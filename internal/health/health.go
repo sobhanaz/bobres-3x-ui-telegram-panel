@@ -20,13 +20,17 @@ type Check func(ctx context.Context) error
 // Handler serves health endpoints and registers dependency checks.
 type Handler struct {
 	service string
+	log     *slog.Logger
 	mu      sync.RWMutex
 	checks  map[string]Check
 }
 
 // New creates a Handler for the named service.
-func New(service string) *Handler {
-	return &Handler{service: service, checks: map[string]Check{}}
+func New(service string, log *slog.Logger) *Handler {
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
+	return &Handler{service: service, log: log, checks: map[string]Check{}}
 }
 
 // AddCheck registers a readiness check under name.
@@ -52,12 +56,20 @@ func (h *Handler) ready(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
+	// Copy under the lock, run outside it: a slow check must not block AddCheck.
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-	results := make(map[string]string, len(h.checks))
+	checks := make(map[string]Check, len(h.checks))
+	for k, v := range h.checks {
+		checks[k] = v
+	}
+	h.mu.RUnlock()
+
+	results := make(map[string]string, len(checks))
 	code := http.StatusOK
-	for name, c := range h.checks {
+	for name, c := range checks {
 		if err := c(ctx); err != nil {
+			// Details go to logs only; the caller just sees "fail".
+			h.log.Warn("readiness check failed", "check", name, "err", err)
 			results[name] = "fail"
 			code = http.StatusServiceUnavailable
 		} else {
@@ -68,7 +80,6 @@ func (h *Handler) ready(w http.ResponseWriter, r *http.Request) {
 	if code != http.StatusOK {
 		status = "not_ready"
 	}
-	// Failure details go to logs, not to the caller (avoid leaking internals).
 	writeJSON(w, code, map[string]any{"status": status, "service": h.service, "checks": results})
 }
 

@@ -6,10 +6,18 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"regexp"
 	"strings"
 )
 
-var sensitiveKeys = []string{"token", "secret", "password", "passwd", "apikey", "api_key", "authorization", "cookie", "private"}
+var sensitiveKeys = []string{
+	"token", "secret", "password", "passwd", "apikey", "api_key", "authorization", "auth",
+	"cookie", "private", "bearer", "credential", "dsn", "database_url", "redis_url",
+	"license", "signature", "key",
+}
+
+// urlCreds matches scheme://user:pass@ so a DSN inside an error string is scrubbed.
+var urlCreds = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@:]*:?[^\s/@]*@`)
 
 const redacted = "[REDACTED]"
 
@@ -48,6 +56,14 @@ func redact(_ []string, a slog.Attr) slog.Attr {
 	for _, s := range sensitiveKeys {
 		if strings.Contains(k, s) {
 			return slog.String(a.Key, redacted)
+		}
+	}
+	switch a.Value.Kind() {
+	case slog.KindString:
+		return slog.String(a.Key, urlCreds.ReplaceAllString(a.Value.String(), "${1}[REDACTED]@"))
+	case slog.KindAny:
+		if err, ok := a.Value.Any().(error); ok {
+			return slog.String(a.Key, urlCreds.ReplaceAllString(err.Error(), "${1}[REDACTED]@"))
 		}
 	}
 	return a

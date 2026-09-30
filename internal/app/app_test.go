@@ -27,16 +27,27 @@ func TestProbeHealthyAndUnhealthy(t *testing.T) {
 
 func TestRunRejectsInvalidConfig(t *testing.T) {
 	t.Setenv("BOBRES_ENV", "nonsense")
+	t.Setenv("BOBRES_SERVICE_TOKEN", "")
 	if code := Run("core", nil, nil); code != 2 {
 		t.Fatalf("want exit 2, got %d", code)
 	}
 }
 
-func TestRunVersionAndSetupFailure(t *testing.T) {
-	t.Setenv("BOBRES_ENV", "dev")
+func TestHealthcheckAndVersionNeedNoValidConfig(t *testing.T) {
+	t.Setenv("BOBRES_ENV", "nonsense") // invalid on purpose
+	t.Setenv("BOBRES_SERVICE_TOKEN", "")
 	if code := Run("core", []string{"--version"}, nil); code != 0 {
-		t.Fatalf("version code %d", code)
+		t.Fatalf("--version must work with broken config, got %d", code)
 	}
+	t.Setenv("BOBRES_HTTP_ADDR", "127.0.0.1:1")
+	if code := Run("core", []string{"--healthcheck"}, nil); code != 1 {
+		t.Fatalf("--healthcheck must run (and fail: nothing listening), got %d", code)
+	}
+}
+
+func TestRunSetupFailure(t *testing.T) {
+	t.Setenv("BOBRES_ENV", "dev")
+	t.Setenv("BOBRES_SERVICE_TOKEN", "0123456789abcdef0123456789abcdef")
 	failing := func(*http.ServeMux, *health.Handler) error { return http.ErrAbortHandler }
 	if code := Run("core", nil, failing); code != 1 {
 		t.Fatalf("setup failure code %d", code)

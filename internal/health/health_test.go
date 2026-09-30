@@ -17,14 +17,14 @@ func newMux(h *Handler) *http.ServeMux {
 
 func TestLiveness(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newMux(New("core")).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	newMux(New("core", nil)).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"service":"core"`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 }
 
 func TestReadinessFailsWhenCheckFails(t *testing.T) {
-	h := New("core")
+	h := New("core", nil)
 	h.AddCheck("db", func(context.Context) error { return errors.New("secret dsn leaked?") })
 	h.AddCheck("redis", func(context.Context) error { return nil })
 	rec := httptest.NewRecorder()
@@ -43,7 +43,7 @@ func TestReadinessFailsWhenCheckFails(t *testing.T) {
 
 func TestReadinessOK(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newMux(New("bot")).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	newMux(New("bot", nil)).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if rec.Code != 200 {
 		t.Fatalf("code %d", rec.Code)
 	}

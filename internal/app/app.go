@@ -24,27 +24,29 @@ type Setup func(mux *http.ServeMux, h *health.Handler) error
 
 // Run executes the standard service lifecycle and returns a process exit code.
 func Run(service string, args []string, setup Setup) int {
-	cfg, err := config.Load(service)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: invalid configuration: %v\n", service, err)
-		return 2
-	}
+	// These need no secrets: a container healthcheck must work even if config is broken.
 	if wantsHealthcheck(args) {
-		return probe(cfg.HTTPAddr)
+		return probe(config.HTTPAddrFromEnv())
 	}
 	if len(args) > 0 && (args[0] == "--version" || args[0] == "version") {
 		fmt.Println(service, version.Version)
 		return 0
 	}
 
+	cfg, err := config.Load(service)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: invalid configuration: %v\n", service, err)
+		return 2
+	}
+
 	log := logging.New(service, cfg.LogLevel, cfg.LogFormat)
-	log.Info("starting", "version", version.Version, "env", cfg.Env)
+	log.Info("starting", "version", version.Version, "config", cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	mux := http.NewServeMux()
-	h := health.New(service)
+	h := health.New(service, log)
 	h.Register(mux)
 	if setup != nil {
 		if err := setup(mux, h); err != nil {
