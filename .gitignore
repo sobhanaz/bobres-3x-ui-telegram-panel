@@ -35,3 +35,7 @@ coverage.out
 
 # Brud Code workspace history
 .brud/
+
+# worktrees
+.worktrees/
+worktrees/
