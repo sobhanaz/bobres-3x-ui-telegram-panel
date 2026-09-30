@@ -38,9 +38,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64.8
+      # Built from source with the job's Go toolchain: the prebuilt v1.64.8 binary is
+      # compiled with Go 1.24 and refuses to lint a Go 1.25 module.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      - name: Lint
+        run: $(go env GOPATH)/bin/golangci-lint run ./...
 
   vuln:
     name: Vulnerability scan
