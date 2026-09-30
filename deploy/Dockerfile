@@ -14,7 +14,7 @@ RUN test -n "$SERVICE" && go build -trimpath \
 # Minimal runtime from Docker Hub (gcr.io/distroless is blocked in some regions and would
 # break builds for customers there). Static binary + CA certs + tzdata only; no shell is
 # used at runtime: the binary implements `app --healthcheck` itself.
-FROM alpine:3.20 AS runtime-base
+FROM alpine:3.24 AS runtime-base
 RUN apk add --no-cache ca-certificates tzdata \
  && addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres
 
