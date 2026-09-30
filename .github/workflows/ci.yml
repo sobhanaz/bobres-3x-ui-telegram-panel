@@ -54,8 +54,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
-      - run: govulncheck ./...
+      # govulncheck itself may need a newer Go than the module targets (v1.8.0 needs 1.26).
+      # GOTOOLCHAIN=auto lets `go install` fetch what it needs; the scan still analyses this
+      # module with the job's own toolchain, which is what actually builds our binaries.
+      - name: Install govulncheck
+        run: GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Scan
+        run: '"$(go env GOPATH)/bin/govulncheck" ./...'
 
   build:
     name: Build binaries
@@ -89,6 +94,10 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    # gitleaks lists the commits of a pull request through the API, which needs this scope.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
