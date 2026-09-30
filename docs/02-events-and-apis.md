@@ -1,0 +1,55 @@
+# 02 - Event catalog and service APIs (DRAFT)
+
+Services: `bot`, `core`, `payments`, `provisioner` (+ Caddy gateway).
+Sync calls: gRPC (internal network only). Async: Postgres outbox + LISTEN/NOTIFY behind an `EventBus` interface (NATS JetStream can replace it later). Contracts in `proto/` (buf). Service auth: signed service tokens now, mTLS later.
+
+## Rules
+- Events are past-tense facts, versioned: `order.paid.v1`. Additive changes only within a version.
+- Publish via transactional outbox. Consume via inbox de-dup. Handlers must be idempotent.
+- Every message: `event_id`, `occurred_at`, `correlation_id`, `actor`, `payload`.
+- Retries with exponential backoff, then dead-letter subject + admin alert.
+
+## Event catalog
+| Event | Producer | Consumers | Meaning |
+|---|---|---|---|
+| user.registered.v1 | core | notifier, core(referral) | New Telegram user |
+| order.created.v1 | core | payments | Order awaiting payment |
+| payment.succeeded.v1 | payments | core | Money confirmed |
+| payment.failed.v1 / payment.expired.v1 | payments | core, notifier | Payment did not complete |
+| order.paid.v1 | core | provisioner | Provision the service |
+| subscription.provision_requested.v1 | core | provisioner | Create/renew/reset command |
+| subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links |
+| subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention |
+| subscription.usage_updated.v1 | provisioner | core | Traffic/expiry sync from 3x-ui |
+| subscription.expiring.v1 / expired.v1 | core(scheduler) | notifier | Reminder triggers |
+| wallet.credited.v1 / debited.v1 | core | notifier | Balance change |
+| refund.requested.v1 / completed.v1 | core | payments | Refund flow |
+| ticket.opened.v1 / replied.v1 | core | notifier | Support |
+| license.changed.v1 | core | all | Entitlements updated (feature gating) |
+
+## Purchase saga (happy path)
+bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pays -> `payment.succeeded`
+-> core marks paid, writes ledger, emits `order.paid` -> provisioner creates 3x-ui client
+-> `subscription.provisioned` -> notifier sends link + QR. Wallet payment skips the payments step.
+
+## gRPC APIs (sketch)
+- core: `GetUser`, `UpsertUser`, `ListPlans`, `CreateOrder`, `ApplyDiscount`, `GetWallet`, `CreditWallet`, `DebitWallet`, `ListSubscriptions`, `OpenTicket`, entitlement checks `HasFeature`.
+- payments: `CreateIntent`, `GetIntent`, `SubmitReceipt`, `ReviewReceipt`, `ListProviders`; HTTP webhooks per provider behind the gateway.
+- provisioner: `CreateClient`, `RenewClient`, `ResetTraffic`, `DeleteClient`, `GetUsage`, `GetLinks`, `HealthCheck`, `ListInbounds`.
+
+## Provider interface (payments)
+`Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
+Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
+
+## 3x-ui adapter (provisioner)
+Interface `PanelAdapter` (add/update/delete client, usage, links, version). First impl: 3x-ui v3.x via Bearer token.
+Startup: detect version, warn outside tested range. Per-client mutex because `clients/update` replaces the row.
+
+## Public HTTP surface (via gateway)
+- `/webhooks/<provider>` (signature verified, replay-protected)
+- `/sub/<token>` subscription info page (branded)
+- `/admin/*` dashboard (session + 2FA), `/healthz`, `/readyz`
+
+## Open points
+- DECIDED: Postgres outbox + LISTEN/NOTIFY for v1; NATS only if load requires it.
+- Whether bot->core is gRPC or shared library in early phases.
