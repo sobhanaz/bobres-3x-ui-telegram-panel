@@ -88,10 +88,10 @@ jobs:
               -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${GITHUB_REF_NAME}" \
               -o "dist/bobres_${os}_${arch}" ./cmd/bobres
           done
-          (cd dist && sha256sum bobres_* > checksums.txt)
       - name: Sign checksums (Ed25519)
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_KEY_ID: ${{ vars.RELEASE_KEY_ID }}
         run: |
           set -euo pipefail
           test -n "$RELEASE_SIGNING_KEY" || { echo "RELEASE_SIGNING_KEY secret is not set"; exit 1; }
@@ -99,10 +99,12 @@ jobs:
           trap 'rm -f "$keyfile"' EXIT
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$keyfile"
           chmod 600 "$keyfile"
-          tools/sign/sign.sh dist/checksums.txt "$keyfile"
+          test -n "$RELEASE_KEY_ID" || { echo "RELEASE_KEY_ID repo variable is not set"; exit 1; }
+          tools/sign/sign.sh --version "$GITHUB_REF_NAME" --key-id "$RELEASE_KEY_ID" --key "$keyfile" dist
           # prove the signature verifies against the PUBLIC key committed in the repo before publishing
           openssl pkeyutl -verify -pubin -inkey install/release-signing.pub.pem -rawin \
             -in dist/checksums.txt -sigfile dist/checksums.txt.sig
+          if [ -f install/keys/keys.txt ]; then cp install/keys/keys.txt install/keys/keys.txt.sig.* dist/; fi
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
