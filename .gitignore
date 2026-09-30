@@ -29,3 +29,6 @@ data/
 # build output
 bin/
 coverage.out
+
+# the release PUBLIC key is meant to be committed (the private key never lives in this repo)
+!install/release-signing.pub.pem
