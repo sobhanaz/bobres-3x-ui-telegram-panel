@@ -42,7 +42,7 @@ payments is the only one with gateway secrets.
 ## Crypto and secrets
 - Secrets at rest: envelope encryption with an install master key (from `.env` / OS keyring); DB stores ciphertext for tokens and gateway keys.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
-- TLS everywhere external; internal service auth via signed tokens or mTLS (decide in Phase 0).
+- TLS everywhere external; internal service auth via signed service tokens first (mTLS later; auth layer is an interface), see PLAN.md §11.
 - Key rotation procedures documented and scripted (`bobres secrets rotate`).
 
 ## Privacy

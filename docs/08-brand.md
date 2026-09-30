@@ -26,7 +26,7 @@ Trademark/domain note: other GitHub projects already use "bobres". Check tradema
 - Logo direction: simple geometric mark, works at 32px avatar size (bot profile picture) and on dark backgrounds.
 - Default operator theme ships neutral; operators upload their own logo/colors.
 
-## Copy deliverables (to write in Phase 0/1, fa + en)
+## Copy deliverables (to write in Phase 1 with the bot, fa + en)
 1. Bot: /start welcome, main menu labels, purchase flow, delivery message, connect guides, wallet, referral, trial, support, settings.
 2. System messages: errors, empty states, rate-limit notice, maintenance, banned, panel down.
 3. Notifications: expiry, quota, payment result, ticket reply.
