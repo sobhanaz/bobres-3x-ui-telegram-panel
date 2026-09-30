@@ -1,10 +1,17 @@
 # BOBRES gateway. TLS certificates are issued automatically for {$BOBRES_DOMAIN}
 # (DNS A record must point at this server, ports 80/443 open).
 {
-	# Do not advertise the server; keep the admin endpoint off the network.
+	# Keep the admin endpoint off the network.
 	admin off
 	servers {
 		protocols h1 h2 h3
+		# Slow-client (slowloris) protection.
+		timeouts {
+			read_body   30s
+			read_header 10s
+			write       60s
+			idle        2m
+		}
 	}
 }
 
@@ -12,11 +19,14 @@
 	encode zstd gzip
 
 	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# No includeSubDomains: the operator's domain may be an apex that also serves other,
+		# plain-HTTP subdomains. Enable it deliberately once every subdomain is HTTPS.
+		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Cross-Origin-Opener-Policy "same-origin"
 		-Server
 	}
 
@@ -25,26 +35,58 @@
 		format json
 	}
 
+	# Service-to-service endpoints must never be reachable from the internet, even by mistake.
+	@internal path /api/internal /api/internal/* /internal /internal/*
+	handle @internal {
+		respond "Not found" 404
+	}
+
 	# Payment gateway callbacks (signature-verified by the payments service).
 	handle /webhooks/* {
 		request_body {
 			max_size 1MB
 		}
-		reverse_proxy payments:8080
+		reverse_proxy payments:8080 {
+			health_uri /healthz
+			health_interval 15s
+			# Never trust a client-supplied forwarding chain.
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
-	# Admin dashboard, JSON API and public subscription pages.
-	@core path /admin /admin/* /api/* /sub/*
+	# Admin dashboard: strict CSP (script/style/img from self only).
+	handle /admin* {
+		header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		header Cache-Control "no-store"
+		request_body {
+			max_size 10MB
+		}
+		reverse_proxy core:8080 {
+			health_uri /healthz
+			health_interval 15s
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	# JSON API and public subscription pages.
+	@core path /api/* /sub/*
 	handle @core {
 		request_body {
 			max_size 10MB
 		}
-		reverse_proxy core:8080
+		reverse_proxy core:8080 {
+			health_uri /healthz
+			health_interval 15s
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
-	# Health probe for external uptime checks (no internals exposed).
+	# External uptime probe. Reflects the REAL state: 200 only if core answers its own health check.
 	handle /healthz {
-		respond "ok" 200
+		rewrite * /healthz
+		reverse_proxy core:8080 {
+			header_down -Server
+		}
 	}
 
 	# Everything else does not exist.

@@ -1,10 +1,13 @@
 # BOBRES stack. Run via `bobres` (or docker compose --env-file .env up -d).
 #
 # Networks
-#   edge    : caddy <-> services that receive public HTTP (core, payments)
-#   backend : internal-only (no internet, not reachable from host): postgres, redis, all apps
-#   egress  : outbound internet for services that call Telegram / gateways / 3x-ui
-# Secrets: each service gets ONLY what it needs (no shared env_file).
+#   public  : caddy only (the only container with a route to the internet inbound)
+#   edge    : INTERNAL. caddy <-> services that receive public HTTP (core, payments).
+#             core has NO internet egress: a compromised dashboard cannot phone home.
+#   backend : INTERNAL. postgres, redis and all apps.
+#   egress  : outbound internet, only for services that must call Telegram / gateways / 3x-ui
+#             (bot, payments, provisioner).
+# Secrets: each service gets ONLY what it needs (no shared env_file) and its OWN database role.
 
 x-app: &app
   restart: unless-stopped
@@ -18,6 +21,9 @@ x-app: &app
     timeout: 5s
     retries: 5
     start_period: 10s
+  mem_limit: 512m
+  pids_limit: 256
+  ulimits: { nofile: { soft: 4096, hard: 4096 } }
   logging:
     driver: json-file
     options: { max-size: "10m", max-file: "5" }
@@ -48,7 +54,9 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks: [edge]
+    mem_limit: 256m
+    pids_limit: 256
+    networks: [public, edge]
     depends_on:
       core: { condition: service_healthy }
       payments: { condition: service_healthy }
@@ -66,7 +74,14 @@ services:
       POSTGRES_USER: bobres
       POSTGRES_DB: bobres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-    volumes: [pg_data:/var/lib/postgresql/data]
+      DB_CORE_PASSWORD: ${DB_CORE_PASSWORD:?set DB_CORE_PASSWORD}
+      DB_PAYMENTS_PASSWORD: ${DB_PAYMENTS_PASSWORD:?set DB_PAYMENTS_PASSWORD}
+      DB_PROVISIONER_PASSWORD: ${DB_PROVISIONER_PASSWORD:?set DB_PROVISIONER_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    mem_limit: 1g
+    pids_limit: 512
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bobres -d bobres"]
       interval: 10s
@@ -85,6 +100,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
       REDISCLI_AUTH: ${REDIS_PASSWORD}
     volumes: [redis_data:/data]
+    mem_limit: 256m
+    pids_limit: 128
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
@@ -98,7 +115,7 @@ services:
     build: { <<: *build, args: { SERVICE: core, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
-      BOBRES_DATABASE_URL: ${BOBRES_DATABASE_URL:?set BOBRES_DATABASE_URL}
+      BOBRES_DATABASE_URL: postgres://svc_core:${DB_CORE_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_REDIS_URL: ${BOBRES_REDIS_URL:?set BOBRES_REDIS_URL}
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
     depends_on:
@@ -126,7 +143,7 @@ services:
     build: { <<: *build, args: { SERVICE: payments, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
-      BOBRES_DATABASE_URL: ${BOBRES_DATABASE_URL:?set BOBRES_DATABASE_URL}
+      BOBRES_DATABASE_URL: postgres://svc_payments:${DB_PAYMENTS_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
     depends_on:
       postgres: { condition: service_healthy }
@@ -138,7 +155,7 @@ services:
     build: { <<: *build, args: { SERVICE: provisioner, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
-      BOBRES_DATABASE_URL: ${BOBRES_DATABASE_URL:?set BOBRES_DATABASE_URL}
+      BOBRES_DATABASE_URL: postgres://svc_provisioner:${DB_PROVISIONER_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_XUI_URL: ${BOBRES_XUI_URL:?set BOBRES_XUI_URL}
       BOBRES_XUI_TOKEN: ${BOBRES_XUI_TOKEN:?set BOBRES_XUI_TOKEN}
     depends_on:
@@ -146,7 +163,9 @@ services:
     networks: [backend, egress]
 
 networks:
-  edge: {}
+  public: {}
+  edge:
+    internal: true
   backend:
     internal: true
   egress: {}
