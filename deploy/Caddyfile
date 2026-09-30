@@ -1,0 +1,54 @@
+# BOBRES gateway. TLS certificates are issued automatically for {$BOBRES_DOMAIN}
+# (DNS A record must point at this server, ports 80/443 open).
+{
+	# Do not advertise the server; keep the admin endpoint off the network.
+	admin off
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$BOBRES_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+
+	# Payment gateway callbacks (signature-verified by the payments service).
+	handle /webhooks/* {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy payments:8080
+	}
+
+	# Admin dashboard, JSON API and public subscription pages.
+	@core path /admin /admin/* /api/* /sub/*
+	handle @core {
+		request_body {
+			max_size 10MB
+		}
+		reverse_proxy core:8080
+	}
+
+	# Health probe for external uptime checks (no internals exposed).
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Everything else does not exist.
+	handle {
+		respond "Not found" 404
+	}
+}
