@@ -25,3 +25,7 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# build output
+bin/
+coverage.out
