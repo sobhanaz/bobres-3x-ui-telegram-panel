@@ -21,7 +21,13 @@ Trust hierarchy: two offline root keys sign `keys.txt` (`tools/sign/keygen.sh ro
 
 Test: `bash tests/sign_test.sh`
 
-Status: install.sh currently verifies `checksums.txt.sig` against the embedded key; verifying
-`keys.txt` (roots, seq, expiry, revocation) in the installer is not implemented yet.
+install.sh embeds the two ROOT public keys, verifies `keys.txt` (root signature, expiry, seq
+anti-rollback, revocation), then `checksums.txt.sig` with the listed release key, and enforces
+release expiry, `min_version` and no-downgrade. State lives in `/var/lib/bobres`.
+Tests: `bash tests/install_verify_test.sh`.
+
+Private keys live in `~/.bobres-secrets` (roots/, release/). Back up both root keys in separate
+places. Never commit or put roots in CI. `install/keys/` holds the signed `keys.txt`; renew it
+before it expires (365 days from 2026-09-30) with a higher `--seq`.
 
 Rotate: generate a new key, ship BOTH public keys in install.sh for one release, then drop the old one.

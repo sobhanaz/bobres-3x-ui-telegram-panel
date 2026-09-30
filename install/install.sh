@@ -7,9 +7,10 @@
 # What this does: checks the OS, installs Docker if missing, downloads the `bobres` CLI,
 # VERIFIES the release signature and checksum, installs it, then hands over to `bobres install`.
 #
-# Trust model (read this): the vendor Ed25519 public key below is embedded in this script.
-# `checksums.txt` must carry a valid signature (`checksums.txt.sig`) from the matching private
-# key, and the binary must match the signed checksum. A compromised download host therefore
+# Trust model (read this): two vendor ROOT Ed25519 public keys are embedded below. They sign
+# `keys.txt` (trusted release keys, with expiry, sequence number and revocations). A release
+# key from that list signs `checksums.txt` (which carries version and expiry), and the binary
+# must match the signed checksum. A compromised download host therefore
 # cannot substitute a binary. The remaining trust roots are THIS script (fetched over HTTPS,
 # so pin/verify it if you can) and Docker's official installer (https://get.docker.com).
 #
@@ -21,13 +22,92 @@ VERSION_SCRIPT="0.2.0"
 BIN_NAME="bobres"
 WORK=""
 
-# Vendor release-signing public key (Ed25519). Rotation: list several keys here for one release.
-read -r -d '' RELEASE_PUBKEY_1 <<'PUBKEY' || true
+# ROOT public keys (Ed25519). Roots sign only keys.txt (the list of trusted release keys);
+# a release key signs each release's checksums.txt. Any one root is enough to accept keys.txt,
+# so losing one root is survivable. Rotate roots by shipping a new install.sh.
+read -r -d '' RELEASE_ROOT_1 <<'PUBKEY' || true
 -----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEA6KBVWYbiD2b9Z5dWPYw3DB/0KIHad7spYISBFLfbdGw=
+MCowBQYDK2VwAyEAKZqHG4ociEUeAtlxJX89TxKY7c3EEWS8JQHUKXBUKZw=
 -----END PUBLIC KEY-----
 PUBKEY
-RELEASE_PUBKEYS=("$RELEASE_PUBKEY_1")
+read -r -d '' RELEASE_ROOT_2 <<'PUBKEY' || true
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEADz7vJ+DMVvKQyotUaJSpnIOlvdbig/KAUzO49wfq3ng=
+-----END PUBLIC KEY-----
+PUBKEY
+RELEASE_ROOTS=("$RELEASE_ROOT_1" "$RELEASE_ROOT_2")
+
+# semver_lt A B -> success if A < B (plain X.Y.Z only)
+semver_lt() {
+  local a1 a2 a3 b1 b2 b3
+  IFS=. read -r a1 a2 a3 <<<"$1"
+  IFS=. read -r b1 b2 b3 <<<"$2"
+  a1=${a1:-0}; a2=${a2:-0}; a3=${a3:-0}; b1=${b1:-0}; b2=${b2:-0}; b3=${b3:-0}
+  [ "$a1" -lt "$b1" ] && return 0; [ "$a1" -gt "$b1" ] && return 1
+  [ "$a2" -lt "$b2" ] && return 0; [ "$a2" -gt "$b2" ] && return 1
+  [ "$a3" -lt "$b3" ]
+}
+
+# verify_release DIR STATE_DIR
+# DIR holds checksums.txt, checksums.txt.sig, keys.txt, keys.txt.sig.N. Prints the verified
+# version on success (last line "VERSION=x.y.z" is not used; use RELEASE_VERSION/KEYS_SEQ globals).
+# On failure prints a reason to stderr and returns 1. Nothing is written to STATE_DIR here.
+verify_release() {
+  local dir=$1 state=$2 now root ok=0 n=0 f
+  now=$(date -u +%Y-%m-%dT%H:%MZ)
+
+  # 1. keys.txt must carry a valid signature from ANY embedded root
+  for f in "$dir"/keys.txt.sig.*; do
+    [ -e "$f" ] || continue
+    for root in "${RELEASE_ROOTS[@]}"; do
+      n=$((n + 1))
+      printf '%s\n' "$root" > "$dir/root${n}.pem"
+      if openssl pkeyutl -verify -pubin -inkey "$dir/root${n}.pem" -rawin \
+           -in "$dir/keys.txt" -sigfile "$f" >/dev/null 2>&1; then ok=1; break 2; fi
+    done
+  done
+  [ "$ok" -eq 1 ] || { echo "key list signature is INVALID (no embedded root verified it)" >&2; return 1; }
+
+  # 2. key list freshness, anti-rollback
+  [ "$(sed -n 1p "$dir/keys.txt")" = "bobres-keys v1" ] || { echo "unknown key list format" >&2; return 1; }
+  local seq kexp minver
+  seq=$(awk '$1=="seq"{print $2; exit}' "$dir/keys.txt")
+  kexp=$(awk '$1=="expires"{print $2; exit}' "$dir/keys.txt")
+  minver=$(awk '$1=="min_version"{print $2; exit}' "$dir/keys.txt")
+  case $seq in ""|*[!0-9]*) echo "bad key list seq" >&2; return 1 ;; esac
+  [ -n "$kexp" ] && [ -n "$minver" ] || { echo "key list is missing expires/min_version" >&2; return 1; }
+  [ "$now" \< "$kexp" ] || { echo "key list expired at $kexp (check the system clock, or upgrade install.sh)" >&2; return 1; }
+  if [ -f "$state/keys.seq" ]; then
+    local last; last=$(cat "$state/keys.seq")
+    case $last in ""|*[!0-9]*) last=0 ;; esac
+    [ "$seq" -ge "$last" ] || { echo "key list seq $seq is older than the last seen $last (rollback attempt?)" >&2; return 1; }
+  fi
+
+  # 3. release header (inside signed bytes)
+  local ver kid rexp
+  ver=$(awk '$1=="#" && $2=="version"{print $3; exit}' "$dir/checksums.txt")
+  kid=$(awk '$1=="#" && $2=="key_id"{print $3; exit}' "$dir/checksums.txt")
+  rexp=$(awk '$1=="#" && $2=="expires"{print $3; exit}' "$dir/checksums.txt")
+  [ -n "$ver" ] && [ -n "$kid" ] && [ -n "$rexp" ] || { echo "release header is missing version/key_id/expires" >&2; return 1; }
+  if awk -v k="$kid" '$1=="revoked" && $2==k {f=1} END{exit !f}' "$dir/keys.txt"; then
+    echo "release key $kid is REVOKED" >&2; return 1
+  fi
+  local b64
+  b64=$(awk -v k="$kid" '$1=="key" && $2==k {print $3; exit}' "$dir/keys.txt")
+  [ -n "$b64" ] || { echo "release key $kid is not in the signed key list" >&2; return 1; }
+  { echo "-----BEGIN PUBLIC KEY-----"; printf '%s' "$b64" | fold -w 64; echo; echo "-----END PUBLIC KEY-----"; } > "$dir/rel.pem"
+  openssl pkeyutl -verify -pubin -inkey "$dir/rel.pem" -rawin \
+    -in "$dir/checksums.txt" -sigfile "$dir/checksums.txt.sig" >/dev/null 2>&1 \
+    || { echo "release signature is INVALID; refusing to install (the download may have been tampered with)" >&2; return 1; }
+  [ "$now" \< "$rexp" ] || { echo "release metadata expired at $rexp (stale or replayed release)" >&2; return 1; }
+  if semver_lt "$ver" "$minver"; then echo "release $ver is below the minimum allowed $minver" >&2; return 1; fi
+  if [ -f "$state/release.version" ]; then
+    local cur; cur=$(cat "$state/release.version")
+    if [ -n "$cur" ] && semver_lt "$ver" "$cur"; then echo "release $ver is older than installed $cur (downgrade refused)" >&2; return 1; fi
+  fi
+  RELEASE_VERSION=$ver; KEYS_SEQ=$seq
+  return 0
+}
 
 main() {
   export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -156,20 +236,15 @@ EOF
   "${CURL[@]}" -o "${WORK}/${ASSET}" "${BASE_URL}/${ASSET}" || die "download failed: ${BASE_URL}/${ASSET}"
   "${CURL[@]}" -o "${WORK}/checksums.txt" "${BASE_URL}/checksums.txt" || die "download failed: ${BASE_URL}/checksums.txt"
   "${CURL[@]}" -o "${WORK}/checksums.txt.sig" "${BASE_URL}/checksums.txt.sig" || die "download failed: ${BASE_URL}/checksums.txt.sig (releases must be signed)"
-
-  # ---- verify signature over checksums.txt, then the binary against it ----
-  info "Verifying release signature"
-  local verified=0 i=0 key
-  for key in "${RELEASE_PUBKEYS[@]}"; do
-    i=$((i + 1))
-    printf '%s\n' "$key" > "${WORK}/pub${i}.pem"
-    if openssl pkeyutl -verify -pubin -inkey "${WORK}/pub${i}.pem" -rawin \
-         -in "${WORK}/checksums.txt" -sigfile "${WORK}/checksums.txt.sig" >/dev/null 2>&1; then
-      verified=1
-      break
-    fi
+  "${CURL[@]}" -o "${WORK}/keys.txt" "${BASE_URL}/keys.txt" || die "download failed: ${BASE_URL}/keys.txt"
+  local n
+  for n in 1 2 3 4; do
+    "${CURL[@]}" -o "${WORK}/keys.txt.sig.${n}" "${BASE_URL}/keys.txt.sig.${n}" 2>/dev/null || rm -f "${WORK}/keys.txt.sig.${n}"
   done
-  [ "$verified" -eq 1 ] || die "release signature is INVALID; refusing to install (the download may have been tampered with)"
+
+  info "Verifying release signature"
+  local STATE_DIR="${BOBRES_STATE_DIR:-/var/lib/bobres}"
+  verify_release "$WORK" "$STATE_DIR" || die "verification failed; refusing to install"
 
   info "Verifying checksum"
   local EXPECTED ACTUAL
@@ -182,6 +257,9 @@ EOF
   install -d -m 0755 "$INSTALL_DIR"
   install -m 0755 "${WORK}/${ASSET}" "${INSTALL_DIR}/.${BIN_NAME}.new"
   mv -f "${INSTALL_DIR}/.${BIN_NAME}.new" "${INSTALL_DIR}/${BIN_NAME}"
+  install -d -m 0755 "$STATE_DIR"
+  printf '%s\n' "$KEYS_SEQ" > "$STATE_DIR/keys.seq"
+  printf '%s\n' "$RELEASE_VERSION" > "$STATE_DIR/release.version"
   info "Installed ${INSTALL_DIR}/${BIN_NAME} ($("${INSTALL_DIR}/${BIN_NAME}" version </dev/null))"
 
   info "Starting ${BOLD}bobres install${RESET}"
@@ -195,4 +273,4 @@ EOF
 }
 
 # Runs only if the whole file was downloaded (this is the last line).
-main "$@"
+[ "${BOBRES_INSTALL_SOURCE_ONLY:-0}" = "1" ] || main "$@"

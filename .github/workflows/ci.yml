@@ -73,6 +73,15 @@ jobs:
           cache: true
       - run: make build
 
+  shell:
+    name: Shell lint + signing tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck install/install.sh tools/sign/*.sh tests/*.sh
+      - run: bash tests/sign_test.sh
+      - run: bash tests/install_verify_test.sh
+
   docker:
     name: Docker images + compose
     runs-on: ubuntu-latest
