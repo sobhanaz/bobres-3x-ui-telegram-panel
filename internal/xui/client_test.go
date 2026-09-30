@@ -20,11 +20,23 @@ const (
 	dayMs = int64(24 * 60 * 60 * 1000)
 )
 
+// testOpts: the fake panel is plain http on loopback, which production settings refuse.
+var testOpts = []xui.Option{xui.AllowInsecureHTTP(), xui.AllowPrivateAddresses()}
+
+func newClient(t *testing.T, url, tok string) *xui.Client {
+	t.Helper()
+	c, err := xui.New(url, tok, testOpts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 func setup(t *testing.T) (*xui.Client, *xuifake.Server) {
 	t.Helper()
 	s := xuifake.NewServer(token)
 	t.Cleanup(s.Close)
-	return xui.New(s.URL, token), s
+	return newClient(t, s.URL, token), s
 }
 
 func spec(email string) xui.ClientSpec {
@@ -144,7 +156,7 @@ func TestNotFound(t *testing.T) {
 func TestWrongTokenAndNoTokenLeak(t *testing.T) {
 	s := xuifake.NewServer(token)
 	t.Cleanup(s.Close)
-	bad := xui.New(s.URL, "wrong-secret-value")
+	bad := newClient(t, s.URL, "wrong-secret-value")
 	err := bad.AddClient(context.Background(), spec("x"), []int{1})
 	if !xui.IsUnauthorized(err) {
 		t.Fatalf("want unauthorized, got %v", err)
@@ -160,7 +172,7 @@ func TestNonJSONResponseDoesNotEchoBody(t *testing.T) {
 		_, _ = w.Write([]byte("<html>internal proxy error with secret-detail</html>"))
 	}))
 	t.Cleanup(srv.Close)
-	err := xui.New(srv.URL, token).AddClient(context.Background(), spec("x"), []int{1})
+	err := newClient(t, srv.URL, token).AddClient(context.Background(), spec("x"), []int{1})
 	var ae *xui.APIError
 	if !errors.As(err, &ae) || ae.Status != http.StatusBadGateway || strings.Contains(err.Error(), "secret-detail") {
 		t.Fatalf("bad handling: %v", err)
@@ -206,18 +218,18 @@ func TestInputValidation(t *testing.T) {
 	}
 }
 
-func TestInboundOptionsAndEmailEscaping(t *testing.T) {
+func TestInboundOptionsAndEmailChars(t *testing.T) {
 	ctx := context.Background()
 	c, _ := setup(t)
 	opts, err := c.InboundOptions(ctx)
 	if err != nil || len(opts) != 3 {
 		t.Fatalf("options: %v %v", err, opts)
 	}
-	weird := "user+tag/with space@example.com"
-	if err := c.AddClient(ctx, spec(weird), []int{1}); err != nil {
+	odd := "user+tag@example.com" // '+' and '@' are legal and must survive path escaping
+	if err := c.AddClient(ctx, spec(odd), []int{1}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.GetClient(ctx, weird); err != nil {
+	if _, err := c.GetClient(ctx, odd); err != nil {
 		t.Fatalf("escaped path failed: %v", err)
 	}
 }

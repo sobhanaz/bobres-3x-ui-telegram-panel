@@ -16,11 +16,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -35,6 +38,40 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("xui: panel error (http %d): %s", e.Status, e.Msg)
+}
+
+// ErrInvalidIdentifier is returned for emails/sub IDs that could alter the request path.
+var ErrInvalidIdentifier = errors.New("xui: invalid identifier")
+
+// ErrInsecureURL is returned when the panel URL is not https (or not allowed).
+var ErrInsecureURL = errors.New("xui: panel URL must use https")
+
+// ErrBlockedAddress is returned when the panel resolves to a private/loopback address.
+var ErrBlockedAddress = errors.New("xui: panel address is not allowed (private, loopback or link-local)")
+
+const maxMsgLen = 200
+
+// sanitizeMsg bounds and cleans panel-controlled text before it can reach logs or users.
+func sanitizeMsg(m string) string {
+	m = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return ' '
+		}
+		return r
+	}, strings.TrimSpace(m))
+	if len(m) > maxMsgLen {
+		m = m[:maxMsgLen] + "..."
+	}
+	return m
+}
+
+var identRe = regexp.MustCompile(`^[A-Za-z0-9._@+\-]{1,128}$`)
+
+func validIdent(s string) error {
+	if s == "." || s == ".." || !identRe.MatchString(s) {
+		return ErrInvalidIdentifier
+	}
+	return nil
 }
 
 // IsUnauthorized reports whether err means the API token was rejected.
@@ -104,30 +141,102 @@ type Client struct {
 	base  string
 	token string
 	hc    *http.Client
-	locks sync.Map // email -> *sync.Mutex (serializes writes per client in this process)
+
+	mu    sync.Mutex
+	locks map[string]*emailLock // refcounted, removed when idle
+}
+
+type emailLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // Option customizes a Client.
-type Option func(*Client)
+type Option func(*settings)
 
-// WithHTTPClient replaces the default HTTP client (tests, custom TLS).
-func WithHTTPClient(hc *http.Client) Option { return func(c *Client) { c.hc = hc } }
-
-// New creates a client. baseURL is the panel root including any web base path.
-func New(baseURL, apiToken string, opts ...Option) *Client {
-	c := &Client{
-		base:  strings.TrimRight(baseURL, "/"),
-		token: apiToken,
-		hc:    &http.Client{Timeout: 15 * time.Second},
-	}
-	for _, o := range opts {
-		o(c)
-	}
-	return c
+type settings struct {
+	hc            *http.Client
+	allowInsecure bool
+	allowPrivate  bool
 }
 
+// WithHTTPClient replaces the default HTTP client (tests, custom TLS). Redirects are
+// still refused. The caller owns dial-time address filtering when using this.
+func WithHTTPClient(hc *http.Client) Option { return func(o *settings) { o.hc = hc } }
+
+// AllowInsecureHTTP permits http:// panel URLs. Only for tests/dev: the bearer token
+// would cross the network in cleartext.
+func AllowInsecureHTTP() Option { return func(o *settings) { o.allowInsecure = true } }
+
+// AllowPrivateAddresses permits panels on loopback/private ranges (a panel on the same
+// host or LAN is a legitimate setup that the operator must opt into).
+func AllowPrivateAddresses() Option { return func(o *settings) { o.allowPrivate = true } }
+
+// New creates a client. baseURL is the panel root including any web base path. It
+// must be https unless AllowInsecureHTTP is given. Unless AllowPrivateAddresses is
+// given, connections to loopback, private and link-local addresses are refused at
+// dial time (after DNS resolution, so DNS rebinding cannot bypass it).
+func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
+	var o settings
+	for _, f := range opts {
+		f(&o)
+	}
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return nil, fmt.Errorf("xui: invalid panel URL")
+	}
+	if u.Scheme == "http" && !o.allowInsecure {
+		return nil, ErrInsecureURL
+	}
+	if u.User != nil {
+		return nil, errors.New("xui: credentials in the panel URL are not allowed")
+	}
+	if apiToken == "" {
+		return nil, errors.New("xui: API token is required")
+	}
+	hc := o.hc
+	if hc == nil {
+		tr := &http.Transport{
+			Proxy:                 nil, // never route the token through an ambient proxy
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 15 * time.Second,
+			MaxIdleConnsPerHost:   4,
+		}
+		if !o.allowPrivate {
+			tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: blockPrivate}).DialContext
+		}
+		hc = &http.Client{Timeout: 15 * time.Second, Transport: tr}
+	}
+	// Copy so we never mutate a caller-owned client, then refuse ALL redirects:
+	// Go would replay POST bodies and the Authorization header on 307/308.
+	cp := *hc
+	cp.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Client{
+		base: strings.TrimRight(baseURL, "/"), token: apiToken, hc: &cp,
+		locks: map[string]*emailLock{},
+	}, nil
+}
+
+// blockPrivate runs on every outgoing connection after DNS resolution.
+func blockPrivate(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return ErrBlockedAddress
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return ErrBlockedAddress
+	}
+	return nil
+}
+
+// lock acquires per-email mutexes in sorted order (deadlock-free) and returns an
+// unlock func. Entries are refcounted and deleted when idle, so the map cannot grow
+// without bound. This only serializes calls inside ONE process; cross-process
+// safety must come from idempotency in the caller (see docs).
 func (c *Client) lock(emails ...string) (unlock func()) {
-	seen := map[string]struct{}{}
+	seen := make(map[string]struct{}, len(emails))
 	uniq := make([]string, 0, len(emails))
 	for _, e := range emails {
 		if _, ok := seen[e]; !ok {
@@ -135,20 +244,37 @@ func (c *Client) lock(emails ...string) (unlock func()) {
 			uniq = append(uniq, e)
 		}
 	}
-	sort.Strings(uniq) // consistent order prevents deadlock between overlapping calls
-	held := make([]*sync.Mutex, 0, len(uniq))
+	sort.Strings(uniq)
+	held := make([]string, 0, len(uniq))
+	locks := make([]*emailLock, 0, len(uniq))
 	for _, e := range uniq {
-		v, _ := c.locks.LoadOrStore(e, &sync.Mutex{})
-		m := v.(*sync.Mutex)
-		m.Lock()
-		held = append(held, m)
+		c.mu.Lock()
+		l := c.locks[e]
+		if l == nil {
+			l = &emailLock{}
+			c.locks[e] = l
+		}
+		l.refs++
+		c.mu.Unlock()
+		l.mu.Lock()
+		held = append(held, e)
+		locks = append(locks, l)
 	}
 	return func() {
-		for i := len(held) - 1; i >= 0; i-- {
-			held[i].Unlock()
+		for i := len(locks) - 1; i >= 0; i-- {
+			locks[i].mu.Unlock()
+			c.mu.Lock()
+			locks[i].refs--
+			if locks[i].refs == 0 {
+				delete(c.locks, held[i])
+			}
+			c.mu.Unlock()
 		}
 	}
 }
+
+// lockCount reports tracked lock entries (tests).
+func (c *Client) lockCount() int { c.mu.Lock(); defer c.mu.Unlock(); return len(c.locks) }
 
 type envelope struct {
 	Success bool            `json:"success"`
@@ -176,7 +302,12 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		// Do not wrap err verbatim if it could echo the URL with credentials; net errors carry only host.
+		// *url.Error embeds the full URL (secret web base path, customer email). Keep only
+		// the underlying cause; context and blocked-address sentinels stay matchable.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
 		return fmt.Errorf("xui: request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -189,8 +320,11 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 		// Non-JSON (proxy page, 404 hiding the API, ...). Never echo the body.
 		return &APIError{Status: resp.StatusCode, Msg: "unexpected non-JSON response"}
 	}
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return &APIError{Status: resp.StatusCode, Msg: "unexpected redirect from panel (check the panel URL and base path)"}
+	}
 	if resp.StatusCode >= 400 || !env.Success {
-		msg := strings.TrimSpace(env.Msg)
+		msg := sanitizeMsg(env.Msg)
 		if msg == "" {
 			msg = http.StatusText(resp.StatusCode)
 		}
@@ -208,8 +342,13 @@ func esc(s string) string { return url.PathEscape(s) }
 
 // AddClient creates a client and attaches it to the given inbounds.
 func (c *Client) AddClient(ctx context.Context, spec ClientSpec, inboundIDs []int) error {
-	if spec.Email == "" || len(inboundIDs) == 0 {
-		return errors.New("xui: AddClient needs an email and at least one inbound")
+	if err := validIdent(spec.Email); err != nil || len(inboundIDs) == 0 {
+		return fmt.Errorf("xui: AddClient needs a valid email and at least one inbound: %w", ErrInvalidIdentifier)
+	}
+	if spec.SubID != "" {
+		if err := validIdent(spec.SubID); err != nil {
+			return err
+		}
 	}
 	defer c.lock(spec.Email)()
 	body := struct {
@@ -221,6 +360,9 @@ func (c *Client) AddClient(ctx context.Context, spec ClientSpec, inboundIDs []in
 
 // GetClient fetches one client by email.
 func (c *Client) GetClient(ctx context.Context, email string) (*ClientDetail, error) {
+	if err := validIdent(email); err != nil {
+		return nil, err
+	}
 	var d ClientDetail
 	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/get/"+esc(email), nil, &d); err != nil {
 		return nil, err
@@ -230,6 +372,9 @@ func (c *Client) GetClient(ctx context.Context, email string) (*ClientDetail, er
 
 // DeleteClient removes a client from every inbound. keepTraffic retains its usage row.
 func (c *Client) DeleteClient(ctx context.Context, email string, keepTraffic bool) error {
+	if err := validIdent(email); err != nil {
+		return err
+	}
 	defer c.lock(email)()
 	p := "/panel/api/clients/del/" + esc(email)
 	if keepTraffic {
@@ -252,6 +397,11 @@ func (c *Client) BulkAdjust(ctx context.Context, req AdjustRequest) (*AdjustResu
 	if len(req.Emails) == 0 {
 		return nil, errors.New("xui: BulkAdjust needs at least one email")
 	}
+	for _, e := range req.Emails {
+		if err := validIdent(e); err != nil {
+			return nil, err
+		}
+	}
 	defer c.lock(req.Emails...)()
 	var r AdjustResult
 	if err := c.do(ctx, http.MethodPost, "/panel/api/clients/bulkAdjust", req, &r); err != nil {
@@ -262,12 +412,18 @@ func (c *Client) BulkAdjust(ctx context.Context, req AdjustRequest) (*AdjustResu
 
 // ResetTraffic zeroes a client's counters and re-enables it.
 func (c *Client) ResetTraffic(ctx context.Context, email string) error {
+	if err := validIdent(email); err != nil {
+		return err
+	}
 	defer c.lock(email)()
 	return c.do(ctx, http.MethodPost, "/panel/api/clients/resetTraffic/"+esc(email), nil, nil)
 }
 
 // Traffic returns usage counters for a client.
 func (c *Client) Traffic(ctx context.Context, email string) (*Traffic, error) {
+	if err := validIdent(email); err != nil {
+		return nil, err
+	}
 	var t Traffic
 	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/traffic/"+esc(email), nil, &t); err != nil {
 		return nil, err
@@ -277,6 +433,9 @@ func (c *Client) Traffic(ctx context.Context, email string) (*Traffic, error) {
 
 // Links returns every share URL for a client.
 func (c *Client) Links(ctx context.Context, email string) ([]string, error) {
+	if err := validIdent(email); err != nil {
+		return nil, err
+	}
 	var l []string
 	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/links/"+esc(email), nil, &l); err != nil {
 		return nil, err
@@ -295,6 +454,9 @@ func (c *Client) InboundOptions(ctx context.Context) ([]InboundOption, error) {
 
 // SubLinks returns share URLs for a subscription ID.
 func (c *Client) SubLinks(ctx context.Context, subID string) ([]string, error) {
+	if err := validIdent(subID); err != nil {
+		return nil, err
+	}
 	var l []string
 	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/subLinks/"+esc(subID), nil, &l); err != nil {
 		return nil, err
