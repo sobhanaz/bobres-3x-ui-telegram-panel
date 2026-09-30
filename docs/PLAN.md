@@ -187,3 +187,10 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
   with their support BEFORE Phase 2.
 - 3x-ui compatibility: adapter for latest v3.x first, version detection with warning; older adapters only on demand.
 - Brand: keep BOBRES. Domain, bot username and trademark checks deferred (do before public launch).
+
+## 12. Dashboard stack (closed)
+- Vue 3 + Vite + TypeScript, built to static files and embedded in the `core` binary via `embed.FS`
+  (same approach 3x-ui uses). No Node runtime in production, no separate container.
+- Needs a JSON API on `core` (versioned, session + CSRF auth). This supersedes the templ/HTMX plan in 04-dashboard.md.
+- Theming through CSS variables for white-label; RTL via CSS logical properties; Vazirmatn + Inter fonts; vue-i18n for fa/en.
+- Keep the UI library decision open (e.g. Naive UI / PrimeVue / shadcn-vue) until Phase 4.

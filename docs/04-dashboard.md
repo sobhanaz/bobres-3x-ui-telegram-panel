@@ -1,6 +1,6 @@
 # 04 - Dashboard pages and roles (DRAFT)
 
-Stack: Go + templ + HTMX, served by `core`, behind the gateway. Branded per install (logo, colors, name).
+Stack: Vue 3 + Vite + TypeScript (embedded in `core` via embed.FS), JSON API on `core`, behind the gateway. See PLAN.md §12. Branded per install (logo, colors, name).
 Sessions: secure cookie, CSRF, optional/required TOTP 2FA for staff. Login by password (+ 2FA) or Telegram login widget.
 
 ## Roles and permissions
