@@ -35,6 +35,8 @@ func LoadBot() (Bot, error) {
 		errs = append(errs, errors.New("BOBRES_CORE_GRPC_ADDR is required"))
 	}
 	b.WebhookURL = getenv("BOBRES_TELEGRAM_WEBHOOK_URL", "")
-	fmt.Sscanf(getenv("BOBRES_ADMIN_TELEGRAM_ID", "0"), "%d", &b.AdminTelegramID)
+	if _, err := fmt.Sscanf(getenv("BOBRES_ADMIN_TELEGRAM_ID", "0"), "%d", &b.AdminTelegramID); err != nil {
+		errs = append(errs, fmt.Errorf("BOBRES_ADMIN_TELEGRAM_ID: %w", err))
+	}
 	return b, errors.Join(errs...)
 }
