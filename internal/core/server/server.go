@@ -100,13 +100,13 @@ func (s *Server) ListPlans(ctx context.Context, req *corev1.ListPlansRequest) (*
 	out := &corev1.ListPlansResponse{}
 	for _, p := range plans {
 		pp := &corev1.Plan{
-			Id:           p.ID,
-			NameI18N:     p.NameI18n,
-			Kind:         p.Kind,
-			Price:        &commonv1.Money{Amount: p.Price, Currency: p.Currency},
-			Enabled:      p.Enabled,
-			IsTrial:      p.IsTrial,
-			Sort:         p.Sort,
+			Id:       p.ID,
+			NameI18N: p.NameI18n,
+			Kind:     p.Kind,
+			Price:    &commonv1.Money{Amount: p.Price, Currency: p.Currency},
+			Enabled:  p.Enabled,
+			IsTrial:  p.IsTrial,
+			Sort:     p.Sort,
 		}
 		if p.DurationDays != nil {
 			pp.DurationDays = *p.DurationDays

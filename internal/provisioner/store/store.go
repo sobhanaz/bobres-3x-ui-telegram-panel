@@ -114,6 +114,34 @@ func (s *Store) FirstServer(ctx context.Context) (*Server, error) {
 	return &sv, nil
 }
 
+// GetServer returns one server row by id, decrypting its token.
+func (s *Store) GetServer(ctx context.Context, id string) (*Server, error) {
+	var (
+		sv  Server
+		enc []byte
+		ver *string
+	)
+	err := s.db.QueryRow(ctx, `
+		SELECT id, name, base_url, api_token_enc, panel_version, enabled
+		FROM provisioner.xui_servers WHERE id = $1`, id).
+		Scan(&sv.ID, &sv.Name, &sv.BaseURL, &enc, &ver, &sv.Enabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get server: %w", err)
+	}
+	tok, err := s.env.Decrypt(enc)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt server token: %w", err)
+	}
+	sv.Token = string(tok)
+	if ver != nil {
+		sv.PanelVersion = *ver
+	}
+	return &sv, nil
+}
+
 // EnqueueJob inserts a pending provision job.
 func (s *Store) EnqueueJob(ctx context.Context, j *Job) error {
 	j.ID = buuid.MustV7().String()
