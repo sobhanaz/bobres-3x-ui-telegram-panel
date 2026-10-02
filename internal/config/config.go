@@ -20,6 +20,7 @@ type Common struct {
 	LogLevel    string // debug | info | warn | error
 	LogFormat   string // json | text
 	HTTPAddr    string
+	GRPCAddr    string
 	DatabaseURL string
 	RedisURL    string
 	// ServiceToken authenticates internal service-to-service calls.
@@ -58,6 +59,7 @@ func Load(service string) (Common, error) {
 		LogLevel:     getenv("BOBRES_LOG_LEVEL", "info"),
 		LogFormat:    getenv("BOBRES_LOG_FORMAT", "json"),
 		HTTPAddr:     getenv("BOBRES_HTTP_ADDR", ":8080"),
+		GRPCAddr:     getenv("BOBRES_GRPC_ADDR", ":9090"),
 		DatabaseURL:  get("BOBRES_DATABASE_URL"),
 		RedisURL:     get("BOBRES_REDIS_URL"),
 		ServiceToken: get("BOBRES_SERVICE_TOKEN"),
