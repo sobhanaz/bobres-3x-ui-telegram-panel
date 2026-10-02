@@ -31,6 +31,10 @@ const (
 	CoreService_GetSettings_FullMethodName         = "/core.v1.CoreService/GetSettings"
 	CoreService_UpdateBranding_FullMethodName      = "/core.v1.CoreService/UpdateBranding"
 	CoreService_ReviewManualPayment_FullMethodName = "/core.v1.CoreService/ReviewManualPayment"
+	CoreService_PayOrderWithWallet_FullMethodName  = "/core.v1.CoreService/PayOrderWithWallet"
+	CoreService_CreatePaymentIntent_FullMethodName = "/core.v1.CoreService/CreatePaymentIntent"
+	CoreService_StartTrial_FullMethodName          = "/core.v1.CoreService/StartTrial"
+	CoreService_CanStartTrial_FullMethodName       = "/core.v1.CoreService/CanStartTrial"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -52,6 +56,10 @@ type CoreServiceClient interface {
 	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*Settings, error)
 	UpdateBranding(ctx context.Context, in *UpdateBrandingRequest, opts ...grpc.CallOption) (*Settings, error)
 	ReviewManualPayment(ctx context.Context, in *ReviewManualPaymentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	PayOrderWithWallet(ctx context.Context, in *PayOrderWithWalletRequest, opts ...grpc.CallOption) (*Order, error)
+	CreatePaymentIntent(ctx context.Context, in *CreatePaymentIntentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	StartTrial(ctx context.Context, in *StartTrialRequest, opts ...grpc.CallOption) (*Order, error)
+	CanStartTrial(ctx context.Context, in *CanStartTrialRequest, opts ...grpc.CallOption) (*CanStartTrialResponse, error)
 }
 
 type coreServiceClient struct {
@@ -182,6 +190,46 @@ func (c *coreServiceClient) ReviewManualPayment(ctx context.Context, in *ReviewM
 	return out, nil
 }
 
+func (c *coreServiceClient) PayOrderWithWallet(ctx context.Context, in *PayOrderWithWalletRequest, opts ...grpc.CallOption) (*Order, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Order)
+	err := c.cc.Invoke(ctx, CoreService_PayOrderWithWallet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) CreatePaymentIntent(ctx context.Context, in *CreatePaymentIntentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntentRef)
+	err := c.cc.Invoke(ctx, CoreService_CreatePaymentIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) StartTrial(ctx context.Context, in *StartTrialRequest, opts ...grpc.CallOption) (*Order, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Order)
+	err := c.cc.Invoke(ctx, CoreService_StartTrial_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) CanStartTrial(ctx context.Context, in *CanStartTrialRequest, opts ...grpc.CallOption) (*CanStartTrialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CanStartTrialResponse)
+	err := c.cc.Invoke(ctx, CoreService_CanStartTrial_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -201,6 +249,10 @@ type CoreServiceServer interface {
 	GetSettings(context.Context, *GetSettingsRequest) (*Settings, error)
 	UpdateBranding(context.Context, *UpdateBrandingRequest) (*Settings, error)
 	ReviewManualPayment(context.Context, *ReviewManualPaymentRequest) (*PaymentIntentRef, error)
+	PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error)
+	CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error)
+	StartTrial(context.Context, *StartTrialRequest) (*Order, error)
+	CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -246,6 +298,18 @@ func (UnimplementedCoreServiceServer) UpdateBranding(context.Context, *UpdateBra
 }
 func (UnimplementedCoreServiceServer) ReviewManualPayment(context.Context, *ReviewManualPaymentRequest) (*PaymentIntentRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReviewManualPayment not implemented")
+}
+func (UnimplementedCoreServiceServer) PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error) {
+	return nil, status.Error(codes.Unimplemented, "method PayOrderWithWallet not implemented")
+}
+func (UnimplementedCoreServiceServer) CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePaymentIntent not implemented")
+}
+func (UnimplementedCoreServiceServer) StartTrial(context.Context, *StartTrialRequest) (*Order, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartTrial not implemented")
+}
+func (UnimplementedCoreServiceServer) CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CanStartTrial not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -484,6 +548,78 @@ func _CoreService_ReviewManualPayment_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_PayOrderWithWallet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PayOrderWithWalletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).PayOrderWithWallet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_PayOrderWithWallet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).PayOrderWithWallet(ctx, req.(*PayOrderWithWalletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_CreatePaymentIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePaymentIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CreatePaymentIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CreatePaymentIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CreatePaymentIntent(ctx, req.(*CreatePaymentIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_StartTrial_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartTrialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).StartTrial(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_StartTrial_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).StartTrial(ctx, req.(*StartTrialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_CanStartTrial_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CanStartTrialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CanStartTrial(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CanStartTrial_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CanStartTrial(ctx, req.(*CanStartTrialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -538,6 +674,22 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReviewManualPayment",
 			Handler:    _CoreService_ReviewManualPayment_Handler,
+		},
+		{
+			MethodName: "PayOrderWithWallet",
+			Handler:    _CoreService_PayOrderWithWallet_Handler,
+		},
+		{
+			MethodName: "CreatePaymentIntent",
+			Handler:    _CoreService_CreatePaymentIntent_Handler,
+		},
+		{
+			MethodName: "StartTrial",
+			Handler:    _CoreService_StartTrial_Handler,
+		},
+		{
+			MethodName: "CanStartTrial",
+			Handler:    _CoreService_CanStartTrial_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1620,6 +1620,9 @@ type PaymentIntentRef struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	OrderId       string                 `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Provider      string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"`
+	Instructions  string                 `protobuf:"bytes,5,opt,name=instructions,proto3" json:"instructions,omitempty"` // rendered payment instructions for the user
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1666,6 +1669,303 @@ func (x *PaymentIntentRef) GetStatus() string {
 		return x.Status
 	}
 	return ""
+}
+
+func (x *PaymentIntentRef) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *PaymentIntentRef) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *PaymentIntentRef) GetInstructions() string {
+	if x != nil {
+		return x.Instructions
+	}
+	return ""
+}
+
+type PayOrderWithWalletRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrderId        string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PayOrderWithWalletRequest) Reset() {
+	*x = PayOrderWithWalletRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PayOrderWithWalletRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PayOrderWithWalletRequest) ProtoMessage() {}
+
+func (x *PayOrderWithWalletRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PayOrderWithWalletRequest.ProtoReflect.Descriptor instead.
+func (*PayOrderWithWalletRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *PayOrderWithWalletRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *PayOrderWithWalletRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type CreatePaymentIntentRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	UserId         string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	OrderId        string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-up intents
+	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`              // manual_card | manual_crypto
+	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`                  // required when order_id is empty
+	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreatePaymentIntentRequest) Reset() {
+	*x = CreatePaymentIntentRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreatePaymentIntentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatePaymentIntentRequest) ProtoMessage() {}
+
+func (x *CreatePaymentIntentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatePaymentIntentRequest.ProtoReflect.Descriptor instead.
+func (*CreatePaymentIntentRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CreatePaymentIntentRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CreatePaymentIntentRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *CreatePaymentIntentRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *CreatePaymentIntentRequest) GetAmount() *v1.Money {
+	if x != nil {
+		return x.Amount
+	}
+	return nil
+}
+
+func (x *CreatePaymentIntentRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type StartTrialRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	UserId         string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PlanId         string                 `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StartTrialRequest) Reset() {
+	*x = StartTrialRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartTrialRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartTrialRequest) ProtoMessage() {}
+
+func (x *StartTrialRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartTrialRequest.ProtoReflect.Descriptor instead.
+func (*StartTrialRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *StartTrialRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *StartTrialRequest) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *StartTrialRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type CanStartTrialRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CanStartTrialRequest) Reset() {
+	*x = CanStartTrialRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CanStartTrialRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CanStartTrialRequest) ProtoMessage() {}
+
+func (x *CanStartTrialRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CanStartTrialRequest.ProtoReflect.Descriptor instead.
+func (*CanStartTrialRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CanStartTrialRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type CanStartTrialResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Eligible      bool                   `protobuf:"varint,1,opt,name=eligible,proto3" json:"eligible,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CanStartTrialResponse) Reset() {
+	*x = CanStartTrialResponse{}
+	mi := &file_core_v1_core_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CanStartTrialResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CanStartTrialResponse) ProtoMessage() {}
+
+func (x *CanStartTrialResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CanStartTrialResponse.ProtoReflect.Descriptor instead.
+func (*CanStartTrialResponse) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CanStartTrialResponse) GetEligible() bool {
+	if x != nil {
+		return x.Eligible
+	}
+	return false
 }
 
 var File_core_v1_core_proto protoreflect.FileDescriptor
@@ -1817,10 +2117,30 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\vreviewer_id\x18\x02 \x01(\tR\n" +
 	"reviewerId\x12\x1a\n" +
 	"\bdecision\x18\x03 \x01(\tR\bdecision\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\":\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x95\x01\n" +
 	"\x10PaymentIntentRef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status2\xc8\x06\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x19\n" +
+	"\border_id\x18\x03 \x01(\tR\aorderId\x12\x1a\n" +
+	"\bprovider\x18\x04 \x01(\tR\bprovider\x12\"\n" +
+	"\finstructions\x18\x05 \x01(\tR\finstructions\"_\n" +
+	"\x19PayOrderWithWalletRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\x12'\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\xbf\x01\n" +
+	"\x1aCreatePaymentIntentRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x1a\n" +
+	"\bprovider\x18\x03 \x01(\tR\bprovider\x12(\n" +
+	"\x06amount\x18\x04 \x01(\v2\x10.common.v1.MoneyR\x06amount\x12'\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"n\n" +
+	"\x11StartTrialRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
+	"\aplan_id\x18\x02 \x01(\tR\x06planId\x12'\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"/\n" +
+	"\x14CanStartTrialRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"3\n" +
+	"\x15CanStartTrialResponse\x12\x1a\n" +
+	"\beligible\x18\x01 \x01(\bR\beligible2\xf3\b\n" +
 	"\vCoreService\x127\n" +
 	"\n" +
 	"UpsertUser\x12\x1a.core.v1.UpsertUserRequest\x1a\r.core.v1.User\x121\n" +
@@ -1834,7 +2154,12 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x13CreateSupportTicket\x12#.core.v1.CreateSupportTicketRequest\x1a\x0f.core.v1.Ticket\x12=\n" +
 	"\vGetSettings\x12\x1b.core.v1.GetSettingsRequest\x1a\x11.core.v1.Settings\x12C\n" +
 	"\x0eUpdateBranding\x12\x1e.core.v1.UpdateBrandingRequest\x1a\x11.core.v1.Settings\x12U\n" +
-	"\x13ReviewManualPayment\x12#.core.v1.ReviewManualPaymentRequest\x1a\x19.core.v1.PaymentIntentRefBJZHgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1b\x06proto3"
+	"\x13ReviewManualPayment\x12#.core.v1.ReviewManualPaymentRequest\x1a\x19.core.v1.PaymentIntentRef\x12H\n" +
+	"\x12PayOrderWithWallet\x12\".core.v1.PayOrderWithWalletRequest\x1a\x0e.core.v1.Order\x12U\n" +
+	"\x13CreatePaymentIntent\x12#.core.v1.CreatePaymentIntentRequest\x1a\x19.core.v1.PaymentIntentRef\x128\n" +
+	"\n" +
+	"StartTrial\x12\x1a.core.v1.StartTrialRequest\x1a\x0e.core.v1.Order\x12N\n" +
+	"\rCanStartTrial\x12\x1d.core.v1.CanStartTrialRequest\x1a\x1e.core.v1.CanStartTrialResponseBJZHgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1b\x06proto3"
 
 var (
 	file_core_v1_core_proto_rawDescOnce sync.Once
@@ -1848,7 +2173,7 @@ func file_core_v1_core_proto_rawDescGZIP() []byte {
 	return file_core_v1_core_proto_rawDescData
 }
 
-var file_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_core_v1_core_proto_goTypes = []any{
 	(*User)(nil),                       // 0: core.v1.User
 	(*Plan)(nil),                       // 1: core.v1.Plan
@@ -1874,55 +2199,69 @@ var file_core_v1_core_proto_goTypes = []any{
 	(*UpdateBrandingRequest)(nil),      // 21: core.v1.UpdateBrandingRequest
 	(*ReviewManualPaymentRequest)(nil), // 22: core.v1.ReviewManualPaymentRequest
 	(*PaymentIntentRef)(nil),           // 23: core.v1.PaymentIntentRef
-	nil,                                // 24: core.v1.Plan.NameI18nEntry
-	nil,                                // 25: core.v1.Settings.ValuesEntry
-	nil,                                // 26: core.v1.UpdateBrandingRequest.ValuesEntry
-	(*v1.Money)(nil),                   // 27: common.v1.Money
-	(*v1.Pagination)(nil),              // 28: common.v1.Pagination
-	(*v1.PageInfo)(nil),                // 29: common.v1.PageInfo
+	(*PayOrderWithWalletRequest)(nil),  // 24: core.v1.PayOrderWithWalletRequest
+	(*CreatePaymentIntentRequest)(nil), // 25: core.v1.CreatePaymentIntentRequest
+	(*StartTrialRequest)(nil),          // 26: core.v1.StartTrialRequest
+	(*CanStartTrialRequest)(nil),       // 27: core.v1.CanStartTrialRequest
+	(*CanStartTrialResponse)(nil),      // 28: core.v1.CanStartTrialResponse
+	nil,                                // 29: core.v1.Plan.NameI18nEntry
+	nil,                                // 30: core.v1.Settings.ValuesEntry
+	nil,                                // 31: core.v1.UpdateBrandingRequest.ValuesEntry
+	(*v1.Money)(nil),                   // 32: common.v1.Money
+	(*v1.Pagination)(nil),              // 33: common.v1.Pagination
+	(*v1.PageInfo)(nil),                // 34: common.v1.PageInfo
 }
 var file_core_v1_core_proto_depIdxs = []int32{
-	24, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
-	27, // 1: core.v1.Plan.price:type_name -> common.v1.Money
-	27, // 2: core.v1.Order.amount:type_name -> common.v1.Money
-	25, // 3: core.v1.Settings.values:type_name -> core.v1.Settings.ValuesEntry
+	29, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
+	32, // 1: core.v1.Plan.price:type_name -> common.v1.Money
+	32, // 2: core.v1.Order.amount:type_name -> common.v1.Money
+	30, // 3: core.v1.Settings.values:type_name -> core.v1.Settings.ValuesEntry
 	1,  // 4: core.v1.ListPlansResponse.plans:type_name -> core.v1.Plan
-	28, // 5: core.v1.ListLedgerEntriesRequest.pagination:type_name -> common.v1.Pagination
+	33, // 5: core.v1.ListLedgerEntriesRequest.pagination:type_name -> common.v1.Pagination
 	4,  // 6: core.v1.ListLedgerEntriesResponse.entries:type_name -> core.v1.LedgerEntry
-	29, // 7: core.v1.ListLedgerEntriesResponse.page_info:type_name -> common.v1.PageInfo
-	28, // 8: core.v1.ListSubscriptionsRequest.pagination:type_name -> common.v1.Pagination
+	34, // 7: core.v1.ListLedgerEntriesResponse.page_info:type_name -> common.v1.PageInfo
+	33, // 8: core.v1.ListSubscriptionsRequest.pagination:type_name -> common.v1.Pagination
 	5,  // 9: core.v1.ListSubscriptionsResponse.subscriptions:type_name -> core.v1.Subscription
-	29, // 10: core.v1.ListSubscriptionsResponse.page_info:type_name -> common.v1.PageInfo
-	26, // 11: core.v1.UpdateBrandingRequest.values:type_name -> core.v1.UpdateBrandingRequest.ValuesEntry
-	8,  // 12: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
-	9,  // 13: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
-	10, // 14: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
-	12, // 15: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
-	13, // 16: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
-	14, // 17: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
-	15, // 18: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
-	17, // 19: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
-	19, // 20: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
-	20, // 21: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
-	21, // 22: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
-	22, // 23: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
-	0,  // 24: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
-	0,  // 25: core.v1.CoreService.GetUser:output_type -> core.v1.User
-	11, // 26: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
-	2,  // 27: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
-	2,  // 28: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
-	3,  // 29: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
-	16, // 30: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
-	18, // 31: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
-	6,  // 32: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
-	7,  // 33: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
-	7,  // 34: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
-	23, // 35: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
-	24, // [24:36] is the sub-list for method output_type
-	12, // [12:24] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	34, // 10: core.v1.ListSubscriptionsResponse.page_info:type_name -> common.v1.PageInfo
+	31, // 11: core.v1.UpdateBrandingRequest.values:type_name -> core.v1.UpdateBrandingRequest.ValuesEntry
+	32, // 12: core.v1.CreatePaymentIntentRequest.amount:type_name -> common.v1.Money
+	8,  // 13: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
+	9,  // 14: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
+	10, // 15: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
+	12, // 16: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
+	13, // 17: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
+	14, // 18: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
+	15, // 19: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
+	17, // 20: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
+	19, // 21: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
+	20, // 22: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
+	21, // 23: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
+	22, // 24: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
+	24, // 25: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
+	25, // 26: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
+	26, // 27: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
+	27, // 28: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
+	0,  // 29: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
+	0,  // 30: core.v1.CoreService.GetUser:output_type -> core.v1.User
+	11, // 31: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
+	2,  // 32: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
+	2,  // 33: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
+	3,  // 34: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
+	16, // 35: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
+	18, // 36: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
+	6,  // 37: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
+	7,  // 38: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
+	7,  // 39: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
+	23, // 40: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
+	2,  // 41: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
+	23, // 42: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
+	2,  // 43: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
+	28, // 44: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
+	29, // [29:45] is the sub-list for method output_type
+	13, // [13:29] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_core_v1_core_proto_init() }
@@ -1940,7 +2279,7 @@ func file_core_v1_core_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_core_v1_core_proto_rawDesc), len(file_core_v1_core_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

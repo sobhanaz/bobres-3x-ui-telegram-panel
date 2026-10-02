@@ -40,7 +40,7 @@ func TestPublishInTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ob.Publish(ctx, tx, "order.created.v1", []byte(`{"id":"1"}`)); err != nil {
+	if err := ob.Publish(ctx, SQLTx{tx}, "order.created.v1", []byte(`{"id":"1"}`)); err != nil {
 		t.Fatal(err)
 	}
 	// invisible before commit (different connection)
@@ -59,7 +59,7 @@ func TestPublishRollbackLeavesNoRow(t *testing.T) {
 	db, ob := testOutbox(t)
 	ctx := context.Background()
 	tx, _ := db.BeginTx(ctx, nil)
-	_ = ob.Publish(ctx, tx, "order.created.v1", []byte(`{}`))
+	_ = ob.Publish(ctx, SQLTx{tx}, "order.created.v1", []byte(`{}`))
 	_ = tx.Rollback()
 	if n := countRows(t, db); n != 0 {
 		t.Fatalf("rows after rollback = %d", n)
@@ -72,7 +72,7 @@ func TestRelayDeliversAndMarksPublished(t *testing.T) {
 	defer cancel()
 
 	tx, _ := db.BeginTx(ctx, nil)
-	if err := ob.Publish(ctx, tx, "ping.v1", []byte(`{"n":1}`)); err != nil {
+	if err := ob.Publish(ctx, SQLTx{tx}, "ping.v1", []byte(`{"n":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	_ = tx.Commit()
@@ -111,7 +111,7 @@ func TestRelaySkipsFailedHandlerRowForRetry(t *testing.T) {
 	defer cancel()
 
 	tx, _ := db.BeginTx(ctx, nil)
-	_ = ob.Publish(ctx, tx, "flaky.v1", []byte(`{}`))
+	_ = ob.Publish(ctx, SQLTx{tx}, "flaky.v1", []byte(`{}`))
 	_ = tx.Commit()
 
 	var firstErr = errInject

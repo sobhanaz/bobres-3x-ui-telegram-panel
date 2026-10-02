@@ -20,6 +20,7 @@ type Server struct {
 	corev1.UnimplementedCoreServiceServer
 	st  *store.Store
 	dom *domain.Service
+	pay domain.PaymentsClient
 }
 
 // New builds the handler set.

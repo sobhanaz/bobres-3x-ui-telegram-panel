@@ -175,6 +175,28 @@ message ReviewManualPaymentRequest {
 message PaymentIntentRef {
   string id = 1;
   string status = 2;
+  string order_id = 3;
+  string provider = 4;
+  string instructions = 5; // rendered payment instructions for the user
+}
+
+message PayOrderWithWalletRequest {
+  string order_id = 1;
+  string idempotency_key = 2;
+}
+
+message CreatePaymentIntentRequest {
+  string user_id = 1;
+  string order_id = 2;        // empty for wallet top-up intents
+  string provider = 3;        // manual_card | manual_crypto
+  common.v1.Money amount = 4; // required when order_id is empty
+  string idempotency_key = 5;
+}
+
+message StartTrialRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  string idempotency_key = 3;
 }
 
 // CoreService owns users, plans, orders, wallet ledger, subscriptions,
@@ -192,4 +214,16 @@ service CoreService {
   rpc GetSettings(GetSettingsRequest) returns (Settings);
   rpc UpdateBranding(UpdateBrandingRequest) returns (Settings);
   rpc ReviewManualPayment(ReviewManualPaymentRequest) returns (PaymentIntentRef);
+  rpc PayOrderWithWallet(PayOrderWithWalletRequest) returns (Order);
+  rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentRef);
+  rpc StartTrial(StartTrialRequest) returns (Order);
+  rpc CanStartTrial(CanStartTrialRequest) returns (CanStartTrialResponse);
+}
+
+message CanStartTrialRequest {
+  string user_id = 1;
+}
+
+message CanStartTrialResponse {
+  bool eligible = 1;
 }

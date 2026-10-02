@@ -36,11 +36,25 @@ func NewOutbox(db *sql.DB, table string) *Outbox {
 	return &Outbox{db: db, table: table}
 }
 
+// DBTX is the minimal executor Publish needs. Both database/sql and pgx
+// transactions are wrapped by callers (see SQLTx and PgxTx).
+type DBTX interface {
+	ExecPublish(ctx context.Context, query string, args ...any) error
+}
+
+// SQLTx adapts *sql.Tx.
+type SQLTx struct{ Tx *sql.Tx }
+
+// ExecPublish implements DBTX.
+func (w SQLTx) ExecPublish(ctx context.Context, query string, args ...any) error {
+	_, err := w.Tx.ExecContext(ctx, query, args...)
+	return err
+}
+
 // Publish inserts the event inside tx.
-func (o *Outbox) Publish(ctx context.Context, tx *sql.Tx, topic string, payload []byte) error {
+func (o *Outbox) Publish(ctx context.Context, tx DBTX, topic string, payload []byte) error {
 	q := fmt.Sprintf(`INSERT INTO %s.%s (topic, payload) VALUES ($1, $2)`, schemaOf(o.table), o.table) //nolint:gosec // table name is whitelisted
-	_, err := tx.ExecContext(ctx, q, topic, payload)
-	if err != nil {
+	if err := tx.ExecPublish(ctx, q, topic, payload); err != nil {
 		return fmt.Errorf("eventbus: publish: %w", err)
 	}
 	return nil
