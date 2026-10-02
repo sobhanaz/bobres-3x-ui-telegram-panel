@@ -1,0 +1,16 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # The Phase 1 design spec (docs/superpowers/specs/2026-09-30-phase1-design.md)
+    # intentionally returns domain types directly (e.g. `rpc GetUser(...)
+    # returns (User)`) instead of per-RPC wrapper messages. Keep RPCs matching
+    # the spec; do not add Xxx Response wrappers.
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE

@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package core.v1;
+
+import "common/v1/types.proto";
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
+
+// --- Domain messages ---
+
+message User {
+  string id = 1; // uuid
+  int64 telegram_id = 2;
+  string username = 3;
+  string language = 4; // fa | en
+  string role = 5; // user | support | admin | owner | reseller
+  string status = 6; // active | banned
+  string referred_by = 7; // uuid, optional
+  int64 created_at = 8; // unix seconds
+  int64 updated_at = 9;
+}
+
+message Plan {
+  string id = 1; // uuid
+  map<string, string> name_i18n = 2; // lang -> name
+  string kind = 3; // traffic | time | both
+  int32 duration_days = 4;
+  int64 traffic_bytes = 5;
+  common.v1.Money price = 6;
+  bool enabled = 7;
+  bool is_trial = 8;
+  int32 sort = 9;
+}
+
+message Order {
+  string id = 1; // uuid
+  string user_id = 2;
+  string plan_id = 3;
+  string type = 4; // new | renew | traffic_topup
+  string status = 5; // created|awaiting_payment|paid|provisioning|active|provision_failed|cancelled|expired
+  common.v1.Money amount = 6;
+  string idempotency_key = 7;
+  int64 created_at = 8;
+  int64 updated_at = 9;
+}
+
+message Wallet {
+  string user_id = 1;
+  string currency = 2;
+  int64 balance = 3;
+  int64 updated_at = 4;
+}
+
+message LedgerEntry {
+  string id = 1;
+  string user_id = 2;
+  string currency = 3;
+  int64 amount = 4;
+  string kind = 5; // topup | purchase | refund | adjust | trial_grant
+  string ref_type = 6;
+  string ref_id = 7;
+  string idempotency_key = 8;
+  int64 balance_after = 9;
+  int64 created_at = 10;
+}
+
+message Subscription {
+  string id = 1;
+  string user_id = 2;
+  string order_id = 3;
+  string server_id = 4;
+  string client_email = 5;
+  string sub_id = 6;
+  string status = 7; // pending|active|expiring_soon|expired|disabled|depleted
+  int64 expires_at = 8;
+  int64 traffic_total_bytes = 9;
+  int64 traffic_used_bytes = 10;
+  int64 last_synced_at = 11;
+}
+
+message Ticket {
+  string id = 1;
+  string user_id = 2;
+  string category = 3;
+  string text = 4;
+  string status = 5; // open | closed
+  int64 created_at = 6;
+}
+
+message Settings {
+  map<string, string> values = 1; // flattened key -> JSON-encoded value
+}
+
+// --- Request/response messages ---
+
+message UpsertUserRequest {
+  int64 telegram_id = 1;
+  string username = 2;
+  string language = 3;
+  string referred_by = 4;
+}
+
+message GetUserRequest {
+  oneof lookup {
+    string id = 1;
+    int64 telegram_id = 2;
+  }
+}
+
+message ListPlansRequest {
+  bool include_disabled = 1;
+}
+
+message ListPlansResponse {
+  repeated Plan plans = 1;
+}
+
+message CreateOrderRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  string type = 3;
+  string idempotency_key = 4;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message GetWalletRequest {
+  string user_id = 1;
+  string currency = 2;
+}
+
+message ListLedgerEntriesRequest {
+  string user_id = 1;
+  common.v1.Pagination pagination = 2;
+}
+
+message ListLedgerEntriesResponse {
+  repeated LedgerEntry entries = 1;
+  common.v1.PageInfo page_info = 2;
+}
+
+message ListSubscriptionsRequest {
+  string user_id = 1;
+  common.v1.Pagination pagination = 2;
+}
+
+message ListSubscriptionsResponse {
+  repeated Subscription subscriptions = 1;
+  common.v1.PageInfo page_info = 2;
+}
+
+message CreateSupportTicketRequest {
+  string user_id = 1;
+  string category = 2;
+  string text = 3;
+}
+
+message GetSettingsRequest {}
+
+message UpdateBrandingRequest {
+  map<string, string> values = 1;
+  string actor_id = 2;
+  string reason = 3;
+}
+
+message ReviewManualPaymentRequest {
+  string intent_id = 1;
+  string reviewer_id = 2;
+  string decision = 3; // approved | rejected
+  string reason = 4;
+}
+
+message PaymentIntentRef {
+  string id = 1;
+  string status = 2;
+}
+
+// CoreService owns users, plans, orders, wallet ledger, subscriptions,
+// audit log, branding/settings, and the dashboard API backing store.
+service CoreService {
+  rpc UpsertUser(UpsertUserRequest) returns (User);
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc ListPlans(ListPlansRequest) returns (ListPlansResponse);
+  rpc CreateOrder(CreateOrderRequest) returns (Order);
+  rpc GetOrder(GetOrderRequest) returns (Order);
+  rpc GetWallet(GetWalletRequest) returns (Wallet);
+  rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+  rpc CreateSupportTicket(CreateSupportTicketRequest) returns (Ticket);
+  rpc GetSettings(GetSettingsRequest) returns (Settings);
+  rpc UpdateBranding(UpdateBrandingRequest) returns (Settings);
+  rpc ReviewManualPayment(ReviewManualPaymentRequest) returns (PaymentIntentRef);
+}

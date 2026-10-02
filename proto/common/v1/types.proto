@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package common.v1;
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1;commonv1";
+
+// Money is an exact amount in minor units for a given currency.
+// IRT (Iranian Toman) has scale 0; USDT has scale 6. Never use float/double
+// for money.
+message Money {
+  int64 amount = 1;
+  string currency = 2;
+}
+
+// Pagination is a page-based cursor for list RPCs.
+message Pagination {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+// PageInfo is returned alongside paginated list responses.
+message PageInfo {
+  int32 page = 1;
+  int32 page_size = 2;
+  int64 total = 3;
+}

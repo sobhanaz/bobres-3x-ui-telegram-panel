@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package provisioner.v1;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1;provisionerv1";
+
+message Client {
+  string subscription_id = 1;
+  string server_id = 2;
+  string email = 3;
+  string xui_sub_id = 4;
+  repeated int32 inbound_ids = 5;
+  int64 expires_at = 6;
+  int64 traffic_total_bytes = 7;
+}
+
+message Usage {
+  string subscription_id = 1;
+  int64 traffic_used_bytes = 2;
+  int64 last_synced_at = 3;
+}
+
+message Links {
+  string subscription_link = 1;
+  string qr_png_base64 = 2;
+}
+
+message Inbound {
+  int32 id = 1;
+  string tag = 2;
+  bool enabled = 3;
+}
+
+message XUIServer {
+  string id = 1;
+  string name = 2;
+  string base_url = 3;
+  string panel_version = 4;
+  bool enabled = 5;
+}
+
+message CreateClientRequest {
+  string subscription_id = 1;
+  string server_id = 2;
+  string email = 3;
+  int64 duration_days = 4;
+  int64 traffic_bytes = 5;
+}
+
+message RenewClientRequest {
+  string subscription_id = 1;
+  int64 add_days = 2;
+  int64 add_bytes = 3;
+}
+
+message DeleteClientRequest {
+  string subscription_id = 1;
+}
+
+message ResetTrafficRequest {
+  string subscription_id = 1;
+}
+
+message GetUsageRequest {
+  string subscription_id = 1;
+}
+
+message GetLinksRequest {
+  string subscription_id = 1;
+}
+
+message ListInboundsRequest {
+  string server_id = 1;
+}
+
+message ListInboundsResponse {
+  repeated Inbound inbounds = 1;
+}
+
+message AddServerRequest {
+  string name = 1;
+  string base_url = 2;
+  string api_token = 3; // encrypted at rest once stored; plaintext only in transit
+}
+
+message HealthCheckRequest {
+  string server_id = 1;
+}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string panel_version = 2;
+  string detail = 3;
+}
+
+// ProvisionerService is the only service that holds 3x-ui API tokens and
+// talks to 3x-ui panels directly.
+service ProvisionerService {
+  rpc CreateClient(CreateClientRequest) returns (Client);
+  rpc RenewClient(RenewClientRequest) returns (Client);
+  rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty);
+  rpc ResetTraffic(ResetTrafficRequest) returns (Client);
+  rpc GetUsage(GetUsageRequest) returns (Usage);
+  rpc GetLinks(GetLinksRequest) returns (Links);
+  rpc ListInbounds(ListInboundsRequest) returns (ListInboundsResponse);
+  rpc AddServer(AddServerRequest) returns (XUIServer);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}

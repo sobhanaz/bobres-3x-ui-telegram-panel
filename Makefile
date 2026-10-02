@@ -5,8 +5,15 @@ SERVICES := bot core payments provisioner
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=$(VERSION)
 
-.PHONY: all build test lint vuln tidy fmt clean $(SERVICES)
+.PHONY: all build test lint vuln tidy fmt clean proto proto-lint $(SERVICES)
 all: fmt lint test build
+
+proto:
+	@command -v buf >/dev/null || (echo "buf not found: go install github.com/bufbuild/buf/cmd/buf@latest" && exit 1)
+	cd proto && buf generate
+
+proto-lint:
+	cd proto && buf lint
 
 build:
 	@mkdir -p bin
