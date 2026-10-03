@@ -1,6 +1,9 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"net/url"
+)
 
 // Bot is the bot service configuration.
 type Bot struct {
@@ -15,6 +18,9 @@ type Bot struct {
 	WebhookSecret string
 	// AdminTelegramID receives operational alerts (provisioning failures).
 	AdminTelegramID int64
+	// TelegramAPIURL replaces https://api.telegram.org (a local Bot API server,
+	// or the fake used by the CI end-to-end run). Empty = Telegram.
+	TelegramAPIURL string
 }
 
 // LoadBot reads the bot service configuration, failing closed on missing secrets.
@@ -43,5 +49,10 @@ func LoadBot() (Bot, error) {
 	}
 	b.AdminTelegramID, err = telegramID("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
+	if b.TelegramAPIURL = getenv("BOBRES_TELEGRAM_API_URL", ""); b.TelegramAPIURL != "" {
+		if u, err := url.Parse(b.TelegramAPIURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			keep(errors.New("BOBRES_TELEGRAM_API_URL must be an http(s) URL"))
+		}
+	}
 	return b, errors.Join(errs...)
 }

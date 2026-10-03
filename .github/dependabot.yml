@@ -10,3 +10,7 @@ updates:
   - package-ecosystem: docker
     directory: /deploy
     schedule: { interval: weekly }
+    ignore:
+      # The Go toolchain is bumped deliberately together with go.mod and CI
+      # (go-version in the workflows), not by image tag.
+      - dependency-name: golang

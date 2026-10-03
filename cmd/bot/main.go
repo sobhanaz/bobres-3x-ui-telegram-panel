@@ -55,7 +55,10 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(func() { _ = conn.Close() })
 	core := corev1.NewCoreServiceClient(conn)
 
-	bot := tg.New(cfg.TelegramBotToken)
+	bot := tg.New(cfg.TelegramBotToken, tg.WithAPIRoot(cfg.TelegramAPIURL))
+	if cfg.TelegramAPIURL != "" {
+		rt.Log.Warn("using a custom Telegram API root", "url", cfg.TelegramAPIURL)
+	}
 	meCtx, cancel := context.WithTimeout(rt.Ctx, 20*time.Second)
 	me, err := bot.GetMe(meCtx)
 	cancel()

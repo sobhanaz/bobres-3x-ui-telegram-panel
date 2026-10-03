@@ -27,6 +27,11 @@ downloads the signed `bobres` CLI binary, verifies it (cosign/ed25519), then han
 ## Layout on server
 `/opt/bobres/{bobres.yml, .env, docker-compose.yml, Caddyfile, data/, backups/, logs/}`; state in named volumes.
 
+## Status (2026-10-03)
+Implemented: `install`, `status`, `logs`, `uninstall [--purge]`, `doctor`, `version`. The bootstrap `install.sh`
+verifies the signed release and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
+`restore`, `config`, `secrets`, `license`, `admin`, `support-bundle`, and the hardening step (ufw, fail2ban).
+
 ## CLI commands
 | Command | Purpose |
 |---|---|

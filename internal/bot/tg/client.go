@@ -49,33 +49,53 @@ func IsNotModified(err error) bool {
 
 // Client calls the Bot API.
 type Client struct {
-	base string // https://api.telegram.org/bot<token>/
+	base string // <api root>/bot<token>/
+	hc   *http.Client
+}
+
+type settings struct {
+	root string // API root, default https://api.telegram.org
+	base string // full base including the token; set by WithBaseURL
 	hc   *http.Client
 }
 
 // Option customizes a Client.
-type Option func(*Client)
+type Option func(*settings)
 
-// WithBaseURL points the client at another API root (tests, local Bot API server).
+// WithAPIRoot points the client at another Bot API root, e.g. a local Bot API
+// server or the fake used in tests ("http://host:8081").
+func WithAPIRoot(root string) Option {
+	return func(s *settings) {
+		if root != "" {
+			s.root = root
+		}
+	}
+}
+
+// WithBaseURL sets the full base URL including the bot path ("…/bot<token>").
 func WithBaseURL(u string) Option {
-	return func(c *Client) { c.base = strings.TrimRight(u, "/") + "/" }
+	return func(s *settings) { s.base = strings.TrimRight(u, "/") + "/" }
 }
 
 // WithHTTPClient replaces the HTTP client.
-func WithHTTPClient(hc *http.Client) Option { return func(c *Client) { c.hc = hc } }
+func WithHTTPClient(hc *http.Client) Option { return func(s *settings) { s.hc = hc } }
 
 // New returns a client for token.
 func New(token string, opts ...Option) *Client {
-	c := &Client{
-		base: "https://api.telegram.org/bot" + token + "/",
+	s := settings{
+		root: "https://api.telegram.org",
 		// Long polling holds requests open (timeout below); keep the client
 		// timeout above it.
 		hc: &http.Client{Timeout: 75 * time.Second},
 	}
 	for _, o := range opts {
-		o(c)
+		o(&s)
 	}
-	return c
+	base := s.base
+	if base == "" {
+		base = strings.TrimRight(s.root, "/") + "/bot" + token + "/"
+	}
+	return &Client{base: base, hc: s.hc}
 }
 
 type reply struct {

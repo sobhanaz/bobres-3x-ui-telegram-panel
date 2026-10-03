@@ -96,8 +96,8 @@ func TestRunDispatch(t *testing.T) {
 	}
 	out.Reset()
 	errOut.Reset()
-	if code := run([]string{"status"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "not implemented") {
-		t.Fatalf("status: %d %q", code, errOut.String())
+	if code := run([]string{"update"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "not implemented") {
+		t.Fatalf("update: %d %q", code, errOut.String())
 	}
 	errOut.Reset()
 	if code := run([]string{"bogus"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "unknown command") {
@@ -111,7 +111,7 @@ func TestRunDispatch(t *testing.T) {
 
 func TestEveryDocumentedCommandIsHandled(t *testing.T) {
 	// docs/06-installer.md command list: none may fall through to "unknown command".
-	for _, c := range []string{"uninstall", "status", "logs", "update", "rollback", "backup", "restore", "config", "secrets", "license", "admin", "support-bundle"} {
+	for _, c := range []string{"update", "rollback", "backup", "restore", "config", "secrets", "license", "admin", "support-bundle"} {
 		var out, errOut bytes.Buffer
 		if code := run([]string{c}, &out, &errOut); code != 2 || strings.Contains(errOut.String(), "unknown command") {
 			t.Errorf("%s: code=%d err=%q", c, code, errOut.String())
