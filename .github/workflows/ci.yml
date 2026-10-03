@@ -39,7 +39,7 @@ jobs:
       BOBRES_TEST_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
           # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
           # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
           # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
           # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
