@@ -17,9 +17,11 @@
 | 1c Payments | Done. Core owns wallets and applies each intent exactly once; payments publishes `payment.succeeded`/`payment.rejected`. |
 | 1d Telegram bot | Done (`internal/bot`): fa/en, buy with wallet / card / USDT, receipts and TXIDs, services with QR, wallet top-ups and history, one trial, support, notifications from core's feed, and an admin panel in the bot. |
 | 1e Dashboard | Deferred to Phase 4, as PLAN.md §10 always had it. Everything Phase 1 needs from it (payment review, plans, users, balances, bans, settings) is in the bot's admin panel, behind core's audited admin RPCs. |
-| 1f Install | `bobres install` done (secrets, files, compose up, health wait, re-run safe). Still open: `bobres status/logs/uninstall`, an end-to-end install run in CI (the generated project is validated with `docker compose config` in tests), and a real-panel integration test behind a build tag. |
+| 1f Install | Done: `bobres install` (secrets, files, compose up, health wait, re-run safe), `bobres status`, `bobres logs`, `bobres uninstall [--purge]`. CI runs the real installer against the real stack (`docker` job): fake Telegram on the runner (`tools/tgfake`), the bot answers a `/start` through core and Postgres, then status, logs and both uninstall modes. A real-panel adapter test exists behind `-tags integration` (`XUI_TEST_URL`, `XUI_TEST_TOKEN`); it has not been run against a live panel yet. |
 
 Tests: every package runs against a throwaway Postgres (and Redis) in CI; `internal/testenv` starts the whole backend in-process and the bot tests drive it through a fake Telegram.
+
+Still open for Phase 1: native-speaker review of the Persian texts; running the integration test against a real 3x-ui v3 panel; dropping the GO-2026-6443 allowlist entry once grpc v1.85.0 is released.
 
 ## Global Constraints
 

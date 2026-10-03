@@ -144,6 +144,10 @@ services:
       # at https://<domain>/tg/webhook (routed by Caddy).
       BOBRES_TELEGRAM_WEBHOOK_URL: ${BOBRES_TELEGRAM_WEBHOOK_URL:-}
       BOBRES_TELEGRAM_WEBHOOK_SECRET: ${BOBRES_TELEGRAM_WEBHOOK_SECRET:-}
+      # Empty = api.telegram.org. A local Bot API server on this host is reachable
+      # as http://host.docker.internal:<port> (see extra_hosts).
+      BOBRES_TELEGRAM_API_URL: ${BOBRES_TELEGRAM_API_URL:-}
+    extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       core: { condition: service_healthy }
       redis: { condition: service_healthy }

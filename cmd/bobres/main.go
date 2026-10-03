@@ -16,7 +16,6 @@ import (
 
 // notImplemented lists commands from docs/06-installer.md that land in later phases.
 var notImplemented = map[string]string{
-	"uninstall": "phase 1", "status": "phase 1", "logs": "phase 1",
 	"update": "phase 6", "rollback": "phase 6", "backup": "phase 7", "restore": "phase 7",
 	"config": "phase 1", "secrets": "phase 7", "license": "phase 6", "admin": "phase 1",
 	"support-bundle": "phase 7",
@@ -40,6 +39,12 @@ func run(args []string, out, errOut io.Writer) int {
 		return doctorCmd(args[1:], out, errOut)
 	case "install":
 		return installCmd(args[1:], stdin, out, errOut)
+	case "status":
+		return newOps(stdin, out, errOut).statusCmd(args[1:])
+	case "logs":
+		return newOps(stdin, out, errOut).logsCmd(args[1:])
+	case "uninstall":
+		return newOps(stdin, out, errOut).uninstallCmd(args[1:])
 	default:
 		if phase, ok := notImplemented[cmd]; ok {
 			fmt.Fprintf(errOut, "bobres %s: not implemented yet (planned for %s)\n", cmd, phase)
@@ -57,12 +62,15 @@ func usage(w io.Writer) {
 Usage: bobres <command> [flags]
 
 Available now:
-  install  Set up BOBRES on this server (asks for what it needs; see install -h)
-  doctor   Check this server (RAM, disk, ports, Docker, DNS)
-  version  Print the version
+  install    Set up BOBRES on this server (asks for what it needs; see install -h)
+  status     Show the services, version and disk (exit 1 if something is down)
+  logs       Show service logs: bobres logs [-f] [--tail N] [service...]
+  uninstall  Remove the containers (data kept unless --purge)
+  doctor     Check this server (RAM, disk, ports, Docker, DNS)
+  version    Print the version
 
 Coming later:
-  uninstall status logs config admin           (phase 1)
+  config admin                                 (phase 1)
   update rollback license                      (phase 6)
   backup restore secrets support-bundle        (phase 7)
 `)

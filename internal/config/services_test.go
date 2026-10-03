@@ -37,6 +37,15 @@ func TestLoadBot(t *testing.T) {
 	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "WEBHOOK_SECRET") {
 		t.Fatalf("webhook mode without a secret accepted: %v", err)
 	}
+	t.Setenv("BOBRES_TELEGRAM_WEBHOOK_URL", "")
+	t.Setenv("BOBRES_TELEGRAM_API_URL", "ftp://x")
+	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "TELEGRAM_API_URL") {
+		t.Fatalf("bad API root accepted: %v", err)
+	}
+	t.Setenv("BOBRES_TELEGRAM_API_URL", "http://host.docker.internal:8081")
+	if c, err := LoadBot(); err != nil || c.TelegramAPIURL != "http://host.docker.internal:8081" {
+		t.Fatalf("API root: %v %+v", err, c.TelegramAPIURL)
+	}
 }
 
 func TestAdminTelegramIDIsStrict(t *testing.T) {
