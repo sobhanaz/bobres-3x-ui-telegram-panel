@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 func TestAllowUnderAndDenyOverLimit(t *testing.T) {
 	rdb := memClient(t)
-	l := New(rdb, "rltest:")
+	l := New(rdb, testPrefix(t))
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
@@ -34,7 +35,7 @@ func TestAllowUnderAndDenyOverLimit(t *testing.T) {
 
 func TestWindowExpiry(t *testing.T) {
 	rdb := memClient(t)
-	l := New(rdb, "rltest:")
+	l := New(rdb, testPrefix(t))
 	ctx := context.Background()
 
 	if _, err := l.Allow(ctx, "user:3", 900*time.Millisecond, 1); err != nil {
@@ -51,7 +52,7 @@ func TestWindowExpiry(t *testing.T) {
 
 func TestKeysAreIsolated(t *testing.T) {
 	rdb := memClient(t)
-	l := New(rdb, "rltest:")
+	l := New(rdb, testPrefix(t))
 	ctx := context.Background()
 
 	if _, err := l.Allow(ctx, "user:a", time.Minute, 1); err != nil {
@@ -60,6 +61,12 @@ func TestKeysAreIsolated(t *testing.T) {
 	if ok, _ := l.Allow(ctx, "user:b", time.Minute, 1); !ok {
 		t.Fatal("quota leaked across keys")
 	}
+}
+
+// testPrefix gives every test run its own keys: the counters live in a shared
+// Redis for up to a minute, so fixed keys made back-to-back runs fail.
+func testPrefix(t *testing.T) string {
+	return fmt.Sprintf("rltest:%s:%d:", t.Name(), time.Now().UnixNano())
 }
 
 // memClient connects to the test Redis (see testdb.RedisAddr). It skips when
