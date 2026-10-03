@@ -1,4 +1,4 @@
-# BOBRES docs index (planning phase - no code yet)
+# BOBRES docs index (Phase 1 in progress)
 
 | Doc | Topic |
 |---|---|

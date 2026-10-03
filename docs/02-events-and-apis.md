@@ -1,7 +1,7 @@
 # 02 - Event catalog and service APIs (DRAFT)
 
 Services: `bot`, `core`, `payments`, `provisioner` (+ Caddy gateway).
-Sync calls: gRPC (internal network only). Async: Postgres outbox + LISTEN/NOTIFY behind an `EventBus` interface (NATS JetStream can replace it later). Contracts in `proto/` (buf). Service auth: signed service tokens now, mTLS later.
+Sync calls: gRPC (internal network only). Async: each service's transactional outbox, pulled by consumers over gRPC (`events.v1.EventFeedService`, one cursor per consumer, kept by the producer; NATS JetStream can replace the transport later). Payload types live in `internal/events`. Contracts in `proto/` (buf). Service auth: one token per service, servers accept only their legitimate callers; mTLS later.
 
 ## Rules
 - Events are past-tense facts, versioned: `order.paid.v1`. Additive changes only within a version.
@@ -51,5 +51,8 @@ Startup: detect version, warn outside tested range. Per-client mutex because `cl
 - `/admin/*` dashboard (session + 2FA), `/healthz`, `/readyz`
 
 ## Open points
-- DECIDED: Postgres outbox + LISTEN/NOTIFY for v1; NATS only if load requires it.
+- DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.
+- Implemented so far: payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and
+  applies each intent exactly once); core publishes `order.paid.v1`, `wallet.credited.v1`, `payment.rejected.v1`
+  for the bot.
 - Whether bot->core is gRPC or shared library in early phases.

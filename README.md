@@ -9,4 +9,14 @@ Telegram bot and management panel for selling and managing 3x-ui (Xray) VPN subs
 - Payments and notifications
 
 ## Status
-Project initialized. Stack and architecture to be decided.
+Phase 1 in progress (see `docs/superpowers/plans/2026-09-30-phase1-implementation.md`).
+Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
+PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.
+
+## Development
+- `make build`, `make test`, `make lint`, `make proto`.
+- Database tests need PostgreSQL 13+ (`BOBRES_TEST_DATABASE_URL`, a URL for any database on
+  a server where the role may `CREATE DATABASE`; default: the local socket in `/tmp`) and
+  Redis (`BOBRES_TEST_REDIS_ADDR`, default `127.0.0.1:6379`). Each test package gets its own
+  throwaway database. They skip when the servers are missing, except with
+  `BOBRES_TEST_REQUIRE_DB=1` (CI), where they fail.
