@@ -96,6 +96,23 @@ func (s *Server) AddUsage(email string, up, down int64) {
 	}
 }
 
+// SetInboundsEnabled flips the enable flag of every inbound.
+func (s *Server) SetInboundsEnabled(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, in := range s.inbounds {
+		in["enable"] = on
+	}
+}
+
+// Seed stores a client directly, as if created earlier (e.g. by another tool,
+// or by an attempt whose response was lost).
+func (s *Server) Seed(email, subID string, inboundIDs []int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clients[email] = &record{client: client{Email: email, SubID: subID, Enable: true}, inboundIDs: inboundIDs}
+}
+
 // Has reports whether a client exists.
 func (s *Server) Has(email string) bool {
 	s.mu.Lock()

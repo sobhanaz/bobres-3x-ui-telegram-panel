@@ -7,6 +7,7 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -28,7 +29,8 @@ const (
 
 // Envelope encrypts and decrypts secrets with keys derived from master.
 type Envelope struct {
-	key []byte // derived AES key
+	key    []byte // derived AES key
+	macKey []byte // derived HMAC key (independent of key)
 }
 
 // NewEnvelope derives a data key from master. master must be at least 32
@@ -37,12 +39,32 @@ func NewEnvelope(master []byte) (*Envelope, error) {
 	if len(master) < masterMinLen {
 		return nil, fmt.Errorf("crypto: master key must be at least %d bytes", masterMinLen)
 	}
-	r := hkdf.New(sha256.New, master, nil, []byte("bobres:envelope:v1"))
-	key := make([]byte, 32)
-	if _, err := io.ReadFull(r, key); err != nil {
+	key, err := derive(master, "bobres:envelope:v1")
+	if err != nil {
+		return nil, err
+	}
+	macKey, err := derive(master, "bobres:mac:v1")
+	if err != nil {
+		return nil, err
+	}
+	return &Envelope{key: key, macKey: macKey}, nil
+}
+
+func derive(master []byte, info string) ([]byte, error) {
+	k := make([]byte, 32)
+	if _, err := io.ReadFull(hkdf.New(sha256.New, master, nil, []byte(info)), k); err != nil {
 		return nil, fmt.Errorf("crypto: derive key: %w", err)
 	}
-	return &Envelope{key: key}, nil
+	return k, nil
+}
+
+// Tag returns HMAC-SHA256(data) under a key derived from the master key. It
+// gives stable identifiers that nobody without the master key can predict
+// (e.g. 3x-ui subscription ids derived from our subscription ids).
+func (e *Envelope) Tag(data []byte) []byte {
+	m := hmac.New(sha256.New, e.macKey)
+	m.Write(data)
+	return m.Sum(nil)
 }
 
 // Encrypt returns version || nonce || AES-GCM(plaintext).

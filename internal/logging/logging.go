@@ -52,6 +52,11 @@ func parseLevel(s string) slog.Level {
 }
 
 func redact(_ []string, a slog.Attr) slog.Attr {
+	// A boolean cannot carry a secret, and "database_url_set=true" is exactly
+	// what an operator needs to see at startup.
+	if a.Value.Kind() == slog.KindBool {
+		return a
+	}
 	k := strings.ToLower(a.Key)
 	for _, s := range sensitiveKeys {
 		if strings.Contains(k, s) {

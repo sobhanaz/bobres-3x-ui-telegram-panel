@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
 
 func TestAllowUnderAndDenyOverLimit(t *testing.T) {
@@ -61,14 +62,17 @@ func TestKeysAreIsolated(t *testing.T) {
 	}
 }
 
-// memClient uses miniredis when available; otherwise a real redis on
-// 127.0.0.1:6379 (skipped if unreachable).
+// memClient connects to the test Redis (see testdb.RedisAddr). It skips when
+// Redis is unreachable locally and fails in CI (BOBRES_TEST_REQUIRE_DB=1).
 func memClient(t *testing.T) *redis.Client {
 	t.Helper()
-	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+	rdb := redis.NewClient(&redis.Options{Addr: testdb.RedisAddr()})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {
+		if testdb.Required() {
+			t.Fatalf("redis required but unavailable: %v", err)
+		}
 		t.Skipf("redis unavailable: %v", err)
 	}
 	t.Cleanup(func() { _ = rdb.Close() })

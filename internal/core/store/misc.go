@@ -154,3 +154,42 @@ func (s *Store) GetStaffByUsername(ctx context.Context, q querier, username stri
 	}
 	return &st, nil
 }
+
+// ClaimInbox records that an event was handled. It returns false when the
+// event was already claimed (a re-delivery), in which case the caller must not
+// apply it again. Call it inside the transaction that applies the event.
+func (s *Store) ClaimInbox(ctx context.Context, tx pgx.Tx, messageID string) (bool, error) {
+	var claimed bool
+	err := tx.QueryRow(ctx, `
+		INSERT INTO core.inbox_core (message_id) VALUES ($1)
+		ON CONFLICT (message_id) DO NOTHING RETURNING true`, messageID).Scan(&claimed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("claim inbox: %w", err)
+	}
+	return true, nil
+}
+
+// DeadLetter is an event that could not be applied.
+type DeadLetter struct {
+	Source  string
+	EventID string
+	Topic   string
+	Payload []byte
+	Error   string
+}
+
+// InsertDeadLetter stores a dead-lettered event (idempotent per source+event).
+func (s *Store) InsertDeadLetter(ctx context.Context, q querier, d DeadLetter) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO core.dead_letters (id, source, event_id, topic, payload, error)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (source, event_id) DO UPDATE SET error = EXCLUDED.error`,
+		buuid.MustV7(), d.Source, d.EventID, d.Topic, string(d.Payload), d.Error)
+	if err != nil {
+		return fmt.Errorf("dead letter: %w", err)
+	}
+	return nil
+}

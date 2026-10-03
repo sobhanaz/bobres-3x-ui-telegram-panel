@@ -175,9 +175,12 @@ func (x *Usage) GetLastSyncedAt() int64 {
 }
 
 type Links struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	SubscriptionLink string                 `protobuf:"bytes,1,opt,name=subscription_link,json=subscriptionLink,proto3" json:"subscription_link,omitempty"`
-	QrPngBase64      string                 `protobuf:"bytes,2,opt,name=qr_png_base64,json=qrPngBase64,proto3" json:"qr_png_base64,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The subscription URL (sub_base_url + subId) when the server has a
+	// subscription base URL configured, otherwise the first config link.
+	SubscriptionLink string   `protobuf:"bytes,1,opt,name=subscription_link,json=subscriptionLink,proto3" json:"subscription_link,omitempty"`
+	QrPngBase64      string   `protobuf:"bytes,2,opt,name=qr_png_base64,json=qrPngBase64,proto3" json:"qr_png_base64,omitempty"` // PNG QR code of subscription_link
+	ConfigLinks      []string `protobuf:"bytes,3,rep,name=config_links,json=configLinks,proto3" json:"config_links,omitempty"`   // one share link per attached inbound
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -224,6 +227,13 @@ func (x *Links) GetQrPngBase64() string {
 		return x.QrPngBase64
 	}
 	return ""
+}
+
+func (x *Links) GetConfigLinks() []string {
+	if x != nil {
+		return x.ConfigLinks
+	}
+	return nil
 }
 
 type Inbound struct {
@@ -293,6 +303,7 @@ type XUIServer struct {
 	BaseUrl       string                 `protobuf:"bytes,3,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
 	PanelVersion  string                 `protobuf:"bytes,4,opt,name=panel_version,json=panelVersion,proto3" json:"panel_version,omitempty"`
 	Enabled       bool                   `protobuf:"varint,5,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	SubBaseUrl    string                 `protobuf:"bytes,6,opt,name=sub_base_url,json=subBaseUrl,proto3" json:"sub_base_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -360,6 +371,13 @@ func (x *XUIServer) GetEnabled() bool {
 		return x.Enabled
 	}
 	return false
+}
+
+func (x *XUIServer) GetSubBaseUrl() string {
+	if x != nil {
+		return x.SubBaseUrl
+	}
+	return ""
 }
 
 type CreateClientRequest struct {
@@ -763,10 +781,16 @@ func (x *ListInboundsResponse) GetInbounds() []*Inbound {
 }
 
 type AddServerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	BaseUrl       string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
-	ApiToken      string                 `protobuf:"bytes,3,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"` // encrypted at rest once stored; plaintext only in transit
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	BaseUrl  string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	ApiToken string                 `protobuf:"bytes,3,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"` // encrypted at rest once stored; plaintext only in transit
+	// Public prefix of the panel's subscription server, e.g.
+	// https://sub.example.com:2096/sub/ (optional).
+	SubBaseUrl string `protobuf:"bytes,4,opt,name=sub_base_url,json=subBaseUrl,proto3" json:"sub_base_url,omitempty"`
+	// The panel is on a private/loopback address (same host or LAN). Off by
+	// default: the client refuses such addresses to block SSRF.
+	AllowPrivate  bool `protobuf:"varint,5,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -820,6 +844,20 @@ func (x *AddServerRequest) GetApiToken() string {
 		return x.ApiToken
 	}
 	return ""
+}
+
+func (x *AddServerRequest) GetSubBaseUrl() string {
+	if x != nil {
+		return x.SubBaseUrl
+	}
+	return ""
+}
+
+func (x *AddServerRequest) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
+	}
+	return false
 }
 
 type HealthCheckRequest struct {
@@ -945,20 +983,23 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x05Usage\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12,\n" +
 	"\x12traffic_used_bytes\x18\x02 \x01(\x03R\x10trafficUsedBytes\x12$\n" +
-	"\x0elast_synced_at\x18\x03 \x01(\x03R\flastSyncedAt\"X\n" +
+	"\x0elast_synced_at\x18\x03 \x01(\x03R\flastSyncedAt\"{\n" +
 	"\x05Links\x12+\n" +
 	"\x11subscription_link\x18\x01 \x01(\tR\x10subscriptionLink\x12\"\n" +
-	"\rqr_png_base64\x18\x02 \x01(\tR\vqrPngBase64\"E\n" +
+	"\rqr_png_base64\x18\x02 \x01(\tR\vqrPngBase64\x12!\n" +
+	"\fconfig_links\x18\x03 \x03(\tR\vconfigLinks\"E\n" +
 	"\aInbound\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x10\n" +
 	"\x03tag\x18\x02 \x01(\tR\x03tag\x12\x18\n" +
-	"\aenabled\x18\x03 \x01(\bR\aenabled\"\x89\x01\n" +
+	"\aenabled\x18\x03 \x01(\bR\aenabled\"\xab\x01\n" +
 	"\tXUIServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
 	"\bbase_url\x18\x03 \x01(\tR\abaseUrl\x12#\n" +
 	"\rpanel_version\x18\x04 \x01(\tR\fpanelVersion\x12\x18\n" +
-	"\aenabled\x18\x05 \x01(\bR\aenabled\"\xbb\x01\n" +
+	"\aenabled\x18\x05 \x01(\bR\aenabled\x12 \n" +
+	"\fsub_base_url\x18\x06 \x01(\tR\n" +
+	"subBaseUrl\"\xbb\x01\n" +
 	"\x13CreateClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
 	"\tserver_id\x18\x02 \x01(\tR\bserverId\x12\x14\n" +
@@ -980,11 +1021,14 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13ListInboundsRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"K\n" +
 	"\x14ListInboundsResponse\x123\n" +
-	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"^\n" +
+	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\xa5\x01\n" +
 	"\x10AddServerRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
-	"\tapi_token\x18\x03 \x01(\tR\bapiToken\"1\n" +
+	"\tapi_token\x18\x03 \x01(\tR\bapiToken\x12 \n" +
+	"\fsub_base_url\x18\x04 \x01(\tR\n" +
+	"subBaseUrl\x12#\n" +
+	"\rallow_private\x18\x05 \x01(\bR\fallowPrivate\"1\n" +
 	"\x12HealthCheckRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"l\n" +
 	"\x13HealthCheckResponse\x12\x18\n" +

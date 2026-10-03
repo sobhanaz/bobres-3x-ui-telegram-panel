@@ -1,106 +1,52 @@
-// Package eventbus defines the async messaging contract between services.
-// v1 backs it with a Postgres transactional outbox (LISTEN/NOTIFY); NATS
-// JetStream can replace the implementation without touching handlers.
+// Package eventbus moves domain events between services with at-least-once
+// delivery:
 //
-// Contract: at-least-once delivery. Handlers MUST be idempotent (consumers
-// de-duplicate on Event.ID via an inbox table).
+//   - Outbox.Publish appends an event inside the caller's transaction, so a
+//     state change and its event commit (or roll back) together.
+//   - Feed serves one schema's outbox to named consumers and keeps one cursor
+//     per consumer in the producer's schema; FeedServer exposes it over gRPC,
+//     so no service ever reads another service's database.
+//   - Consumer pulls from a Source (GRPCSource for a peer's feed), applies each
+//     event with retries and backoff, dead-letters events that cannot be
+//     applied, and acknowledges progress.
+//
+// Handlers must be idempotent and de-duplicate on Message.EventID (an inbox
+// table): a crash between "applied" and "acknowledged" re-delivers the event.
+// Another transport (e.g. NATS JetStream) can replace Feed/Source without
+// touching handlers.
 package eventbus
 
 import (
-	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"sync"
 	"time"
 )
 
-// Event is an immutable fact that already happened. Type is versioned,
-// e.g. "order.paid.v1". Additive payload changes only within one version.
-type Event struct {
-	ID            string          `json:"event_id"`
-	Type          string          `json:"type"`
-	OccurredAt    time.Time       `json:"occurred_at"`
-	CorrelationID string          `json:"correlation_id,omitempty"`
-	Actor         string          `json:"actor,omitempty"`
-	Payload       json.RawMessage `json:"payload"`
+// Message is one event as seen by a consumer.
+type Message struct {
+	Seq       int64  // position in the producer's feed
+	EventID   string // globally unique; the de-duplication key
+	Topic     string // versioned fact name, e.g. "payment.succeeded.v1"
+	Payload   []byte // JSON
+	CreatedAt time.Time
 }
 
-// NewEvent builds an event with a fresh ID and timestamp.
-func NewEvent(typ, correlationID, actor string, payload any) (Event, error) {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return Event{}, err
-	}
-	return Event{ID: newID(), Type: typ, OccurredAt: time.Now().UTC(), CorrelationID: correlationID, Actor: actor, Payload: b}, nil
-}
+type permanentError struct{ err error }
 
-// Handler processes one event. Returning an error triggers a retry with
-// backoff; after the retry budget the event goes to the dead-letter store.
-type Handler func(ctx context.Context, e Event) error
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
 
-// Publisher emits events.
-type Publisher interface {
-	Publish(ctx context.Context, e Event) error
-}
-
-// Subscriber registers handlers for an event type.
-type Subscriber interface {
-	Subscribe(eventType string, h Handler)
-}
-
-// Bus is both.
-type Bus interface {
-	Publisher
-	Subscriber
-}
-
-// ErrNoHandler is returned by test buses when nothing listens (informational).
-var ErrNoHandler = errors.New("eventbus: no handler registered")
-
-func newID() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
-}
-
-// Memory is an in-process Bus for tests and single-binary development.
-// It delivers synchronously and de-duplicates by Event.ID like the real inbox.
-type Memory struct {
-	mu   sync.Mutex
-	subs map[string][]Handler
-	seen map[string]struct{}
-}
-
-// NewMemory returns an empty in-memory bus.
-func NewMemory() *Memory {
-	return &Memory{subs: map[string][]Handler{}, seen: map[string]struct{}{}}
-}
-
-// Subscribe implements Subscriber.
-func (m *Memory) Subscribe(eventType string, h Handler) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.subs[eventType] = append(m.subs[eventType], h)
-}
-
-// Publish implements Publisher. Duplicate event IDs are ignored.
-func (m *Memory) Publish(ctx context.Context, e Event) error {
-	m.mu.Lock()
-	if _, dup := m.seen[e.ID]; dup {
-		m.mu.Unlock()
+// Permanent marks a handler error that retrying cannot fix (malformed payload,
+// reference to something that does not exist). The consumer dead-letters such
+// an event immediately instead of retrying it.
+func Permanent(err error) error {
+	if err == nil {
 		return nil
 	}
-	m.seen[e.ID] = struct{}{}
-	hs := append([]Handler(nil), m.subs[e.Type]...)
-	m.mu.Unlock()
+	return &permanentError{err: err}
+}
 
-	var errs []error
-	for _, h := range hs {
-		if err := h(ctx, e); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
+// IsPermanent reports whether err (or anything it wraps) was marked Permanent.
+func IsPermanent(err error) bool {
+	var p *permanentError
+	return errors.As(err, &p)
 }

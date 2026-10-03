@@ -4,14 +4,32 @@ package domain
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/money"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/provider"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
+)
+
+var (
+	// ErrInvalid marks input that can never succeed as sent.
+	ErrInvalid = errors.New("payments: invalid argument")
+	// ErrForbidden: the intent belongs to someone else.
+	ErrForbidden = errors.New("payments: forbidden")
+)
+
+func invalid(format string, a ...any) error {
+	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, a...))
+}
+
+const (
+	maxProofLen  = 256
+	maxReasonLen = 500
 )
 
 // Service composes the payments store with business rules.
@@ -20,21 +38,29 @@ type Service struct {
 	ob *eventbus.Outbox
 }
 
-// New builds a Service. ob may be nil in tests (events skipped).
-func New(st *store.Store, ob *eventbus.Outbox) *Service { return &Service{st: st, ob: ob} }
+// New builds a Service publishing to the payments outbox.
+func New(st *store.Store) *Service {
+	return &Service{st: st, ob: eventbus.NewOutbox("outbox_payments")}
+}
 
-// CreateIntent inserts a pending intent (idempotent).
+// CreateIntent inserts a pending intent (idempotent per key).
 func (s *Service) CreateIntent(ctx context.Context, in *store.Intent) (*store.Intent, error) {
 	if in.IdempotencyKey == "" {
-		return nil, errors.New("domain: idempotency key required")
+		return nil, invalid("idempotency key required")
+	}
+	if in.UserID == "" {
+		return nil, invalid("user id required")
 	}
 	switch in.Provider {
-	case provider.Wallet, provider.ManualCard, provider.ManualCrypto:
+	case provider.ManualCard, provider.ManualCrypto:
 	default:
-		return nil, fmt.Errorf("domain: unsupported provider %q", in.Provider)
+		return nil, invalid("unsupported provider %q", in.Provider)
 	}
 	if in.Amount <= 0 {
-		return nil, errors.New("domain: amount must be positive")
+		return nil, invalid("amount must be positive")
+	}
+	if money.Scale(in.Currency) < 0 {
+		return nil, invalid("unsupported currency %q", in.Currency)
 	}
 	in.Status = "pending"
 	return s.st.CreateIntent(ctx, nil, in)
@@ -42,8 +68,12 @@ func (s *Service) CreateIntent(ctx context.Context, in *store.Intent) (*store.In
 
 // SubmitReceipt stores a card receipt and moves to confirming.
 func (s *Service) SubmitReceipt(ctx context.Context, userID, intentID, fileID, reference string) (*store.Intent, error) {
+	fileID, reference = strings.TrimSpace(fileID), strings.TrimSpace(reference)
 	if fileID == "" || reference == "" {
-		return nil, errors.New("domain: receipt file and reference required")
+		return nil, invalid("receipt file and reference required")
+	}
+	if len(fileID) > maxProofLen || len(reference) > maxProofLen {
+		return nil, invalid("receipt details too long")
 	}
 	return s.submit(ctx, userID, intentID, provider.ManualCard, func(r *store.Receipt) {
 		r.ReceiptFile = &fileID
@@ -51,10 +81,15 @@ func (s *Service) SubmitReceipt(ctx context.Context, userID, intentID, fileID, r
 	})
 }
 
-// SubmitTXID stores a crypto TXID and moves to confirming.
+// SubmitTXID stores a crypto TXID and moves to confirming. A TXID can pay for
+// one intent only (enforced by a unique index, case-insensitive).
 func (s *Service) SubmitTXID(ctx context.Context, userID, intentID, network, txid string) (*store.Intent, error) {
+	network, txid = strings.ToUpper(strings.TrimSpace(network)), strings.TrimSpace(txid)
 	if txid == "" || network == "" {
-		return nil, errors.New("domain: network and txid required")
+		return nil, invalid("network and txid required")
+	}
+	if len(txid) > maxProofLen || len(network) > 32 {
+		return nil, invalid("transaction details too long")
 	}
 	return s.submit(ctx, userID, intentID, provider.ManualCrypto, func(r *store.Receipt) {
 		r.Network = &network
@@ -71,10 +106,10 @@ func (s *Service) submit(ctx context.Context, userID, intentID, wantProvider str
 			return err
 		}
 		if in.UserID != userID {
-			return errors.New("domain: intent belongs to another user")
+			return ErrForbidden
 		}
 		if in.Provider != wantProvider {
-			return fmt.Errorf("domain: wrong proof type for provider %s", in.Provider)
+			return invalid("this payment expects a %s proof", in.Provider)
 		}
 		r := &store.Receipt{IntentID: intentID}
 		fill(r)
@@ -91,12 +126,20 @@ func (s *Service) submit(ctx context.Context, userID, intentID, wantProvider str
 }
 
 // Review applies an admin decision. Approve credits the ledger mirror and
-// publishes payment.succeeded.v1 (+ wallet.credited.v1 for top-ups); reject
-// publishes payment.rejected.v1. Status guards allow exactly one committed
-// review per intent, so concurrent approvals can never double-credit.
+// publishes payment.succeeded.v1; reject publishes payment.rejected.v1 with the
+// reviewer's reason. Core owns wallets and applies the money exactly once per
+// intent. Status guards allow exactly one committed review per intent, so
+// concurrent approvals can never double-credit.
 func (s *Service) Review(ctx context.Context, reviewerID, intentID, decision, reason string) (*store.Intent, error) {
 	if decision != "approved" && decision != "rejected" {
-		return nil, errors.New("domain: decision must be approved|rejected")
+		return nil, invalid("decision must be approved or rejected")
+	}
+	if reviewerID == "" {
+		return nil, invalid("reviewer required")
+	}
+	reason = strings.TrimSpace(reason)
+	if len(reason) > maxReasonLen {
+		return nil, invalid("reason too long")
 	}
 	var out *store.Intent
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
@@ -123,7 +166,7 @@ func (s *Service) Review(ctx context.Context, reviewerID, intentID, decision, re
 			return err
 		}
 		out = in
-		return s.publishReviewEvents(ctx, tx, in, decision)
+		return s.publishReview(ctx, tx, in, decision, reason)
 	})
 	if err != nil {
 		return nil, err
@@ -131,41 +174,19 @@ func (s *Service) Review(ctx context.Context, reviewerID, intentID, decision, re
 	return out, nil
 }
 
-// publishReviewEvents writes the post-review events inside the review tx.
-func (s *Service) publishReviewEvents(ctx context.Context, tx pgx.Tx, in *store.Intent, decision string) error {
-	if s.ob == nil {
-		return nil
-	}
-	body := map[string]any{
-		"intent_id": in.ID,
-		"user_id":   in.UserID,
-		"provider":  in.Provider,
-		"amount":    in.Amount,
-		"currency":  in.Currency,
+// publishReview writes the review's event inside the review transaction.
+func (s *Service) publishReview(ctx context.Context, tx pgx.Tx, in *store.Intent, decision, reason string) error {
+	e := events.PaymentEvent{
+		IntentID: in.ID, UserID: in.UserID, Provider: in.Provider,
+		Amount: in.Amount, Currency: in.Currency,
 	}
 	if in.OrderID != nil {
-		body["order_id"] = *in.OrderID
+		e.OrderID = *in.OrderID
 	}
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return err
+	topic := events.PaymentsPaymentSucceeded
+	if decision == "rejected" {
+		topic, e.Reason = events.PaymentsPaymentRejected, reason
 	}
-	topic := "payment.rejected.v1"
-	if decision == "approved" {
-		topic = "payment.succeeded.v1"
-	}
-	ptx := eventbus.PgxTx{Tx: tx}
-	if err := s.ob.Publish(ctx, ptx, topic, payload); err != nil {
-		return err
-	}
-	if decision == "approved" && in.OrderID == nil {
-		cred, _ := json.Marshal(map[string]any{
-			"user_id": in.UserID, "amount": in.Amount,
-			"currency": in.Currency, "intent_id": in.ID,
-		})
-		if err := s.ob.Publish(ctx, ptx, "wallet.credited.v1", cred); err != nil {
-			return fmt.Errorf("wallet.credited publish: %w", err)
-		}
-	}
-	return nil
+	_, err := s.ob.Publish(ctx, tx, topic, e)
+	return err
 }

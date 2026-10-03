@@ -182,7 +182,10 @@ message PaymentIntentRef {
 
 message PayOrderWithWalletRequest {
   string order_id = 1;
+  // Kept for compatibility; the order id is the idempotency anchor (one order
+  // can only ever be charged once).
   string idempotency_key = 2;
+  string user_id = 3; // when set, must own the order
 }
 
 message CreatePaymentIntentRequest {

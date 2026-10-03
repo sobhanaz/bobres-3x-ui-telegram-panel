@@ -2,45 +2,36 @@ package domain
 
 import (
 	"context"
-	"database/sql"
+	"encoding/json"
 	"errors"
-	"os"
 	"testing"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/provider"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
+
+func TestMain(m *testing.M) { testdb.Main(m) }
 
 func testService(t *testing.T) (*Service, *store.Store) {
 	t.Helper()
-	dsn := os.Getenv("BOBRES_TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres:///postgres?host=/tmp&port=5432&sslmode=disable"
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
-		t.Skipf("migration: %v", err)
+		t.Fatalf("migrate: %v", err)
 	}
 	st, err := store.New(ctx, dsn)
 	if err != nil {
-		t.Skipf("connect: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(st.Close)
-	for _, tbl := range []string{"manual_receipts", "ledger_entries", "payment_intents", "outbox_payments"} {
-		if _, err := st.DB().Exec(ctx, "TRUNCATE payments."+tbl+" CASCADE"); err != nil {
-			t.Skipf("seed admin and core: %v", err)
-		}
-	}
-	sqlDB, err := sql.Open("pgx", dsn)
-	if err != nil {
+	if _, err := st.DB().Exec(ctx, `TRUNCATE payments.manual_receipts, payments.ledger_entries,
+		payments.payment_intents, payments.outbox_payments CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	ob := eventbus.NewOutbox(sqlDB, "outbox_payments")
-	return New(st, ob), st
+	return New(st), st
 }
 
 const (
@@ -48,6 +39,31 @@ const (
 	admin     = "00000000-0000-7000-8000-00000000d0a1"
 	orderUUID = "00000000-0000-7000-8000-00000000d0b1"
 )
+
+func outbox(t *testing.T, st *store.Store) map[string][]events.PaymentEvent {
+	t.Helper()
+	rows, err := st.DB().Query(context.Background(), `SELECT topic, payload FROM payments.outbox_payments ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := map[string][]events.PaymentEvent{}
+	for rows.Next() {
+		var (
+			topic string
+			raw   []byte
+			e     events.PaymentEvent
+		)
+		if err := rows.Scan(&topic, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &e); err != nil {
+			t.Fatal(err)
+		}
+		out[topic] = append(out[topic], e)
+	}
+	return out
+}
 
 func TestManualCardOrderApproveFlow(t *testing.T) {
 	svc, st := testService(t)
@@ -63,100 +79,103 @@ func TestManualCardOrderApproveFlow(t *testing.T) {
 	if _, err := svc.SubmitReceipt(ctx, uid, in.ID, "photo123", "REF9988"); err != nil {
 		t.Fatal(err)
 	}
-	// Submitting a txid against a card intent must fail.
-	if _, err := svc.SubmitTXID(ctx, uid, in.ID, "TRC20", "0x1"); err == nil {
-		t.Fatal("txid submitted on card intent")
+	if _, err := svc.SubmitTXID(ctx, uid, in.ID, "TRC20", "0x1"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("txid on a card intent: %v", err)
 	}
-	// Another user cannot submit to this intent.
-	if _, err := svc.SubmitReceipt(ctx, admin, in.ID, "x", "y"); err == nil {
-		t.Fatal("foreign user submitted receipt")
+	if _, err := svc.SubmitReceipt(ctx, admin, in.ID, "x", "y"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("foreign user submitted a receipt: %v", err)
 	}
-
 	got, err := svc.Review(ctx, admin, in.ID, "approved", "ok")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Status != "succeeded" {
-		t.Errorf("status = %q", got.Status)
-	}
-	// Double approve rejected.
-	if _, err := svc.Review(ctx, admin, in.ID, "approved", "again"); !errors.Is(err, store.ErrInvalidTransition) {
-		t.Fatalf("double approve: %v", err)
-	}
-	// Outbox has payment.succeeded.v1 with order_id.
-	var topic string
-	var payload []byte
-	err = st.DB().QueryRow(ctx, `SELECT topic, payload FROM payments.outbox_payments WHERE topic='payment.succeeded.v1'`).Scan(&topic, &payload)
-	if err != nil || !contains(string(payload), orderUUID) {
-		t.Fatalf("outbox: %v %s", err, payload)
-	}
-}
-
-func TestTopupApproveEmitsWalletCredited(t *testing.T) {
-	svc, st := testService(t)
-	ctx := context.Background()
-
-	in, _ := svc.CreateIntent(ctx, &store.Intent{
-		UserID: uid, Provider: provider.ManualCrypto, Amount: 25, Currency: "USDT",
-		IdempotencyKey: "top-1",
-	})
-	if _, err := svc.SubmitTXID(ctx, uid, in.ID, "TRC20", "0xfeed"); err != nil {
-		t.Fatal(err)
-	}
-	got, err := svc.Review(ctx, admin, in.ID, "approved", "")
 	if err != nil || got.Status != "succeeded" {
 		t.Fatalf("review: %v %+v", err, got)
 	}
-	var n int
-	if err := st.DB().QueryRow(ctx, `SELECT count(*) FROM payments.outbox_payments WHERE topic='wallet.credited.v1'`).Scan(&n); err != nil {
-		t.Fatal(err)
+	if _, err := svc.Review(ctx, admin, in.ID, "approved", "again"); !errors.Is(err, store.ErrInvalidTransition) {
+		t.Fatalf("double approve: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("wallet.credited count = %d", n)
-	}
-	// Ledger mirror holds one 25 USDT credit.
-	var bal int64
-	if err := st.DB().QueryRow(ctx, `SELECT balance_after FROM payments.ledger_entries WHERE user_id=$1`, uid).Scan(&bal); err != nil {
-		t.Fatal(err)
-	}
-	if bal != 25 {
-		t.Errorf("ledger balance_after = %d", bal)
+	ev := outbox(t, st)
+	if len(ev[events.PaymentsPaymentSucceeded]) != 1 || ev[events.PaymentsPaymentSucceeded][0].OrderID != orderUUID {
+		t.Fatalf("outbox: %+v", ev)
 	}
 }
 
-func TestRejectFlow(t *testing.T) {
+// Core owns wallets: payments announces only the review outcome. Emitting a
+// second event for top-ups was one of the triggers of the core-side double
+// credit and of the stalled event queue.
+func TestTopupApprovalEmitsOneEvent(t *testing.T) {
 	svc, st := testService(t)
 	ctx := context.Background()
 	in, _ := svc.CreateIntent(ctx, &store.Intent{
-		UserID: uid, Provider: provider.ManualCard, Amount: 1000, Currency: "IRT",
-		IdempotencyKey: "rej-1",
+		UserID: uid, Provider: provider.ManualCrypto, Amount: 25_000_000, Currency: "USDT", IdempotencyKey: "top-1",
 	})
-	_, _ = svc.SubmitReceipt(ctx, uid, in.ID, "p", "r")
+	if _, err := svc.SubmitTXID(ctx, uid, in.ID, "trc20", "0xfeed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Review(ctx, admin, in.ID, "approved", ""); err != nil {
+		t.Fatal(err)
+	}
+	ev := outbox(t, st)
+	if len(ev) != 1 || len(ev[events.PaymentsPaymentSucceeded]) != 1 || ev[events.PaymentsPaymentSucceeded][0].Amount != 25_000_000 {
+		t.Fatalf("outbox: %+v", ev)
+	}
+	var bal int64
+	if err := st.DB().QueryRow(ctx, `SELECT balance_after FROM payments.ledger_entries WHERE user_id=$1`, uid).Scan(&bal); err != nil || bal != 25_000_000 {
+		t.Fatalf("ledger mirror: %d %v", bal, err)
+	}
+}
+
+func TestRejectionCarriesTheReason(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	in, _ := svc.CreateIntent(ctx, &store.Intent{
+		UserID: uid, Provider: provider.ManualCard, Amount: 1000, Currency: "IRT", IdempotencyKey: "rej-1",
+	})
+	if _, err := svc.SubmitReceipt(ctx, uid, in.ID, "p", "r"); err != nil {
+		t.Fatal(err)
+	}
 	got, err := svc.Review(ctx, admin, in.ID, "rejected", "fake receipt")
 	if err != nil || got.Status != "failed" {
 		t.Fatalf("reject: %v %+v", err, got)
 	}
-	var n int
-	_ = st.DB().QueryRow(ctx, `SELECT count(*) FROM payments.outbox_payments WHERE topic='payment.rejected.v1' AND payload::text LIKE '%fake%'`).Scan(&n)
-	_ = n
-	var reason string
-	_ = st.DB().QueryRow(ctx, `SELECT reason FROM payments.manual_receipts WHERE intent_id=$1`, in.ID).Scan(&reason)
-	if reason != "fake receipt" {
-		t.Errorf("reason = %q", reason)
+	ev := outbox(t, st)[events.PaymentsPaymentRejected]
+	if len(ev) != 1 || ev[0].Reason != "fake receipt" {
+		t.Fatalf("payment.rejected: %+v", ev)
+	}
+}
+
+// One crypto transaction cannot pay for two intents, in any letter case.
+func TestTXIDCanPayOnlyOnce(t *testing.T) {
+	svc, _ := testService(t)
+	ctx := context.Background()
+	a, _ := svc.CreateIntent(ctx, &store.Intent{UserID: uid, Provider: provider.ManualCrypto, Amount: 1, Currency: "USDT", IdempotencyKey: "tx-a"})
+	b, _ := svc.CreateIntent(ctx, &store.Intent{UserID: uid, Provider: provider.ManualCrypto, Amount: 1, Currency: "USDT", IdempotencyKey: "tx-b"})
+	if _, err := svc.SubmitTXID(ctx, uid, a.ID, "TRC20", "ABCDEF01"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SubmitTXID(ctx, uid, b.ID, "TRC20", "abcdef01"); !errors.Is(err, store.ErrDuplicateProof) {
+		t.Fatalf("reused TXID: want ErrDuplicateProof, got %v", err)
+	}
+}
+
+func TestCreateIntentValidation(t *testing.T) {
+	svc, _ := testService(t)
+	ctx := context.Background()
+	for name, in := range map[string]*store.Intent{
+		"no key":        {UserID: uid, Provider: provider.ManualCard, Amount: 1, Currency: "IRT"},
+		"bad provider":  {UserID: uid, Provider: "zarinpal", Amount: 1, Currency: "IRT", IdempotencyKey: "v1"},
+		"zero amount":   {UserID: uid, Provider: provider.ManualCard, Amount: 0, Currency: "IRT", IdempotencyKey: "v2"},
+		"bad currency":  {UserID: uid, Provider: provider.ManualCard, Amount: 1, Currency: "EUR", IdempotencyKey: "v3"},
+		"wallet intent": {UserID: uid, Provider: provider.Wallet, Amount: 1, Currency: "IRT", IdempotencyKey: "v4"},
+	} {
+		if _, err := svc.CreateIntent(ctx, in); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: want ErrInvalid, got %v", name, err)
+		}
+	}
+	if _, err := svc.CreateIntent(ctx, &store.Intent{UserID: uid, Provider: provider.ManualCard, Amount: 5, Currency: "IRT", IdempotencyKey: "same"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateIntent(ctx, &store.Intent{UserID: uid, Provider: provider.ManualCard, Amount: 6, Currency: "IRT", IdempotencyKey: "same"}); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("reused key with another amount: %v", err)
 	}
 }
 
 func strptr(s string) *string { return &s }
-
-func contains(hay, needle string) bool {
-	return len(hay) >= len(needle) && (hay == needle || index(hay, needle) >= 0)
-}
-
-func index(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}

@@ -50,14 +50,26 @@ func TestScrubsCredentialsInsideValuesAndErrors(t *testing.T) {
 func TestBroaderKeysRedacted(t *testing.T) {
 	var buf bytes.Buffer
 	l := NewWithWriter(&buf, "core", "info", "json")
-	l.Info("x", "database_url", "postgres://a", "license", "tok", "Authorization", "Bearer abc", "bot_token", "1:2", "user_id", 7)
+	// Leak markers must not occur naturally in the log line: the old "1:2" also
+	// matched timestamps such as 21:26, so the test failed a few percent of runs.
+	l.Info("x", "database_url", "postgres://a", "license", "tok", "Authorization", "Bearer abc", "bot_token", "999:SecretBotTok", "user_id", 7)
 	out := buf.String()
-	for _, leak := range []string{"postgres://a", `"tok"`, "Bearer abc", "1:2"} {
+	for _, leak := range []string{"postgres://a", `"tok"`, "Bearer abc", "SecretBotTok"} {
 		if strings.Contains(out, leak) {
 			t.Fatalf("leaked %q: %s", leak, out)
 		}
 	}
 	if !strings.Contains(out, `"user_id":7`) {
 		t.Fatalf("normal field lost: %s", out)
+	}
+}
+
+func TestBooleansAreNotRedacted(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewWithWriter(&buf, "core", "info", "json")
+	l.Info("starting", "database_url_set", true, "service_token", "s3cr3t")
+	out := buf.String()
+	if !strings.Contains(out, `"database_url_set":true`) || strings.Contains(out, "s3cr3t") {
+		t.Fatalf("bad redaction: %s", out)
 	}
 }

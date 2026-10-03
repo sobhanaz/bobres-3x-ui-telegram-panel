@@ -31,19 +31,36 @@ func New(st *store.Store, dom *domain.Service) *Server {
 // Register attaches the service to a grpc.Server.
 func (s *Server) Register(g *grpc.Server) { corev1.RegisterCoreServiceServer(g, s) }
 
+// fail maps domain errors to gRPC codes the bot can act on. Unknown errors
+// become Internal with a generic message (details stay in logs).
 func fail(err error) error {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, domain.ErrInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrUserBanned):
+		return status.Error(codes.PermissionDenied, err.Error())
 	case errors.Is(err, domain.ErrTrialAlreadyUsed),
 		errors.Is(err, domain.ErrOrderNotPayable),
+		errors.Is(err, domain.ErrPlanUnavailable),
 		errors.Is(err, store.ErrInsufficientFunds):
 		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, store.ErrDuplicateIdempotency):
+	case errors.Is(err, store.ErrIdempotencyConflict):
 		return status.Error(codes.AlreadyExists, err.Error())
-	default:
-		return status.Error(codes.Internal, "internal error")
 	}
+	// Errors from a peer service (payments, provisioner) keep their code when
+	// it is meaningful to the caller.
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.InvalidArgument, codes.NotFound, codes.AlreadyExists,
+			codes.FailedPrecondition, codes.PermissionDenied:
+			return status.Error(st.Code(), st.Message())
+		case codes.Unavailable, codes.DeadlineExceeded:
+			return status.Error(codes.Unavailable, "a backend service is unavailable, try again")
+		}
+	}
+	return status.Error(codes.Internal, "internal error")
 }
 
 func userToProto(u *store.User) *corev1.User {
@@ -65,7 +82,10 @@ func userToProto(u *store.User) *corev1.User {
 
 // UpsertUser creates or updates a user by telegram id.
 func (s *Server) UpsertUser(ctx context.Context, req *corev1.UpsertUserRequest) (*corev1.User, error) {
-	u, err := s.st.UpsertUser(ctx, s.st.Conn(), req.GetTelegramId(), req.GetUsername(), req.GetLanguage(), req.GetReferredBy())
+	u, err := s.dom.UpsertUser(ctx, domain.UpsertUserParams{
+		TelegramID: req.GetTelegramId(), Username: req.GetUsername(),
+		Language: req.GetLanguage(), ReferredBy: req.GetReferredBy(),
+	})
 	if err != nil {
 		return nil, fail(err)
 	}
@@ -169,6 +189,36 @@ func (s *Server) GetWallet(ctx context.Context, req *corev1.GetWalletRequest) (*
 		Balance:   w.Balance,
 		UpdatedAt: w.UpdatedAt.Unix(),
 	}, nil
+}
+
+// ListLedgerEntries returns a user's ledger, newest first.
+func (s *Server) ListLedgerEntries(ctx context.Context, req *corev1.ListLedgerEntriesRequest) (*corev1.ListLedgerEntriesResponse, error) {
+	page, size := req.GetPagination().GetPage(), req.GetPagination().GetPageSize()
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	if page < 1 {
+		page = 1
+	}
+	entries, err := s.st.ListLedger(ctx, s.st.Conn(), req.GetUserId(), int(size), int((page-1)*size))
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.ListLedgerEntriesResponse{PageInfo: &commonv1.PageInfo{Page: page, PageSize: size}}
+	for _, e := range entries {
+		le := &corev1.LedgerEntry{
+			Id: e.ID, UserId: e.UserID, Currency: e.Currency, Amount: e.Amount, Kind: e.Kind,
+			IdempotencyKey: e.IdempotencyKey, BalanceAfter: e.BalanceAfter, CreatedAt: e.CreatedAt.Unix(),
+		}
+		if e.RefType != nil {
+			le.RefType = *e.RefType
+		}
+		if e.RefID != nil {
+			le.RefId = *e.RefID
+		}
+		out.Entries = append(out.Entries, le)
+	}
+	return out, nil
 }
 
 // ListSubscriptions returns the user's subscriptions.

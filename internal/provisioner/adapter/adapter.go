@@ -16,6 +16,11 @@ type PanelAdapter interface {
 	ResetTraffic(ctx context.Context, email string) error
 	Usage(ctx context.Context, email string) (usedBytes int64, err error)
 	Links(ctx context.Context, email string) ([]string, error)
+	// SubLinks returns the share links served for a subscription id.
+	SubLinks(ctx context.Context, subID string) ([]string, error)
+	// ClientSubID returns the subscription id of an existing client, so a
+	// retried create can tell our own client from someone else's.
+	ClientSubID(ctx context.Context, email string) (string, error)
 	Inbounds(ctx context.Context) ([]Inbound, error)
 	// HealthCheck pings the panel and reports health metadata.
 	HealthCheck(ctx context.Context) (version string, err error)

@@ -12,7 +12,9 @@ import (
 // ErrNotFound is returned by all Get* methods when no row matches.
 var ErrNotFound = errors.New("store: not found")
 
-const userCols = `id, telegram_id, username, language, role, status, referred_by, created_at, updated_at`
+// username is NULL for Telegram users without a public @username; the struct
+// field is a plain string, so it is read as ”.
+const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User

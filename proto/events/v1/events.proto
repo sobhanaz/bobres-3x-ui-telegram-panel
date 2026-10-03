@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package events.v1;
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1;eventsv1";
+
+// Event is one row of the producing service's transactional outbox.
+message Event {
+  int64 seq = 1; // position in this producer's feed; increases with commit order
+  string event_id = 2; // globally unique; consumers de-duplicate on it
+  string topic = 3; // versioned fact name, e.g. payment.succeeded.v1
+  bytes payload = 4; // JSON
+  int64 created_at = 5; // unix seconds
+}
+
+message PullEventsRequest {
+  int32 limit = 1; // capped by the server
+}
+
+message PullEventsResponse {
+  repeated Event events = 1;
+}
+
+message AckEventsRequest {
+  int64 up_to_seq = 1; // every event with seq <= up_to_seq is done
+}
+
+message AckEventsResponse {}
+
+// EventFeedService lets a peer service pull this service's outbox over gRPC instead of
+// reading its database. The consumer is identified by its service credentials,
+// and the producer keeps one cursor per consumer, so delivery is at-least-once
+// and a restored producer database re-delivers rather than skips.
+service EventFeedService {
+  rpc PullEvents(PullEventsRequest) returns (PullEventsResponse);
+  rpc AckEvents(AckEventsRequest) returns (AckEventsResponse);
+}

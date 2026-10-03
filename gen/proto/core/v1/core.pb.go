@@ -1693,9 +1693,12 @@ func (x *PaymentIntentRef) GetInstructions() string {
 }
 
 type PayOrderWithWalletRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	OrderId        string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
-	IdempotencyKey string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	OrderId string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	// Kept for compatibility; the order id is the idempotency anchor (one order
+	// can only ever be charged once).
+	IdempotencyKey string `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	UserId         string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // when set, must own the order
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1740,6 +1743,13 @@ func (x *PayOrderWithWalletRequest) GetOrderId() string {
 func (x *PayOrderWithWalletRequest) GetIdempotencyKey() string {
 	if x != nil {
 		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *PayOrderWithWalletRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
 	}
 	return ""
 }
@@ -2123,10 +2133,11 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x19\n" +
 	"\border_id\x18\x03 \x01(\tR\aorderId\x12\x1a\n" +
 	"\bprovider\x18\x04 \x01(\tR\bprovider\x12\"\n" +
-	"\finstructions\x18\x05 \x01(\tR\finstructions\"_\n" +
+	"\finstructions\x18\x05 \x01(\tR\finstructions\"x\n" +
 	"\x19PayOrderWithWalletRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12'\n" +
-	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\xbf\x01\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12\x17\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\"\xbf\x01\n" +
 	"\x1aCreatePaymentIntentRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x1a\n" +

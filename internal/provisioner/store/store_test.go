@@ -2,22 +2,22 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
-	"os"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
+
+func TestMain(m *testing.M) { testdb.Main(m) }
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := os.Getenv("BOBRES_TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres:///postgres?host=/tmp&port=5432&sslmode=disable"
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	if err := migrate.Up(ctx, dsn, "provisioner"); err != nil {
-		t.Skipf("migration: %v", err)
+		t.Fatalf("migrate: %v", err)
 	}
 	env, err := bcrypto.NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))
 	if err != nil {
@@ -25,7 +25,7 @@ func testStore(t *testing.T) *Store {
 	}
 	s, err := New(ctx, dsn, env)
 	if err != nil {
-		t.Skipf("connect: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(s.Close)
 	for _, tbl := range []string{"client_map", "provision_jobs", "xui_servers"} {
@@ -40,7 +40,8 @@ func TestServerTokenEncryptedAtRest(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 
-	sv, err := s.AddServer(ctx, &Server{Name: "main", BaseURL: "https://panel.test", Token: "sekrit-token", Enabled: true})
+	sv, err := s.AddServer(ctx, &Server{Name: "main", BaseURL: "https://panel.test", Token: "sekrit-token", Enabled: true,
+		SubBaseURL: "https://sub.panel.test/sub/", AllowPrivate: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestServerTokenEncryptedAtRest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Token != "sekrit-token" || got.Name != "main" || !got.Enabled {
+	if got.Token != "sekrit-token" || got.Name != "main" || !got.Enabled || got.SubBaseURL == "" || !got.AllowPrivate {
 		t.Errorf("bad server round trip: %+v", got)
 	}
 
@@ -74,7 +75,7 @@ func TestServerTokenEncryptedAtRest(t *testing.T) {
 func TestClientMapCRUD(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	sv, _ := s.AddServer(ctx, &Server{Name: "m", BaseURL: "https://p", Token: "t0123456789abcdef0123456789abcdef", Enabled: true})
+	sv, _ := s.AddServer(ctx, &Server{Name: "m", BaseURL: "https://p", Token: "fake", Enabled: true}) //gitleaks:allow test fixture
 
 	cm := &ClientMap{SubscriptionID: "00000000-0000-7000-8000-000000000001", ServerID: sv.ID, Email: "u1-abc", InboundIDs: []int32{1, 2}}
 	if err := s.PutClientMap(ctx, cm); err != nil {
@@ -88,14 +89,14 @@ func TestClientMapCRUD(t *testing.T) {
 		t.Errorf("bad client map: %+v", got)
 	}
 
-	if _, err := s.GetClientMap(ctx, "00000000-0000-7000-8000-0000000000ff"); err != ErrNotFound {
+	if _, err := s.GetClientMap(ctx, "00000000-0000-7000-8000-0000000000ff"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 
 	if err := s.DeleteClientMap(ctx, "00000000-0000-7000-8000-000000000001"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetClientMap(ctx, "00000000-0000-7000-8000-000000000001"); err != ErrNotFound {
+	if _, err := s.GetClientMap(ctx, "00000000-0000-7000-8000-000000000001"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("after delete: %v", err)
 	}
 }

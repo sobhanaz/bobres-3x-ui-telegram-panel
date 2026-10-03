@@ -14,7 +14,7 @@ func (s *Server) SetPayments(p domain.PaymentsClient) { s.pay = p }
 
 // PayOrderWithWallet debits the wallet and marks the order paid.
 func (s *Server) PayOrderWithWallet(ctx context.Context, req *corev1.PayOrderWithWalletRequest) (*corev1.Order, error) {
-	o, err := s.dom.PayOrderWithWallet(ctx, req.GetOrderId(), req.GetIdempotencyKey())
+	o, err := s.dom.PayOrderWithWallet(ctx, req.GetOrderId(), req.GetUserId())
 	if err != nil {
 		return nil, fail(err)
 	}

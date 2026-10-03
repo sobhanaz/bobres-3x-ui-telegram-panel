@@ -79,3 +79,15 @@ func TestDecryptRejectsGarbage(t *testing.T) {
 		t.Fatal("garbage ciphertext accepted")
 	}
 }
+
+func TestTagIsStableAndKeyed(t *testing.T) {
+	a, _ := NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))
+	b, _ := NewEnvelope([]byte("fedcba9876543210fedcba9876543210"))
+	x1, x2 := a.Tag([]byte("sub-1")), a.Tag([]byte("sub-1"))
+	if string(x1) != string(x2) {
+		t.Fatal("tag not stable")
+	}
+	if string(x1) == string(a.Tag([]byte("sub-2"))) || string(x1) == string(b.Tag([]byte("sub-1"))) {
+		t.Fatal("tag does not depend on data and key")
+	}
+}

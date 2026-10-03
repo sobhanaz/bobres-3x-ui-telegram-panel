@@ -56,9 +56,28 @@ message ListPendingReceiptsRequest {
   common.v1.Pagination pagination = 1;
 }
 
+// ManualReceipt is the proof a user submitted for a manual intent.
+message ManualReceipt {
+  string receipt_file = 1; // Telegram file_id of the receipt photo (card)
+  string reference_number = 2; // bank tracking number (card)
+  string network = 3; // crypto network, e.g. TRC20
+  string txid = 4; // crypto transaction id
+  int64 submitted_at = 5;
+}
+
+// PendingReceipt is one item of the manual review queue.
+message PendingReceipt {
+  PaymentIntent intent = 1;
+  ManualReceipt receipt = 2;
+  // Another receipt already carries the same card reference number. Shown to
+  // the reviewer as a warning; reference numbers can legitimately repeat.
+  bool possible_duplicate = 3;
+}
+
 message ListPendingReceiptsResponse {
   repeated PaymentIntent intents = 1;
   common.v1.PageInfo page_info = 2;
+  repeated PendingReceipt receipts = 3; // same order as intents, with proof details
 }
 
 // PaymentsService owns payment intents, manual receipts, and the
