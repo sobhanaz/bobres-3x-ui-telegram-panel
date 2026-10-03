@@ -7,7 +7,9 @@
 #   backend : INTERNAL. postgres, redis and all apps.
 #   egress  : outbound internet, only for services that must call Telegram / gateways / 3x-ui
 #             (bot, payments, provisioner).
-# Secrets: each service gets ONLY what it needs (no shared env_file) and its OWN database role.
+# Secrets: each service gets ONLY what it needs (no shared env_file), its OWN database role
+# and its OWN service token. A server accepts only its legitimate callers: core accepts the
+# bot; payments and provisioner accept only core.
 
 x-app: &app
   restart: unless-stopped
@@ -32,7 +34,6 @@ x-common-env: &common-env
   BOBRES_ENV: ${BOBRES_ENV:-prod}
   BOBRES_LOG_LEVEL: ${BOBRES_LOG_LEVEL:-info}
   BOBRES_LOG_FORMAT: ${BOBRES_LOG_FORMAT:-json}
-  BOBRES_SERVICE_TOKEN: ${BOBRES_SERVICE_TOKEN:?set BOBRES_SERVICE_TOKEN}
 
 x-build: &build
   context: ..
@@ -116,11 +117,15 @@ services:
     environment:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_core:${DB_CORE_PASSWORD}@postgres:5432/bobres?sslmode=disable
-      BOBRES_REDIS_URL: ${BOBRES_REDIS_URL:?set BOBRES_REDIS_URL}
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
+      BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      BOBRES_PEER_BOT_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
+      BOBRES_PAYMENTS_GRPC_ADDR: payments:9090
+      BOBRES_PROVISIONER_GRPC_ADDR: provisioner:9090
+      BOBRES_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:?set BOBRES_CORE_MASTER_KEY}
+      BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [edge, backend]
 
   bot:
@@ -130,7 +135,9 @@ services:
     environment:
       <<: *common-env
       BOBRES_REDIS_URL: ${BOBRES_REDIS_URL:?set BOBRES_REDIS_URL}
-      BOBRES_BOT_TOKEN: ${BOBRES_BOT_TOKEN:?set BOBRES_BOT_TOKEN}
+      BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
+      BOBRES_CORE_GRPC_ADDR: core:9090
+      BOBRES_TELEGRAM_BOT_TOKEN: ${BOBRES_TELEGRAM_BOT_TOKEN:?set BOBRES_TELEGRAM_BOT_TOKEN}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
     depends_on:
       core: { condition: service_healthy }
@@ -145,6 +152,7 @@ services:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_payments:${DB_PAYMENTS_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
+      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend, egress]
@@ -156,8 +164,13 @@ services:
     environment:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_provisioner:${DB_PROVISIONER_PASSWORD}@postgres:5432/bobres?sslmode=disable
+      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      BOBRES_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:?set BOBRES_PROVISIONER_MASTER_KEY}
+      # First panel, registered on first start (later changes go through the dashboard).
       BOBRES_XUI_URL: ${BOBRES_XUI_URL:?set BOBRES_XUI_URL}
       BOBRES_XUI_TOKEN: ${BOBRES_XUI_TOKEN:?set BOBRES_XUI_TOKEN}
+      BOBRES_XUI_SUB_URL: ${BOBRES_XUI_SUB_URL:-}
+      BOBRES_XUI_ALLOW_PRIVATE: ${BOBRES_XUI_ALLOW_PRIVATE:-false}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [backend, egress]
