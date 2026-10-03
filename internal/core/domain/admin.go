@@ -22,6 +22,7 @@ var SettingKeys = map[string]string{
 	"payments.card_holder": "card holder name",
 	"payments.usdt_trc20":  "USDT TRC20 deposit address",
 	"payments.usdt_erc20":  "USDT ERC20 deposit address",
+	"payments.usdt_rate":   "Toman per 1 USDT, to quote Toman prices in USDT",
 	"branding.name":        "store name shown to users",
 	"branding.support":     "support contact (e.g. @support)",
 	"texts.fa.welcome":     "Persian welcome text",

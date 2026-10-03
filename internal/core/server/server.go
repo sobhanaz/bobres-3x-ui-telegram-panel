@@ -257,6 +257,10 @@ func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscrip
 			sp.TrafficTotalBytes = *sc.TrafficTotal
 		}
 		sp.TrafficUsedBytes = sc.TrafficUsed
+		sp.SubscriptionLink = sc.SubLink
+		if sc.LastSyncedAt != nil {
+			sp.LastSyncedAt = sc.LastSyncedAt.Unix()
+		}
 		out.Subscriptions = append(out.Subscriptions, sp)
 	}
 	return out, nil

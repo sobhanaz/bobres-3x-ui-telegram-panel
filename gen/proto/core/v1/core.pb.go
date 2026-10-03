@@ -543,6 +543,7 @@ type Subscription struct {
 	TrafficTotalBytes int64                  `protobuf:"varint,9,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"`
 	TrafficUsedBytes  int64                  `protobuf:"varint,10,opt,name=traffic_used_bytes,json=trafficUsedBytes,proto3" json:"traffic_used_bytes,omitempty"`
 	LastSyncedAt      int64                  `protobuf:"varint,11,opt,name=last_synced_at,json=lastSyncedAt,proto3" json:"last_synced_at,omitempty"`
+	SubscriptionLink  string                 `protobuf:"bytes,12,opt,name=subscription_link,json=subscriptionLink,proto3" json:"subscription_link,omitempty"` // set once provisioned
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -652,6 +653,13 @@ func (x *Subscription) GetLastSyncedAt() int64 {
 		return x.LastSyncedAt
 	}
 	return 0
+}
+
+func (x *Subscription) GetSubscriptionLink() string {
+	if x != nil {
+		return x.SubscriptionLink
+	}
+	return ""
 }
 
 type Ticket struct {
@@ -2996,7 +3004,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\rbalance_after\x18\t \x01(\x03R\fbalanceAfter\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\n" +
-	" \x01(\x03R\tcreatedAt\"\xe4\x02\n" +
+	" \x01(\x03R\tcreatedAt\"\x91\x03\n" +
 	"\fSubscription\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
@@ -3010,7 +3018,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x13traffic_total_bytes\x18\t \x01(\x03R\x11trafficTotalBytes\x12,\n" +
 	"\x12traffic_used_bytes\x18\n" +
 	" \x01(\x03R\x10trafficUsedBytes\x12$\n" +
-	"\x0elast_synced_at\x18\v \x01(\x03R\flastSyncedAt\"\x98\x01\n" +
+	"\x0elast_synced_at\x18\v \x01(\x03R\flastSyncedAt\x12+\n" +
+	"\x11subscription_link\x18\f \x01(\tR\x10subscriptionLink\"\x98\x01\n" +
 	"\x06Ticket\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +

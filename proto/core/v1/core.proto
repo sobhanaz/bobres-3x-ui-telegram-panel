@@ -76,6 +76,7 @@ message Subscription {
   int64 traffic_total_bytes = 9;
   int64 traffic_used_bytes = 10;
   int64 last_synced_at = 11;
+  string subscription_link = 12; // set once provisioned
 }
 
 message Ticket {

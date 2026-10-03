@@ -139,10 +139,16 @@ services:
       BOBRES_CORE_GRPC_ADDR: core:9090
       BOBRES_TELEGRAM_BOT_TOKEN: ${BOBRES_TELEGRAM_BOT_TOKEN:?set BOBRES_TELEGRAM_BOT_TOKEN}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
+      BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
+      # Empty = long polling (no domain needed). Set both to receive updates by webhook
+      # at https://<domain>/tg/webhook (routed by Caddy).
+      BOBRES_TELEGRAM_WEBHOOK_URL: ${BOBRES_TELEGRAM_WEBHOOK_URL:-}
+      BOBRES_TELEGRAM_WEBHOOK_SECRET: ${BOBRES_TELEGRAM_WEBHOOK_SECRET:-}
     depends_on:
       core: { condition: service_healthy }
       redis: { condition: service_healthy }
-    networks: [backend, egress]
+    # edge: only so Caddy can deliver webhook updates to /tg/webhook.
+    networks: [edge, backend, egress]
 
   payments:
     <<: *app

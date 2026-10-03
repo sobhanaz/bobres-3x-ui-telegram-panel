@@ -1,11 +1,8 @@
-// Package tests holds cross-service tests: every service runs in-process on
-// real gRPC (with per-service tokens), sharing one throwaway database the way
-// production shares one Postgres, and a fake 3x-ui panel.
+// Package tests holds cross-service tests (see internal/testenv).
 package tests
 
 import (
 	"context"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -13,140 +10,13 @@ import (
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
 	eventsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1"
-	paymentsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1"
-	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
-	coredomain "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/paymentsclient"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/provisionerclient"
-	coreserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/server"
-	corestore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
-	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
-	paydomain "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
-	payserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
-	paystore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
-	provserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/server"
-	provstore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xuifake"
-	"google.golang.org/grpc"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testenv"
 )
 
 func TestMain(m *testing.M) { testdb.Main(m) }
 
-const (
-	coreToken = "flow-core-token-0123456789abcdef" //nolint:gosec // test fixture, gitleaks:allow
-	botToken  = "flow-bot-token-0123456789abcdef"  //nolint:gosec // test fixture, gitleaks:allow
-	panelTok  = "flow-panel-token"                 //gitleaks:allow test fixture
-	ownerTG   = 777
-)
-
-type stack struct {
-	core  corev1.CoreServiceClient
-	feed  eventsv1.EventFeedServiceClient
-	panel *xuifake.Server
-}
-
-func serve(t *testing.T, gs *grpc.Server) string {
-	t.Helper()
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go func() { _ = gs.Serve(lis) }()
-	t.Cleanup(gs.Stop)
-	return lis.Addr().String()
-}
-
-func dial(t *testing.T, addr, token string) *grpc.ClientConn {
-	t.Helper()
-	c, err := grpcx.Dial(addr, token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = c.Close() })
-	return c
-}
-
-func startStack(t *testing.T) *stack {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	dsn := testdb.DSN(t)
-	for _, schema := range migrate.Schemas() {
-		if err := migrate.Up(ctx, dsn, schema); err != nil {
-			t.Fatalf("migrate %s: %v", schema, err)
-		}
-	}
-
-	// payments (accepts core only)
-	ps, err := paystore.New(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(ps.Close)
-	pgs, _ := grpcx.NewServer(nil, grpcauth.Peer{Name: "core", Token: coreToken})
-	payserver.New(paydomain.New(ps), ps).Register(pgs)
-	eventsv1.RegisterEventFeedServiceServer(pgs, eventbus.NewFeedServer(eventbus.NewFeed(ps.DB(), "outbox_payments")))
-	payAddr := serve(t, pgs)
-
-	// provisioner (accepts core only) + fake panel
-	panel := xuifake.NewServer(panelTok)
-	t.Cleanup(panel.Close)
-	env, _ := bcrypto.NewEnvelope([]byte("flow-test-master-key-0123456789abcdef"))
-	vs, err := provstore.New(ctx, dsn, env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(vs.Close)
-	prov := provserver.New(vs, xui.AllowInsecureHTTP(), xui.AllowPrivateAddresses())
-	if _, err := prov.EnsureDefaultServer(ctx, panel.URL, panelTok, "https://sub.example.test/sub/", true); err != nil {
-		t.Fatal(err)
-	}
-	vgs, _ := grpcx.NewServer(nil, grpcauth.Peer{Name: "core", Token: coreToken})
-	prov.Register(vgs)
-	provAddr := serve(t, vgs)
-
-	// core (accepts the bot only), wired like cmd/core
-	cs, err := corestore.New(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cs.Close)
-	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramID: ownerTG})
-	payConn := dial(t, payAddr, coreToken)
-	payClient := paymentsclient.New(paymentsv1.NewPaymentsServiceClient(payConn))
-	provClient := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(dial(t, provAddr, coreToken)))
-	csrv := coreserver.New(cs, dom)
-	csrv.SetPayments(payClient)
-	csrv.SetProvisioner(provClient)
-	consumer, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
-		Source:     eventbus.NewGRPCSource(eventsv1.NewEventFeedServiceClient(payConn)),
-		Handle:     dom.HandlePaymentEvent,
-		DeadLetter: dom.DeadLetter("payments"),
-		Interval:   50 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	go func() { _ = consumer.Run(ctx) }()
-	worker := dom.NewProvisionWorker(provClient, nil)
-	worker.Interval = 50 * time.Millisecond
-	go func() { _ = worker.Run(ctx) }()
-	cgs, _ := grpcx.NewServer(nil, grpcauth.Peer{Name: "bot", Token: botToken})
-	csrv.Register(cgs)
-	eventsv1.RegisterEventFeedServiceServer(cgs, eventbus.NewFeedServer(eventbus.NewFeed(cs.DB(), "outbox_core")))
-	coreConn := dial(t, serve(t, cgs), botToken)
-	return &stack{
-		core:  corev1.NewCoreServiceClient(coreConn),
-		feed:  eventsv1.NewEventFeedServiceClient(coreConn),
-		panel: panel,
-	}
-}
+const ownerTG = 777
 
 func waitOrder(t *testing.T, c corev1.CoreServiceClient, id, want string) {
 	t.Helper()
@@ -170,9 +40,9 @@ func waitOrder(t *testing.T, c corev1.CoreServiceClient, id, want string) {
 // store, a user pays by card, the admin approves in the review queue, and the
 // user gets a working subscription link. Then a trial and a wallet purchase.
 func TestPurchaseLoop(t *testing.T) {
-	s := startStack(t)
+	s := testenv.Start(t, ownerTG)
 	ctx := context.Background()
-	c := s.core
+	c := s.Core
 
 	if o, err := c.UpsertUser(ctx, &corev1.UpsertUserRequest{TelegramId: ownerTG, Language: "fa"}); err != nil || o.GetRole() != "owner" {
 		t.Fatalf("owner: %v %+v", err, o)
@@ -222,10 +92,10 @@ func TestPurchaseLoop(t *testing.T) {
 	}
 	sub := subs.GetSubscriptions()[0]
 	links, err := c.GetSubscriptionLinks(ctx, &corev1.GetSubscriptionLinksRequest{UserId: u.GetId(), SubscriptionId: sub.GetId()})
-	if err != nil || !strings.HasPrefix(links.GetSubscriptionLink(), "https://sub.example.test/sub/") || len(links.GetQrPng()) == 0 {
+	if err != nil || !strings.HasPrefix(links.GetSubscriptionLink(), testenv.SubBase) || len(links.GetQrPng()) == 0 {
 		t.Fatalf("links: %v %+v", err, links)
 	}
-	if !s.panel.Has(sub.GetClientEmail()) {
+	if !s.Panel.Has(sub.GetClientEmail()) {
 		t.Fatalf("client %s missing on the panel", sub.GetClientEmail())
 	}
 
@@ -265,7 +135,7 @@ func TestPurchaseLoop(t *testing.T) {
 	}
 
 	// The bot's view: everything it must tell the user is on core's feed.
-	evs, err := s.feed.PullEvents(ctx, &eventsv1.PullEventsRequest{Limit: 100})
+	evs, err := s.Feed.PullEvents(ctx, &eventsv1.PullEventsRequest{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
