@@ -9,17 +9,13 @@ import (
 	"time"
 )
 
-const goodToken = "0123456789abcdef0123456789abcdef" // 32 chars
-
 func setEnv(t *testing.T, env string) {
 	t.Helper()
 	t.Setenv("BOBRES_ENV", env)
-	t.Setenv("BOBRES_SERVICE_TOKEN", goodToken)
 }
 
 func TestLoadDefaultsAndFailClosedEnv(t *testing.T) {
 	t.Setenv("BOBRES_ENV", "")
-	t.Setenv("BOBRES_SERVICE_TOKEN", goodToken)
 	c, err := Load("core")
 	if err != nil {
 		t.Fatal(err)
@@ -29,29 +25,25 @@ func TestLoadDefaultsAndFailClosedEnv(t *testing.T) {
 	}
 }
 
-func TestServiceTokenRequiredEverywhere(t *testing.T) {
+func TestTokenLengthDependsOnEnv(t *testing.T) {
 	for _, env := range []string{"dev", "staging", "prod"} {
-		t.Setenv("BOBRES_ENV", env)
-		t.Setenv("BOBRES_SERVICE_TOKEN", "")
-		if _, err := Load("core"); err == nil || !strings.Contains(err.Error(), "SERVICE_TOKEN") {
-			t.Errorf("%s: empty token must be rejected, got %v", env, err)
+		t.Setenv("BOBRES_X_TOKEN", "")
+		if _, err := requireToken("BOBRES_X_TOKEN", env); err == nil {
+			t.Errorf("%s: empty token must be rejected", env)
 		}
 	}
-	setEnv(t, "dev")
-	t.Setenv("BOBRES_SERVICE_TOKEN", "sixteen-chars-ok!")
-	if _, err := Load("core"); err != nil {
+	t.Setenv("BOBRES_X_TOKEN", "sixteen-chars-ok!")
+	if _, err := requireToken("BOBRES_X_TOKEN", "dev"); err != nil {
 		t.Fatalf("dev accepts 16+: %v", err)
 	}
-	t.Setenv("BOBRES_ENV", "prod")
-	if _, err := Load("core"); err == nil {
+	if _, err := requireToken("BOBRES_X_TOKEN", "prod"); err == nil {
 		t.Fatal("prod must require 32+")
 	}
 }
 
 func TestPlaceholderSecretsRejected(t *testing.T) {
-	setEnv(t, "prod")
-	t.Setenv("BOBRES_SERVICE_TOKEN", "CHANGE_ME_random_32_chars_minimum_value")
-	if _, err := Load("core"); err == nil || !strings.Contains(err.Error(), "placeholder") {
+	t.Setenv("BOBRES_X_TOKEN", "CHANGE_ME_random_32_chars_minimum_value")
+	if _, err := requireToken("BOBRES_X_TOKEN", "prod"); err == nil || !strings.Contains(err.Error(), "placeholder") {
 		t.Fatalf("placeholder token must be rejected, got %v", err)
 	}
 	setEnv(t, "prod")
@@ -105,9 +97,11 @@ func TestSecretFileFailsClosed(t *testing.T) {
 }
 
 func TestSecretsNeverPrinted(t *testing.T) {
-	c := Common{Service: "core", Env: "prod", ServiceToken: "supersecrettoken", DatabaseURL: "postgres://u:hunter2@db/x"}
-	for _, s := range []string{fmt.Sprint(c), fmt.Sprintf("%v", c), fmt.Sprintf("%+v", c), c.LogValue().String()} {
-		if strings.Contains(s, "supersecrettoken") || strings.Contains(s, "hunter2") {
+	c := Common{Service: "core", Env: "prod", DatabaseURL: "postgres://u:hunter2@db/x"}
+	co := Core{Common: c, ServiceToken: "supersecrettoken", BotToken: "botsecrettoken"}
+	for _, s := range []string{fmt.Sprint(c), fmt.Sprintf("%v", c), fmt.Sprintf("%+v", c), c.LogValue().String(),
+		fmt.Sprint(co), fmt.Sprintf("%+v", co)} {
+		if strings.Contains(s, "supersecrettoken") || strings.Contains(s, "botsecrettoken") || strings.Contains(s, "hunter2") {
 			t.Fatalf("secret leaked: %s", s)
 		}
 	}

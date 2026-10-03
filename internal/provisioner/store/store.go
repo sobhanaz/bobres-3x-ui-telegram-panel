@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -31,6 +32,12 @@ type Server struct {
 	Token        string
 	PanelVersion string
 	Enabled      bool
+	// SubBaseURL is the public prefix of the panel's subscription server
+	// (subscription link = SubBaseURL + subId); empty when not configured.
+	SubBaseURL string
+	// AllowPrivate: the operator opted in to a panel on a private address.
+	AllowPrivate bool
+	UpdatedAt    time.Time
 }
 
 // Job mirrors provisioner.provision_jobs.
@@ -70,6 +77,13 @@ func (s *Store) Close() { s.db.Close() }
 // DB exposes the pool for readiness probes and tests.
 func (s *Store) DB() *pgxpool.Pool { return s.db }
 
+// SubIDFor derives the 3x-ui subscription id for one of our subscriptions:
+// stable (so a retried create reuses it), unguessable without the master key
+// (the panel serves configs to anyone who knows a subId), and collision-free.
+func (s *Store) SubIDFor(subscriptionID string) string {
+	return hex.EncodeToString(s.env.Tag([]byte("xui-sub-id:" + subscriptionID)))[:32]
+}
+
 // AddServer encrypts the token and inserts the server row.
 func (s *Store) AddServer(ctx context.Context, sv *Server) (*Server, error) {
 	enc, err := s.env.Encrypt([]byte(sv.Token))
@@ -78,30 +92,38 @@ func (s *Store) AddServer(ctx context.Context, sv *Server) (*Server, error) {
 	}
 	sv.ID = buuid.MustV7().String()
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, enabled)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`, sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled).Scan(&sv.ID)
+		INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, enabled, sub_base_url, allow_private)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7) RETURNING updated_at`,
+		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate).Scan(&sv.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("add server: %w", err)
 	}
 	return sv, nil
 }
 
-// FirstServer returns the first enabled server (Phase 1: single server).
-func (s *Store) FirstServer(ctx context.Context) (*Server, error) {
+// CountServers returns how many panels are registered.
+func (s *Store) CountServers(ctx context.Context) (int, error) {
+	var n int
+	if err := s.db.QueryRow(ctx, `SELECT count(*) FROM provisioner.xui_servers`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count servers: %w", err)
+	}
+	return n, nil
+}
+
+const serverCols = `id, name, base_url, api_token_enc, panel_version, enabled, sub_base_url, allow_private, updated_at`
+
+func (s *Store) scanServer(row pgx.Row) (*Server, error) {
 	var (
-		sv  Server
-		enc []byte
-		ver *string
+		sv       Server
+		enc      []byte
+		ver, sub *string
 	)
-	err := s.db.QueryRow(ctx, `
-		SELECT id, name, base_url, api_token_enc, panel_version, enabled
-		FROM provisioner.xui_servers WHERE enabled ORDER BY created_at LIMIT 1`).
-		Scan(&sv.ID, &sv.Name, &sv.BaseURL, &enc, &ver, &sv.Enabled)
+	err := row.Scan(&sv.ID, &sv.Name, &sv.BaseURL, &enc, &ver, &sv.Enabled, &sub, &sv.AllowPrivate, &sv.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("first server: %w", err)
+		return nil, err
 	}
 	tok, err := s.env.Decrypt(enc)
 	if err != nil {
@@ -110,36 +132,30 @@ func (s *Store) FirstServer(ctx context.Context) (*Server, error) {
 	sv.Token = string(tok)
 	if ver != nil {
 		sv.PanelVersion = *ver
+	}
+	if sub != nil {
+		sv.SubBaseURL = *sub
 	}
 	return &sv, nil
 }
 
+// FirstServer returns the first enabled server (Phase 1: single server).
+func (s *Store) FirstServer(ctx context.Context) (*Server, error) {
+	sv, err := s.scanServer(s.db.QueryRow(ctx,
+		`SELECT `+serverCols+` FROM provisioner.xui_servers WHERE enabled ORDER BY created_at LIMIT 1`))
+	if err != nil {
+		return nil, fmt.Errorf("first server: %w", err)
+	}
+	return sv, nil
+}
+
 // GetServer returns one server row by id, decrypting its token.
 func (s *Store) GetServer(ctx context.Context, id string) (*Server, error) {
-	var (
-		sv  Server
-		enc []byte
-		ver *string
-	)
-	err := s.db.QueryRow(ctx, `
-		SELECT id, name, base_url, api_token_enc, panel_version, enabled
-		FROM provisioner.xui_servers WHERE id = $1`, id).
-		Scan(&sv.ID, &sv.Name, &sv.BaseURL, &enc, &ver, &sv.Enabled)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
+	sv, err := s.scanServer(s.db.QueryRow(ctx, `SELECT `+serverCols+` FROM provisioner.xui_servers WHERE id = $1`, id))
 	if err != nil {
 		return nil, fmt.Errorf("get server: %w", err)
 	}
-	tok, err := s.env.Decrypt(enc)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt server token: %w", err)
-	}
-	sv.Token = string(tok)
-	if ver != nil {
-		sv.PanelVersion = *ver
-	}
-	return &sv, nil
+	return sv, nil
 }
 
 // EnqueueJob inserts a pending provision job.
@@ -199,7 +215,7 @@ func (s *Store) DeleteClientMap(ctx context.Context, subscriptionID string) erro
 func (s *Store) TouchHealth(ctx context.Context, serverID, panelVersion string) error {
 	_, err := s.db.Exec(ctx, `
 		UPDATE provisioner.xui_servers
-		SET panel_version = $2, last_health_at = $3, updated_at = now() WHERE id = $1`,
+		SET panel_version = $2, last_health_at = $3 WHERE id = $1`,
 		serverID, panelVersion, time.Now().UTC())
 	return err
 }

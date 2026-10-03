@@ -23,8 +23,11 @@ message Usage {
 }
 
 message Links {
+  // The subscription URL (sub_base_url + subId) when the server has a
+  // subscription base URL configured, otherwise the first config link.
   string subscription_link = 1;
-  string qr_png_base64 = 2;
+  string qr_png_base64 = 2; // PNG QR code of subscription_link
+  repeated string config_links = 3; // one share link per attached inbound
 }
 
 message Inbound {
@@ -39,6 +42,7 @@ message XUIServer {
   string base_url = 3;
   string panel_version = 4;
   bool enabled = 5;
+  string sub_base_url = 6;
 }
 
 message CreateClientRequest {
@@ -83,6 +87,12 @@ message AddServerRequest {
   string name = 1;
   string base_url = 2;
   string api_token = 3; // encrypted at rest once stored; plaintext only in transit
+  // Public prefix of the panel's subscription server, e.g.
+  // https://sub.example.com:2096/sub/ (optional).
+  string sub_base_url = 4;
+  // The panel is on a private/loopback address (same host or LAN). Off by
+  // default: the client refuses such addresses to block SSRF.
+  bool allow_private = 5;
 }
 
 message HealthCheckRequest {

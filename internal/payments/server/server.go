@@ -79,15 +79,32 @@ func (s *Server) ReviewManualPayment(ctx context.Context, req *paymentsv1.Review
 	return intentToProto(in), nil
 }
 
-// ListPendingReceipts lists receipts awaiting admin review.
-func (s *Server) ListPendingReceipts(ctx context.Context, _ *paymentsv1.ListPendingReceiptsRequest) (*paymentsv1.ListPendingReceiptsResponse, error) {
-	intents, err := s.st.ListPendingReceipts(ctx, 50)
+// ListPendingReceipts lists receipts awaiting admin review, with their proof.
+func (s *Server) ListPendingReceipts(ctx context.Context, req *paymentsv1.ListPendingReceiptsRequest) (*paymentsv1.ListPendingReceiptsResponse, error) {
+	size := int(req.GetPagination().GetPageSize())
+	pending, err := s.st.ListPendingReceipts(ctx, size)
 	if err != nil {
 		return nil, fail(err)
 	}
 	out := &paymentsv1.ListPendingReceiptsResponse{}
-	for i := range intents {
-		out.Intents = append(out.Intents, intentToProto(&intents[i]))
+	for i := range pending {
+		p := &pending[i]
+		ip := intentToProto(&p.Intent)
+		out.Intents = append(out.Intents, ip)
+		r := &paymentsv1.ManualReceipt{SubmittedAt: p.Receipt.SubmittedAt.Unix()}
+		if p.Receipt.ReceiptFile != nil {
+			r.ReceiptFile = *p.Receipt.ReceiptFile
+		}
+		if p.Receipt.ReferenceNumber != nil {
+			r.ReferenceNumber = *p.Receipt.ReferenceNumber
+		}
+		if p.Receipt.Network != nil {
+			r.Network = *p.Receipt.Network
+		}
+		if p.Receipt.TXID != nil {
+			r.Txid = *p.Receipt.TXID
+		}
+		out.Receipts = append(out.Receipts, &paymentsv1.PendingReceipt{Intent: ip, Receipt: r, PossibleDuplicate: p.PossibleDuplicate})
 	}
 	return out, nil
 }
@@ -117,13 +134,23 @@ func intentToProto(in *store.Intent) *paymentsv1.PaymentIntent {
 	return p
 }
 
+// fail maps domain errors to gRPC codes; anything unexpected is Internal with
+// a generic message, so database details never leave the service.
 func fail(err error) error {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return status.Error(codes.NotFound, err.Error())
+		return status.Error(codes.NotFound, "payment not found")
+	case errors.Is(err, domain.ErrInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, domain.ErrForbidden):
+		return status.Error(codes.PermissionDenied, "this payment belongs to another user")
 	case errors.Is(err, store.ErrInvalidTransition):
-		return status.Error(codes.FailedPrecondition, err.Error())
+		return status.Error(codes.FailedPrecondition, "this payment cannot change state now")
+	case errors.Is(err, store.ErrDuplicateProof):
+		return status.Error(codes.AlreadyExists, "this transaction was already submitted")
+	case errors.Is(err, store.ErrIdempotencyConflict):
+		return status.Error(codes.AlreadyExists, "idempotency key reused for a different payment")
 	default:
-		return status.Error(codes.Internal, err.Error())
+		return status.Error(codes.Internal, "internal error")
 	}
 }

@@ -4,44 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
-	"runtime"
 	"testing"
-	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
+
+func TestMain(m *testing.M) { testdb.Main(m) }
 
 func testDSN(t *testing.T) string {
 	t.Helper()
-	dsn := os.Getenv("BOBRES_TEST_DATABASE_URL")
-	if dsn == "" {
-		if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
-			candidate := "postgres:///postgres?host=/tmp&port=5432&sslmode=disable"
-			db, err := sql.Open("pgx", candidate)
-			if err == nil {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				defer cancel()
-				if db.PingContext(ctx) == nil {
-					_ = db.Close()
-					return candidate
-				}
-				_ = db.Close()
-			}
-		}
-		dsn = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	_ = db.Close()
-	return dsn
+	return testdb.DSN(t)
 }
 
 func dropSchemas(t *testing.T, dsn string) {
@@ -81,11 +54,11 @@ func TestUpAppliesAllSchemas(t *testing.T) {
 	want := map[string][]string{
 		"core": {"users", "wallets", "ledger_entries", "plans", "orders",
 			"subscriptions", "tickets", "audit_log", "settings", "staff",
-			"outbox_core", "inbox_core"},
+			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters"},
 		"payments": {"payment_intents", "manual_receipts", "ledger_entries",
-			"outbox_payments", "inbox_payments"},
+			"outbox_payments", "inbox_payments", "outbox_payments_cursors"},
 		"provisioner": {"xui_servers", "provision_jobs", "client_map",
-			"outbox_provisioner", "inbox_provisioner"},
+			"outbox_provisioner", "inbox_provisioner", "outbox_provisioner_cursors"},
 	}
 	for schema, tables := range want {
 		for _, table := range tables {
@@ -118,14 +91,28 @@ func TestUpIsIdempotent(t *testing.T) {
 }
 
 func TestUpRejectsUnknownSchema(t *testing.T) {
-	testDSN(t)
-	dsn := os.Getenv("BOBRES_TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres:///postgres?host=/tmp&port=5432&sslmode=disable"
-	}
+	dsn := testDSN(t)
 	err := Up(context.Background(), dsn, "core; DROP TABLE users;--")
 	if !errors.Is(err, ErrUnknownSchema) {
 		t.Fatalf("want ErrUnknownSchema, got %v", err)
+	}
+}
+
+// A missing schema used to surface as goose's "no schema has been selected to
+// create in", which sent people looking in the wrong place.
+func TestUpExplainsMissingSchema(t *testing.T) {
+	dsn := testDSN(t)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close() //nolint:errcheck // test helper
+	if _, err := db.Exec("DROP SCHEMA IF EXISTS provisioner CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dropSchemas(t, dsn) })
+	if err := Up(context.Background(), dsn, "provisioner"); !errors.Is(err, ErrMissingSchema) {
+		t.Fatalf("want ErrMissingSchema, got %v", err)
 	}
 }
 

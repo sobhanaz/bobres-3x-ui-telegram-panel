@@ -27,6 +27,9 @@ const advisoryLockID int64 = 872134
 // ErrUnknownSchema is returned for schema names outside the whitelist.
 var ErrUnknownSchema = errors.New("migrate: unknown schema")
 
+// ErrMissingSchema is returned when the target schema has not been created.
+var ErrMissingSchema = errors.New("migrate: missing schema")
+
 var allowed = map[string]bool{
 	"core":        true,
 	"payments":    true,
@@ -65,6 +68,18 @@ func Up(ctx context.Context, dsn, schema string) error {
 		return fmt.Errorf("migrate: advisory lock: %w", err)
 	}
 	// Session-scoped lock: released automatically when db closes.
+	//
+	// Service roles cannot create schemas (deploy/postgres-init.sh creates them,
+	// owned by each service's role), so a missing schema is a setup error. Say so
+	// plainly instead of letting goose fail with "no schema has been selected".
+	var exists bool
+	if err := db.QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = $1)`, schema).Scan(&exists); err != nil {
+		return fmt.Errorf("migrate: check schema: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("%w: schema %q does not exist (it is created by deploy/postgres-init.sh)", ErrMissingSchema, schema)
+	}
 	if _, err := db.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
 		return fmt.Errorf("migrate: set search_path: %w", err)
 	}

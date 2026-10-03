@@ -10,64 +10,6 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-// CreateSubscription inserts a subscription row in pending state.
-func (s *Store) CreateSubscription(ctx context.Context, q querier, sub *Subscription) (*Subscription, error) {
-	sub.ID = buuid.MustV7().String()
-	err := q.QueryRow(ctx, `
-		INSERT INTO core.subscriptions
-			(id, user_id, order_id, server_id, client_email, sub_id, status,
-			 expires_at, traffic_total_bytes, traffic_used_bytes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING status`,
-		sub.ID, sub.UserID, sub.OrderID, sub.ServerID, sub.ClientEmail,
-		sub.SubID, sub.Status, sub.ExpiresAt, sub.TrafficTotal, sub.TrafficUsed).
-		Scan(&sub.Status)
-	if err != nil {
-		return nil, fmt.Errorf("create subscription: %w", err)
-	}
-	return sub, nil
-}
-
-// ListSubscriptions returns a user's subscriptions, newest first.
-func (s *Store) ListSubscriptions(ctx context.Context, q querier, userID string, limit int) ([]Subscription, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	rows, err := q.Query(ctx, `
-		SELECT id, user_id, order_id, server_id, client_email, sub_id, status,
-			expires_at, traffic_total_bytes, traffic_used_bytes, last_synced_at
-		FROM core.subscriptions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
-		userID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list subscriptions: %w", err)
-	}
-	defer rows.Close()
-	var out []Subscription
-	for rows.Next() {
-		var sc Subscription
-		if err := rows.Scan(&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID,
-			&sc.ClientEmail, &sc.SubID, &sc.Status, &sc.ExpiresAt,
-			&sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, sc)
-	}
-	return out, rows.Err()
-}
-
-// SetSubscriptionStatus updates a subscription's status.
-func (s *Store) SetSubscriptionStatus(ctx context.Context, q querier, id, status string) error {
-	tag, err := q.Exec(ctx,
-		`UPDATE core.subscriptions SET status=$2, updated_at=now() WHERE id=$1`, id, status)
-	if err != nil {
-		return fmt.Errorf("set subscription status: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // CreateTicket inserts a support ticket.
 func (s *Store) CreateTicket(ctx context.Context, q querier, t *Ticket) (*Ticket, error) {
 	t.ID = buuid.MustV7().String()
@@ -153,4 +95,43 @@ func (s *Store) GetStaffByUsername(ctx context.Context, q querier, username stri
 		return nil, fmt.Errorf("get staff: %w", err)
 	}
 	return &st, nil
+}
+
+// ClaimInbox records that an event was handled. It returns false when the
+// event was already claimed (a re-delivery), in which case the caller must not
+// apply it again. Call it inside the transaction that applies the event.
+func (s *Store) ClaimInbox(ctx context.Context, tx pgx.Tx, messageID string) (bool, error) {
+	var claimed bool
+	err := tx.QueryRow(ctx, `
+		INSERT INTO core.inbox_core (message_id) VALUES ($1)
+		ON CONFLICT (message_id) DO NOTHING RETURNING true`, messageID).Scan(&claimed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("claim inbox: %w", err)
+	}
+	return true, nil
+}
+
+// DeadLetter is an event that could not be applied.
+type DeadLetter struct {
+	Source  string
+	EventID string
+	Topic   string
+	Payload []byte
+	Error   string
+}
+
+// InsertDeadLetter stores a dead-lettered event (idempotent per source+event).
+func (s *Store) InsertDeadLetter(ctx context.Context, q querier, d DeadLetter) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO core.dead_letters (id, source, event_id, topic, payload, error)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (source, event_id) DO UPDATE SET error = EXCLUDED.error`,
+		buuid.MustV7(), d.Source, d.EventID, d.Topic, string(d.Payload), d.Error)
+	if err != nil {
+		return fmt.Errorf("dead letter: %w", err)
+	}
+	return nil
 }

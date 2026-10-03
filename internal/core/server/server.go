@@ -18,9 +18,10 @@ import (
 // Server implements corev1.CoreServiceServer on top of domain+store.
 type Server struct {
 	corev1.UnimplementedCoreServiceServer
-	st  *store.Store
-	dom *domain.Service
-	pay domain.PaymentsClient
+	st   *store.Store
+	dom  *domain.Service
+	pay  domain.PaymentsClient
+	prov domain.Provisioner
 }
 
 // New builds the handler set.
@@ -31,19 +32,40 @@ func New(st *store.Store, dom *domain.Service) *Server {
 // Register attaches the service to a grpc.Server.
 func (s *Server) Register(g *grpc.Server) { corev1.RegisterCoreServiceServer(g, s) }
 
+// fail maps domain errors to gRPC codes the bot can act on. Unknown errors
+// become Internal with a generic message (details stay in logs).
 func fail(err error) error {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, domain.ErrInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrUserBanned):
+		return status.Error(codes.PermissionDenied, err.Error())
 	case errors.Is(err, domain.ErrTrialAlreadyUsed),
 		errors.Is(err, domain.ErrOrderNotPayable),
+		errors.Is(err, domain.ErrPlanUnavailable),
 		errors.Is(err, store.ErrInsufficientFunds):
 		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, store.ErrDuplicateIdempotency):
+	case errors.Is(err, store.ErrIdempotencyConflict):
 		return status.Error(codes.AlreadyExists, err.Error())
-	default:
-		return status.Error(codes.Internal, "internal error")
+	case errors.Is(err, domain.ErrNotReady):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	}
+	// Errors from a peer service (payments, provisioner) keep their code and
+	// original message when they are meaningful to the caller.
+	var peer interface{ GRPCStatus() *status.Status }
+	if errors.As(err, &peer) && peer.GRPCStatus() != nil {
+		st := peer.GRPCStatus()
+		switch st.Code() {
+		case codes.InvalidArgument, codes.NotFound, codes.AlreadyExists,
+			codes.FailedPrecondition, codes.PermissionDenied:
+			return status.Error(st.Code(), st.Message())
+		case codes.Unavailable, codes.DeadlineExceeded:
+			return status.Error(codes.Unavailable, "a backend service is unavailable, try again")
+		}
+	}
+	return status.Error(codes.Internal, "internal error")
 }
 
 func userToProto(u *store.User) *corev1.User {
@@ -65,7 +87,10 @@ func userToProto(u *store.User) *corev1.User {
 
 // UpsertUser creates or updates a user by telegram id.
 func (s *Server) UpsertUser(ctx context.Context, req *corev1.UpsertUserRequest) (*corev1.User, error) {
-	u, err := s.st.UpsertUser(ctx, s.st.Conn(), req.GetTelegramId(), req.GetUsername(), req.GetLanguage(), req.GetReferredBy())
+	u, err := s.dom.UpsertUser(ctx, domain.UpsertUserParams{
+		TelegramID: req.GetTelegramId(), Username: req.GetUsername(),
+		Language: req.GetLanguage(), ReferredBy: req.GetReferredBy(),
+	})
 	if err != nil {
 		return nil, fail(err)
 	}
@@ -99,25 +124,29 @@ func (s *Server) ListPlans(ctx context.Context, req *corev1.ListPlansRequest) (*
 		return nil, fail(err)
 	}
 	out := &corev1.ListPlansResponse{}
-	for _, p := range plans {
-		pp := &corev1.Plan{
-			Id:       p.ID,
-			NameI18N: p.NameI18n,
-			Kind:     p.Kind,
-			Price:    &commonv1.Money{Amount: p.Price, Currency: p.Currency},
-			Enabled:  p.Enabled,
-			IsTrial:  p.IsTrial,
-			Sort:     p.Sort,
-		}
-		if p.DurationDays != nil {
-			pp.DurationDays = *p.DurationDays
-		}
-		if p.TrafficBytes != nil {
-			pp.TrafficBytes = *p.TrafficBytes
-		}
-		out.Plans = append(out.Plans, pp)
+	for i := range plans {
+		out.Plans = append(out.Plans, planToProto(&plans[i]))
 	}
 	return out, nil
+}
+
+func planToProto(p *store.Plan) *corev1.Plan {
+	pp := &corev1.Plan{
+		Id:       p.ID,
+		NameI18N: p.NameI18n,
+		Kind:     p.Kind,
+		Price:    &commonv1.Money{Amount: p.Price, Currency: p.Currency},
+		Enabled:  p.Enabled,
+		IsTrial:  p.IsTrial,
+		Sort:     p.Sort,
+	}
+	if p.DurationDays != nil {
+		pp.DurationDays = *p.DurationDays
+	}
+	if p.TrafficBytes != nil {
+		pp.TrafficBytes = *p.TrafficBytes
+	}
+	return pp
 }
 
 // CreateOrder inserts an order (idempotent).
@@ -171,6 +200,36 @@ func (s *Server) GetWallet(ctx context.Context, req *corev1.GetWalletRequest) (*
 	}, nil
 }
 
+// ListLedgerEntries returns a user's ledger, newest first.
+func (s *Server) ListLedgerEntries(ctx context.Context, req *corev1.ListLedgerEntriesRequest) (*corev1.ListLedgerEntriesResponse, error) {
+	page, size := req.GetPagination().GetPage(), req.GetPagination().GetPageSize()
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	if page < 1 {
+		page = 1
+	}
+	entries, err := s.st.ListLedger(ctx, s.st.Conn(), req.GetUserId(), int(size), int((page-1)*size))
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.ListLedgerEntriesResponse{PageInfo: &commonv1.PageInfo{Page: page, PageSize: size}}
+	for _, e := range entries {
+		le := &corev1.LedgerEntry{
+			Id: e.ID, UserId: e.UserID, Currency: e.Currency, Amount: e.Amount, Kind: e.Kind,
+			IdempotencyKey: e.IdempotencyKey, BalanceAfter: e.BalanceAfter, CreatedAt: e.CreatedAt.Unix(),
+		}
+		if e.RefType != nil {
+			le.RefType = *e.RefType
+		}
+		if e.RefID != nil {
+			le.RefId = *e.RefID
+		}
+		out.Entries = append(out.Entries, le)
+	}
+	return out, nil
+}
+
 // ListSubscriptions returns the user's subscriptions.
 func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscriptionsRequest) (*corev1.ListSubscriptionsResponse, error) {
 	subs, err := s.st.ListSubscriptions(ctx, s.st.Conn(), req.GetUserId(), 100)
@@ -198,6 +257,10 @@ func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscrip
 			sp.TrafficTotalBytes = *sc.TrafficTotal
 		}
 		sp.TrafficUsedBytes = sc.TrafficUsed
+		sp.SubscriptionLink = sc.SubLink
+		if sc.LastSyncedAt != nil {
+			sp.LastSyncedAt = sc.LastSyncedAt.Unix()
+		}
 		out.Subscriptions = append(out.Subscriptions, sp)
 	}
 	return out, nil

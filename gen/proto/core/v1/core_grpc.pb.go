@@ -19,22 +19,31 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CoreService_UpsertUser_FullMethodName          = "/core.v1.CoreService/UpsertUser"
-	CoreService_GetUser_FullMethodName             = "/core.v1.CoreService/GetUser"
-	CoreService_ListPlans_FullMethodName           = "/core.v1.CoreService/ListPlans"
-	CoreService_CreateOrder_FullMethodName         = "/core.v1.CoreService/CreateOrder"
-	CoreService_GetOrder_FullMethodName            = "/core.v1.CoreService/GetOrder"
-	CoreService_GetWallet_FullMethodName           = "/core.v1.CoreService/GetWallet"
-	CoreService_ListLedgerEntries_FullMethodName   = "/core.v1.CoreService/ListLedgerEntries"
-	CoreService_ListSubscriptions_FullMethodName   = "/core.v1.CoreService/ListSubscriptions"
-	CoreService_CreateSupportTicket_FullMethodName = "/core.v1.CoreService/CreateSupportTicket"
-	CoreService_GetSettings_FullMethodName         = "/core.v1.CoreService/GetSettings"
-	CoreService_UpdateBranding_FullMethodName      = "/core.v1.CoreService/UpdateBranding"
-	CoreService_ReviewManualPayment_FullMethodName = "/core.v1.CoreService/ReviewManualPayment"
-	CoreService_PayOrderWithWallet_FullMethodName  = "/core.v1.CoreService/PayOrderWithWallet"
-	CoreService_CreatePaymentIntent_FullMethodName = "/core.v1.CoreService/CreatePaymentIntent"
-	CoreService_StartTrial_FullMethodName          = "/core.v1.CoreService/StartTrial"
-	CoreService_CanStartTrial_FullMethodName       = "/core.v1.CoreService/CanStartTrial"
+	CoreService_UpsertUser_FullMethodName               = "/core.v1.CoreService/UpsertUser"
+	CoreService_GetUser_FullMethodName                  = "/core.v1.CoreService/GetUser"
+	CoreService_ListPlans_FullMethodName                = "/core.v1.CoreService/ListPlans"
+	CoreService_CreateOrder_FullMethodName              = "/core.v1.CoreService/CreateOrder"
+	CoreService_GetOrder_FullMethodName                 = "/core.v1.CoreService/GetOrder"
+	CoreService_GetWallet_FullMethodName                = "/core.v1.CoreService/GetWallet"
+	CoreService_ListLedgerEntries_FullMethodName        = "/core.v1.CoreService/ListLedgerEntries"
+	CoreService_ListSubscriptions_FullMethodName        = "/core.v1.CoreService/ListSubscriptions"
+	CoreService_CreateSupportTicket_FullMethodName      = "/core.v1.CoreService/CreateSupportTicket"
+	CoreService_GetSettings_FullMethodName              = "/core.v1.CoreService/GetSettings"
+	CoreService_UpdateBranding_FullMethodName           = "/core.v1.CoreService/UpdateBranding"
+	CoreService_ReviewManualPayment_FullMethodName      = "/core.v1.CoreService/ReviewManualPayment"
+	CoreService_PayOrderWithWallet_FullMethodName       = "/core.v1.CoreService/PayOrderWithWallet"
+	CoreService_CreatePaymentIntent_FullMethodName      = "/core.v1.CoreService/CreatePaymentIntent"
+	CoreService_StartTrial_FullMethodName               = "/core.v1.CoreService/StartTrial"
+	CoreService_CanStartTrial_FullMethodName            = "/core.v1.CoreService/CanStartTrial"
+	CoreService_SubmitPaymentProof_FullMethodName       = "/core.v1.CoreService/SubmitPaymentProof"
+	CoreService_GetSubscriptionLinks_FullMethodName     = "/core.v1.CoreService/GetSubscriptionLinks"
+	CoreService_AdminGetStats_FullMethodName            = "/core.v1.CoreService/AdminGetStats"
+	CoreService_AdminListPendingPayments_FullMethodName = "/core.v1.CoreService/AdminListPendingPayments"
+	CoreService_AdminFindUser_FullMethodName            = "/core.v1.CoreService/AdminFindUser"
+	CoreService_AdminAdjustBalance_FullMethodName       = "/core.v1.CoreService/AdminAdjustBalance"
+	CoreService_AdminSetUserStatus_FullMethodName       = "/core.v1.CoreService/AdminSetUserStatus"
+	CoreService_AdminUpsertPlan_FullMethodName          = "/core.v1.CoreService/AdminUpsertPlan"
+	CoreService_AdminSetSetting_FullMethodName          = "/core.v1.CoreService/AdminSetSetting"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -60,6 +69,15 @@ type CoreServiceClient interface {
 	CreatePaymentIntent(ctx context.Context, in *CreatePaymentIntentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
 	StartTrial(ctx context.Context, in *StartTrialRequest, opts ...grpc.CallOption) (*Order, error)
 	CanStartTrial(ctx context.Context, in *CanStartTrialRequest, opts ...grpc.CallOption) (*CanStartTrialResponse, error)
+	SubmitPaymentProof(ctx context.Context, in *SubmitPaymentProofRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	GetSubscriptionLinks(ctx context.Context, in *GetSubscriptionLinksRequest, opts ...grpc.CallOption) (*SubscriptionLinks, error)
+	AdminGetStats(ctx context.Context, in *AdminGetStatsRequest, opts ...grpc.CallOption) (*AdminStats, error)
+	AdminListPendingPayments(ctx context.Context, in *AdminListPendingPaymentsRequest, opts ...grpc.CallOption) (*AdminListPendingPaymentsResponse, error)
+	AdminFindUser(ctx context.Context, in *AdminFindUserRequest, opts ...grpc.CallOption) (*AdminUserView, error)
+	AdminAdjustBalance(ctx context.Context, in *AdminAdjustBalanceRequest, opts ...grpc.CallOption) (*Wallet, error)
+	AdminSetUserStatus(ctx context.Context, in *AdminSetUserStatusRequest, opts ...grpc.CallOption) (*User, error)
+	AdminUpsertPlan(ctx context.Context, in *AdminUpsertPlanRequest, opts ...grpc.CallOption) (*Plan, error)
+	AdminSetSetting(ctx context.Context, in *AdminSetSettingRequest, opts ...grpc.CallOption) (*Settings, error)
 }
 
 type coreServiceClient struct {
@@ -230,6 +248,96 @@ func (c *coreServiceClient) CanStartTrial(ctx context.Context, in *CanStartTrial
 	return out, nil
 }
 
+func (c *coreServiceClient) SubmitPaymentProof(ctx context.Context, in *SubmitPaymentProofRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntentRef)
+	err := c.cc.Invoke(ctx, CoreService_SubmitPaymentProof_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetSubscriptionLinks(ctx context.Context, in *GetSubscriptionLinksRequest, opts ...grpc.CallOption) (*SubscriptionLinks, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubscriptionLinks)
+	err := c.cc.Invoke(ctx, CoreService_GetSubscriptionLinks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminGetStats(ctx context.Context, in *AdminGetStatsRequest, opts ...grpc.CallOption) (*AdminStats, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminStats)
+	err := c.cc.Invoke(ctx, CoreService_AdminGetStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminListPendingPayments(ctx context.Context, in *AdminListPendingPaymentsRequest, opts ...grpc.CallOption) (*AdminListPendingPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListPendingPaymentsResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListPendingPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminFindUser(ctx context.Context, in *AdminFindUserRequest, opts ...grpc.CallOption) (*AdminUserView, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminUserView)
+	err := c.cc.Invoke(ctx, CoreService_AdminFindUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminAdjustBalance(ctx context.Context, in *AdminAdjustBalanceRequest, opts ...grpc.CallOption) (*Wallet, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Wallet)
+	err := c.cc.Invoke(ctx, CoreService_AdminAdjustBalance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminSetUserStatus(ctx context.Context, in *AdminSetUserStatusRequest, opts ...grpc.CallOption) (*User, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(User)
+	err := c.cc.Invoke(ctx, CoreService_AdminSetUserStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminUpsertPlan(ctx context.Context, in *AdminUpsertPlanRequest, opts ...grpc.CallOption) (*Plan, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Plan)
+	err := c.cc.Invoke(ctx, CoreService_AdminUpsertPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminSetSetting(ctx context.Context, in *AdminSetSettingRequest, opts ...grpc.CallOption) (*Settings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Settings)
+	err := c.cc.Invoke(ctx, CoreService_AdminSetSetting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -253,6 +361,15 @@ type CoreServiceServer interface {
 	CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error)
 	StartTrial(context.Context, *StartTrialRequest) (*Order, error)
 	CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error)
+	SubmitPaymentProof(context.Context, *SubmitPaymentProofRequest) (*PaymentIntentRef, error)
+	GetSubscriptionLinks(context.Context, *GetSubscriptionLinksRequest) (*SubscriptionLinks, error)
+	AdminGetStats(context.Context, *AdminGetStatsRequest) (*AdminStats, error)
+	AdminListPendingPayments(context.Context, *AdminListPendingPaymentsRequest) (*AdminListPendingPaymentsResponse, error)
+	AdminFindUser(context.Context, *AdminFindUserRequest) (*AdminUserView, error)
+	AdminAdjustBalance(context.Context, *AdminAdjustBalanceRequest) (*Wallet, error)
+	AdminSetUserStatus(context.Context, *AdminSetUserStatusRequest) (*User, error)
+	AdminUpsertPlan(context.Context, *AdminUpsertPlanRequest) (*Plan, error)
+	AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -310,6 +427,33 @@ func (UnimplementedCoreServiceServer) StartTrial(context.Context, *StartTrialReq
 }
 func (UnimplementedCoreServiceServer) CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CanStartTrial not implemented")
+}
+func (UnimplementedCoreServiceServer) SubmitPaymentProof(context.Context, *SubmitPaymentProofRequest) (*PaymentIntentRef, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitPaymentProof not implemented")
+}
+func (UnimplementedCoreServiceServer) GetSubscriptionLinks(context.Context, *GetSubscriptionLinksRequest) (*SubscriptionLinks, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSubscriptionLinks not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminGetStats(context.Context, *AdminGetStatsRequest) (*AdminStats, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminGetStats not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListPendingPayments(context.Context, *AdminListPendingPaymentsRequest) (*AdminListPendingPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListPendingPayments not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminFindUser(context.Context, *AdminFindUserRequest) (*AdminUserView, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminFindUser not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminAdjustBalance(context.Context, *AdminAdjustBalanceRequest) (*Wallet, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminAdjustBalance not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminSetUserStatus(context.Context, *AdminSetUserStatusRequest) (*User, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminSetUserStatus not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminUpsertPlan(context.Context, *AdminUpsertPlanRequest) (*Plan, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminUpsertPlan not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminSetSetting not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -620,6 +764,168 @@ func _CoreService_CanStartTrial_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_SubmitPaymentProof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitPaymentProofRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SubmitPaymentProof(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SubmitPaymentProof_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SubmitPaymentProof(ctx, req.(*SubmitPaymentProofRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetSubscriptionLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSubscriptionLinksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetSubscriptionLinks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetSubscriptionLinks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetSubscriptionLinks(ctx, req.(*GetSubscriptionLinksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminGetStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminGetStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminGetStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminGetStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminGetStats(ctx, req.(*AdminGetStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminListPendingPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListPendingPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListPendingPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListPendingPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListPendingPayments(ctx, req.(*AdminListPendingPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminFindUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminFindUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminFindUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminFindUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminFindUser(ctx, req.(*AdminFindUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminAdjustBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminAdjustBalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminAdjustBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminAdjustBalance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminAdjustBalance(ctx, req.(*AdminAdjustBalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminSetUserStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminSetUserStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminSetUserStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminSetUserStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminSetUserStatus(ctx, req.(*AdminSetUserStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminUpsertPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminUpsertPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminUpsertPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminUpsertPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminUpsertPlan(ctx, req.(*AdminUpsertPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminSetSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminSetSettingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminSetSetting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminSetSetting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminSetSetting(ctx, req.(*AdminSetSettingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -690,6 +996,42 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CanStartTrial",
 			Handler:    _CoreService_CanStartTrial_Handler,
+		},
+		{
+			MethodName: "SubmitPaymentProof",
+			Handler:    _CoreService_SubmitPaymentProof_Handler,
+		},
+		{
+			MethodName: "GetSubscriptionLinks",
+			Handler:    _CoreService_GetSubscriptionLinks_Handler,
+		},
+		{
+			MethodName: "AdminGetStats",
+			Handler:    _CoreService_AdminGetStats_Handler,
+		},
+		{
+			MethodName: "AdminListPendingPayments",
+			Handler:    _CoreService_AdminListPendingPayments_Handler,
+		},
+		{
+			MethodName: "AdminFindUser",
+			Handler:    _CoreService_AdminFindUser_Handler,
+		},
+		{
+			MethodName: "AdminAdjustBalance",
+			Handler:    _CoreService_AdminAdjustBalance_Handler,
+		},
+		{
+			MethodName: "AdminSetUserStatus",
+			Handler:    _CoreService_AdminSetUserStatus_Handler,
+		},
+		{
+			MethodName: "AdminUpsertPlan",
+			Handler:    _CoreService_AdminUpsertPlan_Handler,
+		},
+		{
+			MethodName: "AdminSetSetting",
+			Handler:    _CoreService_AdminSetSetting_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

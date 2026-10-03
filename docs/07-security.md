@@ -28,7 +28,7 @@ payments is the only one with gateway secrets.
 | Trial / referral abuse | One per Telegram ID, velocity limits, delayed referral reward until first paid order |
 | Bot flooding / DoS | Per-user and global rate limits, callback de-dup, queue for broadcasts |
 | Dashboard brute force | Rate limit, lockout, 2FA, secure cookies, CSRF tokens, short sessions |
-| SQL injection / XSS | Parameterized queries (sqlc), templ auto-escaping, CSP headers, input validation |
+| SQL injection / XSS | Parameterized queries (pgx), Vue template escaping, CSP headers, input validation |
 | SSRF via admin-entered URLs (3x-ui URL, webhooks) | Allow/deny lists, block metadata/loopback ranges unless explicitly allowed |
 | Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted, support-bundle scrubs |
 | Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel |
@@ -42,7 +42,7 @@ payments is the only one with gateway secrets.
 ## Crypto and secrets
 - Secrets at rest: envelope encryption with an install master key (from `.env` / OS keyring); DB stores ciphertext for tokens and gateway keys.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
-- TLS everywhere external; internal service auth via signed service tokens first (mTLS later; auth layer is an interface), see PLAN.md §11.
+- TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS later; auth is one interceptor), see PLAN.md §11.
 - Key rotation procedures documented and scripted (`bobres secrets rotate`).
 
 ## Privacy
@@ -61,6 +61,6 @@ payments is the only one with gateway secrets.
 - Legal/regulatory exposure of the VPN business is outside technical control (see 09).
 
 ## Open points
-- DECIDED: signed service tokens first, mTLS later.
+- DECIDED: per-service tokens first, mTLS later.
 - Where the master encryption key lives to survive reinstall (backup of key = part of restore drill).
 - Whether to offer optional forced-2FA for owner accounts by default.

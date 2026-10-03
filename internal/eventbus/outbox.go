@@ -2,127 +2,93 @@ package eventbus
 
 import (
 	"context"
-	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-// Message is one outbox row handed to consumers.
-type Message struct {
-	ID      int64
-	Topic   string
-	Payload []byte
+// outboxTable describes one service's outbox. Identifiers are whitelisted
+// here and never come from input, because table names cannot be SQL parameters.
+type outboxTable struct {
+	schema string
+	// lockKey serializes publishers of this outbox (see Publish). It only has
+	// to differ from other advisory locks in the database.
+	lockKey int64
 }
 
-// Outbox appends events to a schema's outbox table inside the caller's
-// transaction, so domain writes and event emission commit or roll back
-// together (transactional outbox pattern).
-type Outbox struct {
-	db    *sql.DB
-	table string // validated: outbox_core | outbox_payments | outbox_provisioner
+var outboxTables = map[string]outboxTable{
+	"outbox_core":        {schema: "core", lockKey: 7_301_001},
+	"outbox_payments":    {schema: "payments", lockKey: 7_301_002},
+	"outbox_provisioner": {schema: "provisioner", lockKey: 7_301_003},
 }
 
-var outboxTables = map[string]bool{
-	"outbox_core":        true,
-	"outbox_payments":    true,
-	"outbox_provisioner": true,
-}
-
-// NewOutbox validates the table name (identifier, never parameterized in SQL).
-func NewOutbox(db *sql.DB, table string) *Outbox {
-	if !outboxTables[table] {
-		panic("eventbus: invalid outbox table " + table)
+func lookupTable(table string) outboxTable {
+	t, ok := outboxTables[table]
+	if !ok {
+		panic("eventbus: unknown outbox table " + table)
 	}
-	return &Outbox{db: db, table: table}
+	return t
 }
 
-// DBTX is the minimal executor Publish needs. Both database/sql and pgx
-// transactions are wrapped by callers (see SQLTx and PgxTx).
+// DBTX is what Publish needs from a transaction; pgx.Tx satisfies it.
 type DBTX interface {
-	ExecPublish(ctx context.Context, query string, args ...any) error
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// SQLTx adapts *sql.Tx.
-type SQLTx struct{ Tx *sql.Tx }
-
-// ExecPublish implements DBTX.
-func (w SQLTx) ExecPublish(ctx context.Context, query string, args ...any) error {
-	_, err := w.Tx.ExecContext(ctx, query, args...)
-	return err
+// Outbox appends events to one service's outbox table.
+type Outbox struct {
+	lockKey int64
+	insert  string
 }
 
-// Publish inserts the event inside tx.
-func (o *Outbox) Publish(ctx context.Context, tx DBTX, topic string, payload []byte) error {
-	q := fmt.Sprintf(`INSERT INTO %s.%s (topic, payload) VALUES ($1, $2)`, schemaOf(o.table), o.table) //nolint:gosec // table name is whitelisted
-	if err := tx.ExecPublish(ctx, q, topic, payload); err != nil {
-		return fmt.Errorf("eventbus: publish: %w", err)
+// NewOutbox returns the outbox for table (outbox_core, outbox_payments or
+// outbox_provisioner). An unknown table is a programming error and panics.
+func NewOutbox(table string) *Outbox {
+	t := lookupTable(table)
+	return &Outbox{
+		lockKey: t.lockKey,
+		insert: fmt.Sprintf( //nolint:gosec // identifiers come from the whitelist above
+			`INSERT INTO %s.%s (topic, payload, event_id) VALUES ($1, $2, $3)`, t.schema, table),
 	}
-	return nil
 }
 
-func schemaOf(table string) string {
-	switch table {
-	case "outbox_payments":
-		return "payments"
-	case "outbox_provisioner":
-		return "provisioner"
+// Publish appends an event inside tx and returns its event id. payload is
+// marshalled to JSON ([]byte and json.RawMessage are taken as JSON already).
+//
+// Publishers of one outbox are serialized by a transaction-scoped advisory
+// lock taken right before the insert, so sequence numbers become visible in
+// increasing order: a consumer that has seen seq N can never later find a
+// committed event with a smaller seq. Publish as the last locking step of a
+// transaction, so the lock is held only for the commit.
+func (o *Outbox) Publish(ctx context.Context, tx DBTX, topic string, payload any) (string, error) {
+	if topic == "" {
+		return "", errors.New("eventbus: topic required")
+	}
+	var body []byte
+	switch p := payload.(type) {
+	case []byte:
+		body = p
+	case json.RawMessage:
+		body = p
 	default:
-		return "core"
-	}
-}
-
-// Relay polls one outbox table and delivers unpublished rows in id order.
-type Relay struct {
-	db       *sql.DB
-	table    string
-	interval time.Duration
-}
-
-// NewRelay validates the table and sets the poll interval.
-func NewRelay(db *sql.DB, table string, interval time.Duration) *Relay {
-	if !outboxTables[table] {
-		panic("eventbus: invalid outbox table " + table)
-	}
-	if interval <= 0 {
-		interval = 500 * time.Millisecond
-	}
-	return &Relay{db: db, table: table, interval: interval}
-}
-
-// Start polls until ctx is done. A handler error leaves the row unpublished
-// so it is retried on the next tick (at-least-once delivery; consumers must
-// be idempotent via their inbox tables).
-func (r *Relay) Start(ctx context.Context, handle func(context.Context, Message) error) error {
-	q := fmt.Sprintf(`SELECT id, topic, payload FROM %s.%s
-		WHERE published_at IS NULL ORDER BY id LIMIT 100`, schemaOf(r.table), r.table) //nolint:gosec // whitelisted
-	mark := fmt.Sprintf(`UPDATE %s.%s SET published_at = now() WHERE id = $1`, schemaOf(r.table), r.table)
-
-	tick := func() {
-		rows, err := r.db.QueryContext(ctx, q)
+		b, err := json.Marshal(payload)
 		if err != nil {
-			return // transient DB errors: retry next tick
+			return "", fmt.Errorf("eventbus: encode %s: %w", topic, err)
 		}
-		defer rows.Close() //nolint:errcheck // read errors handled per-row below
-		for rows.Next() {
-			var m Message
-			if err := rows.Scan(&m.ID, &m.Topic, &m.Payload); err != nil {
-				return
-			}
-			if err := handle(ctx, m); err != nil {
-				return // leave unpublished; retry this and later rows next tick
-			}
-			_, _ = r.db.ExecContext(ctx, mark, m.ID)
-		}
+		body = b
 	}
-
-	t := time.NewTicker(r.interval)
-	defer t.Stop()
-	for {
-		tick()
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-t.C:
-		}
+	if !json.Valid(body) {
+		return "", fmt.Errorf("eventbus: %s payload is not valid JSON", topic)
 	}
+	id := buuid.MustV7().String()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, o.lockKey); err != nil {
+		return "", fmt.Errorf("eventbus: publish lock: %w", err)
+	}
+	if _, err := tx.Exec(ctx, o.insert, topic, body, id); err != nil {
+		return "", fmt.Errorf("eventbus: publish %s: %w", topic, err)
+	}
+	return id, nil
 }

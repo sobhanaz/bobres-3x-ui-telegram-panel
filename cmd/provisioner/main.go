@@ -4,60 +4,55 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
-	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/health"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	provisionserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
-	"google.golang.org/grpc"
 )
 
 func main() {
 	os.Exit(app.Run("provisioner", os.Args[1:], setup))
 }
 
-func setup(mux *http.ServeMux, h *health.Handler) error {
+func setup(rt *app.Runtime) error {
 	cfg, err := config.LoadProvisioner()
 	if err != nil {
 		return fmt.Errorf("load provisioner config: %w", err)
 	}
-	ctx := context.Background()
-
-	if err := migrate.Up(ctx, cfg.DatabaseURL, "provisioner"); err != nil {
+	if err := migrate.Up(rt.Ctx, cfg.DatabaseURL, "provisioner"); err != nil {
 		return fmt.Errorf("migrate provisioner schema: %w", err)
 	}
 	env, err := bcrypto.NewEnvelope([]byte(cfg.MasterKey))
 	if err != nil {
 		return fmt.Errorf("envelope: %w", err)
 	}
-	st, err := store.New(ctx, cfg.DatabaseURL, env)
+	st, err := store.New(rt.Ctx, cfg.DatabaseURL, env)
 	if err != nil {
 		return err
 	}
+	rt.OnClose(st.Close)
+	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
-	gs := grpc.NewServer(grpc.UnaryInterceptor(grpcauth.UnaryInterceptor(cfg.ServiceToken)))
-	provisionserver.New(st).Register(gs)
-
-	lis, err := net.Listen("tcp", cfg.GRPCAddr)
+	srv := provisionserver.New(st)
+	added, err := srv.EnsureDefaultServer(rt.Ctx, cfg.XUIURL, cfg.XUIToken, cfg.XUISubURL, cfg.XUIAllowPrivate)
 	if err != nil {
-		return fmt.Errorf("grpc listen %s: %w", cfg.GRPCAddr, err)
+		return err
 	}
-	h.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
-	h.AddCheck("grpc", func(c context.Context) error {
-		conn, err := net.DialTimeout("tcp", lis.Addr().String(), time.Second)
-		if err != nil {
-			return err
-		}
-		return conn.Close()
-	})
-	go func() { _ = gs.Serve(lis) }()
-	return nil
+	if added {
+		rt.Log.Info("registered the 3x-ui panel from BOBRES_XUI_URL")
+	}
+
+	// Only core may call the provisioner (the only holder of 3x-ui tokens).
+	gs, err := grpcx.NewServer(rt.Log, grpcauth.Peer{Name: "core", Token: cfg.CoreToken})
+	if err != nil {
+		return err
+	}
+	srv.Register(gs)
+	return rt.ServeGRPC(cfg.GRPCAddr, gs)
 }

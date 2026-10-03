@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
@@ -12,7 +14,9 @@ import (
 // ErrNotFound is returned by all Get* methods when no row matches.
 var ErrNotFound = errors.New("store: not found")
 
-const userCols = `id, telegram_id, username, language, role, status, referred_by, created_at, updated_at`
+// username is NULL for Telegram users without a public @username; the struct
+// field is a plain string, so it is read as ”.
+const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
@@ -80,4 +84,60 @@ func (s *Store) SetUserRole(ctx context.Context, q querier, id, role, status str
 		return ErrNotFound
 	}
 	return nil
+}
+
+// GetUserByUsername finds a user by Telegram @username (case-insensitive,
+// leading @ optional).
+func (s *Store) GetUserByUsername(ctx context.Context, q querier, username string) (*User, error) {
+	row := q.QueryRow(ctx, `SELECT `+userCols+` FROM core.users WHERE lower(username) = lower($1)`,
+		strings.TrimPrefix(strings.TrimSpace(username), "@"))
+	u, err := scanUser(row)
+	if err != nil {
+		return nil, fmt.Errorf("get user by username: %w", err)
+	}
+	return u, nil
+}
+
+// SetUserStatus changes a user's status (active | banned).
+func (s *Store) SetUserStatus(ctx context.Context, q querier, id, status string) error {
+	tag, err := q.Exec(ctx, `UPDATE core.users SET status = $2, updated_at = now() WHERE id = $1`, id, status)
+	if err != nil {
+		return fmt.Errorf("set user status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UserCounts are dashboard-style figures.
+type UserCounts struct {
+	UsersTotal, UsersSince, ActiveSubscriptions, ProvisionFailedOrders int64
+}
+
+// Counts returns user and subscription figures; UsersSince counts users
+// created after since.
+func (s *Store) Counts(ctx context.Context, q querier, since time.Time) (UserCounts, error) {
+	var c UserCounts
+	err := q.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM core.users),
+		(SELECT count(*) FROM core.users WHERE created_at >= $1),
+		(SELECT count(*) FROM core.subscriptions WHERE status = 'active'),
+		(SELECT count(*) FROM core.orders WHERE status = 'provision_failed')`, since).
+		Scan(&c.UsersTotal, &c.UsersSince, &c.ActiveSubscriptions, &c.ProvisionFailedOrders)
+	if err != nil {
+		return c, fmt.Errorf("counts: %w", err)
+	}
+	return c, nil
+}
+
+// UserActivity counts a user's subscriptions and orders.
+func (s *Store) UserActivity(ctx context.Context, q querier, userID string) (subscriptions, orders int64, err error) {
+	err = q.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM core.subscriptions WHERE user_id = $1),
+		(SELECT count(*) FROM core.orders WHERE user_id = $1)`, userID).Scan(&subscriptions, &orders)
+	if err != nil {
+		return 0, 0, fmt.Errorf("user activity: %w", err)
+	}
+	return subscriptions, orders, nil
 }

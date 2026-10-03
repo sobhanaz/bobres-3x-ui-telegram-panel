@@ -23,8 +23,7 @@ type Common struct {
 	GRPCAddr    string
 	DatabaseURL string
 	RedisURL    string
-	// ServiceToken authenticates internal service-to-service calls.
-	ServiceToken string
+	// ShutdownWait bounds graceful shutdown (stop intake, drain, release).
 	ShutdownWait time.Duration
 }
 
@@ -36,7 +35,6 @@ func (c Common) LogValue() slog.Value {
 		slog.String("http_addr", c.HTTPAddr),
 		slog.Bool("database_url_set", c.DatabaseURL != ""),
 		slog.Bool("redis_url_set", c.RedisURL != ""),
-		slog.Bool("service_token_set", c.ServiceToken != ""),
 	)
 }
 
@@ -62,7 +60,6 @@ func Load(service string) (Common, error) {
 		GRPCAddr:     getenv("BOBRES_GRPC_ADDR", ":9090"),
 		DatabaseURL:  get("BOBRES_DATABASE_URL"),
 		RedisURL:     get("BOBRES_REDIS_URL"),
-		ServiceToken: get("BOBRES_SERVICE_TOKEN"),
 		ShutdownWait: getDuration("BOBRES_SHUTDOWN_WAIT", 15*time.Second),
 	}
 	errs = append(errs, c.Validate())
@@ -84,15 +81,8 @@ func (c Common) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("BOBRES_LOG_FORMAT must be json|text, got %q", c.LogFormat))
 	}
-	minToken := 16
-	if c.Env == "prod" {
-		minToken = 32
-	}
-	if len(c.ServiceToken) < minToken {
-		errs = append(errs, fmt.Errorf("BOBRES_SERVICE_TOKEN must be at least %d characters in %s", minToken, c.Env))
-	}
 	for name, v := range map[string]string{
-		"BOBRES_SERVICE_TOKEN": c.ServiceToken, "BOBRES_DATABASE_URL": c.DatabaseURL, "BOBRES_REDIS_URL": c.RedisURL,
+		"BOBRES_DATABASE_URL": c.DatabaseURL, "BOBRES_REDIS_URL": c.RedisURL,
 	} {
 		if strings.Contains(v, placeholderMarker) {
 			errs = append(errs, fmt.Errorf("%s still contains the %s placeholder", name, placeholderMarker))

@@ -42,8 +42,8 @@ func (a *XUIv3) Renew(ctx context.Context, email string, addDays, addBytes int64
 	if err != nil {
 		return err
 	}
-	for _, sk := range res.Skipped {
-		return fmt.Errorf("renew skipped for %s: %s", sk.Email, sk.Reason)
+	if len(res.Skipped) > 0 {
+		return fmt.Errorf("renew skipped for %s: %s", res.Skipped[0].Email, res.Skipped[0].Reason)
 	}
 	return nil
 }
@@ -66,6 +66,18 @@ func (a *XUIv3) Usage(ctx context.Context, email string) (int64, error) {
 
 func (a *XUIv3) Links(ctx context.Context, email string) ([]string, error) {
 	return a.c.Links(ctx, email)
+}
+
+func (a *XUIv3) SubLinks(ctx context.Context, subID string) ([]string, error) {
+	return a.c.SubLinks(ctx, subID)
+}
+
+func (a *XUIv3) ClientSubID(ctx context.Context, email string) (string, error) {
+	d, err := a.c.GetClient(ctx, email)
+	if err != nil {
+		return "", err
+	}
+	return d.Client.SubID, nil
 }
 
 func (a *XUIv3) Inbounds(ctx context.Context) ([]Inbound, error) {

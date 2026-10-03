@@ -3,27 +3,26 @@ package store
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
+
+func TestMain(m *testing.M) { testdb.Main(m) }
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := os.Getenv("BOBRES_TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres:///postgres?host=/tmp&port=5432&sslmode=disable"
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
-		t.Skipf("migration: %v", err)
+		t.Fatalf("migrate: %v", err)
 	}
 	s, err := New(ctx, dsn)
 	if err != nil {
-		t.Skipf("connect: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(s.Close)
 	for _, tbl := range []string{"manual_receipts", "ledger_entries", "payment_intents"} {
@@ -67,8 +66,19 @@ func TestIntentLifecycleAndIdempotency(t *testing.T) {
 		t.Fatalf("double submit: %v", err)
 	}
 	list, err := s.ListPendingReceipts(ctx, 10)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("pending list: %v %d", err, len(list))
+	if err != nil || len(list) != 1 || *list[0].Receipt.ReferenceNumber != "998877" || list[0].PossibleDuplicate {
+		t.Fatalf("pending list: %v %+v", err, list)
+	}
+
+	// A second receipt with the same reference number is flagged, not refused.
+	in2, _ := s.CreateIntent(ctx, nil, &Intent{UserID: uid, Provider: "manual_card", Amount: 7, Currency: "IRT", Status: "pending", IdempotencyKey: "i1b"})
+	if err := s.SaveReceipt(ctx, nil, &Receipt{IntentID: in2.ID, ReceiptFile: &file, ReferenceNumber: &ref}); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = s.TransitionConfirming(ctx, nil, in2.ID)
+	list, _ = s.ListPendingReceipts(ctx, 10)
+	if len(list) != 2 || !list[0].PossibleDuplicate || !list[1].PossibleDuplicate {
+		t.Fatalf("duplicate reference not flagged: %+v", list)
 	}
 }
 

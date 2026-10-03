@@ -54,6 +54,17 @@
 		}
 	}
 
+	# Telegram webhook (only used when the bot runs in webhook mode; the bot checks the
+	# secret token Telegram sends with every delivery).
+	handle /tg/webhook {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy bot:8080 {
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
 	# Admin dashboard: strict CSP (script/style/img from self only).
 	handle /admin* {
 		header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"

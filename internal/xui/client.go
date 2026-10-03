@@ -67,6 +67,10 @@ func sanitizeMsg(m string) string {
 
 var identRe = regexp.MustCompile(`^[A-Za-z0-9._@+\-]{1,128}$`)
 
+// ValidateIdentifier reports whether s can be used as a client email or
+// subscription id (it ends up in request paths).
+func ValidateIdentifier(s string) error { return validIdent(s) }
+
 func validIdent(s string) error {
 	if s == "." || s == ".." || !identRe.MatchString(s) {
 		return ErrInvalidIdentifier
@@ -201,6 +205,9 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 			TLSHandshakeTimeout:   10 * time.Second,
 			ResponseHeaderTimeout: 15 * time.Second,
 			MaxIdleConnsPerHost:   4,
+			// Without this an idle keep-alive connection lives until the panel
+			// closes it; callers should also reuse one Client per panel.
+			IdleConnTimeout: 90 * time.Second,
 		}
 		if !o.allowPrivate {
 			tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: blockPrivate}).DialContext

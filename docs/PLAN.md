@@ -1,4 +1,4 @@
-# Project Plan (DRAFT - planning only, no code yet)
+# Project Plan (living document; Phase 0 done, Phase 1 in progress)
 
 Product: Telegram bot + web dashboard for selling and managing 3x-ui (Xray) subscriptions.
 Brand name: BOBRES (chosen by owner; trademark/domain/handle availability not yet checked).
@@ -34,7 +34,7 @@ Status: planning. Nothing here is final until decisions below are closed.
 | payments | Gateways, webhooks, reconciliation |
 | provisioner | ONLY service that talks to 3x-ui: create/renew/delete, usage sync |
 | notifier | Scheduled alerts, broadcasts, retries, Telegram rate limit queue |
-| dashboard | Admin web UI (Go + templ/HTMX) |
+| dashboard | Admin web UI (Vue 3 SPA embedded in core, see §12) |
 
 - Sync: gRPC. Async: Postgres outbox events (NATS later) (e.g. order.paid -> provision -> notify).
 - Patterns: transactional outbox, saga for purchase flow, idempotency keys on all money paths.
@@ -178,9 +178,14 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 7. Hardening: backups/restore drills, monitoring, load tests, docs, legal review.
 
 ## 11. Weak-spot decisions (closed)
-- Internal auth: signed service tokens first (v1), mTLS added later. Design the auth layer as an interface.
-- Queue/events: Postgres transactional outbox + LISTEN/NOTIFY for v1. NO NATS yet. Event bus is an interface
-  so NATS JetStream can replace it without touching handlers. (Supersedes NATS mentions in earlier sections.)
+- Internal auth: one service token PER SERVICE (v1), mTLS added later. A server accepts only its legitimate
+  callers: core accepts the bot; payments and provisioner accept only core (so a compromised bot cannot reach
+  payment approvals or the 3x-ui token holder). The auth layer is one interceptor (`internal/grpcauth`).
+- Queue/events: Postgres transactional outbox per service + a pull feed over gRPC (`events.v1.EventFeedService`):
+  the producer keeps one cursor per consumer, consumers de-duplicate on a UUID event id and dead-letter events
+  they cannot apply. No service reads another service's schema, so payments can run in another region.
+  NO NATS yet; a NATS transport can replace Feed/Source without touching handlers. (Decided 2026-10-03 after
+  the shared-table relay proved incompatible with per-service DB roles; supersedes LISTEN/NOTIFY.)
 - License binding: domain + soft install ID; up to 3 re-activations per year.
 - Services: 4 separate deployables (bot, core, payments, provisioner) in one Go monorepo, shared module, plus Caddy.
 - Zarinpal: payments stays a separate deployable so it can run in any region. Verify Zarinpal's server-IP rules

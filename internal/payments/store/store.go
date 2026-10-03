@@ -21,6 +21,10 @@ var (
 	// ErrInvalidTransition rejects status updates outside the allowed path
 	// (double approve, submit after review).
 	ErrInvalidTransition = errors.New("store: invalid status transition")
+	// ErrIdempotencyConflict: the idempotency key belongs to a different intent.
+	ErrIdempotencyConflict = errors.New("store: idempotency key reused for a different intent")
+	// ErrDuplicateProof: this crypto TXID was already submitted for an intent.
+	ErrDuplicateProof = errors.New("store: this transaction was already submitted")
 )
 
 // Intent mirrors payments.payment_intents.
@@ -130,7 +134,18 @@ func (s *Store) CreateIntent(ctx context.Context, tx pgx.Tx, in *Intent) (*Inten
 	if err != nil {
 		return nil, fmt.Errorf("create intent: %w", err)
 	}
+	if got.UserID != in.UserID || got.Provider != in.Provider || got.Amount != in.Amount ||
+		got.Currency != in.Currency || !sameOptional(got.OrderID, in.OrderID) {
+		return nil, ErrIdempotencyConflict
+	}
 	return got, nil
+}
+
+func sameOptional(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 // GetIntent returns one intent.
@@ -187,6 +202,10 @@ func (s *Store) SaveReceipt(ctx context.Context, tx pgx.Tx, r *Receipt) error {
 			reference_number = EXCLUDED.reference_number`,
 		r.ID, r.IntentID, r.Network, r.TXID, r.ReceiptFile, r.ReferenceNumber)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "manual_receipts_txid_once_idx" {
+			return ErrDuplicateProof
+		}
 		return fmt.Errorf("save receipt: %w", err)
 	}
 	return nil
@@ -207,26 +226,46 @@ func (s *Store) ReviewReceipt(ctx context.Context, tx pgx.Tx, intentID, reviewer
 	return nil
 }
 
-// ListPendingReceipts returns intents awaiting manual review.
-func (s *Store) ListPendingReceipts(ctx context.Context, limit int) ([]Intent, error) {
-	if limit <= 0 {
+// Pending is one intent awaiting manual review, with its proof.
+type Pending struct {
+	Intent  Intent
+	Receipt Receipt
+	// PossibleDuplicate: another receipt carries the same card reference number.
+	PossibleDuplicate bool
+}
+
+// ListPendingReceipts returns intents awaiting manual review, oldest first.
+func (s *Store) ListPendingReceipts(ctx context.Context, limit int) ([]Pending, error) {
+	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	rows, err := s.db.Query(ctx, `
-		SELECT `+intentCols+` FROM payments.payment_intents
-		WHERE status = 'confirming' AND provider IN ('manual_card','manual_crypto')
-		ORDER BY created_at LIMIT $1`, limit)
+		SELECT i.id, i.order_id, i.user_id, i.provider, i.amount, i.currency, i.status, i.idempotency_key,
+		       i.expires_at, i.created_at,
+		       r.network, r.txid, r.receipt_file, r.reference_number, r.submitted_at,
+		       (r.reference_number IS NOT NULL AND EXISTS (
+		           SELECT 1 FROM payments.manual_receipts d
+		           WHERE d.reference_number = r.reference_number AND d.intent_id <> r.intent_id))
+		FROM payments.payment_intents i
+		JOIN payments.manual_receipts r ON r.intent_id = i.id
+		WHERE i.status = 'confirming' AND i.provider IN ('manual_card','manual_crypto')
+		ORDER BY r.submitted_at LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list pending: %w", err)
 	}
 	defer rows.Close()
-	var out []Intent
+	var out []Pending
 	for rows.Next() {
-		in, err := scanIntent(rows)
-		if err != nil {
+		var p Pending
+		in := &p.Intent
+		if err := rows.Scan(&in.ID, &in.OrderID, &in.UserID, &in.Provider, &in.Amount, &in.Currency,
+			&in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt,
+			&p.Receipt.Network, &p.Receipt.TXID, &p.Receipt.ReceiptFile, &p.Receipt.ReferenceNumber,
+			&p.Receipt.SubmittedAt, &p.PossibleDuplicate); err != nil {
 			return nil, err
 		}
-		out = append(out, *in)
+		p.Receipt.IntentID = in.ID
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

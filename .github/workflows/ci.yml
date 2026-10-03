@@ -16,11 +16,35 @@ jobs:
   test:
     name: Test (race)
     runs-on: ubuntu-latest
+    # Database and Redis tests must RUN in CI: with BOBRES_TEST_REQUIRE_DB=1 a
+    # missing service fails the job instead of silently skipping those tests.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      BOBRES_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      BOBRES_TEST_REDIS_ADDR: localhost:6379
+      BOBRES_TEST_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
+          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
+          go-version: "1.25.x"
+          check-latest: true
           cache: true
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
       - uses: actions/upload-artifact@v7
@@ -36,7 +60,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
+          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
+          go-version: "1.25.x"
+          check-latest: true
           cache: true
       # Built from source with the job's Go toolchain: the prebuilt v1.64.8 binary is
       # compiled with Go 1.24 and refuses to lint a Go 1.25 module.
@@ -52,15 +79,21 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
+          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
+          go-version: "1.25.x"
+          check-latest: true
           cache: true
       # govulncheck itself may need a newer Go than the module targets (v1.8.0 needs 1.26).
       # GOTOOLCHAIN=auto lets `go install` fetch what it needs; the scan still analyses this
       # module with the job's own toolchain, which is what actually builds our binaries.
       - name: Install govulncheck
         run: GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+      # Fails on any vulnerability our code calls, except reviewed entries in .govulncheck-allow.
       - name: Scan
-        run: '"$(go env GOPATH)/bin/govulncheck" ./...'
+        run: |
+          "$(go env GOPATH)/bin/govulncheck" -format json ./... > govulncheck.json
+          tools/ci/vulncheck-gate.sh govulncheck.json .govulncheck-allow
 
   build:
     name: Build binaries
@@ -69,7 +102,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
+          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
+          go-version: "1.25.x"
+          check-latest: true
           cache: true
       - run: make build
 
@@ -78,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: shellcheck --severity=warning install/install.sh tools/sign/*.sh tests/*.sh
+      - run: shellcheck --severity=warning install/install.sh tools/sign/*.sh tools/ci/*.sh tests/*.sh deploy/postgres-init.sh
       - run: bash tests/sign_test.sh
       - run: bash tests/install_verify_test.sh
 
