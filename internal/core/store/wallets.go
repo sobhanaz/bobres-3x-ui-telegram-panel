@@ -203,3 +203,22 @@ func (s *Store) ListLedger(ctx context.Context, q querier, userID string, limit,
 	}
 	return out, rows.Err()
 }
+
+// ListWallets returns every wallet of a user.
+func (s *Store) ListWallets(ctx context.Context, q querier, userID string) ([]Wallet, error) {
+	rows, err := q.Query(ctx, `SELECT user_id, currency, balance, updated_at FROM core.wallets
+		WHERE user_id = $1 ORDER BY currency`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list wallets: %w", err)
+	}
+	defer rows.Close()
+	var out []Wallet
+	for rows.Next() {
+		var w Wallet
+		if err := rows.Scan(&w.UserID, &w.Currency, &w.Balance, &w.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}

@@ -26,14 +26,15 @@ type Config struct {
 
 // Service composes the store with business rules.
 type Service struct {
-	st  *store.Store
-	ob  *eventbus.Outbox
-	cfg Config
+	st   *store.Store
+	ob   *eventbus.Outbox
+	cfg  Config
+	kick chan struct{} // wakes the provisioning worker
 }
 
 // New builds a Service publishing to core's outbox.
 func New(st *store.Store, cfg Config) *Service {
-	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg}
+	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1)}
 }
 
 func (s *Service) publish(ctx context.Context, tx pgx.Tx, topic string, payload any) error {
@@ -154,6 +155,9 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	if err != nil {
 		return nil, err
 	}
+	if free {
+		s.kickProvisioning()
+	}
 	return out, nil
 }
 
@@ -215,6 +219,7 @@ func (s *Service) PayOrderWithWallet(ctx context.Context, orderID, userID string
 	if err != nil {
 		return nil, err
 	}
+	s.kickProvisioning()
 	return out, nil
 }
 
@@ -291,5 +296,6 @@ func (s *Service) StartTrial(ctx context.Context, userID, planID, idempotencyKey
 	if err != nil {
 		return nil, err
 	}
+	s.kickProvisioning()
 	return out, nil
 }

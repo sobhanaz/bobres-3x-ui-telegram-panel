@@ -44,6 +44,9 @@ func (s *Service) HandlePaymentEvent(ctx context.Context, m eventbus.Message) er
 	if isDataError(err) {
 		return eventbus.Permanent(err)
 	}
+	if err == nil {
+		s.kickProvisioning() // an order may have become paid
+	}
 	return err
 }
 

@@ -167,9 +167,10 @@ message UpdateBrandingRequest {
 
 message ReviewManualPaymentRequest {
   string intent_id = 1;
-  string reviewer_id = 2;
+  string reviewer_id = 2; // ignored: the reviewer is resolved from actor_telegram_id
   string decision = 3; // approved | rejected
   string reason = 4;
+  int64 actor_telegram_id = 5; // must belong to an admin or the owner
 }
 
 message PaymentIntentRef {
@@ -178,6 +179,110 @@ message PaymentIntentRef {
   string order_id = 3;
   string provider = 4;
   string instructions = 5; // rendered payment instructions for the user
+  common.v1.Money amount = 6;
+  // Structured details so the bot can render instructions in the user's
+  // language: card_number, card_holder, usdt_trc20, usdt_erc20, reference.
+  map<string, string> details = 7;
+}
+
+message SubmitPaymentProofRequest {
+  string user_id = 1;
+  string intent_id = 2;
+  // Card payments: receipt photo (Telegram file_id) and bank reference number.
+  string receipt_file = 3;
+  string reference_number = 4;
+  // Crypto payments: network and transaction id.
+  string network = 5;
+  string txid = 6;
+}
+
+message GetSubscriptionLinksRequest {
+  string user_id = 1; // must own the subscription
+  string subscription_id = 2;
+}
+
+message SubscriptionLinks {
+  string subscription_link = 1;
+  bytes qr_png = 2;
+  repeated string config_links = 3;
+}
+
+// --- Admin RPCs: actor_telegram_id must belong to an active admin or owner.
+// Every change is written to the audit log with the actor and the reason.
+
+message AdminGetStatsRequest {
+  int64 actor_telegram_id = 1;
+}
+
+message AdminStats {
+  int64 users_total = 1;
+  int64 users_today = 2;
+  int64 active_subscriptions = 3;
+  int64 pending_payments = 4;
+  int64 provision_failed_orders = 5;
+  bool panel_healthy = 6;
+  string panel_detail = 7;
+}
+
+message AdminListPendingPaymentsRequest {
+  int64 actor_telegram_id = 1;
+  int32 limit = 2;
+}
+
+message PendingPayment {
+  string intent_id = 1;
+  string order_id = 2;
+  User user = 3;
+  string provider = 4;
+  common.v1.Money amount = 5;
+  string receipt_file = 6;
+  string reference_number = 7;
+  string network = 8;
+  string txid = 9;
+  int64 submitted_at = 10;
+  bool possible_duplicate = 11;
+}
+
+message AdminListPendingPaymentsResponse {
+  repeated PendingPayment payments = 1;
+}
+
+message AdminFindUserRequest {
+  int64 actor_telegram_id = 1;
+  string query = 2; // Telegram id or @username
+}
+
+message AdminUserView {
+  User user = 1;
+  repeated Wallet wallets = 2;
+  int64 subscriptions = 3;
+  int64 orders = 4;
+}
+
+message AdminAdjustBalanceRequest {
+  int64 actor_telegram_id = 1;
+  string user_id = 2;
+  common.v1.Money delta = 3; // signed; the balance can never go below zero
+  string reason = 4;
+  string idempotency_key = 5;
+}
+
+message AdminSetUserStatusRequest {
+  int64 actor_telegram_id = 1;
+  string user_id = 2;
+  string status = 3; // active | banned
+  string reason = 4;
+}
+
+message AdminUpsertPlanRequest {
+  int64 actor_telegram_id = 1;
+  Plan plan = 2; // empty id creates a plan
+}
+
+message AdminSetSettingRequest {
+  int64 actor_telegram_id = 1;
+  string key = 2; // one of the documented setting keys
+  string value = 3; // plain text
 }
 
 message PayOrderWithWalletRequest {
@@ -221,6 +326,15 @@ service CoreService {
   rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentRef);
   rpc StartTrial(StartTrialRequest) returns (Order);
   rpc CanStartTrial(CanStartTrialRequest) returns (CanStartTrialResponse);
+  rpc SubmitPaymentProof(SubmitPaymentProofRequest) returns (PaymentIntentRef);
+  rpc GetSubscriptionLinks(GetSubscriptionLinksRequest) returns (SubscriptionLinks);
+  rpc AdminGetStats(AdminGetStatsRequest) returns (AdminStats);
+  rpc AdminListPendingPayments(AdminListPendingPaymentsRequest) returns (AdminListPendingPaymentsResponse);
+  rpc AdminFindUser(AdminFindUserRequest) returns (AdminUserView);
+  rpc AdminAdjustBalance(AdminAdjustBalanceRequest) returns (Wallet);
+  rpc AdminSetUserStatus(AdminSetUserStatusRequest) returns (User);
+  rpc AdminUpsertPlan(AdminUpsertPlanRequest) returns (Plan);
+  rpc AdminSetSetting(AdminSetSettingRequest) returns (Settings);
 }
 
 message CanStartTrialRequest {

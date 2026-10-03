@@ -65,7 +65,7 @@ type LedgerEntry struct {
 	CreatedAt      time.Time
 }
 
-// Subscription mirrors core.subscriptions.
+// Subscription mirrors core.subscriptions. ServerID is "" until provisioned.
 type Subscription struct {
 	ID           string
 	UserID       string
@@ -78,6 +78,8 @@ type Subscription struct {
 	TrafficTotal *int64
 	TrafficUsed  int64
 	LastSyncedAt *time.Time
+	SubLink      string
+	CreatedAt    time.Time
 }
 
 // Ticket mirrors core.tickets.

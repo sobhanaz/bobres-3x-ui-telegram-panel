@@ -251,9 +251,34 @@ type fakePayments struct {
 	id, status string
 	amount     int64
 	currency   string
+	pending    []PendingPayment
+	reviews    []string // reviewer|intent|decision
+	proofs     []string
 }
 
 func (f *fakePayments) CreateIntent(_ context.Context, _, _, _ string, amount int64, currency, _ string) (string, string, error) {
 	f.amount, f.currency = amount, currency
 	return f.id, f.status, nil
+}
+
+func (f *fakePayments) SubmitReceipt(_ context.Context, userID, intentID, fileID, ref string) (string, error) {
+	f.proofs = append(f.proofs, "card|"+userID+"|"+intentID+"|"+fileID+"|"+ref)
+	return "confirming", nil
+}
+
+func (f *fakePayments) SubmitTXID(_ context.Context, userID, intentID, network, txid string) (string, error) {
+	f.proofs = append(f.proofs, "crypto|"+userID+"|"+intentID+"|"+network+"|"+txid)
+	return "confirming", nil
+}
+
+func (f *fakePayments) ListPending(context.Context, int) ([]PendingPayment, error) {
+	return f.pending, nil
+}
+
+func (f *fakePayments) Review(_ context.Context, reviewerID, intentID, decision, _ string) (string, error) {
+	f.reviews = append(f.reviews, reviewerID+"|"+intentID+"|"+decision)
+	if decision == "approved" {
+		return "succeeded", nil
+	}
+	return "failed", nil
 }

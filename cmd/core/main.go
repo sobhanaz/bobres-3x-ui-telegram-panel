@@ -9,10 +9,12 @@ import (
 
 	eventsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1"
 	paymentsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1"
+	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/paymentsclient"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/provisionerclient"
 	coreserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
@@ -49,6 +51,17 @@ func setup(rt *app.Runtime) error {
 	}
 	rt.OnClose(func() { _ = payConn.Close() })
 	csrv.SetPayments(paymentsclient.New(paymentsv1.NewPaymentsServiceClient(payConn)))
+
+	provConn, err := grpcx.Dial(cfg.ProvisionerGRPCAddr, cfg.ServiceToken)
+	if err != nil {
+		return fmt.Errorf("dial provisioner %s: %w", cfg.ProvisionerGRPCAddr, err)
+	}
+	rt.OnClose(func() { _ = provConn.Close() })
+	prov := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(provConn))
+	csrv.SetProvisioner(prov)
+
+	// Paid orders become VPN accounts here (retried with backoff, alerting once).
+	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).

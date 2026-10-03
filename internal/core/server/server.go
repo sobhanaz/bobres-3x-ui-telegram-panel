@@ -18,9 +18,10 @@ import (
 // Server implements corev1.CoreServiceServer on top of domain+store.
 type Server struct {
 	corev1.UnimplementedCoreServiceServer
-	st  *store.Store
-	dom *domain.Service
-	pay domain.PaymentsClient
+	st   *store.Store
+	dom  *domain.Service
+	pay  domain.PaymentsClient
+	prov domain.Provisioner
 }
 
 // New builds the handler set.
@@ -48,10 +49,14 @@ func fail(err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, domain.ErrNotReady):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	}
-	// Errors from a peer service (payments, provisioner) keep their code when
-	// it is meaningful to the caller.
-	if st, ok := status.FromError(err); ok {
+	// Errors from a peer service (payments, provisioner) keep their code and
+	// original message when they are meaningful to the caller.
+	var peer interface{ GRPCStatus() *status.Status }
+	if errors.As(err, &peer) && peer.GRPCStatus() != nil {
+		st := peer.GRPCStatus()
 		switch st.Code() {
 		case codes.InvalidArgument, codes.NotFound, codes.AlreadyExists,
 			codes.FailedPrecondition, codes.PermissionDenied:
@@ -119,25 +124,29 @@ func (s *Server) ListPlans(ctx context.Context, req *corev1.ListPlansRequest) (*
 		return nil, fail(err)
 	}
 	out := &corev1.ListPlansResponse{}
-	for _, p := range plans {
-		pp := &corev1.Plan{
-			Id:       p.ID,
-			NameI18N: p.NameI18n,
-			Kind:     p.Kind,
-			Price:    &commonv1.Money{Amount: p.Price, Currency: p.Currency},
-			Enabled:  p.Enabled,
-			IsTrial:  p.IsTrial,
-			Sort:     p.Sort,
-		}
-		if p.DurationDays != nil {
-			pp.DurationDays = *p.DurationDays
-		}
-		if p.TrafficBytes != nil {
-			pp.TrafficBytes = *p.TrafficBytes
-		}
-		out.Plans = append(out.Plans, pp)
+	for i := range plans {
+		out.Plans = append(out.Plans, planToProto(&plans[i]))
 	}
 	return out, nil
+}
+
+func planToProto(p *store.Plan) *corev1.Plan {
+	pp := &corev1.Plan{
+		Id:       p.ID,
+		NameI18N: p.NameI18n,
+		Kind:     p.Kind,
+		Price:    &commonv1.Money{Amount: p.Price, Currency: p.Currency},
+		Enabled:  p.Enabled,
+		IsTrial:  p.IsTrial,
+		Sort:     p.Sort,
+	}
+	if p.DurationDays != nil {
+		pp.DurationDays = *p.DurationDays
+	}
+	if p.TrafficBytes != nil {
+		pp.TrafficBytes = *p.TrafficBytes
+	}
+	return pp
 }
 
 // CreateOrder inserts an order (idempotent).

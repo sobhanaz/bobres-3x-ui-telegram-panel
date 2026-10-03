@@ -63,6 +63,8 @@ const (
 	// CreditOrderNotPayable: a manual payment for an order arrived after the
 	// order was paid another way (or cancelled); the money stays in the wallet.
 	CreditOrderNotPayable = "order_not_payable" //nolint:gosec // an event reason, not a credential
+	// CreditAdminAdjust: an admin added balance by hand.
+	CreditAdminAdjust = "admin_adjust"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
