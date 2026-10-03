@@ -8,6 +8,19 @@
 
 **Tech Stack:** Go 1.25, PostgreSQL 16, Redis 7, gRPC/protobuf via buf, goose migrations, sqlc, Vue 3 + Vite + TypeScript, Docker Compose, Caddy.
 
+## Status (2026-10-03)
+
+| Sub-phase | State |
+|---|---|
+| 1a Foundation | Done. Hand-written pgx stores instead of sqlc; per-service tokens instead of one shared token. |
+| 1b Events + provisioner | Done. Events travel through a gRPC pull feed with per-consumer cursors (not LISTEN/NOTIFY, see PLAN.md §11). Provisioning runs as a worker in core (retries with backoff, alerts once). |
+| 1c Payments | Done. Core owns wallets and applies each intent exactly once; payments publishes `payment.succeeded`/`payment.rejected`. |
+| 1d Telegram bot | Done (`internal/bot`): fa/en, buy with wallet / card / USDT, receipts and TXIDs, services with QR, wallet top-ups and history, one trial, support, notifications from core's feed, and an admin panel in the bot. |
+| 1e Dashboard | Deferred to Phase 4, as PLAN.md §10 always had it. Everything Phase 1 needs from it (payment review, plans, users, balances, bans, settings) is in the bot's admin panel, behind core's audited admin RPCs. |
+| 1f Install | `bobres install` done (secrets, files, compose up, health wait, re-run safe). Still open: `bobres status/logs/uninstall`, an end-to-end install run in CI (the generated project is validated with `docker compose config` in tests), and a real-panel integration test behind a build tag. |
+
+Tests: every package runs against a throwaway Postgres (and Redis) in CI; `internal/testenv` starts the whole backend in-process and the bot tests drive it through a fake Telegram.
+
 ## Global Constraints
 
 - Go version: 1.25.
