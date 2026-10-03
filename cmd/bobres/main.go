@@ -16,11 +16,14 @@ import (
 
 // notImplemented lists commands from docs/06-installer.md that land in later phases.
 var notImplemented = map[string]string{
-	"install": "phase 1", "uninstall": "phase 1", "status": "phase 1", "logs": "phase 1",
+	"uninstall": "phase 1", "status": "phase 1", "logs": "phase 1",
 	"update": "phase 6", "rollback": "phase 6", "backup": "phase 7", "restore": "phase 7",
 	"config": "phase 1", "secrets": "phase 7", "license": "phase 6", "admin": "phase 1",
 	"support-bundle": "phase 7",
 }
+
+// stdin feeds interactive prompts (replaced in tests).
+var stdin io.Reader = os.Stdin
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
@@ -35,6 +38,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	case "doctor":
 		return doctorCmd(args[1:], out, errOut)
+	case "install":
+		return installCmd(args[1:], stdin, out, errOut)
 	default:
 		if phase, ok := notImplemented[cmd]; ok {
 			fmt.Fprintf(errOut, "bobres %s: not implemented yet (planned for %s)\n", cmd, phase)
@@ -52,11 +57,12 @@ func usage(w io.Writer) {
 Usage: bobres <command> [flags]
 
 Available now:
+  install  Set up BOBRES on this server (asks for what it needs; see install -h)
   doctor   Check this server (RAM, disk, ports, Docker, DNS)
   version  Print the version
 
 Coming later:
-  install uninstall status logs config admin   (phase 1)
+  uninstall status logs config admin           (phase 1)
   update rollback license                      (phase 6)
   backup restore secrets support-bundle        (phase 7)
 `)
