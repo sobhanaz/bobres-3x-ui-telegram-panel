@@ -39,6 +39,16 @@ type Intent struct {
 	IdempotencyKey string
 	ExpiresAt      *time.Time
 	CreatedAt      time.Time
+
+	// Automated gateways: what the customer pays there (fixed at creation),
+	// the gateway's id for the payment, where to pay, and the outcome.
+	GatewayAmount   *int64
+	GatewayCurrency *string
+	ExternalID      *string
+	PayURL          *string
+	ProviderRef     *string // bank reference / transaction hash, for support
+	FailureReason   *string
+	CheckAttempts   int
 }
 
 // Receipt mirrors payments.manual_receipts.
@@ -107,12 +117,15 @@ func (s *Store) WithTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	return nil
 }
 
-const intentCols = `id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at, created_at`
+const intentCols = `id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at, created_at,
+	gateway_amount, gateway_currency, external_id, pay_url, provider_ref, failure_reason, check_attempts`
 
 func scanIntent(row pgx.Row) (*Intent, error) {
 	var in Intent
 	err := row.Scan(&in.ID, &in.OrderID, &in.UserID, &in.Provider, &in.Amount,
-		&in.Currency, &in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt)
+		&in.Currency, &in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt,
+		&in.GatewayAmount, &in.GatewayCurrency, &in.ExternalID, &in.PayURL, &in.ProviderRef,
+		&in.FailureReason, &in.CheckAttempts)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -124,12 +137,13 @@ func (s *Store) CreateIntent(ctx context.Context, tx pgx.Tx, in *Intent) (*Inten
 	in.ID = buuid.MustV7().String()
 	row := s.q(tx).QueryRow(ctx, `
 		INSERT INTO payments.payment_intents
-			(id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			(id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at,
+			 gateway_amount, gateway_currency)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
 		RETURNING `+intentCols,
 		in.ID, in.OrderID, in.UserID, in.Provider, in.Amount, in.Currency,
-		in.Status, in.IdempotencyKey, in.ExpiresAt)
+		in.Status, in.IdempotencyKey, in.ExpiresAt, in.GatewayAmount, in.GatewayCurrency)
 	got, err := scanIntent(row)
 	if err != nil {
 		return nil, fmt.Errorf("create intent: %w", err)

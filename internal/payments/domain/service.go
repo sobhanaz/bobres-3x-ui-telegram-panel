@@ -6,12 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/money"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/provider"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
 )
@@ -34,27 +36,34 @@ const (
 
 // Service composes the payments store with business rules.
 type Service struct {
-	st *store.Store
-	ob *eventbus.Outbox
+	st  *store.Store
+	ob  *eventbus.Outbox
+	gws map[string]gateway.Gateway
+	log *slog.Logger
 }
 
 // New builds a Service publishing to the payments outbox.
 func New(st *store.Store) *Service {
-	return &Service{st: st, ob: eventbus.NewOutbox("outbox_payments")}
+	return &Service{st: st, ob: eventbus.NewOutbox("outbox_payments"), gws: map[string]gateway.Gateway{}, log: slog.New(slog.DiscardHandler)}
 }
 
-// CreateIntent inserts a pending intent (idempotent per key).
+// CreateIntent inserts a pending intent (idempotent per key) for the manual
+// providers; automated gateways go through StartGateway.
 func (s *Service) CreateIntent(ctx context.Context, in *store.Intent) (*store.Intent, error) {
+	switch in.Provider {
+	case provider.ManualCard, provider.ManualCrypto:
+	default:
+		return nil, invalid("unsupported provider %q", in.Provider)
+	}
+	return s.createIntent(ctx, in)
+}
+
+func (s *Service) createIntent(ctx context.Context, in *store.Intent) (*store.Intent, error) {
 	if in.IdempotencyKey == "" {
 		return nil, invalid("idempotency key required")
 	}
 	if in.UserID == "" {
 		return nil, invalid("user id required")
-	}
-	switch in.Provider {
-	case provider.ManualCard, provider.ManualCrypto:
-	default:
-		return nil, invalid("unsupported provider %q", in.Provider)
 	}
 	if in.Amount <= 0 {
 		return nil, invalid("amount must be positive")
