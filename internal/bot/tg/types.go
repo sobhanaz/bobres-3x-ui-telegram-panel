@@ -36,6 +36,43 @@ type Message struct {
 	Text      string      `json:"text,omitempty"`
 	Caption   string      `json:"caption,omitempty"`
 	Photo     []PhotoSize `json:"photo,omitempty"`
+	// SuccessfulPayment: a Telegram Stars payment completed.
+	SuccessfulPayment *SuccessfulPayment `json:"successful_payment,omitempty"`
+}
+
+// SuccessfulPayment is the service message after a completed payment.
+type SuccessfulPayment struct {
+	Currency                string `json:"currency"`
+	TotalAmount             int64  `json:"total_amount"`
+	InvoicePayload          string `json:"invoice_payload"`
+	TelegramPaymentChargeID string `json:"telegram_payment_charge_id"`
+	ProviderPaymentChargeID string `json:"provider_payment_charge_id,omitempty"`
+}
+
+// PreCheckoutQuery asks the bot to confirm a payment before Telegram charges
+// it; it must be answered within 10 seconds.
+type PreCheckoutQuery struct {
+	ID             string `json:"id"`
+	From           User   `json:"from"`
+	Currency       string `json:"currency"`
+	TotalAmount    int64  `json:"total_amount"`
+	InvoicePayload string `json:"invoice_payload"`
+}
+
+// LabeledPrice is one invoice line (Stars invoices have exactly one).
+type LabeledPrice struct {
+	Label  string `json:"label"`
+	Amount int64  `json:"amount"`
+}
+
+// Invoice is a Telegram Stars invoice (currency XTR).
+type Invoice struct {
+	Title       string // 1-32 characters
+	Description string // 1-255 characters
+	Payload     string // 1-128 bytes, opaque to the user
+	Stars       int64
+	// StartParameter non-empty: a forwarded copy cannot be paid by someone else.
+	StartParameter string
 }
 
 // LargestPhoto returns the file id of the biggest photo size, or "".
@@ -59,9 +96,10 @@ type CallbackQuery struct {
 
 // Update is one incoming event.
 type Update struct {
-	UpdateID      int64          `json:"update_id"`
-	Message       *Message       `json:"message,omitempty"`
-	CallbackQuery *CallbackQuery `json:"callback_query,omitempty"`
+	UpdateID         int64             `json:"update_id"`
+	Message          *Message          `json:"message,omitempty"`
+	CallbackQuery    *CallbackQuery    `json:"callback_query,omitempty"`
+	PreCheckoutQuery *PreCheckoutQuery `json:"pre_checkout_query,omitempty"`
 }
 
 // Sender returns the user who caused the update, or nil.
@@ -69,6 +107,8 @@ func (u *Update) Sender() *User {
 	switch {
 	case u.CallbackQuery != nil:
 		return &u.CallbackQuery.From
+	case u.PreCheckoutQuery != nil:
+		return &u.PreCheckoutQuery.From
 	case u.Message != nil:
 		return u.Message.From
 	default:

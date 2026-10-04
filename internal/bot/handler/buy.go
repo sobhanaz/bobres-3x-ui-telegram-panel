@@ -132,11 +132,14 @@ func (h *Handler) showPlan(r *req, planID string) {
 	if h.cryptoEnabled(cur) {
 		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+planID+":"+n))
 	}
+	if gw := h.gatewayButtons(r, cur, "pay", planID, n); len(gw) > 0 {
+		kb.Row(gw...)
+	}
 	kb.Row(manual...).Row(tg.CB(r.t("btn.back"), "buy"), tg.CB(r.t("btn.home"), "home"))
 	r.show(r.t("plan.detail", "name", esc(planName(r, p)), "limits", planLimits(r, p), "price", r.money(price, cur)), kb)
 }
 
-// onPay handles "pay:<w|c|x>:<plan id>:<nonce>".
+// onPay handles "pay:<w|c|x|z|s>:<plan id>:<nonce>".
 func (h *Handler) onPay(r *req, rest string) {
 	parts := strings.Split(rest, ":")
 	if len(parts) != 3 {
@@ -163,6 +166,10 @@ func (h *Handler) onPay(r *req, rest string) {
 		h.startManual(r, order, "manual_card", "", 0)
 	case "x":
 		h.startManual(r, order, "manual_crypto", "", 0)
+	case "z":
+		h.startGateway(r, order, "zarinpal", planName(r, p), "", 0)
+	case "s":
+		h.startGateway(r, order, "stars", planName(r, p), "", 0)
 	default:
 		h.showPlans(r)
 	}
@@ -189,6 +196,9 @@ func (h *Handler) payWithWallet(r *req, p *corev1.Plan, order *corev1.Order) {
 	}
 	if h.cryptoEnabled(cur) {
 		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+p.GetId()+":"+n))
+	}
+	if gw := h.gatewayButtons(r, cur, "pay", p.GetId(), n); len(gw) > 0 {
+		kb.Row(gw...)
 	}
 	kb.Row(manual...).Row(tg.CB(r.t("btn.back"), "plan:"+p.GetId()), tg.CB(r.t("btn.home"), "home"))
 	r.show(r.t("pay.insufficient", "balance", r.money(w.GetBalance(), cur), "price", r.money(p.GetPrice().GetAmount(), cur)), kb)

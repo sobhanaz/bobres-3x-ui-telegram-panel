@@ -38,6 +38,10 @@ type sent struct {
 	MessageID int             `json:"message_id"`
 	Text      string          `json:"text"`
 	Markup    json.RawMessage `json:"reply_markup"`
+	Payload   string          `json:"payload"`
+	Stars     int64           `json:"stars"`
+	QueryID   string          `json:"query_id"`
+	OK        *bool           `json:"ok"`
 }
 
 type button struct {
@@ -209,6 +213,57 @@ func (p *person) press(data string) {
 	}
 }
 
+// invoice waits for the newest Stars invoice sent to this person.
+func (p *person) invoice() sent {
+	p.w.t.Helper()
+	deadline := time.Now().Add(wait)
+	for {
+		log := p.w.log()
+		for i := len(log) - 1; i >= 0; i-- {
+			if log[i].Method == "sendInvoice" && log[i].ChatID == p.id {
+				return log[i]
+			}
+		}
+		if time.Now().After(deadline) {
+			p.w.t.Fatalf("%s: no invoice within %s", p.name, wait)
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// preCheckout plays Telegram asking the bot to confirm a Stars payment and
+// waits for the bot's answer.
+func (p *person) preCheckout(inv sent, stars int64) bool {
+	p.w.t.Helper()
+	id := "pcq-" + strconv.FormatInt(p.w.seq.Add(1), 10)
+	p.w.post("/_inject", map[string]any{"pre_checkout_query": map[string]any{
+		"id": id, "from": p.from(), "currency": "XTR", "total_amount": stars, "invoice_payload": inv.Payload,
+	}})
+	deadline := time.Now().Add(wait)
+	for {
+		for _, s := range p.w.log() {
+			if s.Method == "answerPreCheckoutQuery" && s.QueryID == id && s.OK != nil {
+				return *s.OK
+			}
+		}
+		if time.Now().After(deadline) {
+			p.w.t.Fatalf("%s: pre-checkout %s not answered within %s", p.name, id, wait)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// paid plays Telegram reporting a completed Stars payment.
+func (p *person) paid(inv sent, stars int64, chargeID string) {
+	p.w.t.Helper()
+	p.w.post("/_inject", map[string]any{"message": map[string]any{
+		"message_id": p.w.seq.Add(1), "date": time.Now().Unix(),
+		"chat": map[string]any{"id": p.id, "type": "private"}, "from": p.from(),
+		"successful_payment": map[string]any{"currency": "XTR", "total_amount": stars,
+			"invoice_payload": inv.Payload, "telegram_payment_charge_id": chargeID},
+	}})
+}
+
 // sees waits until a message to this person contains sub and returns its text.
 func (p *person) sees(sub string) string {
 	p.w.t.Helper()
@@ -273,27 +328,47 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	carol.press("pay:w:")
 	carol.sees("Paid from your wallet")
 
-	// Two distinct subscriptions are delivered (events are at-least-once, so a
-	// repeated notification must not count twice) and both exist on the panel.
+	// Telegram Stars: the owner prices Stars, carol pays an invoice.
+	owner.text("/set payments.stars_rate 1500")
+	owner.sees("Saved")
+	carol.press("home")
+	carol.press("buy")
+	carol.press("plan:")
+	carol.press("pay:s:")
+	inv := carol.invoice()
+	if inv.Stars != 100 || inv.Payload == "" { // 150,000 Toman at 1,500 Toman per Star
+		t.Fatalf("invoice: %+v", inv)
+	}
+	if carol.preCheckout(inv, 99) {
+		t.Fatal("a pre-checkout for fewer Stars was accepted")
+	}
+	if !carol.preCheckout(inv, 100) {
+		t.Fatal("a valid pre-checkout was refused")
+	}
+	carol.paid(inv, 100, "e2e-charge-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	carol.sees("Payment received")
+
+	// Three distinct subscriptions are delivered (events are at-least-once, so a
+	// repeated notification must not count twice) and all exist on the panel.
 	re := regexp.MustCompile(regexp.QuoteMeta(subBase) + `([A-Za-z0-9_-]+)`)
 	subIDs := map[string]bool{}
 	deadline := time.Now().Add(wait)
-	for len(subIDs) < 2 {
+	for len(subIDs) < 3 {
 		for _, m := range carol.messages() {
 			for _, mm := range re.FindAllStringSubmatch(m.text, -1) {
 				subIDs[mm[1]] = true
 			}
 		}
-		if len(subIDs) >= 2 {
+		if len(subIDs) >= 3 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("want 2 delivered subscriptions, got %v", subIDs)
+			t.Fatalf("want 3 delivered subscriptions, got %v", subIDs)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	if len(subIDs) != 2 {
-		t.Fatalf("want exactly 2 subscription links in the chat, got %v", subIDs)
+	if len(subIDs) != 3 {
+		t.Fatalf("want exactly 3 subscription links in the chat, got %v", subIDs)
 	}
 	var opts []xui.Option
 	if os.Getenv("XUI_TEST_ALLOW_PRIVATE") == "1" {

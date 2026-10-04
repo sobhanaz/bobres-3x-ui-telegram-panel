@@ -34,6 +34,9 @@ Goal: know the risks before selling, and get templates reviewed.
 ## E. Payments (for operators, templates you provide)
 21. Refund policy template and consumer-protection rules by region.
 22. Rules of specific gateways (Zarinpal, Telegram Stars, crypto processors) about VPN-related merchants: are they allowed?
+    Findings so far (2026-10-04, not legal advice): a 2021 Shaparak directive reportedly names VPN sales among
+    merchants to cut; Zarinpal's terms forbid unlawful sales; Crypto Pay, Oxapay and NOWPayments exclude Iran;
+    Telegram's Bot Developer ToS 6.2 requires Stars for digital goods sold inside Telegram.
 23. Crypto: any registration/AML implications for operators receiving crypto payments? Reseller credit ("pay later") implications?
 
 ## F. Support and operations

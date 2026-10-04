@@ -26,6 +26,11 @@ type Sent struct {
 	MessageID int             `json:"message_id"`
 	Text      string          `json:"text"`
 	Markup    json.RawMessage `json:"reply_markup,omitempty"`
+	// Stars invoices (sendInvoice) and pre-checkout answers.
+	Payload string `json:"payload,omitempty"`
+	Stars   int64  `json:"stars,omitempty"`
+	QueryID string `json:"query_id,omitempty"`
+	OK      *bool  `json:"ok,omitempty"`
 }
 
 // Server is the fake API state.
@@ -180,6 +185,26 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id, Text: text, Markup: markup})
 		s.mu.Unlock()
 		reply(w, tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}, Text: text})
+	case "sendInvoice":
+		var stars int64
+		if prices, ok := p["prices"].([]any); ok && len(prices) == 1 {
+			if lp, ok := prices[0].(map[string]any); ok {
+				stars = num(lp["amount"])
+			}
+		}
+		s.mu.Lock()
+		id := s.nextMsg
+		s.nextMsg++
+		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id,
+			Text: "[invoice] " + str(p["title"]), Payload: str(p["payload"]), Stars: stars})
+		s.mu.Unlock()
+		reply(w, tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}})
+	case "answerPreCheckoutQuery":
+		ok, _ := p["ok"].(bool)
+		s.mu.Lock()
+		s.sent = append(s.sent, Sent{Method: parts[1], QueryID: str(p["pre_checkout_query_id"]), OK: &ok, Text: str(p["error_message"])})
+		s.mu.Unlock()
+		reply(w, true)
 	case "answerCallbackQuery":
 		s.mu.Lock()
 		s.sent = append(s.sent, Sent{Method: parts[1], Text: str(p["text"])})

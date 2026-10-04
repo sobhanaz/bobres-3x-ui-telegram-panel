@@ -3,7 +3,6 @@
   "lang.changed": "Language set to English.",
   "welcome": "👋 Welcome to <b>{brand}</b>!\nPick a plan, pay, and get connected in minutes.",
   "menu.title": "<b>{brand}</b> · Main menu",
-
   "btn.buy": "🛒 Buy a plan",
   "btn.services": "📦 My services",
   "btn.wallet": "👛 Wallet",
@@ -14,14 +13,12 @@
   "btn.back": "« Back",
   "btn.home": "🏠 Main menu",
   "btn.cancel": "✖️ Cancel",
-
   "error.generic": "Something went wrong. Please try again in a moment.",
   "error.unavailable": "The service is temporarily unavailable. Please try again shortly.",
   "error.banned": "Your account is restricted. Contact support if you think this is a mistake.",
   "error.rate": "Too many requests. Please slow down a little.",
   "error.expired": "This menu has expired. Here is a fresh one.",
   "cancelled": "Cancelled.",
-
   "plans.title": "🛒 Choose a plan:",
   "plans.empty": "No plans are available right now. Please check back later.",
   "plan.detail": "<b>{name}</b>\n{limits}\nPrice: <b>{price}</b>\n\nHow would you like to pay?",
@@ -30,12 +27,10 @@
   "plan.unlimited_time": "⏳ No time limit",
   "plan.unlimited_traffic": "📶 Unlimited traffic",
   "plan.button": "{name} · {price}",
-
   "btn.pay_wallet": "👛 Wallet ({balance})",
   "btn.pay_card": "💳 Card to card",
   "btn.pay_crypto": "🪙 Tether (USDT)",
   "btn.topup_and_buy": "➕ Top up wallet",
-
   "pay.insufficient": "Your wallet balance ({balance}) is not enough for this plan ({price}).",
   "pay.wallet_done": "✅ Paid from your wallet. Preparing your service…",
   "pay.card": "💳 <b>Card-to-card payment</b>\n\nAmount: <b>{amount}</b>\nCard number: <code>{card}</code>\nCard holder: {holder}\nPayment reference: <code>{ref}</code>\n\nAfter paying, send a <b>photo of the receipt</b> here. Put the bank tracking number in the photo caption.",
@@ -53,12 +48,10 @@
   "pay.approved": "✅ Payment confirmed! Preparing your service…",
   "pay.rejected": "❌ Your payment of {amount} was not approved.\nReason: {reason}\n\nYou can try again, or contact support.",
   "btn.try_again": "🔁 Try again",
-
   "reason.amount": "The amount does not match.",
   "reason.unreadable": "The receipt is not readable.",
   "reason.not_received": "The payment was not received.",
   "reason.none": "No reason was given.",
-
   "subs.title": "📦 Your services:",
   "subs.empty": "You don't have any services yet.",
   "subs.item": "{status} · {expires}",
@@ -76,7 +69,6 @@
   "sub.qr_caption": "📷 Scan this QR code in your VPN app.",
   "sub.not_ready": "Your service is still being prepared. You will get a message as soon as it is ready.",
   "sub.delayed": "⏳ Preparing your service is taking longer than usual. We are on it and will message you when it is ready.",
-
   "wallet.title": "👛 <b>Wallet</b>\nBalance: <b>{balance}</b>",
   "btn.topup": "➕ Top up",
   "btn.history": "🧾 History",
@@ -95,16 +87,13 @@
   "ledger.refund": "Refund",
   "ledger.adjust": "Adjustment",
   "ledger.trial_grant": "Free trial",
-
   "trial.unavailable": "The free trial is not available right now.",
   "trial.used": "You have already used your free trial.",
   "trial.started": "🎁 Your free trial is being prepared…",
-
   "support.prompt": "💬 Write your message for support and send it here.{contact}",
   "support.contact": "\nYou can also reach us at {contact}.",
   "support.sent": "✅ Your message was sent (ticket <code>{id}</code>). We will reply here.",
   "support.need_text": "Please send your message as text, or tap Cancel.",
-
   "admin.forbidden": "This is for admins only.",
   "admin.title": "🛠 <b>Admin panel</b>\n\n👥 Users: {users} (+{today} in 24 h)\n📦 Active services: {active}\n💳 Payments to review: {pending}\n⚠️ Failed provisioning: {failed}\n🖥 Panel: {panel}",
   "admin.panel_ok": "online ✅",
@@ -155,5 +144,28 @@
   "admin.provision_failed": "⚠️ Provisioning failed {attempts} times for order <code>{order}</code> (user <code>{tg}</code>):\n<code>{error}</code>",
   "admin.new_ticket": "💬 Support message from {user}:\n\n{text}",
   "admin.new_payment": "💳 New payment to review from {user}: <b>{amount}</b>.",
-  "btn.review_now": "Review now"
+  "btn.review_now": "Review now",
+  "btn.pay_zarinpal": "💳 Pay online (Zarinpal)",
+  "btn.pay_stars": "⭐ Pay with Telegram Stars",
+  "btn.open_payment": "Open the payment page",
+  "btn.check_payment": "I paid, check",
+  "pay.zarinpal": "💳 <b>Online payment</b>\nAmount: <b>{amount}</b>\n\n⚠️ Turn off your VPN before opening the payment page: the bank page only opens from an Iranian connection.\n\nAfter paying you come back automatically and your service is delivered here. If it is not, tap “I paid, check”.",
+  "pay.stars": "⭐ An invoice for <b>{stars} Stars</b> ({amount}) is in the next message. Tap <b>Pay</b> on it; your service is delivered right after.",
+  "pay.stars_title": "VPN subscription",
+  "pay.stars_desc": "Payment of {amount}",
+  "pay.topup_title": "Wallet top-up",
+  "pay.check_paid": "✅ Payment received. Your service is being prepared and will arrive here shortly.",
+  "pay.check_pending": "Not confirmed yet. If you paid, wait a minute and check again.",
+  "pay.check_failed": "❌ This payment was not completed. {reason}\n\nYou can choose a plan and pay again.",
+  "pay.precheck_failed": "This invoice is no longer valid. Open the bot and start the purchase again.",
+  "pay.stars_received": "✅ Payment received. Your service is being prepared.",
+  "pay.stars_unrecorded": "⚠️ Telegram took your payment, but we could not record it yet. Send /paysupport this code and we will fix it: <code>{code}</code>",
+  "paysupport": "💬 <b>Payment support</b>\nFor any problem with a payment, contact {contact} and include the payment reference or the code from the payment message.",
+  "paysupport.in_bot": "support through the button in the main menu",
+  "reason.gateway_failed": "The payment was cancelled or failed at the bank.",
+  "reason.amount_mismatch": "The amount paid did not match the invoice. Contact support with your receipt.",
+  "reason.expired": "The payment link expired.",
+  "reason.payer_mismatch": "Someone other than you paid this invoice. Contact support.",
+  "reason.not_found": "The payment gateway could not find this payment.",
+  "reason.reversed": "The bank returned this payment."
 }

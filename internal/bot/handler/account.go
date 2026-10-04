@@ -147,15 +147,23 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	if h.cryptoEnabled("IRT") {
 		methods = append(methods, tg.CB(r.t("btn.pay_crypto"), fmt.Sprintf("wpay:x:%d:%s", amount, n)))
 	}
-	if len(methods) == 0 {
+	gw := h.gatewayButtons(r, "IRT", "wpay", fmt.Sprint(amount), n)
+	if len(methods) == 0 && len(gw) == 0 {
 		r.show(r.t("pay.not_configured"), homeKeyboard(r))
 		return
 	}
-	kb := (&tg.Keyboard{}).Row(methods...).Row(tg.CB(r.t("btn.back"), "wtop"), tg.CB(r.t("btn.home"), "home"))
+	kb := &tg.Keyboard{}
+	if len(gw) > 0 {
+		kb.Row(gw...)
+	}
+	if len(methods) > 0 {
+		kb.Row(methods...)
+	}
+	kb.Row(tg.CB(r.t("btn.back"), "wtop"), tg.CB(r.t("btn.home"), "home"))
 	r.show(r.t("wallet.choose_method", "amount", r.money(amount, "IRT")), kb)
 }
 
-// onTopupPay handles "wpay:<c|x>:<amount>:<nonce>".
+// onTopupPay handles "wpay:<c|x|z|s>:<amount>:<nonce>".
 func (h *Handler) onTopupPay(r *req, rest string) {
 	parts := strings.Split(rest, ":")
 	if len(parts) != 3 {
@@ -167,11 +175,16 @@ func (h *Handler) onTopupPay(r *req, rest string) {
 		h.showTopupAmounts(r)
 		return
 	}
-	provider := "manual_card"
-	if parts[0] == "x" {
-		provider = "manual_crypto"
+	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "z": "zarinpal", "s": "stars"}[parts[0]]
+	if provider == "" {
+		h.showWallet(r)
+		return
 	}
 	key := fmt.Sprintf("top:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
+	if provider == "zarinpal" || provider == "stars" {
+		h.startGateway(r, nil, provider, r.t("pay.topup_title"), key, amount)
+		return
+	}
 	h.startManual(r, nil, provider, key, amount)
 }
 

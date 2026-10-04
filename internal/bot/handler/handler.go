@@ -30,6 +30,8 @@ type Telegram interface {
 	EditMessageReplyMarkup(ctx context.Context, chatID int64, messageID int, kb *tg.Keyboard) error
 	AnswerCallback(ctx context.Context, callbackID, text string, alert bool) error
 	SendPhoto(ctx context.Context, chatID int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error)
+	SendInvoice(ctx context.Context, chatID int64, inv tg.Invoice) (*tg.Message, error)
+	AnswerPreCheckoutQuery(ctx context.Context, queryID string, ok bool, errMsg string) error
 }
 
 // Limiter decides whether a user may be served now (nil: no limit).
@@ -57,6 +59,9 @@ type Handler struct {
 
 	mu       sync.RWMutex
 	settings map[string]string
+
+	gwMu      sync.Mutex
+	gwMethods map[string]methodsEntry // currency -> usable automated methods
 }
 
 // New builds a Handler. limiter may be nil.
@@ -64,7 +69,8 @@ func New(core corev1.CoreServiceClient, t Telegram, st state.Store, cat *i18n.Ca
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log, settings: map[string]string{}}
+	return &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
+		settings: map[string]string{}, gwMethods: map[string]methodsEntry{}}
 }
 
 // RefreshSettings reloads branding, payment details and text overrides.
@@ -196,6 +202,11 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 	if from == nil || from.IsBot {
 		return
 	}
+	if u.PreCheckoutQuery != nil {
+		// Side-effect free and due within 10 seconds: no de-duplication, no rate limit.
+		h.onPreCheckout(ctx, u.PreCheckoutQuery)
+		return
+	}
 	if first, err := h.state.Once(ctx, "upd:"+strconv.FormatInt(u.UpdateID, 10), 24*time.Hour); err == nil && !first {
 		return // Telegram re-delivered an update we already handled
 	}
@@ -228,6 +239,10 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 		r.lang = i18n.Normalize(from.LanguageCode)
 	}
 
+	if r.cb == nil && r.msg.SuccessfulPayment != nil {
+		h.onStarsPaid(r) // the Stars are already taken: never rate-limited
+		return
+	}
 	if h.limiter != nil {
 		if ok, err := h.limiter.Allow(ctx, "bot:rl:"+strconv.FormatInt(from.ID, 10), 10*time.Second, 20); err == nil && !ok {
 			if r.cb != nil {
@@ -281,6 +296,8 @@ func (h *Handler) routeCallback(r *req, data string) {
 		h.showTopupMethods(r, rest)
 	case "wpay":
 		h.onTopupPay(r, rest)
+	case "chk":
+		h.onCheckPayment(r, rest)
 	case "wcustom":
 		r.setState(sceneTopupAmount, nil)
 		r.show(r.t("wallet.enter_amount", "min", r.money(minTopup, "IRT"), "max", r.money(maxTopup, "IRT")), cancelKeyboard(r))
@@ -332,6 +349,8 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		r.clearState()
 		r.send(r.t("cancelled"), nil)
 		h.showHome(r)
+	case "/paysupport":
+		h.onPaySupport(r)
 	case "/admin", "/set", "/plan_add", "/trial":
 		if r.user == nil {
 			h.askLanguage(r)
