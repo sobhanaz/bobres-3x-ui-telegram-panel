@@ -160,7 +160,7 @@ func pageFor(in *store.Intent) page {
 		p.Kind = "failed"
 		if in.FailureReason != nil && *in.FailureReason == domain.ReasonAmountMismatch {
 			p.ReasonEN = "The amount paid did not match. Contact support with your bank receipt."
-			p.ReasonFA = "مبلغ پرداخت‌شده با فاکتور یکی نبود. با رسید بانکی به پشتیبانی پیام دهید."
+			p.ReasonFA = "مبلغ پرداخت‌شده با فاکتور یکی نبود. با رسید بانکی به پشتیبانی پیام دهید." //nolint:staticcheck // Persian needs the zero-width non-joiner
 		}
 	case "expired":
 		p.Kind = "expired"
@@ -177,6 +177,9 @@ func (h *Handler) render(w http.ResponseWriter, status int, p page) {
 	}
 }
 
+// The page text is Persian, which needs the zero-width non-joiner (U+200C).
+//
+//nolint:staticcheck // ST1018: Persian typography needs U+200C in the literal
 var tmpl = template.Must(template.New("page").Parse(strings.TrimSpace(`
 <!doctype html>
 <html lang="fa" dir="rtl">

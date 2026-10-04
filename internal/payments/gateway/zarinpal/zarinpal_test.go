@@ -39,7 +39,7 @@ func TestConfig(t *testing.T) {
 			t.Errorf("accepted %+v", c)
 		}
 	}
-	if _, err := zarinpal.New(zarinpal.Config{MerchantID: strings.ToUpper(merchant), Proxy: "http://user:pw@10.0.0.2:3128"}); err != nil {
+	if _, err := zarinpal.New(zarinpal.Config{MerchantID: strings.ToUpper(merchant), Proxy: "http://user:pw@10.0.0.2:3128"}); err != nil { //nolint:gosec // test fixture
 		t.Fatalf("valid config: %v", err)
 	}
 	g, _ := zarinpal.New(zarinpal.Config{MerchantID: merchant, Sandbox: true})

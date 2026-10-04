@@ -11,6 +11,7 @@ package zpfake
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,7 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/pg/v4/payment/verify.json", s.verify)
 	mux.HandleFunc("/pg/v4/payment/inquiry.json", s.inquiry)
 	mux.HandleFunc("/pg/StartPay/", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintf(w, "<html><body>fake Zarinpal payment page %s</body></html>", strings.TrimPrefix(r.URL.Path, "/pg/StartPay/"))
+		_, _ = fmt.Fprintf(w, "<html><body>fake Zarinpal payment page %s</body></html>", html.EscapeString(strings.TrimPrefix(r.URL.Path, "/pg/StartPay/")))
 	})
 	mux.HandleFunc("/_pay/", s.pay)
 	return mux

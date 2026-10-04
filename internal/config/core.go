@@ -88,7 +88,7 @@ func LoadPayments() (Payments, error) {
 	if p.ZarinpalMerchantID != "" {
 		u, err := url.Parse(p.ZarinpalPublicURL)
 		switch {
-		case err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && c.Env == "dev")):
+		case err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || c.Env != "dev")):
 			errs = append(errs, errors.New("BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be the https URL of the domain registered with Zarinpal"))
 		case u.Path != "" || u.RawQuery != "":
 			errs = append(errs, errors.New("BOBRES_ZARINPAL_PUBLIC_URL must be just https://host[:port]"))
