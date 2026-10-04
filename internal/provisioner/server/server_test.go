@@ -232,7 +232,7 @@ func TestAddServerValidation(t *testing.T) {
 	}
 	for name, req := range map[string]*provisionerv1.AddServerRequest{
 		"missing token": {Name: "x", BaseUrl: "https://example.com"},
-		"creds in url":  {Name: "x", BaseUrl: "https://user:pw@example.com", ApiToken: "t"},
+		"creds in url":  {Name: "x", BaseUrl: "https://user:pw@example.com", ApiToken: "t"}, //nolint:gosec // test fixture
 		"bad sub url":   {Name: "x", BaseUrl: "https://example.com", ApiToken: "t", SubBaseUrl: "ftp://x"},
 		"not a url":     {Name: "x", BaseUrl: "::::", ApiToken: "t"},
 	} {

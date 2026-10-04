@@ -109,7 +109,7 @@ func params(r *http.Request) map[string]any {
 	case strings.HasPrefix(ct, "application/json"):
 		_ = json.NewDecoder(r.Body).Decode(&m)
 	default:
-		_ = r.ParseMultipartForm(8 << 20)
+		_ = r.ParseMultipartForm(8 << 20) //nolint:gosec // G120: loopback test fake; maxMemory bounds RAM and MaxBytesReader would not silence the rule
 		for k, v := range r.Form {
 			if len(v) > 0 {
 				m[k] = v[0]

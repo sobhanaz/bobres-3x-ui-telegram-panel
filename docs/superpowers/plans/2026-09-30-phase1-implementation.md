@@ -6,7 +6,7 @@
 
 **Architecture:** Four Go microservices (`core`, `bot`, `payments`, `provisioner`) communicate via gRPC and a Postgres transactional outbox, all behind a Caddy gateway. `core` embeds a Vue 3 admin SPA. The installer generates secrets and starts Docker Compose.
 
-**Tech Stack:** Go 1.25, PostgreSQL 16, Redis 7, gRPC/protobuf via buf, goose migrations, sqlc, Vue 3 + Vite + TypeScript, Docker Compose, Caddy.
+**Tech Stack:** Go 1.26 (moved from 1.25 on 2026-10-04 for goose 3.28 / x/crypto 0.57), PostgreSQL 16, Redis 7, gRPC/protobuf via buf, goose migrations, sqlc, Vue 3 + Vite + TypeScript, Docker Compose, Caddy.
 
 ## Status (2026-10-03)
 
@@ -25,7 +25,7 @@ Still open for Phase 1: native-speaker review of the Persian texts; running the 
 
 ## Global Constraints
 
-- Go version: 1.25.
+- Go version: 1.26 (minimum; CI and the Docker image use the latest 1.26 patch).
 - One Postgres database, one schema per service (`core`, `payments`, `provisioner`).
 - All money amounts are `bigint` minor units; IRT scale = 0, USDT scale = 6.
 - Secrets only from env or `*_FILE`; never in git/images.

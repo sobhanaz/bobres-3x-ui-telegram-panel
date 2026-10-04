@@ -41,9 +41,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
-          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
-          go-version: "1.25.x"
+          # Latest 1.26 patch: go.mod's "go 1.26.0" is the minimum language
+          # version, not the toolchain to ship.
+          go-version: "1.26.x"
           check-latest: true
           cache: true
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
@@ -60,15 +60,16 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
-          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
-          go-version: "1.25.x"
+          # Latest 1.26 patch: go.mod's "go 1.26.0" is the minimum language
+          # version, not the toolchain to ship.
+          go-version: "1.26.x"
           check-latest: true
           cache: true
-      # Built from source with the job's Go toolchain: the prebuilt v1.64.8 binary is
-      # compiled with Go 1.24 and refuses to lint a Go 1.25 module.
+      # Built from source with the job's Go toolchain: golangci-lint must be built with
+      # a Go at least as new as go.mod's go line, and only v2 (>= v2.10) handles Go 1.26.
+      # Keep this version in sync with GOLANGCI_LINT_VERSION in the Makefile.
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
       - name: Lint
         run: '"$(go env GOPATH)/bin/golangci-lint" run ./...'
 
@@ -79,16 +80,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
-          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
-          go-version: "1.25.x"
+          # Latest 1.26 patch: go.mod's "go 1.26.0" is the minimum language
+          # version, not the toolchain to ship.
+          go-version: "1.26.x"
           check-latest: true
           cache: true
-      # govulncheck itself may need a newer Go than the module targets (v1.8.0 needs 1.26).
-      # GOTOOLCHAIN=auto lets `go install` fetch what it needs; the scan still analyses this
-      # module with the job's own toolchain, which is what actually builds our binaries.
+      # govulncheck v1.8.0 needs Go >= 1.26, which the job now has: built natively.
       - name: Install govulncheck
-        run: GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
       # Fails on any vulnerability our code calls, except reviewed entries in .govulncheck-allow.
       - name: Scan
         run: |
@@ -102,9 +101,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          # Latest 1.25 patch: go.mod's "go 1.25.0" is the minimum language
-          # version, not the toolchain to ship (1.25.0 has known stdlib CVEs).
-          go-version: "1.25.x"
+          # Latest 1.26 patch: go.mod's "go 1.26.0" is the minimum language
+          # version, not the toolchain to ship.
+          go-version: "1.26.x"
           check-latest: true
           cache: true
       - run: make build
@@ -141,7 +140,7 @@ jobs:
             caddy validate --config /etc/caddy/Caddyfile
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.25.x"
+          go-version: "1.26.x"
           check-latest: true
           cache: true
       # The real installer against the real stack: `bobres install` writes
