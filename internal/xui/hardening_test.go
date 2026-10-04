@@ -39,6 +39,10 @@ func TestNewRejectsInsecureAndBadURLs(t *testing.T) {
 	if _, err := xui.New("http://10.0.0.5:2053/path", "t", xui.AllowPrivateAddresses()); err != nil {
 		t.Fatalf("plain http with allow-private rejected: %v", err)
 	}
+	// A custom client would skip the private-only dial check.
+	if _, err := xui.New("http://10.0.0.5:2053", "t", xui.AllowPrivateAddresses(), xui.WithHTTPClient(http.DefaultClient)); !errors.Is(err, xui.ErrInsecureURL) {
+		t.Fatalf("plain http with a custom client: %v", err)
+	}
 }
 
 func TestPlainHTTPReachesOnlyPrivateAddresses(t *testing.T) {
@@ -196,7 +200,7 @@ func TestGetClientDecodesTheRealPanelShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Client.ID != 14825 || d.Client.UUID != "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b" || d.Client.SubID != "abc123" ||
+	if string(d.Client.ID) != "14825" || d.Client.UUID != "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b" || d.Client.SubID != "abc123" ||
 		len(d.InboundIDs) != 2 || d.Client.TotalGB != 1<<30 {
 		t.Fatalf("decoded %+v", d)
 	}

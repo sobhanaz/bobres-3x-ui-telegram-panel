@@ -1,9 +1,11 @@
 # First real install (staging run)
 
 The last Phase 1 step: one install on a real server with a real bot and a real 3x-ui panel,
-then one real purchase. CI already does all of this with a fake Telegram and a throwaway
-3x-ui container (see the `docker` and `xui` jobs); this run checks the parts CI cannot:
-your network, your domain, Telegram itself and your panel's configuration.
+then one real purchase. CI covers the core path with a fake Telegram and a throwaway 3x-ui
+container (the `docker` and `xui` jobs): install, a trial and a wallet purchase provisioned
+on the panel, status, logs and uninstall. It does not cover card payment with receipt
+approval, QR codes, reinstalling over existing data, or a VPN app actually connecting. This
+run checks those, plus your network, your domain, Telegram itself and your panel's settings.
 
 ## 1. What you need
 
@@ -16,26 +18,40 @@ your network, your domain, Telegram itself and your panel's configuration.
   - an API token: Settings → Security → API tokens → create, scope `admin`;
   - the subscription prefix: Settings → Subscription (e.g. `https://panel.example.com:2096/sub/`);
   - at least one enabled inbound (new customers are attached to every enabled inbound).
-  - If the panel runs on the same VPS, use `http://host.docker.internal:<port>/<path>` with
-    `--xui-allow-private` (plain http is then allowed only to private addresses).
+- Panel on the same VPS:
+  - If the panel has its own TLS certificate, use its public https URL and leave out
+    `--xui-allow-private`.
+  - If it serves plain http, use `http://host.docker.internal:<port>/<path>` with
+    `--xui-allow-private`. This reaches the host through the Docker bridge, so the panel must
+    listen on all interfaces (not only 127.0.0.1) and a firewall such as ufw must allow
+    traffic from the Docker networks to the panel port. `127.0.0.1` or `localhost` do not
+    work: inside the BOBRES containers they are the container itself, and the installer
+    refuses them.
 
 ## 2. Publish a release candidate (owner decision)
 
-Images are published by tagging, e.g. `v0.1.0-rc.1`: the Release workflow verifies, builds
-signed multi-arch images to `ghcr.io/sobhanaz/bobres-*` and a signed `bobres` CLI release.
+Images are published by tagging, e.g. `v0.1.0-rc.1`: the Release workflow runs the unit
+tests and govulncheck, builds signed multi-arch images to `ghcr.io/sobhanaz/bobres-*`, and
+creates a GitHub pre-release with the `bobres` CLI binaries and signed checksums. It needs
+the `RELEASE_SIGNING_KEY` secret and the `RELEASE_KEY_ID` variable (both are set; see
+`tools/sign/README.md`). A pre-release tag does not move the `latest` image tag.
 
 Two things are still open before customers can install:
 - `install/install.sh` downloads from `https://get.example.com/releases/latest`, a placeholder:
   choose where signed releases are served (a small static host, or a GitHub release of a
   public "releases" repository).
-- Packages of a private repository are private on GHCR. For your own server, log in once:
-  `echo <PAT with read:packages> | docker login ghcr.io -u sobhanaz --password-stdin`.
+- Packages of a private repository are private on GHCR. For your own server, log in once as
+  root (the installer runs docker with sudo, which reads root's credentials). This reads the
+  token without echoing it or saving it in the shell history:
+  `read -rs PAT && echo "$PAT" | sudo docker login ghcr.io -u sobhanaz --password-stdin; unset PAT`
   For customers, decide between public images (binaries only; the license gates features)
   and a private registry with per-customer credentials (PLAN.md section 2, open decision).
 
 ## 3. Install
 
-Until the release host exists, copy the CLI from the GitHub release to the VPS and run:
+Until the release host exists, download `bobres_linux_amd64` from the GitHub release (the
+repository is private, so use `gh release download v0.1.0-rc.1 -p bobres_linux_amd64` or the
+web page while logged in), copy it to the VPS as `bobres`, `chmod +x bobres`, and run:
 
 ```bash
 sudo ./bobres install --domain panel.example.com --admin-id <your id> \
@@ -65,6 +81,9 @@ sudo ./bobres status
    `install` again brings the same store back.
 
 Anything that fails here: run `sudo ./bobres logs <service>` and keep the output for the fix.
+Panel problems are logged by the provisioner (`sudo ./bobres logs provisioner`). To correct
+the panel URL, token or options, run `install` again with the right values: the default
+panel is updated on the next start, and the data is kept.
 
 ## 5. After it passes
 

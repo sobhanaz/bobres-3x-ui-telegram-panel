@@ -64,13 +64,42 @@ type person struct {
 	name string
 }
 
+// env reads a required variable. Without it the test skips, unless
+// BOBRES_E2E_REQUIRE=1 (set in CI), so a renamed variable cannot turn the job
+// green without running anything.
 func env(t *testing.T, k string) string {
 	t.Helper()
 	v := os.Getenv(k)
 	if v == "" {
+		if os.Getenv("BOBRES_E2E_REQUIRE") == "1" {
+			t.Fatalf("%s not set and BOBRES_E2E_REQUIRE=1", k)
+		}
 		t.Skipf("%s not set: run against an installed stack (see the package comment)", k)
 	}
 	return v
+}
+
+// dump prints a person's chat and the toasts when the test failed, so a CI
+// failure shows what the bot actually said.
+func (p *person) dump() {
+	if !p.w.t.Failed() {
+		return
+	}
+	p.w.t.Logf("---- chat with %s (%d) ----", p.name, p.id)
+	for _, m := range p.messages() {
+		var labels []string
+		for _, row := range m.buttons {
+			for _, b := range row {
+				labels = append(labels, b.Text+" ["+b.CallbackData+"]")
+			}
+		}
+		p.w.t.Logf("#%d %q buttons=%v", m.id, m.text, labels)
+	}
+	for _, s := range p.w.log() {
+		if s.Method == "answerCallbackQuery" && s.Text != "" {
+			p.w.t.Logf("toast: %q", s.Text)
+		}
+	}
 }
 
 func (w *world) person(id int64, name string) *person { return &person{w: w, id: id, name: name} }
@@ -198,16 +227,6 @@ func (p *person) sees(sub string) string {
 	}
 }
 
-func (p *person) count(sub string) int {
-	n := 0
-	for _, m := range p.messages() {
-		if strings.Contains(m.text, sub) {
-			n++
-		}
-	}
-	return n
-}
-
 func TestStoreOwnerAndCustomer(t *testing.T) {
 	w := &world{t: t, base: strings.TrimRight(env(t, "BOBRES_E2E_TELEGRAM"), "/"), hc: &http.Client{Timeout: 10 * time.Second}}
 	adminID, err := strconv.ParseInt(env(t, "BOBRES_E2E_ADMIN_ID"), 10, 64)
@@ -220,17 +239,19 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 
 	// The owner sets up a plan and the free trial from the bot.
 	owner := w.person(adminID, "owner")
+	t.Cleanup(owner.dump)
 	owner.text("/start")
 	owner.press("lang:en")
 	owner.sees("Main menu")
 	owner.text("/plan_add 150000 IRT 30 50 Monthly 50GB | ماهانه ۵۰ گیگ")
 	owner.sees("Plan saved: Monthly 50GB")
 	owner.text("/trial 1 1")
-	owner.sees("Plan saved")
+	owner.sees("Plan saved: Free trial")
 
 	// A customer takes the trial: the account is created on the real panel.
 	customerID := adminID + 1000
 	carol := w.person(customerID, "carol")
+	t.Cleanup(carol.dump)
 	carol.text("/start")
 	carol.press("lang:en")
 	carol.press("trial")
@@ -251,24 +272,28 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	carol.press("plan:")
 	carol.press("pay:w:")
 	carol.sees("Paid from your wallet")
+
+	// Two distinct subscriptions are delivered (events are at-least-once, so a
+	// repeated notification must not count twice) and both exist on the panel.
+	re := regexp.MustCompile(regexp.QuoteMeta(subBase) + `([A-Za-z0-9_-]+)`)
+	subIDs := map[string]bool{}
 	deadline := time.Now().Add(wait)
-	for carol.count("Your service is ready") < 2 {
+	for len(subIDs) < 2 {
+		for _, m := range carol.messages() {
+			for _, mm := range re.FindAllStringSubmatch(m.text, -1) {
+				subIDs[mm[1]] = true
+			}
+		}
+		if len(subIDs) >= 2 {
+			break
+		}
 		if time.Now().After(deadline) {
-			t.Fatal("the paid service was not delivered")
+			t.Fatalf("want 2 delivered subscriptions, got %v", subIDs)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-
-	// Both subscriptions exist on the real panel.
-	re := regexp.MustCompile(regexp.QuoteMeta(subBase) + `([A-Za-z0-9_-]+)`)
-	subIDs := map[string]bool{}
-	for _, m := range carol.messages() {
-		for _, mm := range re.FindAllStringSubmatch(m.text, -1) {
-			subIDs[mm[1]] = true
-		}
-	}
 	if len(subIDs) != 2 {
-		t.Fatalf("want 2 subscription links in the chat, got %v", subIDs)
+		t.Fatalf("want exactly 2 subscription links in the chat, got %v", subIDs)
 	}
 	var opts []xui.Option
 	if os.Getenv("XUI_TEST_ALLOW_PRIVATE") == "1" {

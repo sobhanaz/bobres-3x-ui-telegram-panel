@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,9 +56,15 @@ func testInstaller(stdinText string, env map[string]string, docker *fakeDocker) 
 	}
 	return &installer{
 		in: bufio.NewReader(strings.NewReader(stdinText)), out: &out, errOut: &errOut,
-		getenv:    func(k string) string { return env[k] },
-		run:       docker.run,
-		checkBot:  func(context.Context, string) (string, error) { return "test_bot", nil },
+		getenv:   func(k string) string { return env[k] },
+		run:      docker.run,
+		checkBot: func(context.Context, string) (string, error) { return "test_bot", nil },
+		lookupIP: func(_ context.Context, host string) ([]net.IP, error) {
+			if host == "public.example.com" {
+				return []net.IP{net.ParseIP("93.184.216.34")}, nil
+			}
+			return []net.IP{net.ParseIP("10.1.2.3")}, nil
+		},
 		preflight: func(string) []Result { return []Result{{"OS/arch", Pass, "linux/amd64"}} },
 		sleep:     func(time.Duration) {},
 	}, &out, &errOut
@@ -176,6 +183,8 @@ func TestInstallRejectsBadInput(t *testing.T) {
 		"bad domain":   {"--domain", "not a domain"},
 		"bad admin id": {"--admin-id", "12ab"},
 		"http panel":   {"--xui-url", "http://xui.example.com"},
+		"loopback":     {"--xui-url", "http://127.0.0.1:2053", "--xui-allow-private"},
+		"localhost":    {"--xui-url", "https://localhost:2053"},
 	}
 	for name, override := range cases {
 		dir := t.TempDir()
@@ -194,6 +203,16 @@ func TestInstallRejectsBadInput(t *testing.T) {
 	ins, _, errOut := testInstaller("", secrets, nil)
 	if code := ins.install(append(baseArgs(dir), "--no-start", "--xui-url", "http://172.17.0.1:2053/p", "--xui-allow-private")); code != 0 {
 		t.Errorf("http panel with --xui-allow-private: exit %d (%s)", code, errOut)
+	}
+	// Online, a plain-http panel name must resolve to private addresses only.
+	ins, _, errOut = testInstaller("", secrets, nil)
+	if code := ins.install(append(baseArgs(t.TempDir()), "--no-start", "--xui-url", "http://public.example.com:2053", "--xui-allow-private")); code != 2 ||
+		!strings.Contains(errOut.String(), "public address 93.184.216.34") {
+		t.Errorf("public plain-http panel: exit %d (%s)", code, errOut)
+	}
+	ins, _, errOut = testInstaller("", secrets, nil)
+	if code := ins.install(append(baseArgs(t.TempDir()), "--no-start", "--xui-url", "http://panel.lan:2053", "--xui-allow-private")); code != 0 {
+		t.Errorf("private plain-http panel: exit %d (%s)", code, errOut)
 	}
 	ins, _, errOut = testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": "nope", "BOBRES_XUI_TOKEN": "t"}, nil)
 	if code := ins.install(append(baseArgs(t.TempDir()), "--no-start")); code != 2 || !strings.Contains(errOut.String(), "BotFather") {

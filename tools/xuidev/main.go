@@ -16,8 +16,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -42,7 +44,15 @@ func main() {
 	pass := flag.String("pass", "admin", "panel admin password")
 	port := flag.Int("inbound-port", 8443, "port of the inbound created when none is enabled")
 	wait := flag.Duration("wait", 3*time.Minute, "how long to wait for the panel to answer")
+	force := flag.Bool("force", false, "allow a panel that is not on a loopback or private address")
 	flag.Parse()
+
+	// It mints a non-expiring admin token and may add an unencrypted inbound:
+	// only for throwaway panels unless explicitly forced.
+	if err := throwaway(*base); err != nil && !*force {
+		fmt.Fprintln(os.Stderr, "xuidev:", err, "(pass -force to use it anyway)")
+		os.Exit(2)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *wait+time.Minute)
 	defer cancel()
@@ -90,7 +100,9 @@ func run(ctx context.Context, p *panel, user, pass string, port int, wait time.D
 		ID     int  `json:"id"`
 		Enable bool `json:"enable"`
 	}
-	_ = json.Unmarshal(obj, &ins)
+	if err := json.Unmarshal(obj, &ins); err != nil {
+		return fmt.Errorf("list inbounds: unexpected response: %w", err)
+	}
 	for _, in := range ins {
 		if in.Enable {
 			fmt.Fprintf(os.Stderr, "xuidev: enabled inbound %d already exists\n", in.ID)
@@ -108,6 +120,24 @@ func run(ctx context.Context, p *panel, user, pass string, port int, wait time.D
 		return fmt.Errorf("create inbound: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "xuidev: created vless inbound on port %d\n", port)
+	return nil
+}
+
+// throwaway accepts panels on loopback or private addresses only.
+func throwaway(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return fmt.Errorf("invalid panel URL %q", raw)
+	}
+	ips, err := net.LookupIP(u.Hostname())
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", u.Hostname(), err)
+	}
+	for _, ip := range ips {
+		if !ip.IsLoopback() && !ip.IsPrivate() {
+			return fmt.Errorf("%s is not a throwaway panel address (%s)", u.Hostname(), ip)
+		}
+	}
 	return nil
 }
 

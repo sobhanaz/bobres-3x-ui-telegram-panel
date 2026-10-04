@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/url"
 	"strings"
@@ -29,6 +30,7 @@ type Server struct {
 	provisionerv1.UnimplementedProvisionerServiceServer
 	st      *store.Store
 	xuiOpts []xui.Option
+	log     *slog.Logger
 
 	mu       sync.Mutex
 	adapters map[string]cachedAdapter // by server id
@@ -43,7 +45,31 @@ type cachedAdapter struct {
 
 // New builds the server. xuiOpts relax panel-client hardening in tests only.
 func New(st *store.Store, xuiOpts ...xui.Option) *Server {
-	return &Server{st: st, xuiOpts: xuiOpts, adapters: map[string]cachedAdapter{}}
+	return &Server{st: st, xuiOpts: xuiOpts, log: slog.New(slog.DiscardHandler), adapters: map[string]cachedAdapter{}}
+}
+
+// SetLogger enables logging of panel failures (xui errors carry neither the
+// token nor the URL path, so they are safe to log).
+func (s *Server) SetLogger(l *slog.Logger) {
+	if l != nil {
+		s.log = l
+	}
+}
+
+// panelError logs a failed panel call and maps it to a gRPC status. Refusals by
+// the address policy (plain http to a public address, a private address without
+// allow-private) are configuration errors the operator must see verbatim;
+// everything else is reported as unavailable with the operation's name.
+func (s *Server) panelError(op string, err error) error {
+	s.log.Warn("3x-ui call failed", "op", op, "err", err)
+	if policyRefusal(err) {
+		return status.Error(codes.FailedPrecondition, err.Error())
+	}
+	return status.Error(codes.Unavailable, op+" failed")
+}
+
+func policyRefusal(err error) bool {
+	return errors.Is(err, xui.ErrPublicPlaintext) || errors.Is(err, xui.ErrBlockedAddress) || errors.Is(err, xui.ErrInsecureURL)
 }
 
 // Register attaches the service.
@@ -154,7 +180,7 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 	}
 	ins, err := a.Inbounds(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, "panel unreachable")
+		return nil, s.panelError("panel inbounds", err)
 	}
 	inboundIDs := enabledInboundIDs(ins)
 	if len(inboundIDs) == 0 {
@@ -169,7 +195,8 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 		existing, lookupErr := a.ClientSubID(ctx, email)
 		switch {
 		case lookupErr != nil:
-			return nil, status.Error(codes.Unavailable, "panel create failed")
+			s.log.Warn("3x-ui create failed", "err", err)
+			return nil, s.panelError("panel create", lookupErr)
 		case existing != subID:
 			return nil, status.Error(codes.AlreadyExists, "another client on the panel already uses this email")
 		}
@@ -206,7 +233,7 @@ func (s *Server) RenewClient(ctx context.Context, req *provisionerv1.RenewClient
 		return nil, status.Error(codes.NotFound, "client not provisioned")
 	}
 	if err := a.Renew(ctx, cm.Email, req.GetAddDays(), req.GetAddBytes()); err != nil {
-		return nil, status.Error(codes.Unavailable, "panel renew failed")
+		return nil, s.panelError("panel renew", err)
 	}
 	return clientProto(cm, 0, 0), nil
 }
@@ -221,7 +248,7 @@ func (s *Server) DeleteClient(ctx context.Context, req *provisionerv1.DeleteClie
 		return &emptypb.Empty{}, nil
 	}
 	if err := a.Delete(ctx, cm.Email); err != nil {
-		return nil, status.Error(codes.Unavailable, "panel delete failed")
+		return nil, s.panelError("panel delete", err)
 	}
 	if err := s.st.DeleteClientMap(ctx, req.GetSubscriptionId()); err != nil {
 		return nil, status.Error(codes.Internal, "client map delete failed")
@@ -239,7 +266,7 @@ func (s *Server) ResetTraffic(ctx context.Context, req *provisionerv1.ResetTraff
 		return nil, status.Error(codes.NotFound, "client not provisioned")
 	}
 	if err := a.ResetTraffic(ctx, cm.Email); err != nil {
-		return nil, status.Error(codes.Unavailable, "panel reset failed")
+		return nil, s.panelError("panel reset", err)
 	}
 	return clientProto(cm, 0, 0), nil
 }
@@ -255,7 +282,7 @@ func (s *Server) GetUsage(ctx context.Context, req *provisionerv1.GetUsageReques
 	}
 	used, err := a.Usage(ctx, cm.Email)
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, "panel usage failed")
+		return nil, s.panelError("panel usage", err)
 	}
 	return &provisionerv1.Usage{SubscriptionId: cm.SubscriptionID, TrafficUsedBytes: used, LastSyncedAt: time.Now().Unix()}, nil
 }
@@ -286,7 +313,7 @@ func (s *Server) GetLinks(ctx context.Context, req *provisionerv1.GetLinksReques
 		link = configs[0]
 	}
 	if link == "" {
-		return nil, status.Error(codes.Unavailable, "panel links failed")
+		return nil, s.panelError("panel links", err)
 	}
 	png, err := qrcode.Encode(link, qrcode.Medium, 512)
 	if err != nil {
@@ -307,7 +334,7 @@ func (s *Server) ListInbounds(ctx context.Context, req *provisionerv1.ListInboun
 	}
 	ins, err := a.Inbounds(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, "panel unreachable")
+		return nil, s.panelError("panel inbounds", err)
 	}
 	out := &provisionerv1.ListInboundsResponse{}
 	for _, in := range ins {
@@ -330,18 +357,11 @@ func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequ
 
 func (s *Server) addServer(ctx context.Context, name, baseURL, token, subBaseURL string, allowPrivate bool) (*store.Server, error) {
 	name, baseURL, subBaseURL = strings.TrimSpace(name), strings.TrimSpace(baseURL), strings.TrimSpace(subBaseURL)
-	if name == "" || baseURL == "" || token == "" {
+	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name, base_url and api_token required")
 	}
-	// Refuse what the panel client would refuse later (http, credentials in URL...).
-	if _, err := xui.New(baseURL, token, s.clientOptions(allowPrivate)...); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	if subBaseURL != "" {
-		u, err := url.Parse(subBaseURL)
-		if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
-			return nil, status.Error(codes.InvalidArgument, "sub_base_url must be an http(s) URL")
-		}
+	if err := s.validateServer(baseURL, token, subBaseURL, allowPrivate); err != nil {
+		return nil, err
 	}
 	sv, err := s.st.AddServer(ctx, &store.Server{
 		Name: name, BaseURL: baseURL, Token: token, Enabled: true,
@@ -353,21 +373,59 @@ func (s *Server) addServer(ctx context.Context, name, baseURL, token, subBaseURL
 	return sv, nil
 }
 
-// EnsureDefaultServer registers the installer-provided panel when no panel
-// exists yet. Later changes go through AddServer (dashboard).
+// validateServer refuses what the panel client would refuse later (plain http
+// without allow-private, credentials in the URL...) and a malformed sub URL.
+func (s *Server) validateServer(baseURL, token, subBaseURL string, allowPrivate bool) error {
+	if baseURL == "" || token == "" {
+		return status.Error(codes.InvalidArgument, "name, base_url and api_token required")
+	}
+	if _, err := xui.New(baseURL, token, s.clientOptions(allowPrivate)...); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if subBaseURL != "" {
+		u, err := url.Parse(subBaseURL)
+		if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+			return status.Error(codes.InvalidArgument, "sub_base_url must be an http(s) URL")
+		}
+	}
+	return nil
+}
+
+// EnsureDefaultServer registers the installer-provided panel as "default" on
+// first start and keeps that row in line with the environment afterwards, so
+// re-running `bobres install` with a corrected URL, token or option takes
+// effect. Until the dashboard manages panels, the environment is the only place
+// to change them. It reports whether anything was written.
 func (s *Server) EnsureDefaultServer(ctx context.Context, baseURL, token, subBaseURL string, allowPrivate bool) (bool, error) {
+	baseURL, subBaseURL = strings.TrimSpace(baseURL), strings.TrimSpace(subBaseURL)
 	if baseURL == "" {
 		return false, nil
 	}
-	n, err := s.st.CountServers(ctx)
-	if err != nil {
+	sv, err := s.st.ServerByName(ctx, "default")
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		n, err := s.st.CountServers(ctx)
+		if err != nil {
+			return false, err
+		}
+		if n > 0 { // panels were registered another way; leave them alone
+			return false, nil
+		}
+		if _, err := s.addServer(ctx, "default", baseURL, token, subBaseURL, allowPrivate); err != nil {
+			return false, fmt.Errorf("register 3x-ui panel from BOBRES_XUI_URL: %w", err)
+		}
+		return true, nil
+	case err != nil:
 		return false, err
 	}
-	if n > 0 {
+	if sv.BaseURL == baseURL && sv.Token == token && sv.SubBaseURL == subBaseURL && sv.AllowPrivate == allowPrivate {
 		return false, nil
 	}
-	if _, err := s.addServer(ctx, "default", baseURL, token, subBaseURL, allowPrivate); err != nil {
-		return false, fmt.Errorf("register 3x-ui panel from BOBRES_XUI_URL: %w", err)
+	if err := s.validateServer(baseURL, token, subBaseURL, allowPrivate); err != nil {
+		return false, fmt.Errorf("update 3x-ui panel from BOBRES_XUI_URL: %w", err)
+	}
+	if err := s.st.UpdateServerConnection(ctx, sv.ID, baseURL, token, subBaseURL, allowPrivate); err != nil {
+		return false, err
 	}
 	return true, nil
 }
@@ -380,7 +438,12 @@ func (s *Server) HealthCheck(ctx context.Context, req *provisionerv1.HealthCheck
 	}
 	ver, err := a.HealthCheck(ctx)
 	if err != nil {
-		return &provisionerv1.HealthCheckResponse{Healthy: false, Detail: "panel unreachable"}, nil
+		s.log.Warn("3x-ui health check failed", "err", err)
+		detail := "panel unreachable"
+		if policyRefusal(err) {
+			detail = err.Error()
+		}
+		return &provisionerv1.HealthCheckResponse{Healthy: false, Detail: detail}, nil
 	}
 	_ = s.st.TouchHealth(ctx, sv.ID, ver)
 	return &provisionerv1.HealthCheckResponse{Healthy: true, PanelVersion: ver}, nil

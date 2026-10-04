@@ -18,6 +18,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"sort"
@@ -103,20 +104,21 @@ type ClientSpec struct {
 }
 
 // ClientRecord is a client as the panel stores it (clients/get). Unlike
-// ClientSpec, "id" is the panel's numeric row id and the protocol UUID is in
-// "uuid" (verified against real 3x-ui v3.8.5 and v3.9.0).
+// ClientSpec, "id" is the panel's row id (a number in v3.8.5 and v3.9.0) and the
+// protocol UUID is in "uuid". ID stays raw: nothing reads it, and a type change
+// there must not break decoding again.
 type ClientRecord struct {
-	ID         int64  `json:"id"`
-	UUID       string `json:"uuid"`
-	Email      string `json:"email"`
-	SubID      string `json:"subId"`
-	TotalGB    int64  `json:"totalGB"`
-	ExpiryTime int64  `json:"expiryTime"`
-	LimitIP    int    `json:"limitIp"`
-	Enable     bool   `json:"enable"`
-	TgID       int64  `json:"tgId"`
-	Comment    string `json:"comment"`
-	Flow       string `json:"flow"`
+	ID         json.RawMessage `json:"id,omitempty"`
+	UUID       string          `json:"uuid"`
+	Email      string          `json:"email"`
+	SubID      string          `json:"subId"`
+	TotalGB    int64           `json:"totalGB"`
+	ExpiryTime int64           `json:"expiryTime"`
+	LimitIP    int             `json:"limitIp"`
+	Enable     bool            `json:"enable"`
+	TgID       int64           `json:"tgId"`
+	Comment    string          `json:"comment"`
+	Flow       string          `json:"flow"`
 }
 
 // ClientDetail is what clients/get returns.
@@ -186,7 +188,9 @@ type settings struct {
 }
 
 // WithHTTPClient replaces the default HTTP client (tests, custom TLS). Redirects are
-// still refused. The caller owns dial-time address filtering when using this.
+// still refused. The caller owns dial-time address filtering when using this, so it
+// is refused for a plain-http panel URL, whose private-only check lives in the
+// default transport.
 func WithHTTPClient(hc *http.Client) Option { return func(o *settings) { o.hc = hc } }
 
 // AllowInsecureHTTP permits http:// panel URLs. Only for tests/dev: the bearer token
@@ -199,9 +203,11 @@ func AllowInsecureHTTP() Option { return func(o *settings) { o.allowInsecure = t
 func AllowPrivateAddresses() Option { return func(o *settings) { o.allowPrivate = true } }
 
 // New creates a client. baseURL is the panel root including any web base path. It
-// must be https unless AllowInsecureHTTP is given. Unless AllowPrivateAddresses is
-// given, connections to loopback, private and link-local addresses are refused at
-// dial time (after DNS resolution, so DNS rebinding cannot bypass it).
+// must be https, except that AllowPrivateAddresses also permits plain http, which
+// may then reach only loopback, private and link-local addresses (AllowInsecureHTTP
+// lifts that for tests). Unless AllowPrivateAddresses is given, connections to
+// loopback, private and link-local addresses are refused. Both checks run at dial
+// time, after DNS resolution, so DNS rebinding cannot bypass them.
 func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 	var o settings
 	for _, f := range opts {
@@ -212,7 +218,7 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("xui: invalid panel URL")
 	}
 	plaintext := u.Scheme == "http"
-	if plaintext && !o.allowInsecure && !o.allowPrivate {
+	if plaintext && !o.allowInsecure && (!o.allowPrivate || o.hc != nil) {
 		return nil, ErrInsecureURL
 	}
 	if u.User != nil {
@@ -274,8 +280,14 @@ func blockPublic(_, address string, _ syscall.RawConn) error {
 	if err != nil {
 		return ErrPublicPlaintext
 	}
-	ip := net.ParseIP(host)
-	if ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
+	// netip, not net.ParseIP: a link-local IPv6 address is dialed with a zone
+	// ("fe80::1%eth0"), and IPv4-mapped forms must be judged as IPv4.
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return ErrPublicPlaintext
+	}
+	a = a.Unmap().WithZone("")
+	if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() {
 		return nil
 	}
 	return ErrPublicPlaintext
