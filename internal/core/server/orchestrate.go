@@ -56,7 +56,7 @@ func (s *Server) CreatePaymentIntent(ctx context.Context, req *corev1.CreatePaym
 	if err != nil {
 		return nil, fail(err)
 	}
-	return &corev1.PaymentIntentRef{
+	ref := &corev1.PaymentIntentRef{
 		Id:           res.IntentID,
 		Status:       res.Status,
 		OrderId:      res.OrderID,
@@ -64,7 +64,73 @@ func (s *Server) CreatePaymentIntent(ctx context.Context, req *corev1.CreatePaym
 		Instructions: res.Instructions,
 		Amount:       &commonv1.Money{Amount: res.Amount, Currency: res.Currency},
 		Details:      res.Details,
-	}, nil
+		PayUrl:       res.PayURL,
+		Description:  res.Description,
+	}
+	if res.GatewayCurrency != "" {
+		ref.GatewayAmount = &commonv1.Money{Amount: res.GatewayAmount, Currency: res.GatewayCurrency}
+	}
+	return ref, nil
+}
+
+func gatewayRef(gi *domain.GatewayIntent) *corev1.PaymentIntentRef {
+	ref := &corev1.PaymentIntentRef{
+		Id: gi.ID, Status: gi.Status, OrderId: gi.OrderID, Provider: gi.Provider,
+		Amount: &commonv1.Money{Amount: gi.Amount, Currency: gi.Currency},
+		PayUrl: gi.PayURL, FailureReason: gi.FailureReason,
+	}
+	if gi.GatewayCurrency != "" {
+		ref.GatewayAmount = &commonv1.Money{Amount: gi.GatewayAmount, Currency: gi.GatewayCurrency}
+	}
+	return ref
+}
+
+// CheckPayment asks payments to check an automated payment now.
+func (s *Server) CheckPayment(ctx context.Context, req *corev1.CheckPaymentRequest) (*corev1.PaymentIntentRef, error) {
+	if err := s.needPayments(); err != nil {
+		return nil, err
+	}
+	gi, err := s.dom.CheckPayment(ctx, s.pay, req.GetUserId(), req.GetIntentId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return gatewayRef(gi), nil
+}
+
+// StarsPreCheckout relays a Telegram Stars pre-checkout.
+func (s *Server) StarsPreCheckout(ctx context.Context, req *corev1.StarsPreCheckoutRequest) (*corev1.PaymentIntentRef, error) {
+	if err := s.needPayments(); err != nil {
+		return nil, err
+	}
+	gi, err := s.dom.StarsPreCheckout(ctx, s.pay, req.GetUserId(), req.GetIntentId(), req.GetTotalAmount(), req.GetCurrency())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return gatewayRef(gi), nil
+}
+
+// StarsPaid relays a successful Telegram Stars payment.
+func (s *Server) StarsPaid(ctx context.Context, req *corev1.StarsPaidRequest) (*corev1.PaymentIntentRef, error) {
+	if err := s.needPayments(); err != nil {
+		return nil, err
+	}
+	gi, err := s.dom.StarsPaid(ctx, s.pay, req.GetUserId(), req.GetIntentId(), req.GetTotalAmount(), req.GetCurrency(), req.GetTelegramPaymentChargeId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return gatewayRef(gi), nil
+}
+
+// ListPaymentMethods lists the automated methods usable for a currency.
+func (s *Server) ListPaymentMethods(ctx context.Context, req *corev1.ListPaymentMethodsRequest) (*corev1.ListPaymentMethodsResponse, error) {
+	if err := s.needPayments(); err != nil {
+		return nil, err
+	}
+	ms, err := s.dom.PaymentMethods(ctx, s.pay, req.GetCurrency())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.ListPaymentMethodsResponse{Providers: ms}, nil
 }
 
 // SubmitPaymentProof forwards a receipt or TXID to payments.

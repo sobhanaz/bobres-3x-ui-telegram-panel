@@ -89,3 +89,68 @@ func (c *Client) Review(ctx context.Context, reviewerID, intentID, decision, rea
 	}
 	return in.GetStatus(), nil
 }
+
+func gatewayIntent(in *paymentsv1.PaymentIntent) *domain.GatewayIntent {
+	return &domain.GatewayIntent{
+		ID: in.GetId(), Status: in.GetStatus(), OrderID: in.GetOrderId(), Provider: in.GetProvider(),
+		Amount: in.GetAmount().GetAmount(), Currency: in.GetAmount().GetCurrency(),
+		GatewayAmount: in.GetGatewayAmount().GetAmount(), GatewayCurrency: in.GetGatewayAmount().GetCurrency(),
+		PayURL: in.GetPayUrl(), FailureReason: in.GetFailureReason(),
+	}
+}
+
+// StartGateway starts an automated payment (Zarinpal) or fixes the
+// Stars of a Telegram Stars invoice.
+func (c *Client) StartGateway(ctx context.Context, p domain.GatewayStart) (*domain.GatewayIntent, error) {
+	in, err := c.rpc.CreateIntent(ctx, &paymentsv1.CreateIntentRequest{
+		OrderId: p.OrderID, UserId: p.UserID, Provider: p.Provider,
+		Amount:         &commonv1.Money{Amount: p.Amount, Currency: p.Currency},
+		IdempotencyKey: p.IdempotencyKey,
+		GatewayAmount:  &commonv1.Money{Amount: p.GatewayAmount, Currency: p.GatewayCurrency},
+		Description:    p.Description,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("payments.CreateIntent: %w", err)
+	}
+	return gatewayIntent(in), nil
+}
+
+// CheckIntent asks payments to check an automated payment now.
+func (c *Client) CheckIntent(ctx context.Context, userID, intentID string) (*domain.GatewayIntent, error) {
+	in, err := c.rpc.CheckIntent(ctx, &paymentsv1.CheckIntentRequest{UserId: userID, IntentId: intentID})
+	if err != nil {
+		return nil, fmt.Errorf("payments.CheckIntent: %w", err)
+	}
+	return gatewayIntent(in), nil
+}
+
+// PrecheckStars validates a Telegram Stars pre-checkout.
+func (c *Client) PrecheckStars(ctx context.Context, userID, intentID string, total int64, currency string) (*domain.GatewayIntent, error) {
+	in, err := c.rpc.PrecheckStarsPayment(ctx, &paymentsv1.PrecheckStarsPaymentRequest{
+		UserId: userID, IntentId: intentID, TotalAmount: total, Currency: currency,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("payments.PrecheckStarsPayment: %w", err)
+	}
+	return gatewayIntent(in), nil
+}
+
+// ConfirmStars settles a Telegram Stars payment.
+func (c *Client) ConfirmStars(ctx context.Context, userID, intentID string, total int64, currency, chargeID string) (*domain.GatewayIntent, error) {
+	in, err := c.rpc.ConfirmStarsPayment(ctx, &paymentsv1.ConfirmStarsPaymentRequest{
+		UserId: userID, IntentId: intentID, TotalAmount: total, Currency: currency, TelegramPaymentChargeId: chargeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("payments.ConfirmStarsPayment: %w", err)
+	}
+	return gatewayIntent(in), nil
+}
+
+// ListGateways lists the automated providers enabled in payments.
+func (c *Client) ListGateways(ctx context.Context) ([]string, error) {
+	resp, err := c.rpc.ListGateways(ctx, &paymentsv1.ListGatewaysRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("payments.ListGateways: %w", err)
+	}
+	return resp.GetProviders(), nil
+}

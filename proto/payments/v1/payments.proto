@@ -10,7 +10,7 @@ message PaymentIntent {
   string id = 1;
   string order_id = 2; // empty for wallet top-ups
   string user_id = 3;
-  string provider = 4; // wallet | manual_card | manual_crypto | zarinpal | stars | cryptopay
+  string provider = 4; // wallet | manual_card | manual_crypto | zarinpal | stars
   common.v1.Money amount = 5;
   string status = 6; // pending|confirming|succeeded|failed|expired
   string provider_ref = 7; // gateways: bank reference or transaction hash
@@ -18,9 +18,9 @@ message PaymentIntent {
   int64 created_at = 9;
   int64 updated_at = 10;
   // Automated gateways: what the customer pays there, fixed at creation (IRR for
-  // Zarinpal, XTR for Telegram Stars, USDT for Crypto Pay).
+  // Zarinpal, XTR for Telegram Stars).
   common.v1.Money gateway_amount = 11;
-  string pay_url = 12; // where the customer pays (Zarinpal, Crypto Pay)
+  string pay_url = 12; // where the customer pays (Zarinpal: a page on this install)
   string external_id = 13; // the gateway's id for the payment
   string failure_reason = 14; // why a gateway payment failed
 }
@@ -31,7 +31,7 @@ message CreateIntentRequest {
   string provider = 3;
   common.v1.Money amount = 4;
   string idempotency_key = 5;
-  // Automated gateways (zarinpal, stars, cryptopay): the amount to charge at the
+  // Automated gateways (zarinpal, stars): the amount to charge at the
   // gateway, computed by core from its rates. Not used by manual providers.
   common.v1.Money gateway_amount = 6;
   string description = 7; // shown at the gateway, e.g. the plan name

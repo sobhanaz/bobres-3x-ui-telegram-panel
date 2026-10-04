@@ -24,7 +24,7 @@ const (
 var ErrUnavailable = errors.New("payments: payment gateway unavailable")
 
 // gatewayCurrency is the only currency each automated provider is charged in.
-var gatewayCurrency = map[string]string{"zarinpal": "IRR", "cryptopay": "USDT", "stars": "XTR"}
+var gatewayCurrency = map[string]string{"zarinpal": "IRR", "stars": "XTR"}
 
 // SetGateways attaches the configured automated providers by name.
 func (s *Service) SetGateways(gws ...gateway.Gateway) {
@@ -51,7 +51,7 @@ func (s *Service) Gateway(name string) gateway.Gateway { return s.gws[name] }
 // offer it (it needs a Stars price).
 func (s *Service) Gateways() []string {
 	out := []string{Stars}
-	for _, name := range []string{"zarinpal", "cryptopay"} {
+	for _, name := range []string{"zarinpal"} {
 		if s.gws[name] != nil {
 			out = append(out, name)
 		}

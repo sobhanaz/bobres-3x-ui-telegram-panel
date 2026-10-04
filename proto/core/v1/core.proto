@@ -184,7 +184,7 @@ message PaymentIntentRef {
   // Structured details so the bot can render instructions in the user's
   // language: card_number, card_holder, usdt_trc20, usdt_erc20, reference.
   map<string, string> details = 7;
-  // Automated gateways: where to pay (Zarinpal, Crypto Pay), what is charged
+  // Automated gateways: where to pay (Zarinpal), what is charged
   // there (XTR for a Stars invoice), and the invoice title.
   string pay_url = 8;
   common.v1.Money gateway_amount = 9;
@@ -219,7 +219,7 @@ message ListPaymentMethodsRequest {
 }
 
 message ListPaymentMethodsResponse {
-  repeated string providers = 1; // automated methods usable now, e.g. zarinpal, stars, cryptopay
+  repeated string providers = 1; // automated methods usable now, e.g. zarinpal, stars
 }
 
 message SubmitPaymentProofRequest {
@@ -333,7 +333,7 @@ message PayOrderWithWalletRequest {
 message CreatePaymentIntentRequest {
   string user_id = 1;
   string order_id = 2;        // empty for wallet top-up intents
-  string provider = 3;        // manual_card | manual_crypto | zarinpal | stars | cryptopay
+  string provider = 3;        // manual_card | manual_crypto | zarinpal | stars
   common.v1.Money amount = 4; // required when order_id is empty
   string idempotency_key = 5;
 }

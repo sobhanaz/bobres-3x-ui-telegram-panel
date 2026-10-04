@@ -1,17 +1,17 @@
--- Phase 2: automated gateways (Zarinpal, Telegram Stars, Crypto Pay).
+-- Phase 2: automated gateways (Zarinpal, Telegram Stars).
 -- +goose Up
 -- +goose StatementBegin
 ALTER TABLE payment_intents DROP CONSTRAINT IF EXISTS payment_intents_provider_check;
 ALTER TABLE payment_intents ADD CONSTRAINT payment_intents_provider_check
-    CHECK (provider IN ('wallet','manual_card','manual_crypto','zarinpal','stars','cryptopay'));
+    CHECK (provider IN ('wallet','manual_card','manual_crypto','zarinpal','stars'));
 
 -- What the customer pays at the gateway, fixed when the intent is created: Rial for
--- Zarinpal, Stars for Telegram, USDT cents for Crypto Pay. Settlement compares the
--- gateway's report against these, never against a recomputed price.
+-- Zarinpal, Stars for Telegram. Settlement compares the gateway's report against
+-- these, never against a recomputed price.
 ALTER TABLE payment_intents
     ADD COLUMN gateway_amount bigint CHECK (gateway_amount IS NULL OR gateway_amount > 0),
     ADD COLUMN gateway_currency text,
-    -- Zarinpal authority, Crypto Pay invoice id, Telegram payment charge id.
+    -- Zarinpal authority, Telegram payment charge id.
     ADD COLUMN external_id text,
     ADD COLUMN pay_url text,
     ADD COLUMN checked_at timestamptz,
@@ -24,7 +24,7 @@ CREATE UNIQUE INDEX payment_intents_external_once_idx
 -- The reconciler's work queue: open gateway intents, least recently checked first.
 CREATE INDEX payment_intents_gateway_open_idx
     ON payment_intents (checked_at NULLS FIRST)
-    WHERE status IN ('pending','confirming') AND provider IN ('zarinpal','cryptopay');
+    WHERE status IN ('pending','confirming') AND provider = 'zarinpal';
 
 -- Audit trail of everything a gateway told us (redacted: no card numbers, no tokens).
 CREATE TABLE gateway_events (

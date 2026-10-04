@@ -27,7 +27,7 @@ type PaymentIntent struct {
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	OrderId     string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-ups
 	UserId      string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | zarinpal | stars | cryptopay
+	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | zarinpal | stars
 	Amount      *v1.Money              `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
 	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`                              // pending|confirming|succeeded|failed|expired
 	ProviderRef string                 `protobuf:"bytes,7,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"` // gateways: bank reference or transaction hash
@@ -35,9 +35,9 @@ type PaymentIntent struct {
 	CreatedAt   int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt   int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// Automated gateways: what the customer pays there, fixed at creation (IRR for
-	// Zarinpal, XTR for Telegram Stars, USDT for Crypto Pay).
+	// Zarinpal, XTR for Telegram Stars).
 	GatewayAmount *v1.Money `protobuf:"bytes,11,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
-	PayUrl        string    `protobuf:"bytes,12,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"`                      // where the customer pays (Zarinpal, Crypto Pay)
+	PayUrl        string    `protobuf:"bytes,12,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"`                      // where the customer pays (Zarinpal: a page on this install)
 	ExternalId    string    `protobuf:"bytes,13,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`          // the gateway's id for the payment
 	FailureReason string    `protobuf:"bytes,14,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"` // why a gateway payment failed
 	unknownFields protoimpl.UnknownFields
@@ -179,7 +179,7 @@ type CreateIntentRequest struct {
 	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	// Automated gateways (zarinpal, stars, cryptopay): the amount to charge at the
+	// Automated gateways (zarinpal, stars): the amount to charge at the
 	// gateway, computed by core from its rates. Not used by manual providers.
 	GatewayAmount *v1.Money `protobuf:"bytes,6,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
 	Description   string    `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"` // shown at the gateway, e.g. the plan name

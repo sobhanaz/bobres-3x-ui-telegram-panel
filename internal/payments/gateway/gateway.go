@@ -1,7 +1,7 @@
 // Package gateway is the contract of the automated payment providers whose
-// payments the payments service creates and checks itself (Zarinpal, Crypto
-// Pay). Telegram Stars has no server-side call to make: the bot reports its
-// payments and the domain checks them against the intent instead.
+// payments the payments service creates and checks itself (Zarinpal today).
+// Telegram Stars has no server-side call to make: the bot reports its payments
+// and the domain checks them against the intent instead.
 package gateway
 
 import (
@@ -36,8 +36,8 @@ func (s State) String() string {
 // Charge is a payment as fixed when the intent was created.
 type Charge struct {
 	IntentID    string
-	Amount      int64  // in the gateway's unit: Rial for Zarinpal, USDT cents for Crypto Pay
-	Currency    string // "IRR", "USDT"
+	Amount      int64  // in the gateway's unit, e.g. Rial for Zarinpal
+	Currency    string // e.g. "IRR"
 	Description string
 	// CallbackURL is where the gateway returns the customer's browser (Zarinpal).
 	CallbackURL string
@@ -46,7 +46,7 @@ type Charge struct {
 
 // Started is what the gateway returned when the payment was created.
 type Started struct {
-	ExternalID string // Zarinpal authority, Crypto Pay invoice id
+	ExternalID string // e.g. the Zarinpal authority
 	PayURL     string // where the customer pays
 }
 

@@ -1643,7 +1643,7 @@ type PaymentIntentRef struct {
 	// Structured details so the bot can render instructions in the user's
 	// language: card_number, card_holder, usdt_trc20, usdt_erc20, reference.
 	Details map[string]string `protobuf:"bytes,7,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// Automated gateways: where to pay (Zarinpal, Crypto Pay), what is charged
+	// Automated gateways: where to pay (Zarinpal), what is charged
 	// there (XTR for a Stars invoice), and the invoice title.
 	PayUrl        string    `protobuf:"bytes,8,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"`
 	GatewayAmount *v1.Money `protobuf:"bytes,9,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
@@ -2004,7 +2004,7 @@ func (x *ListPaymentMethodsRequest) GetCurrency() string {
 
 type ListPaymentMethodsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Providers     []string               `protobuf:"bytes,1,rep,name=providers,proto3" json:"providers,omitempty"` // automated methods usable now, e.g. zarinpal, stars, cryptopay
+	Providers     []string               `protobuf:"bytes,1,rep,name=providers,proto3" json:"providers,omitempty"` // automated methods usable now, e.g. zarinpal, stars
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3042,7 +3042,7 @@ type CreatePaymentIntentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	UserId         string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	OrderId        string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-up intents
-	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`              // manual_card | manual_crypto | zarinpal | stars | cryptopay
+	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`              // manual_card | manual_crypto | zarinpal | stars
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`                  // required when order_id is empty
 	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	unknownFields  protoimpl.UnknownFields

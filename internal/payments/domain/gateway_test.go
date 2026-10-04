@@ -94,7 +94,7 @@ func TestStartGatewayIsIdempotent(t *testing.T) {
 		t.Fatalf("wrong gateway currency: %v", err)
 	}
 	other := gwIntent("k3", 1_500_000)
-	other.Provider = "cryptopay"
+	other.Provider = "paypal"
 	if _, err := svc.StartGateway(ctx, other, "", ""); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unconfigured gateway: %v", err)
 	}

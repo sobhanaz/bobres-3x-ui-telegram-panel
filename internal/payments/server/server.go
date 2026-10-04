@@ -34,7 +34,7 @@ func (s *Server) SetPublicURL(u string) { s.publicURL = strings.TrimRight(u, "/"
 func (s *Server) Register(g *grpc.Server) { paymentsv1.RegisterPaymentsServiceServer(g, s) }
 
 // CreateIntent validates and stores a pending intent; for an automated gateway
-// it also creates the payment there (Zarinpal, Crypto Pay) or fixes the Stars.
+// it also creates the payment there (Zarinpal) or fixes the Stars.
 func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentRequest) (*paymentsv1.PaymentIntent, error) {
 	in := &store.Intent{
 		OrderID:        optstr(req.GetOrderId()),
@@ -55,7 +55,7 @@ func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentR
 	switch req.GetProvider() {
 	case domain.Stars:
 		out, err = s.svc.StartStars(ctx, in)
-	case "zarinpal", "cryptopay":
+	case "zarinpal":
 		out, err = s.svc.StartGateway(ctx, in, req.GetDescription(), s.publicURL+"/webhooks/"+req.GetProvider())
 	default:
 		out, err = s.svc.CreateIntent(ctx, in)
