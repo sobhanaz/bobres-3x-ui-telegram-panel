@@ -44,7 +44,11 @@ func (e *APIError) Error() string {
 var ErrInvalidIdentifier = errors.New("xui: invalid identifier")
 
 // ErrInsecureURL is returned when the panel URL is not https (or not allowed).
-var ErrInsecureURL = errors.New("xui: panel URL must use https")
+var ErrInsecureURL = errors.New("xui: panel URL must use https (plain http only for a private panel, with allow-private)")
+
+// ErrPublicPlaintext is returned when a plain-http panel URL resolves to a
+// public address: the API token must never cross the internet unencrypted.
+var ErrPublicPlaintext = errors.New("xui: plain http is allowed only to private, loopback or link-local addresses; use https")
 
 // ErrBlockedAddress is returned when the panel resolves to a private/loopback address.
 var ErrBlockedAddress = errors.New("xui: panel address is not allowed (private, loopback or link-local)")
@@ -173,7 +177,8 @@ func WithHTTPClient(hc *http.Client) Option { return func(o *settings) { o.hc = 
 func AllowInsecureHTTP() Option { return func(o *settings) { o.allowInsecure = true } }
 
 // AllowPrivateAddresses permits panels on loopback/private ranges (a panel on the same
-// host or LAN is a legitimate setup that the operator must opt into).
+// host or LAN is a legitimate setup that the operator must opt into). It also permits a
+// plain-http panel URL, which may then reach ONLY private addresses.
 func AllowPrivateAddresses() Option { return func(o *settings) { o.allowPrivate = true } }
 
 // New creates a client. baseURL is the panel root including any web base path. It
@@ -189,7 +194,8 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return nil, fmt.Errorf("xui: invalid panel URL")
 	}
-	if u.Scheme == "http" && !o.allowInsecure {
+	plaintext := u.Scheme == "http"
+	if plaintext && !o.allowInsecure && !o.allowPrivate {
 		return nil, ErrInsecureURL
 	}
 	if u.User != nil {
@@ -209,7 +215,13 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 			// closes it; callers should also reuse one Client per panel.
 			IdleConnTimeout: 90 * time.Second,
 		}
-		if !o.allowPrivate {
+		switch {
+		case plaintext && !o.allowInsecure:
+			// A private panel (BOBRES on the same host or LAN) may speak plain
+			// http, but then ONLY to private addresses, checked after DNS on
+			// every connection.
+			tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: blockPublic}).DialContext
+		case !o.allowPrivate:
 			tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: blockPrivate}).DialContext
 		}
 		hc = &http.Client{Timeout: 15 * time.Second, Transport: tr}
@@ -236,6 +248,20 @@ func blockPrivate(_, address string, _ syscall.RawConn) error {
 		return ErrBlockedAddress
 	}
 	return nil
+}
+
+// blockPublic is the inverse of blockPrivate, for plain-http panels: only
+// loopback, private (RFC 1918 / ULA) and link-local unicast addresses pass.
+func blockPublic(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return ErrPublicPlaintext
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
+		return nil
+	}
+	return ErrPublicPlaintext
 }
 
 // lock acquires per-email mutexes in sorted order (deadlock-free) and returns an

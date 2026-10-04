@@ -6,7 +6,7 @@
 - `main` cannot be deleted or force-pushed;
 - every change arrives through a pull request (no approval count, since the owner cannot
   approve their own PRs; review threads must be resolved);
-- all seven CI jobs must pass on the latest commit before merging
+- all CI jobs must pass on the latest commit before merging
   (`integration_id` 15368 is the GitHub Actions app, so only Actions can satisfy them);
 - no bypass actors: the rules apply to administrators too. Loosen them from
   Settings → Rules if an emergency ever requires it.

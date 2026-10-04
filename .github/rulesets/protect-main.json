@@ -5,13 +5,19 @@
   "bypass_actors": [],
   "conditions": {
     "ref_name": {
-      "include": ["~DEFAULT_BRANCH"],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
       "exclude": []
     }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -20,7 +26,11 @@
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_review_thread_resolution": true,
-        "allowed_merge_methods": ["merge", "squash", "rebase"]
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ]
       }
     },
     {
@@ -29,13 +39,42 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": true,
         "required_status_checks": [
-          { "context": "Test (race)", "integration_id": 15368 },
-          { "context": "Lint", "integration_id": 15368 },
-          { "context": "Vulnerability scan", "integration_id": 15368 },
-          { "context": "Build binaries", "integration_id": 15368 },
-          { "context": "Shell lint + signing tests", "integration_id": 15368 },
-          { "context": "Docker images + compose + e2e install", "integration_id": 15368 },
-          { "context": "Secret scan", "integration_id": 15368 }
+          {
+            "context": "Test (race)",
+            "integration_id": 15368
+          },
+          {
+            "context": "Lint",
+            "integration_id": 15368
+          },
+          {
+            "context": "Vulnerability scan",
+            "integration_id": 15368
+          },
+          {
+            "context": "Build binaries",
+            "integration_id": 15368
+          },
+          {
+            "context": "Shell lint + signing tests",
+            "integration_id": 15368
+          },
+          {
+            "context": "Docker images + compose + e2e install",
+            "integration_id": 15368
+          },
+          {
+            "context": "Secret scan",
+            "integration_id": 15368
+          },
+          {
+            "context": "3x-ui integration (v3.8.5)",
+            "integration_id": 15368
+          },
+          {
+            "context": "3x-ui integration (v3.9.0)",
+            "integration_id": 15368
+          }
         ]
       }
     }

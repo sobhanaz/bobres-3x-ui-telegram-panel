@@ -189,7 +189,13 @@ func TestInstallRejectsBadInput(t *testing.T) {
 			t.Errorf("%s: files written despite invalid input", name)
 		}
 	}
-	ins, _, errOut := testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": "nope", "BOBRES_XUI_TOKEN": "t"}, nil)
+	// Plain http is fine for a panel on this host or a private network, when declared.
+	dir := t.TempDir()
+	ins, _, errOut := testInstaller("", secrets, nil)
+	if code := ins.install(append(baseArgs(dir), "--no-start", "--xui-url", "http://172.17.0.1:2053/p", "--xui-allow-private")); code != 0 {
+		t.Errorf("http panel with --xui-allow-private: exit %d (%s)", code, errOut)
+	}
+	ins, _, errOut = testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": "nope", "BOBRES_XUI_TOKEN": "t"}, nil)
 	if code := ins.install(append(baseArgs(t.TempDir()), "--no-start")); code != 2 || !strings.Contains(errOut.String(), "BotFather") {
 		t.Errorf("bad bot token: %d %s", code, errOut)
 	}

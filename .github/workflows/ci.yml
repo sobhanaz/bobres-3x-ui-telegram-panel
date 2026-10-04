@@ -148,32 +148,39 @@ jobs:
       # /opt-style files, starts the compose project and waits for health; the
       # bot talks to a fake Telegram on the runner and answers a /start through
       # core and Postgres; then status, logs and both uninstall modes.
-      - name: End-to-end install
+      # The real installer against the real stack AND a real 3x-ui panel: the
+      # owner sets up a plan and the trial, a customer takes the trial and buys
+      # with wallet credit, all through the bot (fake Telegram on the runner),
+      # and both VPN accounts must exist on the panel. Then status, logs and both
+      # uninstall modes.
+      - name: End-to-end install against a real 3x-ui panel
         env:
           BOBRES_TELEGRAM_BOT_TOKEN: "123456789:AAH-ci-fake-token-abcdefghijklmnopqrstuv"
-          BOBRES_XUI_TOKEN: ci-panel-token
+          XUI_IMAGE: ghcr.io/mhsanaei/3x-ui:v3.9.0
         run: |
           set -euo pipefail
           go build -o /tmp/bobres ./cmd/bobres
           go build -o /tmp/tgfake ./tools/tgfake
+          go build -o /tmp/xuidev ./tools/xuidev
           /tmp/tgfake -addr 0.0.0.0:8081 > /tmp/tgfake.log 2>&1 &
+          # Host networking: the panel is "on this server", reachable from the
+          # stack as host.docker.internal, like a co-located production panel.
+          docker run -d --name xui --network host -e XUI_ENABLE_FAIL2BAN=false "$XUI_IMAGE"
+          xui_token=$(/tmp/xuidev -url http://127.0.0.1:2053)
+          echo "::add-mask::$xui_token"
           dir="$RUNNER_TEMP/bobres"
-          /tmp/bobres install --dir "$dir" --domain ci.example.test --admin-id 4242 \
-            --xui-url https://127.0.0.1:1/ --xui-allow-private --version ci \
-            --skip-checks --offline --no-start
+          BOBRES_XUI_TOKEN="$xui_token" /tmp/bobres install --dir "$dir" --domain ci.example.test --admin-id 4242 \
+            --xui-url http://host.docker.internal:2053 --xui-sub-url https://sub.example.test/sub/ \
+            --xui-allow-private --version ci --skip-checks --offline --no-start
           echo "BOBRES_TELEGRAM_API_URL=http://host.docker.internal:8081" >> "$dir/.env"
           # Re-run: keeps the secrets, starts the stack, waits until every service is healthy.
           /tmp/bobres install --dir "$dir" --skip-checks --offline
           /tmp/bobres status --dir "$dir"
           /tmp/bobres logs --dir "$dir" --tail 20 core
-          curl -fsS -X POST localhost:8081/_inject -H 'Content-Type: application/json' \
-            -d '{"message":{"message_id":1,"date":0,"chat":{"id":4242,"type":"private"},"from":{"id":4242,"is_bot":false,"first_name":"CI","language_code":"en"},"text":"/start"}}'
-          for _ in $(seq 1 30); do
-            if curl -fsS localhost:8081/_sent | grep -q "Choose your language"; then break; fi
-            sleep 2
-          done
-          curl -fsS localhost:8081/_sent | grep -q "Choose your language" || { echo "the bot did not answer /start"; exit 1; }
-          echo "bot answered /start through core"
+          BOBRES_E2E_TELEGRAM=http://127.0.0.1:8081 BOBRES_E2E_ADMIN_ID=4242 \
+          BOBRES_E2E_SUB_BASE=https://sub.example.test/sub/ \
+          XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN="$xui_token" XUI_TEST_ALLOW_PRIVATE=1 \
+            go test -tags e2e -count=1 -v ./tests/e2e/
           /tmp/bobres uninstall --dir "$dir" --yes
           test -z "$(docker ps -aq --filter label=com.docker.compose.project=bobres)"
           docker volume ls -q | grep -q '^bobres_pg_data$'
@@ -186,6 +193,37 @@ jobs:
           cd "$RUNNER_TEMP/bobres" 2>/dev/null && docker compose --project-name bobres -f docker-compose.yml --env-file .env ps --all || true
           cd "$RUNNER_TEMP/bobres" 2>/dev/null && docker compose --project-name bobres -f docker-compose.yml --env-file .env logs --tail 200 || true
           cat /tmp/tgfake.log || true
+          docker logs --tail 100 xui || true
+
+  # Our 3x-ui adapter against REAL panels: the version PLAN.md was written
+  # against and the newest release. Add a version here when upstream ships one.
+  xui:
+    name: 3x-ui integration (${{ matrix.xui }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        xui: [v3.8.5, v3.9.0]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+          cache: true
+      - name: Start a real 3x-ui panel
+        run: docker run -d --name xui -p 127.0.0.1:2053:2053 -e XUI_ENABLE_FAIL2BAN=false ghcr.io/mhsanaei/3x-ui:${{ matrix.xui }}
+      - name: Adapter against the panel
+        run: |
+          set -euo pipefail
+          token=$(go run ./tools/xuidev -url http://127.0.0.1:2053)
+          echo "::add-mask::$token"
+          XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN="$token" XUI_TEST_ALLOW_PRIVATE=1 \
+            go test -tags integration -count=1 -v -run Integration ./internal/provisioner/adapter/
+      - name: Panel logs on failure
+        if: failure()
+        run: docker logs --tail 200 xui || true
 
   secrets:
     name: Secret scan

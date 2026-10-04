@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 )
@@ -34,6 +35,37 @@ func TestNewRejectsInsecureAndBadURLs(t *testing.T) {
 	}
 	if _, err := xui.New("https://panel.example.com/secretpath", "t"); err != nil {
 		t.Fatalf("valid https URL rejected: %v", err)
+	}
+	if _, err := xui.New("http://10.0.0.5:2053/path", "t", xui.AllowPrivateAddresses()); err != nil {
+		t.Fatalf("plain http with allow-private rejected: %v", err)
+	}
+}
+
+func TestPlainHTTPReachesOnlyPrivateAddresses(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`{"success":true,"obj":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	// Loopback over plain http with allow-private: allowed.
+	c, err := xui.New(srv.URL, token, xui.AllowPrivateAddresses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.InboundOptions(context.Background()); err != nil || hits.Load() != 1 {
+		t.Fatalf("private plain-http panel: err=%v hits=%d", err, hits.Load())
+	}
+	// A public address over plain http is refused before any byte is sent
+	// (192.0.2.1 is TEST-NET-1: public, never routed).
+	c, err = xui.New("http://192.0.2.1:2053", token, xui.AllowPrivateAddresses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := c.InboundOptions(ctx); !errors.Is(err, xui.ErrPublicPlaintext) {
+		t.Fatalf("want ErrPublicPlaintext, got %v", err)
 	}
 }
 

@@ -18,12 +18,14 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 )
 
-// Sent is one outgoing message the bot produced.
+// Sent is one outgoing message the bot produced. For edits MessageID is the
+// edited message, so replaying the log gives each message's current state.
 type Sent struct {
-	Method string          `json:"method"`
-	ChatID int64           `json:"chat_id"`
-	Text   string          `json:"text"`
-	Markup json.RawMessage `json:"reply_markup,omitempty"`
+	Method    string          `json:"method"`
+	ChatID    int64           `json:"chat_id"`
+	MessageID int             `json:"message_id"`
+	Text      string          `json:"text"`
+	Markup    json.RawMessage `json:"reply_markup,omitempty"`
 }
 
 // Server is the fake API state.
@@ -170,12 +172,18 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			markup, _ = json.Marshal(m)
 		}
 		s.mu.Lock()
-		id := s.nextMsg
-		s.nextMsg++
-		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), Text: text, Markup: markup})
+		id := int(num(p["message_id"]))
+		if strings.HasPrefix(parts[1], "send") || id == 0 {
+			id = s.nextMsg
+			s.nextMsg++
+		}
+		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id, Text: text, Markup: markup})
 		s.mu.Unlock()
 		reply(w, tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}, Text: text})
 	case "answerCallbackQuery":
+		s.mu.Lock()
+		s.sent = append(s.sent, Sent{Method: parts[1], Text: str(p["text"])})
+		s.mu.Unlock()
 		reply(w, true)
 	default:
 		fail(w, http.StatusNotFound, "Not Found: method "+parts[1])

@@ -103,7 +103,7 @@ func (ins *installer) install(args []string) int {
 	dir := fs.String("dir", "/opt/bobres", "install directory")
 	domain := fs.String("domain", "", "public domain of this install (DNS must point here)")
 	adminID := fs.String("admin-id", "", "Telegram user id of the owner")
-	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https), including any web base path")
+	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path")
 	xuiSub := fs.String("xui-sub-url", "", "public prefix of the panel's subscription links, e.g. https://sub.example.com:2096/sub/")
 	allowPrivate := fs.Bool("xui-allow-private", false, "the panel is on this host or a private network")
 	imageVersion := fs.String("version", "", "image tag to run (default: this CLI's version)")
@@ -359,8 +359,10 @@ func validateEnv(env map[string]string) []error {
 	if !botTokenRe.MatchString(env["BOBRES_TELEGRAM_BOT_TOKEN"]) {
 		errs = append(errs, errors.New("the bot token does not look like a @BotFather token (123456:ABC...)"))
 	}
-	if u, err := url.Parse(env["BOBRES_XUI_URL"]); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		errs = append(errs, errors.New("the 3x-ui URL must be https://host[:port][/path] without credentials"))
+	privatePanel := env["BOBRES_XUI_ALLOW_PRIVATE"] == "true"
+	if u, err := url.Parse(env["BOBRES_XUI_URL"]); err != nil || u.Host == "" || u.User != nil ||
+		(u.Scheme != "https" && (u.Scheme != "http" || !privatePanel)) {
+		errs = append(errs, errors.New("the 3x-ui URL must be https://host[:port][/path] without credentials (http:// only with --xui-allow-private)"))
 	}
 	if sub := env["BOBRES_XUI_SUB_URL"]; sub != "" {
 		if u, err := url.Parse(sub); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
