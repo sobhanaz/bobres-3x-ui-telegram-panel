@@ -1,6 +1,10 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"net/url"
+	"strings"
+)
 
 // Core is the core service configuration.
 type Core struct {
@@ -52,6 +56,15 @@ type Payments struct {
 	Common
 	// CoreToken is core's service token; payments accepts only core.
 	CoreToken string
+	// Zarinpal is enabled when ZarinpalMerchantID is set.
+	ZarinpalMerchantID string
+	ZarinpalSandbox    bool
+	// ZarinpalProxy routes Zarinpal API calls through an http(s) proxy whose IP
+	// is registered in the Zarinpal panel (Zarinpal accepts registered IPs only).
+	ZarinpalProxy string
+	// ZarinpalPublicURL is the domain registered with Zarinpal, serving the pay
+	// page and the callback; it must be reachable from Iran without a VPN.
+	ZarinpalPublicURL string
 }
 
 // LoadPayments reads the payments service configuration.
@@ -67,6 +80,19 @@ func LoadPayments() (Payments, error) {
 	}
 	if p.CoreToken, err = requireToken("BOBRES_PEER_CORE_TOKEN", c.Env); err != nil {
 		errs = append(errs, err)
+	}
+	p.ZarinpalMerchantID = strings.TrimSpace(getenv("BOBRES_ZARINPAL_MERCHANT_ID", ""))
+	p.ZarinpalSandbox = getenv("BOBRES_ZARINPAL_SANDBOX", "") == "true"
+	p.ZarinpalProxy = getenv("BOBRES_ZARINPAL_PROXY", "")
+	p.ZarinpalPublicURL = strings.TrimRight(getenv("BOBRES_ZARINPAL_PUBLIC_URL", getenv("BOBRES_PUBLIC_URL", "")), "/")
+	if p.ZarinpalMerchantID != "" {
+		u, err := url.Parse(p.ZarinpalPublicURL)
+		switch {
+		case err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && c.Env == "dev")):
+			errs = append(errs, errors.New("BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be the https URL of the domain registered with Zarinpal"))
+		case u.Path != "" || u.RawQuery != "":
+			errs = append(errs, errors.New("BOBRES_ZARINPAL_PUBLIC_URL must be just https://host[:port]"))
+		}
 	}
 	return p, errors.Join(errs...)
 }

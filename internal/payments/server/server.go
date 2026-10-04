@@ -63,7 +63,17 @@ func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentR
 	if err != nil {
 		return nil, fail(err)
 	}
-	return intentToProto(out), nil
+	return s.publicIntent(out), nil
+}
+
+// publicIntent is intentToProto for the customer: a Zarinpal payment must start
+// from our own page (Zarinpal checks the Referer), so that page is the pay URL.
+func (s *Server) publicIntent(in *store.Intent) *paymentsv1.PaymentIntent {
+	p := intentToProto(in)
+	if in.Provider == "zarinpal" && p.PayUrl != "" {
+		p.PayUrl = s.publicURL + "/pay/" + in.ID
+	}
+	return p
 }
 
 // CheckIntent asks the gateway about an open intent now.
@@ -72,7 +82,7 @@ func (s *Server) CheckIntent(ctx context.Context, req *paymentsv1.CheckIntentReq
 	if err != nil {
 		return nil, fail(err)
 	}
-	return intentToProto(in), nil
+	return s.publicIntent(in), nil
 }
 
 // PrecheckStarsPayment validates a Stars pre-checkout (nothing is charged yet).

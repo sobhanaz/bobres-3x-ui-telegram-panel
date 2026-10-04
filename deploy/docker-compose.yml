@@ -162,7 +162,13 @@ services:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_payments:${DB_PAYMENTS_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
+      BOBRES_PUBLIC_URL: https://${BOBRES_DOMAIN}
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      # Zarinpal (off unless a merchant id is set). See docs/11-staging-run.md.
+      BOBRES_ZARINPAL_MERCHANT_ID: ${BOBRES_ZARINPAL_MERCHANT_ID:-}
+      BOBRES_ZARINPAL_SANDBOX: ${BOBRES_ZARINPAL_SANDBOX:-false}
+      BOBRES_ZARINPAL_PROXY: ${BOBRES_ZARINPAL_PROXY:-}
+      BOBRES_ZARINPAL_PUBLIC_URL: ${BOBRES_ZARINPAL_PUBLIC_URL:-}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend, egress]

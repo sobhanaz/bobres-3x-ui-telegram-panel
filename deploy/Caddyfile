@@ -41,8 +41,11 @@
 		respond "Not found" 404
 	}
 
-	# Payment gateway callbacks (signature-verified by the payments service).
-	handle /webhooks/* {
+	# Payment pages a customer opens from the bot (Zarinpal must be started from a
+	# page on the registered domain) and gateway returns/callbacks. The payments
+	# service verifies every payment with the gateway; nothing here is trusted.
+	@payments path /webhooks/* /pay/*
+	handle @payments {
 		request_body {
 			max_size 1MB
 		}
