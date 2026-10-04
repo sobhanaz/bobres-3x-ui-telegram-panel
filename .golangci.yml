@@ -11,9 +11,11 @@ linters:
     - gosec
     - misspell
   exclusions:
-    # The v1 default exclusions this code was linted with (what `golangci-lint migrate`
-    # keeps): unchecked fmt.Fprint*/Close/Flush errors, gosec G104/G204/G304 and
-    # file-permission findings, govet unsafe.Pointer and staticcheck SA4011.
+    # Three of the four presets `golangci-lint migrate` emits for the v1 defaults this
+    # code was linted with: unchecked fmt.Fprint*/Close/Flush errors, gosec
+    # G104/G204/G304 and file-permission findings, govet unsafe.Pointer, SA4011.
+    # The fourth, `comments` (doc-comment style rules), is left out on purpose:
+    # the code passes without it.
     presets:
       - std-error-handling
       - common-false-positives

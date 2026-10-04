@@ -25,7 +25,7 @@ test:
 	go test -race -count=1 ./...
 
 lint:
-	@golangci-lint version 2>/dev/null | grep -q 'has version 2\.' || { echo "golangci-lint v2 is required: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)"; exit 1; }
+	@golangci-lint version 2>/dev/null | grep -q 'has version v\{0,1\}2\.' || { echo "golangci-lint v2 is required: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)"; exit 1; }
 	golangci-lint run ./...
 
 vuln:
