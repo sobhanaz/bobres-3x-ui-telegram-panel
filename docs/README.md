@@ -12,6 +12,7 @@
 | [07-security.md](07-security.md) | Threat model and mitigations |
 | [08-brand.md](08-brand.md) | Brand, tone, copy deliverables |
 | [09-legal-questions.md](09-legal-questions.md) | Questions for a lawyer (not legal advice) |
+| [11-staging-run.md](11-staging-run.md) | Checklist for the first install on a real server (end of Phase 1) |
 
 Status of every doc: DRAFT. Open points are listed at the end of each file.
 Known unverified items: Zarinpal server-location rules, BOBRES trademark/domain availability, older 3x-ui API compatibility.

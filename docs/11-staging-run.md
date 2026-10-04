@@ -1,0 +1,71 @@
+# First real install (staging run)
+
+The last Phase 1 step: one install on a real server with a real bot and a real 3x-ui panel,
+then one real purchase. CI already does all of this with a fake Telegram and a throwaway
+3x-ui container (see the `docker` and `xui` jobs); this run checks the parts CI cannot:
+your network, your domain, Telegram itself and your panel's configuration.
+
+## 1. What you need
+
+- A VPS with Ubuntu 22.04/24.04 or Debian 12, 2 GB RAM, 20 GB disk, ports 80 and 443 open.
+- A domain (or subdomain) whose A record points to the VPS.
+- A NEW Telegram bot from @BotFather (not the one 3x-ui's own bot uses) and your numeric
+  Telegram ID (ask @userinfobot).
+- Your 3x-ui panel, v3.8.5 or newer:
+  - the panel URL including its web base path, e.g. `https://panel.example.com:2053/abc123`;
+  - an API token: Settings → Security → API tokens → create, scope `admin`;
+  - the subscription prefix: Settings → Subscription (e.g. `https://panel.example.com:2096/sub/`);
+  - at least one enabled inbound (new customers are attached to every enabled inbound).
+  - If the panel runs on the same VPS, use `http://host.docker.internal:<port>/<path>` with
+    `--xui-allow-private` (plain http is then allowed only to private addresses).
+
+## 2. Publish a release candidate (owner decision)
+
+Images are published by tagging, e.g. `v0.1.0-rc.1`: the Release workflow verifies, builds
+signed multi-arch images to `ghcr.io/sobhanaz/bobres-*` and a signed `bobres` CLI release.
+
+Two things are still open before customers can install:
+- `install/install.sh` downloads from `https://get.example.com/releases/latest`, a placeholder:
+  choose where signed releases are served (a small static host, or a GitHub release of a
+  public "releases" repository).
+- Packages of a private repository are private on GHCR. For your own server, log in once:
+  `echo <PAT with read:packages> | docker login ghcr.io -u sobhanaz --password-stdin`.
+  For customers, decide between public images (binaries only; the license gates features)
+  and a private registry with per-customer credentials (PLAN.md section 2, open decision).
+
+## 3. Install
+
+Until the release host exists, copy the CLI from the GitHub release to the VPS and run:
+
+```bash
+sudo ./bobres install --domain panel.example.com --admin-id <your id> \
+  --xui-url https://panel.example.com:2053/abc123 --xui-sub-url https://panel.example.com:2096/sub/ \
+  --version 0.1.0-rc.1
+```
+
+It asks for the bot token and the panel token (hidden input), checks the server, writes
+`/opt/bobres`, starts everything and waits until all services are healthy. Then:
+
+```bash
+sudo ./bobres status
+```
+
+## 4. Check, in this order
+
+1. Message the bot `/start`, pick a language: the main menu appears.
+2. As admin: `/plan_add 10000 IRT 1 1 Test 1GB | تست ۱ گیگ` and `/trial 1 1`.
+3. From a second Telegram account: take the free trial. The service message must arrive with a
+   link and QR, and the client must appear in the panel (Clients page) on every enabled inbound.
+4. Import the link into a VPN app (v2rayNG, Hiddify, Streisand) and open a website.
+5. Card payment: `/set payments.card_number ...` and `/set payments.card_holder ...`, buy the
+   test plan with "card", send a photo as receipt, approve it from the admin panel; the second
+   service must be delivered.
+6. Wallet: credit the second account from Admin → Find user → Adjust, buy with the wallet.
+7. `sudo ./bobres logs core` shows no errors; `sudo ./bobres uninstall` keeps the data,
+   `install` again brings the same store back.
+
+Anything that fails here: run `sudo ./bobres logs <service>` and keep the output for the fix.
+
+## 5. After it passes
+
+Tag `v0.1.0`. Phase 1 is done when this checklist passes on a real server.
