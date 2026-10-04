@@ -126,7 +126,7 @@ func (s *Server) ListPaymentMethods(ctx context.Context, req *corev1.ListPayment
 	if err := s.needPayments(); err != nil {
 		return nil, err
 	}
-	ms, err := s.dom.PaymentMethods(ctx, s.pay, req.GetCurrency())
+	ms, err := s.dom.PaymentMethods(ctx, s.pay, req.GetCurrency(), req.GetAmount())
 	if err != nil {
 		return nil, fail(err)
 	}

@@ -114,7 +114,11 @@ func (s *Service) paymentReceived(ctx context.Context, tx pgx.Tx, p events.Payme
 		return errors.Join(err, ErrOrderNotPayable)
 	}
 	o.Status = "paid"
-	return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidManually)
+	source := events.PaidManually
+	if isGateway(p.Provider) {
+		source = events.PaidByGateway
+	}
+	return s.publishOrderPaid(ctx, tx, o, u.TelegramID, source)
 }
 
 // paymentRejected tells the user (through the bot) that a reviewer rejected

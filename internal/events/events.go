@@ -40,10 +40,11 @@ type PaymentEvent struct {
 
 // Sources of order.paid.v1.
 const (
-	PaidByWallet = "wallet"
-	PaidManually = "manual"
-	PaidTrial    = "trial"
-	PaidFree     = "free"
+	PaidByWallet  = "wallet"
+	PaidManually  = "manual"
+	PaidByGateway = "gateway" // Zarinpal, Telegram Stars
+	PaidTrial     = "trial"
+	PaidFree      = "free"
 )
 
 // OrderPaidEvent: an order's money is in; provisioning follows.

@@ -15,7 +15,9 @@
 	}
 }
 
-{$BOBRES_DOMAIN} {
+# BOBRES_ZARINPAL_HOST (optional): a second domain registered with Zarinpal for the
+# pay page and return URL, when the main domain is not reachable from Iran without a VPN.
+{$BOBRES_DOMAIN} {$BOBRES_ZARINPAL_HOST} {
 	encode zstd gzip
 
 	header {
@@ -24,7 +26,9 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
-		Referrer-Policy "no-referrer"
+		# "?": only when the upstream sets none. The payments pay page sends
+		# "origin", which Zarinpal needs to see where the payment started.
+		?Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		-Server

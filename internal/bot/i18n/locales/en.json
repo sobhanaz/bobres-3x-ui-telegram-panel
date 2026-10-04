@@ -167,5 +167,6 @@
   "reason.expired": "The payment link expired.",
   "reason.payer_mismatch": "Someone other than you paid this invoice. Contact support.",
   "reason.not_found": "The payment gateway could not find this payment.",
-  "reason.reversed": "The bank returned this payment."
+  "reason.reversed": "The bank returned this payment.",
+  "admin.stars_unrecorded": "⚠️ <b>A Stars payment was not recorded</b>\nUser: {user}\nStars: {stars}\nCharge: <code>{charge}</code>\nInvoice: <code>{payload}</code>\n\nCredit the user by hand (wallet adjustment) or refund the Stars."
 }

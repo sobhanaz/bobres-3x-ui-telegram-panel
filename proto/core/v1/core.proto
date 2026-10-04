@@ -216,6 +216,7 @@ message StarsPaidRequest {
 
 message ListPaymentMethodsRequest {
   string currency = 1; // the plan's currency, e.g. IRT
+  int64 amount = 2; // the price in minor units, to apply each method's limits (0 = any)
 }
 
 message ListPaymentMethodsResponse {

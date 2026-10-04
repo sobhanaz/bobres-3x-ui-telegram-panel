@@ -27,8 +27,14 @@ facts that matter for the code are restated here).
 - A gateway saying "paid" with a different amount fails the intent with
   `amount_mismatch` (the admin refunds); cancelled, unknown and expired intents fail with
   a reason. Reasons reach the customer through `payment.rejected`, translated by the bot.
-- The reconciler (every 30 s, exponential backoff to 64 intervals) checks open gateway
-  intents: lost browser returns, closed tabs, installs without a reachable public URL.
+- A payment the gateway confirms late (our 1-hour expiry passed, a lost return, a
+  concurrent check failed the intent first) still settles: the gateway took the money.
+  Only an amount mismatch stays failed. Core sends money for an order that is no longer
+  payable to the wallet.
+- The reconciler (every 30 s) checks open gateway intents, earliest due first, backing
+  off per intent up to 64 intervals; only its own checks count towards the backoff. User
+  checks ("I paid, check") reach the gateway at most every 3 s per intent (stored in the
+  database); the return page has its own refresh throttle and is always verified.
 - Audit: `payments.gateway_events` records what each gateway said (no card numbers,
   no tokens).
 
@@ -37,14 +43,16 @@ facts that matter for the code are restated here).
 - The bot sends an invoice (currency XTR, one price line, payload = the intent id,
   non-empty `start_parameter` so a forwarded copy cannot be paid by someone else).
 - `pre_checkout_query` (must be answered within 10 s, so it is neither de-duplicated nor
-  rate-limited): the intent must be an open, unexpired Stars intent of this user, for
-  exactly these Stars. The bot now subscribes to `pre_checkout_query` explicitly.
+  rate-limited, and it skips the per-user queue so a slow update cannot delay it): the
+  intent must be an open, unexpired Stars intent of this user, for exactly these Stars.
+  The bot now subscribes to `pre_checkout_query` explicitly.
 - `successful_payment`: settles the intent with `telegram_payment_charge_id` (unique per
-  provider: one charge settles at most one intent). The Stars are already taken, so an
-  intent that expired a moment earlier still settles, a banned user's payment is still
-  recorded, and a recording failure is retried and then logged with everything needed to
-  recover it by hand. The same charge reported twice is harmless; a second charge for a
-  settled intent is refused for a refund.
+  provider: one charge settles at most one intent). The Stars are already taken, so it is
+  handled before de-duplication, the user lookup and the rate limit, logged first,
+  recorded with retries on a context that survives shutdown; an intent that expired a
+  moment earlier still settles and a banned user's payment is still recorded. Anything
+  but a confirmed settlement (a second charge, a wrong payer or amount, an outage) tells
+  the payer to contact support with the charge id and alerts the admin with the details.
 - `/paysupport` answers with the support contact (Telegram requires it).
 - Later: subscriptions via `createInvoiceLink` + `subscription_period` (30 days, at most
   10,000 Stars) belong to Phase 3 (renewals); refunds with `refundStarPayment` from the
@@ -64,13 +72,19 @@ facts that matter for the code are restated here).
   StartPay with `Referrer-Policy: origin`; a plain redirect would not carry the Referer.
 - The return URL `/webhooks/zarinpal` never trusts its query string: it always verifies,
   so a forged `Status=NOK` cannot cancel a paid payment. Refreshes are throttled.
+- The sandbox (any merchant id works, the pay page needs no card) is refused when
+  `BOBRES_ENV=prod`.
+- Prices outside Zarinpal's limits (1,000 to 100,000,000 Toman) do not show the button.
 - Since Sep 2026 Zarinpal accepts API calls only from up to 5 static IPs registered in
   its panel. `BOBRES_ZARINPAL_PROXY` routes the calls through a proxy on a registered
   (Iranian) server when the BOBRES server's IP cannot be registered.
 - Buyers must pay with their VPN off (Shaparak limits internet payments to Iranian IPs),
   so the pay page and the return URL must be reachable from Iran without a VPN. Domains
   of VPN shops are often filtered; `BOBRES_ZARINPAL_PUBLIC_URL` can point at a separate,
-  registered domain served by the payments service (which can run in another region).
+  registered domain. Caddy serves it too (`BOBRES_ZARINPAL_HOST`, set by the installer);
+  the payments service can also run in another region behind its own proxy.
+- Caddy only sets `Referrer-Policy: no-referrer` where the upstream sets none, so the pay
+  page's `origin` reaches Zarinpal; the pay links also carry `referrerpolicy="origin"`.
 
 ## Decisions the owner must take
 
@@ -96,12 +110,12 @@ facts that matter for the code are restated here).
 |---|---|---|
 | core setting | `payments.stars_rate` | Toman per Star; empty = no Stars |
 | payments env | `BOBRES_ZARINPAL_MERCHANT_ID` | enables Zarinpal |
-| payments env | `BOBRES_ZARINPAL_SANDBOX` | sandbox host (tests) |
+| payments env | `BOBRES_ZARINPAL_SANDBOX` | sandbox host (tests; refused in prod) |
 | payments env | `BOBRES_ZARINPAL_PROXY` | http(s) proxy with a registered IP |
 | payments env | `BOBRES_ZARINPAL_PUBLIC_URL` | registered domain for the pay page and return URL |
+| caddy env | `BOBRES_ZARINPAL_HOST` | that domain's host when it differs from `BOBRES_DOMAIN` |
 
-Installer flags: `--zarinpal-merchant-id`, `--zarinpal-sandbox`, `--zarinpal-proxy`,
-`--zarinpal-public-url`.
+Installer flags: `--zarinpal-merchant-id`, `--zarinpal-proxy`, `--zarinpal-public-url`.
 
 ## Tests
 

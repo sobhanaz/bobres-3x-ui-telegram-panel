@@ -666,6 +666,17 @@ func TestStarsPurchase(t *testing.T) {
 	if a := u.preCheckout(inv, 100); a.ok {
 		t.Fatal("a paid invoice passed pre-checkout again")
 	}
+
+	// A payment that cannot settle (a second charge for the paid invoice) is
+	// never answered with "received": the payer and the admin are told.
+	eve.paid(inv, 100, "tg-charge-eve")
+	eve.sees("could not record it yet")
+	owner.sees("A Stars payment was not recorded")
+	for _, m := range w.tg.all(502) {
+		if strings.Contains(m.text, "Payment received") {
+			t.Fatal("an unsettled payment was confirmed to the payer")
+		}
+	}
 }
 
 func TestZarinpalPurchase(t *testing.T) {

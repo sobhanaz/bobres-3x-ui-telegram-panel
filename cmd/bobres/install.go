@@ -86,7 +86,7 @@ var envOrder = []string{
 	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY",
 	"BOBRES_TELEGRAM_BOT_TOKEN", "BOBRES_ADMIN_TELEGRAM_ID", "BOBRES_TIMEZONE",
 	"BOBRES_XUI_URL", "BOBRES_XUI_TOKEN", "BOBRES_XUI_SUB_URL", "BOBRES_XUI_ALLOW_PRIVATE",
-	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_SANDBOX", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL",
+	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL", "BOBRES_ZARINPAL_HOST",
 }
 
 // generated secrets: created once, then kept on every re-run (changing a
@@ -113,7 +113,6 @@ func (ins *installer) install(args []string) int {
 	xuiSub := fs.String("xui-sub-url", "", "public prefix of the panel's subscription links, e.g. https://sub.example.com:2096/sub/")
 	allowPrivate := fs.Bool("xui-allow-private", false, "the panel is on this host or a private network")
 	zpMerchant := fs.String("zarinpal-merchant-id", "", "enable Zarinpal with this merchant id (36-character id from the Zarinpal panel)")
-	zpSandbox := fs.Bool("zarinpal-sandbox", false, "use the Zarinpal sandbox (tests only)")
 	zpProxy := fs.String("zarinpal-proxy", "", "http(s) proxy on a server whose IP is registered in the Zarinpal panel")
 	zpPublic := fs.String("zarinpal-public-url", "", "domain registered with Zarinpal for the pay page and callback (default: https://<domain>)")
 	imageVersion := fs.String("version", "", "image tag to run (default: this CLI's version)")
@@ -152,8 +151,10 @@ func (ins *installer) install(args []string) int {
 	set("BOBRES_ZARINPAL_MERCHANT_ID", strings.ToLower(*zpMerchant))
 	set("BOBRES_ZARINPAL_PROXY", *zpProxy)
 	set("BOBRES_ZARINPAL_PUBLIC_URL", *zpPublic)
-	if *zpSandbox {
-		env["BOBRES_ZARINPAL_SANDBOX"] = "true"
+	// A Zarinpal domain other than the main one is served by the same Caddy site.
+	env["BOBRES_ZARINPAL_HOST"] = ""
+	if u, err := url.Parse(env["BOBRES_ZARINPAL_PUBLIC_URL"]); err == nil && u.Hostname() != "" && !strings.EqualFold(u.Hostname(), env["BOBRES_DOMAIN"]) {
+		env["BOBRES_ZARINPAL_HOST"] = u.Hostname()
 	}
 
 	// Ask for what is still missing (secrets without echo).

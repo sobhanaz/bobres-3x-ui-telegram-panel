@@ -36,6 +36,12 @@ type GatewayIntent struct {
 	FailureReason                 string
 }
 
+// Zarinpal's per-payment limits (the gateway works in Rial: x10).
+const (
+	zarinpalMinToman = 1_000
+	zarinpalMaxToman = 100_000_000
+)
+
 func isGateway(provider string) bool {
 	return provider == Zarinpal || provider == Stars
 }
@@ -65,6 +71,9 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 		if currency != "IRT" {
 			return 0, "", invalid("Zarinpal takes Toman prices only")
 		}
+		if amount < zarinpalMinToman || amount > zarinpalMaxToman {
+			return 0, "", invalid("Zarinpal takes 1,000 to 100,000,000 Toman per payment")
+		}
 		return amount * 10, "IRR", nil
 	case Stars:
 		rate := s.settingInt(ctx, "payments.stars_rate")
@@ -76,14 +85,18 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 	return 0, "", invalid("unsupported payment method %q", provider)
 }
 
-// PaymentMethods lists the automated methods usable for a price in currency:
-// enabled in payments and priced (rates set) here.
-func (s *Service) PaymentMethods(ctx context.Context, pay PaymentsClient, currency string) ([]string, error) {
+// PaymentMethods lists the automated methods usable for a price (amount in
+// currency; 0 = any typical price): enabled in payments, priced (rates set)
+// here, and within the method's limits.
+func (s *Service) PaymentMethods(ctx context.Context, pay PaymentsClient, currency string, amount int64) ([]string, error) {
 	gws, err := pay.ListGateways(ctx)
 	if err != nil {
 		return nil, err
 	}
-	probe := map[string]int64{"IRT": 100_000, "USDT": 1_000_000}[currency]
+	probe := amount
+	if probe <= 0 {
+		probe = map[string]int64{"IRT": 100_000, "USDT": 1_000_000}[currency]
+	}
 	var out []string
 	for _, g := range gws {
 		if _, _, err := s.gatewayCharge(ctx, g, probe, currency); err == nil {
@@ -123,11 +136,11 @@ func (s *Service) StarsPaid(ctx context.Context, pay PaymentsClient, userID, int
 // name (gateways' own pages are not localised by us), else a generic label.
 func (s *Service) orderDescription(ctx context.Context, planID string) string {
 	if planID == "" {
-		return "VPN subscription"
+		return "Subscription"
 	}
 	p, err := s.st.GetPlan(ctx, s.st.Conn(), planID)
 	if err != nil {
-		return "VPN subscription"
+		return "Subscription"
 	}
 	if n := p.NameI18n["en"]; n != "" {
 		return n
@@ -137,5 +150,5 @@ func (s *Service) orderDescription(ctx context.Context, planID string) string {
 			return n
 		}
 	}
-	return "VPN subscription"
+	return "Subscription"
 }

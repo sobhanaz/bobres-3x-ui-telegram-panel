@@ -1961,6 +1961,7 @@ func (x *StarsPaidRequest) GetTelegramPaymentChargeId() string {
 type ListPaymentMethodsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Currency      string                 `protobuf:"bytes,1,opt,name=currency,proto3" json:"currency,omitempty"` // the plan's currency, e.g. IRT
+	Amount        int64                  `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`    // the price in minor units, to apply each method's limits (0 = any)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2000,6 +2001,13 @@ func (x *ListPaymentMethodsRequest) GetCurrency() string {
 		return x.Currency
 	}
 	return ""
+}
+
+func (x *ListPaymentMethodsRequest) GetAmount() int64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
 }
 
 type ListPaymentMethodsResponse struct {
@@ -3443,9 +3451,10 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\tintent_id\x18\x02 \x01(\tR\bintentId\x12!\n" +
 	"\ftotal_amount\x18\x03 \x01(\x03R\vtotalAmount\x12\x1a\n" +
 	"\bcurrency\x18\x04 \x01(\tR\bcurrency\x12;\n" +
-	"\x1atelegram_payment_charge_id\x18\x05 \x01(\tR\x17telegramPaymentChargeId\"7\n" +
+	"\x1atelegram_payment_charge_id\x18\x05 \x01(\tR\x17telegramPaymentChargeId\"O\n" +
 	"\x19ListPaymentMethodsRequest\x12\x1a\n" +
-	"\bcurrency\x18\x01 \x01(\tR\bcurrency\":\n" +
+	"\bcurrency\x18\x01 \x01(\tR\bcurrency\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x03R\x06amount\":\n" +
 	"\x1aListPaymentMethodsResponse\x12\x1c\n" +
 	"\tproviders\x18\x01 \x03(\tR\tproviders\"\xcd\x01\n" +
 	"\x19SubmitPaymentProofRequest\x12\x17\n" +

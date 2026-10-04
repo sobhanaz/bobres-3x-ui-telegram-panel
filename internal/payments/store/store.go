@@ -48,7 +48,8 @@ type Intent struct {
 	PayURL          *string
 	ProviderRef     *string // bank reference / transaction hash, for support
 	FailureReason   *string
-	CheckAttempts   int
+	CheckAttempts   int // reconciler checks only (drives its backoff)
+	CheckedAt       *time.Time
 }
 
 // Receipt mirrors payments.manual_receipts.
@@ -118,14 +119,14 @@ func (s *Store) WithTx(ctx context.Context, fn func(pgx.Tx) error) error {
 }
 
 const intentCols = `id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at, created_at,
-	gateway_amount, gateway_currency, external_id, pay_url, provider_ref, failure_reason, check_attempts`
+	gateway_amount, gateway_currency, external_id, pay_url, provider_ref, failure_reason, check_attempts, checked_at`
 
 func scanIntent(row pgx.Row) (*Intent, error) {
 	var in Intent
 	err := row.Scan(&in.ID, &in.OrderID, &in.UserID, &in.Provider, &in.Amount,
 		&in.Currency, &in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt,
 		&in.GatewayAmount, &in.GatewayCurrency, &in.ExternalID, &in.PayURL, &in.ProviderRef,
-		&in.FailureReason, &in.CheckAttempts)
+		&in.FailureReason, &in.CheckAttempts, &in.CheckedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

@@ -136,11 +136,31 @@ func (g *Gateway) Create(ctx context.Context, c gateway.Charge) (gateway.Started
 }
 
 // Check verifies the payment (100 or 101 = paid). When it is not paid, an
-// inquiry tells a payment still at the bank (pending) from a failed one.
+// inquiry tells a payment still at the bank (pending) from a failed one; if the
+// inquiry says it was paid meanwhile, verify runs once more.
 func (g *Gateway) Check(ctx context.Context, authority string, c gateway.Charge) (gateway.Result, error) {
 	if !authorityRe.MatchString(authority) {
 		return gateway.Result{State: gateway.Failed, Reason: "not_found"}, nil
 	}
+	r, unpaid, err := g.verify(ctx, authority, c)
+	if !unpaid {
+		return r, err
+	}
+	switch g.inquiry(ctx, authority) {
+	case "FAILED":
+		return gateway.Result{State: gateway.Failed, Reason: "gateway_failed"}, nil
+	case "REVERSED":
+		return gateway.Result{State: gateway.Failed, Reason: "reversed"}, nil
+	case "PAID", "VERIFIED": // paid between the two calls
+		if r, unpaid, err := g.verify(ctx, authority, c); !unpaid {
+			return r, err
+		}
+	}
+	return gateway.Result{State: gateway.Pending}, nil // IN_BANK or unknown
+}
+
+// verify calls Zarinpal's verify; unpaid reports code -51 (not paid yet).
+func (g *Gateway) verify(ctx context.Context, authority string, c gateway.Charge) (gateway.Result, bool, error) {
 	var data struct {
 		Code  flexInt `json:"code"`
 		RefID flexInt `json:"ref_id"`
@@ -152,28 +172,27 @@ func (g *Gateway) Check(ctx context.Context, authority string, c gateway.Charge)
 	switch {
 	case err == nil && (data.Code == 100 || data.Code == 101):
 		return gateway.Result{State: gateway.Paid, Amount: c.Amount, Currency: "IRR",
-			Reference: strconv.FormatInt(int64(data.RefID), 10)}, nil
+			Reference: strconv.FormatInt(int64(data.RefID), 10)}, false, nil
 	case err == nil:
-		return gateway.Result{}, fmt.Errorf("zarinpal: unexpected verify code %d", data.Code)
+		return gateway.Result{}, false, fmt.Errorf("zarinpal: unexpected verify code %d", data.Code)
 	case !errors.As(err, &ze):
-		return gateway.Result{}, err // network or decoding: retry later
+		return gateway.Result{}, false, err // network or decoding: retry later
 	}
 	switch ze.Code {
 	case -50: // the paid amount differs from ours
-		return gateway.Result{State: gateway.Failed, Reason: "amount_mismatch"}, nil
+		return gateway.Result{State: gateway.Failed, Reason: "amount_mismatch"}, false, nil
 	case -54, -55:
-		return gateway.Result{State: gateway.Failed, Reason: "not_found"}, nil
+		return gateway.Result{State: gateway.Failed, Reason: "not_found"}, false, nil
 	case -51: // not (yet) paid
-		return g.inquire(ctx, authority)
+		return gateway.Result{State: gateway.Pending}, true, nil
 	default: // configuration (-10, -11, -15, -19), rate limit (-12), Zarinpal-side (-52)
-		return gateway.Result{}, err
+		return gateway.Result{}, false, err
 	}
 }
 
-// inquire maps Zarinpal's view of an unpaid authority to a state. It is never
-// used to confirm a payment: PAID or VERIFIED here stays pending until verify
-// says so on the next check.
-func (g *Gateway) inquire(ctx context.Context, authority string) (gateway.Result, error) {
+// inquiry returns Zarinpal's status of an authority (IN_BANK, PAID, VERIFIED,
+// FAILED, REVERSED), or "" when it cannot tell. It never confirms a payment.
+func (g *Gateway) inquiry(ctx context.Context, authority string) string {
 	var data struct {
 		Code   flexInt `json:"code"`
 		Status string  `json:"status"`
@@ -181,16 +200,9 @@ func (g *Gateway) inquire(ctx context.Context, authority string) (gateway.Result
 	if err := g.call(ctx, "/pg/v4/payment/inquiry.json", map[string]any{
 		"merchant_id": g.merchant, "authority": authority,
 	}, &data); err != nil {
-		return gateway.Result{State: gateway.Pending}, nil //nolint:nilerr // unknown: keep it open, the reconciler asks again
+		return ""
 	}
-	switch strings.ToUpper(data.Status) {
-	case "FAILED":
-		return gateway.Result{State: gateway.Failed, Reason: "gateway_failed"}, nil
-	case "REVERSED":
-		return gateway.Result{State: gateway.Failed, Reason: "reversed"}, nil
-	default: // IN_BANK, PAID (verify next time), VERIFIED, or unknown
-		return gateway.Result{State: gateway.Pending}, nil
-	}
+	return strings.ToUpper(data.Status)
 }
 
 // Error is an error answer from Zarinpal.
@@ -280,8 +292,8 @@ func sanitize(m string) string {
 		}
 		return r
 	}, m)
-	if len(m) > 200 {
-		m = m[:200]
+	if r := []rune(m); len(r) > 200 {
+		m = string(r[:200])
 	}
 	return m
 }

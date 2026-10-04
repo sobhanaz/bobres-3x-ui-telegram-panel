@@ -212,6 +212,13 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 		h.onPreCheckout(ctx, u.PreCheckoutQuery)
 		return
 	}
+	if u.Message != nil && u.Message.SuccessfulPayment != nil {
+		// Sent once, and the Stars are already taken: recorded before anything
+		// that can fail or be cancelled (de-duplication, user lookup, rate
+		// limit, shutdown). Recording is idempotent per charge id.
+		h.onStarsPaid(ctx, u.Message)
+		return
+	}
 	if first, err := h.state.Once(ctx, "upd:"+strconv.FormatInt(u.UpdateID, 10), 24*time.Hour); err == nil && !first {
 		return // Telegram re-delivered an update we already handled
 	}
@@ -244,10 +251,6 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 		r.lang = i18n.Normalize(from.LanguageCode)
 	}
 
-	if r.cb == nil && r.msg.SuccessfulPayment != nil {
-		h.onStarsPaid(r) // the Stars are already taken: never rate-limited
-		return
-	}
 	if h.limiter != nil {
 		if ok, err := h.limiter.Allow(ctx, "bot:rl:"+strconv.FormatInt(from.ID, 10), 10*time.Second, 20); err == nil && !ok {
 			if r.cb != nil {

@@ -147,7 +147,7 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	if h.cryptoEnabled("IRT") {
 		methods = append(methods, tg.CB(r.t("btn.pay_crypto"), fmt.Sprintf("wpay:x:%d:%s", amount, n)))
 	}
-	gw := h.gatewayButtons(r, "IRT", "wpay", fmt.Sprint(amount), n)
+	gw := h.gatewayButtons(r, "IRT", amount, "wpay", fmt.Sprint(amount), n)
 	if len(methods) == 0 && len(gw) == 0 {
 		r.show(r.t("pay.not_configured"), homeKeyboard(r))
 		return

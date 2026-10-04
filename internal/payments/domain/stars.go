@@ -20,8 +20,9 @@ const (
 	ReasonPayerMismatch = "payer_mismatch"
 )
 
-// ErrAlreadyPaid: a second, different payment arrived for a settled intent
-// (the admin should refund it).
+// ErrAlreadyPaid: a second, different payment arrived for a settled intent, or
+// a payment arrived for an intent that can no longer be paid (the admin should
+// refund it).
 var ErrAlreadyPaid = errors.New("payments: this payment was already settled")
 
 // StartStars creates a Stars intent (idempotent per key).
@@ -90,11 +91,17 @@ func (s *Service) ConfirmStars(ctx context.Context, userID, intentID string, tot
 		return s.failStars(ctx, in, ReasonAmountMismatch, detail)
 	}
 	var out *store.Intent
+	lost := false // this charge could not settle the intent
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		got, err := s.st.SettleStarsPaid(ctx, tx, in.ID, chargeID)
 		if errors.Is(err, store.ErrInvalidTransition) {
-			out, err = s.st.GetIntent(ctx, tx, in.ID)
-			return err
+			// Settled concurrently or no longer payable: fine only if it was
+			// settled by this very charge.
+			if out, err = s.st.GetIntent(ctx, tx, in.ID); err != nil {
+				return err
+			}
+			lost = out.Status != "succeeded" || out.ExternalID == nil || *out.ExternalID != chargeID
+			return nil
 		}
 		if err != nil {
 			return err
@@ -109,8 +116,16 @@ func (s *Service) ConfirmStars(ctx context.Context, userID, intentID string, tot
 		out = got
 		return s.publishOutcome(ctx, tx, got, events.PaymentsPaymentSucceeded, "")
 	})
-	if err != nil {
+	if errors.Is(err, store.ErrDuplicateCharge) {
+		lost = true
+	} else if err != nil {
 		return nil, err
+	}
+	if lost {
+		s.log.Warn("Stars payment could not settle its intent", "intent", in.ID)
+		_ = s.st.RecordGatewayEvent(ctx, nil, in.ID, Stars, "confirm", "rejected",
+			map[string]any{"charge_id": chargeID, "stars": total, "reason": "not_payable"})
+		return nil, ErrAlreadyPaid
 	}
 	return out, nil
 }

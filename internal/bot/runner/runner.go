@@ -24,14 +24,20 @@ type Dispatcher struct {
 	queues []chan tg.Update
 	wg     sync.WaitGroup
 	once   sync.Once
+	ctx    context.Context
+	handle HandleFunc
+	urgent chan struct{} // bounds pre-checkout answers running outside the queues
 }
+
+// maxUrgent bounds concurrent pre-checkout answers handled outside the queues.
+const maxUrgent = 32
 
 // NewDispatcher starts workers that call handle with ctx.
 func NewDispatcher(ctx context.Context, workers int, handle HandleFunc) *Dispatcher {
 	if workers <= 0 {
 		workers = 8
 	}
-	d := &Dispatcher{queues: make([]chan tg.Update, workers)}
+	d := &Dispatcher{queues: make([]chan tg.Update, workers), ctx: ctx, handle: handle, urgent: make(chan struct{}, maxUrgent)}
 	for i := range d.queues {
 		q := make(chan tg.Update, 64)
 		d.queues[i] = q
@@ -48,6 +54,22 @@ func NewDispatcher(ctx context.Context, workers int, handle HandleFunc) *Dispatc
 
 // Dispatch queues an update (blocking when that worker is full: back-pressure).
 func (d *Dispatcher) Dispatch(u tg.Update) {
+	if u.PreCheckoutQuery != nil {
+		// Telegram cancels a payment whose pre-checkout is not answered within
+		// 10 s, so it must not wait behind a slow update of the same worker.
+		// It has no side effects, so order does not matter.
+		select {
+		case d.urgent <- struct{}{}:
+			d.wg.Add(1)
+			go func() {
+				defer d.wg.Done()
+				defer func() { <-d.urgent }()
+				d.handle(d.ctx, u)
+			}()
+			return
+		default: // a burst: fall back to the queue rather than drop it
+		}
+	}
 	var id int64
 	if s := u.Sender(); s != nil {
 		id = s.ID

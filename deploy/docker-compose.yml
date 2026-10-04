@@ -51,6 +51,7 @@ services:
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       BOBRES_DOMAIN: ${BOBRES_DOMAIN:?set BOBRES_DOMAIN}
+      BOBRES_ZARINPAL_HOST: ${BOBRES_ZARINPAL_HOST:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

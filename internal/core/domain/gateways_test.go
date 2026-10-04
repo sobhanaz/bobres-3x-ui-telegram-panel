@@ -56,14 +56,18 @@ func TestPaymentMethodsAndGatewayIntent(t *testing.T) {
 	pay := &fakePayments{gateways: []string{Stars, Zarinpal}}
 
 	// No rates yet: only Zarinpal can price a Toman plan.
-	if ms, err := svc.PaymentMethods(ctx, pay, "IRT"); err != nil || len(ms) != 1 || ms[0] != Zarinpal {
+	if ms, err := svc.PaymentMethods(ctx, pay, "IRT", 0); err != nil || len(ms) != 1 || ms[0] != Zarinpal {
 		t.Fatalf("methods without rates: %v %v", ms, err)
 	}
 	setSetting(t, s, "payments.stars_rate", "1500")
-	if ms, _ := svc.PaymentMethods(ctx, pay, "IRT"); len(ms) != 2 {
+	if ms, _ := svc.PaymentMethods(ctx, pay, "IRT", 150_000); len(ms) != 2 {
 		t.Fatalf("methods with a Stars rate: %v", ms)
 	}
-	if ms, _ := svc.PaymentMethods(ctx, pay, "USDT"); len(ms) != 0 {
+	// Zarinpal's limits hide it for prices it cannot take.
+	if ms, _ := svc.PaymentMethods(ctx, pay, "IRT", 500); len(ms) != 1 || ms[0] != Stars {
+		t.Fatalf("methods for 500 Toman: %v", ms)
+	}
+	if ms, _ := svc.PaymentMethods(ctx, pay, "USDT", 0); len(ms) != 0 {
 		t.Fatalf("USDT plans have no automated method yet: %v", ms)
 	}
 

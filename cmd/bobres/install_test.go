@@ -96,7 +96,7 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	}
 	env, _, _ := readEnv(filepath.Join(dir, ".env"))
 	optional := map[string]bool{"BOBRES_XUI_SUB_URL": true, "BOBRES_ZARINPAL_MERCHANT_ID": true,
-		"BOBRES_ZARINPAL_SANDBOX": true, "BOBRES_ZARINPAL_PROXY": true, "BOBRES_ZARINPAL_PUBLIC_URL": true}
+		"BOBRES_ZARINPAL_PROXY": true, "BOBRES_ZARINPAL_PUBLIC_URL": true, "BOBRES_ZARINPAL_HOST": true}
 	for _, k := range envOrder {
 		if !optional[k] && env[k] == "" {
 			t.Errorf("%s missing", k)

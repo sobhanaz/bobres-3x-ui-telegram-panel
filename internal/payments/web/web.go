@@ -30,9 +30,6 @@ var (
 	authorityRe = regexp.MustCompile(`^[AS][0-9a-zA-Z]{35}$`)
 )
 
-// checkGap: a refreshed or re-opened callback asks Zarinpal at most this often.
-const checkGap = 3 * time.Second
-
 // Handler serves the pages.
 type Handler struct {
 	svc *domain.Service
@@ -40,8 +37,12 @@ type Handler struct {
 	log *slog.Logger
 
 	mu   sync.Mutex
-	last map[string]time.Time // intent id -> last gateway check from a page
+	last map[string]time.Time // intent id -> last return-page check
 }
+
+// returnGap: a refreshed or re-opened return page asks the gateway at most
+// this often per intent.
+const returnGap = 3 * time.Second
 
 // New builds the handler.
 func New(svc *domain.Service, st *store.Store, log *slog.Logger) *Handler {
@@ -103,9 +104,13 @@ func (h *Handler) zarinpalReturn(w http.ResponseWriter, r *http.Request) {
 		h.render(w, http.StatusServiceUnavailable, page{Kind: "error"})
 		return
 	}
-	if (in.Status == "pending" || in.Status == "confirming") && h.mayCheck(in.ID) {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		checked, err := h.svc.CheckIntent(ctx, "", in.ID, "callback")
+	statusOK := r.URL.Query().Get("Status") == "OK"
+	if in.Status != "succeeded" && h.mayCheck(in.ID) {
+		// Not tied to the browser: a closed tab must not cut a verify short, and
+		// 20 s stays under the server's write timeout. The service throttles
+		// repeated checks of one intent.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 20*time.Second)
+		checked, err := h.svc.CheckAfterReturn(ctx, in.ID, statusOK)
 		cancel()
 		if err != nil {
 			h.log.Warn("zarinpal return: check", "intent", in.ID, "err", err)
@@ -114,7 +119,7 @@ func (h *Handler) zarinpalReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := pageFor(in)
-	if p.Kind == "pending" && r.URL.Query().Get("Status") == "NOK" {
+	if p.Kind == "pending" && !statusOK {
 		p.Kind = "cancelled"
 	}
 	h.render(w, http.StatusOK, p)
@@ -124,7 +129,7 @@ func (h *Handler) mayCheck(id string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	now := time.Now()
-	if t, ok := h.last[id]; ok && now.Sub(t) < checkGap {
+	if t, ok := h.last[id]; ok && now.Sub(t) < returnGap {
 		return false
 	}
 	if len(h.last) > 10_000 { // bounded: drop old entries
@@ -201,9 +206,9 @@ h1{font-size:20px;margin:0 0 12px}.en{direction:ltr;text-align:left;color:#5b647
 <h1>پرداخت آنلاین</h1>
 <div class="amount">{{.AmountFA}}</div>
 <p class="note">پیش از پرداخت، فیلترشکن (VPN) را خاموش کنید؛ درگاه بانکی فقط از اینترنت ایران باز می‌شود.</p>
-<a class="btn" href="{{.PayURL}}">پرداخت با زرین‌پال</a>
+<a class="btn" href="{{.PayURL}}" referrerpolicy="origin">پرداخت با زرین‌پال</a>
 <p>پس از پرداخت به همین صفحه برمی‌گردید و سرویس شما در ربات تحویل می‌شود.</p>
-<div class="en"><b>Online payment: {{.AmountEN}}</b><br>Turn your VPN off before paying: the bank page only opens from an Iranian connection. <a href="{{.PayURL}}">Pay with Zarinpal</a>. You will come back here, and the bot delivers your service.</div>
+<div class="en"><b>Online payment: {{.AmountEN}}</b><br>Turn your VPN off before paying: the bank page only opens from an Iranian connection. <a href="{{.PayURL}}" referrerpolicy="origin">Pay with Zarinpal</a>. You will come back here, and the bot delivers your service.</div>
 {{else if eq .Kind "paid"}}
 <h1 class="ok">پرداخت انجام شد ✓</h1>
 <div class="amount">{{.AmountFA}}</div>

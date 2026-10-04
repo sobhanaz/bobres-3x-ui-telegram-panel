@@ -132,7 +132,7 @@ func (h *Handler) showPlan(r *req, planID string) {
 	if h.cryptoEnabled(cur) {
 		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+planID+":"+n))
 	}
-	if gw := h.gatewayButtons(r, cur, "pay", planID, n); len(gw) > 0 {
+	if gw := h.gatewayButtons(r, cur, price, "pay", planID, n); len(gw) > 0 {
 		kb.Row(gw...)
 	}
 	kb.Row(manual...).Row(tg.CB(r.t("btn.back"), "buy"), tg.CB(r.t("btn.home"), "home"))
@@ -197,7 +197,7 @@ func (h *Handler) payWithWallet(r *req, p *corev1.Plan, order *corev1.Order) {
 	if h.cryptoEnabled(cur) {
 		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+p.GetId()+":"+n))
 	}
-	if gw := h.gatewayButtons(r, cur, "pay", p.GetId(), n); len(gw) > 0 {
+	if gw := h.gatewayButtons(r, cur, p.GetPrice().GetAmount(), "pay", p.GetId(), n); len(gw) > 0 {
 		kb.Row(gw...)
 	}
 	kb.Row(manual...).Row(tg.CB(r.t("btn.back"), "plan:"+p.GetId()), tg.CB(r.t("btn.home"), "home"))

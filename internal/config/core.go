@@ -83,6 +83,11 @@ func LoadPayments() (Payments, error) {
 	}
 	p.ZarinpalMerchantID = strings.TrimSpace(getenv("BOBRES_ZARINPAL_MERCHANT_ID", ""))
 	p.ZarinpalSandbox = getenv("BOBRES_ZARINPAL_SANDBOX", "") == "true"
+	if p.ZarinpalSandbox && c.Env == "prod" {
+		// In the sandbox any merchant id works and the pay page needs no card:
+		// customers would get service for free.
+		errs = append(errs, errors.New("BOBRES_ZARINPAL_SANDBOX is refused when BOBRES_ENV=prod"))
+	}
 	p.ZarinpalProxy = getenv("BOBRES_ZARINPAL_PROXY", "")
 	p.ZarinpalPublicURL = strings.TrimRight(getenv("BOBRES_ZARINPAL_PUBLIC_URL", getenv("BOBRES_PUBLIC_URL", "")), "/")
 	if p.ZarinpalMerchantID != "" {

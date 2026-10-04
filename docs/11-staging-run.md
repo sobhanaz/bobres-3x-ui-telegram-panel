@@ -89,11 +89,11 @@ panel is updated on the next start, and the data is kept.
 
 - **Telegram Stars:** `/set payments.stars_rate 1500` (Toman per Star). Buy the test plan
   with "Pay with Telegram Stars" from a second account: Telegram shows the invoice, and the
-  service is delivered after paying. Telegram's test environment lets you pay without real
-  Stars (a test bot from the test @BotFather).
+  service is delivered after paying (a few Stars at a low test price are enough; refund
+  them later with Telegram's refund from the bot's Stars balance if needed).
 - **Zarinpal:** read the owner decisions in the Phase 2 design document first. Then
-  re-run install with `--zarinpal-merchant-id <id>` (and `--zarinpal-sandbox` for a first
-  try, any UUID works there). Register this server's IP, or the proxy's
+  re-run install with `--zarinpal-merchant-id <id>` (the sandbox is for tests only and is
+  refused in production). Register this server's IP, or the proxy's
   (`--zarinpal-proxy`), in the Zarinpal panel; the domain in `--zarinpal-public-url` (or
   your main domain) must be the one registered with Zarinpal and reachable from Iran
   without a VPN. Buy with "Pay online", turn the VPN off, pay, and check that you come back

@@ -126,3 +126,28 @@ func TestWebhookRequiresTheSecret(t *testing.T) {
 		t.Fatalf("dispatched %v", got)
 	}
 }
+
+// A pre-checkout query is answered even while the user's worker is stuck on a
+// slow update (Telegram cancels the payment after 10 s).
+func TestPreCheckoutSkipsTheQueue(t *testing.T) {
+	block := make(chan struct{})
+	answered := make(chan struct{})
+	d := NewDispatcher(context.Background(), 1, func(_ context.Context, u tg.Update) {
+		if u.PreCheckoutQuery != nil {
+			close(answered)
+			return
+		}
+		<-block // a slow update holding the only worker
+	})
+	d.Dispatch(tg.Update{UpdateID: 1, Message: &tg.Message{From: &tg.User{ID: 7}, Chat: tg.Chat{ID: 7}}})
+	d.Dispatch(tg.Update{UpdateID: 2, PreCheckoutQuery: &tg.PreCheckoutQuery{ID: "q", From: tg.User{ID: 7}}})
+	select {
+	case <-answered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the pre-checkout waited behind a slow update")
+	}
+	close(block)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	d.Stop(ctx)
+}

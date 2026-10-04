@@ -23,6 +23,14 @@ const (
 // ErrUnavailable: the gateway could not be reached or refused to create the payment.
 var ErrUnavailable = errors.New("payments: payment gateway unavailable")
 
+// gatewayPayWindow: how long a gateway payment link may be used before the
+// intent expires (a payment completed later still settles, see ApplyGatewayResult).
+const gatewayPayWindow = time.Hour
+
+// checkGap: user-triggered checks (button, return page) ask the gateway at most
+// this often per intent, across every path and replica (stored in checked_at).
+const checkGap = 3 * time.Second
+
 // gatewayCurrency is the only currency each automated provider is charged in.
 var gatewayCurrency = map[string]string{"zarinpal": "IRR", "stars": "XTR"}
 
@@ -84,6 +92,10 @@ func (s *Service) StartGateway(ctx context.Context, in *store.Intent, descriptio
 	if in.GatewayAmount == nil || *in.GatewayAmount <= 0 || in.GatewayCurrency == nil || *in.GatewayCurrency != gatewayCurrency[in.Provider] {
 		return nil, invalid("%s needs a positive amount in %s", in.Provider, gatewayCurrency[in.Provider])
 	}
+	if in.ExpiresAt == nil {
+		exp := time.Now().Add(gatewayPayWindow)
+		in.ExpiresAt = &exp
+	}
 	created, err := s.createIntent(ctx, in)
 	if err != nil {
 		return nil, err
@@ -120,12 +132,24 @@ func (s *Service) StartGateway(ctx context.Context, in *store.Intent, descriptio
 	return out, nil
 }
 
-// ApplyGatewayResult settles an open intent from a gateway's report. It is
+// ApplyGatewayResult settles an intent from a gateway's report. It is
 // idempotent: a settled intent is returned as is, and the compare-and-set on the
 // status means concurrent reports (callback and reconciler) settle it once.
 func (s *Service) ApplyGatewayResult(ctx context.Context, in *store.Intent, r gateway.Result, kind string) (*store.Intent, error) {
-	if in.Status != "pending" && in.Status != "confirming" {
+	return s.applyResult(ctx, in, r, kind, false)
+}
+
+func (s *Service) applyResult(ctx context.Context, in *store.Intent, r gateway.Result, kind string, countAttempt bool) (*store.Intent, error) {
+	switch in.Status {
+	case "succeeded":
 		return in, nil
+	case "failed", "expired":
+		// Only a confirmed payment changes a closed intent (a lost return, our
+		// expiry passed, a concurrent check failed it first): the gateway took
+		// the money. An amount mismatch stays failed for the admin.
+		if r.State != gateway.Paid || (in.FailureReason != nil && *in.FailureReason == ReasonAmountMismatch) {
+			return in, nil
+		}
 	}
 	switch r.State {
 	case gateway.Paid:
@@ -147,7 +171,7 @@ func (s *Service) ApplyGatewayResult(ctx context.Context, in *store.Intent, r ga
 		if in.ExpiresAt != nil && time.Now().After(*in.ExpiresAt) {
 			return s.failGateway(ctx, in, "expired", ReasonExpired, kind, nil)
 		}
-		if err := s.st.TouchCheck(ctx, in.ID); err != nil {
+		if err := s.st.TouchCheck(ctx, in.ID, countAttempt); err != nil {
 			return nil, err
 		}
 		return in, nil
@@ -227,10 +251,29 @@ func (s *Service) publishOutcome(ctx context.Context, tx pgx.Tx, in *store.Inten
 	return err
 }
 
+type checkOpts struct {
+	reconciler bool // the reconciler: no throttle, counts towards its backoff
+	closedToo  bool // also ask about failed/expired intents (the gateway says it went through)
+	noThrottle bool // the gateway's return: a one-off signal, throttled by the caller
+}
+
 // CheckIntent asks the gateway about one open intent now (the customer tapped
-// "check payment", or the gateway sent a notification) and applies the answer.
-// The user id, when given, must own the intent.
+// "check payment") and applies the answer. The user id, when given, must own
+// the intent.
 func (s *Service) CheckIntent(ctx context.Context, userID, intentID, kind string) (*store.Intent, error) {
+	return s.check(ctx, userID, intentID, kind, checkOpts{})
+}
+
+// CheckAfterReturn is the gateway's return URL: statusOK means the gateway says
+// the payment went through, so even a failed or expired intent is verified
+// again (a late payment still settles). The caller throttles refreshes; the
+// per-intent check gap does not apply, so a return right after a "check
+// payment" press is still verified.
+func (s *Service) CheckAfterReturn(ctx context.Context, intentID string, statusOK bool) (*store.Intent, error) {
+	return s.check(ctx, "", intentID, "callback", checkOpts{closedToo: statusOK, noThrottle: true})
+}
+
+func (s *Service) check(ctx context.Context, userID, intentID, kind string, o checkOpts) (*store.Intent, error) {
 	in, err := s.st.GetIntent(ctx, nil, intentID)
 	if err != nil {
 		return nil, err
@@ -238,20 +281,26 @@ func (s *Service) CheckIntent(ctx context.Context, userID, intentID, kind string
 	if userID != "" && in.UserID != userID {
 		return nil, ErrForbidden
 	}
-	if in.Status != "pending" && in.Status != "confirming" {
+	switch {
+	case in.Status == "succeeded":
+		return in, nil
+	case in.Status != "pending" && in.Status != "confirming" && !o.closedToo:
 		return in, nil
 	}
 	g := s.gws[in.Provider]
 	if g == nil || in.ExternalID == nil {
 		return in, nil
 	}
+	if !o.reconciler && !o.noThrottle && in.CheckedAt != nil && time.Since(*in.CheckedAt) < checkGap {
+		return in, nil // asked a moment ago: answer from what we know
+	}
 	r, err := g.Check(ctx, *in.ExternalID, chargeOf(in))
 	if err != nil {
 		s.log.Warn("gateway check failed", "provider", in.Provider, "intent", in.ID, "err", err)
-		_ = s.st.TouchCheck(ctx, in.ID)
+		_ = s.st.TouchCheck(ctx, in.ID, o.reconciler)
 		return in, nil
 	}
-	return s.ApplyGatewayResult(ctx, in, r, kind)
+	return s.applyResult(ctx, in, r, kind, o.reconciler)
 }
 
 // ReconcileOnce checks the open gateway intents that are due: a fresh intent
@@ -266,7 +315,7 @@ func (s *Service) ReconcileOnce(ctx context.Context, interval time.Duration) (in
 		if ctx.Err() != nil {
 			break
 		}
-		if _, err := s.CheckIntent(ctx, "", in.ID, "check"); err != nil {
+		if _, err := s.check(ctx, "", in.ID, "check", checkOpts{reconciler: true}); err != nil {
 			s.log.Warn("reconcile intent", "intent", in.ID, "err", err)
 		}
 	}

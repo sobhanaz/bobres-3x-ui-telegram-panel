@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,30 +23,31 @@ type methodsEntry struct {
 	list []string
 }
 
-// gatewayMethods lists the automated methods usable for a currency (enabled in
-// payments and priced in core), cached for a minute.
-func (h *Handler) gatewayMethods(ctx context.Context, currency string) []string {
+// gatewayMethods lists the automated methods usable for a price (enabled in
+// payments, priced in core and within the method's limits), cached for a minute.
+func (h *Handler) gatewayMethods(ctx context.Context, currency string, amount int64) []string {
+	key := currency + ":" + strconv.FormatInt(amount, 10)
 	h.gwMu.Lock()
-	e, ok := h.gwMethods[currency]
+	e, ok := h.gwMethods[key]
 	h.gwMu.Unlock()
 	if ok && time.Since(e.at) < methodsTTL {
 		return e.list
 	}
-	resp, err := h.core.ListPaymentMethods(ctx, &corev1.ListPaymentMethodsRequest{Currency: currency})
+	resp, err := h.core.ListPaymentMethods(ctx, &corev1.ListPaymentMethodsRequest{Currency: currency, Amount: amount})
 	if err != nil {
 		h.log.Debug("list payment methods", "err", err)
 		return e.list // keep the last known list on a hiccup
 	}
 	h.gwMu.Lock()
-	h.gwMethods[currency] = methodsEntry{at: time.Now(), list: resp.GetProviders()}
+	h.gwMethods[key] = methodsEntry{at: time.Now(), list: resp.GetProviders()}
 	h.gwMu.Unlock()
 	return resp.GetProviders()
 }
 
 // gatewayButtons are the automated payment buttons, "<verb>:<z|s>:<target>:<nonce>".
-func (h *Handler) gatewayButtons(r *req, currency, verb, target, n string) []tg.Button {
+func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, target, n string) []tg.Button {
 	var out []tg.Button
-	for _, m := range h.gatewayMethods(r.ctx, currency) {
+	for _, m := range h.gatewayMethods(r.ctx, currency, amount) {
 		switch m {
 		case "zarinpal":
 			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z:"+target+":"+n))
@@ -80,8 +82,18 @@ func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key
 		r.fail(err)
 		return
 	}
-	if intent.GetStatus() != "pending" {
-		r.show(r.t("pay.already_submitted"), homeKeyboard(r))
+	switch intent.GetStatus() {
+	case "pending":
+	case "succeeded":
+		r.show(r.t("pay.check_paid"), homeKeyboard(r))
+		return
+	default: // failed or expired: this screen's payment is over, start again
+		reason := intent.GetFailureReason()
+		if intent.GetStatus() == "expired" {
+			reason = "expired"
+		}
+		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey(reason))),
+			(&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home")))
 		return
 	}
 	amount := r.money(intent.GetAmount().GetAmount(), intent.GetAmount().GetCurrency())
@@ -152,10 +164,12 @@ func reasonKey(reason string) string {
 // onPreCheckout answers Telegram's pre-checkout for a Stars invoice. Telegram
 // cancels the payment unless it is answered within 10 seconds.
 func (h *Handler) onPreCheckout(ctx context.Context, q *tg.PreCheckoutQuery) {
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	checkCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	ok, msg := h.precheck(checkCtx, q)
+	cancel()
+	answerCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
-	ok, msg := h.precheck(ctx, q)
-	if err := h.tg.AnswerPreCheckoutQuery(ctx, q.ID, ok, msg); err != nil {
+	if err := h.tg.AnswerPreCheckoutQuery(answerCtx, q.ID, ok, msg); err != nil {
 		h.log.Warn("answer pre-checkout failed", "user", q.From.ID, "err", err)
 	}
 }
@@ -178,36 +192,78 @@ func (h *Handler) precheck(ctx context.Context, q *tg.PreCheckoutQuery) (bool, s
 	return true, ""
 }
 
-// onStarsPaid records a completed Stars payment. Telegram sends it once and has
-// already taken the Stars, so a failure to record it is retried and then
-// logged with everything needed to recover it by hand.
-func (h *Handler) onStarsPaid(r *req) {
-	sp := r.msg.SuccessfulPayment
-	if r.user == nil {
-		h.log.Error("Stars payment from an unknown user", "telegram_id", r.from.ID, "charge_id", sp.TelegramPaymentChargeID,
-			"payload", sp.InvoicePayload, "stars", sp.TotalAmount)
-		r.send(r.t("pay.stars_unrecorded", "code", esc(sp.TelegramPaymentChargeID)), nil)
+// onStarsPaid records a completed Stars payment. Telegram sends it once and
+// has already taken the Stars, so it is logged before any call, recorded with
+// retries on a context that survives shutdown, and anything but a confirmed
+// payment alerts the admin with what is needed to fix it by hand.
+func (h *Handler) onStarsPaid(parent context.Context, m *tg.Message) {
+	sp, from := m.SuccessfulPayment, m.From
+	if from == nil {
+		h.log.Error("Stars payment without a sender", "charge_id", sp.TelegramPaymentChargeID, "payload", sp.InvoicePayload)
 		return
 	}
-	req := &corev1.StarsPaidRequest{UserId: r.user.GetId(), IntentId: sp.InvoicePayload, TotalAmount: sp.TotalAmount,
-		Currency: sp.Currency, TelegramPaymentChargeId: sp.TelegramPaymentChargeID}
-	var err error
-	for attempt, wait := 0, time.Second; attempt < 5; attempt, wait = attempt+1, wait*2 {
-		if _, err = h.core.StarsPaid(r.ctx, req); err == nil || !retryable(err) {
+	h.log.Info("Stars payment received", "telegram_id", from.ID, "charge_id", sp.TelegramPaymentChargeID,
+		"payload", sp.InvoicePayload, "stars", sp.TotalAmount)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 2*time.Minute)
+	defer cancel()
+	var (
+		user *corev1.User
+		ref  *corev1.PaymentIntentRef
+		err  error
+	)
+	for attempt, wait := 0, time.Second; attempt < 6; attempt, wait = attempt+1, wait*2 {
+		if user == nil {
+			user, err = h.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: from.ID}})
+		}
+		if err == nil {
+			ref, err = h.core.StarsPaid(ctx, &corev1.StarsPaidRequest{UserId: user.GetId(), IntentId: sp.InvoicePayload,
+				TotalAmount: sp.TotalAmount, Currency: sp.Currency, TelegramPaymentChargeId: sp.TelegramPaymentChargeID})
+		}
+		if err == nil || !retryable(err) {
 			break
 		}
 		select {
-		case <-r.ctx.Done():
+		case <-ctx.Done():
 		case <-time.After(wait):
 		}
 	}
-	if err != nil {
-		h.log.Error("Stars payment not recorded", "telegram_id", r.from.ID, "charge_id", sp.TelegramPaymentChargeID,
-			"payload", sp.InvoicePayload, "stars", sp.TotalAmount, "err", err)
-		r.send(r.t("pay.stars_unrecorded", "code", esc(sp.TelegramPaymentChargeID)), homeKeyboard(r))
+	lang := i18n.Normalize(from.LanguageCode)
+	if l := user.GetLanguage(); l != "" {
+		lang = l
+	}
+	if err == nil && ref.GetStatus() == "succeeded" {
+		h.sendTo(ctx, m.Chat.ID, h.cat.T(lang, "pay.stars_received"))
 		return
 	}
-	r.send(r.t("pay.stars_received"), nil)
+	h.log.Error("Stars payment not recorded as paid", "telegram_id", from.ID, "charge_id", sp.TelegramPaymentChargeID,
+		"payload", sp.InvoicePayload, "stars", sp.TotalAmount, "status", ref.GetStatus(), "reason", ref.GetFailureReason(), "err", err)
+	h.sendTo(ctx, m.Chat.ID, h.cat.T(lang, "pay.stars_unrecorded", "code", esc(sp.TelegramPaymentChargeID)))
+	if h.cfg.AdminTelegramID != 0 {
+		who := strconv.FormatInt(from.ID, 10)
+		if from.Username != "" {
+			who = "@" + from.Username + " (" + who + ")"
+		}
+		al := h.userLang(ctx, h.cfg.AdminTelegramID)
+		h.sendTo(ctx, h.cfg.AdminTelegramID, h.cat.T(al, "admin.stars_unrecorded",
+			"user", esc(who), "stars", i18n.Number(al, sp.TotalAmount),
+			"charge", esc(sp.TelegramPaymentChargeID), "payload", esc(sp.InvoicePayload)))
+	}
+}
+
+// userLang is a user's language, or the default when unknown.
+func (h *Handler) userLang(ctx context.Context, telegramID int64) string {
+	u, err := h.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: telegramID}})
+	if err != nil || u.GetLanguage() == "" {
+		return i18n.Languages[0]
+	}
+	return u.GetLanguage()
+}
+
+// sendTo sends a message outside a request (no menu to edit).
+func (h *Handler) sendTo(ctx context.Context, chatID int64, text string) {
+	if _, err := h.tg.SendMessage(ctx, chatID, text, nil); err != nil {
+		h.log.Warn("send failed", "chat", chatID, "err", err)
+	}
 }
 
 func retryable(err error) bool {
