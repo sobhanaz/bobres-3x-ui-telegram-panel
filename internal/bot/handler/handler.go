@@ -90,6 +90,11 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	h.settings = m
 	h.mu.Unlock()
 	h.cat.SetOverrides(m)
+	// Prices and rates may have changed (e.g. payments.stars_rate): the usable
+	// payment methods are asked again on the next screen.
+	h.gwMu.Lock()
+	clear(h.gwMethods)
+	h.gwMu.Unlock()
 	return nil
 }
 

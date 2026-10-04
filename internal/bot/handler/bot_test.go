@@ -619,11 +619,21 @@ func TestParsePlanAndMinor(t *testing.T) {
 func TestStarsPurchase(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
-	owner.text("/set payments.stars_rate 1500")
-	owner.sees("Saved")
 	u := w.person(501, "dana")
 	u.text("/start")
 	u.press("lang:en")
+	// Seen before the owner priced Stars: no Stars button yet...
+	u.press("buy")
+	u.press("plan:")
+	for _, m := range w.tg.all(501) {
+		if strings.Contains(strings.Join(m.labels(), "|"), "Telegram Stars") {
+			t.Fatal("Stars offered before it was priced")
+		}
+	}
+	owner.text("/set payments.stars_rate 1500")
+	owner.sees("Saved")
+	// ...and right after it is priced, the button appears (no stale cache).
+	u.press("home")
 	u.press("buy")
 	u.press("plan:")
 	u.sees("Pay with Telegram Stars")
