@@ -135,7 +135,7 @@ func TestDomainBindingFailsClosed(t *testing.T) {
 	}
 	for _, c := range cases {
 		_, err := Verify(ring(pub), raw, c.opts)
-		if !errors.Is(err, c.want) && !(c.want == nil && err == nil) {
+		if !errors.Is(err, c.want) {
 			t.Errorf("%s: got %v want %v", c.name, err, c.want)
 		}
 	}

@@ -97,7 +97,7 @@ func TestSecretFileFailsClosed(t *testing.T) {
 }
 
 func TestSecretsNeverPrinted(t *testing.T) {
-	c := Common{Service: "core", Env: "prod", DatabaseURL: "postgres://u:hunter2@db/x"}
+	c := Common{Service: "core", Env: "prod", DatabaseURL: "postgres://u:hunter2@db/x"} //nolint:gosec // test fixture
 	co := Core{Common: c, ServiceToken: "supersecrettoken", BotToken: "botsecrettoken"}
 	for _, s := range []string{fmt.Sprint(c), fmt.Sprintf("%v", c), fmt.Sprintf("%+v", c), c.LogValue().String(),
 		fmt.Sprint(co), fmt.Sprintf("%+v", co)} {

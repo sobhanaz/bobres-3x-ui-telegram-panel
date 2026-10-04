@@ -14,6 +14,11 @@ Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind
 PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.
 
 ## Development
+- Go 1.26 or newer (`go.mod` says `go 1.26.0`; CI and the Docker image track the latest 1.26 patch).
+  `make` forces `GOTOOLCHAIN=local`, so it builds with the `go` on your PATH: use a 1.26.x for
+  byte-for-byte parity with CI and the images. Outside `make`, an older Go auto-downloads
+  go1.26.0 (the oldest patch); install a current 1.26.x instead.
+  `make lint` needs golangci-lint v2: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`.
 - `make build`, `make test`, `make lint`, `make proto`.
 - Database tests need PostgreSQL 13+ (`BOBRES_TEST_DATABASE_URL`, a URL for any database on
   a server where the role may `CREATE DATABASE`; default: the local socket in `/tmp`) and

@@ -40,7 +40,7 @@ func TestServerTokenEncryptedAtRest(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 
-	sv, err := s.AddServer(ctx, &Server{Name: "main", BaseURL: "https://panel.test", Token: "sekrit-token", Enabled: true,
+	sv, err := s.AddServer(ctx, &Server{Name: "main", BaseURL: "https://panel.test", Token: "sekrit-token", Enabled: true, //nolint:gosec // test fixture
 		SubBaseURL: "https://sub.panel.test/sub/", AllowPrivate: true})
 	if err != nil {
 		t.Fatal(err)

@@ -2,6 +2,8 @@ SHELL := /bin/bash
 export GOTOOLCHAIN := local
 export PATH := $(PATH):$(HOME)/go/bin
 SERVICES := bot core payments provisioner
+# Same version as the CI "Lint" job; golangci-lint v1 cannot lint a Go 1.26 module.
+GOLANGCI_LINT_VERSION := v2.14.0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=$(VERSION)
 
@@ -23,6 +25,7 @@ test:
 	go test -race -count=1 ./...
 
 lint:
+	@golangci-lint version 2>/dev/null | grep -q 'has version v\{0,1\}2\.' || { echo "golangci-lint v2 is required: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)"; exit 1; }
 	golangci-lint run ./...
 
 vuln:

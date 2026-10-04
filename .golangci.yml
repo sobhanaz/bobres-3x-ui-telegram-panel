@@ -1,16 +1,24 @@
+version: "2"
 run:
   timeout: 5m
 linters:
+  # "standard" = errcheck, govet, ineffassign, staticcheck, unused. In v2 staticcheck
+  # also carries the former gosimple and stylecheck checks.
+  default: standard
   enable:
-    - errcheck
-    - govet
-    - staticcheck
-    - unused
-    - ineffassign
-    - gosec
     - bodyclose
     - errorlint
+    - gosec
     - misspell
-issues:
-  exclude-dirs:
-    - bin
+  exclusions:
+    # Three of the four presets `golangci-lint migrate` emits for the v1 defaults this
+    # code was linted with: unchecked fmt.Fprint*/Close/Flush errors, gosec
+    # G104/G204/G304 and file-permission findings, govet unsafe.Pointer, SA4011.
+    # The fourth, `comments` (doc-comment style rules), is left out on purpose:
+    # the code passes without it.
+    presets:
+      - std-error-handling
+      - common-false-positives
+      - legacy
+    paths:
+      - bin
