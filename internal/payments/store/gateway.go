@@ -138,3 +138,42 @@ func (s *Store) RecordGatewayEvent(ctx context.Context, tx pgx.Tx, intentID, pro
 	}
 	return nil
 }
+
+// SettleStarsPaid settles a Stars intent with Telegram's charge id. Unlike
+// other gateways it also accepts an expired intent: Telegram has already taken
+// the Stars. The unique (provider, external_id) index means one charge settles
+// at most one intent.
+func (s *Store) SettleStarsPaid(ctx context.Context, tx pgx.Tx, id, chargeID string) (*Intent, error) {
+	row := s.q(tx).QueryRow(ctx, `
+		UPDATE payments.payment_intents
+		SET status = 'succeeded', external_id = $2, provider_ref = $2, failure_reason = NULL,
+		    checked_at = now(), updated_at = now()
+		WHERE id = $1 AND provider = 'stars' AND status IN ('pending','confirming','expired')
+		RETURNING `+intentCols, id, chargeID)
+	in, err := scanIntent(row)
+	if errors.Is(err, ErrNotFound) {
+		return nil, ErrInvalidTransition
+	}
+	if err != nil {
+		return nil, fmt.Errorf("settle stars intent: %w", err)
+	}
+	return in, nil
+}
+
+// FailStars fails a Stars intent whose payment cannot settle it (also from
+// expired, since the Stars were taken).
+func (s *Store) FailStars(ctx context.Context, tx pgx.Tx, id, reason string) (*Intent, error) {
+	row := s.q(tx).QueryRow(ctx, `
+		UPDATE payments.payment_intents
+		SET status = 'failed', failure_reason = $2, checked_at = now(), updated_at = now()
+		WHERE id = $1 AND provider = 'stars' AND status IN ('pending','confirming','expired')
+		RETURNING `+intentCols, id, reason)
+	in, err := scanIntent(row)
+	if errors.Is(err, ErrNotFound) {
+		return nil, ErrInvalidTransition
+	}
+	if err != nil {
+		return nil, fmt.Errorf("fail stars intent: %w", err)
+	}
+	return in, nil
+}

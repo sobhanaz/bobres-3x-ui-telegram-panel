@@ -20,6 +20,9 @@ const (
 	ReasonExpired        = "expired"
 )
 
+// ErrUnavailable: the gateway could not be reached or refused to create the payment.
+var ErrUnavailable = errors.New("payments: payment gateway unavailable")
+
 // gatewayCurrency is the only currency each automated provider is charged in.
 var gatewayCurrency = map[string]string{"zarinpal": "IRR", "cryptopay": "USDT", "stars": "XTR"}
 
@@ -42,6 +45,19 @@ func (s *Service) SetLogger(l *slog.Logger) {
 
 // Gateway returns a configured provider, or nil.
 func (s *Service) Gateway(name string) gateway.Gateway { return s.gws[name] }
+
+// Gateways lists the automated providers usable on this install. Telegram
+// Stars needs no credentials, so it is always listed; core decides whether to
+// offer it (it needs a Stars price).
+func (s *Service) Gateways() []string {
+	out := []string{Stars}
+	for _, name := range []string{"zarinpal", "cryptopay"} {
+		if s.gws[name] != nil {
+			out = append(out, name)
+		}
+	}
+	return out
+}
 
 func chargeOf(in *store.Intent) gateway.Charge {
 	c := gateway.Charge{IntentID: in.ID}
@@ -81,7 +97,7 @@ func (s *Service) StartGateway(ctx context.Context, in *store.Intent, descriptio
 	if err != nil {
 		s.log.Warn("gateway create failed", "provider", in.Provider, "intent", created.ID, "err", err)
 		_ = s.st.RecordGatewayEvent(ctx, nil, created.ID, in.Provider, "create", "error", map[string]any{"error": err.Error()})
-		return nil, fmt.Errorf("payments: %s is unavailable: %w", in.Provider, err)
+		return nil, fmt.Errorf("%w: %s: %w", ErrUnavailable, in.Provider, err)
 	}
 	var out *store.Intent
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {

@@ -19,12 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PaymentsService_CreateIntent_FullMethodName        = "/payments.v1.PaymentsService/CreateIntent"
-	PaymentsService_GetIntent_FullMethodName           = "/payments.v1.PaymentsService/GetIntent"
-	PaymentsService_SubmitReceipt_FullMethodName       = "/payments.v1.PaymentsService/SubmitReceipt"
-	PaymentsService_SubmitTXID_FullMethodName          = "/payments.v1.PaymentsService/SubmitTXID"
-	PaymentsService_ReviewManualPayment_FullMethodName = "/payments.v1.PaymentsService/ReviewManualPayment"
-	PaymentsService_ListPendingReceipts_FullMethodName = "/payments.v1.PaymentsService/ListPendingReceipts"
+	PaymentsService_CreateIntent_FullMethodName         = "/payments.v1.PaymentsService/CreateIntent"
+	PaymentsService_GetIntent_FullMethodName            = "/payments.v1.PaymentsService/GetIntent"
+	PaymentsService_SubmitReceipt_FullMethodName        = "/payments.v1.PaymentsService/SubmitReceipt"
+	PaymentsService_SubmitTXID_FullMethodName           = "/payments.v1.PaymentsService/SubmitTXID"
+	PaymentsService_ReviewManualPayment_FullMethodName  = "/payments.v1.PaymentsService/ReviewManualPayment"
+	PaymentsService_ListPendingReceipts_FullMethodName  = "/payments.v1.PaymentsService/ListPendingReceipts"
+	PaymentsService_CheckIntent_FullMethodName          = "/payments.v1.PaymentsService/CheckIntent"
+	PaymentsService_PrecheckStarsPayment_FullMethodName = "/payments.v1.PaymentsService/PrecheckStarsPayment"
+	PaymentsService_ConfirmStarsPayment_FullMethodName  = "/payments.v1.PaymentsService/ConfirmStarsPayment"
+	PaymentsService_ListGateways_FullMethodName         = "/payments.v1.PaymentsService/ListGateways"
 )
 
 // PaymentsServiceClient is the client API for PaymentsService service.
@@ -40,6 +44,11 @@ type PaymentsServiceClient interface {
 	SubmitTXID(ctx context.Context, in *SubmitTXIDRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
 	ReviewManualPayment(ctx context.Context, in *ReviewManualPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
 	ListPendingReceipts(ctx context.Context, in *ListPendingReceiptsRequest, opts ...grpc.CallOption) (*ListPendingReceiptsResponse, error)
+	CheckIntent(ctx context.Context, in *CheckIntentRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
+	// Telegram Stars: validate before Telegram charges, then settle the payment.
+	PrecheckStarsPayment(ctx context.Context, in *PrecheckStarsPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
+	ConfirmStarsPayment(ctx context.Context, in *ConfirmStarsPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
+	ListGateways(ctx context.Context, in *ListGatewaysRequest, opts ...grpc.CallOption) (*ListGatewaysResponse, error)
 }
 
 type paymentsServiceClient struct {
@@ -110,6 +119,46 @@ func (c *paymentsServiceClient) ListPendingReceipts(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *paymentsServiceClient) CheckIntent(ctx context.Context, in *CheckIntentRequest, opts ...grpc.CallOption) (*PaymentIntent, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntent)
+	err := c.cc.Invoke(ctx, PaymentsService_CheckIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) PrecheckStarsPayment(ctx context.Context, in *PrecheckStarsPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntent)
+	err := c.cc.Invoke(ctx, PaymentsService_PrecheckStarsPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) ConfirmStarsPayment(ctx context.Context, in *ConfirmStarsPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntent)
+	err := c.cc.Invoke(ctx, PaymentsService_ConfirmStarsPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) ListGateways(ctx context.Context, in *ListGatewaysRequest, opts ...grpc.CallOption) (*ListGatewaysResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGatewaysResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_ListGateways_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentsServiceServer is the server API for PaymentsService service.
 // All implementations must embed UnimplementedPaymentsServiceServer
 // for forward compatibility.
@@ -123,6 +172,11 @@ type PaymentsServiceServer interface {
 	SubmitTXID(context.Context, *SubmitTXIDRequest) (*PaymentIntent, error)
 	ReviewManualPayment(context.Context, *ReviewManualPaymentRequest) (*PaymentIntent, error)
 	ListPendingReceipts(context.Context, *ListPendingReceiptsRequest) (*ListPendingReceiptsResponse, error)
+	CheckIntent(context.Context, *CheckIntentRequest) (*PaymentIntent, error)
+	// Telegram Stars: validate before Telegram charges, then settle the payment.
+	PrecheckStarsPayment(context.Context, *PrecheckStarsPaymentRequest) (*PaymentIntent, error)
+	ConfirmStarsPayment(context.Context, *ConfirmStarsPaymentRequest) (*PaymentIntent, error)
+	ListGateways(context.Context, *ListGatewaysRequest) (*ListGatewaysResponse, error)
 	mustEmbedUnimplementedPaymentsServiceServer()
 }
 
@@ -150,6 +204,18 @@ func (UnimplementedPaymentsServiceServer) ReviewManualPayment(context.Context, *
 }
 func (UnimplementedPaymentsServiceServer) ListPendingReceipts(context.Context, *ListPendingReceiptsRequest) (*ListPendingReceiptsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPendingReceipts not implemented")
+}
+func (UnimplementedPaymentsServiceServer) CheckIntent(context.Context, *CheckIntentRequest) (*PaymentIntent, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckIntent not implemented")
+}
+func (UnimplementedPaymentsServiceServer) PrecheckStarsPayment(context.Context, *PrecheckStarsPaymentRequest) (*PaymentIntent, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrecheckStarsPayment not implemented")
+}
+func (UnimplementedPaymentsServiceServer) ConfirmStarsPayment(context.Context, *ConfirmStarsPaymentRequest) (*PaymentIntent, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmStarsPayment not implemented")
+}
+func (UnimplementedPaymentsServiceServer) ListGateways(context.Context, *ListGatewaysRequest) (*ListGatewaysResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGateways not implemented")
 }
 func (UnimplementedPaymentsServiceServer) mustEmbedUnimplementedPaymentsServiceServer() {}
 func (UnimplementedPaymentsServiceServer) testEmbeddedByValue()                         {}
@@ -280,6 +346,78 @@ func _PaymentsService_ListPendingReceipts_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentsService_CheckIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).CheckIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_CheckIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).CheckIntent(ctx, req.(*CheckIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_PrecheckStarsPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrecheckStarsPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).PrecheckStarsPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_PrecheckStarsPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).PrecheckStarsPayment(ctx, req.(*PrecheckStarsPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_ConfirmStarsPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmStarsPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).ConfirmStarsPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_ConfirmStarsPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).ConfirmStarsPayment(ctx, req.(*ConfirmStarsPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_ListGateways_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGatewaysRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).ListGateways(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_ListGateways_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).ListGateways(ctx, req.(*ListGatewaysRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentsService_ServiceDesc is the grpc.ServiceDesc for PaymentsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -310,6 +448,22 @@ var PaymentsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPendingReceipts",
 			Handler:    _PaymentsService_ListPendingReceipts_Handler,
+		},
+		{
+			MethodName: "CheckIntent",
+			Handler:    _PaymentsService_CheckIntent_Handler,
+		},
+		{
+			MethodName: "PrecheckStarsPayment",
+			Handler:    _PaymentsService_PrecheckStarsPayment_Handler,
+		},
+		{
+			MethodName: "ConfirmStarsPayment",
+			Handler:    _PaymentsService_ConfirmStarsPayment_Handler,
+		},
+		{
+			MethodName: "ListGateways",
+			Handler:    _PaymentsService_ListGateways_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

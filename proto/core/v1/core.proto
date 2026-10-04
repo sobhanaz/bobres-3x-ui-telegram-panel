@@ -184,6 +184,42 @@ message PaymentIntentRef {
   // Structured details so the bot can render instructions in the user's
   // language: card_number, card_holder, usdt_trc20, usdt_erc20, reference.
   map<string, string> details = 7;
+  // Automated gateways: where to pay (Zarinpal, Crypto Pay), what is charged
+  // there (XTR for a Stars invoice), and the invoice title.
+  string pay_url = 8;
+  common.v1.Money gateway_amount = 9;
+  string description = 10;
+  string failure_reason = 11;
+}
+
+message CheckPaymentRequest {
+  string user_id = 1; // must own the intent
+  string intent_id = 2;
+}
+
+// StarsPreCheckoutRequest relays a Telegram Stars pre_checkout_query.
+message StarsPreCheckoutRequest {
+  string user_id = 1;
+  string intent_id = 2; // the invoice payload
+  int64 total_amount = 3;
+  string currency = 4;
+}
+
+// StarsPaidRequest relays a Telegram Stars successful_payment.
+message StarsPaidRequest {
+  string user_id = 1;
+  string intent_id = 2; // the invoice payload
+  int64 total_amount = 3;
+  string currency = 4;
+  string telegram_payment_charge_id = 5;
+}
+
+message ListPaymentMethodsRequest {
+  string currency = 1; // the plan's currency, e.g. IRT
+}
+
+message ListPaymentMethodsResponse {
+  repeated string providers = 1; // automated methods usable now, e.g. zarinpal, stars, cryptopay
 }
 
 message SubmitPaymentProofRequest {
@@ -297,7 +333,7 @@ message PayOrderWithWalletRequest {
 message CreatePaymentIntentRequest {
   string user_id = 1;
   string order_id = 2;        // empty for wallet top-up intents
-  string provider = 3;        // manual_card | manual_crypto
+  string provider = 3;        // manual_card | manual_crypto | zarinpal | stars | cryptopay
   common.v1.Money amount = 4; // required when order_id is empty
   string idempotency_key = 5;
 }
@@ -328,6 +364,10 @@ service CoreService {
   rpc StartTrial(StartTrialRequest) returns (Order);
   rpc CanStartTrial(CanStartTrialRequest) returns (CanStartTrialResponse);
   rpc SubmitPaymentProof(SubmitPaymentProofRequest) returns (PaymentIntentRef);
+  rpc CheckPayment(CheckPaymentRequest) returns (PaymentIntentRef);
+  rpc StarsPreCheckout(StarsPreCheckoutRequest) returns (PaymentIntentRef);
+  rpc StarsPaid(StarsPaidRequest) returns (PaymentIntentRef);
+  rpc ListPaymentMethods(ListPaymentMethodsRequest) returns (ListPaymentMethodsResponse);
   rpc GetSubscriptionLinks(GetSubscriptionLinksRequest) returns (SubscriptionLinks);
   rpc AdminGetStats(AdminGetStatsRequest) returns (AdminStats);
   rpc AdminListPendingPayments(AdminListPendingPaymentsRequest) returns (AdminListPendingPaymentsResponse);
