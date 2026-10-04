@@ -182,3 +182,22 @@ func TestLockMapDoesNotGrow(t *testing.T) {
 		t.Fatalf("lock map leaked %d entries after all calls finished", n)
 	}
 }
+
+// Real 3x-ui v3 panels return the client's numeric row id in "id" and the
+// protocol UUID in "uuid" from clients/get (found by the real-panel CI job).
+func TestGetClientDecodesTheRealPanelShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"success":true,"msg":"","obj":{"client":{"id":14825,"uuid":"0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b",` +
+			`"email":"u1-o1","subId":"abc123","totalGB":1073741824,"expiryTime":1735689600000,"limitIp":0,"enable":true,` +
+			`"tgId":0,"comment":"","flow":""},"inboundIds":[1,2]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	d, err := newClient(t, srv.URL, token).GetClient(context.Background(), "u1-o1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Client.ID != 14825 || d.Client.UUID != "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b" || d.Client.SubID != "abc123" ||
+		len(d.InboundIDs) != 2 || d.Client.TotalGB != 1<<30 {
+		t.Fatalf("decoded %+v", d)
+	}
+}

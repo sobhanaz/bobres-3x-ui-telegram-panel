@@ -5,9 +5,11 @@
 // (tools/tgfake) the bot polls, with VPN accounts created on a REAL 3x-ui
 // panel. CI runs it against the compose stack after `bobres install`.
 //
-//	BOBRES_E2E_TELEGRAM=http://127.0.0.1:8081 BOBRES_E2E_ADMIN_ID=4242 \
-//	BOBRES_E2E_SUB_BASE=https://sub.example.test/sub/ \
-//	XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN=<token> XUI_TEST_ALLOW_PRIVATE=1 \
+// Environment: BOBRES_E2E_TELEGRAM (the fake Telegram's URL), BOBRES_E2E_ADMIN_ID,
+// BOBRES_E2E_SUB_BASE (the panel's subscription prefix), and XUI_TEST_URL,
+// XUI_TEST_TOKEN and XUI_TEST_ALLOW_PRIVATE to check the panel. The "End-to-end
+// install" step of .github/workflows/ci.yml is a complete run.
+//
 //	go test -tags e2e -count=1 -v ./tests/e2e/
 package e2e
 

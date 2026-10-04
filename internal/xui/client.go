@@ -102,11 +102,28 @@ type ClientSpec struct {
 	Flow       string `json:"flow,omitempty"`
 }
 
+// ClientRecord is a client as the panel stores it (clients/get). Unlike
+// ClientSpec, "id" is the panel's numeric row id and the protocol UUID is in
+// "uuid" (verified against real 3x-ui v3.8.5 and v3.9.0).
+type ClientRecord struct {
+	ID         int64  `json:"id"`
+	UUID       string `json:"uuid"`
+	Email      string `json:"email"`
+	SubID      string `json:"subId"`
+	TotalGB    int64  `json:"totalGB"`
+	ExpiryTime int64  `json:"expiryTime"`
+	LimitIP    int    `json:"limitIp"`
+	Enable     bool   `json:"enable"`
+	TgID       int64  `json:"tgId"`
+	Comment    string `json:"comment"`
+	Flow       string `json:"flow"`
+}
+
 // ClientDetail is what clients/get returns.
 type ClientDetail struct {
-	Client      ClientSpec `json:"client"`
-	InboundIDs  []int      `json:"inboundIds"`
-	UsedTraffic int64      `json:"usedTraffic"`
+	Client      ClientRecord `json:"client"`
+	InboundIDs  []int        `json:"inboundIds"`
+	UsedTraffic int64        `json:"usedTraffic"`
 }
 
 // Traffic is the per-client usage record.
