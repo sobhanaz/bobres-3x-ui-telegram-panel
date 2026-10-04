@@ -110,7 +110,7 @@ func (h *Handler) zarinpalReturn(w http.ResponseWriter, r *http.Request) {
 		// 20 s stays under the server's write timeout. The service throttles
 		// repeated checks of one intent.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 20*time.Second)
-		checked, err := h.svc.CheckAfterReturn(ctx, in.ID, statusOK)
+		checked, err := h.svc.CheckAfterReturn(ctx, in.ID)
 		cancel()
 		if err != nil {
 			h.log.Warn("zarinpal return: check", "intent", in.ID, "err", err)

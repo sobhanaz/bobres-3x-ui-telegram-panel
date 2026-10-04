@@ -219,7 +219,7 @@ func (h *Handler) onStarsPaid(parent context.Context, m *tg.Message) {
 			ref, err = h.core.StarsPaid(ctx, &corev1.StarsPaidRequest{UserId: user.GetId(), IntentId: sp.InvoicePayload,
 				TotalAmount: sp.TotalAmount, Currency: sp.Currency, TelegramPaymentChargeId: sp.TelegramPaymentChargeID})
 		}
-		if err == nil || !retryable(err) {
+		if err == nil || !retryable(err) || attempt == 5 {
 			break
 		}
 		select {

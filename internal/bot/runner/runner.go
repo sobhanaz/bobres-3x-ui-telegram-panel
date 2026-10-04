@@ -24,6 +24,8 @@ type Dispatcher struct {
 	queues []chan tg.Update
 	wg     sync.WaitGroup
 	once   sync.Once
+	mu     sync.RWMutex // guards closed: no send or wg.Add after Stop
+	closed bool
 	ctx    context.Context
 	handle HandleFunc
 	urgent chan struct{} // bounds pre-checkout answers running outside the queues
@@ -54,6 +56,11 @@ func NewDispatcher(ctx context.Context, workers int, handle HandleFunc) *Dispatc
 
 // Dispatch queues an update (blocking when that worker is full: back-pressure).
 func (d *Dispatcher) Dispatch(u tg.Update) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.closed {
+		return // shutting down: Telegram redelivers what we did not confirm
+	}
 	if u.PreCheckoutQuery != nil {
 		// Telegram cancels a payment whose pre-checkout is not answered within
 		// 10 s, so it must not wait behind a slow update of the same worker.
@@ -83,9 +90,12 @@ func (d *Dispatcher) Dispatch(u tg.Update) {
 // Stop drains the queues and waits for in-flight updates, until ctx expires.
 func (d *Dispatcher) Stop(ctx context.Context) {
 	d.once.Do(func() {
+		d.mu.Lock()
+		d.closed = true
 		for _, q := range d.queues {
 			close(q)
 		}
+		d.mu.Unlock()
 	})
 	done := make(chan struct{})
 	go func() { d.wg.Wait(); close(done) }()

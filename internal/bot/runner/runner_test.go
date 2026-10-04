@@ -151,3 +151,13 @@ func TestPreCheckoutSkipsTheQueue(t *testing.T) {
 	defer cancel()
 	d.Stop(ctx)
 }
+
+// After Stop, Dispatch drops updates instead of panicking on a closed queue.
+func TestDispatchAfterStop(t *testing.T) {
+	d := NewDispatcher(context.Background(), 2, func(context.Context, tg.Update) {})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	d.Stop(ctx)
+	d.Dispatch(tg.Update{UpdateID: 1, Message: &tg.Message{From: &tg.User{ID: 1}, Chat: tg.Chat{ID: 1}}})
+	d.Dispatch(tg.Update{UpdateID: 2, PreCheckoutQuery: &tg.PreCheckoutQuery{ID: "q", From: tg.User{ID: 1}}})
+}

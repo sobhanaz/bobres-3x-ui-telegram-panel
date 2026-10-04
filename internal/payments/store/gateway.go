@@ -44,7 +44,7 @@ func (s *Store) SettleGatewayPaid(ctx context.Context, tx pgx.Tx, id, externalID
 		SET status = 'succeeded', external_id = COALESCE(external_id, NULLIF($2, '')),
 		    provider_ref = NULLIF($3, ''), failure_reason = NULL, checked_at = now(), updated_at = now()
 		WHERE id = $1 AND (status IN ('pending','confirming')
-		   OR (status IN ('failed','expired') AND COALESCE(failure_reason, '') <> 'amount_mismatch'))
+		   OR (status IN ('failed','expired') AND COALESCE(failure_reason, '') NOT IN ('amount_mismatch','reversed')))
 		RETURNING `+intentCols, id, externalID, reference)
 	in, err := scanIntent(row)
 	if errors.Is(err, ErrNotFound) {

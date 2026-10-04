@@ -39,6 +39,18 @@
 		format json
 	}
 
+	# On the Zarinpal domain only the pay page and the return URL exist: no
+	# subscription links, admin or API on a domain registered with a payment
+	# gateway. (When BOBRES_ZARINPAL_HOST is empty this compares with "", which no
+	# request host equals, so it never matches.)
+	@zarinpalHostOther {
+		expression `{host} == "{$BOBRES_ZARINPAL_HOST}"`
+		not path /pay/* /webhooks/zarinpal
+	}
+	handle @zarinpalHostOther {
+		respond "Not found" 404
+	}
+
 	# Service-to-service endpoints must never be reachable from the internet, even by mistake.
 	@internal path /api/internal /api/internal/* /internal /internal/*
 	handle @internal {

@@ -167,7 +167,7 @@ func TestGatewayAmountMismatchFailedAndExpiry(t *testing.T) {
 	}
 
 	ex := gwIntent("e1", 1_500_000)
-	past := time.Now().Add(-time.Minute)
+	past := time.Now().Add(-expiryGrace - time.Minute)
 	ex.ExpiresAt = &past
 	ex, _ = svc.StartGateway(ctx, ex, "", "")
 	if got, _ := svc.CheckIntent(ctx, uid, ex.ID, "check"); got.Status != "expired" {

@@ -57,7 +57,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
-		if e.Source != events.PaidManually {
+		if e.Source != events.PaidManually && e.Source != events.PaidByGateway {
 			return nil // wallet, trial and free orders were confirmed in the chat already
 		}
 		lang := n.lang(ctx, e.TelegramID)

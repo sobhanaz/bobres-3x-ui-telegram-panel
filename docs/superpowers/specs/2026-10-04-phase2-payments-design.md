@@ -27,10 +27,13 @@ facts that matter for the code are restated here).
 - A gateway saying "paid" with a different amount fails the intent with
   `amount_mismatch` (the admin refunds); cancelled, unknown and expired intents fail with
   a reason. Reasons reach the customer through `payment.rejected`, translated by the bot.
-- A payment the gateway confirms late (our 1-hour expiry passed, a lost return, a
-  concurrent check failed the intent first) still settles: the gateway took the money.
-  Only an amount mismatch stays failed. Core sends money for an order that is no longer
-  payable to the wallet.
+- A gateway payment link is offered for 1 hour; the intent expires only 45 minutes after
+  that (longer than a gateway session), so the reconciler still sees a payment started
+  at the last minute. A payment the gateway confirms later still settles within 48 hours
+  of creation (lost return, expiry passed, a concurrent check failed the intent first):
+  through the return page or the customer's "check payment". Amount mismatches and
+  reversed payments stay failed. Core sends money for an order that is no longer payable
+  to the wallet.
 - The reconciler (every 30 s) checks open gateway intents, earliest due first, backing
   off per intent up to 64 intervals; only its own checks count towards the backoff. User
   checks ("I paid, check") reach the gateway at most every 3 s per intent (stored in the
@@ -81,8 +84,10 @@ facts that matter for the code are restated here).
 - Buyers must pay with their VPN off (Shaparak limits internet payments to Iranian IPs),
   so the pay page and the return URL must be reachable from Iran without a VPN. Domains
   of VPN shops are often filtered; `BOBRES_ZARINPAL_PUBLIC_URL` can point at a separate,
-  registered domain. Caddy serves it too (`BOBRES_ZARINPAL_HOST`, set by the installer);
-  the payments service can also run in another region behind its own proxy.
+  registered domain. Caddy serves it too (`BOBRES_ZARINPAL_HOST`, set by the installer),
+  but only the pay page and the return URL: every other path is a 404 there, so no
+  subscription links or admin panel live on a domain registered with a payment gateway.
+  The payments service can also run in another region behind its own proxy.
 - Caddy only sets `Referrer-Policy: no-referrer` where the upstream sets none, so the pay
   page's `origin` reaches Zarinpal; the pay links also carry `referrerpolicy="origin"`.
 

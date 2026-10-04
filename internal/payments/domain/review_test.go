@@ -55,17 +55,33 @@ func TestLatePaymentStillSettles(t *testing.T) {
 	svc.SetGateways(gw)
 	ctx := context.Background()
 
-	// Our expiry passed, then the gateway confirms the payment: credit it.
+	// Within the grace after the pay window the intent stays open.
+	grace := gwIntent("lp0", 1_000_000)
+	justPast := time.Now().Add(-time.Minute)
+	grace.ExpiresAt = &justPast
+	grace, _ = svc.StartGateway(ctx, grace, "", "")
+	if got, _ := svc.CheckIntent(ctx, uid, grace.ID, "check"); got.Status != "pending" {
+		t.Fatalf("expired within the grace: %+v", got)
+	}
+
+	// Expired by the reconciler, then the gateway confirms the payment (the
+	// return was lost): the customer's "check" press still credits it.
 	late := gwIntent("lp1", 1_000_000)
-	past := time.Now().Add(-time.Minute)
+	past := time.Now().Add(-expiryGrace - time.Minute)
 	late.ExpiresAt = &past
 	late, _ = svc.StartGateway(ctx, late, "", "")
-	if got, _ := svc.CheckIntent(ctx, uid, late.ID, "check"); got.Status != "expired" {
-		t.Fatalf("not expired: %+v", got)
+	if _, err := svc.ReconcileOnce(ctx, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetIntent(ctx, nil, late.ID); got.Status != "expired" {
+		t.Fatalf("not expired by the reconciler: %+v", got)
 	}
 	gw.set(*late.ExternalID, gateway.Result{State: gateway.Paid, Amount: 1_000_000, Currency: "IRR"})
-	if got, err := svc.CheckAfterReturn(ctx, late.ID, true); err != nil || got.Status != "succeeded" {
-		t.Fatalf("late payment: %+v %v", got, err)
+	if _, err := st.DB().Exec(ctx, `UPDATE payments.payment_intents SET checked_at = now() - interval '1 minute' WHERE id = $1`, late.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := svc.CheckIntent(ctx, uid, late.ID, "check"); err != nil || got.Status != "succeeded" {
+		t.Fatalf("late payment via the check button: %+v %v", got, err)
 	}
 
 	// An amount mismatch stays failed even if the gateway is asked again.
@@ -73,11 +89,30 @@ func TestLatePaymentStillSettles(t *testing.T) {
 	gw.set(*mm.ExternalID, gateway.Result{State: gateway.Paid, Amount: 5, Currency: "IRR"})
 	_, _ = svc.CheckIntent(ctx, uid, mm.ID, "check")
 	gw.set(*mm.ExternalID, gateway.Result{State: gateway.Paid, Amount: 1_000_000, Currency: "IRR"})
-	if got, _ := svc.CheckAfterReturn(ctx, mm.ID, true); got.Status != "failed" {
+	if got, _ := svc.CheckAfterReturn(ctx, mm.ID); got.Status != "failed" {
 		t.Fatalf("mismatch became paid: %+v", got)
 	}
 	if ledgerCount(t, st) != 1 {
 		t.Fatalf("ledger entries: %d", ledgerCount(t, st))
+	}
+
+	// Closed intents are re-asked only behind the gap and only for 48 h.
+	old, _ := svc.StartGateway(ctx, gwIntent("lp3", 1_000_000), "", "")
+	gw.set(*old.ExternalID, gateway.Result{State: gateway.Failed, Reason: "gateway_failed"})
+	_, _ = svc.CheckIntent(ctx, uid, old.ID, "check")
+	before := gw.checks.Load()
+	for i := 0; i < 5; i++ {
+		_, _ = svc.CheckAfterReturn(ctx, old.ID)
+	}
+	if n := gw.checks.Load() - before; n != 0 {
+		t.Fatalf("a closed intent was re-asked within the gap: %d calls", n)
+	}
+	if _, err := st.DB().Exec(ctx, `UPDATE payments.payment_intents SET created_at = now() - interval '3 days', checked_at = NULL WHERE id = $1`, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = svc.CheckAfterReturn(ctx, old.ID)
+	if n := gw.checks.Load() - before; n != 0 {
+		t.Fatalf("a closed intent older than 48 h was re-asked: %d calls", n)
 	}
 }
 
