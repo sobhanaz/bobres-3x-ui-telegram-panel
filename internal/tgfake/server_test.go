@@ -88,3 +88,29 @@ func TestHelperEndpointsAndAuth(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 }
+
+// Edits keep the edited message's id, so replaying the log gives each
+// message's current state; toasts are recorded without a chat.
+func TestEditsAndToastsAreRecorded(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	ctx := context.Background()
+	m, err := c.SendMessage(ctx, 5, "first", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.EditMessageText(ctx, 5, m.MessageID, "edited", nil); err != nil {
+		t.Fatal(err)
+	}
+	m2, _ := c.SendMessage(ctx, 5, "second", nil)
+	if err := c.AnswerCallback(ctx, "cb1", "done", false); err != nil {
+		t.Fatal(err)
+	}
+	sent := f.Sent()
+	if len(sent) != 4 || sent[1].MessageID != m.MessageID || sent[1].Text != "edited" ||
+		m2.MessageID == m.MessageID || sent[3].Method != "answerCallbackQuery" || sent[3].Text != "done" || sent[3].ChatID != 0 {
+		t.Fatalf("log: %+v (ids %d %d)", sent, m.MessageID, m2.MessageID)
+	}
+}

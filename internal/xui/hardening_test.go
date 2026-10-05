@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 )
@@ -34,6 +35,41 @@ func TestNewRejectsInsecureAndBadURLs(t *testing.T) {
 	}
 	if _, err := xui.New("https://panel.example.com/secretpath", "t"); err != nil {
 		t.Fatalf("valid https URL rejected: %v", err)
+	}
+	if _, err := xui.New("http://10.0.0.5:2053/path", "t", xui.AllowPrivateAddresses()); err != nil {
+		t.Fatalf("plain http with allow-private rejected: %v", err)
+	}
+	// A custom client would skip the private-only dial check.
+	if _, err := xui.New("http://10.0.0.5:2053", "t", xui.AllowPrivateAddresses(), xui.WithHTTPClient(http.DefaultClient)); !errors.Is(err, xui.ErrInsecureURL) {
+		t.Fatalf("plain http with a custom client: %v", err)
+	}
+}
+
+func TestPlainHTTPReachesOnlyPrivateAddresses(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`{"success":true,"obj":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	// Loopback over plain http with allow-private: allowed.
+	c, err := xui.New(srv.URL, token, xui.AllowPrivateAddresses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.InboundOptions(context.Background()); err != nil || hits.Load() != 1 {
+		t.Fatalf("private plain-http panel: err=%v hits=%d", err, hits.Load())
+	}
+	// A public address over plain http is refused before any byte is sent
+	// (192.0.2.1 is TEST-NET-1: public, never routed).
+	c, err = xui.New("http://192.0.2.1:2053", token, xui.AllowPrivateAddresses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := c.InboundOptions(ctx); !errors.Is(err, xui.ErrPublicPlaintext) {
+		t.Fatalf("want ErrPublicPlaintext, got %v", err)
 	}
 }
 
@@ -148,5 +184,24 @@ func TestLockMapDoesNotGrow(t *testing.T) {
 	}
 	if n := xui.LockCountForTest(c); n != 0 {
 		t.Fatalf("lock map leaked %d entries after all calls finished", n)
+	}
+}
+
+// Real 3x-ui v3 panels return the client's numeric row id in "id" and the
+// protocol UUID in "uuid" from clients/get (found by the real-panel CI job).
+func TestGetClientDecodesTheRealPanelShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"success":true,"msg":"","obj":{"client":{"id":14825,"uuid":"0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b",` +
+			`"email":"u1-o1","subId":"abc123","totalGB":1073741824,"expiryTime":1735689600000,"limitIp":0,"enable":true,` +
+			`"tgId":0,"comment":"","flow":""},"inboundIds":[1,2]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	d, err := newClient(t, srv.URL, token).GetClient(context.Background(), "u1-o1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(d.Client.ID) != "14825" || d.Client.UUID != "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b" || d.Client.SubID != "abc123" ||
+		len(d.InboundIDs) != 2 || d.Client.TotalGB != 1<<30 {
+		t.Fatalf("decoded %+v", d)
 	}
 }

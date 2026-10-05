@@ -31,8 +31,19 @@ type client struct {
 
 type record struct {
 	client
+	rowID      int64
 	up, down   int64
 	inboundIDs []int
+}
+
+// stored is the client as the real panel returns it from clients/get: the
+// numeric row id in "id" and the protocol UUID in "uuid".
+func (r *record) stored() map[string]any {
+	return map[string]any{
+		"id": r.rowID, "uuid": r.ID, "email": r.Email, "subId": r.SubID, "totalGB": r.TotalGB,
+		"expiryTime": r.ExpiryTime, "limitIp": r.LimitIP, "enable": r.Enable, "tgId": r.TgID,
+		"comment": r.Comment, "flow": r.Flow,
+	}
 }
 
 // Server is a running fake panel. The embedded *httptest.Server gives URL and Close.
@@ -43,6 +54,7 @@ type Server struct {
 	mu       sync.Mutex
 	clients  map[string]*record
 	inbounds []map[string]any
+	nextRow  int64
 	failNext int
 	latency  time.Duration
 	calls    map[string]int
@@ -110,7 +122,8 @@ func (s *Server) SetInboundsEnabled(on bool) {
 func (s *Server) Seed(email, subID string, inboundIDs []int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.clients[email] = &record{client: client{Email: email, SubID: subID, Enable: true}, inboundIDs: inboundIDs}
+	s.nextRow++
+	s.clients[email] = &record{client: client{Email: email, SubID: subID, Enable: true}, rowID: s.nextRow, inboundIDs: inboundIDs}
 }
 
 // Has reports whether a client exists.
@@ -198,7 +211,8 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusOK, false, "Duplicate email: "+b.Client.Email, nil)
 		return
 	}
-	s.clients[b.Client.Email] = &record{client: b.Client, inboundIDs: b.InboundIDs}
+	s.nextRow++
+	s.clients[b.Client.Email] = &record{client: b.Client, rowID: s.nextRow, inboundIDs: b.InboundIDs}
 	reply(w, http.StatusOK, true, "ok", nil)
 }
 
@@ -210,7 +224,7 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	reply(w, http.StatusOK, true, "", map[string]any{"client": rec.client, "inboundIds": rec.inboundIDs, "usedTraffic": rec.up + rec.down})
+	reply(w, http.StatusOK, true, "", map[string]any{"client": rec.stored(), "inboundIds": rec.inboundIDs, "usedTraffic": rec.up + rec.down})
 }
 
 func (s *Server) del(w http.ResponseWriter, r *http.Request) {

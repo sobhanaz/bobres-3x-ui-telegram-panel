@@ -40,12 +40,13 @@ func setup(rt *app.Runtime) error {
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
 	srv := provisionserver.New(st)
-	added, err := srv.EnsureDefaultServer(rt.Ctx, cfg.XUIURL, cfg.XUIToken, cfg.XUISubURL, cfg.XUIAllowPrivate)
+	srv.SetLogger(rt.Log)
+	changed, err := srv.EnsureDefaultServer(rt.Ctx, cfg.XUIURL, cfg.XUIToken, cfg.XUISubURL, cfg.XUIAllowPrivate)
 	if err != nil {
 		return err
 	}
-	if added {
-		rt.Log.Info("registered the 3x-ui panel from BOBRES_XUI_URL")
+	if changed {
+		rt.Log.Info("default 3x-ui panel registered or updated from BOBRES_XUI_URL")
 	}
 
 	// Only core may call the provisioner (the only holder of 3x-ui tokens).

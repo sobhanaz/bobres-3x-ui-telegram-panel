@@ -266,6 +266,25 @@ func TestEnsureDefaultServerOnlyOnce(t *testing.T) {
 	if added, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || !added {
 		t.Fatalf("first start: added=%v err=%v", added, err)
 	}
+	// Same environment on restart: nothing to write.
+	if changed, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || changed {
+		t.Fatalf("restart: changed=%v err=%v", changed, err)
+	}
+	// Re-running install with a corrected panel takes effect.
+	if changed, err := strict.EnsureDefaultServer(ctx, "https://panel2.example.com/p", "tok2", "https://panel2.example.com:2096/sub/", false); err != nil || !changed {
+		t.Fatalf("corrected panel: changed=%v err=%v", changed, err)
+	}
+	sv, err := f.st.ServerByName(ctx, "default")
+	if err != nil || sv.BaseURL != "https://panel2.example.com/p" || sv.Token != "tok2" || sv.SubBaseURL != "https://panel2.example.com:2096/sub/" {
+		t.Fatalf("after update: %+v %v", sv, err)
+	}
+	// An invalid correction is refused and leaves the row alone.
+	if changed, err := strict.EnsureDefaultServer(ctx, "http://panel3.example.com", "tok3", "", false); err == nil || changed {
+		t.Fatalf("invalid correction: changed=%v err=%v", changed, err)
+	}
+	if sv, _ := f.st.ServerByName(ctx, "default"); sv.BaseURL != "https://panel2.example.com/p" {
+		t.Fatalf("row changed by an invalid correction: %+v", sv)
+	}
 }
 
 // The provisioner holds the 3x-ui token: nothing but core may call it, so a

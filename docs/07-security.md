@@ -31,7 +31,7 @@ payments is the only one with gateway secrets.
 | SQL injection / XSS | Parameterized queries (pgx), Vue template escaping, CSP headers, input validation |
 | SSRF via admin-entered URLs (3x-ui URL, webhooks) | Allow/deny lists, block metadata/loopback ranges unless explicitly allowed |
 | Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted, support-bundle scrubs |
-| Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel |
+| Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel. The panel URL must be https; plain http is accepted only with allow-private, and every connection is then checked to go to a private, loopback or link-local address (`xui.ErrPublicPlaintext`). This bounds the first hop only: a private next hop that NATs or proxies onward is the operator's network, and a custom HTTP client (`xui.WithHTTPClient`) is refused for plain http |
 | Supply chain | Pinned deps, govulncheck, trivy, signed images + SBOM, minimal base images, CI with least-privilege tokens |
 | Malicious update / MITM of installer | Signature verification (ed25519/cosign), HTTPS, checksums, no unsigned code paths |
 | License key sharing | Install binding, re-activation limits, revocation; accept residual risk |

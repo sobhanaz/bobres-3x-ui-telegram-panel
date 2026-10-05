@@ -149,6 +149,35 @@ func (s *Store) FirstServer(ctx context.Context) (*Server, error) {
 	return sv, nil
 }
 
+// ServerByName returns the server with that name (ErrNotFound if none).
+func (s *Store) ServerByName(ctx context.Context, name string) (*Server, error) {
+	sv, err := s.scanServer(s.db.QueryRow(ctx, `SELECT `+serverCols+` FROM provisioner.xui_servers WHERE name = $1 ORDER BY created_at LIMIT 1`, name))
+	if err != nil {
+		return nil, fmt.Errorf("server by name: %w", err)
+	}
+	return sv, nil
+}
+
+// UpdateServerConnection replaces how a panel is reached (URL, token, sub URL,
+// private opt-in). updated_at moves, so cached panel clients are rebuilt.
+func (s *Store) UpdateServerConnection(ctx context.Context, id, baseURL, token, subBaseURL string, allowPrivate bool) error {
+	enc, err := s.env.Encrypt([]byte(token))
+	if err != nil {
+		return err
+	}
+	tag, err := s.db.Exec(ctx, `
+		UPDATE provisioner.xui_servers
+		SET base_url = $2, api_token_enc = $3, sub_base_url = NULLIF($4, ''), allow_private = $5, updated_at = now()
+		WHERE id = $1`, id, baseURL, enc, subBaseURL, allowPrivate)
+	if err != nil {
+		return fmt.Errorf("update server: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // GetServer returns one server row by id, decrypting its token.
 func (s *Store) GetServer(ctx context.Context, id string) (*Server, error) {
 	sv, err := s.scanServer(s.db.QueryRow(ctx, `SELECT `+serverCols+` FROM provisioner.xui_servers WHERE id = $1`, id))

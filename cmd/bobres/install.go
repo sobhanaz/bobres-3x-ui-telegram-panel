@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -36,6 +37,7 @@ type installer struct {
 	readHide  func(prompt string) (string, error) // hidden input; nil when not a terminal
 	run       func(ctx context.Context, dir string, args ...string) ([]byte, error)
 	checkBot  func(ctx context.Context, token string) (string, error)
+	lookupIP  func(ctx context.Context, host string) ([]net.IP, error)
 	preflight func(domain string) []Result
 	sleep     func(time.Duration)
 }
@@ -43,6 +45,9 @@ type installer struct {
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 	ins := &installer{
 		in: bufio.NewReader(in), out: out, errOut: errOut, getenv: os.Getenv,
+		lookupIP: func(ctx context.Context, host string) ([]net.IP, error) {
+			return net.DefaultResolver.LookupIP(ctx, "ip", host)
+		},
 		run: func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
 			cmd.Dir = dir
@@ -103,7 +108,7 @@ func (ins *installer) install(args []string) int {
 	dir := fs.String("dir", "/opt/bobres", "install directory")
 	domain := fs.String("domain", "", "public domain of this install (DNS must point here)")
 	adminID := fs.String("admin-id", "", "Telegram user id of the owner")
-	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https), including any web base path")
+	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path")
 	xuiSub := fs.String("xui-sub-url", "", "public prefix of the panel's subscription links, e.g. https://sub.example.com:2096/sub/")
 	allowPrivate := fs.Bool("xui-allow-private", false, "the panel is on this host or a private network")
 	imageVersion := fs.String("version", "", "image tag to run (default: this CLI's version)")
@@ -194,6 +199,10 @@ func (ins *installer) install(args []string) int {
 		}
 	}
 	if !*offline {
+		if err := ins.checkPlainPanel(ctx, env["BOBRES_XUI_URL"]); err != nil {
+			fmt.Fprintln(ins.errOut, "error:", err)
+			return 2
+		}
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		name, err := ins.checkBot(cctx, env["BOBRES_TELEGRAM_BOT_TOKEN"])
 		cancel()
@@ -348,6 +357,40 @@ it holds the keys that encrypt your panel token.
 `, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
 }
 
+// loopbackHost: localhost or a loopback IP literal.
+func loopbackHost(h string) bool {
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+// checkPlainPanel refuses a plain-http panel whose name resolves to a public
+// address, which the provisioner would refuse on every call. host.docker.internal
+// only resolves inside the containers, so it is not looked up here.
+func (ins *installer) checkPlainPanel(ctx context.Context, panelURL string) error {
+	u, err := url.Parse(panelURL)
+	if err != nil || u.Scheme != "http" || strings.EqualFold(u.Hostname(), "host.docker.internal") {
+		return nil
+	}
+	ips := []net.IP{net.ParseIP(u.Hostname())}
+	if ips[0] == nil {
+		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if ips, err = ins.lookupIP(cctx, u.Hostname()); err != nil {
+			return fmt.Errorf("cannot resolve the 3x-ui host %s (use --offline to skip): %w", u.Hostname(), err)
+		}
+	}
+	for _, ip := range ips {
+		if !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() {
+			return fmt.Errorf("the 3x-ui URL is plain http but %s resolves to the public address %s: use the panel's https URL "+
+				"(plain http is only for a panel on this server or a private network)", u.Hostname(), ip)
+		}
+	}
+	return nil
+}
+
 func validateEnv(env map[string]string) []error {
 	var errs []error
 	if !domainRe.MatchString(env["BOBRES_DOMAIN"]) {
@@ -359,8 +402,13 @@ func validateEnv(env map[string]string) []error {
 	if !botTokenRe.MatchString(env["BOBRES_TELEGRAM_BOT_TOKEN"]) {
 		errs = append(errs, errors.New("the bot token does not look like a @BotFather token (123456:ABC...)"))
 	}
-	if u, err := url.Parse(env["BOBRES_XUI_URL"]); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		errs = append(errs, errors.New("the 3x-ui URL must be https://host[:port][/path] without credentials"))
+	privatePanel := env["BOBRES_XUI_ALLOW_PRIVATE"] == "true"
+	if u, err := url.Parse(env["BOBRES_XUI_URL"]); err != nil || u.Host == "" || u.User != nil ||
+		(u.Scheme != "https" && (u.Scheme != "http" || !privatePanel)) {
+		errs = append(errs, errors.New("the 3x-ui URL must be https://host[:port][/path] without credentials (http:// only with --xui-allow-private)"))
+	} else if loopbackHost(u.Hostname()) {
+		errs = append(errs, fmt.Errorf("the 3x-ui URL points to %s, which inside the BOBRES containers is the container itself: "+
+			"for a panel on this server use http://host.docker.internal:<port>/<path> with --xui-allow-private", u.Hostname()))
 	}
 	if sub := env["BOBRES_XUI_SUB_URL"]; sub != "" {
 		if u, err := url.Parse(sub); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {

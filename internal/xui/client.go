@@ -18,6 +18,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"sort"
@@ -44,7 +45,11 @@ func (e *APIError) Error() string {
 var ErrInvalidIdentifier = errors.New("xui: invalid identifier")
 
 // ErrInsecureURL is returned when the panel URL is not https (or not allowed).
-var ErrInsecureURL = errors.New("xui: panel URL must use https")
+var ErrInsecureURL = errors.New("xui: panel URL must use https (plain http only for a private panel, with allow-private)")
+
+// ErrPublicPlaintext is returned when a plain-http panel URL resolves to a
+// public address: the API token must never cross the internet unencrypted.
+var ErrPublicPlaintext = errors.New("xui: plain http is allowed only to private, loopback or link-local addresses; use https")
 
 // ErrBlockedAddress is returned when the panel resolves to a private/loopback address.
 var ErrBlockedAddress = errors.New("xui: panel address is not allowed (private, loopback or link-local)")
@@ -98,11 +103,29 @@ type ClientSpec struct {
 	Flow       string `json:"flow,omitempty"`
 }
 
+// ClientRecord is a client as the panel stores it (clients/get). Unlike
+// ClientSpec, "id" is the panel's row id (a number in v3.8.5 and v3.9.0) and the
+// protocol UUID is in "uuid". ID stays raw: nothing reads it, and a type change
+// there must not break decoding again.
+type ClientRecord struct {
+	ID         json.RawMessage `json:"id,omitempty"`
+	UUID       string          `json:"uuid"`
+	Email      string          `json:"email"`
+	SubID      string          `json:"subId"`
+	TotalGB    int64           `json:"totalGB"`
+	ExpiryTime int64           `json:"expiryTime"`
+	LimitIP    int             `json:"limitIp"`
+	Enable     bool            `json:"enable"`
+	TgID       int64           `json:"tgId"`
+	Comment    string          `json:"comment"`
+	Flow       string          `json:"flow"`
+}
+
 // ClientDetail is what clients/get returns.
 type ClientDetail struct {
-	Client      ClientSpec `json:"client"`
-	InboundIDs  []int      `json:"inboundIds"`
-	UsedTraffic int64      `json:"usedTraffic"`
+	Client      ClientRecord `json:"client"`
+	InboundIDs  []int        `json:"inboundIds"`
+	UsedTraffic int64        `json:"usedTraffic"`
 }
 
 // Traffic is the per-client usage record.
@@ -165,7 +188,9 @@ type settings struct {
 }
 
 // WithHTTPClient replaces the default HTTP client (tests, custom TLS). Redirects are
-// still refused. The caller owns dial-time address filtering when using this.
+// still refused. The caller owns dial-time address filtering when using this, so it
+// is refused for a plain-http panel URL, whose private-only check lives in the
+// default transport.
 func WithHTTPClient(hc *http.Client) Option { return func(o *settings) { o.hc = hc } }
 
 // AllowInsecureHTTP permits http:// panel URLs. Only for tests/dev: the bearer token
@@ -173,13 +198,16 @@ func WithHTTPClient(hc *http.Client) Option { return func(o *settings) { o.hc = 
 func AllowInsecureHTTP() Option { return func(o *settings) { o.allowInsecure = true } }
 
 // AllowPrivateAddresses permits panels on loopback/private ranges (a panel on the same
-// host or LAN is a legitimate setup that the operator must opt into).
+// host or LAN is a legitimate setup that the operator must opt into). It also permits a
+// plain-http panel URL, which may then reach ONLY private addresses.
 func AllowPrivateAddresses() Option { return func(o *settings) { o.allowPrivate = true } }
 
 // New creates a client. baseURL is the panel root including any web base path. It
-// must be https unless AllowInsecureHTTP is given. Unless AllowPrivateAddresses is
-// given, connections to loopback, private and link-local addresses are refused at
-// dial time (after DNS resolution, so DNS rebinding cannot bypass it).
+// must be https, except that AllowPrivateAddresses also permits plain http, which
+// may then reach only loopback, private and link-local addresses (AllowInsecureHTTP
+// lifts that for tests). Unless AllowPrivateAddresses is given, connections to
+// loopback, private and link-local addresses are refused. Both checks run at dial
+// time, after DNS resolution, so DNS rebinding cannot bypass them.
 func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 	var o settings
 	for _, f := range opts {
@@ -189,7 +217,8 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return nil, fmt.Errorf("xui: invalid panel URL")
 	}
-	if u.Scheme == "http" && !o.allowInsecure {
+	plaintext := u.Scheme == "http"
+	if plaintext && !o.allowInsecure && (!o.allowPrivate || o.hc != nil) {
 		return nil, ErrInsecureURL
 	}
 	if u.User != nil {
@@ -209,7 +238,13 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 			// closes it; callers should also reuse one Client per panel.
 			IdleConnTimeout: 90 * time.Second,
 		}
-		if !o.allowPrivate {
+		switch {
+		case plaintext && !o.allowInsecure:
+			// A private panel (BOBRES on the same host or LAN) may speak plain
+			// http, but then ONLY to private addresses, checked after DNS on
+			// every connection.
+			tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: blockPublic}).DialContext
+		case !o.allowPrivate:
 			tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: blockPrivate}).DialContext
 		}
 		hc = &http.Client{Timeout: 15 * time.Second, Transport: tr}
@@ -236,6 +271,26 @@ func blockPrivate(_, address string, _ syscall.RawConn) error {
 		return ErrBlockedAddress
 	}
 	return nil
+}
+
+// blockPublic is the inverse of blockPrivate, for plain-http panels: only
+// loopback, private (RFC 1918 / ULA) and link-local unicast addresses pass.
+func blockPublic(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return ErrPublicPlaintext
+	}
+	// netip, not net.ParseIP: a link-local IPv6 address is dialed with a zone
+	// ("fe80::1%eth0"), and IPv4-mapped forms must be judged as IPv4.
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return ErrPublicPlaintext
+	}
+	a = a.Unmap().WithZone("")
+	if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() {
+		return nil
+	}
+	return ErrPublicPlaintext
 }
 
 // lock acquires per-email mutexes in sorted order (deadlock-free) and returns an

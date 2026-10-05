@@ -181,6 +181,9 @@ services:
       BOBRES_XUI_TOKEN: ${BOBRES_XUI_TOKEN:?set BOBRES_XUI_TOKEN}
       BOBRES_XUI_SUB_URL: ${BOBRES_XUI_SUB_URL:-}
       BOBRES_XUI_ALLOW_PRIVATE: ${BOBRES_XUI_ALLOW_PRIVATE:-false}
+    # A panel on this same server is reachable as http://host.docker.internal:<port>
+    # (with BOBRES_XUI_ALLOW_PRIVATE=true; plain http then only to private addresses).
+    extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       postgres: { condition: service_healthy }
     networks: [backend, egress]

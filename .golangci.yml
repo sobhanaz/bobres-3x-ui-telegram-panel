@@ -1,6 +1,8 @@
 version: "2"
 run:
   timeout: 5m
+  # Also lint the real-panel integration test and the end-to-end driver.
+  build-tags: [integration, e2e]
 linters:
   # "standard" = errcheck, govet, ineffassign, staticcheck, unused. In v2 staticcheck
   # also carries the former gosimple and stylecheck checks.

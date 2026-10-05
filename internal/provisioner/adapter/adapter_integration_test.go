@@ -26,6 +26,9 @@ import (
 func TestIntegrationRealPanel(t *testing.T) {
 	baseURL, token := os.Getenv("XUI_TEST_URL"), os.Getenv("XUI_TEST_TOKEN")
 	if baseURL == "" || token == "" {
+		if os.Getenv("XUI_TEST_REQUIRE") == "1" { // CI: a missing variable must fail, not pass
+			t.Fatal("XUI_TEST_URL and XUI_TEST_TOKEN not set and XUI_TEST_REQUIRE=1")
+		}
 		t.Skip("XUI_TEST_URL and XUI_TEST_TOKEN not set")
 	}
 	var opts []xui.Option
