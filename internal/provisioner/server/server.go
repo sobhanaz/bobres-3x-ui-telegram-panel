@@ -169,7 +169,17 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 		if cm.Email != email {
 			return nil, status.Error(codes.AlreadyExists, "subscription already provisioned with another email")
 		}
-		return clientProto(cm, 0, 0), nil
+		// A retry after the response was lost: report the limits the panel
+		// holds (zeros would read as "never expires" in core).
+		_, a, err := s.server(ctx, cm.ServerID)
+		if err != nil {
+			return nil, err
+		}
+		st, err := a.Status(ctx, cm.Email)
+		if err != nil {
+			return nil, s.panelError("panel client", err)
+		}
+		return clientProto(cm, max(st.ExpiryMs, 0)/1000, st.TotalBytes), nil
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return nil, status.Error(codes.Internal, "client map lookup failed")
 	}
@@ -200,7 +210,10 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 		case existing != subID:
 			return nil, status.Error(codes.AlreadyExists, "another client on the panel already uses this email")
 		}
-		// Ours, from an earlier attempt: adopt it.
+		// Ours, from an earlier attempt: adopt it with the limits it has.
+		if st, err := a.Status(ctx, email); err == nil {
+			expiryMs = max(st.ExpiryMs, 0)
+		}
 	}
 	cm := &store.ClientMap{
 		SubscriptionID: req.GetSubscriptionId(), ServerID: sv.ID, Email: email,
@@ -238,6 +251,26 @@ func (s *Server) RenewClient(ctx context.Context, req *provisionerv1.RenewClient
 	return clientProto(cm, 0, 0), nil
 }
 
+// SetClientLimits sets the absolute expiry and quota of a provisioned client
+// and enables it (renewals and traffic top-ups). Setting the same values
+// again changes nothing, so a retried order cannot add twice.
+func (s *Server) SetClientLimits(ctx context.Context, req *provisionerv1.SetClientLimitsRequest) (*provisionerv1.Client, error) {
+	if req.GetExpiresAt() < 0 || req.GetTrafficTotalBytes() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "expires_at and traffic_total_bytes must be >= 0")
+	}
+	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())
+	if err != nil {
+		return nil, err
+	}
+	if cm == nil {
+		return nil, status.Error(codes.NotFound, "client not provisioned")
+	}
+	if err := a.SetLimits(ctx, cm.Email, req.GetExpiresAt()*1000, req.GetTrafficTotalBytes()); err != nil {
+		return nil, s.panelError("panel set limits", err)
+	}
+	return clientProto(cm, req.GetExpiresAt(), req.GetTrafficTotalBytes()), nil
+}
+
 // DeleteClient removes the client from the panel and the map (idempotent).
 func (s *Server) DeleteClient(ctx context.Context, req *provisionerv1.DeleteClientRequest) (*emptypb.Empty, error) {
 	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())
@@ -271,7 +304,8 @@ func (s *Server) ResetTraffic(ctx context.Context, req *provisionerv1.ResetTraff
 	return clientProto(cm, 0, 0), nil
 }
 
-// GetUsage returns used bytes for the subscription.
+// GetUsage returns the subscription's used bytes and the limits the panel
+// holds for it (an operator may have changed them in the panel).
 func (s *Server) GetUsage(ctx context.Context, req *provisionerv1.GetUsageRequest) (*provisionerv1.Usage, error) {
 	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())
 	if err != nil {
@@ -280,11 +314,14 @@ func (s *Server) GetUsage(ctx context.Context, req *provisionerv1.GetUsageReques
 	if cm == nil {
 		return nil, status.Error(codes.NotFound, "client not provisioned")
 	}
-	used, err := a.Usage(ctx, cm.Email)
+	st, err := a.Status(ctx, cm.Email)
 	if err != nil {
 		return nil, s.panelError("panel usage", err)
 	}
-	return &provisionerv1.Usage{SubscriptionId: cm.SubscriptionID, TrafficUsedBytes: used, LastSyncedAt: time.Now().Unix()}, nil
+	return &provisionerv1.Usage{
+		SubscriptionId: cm.SubscriptionID, TrafficUsedBytes: st.UsedBytes, LastSyncedAt: time.Now().Unix(),
+		TrafficTotalBytes: st.TotalBytes, ExpiresAt: max(st.ExpiryMs, 0) / 1000, Enabled: st.Enabled,
+	}, nil
 }
 
 // GetLinks returns the subscription link (and its QR code as a PNG) plus one
