@@ -13,6 +13,15 @@ __pycache__/
 venv/
 dist/
 build/
+# binaries from `go build ./cmd/<name>` or ./tools/<name> run in the repo root
+# (make build writes to bin/ instead)
+/bobres
+/bot
+/core
+/payments
+/provisioner
+/tgfake
+/xuidev
 
 # data / logs
 *.log
