@@ -147,6 +147,9 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	if h.cryptoEnabled("IRT") {
 		methods = append(methods, tg.CB(r.t("btn.pay_crypto"), fmt.Sprintf("wpay:x:%d:%s", amount, n)))
 	}
+	if h.zarinpalLinkEnabled("IRT") {
+		methods = append(methods, tg.CB(r.t("btn.pay_zarinpal_link"), fmt.Sprintf("wpay:l:%d:%s", amount, n)))
+	}
 	gw := h.gatewayButtons(r, "IRT", amount, "wpay", fmt.Sprint(amount), n)
 	if len(methods) == 0 && len(gw) == 0 {
 		r.show(r.t("pay.not_configured"), homeKeyboard(r))
@@ -175,7 +178,7 @@ func (h *Handler) onTopupPay(r *req, rest string) {
 		h.showTopupAmounts(r)
 		return
 	}
-	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "z": "zarinpal", "s": "stars"}[parts[0]]
+	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "l": "manual_zarinpal", "z": "zarinpal", "s": "stars"}[parts[0]]
 	if provider == "" {
 		h.showWallet(r)
 		return

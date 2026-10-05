@@ -34,14 +34,14 @@
   "pay.insufficient": "Your wallet balance ({balance}) is not enough for this plan ({price}).",
   "pay.wallet_done": "✅ Paid from your wallet. Preparing your service…",
   "pay.card": "💳 <b>Card-to-card payment</b>\n\nAmount: <b>{amount}</b>\nCard number: <code>{card}</code>\nCard holder: {holder}\nPayment reference: <code>{ref}</code>\n\nAfter paying, send a <b>photo of the receipt</b> here. Put the bank tracking number in the photo caption.",
-  "pay.crypto": "🪙 <b>Tether (USDT) payment</b>\n\nAmount: <b>{amount}</b>\n{addresses}\nPayment reference: <code>{ref}</code>\n\nAfter sending, reply with the <b>transaction hash (TXID)</b>.",
+  "pay.crypto": "🪙 <b>Tether (USDT) payment</b>\n\nAmount: <b>{amount}</b>\n{addresses}\nPayment reference: <code>{ref}</code>\n\nAfter sending, send a <b>screenshot of the transfer</b> here, or paste the <b>transaction hash (TXID)</b>.",
   "pay.crypto_trc20": "TRC20 (TRON): <code>{addr}</code>",
   "pay.crypto_erc20": "ERC20 (Ethereum): <code>{addr}</code>",
   "pay.crypto_equiv": "{usdt} (≈ {amount})",
   "pay.not_configured": "This payment method is not set up yet. Please choose another one.",
-  "pay.need_photo": "Please send the receipt as a photo, or tap Cancel.",
+  "pay.need_photo": "Please send the receipt screenshot (as a photo or an image file), or tap Cancel.",
   "pay.need_reference": "Got the receipt photo. Now send the bank tracking/reference number.",
-  "pay.bad_txid": "That does not look like a transaction hash. It is 64 hexadecimal characters (ERC20 hashes start with 0x).",
+  "pay.bad_txid": "That does not look like a transaction hash (64 hexadecimal characters; ERC20 hashes start with 0x). You can also send a screenshot of the transfer.",
   "pay.submitted": "✅ Received. We will review your payment shortly and message you here.",
   "pay.duplicate": "This transaction has already been submitted.",
   "pay.already_submitted": "We already have your proof for this payment. It is waiting for review.",
@@ -168,5 +168,9 @@
   "reason.payer_mismatch": "Someone other than you paid this invoice. Contact support.",
   "reason.not_found": "The payment gateway could not find this payment.",
   "reason.reversed": "The bank returned this payment.",
-  "admin.stars_unrecorded": "⚠️ <b>A Stars payment was not recorded</b>\nUser: {user}\nStars: {stars}\nCharge: <code>{charge}</code>\nInvoice: <code>{payload}</code>\n\nCredit the user by hand (wallet adjustment) or refund the Stars."
+  "admin.stars_unrecorded": "⚠️ <b>A Stars payment was not recorded</b>\nUser: {user}\nStars: {stars}\nCharge: <code>{charge}</code>\nInvoice: <code>{payload}</code>\n\nCredit the user by hand (wallet adjustment) or refund the Stars.",
+  "btn.pay_zarinpal_link": "🔗 Zarinpal (payment link)",
+  "pay.zarinpal_link": "🔗 <b>Pay through Zarinpal</b>\n\nAmount: <b>{amount}</b>\nPayment reference: <code>{ref}</code> (write it in the description if the page asks)\n\nOpen the payment page with the button below and pay. Then send a <b>screenshot of the receipt</b> here, with the tracking number in the caption.",
+  "admin.method_zarinpal_link": "Zarinpal link",
+  "admin.proof_screenshot": "Screenshot attached"
 }
