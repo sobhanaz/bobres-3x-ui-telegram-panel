@@ -33,7 +33,8 @@ func (s State) String() string {
 	}
 }
 
-// Charge is a payment as fixed when the intent was created.
+// Charge is a payment as fixed when the intent was created, plus what the
+// caller knows when it checks (Returned).
 type Charge struct {
 	IntentID    string
 	Amount      int64  // in the gateway's unit, e.g. Rial for Zarinpal
@@ -41,7 +42,12 @@ type Charge struct {
 	Description string
 	// CallbackURL is where the gateway returns the customer's browser (Zarinpal).
 	CallbackURL string
-	ExpiresAt   time.Time
+	// ExpiresAt ends the pay window: the customer may pay until then.
+	ExpiresAt time.Time
+	// Returned: this check follows the customer's return from the gateway's
+	// pages, so the payment session was used and "failed" is final. Without
+	// it, an unpaid payment is final only once the pay window has ended.
+	Returned bool
 }
 
 // Started is what the gateway returned when the payment was created.
