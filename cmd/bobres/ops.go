@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // composeProject is the Compose project name every bobres command uses, so
@@ -21,6 +23,16 @@ const composeProject = "bobres"
 func composeArgs(extra ...string) []string {
 	return append([]string{"compose", "--project-name", composeProject, "-f", "docker-compose.yml", "--env-file", ".env"}, extra...)
 }
+
+// defaultDir is where commands look for the install: $BOBRES_DIR, else /opt/bobres.
+func defaultDir() string {
+	if d := strings.TrimSpace(os.Getenv("BOBRES_DIR")); d != "" {
+		return d
+	}
+	return "/opt/bobres"
+}
+
+const dirUsage = "install directory (default: $BOBRES_DIR, else /opt/bobres)"
 
 // ops holds the side effects of status/logs/uninstall, replaceable in tests.
 type ops struct {
@@ -32,6 +44,7 @@ type ops struct {
 	// stream runs a docker command with its output going straight to the user.
 	stream func(ctx context.Context, dir string, args ...string) error
 	freeGB func(path string) float64
+	sleep  func(time.Duration)
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
@@ -48,6 +61,7 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 			return cmd.Run()
 		},
 		freeGB: freeDiskGB,
+		sleep:  time.Sleep,
 	}
 }
 
@@ -70,7 +84,7 @@ func (o *ops) requireInstall(dir string) (map[string]string, bool) {
 func (o *ops) statusCmd(args []string) int {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
-	dir := fs.String("dir", "/opt/bobres", "install directory")
+	dir := fs.String("dir", defaultDir(), dirUsage)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -171,7 +185,7 @@ func orDash(s string) string {
 func (o *ops) logsCmd(args []string) int {
 	fs := flag.NewFlagSet("logs", flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
-	dir := fs.String("dir", "/opt/bobres", "install directory")
+	dir := fs.String("dir", defaultDir(), dirUsage)
 	follow := fs.Bool("f", false, "follow")
 	tail := fs.String("tail", "200", "number of lines to show from the end of each log")
 	if err := fs.Parse(args); err != nil {
@@ -186,6 +200,10 @@ func (o *ops) logsCmd(args []string) int {
 	}
 	cargs = append(cargs, fs.Args()...)
 	if err := o.stream(context.Background(), *dir, cargs...); err != nil {
+		var ee *exec.ExitError
+		if *follow && errors.As(err, &ee) && (ee.ExitCode() == 130 || ee.ExitCode() == -1) {
+			return 0 // Ctrl+C ends following (the menu keeps running)
+		}
 		fmt.Fprintf(o.errOut, "error: docker compose logs: %v\n", err)
 		return 1
 	}
@@ -197,7 +215,7 @@ func (o *ops) logsCmd(args []string) int {
 func (o *ops) uninstallCmd(args []string) int {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
-	dir := fs.String("dir", "/opt/bobres", "install directory")
+	dir := fs.String("dir", defaultDir(), dirUsage)
 	purge := fs.Bool("purge", false, "also delete the database, Redis data, certificates and the install directory (irreversible)")
 	yes := fs.Bool("yes", false, "do not ask for confirmation")
 	if err := fs.Parse(args); err != nil {
@@ -242,4 +260,97 @@ func (o *ops) uninstallCmd(args []string) int {
 	}
 	fmt.Fprintf(o.out, "Removed containers, volumes and %s. Nothing of BOBRES remains on this server except the images (docker image prune to drop them).\n", *dir)
 	return 0
+}
+
+// dirOnly parses the --dir flag of start/stop/restart and checks the install.
+func (o *ops) dirOnly(name string, args []string) (string, bool) {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(o.errOut)
+	dir := fs.String("dir", defaultDir(), dirUsage)
+	if err := fs.Parse(args); err != nil {
+		return "", false
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(o.errOut, "bobres %s: unexpected argument %q\n", name, fs.Arg(0))
+		return "", false
+	}
+	if _, ok := o.requireInstall(*dir); !ok {
+		return "", false
+	}
+	return *dir, true
+}
+
+// startCmd starts the stack (creating containers removed by uninstall) and
+// waits until it is healthy.
+func (o *ops) startCmd(args []string) int {
+	dir, ok := o.dirOnly("start", args)
+	if !ok {
+		return 2
+	}
+	fmt.Fprintln(o.out, "Starting BOBRES...")
+	if out, err := o.run(context.Background(), dir, composeArgs("up", "-d")...); err != nil {
+		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
+		return 1
+	}
+	return waitHealthy(context.Background(), o.run, o.sleep, dir, o.out, o.errOut)
+}
+
+// stopCmd stops the containers; nothing is removed.
+func (o *ops) stopCmd(args []string) int {
+	dir, ok := o.dirOnly("stop", args)
+	if !ok {
+		return 2
+	}
+	if out, err := o.run(context.Background(), dir, composeArgs("stop")...); err != nil {
+		fmt.Fprintf(o.errOut, "error: docker compose stop failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
+		return 1
+	}
+	fmt.Fprintln(o.out, "BOBRES is stopped. The bot does not answer until you start it again (bobres start).")
+	return 0
+}
+
+// restartCmd restarts the containers and waits until they are healthy. It does
+// not apply edited settings; `bobres install` (or the menu) does.
+func (o *ops) restartCmd(args []string) int {
+	dir, ok := o.dirOnly("restart", args)
+	if !ok {
+		return 2
+	}
+	fmt.Fprintln(o.out, "Restarting BOBRES...")
+	if out, err := o.run(context.Background(), dir, composeArgs("restart")...); err != nil {
+		fmt.Fprintf(o.errOut, "error: docker compose restart failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
+		return 1
+	}
+	return waitHealthy(context.Background(), o.run, o.sleep, dir, o.out, o.errOut)
+}
+
+// waitHealthy polls the services until core, payments, provisioner and bot
+// all report healthy, for five minutes at most.
+func waitHealthy(ctx context.Context, run func(context.Context, string, ...string) ([]byte, error),
+	sleep func(time.Duration), dir string, out, errOut io.Writer) int {
+	want := []string{"core", "payments", "provisioner", "bot"}
+	deadline := 5 * time.Minute
+	for waited := time.Duration(0); ; waited += 5 * time.Second {
+		ps, err := run(ctx, dir, composeArgs("ps", "--format", "json")...)
+		health := map[string]string{}
+		if err == nil {
+			health = parseHealth(ps)
+		}
+		var pending []string
+		for _, s := range want {
+			if health[s] != "healthy" {
+				pending = append(pending, s+"="+orUnknown(health[s]))
+			}
+		}
+		if len(pending) == 0 {
+			fmt.Fprintln(out, "All services are healthy.")
+			return 0
+		}
+		if waited >= deadline {
+			fmt.Fprintf(errOut, "error: services not healthy after %s: %s\nInspect with: bobres logs --dir %s\n",
+				deadline, strings.Join(pending, ", "), dir)
+			return 1
+		}
+		sleep(5 * time.Second)
+	}
 }
