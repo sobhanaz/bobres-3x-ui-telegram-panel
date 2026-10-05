@@ -36,22 +36,27 @@ creates a GitHub pre-release with the `bobres` CLI binaries and signed checksums
 the `RELEASE_SIGNING_KEY` secret and the `RELEASE_KEY_ID` variable (both are set; see
 `tools/sign/README.md`). A pre-release tag does not move the `latest` image tag.
 
-Two things are still open before customers can install:
-- `install/install.sh` downloads from `https://get.example.com/releases/latest`, a placeholder:
-  choose where signed releases are served (a small static host, or a GitHub release of a
-  public "releases" repository).
-- Packages of a private repository are private on GHCR. For your own server, log in once as
-  root (the installer runs docker with sudo, which reads root's credentials). This reads the
-  token without echoing it or saving it in the shell history:
+The repository is public, so `install/install.sh` downloads the CLI from its latest GitHub
+release (a pre-release such as `-rc.1` is not "latest": use a plain `v0.1.0` tag for the
+one-command install, or step 3's manual way for a release candidate). One thing to check
+before customers install:
+- The four `bobres-*` image packages on GHCR must be public, or every customer must log in to
+  pull them: GitHub → your profile → Packages → each `bobres-*` → Package settings → Change
+  visibility → Public. For your own server you can instead log in once as root (the installer
+  runs docker as root). This reads the token without echoing it or saving it in the history:
   `read -rs PAT && echo "$PAT" | sudo docker login ghcr.io -u sobhanaz --password-stdin; unset PAT`
-  For customers, decide between public images (binaries only; the license gates features)
-  and a private registry with per-customer credentials (PLAN.md section 2, open decision).
 
 ## 3. Install
 
-Until the release host exists, download `bobres_linux_amd64` from the GitHub release (the
-repository is private, so use `gh release download v0.1.0-rc.1 -p bobres_linux_amd64` or the
-web page while logged in), copy it to the VPS as `bobres`, `chmod +x bobres`, and run:
+With a plain release tag (`v0.1.0`), as root on the VPS:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
+```
+
+For a release candidate, download `bobres_linux_amd64` from its GitHub pre-release
+(`gh release download v0.1.0-rc.1 -p bobres_linux_amd64`, or the release page), copy it to
+the VPS as `bobres`, `chmod +x bobres`, and run:
 
 ```bash
 sudo ./bobres install --domain panel.example.com --admin-id <your id> \
@@ -63,7 +68,7 @@ It asks for the bot token and the panel token (hidden input), checks the server,
 `/opt/bobres`, starts everything and waits until all services are healthy. Then:
 
 ```bash
-sudo ./bobres status
+sudo bobres status     # or ./bobres for the downloaded binary; plain `bobres` opens the menu
 ```
 
 ## 4. Check, in this order

@@ -8,6 +8,38 @@ Telegram bot and management panel for selling and managing 3x-ui (Xray) VPN subs
 - Admin panel: users, orders, plans, servers, traffic and expiry management
 - Payments and notifications
 
+## Install
+
+On a fresh Ubuntu 22.04/24.04 or Debian 11/12/13 server, as root:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
+```
+
+It installs Docker if needed, downloads the `bobres` CLI from the latest GitHub release,
+verifies its signature and checksum, and asks for your domain, Telegram ID, bot token and
+3x-ui panel (tokens are typed hidden). Afterwards run `bobres` for the management menu:
+
+```text
+  BOBRES manager  bobres v0.1.0
+  /opt/bobres  ·  shop.example.com  ·  version 0.1.0
+  Store: running (7/7 services)
+   1. Status
+   2. Live logs (Ctrl+C returns here)
+   3. Start
+   4. Stop
+   5. Restart
+   6. Show settings
+   7. Change the bot token
+   8. Change the owner (admin) Telegram ID
+   9. Change the 3x-ui panel (URL, API token, subscription link)
+  10. Check this server
+  11. Uninstall
+   0. Exit
+```
+
+Every item is also a command: `bobres status`, `bobres logs -f`, `bobres restart`, ... (`bobres help`).
+
 ## Status
 Phase 1 in progress (see `docs/superpowers/plans/2026-09-30-phase1-implementation.md`).
 Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
