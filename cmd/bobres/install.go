@@ -86,6 +86,7 @@ var envOrder = []string{
 	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY",
 	"BOBRES_TELEGRAM_BOT_TOKEN", "BOBRES_ADMIN_TELEGRAM_ID", "BOBRES_TIMEZONE",
 	"BOBRES_XUI_URL", "BOBRES_XUI_TOKEN", "BOBRES_XUI_SUB_URL", "BOBRES_XUI_ALLOW_PRIVATE",
+	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL", "BOBRES_ZARINPAL_HOST",
 }
 
 // generated secrets: created once, then kept on every re-run (changing a
@@ -111,6 +112,9 @@ func (ins *installer) install(args []string) int {
 	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path")
 	xuiSub := fs.String("xui-sub-url", "", "public prefix of the panel's subscription links, e.g. https://sub.example.com:2096/sub/")
 	allowPrivate := fs.Bool("xui-allow-private", false, "the panel is on this host or a private network")
+	zpMerchant := fs.String("zarinpal-merchant-id", "", "enable Zarinpal with this merchant id (36-character id from the Zarinpal panel)")
+	zpProxy := fs.String("zarinpal-proxy", "", "http(s) proxy on a server whose IP is registered in the Zarinpal panel")
+	zpPublic := fs.String("zarinpal-public-url", "", "domain registered with Zarinpal for the pay page and callback (default: https://<domain>)")
 	imageVersion := fs.String("version", "", "image tag to run (default: this CLI's version)")
 	noStart := fs.Bool("no-start", false, "write the files but do not start the stack")
 	offline := fs.Bool("offline", false, "skip network checks (bot token)")
@@ -143,6 +147,14 @@ func (ins *installer) install(args []string) int {
 	set("BOBRES_XUI_TOKEN", ins.getenv("BOBRES_XUI_TOKEN"))
 	if *allowPrivate {
 		env["BOBRES_XUI_ALLOW_PRIVATE"] = "true"
+	}
+	set("BOBRES_ZARINPAL_MERCHANT_ID", strings.ToLower(*zpMerchant))
+	set("BOBRES_ZARINPAL_PROXY", *zpProxy)
+	set("BOBRES_ZARINPAL_PUBLIC_URL", *zpPublic)
+	// A Zarinpal domain other than the main one is served by the same Caddy site.
+	env["BOBRES_ZARINPAL_HOST"] = ""
+	if u, err := url.Parse(env["BOBRES_ZARINPAL_PUBLIC_URL"]); err == nil && u.Hostname() != "" && !strings.EqualFold(u.Hostname(), env["BOBRES_DOMAIN"]) {
+		env["BOBRES_ZARINPAL_HOST"] = u.Hostname()
 	}
 
 	// Ask for what is still missing (secrets without echo).
@@ -357,6 +369,8 @@ it holds the keys that encrypt your panel token.
 `, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
 }
 
+var merchantRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
 // loopbackHost: localhost or a loopback IP literal.
 func loopbackHost(h string) bool {
 	if strings.EqualFold(h, "localhost") {
@@ -417,6 +431,19 @@ func validateEnv(env map[string]string) []error {
 	}
 	if env["BOBRES_XUI_TOKEN"] == "" {
 		errs = append(errs, errors.New("the 3x-ui API token is required"))
+	}
+	if m := env["BOBRES_ZARINPAL_MERCHANT_ID"]; m != "" && !merchantRe.MatchString(m) {
+		errs = append(errs, errors.New("the Zarinpal merchant id must be the 36-character id from the Zarinpal panel"))
+	}
+	if pu := env["BOBRES_ZARINPAL_PUBLIC_URL"]; pu != "" {
+		if u, err := url.Parse(pu); err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
+			errs = append(errs, errors.New("the Zarinpal public URL must be https://host of the domain registered with Zarinpal"))
+		}
+	}
+	if px := env["BOBRES_ZARINPAL_PROXY"]; px != "" {
+		if u, err := url.Parse(px); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			errs = append(errs, errors.New("the Zarinpal proxy must be an http(s) URL"))
+		}
 	}
 	for k, v := range env {
 		if strings.ContainsAny(v, "'\n\r") {

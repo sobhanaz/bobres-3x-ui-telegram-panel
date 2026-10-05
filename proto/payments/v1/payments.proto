@@ -10,13 +10,19 @@ message PaymentIntent {
   string id = 1;
   string order_id = 2; // empty for wallet top-ups
   string user_id = 3;
-  string provider = 4; // wallet | manual_card | manual_crypto
+  string provider = 4; // wallet | manual_card | manual_crypto | zarinpal | stars
   common.v1.Money amount = 5;
   string status = 6; // pending|confirming|succeeded|failed|expired
-  string provider_ref = 7;
+  string provider_ref = 7; // gateways: bank reference or transaction hash
   int64 expires_at = 8;
   int64 created_at = 9;
   int64 updated_at = 10;
+  // Automated gateways: what the customer pays there, fixed at creation (IRR for
+  // Zarinpal, XTR for Telegram Stars).
+  common.v1.Money gateway_amount = 11;
+  string pay_url = 12; // where the customer pays (Zarinpal: a page on this install)
+  string external_id = 13; // the gateway's id for the payment
+  string failure_reason = 14; // why a gateway payment failed
 }
 
 message CreateIntentRequest {
@@ -25,6 +31,40 @@ message CreateIntentRequest {
   string provider = 3;
   common.v1.Money amount = 4;
   string idempotency_key = 5;
+  // Automated gateways (zarinpal, stars): the amount to charge at the
+  // gateway, computed by core from its rates. Not used by manual providers.
+  common.v1.Money gateway_amount = 6;
+  string description = 7; // shown at the gateway, e.g. the plan name
+}
+
+// CheckIntentRequest asks the gateway about an open intent now.
+message CheckIntentRequest {
+  string intent_id = 1;
+  string user_id = 2; // must own the intent
+}
+
+// PrecheckStarsPaymentRequest: the bot received a pre_checkout_query for a
+// Telegram Stars invoice; nothing is charged yet.
+message PrecheckStarsPaymentRequest {
+  string intent_id = 1; // the invoice payload
+  string user_id = 2; // the payer; must own the intent
+  int64 total_amount = 3; // Stars, as Telegram reports them
+  string currency = 4; // must be XTR
+}
+
+// ConfirmStarsPaymentRequest: the bot received a successful_payment.
+message ConfirmStarsPaymentRequest {
+  string intent_id = 1; // the invoice payload
+  string user_id = 2; // the payer; must own the intent
+  int64 total_amount = 3; // Stars, as Telegram reports them
+  string currency = 4; // must be XTR
+  string telegram_payment_charge_id = 5;
+}
+
+message ListGatewaysRequest {}
+
+message ListGatewaysResponse {
+  repeated string providers = 1; // enabled automated providers
 }
 
 message GetIntentRequest {
@@ -89,4 +129,9 @@ service PaymentsService {
   rpc SubmitTXID(SubmitTXIDRequest) returns (PaymentIntent);
   rpc ReviewManualPayment(ReviewManualPaymentRequest) returns (PaymentIntent);
   rpc ListPendingReceipts(ListPendingReceiptsRequest) returns (ListPendingReceiptsResponse);
+  rpc CheckIntent(CheckIntentRequest) returns (PaymentIntent);
+  // Telegram Stars: validate before Telegram charges, then settle the payment.
+  rpc PrecheckStarsPayment(PrecheckStarsPaymentRequest) returns (PaymentIntent);
+  rpc ConfirmStarsPayment(ConfirmStarsPaymentRequest) returns (PaymentIntent);
+  rpc ListGateways(ListGatewaysRequest) returns (ListGatewaysResponse);
 }

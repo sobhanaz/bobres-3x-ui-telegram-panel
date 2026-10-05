@@ -23,6 +23,7 @@ var SettingKeys = map[string]string{
 	"payments.usdt_trc20":  "USDT TRC20 deposit address",
 	"payments.usdt_erc20":  "USDT ERC20 deposit address",
 	"payments.usdt_rate":   "Toman per 1 USDT, to quote Toman prices in USDT",
+	"payments.stars_rate":  "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
 	"branding.name":        "store name shown to users",
 	"branding.support":     "support contact (e.g. @support)",
 	"texts.fa.welcome":     "Persian welcome text",

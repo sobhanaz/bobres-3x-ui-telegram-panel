@@ -2,6 +2,10 @@ package handler
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,14 +34,46 @@ type msg struct {
 }
 
 type fakeTG struct {
-	mu     sync.Mutex
-	chats  map[int64][]*msg
-	toasts map[int64][]string // by callback sender
-	cbFrom map[string]int64
+	mu       sync.Mutex
+	chats    map[int64][]*msg
+	toasts   map[int64][]string // by callback sender
+	cbFrom   map[string]int64
+	invoices map[int64][]tg.Invoice
+	answers  map[string]precheckAnswer // by pre-checkout query id
+}
+
+type precheckAnswer struct {
+	ok  bool
+	msg string
 }
 
 func newFakeTG() *fakeTG {
-	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{}}
+	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{},
+		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}}
+}
+
+func (f *fakeTG) SendInvoice(_ context.Context, chat int64, inv tg.Invoice) (*tg.Message, error) {
+	f.mu.Lock()
+	f.invoices[chat] = append(f.invoices[chat], inv)
+	f.mu.Unlock()
+	return f.add(chat, &msg{text: fmt.Sprintf("[invoice] %s: %d Stars", inv.Title, inv.Stars)}), nil
+}
+
+func (f *fakeTG) AnswerPreCheckoutQuery(_ context.Context, id string, ok bool, errMsg string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.answers[id] = precheckAnswer{ok: ok, msg: errMsg}
+	return nil
+}
+
+func (f *fakeTG) lastInvoice(chat int64) tg.Invoice {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	inv := f.invoices[chat]
+	if len(inv) == 0 {
+		return tg.Invoice{}
+	}
+	return inv[len(inv)-1]
 }
 
 func (f *fakeTG) add(chat int64, m *msg) *tg.Message {
@@ -242,6 +278,52 @@ func (p *person) toast(sub string) {
 		}
 	}
 	p.w.t.Fatalf("user %d never got toast %q (got %v)", p.id, sub, p.w.tg.toasts[p.id])
+}
+
+// preCheckout plays Telegram asking the bot to confirm a Stars payment and
+// returns the bot's answer.
+func (p *person) preCheckout(inv tg.Invoice, stars int64) precheckAnswer {
+	p.w.t.Helper()
+	id := fmt.Sprintf("pcq-%d", p.w.updateID())
+	p.w.h.Handle(context.Background(), tg.Update{UpdateID: p.w.updateID(), PreCheckoutQuery: &tg.PreCheckoutQuery{
+		ID: id, From: *p.from(), Currency: "XTR", TotalAmount: stars, InvoicePayload: inv.Payload,
+	}})
+	p.w.tg.mu.Lock()
+	defer p.w.tg.mu.Unlock()
+	a, ok := p.w.tg.answers[id]
+	if !ok {
+		p.w.t.Fatalf("the bot never answered pre-checkout %s", id)
+	}
+	return a
+}
+
+// paid plays Telegram reporting a completed Stars payment.
+func (p *person) paid(inv tg.Invoice, stars int64, chargeID string) {
+	p.w.h.Handle(context.Background(), tg.Update{UpdateID: p.w.updateID(), Message: &tg.Message{
+		MessageID: int(p.w.updateID()), From: p.from(), Chat: tg.Chat{ID: p.id, Type: "private"},
+		SuccessfulPayment: &tg.SuccessfulPayment{Currency: "XTR", TotalAmount: stars, InvoicePayload: inv.Payload,
+			TelegramPaymentChargeID: chargeID},
+	}})
+}
+
+// link returns the URL of the newest link button whose label contains label.
+func (p *person) link(label string) string {
+	p.w.t.Helper()
+	ms := p.w.tg.all(p.id)
+	for i := len(ms) - 1; i >= 0; i-- {
+		if ms[i].kb == nil {
+			continue
+		}
+		for _, row := range ms[i].kb.InlineKeyboard {
+			for _, b := range row {
+				if b.URL != "" && strings.Contains(b.Text, label) {
+					return b.URL
+				}
+			}
+		}
+	}
+	p.w.t.Fatalf("user %d: no link button %q", p.id, label)
+	return ""
 }
 
 // eventually runs the notification feed until cond holds.
@@ -532,4 +614,115 @@ func TestParsePlanAndMinor(t *testing.T) {
 	if _, ok := parseMinor("1.2345678", "USDT"); ok {
 		t.Error("more decimals than the currency has accepted")
 	}
+}
+
+func TestStarsPurchase(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	u := w.person(501, "dana")
+	u.text("/start")
+	u.press("lang:en")
+	// Seen before the owner priced Stars: no Stars button yet...
+	u.press("buy")
+	u.press("plan:")
+	for _, m := range w.tg.all(501) {
+		if strings.Contains(strings.Join(m.labels(), "|"), "Telegram Stars") {
+			t.Fatal("Stars offered before it was priced")
+		}
+	}
+	owner.text("/set payments.stars_rate 1500")
+	owner.sees("Saved")
+	// ...and right after it is priced, the button appears (no stale cache).
+	u.press("home")
+	u.press("buy")
+	u.press("plan:")
+	u.sees("Pay with Telegram Stars")
+	u.press("pay:s:")
+	u.sees("invoice for <b>100 Stars</b>") // 150,000 Toman at 1,500 Toman per Star
+	inv := w.tg.lastInvoice(501)
+	if inv.Stars != 100 || inv.Payload == "" || inv.StartParameter == "" || len([]rune(inv.Title)) > 32 {
+		t.Fatalf("invoice: %+v", inv)
+	}
+
+	// Telegram asks before charging: wrong amounts and other payers are refused.
+	if a := u.preCheckout(inv, 99); a.ok || a.msg == "" {
+		t.Fatalf("99 Stars accepted: %+v", a)
+	}
+	eve := w.person(502, "eve")
+	eve.text("/start")
+	eve.press("lang:en")
+	if a := eve.preCheckout(inv, 100); a.ok {
+		t.Fatal("another user may pay this invoice")
+	}
+	if a := u.preCheckout(inv, 100); !a.ok {
+		t.Fatalf("valid pre-checkout refused: %+v", a)
+	}
+	u.paid(inv, 100, "tg-charge-1")
+	u.sees("Payment received")
+	u.eventuallySees("Your service is ready")
+
+	// The same payment reported again changes nothing and is not an error.
+	u.paid(inv, 100, "tg-charge-1")
+	if a := u.preCheckout(inv, 100); a.ok {
+		t.Fatal("a paid invoice passed pre-checkout again")
+	}
+
+	// A payment that cannot settle (a second charge for the paid invoice) is
+	// never answered with "received": the payer and the admin are told.
+	eve.paid(inv, 100, "tg-charge-eve")
+	eve.sees("could not record it yet")
+	owner.sees("A Stars payment was not recorded")
+	for _, m := range w.tg.all(502) {
+		if strings.Contains(m.text, "Payment received") {
+			t.Fatal("an unsettled payment was confirmed to the payer")
+		}
+	}
+}
+
+func TestZarinpalPurchase(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	u := w.person(601, "farid")
+	u.text("/start")
+	u.press("lang:en")
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:z:")
+	u.sees("Turn off your VPN")
+	link := u.link("Open the payment page")
+	if !strings.HasPrefix(link, w.stack.PaySite.URL+"/pay/") {
+		t.Fatalf("pay link must be our own page (Zarinpal checks the Referer): %s", link)
+	}
+
+	// Not paid yet: checking says so.
+	u.press("chk:")
+	u.toast("Not confirmed yet")
+
+	// Our page links to Zarinpal; the customer pays and the browser comes back.
+	resp, err := http.Get(link) //nolint:gosec,noctx // test server
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	authority := regexp.MustCompile(`/pg/StartPay/(S[0-9]{35})`).FindStringSubmatch(string(page))
+	if authority == nil {
+		t.Fatalf("pay page has no Zarinpal link: %s", page)
+	}
+	cb, err := w.stack.Zarinpal.Pay(authority[1], true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.Get(cb) //nolint:gosec,noctx // test server
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(back), "Payment received") {
+		t.Fatalf("return page: %s", back)
+	}
+	u.eventuallySees("Your service is ready")
+	u.press("chk:")
+	u.sees("Payment received")
 }

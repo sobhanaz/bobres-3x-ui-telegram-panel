@@ -15,7 +15,9 @@
 	}
 }
 
-{$BOBRES_DOMAIN} {
+# BOBRES_ZARINPAL_HOST (optional): a second domain registered with Zarinpal for the
+# pay page and return URL, when the main domain is not reachable from Iran without a VPN.
+{$BOBRES_DOMAIN} {$BOBRES_ZARINPAL_HOST} {
 	encode zstd gzip
 
 	header {
@@ -24,7 +26,9 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
-		Referrer-Policy "no-referrer"
+		# "?": only when the upstream sets none. The payments pay page sends
+		# "origin", which Zarinpal needs to see where the payment started.
+		?Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		-Server
@@ -35,14 +39,29 @@
 		format json
 	}
 
+	# On the Zarinpal domain only the pay page and the return URL exist: no
+	# subscription links, admin or API on a domain registered with a payment
+	# gateway. (When BOBRES_ZARINPAL_HOST is empty this compares with "", which no
+	# request host equals, so it never matches.)
+	@zarinpalHostOther {
+		expression `{host} == "{$BOBRES_ZARINPAL_HOST}"`
+		not path /pay/* /webhooks/zarinpal
+	}
+	handle @zarinpalHostOther {
+		respond "Not found" 404
+	}
+
 	# Service-to-service endpoints must never be reachable from the internet, even by mistake.
 	@internal path /api/internal /api/internal/* /internal /internal/*
 	handle @internal {
 		respond "Not found" 404
 	}
 
-	# Payment gateway callbacks (signature-verified by the payments service).
-	handle /webhooks/* {
+	# Payment pages a customer opens from the bot (Zarinpal must be started from a
+	# page on the registered domain) and gateway returns/callbacks. The payments
+	# service verifies every payment with the gateway; nothing here is trusted.
+	@payments path /webhooks/* /pay/*
+	handle @payments {
 		request_body {
 			max_size 1MB
 		}

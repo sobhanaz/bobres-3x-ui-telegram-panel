@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	paymentsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1"
@@ -17,30 +18,94 @@ import (
 // Server implements paymentsv1.PaymentsServiceServer.
 type Server struct {
 	paymentsv1.UnimplementedPaymentsServiceServer
-	svc *domain.Service
-	st  *store.Store
+	svc       *domain.Service
+	st        *store.Store
+	publicURL string // https://<domain>, for gateway callbacks
 }
 
 // New builds the server.
 func New(svc *domain.Service, st *store.Store) *Server { return &Server{svc: svc, st: st} }
 
+// SetPublicURL sets the install's public base URL (https://<domain>); gateways
+// that return the customer's browser (Zarinpal) are told to come back there.
+func (s *Server) SetPublicURL(u string) { s.publicURL = strings.TrimRight(u, "/") }
+
 // Register attaches the service.
 func (s *Server) Register(g *grpc.Server) { paymentsv1.RegisterPaymentsServiceServer(g, s) }
 
-// CreateIntent validates and stores a pending intent.
+// CreateIntent validates and stores a pending intent; for an automated gateway
+// it also creates the payment there (Zarinpal) or fixes the Stars.
 func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentRequest) (*paymentsv1.PaymentIntent, error) {
-	in, err := s.svc.CreateIntent(ctx, &store.Intent{
+	in := &store.Intent{
 		OrderID:        optstr(req.GetOrderId()),
 		UserID:         req.GetUserId(),
 		Provider:       req.GetProvider(),
 		Amount:         req.GetAmount().GetAmount(),
 		Currency:       req.GetAmount().GetCurrency(),
 		IdempotencyKey: req.GetIdempotencyKey(),
-	})
+	}
+	if ga := req.GetGatewayAmount(); ga != nil {
+		amount, cur := ga.GetAmount(), ga.GetCurrency()
+		in.GatewayAmount, in.GatewayCurrency = &amount, &cur
+	}
+	var (
+		out *store.Intent
+		err error
+	)
+	switch req.GetProvider() {
+	case domain.Stars:
+		out, err = s.svc.StartStars(ctx, in)
+	case "zarinpal":
+		out, err = s.svc.StartGateway(ctx, in, req.GetDescription(), s.publicURL+"/webhooks/"+req.GetProvider())
+	default:
+		out, err = s.svc.CreateIntent(ctx, in)
+	}
+	if err != nil {
+		return nil, fail(err)
+	}
+	return s.publicIntent(out), nil
+}
+
+// publicIntent is intentToProto for the customer: a Zarinpal payment must start
+// from our own page (Zarinpal checks the Referer), so that page is the pay URL.
+func (s *Server) publicIntent(in *store.Intent) *paymentsv1.PaymentIntent {
+	p := intentToProto(in)
+	if in.Provider == "zarinpal" && p.PayUrl != "" {
+		p.PayUrl = s.publicURL + "/pay/" + in.ID
+	}
+	return p
+}
+
+// CheckIntent asks the gateway about an open intent now.
+func (s *Server) CheckIntent(ctx context.Context, req *paymentsv1.CheckIntentRequest) (*paymentsv1.PaymentIntent, error) {
+	in, err := s.svc.CheckIntent(ctx, req.GetUserId(), req.GetIntentId(), "check")
+	if err != nil {
+		return nil, fail(err)
+	}
+	return s.publicIntent(in), nil
+}
+
+// PrecheckStarsPayment validates a Stars pre-checkout (nothing is charged yet).
+func (s *Server) PrecheckStarsPayment(ctx context.Context, req *paymentsv1.PrecheckStarsPaymentRequest) (*paymentsv1.PaymentIntent, error) {
+	in, err := s.svc.PrecheckStars(ctx, req.GetUserId(), req.GetIntentId(), req.GetTotalAmount(), req.GetCurrency())
 	if err != nil {
 		return nil, fail(err)
 	}
 	return intentToProto(in), nil
+}
+
+// ConfirmStarsPayment settles a Stars payment Telegram reported to the bot.
+func (s *Server) ConfirmStarsPayment(ctx context.Context, req *paymentsv1.ConfirmStarsPaymentRequest) (*paymentsv1.PaymentIntent, error) {
+	in, err := s.svc.ConfirmStars(ctx, req.GetUserId(), req.GetIntentId(), req.GetTotalAmount(), req.GetCurrency(), req.GetTelegramPaymentChargeId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return intentToProto(in), nil
+}
+
+// ListGateways lists the automated providers usable on this install.
+func (s *Server) ListGateways(context.Context, *paymentsv1.ListGatewaysRequest) (*paymentsv1.ListGatewaysResponse, error) {
+	return &paymentsv1.ListGatewaysResponse{Providers: s.svc.Gateways()}, nil
 }
 
 // GetIntent returns one intent.
@@ -131,6 +196,21 @@ func intentToProto(in *store.Intent) *paymentsv1.PaymentIntent {
 		p.ExpiresAt = in.ExpiresAt.Unix()
 	}
 	p.CreatedAt = in.CreatedAt.Unix()
+	if in.GatewayAmount != nil && in.GatewayCurrency != nil {
+		p.GatewayAmount = &commonv1.Money{Amount: *in.GatewayAmount, Currency: *in.GatewayCurrency}
+	}
+	if in.PayURL != nil {
+		p.PayUrl = *in.PayURL
+	}
+	if in.ExternalID != nil {
+		p.ExternalId = *in.ExternalID
+	}
+	if in.ProviderRef != nil {
+		p.ProviderRef = *in.ProviderRef
+	}
+	if in.FailureReason != nil {
+		p.FailureReason = *in.FailureReason
+	}
 	return p
 }
 
@@ -150,6 +230,10 @@ func fail(err error) error {
 		return status.Error(codes.AlreadyExists, "this transaction was already submitted")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return status.Error(codes.AlreadyExists, "idempotency key reused for a different payment")
+	case errors.Is(err, domain.ErrAlreadyPaid):
+		return status.Error(codes.AlreadyExists, "this payment was already settled")
+	case errors.Is(err, domain.ErrUnavailable):
+		return status.Error(codes.Unavailable, "the payment gateway is unavailable, try again shortly")
 	default:
 		return status.Error(codes.Internal, "internal error")
 	}

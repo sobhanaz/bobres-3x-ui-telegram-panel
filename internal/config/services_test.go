@@ -124,3 +124,24 @@ func TestLoadProvisioner(t *testing.T) {
 		t.Fatalf("panel seed not loaded: %+v %v", p, err)
 	}
 }
+
+func TestZarinpalConfig(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("BOBRES_DATABASE_URL", "postgres://x")
+	t.Setenv("BOBRES_PEER_CORE_TOKEN", strings.Repeat("c", 40))
+	t.Setenv("BOBRES_ZARINPAL_MERCHANT_ID", "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b")
+	t.Setenv("BOBRES_PUBLIC_URL", "https://shop.example.com")
+	if c, err := LoadPayments(); err != nil || c.ZarinpalPublicURL != "https://shop.example.com" {
+		t.Fatalf("defaults to the public URL: %v %+v", err, c.ZarinpalPublicURL)
+	}
+	// The sandbox gives service for free (any merchant, no card): never in prod.
+	t.Setenv("BOBRES_ZARINPAL_SANDBOX", "true")
+	if _, err := LoadPayments(); err == nil || !strings.Contains(err.Error(), "SANDBOX") {
+		t.Fatalf("sandbox accepted in prod: %v", err)
+	}
+	t.Setenv("BOBRES_ZARINPAL_SANDBOX", "false")
+	t.Setenv("BOBRES_ZARINPAL_PUBLIC_URL", "https://pay.example.ir/path")
+	if _, err := LoadPayments(); err == nil {
+		t.Fatal("a public URL with a path was accepted")
+	}
+}

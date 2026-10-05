@@ -233,7 +233,7 @@ func TestOrchestratedIntentForOrder(t *testing.T) {
 		t.Errorf("bad result: %+v fake=%+v", res, fake)
 	}
 	for name, p := range map[string]CreatePaymentIntentParams{
-		"bad provider":   {UserID: u.ID, Provider: "zarinpal", Amount: 1, Currency: "IRT", IdempotencyKey: "x1"},
+		"bad provider":   {UserID: u.ID, Provider: "paypal", Amount: 1, Currency: "IRT", IdempotencyKey: "x1"},
 		"bad currency":   {UserID: u.ID, Provider: "manual_card", Amount: 1, Currency: "EUR", IdempotencyKey: "x2"},
 		"zero top-up":    {UserID: u.ID, Provider: "manual_card", Amount: 0, Currency: "IRT", IdempotencyKey: "x3"},
 		"missing key":    {UserID: u.ID, Provider: "manual_card", Amount: 1, Currency: "IRT"},
@@ -248,6 +248,8 @@ func TestOrchestratedIntentForOrder(t *testing.T) {
 }
 
 type fakePayments struct {
+	started    []GatewayStart
+	gateways   []string
 	id, status string
 	amount     int64
 	currency   string
@@ -255,6 +257,27 @@ type fakePayments struct {
 	reviews    []string // reviewer|intent|decision
 	proofs     []string
 }
+
+func (f *fakePayments) StartGateway(_ context.Context, p GatewayStart) (*GatewayIntent, error) {
+	f.started = append(f.started, p)
+	return &GatewayIntent{ID: "00000000-0000-7000-8000-0000000000g1", Status: "pending", Provider: p.Provider,
+		Amount: p.Amount, Currency: p.Currency, GatewayAmount: p.GatewayAmount, GatewayCurrency: p.GatewayCurrency,
+		PayURL: "https://pay.example.test/x"}, nil
+}
+
+func (f *fakePayments) CheckIntent(_ context.Context, _, intentID string) (*GatewayIntent, error) {
+	return &GatewayIntent{ID: intentID, Status: "pending"}, nil
+}
+
+func (f *fakePayments) PrecheckStars(_ context.Context, _, intentID string, _ int64, _ string) (*GatewayIntent, error) {
+	return &GatewayIntent{ID: intentID, Status: "pending"}, nil
+}
+
+func (f *fakePayments) ConfirmStars(_ context.Context, _, intentID string, _ int64, _, _ string) (*GatewayIntent, error) {
+	return &GatewayIntent{ID: intentID, Status: "succeeded"}, nil
+}
+
+func (f *fakePayments) ListGateways(context.Context) ([]string, error) { return f.gateways, nil }
 
 func (f *fakePayments) CreateIntent(_ context.Context, _, _, _ string, amount int64, currency, _ string) (string, string, error) {
 	f.amount, f.currency = amount, currency

@@ -23,17 +23,23 @@ const (
 )
 
 type PaymentIntent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	OrderId       string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-ups
-	UserId        string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Provider      string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto
-	Amount        *v1.Money              `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"` // pending|confirming|succeeded|failed|expired
-	ProviderRef   string                 `protobuf:"bytes,7,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"`
-	ExpiresAt     int64                  `protobuf:"varint,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	CreatedAt     int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrderId     string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-ups
+	UserId      string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | zarinpal | stars
+	Amount      *v1.Money              `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
+	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`                              // pending|confirming|succeeded|failed|expired
+	ProviderRef string                 `protobuf:"bytes,7,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"` // gateways: bank reference or transaction hash
+	ExpiresAt   int64                  `protobuf:"varint,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	CreatedAt   int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt   int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Automated gateways: what the customer pays there, fixed at creation (IRR for
+	// Zarinpal, XTR for Telegram Stars).
+	GatewayAmount *v1.Money `protobuf:"bytes,11,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
+	PayUrl        string    `protobuf:"bytes,12,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"`                      // where the customer pays (Zarinpal: a page on this install)
+	ExternalId    string    `protobuf:"bytes,13,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`          // the gateway's id for the payment
+	FailureReason string    `protobuf:"bytes,14,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"` // why a gateway payment failed
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -138,6 +144,34 @@ func (x *PaymentIntent) GetUpdatedAt() int64 {
 	return 0
 }
 
+func (x *PaymentIntent) GetGatewayAmount() *v1.Money {
+	if x != nil {
+		return x.GatewayAmount
+	}
+	return nil
+}
+
+func (x *PaymentIntent) GetPayUrl() string {
+	if x != nil {
+		return x.PayUrl
+	}
+	return ""
+}
+
+func (x *PaymentIntent) GetExternalId() string {
+	if x != nil {
+		return x.ExternalId
+	}
+	return ""
+}
+
+func (x *PaymentIntent) GetFailureReason() string {
+	if x != nil {
+		return x.FailureReason
+	}
+	return ""
+}
+
 type CreateIntentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrderId        string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // optional, empty for top-ups
@@ -145,8 +179,12 @@ type CreateIntentRequest struct {
 	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Automated gateways (zarinpal, stars): the amount to charge at the
+	// gateway, computed by core from its rates. Not used by manual providers.
+	GatewayAmount *v1.Money `protobuf:"bytes,6,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
+	Description   string    `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"` // shown at the gateway, e.g. the plan name
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateIntentRequest) Reset() {
@@ -214,6 +252,300 @@ func (x *CreateIntentRequest) GetIdempotencyKey() string {
 	return ""
 }
 
+func (x *CreateIntentRequest) GetGatewayAmount() *v1.Money {
+	if x != nil {
+		return x.GatewayAmount
+	}
+	return nil
+}
+
+func (x *CreateIntentRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// CheckIntentRequest asks the gateway about an open intent now.
+type CheckIntentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IntentId      string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // must own the intent
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckIntentRequest) Reset() {
+	*x = CheckIntentRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckIntentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckIntentRequest) ProtoMessage() {}
+
+func (x *CheckIntentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckIntentRequest.ProtoReflect.Descriptor instead.
+func (*CheckIntentRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CheckIntentRequest) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *CheckIntentRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// PrecheckStarsPaymentRequest: the bot received a pre_checkout_query for a
+// Telegram Stars invoice; nothing is charged yet.
+type PrecheckStarsPaymentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IntentId      string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`           // the invoice payload
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                 // the payer; must own the intent
+	TotalAmount   int64                  `protobuf:"varint,3,opt,name=total_amount,json=totalAmount,proto3" json:"total_amount,omitempty"` // Stars, as Telegram reports them
+	Currency      string                 `protobuf:"bytes,4,opt,name=currency,proto3" json:"currency,omitempty"`                           // must be XTR
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrecheckStarsPaymentRequest) Reset() {
+	*x = PrecheckStarsPaymentRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrecheckStarsPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrecheckStarsPaymentRequest) ProtoMessage() {}
+
+func (x *PrecheckStarsPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrecheckStarsPaymentRequest.ProtoReflect.Descriptor instead.
+func (*PrecheckStarsPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PrecheckStarsPaymentRequest) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *PrecheckStarsPaymentRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *PrecheckStarsPaymentRequest) GetTotalAmount() int64 {
+	if x != nil {
+		return x.TotalAmount
+	}
+	return 0
+}
+
+func (x *PrecheckStarsPaymentRequest) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+// ConfirmStarsPaymentRequest: the bot received a successful_payment.
+type ConfirmStarsPaymentRequest struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	IntentId                string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`           // the invoice payload
+	UserId                  string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                 // the payer; must own the intent
+	TotalAmount             int64                  `protobuf:"varint,3,opt,name=total_amount,json=totalAmount,proto3" json:"total_amount,omitempty"` // Stars, as Telegram reports them
+	Currency                string                 `protobuf:"bytes,4,opt,name=currency,proto3" json:"currency,omitempty"`                           // must be XTR
+	TelegramPaymentChargeId string                 `protobuf:"bytes,5,opt,name=telegram_payment_charge_id,json=telegramPaymentChargeId,proto3" json:"telegram_payment_charge_id,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *ConfirmStarsPaymentRequest) Reset() {
+	*x = ConfirmStarsPaymentRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmStarsPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmStarsPaymentRequest) ProtoMessage() {}
+
+func (x *ConfirmStarsPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmStarsPaymentRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmStarsPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ConfirmStarsPaymentRequest) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *ConfirmStarsPaymentRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ConfirmStarsPaymentRequest) GetTotalAmount() int64 {
+	if x != nil {
+		return x.TotalAmount
+	}
+	return 0
+}
+
+func (x *ConfirmStarsPaymentRequest) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *ConfirmStarsPaymentRequest) GetTelegramPaymentChargeId() string {
+	if x != nil {
+		return x.TelegramPaymentChargeId
+	}
+	return ""
+}
+
+type ListGatewaysRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGatewaysRequest) Reset() {
+	*x = ListGatewaysRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGatewaysRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGatewaysRequest) ProtoMessage() {}
+
+func (x *ListGatewaysRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGatewaysRequest.ProtoReflect.Descriptor instead.
+func (*ListGatewaysRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{5}
+}
+
+type ListGatewaysResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Providers     []string               `protobuf:"bytes,1,rep,name=providers,proto3" json:"providers,omitempty"` // enabled automated providers
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGatewaysResponse) Reset() {
+	*x = ListGatewaysResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGatewaysResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGatewaysResponse) ProtoMessage() {}
+
+func (x *ListGatewaysResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGatewaysResponse.ProtoReflect.Descriptor instead.
+func (*ListGatewaysResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListGatewaysResponse) GetProviders() []string {
+	if x != nil {
+		return x.Providers
+	}
+	return nil
+}
+
 type GetIntentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -223,7 +555,7 @@ type GetIntentRequest struct {
 
 func (x *GetIntentRequest) Reset() {
 	*x = GetIntentRequest{}
-	mi := &file_payments_v1_payments_proto_msgTypes[2]
+	mi := &file_payments_v1_payments_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -235,7 +567,7 @@ func (x *GetIntentRequest) String() string {
 func (*GetIntentRequest) ProtoMessage() {}
 
 func (x *GetIntentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[2]
+	mi := &file_payments_v1_payments_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -248,7 +580,7 @@ func (x *GetIntentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntentRequest.ProtoReflect.Descriptor instead.
 func (*GetIntentRequest) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{2}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetIntentRequest) GetId() string {
@@ -270,7 +602,7 @@ type SubmitReceiptRequest struct {
 
 func (x *SubmitReceiptRequest) Reset() {
 	*x = SubmitReceiptRequest{}
-	mi := &file_payments_v1_payments_proto_msgTypes[3]
+	mi := &file_payments_v1_payments_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -282,7 +614,7 @@ func (x *SubmitReceiptRequest) String() string {
 func (*SubmitReceiptRequest) ProtoMessage() {}
 
 func (x *SubmitReceiptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[3]
+	mi := &file_payments_v1_payments_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -295,7 +627,7 @@ func (x *SubmitReceiptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitReceiptRequest.ProtoReflect.Descriptor instead.
 func (*SubmitReceiptRequest) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{3}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SubmitReceiptRequest) GetIntentId() string {
@@ -338,7 +670,7 @@ type SubmitTXIDRequest struct {
 
 func (x *SubmitTXIDRequest) Reset() {
 	*x = SubmitTXIDRequest{}
-	mi := &file_payments_v1_payments_proto_msgTypes[4]
+	mi := &file_payments_v1_payments_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -350,7 +682,7 @@ func (x *SubmitTXIDRequest) String() string {
 func (*SubmitTXIDRequest) ProtoMessage() {}
 
 func (x *SubmitTXIDRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[4]
+	mi := &file_payments_v1_payments_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -363,7 +695,7 @@ func (x *SubmitTXIDRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitTXIDRequest.ProtoReflect.Descriptor instead.
 func (*SubmitTXIDRequest) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{4}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SubmitTXIDRequest) GetIntentId() string {
@@ -406,7 +738,7 @@ type ReviewManualPaymentRequest struct {
 
 func (x *ReviewManualPaymentRequest) Reset() {
 	*x = ReviewManualPaymentRequest{}
-	mi := &file_payments_v1_payments_proto_msgTypes[5]
+	mi := &file_payments_v1_payments_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -418,7 +750,7 @@ func (x *ReviewManualPaymentRequest) String() string {
 func (*ReviewManualPaymentRequest) ProtoMessage() {}
 
 func (x *ReviewManualPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[5]
+	mi := &file_payments_v1_payments_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -431,7 +763,7 @@ func (x *ReviewManualPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewManualPaymentRequest.ProtoReflect.Descriptor instead.
 func (*ReviewManualPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{5}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ReviewManualPaymentRequest) GetIntentId() string {
@@ -471,7 +803,7 @@ type ListPendingReceiptsRequest struct {
 
 func (x *ListPendingReceiptsRequest) Reset() {
 	*x = ListPendingReceiptsRequest{}
-	mi := &file_payments_v1_payments_proto_msgTypes[6]
+	mi := &file_payments_v1_payments_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -483,7 +815,7 @@ func (x *ListPendingReceiptsRequest) String() string {
 func (*ListPendingReceiptsRequest) ProtoMessage() {}
 
 func (x *ListPendingReceiptsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[6]
+	mi := &file_payments_v1_payments_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -496,7 +828,7 @@ func (x *ListPendingReceiptsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPendingReceiptsRequest.ProtoReflect.Descriptor instead.
 func (*ListPendingReceiptsRequest) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{6}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListPendingReceiptsRequest) GetPagination() *v1.Pagination {
@@ -520,7 +852,7 @@ type ManualReceipt struct {
 
 func (x *ManualReceipt) Reset() {
 	*x = ManualReceipt{}
-	mi := &file_payments_v1_payments_proto_msgTypes[7]
+	mi := &file_payments_v1_payments_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -532,7 +864,7 @@ func (x *ManualReceipt) String() string {
 func (*ManualReceipt) ProtoMessage() {}
 
 func (x *ManualReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[7]
+	mi := &file_payments_v1_payments_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -545,7 +877,7 @@ func (x *ManualReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManualReceipt.ProtoReflect.Descriptor instead.
 func (*ManualReceipt) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{7}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ManualReceipt) GetReceiptFile() string {
@@ -597,7 +929,7 @@ type PendingReceipt struct {
 
 func (x *PendingReceipt) Reset() {
 	*x = PendingReceipt{}
-	mi := &file_payments_v1_payments_proto_msgTypes[8]
+	mi := &file_payments_v1_payments_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -609,7 +941,7 @@ func (x *PendingReceipt) String() string {
 func (*PendingReceipt) ProtoMessage() {}
 
 func (x *PendingReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[8]
+	mi := &file_payments_v1_payments_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -622,7 +954,7 @@ func (x *PendingReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingReceipt.ProtoReflect.Descriptor instead.
 func (*PendingReceipt) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{8}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PendingReceipt) GetIntent() *PaymentIntent {
@@ -657,7 +989,7 @@ type ListPendingReceiptsResponse struct {
 
 func (x *ListPendingReceiptsResponse) Reset() {
 	*x = ListPendingReceiptsResponse{}
-	mi := &file_payments_v1_payments_proto_msgTypes[9]
+	mi := &file_payments_v1_payments_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -669,7 +1001,7 @@ func (x *ListPendingReceiptsResponse) String() string {
 func (*ListPendingReceiptsResponse) ProtoMessage() {}
 
 func (x *ListPendingReceiptsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[9]
+	mi := &file_payments_v1_payments_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -682,7 +1014,7 @@ func (x *ListPendingReceiptsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPendingReceiptsResponse.ProtoReflect.Descriptor instead.
 func (*ListPendingReceiptsResponse) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{9}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListPendingReceiptsResponse) GetIntents() []*PaymentIntent {
@@ -710,7 +1042,7 @@ var File_payments_v1_payments_proto protoreflect.FileDescriptor
 
 const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
-	"\x1apayments/v1/payments.proto\x12\vpayments.v1\x1a\x15common/v1/types.proto\"\xb1\x02\n" +
+	"\x1apayments/v1/payments.proto\x12\vpayments.v1\x1a\x15common/v1/types.proto\"\xcb\x03\n" +
 	"\rPaymentIntent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x17\n" +
@@ -725,13 +1057,37 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\x03R\tupdatedAt\"\xb8\x01\n" +
+	" \x01(\x03R\tupdatedAt\x127\n" +
+	"\x0egateway_amount\x18\v \x01(\v2\x10.common.v1.MoneyR\rgatewayAmount\x12\x17\n" +
+	"\apay_url\x18\f \x01(\tR\x06payUrl\x12\x1f\n" +
+	"\vexternal_id\x18\r \x01(\tR\n" +
+	"externalId\x12%\n" +
+	"\x0efailure_reason\x18\x0e \x01(\tR\rfailureReason\"\x93\x02\n" +
 	"\x13CreateIntentRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +
 	"\bprovider\x18\x03 \x01(\tR\bprovider\x12(\n" +
 	"\x06amount\x18\x04 \x01(\v2\x10.common.v1.MoneyR\x06amount\x12'\n" +
-	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\"\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\x127\n" +
+	"\x0egateway_amount\x18\x06 \x01(\v2\x10.common.v1.MoneyR\rgatewayAmount\x12 \n" +
+	"\vdescription\x18\a \x01(\tR\vdescription\"J\n" +
+	"\x12CheckIntentRequest\x12\x1b\n" +
+	"\tintent_id\x18\x01 \x01(\tR\bintentId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x92\x01\n" +
+	"\x1bPrecheckStarsPaymentRequest\x12\x1b\n" +
+	"\tintent_id\x18\x01 \x01(\tR\bintentId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12!\n" +
+	"\ftotal_amount\x18\x03 \x01(\x03R\vtotalAmount\x12\x1a\n" +
+	"\bcurrency\x18\x04 \x01(\tR\bcurrency\"\xce\x01\n" +
+	"\x1aConfirmStarsPaymentRequest\x12\x1b\n" +
+	"\tintent_id\x18\x01 \x01(\tR\bintentId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12!\n" +
+	"\ftotal_amount\x18\x03 \x01(\x03R\vtotalAmount\x12\x1a\n" +
+	"\bcurrency\x18\x04 \x01(\tR\bcurrency\x12;\n" +
+	"\x1atelegram_payment_charge_id\x18\x05 \x01(\tR\x17telegramPaymentChargeId\"\x15\n" +
+	"\x13ListGatewaysRequest\"4\n" +
+	"\x14ListGatewaysResponse\x12\x1c\n" +
+	"\tproviders\x18\x01 \x03(\tR\tproviders\"\"\n" +
 	"\x10GetIntentRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x9a\x01\n" +
 	"\x14SubmitReceiptRequest\x12\x1b\n" +
@@ -767,7 +1123,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x1bListPendingReceiptsResponse\x124\n" +
 	"\aintents\x18\x01 \x03(\v2\x1a.payments.v1.PaymentIntentR\aintents\x120\n" +
 	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\x127\n" +
-	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts2\x87\x04\n" +
+	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts2\xe2\x06\n" +
 	"\x0fPaymentsService\x12L\n" +
 	"\fCreateIntent\x12 .payments.v1.CreateIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12F\n" +
 	"\tGetIntent\x12\x1d.payments.v1.GetIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12N\n" +
@@ -775,7 +1131,11 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"SubmitTXID\x12\x1e.payments.v1.SubmitTXIDRequest\x1a\x1a.payments.v1.PaymentIntent\x12Z\n" +
 	"\x13ReviewManualPayment\x12'.payments.v1.ReviewManualPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12h\n" +
-	"\x13ListPendingReceipts\x12'.payments.v1.ListPendingReceiptsRequest\x1a(.payments.v1.ListPendingReceiptsResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
+	"\x13ListPendingReceipts\x12'.payments.v1.ListPendingReceiptsRequest\x1a(.payments.v1.ListPendingReceiptsResponse\x12J\n" +
+	"\vCheckIntent\x12\x1f.payments.v1.CheckIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12\\\n" +
+	"\x14PrecheckStarsPayment\x12(.payments.v1.PrecheckStarsPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12Z\n" +
+	"\x13ConfirmStarsPayment\x12'.payments.v1.ConfirmStarsPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12S\n" +
+	"\fListGateways\x12 .payments.v1.ListGatewaysRequest\x1a!.payments.v1.ListGatewaysResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
 
 var (
 	file_payments_v1_payments_proto_rawDescOnce sync.Once
@@ -789,48 +1149,63 @@ func file_payments_v1_payments_proto_rawDescGZIP() []byte {
 	return file_payments_v1_payments_proto_rawDescData
 }
 
-var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_payments_v1_payments_proto_goTypes = []any{
 	(*PaymentIntent)(nil),               // 0: payments.v1.PaymentIntent
 	(*CreateIntentRequest)(nil),         // 1: payments.v1.CreateIntentRequest
-	(*GetIntentRequest)(nil),            // 2: payments.v1.GetIntentRequest
-	(*SubmitReceiptRequest)(nil),        // 3: payments.v1.SubmitReceiptRequest
-	(*SubmitTXIDRequest)(nil),           // 4: payments.v1.SubmitTXIDRequest
-	(*ReviewManualPaymentRequest)(nil),  // 5: payments.v1.ReviewManualPaymentRequest
-	(*ListPendingReceiptsRequest)(nil),  // 6: payments.v1.ListPendingReceiptsRequest
-	(*ManualReceipt)(nil),               // 7: payments.v1.ManualReceipt
-	(*PendingReceipt)(nil),              // 8: payments.v1.PendingReceipt
-	(*ListPendingReceiptsResponse)(nil), // 9: payments.v1.ListPendingReceiptsResponse
-	(*v1.Money)(nil),                    // 10: common.v1.Money
-	(*v1.Pagination)(nil),               // 11: common.v1.Pagination
-	(*v1.PageInfo)(nil),                 // 12: common.v1.PageInfo
+	(*CheckIntentRequest)(nil),          // 2: payments.v1.CheckIntentRequest
+	(*PrecheckStarsPaymentRequest)(nil), // 3: payments.v1.PrecheckStarsPaymentRequest
+	(*ConfirmStarsPaymentRequest)(nil),  // 4: payments.v1.ConfirmStarsPaymentRequest
+	(*ListGatewaysRequest)(nil),         // 5: payments.v1.ListGatewaysRequest
+	(*ListGatewaysResponse)(nil),        // 6: payments.v1.ListGatewaysResponse
+	(*GetIntentRequest)(nil),            // 7: payments.v1.GetIntentRequest
+	(*SubmitReceiptRequest)(nil),        // 8: payments.v1.SubmitReceiptRequest
+	(*SubmitTXIDRequest)(nil),           // 9: payments.v1.SubmitTXIDRequest
+	(*ReviewManualPaymentRequest)(nil),  // 10: payments.v1.ReviewManualPaymentRequest
+	(*ListPendingReceiptsRequest)(nil),  // 11: payments.v1.ListPendingReceiptsRequest
+	(*ManualReceipt)(nil),               // 12: payments.v1.ManualReceipt
+	(*PendingReceipt)(nil),              // 13: payments.v1.PendingReceipt
+	(*ListPendingReceiptsResponse)(nil), // 14: payments.v1.ListPendingReceiptsResponse
+	(*v1.Money)(nil),                    // 15: common.v1.Money
+	(*v1.Pagination)(nil),               // 16: common.v1.Pagination
+	(*v1.PageInfo)(nil),                 // 17: common.v1.PageInfo
 }
 var file_payments_v1_payments_proto_depIdxs = []int32{
-	10, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
-	10, // 1: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
-	11, // 2: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
-	0,  // 3: payments.v1.PendingReceipt.intent:type_name -> payments.v1.PaymentIntent
-	7,  // 4: payments.v1.PendingReceipt.receipt:type_name -> payments.v1.ManualReceipt
-	0,  // 5: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
-	12, // 6: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
-	8,  // 7: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
-	1,  // 8: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
-	2,  // 9: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
-	3,  // 10: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
-	4,  // 11: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
-	5,  // 12: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
-	6,  // 13: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
-	0,  // 14: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 15: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 16: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
-	0,  // 17: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
-	0,  // 18: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
-	9,  // 19: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
-	14, // [14:20] is the sub-list for method output_type
-	8,  // [8:14] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	15, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
+	15, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
+	15, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
+	15, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
+	16, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
+	0,  // 5: payments.v1.PendingReceipt.intent:type_name -> payments.v1.PaymentIntent
+	12, // 6: payments.v1.PendingReceipt.receipt:type_name -> payments.v1.ManualReceipt
+	0,  // 7: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
+	17, // 8: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
+	13, // 9: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
+	1,  // 10: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
+	7,  // 11: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
+	8,  // 12: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
+	9,  // 13: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
+	10, // 14: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
+	11, // 15: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
+	2,  // 16: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
+	3,  // 17: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
+	4,  // 18: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
+	5,  // 19: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
+	0,  // 20: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 21: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 22: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
+	0,  // 23: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
+	0,  // 24: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
+	14, // 25: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
+	0,  // 26: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 27: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
+	0,  // 28: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
+	6,  // 29: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
+	20, // [20:30] is the sub-list for method output_type
+	10, // [10:20] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }
@@ -844,7 +1219,7 @@ func file_payments_v1_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_payments_proto_rawDesc), len(file_payments_v1_payments_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

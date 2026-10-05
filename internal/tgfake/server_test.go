@@ -114,3 +114,22 @@ func TestEditsAndToastsAreRecorded(t *testing.T) {
 		t.Fatalf("log: %+v (ids %d %d)", sent, m.MessageID, m2.MessageID)
 	}
 }
+
+func TestStarsInvoiceAndPreCheckoutAreRecorded(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	ctx := context.Background()
+	if _, err := c.SendInvoice(ctx, 7, tg.Invoice{Title: "Monthly", Description: "d", Payload: "intent-1", Stars: 100, StartParameter: "buy"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AnswerPreCheckoutQuery(ctx, "q1", false, "expired"); err != nil {
+		t.Fatal(err)
+	}
+	sent := f.Sent()
+	if len(sent) != 2 || sent[0].Method != "sendInvoice" || sent[0].Payload != "intent-1" || sent[0].Stars != 100 ||
+		sent[1].QueryID != "q1" || sent[1].OK == nil || *sent[1].OK || sent[1].Text != "expired" {
+		t.Fatalf("log: %+v", sent)
+	}
+}

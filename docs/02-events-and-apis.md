@@ -40,6 +40,10 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 ## Provider interface (payments)
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
 Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
+Built so far: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
+superpowers/specs/2026-10-04-phase2-payments-design.md). crypto-thirdparty is on hold: the candidate
+processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)
+and one settlement path (exactly once, amount fixed at creation, reconciler).
 
 ## 3x-ui adapter (provisioner)
 Interface `PanelAdapter` (add/update/delete client, usage, links, version). First impl: 3x-ui v3.x via Bearer token.

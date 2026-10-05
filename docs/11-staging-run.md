@@ -85,6 +85,20 @@ Panel problems are logged by the provisioner (`sudo ./bobres logs provisioner`).
 the panel URL, token or options, run `install` again with the right values: the default
 panel is updated on the next start, and the data is kept.
 
-## 5. After it passes
+## 5. Phase 2 payments (when you enable them)
+
+- **Telegram Stars:** `/set payments.stars_rate 1500` (Toman per Star). Buy the test plan
+  with "Pay with Telegram Stars" from a second account: Telegram shows the invoice, and the
+  service is delivered after paying (a few Stars at a low test price are enough; refund
+  them later with Telegram's refund from the bot's Stars balance if needed).
+- **Zarinpal:** read the owner decisions in the Phase 2 design document first. Then
+  re-run install with `--zarinpal-merchant-id <id>` (the sandbox is for tests only and is
+  refused in production). Register this server's IP, or the proxy's
+  (`--zarinpal-proxy`), in the Zarinpal panel; the domain in `--zarinpal-public-url` (or
+  your main domain) must be the one registered with Zarinpal and reachable from Iran
+  without a VPN. Buy with "Pay online", turn the VPN off, pay, and check that you come back
+  to a "Payment received" page and the service arrives in the bot.
+
+## 6. After it passes
 
 Tag `v0.1.0`. Phase 1 is done when this checklist passes on a real server.

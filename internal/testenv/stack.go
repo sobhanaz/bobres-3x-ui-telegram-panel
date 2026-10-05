@@ -7,6 +7,8 @@ package testenv
 import (
 	"context"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -27,13 +29,16 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	paydomain "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	payserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
 	paystore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/web"
 	provserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/server"
 	provstore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xuifake"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/zpfake"
 	"google.golang.org/grpc"
 )
 
@@ -51,7 +56,15 @@ type Stack struct {
 	Feed  eventsv1.EventFeedServiceClient
 	Panel *xuifake.Server
 	Store *corestore.Store
+	// Zarinpal is the fake gateway payments uses; PaySite serves the payments
+	// service's public pages (pay page, Zarinpal return).
+	Zarinpal *zpfake.Server
+	PaySite  *httptest.Server
+	Payments *paydomain.Service
 }
+
+// ZarinpalMerchant is the merchant id the stack's Zarinpal gateway uses.
+const ZarinpalMerchant = "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b"
 
 // Start runs the backend until the test ends. ownerTelegramID becomes the
 // owner on first contact.
@@ -72,8 +85,22 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 		t.Fatal(err)
 	}
 	t.Cleanup(ps.Close)
+	zp := zpfake.New()
+	t.Cleanup(zp.Close)
+	zgw, err := zarinpal.New(zarinpal.Config{MerchantID: ZarinpalMerchant, BaseURL: zp.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	paySvc := paydomain.New(ps)
+	paySvc.SetGateways(zgw)
+	payMux := http.NewServeMux()
+	web.New(paySvc, ps, nil).Register(payMux)
+	paySite := httptest.NewServer(payMux)
+	t.Cleanup(paySite.Close)
 	pgs := server(t, "core", CoreToken)
-	payserver.New(paydomain.New(ps), ps).Register(pgs)
+	psrv := payserver.New(paySvc, ps)
+	psrv.SetPublicURL(paySite.URL)
+	psrv.Register(pgs)
 	eventsv1.RegisterEventFeedServiceServer(pgs, eventbus.NewFeedServer(eventbus.NewFeed(ps.DB(), "outbox_payments")))
 	payAddr := serve(t, pgs)
 
@@ -125,10 +152,11 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 	eventsv1.RegisterEventFeedServiceServer(cgs, eventbus.NewFeedServer(eventbus.NewFeed(cs.DB(), "outbox_core")))
 	coreConn := Dial(t, serve(t, cgs), BotToken)
 	return &Stack{
-		Core:  corev1.NewCoreServiceClient(coreConn),
-		Feed:  eventsv1.NewEventFeedServiceClient(coreConn),
-		Panel: panel,
-		Store: cs,
+		Core:     corev1.NewCoreServiceClient(coreConn),
+		Feed:     eventsv1.NewEventFeedServiceClient(coreConn),
+		Panel:    panel,
+		Store:    cs,
+		Zarinpal: zp, PaySite: paySite, Payments: paySvc,
 	}
 }
 

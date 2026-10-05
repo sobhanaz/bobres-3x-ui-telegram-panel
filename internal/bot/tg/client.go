@@ -184,12 +184,16 @@ func (c *Client) GetMe(ctx context.Context) (*User, error) {
 	return &u, nil
 }
 
+// allowedUpdates are the update types the bot handles. pre_checkout_query must
+// be listed explicitly, or Telegram never asks and every Stars payment times out.
+var allowedUpdates = []string{"message", "callback_query", "pre_checkout_query"}
+
 // GetUpdates long-polls for updates after offset.
 func (c *Client) GetUpdates(ctx context.Context, offset int64, timeoutSec int) ([]Update, error) {
 	var out []Update
 	err := c.call(ctx, "getUpdates", jsonBody(map[string]any{
 		"offset": offset, "timeout": timeoutSec,
-		"allowed_updates": []string{"message", "callback_query"},
+		"allowed_updates": allowedUpdates,
 	}), &out)
 	return out, err
 }
@@ -199,7 +203,7 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64, timeoutSec int) (
 func (c *Client) SetWebhook(ctx context.Context, webhookURL, secret string) error {
 	return c.call(ctx, "setWebhook", jsonBody(map[string]any{
 		"url": webhookURL, "secret_token": secret,
-		"allowed_updates": []string{"message", "callback_query"},
+		"allowed_updates": allowedUpdates,
 	}), nil)
 }
 
@@ -254,6 +258,39 @@ func (c *Client) EditMessageReplyMarkup(ctx context.Context, chatID int64, messa
 func (c *Client) AnswerCallback(ctx context.Context, callbackID, text string, alert bool) error {
 	return c.call(ctx, "answerCallbackQuery", jsonBody(map[string]any{
 		"callback_query_id": callbackID, "text": text, "show_alert": alert,
+	}), nil)
+}
+
+// SendInvoice sends a Telegram Stars invoice (currency XTR, one price line).
+func (c *Client) SendInvoice(ctx context.Context, chatID int64, inv Invoice) (*Message, error) {
+	body := map[string]any{
+		"chat_id": chatID, "title": inv.Title, "description": inv.Description, "payload": inv.Payload,
+		"currency": "XTR", "prices": []LabeledPrice{{Label: inv.Title, Amount: inv.Stars}},
+	}
+	if inv.StartParameter != "" {
+		body["start_parameter"] = inv.StartParameter
+	}
+	var m Message
+	if err := c.call(ctx, "sendInvoice", jsonBody(body), &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// AnswerPreCheckoutQuery confirms (ok) or refuses a payment before Telegram
+// charges it; errMsg is shown to the user when refusing.
+func (c *Client) AnswerPreCheckoutQuery(ctx context.Context, queryID string, ok bool, errMsg string) error {
+	body := map[string]any{"pre_checkout_query_id": queryID, "ok": ok}
+	if !ok {
+		body["error_message"] = errMsg
+	}
+	return c.call(ctx, "answerPreCheckoutQuery", jsonBody(body), nil)
+}
+
+// RefundStarPayment returns a Stars payment to the user (full refund).
+func (c *Client) RefundStarPayment(ctx context.Context, userID int64, chargeID string) error {
+	return c.call(ctx, "refundStarPayment", jsonBody(map[string]any{
+		"user_id": userID, "telegram_payment_charge_id": chargeID,
 	}), nil)
 }
 

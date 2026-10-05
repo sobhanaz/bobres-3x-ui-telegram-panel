@@ -22,6 +22,12 @@ type PaymentsClient interface {
 	SubmitTXID(ctx context.Context, userID, intentID, network, txid string) (status string, err error)
 	ListPending(ctx context.Context, limit int) ([]PendingPayment, error)
 	Review(ctx context.Context, reviewerID, intentID, decision, reason string) (status string, err error)
+	// Automated gateways (Phase 2).
+	StartGateway(ctx context.Context, p GatewayStart) (*GatewayIntent, error)
+	CheckIntent(ctx context.Context, userID, intentID string) (*GatewayIntent, error)
+	PrecheckStars(ctx context.Context, userID, intentID string, total int64, currency string) (*GatewayIntent, error)
+	ConfirmStars(ctx context.Context, userID, intentID string, total int64, currency, chargeID string) (*GatewayIntent, error)
+	ListGateways(ctx context.Context) ([]string, error)
 }
 
 // PendingPayment is one manual payment waiting for review.
@@ -57,6 +63,11 @@ type IntentResult struct {
 	// Details holds card_number, card_holder, usdt_trc20, usdt_erc20 and
 	// reference, so the bot can render instructions in the user's language.
 	Details map[string]string
+	// Automated gateways: where to pay and what is charged there.
+	PayURL          string
+	GatewayAmount   int64
+	GatewayCurrency string
+	Description     string
 }
 
 // PaymentReference is the short code a user can put in a transfer note and an
@@ -75,8 +86,8 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 	if p.IdempotencyKey == "" {
 		return nil, invalid("idempotency key required")
 	}
-	switch p.Provider {
-	case "manual_card", "manual_crypto":
+	switch {
+	case p.Provider == "manual_card", p.Provider == "manual_crypto", isGateway(p.Provider):
 	default:
 		return nil, invalid("unsupported payment method %q", p.Provider)
 	}
@@ -84,6 +95,7 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 		return nil, err
 	}
 	amount, currency := p.Amount, p.Currency
+	description := "Wallet top-up"
 	if p.OrderID != "" {
 		o, err := s.st.GetOrder(ctx, s.st.Conn(), p.OrderID)
 		if err != nil {
@@ -96,6 +108,7 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 			return nil, ErrOrderNotPayable
 		}
 		amount, currency = o.Amount, o.Currency
+		description = s.orderDescription(ctx, o.PlanID)
 	} else {
 		if money.Scale(currency) < 0 {
 			return nil, invalid("unsupported currency %q", currency)
@@ -103,6 +116,25 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 		if amount <= 0 || amount > maxTopupMinor {
 			return nil, invalid("top-up amount out of range")
 		}
+	}
+	if isGateway(p.Provider) {
+		ga, gc, err := s.gatewayCharge(ctx, p.Provider, amount, currency)
+		if err != nil {
+			return nil, err
+		}
+		gi, err := pay.StartGateway(ctx, GatewayStart{
+			OrderID: p.OrderID, UserID: p.UserID, Provider: p.Provider, Amount: amount, Currency: currency,
+			GatewayAmount: ga, GatewayCurrency: gc, Description: description, IdempotencyKey: p.IdempotencyKey,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &IntentResult{
+			IntentID: gi.ID, Status: gi.Status, OrderID: p.OrderID, Provider: p.Provider,
+			Amount: amount, Currency: currency, Details: map[string]string{"reference": PaymentReference(gi.ID)},
+			PayURL: gi.PayURL, GatewayAmount: gi.GatewayAmount, GatewayCurrency: gi.GatewayCurrency,
+			Description: description,
+		}, nil
 	}
 	id, status, err := pay.CreateIntent(ctx, p.OrderID, p.UserID, p.Provider, amount, currency, p.IdempotencyKey)
 	if err != nil {

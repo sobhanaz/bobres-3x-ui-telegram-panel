@@ -57,7 +57,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
-		if e.Source != events.PaidManually {
+		if e.Source != events.PaidManually && e.Source != events.PaidByGateway {
 			return nil // wallet, trial and free orders were confirmed in the chat already
 		}
 		lang := n.lang(ctx, e.TelegramID)
@@ -132,10 +132,20 @@ func (n *Notifier) home(lang string) *tg.Keyboard {
 	return (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.home"), "home"))
 }
 
-// reason localizes a rejection reason ("preset:<name>" from the admin panel).
+// gatewayReasons are the failure reasons automated gateways report.
+var gatewayReasons = map[string]bool{
+	"gateway_failed": true, "amount_mismatch": true, "expired": true,
+	"payer_mismatch": true, "not_found": true, "reversed": true,
+}
+
+// reason localizes a rejection reason ("preset:<name>" from the admin panel,
+// or a gateway's reason code).
 func (n *Notifier) reason(lang, r string) string {
 	if name, ok := strings.CutPrefix(r, "preset:"); ok {
 		return n.cat.T(lang, "reason."+name)
+	}
+	if gatewayReasons[r] {
+		return n.cat.T(lang, "reason."+r)
 	}
 	if strings.TrimSpace(r) == "" {
 		return n.cat.T(lang, "reason.none")

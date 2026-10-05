@@ -36,6 +36,10 @@ const (
 	CoreService_StartTrial_FullMethodName               = "/core.v1.CoreService/StartTrial"
 	CoreService_CanStartTrial_FullMethodName            = "/core.v1.CoreService/CanStartTrial"
 	CoreService_SubmitPaymentProof_FullMethodName       = "/core.v1.CoreService/SubmitPaymentProof"
+	CoreService_CheckPayment_FullMethodName             = "/core.v1.CoreService/CheckPayment"
+	CoreService_StarsPreCheckout_FullMethodName         = "/core.v1.CoreService/StarsPreCheckout"
+	CoreService_StarsPaid_FullMethodName                = "/core.v1.CoreService/StarsPaid"
+	CoreService_ListPaymentMethods_FullMethodName       = "/core.v1.CoreService/ListPaymentMethods"
 	CoreService_GetSubscriptionLinks_FullMethodName     = "/core.v1.CoreService/GetSubscriptionLinks"
 	CoreService_AdminGetStats_FullMethodName            = "/core.v1.CoreService/AdminGetStats"
 	CoreService_AdminListPendingPayments_FullMethodName = "/core.v1.CoreService/AdminListPendingPayments"
@@ -70,6 +74,10 @@ type CoreServiceClient interface {
 	StartTrial(ctx context.Context, in *StartTrialRequest, opts ...grpc.CallOption) (*Order, error)
 	CanStartTrial(ctx context.Context, in *CanStartTrialRequest, opts ...grpc.CallOption) (*CanStartTrialResponse, error)
 	SubmitPaymentProof(ctx context.Context, in *SubmitPaymentProofRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	CheckPayment(ctx context.Context, in *CheckPaymentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	StarsPreCheckout(ctx context.Context, in *StarsPreCheckoutRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	StarsPaid(ctx context.Context, in *StarsPaidRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
+	ListPaymentMethods(ctx context.Context, in *ListPaymentMethodsRequest, opts ...grpc.CallOption) (*ListPaymentMethodsResponse, error)
 	GetSubscriptionLinks(ctx context.Context, in *GetSubscriptionLinksRequest, opts ...grpc.CallOption) (*SubscriptionLinks, error)
 	AdminGetStats(ctx context.Context, in *AdminGetStatsRequest, opts ...grpc.CallOption) (*AdminStats, error)
 	AdminListPendingPayments(ctx context.Context, in *AdminListPendingPaymentsRequest, opts ...grpc.CallOption) (*AdminListPendingPaymentsResponse, error)
@@ -258,6 +266,46 @@ func (c *coreServiceClient) SubmitPaymentProof(ctx context.Context, in *SubmitPa
 	return out, nil
 }
 
+func (c *coreServiceClient) CheckPayment(ctx context.Context, in *CheckPaymentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntentRef)
+	err := c.cc.Invoke(ctx, CoreService_CheckPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) StarsPreCheckout(ctx context.Context, in *StarsPreCheckoutRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntentRef)
+	err := c.cc.Invoke(ctx, CoreService_StarsPreCheckout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) StarsPaid(ctx context.Context, in *StarsPaidRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PaymentIntentRef)
+	err := c.cc.Invoke(ctx, CoreService_StarsPaid_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ListPaymentMethods(ctx context.Context, in *ListPaymentMethodsRequest, opts ...grpc.CallOption) (*ListPaymentMethodsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPaymentMethodsResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListPaymentMethods_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) GetSubscriptionLinks(ctx context.Context, in *GetSubscriptionLinksRequest, opts ...grpc.CallOption) (*SubscriptionLinks, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SubscriptionLinks)
@@ -362,6 +410,10 @@ type CoreServiceServer interface {
 	StartTrial(context.Context, *StartTrialRequest) (*Order, error)
 	CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error)
 	SubmitPaymentProof(context.Context, *SubmitPaymentProofRequest) (*PaymentIntentRef, error)
+	CheckPayment(context.Context, *CheckPaymentRequest) (*PaymentIntentRef, error)
+	StarsPreCheckout(context.Context, *StarsPreCheckoutRequest) (*PaymentIntentRef, error)
+	StarsPaid(context.Context, *StarsPaidRequest) (*PaymentIntentRef, error)
+	ListPaymentMethods(context.Context, *ListPaymentMethodsRequest) (*ListPaymentMethodsResponse, error)
 	GetSubscriptionLinks(context.Context, *GetSubscriptionLinksRequest) (*SubscriptionLinks, error)
 	AdminGetStats(context.Context, *AdminGetStatsRequest) (*AdminStats, error)
 	AdminListPendingPayments(context.Context, *AdminListPendingPaymentsRequest) (*AdminListPendingPaymentsResponse, error)
@@ -430,6 +482,18 @@ func (UnimplementedCoreServiceServer) CanStartTrial(context.Context, *CanStartTr
 }
 func (UnimplementedCoreServiceServer) SubmitPaymentProof(context.Context, *SubmitPaymentProofRequest) (*PaymentIntentRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method SubmitPaymentProof not implemented")
+}
+func (UnimplementedCoreServiceServer) CheckPayment(context.Context, *CheckPaymentRequest) (*PaymentIntentRef, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckPayment not implemented")
+}
+func (UnimplementedCoreServiceServer) StarsPreCheckout(context.Context, *StarsPreCheckoutRequest) (*PaymentIntentRef, error) {
+	return nil, status.Error(codes.Unimplemented, "method StarsPreCheckout not implemented")
+}
+func (UnimplementedCoreServiceServer) StarsPaid(context.Context, *StarsPaidRequest) (*PaymentIntentRef, error) {
+	return nil, status.Error(codes.Unimplemented, "method StarsPaid not implemented")
+}
+func (UnimplementedCoreServiceServer) ListPaymentMethods(context.Context, *ListPaymentMethodsRequest) (*ListPaymentMethodsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPaymentMethods not implemented")
 }
 func (UnimplementedCoreServiceServer) GetSubscriptionLinks(context.Context, *GetSubscriptionLinksRequest) (*SubscriptionLinks, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSubscriptionLinks not implemented")
@@ -782,6 +846,78 @@ func _CoreService_SubmitPaymentProof_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_CheckPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CheckPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CheckPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CheckPayment(ctx, req.(*CheckPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_StarsPreCheckout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StarsPreCheckoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).StarsPreCheckout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_StarsPreCheckout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).StarsPreCheckout(ctx, req.(*StarsPreCheckoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_StarsPaid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StarsPaidRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).StarsPaid(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_StarsPaid_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).StarsPaid(ctx, req.(*StarsPaidRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ListPaymentMethods_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPaymentMethodsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListPaymentMethods(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListPaymentMethods_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListPaymentMethods(ctx, req.(*ListPaymentMethodsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_GetSubscriptionLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSubscriptionLinksRequest)
 	if err := dec(in); err != nil {
@@ -1000,6 +1136,22 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitPaymentProof",
 			Handler:    _CoreService_SubmitPaymentProof_Handler,
+		},
+		{
+			MethodName: "CheckPayment",
+			Handler:    _CoreService_CheckPayment_Handler,
+		},
+		{
+			MethodName: "StarsPreCheckout",
+			Handler:    _CoreService_StarsPreCheckout_Handler,
+		},
+		{
+			MethodName: "StarsPaid",
+			Handler:    _CoreService_StarsPaid_Handler,
+		},
+		{
+			MethodName: "ListPaymentMethods",
+			Handler:    _CoreService_ListPaymentMethods_Handler,
 		},
 		{
 			MethodName: "GetSubscriptionLinks",

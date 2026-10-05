@@ -95,8 +95,10 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		t.Fatalf(".env mode: %v %v", st.Mode(), err)
 	}
 	env, _, _ := readEnv(filepath.Join(dir, ".env"))
+	optional := map[string]bool{"BOBRES_XUI_SUB_URL": true, "BOBRES_ZARINPAL_MERCHANT_ID": true,
+		"BOBRES_ZARINPAL_PROXY": true, "BOBRES_ZARINPAL_PUBLIC_URL": true, "BOBRES_ZARINPAL_HOST": true}
 	for _, k := range envOrder {
-		if k != "BOBRES_XUI_SUB_URL" && env[k] == "" {
+		if !optional[k] && env[k] == "" {
 			t.Errorf("%s missing", k)
 		}
 		if strings.Contains(env[k], "CHANGE_ME") {
@@ -184,6 +186,8 @@ func TestInstallRejectsBadInput(t *testing.T) {
 		"bad admin id": {"--admin-id", "12ab"},
 		"http panel":   {"--xui-url", "http://xui.example.com"},
 		"loopback":     {"--xui-url", "http://127.0.0.1:2053", "--xui-allow-private"},
+		"bad merchant": {"--zarinpal-merchant-id", "12345"},
+		"http zp url":  {"--zarinpal-merchant-id", "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b", "--zarinpal-public-url", "http://pay.example.ir"},
 		"localhost":    {"--xui-url", "https://localhost:2053"},
 	}
 	for name, override := range cases {

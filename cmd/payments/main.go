@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	eventsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
@@ -14,8 +15,10 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	paymentserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/web"
 )
 
 func main() {
@@ -42,7 +45,23 @@ func setup(rt *app.Runtime) error {
 	if err != nil {
 		return err
 	}
-	paymentserver.New(domain.New(st), st).Register(gs)
+	svc := domain.New(st)
+	svc.SetLogger(rt.Log)
+	srv := paymentserver.New(svc, st)
+	if cfg.ZarinpalMerchantID != "" {
+		zp, err := zarinpal.New(zarinpal.Config{MerchantID: cfg.ZarinpalMerchantID, Sandbox: cfg.ZarinpalSandbox, Proxy: cfg.ZarinpalProxy})
+		if err != nil {
+			return err
+		}
+		svc.SetGateways(zp)
+		srv.SetPublicURL(cfg.ZarinpalPublicURL)
+		rt.Log.Info("Zarinpal enabled", "sandbox", cfg.ZarinpalSandbox, "proxy", cfg.ZarinpalProxy != "", "public_url", cfg.ZarinpalPublicURL)
+	}
+	srv.Register(gs)
+	// Public pages behind Caddy: the Zarinpal pay page and return URL.
+	web.New(svc, st, rt.Log).Register(rt.Mux)
+	// Catches payments whose return was lost (closed browser, no callback).
+	rt.Go("gateway-reconciler", func(ctx context.Context) error { return svc.RunReconciler(ctx, 30*time.Second) })
 	eventsv1.RegisterEventFeedServiceServer(gs, eventbus.NewFeedServer(eventbus.NewFeed(st.DB(), "outbox_payments")))
 	return rt.ServeGRPC(cfg.GRPCAddr, gs)
 }
