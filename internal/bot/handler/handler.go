@@ -30,6 +30,7 @@ type Telegram interface {
 	EditMessageReplyMarkup(ctx context.Context, chatID int64, messageID int, kb *tg.Keyboard) error
 	AnswerCallback(ctx context.Context, callbackID, text string, alert bool) error
 	SendPhoto(ctx context.Context, chatID int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error)
+	SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error)
 	SendInvoice(ctx context.Context, chatID int64, inv tg.Invoice) (*tg.Message, error)
 	AnswerPreCheckoutQuery(ctx context.Context, queryID string, ok bool, errMsg string) error
 }

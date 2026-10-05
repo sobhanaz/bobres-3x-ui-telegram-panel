@@ -164,7 +164,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		reply(w, true)
 	case "getUpdates":
 		reply(w, s.pending(r, num(p["offset"]), num(p["timeout"])))
-	case "sendMessage", "sendPhoto", "editMessageText", "editMessageReplyMarkup":
+	case "sendMessage", "sendPhoto", "sendDocument", "editMessageText", "editMessageReplyMarkup":
 		text := str(p["text"])
 		if text == "" {
 			text = str(p["caption"])
