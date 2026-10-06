@@ -18,7 +18,8 @@ import (
 // settingKeys mirrors the settings core lets admins change (core enforces it).
 var settingKeys = []string{
 	"payments.card_number", "payments.card_holder", "payments.usdt_trc20", "payments.usdt_erc20",
-	"payments.usdt_rate", "branding.name", "branding.support", "texts.fa.welcome", "texts.en.welcome",
+	"payments.usdt_rate", "payments.stars_rate", "payments.zarinpal_link", "referral.reward_percent",
+	"branding.name", "branding.support", "texts.fa.welcome", "texts.en.welcome",
 }
 
 // rejectReasons are the preset rejection reasons; the user sees them in their
@@ -384,7 +385,148 @@ func (h *Handler) onAdminCommand(r *req, cmd, args string) {
 		h.savePlan(r, p)
 	case "/trial":
 		h.onTrialCommand(r, args)
+	case "/topup_add":
+		p, ok := parseTopup(args)
+		if !ok {
+			r.send(r.t("admin.topup_usage"), nil)
+			return
+		}
+		h.savePlan(r, p)
+	case "/discount_add":
+		h.onDiscountAdd(r, args)
+	case "/discount_off":
+		h.onDiscountOff(r, strings.TrimSpace(args))
+	case "/discounts":
+		h.showDiscounts(r)
 	}
+}
+
+// parseTopup reads "<price> <IRT|USDT> <GB> <English name> | <Persian name>":
+// a traffic package sold from a subscription's page.
+func parseTopup(args string) (*corev1.Plan, bool) {
+	price, rest, _ := strings.Cut(strings.TrimSpace(args), " ")
+	cur, rest, _ := strings.Cut(strings.TrimSpace(rest), " ")
+	gbTok, rest, _ := strings.Cut(strings.TrimSpace(rest), " ")
+	p, ok := parsePlan(price + " " + cur + " 0 " + gbTok + " " + rest)
+	if !ok || p.GetTrafficBytes() <= 0 {
+		return nil, false
+	}
+	p.IsTopup, p.Kind, p.DurationDays = true, "traffic", 0
+	return p, true
+}
+
+// onDiscountAdd: "/discount_add <CODE> <20%|50000 IRT> [max uses] [days valid]".
+func (h *Handler) onDiscountAdd(r *req, args string) {
+	f := strings.Fields(args)
+	if len(f) < 2 {
+		r.send(r.t("admin.discount_usage"), nil)
+		return
+	}
+	d := &corev1.Discount{Code: strings.ToUpper(f[0]), Enabled: true}
+	rest := f[2:]
+	if pct, isPct := strings.CutSuffix(f[1], "%"); isPct {
+		n, ok := i18n.ParseNumber(pct)
+		if !ok || n < 1 || n > 100 {
+			r.send(r.t("admin.discount_usage"), nil)
+			return
+		}
+		d.Percent = int32(n) //nolint:gosec // 1..100
+	} else {
+		if len(f) < 3 {
+			r.send(r.t("admin.discount_usage"), nil)
+			return
+		}
+		cur := strings.ToUpper(f[2])
+		amount, ok := parseMinor(f[1], cur)
+		if !ok || amount <= 0 {
+			r.send(r.t("admin.discount_usage"), nil)
+			return
+		}
+		d.Amount = &commonv1.Money{Amount: amount, Currency: cur}
+		rest = f[3:]
+	}
+	for i, tok := range rest {
+		n, ok := i18n.ParseNumber(tok)
+		if !ok || n <= 0 || i > 1 {
+			r.send(r.t("admin.discount_usage"), nil)
+			return
+		}
+		if i == 0 {
+			d.MaxUses = int32(min(n, 1_000_000)) //nolint:gosec // bounded
+		} else {
+			d.ExpiresAt = time.Now().Add(time.Duration(min(n, 3650)) * 24 * time.Hour).Unix()
+		}
+	}
+	h.saveDiscount(r, d)
+}
+
+func (h *Handler) saveDiscount(r *req, d *corev1.Discount) {
+	saved, err := h.core.AdminUpsertDiscount(r.ctx, &corev1.AdminUpsertDiscountRequest{ActorTelegramId: h.actor(r), Discount: d})
+	if err != nil {
+		if status.Code(err) == codes.InvalidArgument {
+			r.send(esc(status.Convert(err).Message())+"\n"+r.t("admin.discount_usage"), nil)
+			return
+		}
+		r.fail(err)
+		return
+	}
+	r.send(r.t("admin.discount_saved", "line", h.discountLine(r, saved)), nil)
+}
+
+// onDiscountOff: "/discount_off <CODE>" stops a code (its history stays).
+func (h *Handler) onDiscountOff(r *req, code string) {
+	list, err := h.core.AdminListDiscounts(r.ctx, &corev1.AdminListDiscountsRequest{ActorTelegramId: h.actor(r)})
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	for _, d := range list.GetDiscounts() {
+		if strings.EqualFold(d.GetCode(), code) && code != "" {
+			d.Enabled = false
+			h.saveDiscount(r, d)
+			return
+		}
+	}
+	r.send(r.t("admin.discount_unknown", "code", esc(code)), nil)
+}
+
+func (h *Handler) showDiscounts(r *req) {
+	list, err := h.core.AdminListDiscounts(r.ctx, &corev1.AdminListDiscountsRequest{ActorTelegramId: h.actor(r)})
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	if len(list.GetDiscounts()) == 0 {
+		r.send(r.t("admin.discounts_empty")+"\n"+r.t("admin.discount_usage"), nil)
+		return
+	}
+	lines := []string{r.t("admin.discounts_title")}
+	for _, d := range list.GetDiscounts() {
+		lines = append(lines, h.discountLine(r, d))
+	}
+	r.send(strings.Join(lines, "\n"), nil)
+}
+
+// discountLine shows a code's terms: "SPRING20 · 20% · 3/100 used · until … · off".
+func (h *Handler) discountLine(r *req, d *corev1.Discount) string {
+	parts := []string{"<code>" + esc(d.GetCode()) + "</code>"}
+	if d.GetPercent() > 0 {
+		parts = append(parts, i18n.Number(r.lang, int64(d.GetPercent()))+"%")
+	} else {
+		parts = append(parts, r.money(d.GetAmount().GetAmount(), d.GetAmount().GetCurrency()))
+	}
+	used := i18n.Number(r.lang, int64(d.GetUsed()))
+	if d.GetMaxUses() > 0 {
+		used += "/" + i18n.Number(r.lang, int64(d.GetMaxUses()))
+	}
+	parts = append(parts, r.t("admin.discount_used", "n", used))
+	if d.GetExpiresAt() > 0 {
+		parts = append(parts, r.t("admin.discount_until", "date", i18n.Date(r.lang, time.Unix(d.GetExpiresAt(), 0))))
+	}
+	if !d.GetEnabled() {
+		parts = append(parts, r.t("admin.discount_off"))
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (h *Handler) savePlan(r *req, p *corev1.Plan) {

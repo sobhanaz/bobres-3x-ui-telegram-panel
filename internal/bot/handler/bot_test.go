@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/notify"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	corestore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testenv"
@@ -192,7 +194,7 @@ func newWorld(t *testing.T) *world {
 	stack := testenv.Start(t, ownerID)
 	ftg := newFakeTG()
 	cat := i18n.MustLoad()
-	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN"}, nil)
+	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(stack.Feed),
 		Handle:     notify.New(stack.Core, ftg, cat, ownerID, nil).Handle,
@@ -803,4 +805,194 @@ func TestScreenshotForZarinpalLinkAndCrypto(t *testing.T) {
 		}
 		return n == 2
 	})
+}
+
+// fund credits a customer's wallet directly (the admin flow is tested above).
+func (w *world) fund(tg, amount int64) {
+	w.t.Helper()
+	ctx := context.Background()
+	st := w.stack.Store
+	u, err := st.GetUserByTelegramID(ctx, st.Conn(), tg)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	err = st.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := st.Credit(ctx, tx, u.ID, "IRT", amount, &corestore.LedgerEntry{Kind: "adjust",
+			IdempotencyKey: fmt.Sprintf("test-fund-%d-%d", tg, time.Now().UnixNano())})
+		return err
+	})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+// onlySub returns a customer's one subscription.
+func (w *world) onlySub(tg int64) corestore.Subscription {
+	w.t.Helper()
+	ctx := context.Background()
+	st := w.stack.Store
+	u, err := st.GetUserByTelegramID(ctx, st.Conn(), tg)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	subs, err := st.ListSubscriptions(ctx, st.Conn(), u.ID, 10)
+	if err != nil || len(subs) != 1 {
+		w.t.Fatalf("subscriptions of %d: %d %v", tg, len(subs), err)
+	}
+	return subs[0]
+}
+
+func TestRenewAndTopupFromTheServicePage(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/topup_add 30000 IRT 10 +10 GB | ۱۰ گیگ اضافه")
+	owner.sees("Plan saved: +10 GB")
+	u := w.person(701, "rena")
+	u.text("/start")
+	u.press("lang:en")
+	w.fund(701, 1_000_000)
+
+	u.press("buy")
+	for _, l := range u.last().labels() {
+		if strings.Contains(l, "+10 GB") {
+			t.Fatalf("a traffic package is offered as a new service: %v", u.last().labels())
+		}
+	}
+	u.press("plan:")
+	u.press("pay:w:")
+	u.sees("Paid from your wallet")
+	u.eventuallySees("Your service is ready")
+	sub := w.onlySub(701)
+	before, _ := w.stack.Panel.Snapshot(sub.ClientEmail)
+
+	u.press("home")
+	u.press("subs")
+	u.press("sub:")
+	u.sees("of 50 GB")
+	u.press("rnw:")
+	u.sees("Renew service #")
+	u.press("rp:")
+	u.sees("Added to the time and traffic you have left")
+	u.press("pay:w:")
+	u.sees("Paid from your wallet")
+	u.eventuallySees("renewed")
+	after, _ := w.stack.Panel.Snapshot(sub.ClientEmail)
+	// Core keeps whole seconds, the panel milliseconds: up to 1 s may go.
+	if moved := after.ExpiryTime - before.ExpiryTime; after.TotalGB != 100<<30 || moved > 30*24*3600*1000 || moved < 30*24*3600*1000-1000 {
+		t.Fatalf("panel after renewal: total %d (want 100 GB), expiry moved %d ms (want 30 days)", after.TotalGB, moved)
+	}
+
+	u.press("sub:") // "View service" under the renewal message
+	u.press("tup:")
+	u.sees("Add traffic to service")
+	u.press("rp:")
+	u.sees("more traffic for service")
+	u.press("pay:w:")
+	u.eventuallySees("Traffic added to service")
+	if top, _ := w.stack.Panel.Snapshot(sub.ClientEmail); top.TotalGB != 110<<30 || top.ExpiryTime != after.ExpiryTime {
+		t.Fatalf("panel after top-up: %+v", top)
+	}
+	if lost := w.stack.Panel.LostFields(); len(lost) != 0 {
+		t.Fatalf("an update lost the client's identity: %v", lost)
+	}
+}
+
+func TestDiscountCodeAtCheckout(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/discount_add SPRING20 20% 5 30")
+	owner.sees("Saved: <code>SPRING20</code> · 20%")
+	owner.text("/discounts")
+	owner.sees("0/5 used")
+	u := w.person(711, "dina")
+	u.text("/start")
+	u.press("lang:en")
+	w.fund(711, 120_000)
+
+	u.press("buy")
+	u.press("plan:")
+	u.press("dc:")
+	u.sees("Send your discount code")
+	u.text("NOPE")
+	u.sees("not valid")
+	u.text("spring20")
+	u.sees("Code <b>SPRING20</b>: 30,000 Toman off")
+	u.sees("Price: <b>120,000 Toman</b>")
+	u.press("pay:w:")
+	u.sees("Paid from your wallet")
+	u.eventuallySees("Your service is ready")
+
+	u.press("home")
+	u.press("buy")
+	u.press("plan:")
+	u.press("dc:")
+	u.text("SPRING20")
+	u.sees("already used this discount code")
+	owner.text("/discount_off spring20")
+	owner.sees("1/5 used")
+	owner.sees("off")
+}
+
+func TestInviteLinkRewardsTheInviter(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/set referral.reward_percent 10")
+	owner.sees("referral.reward_percent")
+	inviter := w.person(721, "ina")
+	inviter.text("/start")
+	inviter.press("lang:en")
+	inviter.press("ref")
+	inviter.sees("Invite friends")
+	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(inviter.last().text)
+	if m == nil {
+		t.Fatalf("no invite link: %q", inviter.last().text)
+	}
+
+	friend := w.person(722, "fred")
+	friend.text("/start r_" + m[1])
+	friend.press("lang:en")
+	friend.sees("Main menu")
+	w.fund(722, 150_000)
+	friend.press("buy")
+	friend.press("plan:")
+	friend.press("pay:w:")
+	friend.sees("Paid from your wallet")
+	inviter.eventuallySees("A friend you invited made a purchase: <b>15,000 Toman</b>")
+	inviter.press("home")
+	inviter.press("ref")
+	inviter.sees("Invited: 1")
+}
+
+func TestRemindersReachTheCustomer(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/topup_add 30000 IRT 10 +10 GB | ۱۰ گیگ اضافه")
+	owner.sees("Plan saved: +10 GB")
+	u := w.person(731, "remy")
+	u.text("/start")
+	u.press("lang:en")
+	w.fund(731, 150_000)
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:w:")
+	u.eventuallySees("Your service is ready")
+	sub := w.onlySub(731)
+	usage := w.stack.Usage
+	usage.Every = -time.Hour // everything is due
+
+	w.stack.Panel.AddUsage(sub.ClientEmail, 0, 45<<30)
+	if _, err := usage.SyncDue(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.eventuallySees("has used 45 GB of 50 GB")
+	labels := strings.Join(u.last().labels(), " | ")
+	if !strings.Contains(labels, "Renew") || !strings.Contains(labels, "Add traffic") {
+		t.Fatalf("reminder buttons: %s", labels)
+	}
+
+	w.stack.Panel.AddUsage(sub.ClientEmail, 0, 6<<30)
+	if _, err := usage.SyncDue(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.eventuallySees("has used all of its 50 GB")
 }
