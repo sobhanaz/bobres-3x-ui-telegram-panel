@@ -22,7 +22,7 @@ message Usage {
   int64 last_synced_at = 3;
   // The panel's current limits: what the customer really has.
   int64 traffic_total_bytes = 4; // 0 = unlimited
-  int64 expires_at = 5; // unix seconds, 0 = no expiry (or starts on first use)
+  int64 expires_at = 5; // unix seconds; 0 = no expiry; negative = starts on first use (set in the panel)
   bool enabled = 6;
 }
 

@@ -320,7 +320,7 @@ func (s *Server) GetUsage(ctx context.Context, req *provisionerv1.GetUsageReques
 	}
 	return &provisionerv1.Usage{
 		SubscriptionId: cm.SubscriptionID, TrafficUsedBytes: st.UsedBytes, LastSyncedAt: time.Now().Unix(),
-		TrafficTotalBytes: st.TotalBytes, ExpiresAt: max(st.ExpiryMs, 0) / 1000, Enabled: st.Enabled,
+		TrafficTotalBytes: st.TotalBytes, ExpiresAt: st.ExpiryMs / 1000, Enabled: st.Enabled,
 	}, nil
 }
 

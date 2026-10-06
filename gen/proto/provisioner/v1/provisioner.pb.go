@@ -121,7 +121,7 @@ type Usage struct {
 	LastSyncedAt     int64                  `protobuf:"varint,3,opt,name=last_synced_at,json=lastSyncedAt,proto3" json:"last_synced_at,omitempty"`
 	// The panel's current limits: what the customer really has.
 	TrafficTotalBytes int64 `protobuf:"varint,4,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"` // 0 = unlimited
-	ExpiresAt         int64 `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                           // unix seconds, 0 = no expiry (or starts on first use)
+	ExpiresAt         int64 `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                           // unix seconds; 0 = no expiry; negative = starts on first use (set in the panel)
 	Enabled           bool  `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
