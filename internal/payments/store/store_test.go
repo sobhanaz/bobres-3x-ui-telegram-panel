@@ -163,3 +163,61 @@ func TestLedgerCreditIdempotent(t *testing.T) {
 		t.Errorf("running balance = %d, want 250", bal)
 	}
 }
+
+// The payment history lists every intent newest first, with its receipt and
+// review, filtered by user, order, status and provider.
+func TestListIntentsWithReceiptsAndFilters(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	const other = "00000000-0000-7000-8000-00000000b002"
+	order := "00000000-0000-7000-8000-00000000c001"
+	card, err := s.CreateIntent(ctx, nil, &Intent{UserID: uid, OrderID: &order, Provider: "manual_card", Amount: 50000,
+		Currency: "IRT", Status: "pending", IdempotencyKey: "h1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, ref := "file-1", "12345"
+	if err := s.SaveReceipt(ctx, nil, &Receipt{IntentID: card.ID, ReceiptFile: &file, ReferenceNumber: &ref}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.ReviewReceipt(ctx, tx, card.ID, other, "rejected", "blurry")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateIntent(ctx, nil, &Intent{UserID: other, Provider: "zarinpal", Amount: 70000,
+		Currency: "IRT", Status: "pending", IdempotencyKey: "h2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, total, err := s.ListIntents(ctx, IntentFilter{}, 10, 0)
+	if err != nil || total != 2 || len(all) != 2 {
+		t.Fatalf("all: %d of %d, %v", len(all), total, err)
+	}
+	if all[0].Intent.Provider != "zarinpal" || all[0].Receipt != nil {
+		t.Fatalf("newest first, without a receipt: %+v", all[0])
+	}
+	r := all[1].Receipt
+	if r == nil || *r.ReceiptFile != file || *r.ReferenceNumber != ref || *r.Decision != "rejected" ||
+		*r.Reason != "blurry" || *r.ReviewedBy != other || r.ReviewedAt == nil {
+		t.Fatalf("receipt and review: %+v", r)
+	}
+	for _, c := range []struct {
+		f    IntentFilter
+		want int64
+	}{
+		{IntentFilter{UserID: uid}, 1},
+		{IntentFilter{OrderID: order}, 1},
+		{IntentFilter{Provider: "zarinpal"}, 1},
+		{IntentFilter{Status: "pending"}, 2},
+		{IntentFilter{Status: "succeeded"}, 0},
+		{IntentFilter{IntentID: card.ID}, 1},
+	} {
+		if _, n, err := s.ListIntents(ctx, c.f, 10, 0); err != nil || n != c.want {
+			t.Errorf("%+v: %d, want %d (%v)", c.f, n, c.want, err)
+		}
+	}
+	if page, total, err := s.ListIntents(ctx, IntentFilter{}, 1, 1); err != nil || total != 2 || len(page) != 1 || page[0].Intent.ID != card.ID {
+		t.Fatalf("second page: %v %d %v", page, total, err)
+	}
+}

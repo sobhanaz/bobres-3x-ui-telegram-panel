@@ -64,6 +64,7 @@ type Receipt struct {
 	ReviewedBy      *string
 	Decision        *string
 	Reason          *string
+	ReviewedAt      *time.Time
 }
 
 // Store wraps the payments-schema pool.
@@ -320,4 +321,76 @@ func (s *Store) AppendLedgerCredit(ctx context.Context, tx pgx.Tx, userID, curre
 		return fmt.Errorf("ledger insert: %w", err)
 	}
 	return nil
+}
+
+// IntentFilter narrows the payment history; empty fields match everything.
+type IntentFilter struct {
+	UserID, OrderID, Status, Provider, IntentID string
+}
+
+// IntentRecord is a payment with the proof sent for it (manual payments).
+type IntentRecord struct {
+	Intent  Intent
+	Receipt *Receipt
+}
+
+const intentColsI = `i.id, i.order_id, i.user_id, i.provider, i.amount, i.currency, i.status, i.idempotency_key, i.expires_at, i.created_at,
+	i.gateway_amount, i.gateway_currency, i.external_id, i.pay_url, i.provider_ref, i.failure_reason, i.check_attempts, i.checked_at`
+
+// ListIntents returns a page of the payment history, newest first, and the
+// number of matches.
+func (s *Store) ListIntents(ctx context.Context, f IntentFilter, limit, offset int) ([]IntentRecord, int64, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 25
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.db.Query(ctx, `
+		SELECT `+intentColsI+`,
+		       r.id, r.network, r.txid, r.receipt_file, r.reference_number, r.submitted_at,
+		       r.reviewed_by::text, r.decision, r.reason, r.reviewed_at, count(*) OVER ()
+		FROM payments.payment_intents i
+		LEFT JOIN payments.manual_receipts r ON r.intent_id = i.id
+		WHERE ($1 = '' OR i.user_id::text = $1)
+		  AND ($2 = '' OR i.order_id::text = $2)
+		  AND ($3 = '' OR i.status = $3)
+		  AND ($4 = '' OR i.provider = $4)
+		  AND ($7 = '' OR i.id::text = $7)
+		ORDER BY i.created_at DESC, i.id DESC
+		LIMIT $5 OFFSET $6`, f.UserID, f.OrderID, f.Status, f.Provider, limit, offset, f.IntentID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list intents: %w", err)
+	}
+	defer rows.Close()
+	var (
+		out   []IntentRecord
+		total int64
+	)
+	for rows.Next() {
+		var (
+			rec         IntentRecord
+			rid         *string
+			submittedAt *time.Time
+			r           Receipt
+		)
+		in := &rec.Intent
+		if err := rows.Scan(&in.ID, &in.OrderID, &in.UserID, &in.Provider, &in.Amount,
+			&in.Currency, &in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt,
+			&in.GatewayAmount, &in.GatewayCurrency, &in.ExternalID, &in.PayURL, &in.ProviderRef,
+			&in.FailureReason, &in.CheckAttempts, &in.CheckedAt,
+			&rid, &r.Network, &r.TXID, &r.ReceiptFile, &r.ReferenceNumber, &submittedAt,
+			&r.ReviewedBy, &r.Decision, &r.Reason, &r.ReviewedAt, &total); err != nil {
+			return nil, 0, err
+		}
+		if rid != nil {
+			r.ID, r.IntentID = *rid, in.ID
+			if submittedAt != nil {
+				r.SubmittedAt = *submittedAt
+			}
+			rec.Receipt = &r
+		}
+		out = append(out, rec)
+	}
+	return out, total, rows.Err()
 }

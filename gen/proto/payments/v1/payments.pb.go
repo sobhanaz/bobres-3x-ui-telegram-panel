@@ -838,7 +838,8 @@ func (x *ListPendingReceiptsRequest) GetPagination() *v1.Pagination {
 	return nil
 }
 
-// ManualReceipt is the proof a user submitted for a manual intent.
+// ManualReceipt is the proof a user submitted for a manual intent, and its
+// review once there is one.
 type ManualReceipt struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ReceiptFile     string                 `protobuf:"bytes,1,opt,name=receipt_file,json=receiptFile,proto3" json:"receipt_file,omitempty"`             // Telegram file_id of the receipt photo (card)
@@ -846,6 +847,10 @@ type ManualReceipt struct {
 	Network         string                 `protobuf:"bytes,3,opt,name=network,proto3" json:"network,omitempty"`                                        // crypto network, e.g. TRC20
 	Txid            string                 `protobuf:"bytes,4,opt,name=txid,proto3" json:"txid,omitempty"`                                              // crypto transaction id
 	SubmittedAt     int64                  `protobuf:"varint,5,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"`
+	Decision        string                 `protobuf:"bytes,6,opt,name=decision,proto3" json:"decision,omitempty"` // approved | rejected | "" (not reviewed)
+	ReviewReason    string                 `protobuf:"bytes,7,opt,name=review_reason,json=reviewReason,proto3" json:"review_reason,omitempty"`
+	ReviewedBy      string                 `protobuf:"bytes,8,opt,name=reviewed_by,json=reviewedBy,proto3" json:"reviewed_by,omitempty"` // core user id of the reviewer
+	ReviewedAt      int64                  `protobuf:"varint,9,opt,name=reviewed_at,json=reviewedAt,proto3" json:"reviewed_at,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -915,6 +920,34 @@ func (x *ManualReceipt) GetSubmittedAt() int64 {
 	return 0
 }
 
+func (x *ManualReceipt) GetDecision() string {
+	if x != nil {
+		return x.Decision
+	}
+	return ""
+}
+
+func (x *ManualReceipt) GetReviewReason() string {
+	if x != nil {
+		return x.ReviewReason
+	}
+	return ""
+}
+
+func (x *ManualReceipt) GetReviewedBy() string {
+	if x != nil {
+		return x.ReviewedBy
+	}
+	return ""
+}
+
+func (x *ManualReceipt) GetReviewedAt() int64 {
+	if x != nil {
+		return x.ReviewedAt
+	}
+	return 0
+}
+
 // PendingReceipt is one item of the manual review queue.
 type PendingReceipt struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -978,6 +1011,196 @@ func (x *PendingReceipt) GetPossibleDuplicate() bool {
 	return false
 }
 
+// ListIntentsRequest filters the payment history; every field is optional.
+type ListIntentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	OrderId       string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Provider      string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"`
+	Pagination    *v1.Pagination         `protobuf:"bytes,5,opt,name=pagination,proto3" json:"pagination,omitempty"`
+	IntentId      string                 `protobuf:"bytes,6,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"` // one payment
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListIntentsRequest) Reset() {
+	*x = ListIntentsRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListIntentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListIntentsRequest) ProtoMessage() {}
+
+func (x *ListIntentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListIntentsRequest.ProtoReflect.Descriptor instead.
+func (*ListIntentsRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ListIntentsRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ListIntentsRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *ListIntentsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListIntentsRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ListIntentsRequest) GetPagination() *v1.Pagination {
+	if x != nil {
+		return x.Pagination
+	}
+	return nil
+}
+
+func (x *ListIntentsRequest) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+// IntentRecord is one payment with the proof sent for it (manual payments).
+type IntentRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Intent        *PaymentIntent         `protobuf:"bytes,1,opt,name=intent,proto3" json:"intent,omitempty"`
+	Receipt       *ManualReceipt         `protobuf:"bytes,2,opt,name=receipt,proto3" json:"receipt,omitempty"` // unset when there is none
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IntentRecord) Reset() {
+	*x = IntentRecord{}
+	mi := &file_payments_v1_payments_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IntentRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IntentRecord) ProtoMessage() {}
+
+func (x *IntentRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IntentRecord.ProtoReflect.Descriptor instead.
+func (*IntentRecord) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *IntentRecord) GetIntent() *PaymentIntent {
+	if x != nil {
+		return x.Intent
+	}
+	return nil
+}
+
+func (x *IntentRecord) GetReceipt() *ManualReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
+type ListIntentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Records       []*IntentRecord        `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"` // newest first
+	PageInfo      *v1.PageInfo           `protobuf:"bytes,2,opt,name=page_info,json=pageInfo,proto3" json:"page_info,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListIntentsResponse) Reset() {
+	*x = ListIntentsResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListIntentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListIntentsResponse) ProtoMessage() {}
+
+func (x *ListIntentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListIntentsResponse.ProtoReflect.Descriptor instead.
+func (*ListIntentsResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListIntentsResponse) GetRecords() []*IntentRecord {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+func (x *ListIntentsResponse) GetPageInfo() *v1.PageInfo {
+	if x != nil {
+		return x.PageInfo
+	}
+	return nil
+}
+
 type ListPendingReceiptsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Intents       []*PaymentIntent       `protobuf:"bytes,1,rep,name=intents,proto3" json:"intents,omitempty"`
@@ -989,7 +1212,7 @@ type ListPendingReceiptsResponse struct {
 
 func (x *ListPendingReceiptsResponse) Reset() {
 	*x = ListPendingReceiptsResponse{}
-	mi := &file_payments_v1_payments_proto_msgTypes[14]
+	mi := &file_payments_v1_payments_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1001,7 +1224,7 @@ func (x *ListPendingReceiptsResponse) String() string {
 func (*ListPendingReceiptsResponse) ProtoMessage() {}
 
 func (x *ListPendingReceiptsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[14]
+	mi := &file_payments_v1_payments_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1014,7 +1237,7 @@ func (x *ListPendingReceiptsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPendingReceiptsResponse.ProtoReflect.Descriptor instead.
 func (*ListPendingReceiptsResponse) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{14}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListPendingReceiptsResponse) GetIntents() []*PaymentIntent {
@@ -1109,21 +1332,42 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x1aListPendingReceiptsRequest\x125\n" +
 	"\n" +
 	"pagination\x18\x01 \x01(\v2\x15.common.v1.PaginationR\n" +
-	"pagination\"\xae\x01\n" +
+	"pagination\"\xb1\x02\n" +
 	"\rManualReceipt\x12!\n" +
 	"\freceipt_file\x18\x01 \x01(\tR\vreceiptFile\x12)\n" +
 	"\x10reference_number\x18\x02 \x01(\tR\x0freferenceNumber\x12\x18\n" +
 	"\anetwork\x18\x03 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04txid\x18\x04 \x01(\tR\x04txid\x12!\n" +
-	"\fsubmitted_at\x18\x05 \x01(\x03R\vsubmittedAt\"\xa9\x01\n" +
+	"\fsubmitted_at\x18\x05 \x01(\x03R\vsubmittedAt\x12\x1a\n" +
+	"\bdecision\x18\x06 \x01(\tR\bdecision\x12#\n" +
+	"\rreview_reason\x18\a \x01(\tR\freviewReason\x12\x1f\n" +
+	"\vreviewed_by\x18\b \x01(\tR\n" +
+	"reviewedBy\x12\x1f\n" +
+	"\vreviewed_at\x18\t \x01(\x03R\n" +
+	"reviewedAt\"\xa9\x01\n" +
 	"\x0ePendingReceipt\x122\n" +
 	"\x06intent\x18\x01 \x01(\v2\x1a.payments.v1.PaymentIntentR\x06intent\x124\n" +
 	"\areceipt\x18\x02 \x01(\v2\x1a.payments.v1.ManualReceiptR\areceipt\x12-\n" +
-	"\x12possible_duplicate\x18\x03 \x01(\bR\x11possibleDuplicate\"\xbe\x01\n" +
+	"\x12possible_duplicate\x18\x03 \x01(\bR\x11possibleDuplicate\"\xd0\x01\n" +
+	"\x12ListIntentsRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1a\n" +
+	"\bprovider\x18\x04 \x01(\tR\bprovider\x125\n" +
+	"\n" +
+	"pagination\x18\x05 \x01(\v2\x15.common.v1.PaginationR\n" +
+	"pagination\x12\x1b\n" +
+	"\tintent_id\x18\x06 \x01(\tR\bintentId\"x\n" +
+	"\fIntentRecord\x122\n" +
+	"\x06intent\x18\x01 \x01(\v2\x1a.payments.v1.PaymentIntentR\x06intent\x124\n" +
+	"\areceipt\x18\x02 \x01(\v2\x1a.payments.v1.ManualReceiptR\areceipt\"|\n" +
+	"\x13ListIntentsResponse\x123\n" +
+	"\arecords\x18\x01 \x03(\v2\x19.payments.v1.IntentRecordR\arecords\x120\n" +
+	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\"\xbe\x01\n" +
 	"\x1bListPendingReceiptsResponse\x124\n" +
 	"\aintents\x18\x01 \x03(\v2\x1a.payments.v1.PaymentIntentR\aintents\x120\n" +
 	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\x127\n" +
-	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts2\xe2\x06\n" +
+	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts2\xb4\a\n" +
 	"\x0fPaymentsService\x12L\n" +
 	"\fCreateIntent\x12 .payments.v1.CreateIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12F\n" +
 	"\tGetIntent\x12\x1d.payments.v1.GetIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12N\n" +
@@ -1131,7 +1375,8 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"SubmitTXID\x12\x1e.payments.v1.SubmitTXIDRequest\x1a\x1a.payments.v1.PaymentIntent\x12Z\n" +
 	"\x13ReviewManualPayment\x12'.payments.v1.ReviewManualPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12h\n" +
-	"\x13ListPendingReceipts\x12'.payments.v1.ListPendingReceiptsRequest\x1a(.payments.v1.ListPendingReceiptsResponse\x12J\n" +
+	"\x13ListPendingReceipts\x12'.payments.v1.ListPendingReceiptsRequest\x1a(.payments.v1.ListPendingReceiptsResponse\x12P\n" +
+	"\vListIntents\x12\x1f.payments.v1.ListIntentsRequest\x1a .payments.v1.ListIntentsResponse\x12J\n" +
 	"\vCheckIntent\x12\x1f.payments.v1.CheckIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12\\\n" +
 	"\x14PrecheckStarsPayment\x12(.payments.v1.PrecheckStarsPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12Z\n" +
 	"\x13ConfirmStarsPayment\x12'.payments.v1.ConfirmStarsPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12S\n" +
@@ -1149,7 +1394,7 @@ func file_payments_v1_payments_proto_rawDescGZIP() []byte {
 	return file_payments_v1_payments_proto_rawDescData
 }
 
-var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_payments_v1_payments_proto_goTypes = []any{
 	(*PaymentIntent)(nil),               // 0: payments.v1.PaymentIntent
 	(*CreateIntentRequest)(nil),         // 1: payments.v1.CreateIntentRequest
@@ -1165,47 +1410,57 @@ var file_payments_v1_payments_proto_goTypes = []any{
 	(*ListPendingReceiptsRequest)(nil),  // 11: payments.v1.ListPendingReceiptsRequest
 	(*ManualReceipt)(nil),               // 12: payments.v1.ManualReceipt
 	(*PendingReceipt)(nil),              // 13: payments.v1.PendingReceipt
-	(*ListPendingReceiptsResponse)(nil), // 14: payments.v1.ListPendingReceiptsResponse
-	(*v1.Money)(nil),                    // 15: common.v1.Money
-	(*v1.Pagination)(nil),               // 16: common.v1.Pagination
-	(*v1.PageInfo)(nil),                 // 17: common.v1.PageInfo
+	(*ListIntentsRequest)(nil),          // 14: payments.v1.ListIntentsRequest
+	(*IntentRecord)(nil),                // 15: payments.v1.IntentRecord
+	(*ListIntentsResponse)(nil),         // 16: payments.v1.ListIntentsResponse
+	(*ListPendingReceiptsResponse)(nil), // 17: payments.v1.ListPendingReceiptsResponse
+	(*v1.Money)(nil),                    // 18: common.v1.Money
+	(*v1.Pagination)(nil),               // 19: common.v1.Pagination
+	(*v1.PageInfo)(nil),                 // 20: common.v1.PageInfo
 }
 var file_payments_v1_payments_proto_depIdxs = []int32{
-	15, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
-	15, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
-	15, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
-	15, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
-	16, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
+	18, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
+	18, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
+	18, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
+	18, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
+	19, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 5: payments.v1.PendingReceipt.intent:type_name -> payments.v1.PaymentIntent
 	12, // 6: payments.v1.PendingReceipt.receipt:type_name -> payments.v1.ManualReceipt
-	0,  // 7: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
-	17, // 8: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
-	13, // 9: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
-	1,  // 10: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
-	7,  // 11: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
-	8,  // 12: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
-	9,  // 13: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
-	10, // 14: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
-	11, // 15: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
-	2,  // 16: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
-	3,  // 17: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
-	4,  // 18: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
-	5,  // 19: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
-	0,  // 20: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 21: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 22: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
-	0,  // 23: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
-	0,  // 24: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
-	14, // 25: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
-	0,  // 26: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 27: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
-	0,  // 28: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
-	6,  // 29: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
-	20, // [20:30] is the sub-list for method output_type
-	10, // [10:20] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	19, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
+	0,  // 8: payments.v1.IntentRecord.intent:type_name -> payments.v1.PaymentIntent
+	12, // 9: payments.v1.IntentRecord.receipt:type_name -> payments.v1.ManualReceipt
+	15, // 10: payments.v1.ListIntentsResponse.records:type_name -> payments.v1.IntentRecord
+	20, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
+	0,  // 12: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
+	20, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
+	13, // 14: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
+	1,  // 15: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
+	7,  // 16: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
+	8,  // 17: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
+	9,  // 18: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
+	10, // 19: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
+	11, // 20: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
+	14, // 21: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
+	2,  // 22: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
+	3,  // 23: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
+	4,  // 24: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
+	5,  // 25: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
+	0,  // 26: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 27: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 28: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
+	0,  // 29: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
+	0,  // 30: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
+	17, // 31: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
+	16, // 32: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
+	0,  // 33: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 34: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
+	0,  // 35: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
+	6,  // 36: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
+	26, // [26:37] is the sub-list for method output_type
+	15, // [15:26] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }
@@ -1219,7 +1474,7 @@ func file_payments_v1_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_payments_proto_rawDesc), len(file_payments_v1_payments_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
