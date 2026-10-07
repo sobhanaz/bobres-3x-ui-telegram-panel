@@ -52,8 +52,9 @@ func TestMenuWithoutInstallOffersInstall(t *testing.T) {
 func TestMenuRunsTheCommands(t *testing.T) {
 	dir := installDir(t)
 	f := &fakeOps{ps: healthyPS}
-	// status, live logs, start, stop (declined, then confirmed), restart, uninstall (declined), exit
-	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n10\n\n11\nn\n\n0\n", f)
+	// status, live logs, start, stop (declined, then confirmed), restart,
+	// dashboard link, server check, uninstall (declined), exit
+	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n10\n\n11\n\n12\nn\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -73,8 +74,8 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	if verbs["up"] != 1 || verbs["stop"] != 1 || verbs["restart"] != 1 || verbs["down"] != 0 {
 		t.Fatalf("compose verbs %v (calls %v)", verbs, f.calls)
 	}
-	if len(f.stream) != 1 || !contains(f.stream[0], "-f") || !contains(f.stream[0], "logs") {
-		t.Fatalf("live logs: %v", f.stream)
+	if len(f.stream) != 2 || !contains(f.stream[0], "-f") || !contains(f.stream[0], "logs") || !contains(f.stream[1], "login-link") {
+		t.Fatalf("live logs and the dashboard link: %v", f.stream)
 	}
 	if len(*doctors) != 1 || !contains((*doctors)[0], "panel.example.com") {
 		t.Fatalf("doctor: %v", *doctors)

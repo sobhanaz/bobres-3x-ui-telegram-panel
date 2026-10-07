@@ -74,9 +74,25 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 		h.togglePlan(r, arg)
 	case "set":
 		h.showSettings(r)
+	case "web":
+		h.sendDashboardLink(r)
 	default:
 		h.showAdmin(r)
 	}
+}
+
+// sendDashboardLink sends a one-time dashboard login link (2 minutes, once).
+func (h *Handler) sendDashboardLink(r *req) {
+	link, err := h.core.CreateDashboardLink(r.ctx, &corev1.CreateDashboardLinkRequest{ActorTelegramId: h.actor(r)})
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	if link.GetUrl() == "" {
+		r.send(r.t("admin.dashboard_unavailable"), nil)
+		return
+	}
+	r.send(r.t("admin.dashboard_link"), (&tg.Keyboard{}).Row(tg.Link(r.t("btn.open_dashboard"), link.GetUrl())))
 }
 
 func (h *Handler) showAdmin(r *req) {
@@ -96,7 +112,8 @@ func (h *Handler) showAdmin(r *req) {
 	kb := (&tg.Keyboard{}).
 		Row(tg.CB(r.t("btn.adm_pending", "n", pending), "adm:pend")).
 		Row(tg.CB(r.t("btn.adm_find"), "adm:find"), tg.CB(r.t("btn.adm_plans"), "adm:plans")).
-		Row(tg.CB(r.t("btn.adm_settings"), "adm:set"), tg.CB(r.t("btn.home"), "home"))
+		Row(tg.CB(r.t("btn.adm_settings"), "adm:set"), tg.CB(r.t("btn.adm_dashboard"), "adm:web")).
+		Row(tg.CB(r.t("btn.home"), "home"))
 	r.show(r.t("admin.title",
 		"users", i18n.Number(r.lang, st.GetUsersTotal()), "today", i18n.Number(r.lang, st.GetUsersToday()),
 		"active", i18n.Number(r.lang, st.GetActiveSubscriptions()), "pending", pending,

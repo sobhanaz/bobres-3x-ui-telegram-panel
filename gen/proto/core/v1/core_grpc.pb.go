@@ -52,6 +52,7 @@ const (
 	CoreService_GetReferralInfo_FullMethodName          = "/core.v1.CoreService/GetReferralInfo"
 	CoreService_AdminUpsertDiscount_FullMethodName      = "/core.v1.CoreService/AdminUpsertDiscount"
 	CoreService_AdminListDiscounts_FullMethodName       = "/core.v1.CoreService/AdminListDiscounts"
+	CoreService_CreateDashboardLink_FullMethodName      = "/core.v1.CoreService/CreateDashboardLink"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -94,6 +95,7 @@ type CoreServiceClient interface {
 	GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error)
 	AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error)
 	AdminListDiscounts(ctx context.Context, in *AdminListDiscountsRequest, opts ...grpc.CallOption) (*AdminListDiscountsResponse, error)
+	CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error)
 }
 
 type coreServiceClient struct {
@@ -434,6 +436,16 @@ func (c *coreServiceClient) AdminListDiscounts(ctx context.Context, in *AdminLis
 	return out, nil
 }
 
+func (c *coreServiceClient) CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DashboardLink)
+	err := c.cc.Invoke(ctx, CoreService_CreateDashboardLink_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -474,6 +486,7 @@ type CoreServiceServer interface {
 	GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error)
 	AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error)
 	AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error)
+	CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -582,6 +595,9 @@ func (UnimplementedCoreServiceServer) AdminUpsertDiscount(context.Context, *Admi
 }
 func (UnimplementedCoreServiceServer) AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminListDiscounts not implemented")
+}
+func (UnimplementedCoreServiceServer) CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDashboardLink not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1198,6 +1214,24 @@ func _CoreService_AdminListDiscounts_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_CreateDashboardLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateDashboardLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CreateDashboardLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CreateDashboardLink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CreateDashboardLink(ctx, req.(*CreateDashboardLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1336,6 +1370,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminListDiscounts",
 			Handler:    _CoreService_AdminListDiscounts_Handler,
+		},
+		{
+			MethodName: "CreateDashboardLink",
+			Handler:    _CoreService_CreateDashboardLink_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

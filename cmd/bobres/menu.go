@@ -146,7 +146,8 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Change the bot token", run: m.changeBotToken},
 		{label: "Change the owner (admin) Telegram ID", run: m.changeAdmin},
 		{label: "Change the 3x-ui panel (URL, API token, subscription link)", run: func() { m.changePanel(env) }},
-		{label: "Check this server", run: func() { m.doctor([]string{"--domain", env["BOBRES_DOMAIN"]}) }, group: true},
+		{label: "Dashboard login link (if the bot is down)", run: func() { m.ops.adminCmd([]string{"link", "--dir", m.dir}) }, group: true},
+		{label: "Check this server", run: func() { m.doctor([]string{"--domain", env["BOBRES_DOMAIN"]}) }},
 		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }},
 	}
 }

@@ -129,13 +129,3 @@ type Audit struct {
 	After    []byte
 	Reason   *string
 }
-
-// Staff mirrors core.staff.
-type Staff struct {
-	ID            string
-	Username      string
-	PasswordHash  string
-	TOTPSecretEnc []byte
-	Role          string
-	Status        string
-}

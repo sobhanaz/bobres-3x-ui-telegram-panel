@@ -119,6 +119,8 @@ services:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_core:${DB_CORE_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
+      # Optional: where staff open the dashboard, when not https://BOBRES_DOMAIN (local tests).
+      BOBRES_PUBLIC_URL: ${BOBRES_PUBLIC_URL:-}
       BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
       BOBRES_PEER_BOT_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
       BOBRES_PAYMENTS_GRPC_ADDR: payments:9090

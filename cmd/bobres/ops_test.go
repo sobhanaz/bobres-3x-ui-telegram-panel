@@ -222,3 +222,22 @@ func TestLogsInterruptEndsFollowing(t *testing.T) {
 		t.Fatalf("plain logs failure: %d", code)
 	}
 }
+
+func TestAdminLink(t *testing.T) {
+	f := &fakeOps{}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	if code := o.adminCmd([]string{"link", "--dir", dir, "4242"}); code != 0 {
+		t.Fatalf("admin link: %d %s", code, errOut)
+	}
+	got := strings.Join(f.stream[0], " ")
+	if !strings.Contains(got, "exec -T core /app login-link 4242") || !strings.Contains(got, "--project-name bobres") {
+		t.Fatalf("compose args: %s", got)
+	}
+	if code := o.adminCmd([]string{"nope"}); code != 2 {
+		t.Fatalf("unknown subcommand: %d", code)
+	}
+	if code := o.adminCmd([]string{"link", "--dir", t.TempDir()}); code != 2 {
+		t.Fatalf("no install: %d", code)
+	}
+}
