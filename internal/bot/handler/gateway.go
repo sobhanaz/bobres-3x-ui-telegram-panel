@@ -44,15 +44,20 @@ func (h *Handler) gatewayMethods(ctx context.Context, currency string, amount in
 	return resp.GetProviders()
 }
 
-// gatewayButtons are the automated payment buttons, "<verb>:<z|s>:<target>:<nonce>".
+// gatewayButtons are the automated payment buttons, "<verb>:<z|s>:<target>:<nonce>"
+// ("<verb>:<z|s>:<nonce>" without a target).
 func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, target, n string) []tg.Button {
+	suffix := ":" + n
+	if target != "" {
+		suffix = ":" + target + suffix
+	}
 	var out []tg.Button
 	for _, m := range h.gatewayMethods(r.ctx, currency, amount) {
 		switch m {
 		case "zarinpal":
-			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z:"+target+":"+n))
+			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z"+suffix))
 		case "stars":
-			out = append(out, tg.CB(r.t("btn.pay_stars"), verb+":s:"+target+":"+n))
+			out = append(out, tg.CB(r.t("btn.pay_stars"), verb+":s"+suffix))
 		}
 	}
 	return out

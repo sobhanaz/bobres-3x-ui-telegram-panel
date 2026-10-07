@@ -20,6 +20,19 @@ type Provisioner interface {
 	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64) (ProvisionedClient, error)
 	GetLinks(ctx context.Context, subscriptionID string) (Links, error)
 	Health(ctx context.Context) (healthy bool, detail string, err error)
+	// SetLimits sets absolute limits (unix seconds, bytes; 0 = unlimited) and
+	// enables the client: renewals and top-ups, safe to repeat.
+	SetLimits(ctx context.Context, subscriptionID string, expiresAt, trafficBytes int64) error
+	// Usage reports used traffic and the limits the panel holds.
+	Usage(ctx context.Context, subscriptionID string) (Usage, error)
+}
+
+// Usage is a subscription's traffic and limits as the panel holds them.
+type Usage struct {
+	UsedBytes  int64
+	TotalBytes int64 // 0 = unlimited
+	ExpiresAt  int64 // unix seconds; 0 = none; negative = starts on first use
+	Enabled    bool
 }
 
 // ProvisionedClient is what the panel holds for a subscription.
@@ -124,14 +137,30 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		if err != nil {
 			return err
 		}
-		sub, err := st.SubscriptionByOrder(ctx, tx, o.ID)
-		if errors.Is(err, store.ErrNotFound) {
-			sub, err = st.CreateSubscription(ctx, tx, &store.Subscription{
-				UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmail(u.TelegramID),
-			})
-		}
-		if err != nil {
-			return err
+		var sub *store.Subscription
+		if o.SubscriptionID != nil {
+			// A renewal or top-up: its limits are computed once, from the
+			// subscription as it was when first claimed, and kept for retries.
+			if sub, err = st.LockSubscription(ctx, tx, *o.SubscriptionID); err != nil {
+				return err
+			}
+			if !o.TargetsSet {
+				o.TargetExpiresAt, o.TargetTrafficBytes = extendTargets(o.Type, sub, plan, w.now())
+				o.TargetsSet = true
+				if err := st.SetOrderTargets(ctx, tx, o.ID, o.TargetExpiresAt, o.TargetTrafficBytes); err != nil {
+					return err
+				}
+			}
+		} else {
+			sub, err = st.SubscriptionByOrder(ctx, tx, o.ID)
+			if errors.Is(err, store.ErrNotFound) {
+				sub, err = st.CreateSubscription(ctx, tx, &store.Subscription{
+					UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmail(u.TelegramID),
+				})
+			}
+			if err != nil {
+				return err
+			}
 		}
 		attempt, err := st.MarkProvisioning(ctx, tx, o.ID)
 		if err != nil {
@@ -144,6 +173,9 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
+	if job.order.SubscriptionID != nil {
+		return true, w.extend(ctx, job)
+	}
 	days, traffic := planLimits(job.plan)
 	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic)
 	var links Links
@@ -185,6 +217,43 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 		return w.svc.publish(ctx, tx, events.SubscriptionProvisioned, events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic,
+		})
+	})
+}
+
+// extend applies a renewal's or top-up's target limits on the panel, then
+// records them on the subscription and announces the result.
+func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
+	o := job.order
+	var expires, traffic int64
+	if o.TargetExpiresAt != nil {
+		expires = o.TargetExpiresAt.Unix()
+	}
+	if o.TargetTrafficBytes != nil {
+		traffic = *o.TargetTrafficBytes
+	}
+	if err := w.prov.SetLimits(ctx, job.sub.ID, expires, traffic); err != nil {
+		if ctx.Err() != nil {
+			return err // shutting down: the lease expires and a later run retries
+		}
+		return w.fail(ctx, job, err)
+	}
+	st := w.svc.st
+	return st.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := st.ApplySubscriptionLimits(ctx, tx, job.sub.ID, o.TargetExpiresAt, o.TargetTrafficBytes); err != nil {
+			return err
+		}
+		ok, err := st.TransitionOrder(ctx, tx, o.ID, []string{"provisioning"}, "active")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("order %s changed state while extending", o.ID)
+		}
+		w.log.Info("extended", "order_id", o.ID, "subscription_id", job.sub.ID, "type", o.Type)
+		return w.svc.publish(ctx, tx, events.SubscriptionExtended, events.SubscriptionExtendedEvent{
+			SubscriptionID: job.sub.ID, OrderID: o.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
+			Type: o.Type, ExpiresAt: expires, TrafficTotalBytes: traffic, TrafficUsedBytes: job.sub.TrafficUsed,
 		})
 	})
 }

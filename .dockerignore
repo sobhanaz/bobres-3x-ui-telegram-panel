@@ -6,3 +6,7 @@ deploy/.env
 *.md
 **/*_test.go
 coverage.out
+# The dashboard is built inside the image (deploy/Dockerfile); a local build or
+# node_modules must not leak stale files into it.
+web/dashboard/node_modules
+web/dashboard/dist/app

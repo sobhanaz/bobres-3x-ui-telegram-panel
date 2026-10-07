@@ -30,6 +30,7 @@ message Plan {
   bool enabled = 7;
   bool is_trial = 8;
   int32 sort = 9;
+  bool is_topup = 10; // a traffic package for an existing subscription
 }
 
 message Order {
@@ -42,6 +43,9 @@ message Order {
   string idempotency_key = 7;
   int64 created_at = 8;
   int64 updated_at = 9;
+  string subscription_id = 10; // renew | traffic_topup: the subscription extended
+  string discount_code = 11;
+  common.v1.Money discount = 12; // already taken off amount
 }
 
 message Wallet {
@@ -99,6 +103,7 @@ message UpsertUserRequest {
   string username = 2;
   string language = 3;
   string referred_by = 4;
+  string referral_code = 5; // the inviter's code; used only when the user is created
 }
 
 message GetUserRequest {
@@ -119,8 +124,72 @@ message ListPlansResponse {
 message CreateOrderRequest {
   string user_id = 1;
   string plan_id = 2;
-  string type = 3;
+  string type = 3; // new | renew | traffic_topup
   string idempotency_key = 4;
+  string subscription_id = 5; // renew | traffic_topup
+  string discount_code = 6;
+}
+
+// QuoteOrderRequest prices an order before it is created, e.g. to show the
+// effect of a discount code; it fails as CreateOrder would.
+message QuoteOrderRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  string type = 3;
+  string subscription_id = 4;
+  string discount_code = 5;
+}
+
+message Quote {
+  common.v1.Money list_price = 1;
+  common.v1.Money discount = 2;
+  common.v1.Money total = 3;
+  string discount_code = 4; // normalized (upper case)
+}
+
+message GetReferralInfoRequest {
+  string user_id = 1;
+}
+
+message ReferralInfo {
+  string code = 1; // the user's invite code (created on first request)
+  int32 invited = 2;
+  int32 rewarded = 3; // invited users whose first purchase paid a reward
+  repeated common.v1.Money earned = 4; // per currency
+  int32 reward_percent = 5; // of an invited user's first purchase; 0 = referrals are off
+}
+
+message Discount {
+  string code = 1;
+  int32 percent = 2; // either a percentage...
+  common.v1.Money amount = 3; // ...or a fixed amount
+  int32 max_uses = 4; // 0 = unlimited
+  int32 used = 5;
+  int64 expires_at = 6; // unix seconds, 0 = never
+  bool enabled = 7;
+}
+
+message AdminUpsertDiscountRequest {
+  int64 actor_telegram_id = 1;
+  Discount discount = 2;
+}
+
+message AdminListDiscountsRequest {
+  int64 actor_telegram_id = 1;
+}
+
+message AdminListDiscountsResponse {
+  repeated Discount discounts = 1;
+}
+
+message CreateDashboardLinkRequest {
+  int64 actor_telegram_id = 1; // a staff member (owner, admin or support)
+}
+
+// DashboardLink is a one-time dashboard login link (works once, until expires_at).
+message DashboardLink {
+  string url = 1; // empty when the install has no public domain
+  int64 expires_at = 2;
 }
 
 message GetOrderRequest {
@@ -377,6 +446,11 @@ service CoreService {
   rpc AdminSetUserStatus(AdminSetUserStatusRequest) returns (User);
   rpc AdminUpsertPlan(AdminUpsertPlanRequest) returns (Plan);
   rpc AdminSetSetting(AdminSetSettingRequest) returns (Settings);
+  rpc QuoteOrder(QuoteOrderRequest) returns (Quote);
+  rpc GetReferralInfo(GetReferralInfoRequest) returns (ReferralInfo);
+  rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
+  rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
+  rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);
 }
 
 message CanStartTrialRequest {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -51,7 +52,7 @@ func New(st *store.Store) *Service {
 // providers; automated gateways go through StartGateway.
 func (s *Service) CreateIntent(ctx context.Context, in *store.Intent) (*store.Intent, error) {
 	switch in.Provider {
-	case provider.ManualCard, provider.ManualCrypto:
+	case provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal:
 	default:
 		return nil, invalid("unsupported provider %q", in.Provider)
 	}
@@ -75,19 +76,30 @@ func (s *Service) createIntent(ctx context.Context, in *store.Intent) (*store.In
 	return s.st.CreateIntent(ctx, nil, in)
 }
 
-// SubmitReceipt stores a card receipt and moves to confirming.
+// SubmitReceipt stores a receipt screenshot for any manual payment and moves
+// the intent to confirming for an admin to review. A card transfer also needs
+// the bank's reference number (matched against the bank statement and flagged
+// when it repeats); for a crypto transfer or a Zarinpal link payment the
+// screenshot is the proof and a reference is optional.
 func (s *Service) SubmitReceipt(ctx context.Context, userID, intentID, fileID, reference string) (*store.Intent, error) {
 	fileID, reference = strings.TrimSpace(fileID), strings.TrimSpace(reference)
-	if fileID == "" || reference == "" {
-		return nil, invalid("receipt file and reference required")
+	if fileID == "" {
+		return nil, invalid("receipt screenshot required")
 	}
 	if len(fileID) > maxProofLen || len(reference) > maxProofLen {
 		return nil, invalid("receipt details too long")
 	}
-	return s.submit(ctx, userID, intentID, provider.ManualCard, func(r *store.Receipt) {
-		r.ReceiptFile = &fileID
-		r.ReferenceNumber = &reference
-	})
+	return s.submit(ctx, userID, intentID, []string{provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal},
+		func(in *store.Intent, r *store.Receipt) error {
+			if in.Provider == provider.ManualCard && reference == "" {
+				return invalid("the bank reference number is required for a card transfer")
+			}
+			r.ReceiptFile = &fileID
+			if reference != "" {
+				r.ReferenceNumber = &reference
+			}
+			return nil
+		})
 }
 
 // SubmitTXID stores a crypto TXID and moves to confirming. A TXID can pay for
@@ -100,14 +112,16 @@ func (s *Service) SubmitTXID(ctx context.Context, userID, intentID, network, txi
 	if len(txid) > maxProofLen || len(network) > 32 {
 		return nil, invalid("transaction details too long")
 	}
-	return s.submit(ctx, userID, intentID, provider.ManualCrypto, func(r *store.Receipt) {
+	return s.submit(ctx, userID, intentID, []string{provider.ManualCrypto}, func(_ *store.Intent, r *store.Receipt) error {
 		r.Network = &network
 		r.TXID = &txid
+		return nil
 	})
 }
 
-// submit is the shared proof-submission flow.
-func (s *Service) submit(ctx context.Context, userID, intentID, wantProvider string, fill func(*store.Receipt)) (*store.Intent, error) {
+// submit is the shared proof-submission flow: the intent must be the user's
+// and use one of the allowed providers.
+func (s *Service) submit(ctx context.Context, userID, intentID string, allowed []string, fill func(*store.Intent, *store.Receipt) error) (*store.Intent, error) {
 	var out *store.Intent
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		in, err := s.st.GetIntent(ctx, tx, intentID)
@@ -117,11 +131,13 @@ func (s *Service) submit(ctx context.Context, userID, intentID, wantProvider str
 		if in.UserID != userID {
 			return ErrForbidden
 		}
-		if in.Provider != wantProvider {
-			return invalid("this payment expects a %s proof", in.Provider)
+		if !slices.Contains(allowed, in.Provider) {
+			return invalid("this payment does not take this kind of proof (%s)", in.Provider)
 		}
 		r := &store.Receipt{IntentID: intentID}
-		fill(r)
+		if err := fill(in, r); err != nil {
+			return err
+		}
 		if err := s.st.SaveReceipt(ctx, tx, r); err != nil {
 			return err
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,16 +19,18 @@ import (
 // SettingKeys are the settings an admin may change from the bot (and later the
 // dashboard). Values are plain text.
 var SettingKeys = map[string]string{
-	"payments.card_number": "card number shown for card-to-card payments",
-	"payments.card_holder": "card holder name",
-	"payments.usdt_trc20":  "USDT TRC20 deposit address",
-	"payments.usdt_erc20":  "USDT ERC20 deposit address",
-	"payments.usdt_rate":   "Toman per 1 USDT, to quote Toman prices in USDT",
-	"payments.stars_rate":  "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
-	"branding.name":        "store name shown to users",
-	"branding.support":     "support contact (e.g. @support)",
-	"texts.fa.welcome":     "Persian welcome text",
-	"texts.en.welcome":     "English welcome text",
+	"payments.card_number":    "card number shown for card-to-card payments",
+	"payments.card_holder":    "card holder name",
+	"payments.usdt_trc20":     "USDT TRC20 deposit address",
+	"payments.usdt_erc20":     "USDT ERC20 deposit address",
+	"payments.usdt_rate":      "Toman per 1 USDT, to quote Toman prices in USDT",
+	"payments.stars_rate":     "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
+	"payments.zarinpal_link":  "your Zarinpal payment link (https://zarinp.al/...); customers pay there and send the receipt screenshot for approval",
+	"referral.reward_percent": "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)",
+	"branding.name":           "store name shown to users",
+	"branding.support":        "support contact (e.g. @support)",
+	"texts.fa.welcome":        "Persian welcome text",
+	"texts.en.welcome":        "English welcome text",
 }
 
 const maxSettingLen = 1000
@@ -344,6 +347,17 @@ func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, ke
 	value = strings.TrimSpace(value)
 	if len(value) > maxSettingLen {
 		return invalid("setting value too long")
+	}
+	if key == "referral.reward_percent" && value != "" {
+		if n, err := strconv.Atoi(value); err != nil || n < 0 || n > 100 {
+			return invalid("referral.reward_percent must be a whole number from 0 to 100")
+		}
+	}
+	if key == "payments.zarinpal_link" && value != "" {
+		// Shown to customers as a link button: only a plain https link.
+		if u, err := url.Parse(value); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+			return invalid("payments.zarinpal_link must be an https link, e.g. https://zarinp.al/yourname")
+		}
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {

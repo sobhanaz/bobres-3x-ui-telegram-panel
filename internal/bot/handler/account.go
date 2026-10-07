@@ -87,11 +87,27 @@ func (h *Handler) showService(r *req, id string) {
 			r.show(r.t("sub.not_ready"), backHome(r, "subs"))
 			return
 		}
-		kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.qr"), "qr:"+id)).
+		kb := &tg.Keyboard{}
+		var extend []tg.Button
+		if renewable(s) {
+			extend = append(extend, tg.CB(r.t("btn.renew"), "rnw:"+id))
+		}
+		if toppable(s) && len(h.topupPlans(r)) > 0 {
+			extend = append(extend, tg.CB(r.t("btn.add_traffic"), "tup:"+id))
+		}
+		kb.Row(extend...).Row(tg.CB(r.t("btn.qr"), "qr:"+id)).
 			Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
-		r.show(r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
+		text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
 			"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
-			"link", esc(s.GetSubscriptionLink())), kb)
+			"link", esc(s.GetSubscriptionLink()))
+		used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
+		switch {
+		case total > 0:
+			text += "\n" + r.t("sub.usage", "used", i18n.Bytes(r.lang, used), "total", i18n.Bytes(r.lang, total), "bar", usageBar(used, total))
+		case used > 0:
+			text += "\n" + r.t("sub.usage_unlimited", "used", i18n.Bytes(r.lang, used))
+		}
+		r.show(text, kb)
 		return
 	}
 	h.showServices(r)
@@ -147,6 +163,9 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	if h.cryptoEnabled("IRT") {
 		methods = append(methods, tg.CB(r.t("btn.pay_crypto"), fmt.Sprintf("wpay:x:%d:%s", amount, n)))
 	}
+	if h.zarinpalLinkEnabled("IRT") {
+		methods = append(methods, tg.CB(r.t("btn.pay_zarinpal_link"), fmt.Sprintf("wpay:l:%d:%s", amount, n)))
+	}
 	gw := h.gatewayButtons(r, "IRT", amount, "wpay", fmt.Sprint(amount), n)
 	if len(methods) == 0 && len(gw) == 0 {
 		r.show(r.t("pay.not_configured"), homeKeyboard(r))
@@ -175,7 +194,7 @@ func (h *Handler) onTopupPay(r *req, rest string) {
 		h.showTopupAmounts(r)
 		return
 	}
-	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "z": "zarinpal", "s": "stars"}[parts[0]]
+	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "l": "manual_zarinpal", "z": "zarinpal", "s": "stars"}[parts[0]]
 	if provider == "" {
 		h.showWallet(r)
 		return

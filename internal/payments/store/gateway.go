@@ -90,15 +90,21 @@ func (s *Store) TouchCheck(ctx context.Context, id string, countAttempt bool) er
 }
 
 // DueGatewayIntents lists open gateway intents with an external id whose next
-// check is due (minGap, doubling per reconciler check up to 64x), earliest due
-// first, so old abandoned intents cannot starve a fresh one.
-func (s *Store) DueGatewayIntents(ctx context.Context, minGap time.Duration, limit int) ([]*Intent, error) {
+// check is due, earliest due first, so old abandoned intents cannot starve a
+// fresh one. The gap is minGap, doubling per reconciler check: up to 8x until
+// payableFor after the intent's expiry (it may still be paid and must then be
+// verified soon), up to 64x after that.
+func (s *Store) DueGatewayIntents(ctx context.Context, minGap, payableFor time.Duration, limit int) ([]*Intent, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT `+intentCols+` FROM payments.payment_intents
-		WHERE status IN ('pending','confirming') AND provider = ANY($1) AND external_id IS NOT NULL
-		  AND (checked_at IS NULL OR checked_at < now() - $2::interval * power(2, LEAST(check_attempts, 6)))
-		ORDER BY COALESCE(checked_at, created_at) + $2::interval * power(2, LEAST(check_attempts, 6)), created_at
-		LIMIT $3`, GatewayProviders, minGap.String(), limit)
+		SELECT `+intentCols+` FROM (
+			SELECT i.*, $2::interval * power(2, LEAST(i.check_attempts,
+				CASE WHEN i.expires_at IS NOT NULL AND now() < i.expires_at + $4::interval THEN 3 ELSE 6 END)) AS gap
+			FROM payments.payment_intents i
+			WHERE i.status IN ('pending','confirming') AND i.provider = ANY($1) AND i.external_id IS NOT NULL
+		) d
+		WHERE checked_at IS NULL OR checked_at < now() - gap
+		ORDER BY COALESCE(checked_at, created_at) + gap, created_at
+		LIMIT $3`, GatewayProviders, minGap.String(), limit, payableFor.String())
 	if err != nil {
 		return nil, fmt.Errorf("due gateway intents: %w", err)
 	}

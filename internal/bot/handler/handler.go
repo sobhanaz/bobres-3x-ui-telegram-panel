@@ -30,6 +30,7 @@ type Telegram interface {
 	EditMessageReplyMarkup(ctx context.Context, chatID int64, messageID int, kb *tg.Keyboard) error
 	AnswerCallback(ctx context.Context, callbackID, text string, alert bool) error
 	SendPhoto(ctx context.Context, chatID int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error)
+	SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error)
 	SendInvoice(ctx context.Context, chatID int64, inv tg.Invoice) (*tg.Message, error)
 	AnswerPreCheckoutQuery(ctx context.Context, queryID string, ok bool, errMsg string) error
 }
@@ -45,6 +46,8 @@ type Config struct {
 	AdminTelegramID int64
 	// BotName is the brand shown until branding.name is set (from getMe).
 	BotName string
+	// BotUsername (from getMe) builds invite links: t.me/<username>?start=r_<code>.
+	BotUsername string
 }
 
 // Handler serves updates.
@@ -186,6 +189,12 @@ func (r *req) fail(err error) {
 		key = "sub.not_ready"
 	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "cannot change state"):
 		key = "pay.already_submitted"
+	case st.Code() == codes.FailedPrecondition && strings.HasPrefix(msg, "discount: "):
+		key = discountKey(err)
+	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "cannot be extended"):
+		key = "sub.not_extendable"
+	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "plan unavailable"):
+		key = "plan.unavailable"
 	case st.Code() == codes.AlreadyExists && strings.Contains(msg, "already submitted"):
 		key = "pay.duplicate"
 	case st.Code() == codes.Unavailable || st.Code() == codes.DeadlineExceeded:
@@ -294,6 +303,16 @@ func (h *Handler) routeCallback(r *req, data string) {
 		h.showServices(r)
 	case "sub":
 		h.showService(r, rest)
+	case "rnw":
+		h.showRenewPlans(r, rest)
+	case "tup":
+		h.showTopups(r, rest)
+	case "rp":
+		h.onPickForSub(r, rest)
+	case "dc":
+		h.askDiscount(r, rest)
+	case "ref":
+		h.showReferral(r)
 	case "qr":
 		h.sendQR(r, rest)
 	case "wallet":
@@ -349,7 +368,7 @@ func (h *Handler) routeMessage(r *req) {
 func (h *Handler) onCommand(r *req, cmd, args string) {
 	switch cmd {
 	case "/start":
-		h.onStart(r)
+		h.onStart(r, args)
 	case "/menu":
 		r.clearState()
 		h.showHome(r)
@@ -359,7 +378,7 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		h.showHome(r)
 	case "/paysupport":
 		h.onPaySupport(r)
-	case "/admin", "/set", "/plan_add", "/trial":
+	case "/admin", "/set", "/plan_add", "/trial", "/topup_add", "/discount_add", "/discount_off", "/discounts":
 		if r.user == nil {
 			h.askLanguage(r)
 			return
@@ -382,6 +401,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onTopupAmount(r)
 	case sceneTicket:
 		h.onTicket(r)
+	case sceneDiscount:
+		h.onDiscountCode(r, st)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason:
 		h.onAdminScene(r, st)
 	default:
@@ -397,6 +418,7 @@ const (
 	sceneTXID        = "txid"      // crypto transaction hash
 	sceneTopupAmount = "topup_amount"
 	sceneTicket      = "ticket"
+	sceneDiscount    = "discount" // a discount code for a payment menu
 	sceneAdminFind   = "adm_find"
 	sceneAdminAdjust = "adm_adjust"
 	sceneAdminReason = "adm_reason"

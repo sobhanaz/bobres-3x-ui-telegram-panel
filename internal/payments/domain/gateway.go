@@ -315,19 +315,29 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 	if err := s.st.TouchCheck(ctx, in.ID, o.reconciler); err != nil {
 		return nil, err
 	}
-	r, err := g.Check(ctx, *in.ExternalID, chargeOf(in))
+	c := chargeOf(in)
+	c.Returned = o.fromReturn
+	r, err := g.Check(ctx, *in.ExternalID, c)
 	if err != nil {
 		s.log.Warn("gateway check failed", "provider", in.Provider, "intent", in.ID, "err", err)
+		// A gateway that keeps refusing this intent (a changed merchant id, a
+		// suspended terminal) must not keep it open forever: once even a
+		// confirmed payment could no longer settle it, it expires.
+		if open && time.Since(in.CreatedAt) > reopenWindow {
+			return s.failGateway(ctx, in, "expired", ReasonExpired, kind, map[string]any{"after": "gateway errors"})
+		}
 		return in, nil
 	}
 	return s.applyResult(ctx, in, r, kind, o.reconciler)
 }
 
 // ReconcileOnce checks the open gateway intents that are due: a fresh intent
-// every interval, backing off exponentially (up to 64 intervals) as checks
-// accumulate. It returns how many intents it looked at.
+// every interval, backing off exponentially as checks accumulate, at most 8
+// intervals apart while it can still be paid (a payment whose return was lost
+// must be verified soon: Zarinpal gives it back to the payer otherwise), then up
+// to 64. It returns how many intents it looked at.
 func (s *Service) ReconcileOnce(ctx context.Context, interval time.Duration) (int, error) {
-	due, err := s.st.DueGatewayIntents(ctx, interval, 50)
+	due, err := s.st.DueGatewayIntents(ctx, interval, expiryGrace, 50)
 	if err != nil {
 		return 0, err
 	}

@@ -35,6 +35,7 @@ func testService(t *testing.T) (*Service, *store.Store) {
 	}
 	t.Cleanup(s.Close)
 	if _, err := s.DB().Exec(ctx, `TRUNCATE core.ledger_entries, core.wallets, core.subscriptions, core.orders,
+		core.discount_redemptions, core.discount_codes,
 		core.plans, core.users, core.settings, core.inbox_core, core.dead_letters, core.outbox_core,
 		core.outbox_core_cursors, payments.outbox_payments, payments.outbox_payments_cursors CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

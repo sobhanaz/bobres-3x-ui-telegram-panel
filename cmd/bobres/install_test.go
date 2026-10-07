@@ -180,6 +180,38 @@ func TestInteractivePrompts(t *testing.T) {
 	}
 }
 
+// A panel on the same server, typed as the owner knows it (localhost), is
+// rewritten to the address the containers can reach.
+func TestInteractivePanelOnThisServer(t *testing.T) {
+	for _, c := range []struct {
+		typed, answer, wantURL, wantPrivate string
+	}{
+		{"http://127.0.0.1:2053/abc", "", "http://host.docker.internal:2053/abc", "true"},
+		{"http://localhost:2053/abc", "n", "", ""}, // declined: refused by validation, nothing written
+		{"http://10.0.0.5:2053/abc", "y", "http://10.0.0.5:2053/abc", "true"},
+		{"https://xui.example.com/abc", "", "https://xui.example.com/abc", "false"}, // not asked
+	} {
+		dir := t.TempDir()
+		answers := "panel.example.com\n4242\n" + goodBotToken + "\n" + c.typed + "\n"
+		if !strings.HasPrefix(c.typed, "https") {
+			answers += c.answer + "\n"
+		}
+		answers += "paneltoken\n"
+		ins, out, errOut := testInstaller(answers, nil, nil)
+		code := ins.install([]string{"--dir", dir, "--no-start"})
+		env, written, _ := readEnv(filepath.Join(dir, ".env"))
+		if c.wantURL == "" {
+			if code == 0 || written {
+				t.Fatalf("%s declined must be refused before writing: %d %s", c.typed, code, errOut)
+			}
+			continue
+		}
+		if code != 0 || env["BOBRES_XUI_URL"] != c.wantURL || env["BOBRES_XUI_ALLOW_PRIVATE"] != c.wantPrivate {
+			t.Fatalf("%s: %d url=%q private=%q\n%s%s", c.typed, code, env["BOBRES_XUI_URL"], env["BOBRES_XUI_ALLOW_PRIVATE"], out, errOut)
+		}
+	}
+}
+
 func TestInstallRejectsBadInput(t *testing.T) {
 	cases := map[string][]string{
 		"bad domain":   {"--domain", "not a domain"},
@@ -254,7 +286,7 @@ func TestUnhealthyStackReportsWhatIsWrong(t *testing.T) {
 	if code := ins.install(baseArgs(t.TempDir())); code != 1 {
 		t.Fatalf("exit %d", code)
 	}
-	if !strings.Contains(errOut.String(), "core=unhealthy") || !strings.Contains(errOut.String(), "bot=restarting") || !strings.Contains(errOut.String(), "docker compose logs") {
+	if !strings.Contains(errOut.String(), "core=unhealthy") || !strings.Contains(errOut.String(), "bot=restarting") || !strings.Contains(errOut.String(), "bobres logs --dir") {
 		t.Fatalf("message: %s", errOut)
 	}
 }

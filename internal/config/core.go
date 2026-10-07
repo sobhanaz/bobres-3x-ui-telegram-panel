@@ -20,6 +20,9 @@ type Core struct {
 	MasterKey string
 	// AdminTelegramID becomes the owner on first contact with the bot.
 	AdminTelegramID int64
+	// PublicURL is where staff open the dashboard (login links point there):
+	// https://<BOBRES_DOMAIN>, or BOBRES_PUBLIC_URL for a local test setup.
+	PublicURL string
 }
 
 // LoadCore reads the core service configuration, failing closed on missing
@@ -48,7 +51,25 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.AdminTelegramID, err = telegramID("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
+	co.PublicURL, err = publicURL()
+	keep(err)
 	return co, errors.Join(errs...)
+}
+
+// publicURL is BOBRES_PUBLIC_URL when set (an http(s) origin), else
+// https://BOBRES_DOMAIN, else empty (no dashboard links).
+func publicURL() (string, error) {
+	if v := strings.TrimRight(strings.TrimSpace(getenv("BOBRES_PUBLIC_URL", "")), "/"); v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || (u.Path != "" && u.Path != "/") {
+			return "", errors.New("BOBRES_PUBLIC_URL must be an http(s) origin like https://panel.example.com")
+		}
+		return v, nil
+	}
+	if d := strings.TrimSpace(getenv("BOBRES_DOMAIN", "")); d != "" {
+		return "https://" + d, nil
+	}
+	return "", nil
 }
 
 // Payments is the payments service configuration.
