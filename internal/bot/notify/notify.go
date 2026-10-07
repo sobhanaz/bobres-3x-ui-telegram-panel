@@ -105,6 +105,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			events.CreditOrderNotPayable: "wallet.credited_late",
 			events.CreditAdminAdjust:     "wallet.credited_admin",
 			events.CreditReferral:        "wallet.credited_referral",
+			events.CreditRefund:          "wallet.credited_refund",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"

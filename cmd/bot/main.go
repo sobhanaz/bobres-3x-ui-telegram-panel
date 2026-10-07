@@ -100,6 +100,10 @@ func setup(rt *app.Runtime) error {
 	}
 	rt.Go("notifications", notifications.Run)
 
+	if cfg.PeerCoreToken != "" {
+		rt.Mux.Handle("GET /internal/files/{id}", runner.Files(bot, cfg.PeerCoreToken, rt.Log))
+	}
+
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)
 	rt.OnStop(d.Stop)
 	if cfg.WebhookURL != "" {
