@@ -313,3 +313,38 @@ func TestSetLimitsKeepsTheClientIdentity(t *testing.T) {
 		t.Fatal("negative limits accepted")
 	}
 }
+
+// SetEnabled sends the stored client back with only the enable flag changed:
+// its limits and identity stay as they are.
+func TestSetEnabledKeepsTheLimits(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/get/"):
+			_, _ = w.Write([]byte(`{"success":true,"obj":{"client":{"id":17,"uuid":"6f1c2e1a-0000-4000-8000-000000000017",
+				"email":"u1","subId":"sub-u1","totalGB":1073741824,"expiryTime":1800000000000,"enable":true,
+				"createdAt":5,"updatedAt":6},"inboundIds":[1],"usedTraffic":9}}`))
+		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/update/u1"):
+			got = nil
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			_, _ = w.Write([]byte(`{"success":true,"msg":"ok","obj":null}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := newClient(t, srv.URL, token)
+	for _, enable := range []bool{false, true} {
+		if err := c.SetEnabled(context.Background(), "u1", enable); err != nil {
+			t.Fatal(err)
+		}
+		if got["enable"] != enable || got["id"] != "6f1c2e1a-0000-4000-8000-000000000017" || got["subId"] != "sub-u1" ||
+			got["totalGB"] != float64(gib) || got["expiryTime"] != float64(1_800_000_000_000) || got["createdAt"] != nil {
+			t.Fatalf("update body (enable %v): %v", enable, got)
+		}
+	}
+	if err := c.SetEnabled(context.Background(), "bad email!", false); err == nil {
+		t.Fatal("an invalid email reached the panel")
+	}
+}

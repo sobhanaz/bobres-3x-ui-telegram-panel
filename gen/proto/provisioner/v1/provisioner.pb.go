@@ -603,6 +603,60 @@ func (x *SetClientLimitsRequest) GetTrafficTotalBytes() int64 {
 	return 0
 }
 
+// SetClientEnabledRequest turns a client off (it cannot connect) or back on;
+// its limits stay.
+type SetClientEnabledRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	Enabled        bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SetClientEnabledRequest) Reset() {
+	*x = SetClientEnabledRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetClientEnabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetClientEnabledRequest) ProtoMessage() {}
+
+func (x *SetClientEnabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetClientEnabledRequest.ProtoReflect.Descriptor instead.
+func (*SetClientEnabledRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SetClientEnabledRequest) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *SetClientEnabledRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
 type DeleteClientRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
@@ -612,7 +666,7 @@ type DeleteClientRequest struct {
 
 func (x *DeleteClientRequest) Reset() {
 	*x = DeleteClientRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[8]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +678,7 @@ func (x *DeleteClientRequest) String() string {
 func (*DeleteClientRequest) ProtoMessage() {}
 
 func (x *DeleteClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[8]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +691,7 @@ func (x *DeleteClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteClientRequest.ProtoReflect.Descriptor instead.
 func (*DeleteClientRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{8}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteClientRequest) GetSubscriptionId() string {
@@ -656,7 +710,7 @@ type ResetTrafficRequest struct {
 
 func (x *ResetTrafficRequest) Reset() {
 	*x = ResetTrafficRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[9]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +722,7 @@ func (x *ResetTrafficRequest) String() string {
 func (*ResetTrafficRequest) ProtoMessage() {}
 
 func (x *ResetTrafficRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[9]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +735,7 @@ func (x *ResetTrafficRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetTrafficRequest.ProtoReflect.Descriptor instead.
 func (*ResetTrafficRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{9}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ResetTrafficRequest) GetSubscriptionId() string {
@@ -700,7 +754,7 @@ type GetUsageRequest struct {
 
 func (x *GetUsageRequest) Reset() {
 	*x = GetUsageRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[10]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -712,7 +766,7 @@ func (x *GetUsageRequest) String() string {
 func (*GetUsageRequest) ProtoMessage() {}
 
 func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[10]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -725,7 +779,7 @@ func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsageRequest.ProtoReflect.Descriptor instead.
 func (*GetUsageRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{10}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetUsageRequest) GetSubscriptionId() string {
@@ -744,7 +798,7 @@ type GetLinksRequest struct {
 
 func (x *GetLinksRequest) Reset() {
 	*x = GetLinksRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[11]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -756,7 +810,7 @@ func (x *GetLinksRequest) String() string {
 func (*GetLinksRequest) ProtoMessage() {}
 
 func (x *GetLinksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[11]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -769,7 +823,7 @@ func (x *GetLinksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLinksRequest.ProtoReflect.Descriptor instead.
 func (*GetLinksRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{11}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetLinksRequest) GetSubscriptionId() string {
@@ -788,7 +842,7 @@ type ListInboundsRequest struct {
 
 func (x *ListInboundsRequest) Reset() {
 	*x = ListInboundsRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[12]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -800,7 +854,7 @@ func (x *ListInboundsRequest) String() string {
 func (*ListInboundsRequest) ProtoMessage() {}
 
 func (x *ListInboundsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[12]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -813,7 +867,7 @@ func (x *ListInboundsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInboundsRequest.ProtoReflect.Descriptor instead.
 func (*ListInboundsRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{12}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListInboundsRequest) GetServerId() string {
@@ -832,7 +886,7 @@ type ListInboundsResponse struct {
 
 func (x *ListInboundsResponse) Reset() {
 	*x = ListInboundsResponse{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[13]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -844,7 +898,7 @@ func (x *ListInboundsResponse) String() string {
 func (*ListInboundsResponse) ProtoMessage() {}
 
 func (x *ListInboundsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[13]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,7 +911,7 @@ func (x *ListInboundsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInboundsResponse.ProtoReflect.Descriptor instead.
 func (*ListInboundsResponse) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{13}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListInboundsResponse) GetInbounds() []*Inbound {
@@ -884,7 +938,7 @@ type AddServerRequest struct {
 
 func (x *AddServerRequest) Reset() {
 	*x = AddServerRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[14]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -896,7 +950,7 @@ func (x *AddServerRequest) String() string {
 func (*AddServerRequest) ProtoMessage() {}
 
 func (x *AddServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[14]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -909,7 +963,7 @@ func (x *AddServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddServerRequest.ProtoReflect.Descriptor instead.
 func (*AddServerRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{14}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AddServerRequest) GetName() string {
@@ -956,7 +1010,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[15]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -968,7 +1022,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[15]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -981,7 +1035,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{15}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *HealthCheckRequest) GetServerId() string {
@@ -1002,7 +1056,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1014,7 +1068,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1027,7 +1081,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{16}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *HealthCheckResponse) GetHealthy() bool {
@@ -1105,7 +1159,10 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x02 \x01(\x03R\texpiresAt\x12.\n" +
-	"\x13traffic_total_bytes\x18\x03 \x01(\x03R\x11trafficTotalBytes\">\n" +
+	"\x13traffic_total_bytes\x18\x03 \x01(\x03R\x11trafficTotalBytes\"\\\n" +
+	"\x17SetClientEnabledRequest\x12'\n" +
+	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\">\n" +
 	"\x13DeleteClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\">\n" +
 	"\x13ResetTrafficRequest\x12'\n" +
@@ -1130,11 +1187,12 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13HealthCheckResponse\x12\x18\n" +
 	"\ahealthy\x18\x01 \x01(\bR\ahealthy\x12#\n" +
 	"\rpanel_version\x18\x02 \x01(\tR\fpanelVersion\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail2\x9e\x06\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail2\xf3\x06\n" +
 	"\x12ProvisionerService\x12K\n" +
 	"\fCreateClient\x12#.provisioner.v1.CreateClientRequest\x1a\x16.provisioner.v1.Client\x12I\n" +
 	"\vRenewClient\x12\".provisioner.v1.RenewClientRequest\x1a\x16.provisioner.v1.Client\x12Q\n" +
-	"\x0fSetClientLimits\x12&.provisioner.v1.SetClientLimitsRequest\x1a\x16.provisioner.v1.Client\x12K\n" +
+	"\x0fSetClientLimits\x12&.provisioner.v1.SetClientLimitsRequest\x1a\x16.provisioner.v1.Client\x12S\n" +
+	"\x10SetClientEnabled\x12'.provisioner.v1.SetClientEnabledRequest\x1a\x16.provisioner.v1.Client\x12K\n" +
 	"\fDeleteClient\x12#.provisioner.v1.DeleteClientRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
 	"\fResetTraffic\x12#.provisioner.v1.ResetTrafficRequest\x1a\x16.provisioner.v1.Client\x12B\n" +
 	"\bGetUsage\x12\x1f.provisioner.v1.GetUsageRequest\x1a\x15.provisioner.v1.Usage\x12B\n" +
@@ -1155,51 +1213,54 @@ func file_provisioner_v1_provisioner_proto_rawDescGZIP() []byte {
 	return file_provisioner_v1_provisioner_proto_rawDescData
 }
 
-var file_provisioner_v1_provisioner_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_provisioner_v1_provisioner_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_provisioner_v1_provisioner_proto_goTypes = []any{
-	(*Client)(nil),                 // 0: provisioner.v1.Client
-	(*Usage)(nil),                  // 1: provisioner.v1.Usage
-	(*Links)(nil),                  // 2: provisioner.v1.Links
-	(*Inbound)(nil),                // 3: provisioner.v1.Inbound
-	(*XUIServer)(nil),              // 4: provisioner.v1.XUIServer
-	(*CreateClientRequest)(nil),    // 5: provisioner.v1.CreateClientRequest
-	(*RenewClientRequest)(nil),     // 6: provisioner.v1.RenewClientRequest
-	(*SetClientLimitsRequest)(nil), // 7: provisioner.v1.SetClientLimitsRequest
-	(*DeleteClientRequest)(nil),    // 8: provisioner.v1.DeleteClientRequest
-	(*ResetTrafficRequest)(nil),    // 9: provisioner.v1.ResetTrafficRequest
-	(*GetUsageRequest)(nil),        // 10: provisioner.v1.GetUsageRequest
-	(*GetLinksRequest)(nil),        // 11: provisioner.v1.GetLinksRequest
-	(*ListInboundsRequest)(nil),    // 12: provisioner.v1.ListInboundsRequest
-	(*ListInboundsResponse)(nil),   // 13: provisioner.v1.ListInboundsResponse
-	(*AddServerRequest)(nil),       // 14: provisioner.v1.AddServerRequest
-	(*HealthCheckRequest)(nil),     // 15: provisioner.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil),    // 16: provisioner.v1.HealthCheckResponse
-	(*emptypb.Empty)(nil),          // 17: google.protobuf.Empty
+	(*Client)(nil),                  // 0: provisioner.v1.Client
+	(*Usage)(nil),                   // 1: provisioner.v1.Usage
+	(*Links)(nil),                   // 2: provisioner.v1.Links
+	(*Inbound)(nil),                 // 3: provisioner.v1.Inbound
+	(*XUIServer)(nil),               // 4: provisioner.v1.XUIServer
+	(*CreateClientRequest)(nil),     // 5: provisioner.v1.CreateClientRequest
+	(*RenewClientRequest)(nil),      // 6: provisioner.v1.RenewClientRequest
+	(*SetClientLimitsRequest)(nil),  // 7: provisioner.v1.SetClientLimitsRequest
+	(*SetClientEnabledRequest)(nil), // 8: provisioner.v1.SetClientEnabledRequest
+	(*DeleteClientRequest)(nil),     // 9: provisioner.v1.DeleteClientRequest
+	(*ResetTrafficRequest)(nil),     // 10: provisioner.v1.ResetTrafficRequest
+	(*GetUsageRequest)(nil),         // 11: provisioner.v1.GetUsageRequest
+	(*GetLinksRequest)(nil),         // 12: provisioner.v1.GetLinksRequest
+	(*ListInboundsRequest)(nil),     // 13: provisioner.v1.ListInboundsRequest
+	(*ListInboundsResponse)(nil),    // 14: provisioner.v1.ListInboundsResponse
+	(*AddServerRequest)(nil),        // 15: provisioner.v1.AddServerRequest
+	(*HealthCheckRequest)(nil),      // 16: provisioner.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),     // 17: provisioner.v1.HealthCheckResponse
+	(*emptypb.Empty)(nil),           // 18: google.protobuf.Empty
 }
 var file_provisioner_v1_provisioner_proto_depIdxs = []int32{
 	3,  // 0: provisioner.v1.ListInboundsResponse.inbounds:type_name -> provisioner.v1.Inbound
 	5,  // 1: provisioner.v1.ProvisionerService.CreateClient:input_type -> provisioner.v1.CreateClientRequest
 	6,  // 2: provisioner.v1.ProvisionerService.RenewClient:input_type -> provisioner.v1.RenewClientRequest
 	7,  // 3: provisioner.v1.ProvisionerService.SetClientLimits:input_type -> provisioner.v1.SetClientLimitsRequest
-	8,  // 4: provisioner.v1.ProvisionerService.DeleteClient:input_type -> provisioner.v1.DeleteClientRequest
-	9,  // 5: provisioner.v1.ProvisionerService.ResetTraffic:input_type -> provisioner.v1.ResetTrafficRequest
-	10, // 6: provisioner.v1.ProvisionerService.GetUsage:input_type -> provisioner.v1.GetUsageRequest
-	11, // 7: provisioner.v1.ProvisionerService.GetLinks:input_type -> provisioner.v1.GetLinksRequest
-	12, // 8: provisioner.v1.ProvisionerService.ListInbounds:input_type -> provisioner.v1.ListInboundsRequest
-	14, // 9: provisioner.v1.ProvisionerService.AddServer:input_type -> provisioner.v1.AddServerRequest
-	15, // 10: provisioner.v1.ProvisionerService.HealthCheck:input_type -> provisioner.v1.HealthCheckRequest
-	0,  // 11: provisioner.v1.ProvisionerService.CreateClient:output_type -> provisioner.v1.Client
-	0,  // 12: provisioner.v1.ProvisionerService.RenewClient:output_type -> provisioner.v1.Client
-	0,  // 13: provisioner.v1.ProvisionerService.SetClientLimits:output_type -> provisioner.v1.Client
-	17, // 14: provisioner.v1.ProvisionerService.DeleteClient:output_type -> google.protobuf.Empty
-	0,  // 15: provisioner.v1.ProvisionerService.ResetTraffic:output_type -> provisioner.v1.Client
-	1,  // 16: provisioner.v1.ProvisionerService.GetUsage:output_type -> provisioner.v1.Usage
-	2,  // 17: provisioner.v1.ProvisionerService.GetLinks:output_type -> provisioner.v1.Links
-	13, // 18: provisioner.v1.ProvisionerService.ListInbounds:output_type -> provisioner.v1.ListInboundsResponse
-	4,  // 19: provisioner.v1.ProvisionerService.AddServer:output_type -> provisioner.v1.XUIServer
-	16, // 20: provisioner.v1.ProvisionerService.HealthCheck:output_type -> provisioner.v1.HealthCheckResponse
-	11, // [11:21] is the sub-list for method output_type
-	1,  // [1:11] is the sub-list for method input_type
+	8,  // 4: provisioner.v1.ProvisionerService.SetClientEnabled:input_type -> provisioner.v1.SetClientEnabledRequest
+	9,  // 5: provisioner.v1.ProvisionerService.DeleteClient:input_type -> provisioner.v1.DeleteClientRequest
+	10, // 6: provisioner.v1.ProvisionerService.ResetTraffic:input_type -> provisioner.v1.ResetTrafficRequest
+	11, // 7: provisioner.v1.ProvisionerService.GetUsage:input_type -> provisioner.v1.GetUsageRequest
+	12, // 8: provisioner.v1.ProvisionerService.GetLinks:input_type -> provisioner.v1.GetLinksRequest
+	13, // 9: provisioner.v1.ProvisionerService.ListInbounds:input_type -> provisioner.v1.ListInboundsRequest
+	15, // 10: provisioner.v1.ProvisionerService.AddServer:input_type -> provisioner.v1.AddServerRequest
+	16, // 11: provisioner.v1.ProvisionerService.HealthCheck:input_type -> provisioner.v1.HealthCheckRequest
+	0,  // 12: provisioner.v1.ProvisionerService.CreateClient:output_type -> provisioner.v1.Client
+	0,  // 13: provisioner.v1.ProvisionerService.RenewClient:output_type -> provisioner.v1.Client
+	0,  // 14: provisioner.v1.ProvisionerService.SetClientLimits:output_type -> provisioner.v1.Client
+	0,  // 15: provisioner.v1.ProvisionerService.SetClientEnabled:output_type -> provisioner.v1.Client
+	18, // 16: provisioner.v1.ProvisionerService.DeleteClient:output_type -> google.protobuf.Empty
+	0,  // 17: provisioner.v1.ProvisionerService.ResetTraffic:output_type -> provisioner.v1.Client
+	1,  // 18: provisioner.v1.ProvisionerService.GetUsage:output_type -> provisioner.v1.Usage
+	2,  // 19: provisioner.v1.ProvisionerService.GetLinks:output_type -> provisioner.v1.Links
+	14, // 20: provisioner.v1.ProvisionerService.ListInbounds:output_type -> provisioner.v1.ListInboundsResponse
+	4,  // 21: provisioner.v1.ProvisionerService.AddServer:output_type -> provisioner.v1.XUIServer
+	17, // 22: provisioner.v1.ProvisionerService.HealthCheck:output_type -> provisioner.v1.HealthCheckResponse
+	12, // [12:23] is the sub-list for method output_type
+	1,  // [1:12] is the sub-list for method input_type
 	1,  // [1:1] is the sub-list for extension type_name
 	1,  // [1:1] is the sub-list for extension extendee
 	0,  // [0:1] is the sub-list for field type_name
@@ -1216,7 +1277,7 @@ func file_provisioner_v1_provisioner_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_provisioner_v1_provisioner_proto_rawDesc), len(file_provisioner_v1_provisioner_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

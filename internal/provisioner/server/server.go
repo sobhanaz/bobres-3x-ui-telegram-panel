@@ -271,6 +271,21 @@ func (s *Server) SetClientLimits(ctx context.Context, req *provisionerv1.SetClie
 	return clientProto(cm, req.GetExpiresAt(), req.GetTrafficTotalBytes()), nil
 }
 
+// SetClientEnabled turns a provisioned client off or on; its limits stay.
+func (s *Server) SetClientEnabled(ctx context.Context, req *provisionerv1.SetClientEnabledRequest) (*provisionerv1.Client, error) {
+	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())
+	if err != nil {
+		return nil, err
+	}
+	if cm == nil {
+		return nil, status.Error(codes.NotFound, "client not provisioned")
+	}
+	if err := a.SetEnabled(ctx, cm.Email, req.GetEnabled()); err != nil {
+		return nil, s.panelError("panel set enabled", err)
+	}
+	return clientProto(cm, 0, 0), nil
+}
+
 // DeleteClient removes the client from the panel and the map (idempotent).
 func (s *Server) DeleteClient(ctx context.Context, req *provisionerv1.DeleteClientRequest) (*emptypb.Empty, error) {
 	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())

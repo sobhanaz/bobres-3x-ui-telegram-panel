@@ -71,6 +71,13 @@ message SetClientLimitsRequest {
   int64 traffic_total_bytes = 3; // 0 = unlimited
 }
 
+// SetClientEnabledRequest turns a client off (it cannot connect) or back on;
+// its limits stay.
+message SetClientEnabledRequest {
+  string subscription_id = 1;
+  bool enabled = 2;
+}
+
 message DeleteClientRequest {
   string subscription_id = 1;
 }
@@ -123,6 +130,7 @@ service ProvisionerService {
   rpc CreateClient(CreateClientRequest) returns (Client);
   rpc RenewClient(RenewClientRequest) returns (Client);
   rpc SetClientLimits(SetClientLimitsRequest) returns (Client);
+  rpc SetClientEnabled(SetClientEnabledRequest) returns (Client);
   rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty);
   rpc ResetTraffic(ResetTrafficRequest) returns (Client);
   rpc GetUsage(GetUsageRequest) returns (Usage);

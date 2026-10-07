@@ -112,6 +112,21 @@ func TestIntegrationRealPanel(t *testing.T) {
 	if err != nil || strings.Join(after, "\n") != strings.Join(links, "\n") {
 		t.Fatalf("share links changed by set limits (identity lost?):\nbefore %v\nafter  %v (%v)", links, after, err)
 	}
+
+	// Turning a client off and on (staff, from the dashboard) keeps its
+	// limits and identity.
+	for _, on := range []bool{false, true} {
+		if err := a.SetEnabled(ctx, email, on); err != nil {
+			t.Fatalf("set enabled %v: %v", on, err)
+		}
+		st, err := a.Status(ctx, email)
+		if err != nil || st.Enabled != on || st.ExpiryMs != exp || st.TotalBytes != 3<<30 {
+			t.Fatalf("status after set enabled %v: %+v %v", on, st, err)
+		}
+	}
+	if got, err := a.ClientSubID(ctx, email); err != nil || got != subID {
+		t.Fatalf("subscription id after set enabled: %q %v", got, err)
+	}
 	if err := a.Delete(ctx, email); err != nil {
 		t.Fatalf("delete: %v", err)
 	}

@@ -20,16 +20,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProvisionerService_CreateClient_FullMethodName    = "/provisioner.v1.ProvisionerService/CreateClient"
-	ProvisionerService_RenewClient_FullMethodName     = "/provisioner.v1.ProvisionerService/RenewClient"
-	ProvisionerService_SetClientLimits_FullMethodName = "/provisioner.v1.ProvisionerService/SetClientLimits"
-	ProvisionerService_DeleteClient_FullMethodName    = "/provisioner.v1.ProvisionerService/DeleteClient"
-	ProvisionerService_ResetTraffic_FullMethodName    = "/provisioner.v1.ProvisionerService/ResetTraffic"
-	ProvisionerService_GetUsage_FullMethodName        = "/provisioner.v1.ProvisionerService/GetUsage"
-	ProvisionerService_GetLinks_FullMethodName        = "/provisioner.v1.ProvisionerService/GetLinks"
-	ProvisionerService_ListInbounds_FullMethodName    = "/provisioner.v1.ProvisionerService/ListInbounds"
-	ProvisionerService_AddServer_FullMethodName       = "/provisioner.v1.ProvisionerService/AddServer"
-	ProvisionerService_HealthCheck_FullMethodName     = "/provisioner.v1.ProvisionerService/HealthCheck"
+	ProvisionerService_CreateClient_FullMethodName     = "/provisioner.v1.ProvisionerService/CreateClient"
+	ProvisionerService_RenewClient_FullMethodName      = "/provisioner.v1.ProvisionerService/RenewClient"
+	ProvisionerService_SetClientLimits_FullMethodName  = "/provisioner.v1.ProvisionerService/SetClientLimits"
+	ProvisionerService_SetClientEnabled_FullMethodName = "/provisioner.v1.ProvisionerService/SetClientEnabled"
+	ProvisionerService_DeleteClient_FullMethodName     = "/provisioner.v1.ProvisionerService/DeleteClient"
+	ProvisionerService_ResetTraffic_FullMethodName     = "/provisioner.v1.ProvisionerService/ResetTraffic"
+	ProvisionerService_GetUsage_FullMethodName         = "/provisioner.v1.ProvisionerService/GetUsage"
+	ProvisionerService_GetLinks_FullMethodName         = "/provisioner.v1.ProvisionerService/GetLinks"
+	ProvisionerService_ListInbounds_FullMethodName     = "/provisioner.v1.ProvisionerService/ListInbounds"
+	ProvisionerService_AddServer_FullMethodName        = "/provisioner.v1.ProvisionerService/AddServer"
+	ProvisionerService_HealthCheck_FullMethodName      = "/provisioner.v1.ProvisionerService/HealthCheck"
 )
 
 // ProvisionerServiceClient is the client API for ProvisionerService service.
@@ -42,6 +43,7 @@ type ProvisionerServiceClient interface {
 	CreateClient(ctx context.Context, in *CreateClientRequest, opts ...grpc.CallOption) (*Client, error)
 	RenewClient(ctx context.Context, in *RenewClientRequest, opts ...grpc.CallOption) (*Client, error)
 	SetClientLimits(ctx context.Context, in *SetClientLimitsRequest, opts ...grpc.CallOption) (*Client, error)
+	SetClientEnabled(ctx context.Context, in *SetClientEnabledRequest, opts ...grpc.CallOption) (*Client, error)
 	DeleteClient(ctx context.Context, in *DeleteClientRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ResetTraffic(ctx context.Context, in *ResetTrafficRequest, opts ...grpc.CallOption) (*Client, error)
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*Usage, error)
@@ -83,6 +85,16 @@ func (c *provisionerServiceClient) SetClientLimits(ctx context.Context, in *SetC
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Client)
 	err := c.cc.Invoke(ctx, ProvisionerService_SetClientLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) SetClientEnabled(ctx context.Context, in *SetClientEnabledRequest, opts ...grpc.CallOption) (*Client, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Client)
+	err := c.cc.Invoke(ctx, ProvisionerService_SetClientEnabled_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +181,7 @@ type ProvisionerServiceServer interface {
 	CreateClient(context.Context, *CreateClientRequest) (*Client, error)
 	RenewClient(context.Context, *RenewClientRequest) (*Client, error)
 	SetClientLimits(context.Context, *SetClientLimitsRequest) (*Client, error)
+	SetClientEnabled(context.Context, *SetClientEnabledRequest) (*Client, error)
 	DeleteClient(context.Context, *DeleteClientRequest) (*emptypb.Empty, error)
 	ResetTraffic(context.Context, *ResetTrafficRequest) (*Client, error)
 	GetUsage(context.Context, *GetUsageRequest) (*Usage, error)
@@ -194,6 +207,9 @@ func (UnimplementedProvisionerServiceServer) RenewClient(context.Context, *Renew
 }
 func (UnimplementedProvisionerServiceServer) SetClientLimits(context.Context, *SetClientLimitsRequest) (*Client, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetClientLimits not implemented")
+}
+func (UnimplementedProvisionerServiceServer) SetClientEnabled(context.Context, *SetClientEnabledRequest) (*Client, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetClientEnabled not implemented")
 }
 func (UnimplementedProvisionerServiceServer) DeleteClient(context.Context, *DeleteClientRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteClient not implemented")
@@ -287,6 +303,24 @@ func _ProvisionerService_SetClientLimits_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProvisionerServiceServer).SetClientLimits(ctx, req.(*SetClientLimitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_SetClientEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetClientEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).SetClientEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_SetClientEnabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).SetClientEnabled(ctx, req.(*SetClientEnabledRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -435,6 +469,10 @@ var ProvisionerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetClientLimits",
 			Handler:    _ProvisionerService_SetClientLimits_Handler,
+		},
+		{
+			MethodName: "SetClientEnabled",
+			Handler:    _ProvisionerService_SetClientEnabled_Handler,
 		},
 		{
 			MethodName: "DeleteClient",
