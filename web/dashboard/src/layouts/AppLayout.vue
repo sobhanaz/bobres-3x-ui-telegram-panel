@@ -55,7 +55,7 @@ function toggleLang() {
       <nav>
         <template v-for="g in nav" :key="g.group">
           <div class="group">{{ t('nav.group.' + g.group) }}</div>
-          <RouterLink v-for="s in g.items" :key="s.key" :to="{ name: s.key }" class="item" active-class="" exact-active-class="active">
+          <RouterLink v-for="s in g.items" :key="s.key" :to="{ name: s.key }" class="item" :class="{ active: route.meta.section === s.key }" active-class="" exact-active-class="">
             <i :class="s.icon" aria-hidden="true" />
             <span>{{ t('section.' + s.key + '.title') }}</span>
           </RouterLink>
@@ -67,7 +67,7 @@ function toggleLang() {
       <nav>
         <template v-for="g in nav" :key="g.group">
           <div class="group">{{ t('nav.group.' + g.group) }}</div>
-          <RouterLink v-for="s in g.items" :key="s.key" :to="{ name: s.key }" class="item" exact-active-class="active">
+          <RouterLink v-for="s in g.items" :key="s.key" :to="{ name: s.key }" class="item" :class="{ active: route.meta.section === s.key }" active-class="" exact-active-class="">
             <i :class="s.icon" aria-hidden="true" />
             <span>{{ t('section.' + s.key + '.title') }}</span>
           </RouterLink>

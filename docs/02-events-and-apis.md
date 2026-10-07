@@ -55,6 +55,9 @@ Startup: detect version, warn outside tested range. Per-client mutex because `cl
 - `/sub/<token>` subscription info page (branded)
 - `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`
 
+Internal only (never routed by Caddy): the bot's `GET /internal/files/{id}` hands core the receipt
+photos customers sent (core's service token; images and PDFs, 10 MB at most).
+
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.
 - Implemented so far: payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and

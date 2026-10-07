@@ -11,7 +11,20 @@ const SectionPlaceholder = () => import('./pages/SectionPlaceholder.vue')
 // Sections built so far get their page; the others show what is coming.
 const built: Record<string, RouteRecordRaw['component']> = {
   overview: () => import('./pages/OverviewPage.vue'),
+  users: () => import('./pages/UsersPage.vue'),
+  services: () => import('./pages/ServicesPage.vue'),
+  plans: () => import('./pages/PlansPage.vue'),
+  payments: () => import('./pages/PaymentsPage.vue'),
+  ledger: () => import('./pages/LedgerPage.vue'),
+  discounts: () => import('./pages/DiscountsPage.vue'),
 }
+
+// Item pages belong to their section (menu highlight, permission).
+const itemRoutes: RouteRecordRaw[] = [
+  { path: 'users/:id', name: 'user', component: () => import('./pages/UserPage.vue'), meta: { perm: 'users.read', section: 'users' } },
+  { path: 'services/:id', name: 'service', component: () => import('./pages/ServicePage.vue'), meta: { perm: 'services.read', section: 'services' } },
+  { path: 'payments/orders/:id', name: 'order', component: () => import('./pages/OrderPage.vue'), meta: { perm: 'payments.read', section: 'payments' } },
+]
 
 const sectionRoutes: RouteRecordRaw[] = sections.map((s) => ({
   path: s.path,
@@ -27,7 +40,7 @@ export const router = createRouter({
     {
       path: '/',
       component: AppLayout,
-      children: [...sectionRoutes, { path: 'account', name: 'account', component: AccountPage }],
+      children: [...sectionRoutes, ...itemRoutes, { path: 'account', name: 'account', component: AccountPage }],
     },
     { path: '/:rest(.*)*', redirect: { name: 'overview' } },
   ],

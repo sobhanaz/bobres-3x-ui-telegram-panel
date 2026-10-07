@@ -33,3 +33,18 @@ describe('catalogs', () => {
     expect(keys(fa).sort()).toEqual(keys(en).sort())
   })
 })
+
+// Every text compiles in vue-i18n's message syntax ("@", "|", "{", "}" and
+// "$" are syntax there): a broken one throws while rendering and freezes
+// the page in the language it had.
+describe('catalog syntax', () => {
+  it('compiles every message in both languages', async () => {
+    const { createI18n } = await import('vue-i18n')
+    for (const [lang, cat] of [['fa', fa], ['en', en]] as const) {
+      const i18n = createI18n({ legacy: false, locale: lang, messages: { [lang]: cat }, missingWarn: false, fallbackWarn: false })
+      for (const k of keys(cat)) {
+        expect(() => i18n.global.t(k, { n: 1, amount: 'x', balance: 'x', who: 'x', used: 'x', total: 'x', max: 'x', date: 'x', time: 'x', day: 1, week: 1, expiring: 1, ended: 1, brand: 'x', username: 'x', id: 'x' }), `${lang}: ${k}`).not.toThrow()
+      }
+    }
+  })
+})
