@@ -1,0 +1,196 @@
+{
+  "app": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "unknown": "Unknown",
+    "dashboard": "Dashboard",
+    "cancel": "Cancel"
+  },
+  "error": {
+    "generic": "Something went wrong. Try again.",
+    "network": "The server did not answer. Check your connection.",
+    "forbidden": "Your role may not do this."
+  },
+  "theme": {
+    "system": "Theme: system",
+    "dark": "Theme: dark",
+    "light": "Theme: light"
+  },
+  "lang": {
+    "switch": "فارسی"
+  },
+  "role": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "support": "Support"
+  },
+  "nav": {
+    "menu": "Menu",
+    "account": "My account",
+    "logout": "Log out",
+    "group": {
+      "store": "Store",
+      "customers": "Customers",
+      "sales": "Sales",
+      "setup": "Setup",
+      "admin": "Administration"
+    }
+  },
+  "section": {
+    "overview": {
+      "title": "Overview",
+      "desc": "Users, services, revenue and health at a glance."
+    },
+    "users": {
+      "title": "Users",
+      "desc": "Find customers, see their services, orders and wallet, ban or unban, adjust balances."
+    },
+    "services": {
+      "title": "Services",
+      "desc": "Every subscription with its usage; extend, reset traffic, disable, delete or resync from 3x-ui."
+    },
+    "support": {
+      "title": "Support",
+      "desc": "Ticket inbox: reply to customers in the bot, assign tickets, canned replies."
+    },
+    "broadcasts": {
+      "title": "Broadcasts",
+      "desc": "Send a message to all or some customers, now or later, and follow its progress."
+    },
+    "plans": {
+      "title": "Plans",
+      "desc": "Create and edit plans, traffic packages and the free trial; prices and order."
+    },
+    "payments": {
+      "title": "Orders & payments",
+      "desc": "Orders, payments and the review queue with receipt screenshots; retry provisioning, refunds."
+    },
+    "ledger": {
+      "title": "Wallet & ledger",
+      "desc": "Every wallet movement, with filters and CSV export."
+    },
+    "discounts": {
+      "title": "Discounts & referrals",
+      "desc": "Discount codes and their use, the referral reward and top inviters."
+    },
+    "resellers": {
+      "title": "Resellers",
+      "desc": "Reseller tiers and prices, credit limits, their customers and settlements."
+    },
+    "branding": {
+      "title": "Branding & texts",
+      "desc": "Store name, logo, colors and every bot text in Persian and English."
+    },
+    "settings": {
+      "title": "Settings",
+      "desc": "Payment details, maintenance mode, required channel, rate limits, reminders."
+    },
+    "servers": {
+      "title": "3x-ui servers",
+      "desc": "Your panels, their health and inbounds, and which plans use which server."
+    },
+    "gateways": {
+      "title": "Payment gateways",
+      "desc": "Turn gateways on or off, store their keys encrypted, test them."
+    },
+    "staff": {
+      "title": "Staff",
+      "desc": "Who may use the dashboard, their roles, logins and sessions."
+    },
+    "system": {
+      "title": "System",
+      "desc": "Health and version of every service, updates, backups and the license."
+    },
+    "audit": {
+      "title": "Audit log",
+      "desc": "Every change made by staff, searchable and exportable."
+    }
+  },
+  "placeholder": {
+    "coming": "This section is built in milestone {n} of Phase 4.",
+    "today": "Until then, the bot's /admin panel does this."
+  },
+  "login": {
+    "title": "Log in",
+    "subtitle": "Staff dashboard of {brand}",
+    "link_title": "With the bot (easiest)",
+    "link_hint": "In your Telegram bot open /admin and tap “Dashboard”. You get a link that logs you in once, within 2 minutes.",
+    "link_working": "Logging you in…",
+    "link_invalid": "This login link was used already or has expired. Ask the bot for a new one.",
+    "password_title": "With a password",
+    "username": "Username",
+    "password": "Password",
+    "code": "Authenticator code",
+    "submit": "Log in",
+    "failed": "Wrong username, password or code.",
+    "locked": "Too many failed logins. Wait 15 minutes, or use a link from the bot.",
+    "rate_limited": "Too many attempts. Wait a minute.",
+    "not_configured": "Password logins are off on this install. Use a link from the bot.",
+    "no_password_yet": "A password login is added from My account after logging in with the bot."
+  },
+  "overview": {
+    "users": "Users",
+    "users_new": "{day} today · {week} this week",
+    "services": "Active services",
+    "services_detail": "{expiring} expiring soon · {ended} ended",
+    "revenue_day": "Revenue today",
+    "revenue_month": "Revenue, 30 days",
+    "no_revenue": "None yet",
+    "pending": "Payments to review",
+    "failed": "Failed deliveries",
+    "failed_hint": "Paid orders the panel did not create yet",
+    "panel": "3x-ui panel",
+    "panel_ok": "Working",
+    "panel_down": "Not answering",
+    "recent": "Latest orders",
+    "no_orders": "No orders yet.",
+    "col_customer": "Customer",
+    "col_plan": "Plan",
+    "col_type": "Type",
+    "col_amount": "Amount",
+    "col_status": "Status",
+    "col_date": "Date"
+  },
+  "order": {
+    "type": {
+      "new": "New",
+      "renew": "Renewal",
+      "traffic_topup": "Traffic"
+    },
+    "status": {
+      "created": "Created",
+      "awaiting_payment": "Awaiting payment",
+      "paid": "Paid",
+      "provisioning": "Delivering",
+      "active": "Delivered",
+      "provision_failed": "Delivery failed",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    }
+  },
+  "account": {
+    "title": "My account",
+    "telegram": "Telegram",
+    "role": "Role",
+    "session": "This login",
+    "session_link": "Link from the bot, until {time}",
+    "session_password": "Password, until {time}",
+    "password_title": "Password login",
+    "password_on": "On, username {username}. Every login also needs a code from your authenticator app.",
+    "password_off": "Off. You log in with links from the bot.",
+    "password_intro": "A password is a second way in, e.g. when Telegram is unavailable. It always needs a code from an authenticator app (Google Authenticator, Authy, Microsoft Authenticator…).",
+    "password_unavailable": "Password logins are off on this install (no master key).",
+    "username_hint": "3-32 lower-case letters, digits, '.', '_' or '-'",
+    "password_hint": "At least 10 characters",
+    "start": "Continue",
+    "scan": "Scan this code with your authenticator app, or type the key by hand:",
+    "confirm_code": "Then enter the 6-digit code it shows:",
+    "confirm": "Turn on",
+    "enabled": "Password login is on. Your other sessions were logged out.",
+    "remove": "Turn off password login",
+    "remove_confirm": "Turn off password login? You will then log in only with links from the bot.",
+    "removed": "Password login is off.",
+    "code_wrong": "That code is not right. Check the time on your phone and try the next code.",
+    "username_taken": "Another staff member uses this username."
+  }
+}
