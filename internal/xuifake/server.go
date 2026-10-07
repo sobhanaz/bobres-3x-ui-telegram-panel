@@ -5,6 +5,7 @@ package xuifake
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -58,6 +59,7 @@ type Server struct {
 	failNext int
 	latency  time.Duration
 	calls    map[string]int
+	lost     []string
 }
 
 // NewServer starts a fake panel that accepts only the given Bearer token.
@@ -79,6 +81,7 @@ func NewServer(token string) *Server {
 	route("/panel/api/clients/add", "add", s.add)
 	route("/panel/api/clients/get/", "get", s.get)
 	route("/panel/api/clients/del/", "del", s.del)
+	route("/panel/api/clients/update/", "update", s.update)
 	route("/panel/api/clients/bulkAdjust", "bulkAdjust", s.bulkAdjust)
 	route("/panel/api/clients/resetTraffic/", "resetTraffic", s.reset)
 	route("/panel/api/clients/traffic/", "traffic", s.traffic)
@@ -123,8 +126,10 @@ func (s *Server) Seed(email, subID string, inboundIDs []int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.nextRow++
-	s.clients[email] = &record{client: client{Email: email, SubID: subID, Enable: true}, rowID: s.nextRow, inboundIDs: inboundIDs}
+	s.clients[email] = &record{client: client{ID: fakeUUID(s.nextRow), Email: email, SubID: subID, Enable: true}, rowID: s.nextRow, inboundIDs: inboundIDs}
 }
+
+func fakeUUID(row int64) string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", row) }
 
 // Has reports whether a client exists.
 func (s *Server) Has(email string) bool {
@@ -212,6 +217,9 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.nextRow++
+	if b.Client.ID == "" { // the panel generates the protocol UUID
+		b.Client.ID = fakeUUID(s.nextRow)
+	}
 	s.clients[b.Client.Email] = &record{client: b.Client, rowID: s.nextRow, inboundIDs: b.InboundIDs}
 	reply(w, http.StatusOK, true, "ok", nil)
 }
@@ -225,6 +233,53 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusOK, true, "", map[string]any{"client": rec.stored(), "inboundIds": rec.inboundIDs, "usedTraffic": rec.up + rec.down})
+}
+
+// update follows clients/update: the body is a flat client whose "id" is the
+// protocol UUID. The whole row is replaced, so a body without the UUID or the
+// subscription id would lose them: the fake records that as LostFields, which
+// tests assert stays empty.
+func (s *Server) update(w http.ResponseWriter, r *http.Request) {
+	var b map[string]json.RawMessage
+	if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(&b) != nil {
+		reply(w, http.StatusOK, false, "bad request", nil)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec, ok := s.clients[emailFrom(r, "/panel/api/clients/update/")]
+	if !ok {
+		notFound(w)
+		return
+	}
+	var c client
+	raw, _ := json.Marshal(b)
+	if json.Unmarshal(raw, &c) != nil {
+		reply(w, http.StatusOK, false, "bad client", nil)
+		return
+	}
+	for _, k := range []string{"reverse", "allowedIPs"} { // structured on input
+		if v, ok := b[k]; ok && len(v) > 0 && v[0] == '"' {
+			reply(w, http.StatusOK, false, "json: cannot unmarshal string into Go struct field Client."+k, nil)
+			return
+		}
+	}
+	if c.ID != rec.ID {
+		s.lost = append(s.lost, rec.Email+": id")
+	}
+	if c.SubID != rec.SubID {
+		s.lost = append(s.lost, rec.Email+": subId")
+	}
+	c.Email = rec.Email
+	rec.client = c
+	reply(w, http.StatusOK, true, "Inbound client has been updated.", nil)
+}
+
+// LostFields lists identity fields an update replaced with something else.
+func (s *Server) LostFields() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.lost...)
 }
 
 func (s *Server) del(w http.ResponseWriter, r *http.Request) {

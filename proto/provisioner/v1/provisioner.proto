@@ -20,6 +20,10 @@ message Usage {
   string subscription_id = 1;
   int64 traffic_used_bytes = 2;
   int64 last_synced_at = 3;
+  // The panel's current limits: what the customer really has.
+  int64 traffic_total_bytes = 4; // 0 = unlimited
+  int64 expires_at = 5; // unix seconds; 0 = no expiry; negative = starts on first use (set in the panel)
+  bool enabled = 6;
 }
 
 message Links {
@@ -57,6 +61,14 @@ message RenewClientRequest {
   string subscription_id = 1;
   int64 add_days = 2;
   int64 add_bytes = 3;
+}
+
+// SetClientLimitsRequest sets absolute limits (so a retry is harmless) and
+// enables the client: renewals and traffic top-ups.
+message SetClientLimitsRequest {
+  string subscription_id = 1;
+  int64 expires_at = 2; // unix seconds, 0 = no expiry
+  int64 traffic_total_bytes = 3; // 0 = unlimited
 }
 
 message DeleteClientRequest {
@@ -110,6 +122,7 @@ message HealthCheckResponse {
 service ProvisionerService {
   rpc CreateClient(CreateClientRequest) returns (Client);
   rpc RenewClient(RenewClientRequest) returns (Client);
+  rpc SetClientLimits(SetClientLimitsRequest) returns (Client);
   rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty);
   rpc ResetTraffic(ResetTrafficRequest) returns (Client);
   rpc GetUsage(GetUsageRequest) returns (Usage);

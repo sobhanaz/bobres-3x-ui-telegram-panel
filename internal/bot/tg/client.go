@@ -348,3 +348,17 @@ func (c *Client) SendPhoto(ctx context.Context, chatID int64, p Photo, caption s
 	}
 	return &m, nil
 }
+
+// SendDocument re-sends an existing Telegram file (e.g. a screenshot the user
+// sent as a file, whose id sendPhoto refuses) with an HTML caption.
+func (c *Client) SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *Keyboard) (*Message, error) {
+	body := map[string]any{"chat_id": chatID, "document": fileID, "caption": caption, "parse_mode": "HTML"}
+	if kb != nil {
+		body["reply_markup"] = kb
+	}
+	var m Message
+	if err := c.call(ctx, "sendDocument", jsonBody(body), &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
