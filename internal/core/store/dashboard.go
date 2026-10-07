@@ -122,9 +122,9 @@ const subscriptionColsS = `s.id, s.user_id, s.order_id, COALESCE(s.server_id::te
 	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at`
 
 // SubscriptionFilter narrows the services list. Query matches a Telegram id,
-// part of a username or panel email, or the start of a service id (the bot
-// shows its first characters). A deleted service is listed only when Status
-// asks for "deleted" or the list is one user's.
+// part of a username or panel email, or part of a service id (the bot shows
+// its last 6 hex digits). A deleted service is listed only when Status asks
+// for "deleted" or the list is one user's.
 type SubscriptionFilter struct {
 	Query, Status, UserID, ID string
 }
@@ -142,10 +142,7 @@ type SubscriptionRow struct {
 func (s *Store) ListAllSubscriptions(ctx context.Context, q querier, f SubscriptionFilter, p Page) ([]SubscriptionRow, int64, error) {
 	p = p.clamp()
 	num, isNum, like := search(f.Query)
-	idPrefix := strings.ToLower(strings.TrimSpace(f.Query))
-	if !isHexDash(idPrefix) {
-		idPrefix = ""
-	}
+	idPart := idPart(f.Query)
 	rows, err := q.Query(ctx, `
 		SELECT `+subscriptionColsS+`, u.telegram_id, COALESCE(u.username, ''), p.id, p.name_i18n, count(*) OVER ()
 		FROM core.subscriptions s
@@ -154,13 +151,13 @@ func (s *Store) ListAllSubscriptions(ctx context.Context, q querier, f Subscript
 		JOIN core.plans p ON p.id = o.plan_id
 		WHERE ($1 = '' OR (CASE WHEN $2 THEN u.telegram_id = $3 ELSE false END)
 		           OR lower(u.username) LIKE $4 ESCAPE '\' OR lower(s.client_email) LIKE $4 ESCAPE '\'
-		           OR ($5 <> '' AND s.id::text LIKE $5 || '%'))
+		           OR ($5 <> '' AND replace(s.id::text, '-', '') LIKE '%' || $5 || '%'))
 		  AND (CASE WHEN $6 <> '' THEN s.status = $6 WHEN $7 <> '' OR $8 <> '' THEN true ELSE s.status <> 'deleted' END)
 		  AND ($7 = '' OR s.user_id::text = $7)
 		  AND ($8 = '' OR s.id::text = $8)
 		ORDER BY s.created_at DESC, s.id DESC
 		LIMIT $9 OFFSET $10`,
-		strings.TrimSpace(f.Query), isNum, num, like, idPrefix, f.Status, f.UserID, f.ID, p.Limit, p.Offset)
+		strings.TrimSpace(f.Query), isNum, num, like, idPart, f.Status, f.UserID, f.ID, p.Limit, p.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list subscriptions: %w", err)
 	}
@@ -189,17 +186,19 @@ func (s *Store) ListAllSubscriptions(ctx context.Context, q querier, f Subscript
 	return out, total, rows.Err()
 }
 
-// isHexDash reports whether s could start a UUID (4+ hex digits and dashes).
-func isHexDash(s string) bool {
-	if len(s) < 4 || len(s) > 36 {
-		return false
+// idPart is what staff typed as (part of) an id, as hex digits without
+// dashes, or "" when it cannot be one (fewer than 4 hex digits).
+func idPart(q string) string {
+	s := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(q)), "-", "")
+	if len(s) < 4 || len(s) > 32 {
+		return ""
 	}
 	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && c != '-' {
-			return false
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return ""
 		}
 	}
-	return true
+	return s
 }
 
 // orderColsO is orderCols for a query that names the table o.
@@ -208,7 +207,7 @@ const orderColsO = `o.id, o.user_id, o.plan_id, o.type, o.status, o.amount, o.cu
 	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount`
 
 // OrderFilter narrows the orders list. Query matches a Telegram id, part of a
-// username or the start of an order id.
+// username or part of an order id.
 type OrderFilter struct {
 	Query, Status, Type, UserID, SubscriptionID, ID string
 }
@@ -229,10 +228,7 @@ type OrderRow struct {
 func (s *Store) ListOrders(ctx context.Context, q querier, f OrderFilter, p Page) ([]OrderRow, int64, error) {
 	p = p.clamp()
 	num, isNum, like := search(f.Query)
-	idPrefix := strings.ToLower(strings.TrimSpace(f.Query))
-	if !isHexDash(idPrefix) {
-		idPrefix = ""
-	}
+	idPart := idPart(f.Query)
 	rows, err := q.Query(ctx, `
 		SELECT `+orderColsO+`, u.telegram_id, COALESCE(u.username, ''), p.name_i18n,
 			o.provision_attempts, COALESCE(o.last_error, ''), o.next_attempt_at,
@@ -242,7 +238,7 @@ func (s *Store) ListOrders(ctx context.Context, q querier, f OrderFilter, p Page
 		JOIN core.plans p ON p.id = o.plan_id
 		LEFT JOIN core.users c ON c.id = o.created_by
 		WHERE ($1 = '' OR (CASE WHEN $2 THEN u.telegram_id = $3 ELSE false END)
-		           OR lower(u.username) LIKE $4 ESCAPE '\' OR ($5 <> '' AND o.id::text LIKE $5 || '%'))
+		           OR lower(u.username) LIKE $4 ESCAPE '\' OR ($5 <> '' AND replace(o.id::text, '-', '') LIKE '%' || $5 || '%'))
 		  AND ($6 = '' OR o.status = $6)
 		  AND ($7 = '' OR o.type = $7)
 		  AND ($8 = '' OR o.user_id::text = $8)
@@ -250,7 +246,7 @@ func (s *Store) ListOrders(ctx context.Context, q querier, f OrderFilter, p Page
 		  AND ($10 = '' OR o.id::text = $10)
 		ORDER BY o.created_at DESC, o.id DESC
 		LIMIT $11 OFFSET $12`,
-		strings.TrimSpace(f.Query), isNum, num, like, idPrefix, f.Status, f.Type, f.UserID, f.SubscriptionID, f.ID, p.Limit, p.Offset)
+		strings.TrimSpace(f.Query), isNum, num, like, idPart, f.Status, f.Type, f.UserID, f.SubscriptionID, f.ID, p.Limit, p.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list orders: %w", err)
 	}

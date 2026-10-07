@@ -288,7 +288,8 @@ func TestServicesPage(t *testing.T) {
 	expires := time.Now().Add(5 * 24 * time.Hour).UTC().Truncate(time.Second)
 	_, sub := f.order(u, p, "active", "active", expires, 50<<30)
 
-	code, out := b.do(http.MethodGet, "/api/v1/services?q="+sub.ID[:8], nil)
+	short := strings.ReplaceAll(sub.ID, "-", "")[26:] // the last 6 hex digits, as the bot shows them
+	code, out := b.do(http.MethodGet, "/api/v1/services?q="+short, nil)
 	if list := items(out); code != 200 || len(list) != 1 || list[0]["plan"].(map[string]any)["name"].(map[string]any)["en"] != "Monthly 50GB" {
 		t.Fatalf("by short id: %d %v", code, out)
 	}
