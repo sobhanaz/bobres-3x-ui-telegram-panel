@@ -109,6 +109,22 @@ panel is updated on the next start, and the data is kept.
   without a VPN. Buy with "Pay online", turn the VPN off, pay, and check that you come back
   to a "Payment received" page and the service arrives in the bot.
 
-## 6. After it passes
+## 6. Phase 3 retention
+
+- **Renew:** from a second account with a delivered service: My services → the service →
+  Renew → the plan → pay. The service message says "renewed" with the new expiry and
+  traffic, and in the panel the client has 30 more days and 50 GB more, with the same
+  subscription link (nothing to re-import in the VPN app).
+- **Traffic packages:** `/topup_add 30000 IRT 10 +10 GB | ۱۰ گیگ اضافه`, then the service →
+  Add traffic → the package → pay: 10 GB more, same expiry.
+- **Discount codes:** `/discount_add TEST50 50% 1 7`, then buy with "I have a discount code"
+  and `TEST50`: half price; a second try says it was already used.
+- **Referrals:** `/set referral.reward_percent 10`; open "Invite friends", start the bot from
+  another account with that link, buy: the inviter gets 10% in the wallet.
+- **Reminders:** they come from the usage sync (every 10 minutes): in the panel, set a
+  test client's expiry to tomorrow or its traffic close to the limit, and the bot warns the
+  customer once, with Renew / Add traffic buttons.
+
+## 7. After it passes
 
 Tag `v0.1.0`. Phase 1 is done when this checklist passes on a real server.
