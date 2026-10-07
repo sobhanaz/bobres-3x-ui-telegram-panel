@@ -15,6 +15,8 @@ const (
 	PaymentRejected         = "payment.rejected.v1"
 	SubscriptionProvisioned = "subscription.provisioned.v1"
 	ProvisionFailed         = "subscription.provision_failed.v1"
+	SubscriptionExtended    = "subscription.extended.v1"
+	SubscriptionReminder    = "subscription.reminder.v1"
 )
 
 // Topics core consumes from the payments feed.
@@ -66,6 +68,10 @@ const (
 	CreditOrderNotPayable = "order_not_payable" //nolint:gosec // an event reason, not a credential
 	// CreditAdminAdjust: an admin added balance by hand.
 	CreditAdminAdjust = "admin_adjust"
+	// CreditReferral: a reward for an invited user's first purchase.
+	CreditReferral = "referral"
+	// CreditRefund: staff refunded an order to the wallet.
+	CreditRefund = "refund"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
@@ -109,4 +115,37 @@ type ProvisionFailedEvent struct {
 	TelegramID int64  `json:"telegram_id"`
 	Attempts   int    `json:"attempts"`
 	Error      string `json:"error"`
+}
+
+// SubscriptionExtendedEvent: a renewal or traffic top-up was applied.
+type SubscriptionExtendedEvent struct {
+	SubscriptionID    string `json:"subscription_id"`
+	OrderID           string `json:"order_id"`
+	UserID            string `json:"user_id"`
+	TelegramID        int64  `json:"telegram_id"`
+	Type              string `json:"type"`                          // renew | traffic_topup
+	ExpiresAt         int64  `json:"expires_at,omitempty"`          // unix seconds, 0 = no expiry
+	TrafficTotalBytes int64  `json:"traffic_total_bytes,omitempty"` // 0 = unlimited
+	TrafficUsedBytes  int64  `json:"traffic_used_bytes,omitempty"`
+}
+
+// Kinds of subscription.reminder.v1.
+const (
+	ReminderExpiring   = "expiring"    // expires within days (see Days)
+	ReminderLowTraffic = "low_traffic" // most of the traffic is used
+	ReminderExpired    = "expired"
+	ReminderDepleted   = "depleted" // all traffic used
+)
+
+// SubscriptionReminderEvent: a subscription is about to end, or ended.
+type SubscriptionReminderEvent struct {
+	SubscriptionID    string `json:"subscription_id"`
+	UserID            string `json:"user_id"`
+	TelegramID        int64  `json:"telegram_id"`
+	Kind              string `json:"kind"`
+	Days              int    `json:"days,omitempty"`                // expiring: whole days left
+	ExpiresAt         int64  `json:"expires_at,omitempty"`          // unix seconds
+	TrafficTotalBytes int64  `json:"traffic_total_bytes,omitempty"` // 0 = unlimited
+	TrafficUsedBytes  int64  `json:"traffic_used_bytes,omitempty"`
+	TopupAvailable    bool   `json:"topup_available,omitempty"` // traffic packages exist
 }

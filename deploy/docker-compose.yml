@@ -119,12 +119,17 @@ services:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_core:${DB_CORE_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
+      # Optional: where staff open the dashboard, when not https://BOBRES_DOMAIN (local tests).
+      BOBRES_PUBLIC_URL: ${BOBRES_PUBLIC_URL:-}
       BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
       BOBRES_PEER_BOT_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
       BOBRES_PAYMENTS_GRPC_ADDR: payments:9090
       BOBRES_PROVISIONER_GRPC_ADDR: provisioner:9090
       BOBRES_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:?set BOBRES_CORE_MASTER_KEY}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
+      # Receipt photos for the dashboard come through the bot: core keeps no
+      # bot token and has no internet access.
+      BOBRES_BOT_URL: http://bot:8080
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend]
@@ -139,6 +144,8 @@ services:
       BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
       BOBRES_CORE_GRPC_ADDR: core:9090
       BOBRES_TELEGRAM_BOT_TOKEN: ${BOBRES_TELEGRAM_BOT_TOKEN:?set BOBRES_TELEGRAM_BOT_TOKEN}
+      # Core's token: core may fetch receipt photos from the bot (/internal/files).
+      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
       BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
       # Empty = long polling (no domain needed). Set both to receive updates by webhook

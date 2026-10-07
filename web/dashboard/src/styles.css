@@ -1,0 +1,159 @@
+/* BOBRES dashboard base styles. Logical properties only (inline-start/end),
+   so the layout mirrors itself in right-to-left Persian. */
+
+:root {
+  --app-font-fa: 'Vazirmatn', system-ui, sans-serif;
+  --app-font-en: 'Inter', system-ui, sans-serif;
+  --app-sidebar-width: 15.5rem;
+  --app-radius: 0.75rem;
+  --app-gap: 1rem;
+  color-scheme: light;
+}
+
+:root.app-dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  min-block-size: 100%;
+}
+
+body {
+  font-family: var(--app-font-en);
+  background: var(--p-surface-50);
+  color: var(--p-text-color);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root.app-dark body {
+  background: var(--p-surface-950);
+}
+
+html[lang='fa'] body {
+  font-family: var(--app-font-fa);
+  line-height: 1.75;
+  letter-spacing: 0; /* Persian letters connect: no tracking */
+}
+
+/* Directional icons point the reading direction; symbolic ones never flip. */
+[dir='rtl'] .app-flip {
+  scale: -1 1;
+}
+
+/* Technical values (ids, codes, URLs, numbers in English) stay left-to-right. */
+.app-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--app-font-en);
+}
+
+.app-page-title {
+  margin: 0 0 var(--app-gap);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.app-muted {
+  color: var(--p-text-muted-color);
+}
+
+.app-grid {
+  display: grid;
+  gap: var(--app-gap);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Ids, codes and links: monospace, left to right (with .app-ltr). */
+.app-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* Tables whose rows open an item. */
+.app-clickable .p-datatable-tbody > tr {
+  cursor: pointer;
+}
+
+/* A page's title with its main actions, and a row of filters. */
+.app-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--app-gap);
+}
+.app-page-head .app-page-title {
+  margin: 0;
+}
+.app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.app-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-block-end: var(--app-gap);
+}
+.app-toolbar .app-grow {
+  flex: 1 1 16rem;
+}
+
+/* Label/value pairs on an item's page. */
+.app-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.55rem 1.25rem;
+  align-items: baseline;
+}
+.app-facts dt {
+  color: var(--p-text-muted-color);
+}
+.app-facts dd {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A form inside a dialog. */
+.app-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.app-form label,
+.app-form .app-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.app-form .app-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+.app-form .app-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Dates and amounts stay on one line in tables. */
+.app-nowrap {
+  white-space: nowrap;
+}

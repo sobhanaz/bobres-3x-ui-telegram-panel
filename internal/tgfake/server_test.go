@@ -51,8 +51,12 @@ func TestFakeServesTheBotClient(t *testing.T) {
 	if _, err := c.SendPhoto(ctx, 7, tg.Photo{Data: []byte("png")}, "qr", nil); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := c.SendDocument(ctx, 7, "doc-1", "receipt", nil); err != nil {
+		t.Fatal(err)
+	}
 	sent := f.Sent()
-	if len(sent) != 2 || sent[0].ChatID != 7 || sent[0].Text != "hello" || !strings.Contains(string(sent[0].Markup), "buy") || sent[1].Method != "sendPhoto" || sent[1].Text != "qr" {
+	if len(sent) != 3 || sent[0].ChatID != 7 || sent[0].Text != "hello" || !strings.Contains(string(sent[0].Markup), "buy") || sent[1].Method != "sendPhoto" || sent[1].Text != "qr" ||
+		sent[2].Method != "sendDocument" || sent[2].Text != "receipt" {
 		t.Fatalf("sent: %+v", sent)
 	}
 }

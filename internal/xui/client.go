@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -470,6 +471,121 @@ func (c *Client) BulkAdjust(ctx context.Context, req AdjustRequest) (*AdjustResu
 		return nil, err
 	}
 	return &r, nil
+}
+
+// SetLimits sets a client's expiry (unix ms) and quota (bytes) to these
+// absolute values, 0 meaning unlimited, and enables it: renewals and traffic
+// top-ups, where a retry must not add twice. clients/update replaces the whole
+// row, so the stored client is read first and sent back with only those fields
+// changed; fields this package does not model (protocol keys, passwords) pass
+// through untouched.
+func (c *Client) SetLimits(ctx context.Context, email string, expiryMs, totalBytes int64) error {
+	if err := validIdent(email); err != nil {
+		return err
+	}
+	if expiryMs < 0 || totalBytes < 0 {
+		return errors.New("xui: SetLimits needs limits >= 0")
+	}
+	defer c.lock(email)()
+	stored, err := c.storedClient(ctx, email)
+	if err != nil {
+		return err
+	}
+	body, err := updateBody(stored, expiryMs, totalBytes)
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPost, "/panel/api/clients/update/"+esc(email), body, nil)
+}
+
+// SetEnabled turns a client off (it cannot connect) or back on, keeping its
+// limits and usage. The caller holds no lock; this takes the email's lock.
+func (c *Client) SetEnabled(ctx context.Context, email string, enable bool) error {
+	if err := validIdent(email); err != nil {
+		return err
+	}
+	defer c.lock(email)()
+	stored, err := c.storedClient(ctx, email)
+	if err != nil {
+		return err
+	}
+	body, err := asUpdate(stored)
+	if err != nil {
+		return err
+	}
+	body["enable"] = json.RawMessage(strconv.FormatBool(enable))
+	return c.do(ctx, http.MethodPost, "/panel/api/clients/update/"+esc(email), body, nil)
+}
+
+// storedClient reads a client's stored record (clients/get) as raw fields.
+func (c *Client) storedClient(ctx context.Context, email string) (map[string]json.RawMessage, error) {
+	var d struct {
+		Client map[string]json.RawMessage `json:"client"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/get/"+esc(email), nil, &d); err != nil {
+		return nil, err
+	}
+	if len(d.Client) == 0 {
+		return nil, &APIError{Status: http.StatusOK, Msg: "client " + email + " not found"}
+	}
+	return d.Client, nil
+}
+
+// updateBody is the clients/update input that sets these absolute limits and
+// enables the client.
+func updateBody(stored map[string]json.RawMessage, expiryMs, totalBytes int64) (map[string]json.RawMessage, error) {
+	out, err := asUpdate(stored)
+	if err != nil {
+		return nil, err
+	}
+	out["totalGB"] = json.RawMessage(strconv.FormatInt(totalBytes, 10))
+	out["expiryTime"] = json.RawMessage(strconv.FormatInt(expiryMs, 10))
+	out["enable"] = json.RawMessage("true")
+	return out, nil
+}
+
+// asUpdate turns a stored client (clients/get) into clients/update input
+// that changes nothing: the protocol UUID moves from "uuid" to "id" (where
+// the stored form has the panel's row id), bookkeeping fields are dropped,
+// and the two fields stored as text but taken as structures are converted
+// ("reverse" holds a JSON object, "allowedIPs" a comma-separated list).
+func asUpdate(stored map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	out := make(map[string]json.RawMessage, len(stored))
+	for k, v := range stored {
+		switch k {
+		case "id", "uuid", "createdAt", "updatedAt":
+			continue
+		case "reverse", "allowedIPs":
+			var s string
+			if json.Unmarshal(v, &s) != nil {
+				out[k] = v // already structured
+				continue
+			}
+			if s = strings.TrimSpace(s); s == "" {
+				continue
+			}
+			if k == "reverse" {
+				if !json.Valid([]byte(s)) {
+					return nil, fmt.Errorf("xui: stored reverse settings are not JSON")
+				}
+				out[k] = json.RawMessage(s)
+				continue
+			}
+			ips := strings.Split(s, ",")
+			for i := range ips {
+				ips[i] = strings.TrimSpace(ips[i])
+			}
+			b, _ := json.Marshal(ips)
+			out[k] = b
+			continue
+		}
+		out[k] = v
+	}
+	var uuid string
+	if v, ok := stored["uuid"]; ok && json.Unmarshal(v, &uuid) == nil && uuid != "" {
+		out["id"] = stored["uuid"]
+	}
+	return out, nil
 }
 
 // ResetTraffic zeroes a client's counters and re-enables it.

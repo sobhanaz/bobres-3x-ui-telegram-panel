@@ -174,6 +174,52 @@ func (s *Server) ListPendingReceipts(ctx context.Context, req *paymentsv1.ListPe
 	return out, nil
 }
 
+// ListIntents is the payment history for staff, newest first.
+func (s *Server) ListIntents(ctx context.Context, req *paymentsv1.ListIntentsRequest) (*paymentsv1.ListIntentsResponse, error) {
+	page, size := int(req.GetPagination().GetPage()), int(req.GetPagination().GetPageSize())
+	if size <= 0 || size > 200 {
+		size = 25
+	}
+	if page <= 0 {
+		page = 1
+	}
+	recs, total, err := s.st.ListIntents(ctx, store.IntentFilter{
+		UserID: req.GetUserId(), OrderID: req.GetOrderId(), Status: req.GetStatus(), Provider: req.GetProvider(),
+		IntentID: req.GetIntentId(),
+	}, size, (page-1)*size)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &paymentsv1.ListIntentsResponse{
+		PageInfo: &commonv1.PageInfo{Page: int32(page), PageSize: int32(size), Total: total}, //nolint:gosec // bounded above
+	}
+	for i := range recs {
+		rec := &paymentsv1.IntentRecord{Intent: intentToProto(&recs[i].Intent)}
+		if r := recs[i].Receipt; r != nil {
+			rec.Receipt = receiptToProto(r)
+		}
+		out.Records = append(out.Records, rec)
+	}
+	return out, nil
+}
+
+// receiptToProto converts a receipt and its review.
+func receiptToProto(r *store.Receipt) *paymentsv1.ManualReceipt {
+	p := &paymentsv1.ManualReceipt{SubmittedAt: r.SubmittedAt.Unix()}
+	for dst, src := range map[*string]*string{
+		&p.ReceiptFile: r.ReceiptFile, &p.ReferenceNumber: r.ReferenceNumber, &p.Network: r.Network, &p.Txid: r.TXID,
+		&p.Decision: r.Decision, &p.ReviewReason: r.Reason, &p.ReviewedBy: r.ReviewedBy,
+	} {
+		if src != nil {
+			*dst = *src
+		}
+	}
+	if r.ReviewedAt != nil {
+		p.ReviewedAt = r.ReviewedAt.Unix()
+	}
+	return p
+}
+
 func optstr(v string) *string {
 	if v == "" {
 		return nil

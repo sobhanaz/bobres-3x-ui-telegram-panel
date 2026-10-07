@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeOps struct {
@@ -43,7 +45,7 @@ func testOps(stdin string, f *fakeOps) (*ops, *bytes.Buffer, *bytes.Buffer) {
 	var out, errOut bytes.Buffer
 	return &ops{
 		in: strings.NewReader(stdin), out: &out, errOut: &errOut,
-		run: f.run, stream: f.streamf, freeGB: func(string) float64 { return 42 },
+		run: f.run, stream: f.streamf, freeGB: func(string) float64 { return 42 }, sleep: func(time.Duration) {},
 	}, &out, &errOut
 }
 
@@ -157,5 +159,85 @@ func TestParseServicesFormats(t *testing.T) {
 	}
 	if len(parseServices([]byte("garbage"))) != 0 {
 		t.Fatal("garbage parsed as services")
+	}
+}
+
+func TestStartStopRestart(t *testing.T) {
+	f := &fakeOps{ps: healthyPS}
+	o, out, errOut := testOps("", f)
+	if code := o.startCmd([]string{"--dir", t.TempDir()}); code != 2 || !strings.Contains(errOut.String(), "no install found") {
+		t.Fatalf("start without install: %d %s", code, errOut)
+	}
+	dir := installDir(t)
+	for _, c := range []struct {
+		name string
+		run  func([]string) int
+		verb string
+		say  string
+	}{
+		{"start", o.startCmd, "up", "All services are healthy"},
+		{"stop", o.stopCmd, "stop", "BOBRES is stopped"},
+		{"restart", o.restartCmd, "restart", "All services are healthy"},
+	} {
+		f.calls = nil
+		out.Reset()
+		errOut.Reset()
+		if code := c.run([]string{"--dir", dir}); code != 0 {
+			t.Fatalf("%s: %d %s", c.name, code, errOut)
+		}
+		if len(f.calls) == 0 || !contains(f.calls[0], c.verb) || !contains(f.calls[0], composeProject) {
+			t.Fatalf("%s: compose calls %v", c.name, f.calls)
+		}
+		if !strings.Contains(out.String(), c.say) {
+			t.Fatalf("%s output: %s", c.name, out)
+		}
+	}
+	if code := o.stopCmd([]string{"--dir", dir, "extra"}); code != 2 {
+		t.Fatalf("stray argument accepted: %d", code)
+	}
+}
+
+func TestDefaultDirFollowsEnvironment(t *testing.T) {
+	t.Setenv("BOBRES_DIR", "")
+	if d := defaultDir(); d != "/opt/bobres" {
+		t.Fatalf("default: %q", d)
+	}
+	t.Setenv("BOBRES_DIR", "/srv/store")
+	if d := defaultDir(); d != "/srv/store" {
+		t.Fatalf("from BOBRES_DIR: %q", d)
+	}
+}
+
+// Ctrl+C while following ends the logs normally (the menu continues); a
+// failing plain `logs` is still an error.
+func TestLogsInterruptEndsFollowing(t *testing.T) {
+	interrupted := exec.Command("sh", "-c", "exit 130").Run()
+	o, _, errOut := testOps("", &fakeOps{})
+	o.stream = func(context.Context, string, ...string) error { return interrupted }
+	dir := installDir(t)
+	if code := o.logsCmd([]string{"--dir", dir, "-f"}); code != 0 || errOut.Len() != 0 {
+		t.Fatalf("follow + Ctrl+C: %d %q", code, errOut)
+	}
+	if code := o.logsCmd([]string{"--dir", dir}); code != 1 {
+		t.Fatalf("plain logs failure: %d", code)
+	}
+}
+
+func TestAdminLink(t *testing.T) {
+	f := &fakeOps{}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	if code := o.adminCmd([]string{"link", "--dir", dir, "4242"}); code != 0 {
+		t.Fatalf("admin link: %d %s", code, errOut)
+	}
+	got := strings.Join(f.stream[0], " ")
+	if !strings.Contains(got, "exec -T core /app login-link 4242") || !strings.Contains(got, "--project-name bobres") {
+		t.Fatalf("compose args: %s", got)
+	}
+	if code := o.adminCmd([]string{"nope"}); code != 2 {
+		t.Fatalf("unknown subcommand: %d", code)
+	}
+	if code := o.adminCmd([]string{"link", "--dir", t.TempDir()}); code != 2 {
+		t.Fatalf("no install: %d", code)
 	}
 }

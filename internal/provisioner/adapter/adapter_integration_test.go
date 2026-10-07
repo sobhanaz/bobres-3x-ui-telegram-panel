@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,7 +78,8 @@ func TestIntegrationRealPanel(t *testing.T) {
 	if links, err := a.SubLinks(ctx, subID); err != nil || len(links) == 0 {
 		t.Fatalf("sub links: %v %v", links, err)
 	}
-	if links, err := a.Links(ctx, email); err != nil || len(links) != len(ids) {
+	links, err := a.Links(ctx, email)
+	if err != nil || len(links) != len(ids) {
 		t.Fatalf("links: %d for %d inbounds, %v", len(links), len(ids), err)
 	}
 	if used, err := a.Usage(ctx, email); err != nil || used != 0 {
@@ -88,6 +90,42 @@ func TestIntegrationRealPanel(t *testing.T) {
 	}
 	if err := a.ResetTraffic(ctx, email); err != nil {
 		t.Fatalf("reset traffic: %v", err)
+	}
+
+	// Absolute limits (renewals, top-ups): the values land exactly, twice in a
+	// row changes nothing more, and the client keeps its identity (same
+	// subscription id, same share links, which embed the protocol UUID).
+	exp := time.Now().Add(72 * time.Hour).Truncate(time.Second).UnixMilli()
+	for i := 0; i < 2; i++ {
+		if err := a.SetLimits(ctx, email, exp, 3<<30); err != nil {
+			t.Fatalf("set limits #%d: %v", i+1, err)
+		}
+	}
+	st, err := a.Status(ctx, email)
+	if err != nil || st.ExpiryMs != exp || st.TotalBytes != 3<<30 || !st.Enabled {
+		t.Fatalf("status after set limits: %+v %v", st, err)
+	}
+	if got, err := a.ClientSubID(ctx, email); err != nil || got != subID {
+		t.Fatalf("subscription id after set limits: %q %v", got, err)
+	}
+	after, err := a.Links(ctx, email)
+	if err != nil || strings.Join(after, "\n") != strings.Join(links, "\n") {
+		t.Fatalf("share links changed by set limits (identity lost?):\nbefore %v\nafter  %v (%v)", links, after, err)
+	}
+
+	// Turning a client off and on (staff, from the dashboard) keeps its
+	// limits and identity.
+	for _, on := range []bool{false, true} {
+		if err := a.SetEnabled(ctx, email, on); err != nil {
+			t.Fatalf("set enabled %v: %v", on, err)
+		}
+		st, err := a.Status(ctx, email)
+		if err != nil || st.Enabled != on || st.ExpiryMs != exp || st.TotalBytes != 3<<30 {
+			t.Fatalf("status after set enabled %v: %+v %v", on, st, err)
+		}
+	}
+	if got, err := a.ClientSubID(ctx, email); err != nil || got != subID {
+		t.Fatalf("subscription id after set enabled: %q %v", got, err)
 	}
 	if err := a.Delete(ctx, email); err != nil {
 		t.Fatalf("delete: %v", err)

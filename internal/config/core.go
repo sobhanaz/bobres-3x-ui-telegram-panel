@@ -20,6 +20,12 @@ type Core struct {
 	MasterKey string
 	// AdminTelegramID becomes the owner on first contact with the bot.
 	AdminTelegramID int64
+	// PublicURL is where staff open the dashboard (login links point there):
+	// https://<BOBRES_DOMAIN>, or BOBRES_PUBLIC_URL for a local test setup.
+	PublicURL string
+	// BotURL is the bot's internal HTTP address (http://bot:8080): core
+	// fetches receipt photos through it for the dashboard. Empty = none.
+	BotURL string
 }
 
 // LoadCore reads the core service configuration, failing closed on missing
@@ -48,7 +54,30 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.AdminTelegramID, err = telegramID("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
+	co.PublicURL, err = publicURL()
+	keep(err)
+	if co.BotURL = strings.TrimRight(strings.TrimSpace(getenv("BOBRES_BOT_URL", "")), "/"); co.BotURL != "" {
+		if u, err := url.Parse(co.BotURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			keep(errors.New("BOBRES_BOT_URL must be an http(s) URL like http://bot:8080"))
+		}
+	}
 	return co, errors.Join(errs...)
+}
+
+// publicURL is BOBRES_PUBLIC_URL when set (an http(s) origin), else
+// https://BOBRES_DOMAIN, else empty (no dashboard links).
+func publicURL() (string, error) {
+	if v := strings.TrimRight(strings.TrimSpace(getenv("BOBRES_PUBLIC_URL", "")), "/"); v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || (u.Path != "" && u.Path != "/") {
+			return "", errors.New("BOBRES_PUBLIC_URL must be an http(s) origin like https://panel.example.com")
+		}
+		return v, nil
+	}
+	if d := strings.TrimSpace(getenv("BOBRES_DOMAIN", "")); d != "" {
+		return "https://" + d, nil
+	}
+	return "", nil
 }
 
 // Payments is the payments service configuration.

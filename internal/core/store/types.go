@@ -11,6 +11,7 @@ type User struct {
 	Role       string
 	Status     string
 	ReferredBy *string
+	RefCode    *string // the user's invite code, created on first use
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
@@ -26,21 +27,37 @@ type Plan struct {
 	Currency     string
 	Enabled      bool
 	IsTrial      bool
+	IsTopup      bool // a traffic package for an existing subscription
 	Sort         int32
 }
 
-// Order mirrors core.orders.
+// Order mirrors core.orders. Amount is what the customer pays, after
+// DiscountAmount. A renewal or top-up names its SubscriptionID; its target
+// limits are computed once (TargetsSet) and reused on every retry. A staff
+// member's extension (CreatedBy) carries its own ExtendDays/ExtendBytes
+// instead of its plan's.
 type Order struct {
-	ID             string
-	UserID         string
-	PlanID         string
-	Type           string
-	Status         string
-	Amount         int64
-	Currency       string
-	IdempotencyKey string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                 string
+	UserID             string
+	PlanID             string
+	Type               string
+	Status             string
+	Amount             int64
+	Currency           string
+	IdempotencyKey     string
+	SubscriptionID     *string
+	DiscountCode       *string
+	DiscountAmount     int64
+	TargetsSet         bool
+	TargetExpiresAt    *time.Time
+	TargetTrafficBytes *int64
+	ExtendDays         *int32
+	ExtendBytes        *int64
+	CreatedBy          *string
+	RefundedAt         *time.Time
+	RefundAmount       *int64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // Wallet mirrors core.wallets.
@@ -80,6 +97,22 @@ type Subscription struct {
 	LastSyncedAt *time.Time
 	SubLink      string
 	CreatedAt    time.Time
+	// When each reminder went out in the current period (nil = not yet).
+	NotifiedExpiringAt   *time.Time
+	NotifiedLowTrafficAt *time.Time
+	NotifiedEndedAt      *time.Time
+}
+
+// Discount mirrors core.discount_codes: a percentage or a fixed amount.
+type Discount struct {
+	Code      string
+	Percent   *int32
+	Amount    *int64
+	Currency  *string
+	MaxUses   *int32
+	Used      int32
+	ExpiresAt *time.Time
+	Enabled   bool
 }
 
 // Ticket mirrors core.tickets.
@@ -102,14 +135,4 @@ type Audit struct {
 	Before   []byte
 	After    []byte
 	Reason   *string
-}
-
-// Staff mirrors core.staff.
-type Staff struct {
-	ID            string
-	Username      string
-	PasswordHash  string
-	TOTPSecretEnc []byte
-	Role          string
-	Status        string
 }

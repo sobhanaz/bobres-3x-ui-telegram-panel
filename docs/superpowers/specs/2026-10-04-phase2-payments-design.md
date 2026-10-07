@@ -63,12 +63,30 @@ facts that matter for the code are restated here).
 
 ## Zarinpal (REST v4)
 
-- Amount in Rial, no currency field; minimum 10,000 Rial, maximum 1,000,000,000 Rial.
+- Amount in Rial, stated as `currency: IRR` so it can never be read as Toman (the field is
+  optional and the docs do not give its default); minimum 10,000 Rial, maximum
+  1,000,000,000 Rial.
 - Verify answers 100 once and 101 afterwards; both mean paid, so verify is safe to retry.
-  `-51` (not paid) falls back to inquiry: still at the bank stays pending, FAILED or
-  REVERSED fails. `-50` is an amount mismatch. Configuration errors (`-10`, `-11`, `-15`,
-  `-19`) and rate limits (`-12`) are errors to retry, never verdicts. Errors arrive with
-  HTTP 401/422 and an `errors` object; success has an `errors` array.
+  `-50` is an amount mismatch; `-53` (another merchant's session) and `-54` (invalid
+  authority) fail. `-51` (not paid) and `-55` (not found) stay pending while the customer
+  may still pay: until the pay window ends, unless the customer came back from the bank.
+  Only then does inquiry decide: still at the bank stays pending, FAILED or REVERSED fails.
+  Configuration errors (`-10`, `-11`, `-15`, `-19`) and rate limits (`-12`) are errors to
+  retry, never verdicts; an intent that keeps erroring expires once a confirmed payment
+  could no longer settle it (48 hours). Errors arrive with HTTP 401/422 and an `errors`
+  object, either `{code, message}` or keyed by field for validation
+  (`{"authority": ["Invalid authority.", "-54"]}`); success has an `errors` array.
+- When the terminal verifies manually (Zarinpal panel setting, or `metadata.auto_verify`),
+  a payment not verified in time goes back to the payer. The return URL verifies at once;
+  for lost returns the reconciler checks an intent at least every 4 minutes until 45
+  minutes after its pay window, and backs off only after that. `auto_verify` is not sent,
+  so the panel setting decides (Zarinpal recommends merchant-side verification when
+  returns can be lost).
+- Sandbox, checked 2026-10-05: `currency: IRR` is accepted; inquiry reports `IN_BANK` for a
+  session nobody has opened; verify of an unpaid session answers `-51` as `{code, message}`;
+  a malformed authority gets a field-keyed validation error without a code. Before going
+  live, pay and cancel one sandbox payment from the bot and check that verify answers 100
+  then 101.
 - The customer must start the payment from a page on the merchant's registered domain
   (Zarinpal checks the Referer; since Aug 2025 a mismatch shows an interstitial and counts
   as a violation). So the bot links to `/pay/<intent>` on our domain, which links to
@@ -114,6 +132,7 @@ facts that matter for the code are restated here).
 | Where | Key | Meaning |
 |---|---|---|
 | core setting | `payments.stars_rate` | Toman per Star; empty = no Stars |
+| core setting | `payments.zarinpal_link` | the owner's Zarinpal payment link (https); customers pay there and send a screenshot for admin approval (no merchant API needed) |
 | payments env | `BOBRES_ZARINPAL_MERCHANT_ID` | enables Zarinpal |
 | payments env | `BOBRES_ZARINPAL_SANDBOX` | sandbox host (tests; refused in prod) |
 | payments env | `BOBRES_ZARINPAL_PROXY` | http(s) proxy with a registered IP |

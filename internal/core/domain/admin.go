@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,16 +19,18 @@ import (
 // SettingKeys are the settings an admin may change from the bot (and later the
 // dashboard). Values are plain text.
 var SettingKeys = map[string]string{
-	"payments.card_number": "card number shown for card-to-card payments",
-	"payments.card_holder": "card holder name",
-	"payments.usdt_trc20":  "USDT TRC20 deposit address",
-	"payments.usdt_erc20":  "USDT ERC20 deposit address",
-	"payments.usdt_rate":   "Toman per 1 USDT, to quote Toman prices in USDT",
-	"payments.stars_rate":  "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
-	"branding.name":        "store name shown to users",
-	"branding.support":     "support contact (e.g. @support)",
-	"texts.fa.welcome":     "Persian welcome text",
-	"texts.en.welcome":     "English welcome text",
+	"payments.card_number":    "card number shown for card-to-card payments",
+	"payments.card_holder":    "card holder name",
+	"payments.usdt_trc20":     "USDT TRC20 deposit address",
+	"payments.usdt_erc20":     "USDT ERC20 deposit address",
+	"payments.usdt_rate":      "Toman per 1 USDT, to quote Toman prices in USDT",
+	"payments.stars_rate":     "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
+	"payments.zarinpal_link":  "your Zarinpal payment link (https://zarinp.al/...); customers pay there and send the receipt screenshot for approval",
+	"referral.reward_percent": "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)",
+	"branding.name":           "store name shown to users",
+	"branding.support":        "support contact (e.g. @support)",
+	"texts.fa.welcome":        "Persian welcome text",
+	"texts.en.welcome":        "English welcome text",
 }
 
 const maxSettingLen = 1000
@@ -135,6 +138,12 @@ func (s *Service) AdminReviewPayment(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return "", err
 	}
+	return s.ReviewPayment(ctx, actor, pay, intentID, decision, reason)
+}
+
+// ReviewPayment approves or rejects a manual payment. Like every staff
+// operation taking an actor, the caller has checked that the actor may.
+func (s *Service) ReviewPayment(ctx context.Context, actor *store.User, pay PaymentsClient, intentID, decision, reason string) (string, error) {
 	if decision != "approved" && decision != "rejected" {
 		return "", invalid("decision must be approved or rejected")
 	}
@@ -197,6 +206,11 @@ func (s *Service) AdminAdjustBalance(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return nil, err
 	}
+	return s.AdjustBalance(ctx, actor, userID, delta, currency, reason, idemKey)
+}
+
+// AdjustBalance is AdminAdjustBalance for an actor the caller has checked.
+func (s *Service) AdjustBalance(ctx context.Context, actor *store.User, userID string, delta int64, currency, reason, idemKey string) (*store.Wallet, error) {
 	reason = strings.TrimSpace(reason)
 	switch {
 	case delta == 0 || delta > maxTopupMinor || delta < -maxTopupMinor:
@@ -248,13 +262,19 @@ func (s *Service) AdminAdjustBalance(ctx context.Context, actorTelegramID int64,
 	return w, nil
 }
 
-// AdminSetUserStatus bans or unbans a user. The owner cannot be banned, and
-// nobody can ban themselves.
+// AdminSetUserStatus bans or unbans a customer. Nobody can ban themselves or
+// a staff member (owner, admin, support): staff are managed by the owner.
 func (s *Service) AdminSetUserStatus(ctx context.Context, actorTelegramID int64, userID, status, reason string) (*store.User, error) {
 	actor, err := s.requireStaff(ctx, actorTelegramID)
 	if err != nil {
 		return nil, err
 	}
+	return s.SetUserStatus(ctx, actor, userID, status, reason)
+}
+
+// SetUserStatus is AdminSetUserStatus for an actor the caller has checked.
+// Staff cannot ban staff: demote them first (an owner's decision).
+func (s *Service) SetUserStatus(ctx context.Context, actor *store.User, userID, status, reason string) (*store.User, error) {
 	if status != "active" && status != "banned" {
 		return nil, invalid("status must be active or banned")
 	}
@@ -265,7 +285,7 @@ func (s *Service) AdminSetUserStatus(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return nil, err
 	}
-	if target.ID == actor.ID || target.Role == "owner" {
+	if target.ID == actor.ID || IsStaffRole(target.Role) {
 		return nil, ErrForbidden
 	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
@@ -287,10 +307,20 @@ func (s *Service) AdminUpsertPlan(ctx context.Context, actorTelegramID int64, p 
 	if err != nil {
 		return nil, err
 	}
+	return s.UpsertPlan(ctx, actor, p)
+}
+
+// UpsertPlan is AdminUpsertPlan for an actor the caller has checked.
+func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Plan) (*store.Plan, error) {
 	if err := validatePlan(p); err != nil {
 		return nil, err
 	}
-	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+	if p.ID != "" {
+		if _, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID); err != nil {
+			return nil, err // editing a plan that does not exist
+		}
+	}
+	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
 		}
@@ -317,6 +347,9 @@ func validatePlan(p *store.Plan) error {
 	if p.IsTrial && p.Price != 0 {
 		return invalid("a trial plan must be free")
 	}
+	if p.IsTopup && (p.IsTrial || p.Kind != "traffic") {
+		return invalid("a traffic package is a paid plan of kind traffic")
+	}
 	if p.DurationDays != nil && (*p.DurationDays < 0 || *p.DurationDays > 3650) {
 		return invalid("duration out of range")
 	}
@@ -338,12 +371,28 @@ func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, ke
 	if err != nil {
 		return err
 	}
+	return s.SetSetting(ctx, actor, key, value)
+}
+
+// SetSetting is AdminSetSetting for an actor the caller has checked.
+func (s *Service) SetSetting(ctx context.Context, actor *store.User, key, value string) error {
 	if _, ok := SettingKeys[key]; !ok {
 		return invalid("unknown setting %q", key)
 	}
 	value = strings.TrimSpace(value)
 	if len(value) > maxSettingLen {
 		return invalid("setting value too long")
+	}
+	if key == "referral.reward_percent" && value != "" {
+		if n, err := strconv.Atoi(value); err != nil || n < 0 || n > 100 {
+			return invalid("referral.reward_percent must be a whole number from 0 to 100")
+		}
+	}
+	if key == "payments.zarinpal_link" && value != "" {
+		// Shown to customers as a link button: only a plain https link.
+		if u, err := url.Parse(value); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+			return invalid("payments.zarinpal_link must be an https link, e.g. https://zarinp.al/yourname")
+		}
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {

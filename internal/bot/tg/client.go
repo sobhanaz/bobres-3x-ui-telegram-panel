@@ -49,8 +49,9 @@ func IsNotModified(err error) bool {
 
 // Client calls the Bot API.
 type Client struct {
-	base string // <api root>/bot<token>/
-	hc   *http.Client
+	base     string // <api root>/bot<token>/
+	fileBase string // <api root>/file/bot<token>/
+	hc       *http.Client
 }
 
 type settings struct {
@@ -95,7 +96,64 @@ func New(token string, opts ...Option) *Client {
 	if base == "" {
 		base = strings.TrimRight(s.root, "/") + "/bot" + token + "/"
 	}
-	return &Client{base: base, hc: s.hc}
+	// Files are served beside the methods: <root>/file/bot<token>/<path>.
+	fileBase := base
+	if i := strings.LastIndex(strings.TrimRight(base, "/"), "/bot"); i >= 0 {
+		fileBase = base[:i] + "/file" + base[i:]
+	}
+	return &Client{base: base, fileBase: fileBase, hc: s.hc}
+}
+
+// File is a file Telegram keeps for the bot (a photo or document a user sent).
+type File struct {
+	FileID   string `json:"file_id"`
+	FilePath string `json:"file_path"`
+	FileSize int64  `json:"file_size"`
+}
+
+// GetFile looks a file up by its id, for downloading it.
+func (c *Client) GetFile(ctx context.Context, fileID string) (*File, error) {
+	var f File
+	if err := c.call(ctx, "getFile", jsonBody(map[string]string{"file_id": fileID}), &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+// ErrFileTooLarge: the file is bigger than the caller allows.
+var ErrFileTooLarge = errors.New("telegram: file too large")
+
+// Download fetches a file's content by the path GetFile returned, refusing
+// more than max bytes. Errors never contain the URL (it holds the token).
+func (c *Client) Download(ctx context.Context, filePath string, max int64) ([]byte, error) {
+	if filePath == "" || strings.HasPrefix(filePath, "/") || strings.Contains(filePath, "..") ||
+		strings.ContainsAny(filePath, "?#\\") {
+		return nil, errors.New("telegram: unexpected file path")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.fileBase+filePath, nil)
+	if err != nil {
+		return nil, errors.New("telegram: build download request")
+	}
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		var ue *url.Error // its message contains the URL, i.e. the token
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return nil, fmt.Errorf("telegram: download: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, &APIError{Code: resp.StatusCode, Description: "file download failed"}
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
+	if err != nil {
+		return nil, fmt.Errorf("telegram: download: read: %w", err)
+	}
+	if int64(len(data)) > max {
+		return nil, ErrFileTooLarge
+	}
+	return data, nil
 }
 
 type reply struct {
@@ -344,6 +402,20 @@ func (c *Client) SendPhoto(ctx context.Context, chatID int64, p Photo, caption s
 		return &buf, w.FormDataContentType(), nil
 	}
 	if err := c.call(ctx, "sendPhoto", build, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// SendDocument re-sends an existing Telegram file (e.g. a screenshot the user
+// sent as a file, whose id sendPhoto refuses) with an HTML caption.
+func (c *Client) SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *Keyboard) (*Message, error) {
+	body := map[string]any{"chat_id": chatID, "document": fileID, "caption": caption, "parse_mode": "HTML"}
+	if kb != nil {
+		body["reply_markup"] = kb
+	}
+	var m Message
+	if err := c.call(ctx, "sendDocument", jsonBody(body), &m); err != nil {
 		return nil, err
 	}
 	return &m, nil

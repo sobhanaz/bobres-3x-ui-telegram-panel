@@ -96,13 +96,18 @@ message ListPendingReceiptsRequest {
   common.v1.Pagination pagination = 1;
 }
 
-// ManualReceipt is the proof a user submitted for a manual intent.
+// ManualReceipt is the proof a user submitted for a manual intent, and its
+// review once there is one.
 message ManualReceipt {
   string receipt_file = 1; // Telegram file_id of the receipt photo (card)
   string reference_number = 2; // bank tracking number (card)
   string network = 3; // crypto network, e.g. TRC20
   string txid = 4; // crypto transaction id
   int64 submitted_at = 5;
+  string decision = 6; // approved | rejected | "" (not reviewed)
+  string review_reason = 7;
+  string reviewed_by = 8; // core user id of the reviewer
+  int64 reviewed_at = 9;
 }
 
 // PendingReceipt is one item of the manual review queue.
@@ -112,6 +117,27 @@ message PendingReceipt {
   // Another receipt already carries the same card reference number. Shown to
   // the reviewer as a warning; reference numbers can legitimately repeat.
   bool possible_duplicate = 3;
+}
+
+// ListIntentsRequest filters the payment history; every field is optional.
+message ListIntentsRequest {
+  string user_id = 1;
+  string order_id = 2;
+  string status = 3;
+  string provider = 4;
+  common.v1.Pagination pagination = 5;
+  string intent_id = 6; // one payment
+}
+
+// IntentRecord is one payment with the proof sent for it (manual payments).
+message IntentRecord {
+  PaymentIntent intent = 1;
+  ManualReceipt receipt = 2; // unset when there is none
+}
+
+message ListIntentsResponse {
+  repeated IntentRecord records = 1; // newest first
+  common.v1.PageInfo page_info = 2;
 }
 
 message ListPendingReceiptsResponse {
@@ -129,6 +155,8 @@ service PaymentsService {
   rpc SubmitTXID(SubmitTXIDRequest) returns (PaymentIntent);
   rpc ReviewManualPayment(ReviewManualPaymentRequest) returns (PaymentIntent);
   rpc ListPendingReceipts(ListPendingReceiptsRequest) returns (ListPendingReceiptsResponse);
+  // The payment history (staff), with filters.
+  rpc ListIntents(ListIntentsRequest) returns (ListIntentsResponse);
   rpc CheckIntent(CheckIntentRequest) returns (PaymentIntent);
   // Telegram Stars: validate before Telegram charges, then settle the payment.
   rpc PrecheckStarsPayment(PrecheckStarsPaymentRequest) returns (PaymentIntent);

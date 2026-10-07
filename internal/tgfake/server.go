@@ -42,10 +42,20 @@ type Server struct {
 	nextMsg  int
 	webhook  string
 	notified chan struct{}
+	files    map[string][]byte // by file id, served by getFile and /file/
 }
 
 // New returns an empty fake.
-func New() *Server { return &Server{nextUpd: 1, nextMsg: 1, notified: make(chan struct{}, 1)} }
+func New() *Server {
+	return &Server{nextUpd: 1, nextMsg: 1, notified: make(chan struct{}, 1), files: map[string][]byte{}}
+}
+
+// AddFile makes a file available by id (a photo a user sent).
+func (s *Server) AddFile(fileID string, data []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.files[fileID] = data
+}
 
 // Inject queues an update for getUpdates and returns its id.
 func (s *Server) Inject(u tg.Update) int64 {
@@ -83,8 +93,26 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(s.Sent())
 	})
+	mux.HandleFunc("/file/", s.file)
 	mux.HandleFunc("/", s.api)
 	return mux
+}
+
+// file serves /file/bot<token>/files/<file id>, the path getFile returns.
+func (s *Server) file(w http.ResponseWriter, r *http.Request) {
+	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/file/"), "/", 3)
+	if len(parts) != 3 || !strings.HasPrefix(parts[0], "bot") || parts[1] != "files" {
+		http.NotFound(w, r)
+		return
+	}
+	s.mu.Lock()
+	data, ok := s.files[parts[2]]
+	s.mu.Unlock()
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	_, _ = w.Write(data)
 }
 
 func reply(w http.ResponseWriter, result any) {
@@ -150,6 +178,16 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	}
 	p := params(r)
 	switch parts[1] {
+	case "getFile":
+		id := str(p["file_id"])
+		s.mu.Lock()
+		data, ok := s.files[id]
+		s.mu.Unlock()
+		if !ok {
+			fail(w, http.StatusBadRequest, "Bad Request: invalid file_id")
+			return
+		}
+		reply(w, map[string]any{"file_id": id, "file_path": "files/" + id, "file_size": len(data)})
 	case "getMe":
 		reply(w, tg.User{ID: 1000, IsBot: true, FirstName: "Fake", Username: "fake_bot"})
 	case "deleteWebhook":
@@ -164,7 +202,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		reply(w, true)
 	case "getUpdates":
 		reply(w, s.pending(r, num(p["offset"]), num(p["timeout"])))
-	case "sendMessage", "sendPhoto", "editMessageText", "editMessageReplyMarkup":
+	case "sendMessage", "sendPhoto", "sendDocument", "editMessageText", "editMessageReplyMarkup":
 		text := str(p["text"])
 		if text == "" {
 			text = str(p["caption"])

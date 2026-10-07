@@ -11,12 +11,14 @@ import (
 )
 
 const subscriptionCols = `id, user_id, order_id, COALESCE(server_id::text, ''), client_email, sub_id, status,
-	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at`
+	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at,
+	notified_expiring_at, notified_low_traffic_at, notified_ended_at`
 
 func scanSubscription(row pgx.Row) (*Subscription, error) {
 	var sc Subscription
 	err := row.Scan(&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
-		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt)
+		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
+		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -61,13 +63,14 @@ func (s *Store) SubscriptionByOrder(ctx context.Context, q querier, orderID stri
 	return sc, nil
 }
 
-// ListSubscriptions returns a user's subscriptions, newest first.
+// ListSubscriptions returns a user's subscriptions, newest first, without
+// the ones deleted from the panel (the customer's own list).
 func (s *Store) ListSubscriptions(ctx context.Context, q querier, userID string, limit int) ([]Subscription, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions
-		WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`, userID, limit)
+		WHERE user_id = $1 AND status <> 'deleted' ORDER BY created_at DESC LIMIT $2`, userID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions: %w", err)
 	}
@@ -99,6 +102,94 @@ func (s *Store) ActivateSubscription(ctx context.Context, q querier, id, serverI
 	return nil
 }
 
+// LockSubscription returns a subscription and locks its row until tx ends, so
+// a renewal and the usage sync never compute from each other's half-states.
+func (s *Store) LockSubscription(ctx context.Context, tx pgx.Tx, id string) (*Subscription, error) {
+	sc, err := scanSubscription(tx.QueryRow(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions WHERE id = $1 FOR UPDATE`, id))
+	if err != nil {
+		return nil, fmt.Errorf("lock subscription: %w", err)
+	}
+	return sc, nil
+}
+
+// ApplySubscriptionLimits records new limits after a renewal or top-up: the
+// subscription is active again and its reminders start over.
+func (s *Store) ApplySubscriptionLimits(ctx context.Context, q querier, id string, expiresAt *time.Time, trafficTotal *int64) error {
+	tag, err := q.Exec(ctx, `
+		UPDATE core.subscriptions
+		SET status = 'active', expires_at = $2, traffic_total_bytes = $3,
+		    notified_expiring_at = NULL, notified_low_traffic_at = NULL, notified_ended_at = NULL, updated_at = now()
+		WHERE id = $1`, id, expiresAt, trafficTotal)
+	if err != nil {
+		return fmt.Errorf("apply subscription limits: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DueUsageSync lists provisioned subscriptions whose usage was last synced
+// before olderThan (never synced first). Disabled ones are left alone.
+func (s *Store) DueUsageSync(ctx context.Context, q querier, olderThan time.Time, limit int) ([]Subscription, error) {
+	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions
+		WHERE status IN ('active', 'expiring_soon', 'expired', 'depleted') AND server_id IS NOT NULL
+		  AND (last_synced_at IS NULL OR last_synced_at < $1)
+		ORDER BY last_synced_at NULLS FIRST LIMIT $2`, olderThan, limit)
+	if err != nil {
+		return nil, fmt.Errorf("due usage sync: %w", err)
+	}
+	defer rows.Close()
+	var out []Subscription
+	for rows.Next() {
+		sc, err := scanSubscription(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *sc)
+	}
+	return out, rows.Err()
+}
+
+// SubscriptionSync is one usage-sync result for a subscription: its status,
+// usage, limits and the full reminder state (nil = not reminded this period).
+type SubscriptionSync struct {
+	Status               string
+	TrafficUsed          int64
+	ExpiresAt            *time.Time
+	TrafficTotal         *int64
+	NotifiedExpiringAt   *time.Time
+	NotifiedLowTrafficAt *time.Time
+	NotifiedEndedAt      *time.Time
+}
+
+// RecordSync stores a usage-sync result.
+func (s *Store) RecordSync(ctx context.Context, q querier, id string, r SubscriptionSync) error {
+	tag, err := q.Exec(ctx, `
+		UPDATE core.subscriptions
+		SET status = $2, traffic_used_bytes = $3, expires_at = $4, traffic_total_bytes = $5, last_synced_at = now(),
+		    notified_expiring_at = $6, notified_low_traffic_at = $7, notified_ended_at = $8, updated_at = now()
+		WHERE id = $1`, id, r.Status, r.TrafficUsed, r.ExpiresAt, r.TrafficTotal,
+		r.NotifiedExpiringAt, r.NotifiedLowTrafficAt, r.NotifiedEndedAt)
+	if err != nil {
+		return fmt.Errorf("record sync: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// TouchSync marks a subscription as just looked at without new usage (the
+// panel did not answer), so one failing client does not block the queue.
+func (s *Store) TouchSync(ctx context.Context, q querier, id string) error {
+	_, err := q.Exec(ctx, `UPDATE core.subscriptions SET last_synced_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("touch sync: %w", err)
+	}
+	return nil
+}
+
 // SetSubscriptionStatus updates a subscription's status.
 func (s *Store) SetSubscriptionStatus(ctx context.Context, q querier, id, status string) error {
 	tag, err := q.Exec(ctx,
@@ -112,18 +203,17 @@ func (s *Store) SetSubscriptionStatus(ctx context.Context, q querier, id, status
 	return nil
 }
 
-// ClaimDueOrder locks the next order that needs provisioning: paid, failed
-// and due for a retry, or stuck in "provisioning" longer than staleAfter (a
-// worker died mid-call; provisioning is idempotent, so retrying is safe).
+// ClaimDueOrder locks the next order that needs provisioning (a new client,
+// or new limits for a renewal or top-up): paid, failed and due for a retry,
+// or stuck in "provisioning" longer than staleAfter (a worker died mid-call;
+// both kinds are idempotent, so retrying is safe).
 // SKIP LOCKED lets several workers run without blocking each other.
 func (s *Store) ClaimDueOrder(ctx context.Context, tx pgx.Tx, staleAfter time.Duration) (*Order, error) {
 	o, err := scanOrder(tx.QueryRow(ctx, `
 		SELECT `+orderCols+` FROM core.orders
-		WHERE type = 'new' AND (
-			status = 'paid'
+		WHERE status = 'paid'
 			OR (status = 'provision_failed' AND next_attempt_at <= now())
 			OR (status = 'provisioning' AND updated_at < now() - make_interval(secs => $1))
-		)
 		ORDER BY updated_at
 		LIMIT 1
 		FOR UPDATE SKIP LOCKED`, staleAfter.Seconds()))

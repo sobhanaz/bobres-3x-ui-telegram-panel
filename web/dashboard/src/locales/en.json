@@ -1,0 +1,475 @@
+{
+  "app": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "unknown": "Unknown",
+    "dashboard": "Dashboard",
+    "cancel": "Cancel"
+  },
+  "error": {
+    "generic": "Something went wrong. Try again.",
+    "network": "The server did not answer. Check your connection.",
+    "forbidden": "Your role may not do this.",
+    "conflict": "This clashes with an earlier change. Reload the page and try again.",
+    "insufficient_funds": "The wallet balance is too low for this.",
+    "invalid": "Some of what you entered is not accepted.",
+    "not_found": "This item no longer exists.",
+    "state": "This cannot be done right now.",
+    "unavailable": "A service this needs (or the 3x-ui panel) did not answer. Try again in a minute."
+  },
+  "theme": {
+    "system": "Theme: system",
+    "dark": "Theme: dark",
+    "light": "Theme: light"
+  },
+  "lang": {
+    "switch": "فارسی"
+  },
+  "role": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "support": "Support"
+  },
+  "nav": {
+    "menu": "Menu",
+    "account": "My account",
+    "logout": "Log out",
+    "group": {
+      "store": "Store",
+      "customers": "Customers",
+      "sales": "Sales",
+      "setup": "Setup",
+      "admin": "Administration"
+    }
+  },
+  "section": {
+    "overview": {
+      "title": "Overview",
+      "desc": "Users, services, revenue and health at a glance."
+    },
+    "users": {
+      "title": "Users",
+      "desc": "Find customers, see their services, orders and wallet, ban or unban, adjust balances."
+    },
+    "services": {
+      "title": "Services",
+      "desc": "Every subscription with its usage; extend, reset traffic, disable, delete or resync from 3x-ui."
+    },
+    "support": {
+      "title": "Support",
+      "desc": "Ticket inbox: reply to customers in the bot, assign tickets, canned replies."
+    },
+    "broadcasts": {
+      "title": "Broadcasts",
+      "desc": "Send a message to all or some customers, now or later, and follow its progress."
+    },
+    "plans": {
+      "title": "Plans",
+      "desc": "Create and edit plans, traffic packages and the free trial; prices and order."
+    },
+    "payments": {
+      "title": "Orders & payments",
+      "desc": "Orders, payments and the review queue with receipt screenshots; retry provisioning, refunds."
+    },
+    "ledger": {
+      "title": "Wallet & ledger",
+      "desc": "Every wallet movement, with filters and CSV export."
+    },
+    "discounts": {
+      "title": "Discounts & referrals",
+      "desc": "Discount codes and their use, the referral reward and top inviters."
+    },
+    "resellers": {
+      "title": "Resellers",
+      "desc": "Reseller tiers and prices, credit limits, their customers and settlements."
+    },
+    "branding": {
+      "title": "Branding & texts",
+      "desc": "Store name, logo, colors and every bot text in Persian and English."
+    },
+    "settings": {
+      "title": "Settings",
+      "desc": "Payment details, maintenance mode, required channel, rate limits, reminders."
+    },
+    "servers": {
+      "title": "3x-ui servers",
+      "desc": "Your panels, their health and inbounds, and which plans use which server."
+    },
+    "gateways": {
+      "title": "Payment gateways",
+      "desc": "Turn gateways on or off, store their keys encrypted, test them."
+    },
+    "staff": {
+      "title": "Staff",
+      "desc": "Who may use the dashboard, their roles, logins and sessions."
+    },
+    "system": {
+      "title": "System",
+      "desc": "Health and version of every service, updates, backups and the license."
+    },
+    "audit": {
+      "title": "Audit log",
+      "desc": "Every change made by staff, searchable and exportable."
+    }
+  },
+  "placeholder": {
+    "coming": "This section is built in milestone {n} of Phase 4.",
+    "today": "Until then, the bot's /admin panel does this."
+  },
+  "login": {
+    "title": "Log in",
+    "subtitle": "Staff dashboard of {brand}",
+    "link_title": "With the bot (easiest)",
+    "link_hint": "In your Telegram bot open /admin and tap “Dashboard”. You get a link that logs you in once, within 2 minutes.",
+    "link_working": "Logging you in…",
+    "link_invalid": "This login link was used already or has expired. Ask the bot for a new one.",
+    "password_title": "With a password",
+    "username": "Username",
+    "password": "Password",
+    "code": "Authenticator code",
+    "submit": "Log in",
+    "failed": "Wrong username, password or code.",
+    "locked": "Too many failed logins. Wait 15 minutes, or use a link from the bot.",
+    "rate_limited": "Too many attempts. Wait a minute.",
+    "not_configured": "Password logins are off on this install. Use a link from the bot.",
+    "no_password_yet": "A password login is added from My account after logging in with the bot."
+  },
+  "overview": {
+    "users": "Users",
+    "users_new": "{day} today · {week} this week",
+    "services": "Active services",
+    "services_detail": "{expiring} expiring soon · {ended} ended",
+    "revenue_day": "Revenue today",
+    "revenue_month": "Revenue, 30 days",
+    "no_revenue": "None yet",
+    "pending": "Payments to review",
+    "failed": "Failed deliveries",
+    "failed_hint": "Paid orders the panel did not create yet",
+    "panel": "3x-ui panel",
+    "panel_ok": "Working",
+    "panel_down": "Not answering",
+    "recent": "Latest orders",
+    "no_orders": "No orders yet.",
+    "col_customer": "Customer",
+    "col_plan": "Plan",
+    "col_type": "Type",
+    "col_amount": "Amount",
+    "col_status": "Status",
+    "col_date": "Date"
+  },
+  "order": {
+    "type": {
+      "new": "New",
+      "renew": "Renewal",
+      "traffic_topup": "Traffic"
+    },
+    "status": {
+      "created": "Created",
+      "awaiting_payment": "Awaiting payment",
+      "paid": "Paid",
+      "provisioning": "Delivering",
+      "active": "Delivered",
+      "provision_failed": "Delivery failed",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "title": "Order",
+    "search": "Order id, Telegram id or {'@'}username",
+    "none": "No orders found.",
+    "all_types": "All types",
+    "type_label": "Type",
+    "by_staff": "by {who}",
+    "refunded": "Refunded",
+    "made_by": "Made by",
+    "discount": "{amount} off with",
+    "service": "Service",
+    "service_new": "Created when delivered",
+    "created": "Created",
+    "deliveries": "Delivery",
+    "attempts": "{n} attempts",
+    "next_attempt": "next try {time}",
+    "payments": "Payments",
+    "payments_unavailable": "The payments service did not answer; payment attempts are not shown.",
+    "retry": "Retry delivery now",
+    "retry_started": "Delivery runs again now",
+    "refund": "Refund to wallet",
+    "refund_intro": "{amount} goes to the customer's wallet and the order is cancelled (it was not delivered). The customer is told.",
+    "refund_intro_delivered": "{amount} goes to the customer's wallet. The service was delivered and keeps working: delete it on its page if needed. The customer is told.",
+    "refund_done": "Refunded. Wallet balance: {balance}"
+  },
+  "account": {
+    "title": "My account",
+    "telegram": "Telegram",
+    "role": "Role",
+    "session": "This login",
+    "session_link": "Link from the bot, until {time}",
+    "session_password": "Password, until {time}",
+    "password_title": "Password login",
+    "password_on": "On, username {username}. Every login also needs a code from your authenticator app.",
+    "password_off": "Off. You log in with links from the bot.",
+    "password_intro": "A password is a second way in, e.g. when Telegram is unavailable. It always needs a code from an authenticator app (Google Authenticator, Authy, Microsoft Authenticator…).",
+    "password_unavailable": "Password logins are off on this install (no master key).",
+    "username_hint": "3-32 lower-case letters, digits, '.', '_' or '-'",
+    "password_hint": "At least 10 characters",
+    "start": "Continue",
+    "scan": "Scan this code with your authenticator app, or type the key by hand:",
+    "confirm_code": "Then enter the 6-digit code it shows:",
+    "confirm": "Turn on",
+    "enabled": "Password login is on. Your other sessions were logged out.",
+    "remove": "Turn off password login",
+    "remove_confirm": "Turn off password login? You will then log in only with links from the bot.",
+    "removed": "Password login is off.",
+    "code_wrong": "That code is not right. Check the time on your phone and try the next code.",
+    "username_taken": "Another staff member uses this username."
+  },
+  "common": {
+    "all": "All",
+    "amount": "Amount",
+    "back": "Back",
+    "copied": "Copied",
+    "copy": "Copy",
+    "currency": "Currency",
+    "customer": "Customer",
+    "date": "Date",
+    "edit": "Edit",
+    "plan": "Plan",
+    "reason": "Reason",
+    "reason_hint": "Kept in the audit log with your name.",
+    "reason_optional": "Note (optional)",
+    "save": "Save",
+    "status": "Status"
+  },
+  "currency": {
+    "IRT": "Toman",
+    "USDT": "USDT (Tether)"
+  },
+  "user": {
+    "title": "Customer",
+    "search": "Telegram id, {'@'}username or invite code",
+    "none": "No customers found.",
+    "all_roles": "All roles",
+    "role": "Role",
+    "role_customer": "Customer",
+    "status": {
+      "active": "Active",
+      "banned": "Banned"
+    },
+    "wallet": "Wallet",
+    "wallet_empty": "Empty",
+    "services": "Services",
+    "orders": "Orders",
+    "payments": "Payments",
+    "ledger": "Wallet history",
+    "joined": "Joined",
+    "language": "Language",
+    "invite_code": "Invite code",
+    "invitations": "Invitations",
+    "invited_by": "Invited by",
+    "invited": "People invited",
+    "rewards": "Rewards earned",
+    "adjust_balance": "Change balance",
+    "adjust_intro": "Add money to the wallet or take some out. The customer is told when money is added.",
+    "add_money": "Add money",
+    "take_money": "Take money out",
+    "balance_done": "Done. New balance: {balance}",
+    "ban": "Ban",
+    "unban": "Unban",
+    "ban_intro": "A banned customer cannot buy or renew. Their running services keep working until they end (turn them off on their pages if needed).",
+    "unban_intro": "The customer can buy and renew again.",
+    "banned": "Customer banned",
+    "unbanned": "Customer unbanned"
+  },
+  "service": {
+    "title": "Service",
+    "search": "Service id, Telegram id, {'@'}username or panel email",
+    "none": "No services found.",
+    "all_live": "All except deleted",
+    "col_id": "Service",
+    "status": {
+      "pending": "Being delivered",
+      "active": "Active",
+      "expiring_soon": "Ending soon",
+      "expired": "Expired",
+      "disabled": "Turned off",
+      "depleted": "Traffic used up",
+      "deleted": "Deleted"
+    },
+    "expires": "Ends",
+    "never": "Never",
+    "days_left": "{n} days left",
+    "days_ago": "ended {n} days ago",
+    "traffic": "Traffic",
+    "traffic_of": "{used} of {total}",
+    "traffic_unlimited": "{used} used · unlimited",
+    "link": "Subscription link",
+    "panel_email": "Panel account",
+    "synced_at": "Last read from the panel",
+    "never_synced": "Not yet",
+    "sync": "Read now",
+    "synced": "Updated from the panel",
+    "created": "Bought",
+    "orders": "Orders for this service",
+    "extend": "Extend",
+    "extend_intro": "Add days, traffic or both. It is applied like a renewal (free), and the customer is told.",
+    "add_days": "Days to add",
+    "add_gb": "GB to add",
+    "new_expiry": "New end date: about {date}",
+    "reset": "Reset traffic",
+    "reset_intro": "Sets the used traffic back to zero on the panel (a service that had used it all works again).",
+    "disable": "Turn off",
+    "disable_intro": "The customer can no longer connect. Renewals and reminders stop until you turn it on again.",
+    "enable": "Turn on",
+    "enable_intro": "The customer can connect again; its end date and traffic still apply.",
+    "delete": "Delete",
+    "delete_intro": "Removes the account from the 3x-ui panel for good: the link stops working. The service and its orders stay in the records.",
+    "done_extend": "Extension added: it is applied in a few seconds",
+    "done_reset": "Traffic reset",
+    "done_disable": "Service turned off",
+    "done_enable": "Service turned on",
+    "done_delete": "Service deleted"
+  },
+  "plan": {
+    "intro": "Plans are what customers buy in the bot. Traffic packages add traffic to a running service; the free trial is a plan marked as a trial.",
+    "new": "New plan",
+    "edit": "Edit plan",
+    "none": "No plans yet.",
+    "name": "Plan",
+    "name_fa": "Name in Persian",
+    "name_en": "Name in English",
+    "kind_label": "Limits",
+    "kind": {
+      "time": "Time only (unlimited traffic)",
+      "traffic": "Traffic only (no end date)",
+      "both": "Time and traffic"
+    },
+    "duration": "Duration",
+    "duration_days": "Days",
+    "days": "{n} days",
+    "traffic_gb": "Traffic (GB)",
+    "unlimited": "Unlimited",
+    "price": "Price",
+    "free": "Free",
+    "sales": "Sold",
+    "on_sale": "On sale",
+    "sort": "Order in the list",
+    "trial": "Free trial",
+    "trial_hint": "Free trial (each customer can take it once)",
+    "topup": "Traffic package",
+    "topup_hint": "Traffic package (adds traffic to a running service)",
+    "saved": "Plan saved"
+  },
+  "payment": {
+    "queue": "Review queue",
+    "orders": "Orders",
+    "history": "All payments",
+    "queue_empty": "Nothing to review. Card, crypto and Zarinpal-link payments appear here when customers send their receipts.",
+    "receipt": "Receipt",
+    "no_photo": "No photo",
+    "method": "Method",
+    "provider": {
+      "manual_card": "Card to card",
+      "manual_crypto": "Crypto (USDT)",
+      "manual_zarinpal": "Zarinpal link",
+      "zarinpal": "Zarinpal",
+      "stars": "Telegram Stars",
+      "wallet": "Wallet"
+    },
+    "reference": "Reference number",
+    "duplicate": "Seen before",
+    "duplicate_hint": "Another receipt has the same reference number. Check the photo carefully: it may be a reused receipt.",
+    "txid": "Transaction",
+    "sent": "Sent",
+    "for": "For",
+    "order_link": "an order",
+    "topup": "Wallet top-up",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approve_intro": "Approve this payment of {amount}? The order is paid and delivered at once (or the wallet is topped up).",
+    "reject_intro": "The customer sees your reason in the bot.",
+    "approved": "Payment approved",
+    "rejected": "Payment rejected",
+    "none": "No payments found.",
+    "all_methods": "All methods",
+    "proof": "Proof",
+    "status": {
+      "pending": "Not paid",
+      "confirming": "To review",
+      "succeeded": "Paid",
+      "failed": "Failed",
+      "expired": "Expired"
+    }
+  },
+  "review": {
+    "status": {
+      "approved": "Approved",
+      "rejected": "Rejected"
+    }
+  },
+  "ledger": {
+    "export": "Export CSV",
+    "hint": "Every movement of every wallet; money taken out is negative.",
+    "none": "No entries.",
+    "kind_col": "Kind",
+    "kind": {
+      "topup": "Top-up",
+      "purchase": "Purchase",
+      "refund": "Refund",
+      "adjust": "Change by staff",
+      "referral": "Invitation reward",
+      "trial_grant": "Free trial"
+    },
+    "balance_after": "Balance after",
+    "reference": "For",
+    "ref": {
+      "order": "Order",
+      "admin": "Staff",
+      "user": "Invited customer",
+      "intent": "Payment"
+    },
+    "all_kinds": "All kinds",
+    "all_currencies": "All currencies",
+    "period_label": "Period",
+    "period": {
+      "all": "All time",
+      "today": "Today",
+      "week": "Last 7 days",
+      "month": "Last 30 days"
+    },
+    "one_customer": "One customer"
+  },
+  "discount": {
+    "new": "New code",
+    "codes": "Discount codes",
+    "none": "No codes yet.",
+    "code": "Code",
+    "code_hint": "3-32 letters, digits, _ or -; customers type it in the bot.",
+    "value": "Discount",
+    "percent": "Percent",
+    "fixed": "Fixed amount",
+    "percent_off": "{n}% off",
+    "uses": "Used",
+    "used_of": "{used} of {max}",
+    "used_up": "Used up",
+    "expires": "Ends",
+    "never": "Never",
+    "expired": "Ended",
+    "active": "Active",
+    "max_uses": "Most uses",
+    "unlimited": "Unlimited",
+    "days": "Ends in (days)",
+    "once_per_customer": "Each customer can use a code once.",
+    "saved": "Code saved",
+    "referrals": "Invitations",
+    "referrals_intro": "Customers share an invite link from the bot. When someone they invited makes a first purchase, they get this share of it in their wallet. 0 turns invitations off.",
+    "reward": "Reward (%)",
+    "reward_now": "Now: {n}% of the first purchase",
+    "reward_none": "Invitations are off",
+    "reward_saved": "Reward saved",
+    "reward_off": "Invitations turned off",
+    "top": "Top inviters",
+    "top_none": "Nobody has invited anyone yet.",
+    "invited": "Invited",
+    "rewarded": "Rewarded purchases",
+    "earned": "Earned"
+  }
+}
