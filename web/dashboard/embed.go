@@ -15,6 +15,12 @@ import (
 //go:embed all:dist
 var files embed.FS
 
+// CSP is the dashboard's Content-Security-Policy: scripts, fonts and API calls
+// from this origin only, styles also inline (the UI library injects its theme),
+// images also as data: URIs (the authenticator QR code). deploy/Caddyfile sends
+// the same policy (a test keeps them equal), so it holds with or without Caddy.
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+
 // Handler serves the dashboard (or a notice when it was not built).
 func Handler() http.Handler {
 	app, err := fs.Sub(files, "dist/app")
@@ -31,6 +37,7 @@ func handler(app fs.FS) http.Handler {
 	}
 	static := http.FileServerFS(app)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", CSP)
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
