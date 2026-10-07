@@ -1,7 +1,8 @@
 # 04 - Dashboard pages and roles (DRAFT)
 
 Stack: Vue 3 + Vite + TypeScript (embedded in `core` via embed.FS), JSON API on `core`, behind the gateway. See PLAN.md §12. Branded per install (logo, colors, name).
-Sessions: secure cookie, CSRF, optional/required TOTP 2FA for staff. Login by password (+ 2FA) or Telegram login widget.
+Sessions: secure cookie, CSRF. Login with a one-time link from the bot (or `bobres admin link`), or with a password that always needs a TOTP code.
+Decisions, milestones and status: `superpowers/specs/2026-10-07-phase4-dashboard-design.md`.
 
 ## Roles and permissions
 | Role | Scope |
@@ -37,5 +38,5 @@ Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban)
 No public marketing site, no end-user web portal (users stay in Telegram), no mobile app.
 
 ## Open points
-- Dashboard language: fa/en switch for staff.
+- DECIDED (2026-10-07): staff switch between fa (default, RTL) and en.
 - Data export and GDPR-style deletion for a user (delete/anonymize but keep ledger integrity).

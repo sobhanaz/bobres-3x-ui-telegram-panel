@@ -40,8 +40,8 @@ services are recreated. Scripts get the usage text instead, never a prompt.
 
 ## Status (2026-10-03)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
-`version`. The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
-`restore`, `config`, `secrets`, `license`, `admin`, `support-bundle`, and the hardening step (ufw, fail2ban).
+`version`, `admin link` (2026-10-07). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
+`restore`, `config`, `secrets`, `license`, `admin add/reset-2fa`, `support-bundle`, and the hardening step (ufw, fail2ban).
 
 ## CLI commands
 | Command | Purpose |
@@ -58,6 +58,7 @@ Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, 
 | `bobres secrets rotate <name>` | Rotate bot token/3x-ui token/DB password |
 | `bobres license status/activate/import` | License handling |
 | `bobres doctor` | Diagnose: DNS, TLS, ports, bot token, 3x-ui reachability/version, queue lag, disk; print fixes |
+| `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner) |
 | `bobres admin add/reset-2fa` | Break-glass staff management |
 | `bobres support-bundle` | Redacted logs/config for support (no secrets, no user data) |
 
