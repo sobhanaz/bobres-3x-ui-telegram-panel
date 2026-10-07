@@ -71,3 +71,29 @@ func (c *Client) Usage(ctx context.Context, subscriptionID string) (domain.Usage
 	return domain.Usage{UsedBytes: u.GetTrafficUsedBytes(), TotalBytes: u.GetTrafficTotalBytes(),
 		ExpiresAt: u.GetExpiresAt(), Enabled: u.GetEnabled()}, nil
 }
+
+// SetEnabled implements domain.Provisioner.
+func (c *Client) SetEnabled(ctx context.Context, subscriptionID string, enabled bool) error {
+	if _, err := c.rpc.SetClientEnabled(ctx, &provisionerv1.SetClientEnabledRequest{
+		SubscriptionId: subscriptionID, Enabled: enabled,
+	}); err != nil {
+		return fmt.Errorf("provisioner.SetClientEnabled: %w", err)
+	}
+	return nil
+}
+
+// ResetTraffic implements domain.Provisioner.
+func (c *Client) ResetTraffic(ctx context.Context, subscriptionID string) error {
+	if _, err := c.rpc.ResetTraffic(ctx, &provisionerv1.ResetTrafficRequest{SubscriptionId: subscriptionID}); err != nil {
+		return fmt.Errorf("provisioner.ResetTraffic: %w", err)
+	}
+	return nil
+}
+
+// Delete implements domain.Provisioner.
+func (c *Client) Delete(ctx context.Context, subscriptionID string) error {
+	if _, err := c.rpc.DeleteClient(ctx, &provisionerv1.DeleteClientRequest{SubscriptionId: subscriptionID}); err != nil {
+		return fmt.Errorf("provisioner.DeleteClient: %w", err)
+	}
+	return nil
+}

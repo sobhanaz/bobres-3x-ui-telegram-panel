@@ -40,9 +40,11 @@ const (
 type Config struct {
 	Store  *store.Store
 	Domain *domain.Service
-	// Payments and Provisioner feed the overview (nil: shown as unknown).
+	// Payments and Provisioner feed the overview and the sales pages.
 	Payments    domain.PaymentsClient
 	Provisioner domain.Provisioner
+	// Files fetches receipt photos through the bot (nil: not shown).
+	Files ReceiptFiles
 	// Secrets encrypts authenticator secrets; nil disables password logins.
 	Secrets *bcrypto.Envelope
 	// Dashboard serves the built app under /admin/ (nil: not mounted).
@@ -76,6 +78,39 @@ func (s *Server) Register(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/me/password/confirm", s.session(s.confirmPassword))
 	api.HandleFunc("DELETE /api/v1/me/password", s.session(s.removePassword))
 	api.HandleFunc("GET /api/v1/overview", s.session(s.require(PermOverviewRead, s.overview)))
+
+	// Customers.
+	s.route(api, "GET /api/v1/users", PermUsersRead, s.listUsers)
+	s.route(api, "GET /api/v1/users/{id}", PermUsersRead, s.getUser)
+	s.route(api, "POST /api/v1/users/{id}/status", PermUsersWrite, s.setUserStatus)
+	s.route(api, "POST /api/v1/users/{id}/balance", PermWalletAdjust, s.adjustBalance)
+	s.route(api, "GET /api/v1/services", PermServicesRead, s.listServices)
+	s.route(api, "GET /api/v1/services/{id}", PermServicesRead, s.getService)
+	s.route(api, "POST /api/v1/services/{id}/extend", PermServicesExtend, s.extendService)
+	s.route(api, "POST /api/v1/services/{id}/sync", PermServicesExtend, s.syncService)
+	s.route(api, "POST /api/v1/services/{id}/reset-traffic", PermServicesWrite, s.resetService)
+	s.route(api, "POST /api/v1/services/{id}/enabled", PermServicesWrite, s.setServiceEnabled)
+	s.route(api, "POST /api/v1/services/{id}/delete", PermServicesWrite, s.deleteService)
+
+	// Sales.
+	s.route(api, "GET /api/v1/plans", PermPlansWrite, s.listPlans)
+	s.route(api, "POST /api/v1/plans", PermPlansWrite, s.createPlan)
+	s.route(api, "PUT /api/v1/plans/{id}", PermPlansWrite, s.updatePlan)
+	s.route(api, "GET /api/v1/orders", PermPaymentsRead, s.listOrders)
+	s.route(api, "GET /api/v1/orders/{id}", PermPaymentsRead, s.getOrder)
+	s.route(api, "POST /api/v1/orders/{id}/retry", PermPaymentsReview, s.retryOrder)
+	s.route(api, "POST /api/v1/orders/{id}/refund", PermPaymentsReview, s.refundOrder)
+	s.route(api, "GET /api/v1/payments", PermPaymentsRead, s.listPayments)
+	s.route(api, "GET /api/v1/payments/pending", PermPaymentsRead, s.pendingPayments)
+	s.route(api, "GET /api/v1/payments/{id}/receipt", PermPaymentsRead, s.paymentReceipt)
+	s.route(api, "POST /api/v1/payments/{id}/review", PermPaymentsReview, s.reviewPayment)
+	s.route(api, "GET /api/v1/ledger", PermLedgerRead, s.listLedger)
+	s.route(api, "GET /api/v1/ledger.csv", PermLedgerRead, s.exportLedger)
+	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
+	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)
+	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
+	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
+	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
 	api.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
@@ -86,6 +121,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 			http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
 		})
 	}
+}
+
+// route mounts a staff endpoint: a live session, then the permission.
+func (s *Server) route(mux *http.ServeMux, pattern, perm string, h http.HandlerFunc) {
+	mux.HandleFunc(pattern, s.session(s.require(perm, h)))
 }
 
 func apiHeaders(next http.Handler) http.Handler {

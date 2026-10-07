@@ -23,6 +23,9 @@ type Core struct {
 	// PublicURL is where staff open the dashboard (login links point there):
 	// https://<BOBRES_DOMAIN>, or BOBRES_PUBLIC_URL for a local test setup.
 	PublicURL string
+	// BotURL is the bot's internal HTTP address (http://bot:8080): core
+	// fetches receipt photos through it for the dashboard. Empty = none.
+	BotURL string
 }
 
 // LoadCore reads the core service configuration, failing closed on missing
@@ -53,6 +56,11 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.PublicURL, err = publicURL()
 	keep(err)
+	if co.BotURL = strings.TrimRight(strings.TrimSpace(getenv("BOBRES_BOT_URL", "")), "/"); co.BotURL != "" {
+		if u, err := url.Parse(co.BotURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			keep(errors.New("BOBRES_BOT_URL must be an http(s) URL like http://bot:8080"))
+		}
+	}
 	return co, errors.Join(errs...)
 }
 

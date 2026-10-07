@@ -70,6 +70,8 @@ const (
 	CreditAdminAdjust = "admin_adjust"
 	// CreditReferral: a reward for an invited user's first purchase.
 	CreditReferral = "referral"
+	// CreditRefund: staff refunded an order to the wallet.
+	CreditRefund = "refund"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.

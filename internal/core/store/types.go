@@ -33,7 +33,9 @@ type Plan struct {
 
 // Order mirrors core.orders. Amount is what the customer pays, after
 // DiscountAmount. A renewal or top-up names its SubscriptionID; its target
-// limits are computed once (TargetsSet) and reused on every retry.
+// limits are computed once (TargetsSet) and reused on every retry. A staff
+// member's extension (CreatedBy) carries its own ExtendDays/ExtendBytes
+// instead of its plan's.
 type Order struct {
 	ID                 string
 	UserID             string
@@ -49,6 +51,11 @@ type Order struct {
 	TargetsSet         bool
 	TargetExpiresAt    *time.Time
 	TargetTrafficBytes *int64
+	ExtendDays         *int32
+	ExtendBytes        *int64
+	CreatedBy          *string
+	RefundedAt         *time.Time
+	RefundAmount       *int64
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }

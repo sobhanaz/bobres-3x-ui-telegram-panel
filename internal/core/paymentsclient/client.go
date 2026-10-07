@@ -154,3 +154,38 @@ func (c *Client) ListGateways(ctx context.Context) ([]string, error) {
 	}
 	return resp.GetProviders(), nil
 }
+
+// ListPayments implements domain.PaymentsClient.
+func (c *Client) ListPayments(ctx context.Context, f domain.PaymentFilter, page, size int) ([]domain.PaymentRecord, int64, error) {
+	resp, err := c.rpc.ListIntents(ctx, &paymentsv1.ListIntentsRequest{
+		UserId: f.UserID, OrderId: f.OrderID, Status: f.Status, Provider: f.Provider, IntentId: f.IntentID,
+		Pagination: &commonv1.Pagination{Page: int32(page), PageSize: int32(size)}, //nolint:gosec // small page numbers
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("payments.ListIntents: %w", err)
+	}
+	out := make([]domain.PaymentRecord, 0, len(resp.GetRecords()))
+	for _, r := range resp.GetRecords() {
+		in := r.GetIntent()
+		rec := domain.PaymentRecord{
+			IntentID: in.GetId(), OrderID: in.GetOrderId(), UserID: in.GetUserId(), Provider: in.GetProvider(),
+			Status: in.GetStatus(), Amount: in.GetAmount().GetAmount(), Currency: in.GetAmount().GetCurrency(),
+			GatewayAmount: in.GetGatewayAmount().GetAmount(), GatewayCurrency: in.GetGatewayAmount().GetCurrency(),
+			ProviderRef: in.GetProviderRef(), FailureReason: in.GetFailureReason(), CreatedAt: time.Unix(in.GetCreatedAt(), 0),
+		}
+		if p := r.GetReceipt(); p != nil {
+			proof := &domain.PaymentProof{
+				ReceiptFile: p.GetReceiptFile(), ReferenceNumber: p.GetReferenceNumber(), Network: p.GetNetwork(),
+				TXID: p.GetTxid(), SubmittedAt: time.Unix(p.GetSubmittedAt(), 0), Decision: p.GetDecision(),
+				Reason: p.GetReviewReason(), ReviewedBy: p.GetReviewedBy(),
+			}
+			if p.GetReviewedAt() > 0 {
+				t := time.Unix(p.GetReviewedAt(), 0)
+				proof.ReviewedAt = &t
+			}
+			rec.Proof = proof
+		}
+		out = append(out, rec)
+	}
+	return out, resp.GetPageInfo().GetTotal(), nil
+}

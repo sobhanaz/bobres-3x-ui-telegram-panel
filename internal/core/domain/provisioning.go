@@ -25,6 +25,12 @@ type Provisioner interface {
 	SetLimits(ctx context.Context, subscriptionID string, expiresAt, trafficBytes int64) error
 	// Usage reports used traffic and the limits the panel holds.
 	Usage(ctx context.Context, subscriptionID string) (Usage, error)
+	// SetEnabled turns the client on or off on the panel (its limits stay).
+	SetEnabled(ctx context.Context, subscriptionID string, enabled bool) error
+	// ResetTraffic zeroes the client's used traffic.
+	ResetTraffic(ctx context.Context, subscriptionID string) error
+	// Delete removes the client from the panel; deleting it again is fine.
+	Delete(ctx context.Context, subscriptionID string) error
 }
 
 // Usage is a subscription's traffic and limits as the panel holds them.
@@ -114,7 +120,8 @@ type provisionJob struct {
 	user    *store.User
 	plan    *store.Plan
 	sub     *store.Subscription
-	attempt int // this run's attempt number
+	attempt int    // this run's attempt number
+	blocked string // why the order cannot be applied now (no panel call)
 }
 
 // ProvisionNext handles at most one order. It reports whether there was one.
@@ -144,8 +151,19 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 			if sub, err = st.LockSubscription(ctx, tx, *o.SubscriptionID); err != nil {
 				return err
 			}
+			if sub.Status == "disabled" || sub.Status == "deleted" {
+				// Paid before staff turned the service off: it waits (and is
+				// retried) until the service is on again or the order refunded.
+				attempt, err := st.MarkProvisioning(ctx, tx, o.ID)
+				if err != nil {
+					return err
+				}
+				job = &provisionJob{order: o, user: u, plan: plan, sub: sub, attempt: attempt, blocked: "the service is " + sub.Status}
+				return nil
+			}
 			if !o.TargetsSet {
-				o.TargetExpiresAt, o.TargetTrafficBytes = extendTargets(o.Type, sub, plan, w.now())
+				days, bytes := orderLimits(o, plan)
+				o.TargetExpiresAt, o.TargetTrafficBytes = extendBy(o.Type, sub, days, bytes, w.now())
 				o.TargetsSet = true
 				if err := st.SetOrderTargets(ctx, tx, o.ID, o.TargetExpiresAt, o.TargetTrafficBytes); err != nil {
 					return err
@@ -171,6 +189,9 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 	})
 	if err != nil || job == nil {
 		return false, err
+	}
+	if job.blocked != "" {
+		return true, w.fail(ctx, job, errors.New(job.blocked))
 	}
 
 	if job.order.SubscriptionID != nil {
