@@ -513,7 +513,12 @@ func (s *Service) SaveCanned(ctx context.Context, actor *store.User, c *store.Ca
 			continue
 		}
 		if _, err := staffBody(v); err != nil {
-			return &FieldError{"body." + l, err.(*FieldError).Msg}
+			msg := err.Error()
+			var fe *FieldError
+			if errors.As(err, &fe) {
+				msg = fe.Msg
+			}
+			return &FieldError{"body." + l, msg}
 		}
 		body[l] = v
 	}

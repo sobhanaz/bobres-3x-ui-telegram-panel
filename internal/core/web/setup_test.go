@@ -74,6 +74,7 @@ type fakeBot struct {
 	mu        sync.Mutex
 	refreshes int
 	checked   []string
+	tests     []botfiles.TestBroadcast
 	down      bool
 }
 
@@ -92,6 +93,16 @@ func (b *fakeBot) CheckChannel(_ context.Context, chat string) (*botfiles.Channe
 	}
 	b.checked = append(b.checked, chat)
 	return &botfiles.ChannelCheck{OK: true, Title: "News", BotAdmin: true}, nil
+}
+
+func (b *fakeBot) TestBroadcast(_ context.Context, t botfiles.TestBroadcast) (*botfiles.TestResult, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.down {
+		return nil, errors.New("bot down")
+	}
+	b.tests = append(b.tests, t)
+	return &botfiles.TestResult{OK: true, MessageID: 42}, nil
 }
 
 func (b *fakeBot) refreshCount() int {

@@ -59,7 +59,9 @@ type Config struct {
 type Server struct {
 	cfg     Config
 	limiter *limiter
-	now     func() time.Time
+	// tests limits broadcast test sends per staff member.
+	tests *limiter
+	now   func() time.Time
 }
 
 // New builds the API.
@@ -67,7 +69,7 @@ func New(cfg Config) *Server {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), now: time.Now}
+	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute), now: time.Now}
 }
 
 // Register mounts the API on /api/v1/ and the dashboard on /admin/.
@@ -120,6 +122,33 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
 	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
 	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
+
+	// Support and broadcasts.
+	s.route(api, "GET /api/v1/tickets", PermTicketsWrite, s.listTickets)
+	s.route(api, "GET /api/v1/tickets/counts", PermTicketsWrite, s.ticketCounts)
+	s.route(api, "GET /api/v1/tickets/assignees", PermTicketsWrite, s.ticketAssignees)
+	s.route(api, "GET /api/v1/tickets/{id}", PermTicketsWrite, s.getTicket)
+	s.route(api, "POST /api/v1/tickets/{id}/messages", PermTicketsWrite, s.replyTicket)
+	s.route(api, "POST /api/v1/tickets/{id}/status", PermTicketsWrite, s.setTicketStatus)
+	s.route(api, "PUT /api/v1/tickets/{id}/assignee", PermTicketsWrite, s.assignTicket)
+	s.route(api, "GET /api/v1/tickets/{id}/messages/{mid}/file", PermTicketsWrite, s.ticketFile)
+	s.route(api, "GET /api/v1/canned-replies", PermTicketsWrite, s.listCanned)
+	s.route(api, "POST /api/v1/canned-replies", PermTicketsManage, s.createCanned)
+	s.route(api, "PUT /api/v1/canned-replies/{id}", PermTicketsManage, s.updateCanned)
+	s.route(api, "DELETE /api/v1/canned-replies/{id}", PermTicketsManage, s.deleteCanned)
+	s.route(api, "GET /api/v1/broadcasts", PermBroadcastWrite, s.listBroadcasts)
+	s.route(api, "POST /api/v1/broadcasts", PermBroadcastWrite, s.createBroadcast)
+	s.route(api, "POST /api/v1/broadcasts/audience", PermBroadcastWrite, s.broadcastAudience)
+	s.route(api, "POST /api/v1/broadcasts/check", PermBroadcastWrite, s.checkBroadcastText)
+	s.route(api, "POST /api/v1/broadcasts/test", PermBroadcastWrite, s.testBroadcast)
+	s.route(api, "GET /api/v1/broadcasts/{id}", PermBroadcastWrite, s.getBroadcast)
+	s.route(api, "PUT /api/v1/broadcasts/{id}", PermBroadcastWrite, s.updateBroadcast)
+	s.route(api, "DELETE /api/v1/broadcasts/{id}", PermBroadcastWrite, s.deleteBroadcast)
+	s.route(api, "POST /api/v1/broadcasts/{id}/send", PermBroadcastWrite, s.sendBroadcast)
+	s.route(api, "POST /api/v1/broadcasts/{id}/pause", PermBroadcastWrite, s.pauseBroadcast)
+	s.route(api, "POST /api/v1/broadcasts/{id}/resume", PermBroadcastWrite, s.resumeBroadcast)
+	s.route(api, "POST /api/v1/broadcasts/{id}/cancel", PermBroadcastWrite, s.cancelBroadcast)
+	s.route(api, "GET /api/v1/broadcasts/{id}/recipients", PermBroadcastWrite, s.broadcastRecipients)
 
 	// Store setup.
 	s.route(api, "GET /api/v1/branding", PermBrandingWrite, s.getBranding)

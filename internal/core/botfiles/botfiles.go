@@ -4,6 +4,7 @@
 package botfiles
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -123,6 +124,57 @@ func (c *Client) CheckChannel(ctx context.Context, chat string) (*ChannelCheck, 
 	var out ChannelCheck
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out); err != nil {
 		return nil, fmt.Errorf("botfiles: channel check: %w", err)
+	}
+	return &out, nil
+}
+
+// TestBroadcast is a broadcast sent to one chat (a staff member's own) to
+// see how it looks.
+type TestBroadcast struct {
+	ChatID int64             `json:"chat_id"`
+	Text   string            `json:"text"`
+	Button *TestBroadcastBtn `json:"button"`
+}
+
+// TestBroadcastBtn is a test broadcast's link button.
+type TestBroadcastBtn struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
+}
+
+// TestResult is how the bot's test send went.
+type TestResult struct {
+	OK        bool   `json:"ok"`
+	MessageID int64  `json:"message_id,omitempty"`
+	Problem   string `json:"problem,omitempty"` // blocked, bad_request, error
+	Detail    string `json:"detail,omitempty"`
+}
+
+// TestBroadcast asks the bot to send a broadcast to one chat now.
+func (c *Client) TestBroadcast(ctx context.Context, t TestBroadcast) (*TestResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	body, err := json.Marshal(t)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/broadcasts/test", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("botfiles: test broadcast: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("botfiles: test broadcast: the bot answered %d", resp.StatusCode)
+	}
+	var out TestResult
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("botfiles: test broadcast: %w", err)
 	}
 	return &out, nil
 }

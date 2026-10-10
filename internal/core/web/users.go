@@ -18,11 +18,12 @@ type userJSON struct {
 	CreatedAt  int64   `json:"created_at"`
 	RefCode    string  `json:"ref_code,omitempty"`
 	Wallets    []money `json:"wallets"`
+	BotBlocked bool    `json:"bot_blocked"` // Telegram said the user blocked the bot
 }
 
 func userOf(u *store.User, wallets []store.Wallet) userJSON {
 	out := userJSON{ID: u.ID, TelegramID: u.TelegramID, Username: u.Username, Language: u.Language,
-		Role: u.Role, Status: u.Status, CreatedAt: u.CreatedAt.Unix(), Wallets: []money{}}
+		Role: u.Role, Status: u.Status, CreatedAt: u.CreatedAt.Unix(), Wallets: []money{}, BotBlocked: u.BotBlockedAt != nil}
 	if u.RefCode != nil {
 		out.RefCode = *u.RefCode
 	}
@@ -86,10 +87,15 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 	if u.ReferredBy != nil {
 		referredBy = s.usersByID(ctx, []string{*u.ReferredBy})[*u.ReferredBy]
 	}
+	tickets, err := st.CountUserTickets(ctx, st.Conn(), id)
+	if err != nil {
+		s.fail(w, "count tickets", err)
+		return
+	}
 	me := actor(r)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":     userOf(u, wallets),
-		"counts":   map[string]int64{"subscriptions": subs, "orders": orders},
+		"counts":   map[string]int64{"subscriptions": subs, "orders": orders, "tickets": tickets},
 		"referral": map[string]any{"referred_by": referredBy, "invited": invited, "rewarded": rewarded, "earned": moneyList(earned)},
 		// Staff are managed on the Staff page, never banned from here.
 		"can_ban": u.ID != me.ID && !domain.IsStaffRole(u.Role) && Allowed(me.Role, PermUsersWrite),

@@ -14,6 +14,7 @@ import (
 type BotPeer interface {
 	RefreshSettings(ctx context.Context) error
 	CheckChannel(ctx context.Context, chat string) (*botfiles.ChannelCheck, error)
+	TestBroadcast(ctx context.Context, t botfiles.TestBroadcast) (*botfiles.TestResult, error)
 }
 
 // settingsGroups are the groups of the Settings page; branding and texts
