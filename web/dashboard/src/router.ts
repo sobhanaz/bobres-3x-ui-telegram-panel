@@ -17,6 +17,8 @@ const built: Record<string, RouteRecordRaw['component']> = {
   payments: () => import('./pages/PaymentsPage.vue'),
   ledger: () => import('./pages/LedgerPage.vue'),
   discounts: () => import('./pages/DiscountsPage.vue'),
+  support: () => import('./pages/SupportPage.vue'),
+  broadcasts: () => import('./pages/BroadcastsPage.vue'),
   branding: () => import('./pages/BrandingPage.vue'),
   settings: () => import('./pages/SettingsPage.vue'),
   staff: () => import('./pages/StaffPage.vue'),
@@ -28,6 +30,10 @@ const itemRoutes: RouteRecordRaw[] = [
   { path: 'users/:id', name: 'user', component: () => import('./pages/UserPage.vue'), meta: { perm: 'users.read', section: 'users' } },
   { path: 'services/:id', name: 'service', component: () => import('./pages/ServicePage.vue'), meta: { perm: 'services.read', section: 'services' } },
   { path: 'payments/orders/:id', name: 'order', component: () => import('./pages/OrderPage.vue'), meta: { perm: 'payments.read', section: 'payments' } },
+  { path: 'support/:id', name: 'ticket', component: () => import('./pages/TicketPage.vue'), meta: { perm: 'tickets.write', section: 'support' } },
+  { path: 'broadcasts/new', name: 'broadcast-new', component: () => import('./pages/BroadcastEditPage.vue'), meta: { perm: 'broadcasts.write', section: 'broadcasts' } },
+  { path: 'broadcasts/:id/edit', name: 'broadcast-edit', component: () => import('./pages/BroadcastEditPage.vue'), meta: { perm: 'broadcasts.write', section: 'broadcasts' } },
+  { path: 'broadcasts/:id', name: 'broadcast', component: () => import('./pages/BroadcastPage.vue'), meta: { perm: 'broadcasts.write', section: 'broadcasts' } },
 ]
 
 const sectionRoutes: RouteRecordRaw[] = sections.map((s) => ({

@@ -54,6 +54,15 @@ const (
 	CoreService_AdminListDiscounts_FullMethodName       = "/core.v1.CoreService/AdminListDiscounts"
 	CoreService_CreateDashboardLink_FullMethodName      = "/core.v1.CoreService/CreateDashboardLink"
 	CoreService_ListStaffContacts_FullMethodName        = "/core.v1.CoreService/ListStaffContacts"
+	CoreService_AddTicketMessage_FullMethodName         = "/core.v1.CoreService/AddTicketMessage"
+	CoreService_GetMyTickets_FullMethodName             = "/core.v1.CoreService/GetMyTickets"
+	CoreService_GetMyTicket_FullMethodName              = "/core.v1.CoreService/GetMyTicket"
+	CoreService_CloseMyTicket_FullMethodName            = "/core.v1.CoreService/CloseMyTicket"
+	CoreService_GetTicketMessage_FullMethodName         = "/core.v1.CoreService/GetTicketMessage"
+	CoreService_ReportTicketDelivery_FullMethodName     = "/core.v1.CoreService/ReportTicketDelivery"
+	CoreService_SetUserBotBlocked_FullMethodName        = "/core.v1.CoreService/SetUserBotBlocked"
+	CoreService_ClaimBroadcastBatch_FullMethodName      = "/core.v1.CoreService/ClaimBroadcastBatch"
+	CoreService_ReportBroadcastResults_FullMethodName   = "/core.v1.CoreService/ReportBroadcastResults"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -102,6 +111,17 @@ type CoreServiceClient interface {
 	CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error)
 	// ListStaffContacts lists the active owners and admins, for staff alerts.
 	ListStaffContacts(ctx context.Context, in *ListStaffContactsRequest, opts ...grpc.CallOption) (*ListStaffContactsResponse, error)
+	// Support tickets (milestone 4). CreateSupportTicket stays for older bots.
+	AddTicketMessage(ctx context.Context, in *AddTicketMessageRequest, opts ...grpc.CallOption) (*AddTicketMessageResponse, error)
+	GetMyTickets(ctx context.Context, in *GetMyTicketsRequest, opts ...grpc.CallOption) (*MyTickets, error)
+	GetMyTicket(ctx context.Context, in *GetMyTicketRequest, opts ...grpc.CallOption) (*TicketThread, error)
+	CloseMyTicket(ctx context.Context, in *CloseMyTicketRequest, opts ...grpc.CallOption) (*Ticket, error)
+	GetTicketMessage(ctx context.Context, in *GetTicketMessageRequest, opts ...grpc.CallOption) (*TicketMessageView, error)
+	ReportTicketDelivery(ctx context.Context, in *ReportTicketDeliveryRequest, opts ...grpc.CallOption) (*ReportTicketDeliveryResponse, error)
+	// Broadcasts (milestone 4): the bot claims recipients and reports results.
+	SetUserBotBlocked(ctx context.Context, in *SetUserBotBlockedRequest, opts ...grpc.CallOption) (*SetUserBotBlockedResponse, error)
+	ClaimBroadcastBatch(ctx context.Context, in *ClaimBroadcastBatchRequest, opts ...grpc.CallOption) (*BroadcastBatch, error)
+	ReportBroadcastResults(ctx context.Context, in *ReportBroadcastResultsRequest, opts ...grpc.CallOption) (*BroadcastState, error)
 }
 
 type coreServiceClient struct {
@@ -463,6 +483,96 @@ func (c *coreServiceClient) ListStaffContacts(ctx context.Context, in *ListStaff
 	return out, nil
 }
 
+func (c *coreServiceClient) AddTicketMessage(ctx context.Context, in *AddTicketMessageRequest, opts ...grpc.CallOption) (*AddTicketMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddTicketMessageResponse)
+	err := c.cc.Invoke(ctx, CoreService_AddTicketMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetMyTickets(ctx context.Context, in *GetMyTicketsRequest, opts ...grpc.CallOption) (*MyTickets, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MyTickets)
+	err := c.cc.Invoke(ctx, CoreService_GetMyTickets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetMyTicket(ctx context.Context, in *GetMyTicketRequest, opts ...grpc.CallOption) (*TicketThread, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TicketThread)
+	err := c.cc.Invoke(ctx, CoreService_GetMyTicket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) CloseMyTicket(ctx context.Context, in *CloseMyTicketRequest, opts ...grpc.CallOption) (*Ticket, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Ticket)
+	err := c.cc.Invoke(ctx, CoreService_CloseMyTicket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetTicketMessage(ctx context.Context, in *GetTicketMessageRequest, opts ...grpc.CallOption) (*TicketMessageView, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TicketMessageView)
+	err := c.cc.Invoke(ctx, CoreService_GetTicketMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ReportTicketDelivery(ctx context.Context, in *ReportTicketDeliveryRequest, opts ...grpc.CallOption) (*ReportTicketDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportTicketDeliveryResponse)
+	err := c.cc.Invoke(ctx, CoreService_ReportTicketDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) SetUserBotBlocked(ctx context.Context, in *SetUserBotBlockedRequest, opts ...grpc.CallOption) (*SetUserBotBlockedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetUserBotBlockedResponse)
+	err := c.cc.Invoke(ctx, CoreService_SetUserBotBlocked_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ClaimBroadcastBatch(ctx context.Context, in *ClaimBroadcastBatchRequest, opts ...grpc.CallOption) (*BroadcastBatch, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BroadcastBatch)
+	err := c.cc.Invoke(ctx, CoreService_ClaimBroadcastBatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ReportBroadcastResults(ctx context.Context, in *ReportBroadcastResultsRequest, opts ...grpc.CallOption) (*BroadcastState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BroadcastState)
+	err := c.cc.Invoke(ctx, CoreService_ReportBroadcastResults_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -509,6 +619,17 @@ type CoreServiceServer interface {
 	CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error)
 	// ListStaffContacts lists the active owners and admins, for staff alerts.
 	ListStaffContacts(context.Context, *ListStaffContactsRequest) (*ListStaffContactsResponse, error)
+	// Support tickets (milestone 4). CreateSupportTicket stays for older bots.
+	AddTicketMessage(context.Context, *AddTicketMessageRequest) (*AddTicketMessageResponse, error)
+	GetMyTickets(context.Context, *GetMyTicketsRequest) (*MyTickets, error)
+	GetMyTicket(context.Context, *GetMyTicketRequest) (*TicketThread, error)
+	CloseMyTicket(context.Context, *CloseMyTicketRequest) (*Ticket, error)
+	GetTicketMessage(context.Context, *GetTicketMessageRequest) (*TicketMessageView, error)
+	ReportTicketDelivery(context.Context, *ReportTicketDeliveryRequest) (*ReportTicketDeliveryResponse, error)
+	// Broadcasts (milestone 4): the bot claims recipients and reports results.
+	SetUserBotBlocked(context.Context, *SetUserBotBlockedRequest) (*SetUserBotBlockedResponse, error)
+	ClaimBroadcastBatch(context.Context, *ClaimBroadcastBatchRequest) (*BroadcastBatch, error)
+	ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -623,6 +744,33 @@ func (UnimplementedCoreServiceServer) CreateDashboardLink(context.Context, *Crea
 }
 func (UnimplementedCoreServiceServer) ListStaffContacts(context.Context, *ListStaffContactsRequest) (*ListStaffContactsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListStaffContacts not implemented")
+}
+func (UnimplementedCoreServiceServer) AddTicketMessage(context.Context, *AddTicketMessageRequest) (*AddTicketMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddTicketMessage not implemented")
+}
+func (UnimplementedCoreServiceServer) GetMyTickets(context.Context, *GetMyTicketsRequest) (*MyTickets, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMyTickets not implemented")
+}
+func (UnimplementedCoreServiceServer) GetMyTicket(context.Context, *GetMyTicketRequest) (*TicketThread, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMyTicket not implemented")
+}
+func (UnimplementedCoreServiceServer) CloseMyTicket(context.Context, *CloseMyTicketRequest) (*Ticket, error) {
+	return nil, status.Error(codes.Unimplemented, "method CloseMyTicket not implemented")
+}
+func (UnimplementedCoreServiceServer) GetTicketMessage(context.Context, *GetTicketMessageRequest) (*TicketMessageView, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTicketMessage not implemented")
+}
+func (UnimplementedCoreServiceServer) ReportTicketDelivery(context.Context, *ReportTicketDeliveryRequest) (*ReportTicketDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportTicketDelivery not implemented")
+}
+func (UnimplementedCoreServiceServer) SetUserBotBlocked(context.Context, *SetUserBotBlockedRequest) (*SetUserBotBlockedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetUserBotBlocked not implemented")
+}
+func (UnimplementedCoreServiceServer) ClaimBroadcastBatch(context.Context, *ClaimBroadcastBatchRequest) (*BroadcastBatch, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimBroadcastBatch not implemented")
+}
+func (UnimplementedCoreServiceServer) ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportBroadcastResults not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1275,6 +1423,168 @@ func _CoreService_ListStaffContacts_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_AddTicketMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTicketMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AddTicketMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AddTicketMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AddTicketMessage(ctx, req.(*AddTicketMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetMyTickets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMyTicketsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetMyTickets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetMyTickets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetMyTickets(ctx, req.(*GetMyTicketsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetMyTicket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMyTicketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetMyTicket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetMyTicket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetMyTicket(ctx, req.(*GetMyTicketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_CloseMyTicket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CloseMyTicketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CloseMyTicket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CloseMyTicket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CloseMyTicket(ctx, req.(*CloseMyTicketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetTicketMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTicketMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetTicketMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetTicketMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetTicketMessage(ctx, req.(*GetTicketMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ReportTicketDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportTicketDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ReportTicketDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ReportTicketDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ReportTicketDelivery(ctx, req.(*ReportTicketDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_SetUserBotBlocked_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetUserBotBlockedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetUserBotBlocked(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetUserBotBlocked_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetUserBotBlocked(ctx, req.(*SetUserBotBlockedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ClaimBroadcastBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimBroadcastBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ClaimBroadcastBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ClaimBroadcastBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ClaimBroadcastBatch(ctx, req.(*ClaimBroadcastBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ReportBroadcastResults_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportBroadcastResultsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ReportBroadcastResults(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ReportBroadcastResults_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ReportBroadcastResults(ctx, req.(*ReportBroadcastResultsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1421,6 +1731,42 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListStaffContacts",
 			Handler:    _CoreService_ListStaffContacts_Handler,
+		},
+		{
+			MethodName: "AddTicketMessage",
+			Handler:    _CoreService_AddTicketMessage_Handler,
+		},
+		{
+			MethodName: "GetMyTickets",
+			Handler:    _CoreService_GetMyTickets_Handler,
+		},
+		{
+			MethodName: "GetMyTicket",
+			Handler:    _CoreService_GetMyTicket_Handler,
+		},
+		{
+			MethodName: "CloseMyTicket",
+			Handler:    _CoreService_CloseMyTicket_Handler,
+		},
+		{
+			MethodName: "GetTicketMessage",
+			Handler:    _CoreService_GetTicketMessage_Handler,
+		},
+		{
+			MethodName: "ReportTicketDelivery",
+			Handler:    _CoreService_ReportTicketDelivery_Handler,
+		},
+		{
+			MethodName: "SetUserBotBlocked",
+			Handler:    _CoreService_SetUserBotBlocked_Handler,
+		},
+		{
+			MethodName: "ClaimBroadcastBatch",
+			Handler:    _CoreService_ClaimBroadcastBatch_Handler,
+		},
+		{
+			MethodName: "ReportBroadcastResults",
+			Handler:    _CoreService_ReportBroadcastResults_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

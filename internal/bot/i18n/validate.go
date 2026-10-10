@@ -35,6 +35,7 @@ const (
 	ProblemBadEntity   = "bad_entity"
 	ProblemMarkup      = "markup_not_allowed"
 	ProblemTooLong     = "too_long"
+	ProblemEmpty       = "empty"
 )
 
 // allowedTags are the Telegram HTML tags an override may use.
@@ -79,18 +80,9 @@ func (c *Catalog) ValidateOverride(lang, key, value string) (string, []Problem) 
 	if value == "" {
 		return "", nil
 	}
-	var probs []Problem
-	add := func(code, arg string) {
-		p := Problem{code, arg}
-		if !slices.Contains(probs, p) {
-			probs = append(probs, p)
-		}
-	}
-	for _, r := range value {
-		if r != '\n' && r != '\t' && (unicode.IsControl(r) || r == ' ' || r == ' ') {
-			add(ProblemControlChar, strconv.QuoteRune(r))
-		}
-	}
+	var ps problems
+	add := ps.add
+	ps.controlChars(value)
 
 	have := placeholders(value)
 	for _, p := range info.Placeholders {
@@ -124,7 +116,78 @@ func (c *Catalog) ValidateOverride(lang, key, value string) (string, []Problem) 
 	if n := TextLength(value); n > info.Max {
 		add(ProblemTooLong, strconv.Itoa(info.Max))
 	}
-	return value, probs
+	return value, ps
+}
+
+// problems collects distinct problems.
+type problems []Problem
+
+func (ps *problems) add(code, arg string) {
+	p := Problem{code, arg}
+	if !slices.Contains(*ps, p) {
+		*ps = append(*ps, p)
+	}
+}
+
+// controlChars flags characters that would break a message's layout.
+func (ps *problems) controlChars(value string) {
+	for _, r := range value {
+		if r != '\n' && r != '\t' && (unicode.IsControl(r) || r == ' ' || r == ' ') {
+			ps.add(ProblemControlChar, strconv.QuoteRune(r))
+		}
+	}
+}
+
+// MaxMessage is the longest message Telegram takes, in UTF-16 units of the
+// text without tags.
+const MaxMessage = 4096
+
+// MaxLabel is the longest button label allowed.
+const MaxLabel = 64
+
+// ValidateMessage checks a whole message staff write freely (a broadcast):
+// Telegram's HTML subset, nothing else, at most max units long (braces are
+// plain text: there are no placeholders). It returns the text normalised.
+func ValidateMessage(value string, max int) (string, []Problem) {
+	if !utf8.ValidString(value) {
+		return "", []Problem{{ProblemBadUTF8, ""}}
+	}
+	value = NormalizeText(value)
+	if value == "" {
+		return "", []Problem{{ProblemEmpty, ""}}
+	}
+	var ps problems
+	ps.controlChars(value)
+	for _, p := range checkHTML(value) {
+		ps.add(p.Code, p.Arg)
+	}
+	if TextLength(value) > max {
+		ps.add(ProblemTooLong, strconv.Itoa(max))
+	}
+	return value, ps
+}
+
+// ValidateLabel checks a button label: one line of plain text, at most
+// MaxLabel units.
+func ValidateLabel(value string) (string, []Problem) {
+	if !utf8.ValidString(value) {
+		return "", []Problem{{ProblemBadUTF8, ""}}
+	}
+	value = strings.Join(strings.Fields(NormalizeText(value)), " ")
+	if value == "" {
+		return "", []Problem{{ProblemEmpty, ""}}
+	}
+	var ps problems
+	ps.controlChars(value)
+	for _, ch := range []string{"<", ">", "&"} {
+		if strings.Contains(value, ch) {
+			ps.add(ProblemMarkup, ch)
+		}
+	}
+	if TextLength(value) > MaxLabel {
+		ps.add(ProblemTooLong, strconv.Itoa(MaxLabel))
+	}
+	return value, ps
 }
 
 // render fills the placeholders with samples: values that carry tags get a

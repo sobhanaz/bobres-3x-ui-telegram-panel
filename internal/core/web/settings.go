@@ -18,7 +18,7 @@ type BotPeer interface {
 
 // settingsGroups are the groups of the Settings page; branding and texts
 // have their own page, the referral reward is on the Discounts page.
-var settingsGroups = []string{"general", "maintenance", "join", "notify", "limits", "payments"}
+var settingsGroups = []string{"general", "maintenance", "join", "notify", "support", "limits", "payments"}
 
 type settingJSON struct {
 	Key      string   `json:"key"`
