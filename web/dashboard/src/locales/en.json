@@ -120,7 +120,7 @@
     "title": "Log in",
     "subtitle": "Staff dashboard of {brand}",
     "link_title": "With the bot (easiest)",
-    "link_hint": "In your Telegram bot open /admin and tap “Dashboard”. You get a link that logs you in once, within 2 minutes.",
+    "link_hint": "In the Telegram bot, send /dashboard (or tap Dashboard in /admin). You get a link that logs you in once, within 2 minutes.",
     "link_working": "Logging you in…",
     "link_invalid": "This login link was used already or has expired. Ask the bot for a new one.",
     "password_title": "With a password",

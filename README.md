@@ -45,10 +45,11 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres restart
 Phases 1-3 are built: the sellable bot with manual payments, Phase 2 payments (Telegram Stars,
 Zarinpal, payment screenshots approved by the admin), Phase 3 retention (renewals, traffic
 packages, reminders, discount codes, referrals). Phase 4, the web dashboard at `https://<domain>/admin`,
-is in progress: its foundation (login from the bot's /admin "Dashboard" button or with a password
-and authenticator code, Persian/English, dark/light, the Overview) and the customers and sales pages
-(users, services, plans, orders and the receipt review queue, the ledger with CSV export, discount
-codes and referrals) are built; the other pages follow in four more milestones. Design notes are in `docs/superpowers/specs/`; the first real install is
+is in progress: its foundation (login with a link from the bot's /dashboard or with a password and
+authenticator code, Persian/English, dark/light, the Overview), the customers and sales pages (users,
+services, plans, orders and the receipt review queue, the ledger with CSV export, discount codes and
+referrals) and store setup (branding and every bot text, settings such as maintenance mode and a
+required channel, staff, the audit log) are built; the other pages follow in three more milestones. Design notes are in `docs/superpowers/specs/`; the first real install is
 `docs/11-staging-run.md`.
 Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
 PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.

@@ -275,6 +275,23 @@ Changes that move money or add days take a request key, so a retried request hap
     message. Before, one broken text could make the menu, or the notification queue, stop.
   - The page has a live check while typing, a safe preview (never `v-html`), reset, and per-language
     export and import. An import is all or nothing.
+- **The bot follows the settings** (`internal/bot/settings`, shared by the handler and the notifier):
+  - Gates come after the rate limit and never before a Stars payment: maintenance mode, then the
+    required channel. Both let staff (support too), the configured owner, `/paysupport`, payment
+    checks, receipts and TXIDs of payments under way, the language picker and a newcomer's `/start`
+    through.
+    - Maintenance: a popup for taps, the message at most once a minute per user.
+    - Required channel: `getChatMember` with a 3-second limit; members are remembered in Redis for 10
+      minutes, non-members never; Telegram errors let users in (logged). A newcomer is checked right
+      after picking a language.
+  - `limits.bot_per_10s` replaces the fixed 20; `limits.tickets_per_day` caps support messages.
+  - Staff alerts can go to every active owner and admin (`ListStaffContacts`, cached at each reload)
+    in their language, never about their own action; each kind can be turned off, and "every sale" on.
+  - `/terms`, terms and privacy buttons on the support screen, and `/dashboard` (plus a menu button)
+    so support staff can get a login link; `/admin` stays owner and admin.
+  - Time zone and the Toman's name change while the bot runs.
+  - When Telegram refuses a message's markup ("can't parse entities"), the bot sends it once more as
+    plain text instead of failing.
 - **Staff.** The owner sees each member's role, password and two-factor state, lock, last login and
   live sessions.
   - Actions: add a customer as staff, change a role, remove, see and end sessions, reset the password,
