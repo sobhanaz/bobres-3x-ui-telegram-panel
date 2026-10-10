@@ -370,6 +370,9 @@ describe('Broadcast pages', () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain('COUNT ۱٬۲۳۴'))
     expect(document.body.textContent).toContain('FA ۱٬۰۰۰ EN ۲۳۴')
     expect(posted(calls, '/broadcasts/audience').map(bodyOfCall)).toEqual([{ segment: 'all', language: '' }])
+    // "All languages" shows as chosen (PrimeVue never checks a radio whose value is '').
+    const langRadios = [...document.querySelectorAll('input[type=radio][name$=-language]')] as HTMLInputElement[]
+    expect(langRadios.map((r) => r.checked)).toEqual([true, false, false])
 
     // Both languages are needed: two tabs. The Persian one is open.
     expect(document.querySelectorAll('[role=tab]')).toHaveLength(2)

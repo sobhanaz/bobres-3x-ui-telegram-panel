@@ -18,6 +18,13 @@ const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const uid = useId()
 
+// PrimeVue's RadioButton never shows '' as checked: "all languages" uses
+// a stand-in value on the radio only.
+const langChoice = computed({
+  get: () => language.value || 'all',
+  set: (v: string) => (language.value = (v === 'all' ? '' : v) as AudienceLang),
+})
+
 const icons: Record<Segment, string> = {
   all: 'pi pi-users',
   active: 'pi pi-bolt',
@@ -81,7 +88,7 @@ const languageLabel = (l: AudienceLang) => t('broadcasts.language.' + (l || 'all
       <legend class="legend">{{ t('broadcasts.audience.language_label') }}</legend>
       <div class="langs">
         <div v-for="l in AUDIENCE_LANGS" :key="l || 'all'" class="lang">
-          <RadioButton v-model="language" :input-id="`${uid}-lang-${l || 'all'}`" :name="`${uid}-language`" :value="l" :disabled="props.disabled" />
+          <RadioButton v-model="langChoice" :input-id="`${uid}-lang-${l || 'all'}`" :name="`${uid}-language`" :value="l || 'all'" :disabled="props.disabled" />
           <label :for="`${uid}-lang-${l || 'all'}`">{{ languageLabel(l) }}</label>
         </div>
       </div>
