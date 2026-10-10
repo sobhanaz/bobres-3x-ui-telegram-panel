@@ -24,8 +24,9 @@ export const MAX_URL = 1024
 /** How far ahead a broadcast may be scheduled. */
 export const MAX_AHEAD = 30 * 86_400
 
-/** Delays in milliseconds; tests may shorten them (the app's own copy). */
-export const timing = { poll: 2000, listPoll: 5000, check: 400, audience: 400 }
+/** Delays in milliseconds; tests may shorten them (the app's own copy).
+ * clock: how often the list looks again at what falls due. */
+export const timing = { poll: 2000, listPoll: 5000, check: 400, audience: 400, clock: 30_000 }
 
 /** neededLangs are the languages an audience needs a text in. */
 export function neededLangs(language: AudienceLang): Lang[] {

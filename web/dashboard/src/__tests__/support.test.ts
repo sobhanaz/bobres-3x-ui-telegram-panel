@@ -111,6 +111,10 @@ describe('thread helpers', () => {
     expect(customerBlocked([staff('blocked'), customer, staff('pending')])).toBe(true)
     expect(customerBlocked([staff('blocked'), staff('sent')])).toBe(false)
     expect(customerBlocked([customer])).toBe(false)
+    // core's flag wins whenever it is sent: unblocked since that reply, or blocked with no reply yet
+    expect(customerBlocked([staff('blocked')], false)).toBe(false)
+    expect(customerBlocked([customer], true)).toBe(true)
+    expect(customerBlocked([staff('blocked')], undefined)).toBe(true)
   })
   it('lets only managers give tickets to others', () => {
     const me = { id: 's1', telegram_id: 1, username: 'me' }
@@ -228,7 +232,7 @@ describe('support pages', () => {
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   const text = (path: string) => (path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], fa) as string | undefined) ?? path
 
-  type Answer = (url: string, init?: RequestInit) => Response | undefined
+  type Answer = (url: string, init?: RequestInit) => Response | Promise<Response> | undefined
   async function boot(path: string, permissions: string[], answer: Answer = () => undefined, ticketPollMs = 60_000) {
     vi.resetModules()
     vi.spyOn(console, 'warn').mockImplementation(() => {}) // texts not merged into the catalogs yet
@@ -402,6 +406,206 @@ describe('support pages', () => {
     const reads = () => calls.filter((c) => c === `GET /api/v1/tickets/${tid}`).length
     const before = reads()
     await vi.waitFor(() => expect(reads()).toBeGreaterThan(before + 1))
+  })
+
+  it('keeps a reply being written when the ticket is closed meanwhile', async () => {
+    let ticket: TicketItem = { ...baseTicket }
+    const { calls, router } = await boot(`/admin/support/${tid}`, supportPerms, (url, init) => {
+      if (url === `/api/v1/tickets/${tid}` && (init?.method ?? 'GET') === 'GET') return json(200, { ticket, messages: baseMessages(), can_manage: false })
+      if (url === `/api/v1/tickets/${tid}/status` && init?.method === 'POST') {
+        const b = JSON.parse(String(init.body)) as { status: 'open' | 'closed' }
+        ticket = { ...ticket, status: b.status, closed_at: b.status === 'closed' ? t0 : null }
+        return json(200, { ticket })
+      }
+    }, 40)
+    const area = await vi.waitFor(() => {
+      const el = document.querySelector('.composer textarea') as HTMLTextAreaElement | null
+      expect(el).not.toBeNull()
+      return el!
+    })
+    type(area, 'Half a reply')
+    // The customer closes it in Telegram; the next refresh sees it.
+    ticket = { ...ticket, status: 'closed', closed_at: t0 }
+    await vi.waitFor(() => expect(document.querySelector('.closed-box')).not.toBeNull())
+    expect(document.querySelector('.composer textarea')).toBeNull()
+    expect(document.querySelector('.closed-box')?.textContent).toContain(text('support.draft_kept'))
+
+    // Leaving still asks first; staying keeps it.
+    const nav = router.push({ name: 'support' })
+    const keep = await vi.waitFor(() => {
+      const b = document.querySelector('.p-confirmdialog-reject-button') as HTMLButtonElement | null
+      expect(b).not.toBeNull()
+      return b!
+    })
+    keep.click()
+    await nav
+    expect(router.currentRoute.value.name).toBe('ticket')
+
+    // Reopened: the reply is back in the box.
+    ;(document.querySelector('.closed-box button') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect((document.querySelector('.composer textarea') as HTMLTextAreaElement | null)?.value).toBe('Half a reply'))
+    expect(posts(calls, `/tickets/${tid}/status`)).toEqual([{ status: 'open', reason: '' }])
+  })
+
+  // A core that keeps one reply per request key, as the real one does (the
+  // key is checked before the closed status). answer decides how the first
+  // reply's answer comes back.
+  function keyedCore(answer: (reply: () => Response) => Response | Promise<Response>) {
+    let ticket: TicketItem = { ...baseTicket }
+    const messages = baseMessages()
+    const byKey = new Map<string, TicketMessageItem>()
+    let first = true
+    const core: Answer = (url, init) => {
+      if (url === `/api/v1/tickets/${tid}` && (init?.method ?? 'GET') === 'GET') return json(200, { ticket, messages, can_manage: false })
+      if (url === `/api/v1/tickets/${tid}/status` && init?.method === 'POST') {
+        const b = JSON.parse(String(init.body)) as { status: 'open' | 'closed' }
+        ticket = { ...ticket, status: b.status, closed_at: b.status === 'closed' ? t0 : null }
+        return json(200, { ticket })
+      }
+      if (url === `/api/v1/tickets/${tid}/messages` && init?.method === 'POST') {
+        const b = JSON.parse(String(init.body)) as { body: string; close: boolean; key: string }
+        let message = byKey.get(b.key)
+        if (!message) {
+          if (ticket.status === 'closed') return json(409, { error: 'state', message: 'the ticket is closed; reopen it to write' })
+          message = { id: 'n' + messages.length, kind: 'staff', author: helper, body: b.body, file: null, delivery: { status: 'pending', at: null }, created_at: t0 }
+          byKey.set(b.key, message)
+          messages.push(message)
+          ticket = { ...ticket, status: b.close ? 'closed' : 'answered', closed_at: b.close ? t0 : null }
+        }
+        const m = message
+        const reply = () => json(200, { ticket, message: m })
+        if (first) {
+          first = false
+          return answer(reply)
+        }
+        return reply()
+      }
+    }
+    const replies = (body: string) => messages.filter((m) => m.kind === 'staff' && m.body === body).length
+    return { core, replies }
+  }
+  // Reply & close; the ticket shows closed, with the text kept.
+  async function replyAndClose(body: string) {
+    const area = await vi.waitFor(() => {
+      const el = document.querySelector('.composer textarea') as HTMLTextAreaElement | null
+      expect(el).not.toBeNull()
+      return el!
+    })
+    type(area, body)
+    await vi.waitFor(() => expect((document.querySelector('.composer .close-btn') as HTMLButtonElement).disabled).toBe(false))
+    ;(document.querySelector('.composer .close-btn') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(document.querySelector('.closed-box')?.textContent).toContain(text('support.draft_kept')))
+    // the reply is in the thread already
+    await vi.waitFor(() => expect(document.querySelector('.thread .bubble:last-child')?.textContent).toContain(body))
+  }
+  // Reopen, and Send the kept text: the two sends as they went out.
+  async function reopenAndSend(calls: string[], body: string) {
+    ;(document.querySelector('.closed-box button') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect((document.querySelector('.composer textarea') as HTMLTextAreaElement | null)?.value).toBe(body))
+    ;(document.querySelector('.composer .send-btn') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(posts(calls, `/tickets/${tid}/messages`)).toHaveLength(2))
+    await vi.waitFor(() => expect((document.querySelector('.composer textarea') as HTMLTextAreaElement).value).toBe(''))
+    return posts(calls, `/tickets/${tid}/messages`)
+  }
+
+  it('sends a kept reply once when the answer to its first send was lost', async () => {
+    // Core saves the reply and closes the ticket, but the answer never arrives.
+    const { core, replies } = keyedCore(() => Promise.reject(new TypeError('Failed to fetch')))
+    const { calls } = await boot(`/admin/support/${tid}`, supportPerms, core, 40)
+    await replyAndClose('All sorted, thanks')
+    const [first, again] = await reopenAndSend(calls, 'All sorted, thanks')
+    expect(first).toMatchObject({ kind: 'reply', close: true })
+    expect(again).toMatchObject({ kind: 'reply', close: false })
+    expect(again.key).toBe(first.key)
+    expect(replies('All sorted, thanks')).toBe(1)
+    expect(document.querySelectorAll('.thread .bubble')).toHaveLength(6)
+  })
+
+  it('forgets a reply whose answer came after the ticket showed closed', async () => {
+    // The answer is slow: the refresh sees the ticket closed first.
+    let release!: () => void
+    const slow = new Promise<void>((r) => (release = r))
+    const { core, replies } = keyedCore((reply) => slow.then(reply))
+    const { calls, router } = await boot(`/admin/support/${tid}`, supportPerms, core, 40)
+    await replyAndClose('All sorted, thanks')
+    release() // the answer comes to a box that is gone: the reply went out
+    await vi.waitFor(() => expect(document.querySelector('.closed-box')?.textContent).toContain(text('support.closed_hint')))
+    ;(document.querySelector('.closed-box button') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect((document.querySelector('.composer textarea') as HTMLTextAreaElement | null)?.value).toBe(''))
+    expect(posts(calls, `/tickets/${tid}/messages`)).toHaveLength(1)
+    expect(replies('All sorted, thanks')).toBe(1)
+    // nothing unsent: leaving asks nothing
+    await router.push({ name: 'support' })
+    expect(router.currentRoute.value.name).toBe('support')
+  })
+
+  it('closes after Reply & close repeats a Send whose answer was lost', async () => {
+    // Core saves the plain reply, but its answer never arrives.
+    const { core, replies } = keyedCore(() => Promise.reject(new TypeError('Failed to fetch')))
+    const { calls } = await boot(`/admin/support/${tid}`, supportPerms, core, 40)
+    const area = await vi.waitFor(() => {
+      const el = document.querySelector('.composer textarea') as HTMLTextAreaElement | null
+      expect(el).not.toBeNull()
+      return el!
+    })
+    type(area, 'All sorted, thanks')
+    await vi.waitFor(() => expect((document.querySelector('.composer .send-btn') as HTMLButtonElement).disabled).toBe(false))
+    ;(document.querySelector('.composer .send-btn') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(document.querySelector('.composer .msg')).not.toBeNull())
+    expect(area.value).toBe('All sorted, thanks')
+    // Reply & close with the same text: core hands back the saved reply, still answered.
+    ;(document.querySelector('.composer .close-btn') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(document.querySelector('.closed-box')).not.toBeNull())
+    const sends = posts(calls, `/tickets/${tid}/messages`)
+    expect(sends).toHaveLength(2)
+    expect(sends[1]).toMatchObject({ close: true })
+    expect(sends[1].key).toBe(sends[0].key)
+    expect(posts(calls, `/tickets/${tid}/status`)).toEqual([{ status: 'closed', reason: '' }])
+    expect(replies('All sorted, thanks')).toBe(1)
+    expect(document.querySelector('.closed-box')?.textContent).toContain(text('support.closed_hint'))
+  })
+
+  it('trusts core’s blocked flag and shows another staff member’s name whole', async () => {
+    const boss = { id: 's2', telegram_id: 1002, username: 'boss' }
+    // The customer started the bot again after the blocked reply (m4): core says so.
+    const ticket: TicketItem = { ...baseTicket, user: { ...customer, status: 'active', bot_blocked: false }, assignee: boss }
+    await boot(`/admin/support/${tid}`, [...supportPerms, 'tickets.manage'], (url) => {
+      if (url === `/api/v1/tickets/${tid}`) return json(200, { ticket, messages: baseMessages(), can_manage: true })
+      if (url === '/api/v1/tickets/assignees') return json(200, { items: [{ ...helper, role: 'admin' }, { ...boss, role: 'owner' }] })
+    })
+    await vi.waitFor(() => expect(document.querySelectorAll('.thread .bubble')).toHaveLength(5))
+    expect(document.querySelector('.side')?.textContent).not.toContain(text('support.blocked_bot'))
+    expect(document.body.textContent).not.toContain(text('support.blocked_hint'))
+    // isolated, so the Persian page cannot show it as "boss@"
+    await vi.waitFor(() => expect(document.querySelector('.assignee .p-select-label')?.textContent).toBe('⁨@boss⁩'))
+  })
+
+  it('starts no refresh for a thread left during its first load', async () => {
+    // Each running poller listens for the tab showing again: count those listeners.
+    const listening = new Set<unknown>()
+    const add = document.addEventListener.bind(document)
+    const remove = document.removeEventListener.bind(document)
+    vi.spyOn(document, 'addEventListener').mockImplementation((type: string, fn: EventListenerOrEventListenerObject, opts?: boolean | AddEventListenerOptions) => {
+      if (type === 'visibilitychange') listening.add(fn)
+      add(type, fn, opts)
+    })
+    vi.spyOn(document, 'removeEventListener').mockImplementation((type: string, fn: EventListenerOrEventListenerObject, opts?: boolean | EventListenerOptions) => {
+      if (type === 'visibilitychange') listening.delete(fn)
+      remove(type, fn, opts)
+    })
+    let release!: () => void
+    const slow = new Promise<void>((r) => (release = r))
+    const { calls, router } = await boot(`/admin/support/${tid}`, supportPerms, (url) => {
+      if (url === `/api/v1/tickets/${tid}`) return slow.then(() => json(200, { ticket: baseTicket, messages: baseMessages(), can_manage: false }))
+    }, 20)
+    await vi.waitFor(() => expect(calls).toContain(`GET /api/v1/tickets/${tid}`))
+    // Back to the inbox before the thread arrives.
+    await router.push({ name: 'support' })
+    await vi.waitFor(() => expect(document.querySelector('.p-datatable-tbody')?.textContent).toContain('#1024'))
+    const before = listening.size
+    release()
+    await new Promise((r) => setTimeout(r, 100))
+    expect(listening.size).toBe(before)
   })
 
   it('manages saved replies for those who may', async () => {

@@ -35,7 +35,8 @@ const options = computed(() =>
   assigneeChoices(staff.value, me.value, props.canManage, props.current).map((c) => ({
     value: c.id,
     disabled: c.disabled,
-    label: c.id === '' ? t('support.nobody') : c.me ? t('support.me', { name: isolate(staffName(c.user)) }) : staffName(c.user),
+    // isolated: the chosen value shows the bare label ("@ali" must not read "ali@" in Persian)
+    label: c.id === '' ? t('support.nobody') : c.me ? t('support.me', { name: isolate(staffName(c.user)) }) : isolate(staffName(c.user)),
     role: c.user && 'role' in c.user ? String((c.user as Assignee).role) : '',
   })),
 )

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, useId } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave } from 'vue-router'
-import { useConfirm } from 'primevue/useconfirm'
 import Textarea from 'primevue/textarea'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
@@ -11,21 +9,22 @@ import { api } from '../../api'
 import { errorText } from '../../errors'
 import { insertAt } from '../../branding'
 import { num, type Lang } from '../../format'
-import { REPLY_MAX, cannedBody, plainLength, replyOk, requestKeys } from '../../support'
+import { REPLY_MAX, cannedBody, plainLength, replyOk, type RequestKeys } from '../../support'
 import type { CannedReply, TicketItem, TicketMessageItem } from '../../types'
 
 // The reply box: a reply to the customer (sent by the bot as the store, never
 // with a staff name) or an internal note. Every send carries a request key,
-// reused when the same send is retried, so the customer gets it once.
-const props = defineProps<{ ticketId: string; customerLang: string }>()
+// reused when the same send is retried, so the customer gets it once. The
+// text being written and its keys belong to the page (v-model:draft, keys),
+// so they outlive the box.
+const props = defineProps<{ ticketId: string; customerLang: string; keys: RequestKeys }>()
 const emit = defineEmits<{ sent: [res: { ticket: TicketItem; message: TicketMessageItem }] }>()
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
-const confirm = useConfirm()
 const uid = useId()
 const areaId = `${uid}-reply`
 
-const draft = ref('')
+const draft = defineModel<string>('draft', { default: '' })
 const length = computed(() => plainLength(draft.value))
 const over = computed(() => length.value > REPLY_MAX)
 const ok = computed(() => replyOk(draft.value))
@@ -60,12 +59,15 @@ type Kind = 'reply' | 'note'
 const busy = ref<'' | 'reply' | 'close' | 'note'>('')
 const error = ref('')
 const detail = ref('')
-const keys = requestKeys()
+let gone = false
+onBeforeUnmount(() => (gone = true))
 
 async function send(kind: Kind, close: boolean) {
   if (busy.value || !ok.value) return
   const body = draft.value.replace(/\r\n?/g, '\n').trim()
-  const key = keys.key(JSON.stringify([kind, close, body]))
+  // The same text as a reply is the same send, with or without the close: a
+  // reply whose answer was lost, sent again after Reopen, comes back once.
+  const key = props.keys.key(JSON.stringify([kind, body]))
   busy.value = kind === 'note' ? 'note' : close ? 'close' : 'reply'
   error.value = ''
   detail.value = ''
@@ -76,8 +78,23 @@ async function send(kind: Kind, close: boolean) {
       close,
       key,
     })
-    keys.done()
+    // Sent: the page forgets the text and its key (done() also clears the
+    // page's copy, which matters when the box is gone meanwhile).
+    props.keys.done()
+    if (gone) return
     draft.value = ''
+    // The same text sent before without the close (its answer lost) comes
+    // back as that earlier reply, and core does not close for it: close now.
+    // A failed close leaves the reply sent and says why.
+    if (close && res.ticket.status !== 'closed') {
+      try {
+        res.ticket = (await api<{ ticket: TicketItem }>('POST', `/tickets/${props.ticketId}/status`, { status: 'closed', reason: '' })).ticket
+      } catch (e) {
+        const err = errorText(e, t)
+        error.value = err.text
+        detail.value = err.detail
+      }
+    }
     emit('sent', res)
   } catch (e) {
     const err = errorText(e, t)
@@ -94,22 +111,6 @@ function onKey(e: KeyboardEvent) {
     void send('reply', false)
   }
 }
-
-// Leaving with an unsent reply asks first.
-onBeforeRouteLeave(() => {
-  if (!draft.value.trim()) return true
-  return new Promise<boolean>((resolve) => {
-    confirm.require({
-      header: t('support.discard_title'),
-      message: t('support.discard_message'),
-      acceptProps: { label: t('support.discard'), severity: 'danger' },
-      rejectProps: { label: t('support.keep_writing'), severity: 'secondary', outlined: true },
-      accept: () => resolve(true),
-      reject: () => resolve(false),
-      onHide: () => resolve(false),
-    })
-  })
-})
 </script>
 
 <template>

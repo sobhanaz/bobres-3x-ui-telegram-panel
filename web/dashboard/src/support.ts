@@ -136,9 +136,11 @@ export function fileSize(n: number, lang: Lang): string {
   return fmt(n / (1024 * 1024), 'megabyte')
 }
 
-/** customerBlocked: Telegram refused the latest delivered staff reply because
- * the customer blocked the bot (newer replies still sending do not count). */
-export function customerBlocked(messages: Pick<TicketMessageItem, 'kind' | 'delivery'>[]): boolean {
+/** customerBlocked: the customer blocked the bot. Core's flag (user.bot_blocked)
+ * says so when it is sent; without it, Telegram refused the latest delivered
+ * staff reply (newer replies still sending do not count). */
+export function customerBlocked(messages: Pick<TicketMessageItem, 'kind' | 'delivery'>[], flag?: boolean): boolean {
+  if (typeof flag === 'boolean') return flag
   for (let i = messages.length - 1; i >= 0; i--) {
     const d = messages[i].delivery
     if (messages[i].kind !== 'staff' || !d || d.status === 'pending') continue
@@ -184,13 +186,18 @@ export function assigneeChoices(all: Assignee[], me: UserBrief | null, canManage
   return out
 }
 
+export interface RequestKeys {
+  key(sig: string): string
+  done(): void
+}
+
 /**
  * requestKeys keeps one request key per thing sent: sending the same text
  * the same way again (a retry after an error) reuses the key, so core sends
  * it to the customer once; anything else gets a new key. done() forgets it
  * after a success.
  */
-export function requestKeys(make: () => string = newKey) {
+export function requestKeys(make: () => string = newKey): RequestKeys {
   let last: { sig: string; key: string } | null = null
   return {
     key(sig: string): string {

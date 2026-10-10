@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
@@ -42,11 +42,18 @@ async function refresh() {
   list.total.value = res.total
 }
 const poll = poller(refresh, () => timing.listPoll)
+// The time due rows are checked against, moved on by a timer: a broadcast
+// that falls due while the page is open starts the refresh too.
+const now = ref(Date.now() / 1000)
+const clock = setInterval(() => (now.value = Date.now() / 1000), timing.clock)
 watch(
-  () => list.items.value.some((b) => changingSoon(b, Date.now() / 1000)),
+  () => list.items.value.some((b) => changingSoon(b, now.value)),
   (any) => (any ? poll.start() : poll.stop()),
 )
-onBeforeUnmount(poll.stop)
+onBeforeUnmount(() => {
+  clearInterval(clock)
+  poll.stop()
+})
 
 const statuses = computed(() => [{ label: t('broadcasts.list.all_statuses'), value: '' }, ...STATUSES.map((s) => ({ label: t('broadcasts.status.' + s), value: s }))])
 const audience = (b: BroadcastItem) => t('broadcasts.segment.' + b.segment) + ' · ' + t('broadcasts.language.' + (b.language || 'all'))

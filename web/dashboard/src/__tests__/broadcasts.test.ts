@@ -298,7 +298,7 @@ describe('Broadcast pages', () => {
     )
     // The app's own copies after resetModules: shorter waits, fixed messages.
     const b = await import('../broadcasts')
-    Object.assign(b.timing, { poll: 30, listPoll: 30, check: 10, audience: 10 })
+    Object.assign(b.timing, { poll: 30, listPoll: 30, check: 10, audience: 10, clock: 20 })
     const { i18n } = await import('../i18n')
     i18n.global.mergeLocaleMessage('fa', stubs)
     await import('../main')
@@ -424,7 +424,8 @@ describe('Broadcast pages', () => {
       texts: { fa: 'سلام <b>همه</b>', en: 'Hello <i>everyone</i>' },
       button: null,
     })
-    expect(bodyOfCall(posted(calls, `/broadcasts/${ID}/send`)[0])).toEqual({ at: null })
+    // with the version it shows (the one just created)
+    expect(bodyOfCall(posted(calls, `/broadcasts/${ID}/send`)[0])).toEqual({ at: null, version: 3 })
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('broadcast'))
     await vi.waitFor(() => expect(document.body.textContent).toContain('DONE ۰ OF ۱٬۲۳۴'))
   })
@@ -470,7 +471,8 @@ describe('Broadcast pages', () => {
     await vi.waitFor(() => expect(posted(calls, `/broadcasts/${ID}/send`)).toHaveLength(1))
     const put = calls.find((c) => c.startsWith(`PUT /api/v1/broadcasts/${ID}`))!
     expect(bodyOfCall(put)).toEqual({ segment: 'active', language: 'fa', texts: { fa: 'سلام دوباره', en: '' }, button: null, version: 3 })
-    expect(bodyOfCall(posted(calls, `/broadcasts/${ID}/send`)[0])).toEqual({ at })
+    // with the version the save returned
+    expect(bodyOfCall(posted(calls, `/broadcasts/${ID}/send`)[0])).toEqual({ at, version: 4 })
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('broadcast'))
   })
 
@@ -588,5 +590,174 @@ describe('Broadcast pages', () => {
     ;(document.querySelectorAll('[role=tab]')[1] as HTMLElement).click()
     await vi.waitFor(() => expect(document.querySelector('.recipients')?.textContent).toContain('chat not found'))
     expect(calls).toContain(`GET /api/v1/broadcasts/${ID}/recipients?status=failed&page=1&size=25`)
+  })
+
+  it('starts refreshing the list when a broadcast falls due while it is open', async () => {
+    const realNow = Date.now.bind(Date)
+    const items = [broadcast({ status: 'scheduled', scheduled_at: Math.floor(realNow() / 1000) + 20 * 60 })]
+    const { calls } = await boot('/admin/broadcasts', (url) => {
+      if (url.startsWith('/api/v1/broadcasts?')) return json(200, { items, total: 1, page: 1, size: 25 })
+    })
+    const lists = () => calls.filter((c) => c.startsWith('GET /api/v1/broadcasts?')).length
+    await vi.waitFor(() => expect(document.querySelectorAll('.p-datatable-tbody tr')).toHaveLength(1))
+    // twenty minutes away: no refresh yet
+    await new Promise((r) => setTimeout(r, 100))
+    expect(lists()).toBe(1)
+    // fifteen minutes on, it is due within ten: the list refreshes by itself
+    vi.spyOn(Date, 'now').mockImplementation(() => realNow() + 15 * 60_000)
+    await vi.waitFor(() => expect(lists()).toBeGreaterThan(2))
+  })
+
+  it('sends only the version the composer shows, and shows the latest when it changed', async () => {
+    let current = broadcast({ language: 'fa', texts: { fa: 'سلام', en: '' } })
+    const { calls, router } = await boot(`/admin/broadcasts/${ID}/edit`, (url, init, body) => {
+      if (url === `/api/v1/broadcasts/${ID}/send`) {
+        if (body.version !== current.version) return json(409, { error: 'state', message: 'someone changed this broadcast meanwhile; reload it' })
+        return json(200, { item: { ...current, status: 'running' } })
+      }
+      if (url === `/api/v1/broadcasts/${ID}` && (init?.method ?? 'GET') === 'GET') return json(200, { item: current })
+    })
+    const faText = () => (document.querySelector('textarea[lang="fa"]') as HTMLTextAreaElement | null)?.value
+    await vi.waitFor(() => expect(faText()).toBe('سلام'))
+    await vi.waitFor(() => expect(document.querySelector('.p-card .pi-spinner')).toBeNull())
+    // Someone else saves another text for everyone meanwhile.
+    current = { ...current, segment: 'all', texts: { fa: 'متن تازه', en: '' }, version: 4 }
+
+    const sendNow = async () => {
+      button('send-now')!.click()
+      const confirm = await vi.waitFor(() => {
+        const b = document.querySelector('.send-dialog button.send-confirm') as HTMLButtonElement | null
+        expect(b?.disabled).toBe(false)
+        return b!
+      })
+      confirm.click()
+    }
+    await sendNow()
+    // The dialog counted the audience the page shows; core refuses that version.
+    expect(bodyOfCall(posted(calls, '/broadcasts/audience').pop()!)).toEqual({ segment: 'active', language: 'fa' })
+    await vi.waitFor(() => expect(document.querySelector('.not-sent')?.textContent).toContain(text('broadcasts.send.stale')))
+    expect(posted(calls, `/broadcasts/${ID}/send`).map(bodyOfCall)).toEqual([{ at: null, version: 3 }])
+    expect(calls.some((c) => c.startsWith('PUT '))).toBe(false)
+    // The latest version is shown; nothing goes out by itself.
+    await vi.waitFor(() => expect(faText()).toBe('متن تازه'))
+    expect(router.currentRoute.value.name).toBe('broadcast-edit')
+    await new Promise((r) => setTimeout(r, 60))
+    expect(posted(calls, `/broadcasts/${ID}/send`)).toHaveLength(1)
+
+    // Sent again, it goes with the version now shown.
+    await vi.waitFor(() => expect(document.querySelector('.p-card .pi-spinner')).toBeNull())
+    await sendNow()
+    await vi.waitFor(() => expect(posted(calls, `/broadcasts/${ID}/send`)).toHaveLength(2))
+    expect(bodyOfCall(posted(calls, `/broadcasts/${ID}/send`)[1])).toEqual({ at: null, version: 4 })
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('broadcast'))
+  })
+
+  it('sends a draft from its page with the version shown, and shows the latest when it changed', async () => {
+    let current = broadcast()
+    const { calls } = await boot(`/admin/broadcasts/${ID}`, (url, init, body) => {
+      if (url === `/api/v1/broadcasts/${ID}/send`) {
+        if (body.version !== current.version) return json(409, { error: 'state', message: 'someone changed this broadcast meanwhile; reload it' })
+        return json(200, { item: { ...current, status: 'running' } })
+      }
+      if (url === `/api/v1/broadcasts/${ID}` && (init?.method ?? 'GET') === 'GET') return json(200, { item: current })
+    })
+    await vi.waitFor(() => expect(button('send-now')).not.toBeNull())
+    current = { ...current, segment: 'all', texts: { fa: 'متن تازه', en: 'Fresh text' }, version: 4 }
+
+    button('send-now')!.click()
+    const confirm = await vi.waitFor(() => {
+      const b = document.querySelector('.send-dialog button.send-confirm') as HTMLButtonElement | null
+      expect(b?.disabled).toBe(false)
+      return b!
+    })
+    expect(bodyOfCall(posted(calls, '/broadcasts/audience').pop()!)).toEqual({ segment: 'active', language: '' })
+    confirm.click()
+    await vi.waitFor(() => expect(document.querySelector('.not-sent')?.textContent).toContain(text('broadcasts.send.stale')))
+    expect(posted(calls, `/broadcasts/${ID}/send`).map(bodyOfCall)).toEqual([{ at: null, version: 3 }])
+    // reloaded: the page shows what changed, and nothing went out
+    await vi.waitFor(() => expect(document.querySelector('pre.raw[lang="en"]')?.textContent).toBe('Fresh text'))
+    await new Promise((r) => setTimeout(r, 60))
+    expect(posted(calls, `/broadcasts/${ID}/send`)).toHaveLength(1)
+  })
+
+  // Core refuses a send at the right version too when the broadcast went out
+  // meanwhile (a status change keeps the version): core's reason shows, not
+  // the stale text that offers sending again.
+  const sentElsewhere = (current: () => BroadcastItem): Answer => (url, init, body) => {
+    if (url === `/api/v1/broadcasts/${ID}/send`) {
+      if (body.version !== current().version) return json(409, { error: 'state', message: 'someone changed this broadcast meanwhile; reload it' })
+      if (!editable(current().status)) return json(409, { error: 'state', message: 'this broadcast was sent already' })
+      return json(200, { item: { ...current(), status: 'running' } })
+    }
+    if (url === `/api/v1/broadcasts/${ID}` && (init?.method ?? 'GET') === 'GET') return json(200, { item: current() })
+  }
+  const running = (b: BroadcastItem): BroadcastItem => ({ ...b, status: 'running', started_at: 1_790_000_100, counts: { ...b.counts, total: 100, pending: 100 } })
+  async function confirmSendNow() {
+    button('send-now')!.click()
+    const confirm = await vi.waitFor(() => {
+      const b = document.querySelector('.send-dialog button.send-confirm') as HTMLButtonElement | null
+      expect(b?.disabled).toBe(false)
+      return b!
+    })
+    confirm.click()
+  }
+
+  it('says why the composer’s send did not go out when it was sent elsewhere meanwhile', async () => {
+    let current = broadcast({ language: 'fa', texts: { fa: 'سلام', en: '' } })
+    const { calls, router } = await boot(`/admin/broadcasts/${ID}/edit`, sentElsewhere(() => current))
+    await vi.waitFor(() => expect((document.querySelector('textarea[lang="fa"]') as HTMLTextAreaElement | null)?.value).toBe('سلام'))
+    await vi.waitFor(() => expect(document.querySelector('.p-card .pi-spinner')).toBeNull())
+    current = running(current)
+
+    await confirmSendNow()
+    // its own page shows it going out, with core's reason
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('broadcast'))
+    await vi.waitFor(() => expect(document.querySelector('.p-toast')?.textContent).toContain('this broadcast was sent already'))
+    expect(document.querySelector('.p-toast')?.textContent).toContain(text('error.state'))
+    await vi.waitFor(() => expect(button('pause')).not.toBeNull())
+    expect(document.body.textContent).not.toContain(text('broadcasts.send.stale'))
+    expect(posted(calls, `/broadcasts/${ID}/send`).map(bodyOfCall)).toEqual([{ at: null, version: 3 }])
+  })
+
+  it('says why a draft’s page did not send it when it was sent elsewhere meanwhile', async () => {
+    let current = broadcast()
+    const { calls } = await boot(`/admin/broadcasts/${ID}`, sentElsewhere(() => current))
+    await vi.waitFor(() => expect(button('send-now')).not.toBeNull())
+    current = running(current)
+
+    await confirmSendNow()
+    await vi.waitFor(() => expect(document.body.textContent).toContain('this broadcast was sent already'))
+    expect(document.body.textContent).toContain(text('error.state'))
+    expect(document.querySelector('.not-sent')).toBeNull()
+    // reloaded: it shows going out
+    await vi.waitFor(() => expect(button('pause')).not.toBeNull())
+    expect(posted(calls, `/broadcasts/${ID}/send`).map(bodyOfCall)).toEqual([{ at: null, version: 3 }])
+  })
+
+  it('does not save a draft that would drop its button for want of a link', async () => {
+    const draft = broadcast({ language: 'en', texts: { fa: '', en: 'Hi' } })
+    const { calls } = await boot(`/admin/broadcasts/${ID}/edit`, (url, init, body) => {
+      // core keeps no button without a link
+      if (url === `/api/v1/broadcasts/${ID}` && init?.method === 'PUT') return json(200, { item: { ...draft, ...body, button: null, version: 4 } })
+      if (url === `/api/v1/broadcasts/${ID}`) return json(200, { item: draft })
+    })
+    await vi.waitFor(() => expect((document.querySelector('textarea[lang="en"]') as HTMLTextAreaElement | null)?.value).toBe('Hi'))
+    const toggle = document.querySelector('.button-field input[type="checkbox"]') as HTMLInputElement
+    toggle.click()
+    const url = await vi.waitFor(() => {
+      const el = document.querySelector('.button-field input[inputmode="url"]') as HTMLInputElement | null
+      expect(el).not.toBeNull()
+      return el!
+    })
+    const label = document.querySelector('.button-field input[lang="en"]') as HTMLInputElement
+    type(label, 'Open')
+    await vi.waitFor(() => expect(button('save')!.disabled).toBe(false))
+    button('save')!.click()
+    await vi.waitFor(() => expect(url.closest('.field')?.textContent).toContain(text('broadcasts.button.url_empty')))
+    expect(document.body.textContent).toContain(text('broadcasts.save.fix_first'))
+    expect(calls.some((c) => c.startsWith('PUT '))).toBe(false)
+    // the button and its label are still there
+    expect(toggle.checked).toBe(true)
+    expect(label.value).toBe('Open')
   })
 })

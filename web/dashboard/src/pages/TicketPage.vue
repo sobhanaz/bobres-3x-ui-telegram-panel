@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
@@ -18,7 +19,7 @@ import { api } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { dateTime, type Lang } from '../format'
-import { customerBlocked, duration, loadCounts, pollEvery, poller, waitingSeconds } from '../support'
+import { customerBlocked, duration, loadCounts, pollEvery, poller, requestKeys, waitingSeconds, type RequestKeys } from '../support'
 import type { TicketDetail, TicketItem, TicketMessageItem } from '../types'
 
 // The user part of a ticket; bot_blocked if core adds the customer's
@@ -30,6 +31,7 @@ const lang = computed(() => locale.value as Lang)
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const confirm = useConfirm()
 const auth = useAuth()
 const uid = useId()
 const id = computed(() => route.params.id as string)
@@ -40,7 +42,7 @@ const ticket = computed(() => detail.value?.ticket ?? null)
 const customer = computed(() => (ticket.value?.user ?? null) as Customer | null)
 const messages = computed(() => detail.value?.messages ?? [])
 const closed = computed(() => ticket.value?.status === 'closed')
-const blocked = computed(() => !!customer.value?.bot_blocked || customerBlocked(messages.value))
+const blocked = computed(() => customerBlocked(messages.value, customer.value?.bot_blocked))
 const now = ref(Math.floor(Date.now() / 1000))
 
 // The thread scrolls by itself; it follows new messages while the reader is
@@ -79,16 +81,58 @@ async function load(quiet = false) {
 }
 
 const poll = poller(() => load(true), () => pollEvery.ticket)
+// Left during the first load: no poller for a page that is gone.
+let alive = true
 onMounted(async () => {
   await load()
-  poll.start(false)
+  if (alive) poll.start(false)
 })
-onBeforeUnmount(() => poll.stop())
+onBeforeUnmount(() => {
+  alive = false
+  poll.stop()
+})
 watch(id, async (v, old) => {
   // Another ticket in the same page (leaving for a user page changes :id too).
   if (route.name !== 'ticket' || !v || v === old) return
   detail.value = null
   await load()
+})
+
+// Replies being written, by ticket: one outlives the ticket being closed
+// meanwhile (the box gives way to Reopen) and is back after Reopen. Its
+// request keys stay with it, so sending it again then is the same send.
+const drafts = ref<Record<string, string>>({})
+const keys: Record<string, RequestKeys> = {}
+// done() after a send also drops the page's copy of the text: the box may be
+// gone by the time core answers, and its own clearing goes nowhere then.
+function keysOf(ticketId: string): RequestKeys {
+  if (!keys[ticketId]) {
+    const k = requestKeys()
+    keys[ticketId] = {
+      key: (sig) => k.key(sig),
+      done: () => {
+        k.done()
+        drafts.value[ticketId] = ''
+      },
+    }
+  }
+  return keys[ticketId]
+}
+const draftKept = computed(() => !!ticket.value && !!drafts.value[ticket.value.id]?.trim())
+// Leaving with an unsent reply asks first.
+onBeforeRouteLeave(() => {
+  if (!Object.values(drafts.value).some((d) => d.trim())) return true
+  return new Promise<boolean>((resolve) => {
+    confirm.require({
+      header: t('support.discard_title'),
+      message: t('support.discard_message'),
+      acceptProps: { label: t('support.discard'), severity: 'danger' },
+      rejectProps: { label: t('support.keep_writing'), severity: 'secondary', outlined: true },
+      accept: () => resolve(true),
+      reject: () => resolve(false),
+      onHide: () => resolve(false),
+    })
+  })
 })
 
 // A reply or note just sent shows at once (its delivery fills in on the
@@ -246,12 +290,14 @@ const languageName = (l: string) => ({ fa: 'فارسی', en: 'English' })[l] ?? 
 
         <Message v-if="blocked && !closed" severity="warn" :closable="false" class="note">{{ t('support.blocked_hint') }}</Message>
         <div v-if="ticket && closed" class="closed-box">
-          <span class="app-muted">{{ t('support.closed_hint') }}</span>
+          <span class="app-muted">{{ draftKept ? t('support.draft_kept') : t('support.closed_hint') }}</span>
           <Button :label="t('support.reopen')" icon="pi pi-replay" size="small" outlined :loading="busy" @click="setStatus('open')" />
         </div>
         <TicketComposer
           v-else-if="ticket"
           :key="ticket.id"
+          v-model:draft="drafts[ticket.id]"
+          :keys="keysOf(ticket.id)"
           :ticket-id="ticket.id"
           :customer-lang="customer?.language ?? ''"
           class="composer"

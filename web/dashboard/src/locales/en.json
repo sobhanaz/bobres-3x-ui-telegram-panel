@@ -1140,6 +1140,7 @@
     "reopen": "Reopen",
     "reopened_done": "Ticket reopened",
     "closed_hint": "This ticket is closed. Reopen it to reply.",
+    "draft_kept": "Your unsent reply is kept. Reopen the ticket to send it.",
     "nobody": "Nobody",
     "me": "Me ({name})",
     "assigned_done": "Ticket assigned",
@@ -1284,7 +1285,8 @@
       "count_note": "The recipients are counted again when sending starts.",
       "zero": "No customer matches this choice, so there is nothing to send.",
       "done_now": "Sending started",
-      "done_later": "Broadcast scheduled"
+      "done_later": "Broadcast scheduled",
+      "stale": "This broadcast was changed somewhere else after you opened it, so it was not sent. Check its latest version, then send again if you still want to."
     },
     "leave": {
       "title": "Leave without saving?",

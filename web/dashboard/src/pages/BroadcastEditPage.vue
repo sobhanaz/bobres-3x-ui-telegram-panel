@@ -31,6 +31,7 @@ import {
   sameDraft,
   splitProblems,
   testOutcome,
+  urlProblem,
   type Draft,
   type TestOutcome,
   type TextState,
@@ -61,6 +62,8 @@ const showAll = ref(false)
 const formError = ref('')
 const formDetail = ref('')
 const stale = ref(false)
+/** notSent: core refused to send because the broadcast changed elsewhere; the latest is shown. */
+const notSent = ref(false)
 
 const needed = computed(() => neededLangs(draft.value.language))
 const tab = ref<Lang>(lang.value)
@@ -85,13 +88,15 @@ function resetForm(d: Draft) {
   formError.value = ''
   formDetail.value = ''
   stale.value = false
+  notSent.value = false
 }
 
-async function load() {
+/** load reads the broadcast into the form; false when this page does not show it. */
+async function load(): Promise<boolean> {
   if (!id.value) {
     item.value = null
     resetForm(blankDraft())
-    return
+    return true
   }
   loading.value = true
   loadError.value = ''
@@ -100,12 +105,14 @@ async function load() {
     // Once it is sending (or over), its page shows it instead.
     if (!editable(res.item.status)) {
       void router.replace({ name: 'broadcast', params: { id: res.item.id } })
-      return
+      return false
     }
     item.value = res.item
     resetForm(draftOf(res.item))
+    return true
   } catch (e) {
     loadError.value = errorText(e, t).text
+    return false
   } finally {
     loading.value = false
   }
@@ -208,6 +215,13 @@ async function save(): Promise<BroadcastItem | null> {
   }
 }
 async function saveDraft() {
+  // A button without its link: core would save the draft without the button.
+  if (draft.value.button.on && urlProblem(draft.value.button.url)) {
+    showAll.value = true
+    formError.value = t('broadcasts.save.fix_first')
+    formDetail.value = ''
+    return
+  }
   if (await save()) {
     toast.add({ severity: 'success', summary: isScheduled.value ? t('broadcasts.save.saved_changes') : t('broadcasts.save.saved'), life: 3000 })
   }
@@ -268,6 +282,7 @@ let leaving = false
 function openSend(mode: 'now' | 'later') {
   showAll.value = true
   test.value = null
+  notSent.value = false
   if (problems.value.length || anyChecking.value) {
     formError.value = anyChecking.value ? t('broadcasts.save.wait_check') : t('broadcasts.save.fix_first')
     formDetail.value = ''
@@ -296,13 +311,24 @@ async function send(at: number | null) {
         return
       }
     }
-    await api<{ item: BroadcastItem }>('POST', `/broadcasts/${target.id}/send`, { at })
+    // With the version this page shows (or just saved): core refuses it when
+    // the broadcast changed since, instead of sending what nobody here saw.
+    await api<{ item: BroadcastItem }>('POST', `/broadcasts/${target.id}/send`, { at, version: target.version })
     sendOpen.value = false
     toast.add({ severity: 'success', summary: at === null ? t('broadcasts.send.done_now') : t('broadcasts.send.done_later'), life: 4000 })
     leaving = true
     await router.push({ name: 'broadcast', params: { id: target.id } })
   } catch (e) {
-    if (e instanceof ApiError && e.data.field === 'at') atError.value = e.message
+    if (e instanceof ApiError && e.status === 409) {
+      // Changed elsewhere: show the latest version; sending again is the admin's
+      // call. Sent or cancelled meanwhile (its page shows it now): core's reason.
+      sendOpen.value = false
+      if (await load()) notSent.value = true
+      else {
+        const err = errorText(e, t)
+        toast.add({ severity: 'warn', summary: err.text, detail: err.detail || undefined, life: 8000 })
+      }
+    } else if (e instanceof ApiError && e.data.field === 'at') atError.value = e.message
     else {
       const err = errorText(e, t)
       sendError.value = err.text
@@ -372,6 +398,7 @@ function back() {
       <div v-if="formDetail" class="app-ltr detail">{{ formDetail }}</div>
       <Button :label="t('broadcasts.save.reload')" icon="pi pi-refresh" size="small" severity="warn" outlined class="reload" @click="load" />
     </Message>
+    <Message v-if="notSent" severity="warn" :closable="false" class="not-sent">{{ t('broadcasts.send.stale') }}</Message>
 
     <Card>
       <template #title>{{ t('broadcasts.audience.title') }}</template>

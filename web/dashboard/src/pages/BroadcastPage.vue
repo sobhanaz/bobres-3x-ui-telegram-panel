@@ -26,6 +26,7 @@ import { dateTime, num, type Lang } from '../format'
 import {
   actionsFor,
   duration,
+  editable,
   live,
   neededLangs,
   percent,
@@ -71,6 +72,8 @@ onBeforeUnmount(poll.stop)
 watch(id, () => {
   item.value = null
   loadError.value = ''
+  sendFor.value = null
+  notSent.value = false
   void load().catch(() => {})
 })
 
@@ -129,14 +132,21 @@ function ask(a: 'cancel' | 'delete') {
   })
 }
 
-// Send or schedule a draft.
+// Send or schedule a draft: the version shown when the dialog opened, whose
+// audience the dialog counts; core refuses it when it changed since.
 const sendOpen = ref(false)
 const sendMode = ref<'now' | 'later'>('now')
 const sendBusy = ref(false)
 const sendError = ref('')
 const sendDetail = ref('')
 const atError = ref('')
+const sendFor = ref<BroadcastItem | null>(null)
+const notSent = ref(false)
 function openSend(mode: 'now' | 'later') {
+  sendFor.value = item.value
+  notSent.value = false
+  actionError.value = ''
+  actionDetail.value = ''
   sendMode.value = mode
   sendError.value = ''
   sendDetail.value = ''
@@ -144,16 +154,29 @@ function openSend(mode: 'now' | 'later') {
   sendOpen.value = true
 }
 async function send(at: number | null) {
+  const target = sendFor.value
+  if (!target) return
   sendBusy.value = true
   sendError.value = ''
   sendDetail.value = ''
   atError.value = ''
   try {
-    item.value = (await api<{ item: BroadcastItem }>('POST', `/broadcasts/${id.value}/send`, { at })).item
+    item.value = (await api<{ item: BroadcastItem }>('POST', `/broadcasts/${target.id}/send`, { at, version: target.version })).item
     sendOpen.value = false
     toast.add({ severity: 'success', summary: at === null ? t('broadcasts.send.done_now') : t('broadcasts.send.done_later'), life: 4000 })
   } catch (e) {
-    if (e instanceof ApiError && e.data.field === 'at') atError.value = e.message
+    if (e instanceof ApiError && e.status === 409) {
+      // Changed elsewhere: show the latest version; sending again is the admin's
+      // call. Sent or cancelled meanwhile: core's reason says so.
+      sendOpen.value = false
+      const fresh = await load().then(() => true, () => false)
+      if (fresh && item.value && editable(item.value.status)) notSent.value = true
+      else {
+        const err = errorText(e, t)
+        actionError.value = err.text
+        actionDetail.value = err.detail
+      }
+    } else if (e instanceof ApiError && e.data.field === 'at') atError.value = e.message
     else {
       const err = errorText(e, t)
       sendError.value = err.text
@@ -201,6 +224,7 @@ const problemCount = computed(() => counts.value.failed + counts.value.blocked +
     {{ actionError }}
     <div v-if="actionDetail" class="app-ltr detail">{{ actionDetail }}</div>
   </Message>
+  <Message v-if="notSent" severity="warn" :closable="false" class="not-sent">{{ t('broadcasts.send.stale') }}</Message>
   <Skeleton v-if="!item && !loadError" height="16rem" />
 
   <template v-if="item">
@@ -323,8 +347,8 @@ const problemCount = computed(() => counts.value.failed + counts.value.blocked +
   <SendDialog
     v-if="item"
     v-model:visible="sendOpen"
-    :segment="item.segment"
-    :language="item.language"
+    :segment="(sendFor ?? item).segment"
+    :language="(sendFor ?? item).language"
     :mode="sendMode"
     :busy="sendBusy"
     :error="sendError"
