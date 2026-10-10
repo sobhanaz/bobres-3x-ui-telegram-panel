@@ -48,6 +48,22 @@ func (a *XUIv3) Renew(ctx context.Context, email string, addDays, addBytes int64
 	return nil
 }
 
+func (a *XUIv3) SetLimits(ctx context.Context, email string, expiryMs, totalBytes int64) error {
+	return a.c.SetLimits(ctx, email, expiryMs, totalBytes)
+}
+
+func (a *XUIv3) SetEnabled(ctx context.Context, email string, enabled bool) error {
+	return a.c.SetEnabled(ctx, email, enabled)
+}
+
+func (a *XUIv3) Status(ctx context.Context, email string) (ClientStatus, error) {
+	d, err := a.c.GetClient(ctx, email)
+	if err != nil {
+		return ClientStatus{}, err
+	}
+	return ClientStatus{UsedBytes: d.UsedTraffic, TotalBytes: d.Client.TotalGB, ExpiryMs: d.Client.ExpiryTime, Enabled: d.Client.Enable}, nil
+}
+
 func (a *XUIv3) Delete(ctx context.Context, email string) error {
 	return a.c.DeleteClient(ctx, email, false)
 }

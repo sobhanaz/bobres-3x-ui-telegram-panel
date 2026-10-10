@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
@@ -42,8 +44,8 @@ func planLimits(r *req, p *corev1.Plan) string {
 	return strings.Join(lines, "\n")
 }
 
-// plans returns the purchasable (enabled, non-trial) plans, or all plans
-// including disabled ones for admins.
+// plans returns the enabled, non-trial plans (regular plans and traffic
+// packages), or all plans including disabled ones for admins.
 func (h *Handler) plans(r *req, all bool) ([]*corev1.Plan, error) {
 	resp, err := h.core.ListPlans(r.ctx, &corev1.ListPlansRequest{IncludeDisabled: all})
 	if err != nil {
@@ -74,8 +76,24 @@ func (h *Handler) findPlan(r *req, id string, all bool) (*corev1.Plan, error) {
 	return nil, status.Error(codes.NotFound, "plan not found")
 }
 
-func (h *Handler) showPlans(r *req) {
+// regularPlans are the plans sold as a new service or a renewal (not the
+// traffic packages, which are sold from a subscription's page).
+func (h *Handler) regularPlans(r *req) ([]*corev1.Plan, error) {
 	ps, err := h.plans(r, false)
+	if err != nil {
+		return nil, err
+	}
+	out := ps[:0:0]
+	for _, p := range ps {
+		if !p.GetIsTopup() {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func (h *Handler) showPlans(r *req) {
+	ps, err := h.regularPlans(r)
 	if err != nil {
 		r.fail(err)
 		return
@@ -104,6 +122,11 @@ func (h *Handler) cardEnabled(currency string) bool {
 	return currency == "IRT" && h.setting("payments.card_number") != ""
 }
 
+// zarinpalLinkEnabled: the store's Zarinpal payment link, approved manually.
+func (h *Handler) zarinpalLinkEnabled(currency string) bool {
+	return currency == "IRT" && h.setting("payments.zarinpal_link") != ""
+}
+
 func (h *Handler) cryptoEnabled(currency string) bool {
 	if h.setting("payments.usdt_trc20") == "" && h.setting("payments.usdt_erc20") == "" {
 		return false
@@ -112,48 +135,138 @@ func (h *Handler) cryptoEnabled(currency string) bool {
 }
 
 func (h *Handler) showPlan(r *req, planID string) {
-	p, err := h.findPlan(r, planID, false)
+	h.showCheckout(r, state.Checkout{Type: "new", PlanID: planID})
+}
+
+// saveCheckout stores what a payment menu sells under a fresh nonce.
+func (h *Handler) saveCheckout(r *req, c state.Checkout) (string, bool) {
+	n := nonce()
+	if err := h.state.SaveCheckout(r.ctx, r.from.ID, n, c); err != nil {
+		r.fail(err)
+		return "", false
+	}
+	return n, true
+}
+
+// payButtons are the payment methods for an amount: a wallet row, the
+// automated gateways and the manual methods, all "pay:<method>:<nonce>".
+func (h *Handler) payButtons(r *req, kb *tg.Keyboard, cur string, amount int64, n string, wallet *tg.Button) {
+	if wallet != nil {
+		kb.Row(*wallet)
+	}
+	var manual []tg.Button
+	if h.cardEnabled(cur) {
+		manual = append(manual, tg.CB(r.t("btn.pay_card"), "pay:c:"+n))
+	}
+	if h.cryptoEnabled(cur) {
+		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+n))
+	}
+	if h.zarinpalLinkEnabled(cur) {
+		manual = append(manual, tg.CB(r.t("btn.pay_zarinpal_link"), "pay:l:"+n))
+	}
+	if gw := h.gatewayButtons(r, cur, amount, "pay", "", n); len(gw) > 0 {
+		kb.Row(gw...)
+	}
+	kb.Row(manual...)
+}
+
+// checkoutBack is where a payment menu's Back button leads.
+func checkoutBack(c state.Checkout) string {
+	if c.SubscriptionID != "" {
+		return "sub:" + c.SubscriptionID
+	}
+	return "buy"
+}
+
+// showCheckout shows what is bought (a new service, a renewal or a traffic
+// package, with any discount code) and how to pay for it. The menu is saved
+// under a fresh nonce, so its buttons carry no ids.
+func (h *Handler) showCheckout(r *req, c state.Checkout) {
+	p, err := h.findPlan(r, c.PlanID, false)
 	if err != nil {
 		r.fail(err)
 		return
 	}
 	price, cur := p.GetPrice().GetAmount(), p.GetPrice().GetCurrency()
+	var off int64
+	if c.DiscountCode != "" {
+		q, err := h.core.QuoteOrder(r.ctx, &corev1.QuoteOrderRequest{UserId: r.user.GetId(), PlanId: c.PlanID,
+			Type: c.Type, SubscriptionId: c.SubscriptionID, DiscountCode: c.DiscountCode})
+		if err != nil { // the code stopped working since it was entered
+			r.send(r.t(discountKey(err)), nil)
+			c.DiscountCode = ""
+		} else {
+			price, off = q.GetTotal().GetAmount(), q.GetDiscount().GetAmount()
+		}
+	}
+	n, ok := h.saveCheckout(r, c)
+	if !ok {
+		return
+	}
 	w, err := h.core.GetWallet(r.ctx, &corev1.GetWalletRequest{UserId: r.user.GetId(), Currency: cur})
 	if err != nil {
 		r.fail(err)
 		return
 	}
-	n := nonce()
-	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.pay_wallet", "balance", r.money(w.GetBalance(), cur)), "pay:w:"+planID+":"+n))
-	var manual []tg.Button
-	if h.cardEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_card"), "pay:c:"+planID+":"+n))
+	kb := &tg.Keyboard{}
+	wallet := tg.CB(r.t("btn.pay_wallet", "balance", r.money(w.GetBalance(), cur)), "pay:w:"+n)
+	h.payButtons(r, kb, cur, price, n, &wallet)
+	if c.DiscountCode == "" && price > 0 {
+		kb.Row(tg.CB(r.t("btn.discount"), "dc:"+n))
 	}
-	if h.cryptoEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+planID+":"+n))
+	kb.Row(tg.CB(r.t("btn.back"), checkoutBack(c)), tg.CB(r.t("btn.home"), "home"))
+	var text string
+	switch c.Type {
+	case "renew":
+		text = r.t("renew.detail", "id", shortID(c.SubscriptionID), "name", esc(planName(r, p)), "limits", planLimits(r, p), "price", r.money(price, cur))
+	case "traffic_topup":
+		text = r.t("topup.detail", "id", shortID(c.SubscriptionID), "name", esc(planName(r, p)),
+			"size", i18n.Bytes(r.lang, p.GetTrafficBytes()), "price", r.money(price, cur))
+	default:
+		text = r.t("plan.detail", "name", esc(planName(r, p)), "limits", planLimits(r, p), "price", r.money(price, cur))
 	}
-	if gw := h.gatewayButtons(r, cur, price, "pay", planID, n); len(gw) > 0 {
-		kb.Row(gw...)
+	if off > 0 {
+		text += "\n" + r.t("discount.applied", "code", esc(c.DiscountCode), "off", r.money(off, cur))
 	}
-	kb.Row(manual...).Row(tg.CB(r.t("btn.back"), "buy"), tg.CB(r.t("btn.home"), "home"))
-	r.show(r.t("plan.detail", "name", esc(planName(r, p)), "limits", planLimits(r, p), "price", r.money(price, cur)), kb)
+	r.show(text, kb)
 }
 
-// onPay handles "pay:<w|c|x|z|s>:<plan id>:<nonce>".
+// onPay handles "pay:<w|c|x|l|z|s>:<nonce>" (a saved checkout), and the
+// "pay:<method>:<plan id>:<nonce>" buttons of menus sent before checkouts.
 func (h *Handler) onPay(r *req, rest string) {
 	parts := strings.Split(rest, ":")
-	if len(parts) != 3 {
+	var (
+		c         state.Checkout
+		method, n string
+	)
+	switch len(parts) {
+	case 2:
+		method, n = parts[0], parts[1]
+		got, ok, err := h.state.LoadCheckout(r.ctx, r.from.ID, n)
+		if err != nil {
+			r.fail(err)
+			return
+		}
+		if !ok {
+			r.show(r.t("error.menu_expired"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home")))
+			return
+		}
+		c = got
+	case 3:
+		method, n = parts[0], parts[2]
+		c = state.Checkout{Type: "new", PlanID: parts[1]}
+	default:
 		h.showPlans(r)
 		return
 	}
-	method, planID, n := parts[0], parts[1], parts[2]
-	p, err := h.findPlan(r, planID, false)
+	p, err := h.findPlan(r, c.PlanID, false)
 	if err != nil {
 		r.fail(err)
 		return
 	}
 	order, err := h.core.CreateOrder(r.ctx, &corev1.CreateOrderRequest{
-		UserId: r.user.GetId(), PlanId: planID, IdempotencyKey: fmt.Sprintf("ord:%d:%s:%s", r.from.ID, planID, n),
+		UserId: r.user.GetId(), PlanId: c.PlanID, Type: c.Type, SubscriptionId: c.SubscriptionID,
+		DiscountCode: c.DiscountCode, IdempotencyKey: fmt.Sprintf("ord:%d:%s:%s", r.from.ID, c.PlanID, n),
 	})
 	if err != nil {
 		r.fail(err)
@@ -161,11 +274,13 @@ func (h *Handler) onPay(r *req, rest string) {
 	}
 	switch method {
 	case "w":
-		h.payWithWallet(r, p, order)
+		h.payWithWallet(r, c, p, order)
 	case "c":
 		h.startManual(r, order, "manual_card", "", 0)
 	case "x":
 		h.startManual(r, order, "manual_crypto", "", 0)
+	case "l":
+		h.startManual(r, order, "manual_zarinpal", "", 0)
 	case "z":
 		h.startGateway(r, order, "zarinpal", planName(r, p), "", 0)
 	case "s":
@@ -175,7 +290,7 @@ func (h *Handler) onPay(r *req, rest string) {
 	}
 }
 
-func (h *Handler) payWithWallet(r *req, p *corev1.Plan, order *corev1.Order) {
+func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order *corev1.Order) {
 	_, err := h.core.PayOrderWithWallet(r.ctx, &corev1.PayOrderWithWalletRequest{OrderId: order.GetId(), UserId: r.user.GetId()})
 	if err == nil {
 		r.show(r.t("pay.wallet_done"), homeKeyboard(r))
@@ -186,22 +301,20 @@ func (h *Handler) payWithWallet(r *req, p *corev1.Plan, order *corev1.Order) {
 		r.fail(err)
 		return
 	}
-	cur := p.GetPrice().GetCurrency()
+	cur, amount := order.GetAmount().GetCurrency(), order.GetAmount().GetAmount()
 	w, _ := h.core.GetWallet(r.ctx, &corev1.GetWalletRequest{UserId: r.user.GetId(), Currency: cur})
-	n := nonce()
+	n, ok := h.saveCheckout(r, c) // the same purchase, paid another way
+	if !ok {
+		return
+	}
 	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.topup_and_buy"), "wtop"))
-	var manual []tg.Button
-	if h.cardEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_card"), "pay:c:"+p.GetId()+":"+n))
+	h.payButtons(r, kb, cur, amount, n, nil)
+	back := "plan:" + p.GetId()
+	if c.SubscriptionID != "" {
+		back = "sub:" + c.SubscriptionID
 	}
-	if h.cryptoEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+p.GetId()+":"+n))
-	}
-	if gw := h.gatewayButtons(r, cur, p.GetPrice().GetAmount(), "pay", p.GetId(), n); len(gw) > 0 {
-		kb.Row(gw...)
-	}
-	kb.Row(manual...).Row(tg.CB(r.t("btn.back"), "plan:"+p.GetId()), tg.CB(r.t("btn.home"), "home"))
-	r.show(r.t("pay.insufficient", "balance", r.money(w.GetBalance(), cur), "price", r.money(p.GetPrice().GetAmount(), cur)), kb)
+	kb.Row(tg.CB(r.t("btn.back"), back), tg.CB(r.t("btn.home"), "home"))
+	r.show(r.t("pay.insufficient", "balance", r.money(w.GetBalance(), cur), "price", r.money(amount, cur)), kb)
 }
 
 // startManual creates (or reuses) a manual intent for an order, or a top-up
@@ -237,7 +350,11 @@ func (h *Handler) startManual(r *req, order *corev1.Order, provider, key string,
 		"intent": intent.GetId(), "provider": provider,
 		"amount": fmt.Sprint(intent.GetAmount().GetAmount()), "currency": intent.GetAmount().GetCurrency(),
 	})
-	r.show(text, cancelKeyboard(r))
+	kb := cancelKeyboard(r)
+	if link := intent.GetDetails()["zarinpal_link"]; provider == "manual_zarinpal" && link != "" {
+		kb = &tg.Keyboard{InlineKeyboard: append([][]tg.Button{{tg.Link(r.t("btn.open_payment"), link)}}, kb.InlineKeyboard...)}
+	}
+	r.show(text, kb)
 }
 
 // instructions renders how to pay an intent in the user's language.
@@ -272,6 +389,11 @@ func (h *Handler) instructions(r *req, in *corev1.PaymentIntentRef) (string, boo
 			shown = r.t("pay.crypto_equiv", "usdt", i18n.Money(r.lang, cents*10_000, "USDT"), "amount", shown)
 		}
 		return r.t("pay.crypto", "amount", shown, "addresses", strings.Join(addrs, "\n"), "ref", esc(d["reference"])), true
+	case "manual_zarinpal":
+		if d["zarinpal_link"] == "" {
+			return "", false
+		}
+		return r.t("pay.zarinpal_link", "amount", r.money(amount, cur), "ref", esc(d["reference"])), true
 	}
 	return "", false
 }
@@ -283,7 +405,7 @@ func (h *Handler) onProof(r *req, st state.State) {
 	intent := st.Get("intent")
 	switch st.Scene {
 	case sceneReceipt:
-		file := r.msg.LargestPhoto()
+		file := r.msg.ImageFile()
 		if file == "" {
 			r.send(r.t("pay.need_photo"), cancelKeyboard(r))
 			return
@@ -307,6 +429,13 @@ func (h *Handler) onProof(r *req, st state.State) {
 		}
 		h.submitProof(r, st, &corev1.SubmitPaymentProofRequest{IntentId: intent, ReceiptFile: st.Get("file"), ReferenceNumber: ref})
 	case sceneTXID:
+		// A screenshot of the transfer is enough: an admin checks it, as with a
+		// card receipt. A pasted transaction hash still works.
+		if file := r.msg.ImageFile(); file != "" {
+			h.submitProof(r, st, &corev1.SubmitPaymentProofRequest{IntentId: intent, ReceiptFile: file,
+				ReferenceNumber: strings.TrimSpace(r.msg.Caption)})
+			return
+		}
 		txid := strings.Join(strings.Fields(r.msg.Text), "")
 		if !txidRe.MatchString(txid) {
 			r.send(r.t("pay.bad_txid"), cancelKeyboard(r))
@@ -334,27 +463,47 @@ func (h *Handler) submitProof(r *req, st state.State, in *corev1.SubmitPaymentPr
 		"amount", func(lang string) string { return i18n.Money(lang, amount, st.Get("currency")) })
 }
 
-// notifyAdmin messages the configured admin in their language. An argument
-// value may be a func(lang) string, rendered in the admin's language.
+// alertToggles are the notify.* switches (on by default) of the staff alerts
+// that have one; other alerts, such as admin.stars_unrecorded, always go out.
+var alertToggles = map[string]string{
+	"admin.new_payment": "notify.new_payment",
+	"admin.new_ticket":  "notify.new_ticket",
+}
+
+// notifyAdmin alerts the staff about something the user did (not the user
+// themselves, when they are staff).
 func (h *Handler) notifyAdmin(r *req, key string, args ...any) {
-	if h.cfg.AdminTelegramID == 0 || h.cfg.AdminTelegramID == r.from.ID {
+	h.notifyStaff(r.ctx, r.from.ID, key, args...)
+}
+
+// notifyStaff messages everyone who gets staff alerts (notify.recipients),
+// each in their language, except the Telegram user skip (0: nobody), unless
+// the alert is switched off. An argument value may be a func(lang) string,
+// rendered in each recipient's language.
+func (h *Handler) notifyStaff(ctx context.Context, skip int64, key string, args ...any) {
+	if toggle, ok := alertToggles[key]; ok && !h.set.Bool(toggle, true) {
 		return
 	}
-	lang := "fa"
-	if u, err := h.core.GetUser(r.ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: h.cfg.AdminTelegramID}}); err == nil {
-		lang = u.GetLanguage()
-	}
-	for i := 1; i < len(args); i += 2 {
-		if f, ok := args[i].(func(string) string); ok {
-			args[i] = f(lang)
+	for _, c := range h.set.Recipients(h.cfg.AdminTelegramID) {
+		if c.TelegramID == skip {
+			continue
 		}
-	}
-	text := h.cat.T(lang, key, args...)
-	var kb *tg.Keyboard
-	if key == "admin.new_payment" {
-		kb = (&tg.Keyboard{}).Row(tg.CB(h.cat.T(lang, "btn.review_now"), "adm:pend"))
-	}
-	if _, err := h.tg.SendMessage(r.ctx, h.cfg.AdminTelegramID, text, kb); err != nil {
-		h.log.Warn("admin notification failed", "err", err)
+		lang := c.Language
+		if lang == "" {
+			lang = h.userLang(ctx, c.TelegramID)
+		}
+		rendered := slices.Clone(args)
+		for i := 1; i < len(rendered); i += 2 {
+			if f, ok := rendered[i].(func(string) string); ok {
+				rendered[i] = f(lang)
+			}
+		}
+		var kb *tg.Keyboard
+		if key == "admin.new_payment" {
+			kb = (&tg.Keyboard{}).Row(tg.CB(h.cat.T(lang, "btn.review_now"), "adm:pend"))
+		}
+		if _, err := h.tg.SendMessage(ctx, c.TelegramID, h.cat.T(lang, key, rendered...), kb); err != nil {
+			h.log.Warn("staff notification failed", "chat", c.TelegramID, "err", err)
+		}
 	}
 }

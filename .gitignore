@@ -48,3 +48,10 @@ coverage.out
 # worktrees
 .worktrees/
 worktrees/
+
+# The dashboard build output (embedded into core by CI and Docker builds);
+# dist/README.txt stays so the Go embed always has a file.
+!/web/dashboard/dist/
+/web/dashboard/dist/*
+!/web/dashboard/dist/README.txt
+/web/dashboard/node_modules/

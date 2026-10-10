@@ -25,7 +25,8 @@ Services reference each other by ID only (UUID v7). Migrations: goose, forward-o
 | referrals | id, referrer_id, referred_id UNIQUE, reward_ledger_id, status |
 | resellers | user_id, tier, mode (discount/credit/both), credit_limit, credit_used |
 | tickets / ticket_messages | id, user_id, status, subject; ticket_id, author_id, body, attachments |
-| audit_log | id, actor_id, action, entity, entity_id, before jsonb, after jsonb, ip, created_at |
+| audit_log | id, actor_id, action, entity, entity_id (text: a uuid, code or key), before jsonb, after jsonb, reason, ip, source (dashboard/bot/cli/system), created_at; append-only (triggers refuse UPDATE, DELETE, TRUNCATE) |
+| assets | name (logo), content_type, data, updated_at: store files kept out of settings |
 | settings | key, value jsonb (branding, texts, feature flags, gateway toggles) |
 | broadcasts | id, audience, body_i18n, status, sent_count, created_at |
 

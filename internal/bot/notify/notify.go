@@ -1,5 +1,6 @@
 // Package notify turns core's events into Telegram messages: payment
-// results, wallet credits, delivered services, and admin alerts.
+// results, wallet credits, delivered and extended services, reminders before
+// a service ends, and admin alerts.
 package notify
 
 import (
@@ -13,6 +14,7 @@ import (
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
@@ -29,16 +31,23 @@ type Notifier struct {
 	core    corev1.CoreServiceClient
 	tg      Telegram
 	cat     *i18n.Catalog
+	set     *settings.Store
 	adminTG int64
 	log     *slog.Logger
 }
 
-// New builds a Notifier; adminTelegramID 0 disables admin alerts.
-func New(core corev1.CoreServiceClient, t Telegram, cat *i18n.Catalog, adminTelegramID int64, log *slog.Logger) *Notifier {
+// New builds a Notifier. set holds the settings the handler keeps up to date
+// (the notify.* switches and who gets staff alerts; nil: the defaults).
+// Staff alerts go to adminTelegramID (0: nobody) unless notify.recipients
+// sends them to every owner and admin.
+func New(core corev1.CoreServiceClient, t Telegram, cat *i18n.Catalog, set *settings.Store, adminTelegramID int64, log *slog.Logger) *Notifier {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Notifier{core: core, tg: t, cat: cat, adminTG: adminTelegramID, log: log}
+	if set == nil {
+		set = settings.New()
+	}
+	return &Notifier{core: core, tg: t, cat: cat, set: set, adminTG: adminTelegramID, log: log}
 }
 
 func decode(m eventbus.Message, v any) error {
@@ -57,11 +66,21 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
-		if e.Source != events.PaidManually && e.Source != events.PaidByGateway {
-			return nil // wallet, trial and free orders were confirmed in the chat already
+		// The customer's confirmation first: a failed one retries the event,
+		// and the staff's sale alert must not be sent again each time.
+		if e.Source == events.PaidManually || e.Source == events.PaidByGateway {
+			lang := n.lang(ctx, e.TelegramID)
+			if err := n.send(ctx, e.TelegramID, n.cat.T(lang, "pay.approved"), n.home(lang)); err != nil {
+				return err
+			}
+		} // wallet, trial and free orders were confirmed in the chat already
+		if e.Source != events.PaidTrial && e.Source != events.PaidFree && n.set.Bool("notify.sales", false) {
+			// Best effort: a lost sale alert is not worth holding the queue for.
+			if err := n.saleAlert(ctx, e); err != nil {
+				n.log.Warn("sale alert not sent", "order", e.OrderID, "err", err)
+			}
 		}
-		lang := n.lang(ctx, e.TelegramID)
-		return n.send(ctx, e.TelegramID, n.cat.T(lang, "pay.approved"), n.home(lang))
+		return nil
 
 	case events.SubscriptionProvisioned:
 		var e events.SubscriptionProvisionedEvent
@@ -103,6 +122,8 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		key := map[string]string{
 			events.CreditOrderNotPayable: "wallet.credited_late",
 			events.CreditAdminAdjust:     "wallet.credited_admin",
+			events.CreditReferral:        "wallet.credited_referral",
+			events.CreditRefund:          "wallet.credited_refund",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"
@@ -111,21 +132,148 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, key,
 			"amount", i18n.Money(lang, e.Amount, e.Currency), "balance", i18n.Money(lang, e.Balance, e.Currency)), n.home(lang))
 
+	case events.SubscriptionExtended:
+		var e events.SubscriptionExtendedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		lang := n.lang(ctx, e.TelegramID)
+		kb := (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.view_service"), "sub:"+e.SubscriptionID))
+		key := "sub.renewed"
+		if e.Type == "traffic_topup" {
+			key = "sub.topped_up"
+		}
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, key, "id", shortID(e.SubscriptionID),
+			"expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes)), kb)
+
+	case events.SubscriptionReminder:
+		var e events.SubscriptionReminderEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		lang := n.lang(ctx, e.TelegramID)
+		row := []tg.Button{tg.CB(n.cat.T(lang, "btn.renew"), "rnw:"+e.SubscriptionID)}
+		if e.TopupAvailable && (e.Kind == events.ReminderLowTraffic || e.Kind == events.ReminderDepleted) {
+			row = append(row, tg.CB(n.cat.T(lang, "btn.add_traffic"), "tup:"+e.SubscriptionID))
+		}
+		kb := (&tg.Keyboard{}).Row(row...).Row(tg.CB(n.cat.T(lang, "btn.view_service"), "sub:"+e.SubscriptionID))
+		var text string
+		switch e.Kind {
+		case events.ReminderExpiring:
+			text = n.cat.T(lang, "reminder.expiring", "id", shortID(e.SubscriptionID),
+				"days", i18n.Number(lang, int64(e.Days)), "date", n.expires(lang, e.ExpiresAt))
+		case events.ReminderLowTraffic:
+			text = n.cat.T(lang, "reminder.low_traffic", "id", shortID(e.SubscriptionID),
+				"used", i18n.Bytes(lang, e.TrafficUsedBytes), "total", i18n.Bytes(lang, e.TrafficTotalBytes))
+		case events.ReminderExpired:
+			text = n.cat.T(lang, "reminder.expired", "id", shortID(e.SubscriptionID))
+		case events.ReminderDepleted:
+			text = n.cat.T(lang, "reminder.depleted", "id", shortID(e.SubscriptionID), "total", i18n.Bytes(lang, e.TrafficTotalBytes))
+		default:
+			return nil // a newer core's reminder this bot does not know
+		}
+		return n.send(ctx, e.TelegramID, text, kb)
+
 	case events.ProvisionFailed:
 		var e events.ProvisionFailedEvent
 		if err := decode(m, &e); err != nil {
 			return err
 		}
-		if n.adminTG != 0 {
-			lang := n.lang(ctx, n.adminTG)
-			if err := n.send(ctx, n.adminTG, n.cat.T(lang, "admin.provision_failed",
-				"attempts", e.Attempts, "order", e.OrderID, "tg", e.TelegramID, "error", html.EscapeString(truncate(e.Error, 500))), nil); err != nil {
+		if n.set.Bool("notify.provision_failed", true) {
+			if err := n.alert(ctx, 0, func(lang string) string {
+				return n.cat.T(lang, "admin.provision_failed", "attempts", e.Attempts, "order", e.OrderID,
+					"tg", e.TelegramID, "error", html.EscapeString(truncate(e.Error, 500)))
+			}); err != nil {
 				return err
 			}
 		}
 		return n.send(ctx, e.TelegramID, n.cat.T(n.lang(ctx, e.TelegramID), "sub.delayed"), nil)
 	}
 	return nil
+}
+
+// alert messages everyone who gets staff alerts (notify.recipients), each in
+// their language, except the Telegram user skip (0: nobody). It fails only
+// when nobody got it, so a retry does not repeat it to those who did.
+func (n *Notifier) alert(ctx context.Context, skip int64, text func(lang string) string) error {
+	var failed error
+	sent := false
+	for _, c := range n.set.Recipients(n.adminTG) {
+		if c.TelegramID == skip {
+			continue
+		}
+		lang := c.Language
+		if lang == "" {
+			lang = n.lang(ctx, c.TelegramID)
+		}
+		if err := n.send(ctx, c.TelegramID, text(lang), nil); err != nil {
+			n.log.Warn("staff alert failed", "chat", c.TelegramID, "err", err)
+			failed = err
+			continue
+		}
+		sent = true
+	}
+	if sent {
+		return nil
+	}
+	return failed
+}
+
+// saleAlert tells the staff about a paid order (notify.sales); a staff
+// member's own purchase is not announced to them.
+func (n *Notifier) saleAlert(ctx context.Context, e events.OrderPaidEvent) error {
+	buyer := fmt.Sprintf("id %d", e.TelegramID)
+	if u, err := n.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: e.TelegramID}}); err == nil && u.GetUsername() != "" {
+		buyer = "@" + u.GetUsername()
+	}
+	var names map[string]string
+	if ps, err := n.core.ListPlans(ctx, &corev1.ListPlansRequest{IncludeDisabled: true}); err == nil {
+		for _, p := range ps.GetPlans() {
+			if p.GetId() == e.PlanID {
+				names = p.GetNameI18N()
+			}
+		}
+	}
+	return n.alert(ctx, e.TelegramID, func(lang string) string {
+		return n.cat.T(lang, "admin.new_sale", "user", html.EscapeString(buyer),
+			"plan", html.EscapeString(planName(names, lang, e.PlanID)), "amount", i18n.Money(lang, e.Amount, e.Currency))
+	})
+}
+
+// planName is a plan's name in lang, else in another language, else its id.
+func planName(names map[string]string, lang, id string) string {
+	if n := names[lang]; n != "" {
+		return n
+	}
+	for _, l := range i18n.Languages {
+		if n := names[l]; n != "" {
+			return n
+		}
+	}
+	return "#" + shortID(id)
+}
+
+func (n *Notifier) expires(lang string, unix int64) string {
+	if unix <= 0 {
+		return n.cat.T(lang, "sub.no_expiry")
+	}
+	return i18n.Date(lang, time.Unix(unix, 0))
+}
+
+func (n *Notifier) traffic(lang string, b int64) string {
+	if b <= 0 {
+		return n.cat.T(lang, "sub.unlimited")
+	}
+	return i18n.Bytes(lang, b)
+}
+
+// shortID is how services are named in messages: the last 6 characters.
+func shortID(id string) string {
+	id = strings.ReplaceAll(id, "-", "")
+	if len(id) > 6 {
+		return id[len(id)-6:]
+	}
+	return id
 }
 
 func (n *Notifier) home(lang string) *tg.Keyboard {

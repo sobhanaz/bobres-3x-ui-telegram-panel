@@ -85,3 +85,31 @@ func memClient(t *testing.T) *redis.Client {
 	t.Cleanup(func() { _ = rdb.Close() })
 	return rdb
 }
+
+func TestGiveReturnsOneRequest(t *testing.T) {
+	rdb := memClient(t)
+	prefix := testPrefix(t)
+	l := New(rdb, prefix)
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := l.Allow(ctx, "user:g", time.Minute, 2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := l.Give(ctx, "user:g"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := l.Allow(ctx, "user:g", time.Minute, 2); !ok {
+		t.Fatal("a given-back request was still counted")
+	}
+	if ok, _ := l.Allow(ctx, "user:g", time.Minute, 2); ok {
+		t.Fatal("over the limit after a give-back")
+	}
+	// Nothing to give back: no key is made (it would never expire).
+	if err := l.Give(ctx, "user:none"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := rdb.Exists(ctx, prefix+"user:none").Result(); err != nil || n != 0 {
+		t.Fatalf("give-back made a key: %d %v", n, err)
+	}
+}

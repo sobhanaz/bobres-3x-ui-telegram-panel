@@ -44,15 +44,20 @@ func (h *Handler) gatewayMethods(ctx context.Context, currency string, amount in
 	return resp.GetProviders()
 }
 
-// gatewayButtons are the automated payment buttons, "<verb>:<z|s>:<target>:<nonce>".
+// gatewayButtons are the automated payment buttons, "<verb>:<z|s>:<target>:<nonce>"
+// ("<verb>:<z|s>:<nonce>" without a target).
 func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, target, n string) []tg.Button {
+	suffix := ":" + n
+	if target != "" {
+		suffix = ":" + target + suffix
+	}
 	var out []tg.Button
 	for _, m := range h.gatewayMethods(r.ctx, currency, amount) {
 		switch m {
 		case "zarinpal":
-			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z:"+target+":"+n))
+			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z"+suffix))
 		case "stars":
-			out = append(out, tg.CB(r.t("btn.pay_stars"), verb+":s:"+target+":"+n))
+			out = append(out, tg.CB(r.t("btn.pay_stars"), verb+":s"+suffix))
 		}
 	}
 	return out
@@ -238,16 +243,14 @@ func (h *Handler) onStarsPaid(parent context.Context, m *tg.Message) {
 	h.log.Error("Stars payment not recorded as paid", "telegram_id", from.ID, "charge_id", sp.TelegramPaymentChargeID,
 		"payload", sp.InvoicePayload, "stars", sp.TotalAmount, "status", ref.GetStatus(), "reason", ref.GetFailureReason(), "err", err)
 	h.sendTo(ctx, m.Chat.ID, h.cat.T(lang, "pay.stars_unrecorded", "code", esc(sp.TelegramPaymentChargeID)))
-	if h.cfg.AdminTelegramID != 0 {
-		who := strconv.FormatInt(from.ID, 10)
-		if from.Username != "" {
-			who = "@" + from.Username + " (" + who + ")"
-		}
-		al := h.userLang(ctx, h.cfg.AdminTelegramID)
-		h.sendTo(ctx, h.cfg.AdminTelegramID, h.cat.T(al, "admin.stars_unrecorded",
-			"user", esc(who), "stars", i18n.Number(al, sp.TotalAmount),
-			"charge", esc(sp.TelegramPaymentChargeID), "payload", esc(sp.InvoicePayload)))
+	who := strconv.FormatInt(from.ID, 10)
+	if from.Username != "" {
+		who = "@" + from.Username + " (" + who + ")"
 	}
+	// Always sent, also to a staff member who paid: money was taken.
+	h.notifyStaff(ctx, 0, "admin.stars_unrecorded",
+		"user", esc(who), "stars", func(l string) string { return i18n.Number(l, sp.TotalAmount) },
+		"charge", esc(sp.TelegramPaymentChargeID), "payload", esc(sp.InvoicePayload))
 }
 
 // userLang is a user's language, or the default when unknown.

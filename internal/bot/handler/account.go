@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -87,11 +89,27 @@ func (h *Handler) showService(r *req, id string) {
 			r.show(r.t("sub.not_ready"), backHome(r, "subs"))
 			return
 		}
-		kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.qr"), "qr:"+id)).
+		kb := &tg.Keyboard{}
+		var extend []tg.Button
+		if renewable(s) {
+			extend = append(extend, tg.CB(r.t("btn.renew"), "rnw:"+id))
+		}
+		if toppable(s) && len(h.topupPlans(r)) > 0 {
+			extend = append(extend, tg.CB(r.t("btn.add_traffic"), "tup:"+id))
+		}
+		kb.Row(extend...).Row(tg.CB(r.t("btn.qr"), "qr:"+id)).
 			Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
-		r.show(r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
+		text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
 			"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
-			"link", esc(s.GetSubscriptionLink())), kb)
+			"link", esc(s.GetSubscriptionLink()))
+		used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
+		switch {
+		case total > 0:
+			text += "\n" + r.t("sub.usage", "used", i18n.Bytes(r.lang, used), "total", i18n.Bytes(r.lang, total), "bar", usageBar(used, total))
+		case used > 0:
+			text += "\n" + r.t("sub.usage_unlimited", "used", i18n.Bytes(r.lang, used))
+		}
+		r.show(text, kb)
 		return
 	}
 	h.showServices(r)
@@ -147,6 +165,9 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	if h.cryptoEnabled("IRT") {
 		methods = append(methods, tg.CB(r.t("btn.pay_crypto"), fmt.Sprintf("wpay:x:%d:%s", amount, n)))
 	}
+	if h.zarinpalLinkEnabled("IRT") {
+		methods = append(methods, tg.CB(r.t("btn.pay_zarinpal_link"), fmt.Sprintf("wpay:l:%d:%s", amount, n)))
+	}
 	gw := h.gatewayButtons(r, "IRT", amount, "wpay", fmt.Sprint(amount), n)
 	if len(methods) == 0 && len(gw) == 0 {
 		r.show(r.t("pay.not_configured"), homeKeyboard(r))
@@ -175,7 +196,7 @@ func (h *Handler) onTopupPay(r *req, rest string) {
 		h.showTopupAmounts(r)
 		return
 	}
-	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "z": "zarinpal", "s": "stars"}[parts[0]]
+	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "l": "manual_zarinpal", "z": "zarinpal", "s": "stars"}[parts[0]]
 	if provider == "" {
 		h.showWallet(r)
 		return
@@ -264,7 +285,57 @@ func (h *Handler) onSupport(r *req) {
 		contact = r.t("support.contact", "contact", esc(c))
 	}
 	r.setState(sceneTicket, nil)
-	r.show(r.t("support.prompt", "contact", contact), cancelKeyboard(r))
+	kb := (&tg.Keyboard{}).Row(h.legalButtons(r)...).Row(tg.CB(r.t("btn.cancel"), "cancel"))
+	r.show(r.t("support.prompt", "contact", contact), kb)
+}
+
+// legalButtons link to the store's terms and privacy policy, when set
+// (https links only: Telegram refuses a message with a bad link button).
+func (h *Handler) legalButtons(r *req) []tg.Button {
+	var out []tg.Button
+	if u := h.setting("branding.terms_url"); httpsURL(u) {
+		out = append(out, tg.Link(r.t("btn.terms"), u))
+	}
+	if u := h.setting("branding.privacy_url"); httpsURL(u) {
+		out = append(out, tg.Link(r.t("btn.privacy"), u))
+	}
+	return out
+}
+
+// onTerms answers /terms with the store's terms and privacy policy.
+func (h *Handler) onTerms(r *req) {
+	links := h.legalButtons(r)
+	if len(links) == 0 {
+		r.send(r.t("terms.none"), homeKeyboard(r))
+		return
+	}
+	r.send(r.t("terms.title"), (&tg.Keyboard{}).Row(links...).Row(tg.CB(r.t("btn.home"), "home")))
+}
+
+// allowTicket counts a support message against limits.tickets_per_day per
+// user and day (0: no limit). A limiter failure lets the message through.
+func (h *Handler) allowTicket(r *req) bool {
+	perDay := h.set.Int("limits.tickets_per_day", 10, 0, 100)
+	if h.limiter == nil || perDay == 0 {
+		return true
+	}
+	ok, err := h.limiter.Allow(r.ctx, ticketKey(r), 24*time.Hour, int(perDay))
+	return err != nil || ok
+}
+
+func ticketKey(r *req) string { return "bot:tk:" + strconv.FormatInt(r.from.ID, 10) }
+
+// giveTicket returns a counted support message whose ticket was not made.
+func (h *Handler) giveTicket(r *req) {
+	g, ok := h.limiter.(interface {
+		Give(ctx context.Context, key string) error
+	})
+	if !ok {
+		return
+	}
+	if err := g.Give(r.ctx, ticketKey(r)); err != nil {
+		h.log.Warn("ticket limit give back", "err", err)
+	}
 }
 
 const maxTicketRunes = 2000
@@ -281,9 +352,15 @@ func (h *Handler) onTicket(r *req) {
 	if utf8.RuneCountInString(text) > maxTicketRunes {
 		text = string([]rune(text)[:maxTicketRunes])
 	}
+	if !h.allowTicket(r) {
+		r.clearState()
+		r.send(r.t("support.limit"), homeKeyboard(r))
+		return
+	}
 	t, err := h.core.CreateSupportTicket(r.ctx, &corev1.CreateSupportTicketRequest{UserId: r.user.GetId(), Category: "general", Text: text})
 	r.clearState()
 	if err != nil {
+		h.giveTicket(r) // no ticket was made: it does not count
 		r.fail(err)
 		return
 	}

@@ -15,23 +15,6 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/money"
 )
 
-// SettingKeys are the settings an admin may change from the bot (and later the
-// dashboard). Values are plain text.
-var SettingKeys = map[string]string{
-	"payments.card_number": "card number shown for card-to-card payments",
-	"payments.card_holder": "card holder name",
-	"payments.usdt_trc20":  "USDT TRC20 deposit address",
-	"payments.usdt_erc20":  "USDT ERC20 deposit address",
-	"payments.usdt_rate":   "Toman per 1 USDT, to quote Toman prices in USDT",
-	"payments.stars_rate":  "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
-	"branding.name":        "store name shown to users",
-	"branding.support":     "support contact (e.g. @support)",
-	"texts.fa.welcome":     "Persian welcome text",
-	"texts.en.welcome":     "English welcome text",
-}
-
-const maxSettingLen = 1000
-
 // requireStaff loads the actor and checks they are an active admin or owner.
 func (s *Service) requireStaff(ctx context.Context, actorTelegramID int64) (*store.User, error) {
 	if actorTelegramID <= 0 {
@@ -51,15 +34,30 @@ func (s *Service) requireStaff(ctx context.Context, actorTelegramID int64) (*sto
 }
 
 func (s *Service) audit(ctx context.Context, q pgx.Tx, actor *store.User, action, entity, entityID string, after any, reason string) error {
-	var payload []byte
-	if after != nil {
-		b, err := json.Marshal(after)
-		if err != nil {
-			return err
+	return s.auditChange(ctx, q, actor, action, entity, entityID, nil, after, reason)
+}
+
+// auditChange writes an audit entry with the item's state before and after.
+// A nil actor is the system (a configured rule, not a person).
+func (s *Service) auditChange(ctx context.Context, q pgx.Tx, actor *store.User, action, entity, entityID string, before, after any, reason string) error {
+	enc := func(v any) ([]byte, error) {
+		if v == nil {
+			return nil, nil
 		}
-		payload = b
+		return json.Marshal(v)
 	}
-	a := &store.Audit{ActorID: &actor.ID, Action: action, Entity: entity, After: payload}
+	b, err := enc(before)
+	if err != nil {
+		return err
+	}
+	payload, err := enc(after)
+	if err != nil {
+		return err
+	}
+	a := &store.Audit{Action: action, Entity: entity, Before: b, After: payload}
+	if actor != nil {
+		a.ActorID = &actor.ID
+	}
 	if entityID != "" {
 		a.EntityID = &entityID
 	}
@@ -135,6 +133,12 @@ func (s *Service) AdminReviewPayment(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return "", err
 	}
+	return s.ReviewPayment(ctx, actor, pay, intentID, decision, reason)
+}
+
+// ReviewPayment approves or rejects a manual payment. Like every staff
+// operation taking an actor, the caller has checked that the actor may.
+func (s *Service) ReviewPayment(ctx context.Context, actor *store.User, pay PaymentsClient, intentID, decision, reason string) (string, error) {
 	if decision != "approved" && decision != "rejected" {
 		return "", invalid("decision must be approved or rejected")
 	}
@@ -142,9 +146,14 @@ func (s *Service) AdminReviewPayment(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return "", err
 	}
+	after := map[string]string{"decision": decision}
+	// The order makes the entry easy to follow from the audit log.
+	if recs, _, err := pay.ListPayments(ctx, PaymentFilter{IntentID: intentID}, 1, 1); err == nil && len(recs) == 1 {
+		after["order_id"] = recs[0].OrderID
+	}
 	// The review already happened; an audit failure is logged by the caller
 	// through the returned error but does not undo it.
-	if err := s.audit(ctx, nil, actor, "payment.review", "payment_intent", intentID, map[string]string{"decision": decision}, reason); err != nil {
+	if err := s.audit(ctx, nil, actor, "payment.review", "payment_intent", intentID, after, reason); err != nil {
 		return status, fmt.Errorf("payment reviewed but audit failed: %w", err)
 	}
 	return status, nil
@@ -197,6 +206,11 @@ func (s *Service) AdminAdjustBalance(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return nil, err
 	}
+	return s.AdjustBalance(ctx, actor, userID, delta, currency, reason, idemKey)
+}
+
+// AdjustBalance is AdminAdjustBalance for an actor the caller has checked.
+func (s *Service) AdjustBalance(ctx context.Context, actor *store.User, userID string, delta int64, currency, reason, idemKey string) (*store.Wallet, error) {
 	reason = strings.TrimSpace(reason)
 	switch {
 	case delta == 0 || delta > maxTopupMinor || delta < -maxTopupMinor:
@@ -248,13 +262,19 @@ func (s *Service) AdminAdjustBalance(ctx context.Context, actorTelegramID int64,
 	return w, nil
 }
 
-// AdminSetUserStatus bans or unbans a user. The owner cannot be banned, and
-// nobody can ban themselves.
+// AdminSetUserStatus bans or unbans a customer. Nobody can ban themselves or
+// a staff member (owner, admin, support): staff are managed by the owner.
 func (s *Service) AdminSetUserStatus(ctx context.Context, actorTelegramID int64, userID, status, reason string) (*store.User, error) {
 	actor, err := s.requireStaff(ctx, actorTelegramID)
 	if err != nil {
 		return nil, err
 	}
+	return s.SetUserStatus(ctx, actor, userID, status, reason)
+}
+
+// SetUserStatus is AdminSetUserStatus for an actor the caller has checked.
+// Staff cannot ban staff: demote them first (an owner's decision).
+func (s *Service) SetUserStatus(ctx context.Context, actor *store.User, userID, status, reason string) (*store.User, error) {
 	if status != "active" && status != "banned" {
 		return nil, invalid("status must be active or banned")
 	}
@@ -265,14 +285,15 @@ func (s *Service) AdminSetUserStatus(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return nil, err
 	}
-	if target.ID == actor.ID || target.Role == "owner" {
+	if target.ID == actor.ID || IsStaffRole(target.Role) {
 		return nil, ErrForbidden
 	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.SetUserStatus(ctx, tx, userID, status); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actor, "user.status", "user", userID, map[string]string{"status": status}, reason)
+		return s.auditChange(ctx, tx, actor, "user.status", "user", userID,
+			map[string]string{"status": target.Status}, map[string]string{"status": status}, reason)
 	})
 	if err != nil {
 		return nil, err
@@ -287,14 +308,27 @@ func (s *Service) AdminUpsertPlan(ctx context.Context, actorTelegramID int64, p 
 	if err != nil {
 		return nil, err
 	}
+	return s.UpsertPlan(ctx, actor, p)
+}
+
+// UpsertPlan is AdminUpsertPlan for an actor the caller has checked.
+func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Plan) (*store.Plan, error) {
 	if err := validatePlan(p); err != nil {
 		return nil, err
 	}
-	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+	var before any // nil for a new plan
+	if p.ID != "" {
+		old, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID)
+		if err != nil {
+			return nil, err // editing a plan that does not exist
+		}
+		before = old
+	}
+	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actor, "plan.upsert", "plan", p.ID, p, "")
+		return s.auditChange(ctx, tx, actor, "plan.upsert", "plan", p.ID, before, p, "")
 	})
 	if err != nil {
 		return nil, err
@@ -317,6 +351,9 @@ func validatePlan(p *store.Plan) error {
 	if p.IsTrial && p.Price != 0 {
 		return invalid("a trial plan must be free")
 	}
+	if p.IsTopup && (p.IsTrial || p.Kind != "traffic") {
+		return invalid("a traffic package is a paid plan of kind traffic")
+	}
 	if p.DurationDays != nil && (*p.DurationDays < 0 || *p.DurationDays > 3650) {
 		return invalid("duration out of range")
 	}
@@ -330,29 +367,4 @@ func validatePlan(p *store.Plan) error {
 		return invalid("a %s plan needs a traffic limit", p.Kind)
 	}
 	return nil
-}
-
-// AdminSetSetting changes one allowlisted setting.
-func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, key, value string) error {
-	actor, err := s.requireStaff(ctx, actorTelegramID)
-	if err != nil {
-		return err
-	}
-	if _, ok := SettingKeys[key]; !ok {
-		return invalid("unknown setting %q", key)
-	}
-	value = strings.TrimSpace(value)
-	if len(value) > maxSettingLen {
-		return invalid("setting value too long")
-	}
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return s.st.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := s.st.SetSetting(ctx, tx, key, raw); err != nil {
-			return err
-		}
-		return s.audit(ctx, tx, actor, "setting.set", "settings", "", map[string]string{"key": key, "value": value}, "")
-	})
 }

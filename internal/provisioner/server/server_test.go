@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
@@ -123,6 +124,21 @@ func TestCreateProvisionFlow(t *testing.T) {
 	if _, err := f.client.ResetTraffic(ctx, &provisionerv1.ResetTrafficRequest{SubscriptionId: sub1}); err != nil {
 		t.Fatalf("ResetTraffic: %v", err)
 	}
+	for _, on := range []bool{false, true} {
+		if _, err := f.client.SetClientEnabled(ctx, &provisionerv1.SetClientEnabledRequest{SubscriptionId: sub1, Enabled: on}); err != nil {
+			t.Fatalf("SetClientEnabled(%v): %v", on, err)
+		}
+		u, err := f.client.GetUsage(ctx, &provisionerv1.GetUsageRequest{SubscriptionId: sub1})
+		if err != nil || u.GetEnabled() != on || u.GetTrafficTotalBytes() != 10<<30 || u.GetExpiresAt() == 0 {
+			t.Fatalf("after SetClientEnabled(%v): %v %+v", on, err, u)
+		}
+	}
+	if lost := f.fake.LostFields(); len(lost) != 0 {
+		t.Fatalf("an update lost the client's identity: %v", lost)
+	}
+	if _, err := f.client.SetClientEnabled(ctx, &provisionerv1.SetClientEnabledRequest{SubscriptionId: "00000000-0000-4000-8000-000000000999"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown subscription: %v", err)
+	}
 	ins, err := f.client.ListInbounds(ctx, &provisionerv1.ListInboundsRequest{})
 	if err != nil || len(ins.GetInbounds()) != 3 {
 		t.Fatalf("ListInbounds: %v %v", err, ins)
@@ -182,6 +198,10 @@ func TestCreateClientIsSafeToRetry(t *testing.T) {
 	again, err := f.client.CreateClient(ctx, req)
 	if err != nil || again.GetXuiSubId() != first.GetXuiSubId() || f.fake.Calls("add") != 1 {
 		t.Fatalf("retry: %v, add calls=%d", err, f.fake.Calls("add"))
+	}
+	// The retry reports the panel's limits: zeros would be stored as "never expires".
+	if first.GetExpiresAt() == 0 || again.GetExpiresAt() != first.GetExpiresAt() {
+		t.Fatalf("retry lost the expiry: first %d, retry %d", first.GetExpiresAt(), again.GetExpiresAt())
 	}
 
 	// An earlier attempt created the client but its response was lost (no map
@@ -300,5 +320,44 @@ func TestOnlyCoreMayCall(t *testing.T) {
 		&provisionerv1.DeleteClientRequest{SubscriptionId: sub1})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("want Unauthenticated, got %v", err)
+	}
+}
+
+func TestSetClientLimitsAndUsage(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if _, err := f.client.CreateClient(ctx, &provisionerv1.CreateClientRequest{SubscriptionId: sub1, Email: "u10-renew", DurationDays: 1, TrafficBytes: 1 << 30}); err != nil {
+		t.Fatal(err)
+	}
+	f.fake.AddUsage("u10-renew", 300, 700)
+	u, err := f.client.GetUsage(ctx, &provisionerv1.GetUsageRequest{SubscriptionId: sub1})
+	if err != nil || u.GetTrafficUsedBytes() != 1000 || u.GetTrafficTotalBytes() != 1<<30 || u.GetExpiresAt() == 0 || !u.GetEnabled() {
+		t.Fatalf("usage: %+v %v", u, err)
+	}
+
+	// Absolute limits: applying the same request twice changes nothing more.
+	exp := time.Now().Add(40 * 24 * time.Hour).Unix()
+	req := &provisionerv1.SetClientLimitsRequest{SubscriptionId: sub1, ExpiresAt: exp, TrafficTotalBytes: 3 << 30}
+	for i := 0; i < 2; i++ {
+		if _, err := f.client.SetClientLimits(ctx, req); err != nil {
+			t.Fatalf("set limits #%d: %v", i+1, err)
+		}
+	}
+	snap, _ := f.fake.Snapshot("u10-renew")
+	if snap.ExpiryTime != exp*1000 || snap.TotalGB != 3<<30 || !snap.Enable || snap.Up+snap.Down != 1000 {
+		t.Fatalf("panel after set limits: %+v", snap)
+	}
+	if lost := f.fake.LostFields(); len(lost) != 0 {
+		t.Fatalf("the update dropped the client's identity: %v", lost)
+	}
+	links, err := f.client.GetLinks(ctx, &provisionerv1.GetLinksRequest{SubscriptionId: sub1})
+	if err != nil || !strings.HasSuffix(links.GetSubscriptionLink(), f.st.SubIDFor(sub1)) {
+		t.Fatalf("subscription link after the update: %v %v", links, err)
+	}
+	if _, err := f.client.SetClientLimits(ctx, &provisionerv1.SetClientLimitsRequest{SubscriptionId: "00000000-0000-7000-8000-0000000000c1", ExpiresAt: exp}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unprovisioned subscription: %v", err)
+	}
+	if _, err := f.client.SetClientLimits(ctx, &provisionerv1.SetClientLimitsRequest{SubscriptionId: sub1, ExpiresAt: -1}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("negative expiry: %v", err)
 	}
 }

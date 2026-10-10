@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/notify"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	corestore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testenv"
@@ -26,11 +28,12 @@ func TestMain(m *testing.M) { testdb.Main(m) }
 // --- a fake Telegram that keeps each chat's messages ---
 
 type msg struct {
-	id     int
-	text   string
-	kb     *tg.Keyboard
-	photo  bool
-	fileID string
+	id       int
+	text     string
+	kb       *tg.Keyboard
+	photo    bool
+	document bool
+	fileID   string
 }
 
 type fakeTG struct {
@@ -40,6 +43,16 @@ type fakeTG struct {
 	cbFrom   map[string]int64
 	invoices map[int64][]tg.Invoice
 	answers  map[string]precheckAnswer // by pre-checkout query id
+	docs     map[string]bool           // file ids users sent as documents
+
+	// The join channel: each user's status (none: "left"), how often the
+	// bot asked, and an error every check fails with.
+	members     map[int64]string
+	memberCalls int
+	memberErr   error
+
+	// down: chats whose messages fail (Telegram unreachable for them).
+	down map[int64]bool
 }
 
 type precheckAnswer struct {
@@ -49,7 +62,38 @@ type precheckAnswer struct {
 
 func newFakeTG() *fakeTG {
 	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{},
-		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}}
+		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}, docs: map[string]bool{},
+		members: map[int64]string{}}
+}
+
+func (f *fakeTG) GetChat(_ context.Context, chat string) (*tg.Chat, error) {
+	return &tg.Chat{ID: -1001234567890, Type: "channel", Title: "Test channel", Username: strings.TrimPrefix(chat, "@")}, nil
+}
+
+func (f *fakeTG) GetChatMember(_ context.Context, _ string, userID int64) (*tg.ChatMember, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.memberCalls++
+	if f.memberErr != nil {
+		return nil, f.memberErr
+	}
+	st := f.members[userID]
+	if st == "" {
+		st = "left"
+	}
+	return &tg.ChatMember{Status: st, User: tg.User{ID: userID}}, nil
+}
+
+func (f *fakeTG) setMember(userID int64, status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.members[userID] = status
+}
+
+func (f *fakeTG) checks() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.memberCalls
 }
 
 func (f *fakeTG) SendInvoice(_ context.Context, chat int64, inv tg.Invoice) (*tg.Message, error) {
@@ -85,11 +129,37 @@ func (f *fakeTG) add(chat int64, m *msg) *tg.Message {
 }
 
 func (f *fakeTG) SendMessage(_ context.Context, chat int64, text string, kb *tg.Keyboard) (*tg.Message, error) {
+	f.mu.Lock()
+	down := f.down[chat]
+	f.mu.Unlock()
+	if down {
+		return nil, &tg.APIError{Code: 502, Description: "Bad Gateway"}
+	}
 	return f.add(chat, &msg{text: text, kb: kb}), nil
 }
 
+// setDown makes messages to a chat fail (or work again).
+func (f *fakeTG) setDown(chat int64, down bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.down == nil {
+		f.down = map[int64]bool{}
+	}
+	f.down[chat] = down
+}
+
 func (f *fakeTG) SendPhoto(_ context.Context, chat int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error) {
+	f.mu.Lock()
+	isDoc := f.docs[p.FileID]
+	f.mu.Unlock()
+	if isDoc { // like Telegram: a document's file id is not a photo
+		return nil, &tg.APIError{Code: 400, Description: "Bad Request: type of file mismatch"}
+	}
 	return f.add(chat, &msg{text: caption, kb: kb, photo: true, fileID: p.FileID}), nil
+}
+
+func (f *fakeTG) SendDocument(_ context.Context, chat int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error) {
+	return f.add(chat, &msg{text: caption, kb: kb, document: true, fileID: fileID}), nil
 }
 
 func (f *fakeTG) EditMessageText(_ context.Context, chat int64, id int, text string, kb *tg.Keyboard) error {
@@ -180,10 +250,10 @@ func newWorld(t *testing.T) *world {
 	stack := testenv.Start(t, ownerID)
 	ftg := newFakeTG()
 	cat := i18n.MustLoad()
-	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN"}, nil)
+	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(stack.Feed),
-		Handle:     notify.New(stack.Core, ftg, cat, ownerID, nil).Handle,
+		Handle:     notify.New(stack.Core, ftg, cat, h.Settings(), ownerID, nil).Handle,
 		DeadLetter: func(context.Context, eventbus.Message, error) error { return nil },
 	})
 	if err != nil {
@@ -215,6 +285,17 @@ func (p *person) photo(fileID, caption string) {
 	p.w.h.Handle(context.Background(), tg.Update{UpdateID: p.w.updateID(), Message: &tg.Message{
 		MessageID: int(p.w.updateID()), From: p.from(), Chat: tg.Chat{ID: p.id, Type: "private"},
 		Caption: caption, Photo: []tg.PhotoSize{{FileID: fileID + "-small", Width: 90, Height: 90}, {FileID: fileID, Width: 1280, Height: 960}},
+	}})
+}
+
+// document sends an image as a file (uncompressed screenshot).
+func (p *person) document(fileID, mime, caption string) {
+	p.w.tg.mu.Lock()
+	p.w.tg.docs[fileID] = true
+	p.w.tg.mu.Unlock()
+	p.w.h.Handle(context.Background(), tg.Update{UpdateID: p.w.updateID(), Message: &tg.Message{
+		MessageID: int(p.w.updateID()), From: p.from(), Chat: tg.Chat{ID: p.id, Type: "private"},
+		Caption: caption, Document: &tg.Document{FileID: fileID, MimeType: mime, FileName: "receipt.jpg"},
 	}})
 }
 
@@ -352,6 +433,10 @@ func (p *person) eventuallySees(sub string) {
 		return false
 	})
 }
+
+// trc20 is a well-formed USDT TRC20 address (T and 33 base58 characters):
+// core refuses anything else.
+const trc20 = "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL"
 
 // setupStore registers the owner and configures a plan, a card and a trial.
 func setupStore(t *testing.T, w *world) *person {
@@ -513,7 +598,7 @@ func TestRejectionReasonInTheUsersLanguage(t *testing.T) {
 func TestCryptoTXIDFlow(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
-	owner.text("/set payments.usdt_trc20 TXYZ1234567890")
+	owner.text("/set payments.usdt_trc20 " + trc20)
 	owner.text("/set payments.usdt_rate 60000")
 	u := w.person(501, "erin")
 	u.text("/start")
@@ -525,7 +610,7 @@ func TestCryptoTXIDFlow(t *testing.T) {
 	if strings.Contains(u.last().text, "USDT USDT") {
 		t.Fatalf("currency printed twice: %q", u.last().text)
 	}
-	u.sees("TXYZ1234567890")
+	u.sees(trc20)
 	u.text("not-a-hash")
 	u.sees("does not look like a transaction hash")
 	hash := strings.Repeat("ab", 32)
@@ -725,4 +810,249 @@ func TestZarinpalPurchase(t *testing.T) {
 	u.eventuallySees("Your service is ready")
 	u.press("chk:")
 	u.sees("Payment received")
+}
+
+// Every manual method works like card-to-card: a screenshot, approved by an admin.
+func TestScreenshotForZarinpalLinkAndCrypto(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/set payments.zarinpal_link http://not-https.example")
+	owner.text("/set payments.zarinpal_link https://zarinp.al/teststore")
+	owner.text("/set payments.usdt_trc20 " + trc20)
+	owner.text("/set payments.usdt_rate 60000")
+	u := w.person(701, "nima")
+	u.text("/start")
+	u.press("lang:en")
+
+	// Zarinpal payment link, receipt screenshot sent as an image file.
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:l:")
+	u.sees("Pay through Zarinpal")
+	if link := u.link("Open the payment page"); link != "https://zarinp.al/teststore" {
+		t.Fatalf("payment link: %q (an http link must have been refused)", link)
+	}
+	u.document("zl-receipt-file", "image/jpeg", "TRK-55")
+	u.sees("Received")
+	owner.sees("New payment to review")
+	owner.press("adm:pend")
+	owner.sees("Zarinpal link")
+	if m := w.tg.last(owner.id); !m.document || m.fileID != "zl-receipt-file" {
+		t.Fatalf("the admin must get the screenshot file itself: %+v", m)
+	}
+	owner.press("adm:ok:")
+	u.eventuallySees("Your service is ready")
+
+	// USDT: a screenshot of the transfer instead of the transaction hash.
+	u.press("home")
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:x:")
+	u.photo("usdt-transfer-shot", "")
+	u.sees("Received")
+	owner.press("adm:pend")
+	owner.sees("Screenshot attached")
+	if m := w.tg.last(owner.id); !m.photo || m.fileID != "usdt-transfer-shot" {
+		t.Fatalf("the admin must get the screenshot: %+v", m)
+	}
+	owner.press("adm:ok:")
+	w.eventually("two delivered services", func() bool {
+		n := 0
+		for _, m := range w.tg.all(701) {
+			if strings.Contains(m.text, "Your service is ready") {
+				n++
+			}
+		}
+		return n == 2
+	})
+}
+
+// fund credits a customer's wallet directly (the admin flow is tested above).
+func (w *world) fund(tg, amount int64) {
+	w.t.Helper()
+	ctx := context.Background()
+	st := w.stack.Store
+	u, err := st.GetUserByTelegramID(ctx, st.Conn(), tg)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	err = st.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := st.Credit(ctx, tx, u.ID, "IRT", amount, &corestore.LedgerEntry{Kind: "adjust",
+			IdempotencyKey: fmt.Sprintf("test-fund-%d-%d", tg, time.Now().UnixNano())})
+		return err
+	})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+// onlySub returns a customer's one subscription.
+func (w *world) onlySub(tg int64) corestore.Subscription {
+	w.t.Helper()
+	ctx := context.Background()
+	st := w.stack.Store
+	u, err := st.GetUserByTelegramID(ctx, st.Conn(), tg)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	subs, err := st.ListSubscriptions(ctx, st.Conn(), u.ID, 10)
+	if err != nil || len(subs) != 1 {
+		w.t.Fatalf("subscriptions of %d: %d %v", tg, len(subs), err)
+	}
+	return subs[0]
+}
+
+func TestRenewAndTopupFromTheServicePage(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/topup_add 30000 IRT 10 +10 GB | ۱۰ گیگ اضافه")
+	owner.sees("Plan saved: +10 GB")
+	u := w.person(701, "rena")
+	u.text("/start")
+	u.press("lang:en")
+	w.fund(701, 1_000_000)
+
+	u.press("buy")
+	for _, l := range u.last().labels() {
+		if strings.Contains(l, "+10 GB") {
+			t.Fatalf("a traffic package is offered as a new service: %v", u.last().labels())
+		}
+	}
+	u.press("plan:")
+	u.press("pay:w:")
+	u.sees("Paid from your wallet")
+	u.eventuallySees("Your service is ready")
+	sub := w.onlySub(701)
+	before, _ := w.stack.Panel.Snapshot(sub.ClientEmail)
+
+	u.press("home")
+	u.press("subs")
+	u.press("sub:")
+	u.sees("of 50 GB")
+	u.press("rnw:")
+	u.sees("Renew service #")
+	u.press("rp:")
+	u.sees("Added to the time and traffic you have left")
+	u.press("pay:w:")
+	u.sees("Paid from your wallet")
+	u.eventuallySees("renewed")
+	after, _ := w.stack.Panel.Snapshot(sub.ClientEmail)
+	// Core keeps whole seconds, the panel milliseconds: up to 1 s may go.
+	if moved := after.ExpiryTime - before.ExpiryTime; after.TotalGB != 100<<30 || moved > 30*24*3600*1000 || moved < 30*24*3600*1000-1000 {
+		t.Fatalf("panel after renewal: total %d (want 100 GB), expiry moved %d ms (want 30 days)", after.TotalGB, moved)
+	}
+
+	u.press("sub:") // "View service" under the renewal message
+	u.press("tup:")
+	u.sees("Add traffic to service")
+	u.press("rp:")
+	u.sees("more traffic for service")
+	u.press("pay:w:")
+	u.eventuallySees("Traffic added to service")
+	if top, _ := w.stack.Panel.Snapshot(sub.ClientEmail); top.TotalGB != 110<<30 || top.ExpiryTime != after.ExpiryTime {
+		t.Fatalf("panel after top-up: %+v", top)
+	}
+	if lost := w.stack.Panel.LostFields(); len(lost) != 0 {
+		t.Fatalf("an update lost the client's identity: %v", lost)
+	}
+}
+
+func TestDiscountCodeAtCheckout(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/discount_add SPRING20 20% 5 30")
+	owner.sees("Saved: <code>SPRING20</code> · 20%")
+	owner.text("/discounts")
+	owner.sees("0/5 used")
+	u := w.person(711, "dina")
+	u.text("/start")
+	u.press("lang:en")
+	w.fund(711, 120_000)
+
+	u.press("buy")
+	u.press("plan:")
+	u.press("dc:")
+	u.sees("Send your discount code")
+	u.text("NOPE")
+	u.sees("not valid")
+	u.text("spring20")
+	u.sees("Code <b>SPRING20</b>: 30,000 Toman off")
+	u.sees("Price: <b>120,000 Toman</b>")
+	u.press("pay:w:")
+	u.sees("Paid from your wallet")
+	u.eventuallySees("Your service is ready")
+
+	u.press("home")
+	u.press("buy")
+	u.press("plan:")
+	u.press("dc:")
+	u.text("SPRING20")
+	u.sees("already used this discount code")
+	owner.text("/discount_off spring20")
+	owner.sees("1/5 used")
+	owner.sees("off")
+}
+
+func TestInviteLinkRewardsTheInviter(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/set referral.reward_percent 10")
+	owner.sees("referral.reward_percent")
+	inviter := w.person(721, "ina")
+	inviter.text("/start")
+	inviter.press("lang:en")
+	inviter.press("ref")
+	inviter.sees("Invite friends")
+	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(inviter.last().text)
+	if m == nil {
+		t.Fatalf("no invite link: %q", inviter.last().text)
+	}
+
+	friend := w.person(722, "fred")
+	friend.text("/start r_" + m[1])
+	friend.press("lang:en")
+	friend.sees("Main menu")
+	w.fund(722, 150_000)
+	friend.press("buy")
+	friend.press("plan:")
+	friend.press("pay:w:")
+	friend.sees("Paid from your wallet")
+	inviter.eventuallySees("A friend you invited made a purchase: <b>15,000 Toman</b>")
+	inviter.press("home")
+	inviter.press("ref")
+	inviter.sees("Invited: 1")
+}
+
+func TestRemindersReachTheCustomer(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/topup_add 30000 IRT 10 +10 GB | ۱۰ گیگ اضافه")
+	owner.sees("Plan saved: +10 GB")
+	u := w.person(731, "remy")
+	u.text("/start")
+	u.press("lang:en")
+	w.fund(731, 150_000)
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:w:")
+	u.eventuallySees("Your service is ready")
+	sub := w.onlySub(731)
+	usage := w.stack.Usage
+	usage.Every = -time.Hour // everything is due
+
+	w.stack.Panel.AddUsage(sub.ClientEmail, 0, 45<<30)
+	if _, err := usage.SyncDue(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.eventuallySees("has used 45 GB of 50 GB")
+	labels := strings.Join(u.last().labels(), " | ")
+	if !strings.Contains(labels, "Renew") || !strings.Contains(labels, "Add traffic") {
+		t.Fatalf("reminder buttons: %s", labels)
+	}
+
+	w.stack.Panel.AddUsage(sub.ClientEmail, 0, 6<<30)
+	if _, err := usage.SyncDue(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.eventuallySees("has used all of its 50 GB")
 }

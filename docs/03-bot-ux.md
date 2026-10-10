@@ -25,7 +25,7 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
-**Manual payment:** show card/address + amount + unique reference -> user sends receipt photo -> admin approve/reject buttons in admin chat -> result to user.
+**Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> admin approve/reject buttons in admin chat -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew.
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
@@ -33,6 +33,21 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 
 ## Admin in bot (quick actions, full power is in dashboard)
 Stats snapshot, find user, add balance, ban/unban, approve receipts, broadcast (queued), toggle gateway, panel health.
+Built so far (2026-10-10): `/admin` for owners and admins (it says when maintenance mode is on), `/set key value`
+(it shows why core refused a value; payment details are the owner's), and `/dashboard` plus a menu button that send
+any staff member, support included, a one-time dashboard login link.
+
+## Store rules the bot applies (dashboard Settings, 2026-10-10)
+- **Maintenance mode:** customers get the maintenance text (a popup for taps, the message at most once a minute).
+  Staff, the configured owner, `/paysupport`, payment checks and receipts of payments under way still work.
+- **Required channel:** customers join it before using the bot (a join button and an "I've joined" check). Members
+  are remembered for 10 minutes; if Telegram cannot answer, users are let in. Staff and a newcomer's `/start` and
+  language choice are never blocked.
+- **Limits:** taps and messages per 10 seconds, support messages per day.
+- **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to the owner
+  or to every owner and admin. "Payment taken but not recorded" is always sent.
+- `/terms`, and terms and privacy link buttons on the support screen, when the links are set.
+- Dates use the store's time zone; prices use the store's name for the Toman.
 
 ## Reseller panel
 Own price tier, sales list, credit limit and usage, create service for a customer, top-up request.

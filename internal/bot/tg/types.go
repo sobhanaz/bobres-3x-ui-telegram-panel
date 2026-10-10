@@ -2,6 +2,8 @@
 // uses, typed, with the token kept out of every error message.
 package tg
 
+import "strings"
+
 // User is a Telegram user or bot.
 type User struct {
 	ID           int64  `json:"id"`
@@ -14,9 +16,34 @@ type User struct {
 
 // Chat is where a message lives.
 type Chat struct {
-	ID   int64  `json:"id"`
-	Type string `json:"type"` // private | group | supergroup | channel
+	ID       int64  `json:"id"`
+	Type     string `json:"type"`               // private | group | supergroup | channel
+	Title    string `json:"title,omitempty"`    // groups and channels
+	Username string `json:"username,omitempty"` // public chats
 }
+
+// ChatMember is a user's membership in a chat (getChatMember).
+type ChatMember struct {
+	// Status: creator, administrator, member, restricted, left or kicked.
+	Status string `json:"status"`
+	// IsMember: whether a restricted user is still in the chat.
+	IsMember bool `json:"is_member,omitempty"`
+	User     User `json:"user"`
+}
+
+// Joined reports whether the user is in the chat.
+func (m *ChatMember) Joined() bool {
+	switch m.Status {
+	case "creator", "administrator", "member":
+		return true
+	case "restricted":
+		return m.IsMember
+	}
+	return false
+}
+
+// IsAdmin reports whether the user administers the chat.
+func (m *ChatMember) IsAdmin() bool { return m.Status == "creator" || m.Status == "administrator" }
 
 // PhotoSize is one resolution of a photo.
 type PhotoSize struct {
@@ -36,8 +63,31 @@ type Message struct {
 	Text      string      `json:"text,omitempty"`
 	Caption   string      `json:"caption,omitempty"`
 	Photo     []PhotoSize `json:"photo,omitempty"`
+	// Document: a file, e.g. a screenshot sent "as file" (uncompressed).
+	Document *Document `json:"document,omitempty"`
 	// SuccessfulPayment: a Telegram Stars payment completed.
 	SuccessfulPayment *SuccessfulPayment `json:"successful_payment,omitempty"`
+}
+
+// Document is a file attached to a message.
+type Document struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	FileName     string `json:"file_name,omitempty"`
+	MimeType     string `json:"mime_type,omitempty"`
+	FileSize     int64  `json:"file_size,omitempty"`
+}
+
+// ImageFile returns the file id of a picture in the message: the largest photo
+// size, or an image sent as a file. "" when there is none.
+func (m *Message) ImageFile() string {
+	if id := m.LargestPhoto(); id != "" {
+		return id
+	}
+	if d := m.Document; d != nil && strings.HasPrefix(strings.ToLower(d.MimeType), "image/") {
+		return d.FileID
+	}
+	return ""
 }
 
 // SuccessfulPayment is the service message after a completed payment.

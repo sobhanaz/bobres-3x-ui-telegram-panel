@@ -18,6 +18,87 @@ type fakeProvisioner struct {
 	calls    []string
 	days     int64
 	traffic  int64
+	// SetLimits calls by subscription id, and failures to inject first.
+	limits      map[string][]limitsCall
+	limitsFails int
+	// usage answers Usage by subscription id; a missing entry is an error.
+	usage map[string]Usage
+	// Staff operations by subscription id ("enable", "disable", "reset",
+	// "delete"), and an error to return from them.
+	ops    []string
+	opsErr error
+}
+
+func (f *fakeProvisioner) op(subscriptionID, what string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.opsErr != nil {
+		return f.opsErr
+	}
+	f.ops = append(f.ops, subscriptionID+"|"+what)
+	return nil
+}
+
+func (f *fakeProvisioner) SetEnabled(_ context.Context, subscriptionID string, enabled bool) error {
+	if enabled {
+		return f.op(subscriptionID, "enable")
+	}
+	return f.op(subscriptionID, "disable")
+}
+
+func (f *fakeProvisioner) ResetTraffic(_ context.Context, subscriptionID string) error {
+	return f.op(subscriptionID, "reset")
+}
+
+func (f *fakeProvisioner) Delete(_ context.Context, subscriptionID string) error {
+	return f.op(subscriptionID, "delete")
+}
+
+func (f *fakeProvisioner) opsDone() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.ops...)
+}
+
+type limitsCall struct{ expires, traffic int64 }
+
+func (f *fakeProvisioner) SetLimits(_ context.Context, subscriptionID string, expiresAt, trafficBytes int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.limitsFails > 0 {
+		f.limitsFails--
+		return errors.New("panel unreachable")
+	}
+	if f.limits == nil {
+		f.limits = map[string][]limitsCall{}
+	}
+	f.limits[subscriptionID] = append(f.limits[subscriptionID], limitsCall{expiresAt, trafficBytes})
+	return nil
+}
+
+func (f *fakeProvisioner) Usage(_ context.Context, subscriptionID string) (Usage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.usage[subscriptionID]
+	if !ok {
+		return Usage{}, errors.New("panel unreachable")
+	}
+	return u, nil
+}
+
+func (f *fakeProvisioner) setUsage(subscriptionID string, u Usage) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.usage == nil {
+		f.usage = map[string]Usage{}
+	}
+	f.usage[subscriptionID] = u
+}
+
+func (f *fakeProvisioner) limitsFor(subscriptionID string) []limitsCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]limitsCall(nil), f.limits[subscriptionID]...)
 }
 
 func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64) (ProvisionedClient, error) {

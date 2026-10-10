@@ -85,3 +85,11 @@ func requireNonEmpty(name, v string) error {
 	}
 	return nil
 }
+
+// optionalToken is requireToken for a token that may be left unset ("").
+func optionalToken(name, env string) (string, error) {
+	if v, err := Secret(name); err != nil || v == "" {
+		return "", err
+	}
+	return requireToken(name, env)
+}

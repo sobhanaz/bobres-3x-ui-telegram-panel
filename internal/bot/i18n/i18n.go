@@ -67,16 +67,20 @@ func Normalize(lang string) string {
 }
 
 // SetOverrides replaces the per-install overrides from core settings
-// (texts.<lang>.<key> -> value).
-func (c *Catalog) SetOverrides(settings map[string]string) {
+// (texts.<lang>.<key> -> value). Core checks overrides when they are saved;
+// they are checked again here (a newer catalog, a row written by hand), and
+// any that would break a message is left out and returned in dropped, so
+// the bot keeps working with the default text.
+func (c *Catalog) SetOverrides(settings map[string]string) (dropped []string) {
 	o := map[string]map[string]string{}
 	for k, v := range settings {
-		rest, ok := strings.CutPrefix(k, "texts.")
-		if !ok {
+		lang, key, ok := SplitTextKey(k)
+		if !ok || v == "" {
 			continue
 		}
-		lang, key, ok := strings.Cut(rest, ".")
-		if !ok || v == "" {
+		v, probs := c.ValidateOverride(lang, key, v)
+		if len(probs) > 0 || v == "" {
+			dropped = append(dropped, k)
 			continue
 		}
 		if o[lang] == nil {
@@ -87,6 +91,18 @@ func (c *Catalog) SetOverrides(settings map[string]string) {
 	c.mu.Lock()
 	c.overrides = o
 	c.mu.Unlock()
+	sort.Strings(dropped)
+	return dropped
+}
+
+// SplitTextKey reads a settings key texts.<lang>.<text key>.
+func SplitTextKey(k string) (lang, key string, ok bool) {
+	rest, ok := strings.CutPrefix(k, "texts.")
+	if !ok {
+		return "", "", false
+	}
+	lang, key, ok = strings.Cut(rest, ".")
+	return lang, key, ok && lang != "" && key != ""
 }
 
 // T renders key in lang, replacing {name} with the matching value from

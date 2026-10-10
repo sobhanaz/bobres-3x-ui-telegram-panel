@@ -36,22 +36,27 @@ creates a GitHub pre-release with the `bobres` CLI binaries and signed checksums
 the `RELEASE_SIGNING_KEY` secret and the `RELEASE_KEY_ID` variable (both are set; see
 `tools/sign/README.md`). A pre-release tag does not move the `latest` image tag.
 
-Two things are still open before customers can install:
-- `install/install.sh` downloads from `https://get.example.com/releases/latest`, a placeholder:
-  choose where signed releases are served (a small static host, or a GitHub release of a
-  public "releases" repository).
-- Packages of a private repository are private on GHCR. For your own server, log in once as
-  root (the installer runs docker with sudo, which reads root's credentials). This reads the
-  token without echoing it or saving it in the shell history:
+The repository is public, so `install/install.sh` downloads the CLI from its latest GitHub
+release (a pre-release such as `-rc.1` is not "latest": use a plain `v0.1.0` tag for the
+one-command install, or step 3's manual way for a release candidate). One thing to check
+before customers install:
+- The four `bobres-*` image packages on GHCR must be public, or every customer must log in to
+  pull them: GitHub → your profile → Packages → each `bobres-*` → Package settings → Change
+  visibility → Public. For your own server you can instead log in once as root (the installer
+  runs docker as root). This reads the token without echoing it or saving it in the history:
   `read -rs PAT && echo "$PAT" | sudo docker login ghcr.io -u sobhanaz --password-stdin; unset PAT`
-  For customers, decide between public images (binaries only; the license gates features)
-  and a private registry with per-customer credentials (PLAN.md section 2, open decision).
 
 ## 3. Install
 
-Until the release host exists, download `bobres_linux_amd64` from the GitHub release (the
-repository is private, so use `gh release download v0.1.0-rc.1 -p bobres_linux_amd64` or the
-web page while logged in), copy it to the VPS as `bobres`, `chmod +x bobres`, and run:
+With a plain release tag (`v0.1.0`), as root on the VPS:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
+```
+
+For a release candidate, download `bobres_linux_amd64` from its GitHub pre-release
+(`gh release download v0.1.0-rc.1 -p bobres_linux_amd64`, or the release page), copy it to
+the VPS as `bobres`, `chmod +x bobres`, and run:
 
 ```bash
 sudo ./bobres install --domain panel.example.com --admin-id <your id> \
@@ -63,7 +68,7 @@ It asks for the bot token and the panel token (hidden input), checks the server,
 `/opt/bobres`, starts everything and waits until all services are healthy. Then:
 
 ```bash
-sudo ./bobres status
+sudo bobres status     # or ./bobres for the downloaded binary; plain `bobres` opens the menu
 ```
 
 ## 4. Check, in this order
@@ -74,7 +79,8 @@ sudo ./bobres status
    link and QR, and the client must appear in the panel (Clients page) on every enabled inbound.
 4. Import the link into a VPN app (v2rayNG, Hiddify, Streisand) and open a website.
 5. Card payment: `/set payments.card_number ...` and `/set payments.card_holder ...`, buy the
-   test plan with "card", send a photo as receipt, approve it from the admin panel; the second
+   test plan with "card", send a screenshot of the transfer (photo or image file) with the
+   bank reference number as its caption, approve it from the admin panel; the second
    service must be delivered.
 6. Wallet: credit the second account from Admin → Find user → Adjust, buy with the wallet.
 7. `sudo ./bobres logs core` shows no errors; `sudo ./bobres uninstall` keeps the data,
@@ -91,6 +97,10 @@ panel is updated on the next start, and the data is kept.
   with "Pay with Telegram Stars" from a second account: Telegram shows the invoice, and the
   service is delivered after paying (a few Stars at a low test price are enough; refund
   them later with Telegram's refund from the bot's Stars balance if needed).
+- **Zarinpal link (manual, no merchant API):** `/set payments.zarinpal_link https://zarinp.al/yourname`.
+  Buy the test plan with "Zarinpal (payment link)", pay the shown amount on that page, send the payment
+  screenshot (the tracking code as caption is optional), approve it from the admin panel; the
+  service must be delivered. USDT works the same way: a screenshot of the transfer or the TXID.
 - **Zarinpal:** read the owner decisions in the Phase 2 design document first. Then
   re-run install with `--zarinpal-merchant-id <id>` (the sandbox is for tests only and is
   refused in production). Register this server's IP, or the proxy's
@@ -99,6 +109,22 @@ panel is updated on the next start, and the data is kept.
   without a VPN. Buy with "Pay online", turn the VPN off, pay, and check that you come back
   to a "Payment received" page and the service arrives in the bot.
 
-## 6. After it passes
+## 6. Phase 3 retention
+
+- **Renew:** from a second account with a delivered service: My services → the service →
+  Renew → the plan → pay. The service message says "renewed" with the new expiry and
+  traffic, and in the panel the client has 30 more days and 50 GB more, with the same
+  subscription link (nothing to re-import in the VPN app).
+- **Traffic packages:** `/topup_add 30000 IRT 10 +10 GB | ۱۰ گیگ اضافه`, then the service →
+  Add traffic → the package → pay: 10 GB more, same expiry.
+- **Discount codes:** `/discount_add TEST50 50% 1 7`, then buy with "I have a discount code"
+  and `TEST50`: half price; a second try says it was already used.
+- **Referrals:** `/set referral.reward_percent 10`; open "Invite friends", start the bot from
+  another account with that link, buy: the inviter gets 10% in the wallet.
+- **Reminders:** they come from the usage sync (every 10 minutes): in the panel, set a
+  test client's expiry to tomorrow or its traffic close to the limit, and the bot warns the
+  customer once, with Renew / Add traffic buttons.
+
+## 7. After it passes
 
 Tag `v0.1.0`. Phase 1 is done when this checklist passes on a real server.

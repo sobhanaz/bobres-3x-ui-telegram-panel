@@ -48,6 +48,12 @@ const (
 	CoreService_AdminSetUserStatus_FullMethodName       = "/core.v1.CoreService/AdminSetUserStatus"
 	CoreService_AdminUpsertPlan_FullMethodName          = "/core.v1.CoreService/AdminUpsertPlan"
 	CoreService_AdminSetSetting_FullMethodName          = "/core.v1.CoreService/AdminSetSetting"
+	CoreService_QuoteOrder_FullMethodName               = "/core.v1.CoreService/QuoteOrder"
+	CoreService_GetReferralInfo_FullMethodName          = "/core.v1.CoreService/GetReferralInfo"
+	CoreService_AdminUpsertDiscount_FullMethodName      = "/core.v1.CoreService/AdminUpsertDiscount"
+	CoreService_AdminListDiscounts_FullMethodName       = "/core.v1.CoreService/AdminListDiscounts"
+	CoreService_CreateDashboardLink_FullMethodName      = "/core.v1.CoreService/CreateDashboardLink"
+	CoreService_ListStaffContacts_FullMethodName        = "/core.v1.CoreService/ListStaffContacts"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -67,6 +73,9 @@ type CoreServiceClient interface {
 	ListSubscriptions(ctx context.Context, in *ListSubscriptionsRequest, opts ...grpc.CallOption) (*ListSubscriptionsResponse, error)
 	CreateSupportTicket(ctx context.Context, in *CreateSupportTicketRequest, opts ...grpc.CallOption) (*Ticket, error)
 	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*Settings, error)
+	// Deprecated: Do not use.
+	// UpdateBranding is not served (Unimplemented): branding is changed with
+	// AdminSetSetting or the dashboard, which check and audit every value.
 	UpdateBranding(ctx context.Context, in *UpdateBrandingRequest, opts ...grpc.CallOption) (*Settings, error)
 	ReviewManualPayment(ctx context.Context, in *ReviewManualPaymentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
 	PayOrderWithWallet(ctx context.Context, in *PayOrderWithWalletRequest, opts ...grpc.CallOption) (*Order, error)
@@ -86,6 +95,13 @@ type CoreServiceClient interface {
 	AdminSetUserStatus(ctx context.Context, in *AdminSetUserStatusRequest, opts ...grpc.CallOption) (*User, error)
 	AdminUpsertPlan(ctx context.Context, in *AdminUpsertPlanRequest, opts ...grpc.CallOption) (*Plan, error)
 	AdminSetSetting(ctx context.Context, in *AdminSetSettingRequest, opts ...grpc.CallOption) (*Settings, error)
+	QuoteOrder(ctx context.Context, in *QuoteOrderRequest, opts ...grpc.CallOption) (*Quote, error)
+	GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error)
+	AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error)
+	AdminListDiscounts(ctx context.Context, in *AdminListDiscountsRequest, opts ...grpc.CallOption) (*AdminListDiscountsResponse, error)
+	CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error)
+	// ListStaffContacts lists the active owners and admins, for staff alerts.
+	ListStaffContacts(ctx context.Context, in *ListStaffContactsRequest, opts ...grpc.CallOption) (*ListStaffContactsResponse, error)
 }
 
 type coreServiceClient struct {
@@ -196,6 +212,7 @@ func (c *coreServiceClient) GetSettings(ctx context.Context, in *GetSettingsRequ
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *coreServiceClient) UpdateBranding(ctx context.Context, in *UpdateBrandingRequest, opts ...grpc.CallOption) (*Settings, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Settings)
@@ -386,6 +403,66 @@ func (c *coreServiceClient) AdminSetSetting(ctx context.Context, in *AdminSetSet
 	return out, nil
 }
 
+func (c *coreServiceClient) QuoteOrder(ctx context.Context, in *QuoteOrderRequest, opts ...grpc.CallOption) (*Quote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Quote)
+	err := c.cc.Invoke(ctx, CoreService_QuoteOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReferralInfo)
+	err := c.cc.Invoke(ctx, CoreService_GetReferralInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Discount)
+	err := c.cc.Invoke(ctx, CoreService_AdminUpsertDiscount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminListDiscounts(ctx context.Context, in *AdminListDiscountsRequest, opts ...grpc.CallOption) (*AdminListDiscountsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListDiscountsResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListDiscounts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DashboardLink)
+	err := c.cc.Invoke(ctx, CoreService_CreateDashboardLink_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ListStaffContacts(ctx context.Context, in *ListStaffContactsRequest, opts ...grpc.CallOption) (*ListStaffContactsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStaffContactsResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListStaffContacts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -403,6 +480,9 @@ type CoreServiceServer interface {
 	ListSubscriptions(context.Context, *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error)
 	CreateSupportTicket(context.Context, *CreateSupportTicketRequest) (*Ticket, error)
 	GetSettings(context.Context, *GetSettingsRequest) (*Settings, error)
+	// Deprecated: Do not use.
+	// UpdateBranding is not served (Unimplemented): branding is changed with
+	// AdminSetSetting or the dashboard, which check and audit every value.
 	UpdateBranding(context.Context, *UpdateBrandingRequest) (*Settings, error)
 	ReviewManualPayment(context.Context, *ReviewManualPaymentRequest) (*PaymentIntentRef, error)
 	PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error)
@@ -422,6 +502,13 @@ type CoreServiceServer interface {
 	AdminSetUserStatus(context.Context, *AdminSetUserStatusRequest) (*User, error)
 	AdminUpsertPlan(context.Context, *AdminUpsertPlanRequest) (*Plan, error)
 	AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error)
+	QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error)
+	GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error)
+	AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error)
+	AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error)
+	CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error)
+	// ListStaffContacts lists the active owners and admins, for staff alerts.
+	ListStaffContacts(context.Context, *ListStaffContactsRequest) (*ListStaffContactsResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -518,6 +605,24 @@ func (UnimplementedCoreServiceServer) AdminUpsertPlan(context.Context, *AdminUps
 }
 func (UnimplementedCoreServiceServer) AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminSetSetting not implemented")
+}
+func (UnimplementedCoreServiceServer) QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuoteOrder not implemented")
+}
+func (UnimplementedCoreServiceServer) GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetReferralInfo not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminUpsertDiscount not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListDiscounts not implemented")
+}
+func (UnimplementedCoreServiceServer) CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDashboardLink not implemented")
+}
+func (UnimplementedCoreServiceServer) ListStaffContacts(context.Context, *ListStaffContactsRequest) (*ListStaffContactsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListStaffContacts not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1062,6 +1167,114 @@ func _CoreService_AdminSetSetting_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_QuoteOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).QuoteOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_QuoteOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).QuoteOrder(ctx, req.(*QuoteOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetReferralInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetReferralInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetReferralInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetReferralInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetReferralInfo(ctx, req.(*GetReferralInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminUpsertDiscount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminUpsertDiscountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminUpsertDiscount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminUpsertDiscount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminUpsertDiscount(ctx, req.(*AdminUpsertDiscountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminListDiscounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListDiscountsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListDiscounts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListDiscounts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListDiscounts(ctx, req.(*AdminListDiscountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_CreateDashboardLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateDashboardLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CreateDashboardLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CreateDashboardLink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CreateDashboardLink(ctx, req.(*CreateDashboardLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ListStaffContacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStaffContactsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListStaffContacts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListStaffContacts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListStaffContacts(ctx, req.(*ListStaffContactsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1184,6 +1397,30 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminSetSetting",
 			Handler:    _CoreService_AdminSetSetting_Handler,
+		},
+		{
+			MethodName: "QuoteOrder",
+			Handler:    _CoreService_QuoteOrder_Handler,
+		},
+		{
+			MethodName: "GetReferralInfo",
+			Handler:    _CoreService_GetReferralInfo_Handler,
+		},
+		{
+			MethodName: "AdminUpsertDiscount",
+			Handler:    _CoreService_AdminUpsertDiscount_Handler,
+		},
+		{
+			MethodName: "AdminListDiscounts",
+			Handler:    _CoreService_AdminListDiscounts_Handler,
+		},
+		{
+			MethodName: "CreateDashboardLink",
+			Handler:    _CoreService_CreateDashboardLink_Handler,
+		},
+		{
+			MethodName: "ListStaffContacts",
+			Handler:    _CoreService_ListStaffContacts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

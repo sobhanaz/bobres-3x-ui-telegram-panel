@@ -2,6 +2,7 @@ package xui_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -271,5 +272,79 @@ func TestConcurrentOverlappingAdjustsDoNotRaceOrDeadlock(t *testing.T) {
 	}
 	if total != 60 { // 30 calls x 2 emails x 1 byte
 		t.Fatalf("lost updates: total bytes added %d, want 60", total)
+	}
+}
+
+// SetLimits sends the stored client back with only the limits changed: the
+// protocol UUID moves to "id", text-stored structures are converted, and
+// fields this package does not model (a trojan password) survive.
+func TestSetLimitsKeepsTheClientIdentity(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/get/"):
+			_, _ = w.Write([]byte(`{"success":true,"obj":{"client":{"id":17,"uuid":"6f1c2e1a-0000-4000-8000-000000000017",
+				"email":"u1","subId":"sub-u1","password":"tr0jan","flow":"xtls-rprx-vision","reverse":"","allowedIPs":"10.0.0.2/32, 10.0.0.3/32",
+				"totalGB":1,"expiryTime":2,"enable":false,"limitHwid":2,"createdAt":5,"updatedAt":6},"inboundIds":[1],"usedTraffic":9}}`))
+		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/update/u1"):
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			_, _ = w.Write([]byte(`{"success":true,"msg":"ok","obj":null}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := newClient(t, srv.URL, token)
+	if err := c.SetLimits(context.Background(), "u1", 1_800_000_000_000, 5*gib); err != nil {
+		t.Fatal(err)
+	}
+	ips, _ := got["allowedIPs"].([]any)
+	if got["id"] != "6f1c2e1a-0000-4000-8000-000000000017" || got["uuid"] != nil || got["createdAt"] != nil ||
+		got["subId"] != "sub-u1" || got["password"] != "tr0jan" || got["flow"] != "xtls-rprx-vision" ||
+		got["totalGB"] != float64(5*gib) || got["expiryTime"] != float64(1_800_000_000_000) || got["enable"] != true ||
+		got["limitHwid"] != float64(2) || len(ips) != 2 || ips[1] != "10.0.0.3/32" {
+		t.Fatalf("update body: %v", got)
+	}
+	if _, ok := got["reverse"]; ok {
+		t.Fatalf("an empty reverse must be left out (the panel wants an object): %v", got["reverse"])
+	}
+	if err := c.SetLimits(context.Background(), "u1", -1, 0); err == nil {
+		t.Fatal("negative limits accepted")
+	}
+}
+
+// SetEnabled sends the stored client back with only the enable flag changed:
+// its limits and identity stay as they are.
+func TestSetEnabledKeepsTheLimits(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/get/"):
+			_, _ = w.Write([]byte(`{"success":true,"obj":{"client":{"id":17,"uuid":"6f1c2e1a-0000-4000-8000-000000000017",
+				"email":"u1","subId":"sub-u1","totalGB":1073741824,"expiryTime":1800000000000,"enable":true,
+				"createdAt":5,"updatedAt":6},"inboundIds":[1],"usedTraffic":9}}`))
+		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/update/u1"):
+			got = nil
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			_, _ = w.Write([]byte(`{"success":true,"msg":"ok","obj":null}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := newClient(t, srv.URL, token)
+	for _, enable := range []bool{false, true} {
+		if err := c.SetEnabled(context.Background(), "u1", enable); err != nil {
+			t.Fatal(err)
+		}
+		if got["enable"] != enable || got["id"] != "6f1c2e1a-0000-4000-8000-000000000017" || got["subId"] != "sub-u1" ||
+			got["totalGB"] != float64(gib) || got["expiryTime"] != float64(1_800_000_000_000) || got["createdAt"] != nil {
+			t.Fatalf("update body (enable %v): %v", enable, got)
+		}
+	}
+	if err := c.SetEnabled(context.Background(), "bad email!", false); err == nil {
+		t.Fatal("an invalid email reached the panel")
 	}
 }

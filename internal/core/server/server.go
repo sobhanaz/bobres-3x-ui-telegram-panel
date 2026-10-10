@@ -3,8 +3,9 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"math"
+	"sort"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -22,6 +23,47 @@ type Server struct {
 	dom  *domain.Service
 	pay  domain.PaymentsClient
 	prov domain.Provisioner
+	// publicURL is the dashboard's origin, for login links.
+	publicURL string
+}
+
+// fromBot marks the changes a request makes as made in the bot (the only
+// peer that calls core), for the audit log.
+func fromBot(ctx context.Context) context.Context { return store.WithSource(ctx, store.SourceBot) }
+
+// ListStaffContacts lists the active owners and admins, for staff alerts.
+func (s *Server) ListStaffContacts(ctx context.Context, _ *corev1.ListStaffContactsRequest) (*corev1.ListStaffContactsResponse, error) {
+	users, err := s.st.ListStaffContacts(ctx, s.st.Conn())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.ListStaffContactsResponse{}
+	for _, u := range users {
+		out.Items = append(out.Items, &corev1.StaffContact{TelegramId: u.TelegramID, Language: u.Language, Role: u.Role})
+	}
+	return out, nil
+}
+
+// SetPublicURL sets the dashboard origin login links point to.
+func (s *Server) SetPublicURL(u string) { s.publicURL = u }
+
+// CreateDashboardLink makes a one-time dashboard login link for a staff member.
+func (s *Server) CreateDashboardLink(ctx context.Context, req *corev1.CreateDashboardLinkRequest) (*corev1.DashboardLink, error) {
+	ctx = fromBot(ctx)
+	if s.publicURL == "" {
+		return &corev1.DashboardLink{}, nil
+	}
+	token, exp, err := s.dom.CreateLoginLink(ctx, req.GetActorTelegramId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.DashboardLink{Url: DashboardLoginURL(s.publicURL, token), ExpiresAt: exp.Unix()}, nil
+}
+
+// DashboardLoginURL is the link a login token is sent as. The token is in the
+// fragment, so it never reaches server logs or a Referer header.
+func DashboardLoginURL(publicURL, token string) string {
+	return publicURL + "/admin/login#t=" + token
 }
 
 // New builds the handler set.
@@ -45,6 +87,8 @@ func fail(err error) error {
 	case errors.Is(err, domain.ErrTrialAlreadyUsed),
 		errors.Is(err, domain.ErrOrderNotPayable),
 		errors.Is(err, domain.ErrPlanUnavailable),
+		errors.Is(err, domain.ErrNotExtendable),
+		errors.Is(err, domain.ErrDiscount),
 		errors.Is(err, store.ErrInsufficientFunds):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, store.ErrIdempotencyConflict):
@@ -87,9 +131,10 @@ func userToProto(u *store.User) *corev1.User {
 
 // UpsertUser creates or updates a user by telegram id.
 func (s *Server) UpsertUser(ctx context.Context, req *corev1.UpsertUserRequest) (*corev1.User, error) {
+	ctx = fromBot(ctx)
 	u, err := s.dom.UpsertUser(ctx, domain.UpsertUserParams{
 		TelegramID: req.GetTelegramId(), Username: req.GetUsername(),
-		Language: req.GetLanguage(), ReferredBy: req.GetReferredBy(),
+		Language: req.GetLanguage(), ReferredBy: req.GetReferredBy(), ReferralCode: req.GetReferralCode(),
 	})
 	if err != nil {
 		return nil, fail(err)
@@ -139,6 +184,7 @@ func planToProto(p *store.Plan) *corev1.Plan {
 		Enabled:  p.Enabled,
 		IsTrial:  p.IsTrial,
 		Sort:     p.Sort,
+		IsTopup:  p.IsTopup,
 	}
 	if p.DurationDays != nil {
 		pp.DurationDays = *p.DurationDays
@@ -156,6 +202,8 @@ func (s *Server) CreateOrder(ctx context.Context, req *corev1.CreateOrderRequest
 		PlanID:         req.GetPlanId(),
 		Type:           req.GetType(),
 		IdempotencyKey: req.GetIdempotencyKey(),
+		SubscriptionID: req.GetSubscriptionId(),
+		DiscountCode:   req.GetDiscountCode(),
 	})
 	if err != nil {
 		return nil, fail(err)
@@ -164,7 +212,7 @@ func (s *Server) CreateOrder(ctx context.Context, req *corev1.CreateOrderRequest
 }
 
 func orderToProto(o *store.Order) *corev1.Order {
-	return &corev1.Order{
+	out := &corev1.Order{
 		Id:             o.ID,
 		UserId:         o.UserID,
 		PlanId:         o.PlanID,
@@ -175,6 +223,50 @@ func orderToProto(o *store.Order) *corev1.Order {
 		CreatedAt:      o.CreatedAt.Unix(),
 		UpdatedAt:      o.UpdatedAt.Unix(),
 	}
+	if o.SubscriptionID != nil {
+		out.SubscriptionId = *o.SubscriptionID
+	}
+	if o.DiscountCode != nil {
+		out.DiscountCode = *o.DiscountCode
+		out.Discount = &commonv1.Money{Amount: o.DiscountAmount, Currency: o.Currency}
+	}
+	return out
+}
+
+// QuoteOrder prices an order before it is created (discount codes).
+func (s *Server) QuoteOrder(ctx context.Context, req *corev1.QuoteOrderRequest) (*corev1.Quote, error) {
+	q, err := s.dom.QuoteOrder(ctx, domain.QuoteParams{
+		UserID: req.GetUserId(), PlanID: req.GetPlanId(), Type: req.GetType(),
+		SubscriptionID: req.GetSubscriptionId(), DiscountCode: req.GetDiscountCode(),
+	})
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.Quote{
+		ListPrice:    &commonv1.Money{Amount: q.ListPrice, Currency: q.Currency},
+		Discount:     &commonv1.Money{Amount: q.Discount, Currency: q.Currency},
+		Total:        &commonv1.Money{Amount: q.Total, Currency: q.Currency},
+		DiscountCode: q.DiscountCode,
+	}, nil
+}
+
+// GetReferralInfo returns the user's invite code and what it earned.
+func (s *Server) GetReferralInfo(ctx context.Context, req *corev1.GetReferralInfoRequest) (*corev1.ReferralInfo, error) {
+	r, err := s.dom.Referral(ctx, req.GetUserId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.ReferralInfo{Code: r.Code, Invited: int32(min(r.Invited, math.MaxInt32)), //nolint:gosec // bounded
+		Rewarded: int32(min(r.Rewarded, math.MaxInt32)), RewardPercent: int32(r.RewardPercent)} //nolint:gosec // a percentage
+	currencies := make([]string, 0, len(r.Earned))
+	for c := range r.Earned {
+		currencies = append(currencies, c)
+	}
+	sort.Strings(currencies)
+	for _, c := range currencies {
+		out.Earned = append(out.Earned, &commonv1.Money{Amount: r.Earned[c], Currency: c})
+	}
+	return out, nil
 }
 
 // GetOrder returns one order.
@@ -297,37 +389,4 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 		out.Values[k] = string(v)
 	}
 	return out, nil
-}
-
-// UpdateBranding upserts branding settings with an audit row.
-func (s *Server) UpdateBranding(ctx context.Context, req *corev1.UpdateBrandingRequest) (*corev1.Settings, error) {
-	for k, v := range req.GetValues() {
-		raw := json.RawMessage(v)
-		if !json.Valid(raw) {
-			raw, _ = json.Marshal(v) // treat as plain string
-		}
-		if err := s.st.SetSetting(ctx, s.st.Conn(), "branding."+k, raw); err != nil {
-			return nil, fail(err)
-		}
-	}
-	actor := req.GetActorId()
-	reason := req.GetReason()
-	payload, _ := json.Marshal(req.GetValues())
-	if err := s.st.WriteAudit(ctx, s.st.Conn(), &store.Audit{
-		ActorID: optstr(actor),
-		Action:  "branding.update",
-		Entity:  "settings",
-		After:   payload,
-		Reason:  optstr(reason),
-	}); err != nil {
-		return nil, fail(err)
-	}
-	return s.GetSettings(ctx, &corev1.GetSettingsRequest{})
-}
-
-func optstr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }

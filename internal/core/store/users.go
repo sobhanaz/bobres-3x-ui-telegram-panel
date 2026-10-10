@@ -16,12 +16,12 @@ var ErrNotFound = errors.New("store: not found")
 
 // username is NULL for Telegram users without a public @username; the struct
 // field is a plain string, so it is read as ”.
-const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at`
+const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at, ref_code`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.TelegramID, &u.Username, &u.Language, &u.Role,
-		&u.Status, &u.ReferredBy, &u.CreatedAt, &u.UpdatedAt)
+		&u.Status, &u.ReferredBy, &u.CreatedAt, &u.UpdatedAt, &u.RefCode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -140,4 +140,64 @@ func (s *Store) UserActivity(ctx context.Context, q querier, userID string) (sub
 		return 0, 0, fmt.Errorf("user activity: %w", err)
 	}
 	return subscriptions, orders, nil
+}
+
+// SetRefCode gives a user an invite code unless they have one already, and
+// returns the code they end up with. A code taken by someone else is
+// ErrRefCodeTaken (the caller draws another).
+func (s *Store) SetRefCode(ctx context.Context, q querier, userID, code string) (string, error) {
+	var got string
+	err := q.QueryRow(ctx, `
+		UPDATE core.users SET ref_code = COALESCE(ref_code, $2), updated_at = now()
+		WHERE id = $1 RETURNING ref_code`, userID, code).Scan(&got)
+	if isUniqueViolation(err) {
+		return "", ErrRefCodeTaken
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("set ref code: %w", err)
+	}
+	return got, nil
+}
+
+// ErrRefCodeTaken: another user already has this invite code.
+var ErrRefCodeTaken = errors.New("store: invite code taken")
+
+// UserByRefCode finds the owner of an invite code (case-insensitive).
+func (s *Store) UserByRefCode(ctx context.Context, q querier, code string) (*User, error) {
+	u, err := scanUser(q.QueryRow(ctx, `SELECT `+userCols+` FROM core.users WHERE ref_code = lower($1)`, code))
+	if err != nil {
+		return nil, fmt.Errorf("user by ref code: %w", err)
+	}
+	return u, nil
+}
+
+// ReferralStats counts the users someone invited and sums the rewards paid
+// to them, per currency.
+func (s *Store) ReferralStats(ctx context.Context, q querier, userID string) (invited, rewarded int, earned map[string]int64, err error) {
+	if err = q.QueryRow(ctx, `SELECT count(*) FROM core.users WHERE referred_by = $1`, userID).Scan(&invited); err != nil {
+		return 0, 0, nil, fmt.Errorf("referral stats: %w", err)
+	}
+	rows, err := q.Query(ctx, `SELECT currency, count(*), sum(amount) FROM core.ledger_entries
+		WHERE user_id = $1 AND kind = 'referral' GROUP BY currency`, userID)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("referral stats: %w", err)
+	}
+	defer rows.Close()
+	earned = map[string]int64{}
+	for rows.Next() {
+		var (
+			cur string
+			n   int
+			sum int64
+		)
+		if err := rows.Scan(&cur, &n, &sum); err != nil {
+			return 0, 0, nil, err
+		}
+		rewarded += n
+		earned[cur] = sum
+	}
+	return invited, rewarded, earned, rows.Err()
 }

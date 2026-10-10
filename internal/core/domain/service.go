@@ -48,6 +48,9 @@ type UpsertUserParams struct {
 	Username   string
 	Language   string
 	ReferredBy string
+	// ReferralCode is the inviter's code from the bot's start link; like
+	// ReferredBy it only counts when the user is created.
+	ReferralCode string
 }
 
 // UpsertUser registers or refreshes a Telegram user. The configured owner is
@@ -64,15 +67,18 @@ func (s *Service) UpsertUser(ctx context.Context, p UpsertUserParams) (*store.Us
 	if len(p.Username) > 64 {
 		return nil, invalid("username too long")
 	}
-	u, err := s.st.UpsertUser(ctx, s.st.Conn(), p.TelegramID, p.Username, p.Language, p.ReferredBy)
+	referredBy := p.ReferredBy
+	if referredBy == "" && p.ReferralCode != "" {
+		referredBy = s.referrerFor(ctx, p.ReferralCode) // applied only when the user is created
+	}
+	u, err := s.st.UpsertUser(ctx, s.st.Conn(), p.TelegramID, p.Username, p.Language, referredBy)
 	if err != nil {
 		return nil, err
 	}
-	if s.cfg.OwnerTelegramID != 0 && u.TelegramID == s.cfg.OwnerTelegramID && u.Role != "owner" {
-		if err := s.st.SetUserRole(ctx, s.st.Conn(), u.ID, "owner", "active"); err != nil {
+	if s.IsConfiguredOwner(u) {
+		if err := s.promoteOwner(ctx, u); err != nil {
 			return nil, err
 		}
-		u.Role, u.Status = "owner", "active"
 	}
 	return u, nil
 }
@@ -101,47 +107,55 @@ func (s *Service) activeUser(ctx context.Context, q pgx.Tx, userID string) (*sto
 type CreateOrderParams struct {
 	UserID         string
 	PlanID         string
-	Type           string // new (renewals and top-ups are not available yet)
+	Type           string // new | renew | traffic_topup
 	IdempotencyKey string
+	SubscriptionID string // renew | traffic_topup
+	DiscountCode   string
 }
 
-// CreateOrder validates the plan and inserts an order. Retries with the same
-// IdempotencyKey return the existing order unchanged. Trial plans are refused
-// here: they go through StartTrial, which enforces one trial per user.
+// CreateOrder validates the plan (and, for a renewal or top-up, the
+// subscription), applies a discount code, and inserts an order. Retries with
+// the same IdempotencyKey return the existing order unchanged. Trial plans
+// are refused here: they go through StartTrial, which enforces one trial per
+// user.
 func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.Order, error) {
 	if p.IdempotencyKey == "" {
 		return nil, invalid("idempotency key required")
 	}
 	if p.Type == "" {
-		p.Type = "new"
-	}
-	if p.Type != "new" {
-		return nil, invalid("order type %q is not available yet", p.Type)
+		p.Type = OrderNew
 	}
 	u, err := s.activeUser(ctx, nil, p.UserID)
 	if err != nil {
 		return nil, err
 	}
-	plan, err := s.st.GetPlan(ctx, s.st.Conn(), p.PlanID)
+	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
-	if plan.IsTrial {
-		return nil, fmt.Errorf("%w: trial plans are started with StartTrial", ErrPlanUnavailable)
+	off, code, err := s.discountFor(ctx, p.UserID, plan, p.DiscountCode)
+	if err != nil {
+		return nil, err
 	}
-	if !plan.Enabled {
-		return nil, fmt.Errorf("%w: plan is disabled", ErrPlanUnavailable)
-	}
-	free := plan.Price == 0
+	amount := plan.Price - off
+	free := amount == 0
 	status := "awaiting_payment"
 	if free {
 		status = "paid"
+	}
+	var subID, discountCode *string
+	if p.SubscriptionID != "" {
+		subID = &p.SubscriptionID
+	}
+	if code != "" {
+		discountCode = &code
 	}
 	var out *store.Order
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		o, inserted, err := s.st.CreateOrder(ctx, tx, &store.Order{
 			UserID: p.UserID, PlanID: p.PlanID, Type: p.Type, Status: status,
-			Amount: plan.Price, Currency: plan.Currency, IdempotencyKey: p.IdempotencyKey,
+			Amount: amount, Currency: plan.Currency, IdempotencyKey: p.IdempotencyKey,
+			SubscriptionID: subID, DiscountCode: discountCode, DiscountAmount: off,
 		})
 		if err != nil {
 			return err
@@ -161,7 +175,12 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	return out, nil
 }
 
+// publishOrderPaid announces a paid order, in the transaction that marks it
+// paid, after the effects of paying (discount use, referral reward).
 func (s *Service) publishOrderPaid(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source string) error {
+	if err := s.orderPaidEffects(ctx, tx, o, source); err != nil {
+		return err
+	}
 	return s.publish(ctx, tx, events.OrderPaid, events.OrderPaidEvent{
 		OrderID: o.ID, UserID: o.UserID, TelegramID: telegramID, PlanID: o.PlanID,
 		Amount: o.Amount, Currency: o.Currency, Source: source,

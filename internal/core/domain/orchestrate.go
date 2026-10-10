@@ -22,6 +22,9 @@ type PaymentsClient interface {
 	SubmitTXID(ctx context.Context, userID, intentID, network, txid string) (status string, err error)
 	ListPending(ctx context.Context, limit int) ([]PendingPayment, error)
 	Review(ctx context.Context, reviewerID, intentID, decision, reason string) (status string, err error)
+	// ListPayments is the payment history (staff), newest first, with the
+	// number of matches.
+	ListPayments(ctx context.Context, f PaymentFilter, page, size int) ([]PaymentRecord, int64, error)
 	// Automated gateways (Phase 2).
 	StartGateway(ctx context.Context, p GatewayStart) (*GatewayIntent, error)
 	CheckIntent(ctx context.Context, userID, intentID string) (*GatewayIntent, error)
@@ -41,11 +44,38 @@ type PendingPayment struct {
 	PossibleDuplicate                   bool
 }
 
+// PaymentFilter narrows the payment history; empty fields match everything.
+type PaymentFilter struct {
+	UserID, OrderID, Status, Provider, IntentID string
+}
+
+// PaymentRecord is one payment in the history: what was charged where, its
+// outcome, and the proof the customer sent (manual payments) with its review.
+type PaymentRecord struct {
+	IntentID, OrderID, UserID, Provider, Status string
+	Amount                                      int64
+	Currency                                    string
+	GatewayAmount                               int64
+	GatewayCurrency                             string
+	ProviderRef, FailureReason                  string
+	CreatedAt                                   time.Time
+	Proof                                       *PaymentProof
+}
+
+// PaymentProof is a manual payment's proof and its review ("" decision =
+// not reviewed yet).
+type PaymentProof struct {
+	ReceiptFile, ReferenceNumber, Network, TXID string
+	SubmittedAt                                 time.Time
+	Decision, Reason, ReviewedBy                string
+	ReviewedAt                                  *time.Time
+}
+
 // CreatePaymentIntentParams carries bot/orchestration inputs.
 type CreatePaymentIntentParams struct {
 	UserID         string
 	OrderID        string // empty for a wallet top-up
-	Provider       string // manual_card | manual_crypto
+	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | stars
 	Amount         int64  // top-ups only; an order's amount comes from the order
 	Currency       string
 	IdempotencyKey string
@@ -87,7 +117,7 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 		return nil, invalid("idempotency key required")
 	}
 	switch {
-	case p.Provider == "manual_card", p.Provider == "manual_crypto", isGateway(p.Provider):
+	case p.Provider == "manual_card", p.Provider == "manual_crypto", p.Provider == "manual_zarinpal", isGateway(p.Provider):
 	default:
 		return nil, invalid("unsupported payment method %q", p.Provider)
 	}
@@ -153,8 +183,9 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 func (s *Service) paymentDetails(ctx context.Context, prov string) map[string]string {
 	out := map[string]string{}
 	keys := map[string][]string{
-		"manual_card":   {"card_number", "card_holder"},
-		"manual_crypto": {"usdt_trc20", "usdt_erc20"},
+		"manual_card":     {"card_number", "card_holder"},
+		"manual_crypto":   {"usdt_trc20", "usdt_erc20"},
+		"manual_zarinpal": {"zarinpal_link"},
 	}[prov]
 	for _, k := range keys {
 		if v := s.setting(ctx, "payments."+k); v != "" {
@@ -195,7 +226,13 @@ func renderInstructions(prov string, amount int64, currency string, d map[string
 		if d["usdt_trc20"] == "" && d["usdt_erc20"] == "" {
 			return ""
 		}
-		return fmt.Sprintf("Send %s to:\nTRC20: %s\nERC20: %s\nThen send the TXID and network here.", shown, d["usdt_trc20"], d["usdt_erc20"])
+		return fmt.Sprintf("Send %s to:\nTRC20: %s\nERC20: %s\nThen send a screenshot of the transfer (or the TXID) here.", shown, d["usdt_trc20"], d["usdt_erc20"])
+	case "manual_zarinpal":
+		if d["zarinpal_link"] == "" {
+			return ""
+		}
+		return fmt.Sprintf("Pay %s at %s\nReference: %s\nThen send the receipt screenshot and its tracking code here.",
+			shown, d["zarinpal_link"], d["reference"])
 	default:
 		return ""
 	}

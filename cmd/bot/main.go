@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	_ "time/tzdata" // general.timezone works even where the image has no zoneinfo
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
 	eventsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1"
@@ -33,12 +34,13 @@ func setup(rt *app.Runtime) error {
 	if err != nil {
 		return fmt.Errorf("load bot config: %w", err)
 	}
+	// The time zone of dates until (and unless) general.timezone names one.
+	loc := i18n.CurrentLocation()
 	if tz := os.Getenv("BOBRES_TIMEZONE"); tz != "" {
-		loc, err := time.LoadLocation(tz)
-		if err != nil {
+		if loc, err = time.LoadLocation(tz); err != nil {
 			return fmt.Errorf("BOBRES_TIMEZONE: %w", err)
 		}
-		i18n.Location = loc
+		i18n.SetLocation(loc)
 	}
 
 	rdb, err := redisx.New(rt.Ctx, cfg.RedisURL)
@@ -69,7 +71,7 @@ func setup(rt *app.Runtime) error {
 
 	cat := i18n.MustLoad()
 	h := handler.New(core, bot, state.NewRedis(rdb), cat, ratelimit.New(rdb, ""),
-		handler.Config{AdminTelegramID: cfg.AdminTelegramID, BotName: me.FirstName}, rt.Log)
+		handler.Config{AdminTelegramID: cfg.AdminTelegramID, BotName: me.FirstName, BotUsername: me.Username, Location: loc}, rt.Log)
 	if err := h.RefreshSettings(rt.Ctx); err != nil {
 		rt.Log.Warn("settings not loaded yet (core unreachable?); retrying in the background", "err", err)
 	}
@@ -91,7 +93,7 @@ func setup(rt *app.Runtime) error {
 	notifications, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Name:       "core-events",
 		Source:     eventbus.NewGRPCSource(eventsv1.NewEventFeedServiceClient(conn)),
-		Handle:     notify.New(core, bot, cat, cfg.AdminTelegramID, rt.Log).Handle,
+		Handle:     notify.New(core, bot, cat, h.Settings(), cfg.AdminTelegramID, rt.Log).Handle,
 		DeadLetter: notify.LogDeadLetter(rt.Log),
 		Log:        rt.Log,
 	})
@@ -99,6 +101,15 @@ func setup(rt *app.Runtime) error {
 		return err
 	}
 	rt.Go("notifications", notifications.Run)
+
+	if cfg.PeerCoreToken != "" {
+		rt.Mux.Handle("GET /internal/files/{id}", runner.Files(bot, cfg.PeerCoreToken, rt.Log))
+		// Core asks for a reload after every settings, texts or branding change
+		// (the minute ticker above stays as the fallback), and checks a join
+		// channel for the dashboard: core has no bot token.
+		rt.Mux.Handle("POST /internal/settings/refresh", runner.Refresh(h.RefreshSettings, cfg.PeerCoreToken, rt.Log))
+		rt.Mux.Handle("GET /internal/channel-check", runner.ChannelCheck(bot, me.ID, cfg.PeerCoreToken))
+	}
 
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)
 	rt.OnStop(d.Stop)
