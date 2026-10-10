@@ -1,9 +1,10 @@
 import Aura from '@primeuix/themes/aura'
-import { definePreset } from '@primeuix/themes'
+import { definePreset, palette, updatePrimaryPalette } from '@primeuix/themes'
+import { HEX_RE } from './branding'
 
 // BOBRES look: deep navy surfaces in dark mode, a teal accent, calm and
-// legible. Colors are CSS variables, so an operator brand color can be
-// applied later (milestone 3) without a rebuild.
+// legible. Colors are CSS variables, so the operator's brand color is
+// applied at runtime (applyBrandColor) without a rebuild.
 export const BobresPreset = definePreset(Aura, {
   semantic: {
     primary: {
@@ -57,3 +58,31 @@ export const BobresPreset = definePreset(Aura, {
 })
 
 export const darkModeSelector = '.app-dark'
+
+// The brand colour now shown ("" = the preset's teal). Changing the palette
+// re-injects PrimeVue's variables, so the same colour is not applied twice.
+let appliedColor = ''
+
+/** applyBrandColor makes #rrggbb the primary colour (tints and shades derived
+ * from it); empty or invalid goes back to the preset's teal. */
+export function applyBrandColor(hex?: string | null): void {
+  const next = hex && HEX_RE.test(hex) ? hex.toLowerCase() : ''
+  if (next === appliedColor) return
+  appliedColor = next
+  updatePrimaryPalette(palette(next || '{teal}') as Parameters<typeof updatePrimaryPalette>[0])
+}
+
+const defaultIcon = import.meta.env.BASE_URL + 'favicon.svg'
+
+/** applyDocumentBrand sets the browser tab's title and icon (the uploaded
+ * logo, or the BOBRES icon). */
+export function applyDocumentBrand(title: string, logo?: string | null): void {
+  document.title = title
+  const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+  if (!link) return
+  const href = logo || defaultIcon
+  if (link.getAttribute('href') === href) return
+  if (logo) link.removeAttribute('type')
+  else link.type = 'image/svg+xml'
+  link.setAttribute('href', href)
+}

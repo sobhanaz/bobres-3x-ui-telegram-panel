@@ -1,6 +1,7 @@
 // Numbers, money and dates in the dashboard's language: Persian digits and
 // the Jalali calendar for fa (the browser's own Intl, no library), Latin
 // digits and Gregorian dates for en.
+import { reactive } from 'vue'
 
 export type Lang = 'fa' | 'en'
 
@@ -23,6 +24,22 @@ const names: Record<string, Record<Lang, string>> = {
   XTR: { fa: 'ستاره', en: 'Stars' },
 }
 
+// The store's own name for Toman (Branding page), per language; "" = the
+// default above. Reactive, so amounts already on screen follow a change.
+const irtNames = reactive<Record<Lang, string>>({ fa: '', en: '' })
+
+/** setCurrencyNames sets how Toman is written in each language (empty or
+ * missing = the default name). */
+export function setCurrencyNames(custom: { fa?: string; en?: string }): void {
+  irtNames.fa = custom.fa?.trim() ?? ''
+  irtNames.en = custom.en?.trim() ?? ''
+}
+
+function currencyName(currency: string, lang: Lang): string {
+  if (currency === 'IRT' && irtNames[lang]) return irtNames[lang]
+  return names[currency]?.[lang] ?? currency
+}
+
 /** money writes an amount in its currency; signed adds "+" to gains (the
  * number formatter places signs right in both directions). */
 export function money(m: Money, lang: Lang, signed = false): string {
@@ -32,7 +49,7 @@ export function money(m: Money, lang: Lang, signed = false): string {
     maximumFractionDigits: Math.min(scale, 2),
     signDisplay: signed ? 'exceptZero' : 'auto',
   }).format(value)
-  return `${formatted} ${names[m.currency]?.[lang] ?? m.currency}`
+  return `${formatted} ${currencyName(m.currency, lang)}`
 }
 
 /** shortId is the part of an id the bot shows customers: its last 6 hex digits. */

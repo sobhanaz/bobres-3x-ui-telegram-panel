@@ -156,3 +156,112 @@ export interface ReferrerItem {
   rewarded: number
   earned: Money[]
 }
+
+export interface AuditItem {
+  id: string
+  actor: UserBrief | null
+  actor_role: string
+  action: string
+  entity: string
+  entity_id: string
+  before: unknown
+  after: unknown
+  reason: string
+  ip: string
+  source: string
+  created_at: number
+}
+
+export interface SettingItem {
+  key: string
+  group: string
+  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'url' | 'channel' | 'color'
+  value: string
+  default: string
+  options: string[]
+  min: number | null
+  max: number | null
+  editable: boolean
+}
+
+export interface SettingsReply {
+  items: SettingItem[]
+  groups: string[]
+}
+
+export interface ChannelCheck {
+  ok: boolean
+  title?: string
+  bot_admin?: boolean
+  problem?: 'not_found' | 'not_admin' | 'not_channel' | 'error'
+  detail?: string
+}
+
+export interface LangPair {
+  fa: string
+  en: string
+}
+
+export interface BrandingInfo {
+  name: string
+  support: string
+  color: string
+  terms_url: string
+  privacy_url: string
+  currency: LangPair
+  logo: { url: string; type: string; size: number; updated_at: number } | null
+  defaults: { name: string; color: string; currency: LangPair }
+}
+
+/** A problem a text override has; arg is the placeholder, tag or limit. */
+export interface TextProblem {
+  key?: string
+  lang?: string
+  code: string
+  arg: string
+}
+
+export interface TextItem {
+  key: string
+  group: string
+  context: string
+  placeholders: string[]
+  max: number
+  langs: string[]
+  default: LangPair
+  override: LangPair
+}
+
+export interface TextCheck {
+  ok: boolean
+  value: string
+  problems: TextProblem[]
+  length: number
+  max: number
+}
+
+export interface StaffItem {
+  id: string
+  telegram_id: number
+  username: string
+  language: string
+  role: 'owner' | 'admin' | 'support'
+  status: string
+  configured_owner: boolean
+  me: boolean
+  created_at: number
+  password: { state: 'off' | 'pending' | 'on'; username: string; locked_until: number | null; failed_attempts: number }
+  last_login: { at: number; method: string; ip: string } | null
+  sessions: number
+}
+
+export interface SessionItem {
+  id: string
+  method: 'link' | 'password'
+  ip: string
+  user_agent: string
+  created_at: number
+  last_seen_at: number
+  expires_at: number
+  current: boolean
+}

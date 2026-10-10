@@ -43,7 +43,8 @@ describe('catalog syntax', () => {
     for (const [lang, cat] of [['fa', fa], ['en', en]] as const) {
       const i18n = createI18n({ legacy: false, locale: lang, messages: { [lang]: cat }, missingWarn: false, fallbackWarn: false })
       for (const k of keys(cat)) {
-        expect(() => i18n.global.t(k, { n: 1, amount: 'x', balance: 'x', who: 'x', used: 'x', total: 'x', max: 'x', date: 'x', time: 'x', day: 1, week: 1, expiring: 1, ended: 1, brand: 'x', username: 'x', id: 'x' }), `${lang}: ${k}`).not.toThrow()
+        expect(() => i18n.global.t(k, { n: 1, amount: 'x', balance: 'x', who: 'x', used: 'x', total: 'x', max: 'x', date: 'x', time: 'x', day: 1, week: 1, expiring: 1, ended: 1, brand: 'x', username: 'x', id: 'x',
+          fallback: 'x', ratio: 'x', size: 'x', lang: 'x', key: 'x', file: 'x', name: 'x', arg: 'x', code: 'x', entity: 'x', tags: 'x', chars: 'x', entities: 'x', role: 'x', browser: 'x', os: 'x', device: 'x', group: 'x', def: 'x', min: 'x', title: 'x' }), `${lang}: ${k}`).not.toThrow()
       }
     }
   })

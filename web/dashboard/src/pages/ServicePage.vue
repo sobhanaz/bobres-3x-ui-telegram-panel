@@ -161,18 +161,24 @@ async function copyLink() {
       {{ t('service.title') }}
       <span v-if="s" class="app-ltr app-mono app-muted">{{ shortId(s.id) }}</span>
     </h1>
-    <div v-if="s && live" class="app-actions">
-      <Button v-if="auth.can('services.extend')" :label="t('service.extend')" icon="pi pi-calendar-plus" @click="start('extend')" />
-      <Button v-if="auth.can('services.write')" :label="t('service.reset')" icon="pi pi-refresh" outlined @click="start('reset')" />
-      <Button
-        v-if="auth.can('services.write')"
-        :label="s.status === 'disabled' ? t('service.enable') : t('service.disable')"
-        :icon="s.status === 'disabled' ? 'pi pi-play' : 'pi pi-pause'"
-        :severity="s.status === 'disabled' ? 'success' : 'warn'"
-        outlined
-        @click="start(s.status === 'disabled' ? 'enable' : 'disable')"
-      />
-      <Button v-if="auth.can('services.write')" :label="t('service.delete')" icon="pi pi-trash" severity="danger" text @click="start('delete')" />
+    <div v-if="s" class="app-actions">
+      <RouterLink v-if="auth.can('audit.read')" :to="{ name: 'audit', query: { entity_id: s.id } }" class="p-button p-component p-button-text history">
+        <i class="pi pi-history" aria-hidden="true" />
+        <span>{{ t('audit.history') }}</span>
+      </RouterLink>
+      <template v-if="live">
+        <Button v-if="auth.can('services.extend')" :label="t('service.extend')" icon="pi pi-calendar-plus" @click="start('extend')" />
+        <Button v-if="auth.can('services.write')" :label="t('service.reset')" icon="pi pi-refresh" outlined @click="start('reset')" />
+        <Button
+          v-if="auth.can('services.write')"
+          :label="s.status === 'disabled' ? t('service.enable') : t('service.disable')"
+          :icon="s.status === 'disabled' ? 'pi pi-play' : 'pi pi-pause'"
+          :severity="s.status === 'disabled' ? 'success' : 'warn'"
+          outlined
+          @click="start(s.status === 'disabled' ? 'enable' : 'disable')"
+        />
+        <Button v-if="auth.can('services.write')" :label="t('service.delete')" icon="pi pi-trash" severity="danger" text @click="start('delete')" />
+      </template>
     </div>
   </div>
   <Message v-if="loadError" severity="error" :closable="false">{{ loadError }}</Message>
@@ -262,6 +268,10 @@ async function copyLink() {
 </template>
 
 <style scoped>
+.history {
+  text-decoration: none;
+  gap: 0.5rem;
+}
 .orders {
   margin-block-start: var(--app-gap);
 }

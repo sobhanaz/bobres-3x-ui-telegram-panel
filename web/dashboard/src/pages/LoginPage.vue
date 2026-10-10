@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Card from 'primevue/card'
@@ -13,12 +13,21 @@ import { useAuth } from '../stores/auth'
 import { ApiError } from '../api'
 import { latinDigits } from '../format'
 import { setLang, currentLang } from '../i18n'
+import { applyBrandColor, applyDocumentBrand } from '../theme'
 
 const { t } = useI18n()
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
-const logo = import.meta.env.BASE_URL + 'favicon.svg'
+
+// The store's public name, colour and logo (no session needed).
+const brandName = computed(() => auth.publicBrand?.name || auth.brand)
+const logo = computed(() => auth.publicBrand?.logo || import.meta.env.BASE_URL + 'favicon.svg')
+onMounted(() => {
+  if (auth.publicBrand && !auth.me) applyBrandColor(auth.publicBrand.color)
+  void auth.loadPublicBrand()
+})
+watchEffect(() => applyDocumentBrand(t('branding.doc_title', { brand: brandName.value }), auth.publicBrand?.logo))
 
 const linking = ref(false)
 const error = ref('')
@@ -91,10 +100,10 @@ async function submit() {
     <Card class="card">
       <template #title>
         <div class="head">
-          <img :src="logo" alt="" width="36" height="36" />
+          <img :src="logo" alt="" width="36" height="36" class="logo" />
           <div>
             <div>{{ t('login.title') }}</div>
-            <div class="app-muted sub">{{ t('login.subtitle', { brand: auth.brand }) }}</div>
+            <div class="app-muted sub">{{ t('login.subtitle', { brand: brandName }) }}</div>
           </div>
         </div>
       </template>
@@ -149,6 +158,11 @@ async function submit() {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+.logo {
+  object-fit: contain;
+  border-radius: 0.5rem;
+  flex: none;
 }
 .sub {
   font-size: 0.9rem;

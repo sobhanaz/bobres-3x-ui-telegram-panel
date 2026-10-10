@@ -36,7 +36,7 @@ payments is the only one with gateway secrets.
 | Malicious update / MITM of installer | Signature verification (ed25519/cosign), HTTPS, checksums, no unsigned code paths |
 | License key sharing | Install binding, re-activation limits, revocation; accept residual risk |
 | Compromised host | Non-root containers, read-only FS, dropped capabilities, ufw, fail2ban, unattended upgrades |
-| Insider/staff abuse | Roles with least privilege, mandatory reason on money actions, immutable audit log |
+| Insider/staff abuse | Roles with least privilege (payment details, staff and the owner role are the owner's), mandatory reason on money and staff actions, an append-only audit log (a database trigger refuses changes) that records where each change was made |
 | Subscription link leak | Long random tokens, rotate/reset button, optional per-device limits (HWID in 3x-ui) |
 
 ## Crypto and secrets

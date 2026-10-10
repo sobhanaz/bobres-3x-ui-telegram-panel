@@ -4,10 +4,13 @@
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string, message: string) {
+  /** The whole error answer, for extra fields such as field or problems. */
+  readonly data: Record<string, unknown>
+  constructor(status: number, code: string, message: string, data: Record<string, unknown> = {}) {
     super(message)
     this.status = status
     this.code = code
+    this.data = data
   }
 }
 
@@ -23,9 +26,15 @@ export function whenAuthLost(fn: () => void): void {
   onAuthLost = fn
 }
 
+/**
+ * api calls core. A Blob or File body (an upload) is sent as it is, with its
+ * own type; anything else is sent as JSON.
+ */
 export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const raw = body instanceof Blob
+  if (raw) headers['Content-Type'] = body.type || 'application/octet-stream'
+  else if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (method !== 'GET' && csrfToken) headers['X-CSRF-Token'] = csrfToken
   let res: Response
   try {
@@ -33,7 +42,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
       method,
       headers,
       credentials: 'same-origin',
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: raw ? body : body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, 'network', 'network')
@@ -44,7 +53,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
     const code = typeof data.error === 'string' ? data.error : 'error'
     const message = typeof data.message === 'string' ? data.message : res.statusText
     if (res.status === 401 && !path.startsWith('/auth/')) onAuthLost()
-    throw new ApiError(res.status, code, message)
+    throw new ApiError(res.status, code, message, data)
   }
   return data as T
 }

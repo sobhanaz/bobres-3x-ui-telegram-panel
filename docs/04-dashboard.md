@@ -8,8 +8,8 @@ Decisions, milestones and status: `superpowers/specs/2026-10-07-phase4-dashboard
 | Role | Scope |
 |---|---|
 | owner | Everything incl. license, staff, gateway secrets, danger zone |
-| admin | Users, orders, plans, discounts, broadcasts, settings (no license/secrets) |
-| support | Tickets, read-only users/orders, limited actions (extend, reset traffic) |
+| admin | Users, orders, plans, discounts, broadcasts, settings, branding, audit log (no staff, license, secrets or payment details) |
+| support | Tickets, read-only users/orders, limited actions (extend a service, read it from the panel) |
 | reseller | Own customers, own sales, own credit; sees only their data |
 | finance (optional) | Payments, ledger, reports, exports, no user edits |
 Permissions are a list of granular flags (e.g. `users.write`, `wallet.adjust`) so custom roles are possible later.
