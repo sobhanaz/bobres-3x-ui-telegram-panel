@@ -4,11 +4,25 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
-// Location is the time zone dates are shown in (set from configuration).
-var Location = mustLoad("Asia/Tehran")
+// location is the time zone dates are shown in: configuration, then the
+// store's setting, which can change while the bot runs.
+var location atomic.Pointer[time.Location]
+
+func init() { location.Store(mustLoad("Asia/Tehran")) }
+
+// SetLocation sets the time zone dates are shown in.
+func SetLocation(l *time.Location) {
+	if l != nil {
+		location.Store(l)
+	}
+}
+
+// CurrentLocation is the time zone dates are shown in.
+func CurrentLocation() *time.Location { return location.Load() }
 
 func mustLoad(name string) *time.Location {
 	l, err := time.LoadLocation(name)
@@ -94,14 +108,38 @@ var currencyNames = map[string]map[string]string{
 
 var currencyScale = map[string]int{"IRT": 0, "USDT": 6}
 
+// irtNames are the store's own names for the Toman (per language), from
+// the branding settings; empty means the built-in name.
+var irtNames atomic.Pointer[map[string]string]
+
+// SetCurrencyNames sets the store's names for the Toman, per language.
+func SetCurrencyNames(names map[string]string) {
+	m := map[string]string{}
+	for lang, n := range names {
+		if n = strings.TrimSpace(n); n != "" {
+			m[Normalize(lang)] = n
+		}
+	}
+	irtNames.Store(&m)
+}
+
+func currencyName(lang, currency string) string {
+	if currency == "IRT" {
+		if m := irtNames.Load(); m != nil && (*m)[lang] != "" {
+			return (*m)[lang]
+		}
+	}
+	if name := currencyNames[lang][currency]; name != "" {
+		return name
+	}
+	return currency
+}
+
 // Money formats minor units in the currency's major unit, e.g. "150,000 Toman",
 // "۱۵۰٬۰۰۰ تومان", "25.5 USDT".
 func Money(lang string, minor int64, currency string) string {
 	lang = Normalize(lang)
-	name := currencyNames[lang][currency]
-	if name == "" {
-		name = currency
-	}
+	name := currencyName(lang, currency)
 	scale := currencyScale[currency]
 	if scale == 0 {
 		return Number(lang, minor) + " " + name
@@ -145,7 +183,7 @@ var persianMonths = [...]string{"فروردین", "اردیبهشت", "خردا�
 
 // Date formats a day: Jalali in Persian ("۱۱ آبان ۱۴۰۵"), "2 Nov 2026" in English.
 func Date(lang string, t time.Time) string {
-	t = t.In(Location)
+	t = t.In(CurrentLocation())
 	if Normalize(lang) == "fa" {
 		y, m, d := GregorianToJalali(t.Year(), int(t.Month()), t.Day())
 		return Digits(lang, strconv.Itoa(d)) + " " + persianMonths[m-1] + " " + Digits(lang, strconv.Itoa(y))

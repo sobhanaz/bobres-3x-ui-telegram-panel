@@ -3,7 +3,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math"
 	"sort"
@@ -28,11 +27,29 @@ type Server struct {
 	publicURL string
 }
 
+// fromBot marks the changes a request makes as made in the bot (the only
+// peer that calls core), for the audit log.
+func fromBot(ctx context.Context) context.Context { return store.WithSource(ctx, store.SourceBot) }
+
+// ListStaffContacts lists the active owners and admins, for staff alerts.
+func (s *Server) ListStaffContacts(ctx context.Context, _ *corev1.ListStaffContactsRequest) (*corev1.ListStaffContactsResponse, error) {
+	users, err := s.st.ListStaffContacts(ctx, s.st.Conn())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.ListStaffContactsResponse{}
+	for _, u := range users {
+		out.Items = append(out.Items, &corev1.StaffContact{TelegramId: u.TelegramID, Language: u.Language, Role: u.Role})
+	}
+	return out, nil
+}
+
 // SetPublicURL sets the dashboard origin login links point to.
 func (s *Server) SetPublicURL(u string) { s.publicURL = u }
 
 // CreateDashboardLink makes a one-time dashboard login link for a staff member.
 func (s *Server) CreateDashboardLink(ctx context.Context, req *corev1.CreateDashboardLinkRequest) (*corev1.DashboardLink, error) {
+	ctx = fromBot(ctx)
 	if s.publicURL == "" {
 		return &corev1.DashboardLink{}, nil
 	}
@@ -114,6 +131,7 @@ func userToProto(u *store.User) *corev1.User {
 
 // UpsertUser creates or updates a user by telegram id.
 func (s *Server) UpsertUser(ctx context.Context, req *corev1.UpsertUserRequest) (*corev1.User, error) {
+	ctx = fromBot(ctx)
 	u, err := s.dom.UpsertUser(ctx, domain.UpsertUserParams{
 		TelegramID: req.GetTelegramId(), Username: req.GetUsername(),
 		Language: req.GetLanguage(), ReferredBy: req.GetReferredBy(), ReferralCode: req.GetReferralCode(),
@@ -371,32 +389,6 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 		out.Values[k] = string(v)
 	}
 	return out, nil
-}
-
-// UpdateBranding upserts branding settings with an audit row.
-func (s *Server) UpdateBranding(ctx context.Context, req *corev1.UpdateBrandingRequest) (*corev1.Settings, error) {
-	for k, v := range req.GetValues() {
-		raw := json.RawMessage(v)
-		if !json.Valid(raw) {
-			raw, _ = json.Marshal(v) // treat as plain string
-		}
-		if err := s.st.SetSetting(ctx, s.st.Conn(), "branding."+k, raw); err != nil {
-			return nil, fail(err)
-		}
-	}
-	actor := req.GetActorId()
-	reason := req.GetReason()
-	payload, _ := json.Marshal(req.GetValues())
-	if err := s.st.WriteAudit(ctx, s.st.Conn(), &store.Audit{
-		ActorID: optstr(actor),
-		Action:  "branding.update",
-		Entity:  "settings",
-		After:   payload,
-		Reason:  optstr(reason),
-	}); err != nil {
-		return nil, fail(err)
-	}
-	return s.GetSettings(ctx, &corev1.GetSettingsRequest{})
 }
 
 func optstr(s string) *string {

@@ -135,4 +135,5 @@ type Audit struct {
 	Before   []byte
 	After    []byte
 	Reason   *string
+	IP       *string // the dashboard client's address (nil from the bot)
 }

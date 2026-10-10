@@ -111,6 +111,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
 	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
 	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
+
+	// Administration.
+	s.route(api, "GET /api/v1/audit", PermAuditRead, s.listAudit)
+	s.route(api, "GET /api/v1/audit/actions", PermAuditRead, s.auditActions)
+	s.route(api, "GET /api/v1/audit.csv", PermAuditRead, s.exportAudit)
 	api.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
@@ -133,7 +138,8 @@ func apiHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
-		next.ServeHTTP(w, r)
+		// Audit entries written for this request record where it came from.
+		next.ServeHTTP(w, r.WithContext(store.WithClientIP(r.Context(), clientIP(r))))
 	})
 }
 

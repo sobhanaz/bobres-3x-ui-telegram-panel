@@ -38,7 +38,7 @@ func setup(rt *app.Runtime) error {
 		if err != nil {
 			return fmt.Errorf("BOBRES_TIMEZONE: %w", err)
 		}
-		i18n.Location = loc
+		i18n.SetLocation(loc)
 	}
 
 	rdb, err := redisx.New(rt.Ctx, cfg.RedisURL)

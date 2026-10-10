@@ -105,7 +105,7 @@ func TestJalali(t *testing.T) {
 			t.Errorf("%d-%d-%d -> %d/%d/%d, want %d/%d/%d", c.gy, c.gm, c.gd, y, m, d, c.jy, c.jm, c.jd)
 		}
 	}
-	d := time.Date(2026, 11, 2, 12, 0, 0, 0, Location)
+	d := time.Date(2026, 11, 2, 12, 0, 0, 0, CurrentLocation())
 	if got := Date("fa", d); got != "۱۱ آبان ۱۴۰۵" {
 		t.Errorf("fa date %q", got)
 	}

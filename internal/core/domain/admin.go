@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -15,25 +14,6 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/money"
 )
-
-// SettingKeys are the settings an admin may change from the bot (and later the
-// dashboard). Values are plain text.
-var SettingKeys = map[string]string{
-	"payments.card_number":    "card number shown for card-to-card payments",
-	"payments.card_holder":    "card holder name",
-	"payments.usdt_trc20":     "USDT TRC20 deposit address",
-	"payments.usdt_erc20":     "USDT ERC20 deposit address",
-	"payments.usdt_rate":      "Toman per 1 USDT, to quote Toman prices in USDT",
-	"payments.stars_rate":     "Toman per Telegram Star, to price plans in Stars (empty = no Stars)",
-	"payments.zarinpal_link":  "your Zarinpal payment link (https://zarinp.al/...); customers pay there and send the receipt screenshot for approval",
-	"referral.reward_percent": "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)",
-	"branding.name":           "store name shown to users",
-	"branding.support":        "support contact (e.g. @support)",
-	"texts.fa.welcome":        "Persian welcome text",
-	"texts.en.welcome":        "English welcome text",
-}
-
-const maxSettingLen = 1000
 
 // requireStaff loads the actor and checks they are an active admin or owner.
 func (s *Service) requireStaff(ctx context.Context, actorTelegramID int64) (*store.User, error) {
@@ -54,15 +34,30 @@ func (s *Service) requireStaff(ctx context.Context, actorTelegramID int64) (*sto
 }
 
 func (s *Service) audit(ctx context.Context, q pgx.Tx, actor *store.User, action, entity, entityID string, after any, reason string) error {
-	var payload []byte
-	if after != nil {
-		b, err := json.Marshal(after)
-		if err != nil {
-			return err
+	return s.auditChange(ctx, q, actor, action, entity, entityID, nil, after, reason)
+}
+
+// auditChange writes an audit entry with the item's state before and after.
+// A nil actor is the system (a configured rule, not a person).
+func (s *Service) auditChange(ctx context.Context, q pgx.Tx, actor *store.User, action, entity, entityID string, before, after any, reason string) error {
+	enc := func(v any) ([]byte, error) {
+		if v == nil {
+			return nil, nil
 		}
-		payload = b
+		return json.Marshal(v)
 	}
-	a := &store.Audit{ActorID: &actor.ID, Action: action, Entity: entity, After: payload}
+	b, err := enc(before)
+	if err != nil {
+		return err
+	}
+	payload, err := enc(after)
+	if err != nil {
+		return err
+	}
+	a := &store.Audit{Action: action, Entity: entity, Before: b, After: payload}
+	if actor != nil {
+		a.ActorID = &actor.ID
+	}
 	if entityID != "" {
 		a.EntityID = &entityID
 	}
@@ -363,45 +358,4 @@ func validatePlan(p *store.Plan) error {
 		return invalid("a %s plan needs a traffic limit", p.Kind)
 	}
 	return nil
-}
-
-// AdminSetSetting changes one allowlisted setting.
-func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, key, value string) error {
-	actor, err := s.requireStaff(ctx, actorTelegramID)
-	if err != nil {
-		return err
-	}
-	return s.SetSetting(ctx, actor, key, value)
-}
-
-// SetSetting is AdminSetSetting for an actor the caller has checked.
-func (s *Service) SetSetting(ctx context.Context, actor *store.User, key, value string) error {
-	if _, ok := SettingKeys[key]; !ok {
-		return invalid("unknown setting %q", key)
-	}
-	value = strings.TrimSpace(value)
-	if len(value) > maxSettingLen {
-		return invalid("setting value too long")
-	}
-	if key == "referral.reward_percent" && value != "" {
-		if n, err := strconv.Atoi(value); err != nil || n < 0 || n > 100 {
-			return invalid("referral.reward_percent must be a whole number from 0 to 100")
-		}
-	}
-	if key == "payments.zarinpal_link" && value != "" {
-		// Shown to customers as a link button: only a plain https link.
-		if u, err := url.Parse(value); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-			return invalid("payments.zarinpal_link must be an https link, e.g. https://zarinp.al/yourname")
-		}
-	}
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return s.st.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := s.st.SetSetting(ctx, tx, key, raw); err != nil {
-			return err
-		}
-		return s.audit(ctx, tx, actor, "setting.set", "settings", "", map[string]string{"key": key, "value": value}, "")
-	})
 }
