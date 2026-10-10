@@ -377,6 +377,12 @@ func (s *Store) RecordResults(ctx context.Context, tx pgx.Tx, broadcastID string
 	for i, r := range results {
 		users[i], outcomes[i], msgs[i], errs[i] = r.UserID, r.Outcome, r.MessageID, r.Error
 	}
+	// Wait for a pause or cancel under way (it locks the broadcast FOR UPDATE)
+	// and block one from starting, so released recipients follow the status
+	// it ends with. KEY SHARE leaves the counters' updates free.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM core.broadcasts WHERE id = $1 FOR KEY SHARE`, broadcastID); err != nil {
+		return fmt.Errorf("record results: %w", err)
+	}
 	_, err := tx.Exec(ctx, `
 		WITH res AS (
 			SELECT * FROM unnest($2::uuid[], $3::text[], $4::bigint[], $5::text[]) AS x(user_id, outcome, message_id, error)),

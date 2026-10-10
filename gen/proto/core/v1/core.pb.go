@@ -959,8 +959,11 @@ type AddTicketMessageRequest struct {
 	FileName           string                 `protobuf:"bytes,9,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
 	FileSize           int64                  `protobuf:"varint,10,opt,name=file_size,json=fileSize,proto3" json:"file_size,omitempty"`
 	TgMessageId        int64                  `protobuf:"varint,11,opt,name=tg_message_id,json=tgMessageId,proto3" json:"tg_message_id,omitempty"` // the customer's message: makes a repeat harmless
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// With reply_to_tg_message_id: only says whether it is this customer's
+	// delivered staff reply (NOT_FOUND otherwise); nothing is saved.
+	CheckOnly     bool `protobuf:"varint,12,opt,name=check_only,json=checkOnly,proto3" json:"check_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AddTicketMessageRequest) Reset() {
@@ -1068,6 +1071,13 @@ func (x *AddTicketMessageRequest) GetTgMessageId() int64 {
 		return x.TgMessageId
 	}
 	return 0
+}
+
+func (x *AddTicketMessageRequest) GetCheckOnly() bool {
+	if x != nil {
+		return x.CheckOnly
+	}
+	return false
 }
 
 type AddTicketMessageResponse struct {
@@ -5541,7 +5551,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12\x19\n" +
 	"\bhas_file\x18\x04 \x01(\bR\ahasFile\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\x03R\tcreatedAt\"\xe4\x02\n" +
+	"created_at\x18\x05 \x01(\x03R\tcreatedAt\"\x83\x03\n" +
 	"\x17AddTicketMessageRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
 	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x1b\n" +
@@ -5554,7 +5564,9 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\tfile_name\x18\t \x01(\tR\bfileName\x12\x1b\n" +
 	"\tfile_size\x18\n" +
 	" \x01(\x03R\bfileSize\x12\"\n" +
-	"\rtg_message_id\x18\v \x01(\x03R\vtgMessageId\"\xc0\x01\n" +
+	"\rtg_message_id\x18\v \x01(\x03R\vtgMessageId\x12\x1d\n" +
+	"\n" +
+	"check_only\x18\f \x01(\bR\tcheckOnly\"\xc0\x01\n" +
 	"\x18AddTicketMessageResponse\x12'\n" +
 	"\x06ticket\x18\x01 \x01(\v2\x0f.core.v1.TicketR\x06ticket\x12\x1d\n" +
 	"\n" +

@@ -169,8 +169,9 @@ func (s *Service) BroadcastAudience(ctx context.Context, segment, language strin
 }
 
 // SendBroadcast schedules a draft (or reschedules a scheduled broadcast) for
-// at, or now when at is nil. The worker starts it when the time comes.
-func (s *Service) SendBroadcast(ctx context.Context, actor *store.User, id string, at *time.Time) (*store.Broadcast, error) {
+// at, or now when at is nil, if it is still at the version the sender read.
+// The worker starts it when the time comes.
+func (s *Service) SendBroadcast(ctx context.Context, actor *store.User, id string, at *time.Time, version int) (*store.Broadcast, error) {
 	now := time.Now()
 	when := now
 	if at != nil {
@@ -185,6 +186,9 @@ func (s *Service) SendBroadcast(ctx context.Context, actor *store.User, id strin
 		b, err := s.st.GetBroadcast(ctx, tx, id, true)
 		if err != nil {
 			return err
+		}
+		if b.Version != version { // what goes out must be what the sender saw
+			return stateErr("someone changed this broadcast meanwhile; reload it")
 		}
 		ok, err := s.st.SetBroadcastStatus(ctx, tx, id, []string{"draft", "scheduled"}, "scheduled", &when)
 		if err != nil {

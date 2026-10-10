@@ -26,7 +26,7 @@ func TestSupportTickets(t *testing.T) {
 	id := r1.Ticket.ID
 
 	// Support staff work tickets too.
-	f.staffUser(9102, "support")
+	supU := f.staffUser(9102, "support")
 	sup := f.browser()
 	sup.loginWithLink(9102)
 	code, out := sup.do(http.MethodGet, "/api/v1/tickets?status=open", nil)
@@ -91,6 +91,15 @@ func TestSupportTickets(t *testing.T) {
 	}
 	if code, out := b.do(http.MethodPut, "/api/v1/tickets/"+id+"/assignee", map[string]any{"user_id": ownerU.ID}); code != 200 || out["ticket"].(map[string]any)["assignee"].(map[string]any)["id"] != ownerU.ID {
 		t.Fatalf("owner assigned: %d %v", code, out)
+	}
+	// Nor may support take it back or clear it once a manager gave it on.
+	for _, to := range []any{supU.ID, nil} {
+		if code, _ := sup.do(http.MethodPut, "/api/v1/tickets/"+id+"/assignee", map[string]any{"user_id": to}); code != 403 {
+			t.Fatalf("support took or cleared the owner's ticket (%v): %d", to, code)
+		}
+	}
+	if _, out := sup.do(http.MethodGet, "/api/v1/tickets/"+id, nil); out["ticket"].(map[string]any)["assignee"].(map[string]any)["id"] != ownerU.ID {
+		t.Fatalf("assignee after refusals: %v", out["ticket"])
 	}
 	// Close, then a reply is refused until it is reopened.
 	if code, out := sup.do(http.MethodPost, "/api/v1/tickets/"+id+"/status", map[string]any{"status": "closed", "reason": "solved"}); code != 200 || out["ticket"].(map[string]any)["status"] != "closed" {
@@ -201,10 +210,17 @@ func TestBroadcastsAPI(t *testing.T) {
 	b.do(http.MethodPut, "/api/v1/broadcasts/"+id, upd)
 
 	// Send: scheduled now, started by the worker, paused, resumed, cancelled.
-	if code, out := b.do(http.MethodPost, "/api/v1/broadcasts/"+id+"/send", map[string]any{"at": 1}); code != 400 || out["field"] != "at" {
+	// It needs the version read, so nobody sends what they never saw.
+	if code, out := b.do(http.MethodPost, "/api/v1/broadcasts/"+id+"/send", map[string]any{"at": nil}); code != 400 || out["field"] != "version" {
+		t.Fatalf("send without a version: %d %v", code, out)
+	}
+	if code, out := b.do(http.MethodPost, "/api/v1/broadcasts/"+id+"/send", map[string]any{"at": nil, "version": 2}); code != 409 || out["error"] != "state" {
+		t.Fatalf("send of a stale version: %d %v", code, out)
+	}
+	if code, out := b.do(http.MethodPost, "/api/v1/broadcasts/"+id+"/send", map[string]any{"at": 1, "version": 3}); code != 400 || out["field"] != "at" {
 		t.Fatalf("send in the past: %d %v", code, out)
 	}
-	if code, out := b.do(http.MethodPost, "/api/v1/broadcasts/"+id+"/send", map[string]any{"at": nil}); code != 200 || out["item"].(map[string]any)["status"] != "scheduled" {
+	if code, out := b.do(http.MethodPost, "/api/v1/broadcasts/"+id+"/send", map[string]any{"at": nil, "version": 3}); code != 200 || out["item"].(map[string]any)["status"] != "scheduled" {
 		t.Fatalf("send: %d %v", code, out)
 	}
 	if err := f.dom.NewBroadcastWorker(nil).Step(ctx); err != nil {

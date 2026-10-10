@@ -173,6 +173,153 @@ func TestTicketAutoClose(t *testing.T) {
 	}
 }
 
+// Auto-close takes only tickets still answered and stale when it gets to
+// them: the customer may write, or staff reply again, after they are listed.
+func TestTicketAutoCloseSkipsNewActivity(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	sup := staffMember(t, s, 7131, "support")
+	after := 7 * 24 * time.Hour
+	stale := func(tg int64) (*store.User, string) {
+		t.Helper()
+		c := seedUser(t, s, tg)
+		r, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: c.ID, Text: "hi"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := svc.ReplyTicket(ctx, sup, r.Ticket.ID, "answer", "reply", false, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.DB().Exec(ctx, `UPDATE core.tickets SET last_staff_at = now() - interval '8 days' WHERE id = $1`, r.Ticket.ID); err != nil {
+			t.Fatal(err)
+		}
+		return c, r.Ticket.ID
+	}
+	status := func(id string) string {
+		t.Helper()
+		tk, err := s.GetTicket(ctx, s.Conn(), id, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tk.Status
+	}
+	// The customer answered: the ticket waits for staff.
+	c, id := stale(7132)
+	if _, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: c.ID, TicketID: id, Text: "still broken"}); err != nil {
+		t.Fatal(err)
+	}
+	w := svc.NewTicketWorker(nil)
+	if n, err := w.Step(ctx); err != nil || n != 0 || status(id) != "open" {
+		t.Fatalf("auto-close took a waiting ticket: %d %v %s", n, err, status(id))
+	}
+	// Listed as stale, then the customer writes on one and staff reply again
+	// on the other before the close: neither is closed.
+	c1, id1 := stale(7133)
+	_, id2 := stale(7134)
+	ids, err := s.StaleAnswered(ctx, s.Conn(), after, 200)
+	if err != nil || len(ids) != 2 {
+		t.Fatalf("stale: %v %v", ids, err)
+	}
+	if _, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: c1.ID, TicketID: id1, Text: "still broken"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ReplyTicket(ctx, sup, id2, "one more thing", "reply", false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := w.closeStale(ctx, ids, after); err != nil || n != 0 || status(id1) != "open" || status(id2) != "answered" {
+		t.Fatalf("closed after new activity: %d %v %s %s", n, err, status(id1), status(id2))
+	}
+}
+
+// Telegram numbers messages per chat, so two customers' delivered replies
+// can share an id: a reply-to only ever finds the customer's own ticket.
+func TestReplyToFindsOwnTicket(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	sup := staffMember(t, s, 7141, "support")
+	a, b, c := seedUser(t, s, 7142), seedUser(t, s, 7143), seedUser(t, s, 7144)
+	answered := func(u *store.User, text string) string {
+		t.Helper()
+		r, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: u.ID, Text: text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, m, err := svc.ReplyTicket(ctx, sup, r.Ticket.ID, "answer", "reply", false, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ReportTicketDelivery(ctx, m.ID, "sent", 555); err != nil {
+			t.Fatal(err)
+		}
+		return r.Ticket.ID
+	}
+	// B's reply is the older one: a lookup by message id alone finds A's.
+	tb := answered(b, "B's question")
+	ta := answered(a, "A's question")
+	r, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: b.ID, ReplyToTGID: 555, Text: "B's private answer", TGMessageID: 20})
+	if err != nil || r.Ticket.ID != tb {
+		t.Fatalf("B's reply-to: %+v %v", r, err)
+	}
+	_, msgs, err := svc.MyTicket(ctx, a.ID, ta, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range msgs {
+		if strings.Contains(m.Body, "B's") {
+			t.Fatalf("B's message reached A's ticket: %q", m.Body)
+		}
+	}
+	if _, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: c.ID, ReplyToTGID: 555, Text: "hi", TGMessageID: 21}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a reply-to with no delivered reply of theirs: %v", err)
+	}
+}
+
+// Callback data can be forged: a customer never reads or closes another
+// customer's ticket.
+func TestCustomerCannotUseOthersTicket(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	a, b := seedUser(t, s, 7151), seedUser(t, s, 7152)
+	r, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: a.ID, Text: "A's question"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.MyTicket(ctx, b.ID, r.Ticket.ID, 20); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("B read A's ticket: %v", err)
+	}
+	if _, err := svc.CloseMyTicket(ctx, b.ID, r.Ticket.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("B closed A's ticket: %v", err)
+	}
+	if tk, _ := s.GetTicket(ctx, s.Conn(), r.Ticket.ID, false); tk.Status != "open" {
+		t.Fatalf("A's ticket: %s", tk.Status)
+	}
+}
+
+// Taking or clearing a ticket a colleague holds is a manager's call.
+func TestSupportCannotTakeHeldTicket(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	owner := staffMember(t, s, 7161, "owner")
+	adm := staffMember(t, s, 7162, "admin")
+	sup := staffMember(t, s, 7163, "support")
+	c := seedUser(t, s, 7164)
+	r, err := svc.AddCustomerMessage(ctx, CustomerMessage{UserID: c.ID, Text: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AssignTicket(ctx, owner, r.Ticket.ID, &adm.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	for name, to := range map[string]*string{"take": &sup.ID, "clear": nil} {
+		if _, err := svc.AssignTicket(ctx, sup, r.Ticket.ID, to, false); !errors.Is(err, ErrForbidden) {
+			t.Errorf("support could %s the admin's ticket: %v", name, err)
+		}
+	}
+	if tk, _ := s.GetTicket(ctx, s.Conn(), r.Ticket.ID, false); tk.AssignedTo == nil || *tk.AssignedTo != adm.ID {
+		t.Fatalf("assignee changed: %v", tk.AssignedTo)
+	}
+}
+
 // A broadcast reaches its audience at most once: claims, results, blocked
 // users, halts and the end.
 func TestBroadcastLifecycle(t *testing.T) {
@@ -200,7 +347,10 @@ func TestBroadcastLifecycle(t *testing.T) {
 	if total, _, _, _ := svc.BroadcastAudience(ctx, "all", ""); total != 3 { // the owner and two customers
 		t.Fatalf("audience: %d", total)
 	}
-	if _, err := svc.SendBroadcast(ctx, owner, b.ID, nil); err != nil {
+	if _, err := svc.SendBroadcast(ctx, owner, b.ID, nil, b.Version+1); !errors.Is(err, ErrState) {
+		t.Fatalf("send of another version: %v", err)
+	}
+	if _, err := svc.SendBroadcast(ctx, owner, b.ID, nil, b.Version); err != nil {
 		t.Fatal(err)
 	}
 	w := svc.NewBroadcastWorker(nil)
@@ -278,8 +428,19 @@ func TestBroadcastLeaseAndCancel(t *testing.T) {
 		seedUser(t, s, tg)
 	}
 	b, _ := svc.CreateBroadcast(ctx, owner, BroadcastInput{Segment: "all", Language: "fa", Texts: map[string]string{"fa": "x"}})
+	// Sending needs the version read: an edit made since is not sent unseen.
+	edited, err := svc.UpdateBroadcast(ctx, owner, b.ID, BroadcastInput{Segment: "all", Language: "fa", Texts: map[string]string{"fa": "y"}}, b.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
 	at := time.Now().Add(time.Hour)
-	if _, err := svc.SendBroadcast(ctx, owner, b.ID, &at); err != nil {
+	if _, err := svc.SendBroadcast(ctx, owner, b.ID, &at, b.Version); !errors.Is(err, ErrState) {
+		t.Fatalf("sent a broadcast changed since it was read: %v", err)
+	}
+	if b, _ = s.GetBroadcast(ctx, s.Conn(), b.ID, false); b.Status != "draft" {
+		t.Fatalf("a refused send changed the status: %s", b.Status)
+	}
+	if _, err := svc.SendBroadcast(ctx, owner, b.ID, &at, edited.Version); err != nil {
 		t.Fatal(err)
 	}
 	w := svc.NewBroadcastWorker(nil)
@@ -320,3 +481,154 @@ func TestBroadcastLeaseAndCancel(t *testing.T) {
 		t.Fatalf("deleted a sent broadcast: %v", err)
 	}
 }
+
+// startBroadcast sends a broadcast to everyone now and lets the worker start it.
+func startBroadcast(t *testing.T, svc *Service, s *store.Store, owner *store.User) *store.Broadcast {
+	t.Helper()
+	ctx := context.Background()
+	b, err := svc.CreateBroadcast(ctx, owner, BroadcastInput{Segment: "all", Texts: map[string]string{"fa": "x", "en": "x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SendBroadcast(ctx, owner, b.ID, nil, b.Version); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.NewBroadcastWorker(nil).Step(ctx); err != nil {
+		t.Fatal(err)
+	}
+	b, err = s.GetBroadcast(ctx, s.Conn(), b.ID, false)
+	if err != nil || b.Status != "running" {
+		t.Fatalf("start: %+v %v", b, err)
+	}
+	return b
+}
+
+// Recipients someone holds are not handed out again before their lease
+// ends, one claim after another or at the same time.
+func TestBroadcastClaimsDoNotOverlap(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	owner := staffMember(t, s, 7311, "owner")
+	for _, tg := range []int64{7312, 7313} {
+		seedUser(t, s, tg)
+	}
+	if b := startBroadcast(t, svc, s, owner); b.Total != 3 {
+		t.Fatalf("audience: %d", b.Total)
+	}
+	first, err := svc.ClaimBroadcastBatch(ctx, 2)
+	if err != nil || first == nil || len(first.Recipients) != 2 {
+		t.Fatalf("first claim: %+v %v", first, err)
+	}
+	second, err := svc.ClaimBroadcastBatch(ctx, 5)
+	if err != nil || second == nil || len(second.Recipients) != 1 {
+		t.Fatalf("second claim: %+v %v", second, err)
+	}
+	for _, r := range first.Recipients {
+		if r.UserID == second.Recipients[0].UserID {
+			t.Fatalf("recipient %s handed out twice", r.UserID)
+		}
+	}
+	if more, err := svc.ClaimBroadcastBatch(ctx, 5); err != nil || more != nil {
+		t.Fatalf("claimed while all are held: %+v %v", more, err)
+	}
+
+	// Two claims at once share nothing and between them take everyone.
+	b := startBroadcast(t, svc, s, owner)
+	var wg sync.WaitGroup
+	got := make([]*BroadcastBatch, 2)
+	errs := make([]error, 2)
+	for i := range got {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got[i], errs[i] = svc.ClaimBroadcastBatch(ctx, 2)
+		}()
+	}
+	wg.Wait()
+	seen := map[string]bool{}
+	for i, batch := range got {
+		if errs[i] != nil || batch == nil || batch.Broadcast.ID != b.ID {
+			t.Fatalf("claim %d: %+v %v", i, batch, errs[i])
+		}
+		for _, r := range batch.Recipients {
+			if seen[r.UserID] {
+				t.Fatalf("recipient %s handed out twice", r.UserID)
+			}
+			seen[r.UserID] = true
+		}
+	}
+	if len(seen) != 3 {
+		t.Fatalf("claims took %d of 3 recipients", len(seen))
+	}
+}
+
+// Recipients the bot gives back while staff cancel end cancelled, not in
+// line for good: the report waits for the cancel and sees it.
+func TestBroadcastReleaseDuringCancel(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	owner := staffMember(t, s, 7321, "owner")
+	for _, tg := range []int64{7322, 7323} {
+		seedUser(t, s, tg)
+	}
+	b := startBroadcast(t, svc, s, owner)
+	held, err := svc.ClaimBroadcastBatch(ctx, 2)
+	if err != nil || held == nil || len(held.Recipients) != 2 {
+		t.Fatalf("claim: %+v %v", held, err)
+	}
+	// The cancel's steps (changeBroadcast), held open in a transaction.
+	tx, err := s.DB().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	if _, err := s.GetBroadcast(ctx, tx, b.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.SetBroadcastStatus(ctx, tx, b.ID, []string{"running"}, "cancelled", nil); err != nil || !ok {
+		t.Fatalf("cancel: %v %v", ok, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		var res []store.Result
+		for _, r := range held.Recipients {
+			res = append(res, store.Result{UserID: r.UserID, Outcome: "released"})
+		}
+		_, err := svc.ReportBroadcastResults(ctx, b.ID, res, "")
+		done <- err
+	}()
+	// Let the report reach the broadcast's lock.
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		var waiting int
+		if err := s.DB().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the report never waited for the cancel")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := s.CancelPending(ctx, tx, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	b, _ = s.GetBroadcast(ctx, s.Conn(), b.ID, false)
+	var left int
+	if err := s.DB().QueryRow(ctx, `SELECT count(*) FROM core.broadcast_recipients WHERE broadcast_id = $1 AND status <> 'cancelled'`,
+		b.ID).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if b.Status != "cancelled" || b.Pending != 0 || left != 0 {
+		t.Fatalf("after the cancel: %s pending=%d not cancelled=%d", b.Status, b.Pending, left)
+	}
+}
+

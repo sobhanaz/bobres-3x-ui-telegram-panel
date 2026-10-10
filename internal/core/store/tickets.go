@@ -363,6 +363,9 @@ func (s *Store) ListTickets(ctx context.Context, q querier, f TicketFilter, p Pa
 	if qs := strings.TrimSpace(f.Query); qs != "" {
 		num := strings.TrimPrefix(qs, "#")
 		switch n, err := strconv.ParseInt(num, 10, 64); {
+		case err == nil && n > 0 && hexSuffixRe.MatchString(qs):
+			// Six digits: a ticket number, or an id suffix that has no letters.
+			where = append(where, "(t.number = "+arg(n)+" OR right(t.id::text, 6) = "+arg(qs)+")")
 		case err == nil && n > 0 && (strings.HasPrefix(qs, "#") || n < 1_000_000):
 			where = append(where, "t.number = "+arg(n))
 		case err == nil && n > 0:
@@ -499,6 +502,18 @@ func (s *Store) StaleAnswered(ctx context.Context, q querier, after time.Duratio
 		return nil, fmt.Errorf("stale tickets: %w", err)
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// AutoCloseTicket closes a ticket the system finds stale (as StaleAnswered
+// lists them); false when the customer wrote or staff replied since.
+func (s *Store) AutoCloseTicket(ctx context.Context, q querier, id string, after time.Duration) (bool, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.tickets SET status = 'closed', closed_at = now(), closed_by = NULL,
+			close_reason = 'auto', updated_at = now()
+		WHERE id = $1 AND status = 'answered' AND last_staff_at < now() - $2::interval`, id, after.String())
+	if err != nil {
+		return false, fmt.Errorf("auto-close ticket: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // Canned is a saved reply.

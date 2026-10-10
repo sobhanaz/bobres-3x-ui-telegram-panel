@@ -267,16 +267,21 @@ func (s *Server) testBroadcast(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// sendBroadcast: POST /api/v1/broadcasts/{id}/send {at: null|unix}.
+// sendBroadcast: POST /api/v1/broadcasts/{id}/send {at: null|unix, version}.
 func (s *Server) sendBroadcast(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req struct {
-		At *int64 `json:"at"`
+		At      *int64 `json:"at"`
+		Version int    `json:"version"`
 	}
 	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Version <= 0 {
+		writeFieldError(w, "version", "required: the version of the broadcast you read")
 		return
 	}
 	var at *time.Time
@@ -284,7 +289,7 @@ func (s *Server) sendBroadcast(w http.ResponseWriter, r *http.Request) {
 		t := time.Unix(*req.At, 0)
 		at = &t
 	}
-	b, err := s.cfg.Domain.SendBroadcast(r.Context(), actor(r), id, at)
+	b, err := s.cfg.Domain.SendBroadcast(r.Context(), actor(r), id, at, req.Version)
 	if err != nil {
 		s.fail(w, "send broadcast", err)
 		return

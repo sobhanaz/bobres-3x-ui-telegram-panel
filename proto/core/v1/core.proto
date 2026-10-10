@@ -118,6 +118,9 @@ message AddTicketMessageRequest {
   string file_name = 9;
   int64 file_size = 10;
   int64 tg_message_id = 11; // the customer's message: makes a repeat harmless
+  // With reply_to_tg_message_id: only says whether it is this customer's
+  // delivered staff reply (NOT_FOUND otherwise); nothing is saved.
+  bool check_only = 12;
 }
 
 message AddTicketMessageResponse {

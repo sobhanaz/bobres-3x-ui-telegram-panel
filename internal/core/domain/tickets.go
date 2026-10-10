@@ -65,6 +65,16 @@ func subjectOf(text, fileName string) string {
 	return line
 }
 
+// RepliedTicket is the ticket of the customer's delivered staff reply with
+// this Telegram message id (store.ErrNotFound when it is not one). Nothing is
+// saved: the bot asks before it counts a reply against the daily limit.
+func (s *Service) RepliedTicket(ctx context.Context, userID string, tgMessageID int64) (*store.Ticket, error) {
+	if tgMessageID <= 0 {
+		return nil, invalid("the replied message is missing")
+	}
+	return s.st.TicketByDelivered(ctx, s.st.Conn(), userID, tgMessageID)
+}
+
 // AddCustomerMessage records a customer's message in their open ticket, or
 // starts one. Staff are alerted when a ticket starts and when the customer
 // writes again after an answer (not for every message).
@@ -601,13 +611,20 @@ func (w *TicketWorker) Step(ctx context.Context) (int, error) {
 	if days <= 0 {
 		return 0, nil
 	}
-	ids, err := w.s.st.StaleAnswered(ctx, w.s.st.Conn(), time.Duration(days)*24*time.Hour, 200)
+	after := time.Duration(days) * 24 * time.Hour
+	ids, err := w.s.st.StaleAnswered(ctx, w.s.st.Conn(), after, 200)
 	if err != nil {
 		return 0, err
 	}
+	return w.closeStale(ctx, ids, after)
+}
+
+// closeStale closes the listed tickets that are still stale: the customer
+// may have written, or staff replied again, since they were listed.
+func (w *TicketWorker) closeStale(ctx context.Context, ids []string, after time.Duration) (int, error) {
 	n := 0
 	for _, id := range ids {
-		if ok, err := w.s.st.CloseTicket(ctx, w.s.st.Conn(), id, nil, "auto"); err != nil {
+		if ok, err := w.s.st.AutoCloseTicket(ctx, w.s.st.Conn(), id, after); err != nil {
 			return n, err
 		} else if ok {
 			n++

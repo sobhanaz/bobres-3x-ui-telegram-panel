@@ -32,6 +32,13 @@ func (s *Server) CreateSupportTicket(ctx context.Context, req *corev1.CreateSupp
 // AddTicketMessage records a customer's support message.
 func (s *Server) AddTicketMessage(ctx context.Context, req *corev1.AddTicketMessageRequest) (*corev1.AddTicketMessageResponse, error) {
 	ctx = fromBot(ctx)
+	if req.GetCheckOnly() {
+		t, err := s.dom.RepliedTicket(ctx, req.GetUserId(), req.GetReplyToTgMessageId())
+		if err != nil {
+			return nil, fail(err)
+		}
+		return &corev1.AddTicketMessageResponse{Ticket: ticketToProto(t)}, nil
+	}
 	res, err := s.dom.AddCustomerMessage(ctx, domain.CustomerMessage{
 		UserID: req.GetUserId(), Category: req.GetCategory(), TicketID: req.GetTicketId(),
 		ReplyToTGID: req.GetReplyToTgMessageId(), Text: req.GetText(), FileID: req.GetFileId(), FileType: req.GetFileType(),
