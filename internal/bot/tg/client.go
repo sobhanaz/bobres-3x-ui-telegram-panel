@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 )
 
 const maxBody = 4 << 20
@@ -270,14 +273,68 @@ func (c *Client) DeleteWebhook(ctx context.Context) error {
 	return c.call(ctx, "deleteWebhook", jsonBody(map[string]any{"drop_pending_updates": false}), nil)
 }
 
+// IsParseError reports that Telegram refused a text's HTML markup.
+func IsParseError(err error) bool {
+	var ae *APIError
+	if !errors.As(err, &ae) || ae.Code != http.StatusBadRequest {
+		return false
+	}
+	d := strings.ToLower(ae.Description)
+	return strings.Contains(d, "can't parse") && strings.Contains(d, "entities")
+}
+
+// callHTML posts body, whose field (text or caption) is HTML. When Telegram
+// refuses the markup (say, a broken text override), it is sent once more as
+// plain text, so the message still arrives instead of nothing.
+func (c *Client) callHTML(ctx context.Context, method string, body map[string]any, field string, out any) error {
+	body["parse_mode"] = "HTML"
+	err := c.call(ctx, method, jsonBody(body), out)
+	if !IsParseError(err) {
+		return err
+	}
+	plain := maps.Clone(body)
+	delete(plain, "parse_mode")
+	if s, ok := plain[field].(string); ok {
+		plain[field] = i18n.StripHTML(s)
+	}
+	return c.call(ctx, method, jsonBody(plain), out)
+}
+
+// chatRef is a chat_id: a numeric id (-100…) as a number, an @username as is.
+func chatRef(chat string) any {
+	if id, err := strconv.ParseInt(chat, 10, 64); err == nil {
+		return id
+	}
+	return chat
+}
+
+// GetChat looks a chat up by its @username or numeric id.
+func (c *Client) GetChat(ctx context.Context, chat string) (*Chat, error) {
+	var out Chat
+	if err := c.call(ctx, "getChat", jsonBody(map[string]any{"chat_id": chatRef(chat)}), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetChatMember reports a user's membership of a chat (@username or numeric
+// id). For other users of a channel, the bot must be its administrator.
+func (c *Client) GetChatMember(ctx context.Context, chat string, userID int64) (*ChatMember, error) {
+	var out ChatMember
+	if err := c.call(ctx, "getChatMember", jsonBody(map[string]any{"chat_id": chatRef(chat), "user_id": userID}), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // SendMessage sends an HTML-formatted message.
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, kb *Keyboard) (*Message, error) {
-	body := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": true}
+	body := map[string]any{"chat_id": chatID, "text": text, "disable_web_page_preview": true}
 	if kb != nil {
 		body["reply_markup"] = kb
 	}
 	var m Message
-	if err := c.call(ctx, "sendMessage", jsonBody(body), &m); err != nil {
+	if err := c.callHTML(ctx, "sendMessage", body, "text", &m); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -286,12 +343,11 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, kb 
 // EditMessageText replaces a message's text and keyboard. An edit that
 // changes nothing is not an error.
 func (c *Client) EditMessageText(ctx context.Context, chatID int64, messageID int, text string, kb *Keyboard) error {
-	body := map[string]any{"chat_id": chatID, "message_id": messageID, "text": text,
-		"parse_mode": "HTML", "disable_web_page_preview": true}
+	body := map[string]any{"chat_id": chatID, "message_id": messageID, "text": text, "disable_web_page_preview": true}
 	if kb != nil {
 		body["reply_markup"] = kb
 	}
-	err := c.call(ctx, "editMessageText", jsonBody(body), nil)
+	err := c.callHTML(ctx, "editMessageText", body, "text", nil)
 	if IsNotModified(err) {
 		return nil
 	}
@@ -363,59 +419,76 @@ type Photo struct {
 func (c *Client) SendPhoto(ctx context.Context, chatID int64, p Photo, caption string, kb *Keyboard) (*Message, error) {
 	var m Message
 	if p.FileID != "" {
-		body := map[string]any{"chat_id": chatID, "photo": p.FileID, "caption": caption, "parse_mode": "HTML"}
+		body := map[string]any{"chat_id": chatID, "photo": p.FileID, "caption": caption}
 		if kb != nil {
 			body["reply_markup"] = kb
 		}
-		if err := c.call(ctx, "sendPhoto", jsonBody(body), &m); err != nil {
+		if err := c.callHTML(ctx, "sendPhoto", body, "caption", &m); err != nil {
 			return nil, err
 		}
 		return &m, nil
 	}
-	build := func() (io.Reader, string, error) {
-		var buf bytes.Buffer
-		w := multipart.NewWriter(&buf)
-		_ = w.WriteField("chat_id", strconv.FormatInt(chatID, 10))
-		_ = w.WriteField("caption", caption)
-		_ = w.WriteField("parse_mode", "HTML")
-		if kb != nil {
-			b, err := json.Marshal(kb)
-			if err != nil {
-				return nil, "", err
-			}
-			_ = w.WriteField("reply_markup", string(b))
+	// The upload is multipart; a refused caption is sent again as plain text.
+	build := func(html bool) func() (io.Reader, string, error) {
+		return func() (io.Reader, string, error) {
+			return photoForm(chatID, p, caption, html, kb)
 		}
-		name := p.Name
-		if name == "" {
-			name = "photo.png"
-		}
-		fw, err := w.CreateFormFile("photo", name)
-		if err != nil {
-			return nil, "", err
-		}
-		if _, err := fw.Write(p.Data); err != nil {
-			return nil, "", err
-		}
-		if err := w.Close(); err != nil {
-			return nil, "", err
-		}
-		return &buf, w.FormDataContentType(), nil
 	}
-	if err := c.call(ctx, "sendPhoto", build, &m); err != nil {
+	err := c.call(ctx, "sendPhoto", build(true), &m)
+	if IsParseError(err) {
+		err = c.call(ctx, "sendPhoto", build(false), &m)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &m, nil
 }
 
+// photoForm is the multipart body of a photo upload, with an HTML caption
+// (html) or the same caption as plain text.
+func photoForm(chatID int64, p Photo, caption string, html bool, kb *Keyboard) (io.Reader, string, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	_ = w.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	if html {
+		_ = w.WriteField("caption", caption)
+		_ = w.WriteField("parse_mode", "HTML")
+	} else {
+		_ = w.WriteField("caption", i18n.StripHTML(caption))
+	}
+	if kb != nil {
+		b, err := json.Marshal(kb)
+		if err != nil {
+			return nil, "", err
+		}
+		_ = w.WriteField("reply_markup", string(b))
+	}
+	name := p.Name
+	if name == "" {
+		name = "photo.png"
+	}
+	fw, err := w.CreateFormFile("photo", name)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := fw.Write(p.Data); err != nil {
+		return nil, "", err
+	}
+	if err := w.Close(); err != nil {
+		return nil, "", err
+	}
+	return &buf, w.FormDataContentType(), nil
+}
+
 // SendDocument re-sends an existing Telegram file (e.g. a screenshot the user
 // sent as a file, whose id sendPhoto refuses) with an HTML caption.
 func (c *Client) SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *Keyboard) (*Message, error) {
-	body := map[string]any{"chat_id": chatID, "document": fileID, "caption": caption, "parse_mode": "HTML"}
+	body := map[string]any{"chat_id": chatID, "document": fileID, "caption": caption}
 	if kb != nil {
 		body["reply_markup"] = kb
 	}
 	var m Message
-	if err := c.call(ctx, "sendDocument", jsonBody(body), &m); err != nil {
+	if err := c.callHTML(ctx, "sendDocument", body, "caption", &m); err != nil {
 		return nil, err
 	}
 	return &m, nil

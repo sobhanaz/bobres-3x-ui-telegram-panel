@@ -63,6 +63,9 @@ func (h *Handler) onLanguage(r *req, lang string) {
 	if isNew {
 		r.show(r.t("welcome", "brand", esc(h.brand())), nil)
 		r.cb = nil // the welcome stays; the menu comes as a new message
+		if h.gateNewUser(r) {
+			return
+		}
 		h.showHome(r)
 		return
 	}
@@ -82,8 +85,11 @@ func (h *Handler) showHome(r *req) {
 	if h.referralsOn() {
 		kb.Row(tg.CB(r.t("btn.invite"), "ref"))
 	}
-	if r.isStaff() {
-		kb.Row(tg.CB(r.t("btn.admin"), "adm"))
+	switch {
+	case r.isStaff():
+		kb.Row(tg.CB(r.t("btn.admin"), "adm"), tg.CB(r.t("btn.dashboard"), "dash"))
+	case r.isTeam(): // support: the dashboard only
+		kb.Row(tg.CB(r.t("btn.dashboard"), "dash"))
 	}
 	r.show(r.t("menu.title", "brand", esc(h.brand())), kb)
 }

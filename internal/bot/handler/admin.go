@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -15,8 +16,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// settingKeys mirrors the settings core lets admins change (core enforces it).
+// settingKeys are the settings the bot's settings screen shows: the switches
+// worth having in Telegram (maintenance first, to turn it off when the
+// dashboard is down) and the store's basics. /set takes every setting core
+// knows (core checks the key and the value); the dashboard shows them all.
 var settingKeys = []string{
+	"maintenance.enabled", "join.channel", "join.link", "notify.recipients",
 	"payments.card_number", "payments.card_holder", "payments.usdt_trc20", "payments.usdt_erc20",
 	"payments.usdt_rate", "payments.stars_rate", "payments.zarinpal_link", "referral.reward_percent",
 	"branding.name", "branding.support", "texts.fa.welcome", "texts.en.welcome",
@@ -81,7 +86,8 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 	}
 }
 
-// sendDashboardLink sends a one-time dashboard login link (2 minutes, once).
+// sendDashboardLink sends a one-time dashboard login link (2 minutes, once)
+// to a staff member: owner, admin or support (core checks the role).
 func (h *Handler) sendDashboardLink(r *req) {
 	link, err := h.core.CreateDashboardLink(r.ctx, &corev1.CreateDashboardLinkRequest{ActorTelegramId: h.actor(r)})
 	if err != nil {
@@ -114,10 +120,14 @@ func (h *Handler) showAdmin(r *req) {
 		Row(tg.CB(r.t("btn.adm_find"), "adm:find"), tg.CB(r.t("btn.adm_plans"), "adm:plans")).
 		Row(tg.CB(r.t("btn.adm_settings"), "adm:set"), tg.CB(r.t("btn.adm_dashboard"), "adm:web")).
 		Row(tg.CB(r.t("btn.home"), "home"))
-	r.show(r.t("admin.title",
+	text := r.t("admin.title",
 		"users", i18n.Number(r.lang, st.GetUsersTotal()), "today", i18n.Number(r.lang, st.GetUsersToday()),
 		"active", i18n.Number(r.lang, st.GetActiveSubscriptions()), "pending", pending,
-		"failed", i18n.Number(r.lang, st.GetProvisionFailedOrders()), "panel", panel), kb)
+		"failed", i18n.Number(r.lang, st.GetProvisionFailedOrders()), "panel", panel)
+	if h.set.Bool("maintenance.enabled", false) {
+		text = r.t("admin.maintenance_on") + "\n\n" + text
+	}
+	r.show(text, kb)
 }
 
 // showPending sends the oldest payment awaiting review as a new message (a
@@ -385,7 +395,15 @@ func (h *Handler) onAdminCommand(r *req, cmd, args string) {
 			ActorTelegramId: h.actor(r), Key: key, Value: strings.TrimSpace(value),
 		}); err != nil {
 			if status.Code(err) == codes.InvalidArgument {
-				r.send(r.t("admin.setting_usage")+"\n"+strings.Join(settingKeys, "\n"), nil)
+				// Core's reason (a bad value, an unknown key, owner only); the
+				// key list helps with a mistyped key.
+				reason := status.Convert(err).Message()
+				reason = strings.TrimPrefix(reason, "domain: invalid argument: ") // core's error kind
+				msg := r.t("admin.setting_usage") + "\n" + esc(reason)
+				if !slices.Contains(settingKeys, key) && !strings.HasPrefix(key, "texts.") {
+					msg += "\n\n" + strings.Join(settingKeys, "\n")
+				}
+				r.send(msg, nil)
 				return
 			}
 			r.fail(err)

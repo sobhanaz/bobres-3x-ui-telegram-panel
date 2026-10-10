@@ -16,9 +16,34 @@ type User struct {
 
 // Chat is where a message lives.
 type Chat struct {
-	ID   int64  `json:"id"`
-	Type string `json:"type"` // private | group | supergroup | channel
+	ID       int64  `json:"id"`
+	Type     string `json:"type"`               // private | group | supergroup | channel
+	Title    string `json:"title,omitempty"`    // groups and channels
+	Username string `json:"username,omitempty"` // public chats
 }
+
+// ChatMember is a user's membership in a chat (getChatMember).
+type ChatMember struct {
+	// Status: creator, administrator, member, restricted, left or kicked.
+	Status string `json:"status"`
+	// IsMember: whether a restricted user is still in the chat.
+	IsMember bool `json:"is_member,omitempty"`
+	User     User `json:"user"`
+}
+
+// Joined reports whether the user is in the chat.
+func (m *ChatMember) Joined() bool {
+	switch m.Status {
+	case "creator", "administrator", "member":
+		return true
+	case "restricted":
+		return m.IsMember
+	}
+	return false
+}
+
+// IsAdmin reports whether the user administers the chat.
+func (m *ChatMember) IsAdmin() bool { return m.Status == "creator" || m.Status == "administrator" }
 
 // PhotoSize is one resolution of a photo.
 type PhotoSize struct {

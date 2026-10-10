@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -283,7 +284,42 @@ func (h *Handler) onSupport(r *req) {
 		contact = r.t("support.contact", "contact", esc(c))
 	}
 	r.setState(sceneTicket, nil)
-	r.show(r.t("support.prompt", "contact", contact), cancelKeyboard(r))
+	kb := (&tg.Keyboard{}).Row(h.legalButtons(r)...).Row(tg.CB(r.t("btn.cancel"), "cancel"))
+	r.show(r.t("support.prompt", "contact", contact), kb)
+}
+
+// legalButtons link to the store's terms and privacy policy, when set
+// (https links only: Telegram refuses a message with a bad link button).
+func (h *Handler) legalButtons(r *req) []tg.Button {
+	var out []tg.Button
+	if u := h.setting("branding.terms_url"); httpsURL(u) {
+		out = append(out, tg.Link(r.t("btn.terms"), u))
+	}
+	if u := h.setting("branding.privacy_url"); httpsURL(u) {
+		out = append(out, tg.Link(r.t("btn.privacy"), u))
+	}
+	return out
+}
+
+// onTerms answers /terms with the store's terms and privacy policy.
+func (h *Handler) onTerms(r *req) {
+	links := h.legalButtons(r)
+	if len(links) == 0 {
+		r.send(r.t("terms.none"), homeKeyboard(r))
+		return
+	}
+	r.send(r.t("terms.title"), (&tg.Keyboard{}).Row(links...).Row(tg.CB(r.t("btn.home"), "home")))
+}
+
+// allowTicket counts a support message against limits.tickets_per_day per
+// user and day (0: no limit). A limiter failure lets the message through.
+func (h *Handler) allowTicket(r *req) bool {
+	perDay := h.set.Int("limits.tickets_per_day", 10, 0, 100)
+	if h.limiter == nil || perDay == 0 {
+		return true
+	}
+	ok, err := h.limiter.Allow(r.ctx, "bot:tk:"+strconv.FormatInt(r.from.ID, 10), 24*time.Hour, int(perDay))
+	return err != nil || ok
 }
 
 const maxTicketRunes = 2000
@@ -299,6 +335,11 @@ func (h *Handler) onTicket(r *req) {
 	}
 	if utf8.RuneCountInString(text) > maxTicketRunes {
 		text = string([]rune(text)[:maxTicketRunes])
+	}
+	if !h.allowTicket(r) {
+		r.clearState()
+		r.send(r.t("support.limit"), homeKeyboard(r))
+		return
 	}
 	t, err := h.core.CreateSupportTicket(r.ctx, &corev1.CreateSupportTicketRequest{UserId: r.user.GetId(), Category: "general", Text: text})
 	r.clearState()

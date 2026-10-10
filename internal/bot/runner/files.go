@@ -25,6 +25,13 @@ type FileGetter interface {
 
 var fileIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{10,256}$`)
 
+// fromCore reports whether a request to an /internal/ endpoint carries
+// core's service token.
+func fromCore(r *http.Request, coreToken string) bool {
+	got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	return ok && coreToken != "" && subtle.ConstantTimeCompare([]byte(got), []byte(coreToken)) == 1
+}
+
 // fileTypes are the kinds of file handed out, by their sniffed type.
 var fileTypes = map[string]bool{
 	"image/jpeg": true, "image/png": true, "image/webp": true, "image/gif": true, "application/pdf": true,
@@ -36,8 +43,7 @@ var fileTypes = map[string]bool{
 // token), and Caddy never routes /internal/ from outside.
 func Files(bot FileGetter, coreToken string, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || coreToken == "" || subtle.ConstantTimeCompare([]byte(got), []byte(coreToken)) != 1 {
+		if !fromCore(r, coreToken) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}

@@ -44,6 +44,12 @@ type fakeTG struct {
 	invoices map[int64][]tg.Invoice
 	answers  map[string]precheckAnswer // by pre-checkout query id
 	docs     map[string]bool           // file ids users sent as documents
+
+	// The join channel: each user's status (none: "left"), how often the
+	// bot asked, and an error every check fails with.
+	members     map[int64]string
+	memberCalls int
+	memberErr   error
 }
 
 type precheckAnswer struct {
@@ -53,7 +59,38 @@ type precheckAnswer struct {
 
 func newFakeTG() *fakeTG {
 	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{},
-		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}, docs: map[string]bool{}}
+		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}, docs: map[string]bool{},
+		members: map[int64]string{}}
+}
+
+func (f *fakeTG) GetChat(_ context.Context, chat string) (*tg.Chat, error) {
+	return &tg.Chat{ID: -1001234567890, Type: "channel", Title: "Test channel", Username: strings.TrimPrefix(chat, "@")}, nil
+}
+
+func (f *fakeTG) GetChatMember(_ context.Context, _ string, userID int64) (*tg.ChatMember, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.memberCalls++
+	if f.memberErr != nil {
+		return nil, f.memberErr
+	}
+	st := f.members[userID]
+	if st == "" {
+		st = "left"
+	}
+	return &tg.ChatMember{Status: st, User: tg.User{ID: userID}}, nil
+}
+
+func (f *fakeTG) setMember(userID int64, status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.members[userID] = status
+}
+
+func (f *fakeTG) checks() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.memberCalls
 }
 
 func (f *fakeTG) SendInvoice(_ context.Context, chat int64, inv tg.Invoice) (*tg.Message, error) {
@@ -197,7 +234,7 @@ func newWorld(t *testing.T) *world {
 	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(stack.Feed),
-		Handle:     notify.New(stack.Core, ftg, cat, ownerID, nil).Handle,
+		Handle:     notify.New(stack.Core, ftg, cat, h.Settings(), ownerID, nil).Handle,
 		DeadLetter: func(context.Context, eventbus.Message, error) error { return nil },
 	})
 	if err != nil {
@@ -378,6 +415,10 @@ func (p *person) eventuallySees(sub string) {
 	})
 }
 
+// trc20 is a well-formed USDT TRC20 address (T and 33 base58 characters):
+// core refuses anything else.
+const trc20 = "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL"
+
 // setupStore registers the owner and configures a plan, a card and a trial.
 func setupStore(t *testing.T, w *world) *person {
 	t.Helper()
@@ -538,7 +579,7 @@ func TestRejectionReasonInTheUsersLanguage(t *testing.T) {
 func TestCryptoTXIDFlow(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
-	owner.text("/set payments.usdt_trc20 TXYZ1234567890")
+	owner.text("/set payments.usdt_trc20 " + trc20)
 	owner.text("/set payments.usdt_rate 60000")
 	u := w.person(501, "erin")
 	u.text("/start")
@@ -550,7 +591,7 @@ func TestCryptoTXIDFlow(t *testing.T) {
 	if strings.Contains(u.last().text, "USDT USDT") {
 		t.Fatalf("currency printed twice: %q", u.last().text)
 	}
-	u.sees("TXYZ1234567890")
+	u.sees(trc20)
 	u.text("not-a-hash")
 	u.sees("does not look like a transaction hash")
 	hash := strings.Repeat("ab", 32)
@@ -758,7 +799,7 @@ func TestScreenshotForZarinpalLinkAndCrypto(t *testing.T) {
 	owner := setupStore(t, w)
 	owner.text("/set payments.zarinpal_link http://not-https.example")
 	owner.text("/set payments.zarinpal_link https://zarinp.al/teststore")
-	owner.text("/set payments.usdt_trc20 TXa1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q")
+	owner.text("/set payments.usdt_trc20 " + trc20)
 	owner.text("/set payments.usdt_rate 60000")
 	u := w.person(701, "nima")
 	u.text("/start")
