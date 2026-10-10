@@ -24,11 +24,11 @@ Services reference each other by ID only (UUID v7). Migrations: goose, forward-o
 | discounts | id, code UNIQUE, kind (percent/fixed), value, max_uses, used_count, per_user_limit, valid_from, valid_to, plan_scope |
 | referrals | id, referrer_id, referred_id UNIQUE, reward_ledger_id, status |
 | resellers | user_id, tier, mode (discount/credit/both), credit_limit, credit_used |
-| tickets / ticket_messages | id, user_id, status, subject; ticket_id, author_id, body, attachments |
+| tickets / ticket_messages / ticket_canned | tickets: number, user_id, category, subject, status (open/answered/closed, one not closed per user), assigned_to, timestamps, close reason; messages: kind (customer/staff/note), author, body, Telegram file, delivery of staff replies; saved replies per language |
 | audit_log | id, actor_id, action, entity, entity_id (text: a uuid, code or key), before jsonb, after jsonb, reason, ip, source (dashboard/bot/cli/system), created_at; append-only (triggers refuse UPDATE, DELETE, TRUNCATE) |
 | assets | name (logo), content_type, data, updated_at: store files kept out of settings |
 | settings | key, value jsonb (branding, texts, feature flags, gateway toggles) |
-| broadcasts | id, audience, body_i18n, status, sent_count, created_at |
+| broadcasts / broadcast_recipients | broadcasts: segment, language, texts, button, schedule, status, counts; recipients: the audience snapshot with each one's status (pending, claimed, sent, blocked, failed, unknown, cancelled). users.bot_blocked_at marks users who blocked the bot |
 
 ## Schema `payments`
 | Table | Key columns |

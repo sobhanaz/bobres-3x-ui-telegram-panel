@@ -29,6 +29,8 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew.
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
+Built (2026-10-10): one open conversation per customer, numbered; text, photos and PDFs; staff replies arrive in the
+chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; past tickets can be read.
 **Referral:** personal link, count, reward rules, balance credited on first paid order of the referred.
 
 ## Admin in bot (quick actions, full power is in dashboard)
