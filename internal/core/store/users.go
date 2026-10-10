@@ -16,12 +16,12 @@ var ErrNotFound = errors.New("store: not found")
 
 // username is NULL for Telegram users without a public @username; the struct
 // field is a plain string, so it is read as ”.
-const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at, ref_code`
+const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at, ref_code, bot_blocked_at`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.TelegramID, &u.Username, &u.Language, &u.Role,
-		&u.Status, &u.ReferredBy, &u.CreatedAt, &u.UpdatedAt, &u.RefCode)
+		&u.Status, &u.ReferredBy, &u.CreatedAt, &u.UpdatedAt, &u.RefCode, &u.BotBlockedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -200,4 +200,15 @@ func (s *Store) ReferralStats(ctx context.Context, q querier, userID string) (in
 		earned[cur] = sum
 	}
 	return invited, rewarded, earned, rows.Err()
+}
+
+// SetBotBlocked records that a user blocked the bot (or is reachable again);
+// false when nothing changed or there is no such user.
+func (s *Store) SetBotBlocked(ctx context.Context, q querier, telegramID int64, blocked bool) (bool, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.users SET bot_blocked_at = CASE WHEN $2 THEN now() END
+		WHERE telegram_id = $1 AND (bot_blocked_at IS NOT NULL) <> $2`, telegramID, blocked)
+	if err != nil {
+		return false, fmt.Errorf("set bot blocked: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }

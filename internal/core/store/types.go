@@ -14,6 +14,8 @@ type User struct {
 	RefCode    *string // the user's invite code, created on first use
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	// BotBlockedAt: when Telegram said the user blocked the bot (nil: reachable).
+	BotBlockedAt *time.Time
 }
 
 // Plan mirrors core.plans.
@@ -117,12 +119,20 @@ type Discount struct {
 
 // Ticket mirrors core.tickets.
 type Ticket struct {
-	ID        string
-	UserID    string
-	Category  string
-	Text      string
-	Status    string
-	CreatedAt time.Time
+	ID             string
+	Number         int64
+	UserID         string
+	Category       string
+	Subject        string
+	Status         string // open | answered | closed
+	AssignedTo     *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	LastCustomerAt *time.Time
+	LastStaffAt    *time.Time
+	ClosedAt       *time.Time
+	ClosedBy       *string
+	CloseReason    string
 }
 
 // Audit mirrors core.audit_log.

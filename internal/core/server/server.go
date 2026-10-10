@@ -32,8 +32,8 @@ type Server struct {
 func fromBot(ctx context.Context) context.Context { return store.WithSource(ctx, store.SourceBot) }
 
 // ListStaffContacts lists the active owners and admins, for staff alerts.
-func (s *Server) ListStaffContacts(ctx context.Context, _ *corev1.ListStaffContactsRequest) (*corev1.ListStaffContactsResponse, error) {
-	users, err := s.st.ListStaffContacts(ctx, s.st.Conn())
+func (s *Server) ListStaffContacts(ctx context.Context, req *corev1.ListStaffContactsRequest) (*corev1.ListStaffContactsResponse, error) {
+	users, err := s.st.ListStaffContacts(ctx, s.st.Conn(), req.GetIncludeSupport())
 	if err != nil {
 		return nil, fail(err)
 	}
@@ -93,7 +93,7 @@ func fail(err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return status.Error(codes.AlreadyExists, err.Error())
-	case errors.Is(err, domain.ErrNotReady):
+	case errors.Is(err, domain.ErrNotReady), errors.Is(err, domain.ErrState):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	}
 	// Errors from a peer service (payments, provisioner) keep their code and
@@ -122,6 +122,7 @@ func userToProto(u *store.User) *corev1.User {
 		Status:     u.Status,
 		CreatedAt:  u.CreatedAt.Unix(),
 		UpdatedAt:  u.UpdatedAt.Unix(),
+		BotBlocked: u.BotBlockedAt != nil,
 	}
 	if u.ReferredBy != nil {
 		out.ReferredBy = *u.ReferredBy
@@ -356,26 +357,6 @@ func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscrip
 		out.Subscriptions = append(out.Subscriptions, sp)
 	}
 	return out, nil
-}
-
-// CreateSupportTicket stores a minimal support ticket.
-func (s *Server) CreateSupportTicket(ctx context.Context, req *corev1.CreateSupportTicketRequest) (*corev1.Ticket, error) {
-	t, err := s.st.CreateTicket(ctx, s.st.Conn(), &store.Ticket{
-		UserID:   req.GetUserId(),
-		Category: req.GetCategory(),
-		Text:     req.GetText(),
-	})
-	if err != nil {
-		return nil, fail(err)
-	}
-	return &corev1.Ticket{
-		Id:        t.ID,
-		UserId:    t.UserID,
-		Category:  t.Category,
-		Text:      t.Text,
-		Status:    t.Status,
-		CreatedAt: t.CreatedAt.Unix(),
-	}, nil
 }
 
 // GetSettings returns flattened settings (key -> raw JSON string).
