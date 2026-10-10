@@ -274,6 +274,7 @@ export interface TicketUser {
   username: string
   status: string
   language: string
+  bot_blocked?: boolean
 }
 
 export interface TicketItem {

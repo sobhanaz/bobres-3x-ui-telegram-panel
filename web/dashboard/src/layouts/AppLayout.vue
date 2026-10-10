@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
 import Menu from 'primevue/menu'
+import Badge from 'primevue/badge'
 import { useAuth } from '../stores/auth'
 import { useUi } from '../stores/ui'
 import { groups, visibleSections } from '../sections'
 import { setLang, currentLang } from '../i18n'
 import { applyDocumentBrand } from '../theme'
+import { num, type Lang } from '../format'
+import { loadCounts, pollEvery, poller, ticketCounts } from '../support'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const auth = useAuth()
 const ui = useUi()
 const route = useRoute()
@@ -29,6 +32,15 @@ const nav = computed(() => {
     .map((g) => ({ group: g, items: list.filter((s) => s.group === g) }))
     .filter((g) => g.items.length > 0)
 })
+
+// Tickets waiting for staff, on the Support item: refreshed every minute for
+// those who answer tickets (and right away by the support pages).
+const canTickets = computed(() => auth.can('tickets.write'))
+const countsPoll = poller(loadCounts, () => pollEvery.counts)
+watch(canTickets, (v) => (v ? countsPoll.start() : countsPoll.stop()), { immediate: true })
+onBeforeUnmount(() => countsPoll.stop())
+const waiting = computed(() => (canTickets.value ? (ticketCounts.value?.waiting ?? 0) : 0))
+const badgeOf = (key: string) => (key === 'support' && waiting.value > 0 ? num(waiting.value, locale.value as Lang) : '')
 
 const themeIcon = computed(() => ({ system: 'pi pi-desktop', dark: 'pi pi-moon', light: 'pi pi-sun' })[ui.theme])
 
@@ -61,6 +73,10 @@ function toggleLang() {
           <RouterLink v-for="s in g.items" :key="s.key" :to="{ name: s.key }" class="item" :class="{ active: route.meta.section === s.key }" active-class="" exact-active-class="">
             <i :class="s.icon" aria-hidden="true" />
             <span>{{ t('section.' + s.key + '.title') }}</span>
+            <template v-if="badgeOf(s.key)">
+              <Badge :value="badgeOf(s.key)" severity="warn" class="badge" aria-hidden="true" />
+              <span class="sr-only">{{ t('support.badge', { n: badgeOf(s.key) }) }}</span>
+            </template>
           </RouterLink>
         </template>
       </nav>
@@ -73,6 +89,10 @@ function toggleLang() {
           <RouterLink v-for="s in g.items" :key="s.key" :to="{ name: s.key }" class="item" :class="{ active: route.meta.section === s.key }" active-class="" exact-active-class="">
             <i :class="s.icon" aria-hidden="true" />
             <span>{{ t('section.' + s.key + '.title') }}</span>
+            <template v-if="badgeOf(s.key)">
+              <Badge :value="badgeOf(s.key)" severity="warn" class="badge" aria-hidden="true" />
+              <span class="sr-only">{{ t('support.badge', { n: badgeOf(s.key) }) }}</span>
+            </template>
           </RouterLink>
         </template>
       </nav>
@@ -171,6 +191,20 @@ nav {
   font-size: 1rem;
   inline-size: 1.1rem;
   text-align: center;
+}
+.badge {
+  margin-inline-start: auto;
+}
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .main {
   flex: 1;

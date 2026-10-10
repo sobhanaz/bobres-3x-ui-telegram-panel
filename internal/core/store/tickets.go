@@ -319,6 +319,7 @@ type TicketRow struct {
 	Username         string
 	UserStatus       string
 	Language         string
+	BotBlocked       bool
 	AssigneeTG       int64
 	AssigneeUsername string
 	LastKind         string
@@ -378,7 +379,7 @@ func (s *Store) ListTickets(ctx context.Context, q querier, f TicketFilter, p Pa
 				" OR EXISTS (SELECT 1 FROM core.ticket_messages x WHERE x.ticket_id = t.id AND lower(x.body) LIKE "+a+"))")
 		}
 	}
-	sql := `SELECT ` + ticketCols + `, u.telegram_id, COALESCE(u.username, ''), u.status, u.language,
+	sql := `SELECT ` + ticketCols + `, u.telegram_id, COALESCE(u.username, ''), u.status, u.language, u.bot_blocked_at IS NOT NULL,
 			COALESCE(a.telegram_id, 0), COALESCE(a.username, ''),
 			COALESCE(lm.kind, ''), COALESCE(left(lm.body, 200), ''), lm.file_id IS NOT NULL, lm.created_at,
 			count(*) OVER ()
@@ -406,7 +407,7 @@ func (s *Store) ListTickets(ctx context.Context, q querier, f TicketFilter, p Pa
 	)
 	for rows.Next() {
 		var r TicketRow
-		t, err := scanTicket(rows, &r.TelegramID, &r.Username, &r.UserStatus, &r.Language, &r.AssigneeTG,
+		t, err := scanTicket(rows, &r.TelegramID, &r.Username, &r.UserStatus, &r.Language, &r.BotBlocked, &r.AssigneeTG,
 			&r.AssigneeUsername, &r.LastKind, &r.LastPreview, &r.LastHasFile, &r.LastAt, &total)
 		if err != nil {
 			return nil, 0, err
@@ -430,7 +431,7 @@ func (s *Store) GetTicketRow(ctx context.Context, q querier, id string) (*Ticket
 }
 
 func (s *Store) listByID(ctx context.Context, q querier, id string) ([]TicketRow, int64, error) {
-	rows, err := q.Query(ctx, `SELECT `+ticketCols+`, u.telegram_id, COALESCE(u.username, ''), u.status, u.language,
+	rows, err := q.Query(ctx, `SELECT `+ticketCols+`, u.telegram_id, COALESCE(u.username, ''), u.status, u.language, u.bot_blocked_at IS NOT NULL,
 			COALESCE(a.telegram_id, 0), COALESCE(a.username, ''),
 			COALESCE(lm.kind, ''), COALESCE(left(lm.body, 200), ''), lm.file_id IS NOT NULL, lm.created_at, 1::bigint
 		FROM core.tickets t
@@ -447,7 +448,7 @@ func (s *Store) listByID(ctx context.Context, q querier, id string) ([]TicketRow
 	var total int64
 	for rows.Next() {
 		var r TicketRow
-		t, err := scanTicket(rows, &r.TelegramID, &r.Username, &r.UserStatus, &r.Language, &r.AssigneeTG,
+		t, err := scanTicket(rows, &r.TelegramID, &r.Username, &r.UserStatus, &r.Language, &r.BotBlocked, &r.AssigneeTG,
 			&r.AssigneeUsername, &r.LastKind, &r.LastPreview, &r.LastHasFile, &r.LastAt, &total)
 		if err != nil {
 			return nil, 0, err

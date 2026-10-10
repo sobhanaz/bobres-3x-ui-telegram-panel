@@ -9,7 +9,9 @@ import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import Button from 'primevue/button'
 import { api } from '../api'
+import { useAuth } from '../stores/auth'
 import { dateTime, money, num, type Money, type Lang } from '../format'
+import { duration } from '../support'
 
 interface RecentOrder {
   id: string
@@ -30,23 +32,34 @@ interface Overview {
   pending_payments: number
   panel: { healthy: boolean; detail: string }
   recent_orders: RecentOrder[]
+  /** Support (M4): tickets waiting for staff; absent from older cores. */
+  tickets?: { waiting: number; oldest_waiting_at: number | null }
 }
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
+const auth = useAuth()
 const data = ref<Overview | null>(null)
 const failed = ref(false)
+const loadedAt = ref(Math.floor(Date.now() / 1000))
 
 async function load() {
   failed.value = false
   try {
     data.value = await api<Overview>('GET', '/overview')
+    loadedAt.value = Math.floor(Date.now() / 1000)
   } catch {
     failed.value = true
   }
 }
 onMounted(load)
 
+// The support card: for those who answer tickets, when core reports them.
+const tickets = computed(() => (auth.can('tickets.write') ? (data.value?.tickets ?? null) : null))
+const oldestWait = computed(() => {
+  const at = tickets.value?.oldest_waiting_at
+  return tickets.value && tickets.value.waiting > 0 && at ? duration(Math.max(0, loadedAt.value - at), lang.value) : ''
+})
 const moneyLine = (list: Money[]) => (list.length ? list.map((m) => money(m, lang.value)).join(' · ') : t('overview.no_revenue'))
 const planName = (p: Record<string, string>) => p[lang.value] || p.en || p.fa || ''
 const statusSeverity = (s: string) =>
@@ -105,6 +118,15 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
+    <RouterLink v-if="tickets" :to="{ name: 'support', query: { status: 'open' } }" class="card-link">
+      <Card class="stat">
+        <template #subtitle>{{ t('overview.tickets') }}</template>
+        <template #content>
+          <div class="big" :class="{ warn: tickets.waiting > 0 }">{{ num(tickets.waiting, lang) }}</div>
+          <div class="app-muted">{{ oldestWait ? t('overview.tickets_oldest', { time: oldestWait }) : t('overview.tickets_none') }}</div>
+        </template>
+      </Card>
+    </RouterLink>
     <Card class="stat">
       <template #subtitle>{{ t('overview.failed') }}</template>
       <template #content>
@@ -181,5 +203,17 @@ const statusSeverity = (s: string) =>
 }
 .recent {
   margin-block-start: var(--app-gap);
+}
+.card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--p-card-border-radius, var(--app-radius));
+}
+.card-link:hover .stat {
+  box-shadow: 0 0 0 1px var(--p-primary-color);
+}
+.card-link .stat {
+  block-size: 100%;
 }
 </style>

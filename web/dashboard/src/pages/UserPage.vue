@@ -23,12 +23,16 @@ import ServicesTable from '../components/ServicesTable.vue'
 import OrdersTable from '../components/OrdersTable.vue'
 import PaymentsTable from '../components/PaymentsTable.vue'
 import LedgerTable from '../components/LedgerTable.vue'
+import TicketsTable from '../components/support/TicketsTable.vue'
 import { api, newKey } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { useList } from '../composables/useList'
 import { asciiNumber, currencies, date, money, num, validAmount, type Lang } from '../format'
-import type { LedgerItem, OrderItem, PaymentItem, ServiceItem, UserDetail } from '../types'
+import type { LedgerItem, OrderItem, PaymentItem, ServiceItem, TicketItem, UserDetail } from '../types'
+
+// counts.tickets comes with core's M4 user answer (older answers leave it out).
+type Detail = UserDetail & { counts: UserDetail['counts'] & { tickets?: number } }
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
@@ -38,12 +42,12 @@ const toast = useToast()
 const auth = useAuth()
 const id = computed(() => route.params.id as string)
 
-const detail = ref<UserDetail | null>(null)
+const detail = ref<Detail | null>(null)
 const loadError = ref('')
 async function load() {
   loadError.value = ''
   try {
-    detail.value = await api<UserDetail>('GET', `/users/${id.value}`)
+    detail.value = await api<Detail>('GET', `/users/${id.value}`)
   } catch (e) {
     loadError.value = errorText(e, t).text
   }
@@ -53,22 +57,30 @@ const services = useList<ServiceItem, { user: string }>('/services', { user: id.
 const orders = useList<OrderItem, { user: string }>('/orders', { user: id.value }, 10)
 const payments = useList<PaymentItem, { user: string }>('/payments', { user: id.value }, 10)
 const ledger = useList<LedgerItem, { user: string }>('/ledger', { user: id.value }, 10)
-const tab = ref('services')
+const tickets = useList<TicketItem, { user: string }>('/tickets', { user: id.value }, 10)
+const canTickets = computed(() => auth.can('tickets.write'))
+// The tab is in the address (?tab=), so the support thread can open Tickets.
+const tabs = computed(() => ['services', 'orders', 'payments', 'ledger', ...(canTickets.value ? ['tickets'] : [])])
+const tabOf = (v: unknown) => (typeof v === 'string' && tabs.value.includes(v) ? v : 'services')
+const tab = ref(tabOf(route.query.tab))
 const loaded = new Set<string>()
 function showTab(v: string | number) {
-  tab.value = String(v)
+  tab.value = tabOf(String(v))
+  if (route.query.tab !== tab.value && (route.query.tab || tab.value !== 'services')) {
+    void router.replace({ query: { ...route.query, tab: tab.value } })
+  }
   if (loaded.has(tab.value)) return
   loaded.add(tab.value)
-  ;({ services, orders, payments, ledger })[tab.value as 'services']?.load()
+  ;({ services, orders, payments, ledger, tickets })[tab.value as 'services']?.load()
 }
 onMounted(() => {
   void load()
-  showTab('services')
+  showTab(tab.value)
 })
 watch(id, () => {
   detail.value = null
   loaded.clear()
-  for (const l of [services, orders, payments, ledger]) l.filters.user = id.value
+  for (const l of [services, orders, payments, ledger, tickets]) l.filters.user = id.value
   void load()
   showTab(tab.value)
 })
@@ -230,6 +242,10 @@ const directions = computed(() => [
           <Tab value="orders">{{ t('user.orders') }} <Tag v-if="detail" :value="num(detail.counts.orders, lang)" severity="secondary" /></Tab>
           <Tab value="payments">{{ t('user.payments') }}</Tab>
           <Tab value="ledger">{{ t('user.ledger') }}</Tab>
+          <Tab v-if="canTickets" value="tickets">
+            {{ t('user.tickets') }}
+            <Tag v-if="detail && detail.counts.tickets !== undefined" :value="num(detail.counts.tickets, lang)" severity="secondary" />
+          </Tab>
         </TabList>
         <TabPanels>
           <TabPanel value="services">
@@ -258,6 +274,14 @@ const directions = computed(() => [
               :items="ledger.items.value" :total="ledger.total.value" :rows="ledger.rows.value"
               :first="(ledger.page.value - 1) * ledger.rows.value" :loading="ledger.loading.value" hide-user
               @page="ledger.onPage"
+            />
+          </TabPanel>
+          <TabPanel v-if="canTickets" value="tickets">
+            <TicketsTable
+              :items="tickets.items.value" :total="tickets.total.value" :rows="tickets.rows.value"
+              :first="(tickets.page.value - 1) * tickets.rows.value" :loading="tickets.loading.value" hide-user
+              :empty="t('user.tickets_none')"
+              @page="tickets.onPage" @open="(tk) => router.push({ name: 'ticket', params: { id: tk.id } })"
             />
           </TabPanel>
         </TabPanels>

@@ -17,6 +17,7 @@ type ticketUser struct {
 	Username   string `json:"username"`
 	Status     string `json:"status"`
 	Language   string `json:"language"`
+	BotBlocked bool   `json:"bot_blocked"`
 }
 
 type ticketJSON struct {
@@ -38,7 +39,8 @@ type ticketJSON struct {
 
 func ticketOf(r *store.TicketRow) ticketJSON {
 	out := ticketJSON{ID: r.ID, Number: r.Number, Status: r.Status, Category: r.Category, Subject: r.Subject,
-		User:      ticketUser{ID: r.UserID, TelegramID: r.TelegramID, Username: r.Username, Status: r.UserStatus, Language: r.Language},
+		User: ticketUser{ID: r.UserID, TelegramID: r.TelegramID, Username: r.Username, Status: r.UserStatus, Language: r.Language,
+			BotBlocked: r.BotBlocked},
 		CreatedAt: r.CreatedAt.Unix(), UpdatedAt: r.UpdatedAt.Unix(), LastCustomerAt: unix(r.LastCustomerAt),
 		LastStaffAt: unix(r.LastStaffAt), ClosedAt: unix(r.ClosedAt), CloseReason: r.CloseReason}
 	if r.AssignedTo != nil {

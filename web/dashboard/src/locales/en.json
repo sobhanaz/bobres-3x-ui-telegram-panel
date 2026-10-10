@@ -155,7 +155,10 @@
     "col_type": "Type",
     "col_amount": "Amount",
     "col_status": "Status",
-    "col_date": "Date"
+    "col_date": "Date",
+    "tickets": "Tickets waiting",
+    "tickets_oldest": "The oldest has waited {time}",
+    "tickets_none": "Nobody is waiting"
   },
   "order": {
     "type": {
@@ -300,7 +303,9 @@
     "ban_intro": "A banned customer cannot buy or renew. Their running services keep working until they end (turn them off on their pages if needed).",
     "unban_intro": "The customer can buy and renew again.",
     "banned": "Customer banned",
-    "unbanned": "Customer unbanned"
+    "unbanned": "Customer unbanned",
+    "tickets": "Tickets",
+    "tickets_none": "No tickets from this customer."
   },
   "service": {
     "title": "Service",
@@ -733,6 +738,10 @@
       "payments": {
         "title": "Payment details",
         "desc": "What the bot shows customers for card transfer, USDT, Telegram Stars and your Zarinpal link."
+      },
+      "support": {
+        "title": "Support",
+        "desc": "How support tickets are handled."
       }
     },
     "field": {
@@ -777,7 +786,7 @@
         },
         "recipients": {
           "label": "Recipients",
-          "help": "“Only the store owner” is the Telegram account set as owner when BOBRES was installed. “Every owner and admin” is every active owner and admin; support staff do not get these."
+          "help": "“Only the store owner” is the Telegram account set as owner when BOBRES was installed. “Every owner and admin” is every active owner and admin; support staff get only the ticket alerts, never payment or sales ones."
         }
       },
       "limits": {
@@ -788,6 +797,10 @@
         "tickets_per_day": {
           "label": "Tickets per customer per day",
           "help": "A customer cannot send more support tickets than this in 24 hours. 0 means no limit."
+        },
+        "broadcast_per_sec": {
+          "label": "Broadcast messages per second",
+          "help": "How fast broadcasts go out (1 to 25). Telegram allows about 30 messages a second for the whole bot; the bot's replies to customers go first and slow a broadcast down when it is busy."
         }
       },
       "payments": {
@@ -818,6 +831,12 @@
         "zarinpal_link": {
           "label": "Zarinpal link",
           "help": "Your own Zarinpal payment link (https). Customers pay there and send the reference for you to review."
+        }
+      },
+      "support": {
+        "autoclose_days": {
+          "label": "Close answered tickets after (days)",
+          "help": "A ticket whose customer has not written back this many days after a staff reply is closed, without a message. 0 turns this off."
         }
       }
     }
@@ -917,7 +936,10 @@
       "text": "Bot text",
       "branding": "Branding",
       "staff": "Staff member",
-      "dashboard": "Dashboard account"
+      "dashboard": "Dashboard account",
+      "ticket": "Support ticket",
+      "canned_reply": "Saved reply",
+      "broadcast": "Broadcast"
     },
     "group": {
       "payment": "Payments",
@@ -932,7 +954,10 @@
       "text": "Bot texts",
       "branding": "Branding",
       "staff": "Staff",
-      "export": "Exports"
+      "export": "Exports",
+      "ticket": "Tickets",
+      "canned": "Saved replies",
+      "broadcast": "Broadcasts"
     },
     "action": {
       "payment": {
@@ -1010,7 +1035,320 @@
       "export": {
         "ledger": "Wallet history exported",
         "audit": "Audit log exported"
+      },
+      "ticket": {
+        "reply": "Ticket answered",
+        "note": "Internal note added",
+        "status": "Ticket closed or reopened",
+        "assign": "Ticket assigned"
+      },
+      "canned": {
+        "save": "Saved reply saved",
+        "delete": "Saved reply deleted"
+      },
+      "broadcast": {
+        "create": "Broadcast created",
+        "update": "Broadcast edited",
+        "delete": "Broadcast deleted",
+        "send": "Broadcast sent or scheduled",
+        "pause": "Broadcast paused",
+        "resume": "Broadcast resumed",
+        "cancel": "Broadcast cancelled",
+        "test": "Test broadcast sent",
+        "halt": "Broadcast stopped by the bot",
+        "finish": "Broadcast finished"
       }
+    }
+  },
+  "support": {
+    "ticket": "Ticket",
+    "tab": {
+      "open": "Waiting",
+      "answered": "Answered",
+      "closed": "Closed",
+      "all": "All",
+      "canned": "Saved replies"
+    },
+    "status": {
+      "open": "Waiting",
+      "answered": "Answered",
+      "closed": "Closed"
+    },
+    "category": {
+      "payment": "Payment",
+      "service": "Service",
+      "other": "Other"
+    },
+    "category_label": "Category",
+    "category_all": "All categories",
+    "assignee": "Assigned to",
+    "assigned_any": "Anyone",
+    "assigned_me": "Assigned to me",
+    "assigned_none": "Unassigned",
+    "search": "Search tickets",
+    "search_hint": "Search by ticket number (#1024), {'@'}username, Telegram id or words from the messages.",
+    "refresh": "Refresh",
+    "none": "No tickets found.",
+    "none_waiting": "No ticket is waiting for an answer.",
+    "subject": "Subject",
+    "updated": "Last activity",
+    "waiting": "Waiting {time}",
+    "waiting_label": "Waiting for",
+    "closed_short": "Closed",
+    "opened_on": "Opened {date}",
+    "opened": "Opened",
+    "closed_at": "Closed",
+    "close_reason": {
+      "staff": "Closed by staff",
+      "customer": "Closed by the customer",
+      "auto": "Closed automatically: no answer from the customer",
+      "merged": "Merged into the customer's newer ticket"
+    },
+    "banned": "Banned",
+    "blocked_bot": "Blocked the bot",
+    "blocked_hint": "The customer blocked the bot, so replies do not reach them. They get new replies only after they start the bot again.",
+    "other_tickets": "All of this customer's tickets",
+    "thread": "Conversation",
+    "no_messages": "No messages yet.",
+    "note_label": "Internal note",
+    "staff": "Staff",
+    "photo": "Photo from the customer",
+    "file": "File",
+    "open_file": "Open full size",
+    "delivery": {
+      "pending": "Sending…",
+      "sent": "Delivered",
+      "blocked": "The customer blocked the bot",
+      "failed": "Not delivered"
+    },
+    "composer": "Reply to the ticket",
+    "reply_label": "Your reply",
+    "reply_placeholder": "Write to the customer…",
+    "reply_hint": "The bot sends replies in the store's name, never yours. Only staff see internal notes. Ctrl+Enter sends.",
+    "length": "Length",
+    "insert_canned": "Insert a saved reply",
+    "send": "Send",
+    "send_close": "Send and close",
+    "add_note": "Add note",
+    "discard_title": "Leave without sending?",
+    "discard_message": "Your reply has not been sent and will be lost.",
+    "discard": "Leave",
+    "keep_writing": "Keep writing",
+    "close": "Close ticket",
+    "close_intro": "The customer is told the ticket was closed. If they write again, a new ticket starts.",
+    "closed_done": "Ticket closed",
+    "reopen": "Reopen",
+    "reopened_done": "Ticket reopened",
+    "closed_hint": "This ticket is closed. Reopen it to reply.",
+    "nobody": "Nobody",
+    "me": "Me ({name})",
+    "assigned_done": "Ticket assigned",
+    "unassigned_done": "Ticket unassigned",
+    "badge": "{n} tickets waiting",
+    "canned": {
+      "hint": "Ready texts staff insert into a reply: the text in the customer's language, or the other one when it is empty.",
+      "new": "New saved reply",
+      "none": "No saved replies yet.",
+      "title_label": "Title",
+      "title_hint": "Only staff see it, in the list under the reply box.",
+      "fa": "Persian text",
+      "en": "English text",
+      "sort": "Order",
+      "sort_hint": "Smaller numbers come first.",
+      "langs_hint": "Write at least one language. Plain text only, up to 3,500 characters each.",
+      "saved": "Saved reply saved",
+      "edit": "Edit {title}",
+      "edit_title": "Edit saved reply",
+      "delete": "Delete saved reply",
+      "delete_one": "Delete {title}",
+      "delete_confirm": "Delete the saved reply {title}? Replies already sent stay as they are.",
+      "deleted": "Saved reply deleted"
+    }
+  },
+  "broadcasts": {
+    "new": "New broadcast",
+    "title_new": "New broadcast",
+    "title_edit": "Edit broadcast",
+    "status": {
+      "draft": "Draft",
+      "scheduled": "Scheduled",
+      "running": "Sending",
+      "paused": "Paused",
+      "done": "Finished",
+      "cancelled": "Cancelled"
+    },
+    "segment": {
+      "all": "All customers",
+      "active": "With an active service",
+      "expired": "Expired (no active service)",
+      "never_bought": "Never bought"
+    },
+    "segment_desc": {
+      "all": "Everyone who uses the bot.",
+      "active": "Customers with at least one active service.",
+      "expired": "Customers who bought before but have no active service now.",
+      "never_bought": "People who started the bot but have not bought anything yet."
+    },
+    "language": {
+      "all": "All languages",
+      "fa": "Persian speakers",
+      "en": "English speakers"
+    },
+    "list": {
+      "all_statuses": "All statuses",
+      "created": "Created",
+      "audience": "Recipients",
+      "text": "Message",
+      "progress": "Progress",
+      "scheduled": "Send time",
+      "empty": "You have not sent a broadcast yet. One message can reach all your customers, or a group of them, in the bot.",
+      "empty_filtered": "No broadcast has this status."
+    },
+    "progress": {
+      "label": "Sending progress",
+      "breakdown": "Sent {sent} · blocked the bot {blocked} · failed {failed}"
+    },
+    "audience": {
+      "title": "Recipients",
+      "segment_label": "Which customers?",
+      "language_label": "Bot language",
+      "counting": "Counting…",
+      "count": "Recipients: {n}",
+      "by_lang": "Persian {fa} · English {en}",
+      "none": "No customer matches this choice.",
+      "left_out": "Banned customers and people who blocked the bot do not get it."
+    },
+    "text": {
+      "title": "Message",
+      "label": "{lang} text",
+      "both_hint": "Each customer gets the message in the language they chose in the bot, so write it in both languages.",
+      "one_hint": "Only customers whose bot language is {lang} get this message.",
+      "empty": "Write the message in this language.",
+      "preview": "Preview in Telegram",
+      "has_problem": "This language has a problem"
+    },
+    "button": {
+      "title": "Link button",
+      "add": "Add a link button under the message",
+      "url": "Button link",
+      "url_empty": "Enter the button's link.",
+      "url_bad": "Enter a full link that starts with https://",
+      "url_long": "This link is too long.",
+      "label": "Button text ({lang})",
+      "label_empty": "Write the button text.",
+      "label_chars": "The characters {chars} are not allowed in a button.",
+      "label_long": "At most {n} characters."
+    },
+    "test": {
+      "send": "Send to me",
+      "hint": "Send to me sends the {lang} text to your own Telegram, so you can see it before everyone does.",
+      "ok": "Test message sent to your Telegram.",
+      "blocked": "It did not reach you. Start the bot from your own Telegram account first (/start), then try again.",
+      "bad_request": "Telegram did not accept this message.",
+      "error": "The bot could not send it.",
+      "unreachable": "The bot cannot be reached right now. Try again in a minute.",
+      "rate_limited": "At most 5 test messages a minute. Wait a moment.",
+      "invalid": "The test was not sent. Fix the marked fields first.",
+      "failed": "The test message was not sent.",
+      "need_text": "Write the text in this language first."
+    },
+    "save": {
+      "draft": "Save draft",
+      "changes": "Save changes",
+      "saved": "Draft saved",
+      "saved_changes": "Changes saved",
+      "stale": "This broadcast was changed somewhere else (or started sending) after you opened it. Reload to see the latest version; your edits on this page are not saved.",
+      "reload": "Reload",
+      "fix_first": "Fix the marked fields first.",
+      "wait_check": "Wait a moment while the text is checked."
+    },
+    "compose": {
+      "scheduled_note": "This broadcast is scheduled for {time}. Save changes keeps that time; to change it, use Schedule."
+    },
+    "send": {
+      "now": "Send now",
+      "schedule": "Schedule",
+      "title_now": "Send this broadcast now?",
+      "title_later": "Schedule the broadcast",
+      "when": "When to send",
+      "when_now": "Now",
+      "when_later": "Later",
+      "at_label": "Date and time",
+      "picker_note": "Times are in this device's time zone ({zone}).",
+      "chosen": "Sends on {time}",
+      "invalid": "Enter a complete date and time.",
+      "past": "Pick a time in the future.",
+      "too_far": "At most 30 days ahead.",
+      "confirm_now": "This message goes to {n} customers now. Messages already sent cannot be taken back.",
+      "confirm_later": "This message goes to {n} customers on {time}. Until then you can still edit or cancel it.",
+      "count_note": "The recipients are counted again when sending starts.",
+      "zero": "No customer matches this choice, so there is nothing to send.",
+      "done_now": "Sending started",
+      "done_later": "Broadcast scheduled"
+    },
+    "leave": {
+      "title": "Leave without saving?",
+      "message": "Your changes to this broadcast are not saved yet."
+    },
+    "detail": {
+      "title": "Broadcast",
+      "tab_details": "Details",
+      "tab_problems": "Failed and blocked",
+      "progress": "Progress",
+      "not_started": "Sending has not started yet.",
+      "starts_at": "Sending starts on {time}.",
+      "done_of": "{done} of {total} recipients done",
+      "rate": "Speed",
+      "rate_value": "{n} messages a second",
+      "eta": "Time left",
+      "eta_value": "about {time}",
+      "halted": "The bot paused this broadcast. Fix the cause, then press Resume. The bot said:",
+      "unknown_hint": "Unknown means the bot could not tell whether Telegram delivered the message; these are never sent again.",
+      "about": "Details",
+      "created_by": "Created by",
+      "started_at": "Started",
+      "finished_at": "Finished",
+      "raw": "Raw text",
+      "no_button": "No button"
+    },
+    "counts": {
+      "total": "Total",
+      "sent": "Sent",
+      "blocked": "Blocked the bot",
+      "failed": "Failed",
+      "unknown": "Unknown",
+      "pending": "Waiting"
+    },
+    "action": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel broadcast",
+      "delete": "Delete",
+      "keep": "Keep it",
+      "pause_done": "Broadcast paused",
+      "resume_done": "Broadcast resumed",
+      "cancel_done": "Broadcast cancelled",
+      "deleted": "Draft deleted",
+      "cancel_title": "Cancel this broadcast?",
+      "cancel_message": "Customers who have not got it yet will not get it. Messages already sent stay.",
+      "delete_title": "Delete this draft?",
+      "delete_message": "This cannot be undone."
+    },
+    "recipients": {
+      "status_label": "Result",
+      "status": {
+        "failed": "Failed",
+        "blocked": "Blocked the bot",
+        "unknown": "Unknown"
+      },
+      "hint": {
+        "failed": "Telegram did not accept the message for these customers. Its answer says why.",
+        "blocked": "These customers blocked the bot. Until they start it again, they do not get later broadcasts either.",
+        "unknown": "It is not known whether the message reached these customers (for example, the connection to Telegram dropped). It is not sent again, so nobody gets it twice."
+      },
+      "error": "Telegram's answer",
+      "when": "Time",
+      "empty": "No customer in this list."
     }
   }
 }
