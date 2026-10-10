@@ -146,9 +146,14 @@ func (s *Service) ReviewPayment(ctx context.Context, actor *store.User, pay Paym
 	if err != nil {
 		return "", err
 	}
+	after := map[string]string{"decision": decision}
+	// The order makes the entry easy to follow from the audit log.
+	if recs, _, err := pay.ListPayments(ctx, PaymentFilter{IntentID: intentID}, 1, 1); err == nil && len(recs) == 1 {
+		after["order_id"] = recs[0].OrderID
+	}
 	// The review already happened; an audit failure is logged by the caller
 	// through the returned error but does not undo it.
-	if err := s.audit(ctx, nil, actor, "payment.review", "payment_intent", intentID, map[string]string{"decision": decision}, reason); err != nil {
+	if err := s.audit(ctx, nil, actor, "payment.review", "payment_intent", intentID, after, reason); err != nil {
 		return status, fmt.Errorf("payment reviewed but audit failed: %w", err)
 	}
 	return status, nil
@@ -287,7 +292,8 @@ func (s *Service) SetUserStatus(ctx context.Context, actor *store.User, userID, 
 		if err := s.st.SetUserStatus(ctx, tx, userID, status); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actor, "user.status", "user", userID, map[string]string{"status": status}, reason)
+		return s.auditChange(ctx, tx, actor, "user.status", "user", userID,
+			map[string]string{"status": target.Status}, map[string]string{"status": status}, reason)
 	})
 	if err != nil {
 		return nil, err
@@ -310,16 +316,19 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 	if err := validatePlan(p); err != nil {
 		return nil, err
 	}
+	var before any // nil for a new plan
 	if p.ID != "" {
-		if _, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID); err != nil {
+		old, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID)
+		if err != nil {
 			return nil, err // editing a plan that does not exist
 		}
+		before = old
 	}
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actor, "plan.upsert", "plan", p.ID, p, "")
+		return s.auditChange(ctx, tx, actor, "plan.upsert", "plan", p.ID, before, p, "")
 	})
 	if err != nil {
 		return nil, err

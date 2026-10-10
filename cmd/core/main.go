@@ -65,7 +65,12 @@ func loginLink(args []string) int {
 		return 1
 	}
 	defer st.Close()
-	token, exp, err := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID}).CreateLoginLink(ctx, tg)
+	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID})
+	ctx = store.WithSource(ctx, store.SourceCLI)
+	if err := dom.EnsureOwner(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "owner role:", err)
+	}
+	token, exp, err := dom.CreateLoginLink(ctx, tg)
 	if errors.Is(err, domain.ErrForbidden) {
 		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member (the owner must have started the bot once)\n", tg)
 		return 1
@@ -95,6 +100,10 @@ func setup(rt *app.Runtime) error {
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
 	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID})
+	// A new owner set with bobres menu gets the role now, not at their next /start.
+	if err := dom.EnsureOwner(rt.Ctx); err != nil {
+		rt.Log.Warn("owner role", "err", err)
+	}
 	csrv := coreserver.New(st, dom)
 	csrv.SetPublicURL(cfg.PublicURL)
 
@@ -123,14 +132,18 @@ func setup(rt *app.Runtime) error {
 	} else {
 		rt.Log.Warn("no master key: dashboard password logins are off (login links from the bot still work)")
 	}
-	var files web.ReceiptFiles
+	var (
+		files web.ReceiptFiles
+		bot   web.BotPeer
+	)
 	if cfg.BotURL != "" {
-		files = botfiles.New(cfg.BotURL, cfg.ServiceToken)
+		peer := botfiles.New(cfg.BotURL, cfg.ServiceToken)
+		files, bot = peer, peer
 	} else {
-		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos")
+		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Secrets: secrets, Files: files,
-		Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		Bot: bot, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)

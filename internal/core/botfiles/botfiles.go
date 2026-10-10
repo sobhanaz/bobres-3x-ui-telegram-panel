@@ -1,10 +1,11 @@
-// Package botfiles fetches files customers sent the bot (receipt photos) for
-// the dashboard, from the bot's internal endpoint: core keeps no bot token
-// and has no internet access.
+// Package botfiles calls the bot's internal endpoints for the dashboard:
+// files customers sent (receipt photos), reloading settings, checking a
+// channel. Core keeps no bot token and has no internet access.
 package botfiles
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -70,4 +71,58 @@ func (c *Client) Fetch(ctx context.Context, fileID string) (*File, error) {
 		return nil, ErrRefused
 	}
 	return &File{Data: data, ContentType: resp.Header.Get("Content-Type")}, nil
+}
+
+// RefreshSettings asks the bot to reload the settings now instead of at its
+// next minute, so a change made in the dashboard shows at once.
+func (c *Client) RefreshSettings(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/settings/refresh", nil)
+	if err != nil {
+		return fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("botfiles: refresh: %w", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("botfiles: refresh: the bot answered %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// ChannelCheck is what the bot found out about a channel customers must join.
+type ChannelCheck struct {
+	OK       bool   `json:"ok"`
+	Title    string `json:"title,omitempty"`
+	BotAdmin bool   `json:"bot_admin"`
+	Problem  string `json:"problem,omitempty"` // not_found, not_admin, not_channel, error
+	Detail   string `json:"detail,omitempty"`
+}
+
+// CheckChannel asks the bot whether it can see who is in the channel.
+func (c *Client) CheckChannel(ctx context.Context, chat string) (*ChannelCheck, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/internal/channel-check?chat="+url.QueryEscape(chat), nil)
+	if err != nil {
+		return nil, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("botfiles: channel check: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("botfiles: channel check: the bot answered %d", resp.StatusCode)
+	}
+	var out ChannelCheck
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("botfiles: channel check: %w", err)
+	}
+	return &out, nil
 }

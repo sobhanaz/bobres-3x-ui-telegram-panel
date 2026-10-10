@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -103,9 +104,12 @@ func (s *Server) loginWithPassword(w http.ResponseWriter, r *http.Request) {
 		step, codeOK = webauth.CheckTOTP(string(secret), in.Code, s.now(), creds.TOTPLastStep)
 	}
 	if !passOK || !codeOK {
-		if err := s.cfg.Store.RecordLoginFailure(ctx, conn, creds.UserID, lockFor); err != nil {
+		locked, err := s.cfg.Store.RecordLoginFailure(ctx, conn, creds.UserID, lockFor)
+		if err != nil {
 			s.cfg.Log.Warn("record login failure", "err", err)
 		}
+		// Not the member's doing: the entry names the account, with no actor.
+		s.writeAudit(ctx, nil, "dashboard.login_failed", creds.UserID, map[string]any{"method": "password", "locked": locked})
 		writeError(w, http.StatusUnauthorized, "login_failed", wrong)
 		return
 	}
@@ -152,6 +156,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, "logout", err)
 		return
 	}
+	s.audit(r.Context(), st.user, "dashboard.logout", nil)
 	clearCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -163,9 +168,17 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) { s.writeMe(w, r) }
 func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 	st := staffFrom(r.Context())
 	u := st.user
-	password := map[string]any{"enabled": false}
+	settings, err := s.cfg.Domain.Settings(r.Context())
+	if err != nil {
+		s.cfg.Log.Warn("settings for /me", "err", err)
+	}
+	var logo any
+	if u := s.logoURL(r.Context()); u != "" {
+		logo = u
+	}
+	password := map[string]any{"enabled": false, "reauth": false}
 	if c, err := s.cfg.Store.CredentialsFor(r.Context(), s.cfg.Store.Conn(), u.ID); err == nil && c.TOTPConfirmedAt != nil {
-		password = map[string]any{"enabled": true, "username": c.Username}
+		password = map[string]any{"enabled": true, "username": c.Username, "reauth": s.needsReauth(st, c)}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{"id": u.ID, "telegram_id": u.TelegramID, "username": u.Username,
@@ -175,7 +188,9 @@ func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 		"session":            map[string]any{"method": st.session.Method, "expires_at": st.session.ExpiresAt.Unix()},
 		"password":           password,
 		"password_available": s.cfg.Secrets != nil,
-		"brand":              s.brand(r.Context()),
+		"brand":              brandName(settings),
+		"branding": map[string]any{"color": settings["branding.color"], "logo": logo,
+			"currency": langPair{settings["branding.currency.fa"], settings["branding.currency.en"]}},
 	})
 }
 
@@ -189,8 +204,12 @@ func (s *Server) startPassword(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Code     string `json:"code"`
 	}
 	if !readJSON(w, r, &in) {
+		return
+	}
+	if !s.reauth(w, r, in.Code) {
 		return
 	}
 	username := strings.ToLower(strings.TrimSpace(in.Username))
@@ -227,7 +246,8 @@ func (s *Server) startPassword(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, "save credentials", err)
 		return
 	}
-	otpURL := webauth.TOTPURL(s.brand(r.Context()), username, secret)
+	// The issuer and the account are split on ':' in the authenticator app.
+	otpURL := webauth.TOTPURL(strings.ReplaceAll(s.brand(r.Context()), ":", " "), username, secret)
 	png, err := qrcode.Encode(otpURL, qrcode.Medium, 256)
 	if err != nil {
 		s.internal(w, "qr code", err)
@@ -280,6 +300,16 @@ func (s *Server) confirmPassword(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) removePassword(w http.ResponseWriter, r *http.Request) {
 	st := staffFrom(r.Context())
+	var in struct {
+		Code string `json:"code"`
+	}
+	if body, _ := io.ReadAll(r.Body); len(bytes.TrimSpace(body)) > 0 && json.Unmarshal(body, &in) != nil {
+		writeError(w, http.StatusBadRequest, "invalid", "the request body is not valid JSON for this endpoint")
+		return
+	}
+	if !s.reauth(w, r, in.Code) {
+		return
+	}
 	if err := s.cfg.Store.DeleteCredentials(r.Context(), s.cfg.Store.Conn(), st.user.ID); err != nil {
 		s.internal(w, "delete credentials", err)
 		return
@@ -290,17 +320,84 @@ func (s *Server) removePassword(w http.ResponseWriter, r *http.Request) {
 
 // revokeOtherSessions ends every session of the staff member but this one.
 func (s *Server) revokeOtherSessions(ctx context.Context, st *staff) {
-	if err := s.cfg.Store.RevokeOtherSessions(ctx, s.cfg.Store.Conn(), st.user.ID, st.idHash); err != nil {
+	if _, err := s.cfg.Store.RevokeOtherSessions(ctx, s.cfg.Store.Conn(), st.user.ID, st.idHash); err != nil {
 		s.cfg.Log.Warn("revoke sessions", "err", err)
 	}
 }
 
-func (s *Server) audit(ctx context.Context, actor *store.User, action string, detail any) {
-	var after []byte
-	if detail != nil {
-		after, _ = json.Marshal(detail)
+// reauthWindow: a login link this recent is fresh proof of who is there
+// (their Telegram account), so no authenticator code is asked again.
+const reauthWindow = 10 * time.Minute
+
+// needsReauth: replacing or removing a working password login needs the
+// current authenticator code, so a stolen session cannot take it over.
+func (s *Server) needsReauth(st *staff, c *store.StaffCredentials) bool {
+	if c == nil || c.TOTPConfirmedAt == nil {
+		return false
 	}
-	if err := s.cfg.Store.WriteAudit(ctx, s.cfg.Store.Conn(), &store.Audit{ActorID: &actor.ID, Action: action, Entity: "dashboard", After: after}); err != nil {
+	return st.session.Method != "link" || s.now().Sub(st.session.CreatedAt) > reauthWindow
+}
+
+// reauth checks the current code when needsReauth; false after answering.
+// Wrong codes count towards the password login's lock.
+func (s *Server) reauth(w http.ResponseWriter, r *http.Request, code string) bool {
+	st := staffFrom(r.Context())
+	ctx, conn := r.Context(), s.cfg.Store.Conn()
+	creds, err := s.cfg.Store.CredentialsFor(ctx, conn, st.user.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return true
+	}
+	if err != nil {
+		s.internal(w, "load credentials", err)
+		return false
+	}
+	if !s.needsReauth(st, creds) {
+		return true
+	}
+	if creds.LockedUntil != nil && creds.LockedUntil.After(s.now()) {
+		writeError(w, http.StatusLocked, "locked", "too many wrong codes; try again in 15 minutes or use a fresh link from the bot")
+		return false
+	}
+	if strings.TrimSpace(code) == "" {
+		writeError(w, http.StatusForbidden, "code_required", "enter the current code from your authenticator app")
+		return false
+	}
+	secret, err := s.cfg.Secrets.Decrypt(creds.TOTPSecretEnc)
+	if err != nil {
+		s.internal(w, "decrypt secret", err)
+		return false
+	}
+	step, ok := webauth.CheckTOTP(string(secret), code, s.now(), creds.TOTPLastStep)
+	if !ok {
+		if _, err := s.cfg.Store.RecordLoginFailure(ctx, conn, st.user.ID, lockFor); err != nil {
+			s.cfg.Log.Warn("record login failure", "err", err)
+		}
+		writeError(w, http.StatusBadRequest, "code_wrong", "that code is not right; check the time on your phone and try the next code")
+		return false
+	}
+	if err := s.cfg.Store.RecordLoginSuccess(ctx, conn, st.user.ID, step); err != nil {
+		s.internal(w, "record code", err)
+		return false
+	}
+	return true
+}
+
+// audit records a staff member's own dashboard action.
+func (s *Server) audit(ctx context.Context, actor *store.User, action string, detail any) {
+	s.writeAudit(ctx, actor, action, actor.ID, detail)
+}
+
+// writeAudit records a dashboard event about a staff account (entityID); a
+// nil actor means nobody logged in did it (a failed login).
+func (s *Server) writeAudit(ctx context.Context, actor *store.User, action, entityID string, detail any) {
+	a := &store.Audit{Action: action, Entity: "dashboard", EntityID: &entityID}
+	if detail != nil {
+		a.After, _ = json.Marshal(detail)
+	}
+	if actor != nil {
+		a.ActorID = &actor.ID
+	}
+	if err := s.cfg.Store.WriteAudit(ctx, s.cfg.Store.Conn(), a); err != nil {
 		s.cfg.Log.Warn("audit", "action", action, "err", err)
 	}
 }
@@ -308,14 +405,11 @@ func (s *Server) audit(ctx context.Context, actor *store.User, action string, de
 // brand is the store's name (branding.name), shown in the dashboard and as
 // the authenticator app's issuer.
 func (s *Server) brand(ctx context.Context) string {
-	m, err := s.cfg.Store.GetSettings(ctx, s.cfg.Store.Conn())
-	if err == nil {
-		var v string
-		if raw, ok := m["branding.name"]; ok && json.Unmarshal(raw, &v) == nil && strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
+	m, err := s.cfg.Domain.Settings(ctx)
+	if err != nil {
+		return defaultBrand
 	}
-	return "BOBRES"
+	return brandName(m)
 }
 
 func truncate(s string, n int) string {

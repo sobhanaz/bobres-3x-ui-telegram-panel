@@ -69,21 +69,25 @@ func (s *Store) RevokeSession(ctx context.Context, q querier, idHash []byte) err
 	return nil
 }
 
-// RevokeUserSessions ends every session of a user (role change, ban, password change).
-func (s *Store) RevokeUserSessions(ctx context.Context, q querier, userID string) error {
-	if _, err := q.Exec(ctx, `UPDATE core.web_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, userID); err != nil {
-		return fmt.Errorf("revoke user sessions: %w", err)
+// RevokeUserSessions ends every session of a user (role change, password
+// reset) and says how many were live.
+func (s *Store) RevokeUserSessions(ctx context.Context, q querier, userID string) (int64, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.web_sessions SET revoked_at = now()
+		WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("revoke user sessions: %w", err)
 	}
-	return nil
+	return tag.RowsAffected(), nil
 }
 
 // RevokeOtherSessions ends every session of a user except the one kept.
-func (s *Store) RevokeOtherSessions(ctx context.Context, q querier, userID string, keep []byte) error {
-	if _, err := q.Exec(ctx, `UPDATE core.web_sessions SET revoked_at = now()
-		WHERE user_id = $1 AND id_hash <> $2 AND revoked_at IS NULL`, userID, keep); err != nil {
-		return fmt.Errorf("revoke other sessions: %w", err)
+func (s *Store) RevokeOtherSessions(ctx context.Context, q querier, userID string, keep []byte) (int64, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.web_sessions SET revoked_at = now()
+		WHERE user_id = $1 AND id_hash <> $2 AND revoked_at IS NULL AND expires_at > now()`, userID, keep)
+	if err != nil {
+		return 0, fmt.Errorf("revoke other sessions: %w", err)
 	}
-	return nil
+	return tag.RowsAffected(), nil
 }
 
 // CreateLoginLink stores a one-time login token (its hash) for a user.
@@ -191,18 +195,28 @@ func (s *Store) ConfirmCredentials(ctx context.Context, q querier, userID string
 }
 
 // RecordLoginFailure counts a failed password login; the fifth in a row locks
-// the login for lockFor.
-func (s *Store) RecordLoginFailure(ctx context.Context, q querier, userID string, lockFor time.Duration) error {
-	_, err := q.Exec(ctx, `
-		UPDATE core.staff_credentials
-		SET failed_attempts = failed_attempts + 1,
-		    locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + $2::interval ELSE locked_until END,
+// the login for lockFor (it reports when this one locked it). Failures
+// before a lock that has ended no longer count.
+func (s *Store) RecordLoginFailure(ctx context.Context, q querier, userID string, lockFor time.Duration) (bool, error) {
+	var locked bool
+	err := q.QueryRow(ctx, `
+		WITH cur AS (
+			SELECT CASE WHEN locked_until IS NOT NULL AND locked_until <= now() THEN 0 ELSE failed_attempts END AS n
+			FROM core.staff_credentials WHERE user_id = $1 FOR UPDATE)
+		UPDATE core.staff_credentials c
+		SET failed_attempts = cur.n + 1,
+		    locked_until = CASE WHEN cur.n + 1 >= 5 THEN now() + $2::interval
+		                        WHEN c.locked_until <= now() THEN NULL ELSE c.locked_until END,
 		    updated_at = now()
-		WHERE user_id = $1`, userID, lockFor.String())
-	if err != nil {
-		return fmt.Errorf("record login failure: %w", err)
+		FROM cur WHERE c.user_id = $1
+		RETURNING cur.n + 1 >= 5`, userID, lockFor.String()).Scan(&locked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
 	}
-	return nil
+	if err != nil {
+		return false, fmt.Errorf("record login failure: %w", err)
+	}
+	return locked, nil
 }
 
 // RecordLoginSuccess clears the failure count and remembers the code used.

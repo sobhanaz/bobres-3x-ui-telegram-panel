@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/webauth"
 )
@@ -56,7 +57,14 @@ func (s *Service) CreateLoginLink(ctx context.Context, telegramID int64) (string
 		return "", time.Time{}, err
 	}
 	expires := time.Now().Add(LoginLinkTTL)
-	if err := s.st.CreateLoginLink(ctx, s.st.Conn(), hash, u.ID, expires); err != nil {
+	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.st.CreateLoginLink(ctx, tx, hash, u.ID, expires); err != nil {
+			return err
+		}
+		// Who asked for a way in, and where (the entry's source: bot or CLI).
+		return s.audit(ctx, tx, u, "dashboard.link_created", "dashboard", u.ID, nil, "")
+	})
+	if err != nil {
 		return "", time.Time{}, err
 	}
 	return token, expires, nil

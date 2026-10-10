@@ -45,6 +45,9 @@ type Config struct {
 	Provisioner domain.Provisioner
 	// Files fetches receipt photos through the bot (nil: not shown).
 	Files ReceiptFiles
+	// Bot reloads settings and checks channels (nil: the bot picks changes
+	// up within a minute, channel checks are unavailable).
+	Bot BotPeer
 	// Secrets encrypts authenticator secrets; nil disables password logins.
 	Secrets *bcrypto.Envelope
 	// Dashboard serves the built app under /admin/ (nil: not mounted).
@@ -77,7 +80,13 @@ func (s *Server) Register(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/me/password", s.session(s.startPassword))
 	api.HandleFunc("POST /api/v1/me/password/confirm", s.session(s.confirmPassword))
 	api.HandleFunc("DELETE /api/v1/me/password", s.session(s.removePassword))
+	api.HandleFunc("GET /api/v1/me/sessions", s.session(s.mySessions))
+	api.HandleFunc("POST /api/v1/me/sessions/revoke-others", s.session(s.revokeMyOtherSessions))
+	api.HandleFunc("POST /api/v1/me/sessions/{sid}/revoke", s.session(s.revokeMySession))
 	api.HandleFunc("GET /api/v1/overview", s.session(s.require(PermOverviewRead, s.overview)))
+	// The store's look, for the login page (public: nothing private in it).
+	api.HandleFunc("GET /api/v1/brand", s.publicBrand)
+	api.HandleFunc("GET /api/v1/brand/logo", s.logo)
 
 	// Customers.
 	s.route(api, "GET /api/v1/users", PermUsersRead, s.listUsers)
@@ -112,7 +121,30 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
 	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
 
+	// Store setup.
+	s.route(api, "GET /api/v1/branding", PermBrandingWrite, s.getBranding)
+	s.route(api, "PUT /api/v1/branding", PermBrandingWrite, s.putBranding)
+	s.route(api, "PUT /api/v1/branding/logo", PermBrandingWrite, s.putLogo)
+	s.route(api, "DELETE /api/v1/branding/logo", PermBrandingWrite, s.deleteLogo)
+	s.route(api, "GET /api/v1/texts", PermBrandingWrite, s.listTexts)
+	s.route(api, "POST /api/v1/texts/check", PermBrandingWrite, s.checkText)
+	s.route(api, "PUT /api/v1/texts", PermBrandingWrite, s.putText)
+	s.route(api, "GET /api/v1/texts.json", PermBrandingWrite, s.exportTexts)
+	s.route(api, "POST /api/v1/texts/import", PermBrandingWrite, s.importTexts)
+	s.route(api, "GET /api/v1/settings", PermSettingsWrite, s.getSettings)
+	s.route(api, "PUT /api/v1/settings", PermSettingsWrite, s.putSettings)
+	s.route(api, "POST /api/v1/settings/channel-check", PermSettingsWrite, s.checkChannel)
+
 	// Administration.
+	s.route(api, "GET /api/v1/staff", PermStaffWrite, s.listStaff)
+	s.route(api, "POST /api/v1/staff", PermStaffWrite, s.addStaff)
+	s.route(api, "PUT /api/v1/staff/{id}/role", PermStaffWrite, s.setStaffRole)
+	s.route(api, "POST /api/v1/staff/{id}/remove", PermStaffWrite, s.removeStaff)
+	s.route(api, "GET /api/v1/staff/{id}/sessions", PermStaffWrite, s.staffSessions)
+	s.route(api, "POST /api/v1/staff/{id}/sessions/revoke", PermStaffWrite, s.revokeStaffSessions)
+	s.route(api, "POST /api/v1/staff/{id}/sessions/{sid}/revoke", PermStaffWrite, s.revokeStaffSession)
+	s.route(api, "POST /api/v1/staff/{id}/password/reset", PermStaffWrite, s.resetStaffPassword)
+	s.route(api, "POST /api/v1/staff/{id}/unlock", PermStaffWrite, s.unlockStaff)
 	s.route(api, "GET /api/v1/audit", PermAuditRead, s.listAudit)
 	s.route(api, "GET /api/v1/audit/actions", PermAuditRead, s.auditActions)
 	s.route(api, "GET /api/v1/audit.csv", PermAuditRead, s.exportAudit)
@@ -139,7 +171,8 @@ func apiHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
 		// Audit entries written for this request record where it came from.
-		next.ServeHTTP(w, r.WithContext(store.WithClientIP(r.Context(), clientIP(r))))
+		ctx := store.WithSource(store.WithClientIP(r.Context(), clientIP(r)), store.SourceDashboard)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

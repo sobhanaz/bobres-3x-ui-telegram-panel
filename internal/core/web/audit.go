@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
@@ -25,12 +26,13 @@ type auditJSON struct {
 	After     json.RawMessage `json:"after"`
 	Reason    string          `json:"reason"`
 	IP        string          `json:"ip"`
+	Source    string          `json:"source"` // dashboard, bot, cli, system ("" before it was recorded)
 	CreatedAt int64           `json:"created_at"`
 }
 
 func auditOf(a *store.AuditRow) auditJSON {
 	out := auditJSON{ID: a.ID, ActorRole: a.ActorRole, Action: a.Action, Entity: a.Entity, Before: a.Before,
-		After: a.After, Reason: a.Reason, IP: a.IP, CreatedAt: a.CreatedAt.Unix()}
+		After: a.After, Reason: a.Reason, IP: a.IP, Source: a.Source, CreatedAt: a.CreatedAt.Unix()}
 	if a.ActorID != nil && a.ActorTelegramID != 0 {
 		out.Actor = briefOf(*a.ActorID, a.ActorTelegramID, a.ActorUsername)
 	}
@@ -50,9 +52,10 @@ func auditOf(a *store.AuditRow) auditJSON {
 // unix seconds, [from, to)).
 func auditFilter(r *http.Request) (store.AuditFilter, bool) {
 	q := r.URL.Query()
-	actor, ok1 := queryID(r, "actor")
-	entityID, ok2 := queryID(r, "entity_id")
-	if !ok1 || !ok2 {
+	actor, ok := queryID(r, "actor")
+	// An item is a uuid, a discount code, a setting key or a text (fa.welcome).
+	entityID := strings.TrimSpace(q.Get("entity_id"))
+	if !ok || len(entityID) > 200 || len(q.Get("action")) > 100 || len(q.Get("entity")) > 50 {
 		return store.AuditFilter{}, false
 	}
 	f := store.AuditFilter{ActorID: actor, Action: q.Get("action"), Entity: q.Get("entity"), EntityID: entityID}
@@ -120,8 +123,9 @@ func (s *Server) exportAudit(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Disposition", `attachment; filename="audit-`+s.now().UTC().Format("20060102-1504")+`.csv"`)
 	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
 	cw := csv.NewWriter(w)
+	s.audit(r.Context(), actor(r), "export.audit", r.URL.Query())
 	_ = cw.Write([]string{"time_utc", "actor_telegram_id", "actor_username", "actor_role", "action", "entity", "entity_id",
-		"reason", "ip", "before", "after", "entry_id"})
+		"reason", "ip", "source", "before", "after", "entry_id"})
 	more, err := s.cfg.Store.EachAudit(r.Context(), s.cfg.Store.Conn(), f, maxAuditCSVRows, func(a store.AuditRow) error {
 		entity := ""
 		if a.EntityID != nil {
@@ -132,8 +136,8 @@ func (s *Server) exportAudit(w http.ResponseWriter, r *http.Request) {
 			tg = strconv.FormatInt(a.ActorTelegramID, 10)
 		}
 		return cw.Write([]string{
-			a.CreatedAt.UTC().Format(time.RFC3339), tg, csvText(a.ActorUsername), a.ActorRole, a.Action, a.Entity, entity,
-			csvText(a.Reason), a.IP, csvText(string(a.Before)), csvText(string(a.After)), a.ID,
+			a.CreatedAt.UTC().Format(time.RFC3339), tg, csvText(a.ActorUsername), a.ActorRole, a.Action, a.Entity, csvText(entity),
+			csvText(a.Reason), a.IP, a.Source, csvText(string(a.Before)), csvText(string(a.After)), a.ID,
 		})
 	})
 	if err != nil {
