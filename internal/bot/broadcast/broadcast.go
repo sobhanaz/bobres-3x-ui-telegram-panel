@@ -397,9 +397,9 @@ type pacer struct {
 var errStopped = errors.New("broadcast: stopped")
 
 // budget is how many broadcast messages a second may go out now: the rate,
-// less the interactive messages of the last second (customers come first),
-// never more than Telegram's overall limit in all.
-func budget(rate, interactive int) int { return min(rate, maxTotalPerSec) - interactive }
+// as long as they and the interactive messages of the last second stay
+// under Telegram's overall limit (customers come first).
+func budget(rate, interactive int) int { return min(rate, maxTotalPerSec-interactive) }
 
 // wait returns when the next send may go, or an error when ctx ends or the
 // batch stops first.

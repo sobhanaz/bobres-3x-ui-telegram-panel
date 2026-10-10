@@ -360,12 +360,12 @@ func TestPacing(t *testing.T) {
 		t.Fatalf("%d sends in flight", s.maxInFlight)
 	}
 
-	if budget(20, 0) != 20 || budget(20, 10) != 10 || budget(25, 3) != 22 || budget(40, 0) != maxTotalPerSec || budget(5, 5) != 0 {
+	if budget(20, 0) != 20 || budget(20, 10) != 18 || budget(25, 3) != 25 || budget(40, 0) != maxTotalPerSec || budget(5, 5) != 5 || budget(20, 28) != 0 {
 		t.Fatal("budget")
 	}
-	// 15 interactive messages in the last second leave 5 a second of 20.
+	// 23 interactive messages in the last second leave 5 a second under Telegram's 28.
 	m := &tg.Meter{}
-	for range 15 {
+	for range 23 {
 		m.Add()
 	}
 	p := &pacer{rate: 20, flood: &tg.Flood{}, meter: m}
@@ -379,7 +379,7 @@ func TestPacing(t *testing.T) {
 		t.Fatalf("two sends %v apart at 5 a second", d)
 	}
 	m = &tg.Meter{}
-	for range 20 {
+	for range maxTotalPerSec {
 		m.Add()
 	}
 	p = &pacer{rate: 20, flood: &tg.Flood{}, meter: m}
