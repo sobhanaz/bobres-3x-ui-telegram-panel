@@ -306,7 +306,12 @@ func TestBrandingAndLogo(t *testing.T) {
 	if code, out := b.do(http.MethodDelete, "/api/v1/branding/logo", nil); code != 200 || out["logo"] != nil {
 		t.Fatalf("remove logo: %d %v", code, out)
 	}
-	if resp, _ := anon.c.Get(f.srv.URL + "/api/v1/brand/logo"); resp.StatusCode != 404 {
+	resp, err = anon.c.Get(f.srv.URL + "/api/v1/brand/logo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
 		t.Fatalf("removed logo still served: %d", resp.StatusCode)
 	}
 }
@@ -443,7 +448,7 @@ func TestStaffPage(t *testing.T) {
 	if code, _ := sup.do(http.MethodGet, "/api/v1/staff", nil); code != 403 {
 		t.Fatalf("support saw staff: %d", code)
 	}
-	code, pw := sup.do(http.MethodPost, "/api/v1/me/password", map[string]string{"username": "sara", "password": "a long password"})
+	_, pw := sup.do(http.MethodPost, "/api/v1/me/password", map[string]string{"username": "sara", "password": "a long password"})
 	secret, _ := pw["secret"].(string)
 	c0, _ := webauth.TOTPCode(secret, webauth.TOTPStep(time.Now()))
 	if code, _ := sup.do(http.MethodPost, "/api/v1/me/password/confirm", map[string]string{"code": c0}); code != 200 {

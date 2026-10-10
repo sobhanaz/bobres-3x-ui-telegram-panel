@@ -390,10 +390,3 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	}
 	return out, nil
 }
-
-func optstr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}

@@ -175,7 +175,8 @@ func checkHTML(s string) []Problem {
 				stack = stack[:len(stack)-1]
 				continue
 			}
-			if inCode() && !(name == "code" && len(stack) > 0 && stack[len(stack)-1] == "pre") {
+			preCode := name == "code" && len(stack) > 0 && stack[len(stack)-1] == "pre" // <pre><code> is allowed
+			if inCode() && !preCode {
 				probs = append(probs, Problem{ProblemTagInCode, name})
 			}
 			if p := checkAttrs(name, attrs); p != nil {
