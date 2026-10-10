@@ -37,12 +37,56 @@ func (h *Handler) gate(r *req) bool {
 	if h.payingNow(r) {
 		return false
 	}
+	if h.continuesTicket(r) {
+		r.gated = true // what turns out to start a ticket gets the answer below
+		return false
+	}
 	if maintenance {
 		h.sayMaintenance(r)
 	} else {
 		h.askToJoin(r, channel)
 	}
 	return true
+}
+
+// answerGate is the gates' answer to an update let through to continue a
+// ticket that turned out not to (r.gated).
+func (h *Handler) answerGate(r *req) {
+	if h.set.Bool("maintenance.enabled", false) {
+		h.sayMaintenance(r)
+		return
+	}
+	h.askToJoin(r, h.set.Get("join.channel"))
+}
+
+// continuesTicket: a customer going on with a ticket, which the gates let
+// through (starting one they do not): the buttons to answer, close, list or
+// read tickets, a message in the ticket scene that names a ticket, or a
+// Telegram reply to a message of the bot (a staff answer, core checks). The
+// state is read only when a gate would otherwise block.
+func (h *Handler) continuesTicket(r *req) bool {
+	if r.user == nil {
+		return false
+	}
+	if r.cb != nil {
+		verb, rest, _ := strings.Cut(r.cb.Data, ":")
+		sub, _, _ := strings.Cut(rest, ":")
+		return verb == "tk" && (sub == "r" || sub == "c" || sub == "l" || sub == "v")
+	}
+	if _, _, isCmd := command(r.msg.Text); isCmd {
+		return false
+	}
+	st, err := h.state.Get(r.ctx, r.from.ID)
+	if err != nil {
+		return false
+	}
+	switch st.Scene {
+	case sceneTicket:
+		return st.Get("tid") != ""
+	case "":
+		return replyToBot(r.msg)
+	}
+	return false
 }
 
 // exempt: what both gates let through. Staff and the configured owner (who

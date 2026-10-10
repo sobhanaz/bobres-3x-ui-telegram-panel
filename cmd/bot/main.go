@@ -12,6 +12,7 @@ import (
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
 	eventsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/broadcast"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/handler"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/notify"
@@ -57,7 +58,13 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(func() { _ = conn.Close() })
 	core := corev1.NewCoreServiceClient(conn)
 
-	bot := tg.New(cfg.TelegramBotToken, tg.WithAPIRoot(cfg.TelegramAPIURL))
+	// Any 429 either client sees pauses broadcasts (flood); broadcasts take
+	// only what the interactive client's messages leave (meter), on their own
+	// connections, without the hidden sleep on a 429.
+	flood, meter := &tg.Flood{}, &tg.Meter{}
+	bot := tg.New(cfg.TelegramBotToken, tg.WithAPIRoot(cfg.TelegramAPIURL), tg.WithFlood(flood), tg.WithMeter(meter))
+	bulk := tg.New(cfg.TelegramBotToken, tg.WithAPIRoot(cfg.TelegramAPIURL), tg.WithFlood(flood), tg.WithNoRetry(),
+		tg.WithHTTPClient(tg.NewBulkHTTPClient(8)))
 	if cfg.TelegramAPIURL != "" {
 		rt.Log.Warn("using a custom Telegram API root", "url", cfg.TelegramAPIURL)
 	}
@@ -90,17 +97,22 @@ func setup(rt *app.Runtime) error {
 		}
 	})
 
+	notifier := notify.New(core, bot, cat, h.Settings(), cfg.AdminTelegramID, rt.Log)
 	notifications, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Name:       "core-events",
 		Source:     eventbus.NewGRPCSource(eventsv1.NewEventFeedServiceClient(conn)),
-		Handle:     notify.New(core, bot, cat, h.Settings(), cfg.AdminTelegramID, rt.Log).Handle,
-		DeadLetter: notify.LogDeadLetter(rt.Log),
+		Handle:     notifier.Handle,
+		DeadLetter: notifier.DeadLetter,
 		Log:        rt.Log,
 	})
 	if err != nil {
 		return err
 	}
 	rt.Go("notifications", notifications.Run)
+
+	// Broadcasts: claimed from core in batches, sent at the store's pace;
+	// at shutdown the sends in flight finish and the rest go back in line.
+	rt.Go("broadcasts", broadcast.New(core, bulk, h.Settings(), flood, meter, rt.Log).Run)
 
 	if cfg.PeerCoreToken != "" {
 		rt.Mux.Handle("GET /internal/files/{id}", runner.Files(bot, cfg.PeerCoreToken, rt.Log))
@@ -109,6 +121,8 @@ func setup(rt *app.Runtime) error {
 		// channel for the dashboard: core has no bot token.
 		rt.Mux.Handle("POST /internal/settings/refresh", runner.Refresh(h.RefreshSettings, cfg.PeerCoreToken, rt.Log))
 		rt.Mux.Handle("GET /internal/channel-check", runner.ChannelCheck(bot, me.ID, cfg.PeerCoreToken))
+		// "Send to me" from the broadcast composer.
+		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
 	}
 
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)

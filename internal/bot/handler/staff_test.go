@@ -28,15 +28,20 @@ func TestStaffAlertsFollowTheSettings(t *testing.T) {
 	adm.press("lang:fa")
 	w.role(841, "admin")
 	u := w.customer(842, "cust")
+	// Each ticket is closed after its first message, so the next one is new
+	// (and alerted again).
 	ticket := func(p *person, text string) {
 		p.text("/menu")
 		p.press("support")
 		p.text(text)
+		w.closeTicket(p.id)
 	}
 
 	// By default only the configured owner is alerted.
 	ticket(u, "first question")
-	owner.sees("Support message from @cust")
+	owner.eventuallySees("New ticket <b>#")
+	owner.sees("from @cust · 💬 Other\n\nfirst question")
+	w.drain()
 	if adm.count("@cust") != 0 {
 		t.Fatal("an admin was alerted with notify.recipients = owner")
 	}
@@ -45,15 +50,18 @@ func TestStaffAlertsFollowTheSettings(t *testing.T) {
 	// who wrote.
 	owner.text("/set notify.recipients staff")
 	ticket(u, "second question")
-	adm.sees("پیام پشتیبانی از @cust")
+	adm.eventuallySees("تیکت جدید")
+	adm.sees("از @cust · 💬 سایر موارد\n\nsecond question")
 	ticket(adm, "a question from the admin")
-	owner.sees("a question from the admin")
+	owner.eventuallySees("a question from the admin")
+	w.drain()
 	if adm.count("a question from the admin") != 0 {
 		t.Fatal("the admin was alerted about their own ticket")
 	}
 
 	owner.text("/set notify.new_ticket false")
 	ticket(u, "third question")
+	w.drain()
 	if owner.count("third question") != 0 || adm.count("third question") != 0 {
 		t.Fatal("ticket alert sent while switched off")
 	}

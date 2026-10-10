@@ -3,6 +3,7 @@ package tgfake
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -116,6 +117,72 @@ func TestEditsAndToastsAreRecorded(t *testing.T) {
 	if len(sent) != 4 || sent[1].MessageID != m.MessageID || sent[1].Text != "edited" ||
 		m2.MessageID == m.MessageID || sent[3].Method != "answerCallbackQuery" || sent[3].Text != "done" || sent[3].ChatID != 0 {
 		t.Fatalf("log: %+v (ids %d %d)", sent, m.MessageID, m2.MessageID)
+	}
+}
+
+// Failures injected per chat: a blocked user, a vanished chat, a flood wait
+// for a few calls, another refusal; other chats are not affected.
+func TestFailuresPerChat(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	flood := &tg.Flood{}
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL), tg.WithNoRetry(), tg.WithFlood(flood))
+	ctx := context.Background()
+
+	f.FailChat(1, Blocked())
+	f.FailChat(2, ChatNotFound())
+	f.FailChat(3, Flood(2, 1))
+	f.FailChat(4, BadRequest("message is too long"))
+	for _, chat := range []int64{1, 2} {
+		if _, err := c.SendMessage(ctx, chat, "x", nil); !tg.IsBlocked(err) {
+			t.Fatalf("chat %d: %v", chat, err)
+		}
+	}
+	_, err := c.SendMessage(ctx, 3, "x", nil)
+	if wait, ok := tg.IsFlood(err); !ok || wait != 2*time.Second || flood.Until().IsZero() {
+		t.Fatalf("flood: %v (%v)", err, wait)
+	}
+	if _, err := c.SendMessage(ctx, 3, "x", nil); err != nil {
+		t.Fatalf("the flood was for one call only: %v", err)
+	}
+	var ae *tg.APIError
+	if _, err := c.SendMessage(ctx, 4, "x", nil); !errors.As(err, &ae) || ae.Code != 400 || tg.IsBlocked(err) ||
+		!strings.Contains(ae.Description, "too long") {
+		t.Fatalf("bad request: %v", err)
+	}
+	if _, err := c.SendMessage(ctx, 5, "x", nil); err != nil {
+		t.Fatalf("another chat: %v", err)
+	}
+	f.ClearChat(1)
+	if _, err := c.SendMessage(ctx, 1, "x", nil); err != nil {
+		t.Fatalf("cleared: %v", err)
+	}
+	// Over HTTP, for the end-to-end run; code 0 clears.
+	resp, err := http.Post(srv.URL+"/_fail", "application/json", strings.NewReader(`{"chat_id":6,"code":403,"description":"Forbidden: user is deactivated"}`))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("/_fail: %v %v", err, resp)
+	}
+	_ = resp.Body.Close()
+	if _, err := c.SendMessage(ctx, 6, "x", nil); !tg.IsBlocked(err) {
+		t.Fatalf("/_fail not applied: %v", err)
+	}
+	resp, err = http.Post(srv.URL+"/_fail", "application/json", strings.NewReader(`{"chat_id":6,"code":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if _, err := c.SendMessage(ctx, 6, "x", nil); err != nil {
+		t.Fatalf("/_fail clear: %v", err)
+	}
+	if sent := f.Sent(); len(sent) != 4 {
+		t.Fatalf("only delivered messages are recorded: %+v", sent)
+	}
+
+	// A sent photo comes back with a file id to re-send it by.
+	m, err := c.SendPhoto(ctx, 5, tg.Photo{Data: []byte("png")}, "qr", nil)
+	if err != nil || m.LargestPhoto() == "" {
+		t.Fatalf("photo reply: %v %+v", err, m)
 	}
 }
 

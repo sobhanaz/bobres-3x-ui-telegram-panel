@@ -1,6 +1,6 @@
 // Package notify turns core's events into Telegram messages: payment
 // results, wallet credits, delivered and extended services, reminders before
-// a service ends, and admin alerts.
+// a service ends, support staff's replies, and admin alerts.
 package notify
 
 import (
@@ -18,6 +18,8 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Telegram is what the notifier sends with.
@@ -188,25 +190,63 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			}
 		}
 		return n.send(ctx, e.TelegramID, n.cat.T(n.lang(ctx, e.TelegramID), "sub.delayed"), nil)
+
+	case events.TicketOpened:
+		var e events.TicketOpenedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.ticketAlert(ctx, e.MessageID, e.TelegramID, 0, "admin.ticket_opened")
+
+	case events.TicketCustomerReplied:
+		var e events.TicketCustomerRepliedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.ticketAlert(ctx, e.MessageID, e.TelegramID, e.AssigneeTelegramID, "admin.ticket_followup")
+
+	case events.TicketReplied:
+		var e events.TicketRepliedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.deliverReply(ctx, e)
+
+	case events.TicketClosed:
+		var e events.TicketClosedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		lang := n.lang(ctx, e.TelegramID)
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "support.closed_by_staff", "id", e.Number), n.supportButton(lang))
 	}
 	return nil
 }
 
-// alert messages everyone who gets staff alerts (notify.recipients), each in
-// their language, except the Telegram user skip (0: nobody). It fails only
-// when nobody got it, so a retry does not repeat it to those who did.
+// alert messages everyone who gets staff alerts about payments, sales and
+// failed deliveries (notify.recipients; never support staff), each in their
+// language, except the Telegram user skip (0: nobody). It fails only when
+// nobody got it, so a retry does not repeat it to those who did.
 func (n *Notifier) alert(ctx context.Context, skip int64, text func(lang string) string) error {
+	return n.alertTo(ctx, n.set.Recipients(n.adminTG), skip, func(lang string) (string, *tg.Keyboard) {
+		return text(lang), nil
+	})
+}
+
+// alertTo messages each of to in their language, except skip; as alert.
+func (n *Notifier) alertTo(ctx context.Context, to []settings.Contact, skip int64, render func(lang string) (string, *tg.Keyboard)) error {
 	var failed error
 	sent := false
-	for _, c := range n.set.Recipients(n.adminTG) {
-		if c.TelegramID == skip {
+	for _, c := range to {
+		if c.TelegramID == skip || c.TelegramID == 0 {
 			continue
 		}
 		lang := c.Language
 		if lang == "" {
 			lang = n.lang(ctx, c.TelegramID)
 		}
-		if err := n.send(ctx, c.TelegramID, text(lang), nil); err != nil {
+		text, kb := render(lang)
+		if err := n.send(ctx, c.TelegramID, text, kb); err != nil {
 			n.log.Warn("staff alert failed", "chat", c.TelegramID, "err", err)
 			failed = err
 			continue
@@ -217,6 +257,138 @@ func (n *Notifier) alert(ctx context.Context, skip int64, text func(lang string)
 		return nil
 	}
 	return failed
+}
+
+// ticketPreview is the start of a customer's message for a staff alert:
+// at most 300 characters, escaped, with 📎 when a file came with it.
+const ticketPreview = 300
+
+// ticketAlert tells the staff about a new ticket or a customer's answer
+// (notify.new_ticket): everyone who gets ticket alerts, support staff
+// included (notify.recipients), or only the ticket's assignee. The customer
+// is never alerted about their own ticket (staff writing to their store).
+func (n *Notifier) ticketAlert(ctx context.Context, messageID string, customer, assignee int64, key string) error {
+	if !n.set.Bool("notify.new_ticket", true) {
+		return nil
+	}
+	v, err := n.core.GetTicketMessage(ctx, &corev1.GetTicketMessageRequest{MessageId: messageID})
+	if status.Code(err) == codes.NotFound {
+		n.log.Warn("ticket message for an alert not found", "message", messageID)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	user := fmt.Sprintf("id %d", v.GetTelegramId())
+	if v.GetUsername() != "" {
+		user = "@" + v.GetUsername()
+	}
+	preview := html.EscapeString(truncateRunes(v.GetBody(), ticketPreview))
+	if v.GetHasFile() {
+		preview = strings.TrimSpace("📎 " + preview)
+	}
+	to := n.set.TicketRecipients(n.adminTG)
+	if assignee != 0 {
+		c, ok := n.set.Contact(assignee)
+		if !ok {
+			c = settings.Contact{TelegramID: assignee}
+		}
+		to = []settings.Contact{c}
+	}
+	return n.alertTo(ctx, to, customer, func(lang string) (string, *tg.Keyboard) {
+		var kb *tg.Keyboard
+		if u := v.GetUrl(); strings.HasPrefix(u, "https://") {
+			kb = (&tg.Keyboard{}).Row(tg.Link(n.cat.T(lang, "btn.ticket_open"), u))
+		}
+		args := []any{"user", html.EscapeString(user), "id", v.GetTicketNumber(), "text", preview}
+		if key == "admin.ticket_opened" {
+			args = append(args, "category", n.category(lang, v.GetCategory()))
+		}
+		return n.cat.T(lang, key, args...), kb
+	})
+}
+
+// category names a ticket's topic in lang (older tickets have "general").
+func (n *Notifier) category(lang, c string) string {
+	switch c {
+	case "payment", "service":
+	default:
+		c = "other"
+	}
+	return n.cat.T(lang, "support.cat."+c)
+}
+
+// deliverReply sends a staff reply to the customer and reports how it went.
+// A reply already reported (a repeated event) is not sent again.
+func (n *Notifier) deliverReply(ctx context.Context, e events.TicketRepliedEvent) error {
+	v, err := n.core.GetTicketMessage(ctx, &corev1.GetTicketMessageRequest{MessageId: e.MessageID})
+	if status.Code(err) == codes.NotFound {
+		n.log.Warn("ticket reply to deliver not found", "message", e.MessageID)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if v.GetDelivery() != "pending" {
+		return nil // sent (or given up) before
+	}
+	lang := i18n.Normalize(v.GetLanguage())
+	body := html.EscapeString(v.GetBody())
+	var (
+		text string
+		kb   *tg.Keyboard
+	)
+	if v.GetClosed() || e.Closed {
+		text = n.cat.T(lang, "support.reply_closed", "id", v.GetTicketNumber(), "text", body)
+		kb = n.supportButton(lang)
+	} else {
+		text = n.cat.T(lang, "support.reply", "id", v.GetTicketNumber(), "text", body)
+		kb = (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.ticket_reply"), "tk:r:"+v.GetTicketId()),
+			tg.CB(n.cat.T(lang, "btn.ticket_close"), "tk:c:"+v.GetTicketId()))
+	}
+	msg, err := n.tg.SendMessage(ctx, v.GetTelegramId(), text, kb)
+	if tg.IsBlocked(err) {
+		n.log.Info("user blocked the bot; ticket reply not delivered", "chat", v.GetTelegramId())
+		// Core marks the user as blocking the bot too. Nothing was sent, so a
+		// failed report is safe to retry.
+		_, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "blocked"})
+		return err
+	}
+	if err != nil {
+		return err // retried by the consumer
+	}
+	if _, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "sent",
+		TgMessageId: int64(msg.MessageID)}); err != nil {
+		// Not retried: the reply would be sent twice.
+		n.log.Warn("ticket reply delivered but not reported", "message", e.MessageID, "err", err)
+	}
+	return nil
+}
+
+// supportButton opens the Support screen as a new message (the one it is
+// under stays as it is).
+func (n *Notifier) supportButton(lang string) *tg.Keyboard {
+	return (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.support"), "support:m"))
+}
+
+// DeadLetter is the bot's dead-letter sink (an eventbus.DeadLetterFunc): it
+// has no database, so an undeliverable notification is logged for the
+// operator; a staff reply that could not be delivered is reported failed,
+// so the dashboard shows it.
+func (n *Notifier) DeadLetter(ctx context.Context, m eventbus.Message, cause error) error {
+	n.log.Error("notification dropped", "event_id", m.EventID, "topic", m.Topic, "err", cause)
+	if m.Topic != events.TicketReplied {
+		return nil
+	}
+	var e events.TicketRepliedEvent
+	if json.Unmarshal(m.Payload, &e) != nil || e.MessageID == "" {
+		return nil
+	}
+	_, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "failed"})
+	if status.Code(err) == codes.NotFound {
+		return nil
+	}
+	return err // retried later: the dashboard must not keep showing "sending"
 }
 
 // saleAlert tells the staff about a paid order (notify.sales); a staff
@@ -316,9 +488,19 @@ func (n *Notifier) send(ctx context.Context, chatID int64, text string, kb *tg.K
 	_, err := n.tg.SendMessage(ctx, chatID, text, kb)
 	if tg.IsBlocked(err) {
 		n.log.Info("user blocked the bot; notification skipped", "chat", chatID)
+		n.markBlocked(ctx, chatID)
 		return nil
 	}
 	return err
+}
+
+// markBlocked records in core that a user blocked the bot (best effort: the
+// next broadcast finds out again).
+func (n *Notifier) markBlocked(ctx context.Context, chatID int64) {
+	if _, err := n.core.SetUserBotBlocked(ctx, &corev1.SetUserBotBlockedRequest{TelegramId: chatID, Blocked: true}); err != nil &&
+		status.Code(err) != codes.NotFound {
+		n.log.Warn("bot blocked flag not saved", "chat", chatID, "err", err)
+	}
 }
 
 // sendQR follows the ready message with the QR code; failures are logged
@@ -341,11 +523,10 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// LogDeadLetter is the bot's dead-letter sink: it has no database, so an
-// undeliverable notification is logged for the operator.
-func LogDeadLetter(log *slog.Logger) eventbus.DeadLetterFunc {
-	return func(_ context.Context, m eventbus.Message, cause error) error {
-		log.Error("notification dropped", "event_id", m.EventID, "topic", m.Topic, "err", cause)
-		return nil
+// truncateRunes shortens s to n runes (never splitting a character).
+func truncateRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
 	}
+	return s
 }

@@ -465,9 +465,9 @@ func (h *Handler) submitProof(r *req, st state.State, in *corev1.SubmitPaymentPr
 
 // alertToggles are the notify.* switches (on by default) of the staff alerts
 // that have one; other alerts, such as admin.stars_unrecorded, always go out.
+// (Ticket alerts are the notifier's, under notify.new_ticket.)
 var alertToggles = map[string]string{
 	"admin.new_payment": "notify.new_payment",
-	"admin.new_ticket":  "notify.new_ticket",
 }
 
 // notifyAdmin alerts the staff about something the user did (not the user

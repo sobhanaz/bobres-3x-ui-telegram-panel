@@ -221,27 +221,51 @@ func TestForcedJoin(t *testing.T) {
 	}
 }
 
+// limits.tickets_per_day counts every support message (an album once), and
+// a message that was not recorded is given back.
 func TestTicketsPerDay(t *testing.T) {
 	w := newWorld(t)
-	w.h.limiter = newMemLimiter("bot:tk:")
+	lim := newMemLimiter("bot:tk:")
+	w.h.limiter = lim
 	owner := setupStore(t, w)
 	owner.text("/set limits.tickets_per_day 2")
 	u := w.customer(821, "tina")
-	ticket := func(text string) {
-		u.text("/menu")
-		u.press("support")
-		u.text(text)
-	}
+	u.text("/menu")
+	u.press("support")
 	for i := range 3 {
-		ticket(fmt.Sprintf("help number %d", i))
+		u.text(fmt.Sprintf("help number %d", i))
 	}
 	u.lastHas("today's limit of support messages")
-	if n := owner.count("Support message from @tina"); n != 2 {
-		t.Fatalf("%d tickets reached the admin, want 2", n)
+	if n := len(w.ticketMessages(w.openTicket(821).ID)); n != 2 {
+		t.Fatalf("%d messages recorded, want 2", n)
 	}
+	owner.eventuallySees("New ticket <b>#")
+	w.drain()
+	if n := owner.count("New ticket"); n != 1 {
+		t.Fatalf("%d ticket alerts, want 1 (follow-ups are not alerted)", n)
+	}
+
+	// An album is one message; the limit holds for all of its parts.
+	lim.reset()
+	u.text("/menu")
+	u.press("support")
+	u.album("album-1", "shot-1", "shot-2", "shot-3")
+	u.text("and one more")
+	u.lastHas("Added to ticket")
+	u.album("album-2", "shot-4", "shot-5")
+	u.lastHas("today's limit of support messages")
+	if n := len(w.ticketMessages(w.openTicket(821).ID)); n != 6 {
+		t.Fatalf("%d messages recorded, want 6", n)
+	}
+	if n := u.count("today's limit"); n != 2 {
+		t.Fatalf("the limit was said %d times, want 2 (once per album)", n)
+	}
+
 	owner.text("/set limits.tickets_per_day 0") // no limit
-	ticket("help number 3")
-	u.lastHas("Your message was sent")
+	u.text("/menu")
+	u.press("support")
+	u.text("help number 3")
+	u.lastHas("Added to ticket")
 }
 
 func TestConfigurableRateLimit(t *testing.T) {
