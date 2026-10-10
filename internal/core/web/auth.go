@@ -269,6 +269,10 @@ func (s *Server) confirmPassword(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
+	if s.cfg.Secrets == nil {
+		writeError(w, http.StatusServiceUnavailable, "not_configured", "password logins are off on this install (no master key)")
+		return
+	}
 	st := staffFrom(r.Context())
 	ctx, conn := r.Context(), s.cfg.Store.Conn()
 	creds, err := s.cfg.Store.CredentialsFor(ctx, conn, st.user.ID)

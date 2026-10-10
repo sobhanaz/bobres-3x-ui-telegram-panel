@@ -174,11 +174,30 @@ func (s *Server) importTexts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid", "the file has no texts (or far too many)")
 		return
 	}
-	for k := range req.Texts {
-		if perm := domain.TextPerm(k); perm != "" && !Allowed(actor(r).Role, perm) {
+	// A file exported by an admin carries the owner's payment texts too:
+	// those may come back unchanged (they are left alone), not changed.
+	var current map[string]string
+	for k, v := range req.Texts {
+		perm := domain.TextPerm(k)
+		if perm == "" || Allowed(actor(r).Role, perm) {
+			continue
+		}
+		if current == nil {
+			var err error
+			if current, err = s.cfg.Domain.Settings(r.Context()); err != nil {
+				s.fail(w, "texts", err)
+				return
+			}
+		}
+		if i18n.NormalizeText(v) != current["texts."+req.Lang+"."+k] {
 			writeTextForbidden(w, k)
 			return
 		}
+		delete(req.Texts, k)
+	}
+	if len(req.Texts) == 0 {
+		writeJSON(w, http.StatusOK, map[string]int{"changed": 0})
+		return
 	}
 	n, err := s.cfg.Domain.ImportTexts(r.Context(), actor(r), req.Lang, req.Texts)
 	if err != nil {

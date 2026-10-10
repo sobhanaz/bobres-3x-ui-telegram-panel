@@ -129,9 +129,16 @@ export function textLength(s: string): number {
     .replace(/\r\n?/g, '\n')
     .trim()
     .replace(/<[^<>]*>/g, '')
-    .replace(/&#([0-9]{1,7});/g, (_, d: string) => codePoint(parseInt(d, 10)))
-    .replace(/&#x([0-9a-fA-F]{1,6});/g, (_, h: string) => codePoint(parseInt(h, 16)))
-    .replace(/&(?:lt|gt|amp|quot);/g, '&').length
+    .replace(ENTITY, entityChar).length
+}
+
+// One pass over every entity, as core and Telegram read them: "&#38;lt;"
+// is "&lt;" (four characters), not "<".
+const ENTITY = /&(?:#([0-9]{1,7})|#x([0-9a-fA-F]{1,6})|(lt|gt|amp|quot));/g
+function entityChar(_: string, dec?: string, hex?: string): string {
+  if (dec) return codePoint(parseInt(dec, 10))
+  if (hex) return codePoint(parseInt(hex, 16))
+  return '&'
 }
 
 // codePoint is the character an entity stands for (an emoji counts as two

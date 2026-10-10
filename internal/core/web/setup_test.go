@@ -848,6 +848,13 @@ func TestPaymentTextsAreTheOwners(t *testing.T) {
 	if code, out := adm.do(http.MethodPost, "/api/v1/texts/import", map[string]any{"lang": "en", "texts": map[string]string{"btn.buy": "Buy", "pay.zarinpal": "x {amount}"}}); code != 403 {
 		t.Fatalf("admin imported a payment text: %d %v", code, out)
 	}
+	// The owner's payment text may come back unchanged in an admin's file.
+	if err := f.dom.SetSetting(context.Background(), owner(t, f), "texts.en.pay.zarinpal", "Pay {amount} on Zarinpal."); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := adm.do(http.MethodPost, "/api/v1/texts/import", map[string]any{"lang": "en", "texts": map[string]string{"btn.buy": "Buy!", "pay.zarinpal": "Pay {amount} on Zarinpal."}}); code != 200 || out["changed"] != float64(1) {
+		t.Fatalf("admin re-imported their export: %d %v", code, out)
+	}
 	if code, _ := adm.do(http.MethodPut, "/api/v1/texts", map[string]string{"lang": "en", "key": "btn.buy", "value": "Buy now"}); code != 200 {
 		t.Fatalf("admin changed a button: %d", code)
 	}
@@ -866,4 +873,14 @@ func TestAuditLogRefusesTruncate(t *testing.T) {
 	if _, err := f.st.DB().Exec(context.Background(), `TRUNCATE core.audit_log`); err == nil || !strings.Contains(err.Error(), "append-only") {
 		t.Fatalf("audit log truncated: %v", err)
 	}
+}
+
+// owner is the configured owner's user.
+func owner(t *testing.T, f *fixture) *store.User {
+	t.Helper()
+	u, err := f.st.GetUserByTelegramID(context.Background(), f.st.Conn(), ownerTG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }

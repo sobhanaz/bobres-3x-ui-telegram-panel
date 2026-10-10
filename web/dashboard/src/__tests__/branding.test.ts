@@ -152,6 +152,7 @@ describe('text editing', () => {
     expect(textLength('سلام')).toBe(4)
     // A numeric entity is the character it stands for, as core counts it.
     expect(textLength('&#128512;&#x41;')).toBe(3)
+    expect(textLength('&#38;lt;')).toBe(4) // decoded once: "&lt;
   })
   it('inserts a placeholder at the cursor', () => {
     expect(insertAt('Hello !', 6, 6, '{name}')).toEqual({ value: 'Hello {name}!', cursor: 12 })

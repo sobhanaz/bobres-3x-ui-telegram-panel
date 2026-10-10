@@ -77,7 +77,13 @@ async function run() {
   } catch (e) {
     const probs = e instanceof ApiError && Array.isArray(e.data.problems) ? (e.data.problems as TextProblem[]) : []
     problems.value = probs.filter((p) => p && typeof p.code === 'string')
-    if (!problems.value.length) {
+    if (problems.value.length) {
+      // shown as a list
+    } else if (e instanceof ApiError && e.code === 'forbidden' && typeof e.data.field === 'string') {
+      // A payment text the owner keeps: say which one.
+      error.value = t('texts.owner_only')
+      detail.value = e.data.field
+    } else {
       const err = errorText(e, t)
       error.value = err.text
       detail.value = err.detail

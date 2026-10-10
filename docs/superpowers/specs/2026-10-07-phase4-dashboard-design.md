@@ -277,7 +277,9 @@ Changes that move money or add days take a request key, so a retried request hap
     export and import. An import is all or nothing.
   - **The payment screens' texts are the owner's** (`gateways.write`, also through `/set`): they tell
     customers where to send money, so an admin could otherwise put their own card number there. Admins
-    see them read-only.
+    see them read-only, and may re-import them unchanged in an exported file. Admins can still write
+    free text in the other texts (the welcome, a plan's description); every change is in the audit
+    log with who made it.
   - The Toman's name may not contain `<`, `>` or `&`: it goes into every price, inside HTML messages.
 - **The bot follows the settings** (`internal/bot/settings`, shared by the handler and the notifier):
   - Gates come after the rate limit and never before a Stars payment: maintenance mode, then the
