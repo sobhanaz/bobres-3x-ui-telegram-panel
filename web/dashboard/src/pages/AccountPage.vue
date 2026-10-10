@@ -52,6 +52,7 @@ function failText(e: unknown): string {
     }
     if (e.code === 'username_taken') return t('account.username_taken')
     if (e.code === 'code_wrong') return t('account.code_wrong')
+    if (e.code === 'locked') return t('login.locked')
     if (e.code === 'invalid') return e.message
   }
   return errorText(e, t).text
@@ -83,6 +84,9 @@ async function start() {
     setup.value = await api<{ qr: string; secret: string }>('POST', '/me/password', body)
     password.value = ''
     current.value = ''
+    // Core replaced the old login with the new one, off until its first code:
+    // show that, also if the page is left before confirming.
+    if (auth.me) auth.me.password = { enabled: false, reauth: false }
   } catch (e) {
     fail(e)
     current.value = ''

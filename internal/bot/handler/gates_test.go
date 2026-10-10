@@ -281,3 +281,44 @@ func TestHTTPSURL(t *testing.T) {
 		}
 	}
 }
+
+// A payment already under way can be finished whatever the gates say: a
+// TXID, a receipt and then its bank reference, a check of a gateway payment.
+func TestGatesLetPaymentsUnderWayFinish(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/set payments.usdt_trc20 " + trc20)
+	owner.text("/set payments.usdt_rate 60000")
+	start := func(id int64, name, method string) *person {
+		p := w.customer(id, name)
+		p.press("buy")
+		p.press("plan:")
+		p.press(method)
+		return p
+	}
+	crypto := start(821, "cara", "pay:x:")
+	card := start(822, "carl", "pay:c:")
+	gateway := start(823, "gina", "pay:z:")
+	late := start(824, "leo", "pay:x:")
+
+	owner.text("/set maintenance.enabled true")
+	owner.sees("Saved")
+	crypto.text(strings.Repeat("ab", 32))
+	crypto.lastHas("Received")
+	card.photo("receipt-gate", "") // no caption: the bank reference is asked
+	card.lastHas("bank tracking/reference number")
+	card.text("554433")
+	card.lastHas("Received")
+	gateway.press("chk:")
+	gateway.toast("Not confirmed yet")
+	gateway.press("home") // anything else waits
+	gateway.toast("under maintenance")
+
+	owner.text("/set maintenance.enabled false")
+	owner.text("/set join.channel @testchan")
+	owner.sees("Saved")
+	late.text(strings.Repeat("cd", 32))
+	late.lastHas("Received")
+	late.press("home")
+	late.lastHas("Join our channel")
+}

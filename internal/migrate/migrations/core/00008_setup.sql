@@ -23,6 +23,8 @@ END
 $$;
 CREATE TRIGGER audit_log_append_only BEFORE UPDATE OR DELETE ON audit_log
     FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
+CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON audit_log
+    FOR EACH STATEMENT EXECUTE FUNCTION audit_log_append_only();
 
 -- Store files (the logo). Not in settings: the bot reads every setting each minute.
 CREATE TABLE assets (
@@ -40,6 +42,7 @@ CREATE INDEX web_sessions_user_created_idx ON web_sessions (user_id, created_at 
 -- +goose StatementBegin
 DROP INDEX IF EXISTS web_sessions_user_created_idx;
 DROP TABLE IF EXISTS assets;
+DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log;
 DROP TRIGGER IF EXISTS audit_log_append_only ON audit_log;
 DROP FUNCTION IF EXISTS audit_log_append_only();
 DROP INDEX IF EXISTS audit_log_entity_idx;

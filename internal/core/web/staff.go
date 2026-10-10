@@ -194,7 +194,7 @@ func (s *Server) revokeStaffSessions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, err := s.cfg.Domain.RevokeStaffSessions(r.Context(), actor(r), id, reason)
+	n, err := s.cfg.Domain.RevokeStaffSessions(r.Context(), actor(r), id, reason, SessionIdle)
 	if err != nil {
 		s.fail(w, "revoke staff sessions", err)
 		return
@@ -299,7 +299,7 @@ func (s *Server) revokeMySession(w http.ResponseWriter, r *http.Request) {
 // revokeMyOtherSessions: POST /api/v1/me/sessions/revoke-others.
 func (s *Server) revokeMyOtherSessions(w http.ResponseWriter, r *http.Request) {
 	st := staffFrom(r.Context())
-	n, err := s.cfg.Store.RevokeOtherSessions(r.Context(), s.cfg.Store.Conn(), st.user.ID, st.idHash)
+	n, err := s.cfg.Store.RevokeOtherSessions(r.Context(), s.cfg.Store.Conn(), st.user.ID, st.idHash, SessionIdle)
 	if err != nil {
 		s.fail(w, "revoke sessions", err)
 		return

@@ -167,7 +167,7 @@ async function save() {
     })
     setInfo(res)
     toast.add({ severity: 'success', summary: t('branding.saved'), life: 3000 })
-    await auth.load() // header, colour and Toman name everywhere
+    await auth.refresh() // header, colour and Toman name everywhere
   } catch (e) {
     const field = e instanceof ApiError && typeof e.data.field === 'string' ? (brandingField(e.data.field) as Field) : null
     if (e instanceof ApiError && field && fields.includes(field)) {
@@ -191,7 +191,7 @@ function discard() {
 // colour preview that reloading replaced.
 async function logoChanged(b: BrandingInfo) {
   if (info.value) info.value = { ...info.value, logo: b.logo }
-  await auth.load()
+  await auth.refresh()
   if (colorOk.value) applyBrandColor(form.value.color.trim())
 }
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -318,8 +319,23 @@ func (h *Handler) allowTicket(r *req) bool {
 	if h.limiter == nil || perDay == 0 {
 		return true
 	}
-	ok, err := h.limiter.Allow(r.ctx, "bot:tk:"+strconv.FormatInt(r.from.ID, 10), 24*time.Hour, int(perDay))
+	ok, err := h.limiter.Allow(r.ctx, ticketKey(r), 24*time.Hour, int(perDay))
 	return err != nil || ok
+}
+
+func ticketKey(r *req) string { return "bot:tk:" + strconv.FormatInt(r.from.ID, 10) }
+
+// giveTicket returns a counted support message whose ticket was not made.
+func (h *Handler) giveTicket(r *req) {
+	g, ok := h.limiter.(interface {
+		Give(ctx context.Context, key string) error
+	})
+	if !ok {
+		return
+	}
+	if err := g.Give(r.ctx, ticketKey(r)); err != nil {
+		h.log.Warn("ticket limit give back", "err", err)
+	}
 }
 
 const maxTicketRunes = 2000
@@ -344,6 +360,7 @@ func (h *Handler) onTicket(r *req) {
 	t, err := h.core.CreateSupportTicket(r.ctx, &corev1.CreateSupportTicketRequest{UserId: r.user.GetId(), Category: "general", Text: text})
 	r.clearState()
 	if err != nil {
+		h.giveTicket(r) // no ticket was made: it does not count
 		r.fail(err)
 		return
 	}

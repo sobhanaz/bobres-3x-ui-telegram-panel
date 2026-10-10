@@ -141,6 +141,9 @@ func TestTextLengthAndStrip(t *testing.T) {
 	if n := TextLength("<b>ab</b> &amp; 😀"); n != 7 { // a b space & space + 2 units for the emoji
 		t.Fatalf("length %d", n)
 	}
+	if n := TextLength("&#128512;&#x41;"); n != 3 { // an emoji (2 units) and A
+		t.Fatalf("numeric entities: %d", n)
+	}
 	if got := StripHTML("<b>a &lt;b&gt;</b> &amp; &quot;q&quot;"); got != `a <b> & "q"` {
 		t.Fatalf("strip %q", got)
 	}

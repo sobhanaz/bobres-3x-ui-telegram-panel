@@ -50,6 +50,9 @@ type fakeTG struct {
 	members     map[int64]string
 	memberCalls int
 	memberErr   error
+
+	// down: chats whose messages fail (Telegram unreachable for them).
+	down map[int64]bool
 }
 
 type precheckAnswer struct {
@@ -126,7 +129,23 @@ func (f *fakeTG) add(chat int64, m *msg) *tg.Message {
 }
 
 func (f *fakeTG) SendMessage(_ context.Context, chat int64, text string, kb *tg.Keyboard) (*tg.Message, error) {
+	f.mu.Lock()
+	down := f.down[chat]
+	f.mu.Unlock()
+	if down {
+		return nil, &tg.APIError{Code: 502, Description: "Bad Gateway"}
+	}
 	return f.add(chat, &msg{text: text, kb: kb}), nil
+}
+
+// setDown makes messages to a chat fail (or work again).
+func (f *fakeTG) setDown(chat int64, down bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.down == nil {
+		f.down = map[int64]bool{}
+	}
+	f.down[chat] = down
 }
 
 func (f *fakeTG) SendPhoto(_ context.Context, chat int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error) {

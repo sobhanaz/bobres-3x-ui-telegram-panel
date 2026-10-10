@@ -129,7 +129,15 @@ export function textLength(s: string): number {
     .replace(/\r\n?/g, '\n')
     .trim()
     .replace(/<[^<>]*>/g, '')
-    .replace(/&(?:lt|gt|amp|quot|#[0-9]{1,7}|#x[0-9a-fA-F]{1,6});/g, '&').length
+    .replace(/&#([0-9]{1,7});/g, (_, d: string) => codePoint(parseInt(d, 10)))
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (_, h: string) => codePoint(parseInt(h, 16)))
+    .replace(/&(?:lt|gt|amp|quot);/g, '&').length
+}
+
+// codePoint is the character an entity stands for (an emoji counts as two
+// UTF-16 units, as Telegram and core count it).
+function codePoint(n: number): string {
+  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '\ufffd'
 }
 
 /** insertAt puts text in place of the selection [start, end) and says where

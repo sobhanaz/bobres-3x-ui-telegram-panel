@@ -146,7 +146,7 @@ func (s *Service) SetStaffRole(ctx context.Context, actor *store.User, id, role,
 		} else if err != nil {
 			return err
 		}
-		if _, err := s.st.RevokeUserSessions(ctx, tx, t.ID); err != nil {
+		if _, err := s.st.RevokeUserSessions(ctx, tx, t.ID, 0); err != nil {
 			return err
 		}
 		return s.auditChange(ctx, tx, actor, "staff.role", "staff", t.ID,
@@ -218,7 +218,7 @@ func (s *Service) endAccess(ctx context.Context, tx pgx.Tx, userID string) error
 	if err := s.st.ExpireLoginLinks(ctx, tx, userID); err != nil {
 		return err
 	}
-	_, err := s.st.RevokeUserSessions(ctx, tx, userID)
+	_, err := s.st.RevokeUserSessions(ctx, tx, userID, 0)
 	return err
 }
 
@@ -249,8 +249,9 @@ func (s *Service) StaffSessions(ctx context.Context, actor *store.User, id strin
 	return s.st.ListSessions(ctx, s.st.Conn(), t.ID, idle)
 }
 
-// RevokeStaffSessions logs a member out everywhere.
-func (s *Service) RevokeStaffSessions(ctx context.Context, actor *store.User, id, reason string) (int64, error) {
+// RevokeStaffSessions logs a member out everywhere and says how many live
+// sessions (used within idle) ended.
+func (s *Service) RevokeStaffSessions(ctx context.Context, actor *store.User, id, reason string, idle time.Duration) (int64, error) {
 	reason, err := needReasonText(reason)
 	if err != nil {
 		return 0, err
@@ -261,7 +262,7 @@ func (s *Service) RevokeStaffSessions(ctx context.Context, actor *store.User, id
 	}
 	var n int64
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
-		if n, err = s.st.RevokeUserSessions(ctx, tx, t.ID); err != nil {
+		if n, err = s.st.RevokeUserSessions(ctx, tx, t.ID, idle); err != nil {
 			return err
 		}
 		return s.auditChange(ctx, tx, actor, "staff.sessions.revoke", "staff", t.ID, nil, map[string]int64{"count": n}, reason)
@@ -308,7 +309,7 @@ func (s *Service) ResetStaffPassword(ctx context.Context, actor *store.User, id,
 		if err := s.st.DeleteCredentials(ctx, tx, t.ID); err != nil {
 			return err
 		}
-		if _, err := s.st.RevokeUserSessions(ctx, tx, t.ID); err != nil {
+		if _, err := s.st.RevokeUserSessions(ctx, tx, t.ID, 0); err != nil {
 			return err
 		}
 		return s.auditChange(ctx, tx, actor, "staff.password.reset", "staff", t.ID, nil, nil, reason)

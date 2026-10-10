@@ -23,9 +23,11 @@ type textJSON struct {
 	Langs        []string `json:"langs"`
 	Default      langPair `json:"default"`
 	Override     langPair `json:"override"`
+	// Editable is false for the payment screens when the viewer is not the owner.
+	Editable bool `json:"editable"`
 }
 
-func textOf(info i18n.TextInfo, settings map[string]string) textJSON {
+func textOf(info i18n.TextInfo, settings map[string]string, role string) textJSON {
 	cat := domain.Texts()
 	ph := info.Placeholders
 	if ph == nil {
@@ -35,7 +37,14 @@ func textOf(info i18n.TextInfo, settings map[string]string) textJSON {
 		Key: info.Key, Group: info.Group, Context: string(info.Context), Placeholders: ph, Max: info.Max, Langs: info.Langs,
 		Default:  langPair{cat.Default("fa", info.Key), cat.Default("en", info.Key)},
 		Override: langPair{settings["texts.fa."+info.Key], settings["texts.en."+info.Key]},
+		Editable: Allowed(role, domain.TextPerm(info.Key)),
 	}
+}
+
+// writeTextForbidden answers a change to a text only the owner may make.
+func writeTextForbidden(w http.ResponseWriter, key string) {
+	writeJSON(w, http.StatusForbidden, map[string]any{"error": "forbidden", "field": key,
+		"message": "only the store owner can change the payment texts"})
 }
 
 // listTexts: GET /api/v1/texts, every bot text with its default and override.
@@ -47,8 +56,9 @@ func (s *Server) listTexts(w http.ResponseWriter, r *http.Request) {
 	}
 	infos := domain.Texts().Infos()
 	items := make([]textJSON, 0, len(infos))
+	role := actor(r).Role
 	for _, info := range infos {
-		items = append(items, textOf(info, settings))
+		items = append(items, textOf(info, settings, role))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"languages": i18n.Languages, "items": items})
 }
@@ -106,6 +116,10 @@ func (s *Server) putText(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !Allowed(actor(r).Role, domain.TextPerm(req.Key)) {
+		writeTextForbidden(w, req.Key)
+		return
+	}
 	if _, err := s.cfg.Domain.SetSettings(r.Context(), actor(r), map[string]string{"texts." + req.Lang + "." + req.Key: req.Value}); err != nil {
 		s.fail(w, "save text", err)
 		return
@@ -116,7 +130,7 @@ func (s *Server) putText(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "texts", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"item": textOf(info, settings)})
+	writeJSON(w, http.StatusOK, map[string]any{"item": textOf(info, settings, actor(r).Role)})
 }
 
 // exportTexts: GET /api/v1/texts.json?lang=fa, a language's overrides as a
@@ -159,6 +173,12 @@ func (s *Server) importTexts(w http.ResponseWriter, r *http.Request) {
 	if len(req.Texts) == 0 || len(req.Texts) > maxImportTexts {
 		writeError(w, http.StatusBadRequest, "invalid", "the file has no texts (or far too many)")
 		return
+	}
+	for k := range req.Texts {
+		if perm := domain.TextPerm(k); perm != "" && !Allowed(actor(r).Role, perm) {
+			writeTextForbidden(w, k)
+			return
+		}
 	}
 	n, err := s.cfg.Domain.ImportTexts(r.Context(), actor(r), req.Lang, req.Texts)
 	if err != nil {

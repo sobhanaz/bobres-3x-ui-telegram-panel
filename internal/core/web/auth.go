@@ -138,8 +138,9 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID, me
 		s.internal(w, "new session", err)
 		return
 	}
+	now := s.now()
 	sess := &store.WebSession{IDHash: hash, UserID: user.ID, CSRFToken: csrf, Method: method,
-		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 256), ExpiresAt: s.now().Add(SessionTTL)}
+		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 256), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionTTL)}
 	if err := s.cfg.Store.CreateSession(ctx, s.cfg.Store.Conn(), sess); err != nil {
 		s.internal(w, "create session", err)
 		return
@@ -320,7 +321,7 @@ func (s *Server) removePassword(w http.ResponseWriter, r *http.Request) {
 
 // revokeOtherSessions ends every session of the staff member but this one.
 func (s *Server) revokeOtherSessions(ctx context.Context, st *staff) {
-	if _, err := s.cfg.Store.RevokeOtherSessions(ctx, s.cfg.Store.Conn(), st.user.ID, st.idHash); err != nil {
+	if _, err := s.cfg.Store.RevokeOtherSessions(ctx, s.cfg.Store.Conn(), st.user.ID, st.idHash, 0); err != nil {
 		s.cfg.Log.Warn("revoke sessions", "err", err)
 	}
 }
@@ -352,6 +353,12 @@ func (s *Server) reauth(w http.ResponseWriter, r *http.Request, code string) boo
 		return false
 	}
 	if !s.needsReauth(st, creds) {
+		return true
+	}
+	if s.cfg.Secrets == nil {
+		// Without the master key password logins are off and no code can be
+		// checked: the leftover login can only be removed (startPassword
+		// already refuses to set one).
 		return true
 	}
 	if creds.LockedUntil != nil && creds.LockedUntil.After(s.now()) {

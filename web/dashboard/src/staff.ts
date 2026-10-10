@@ -135,6 +135,9 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
     case 'discount':
       return { name: 'discounts' }
     case 'settings':
+      // Branding and the referral reward are settings edited on other pages.
+      if (id.startsWith('branding.')) return { name: 'branding' }
+      if (id.startsWith('referral.')) return { name: 'discounts' }
       return { name: 'settings' }
     case 'text':
       return { name: 'branding', query: { tab: 'texts' } }

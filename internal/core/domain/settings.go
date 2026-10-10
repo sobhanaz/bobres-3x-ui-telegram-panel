@@ -138,12 +138,24 @@ func SettingPerm(key string) string {
 	if sp, ok := SpecOf(key); ok {
 		return sp.Perm
 	}
-	if lang, k, ok := i18n.SplitTextKey(key); ok {
-		if _, known := Texts().Info(k); known && slices.Contains(i18n.Languages, lang) {
-			return permBranding
-		}
+	if lang, k, ok := i18n.SplitTextKey(key); ok && slices.Contains(i18n.Languages, lang) {
+		return TextPerm(k)
 	}
 	return ""
+}
+
+// TextPerm is the permission needed to change a bot text: the payment
+// screens (where customers are told where to send money) are the owner's,
+// like the payment details themselves; "" for an unknown text.
+func TextPerm(key string) string {
+	info, ok := Texts().Info(key)
+	switch {
+	case !ok:
+		return ""
+	case info.Group == "pay":
+		return permGateways
+	}
+	return permBranding
 }
 
 // Texts is the bot's text catalog, which core uses to check overrides.
@@ -239,6 +251,11 @@ func NormalizeSetting(key, value string) (string, error) {
 		}
 		value = strings.Join(strings.Fields(value), " ")
 		switch key {
+		case "branding.currency.fa", "branding.currency.en":
+			// It goes into every price, also inside HTML messages and buttons.
+			if strings.ContainsAny(value, "<>&") {
+				return bad("may not contain <, > or &")
+			}
 		case "payments.card_number":
 			value = latinDigits(value)
 			if !cardRe.MatchString(strings.NewReplacer(" ", "", "-", "").Replace(strings.ToUpper(value))) {

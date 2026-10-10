@@ -230,6 +230,8 @@ export interface TextItem {
   langs: string[]
   default: LangPair
   override: LangPair
+  /** false: a payment text, which only the store owner may change */
+  editable?: boolean
 }
 
 export interface TextCheck {

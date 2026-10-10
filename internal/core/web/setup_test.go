@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"image"
@@ -698,5 +699,171 @@ func TestSettingPermsExist(t *testing.T) {
 	}
 	if Allowed("owner", "made.up") {
 		t.Error("owner allowed a permission that does not exist")
+	}
+}
+
+// confirmPassword gives the logged-in member a working password login and
+// returns its authenticator secret (the confirm code is used up).
+func confirmPassword(t *testing.T, b *browser, username string) string {
+	t.Helper()
+	// Codes made now must stay in the server's window: skip the end of a step.
+	if sec := time.Now().Unix() % 30; sec >= 25 {
+		time.Sleep(time.Duration(31-sec) * time.Second)
+	}
+	_, pw := b.do(http.MethodPost, "/api/v1/me/password", map[string]string{"username": username, "password": "a long password"})
+	secret, _ := pw["secret"].(string)
+	c0, _ := webauth.TOTPCode(secret, webauth.TOTPStep(time.Now())-1)
+	if code, out := b.do(http.MethodPost, "/api/v1/me/password/confirm", map[string]string{"code": c0}); code != 200 {
+		t.Fatalf("confirm: %d %v", code, out)
+	}
+	return secret
+}
+
+// A fresh login link is fresh proof of the Telegram account: no code is
+// asked for ten minutes, then it is.
+func TestReauthWindow(t *testing.T) {
+	f, b, _ := setupFixture(t)
+	confirmPassword(t, b, "boss")
+	fresh := f.browser()
+	token, _, _ := f.dom.CreateLoginLink(context.Background(), ownerTG)
+	code, me := fresh.do(http.MethodPost, "/api/v1/auth/link", map[string]string{"token": token})
+	if pw, _ := me["password"].(map[string]any); code != 200 || pw["enabled"] != true || pw["reauth"] != false {
+		t.Fatalf("fresh link login: %d %v", code, me)
+	}
+	f.api.now = func() time.Time { return time.Now().Add(11 * time.Minute) }
+	defer func() { f.api.now = time.Now }()
+	if _, me := fresh.do(http.MethodGet, "/api/v1/me", nil); me["password"].(map[string]any)["reauth"] != true {
+		t.Fatalf("after 11 minutes: %v", me["password"])
+	}
+	if code, out := fresh.do(http.MethodDelete, "/api/v1/me/password", nil); code != 403 || out["error"] != "code_required" {
+		t.Fatalf("removed without a code after the window: %d %v", code, out)
+	}
+}
+
+// Wrong codes on My account count towards the lock, the only limit on
+// guessing them from a stolen session.
+func TestReauthLocksAfterWrongCodes(t *testing.T) {
+	f, b, _ := setupFixture(t)
+	secret := confirmPassword(t, b, "boss")
+	pass := f.browser()
+	c1, _ := webauth.TOTPCode(secret, webauth.TOTPStep(time.Now()))
+	if code, _ := pass.do(http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "boss", "password": "a long password", "code": c1}); code != 200 {
+		t.Fatalf("password login: %d", code)
+	}
+	for i := 0; i < 5; i++ {
+		if code, out := pass.do(http.MethodDelete, "/api/v1/me/password", map[string]string{"code": "000000"}); code != 400 {
+			t.Fatalf("wrong code %d: %d %v", i+1, code, out)
+		}
+	}
+	c2, _ := webauth.TOTPCode(secret, webauth.TOTPStep(time.Now())+1)
+	if code, out := pass.do(http.MethodDelete, "/api/v1/me/password", map[string]string{"code": c2}); code != http.StatusLocked {
+		t.Fatalf("a right code after five wrong ones: %d %v", code, out)
+	}
+}
+
+// Co-owners never give, take or remove the owner role: that is the
+// configured owner's decision.
+func TestCoOwnerLimits(t *testing.T) {
+	f, _, _ := setupFixture(t)
+	a, bOwner := f.staffUser(8711, "owner"), f.staffUser(8712, "owner")
+	_ = a
+	co := f.browser()
+	co.loginWithLink(8711)
+	cust := f.customer(8713, "cust")
+	cases := []struct {
+		method, path string
+		body         map[string]string
+	}{
+		{http.MethodPut, "/api/v1/staff/" + bOwner.ID + "/role", map[string]string{"role": "admin", "reason": "x"}},
+		{http.MethodPost, "/api/v1/staff/" + bOwner.ID + "/remove", map[string]string{"reason": "x"}},
+		{http.MethodPost, "/api/v1/staff", map[string]string{"user_id": cust.ID, "role": "owner", "reason": "x"}},
+	}
+	for _, c := range cases {
+		if code, out := co.do(c.method, c.path, c.body); code != 409 {
+			t.Errorf("co-owner %s %s: %d %v", c.method, c.path, code, out)
+		}
+	}
+	if u, _ := f.st.GetUser(context.Background(), f.st.Conn(), bOwner.ID); u.Role != "owner" {
+		t.Fatalf("co-owner's role changed: %s", u.Role)
+	}
+}
+
+// A password reset logs the member out everywhere (the password may have leaked).
+func TestPasswordResetLogsOut(t *testing.T) {
+	f, b, _ := setupFixture(t)
+	m := f.staffUser(8721, "support")
+	mb := f.browser()
+	mb.loginWithLink(8721)
+	confirmPassword(t, mb, "helper")
+	if code, _ := b.do(http.MethodPost, "/api/v1/staff/"+m.ID+"/password/reset", map[string]string{"reason": "leaked"}); code != 204 {
+		t.Fatalf("reset: %d", code)
+	}
+	if code, _ := mb.do(http.MethodGet, "/api/v1/me", nil); code != 401 {
+		t.Fatalf("session kept after a password reset: %d", code)
+	}
+}
+
+// webpOf is a minimal lossless WebP header of the given size (enough to be
+// recognised and measured; core never decodes it). Sizes are 1..16384.
+func webpOf(w, h uint32) []byte {
+	bits := (w - 1) | (h-1)<<14
+	chunk := []byte{0x2f, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	binary.LittleEndian.PutUint32(chunk[1:5], bits)
+	b := []byte("RIFF")
+	b = binary.LittleEndian.AppendUint32(b, 4+8+10)
+	b = append(b, "WEBPVP8L"...)
+	b = binary.LittleEndian.AppendUint32(b, 10)
+	return append(b, chunk...)
+}
+
+func TestLogoSizes(t *testing.T) {
+	_, b, _ := setupFixture(t)
+	for _, img := range [][]byte{pngOf(4096, 16), pngOf(16, 4096), webpOf(3000, 100)} {
+		if code, out := b.raw(http.MethodPut, "/api/v1/branding/logo", "image/png", img); code != 400 {
+			t.Errorf("oversized logo: %d %v", code, out)
+		}
+	}
+	code, out := b.raw(http.MethodPut, "/api/v1/branding/logo", "image/webp", webpOf(200, 100))
+	if logo, _ := out["logo"].(map[string]any); code != 200 || logo["type"] != "image/webp" {
+		t.Fatalf("webp logo: %d %v", code, out)
+	}
+}
+
+// Admins edit bot texts but not the payment screens, here or with /set.
+func TestPaymentTextsAreTheOwners(t *testing.T) {
+	f, _, _ := setupFixture(t)
+	f.staffUser(8731, "admin")
+	adm := f.browser()
+	adm.loginWithLink(8731)
+	_, out := adm.do(http.MethodGet, "/api/v1/texts", nil)
+	for _, it := range items(out) {
+		want := !strings.HasPrefix(it["key"].(string), "pay.") && it["group"] != "pay"
+		if it["editable"] != want {
+			t.Fatalf("%s editable=%v for an admin", it["key"], it["editable"])
+		}
+	}
+	if code, out := adm.do(http.MethodPut, "/api/v1/texts", map[string]string{"lang": "en", "key": "pay.card", "value": "Send {amount} to 6037 9911 0000 0000, not {card} {holder} {ref}"}); code != 403 {
+		t.Fatalf("admin changed a payment text: %d %v", code, out)
+	}
+	if code, out := adm.do(http.MethodPost, "/api/v1/texts/import", map[string]any{"lang": "en", "texts": map[string]string{"btn.buy": "Buy", "pay.zarinpal": "x {amount}"}}); code != 403 {
+		t.Fatalf("admin imported a payment text: %d %v", code, out)
+	}
+	if code, _ := adm.do(http.MethodPut, "/api/v1/texts", map[string]string{"lang": "en", "key": "btn.buy", "value": "Buy now"}); code != 200 {
+		t.Fatalf("admin changed a button: %d", code)
+	}
+	err := f.dom.AdminSetSetting(context.Background(), 8731, "texts.en.pay.card", "x {amount} {card} {holder} {ref}")
+	if !errors.Is(err, domain.ErrInvalid) || !strings.Contains(err.Error(), "only the store owner") {
+		t.Fatalf("admin /set a payment text: %v", err)
+	}
+	// The Toman's name goes into every price: no markup.
+	if _, err := domain.NormalizeSetting("branding.currency.en", "<i>Toman"); err == nil {
+		t.Fatal("a currency name with markup was accepted")
+	}
+}
+
+func TestAuditLogRefusesTruncate(t *testing.T) {
+	f, _, _ := setupFixture(t)
+	if _, err := f.st.DB().Exec(context.Background(), `TRUNCATE core.audit_log`); err == nil || !strings.Contains(err.Error(), "append-only") {
+		t.Fatalf("audit log truncated: %v", err)
 	}
 }

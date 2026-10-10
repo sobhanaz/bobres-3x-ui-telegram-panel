@@ -275,6 +275,10 @@ Changes that move money or add days take a request key, so a retried request hap
     message. Before, one broken text could make the menu, or the notification queue, stop.
   - The page has a live check while typing, a safe preview (never `v-html`), reset, and per-language
     export and import. An import is all or nothing.
+  - **The payment screens' texts are the owner's** (`gateways.write`, also through `/set`): they tell
+    customers where to send money, so an admin could otherwise put their own card number there. Admins
+    see them read-only.
+  - The Toman's name may not contain `<`, `>` or `&`: it goes into every price, inside HTML messages.
 - **The bot follows the settings** (`internal/bot/settings`, shared by the handler and the notifier):
   - Gates come after the rate limit and never before a Stars payment: maintenance mode, then the
     required channel. Both let staff (support too), the configured owner, `/paysupport`, payment
@@ -324,7 +328,8 @@ Changes that move money or add days take a request key, so a retried request hap
   - Changes to settings, plans, discounts and bans keep the value before.
   - An entry's item can now be any text (a discount code, a setting key, `fa.welcome`), not only a
     uuid.
-  - **The table is append-only:** a database trigger refuses UPDATE and DELETE.
+  - **The table is append-only:** database triggers refuse UPDATE, DELETE and TRUNCATE. Tests clear it
+    through `testdb.Truncate`, which switches the TRUNCATE trigger off inside its own transaction.
 - **Locks.** Failed logins from before a lock that has ended no longer count, so the next mistake
   does not lock the account again at once. The owner can lift a lock from the Staff page.
 
@@ -375,6 +380,40 @@ one-way hash of the cookie, so it gives nothing away.
     (gone from the panel)
   - plans edited, balances changed with Persian digits, Persian and English, dark and light, phone
     width, the support role's view, and no CSP violations
+- **Milestone 3 (Go).**
+  - Core, over TLS against a real database:
+    - settings: normalising, all or nothing, field errors, the private-channel rule, payment details
+      refused to admins, support refused
+    - branding and the logo: SVG, tiny and oversized images refused; the public brand and the
+      served image with its sandbox CSP
+    - bot texts: live check, refused broken texts, export, an all-or-nothing import
+    - staff rules: self, configured owner, co-owners, the owner role, banned customers, sessions
+      ending on role changes and removal, reset, unlock
+    - two owners demoting each other (stale actor), my sessions, the password re-check, failed-login,
+      link and export audit entries, the append-only trigger, the owner bootstrap
+  - The text checker: every built-in text passes its own checks, and a table of broken overrides
+    (unclosed and crossed tags, script, links to http or javascript, raw `<` and `&`, markup in
+    buttons, Telegram lengths, `<code>{addresses}</code>`) is refused; the bot drops them on load.
+  - The bot (with a fake Telegram):
+    - maintenance and the required channel with every exemption, the member cache, failing open
+    - limits, alert switches and staff recipients, `/terms`, `/dashboard` for support, `/set`
+      showing core's reason
+    - the refresh and channel-check endpoints, and the plain-text fallback
+- **Milestone 3 (dashboard, vitest).** Branding helpers (contrast, the preview tokenizer, lengths), the
+  settings checks, the staff action rules and device names. The pages boot against a fake core:
+  - texts up to the live check
+  - the store form with a field error and the colour restored on leaving
+  - the settings cards and the maintenance confirm
+- **By hand (milestone 3),** a local core with a stand-in for the bot's internal endpoints, in the
+  browser:
+  - maintenance turned on after the confirm, the bot told at once, the audit entry with before/after
+    and IP; the channel check through the bot
+  - store name, colour and logo saved and applied to the sidebar, the tab title and the login page;
+    a broken welcome text refused live, a good one saved
+  - a customer added as support, a role changed, the audit log's details
+  - My account's sessions, Persian and English, dark and light, phone width with no sideways
+    scrolling
+  - the embedded build under the real CSP with no violations (logo, `data:` preview, colour)
 - **By hand, in a browser,** against a locally built core:
   - link login; password + code setup, login, and turning it off
   - Persian and English, dark and light, the phone drawer

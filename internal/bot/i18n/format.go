@@ -116,7 +116,8 @@ var irtNames atomic.Pointer[map[string]string]
 func SetCurrencyNames(names map[string]string) {
 	m := map[string]string{}
 	for lang, n := range names {
-		if n = strings.TrimSpace(n); n != "" {
+		// Prices go into HTML messages unescaped: a name with markup is skipped.
+		if n = strings.TrimSpace(n); n != "" && !strings.ContainsAny(n, "<>&") {
 			m[Normalize(lang)] = n
 		}
 	}

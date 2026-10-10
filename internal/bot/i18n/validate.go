@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"html"
 	"regexp"
 	"slices"
 	"strconv"
@@ -236,12 +237,10 @@ func checkAttrs(tag, attrs string) *Problem {
 
 var stripTagsRe = regexp.MustCompile(`<[^<>]*>`)
 
-// TextLength counts a text the way Telegram limits it: UTF-16 units, without
-// tags, with entities as one character.
+// TextLength counts a text the way Telegram limits it: UTF-16 units of the
+// text without tags, with each entity as the character it stands for.
 func TextLength(s string) int {
-	s = stripTagsRe.ReplaceAllString(s, "")
-	s = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&amp;", "&", "&quot;", `"`).Replace(s)
-	return len(utf16.Encode([]rune(s)))
+	return len(utf16.Encode([]rune(html.UnescapeString(stripTagsRe.ReplaceAllString(s, "")))))
 }
 
 // StripHTML turns an HTML message into the plain text Telegram would show:

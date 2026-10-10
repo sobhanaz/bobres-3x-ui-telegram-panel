@@ -59,6 +59,17 @@ export const useAuth = defineStore('auth', () => {
     }
   }
 
+  /** refresh re-reads /me after a change (new brand, password state). A
+   * failed read keeps what is shown: an ended session is handled by the 401
+   * hook, a network blip must not log the page out. */
+  async function refresh() {
+    try {
+      set(await api<Me>('GET', '/me'))
+    } catch {
+      /* keep the current state */
+    }
+  }
+
   async function loginWithLink(token: string) {
     set(await api<Me>('POST', '/auth/link', { token }))
   }
@@ -78,5 +89,5 @@ export const useAuth = defineStore('auth', () => {
   const can = (perm: string) => me.value?.permissions.includes(perm) ?? false
   const brand = computed(() => me.value?.brand ?? 'BOBRES')
 
-  return { me, loaded, publicBrand, load, set, loadPublicBrand, loginWithLink, loginWithPassword, logout, can, brand }
+  return { me, loaded, publicBrand, load, refresh, set, loadPublicBrand, loginWithLink, loginWithPassword, logout, can, brand }
 })

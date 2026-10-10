@@ -642,7 +642,8 @@
       "lang_unused": "This text is not used in this language.",
       "unknown_key": "This text no longer exists.",
       "other": "Not accepted ({code}): {arg}"
-    }
+    },
+    "owner_only": "Only the store owner can change the payment texts (where customers are told to send money)."
   },
   "settings": {
     "intro": "Each card saves on its own. Changes reach the bot within a few seconds.",

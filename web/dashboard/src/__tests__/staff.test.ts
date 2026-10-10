@@ -100,6 +100,10 @@ describe('audit links', () => {
   it('opens item pages by id', () => {
     expect(auditLink(entry('user', uuid))).toEqual({ name: 'user', params: { id: uuid } })
     expect(auditLink(entry('staff', uuid))).toEqual({ name: 'user', params: { id: uuid } })
+    // Branding and the referral reward are settings shown on other pages.
+    expect(auditLink(entry('settings', 'branding.color'))).toEqual({ name: 'branding' })
+    expect(auditLink(entry('settings', 'referral.reward_percent'))).toEqual({ name: 'discounts' })
+    expect(auditLink(entry('settings', 'maintenance.enabled'))).toEqual({ name: 'settings' })
     expect(auditLink(entry('subscription', uuid))).toEqual({ name: 'service', params: { id: uuid } })
     expect(auditLink(entry('order', uuid))).toEqual({ name: 'order', params: { id: uuid } })
     expect(auditLink(entry('user', ''))).toBeNull()

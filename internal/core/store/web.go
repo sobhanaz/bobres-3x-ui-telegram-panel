@@ -70,24 +70,31 @@ func (s *Store) RevokeSession(ctx context.Context, q querier, idHash []byte) err
 }
 
 // RevokeUserSessions ends every session of a user (role change, password
-// reset) and says how many were live.
-func (s *Store) RevokeUserSessions(ctx context.Context, q querier, userID string) (int64, error) {
-	tag, err := q.Exec(ctx, `UPDATE core.web_sessions SET revoked_at = now()
-		WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()`, userID)
-	if err != nil {
-		return 0, fmt.Errorf("revoke user sessions: %w", err)
-	}
-	return tag.RowsAffected(), nil
+// reset). It says how many were live: used within idle (0: any unexpired),
+// the way the session lists count them.
+func (s *Store) RevokeUserSessions(ctx context.Context, q querier, userID string, idle time.Duration) (int64, error) {
+	return s.revokeSessions(ctx, q, userID, nil, idle)
 }
 
-// RevokeOtherSessions ends every session of a user except the one kept.
-func (s *Store) RevokeOtherSessions(ctx context.Context, q querier, userID string, keep []byte) (int64, error) {
-	tag, err := q.Exec(ctx, `UPDATE core.web_sessions SET revoked_at = now()
-		WHERE user_id = $1 AND id_hash <> $2 AND revoked_at IS NULL AND expires_at > now()`, userID, keep)
+// RevokeOtherSessions ends every session of a user except the one kept, and
+// says how many others were live (see RevokeUserSessions).
+func (s *Store) RevokeOtherSessions(ctx context.Context, q querier, userID string, keep []byte, idle time.Duration) (int64, error) {
+	return s.revokeSessions(ctx, q, userID, keep, idle)
+}
+
+func (s *Store) revokeSessions(ctx context.Context, q querier, userID string, keep []byte, idle time.Duration) (int64, error) {
+	var n int64
+	err := q.QueryRow(ctx, `
+		WITH r AS (
+			UPDATE core.web_sessions SET revoked_at = now()
+			WHERE user_id = $1 AND ($2::bytea IS NULL OR id_hash <> $2) AND revoked_at IS NULL AND expires_at > now()
+			RETURNING last_seen_at)
+		SELECT count(*) FILTER (WHERE $3::interval = interval '0' OR last_seen_at > now() - $3::interval) FROM r`,
+		userID, keep, idle.String()).Scan(&n)
 	if err != nil {
-		return 0, fmt.Errorf("revoke other sessions: %w", err)
+		return 0, fmt.Errorf("revoke sessions: %w", err)
 	}
-	return tag.RowsAffected(), nil
+	return n, nil
 }
 
 // CreateLoginLink stores a one-time login token (its hash) for a user.

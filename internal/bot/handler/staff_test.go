@@ -297,3 +297,35 @@ func TestRefreshEndpointAppliesSettings(t *testing.T) {
 		t.Fatalf("currency name after clearing: %q", got)
 	}
 }
+
+// A paid order's confirmation goes to the customer first: when it fails the
+// event is retried without announcing the sale again, and a failed sale
+// alert does not hold the customer's message back.
+func TestSaleAlertAfterTheCustomer(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/set notify.sales true")
+	owner.sees("Saved")
+	u := w.customer(851, "paid")
+	n := notify.New(w.stack.Core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+	paid := func() error {
+		payload, _ := json.Marshal(events.OrderPaidEvent{OrderID: "order-9", TelegramID: 851, PlanID: "plan-x",
+			Amount: 150_000, Currency: "IRT", Source: events.PaidManually})
+		return n.Handle(context.Background(), eventbus.Message{Topic: events.OrderPaid, Payload: payload})
+	}
+
+	w.tg.setDown(851, true)
+	if err := paid(); err == nil {
+		t.Fatal("a failed confirmation was not retried")
+	}
+	if owner.count("New sale") != 0 {
+		t.Fatal("the sale was announced before the customer was told")
+	}
+	w.tg.setDown(851, false)
+	w.tg.setDown(ownerID, true)
+	if err := paid(); err != nil {
+		t.Fatalf("a failed sale alert held the event: %v", err)
+	}
+	u.lastHas("Payment confirmed")
+	w.tg.setDown(ownerID, false)
+}

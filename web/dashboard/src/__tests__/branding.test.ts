@@ -150,6 +150,8 @@ describe('text editing', () => {
     expect(textLength('👋 hi')).toBe(5) // the emoji is two UTF-16 units
     expect(textLength('  salam\r\n ')).toBe(5)
     expect(textLength('سلام')).toBe(4)
+    // A numeric entity is the character it stands for, as core counts it.
+    expect(textLength('&#128512;&#x41;')).toBe(3)
   })
   it('inserts a placeholder at the cursor', () => {
     expect(insertAt('Hello !', 6, 6, '{name}')).toEqual({ value: 'Hello {name}!', cursor: 12 })

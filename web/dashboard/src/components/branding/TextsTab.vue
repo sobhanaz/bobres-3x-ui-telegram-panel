@@ -161,6 +161,7 @@ function saved(it: TextItem) {
     </Column>
     <Column :header="t('common.status')">
       <template #body="{ data: it }">
+        <i v-if="it.editable === false" v-tooltip="t('texts.owner_only')" class="pi pi-lock app-muted lock" :aria-label="t('texts.owner_only')" />
         <Tag v-if="isChanged(it)" :value="t('texts.changed')" severity="info" />
         <Tag v-else :value="t('texts.default')" severity="secondary" />
         <div v-if="isChanged(it)" class="app-muted small langs">{{ changedLangs(it).map((l) => t('texts.' + l)).join(lang === 'fa' ? '، ' : ', ') }}</div>

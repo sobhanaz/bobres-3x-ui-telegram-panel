@@ -149,3 +149,34 @@ func RedisAddr() string {
 	}
 	return "127.0.0.1:6379"
 }
+
+// Beginner starts a transaction (*pgxpool.Pool and *pgx.Conn both do).
+type Beginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// Truncate empties tables (a comma-separated list) with CASCADE. The audit
+// log refuses TRUNCATE (a trigger keeps it append-only), so when the list
+// names it that trigger is switched off inside the same transaction.
+func Truncate(ctx context.Context, db Beginner, tables string) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	audit := strings.Contains(tables, "core.audit_log")
+	if audit {
+		if _, err := tx.Exec(ctx, `ALTER TABLE core.audit_log DISABLE TRIGGER audit_log_no_truncate`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, "TRUNCATE "+tables+" CASCADE"); err != nil {
+		return err
+	}
+	if audit {
+		if _, err := tx.Exec(ctx, `ALTER TABLE core.audit_log ENABLE TRIGGER audit_log_no_truncate`); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}

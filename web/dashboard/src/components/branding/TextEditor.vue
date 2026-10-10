@@ -116,9 +116,11 @@ const dirty = (l: Lang) => {
 }
 const anyDirty = computed(() => entries.value.some((e) => dirty(e.l)))
 const blocked = (d: Draft) => !!d.check && !d.check.ok && !d.checking
+// Payment texts are the store owner's (like the payment details).
+const editable = computed(() => current.value?.editable !== false)
 const canSave = (l: Lang) => {
   const d = drafts[l]
-  return !!d && dirty(l) && d.value.trim() !== '' && !d.saving && !blocked(d)
+  return editable.value && !!d && dirty(l) && d.value.trim() !== '' && !d.saving && !blocked(d)
 }
 const shownProblems = (d: Draft) => (d.problems.length ? d.problems : !d.checking && d.check ? d.check.problems : [])
 
@@ -235,6 +237,7 @@ const previewKind = computed(() => (context.value.startsWith('button') ? 'button
       <p class="app-muted hint">
         {{ html ? t('texts.html_hint', markup) : t('texts.plain_hint', markup) }}
       </p>
+      <Message v-if="!editable" severity="info" :closable="false" icon="pi pi-lock">{{ t('texts.owner_only') }}</Message>
 
       <div class="langs">
         <section v-for="e in entries" :key="e.l" class="lang" :aria-labelledby="areaId(e.l) + '-label'">
@@ -255,11 +258,12 @@ const previewKind = computed(() => (context.value.startsWith('button') ? 'button
             rows="5"
             auto-resize
             fluid
+            :readonly="!editable"
             :invalid="shownProblems(e.d).length > 0"
             @update:model-value="(v: string | undefined) => edit(e.l, v)"
           />
 
-          <div v-if="current.placeholders.length" class="chips">
+          <div v-if="editable && current.placeholders.length" class="chips">
             <span class="app-muted small">{{ t('texts.placeholders') }}</span>
             <Button
               v-for="p in current.placeholders"
@@ -294,6 +298,7 @@ const previewKind = computed(() => (context.value.startsWith('button') ? 'button
             <div class="default-head">
               <span class="app-muted small">{{ t('texts.default_text') }}</span>
               <Button
+                v-if="editable"
                 :label="t('texts.use_default')"
                 text
                 size="small"
@@ -304,7 +309,7 @@ const previewKind = computed(() => (context.value.startsWith('button') ? 'button
             <div class="default app-muted" :dir="e.l === 'fa' ? 'rtl' : 'ltr'" :lang="e.l">{{ current.default[e.l] }}</div>
           </div>
 
-          <div class="actions">
+          <div v-if="editable" class="actions">
             <Button
               v-if="current.override[e.l]"
               :label="t('texts.reset')"

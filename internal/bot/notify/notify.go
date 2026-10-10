@@ -66,16 +66,21 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
-		if e.Source != events.PaidTrial && e.Source != events.PaidFree && n.set.Bool("notify.sales", false) {
-			if err := n.saleAlert(ctx, e); err != nil {
+		// The customer's confirmation first: a failed one retries the event,
+		// and the staff's sale alert must not be sent again each time.
+		if e.Source == events.PaidManually || e.Source == events.PaidByGateway {
+			lang := n.lang(ctx, e.TelegramID)
+			if err := n.send(ctx, e.TelegramID, n.cat.T(lang, "pay.approved"), n.home(lang)); err != nil {
 				return err
 			}
+		} // wallet, trial and free orders were confirmed in the chat already
+		if e.Source != events.PaidTrial && e.Source != events.PaidFree && n.set.Bool("notify.sales", false) {
+			// Best effort: a lost sale alert is not worth holding the queue for.
+			if err := n.saleAlert(ctx, e); err != nil {
+				n.log.Warn("sale alert not sent", "order", e.OrderID, "err", err)
+			}
 		}
-		if e.Source != events.PaidManually && e.Source != events.PaidByGateway {
-			return nil // wallet, trial and free orders were confirmed in the chat already
-		}
-		lang := n.lang(ctx, e.TelegramID)
-		return n.send(ctx, e.TelegramID, n.cat.T(lang, "pay.approved"), n.home(lang))
+		return nil
 
 	case events.SubscriptionProvisioned:
 		var e events.SubscriptionProvisionedEvent
