@@ -38,7 +38,7 @@ func TestBroadcastReachesItsAudience(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.SendBroadcast(ctx, owner, b.ID, nil); err != nil {
+		if _, err := d.SendBroadcast(ctx, owner, b.ID, nil, b.Version); err != nil {
 			t.Fatal(err)
 		}
 		cw := d.NewBroadcastWorker(nil)

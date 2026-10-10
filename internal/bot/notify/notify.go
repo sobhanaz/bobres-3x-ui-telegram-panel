@@ -10,6 +10,7 @@ import (
 	"html"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -36,6 +37,57 @@ type Notifier struct {
 	set     *settings.Store
 	adminTG int64
 	log     *slog.Logger
+	sent    unreported
+}
+
+// unreported remembers staff replies that reached the customer while core
+// did not hear of it (message id -> Telegram message id). The same event
+// coming back (its ack was lost too) is then reported, never sent again.
+// It lives in the process; the oldest are forgotten past maxUnreported.
+type unreported struct {
+	mu    sync.Mutex
+	tg    map[string]int64
+	order []string
+}
+
+const maxUnreported = 1000
+
+func (u *unreported) put(id string, tgID int64) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.tg == nil {
+		u.tg = map[string]int64{}
+	}
+	if _, ok := u.tg[id]; !ok {
+		u.order = append(u.order, id)
+	}
+	u.tg[id] = tgID
+	for len(u.order) > maxUnreported {
+		delete(u.tg, u.order[0])
+		u.order = u.order[1:]
+	}
+}
+
+func (u *unreported) get(id string) (int64, bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	v, ok := u.tg[id]
+	return v, ok
+}
+
+func (u *unreported) drop(id string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if _, ok := u.tg[id]; !ok {
+		return
+	}
+	delete(u.tg, id)
+	for i, v := range u.order {
+		if v == id {
+			u.order = append(u.order[:i], u.order[i+1:]...)
+			break
+		}
+	}
 }
 
 // New builds a Notifier. set holds the settings the handler keeps up to date
@@ -330,7 +382,18 @@ func (n *Notifier) deliverReply(ctx context.Context, e events.TicketRepliedEvent
 		return err
 	}
 	if v.GetDelivery() != "pending" {
+		n.sent.drop(e.MessageID)
 		return nil // sent (or given up) before
+	}
+	if tgID, ok := n.sent.get(e.MessageID); ok {
+		// Sent already; only the report was lost.
+		if _, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "sent",
+			TgMessageId: tgID}); err != nil {
+			n.log.Warn("ticket reply delivered but not reported", "message", e.MessageID, "err", err)
+			return nil
+		}
+		n.sent.drop(e.MessageID)
+		return nil
 	}
 	lang := i18n.Normalize(v.GetLanguage())
 	body := html.EscapeString(v.GetBody())
@@ -354,13 +417,22 @@ func (n *Notifier) deliverReply(ctx context.Context, e events.TicketRepliedEvent
 		_, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "blocked"})
 		return err
 	}
+	if tg.IsRefused(err) {
+		// Telegram will never take it (say, too long with a text override):
+		// failed at once, so later notifications do not wait behind it.
+		n.log.Warn("ticket reply refused by Telegram", "message", e.MessageID, "err", err)
+		_, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "failed"})
+		return err
+	}
 	if err != nil {
 		return err // retried by the consumer
 	}
 	if _, err := n.core.ReportTicketDelivery(ctx, &corev1.ReportTicketDeliveryRequest{MessageId: e.MessageID, Status: "sent",
 		TgMessageId: int64(msg.MessageID)}); err != nil {
-		// Not retried: the reply would be sent twice.
+		// Not retried: the reply would be sent twice. Remembered, so the
+		// event coming back again is only reported.
 		n.log.Warn("ticket reply delivered but not reported", "message", e.MessageID, "err", err)
+		n.sent.put(e.MessageID, int64(msg.MessageID))
 	}
 	return nil
 }

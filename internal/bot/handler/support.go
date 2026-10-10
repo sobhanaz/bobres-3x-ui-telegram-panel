@@ -321,6 +321,22 @@ func (h *Handler) addToTicket(r *req, to ticketTarget) {
 			if album != "" {
 				_ = h.state.Remember(r.ctx, limitKey, time.Minute) // the album's other parts too
 			}
+			if to.replyTo != 0 {
+				// A reply is for support only when it answers a delivered staff
+				// reply: core says so without saving it. Otherwise it does not
+				// count, and it is answered as any other message.
+				_, err := h.core.AddTicketMessage(r.ctx, &corev1.AddTicketMessageRequest{UserId: r.user.GetId(),
+					ReplyToTgMessageId: to.replyTo, CheckOnly: true})
+				if err != nil {
+					h.giveTicket(r)
+					if status.Code(err) == codes.NotFound {
+						h.notForSupport(r)
+						return
+					}
+					r.fail(err)
+					return
+				}
+			}
 			r.send(r.t("support.limit"), homeKeyboard(r))
 			return
 		}

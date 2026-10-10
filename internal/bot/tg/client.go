@@ -60,6 +60,24 @@ func IsFlood(err error) (time.Duration, bool) {
 	return time.Duration(max(ae.RetryAfter, 1)) * time.Second, true
 }
 
+// IsRefused reports that Telegram refused the message itself, say as too
+// long (a 400): sending it again will not help. A blocked chat, a flood, a
+// refused bot token and a reply that is not Telegram's are not refusals.
+func IsRefused(err error) bool {
+	var ae *APIError
+	if !errors.As(err, &ae) || ae.Code < 400 || ae.Code >= 500 || IsBlocked(err) {
+		return false
+	}
+	switch ae.Code {
+	case http.StatusUnauthorized, http.StatusNotFound, http.StatusTooManyRequests:
+		return false
+	}
+	return ae.Description != nonJSON
+}
+
+// nonJSON describes a reply that is not the Bot API's (say, a proxy's page).
+const nonJSON = "unexpected non-JSON reply"
+
 // Client calls the Bot API.
 type Client struct {
 	base     string // <api root>/bot<token>/
@@ -247,7 +265,7 @@ func (c *Client) do(ctx context.Context, method string, body io.Reader, ctype st
 	}
 	var r reply
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return &APIError{Code: resp.StatusCode, Description: "unexpected non-JSON reply"}
+		return &APIError{Code: resp.StatusCode, Description: nonJSON}
 	}
 	if !r.OK {
 		return &APIError{Code: r.ErrorCode, Description: r.Description, RetryAfter: r.Parameters.RetryAfter}

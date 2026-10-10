@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -100,6 +101,30 @@ func TestEditNotModifiedIsFine(t *testing.T) {
 	})
 	if err := c.EditMessageText(context.Background(), 1, 2, "same", nil); err != nil {
 		t.Fatalf("not-modified edit: %v", err)
+	}
+}
+
+// Only a refusal of the message itself is final; what may pass later is not.
+func TestIsRefused(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{
+		{&APIError{Code: 400, Description: "Bad Request: message is too long"}, true},
+		{fmt.Errorf("send: %w", &APIError{Code: 400, Description: "Bad Request: BUTTON_URL_INVALID"}), true},
+		{&APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"}, false},
+		{&APIError{Code: 400, Description: "Bad Request: chat not found"}, false},
+		{&APIError{Code: 429, Description: "Too Many Requests: retry after 3", RetryAfter: 3}, false},
+		{&APIError{Code: 401, Description: "Unauthorized"}, false},
+		{&APIError{Code: 404, Description: "Not Found"}, false},
+		{&APIError{Code: 400, Description: nonJSON}, false},
+		{&APIError{Code: 502, Description: "Bad Gateway"}, false},
+		{context.DeadlineExceeded, false},
+		{nil, false},
+	} {
+		if got := IsRefused(c.err); got != c.want {
+			t.Errorf("IsRefused(%v) = %v", c.err, got)
+		}
 	}
 }
 

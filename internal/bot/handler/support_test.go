@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -15,6 +16,8 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // --- what the dashboard does, through core's domain over the test store ---
@@ -422,6 +425,111 @@ func TestReplyDelivery(t *testing.T) {
 	if d := w.ticketMessage(m3.ID).Delivery; d != "failed" {
 		t.Fatalf("dead letter: %q", d)
 	}
+}
+
+// A reply Telegram refuses (too long with a long text override) is reported
+// failed at once: the notifications after it are not held up.
+func TestRefusedReplyFailsAtOnce(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	u := w.customer(882, "long")
+	u.text("/menu")
+	u.press("support")
+	u.text("hello")
+	w.drain()
+	w.setInCore("texts.en.support.reply_closed", "💬 <b>Support</b> · ticket #{id}\n\n{text}\n\n"+strings.Repeat("Our hours are 9 to 5. ", 32))
+	if err := w.h.RefreshSettings(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	long := w.staffReply(882, strings.Repeat("a", 3500), true)
+	u.text("/menu")
+	u.press("support")
+	u.text("one more question") // a new ticket
+	w.staffReply(882, "a short answer", false)
+	w.drain() // fails at an event the consumer would retry
+	if d := w.ticketMessage(long.ID).Delivery; d != "failed" || u.count("Our hours") != 0 || u.count("a short answer") != 1 {
+		t.Fatalf("long reply %q; the short one arrived %d times", d, u.count("a short answer"))
+	}
+}
+
+// A reply that reached the customer is done even when core does not hear of
+// it: a retry would send it again (core still says pending).
+func TestReplySentButNotReported(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	u := w.customer(883, "lost")
+	u.text("/menu")
+	u.press("support")
+	u.text("hello")
+	w.drain()
+
+	core := &lossyCore{CoreServiceClient: w.stack.Core, fail: 1}
+	n := notify.New(core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{Source: eventbus.NewGRPCSource(w.stack.Feed),
+		Handle: n.Handle, DeadLetter: n.DeadLetter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.staffReply(883, "answer once", false)
+	var stepErr error
+	for range 3 { // a failed event is tried again at the next step
+		if _, err := feed.Step(context.Background()); err != nil {
+			stepErr = err
+		}
+	}
+	w.drain()
+	if got := u.count("answer once"); got != 1 || stepErr != nil || core.failures() != 1 {
+		t.Fatalf("the reply arrived %d times (feed: %v, failed reports: %d)", got, stepErr, core.failures())
+	}
+
+	// The ack is lost too, so the same event comes back: it is only reported.
+	core.failNext(1)
+	m := w.staffReply(883, "answer twice?", false)
+	payload, err := json.Marshal(events.TicketRepliedEvent{TicketID: m.TicketID, MessageID: m.ID, TelegramID: 883})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := eventbus.Message{EventID: "again-1", Topic: events.TicketReplied, Payload: payload}
+	for range 2 {
+		if err := n.Handle(context.Background(), ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, d := u.count("answer twice?"), w.ticketMessage(m.ID); got != 1 || d.Delivery != "sent" || d.TGMessageID == nil {
+		t.Fatalf("the reply arrived %d times; delivery %q", got, d.Delivery)
+	}
+}
+
+// lossyCore is core whose next reports of a delivery fail (core restarting).
+type lossyCore struct {
+	corev1.CoreServiceClient
+	mu     sync.Mutex
+	fail   int // reports still to fail
+	failed int
+}
+
+func (c *lossyCore) ReportTicketDelivery(ctx context.Context, in *corev1.ReportTicketDeliveryRequest, opts ...grpc.CallOption) (*corev1.ReportTicketDeliveryResponse, error) {
+	c.mu.Lock()
+	if c.fail > 0 {
+		c.fail--
+		c.failed++
+		c.mu.Unlock()
+		return nil, status.Error(codes.Unavailable, "core is restarting")
+	}
+	c.mu.Unlock()
+	return c.CoreServiceClient.ReportTicketDelivery(ctx, in, opts...)
+}
+
+func (c *lossyCore) failNext(n int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.fail = n
+}
+
+func (c *lossyCore) failures() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.failed
 }
 
 // Maintenance and the forced join let a customer go on with their ticket,

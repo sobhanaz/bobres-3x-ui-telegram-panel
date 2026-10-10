@@ -34,6 +34,22 @@ func (l *memLimiter) Allow(_ context.Context, key string, _ time.Duration, max i
 	return l.n[key] <= max, nil
 }
 
+// Give returns one count, as the Redis limiter does.
+func (l *memLimiter) Give(_ context.Context, key string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.n[key] > 0 {
+		l.n[key]--
+	}
+	return nil
+}
+
+func (l *memLimiter) count(key string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.n[key]
+}
+
 func (l *memLimiter) reset() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -266,6 +282,55 @@ func TestTicketsPerDay(t *testing.T) {
 	u.press("support")
 	u.text("help number 3")
 	u.lastHas("Added to ticket")
+}
+
+// A Telegram reply outside any scene counts only when it answers a staff
+// reply. Over the limit core says which it is without saving it: a reply to
+// a staff answer gets the limit, any other reply the usual answer.
+func TestTicketLimitAndReplies(t *testing.T) {
+	w := newWorld(t)
+	lim := newMemLimiter("bot:tk:")
+	w.h.limiter = lim
+	owner := setupStore(t, w)
+	owner.text("/set limits.tickets_per_day 2")
+	u := w.customer(825, "rick")
+	key := "bot:tk:825"
+	u.text("/menu")
+	u.press("support")
+	u.text("help")
+	tk := w.openTicket(825)
+	w.staffReply(825, "an answer", false)
+	u.eventuallySees("an answer")
+	answer := u.last()
+
+	u.text("/menu")
+	u.replyTo("hello?", u.last().id) // the menu
+	u.lastHas("Main menu")
+	if n := lim.count(key); n != 1 {
+		t.Fatalf("a reply to the menu counted: %d", n)
+	}
+	u.replyTo("thanks", answer.id) // the second message today, the last allowed
+	u.lastHas("Added to ticket")
+
+	u.text("/menu")
+	u.replyTo("hello again?", u.last().id)
+	u.lastHas("Main menu")
+	if n := lim.count(key); n != 2 {
+		t.Fatalf("a reply to the menu over the limit counted: %d", n)
+	}
+	u.replyTo("one more thing", answer.id)
+	u.lastHas("today's limit of support messages")
+	if n := len(w.ticketMessages(tk.ID)); n != 3 || u.count("today's limit") != 1 {
+		t.Fatalf("over the limit: %d messages, limit said %d times", n, u.count("today's limit"))
+	}
+
+	// In the ticket scene the limit is said.
+	u.press("support")
+	u.text("more")
+	u.lastHas("today's limit of support messages")
+	if n := len(w.ticketMessages(tk.ID)); n != 3 {
+		t.Fatalf("%d messages recorded over the limit", n)
+	}
 }
 
 func TestConfigurableRateLimit(t *testing.T) {

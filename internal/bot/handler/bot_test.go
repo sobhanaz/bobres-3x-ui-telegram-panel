@@ -140,6 +140,9 @@ func (f *fakeTG) SendMessage(_ context.Context, chat int64, text string, kb *tg.
 	if blocked {
 		return nil, &tg.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"}
 	}
+	if i18n.TextLength(text) > i18n.MaxMessage { // as Telegram
+		return nil, &tg.APIError{Code: 400, Description: "Bad Request: message is too long"}
+	}
 	return f.add(chat, &msg{text: text, kb: kb}), nil
 }
 
