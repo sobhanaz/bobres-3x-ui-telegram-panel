@@ -42,9 +42,10 @@ func search(q string) (num int64, isNum bool, like string) {
 }
 
 // UserFilter narrows the users list. Query matches a Telegram id, part of a
-// username or an invite code.
+// username or an invite code; ReferredBy keeps the users someone invited (a
+// reseller's customers).
 type UserFilter struct {
-	Query, Status, Role string
+	Query, Status, Role, ReferredBy string
 }
 
 // UserRow is one line of the users list.
@@ -68,9 +69,10 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 		           OR lower(u.username) LIKE $4 ESCAPE '\' OR u.ref_code = lower(btrim($1)))
 		  AND ($5 = '' OR u.status = $5)
 		  AND ($6 = '' OR u.role = $6)
+		  AND ($9 = '' OR u.referred_by::text = $9)
 		ORDER BY u.created_at DESC, u.id DESC
 		LIMIT $7 OFFSET $8`,
-		strings.TrimSpace(f.Query), isNum, num, like, f.Status, f.Role, p.Limit, p.Offset)
+		strings.TrimSpace(f.Query), isNum, num, like, f.Status, f.Role, p.Limit, p.Offset, f.ReferredBy)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list users: %w", err)
 	}
@@ -96,30 +98,29 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 	if len(ids) == 0 {
 		return out, total, nil
 	}
-	wrows, err := q.Query(ctx, `SELECT user_id, currency, balance, updated_at FROM core.wallets
+	wrows, err := q.Query(ctx, `SELECT `+walletCols+` FROM core.wallets
 		WHERE user_id = ANY($1) AND balance <> 0 ORDER BY currency`, ids)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list users: wallets: %w", err)
 	}
-	defer wrows.Close()
+	wallets, err := collectWallets(wrows)
+	if err != nil {
+		return nil, 0, err
+	}
 	byUser := map[string][]Wallet{}
-	for wrows.Next() {
-		var w Wallet
-		if err := wrows.Scan(&w.UserID, &w.Currency, &w.Balance, &w.UpdatedAt); err != nil {
-			return nil, 0, err
-		}
+	for _, w := range wallets {
 		byUser[w.UserID] = append(byUser[w.UserID], w)
 	}
 	for i := range out {
 		out[i].Wallets = byUser[out[i].ID]
 	}
-	return out, total, wrows.Err()
+	return out, total, nil
 }
 
 // subscriptionColsS is subscriptionCols for a query that names the table s.
 const subscriptionColsS = `s.id, s.user_id, s.order_id, COALESCE(s.server_id::text, ''), s.client_email, s.sub_id, s.status,
 	s.expires_at, s.traffic_total_bytes, COALESCE(s.traffic_used_bytes, 0), s.last_synced_at, COALESCE(s.sub_link, ''), s.created_at,
-	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at`
+	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label`
 
 // SubscriptionFilter narrows the services list. Query matches a Telegram id,
 // part of a username or panel email, or part of a service id (the bot shows
@@ -172,10 +173,7 @@ func (s *Store) ListAllSubscriptions(ctx context.Context, q querier, f Subscript
 			name []byte
 		)
 		sc := &r.Subscription
-		if err := rows.Scan(&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
-			&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
-			&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt,
-			&r.TelegramID, &r.Username, &r.PlanID, &name, &total); err != nil {
+		if err := rows.Scan(append(subscriptionDest(sc), &r.TelegramID, &r.Username, &r.PlanID, &name, &total)...); err != nil {
 			return nil, 0, err
 		}
 		if err := json.Unmarshal(name, &r.PlanName); err != nil {
@@ -204,7 +202,7 @@ func idPart(q string) string {
 // orderColsO is orderCols for a query that names the table o.
 const orderColsO = `o.id, o.user_id, o.plan_id, o.type, o.status, o.amount, o.currency, o.idempotency_key, o.created_at, o.updated_at,
 	o.subscription_id, o.discount_code, o.discount_amount, o.targets_set, o.target_expires_at, o.target_traffic_bytes,
-	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount`
+	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount, o.label`
 
 // OrderFilter narrows the orders list. Query matches a Telegram id, part of a
 // username or part of an order id.

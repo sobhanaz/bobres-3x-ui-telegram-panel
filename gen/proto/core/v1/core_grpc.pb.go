@@ -63,6 +63,8 @@ const (
 	CoreService_SetUserBotBlocked_FullMethodName        = "/core.v1.CoreService/SetUserBotBlocked"
 	CoreService_ClaimBroadcastBatch_FullMethodName      = "/core.v1.CoreService/ClaimBroadcastBatch"
 	CoreService_ReportBroadcastResults_FullMethodName   = "/core.v1.CoreService/ReportBroadcastResults"
+	CoreService_SetSubscriptionLabel_FullMethodName     = "/core.v1.CoreService/SetSubscriptionLabel"
+	CoreService_GetResellerInfo_FullMethodName          = "/core.v1.CoreService/GetResellerInfo"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -122,6 +124,9 @@ type CoreServiceClient interface {
 	SetUserBotBlocked(ctx context.Context, in *SetUserBotBlockedRequest, opts ...grpc.CallOption) (*SetUserBotBlockedResponse, error)
 	ClaimBroadcastBatch(ctx context.Context, in *ClaimBroadcastBatchRequest, opts ...grpc.CallOption) (*BroadcastBatch, error)
 	ReportBroadcastResults(ctx context.Context, in *ReportBroadcastResultsRequest, opts ...grpc.CallOption) (*BroadcastState, error)
+	// Resellers (milestone 5).
+	SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error)
+	GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
 }
 
 type coreServiceClient struct {
@@ -573,6 +578,26 @@ func (c *coreServiceClient) ReportBroadcastResults(ctx context.Context, in *Repo
 	return out, nil
 }
 
+func (c *coreServiceClient) SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Subscription)
+	err := c.cc.Invoke(ctx, CoreService_SetSubscriptionLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResellerInfo)
+	err := c.cc.Invoke(ctx, CoreService_GetResellerInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -630,6 +655,9 @@ type CoreServiceServer interface {
 	SetUserBotBlocked(context.Context, *SetUserBotBlockedRequest) (*SetUserBotBlockedResponse, error)
 	ClaimBroadcastBatch(context.Context, *ClaimBroadcastBatchRequest) (*BroadcastBatch, error)
 	ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error)
+	// Resellers (milestone 5).
+	SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error)
+	GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -771,6 +799,12 @@ func (UnimplementedCoreServiceServer) ClaimBroadcastBatch(context.Context, *Clai
 }
 func (UnimplementedCoreServiceServer) ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportBroadcastResults not implemented")
+}
+func (UnimplementedCoreServiceServer) SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSubscriptionLabel not implemented")
+}
+func (UnimplementedCoreServiceServer) GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetResellerInfo not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1585,6 +1619,42 @@ func _CoreService_ReportBroadcastResults_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_SetSubscriptionLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSubscriptionLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetSubscriptionLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetSubscriptionLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetSubscriptionLabel(ctx, req.(*SetSubscriptionLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetResellerInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResellerInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetResellerInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetResellerInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetResellerInfo(ctx, req.(*GetResellerInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1767,6 +1837,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportBroadcastResults",
 			Handler:    _CoreService_ReportBroadcastResults_Handler,
+		},
+		{
+			MethodName: "SetSubscriptionLabel",
+			Handler:    _CoreService_SetSubscriptionLabel_Handler,
+		},
+		{
+			MethodName: "GetResellerInfo",
+			Handler:    _CoreService_GetResellerInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

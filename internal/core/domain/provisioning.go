@@ -173,7 +173,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 			sub, err = st.SubscriptionByOrder(ctx, tx, o.ID)
 			if errors.Is(err, store.ErrNotFound) {
 				sub, err = st.CreateSubscription(ctx, tx, &store.Subscription{
-					UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmail(u.TelegramID),
+					UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmail(u.TelegramID), Label: o.Label,
 				})
 			}
 			if err != nil {
@@ -237,7 +237,7 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 		w.log.Info("provisioned", "order_id", job.order.ID, "subscription_id", job.sub.ID)
 		return w.svc.publish(ctx, tx, events.SubscriptionProvisioned, events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
-			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic,
+			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic, Label: derefStr(job.sub.Label),
 		})
 	})
 }
@@ -275,6 +275,7 @@ func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
 		return w.svc.publish(ctx, tx, events.SubscriptionExtended, events.SubscriptionExtendedEvent{
 			SubscriptionID: job.sub.ID, OrderID: o.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			Type: o.Type, ExpiresAt: expires, TrafficTotalBytes: traffic, TrafficUsedBytes: job.sub.TrafficUsed,
+			Label: derefStr(job.sub.Label),
 		})
 	})
 }

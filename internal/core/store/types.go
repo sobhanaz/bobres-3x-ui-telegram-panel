@@ -58,16 +58,19 @@ type Order struct {
 	CreatedBy          *string
 	RefundedAt         *time.Time
 	RefundAmount       *int64
+	Label              *string // a reseller's name for the service it creates
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
 
-// Wallet mirrors core.wallets.
+// Wallet mirrors core.wallets. A reseller's balance may go down to
+// -CreditLimit; everyone else's limit is 0.
 type Wallet struct {
-	UserID    string
-	Currency  string
-	Balance   int64
-	UpdatedAt time.Time
+	UserID      string
+	Currency    string
+	Balance     int64
+	CreditLimit int64
+	UpdatedAt   time.Time
 }
 
 // LedgerEntry mirrors core.ledger_entries.
@@ -98,6 +101,7 @@ type Subscription struct {
 	TrafficUsed  int64
 	LastSyncedAt *time.Time
 	SubLink      string
+	Label        *string // the name a reseller gave it
 	CreatedAt    time.Time
 	// When each reminder went out in the current period (nil = not yet).
 	NotifiedExpiringAt   *time.Time

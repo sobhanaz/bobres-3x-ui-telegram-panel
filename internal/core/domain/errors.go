@@ -52,3 +52,10 @@ func contains(list []string, s string) bool {
 }
 
 func strptr(s string) *string { return &s }
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
 
@@ -54,7 +56,7 @@ func TestUpAppliesAllSchemas(t *testing.T) {
 	want := map[string][]string{
 		"core": {"users", "wallets", "ledger_entries", "plans", "orders",
 			"subscriptions", "tickets", "ticket_messages", "ticket_canned", "broadcasts", "broadcast_recipients", "audit_log", "settings", "staff_credentials", "web_sessions", "login_links",
-			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters"},
+			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters", "reseller_tiers", "reseller_tier_prices", "resellers"},
 		"payments": {"payment_intents", "manual_receipts", "ledger_entries",
 			"outbox_payments", "inbox_payments", "outbox_payments_cursors"},
 		"provisioner": {"xui_servers", "provision_jobs", "client_map",
@@ -234,5 +236,108 @@ func TestSupportMigrationMergesM3Tickets(t *testing.T) {
 		if msgs != 1 || body != tk.text {
 			t.Errorf("ticket %s: %d messages, customer's body %q, want 1 with %q", tk.id, msgs, body, tk.text)
 		}
+	}
+}
+
+// downTo rolls the schema's migrations back to version (the tests of a
+// migration's Down).
+func downTo(ctx context.Context, dsn, schema string, version int64) error {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+	goose.SetBaseFS(fsys)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return err
+	}
+	defer db.Close() //nolint:errcheck // test helper
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+		return err
+	}
+	return goose.DownToContext(ctx, db, "migrations/"+schema, version)
+}
+
+// 00010 lets a reseller's wallet go down to -credit_limit and adds the
+// commission and settlement kinds. Going back is refused while anyone owes
+// money; otherwise the old check returns, the kinds stay (append-only
+// ledger) and resellers become customers.
+func TestResellersMigrationDown(t *testing.T) {
+	dsn := testDSN(t)
+	dropSchemas(t, dsn)
+	ctx := context.Background()
+	if err := Up(ctx, dsn, "core"); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close() //nolint:errcheck // test helper
+	exec := func(q string, args ...any) error {
+		_, err := db.ExecContext(ctx, q, args...)
+		return err
+	}
+
+	uid := "00000000-0000-0000-0000-000000000201"
+	tier := "00000000-0000-0000-0000-0000000002a1"
+	for _, q := range []string{
+		`INSERT INTO core.users (id, telegram_id, role) VALUES ('` + uid + `', 201, 'reseller')`,
+		`INSERT INTO core.reseller_tiers (id, name, discount_percent, commission_percent) VALUES ('` + tier + `', 'Gold', 20, 10)`,
+		`INSERT INTO core.resellers (user_id, tier_id) VALUES ('` + uid + `', '` + tier + `')`,
+		`INSERT INTO core.wallets (user_id, currency, balance, credit_limit) VALUES ('` + uid + `', 'IRT', -500, 1000)`,
+		`INSERT INTO core.ledger_entries (id, user_id, currency, amount, kind, idempotency_key, balance_after)
+			VALUES ('00000000-0000-0000-0000-000000000211', '` + uid + `', 'IRT', 100, 'commission', 'commission:x', 100)`,
+	} {
+		if err := exec(q); err != nil {
+			t.Fatalf("seed: %v\n%s", err, q)
+		}
+	}
+	// The new checks hold.
+	if err := exec(`UPDATE core.wallets SET balance = -1001 WHERE user_id = $1`, uid); err == nil {
+		t.Fatal("a balance below -credit_limit was accepted")
+	}
+	if err := exec(`UPDATE core.wallets SET credit_limit = -1 WHERE user_id = $1`, uid); err == nil {
+		t.Fatal("a negative credit limit was accepted")
+	}
+	if err := exec(`INSERT INTO core.reseller_tiers (id, name, discount_percent, commission_percent) VALUES (gen_random_uuid(), 'X', 91, 0)`); err == nil {
+		t.Fatal("a 91% discount was accepted")
+	}
+	if err := exec(`DELETE FROM core.reseller_tiers WHERE id = $1`, tier); err == nil {
+		t.Fatal("a tier in use was deleted")
+	}
+
+	if err := downTo(ctx, dsn, "core", 9); err == nil || !strings.Contains(err.Error(), "negative balance") {
+		t.Fatalf("Down with a debt: %v", err)
+	}
+	if err := exec(`UPDATE core.wallets SET balance = 0 WHERE user_id = $1`, uid); err != nil {
+		t.Fatal(err)
+	}
+	if err := downTo(ctx, dsn, "core", 9); err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	var role string
+	var hasLimit, hasTiers bool
+	if err := db.QueryRowContext(ctx, `SELECT role,
+		EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'core' AND table_name = 'wallets' AND column_name = 'credit_limit'),
+		EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'core' AND table_name = 'reseller_tiers')
+		FROM core.users WHERE id = $1`, uid).Scan(&role, &hasLimit, &hasTiers); err != nil {
+		t.Fatal(err)
+	}
+	if role != "user" || hasLimit || hasTiers {
+		t.Fatalf("after Down: role %s, credit_limit column %v, tiers table %v", role, hasLimit, hasTiers)
+	}
+	if err := exec(`UPDATE core.wallets SET balance = -1 WHERE user_id = $1`, uid); err == nil {
+		t.Fatal("after Down a negative balance was accepted")
+	}
+	if err := exec(`INSERT INTO core.ledger_entries (id, user_id, currency, amount, kind, idempotency_key, balance_after)
+		VALUES ('00000000-0000-0000-0000-000000000212', $1, 'IRT', 5, 'settlement', 'settlement:y', 5)`, uid); err != nil {
+		t.Fatalf("after Down the ledger refused a settlement: %v", err)
+	}
+	// And up again.
+	if err := Up(ctx, dsn, "core"); err != nil {
+		t.Fatalf("Up again: %v", err)
 	}
 }

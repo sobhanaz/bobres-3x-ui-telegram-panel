@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	// ErrInsufficientFunds is returned when a debit would drop balance below 0.
+	// ErrInsufficientFunds is returned when a debit would drop the balance
+	// below 0 (below -credit_limit for a reseller).
 	ErrInsufficientFunds = errors.New("store: insufficient funds")
 	// ErrDuplicateIdempotency means the key was already used for this exact
 	// movement. Nothing changed; callers may treat it as a successful replay.
@@ -38,19 +39,25 @@ func scanLedger(row pgx.Row) (*LedgerEntry, error) {
 	return &e, err
 }
 
+const walletCols = `user_id, currency, balance, credit_limit, updated_at`
+
+func walletDest(w *Wallet) []any {
+	return []any{&w.UserID, &w.Currency, &w.Balance, &w.CreditLimit, &w.UpdatedAt}
+}
+
 // GetWallet returns the wallet row, creating it implicitly if missing.
 func (s *Store) GetWallet(ctx context.Context, q querier, userID, currency string) (*Wallet, error) {
 	var w Wallet
 	err := q.QueryRow(ctx, `
 		INSERT INTO core.wallets (user_id, currency) VALUES ($1, $2)
 		ON CONFLICT (user_id, currency) DO NOTHING
-		RETURNING user_id, currency, balance, updated_at`, userID, currency).
-		Scan(&w.UserID, &w.Currency, &w.Balance, &w.UpdatedAt)
+		RETURNING `+walletCols, userID, currency).
+		Scan(walletDest(&w)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = q.QueryRow(ctx,
-			`SELECT user_id, currency, balance, updated_at FROM core.wallets WHERE user_id=$1 AND currency=$2`,
+			`SELECT `+walletCols+` FROM core.wallets WHERE user_id=$1 AND currency=$2`,
 			userID, currency).
-			Scan(&w.UserID, &w.Currency, &w.Balance, &w.UpdatedAt)
+			Scan(walletDest(&w)...)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get wallet: %w", err)
@@ -59,20 +66,20 @@ func (s *Store) GetWallet(ctx context.Context, q querier, userID, currency strin
 }
 
 // lockWallet ensures the wallet exists and locks its row for the rest of tx.
-// Every balance change for one user+currency serializes on this lock.
-func lockWallet(ctx context.Context, tx pgx.Tx, userID, currency string) (int64, error) {
+// Every balance change for one user+currency serializes on this lock, and the
+// credit limit read here holds until the change commits.
+func lockWallet(ctx context.Context, tx pgx.Tx, userID, currency string) (balance, limit int64, err error) {
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO core.wallets (user_id, currency) VALUES ($1, $2)
 		ON CONFLICT DO NOTHING`, userID, currency); err != nil {
-		return 0, fmt.Errorf("wallet upsert: %w", err)
+		return 0, 0, fmt.Errorf("wallet upsert: %w", err)
 	}
-	var balance int64
 	if err := tx.QueryRow(ctx,
-		`SELECT balance FROM core.wallets WHERE user_id=$1 AND currency=$2 FOR UPDATE`,
-		userID, currency).Scan(&balance); err != nil {
-		return 0, fmt.Errorf("wallet lock: %w", err)
+		`SELECT balance, credit_limit FROM core.wallets WHERE user_id=$1 AND currency=$2 FOR UPDATE`,
+		userID, currency).Scan(&balance, &limit); err != nil {
+		return 0, 0, fmt.Errorf("wallet lock: %w", err)
 	}
-	return balance, nil
+	return balance, limit, nil
 }
 
 // LedgerByKey returns the entry recorded under an idempotency key.
@@ -89,11 +96,15 @@ func (s *Store) LedgerByKey(ctx context.Context, q querier, key string) (*Ledger
 // one) never moves money: it returns ErrDuplicateIdempotency with the
 // balance untouched. e.Amount is stored signed (debits negative), so a
 // wallet's balance always equals the SUM of its ledger amounts.
+//
+// A debit may take the balance down to -credit_limit (0 for everyone but
+// resellers) and no further. A credit or a zero entry always goes through,
+// even when the balance stays below zero: it only lowers a reseller's debt.
 func move(ctx context.Context, tx pgx.Tx, e *LedgerEntry, delta int64) (*Wallet, error) {
 	if e.UserID == "" || e.Currency == "" || e.Kind == "" || e.IdempotencyKey == "" {
 		return nil, errors.New("ledger: user, currency, kind and idempotency key are required")
 	}
-	balance, err := lockWallet(ctx, tx, e.UserID, e.Currency)
+	balance, limit, err := lockWallet(ctx, tx, e.UserID, e.Currency)
 	if err != nil {
 		return nil, err
 	}
@@ -105,12 +116,12 @@ func move(ctx context.Context, tx pgx.Tx, e *LedgerEntry, delta int64) (*Wallet,
 			return nil, ErrIdempotencyConflict
 		}
 		*e = *prev
-		return &Wallet{UserID: e.UserID, Currency: e.Currency, Balance: balance}, ErrDuplicateIdempotency
+		return &Wallet{UserID: e.UserID, Currency: e.Currency, Balance: balance, CreditLimit: limit}, ErrDuplicateIdempotency
 	case !errors.Is(err, ErrNotFound):
 		return nil, fmt.Errorf("ledger lookup: %w", err)
 	}
 	next := balance + delta
-	if next < 0 {
+	if delta < 0 && next < -limit {
 		return nil, ErrInsufficientFunds
 	}
 	if delta != 0 {
@@ -128,7 +139,7 @@ func move(ctx context.Context, tx pgx.Tx, e *LedgerEntry, delta int64) (*Wallet,
 	if err := insertLedger(ctx, tx, e); err != nil {
 		return nil, err
 	}
-	return &Wallet{UserID: e.UserID, Currency: e.Currency, Balance: next}, nil
+	return &Wallet{UserID: e.UserID, Currency: e.Currency, Balance: next, CreditLimit: limit}, nil
 }
 
 // insertLedger appends an entry. A key collision here (the same key used for
@@ -206,16 +217,21 @@ func (s *Store) ListLedger(ctx context.Context, q querier, userID string, limit,
 
 // ListWallets returns every wallet of a user.
 func (s *Store) ListWallets(ctx context.Context, q querier, userID string) ([]Wallet, error) {
-	rows, err := q.Query(ctx, `SELECT user_id, currency, balance, updated_at FROM core.wallets
+	rows, err := q.Query(ctx, `SELECT `+walletCols+` FROM core.wallets
 		WHERE user_id = $1 ORDER BY currency`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list wallets: %w", err)
 	}
+	return collectWallets(rows)
+}
+
+// collectWallets reads wallet rows (walletCols) and closes them.
+func collectWallets(rows pgx.Rows) ([]Wallet, error) {
 	defer rows.Close()
 	var out []Wallet
 	for rows.Next() {
 		var w Wallet
-		if err := rows.Scan(&w.UserID, &w.Currency, &w.Balance, &w.UpdatedAt); err != nil {
+		if err := rows.Scan(walletDest(&w)...); err != nil {
 			return nil, err
 		}
 		out = append(out, w)

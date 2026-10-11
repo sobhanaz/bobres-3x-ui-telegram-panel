@@ -123,6 +123,18 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
 	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
 
+	// Resellers: they work in the bot; owner and admin manage them here.
+	s.route(api, "GET /api/v1/resellers", PermResellersWrite, s.listResellers)
+	s.route(api, "POST /api/v1/resellers", PermResellersWrite, s.createReseller)
+	s.route(api, "GET /api/v1/resellers/{id}", PermResellersWrite, s.getReseller)
+	s.route(api, "PUT /api/v1/resellers/{id}", PermResellersWrite, s.updateReseller)
+	s.route(api, "POST /api/v1/resellers/{id}/payments", PermResellersWrite, s.resellerPayment)
+	s.route(api, "POST /api/v1/resellers/{id}/remove", PermResellersWrite, s.removeReseller)
+	s.route(api, "GET /api/v1/reseller-tiers", PermResellersWrite, s.listTiers)
+	s.route(api, "POST /api/v1/reseller-tiers", PermResellersWrite, s.createTier)
+	s.route(api, "PUT /api/v1/reseller-tiers/{id}", PermResellersWrite, s.updateTier)
+	s.route(api, "DELETE /api/v1/reseller-tiers/{id}", PermResellersWrite, s.deleteTier)
+
 	// Support and broadcasts.
 	s.route(api, "GET /api/v1/tickets", PermTicketsWrite, s.listTickets)
 	s.route(api, "GET /api/v1/tickets/counts", PermTicketsWrite, s.ticketCounts)

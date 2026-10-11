@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,6 +23,9 @@ const trialOnceConstraint = "ledger_entries_trial_once_idx"
 type Config struct {
 	// OwnerTelegramID is promoted to the owner role on first contact.
 	OwnerTelegramID int64
+	// Log receives what needs an operator's eye outside a request (nil: the
+	// default logger).
+	Log *slog.Logger
 }
 
 // Service composes the store with business rules.
@@ -35,6 +39,9 @@ type Service struct {
 
 // New builds a Service publishing to core's outbox.
 func New(st *store.Store, cfg Config) *Service {
+	if cfg.Log == nil {
+		cfg.Log = slog.Default()
+	}
 	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1),
 		bkick: make(chan struct{}, 1)}
 }
@@ -113,12 +120,16 @@ type CreateOrderParams struct {
 	IdempotencyKey string
 	SubscriptionID string // renew | traffic_topup
 	DiscountCode   string
+	// Label is the name a reseller gives the service they buy for a
+	// customer; kept on a reseller's new order only (ignored otherwise).
+	Label string
 }
 
 // CreateOrder validates the plan (and, for a renewal or top-up, the
-// subscription), applies a discount code, and inserts an order. Retries with
-// the same IdempotencyKey return the existing order unchanged. Trial plans
-// are refused here: they go through StartTrial, which enforces one trial per
+// subscription), prices it for the user (a reseller pays their tier's
+// price), applies a discount code, and inserts an order. Retries with the
+// same IdempotencyKey return the existing order unchanged. Trial plans are
+// refused here: they go through StartTrial, which enforces one trial per
 // user.
 func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.Order, error) {
 	if p.IdempotencyKey == "" {
@@ -135,11 +146,21 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	if err != nil {
 		return nil, err
 	}
-	off, code, err := s.discountFor(ctx, p.UserID, plan, p.DiscountCode)
+	price, err := s.priceFor(ctx, u, plan)
 	if err != nil {
 		return nil, err
 	}
-	amount := plan.Price - off
+	off, code, err := s.discountFor(ctx, u, price, plan.Currency, p.DiscountCode)
+	if err != nil {
+		return nil, err
+	}
+	var label *string
+	if isReseller(u) && p.Type == OrderNew {
+		if label, err = normalizeLabel(p.Label); err != nil {
+			return nil, err
+		}
+	}
+	amount := price - off
 	free := amount == 0
 	status := "awaiting_payment"
 	if free {
@@ -154,10 +175,20 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	}
 	var out *store.Order
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		// A reseller's price holds only while they are one: holding their row
+		// makes a removal wait for this order (and then cancel it), and a
+		// removal that came first leaves no row.
+		if isReseller(u) {
+			if err := s.st.HoldReseller(ctx, tx, u.ID); errors.Is(err, store.ErrNotFound) {
+				return stateErr("your reseller account changed meanwhile; try again")
+			} else if err != nil {
+				return err
+			}
+		}
 		o, inserted, err := s.st.CreateOrder(ctx, tx, &store.Order{
 			UserID: p.UserID, PlanID: p.PlanID, Type: p.Type, Status: status,
 			Amount: amount, Currency: plan.Currency, IdempotencyKey: p.IdempotencyKey,
-			SubscriptionID: subID, DiscountCode: discountCode, DiscountAmount: off,
+			SubscriptionID: subID, DiscountCode: discountCode, DiscountAmount: off, Label: label,
 		})
 		if err != nil {
 			return err

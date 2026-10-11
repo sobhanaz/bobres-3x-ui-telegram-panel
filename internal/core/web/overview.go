@@ -39,7 +39,7 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.cfg.Log.Warn("overview tickets", "err", err)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"tickets":          tickets,
 		"users":            map[string]int64{"total": o.UsersTotal, "new_24h": o.UsersNew24h, "new_7d": o.UsersNew7d},
 		"services":         map[string]int64{"active": o.ServicesActive, "expiring": o.ServicesExpiring, "ended": o.ServicesEnded},
@@ -48,5 +48,14 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 		"pending_payments": o.PendingPayments,
 		"panel":            map[string]any{"healthy": o.PanelHealthy, "detail": o.PanelDetail},
 		"recent_orders":    recent,
-	})
+	}
+	// What resellers owe the store, for those who manage them.
+	if Allowed(actor(r).Role, PermResellersWrite) {
+		if n, debt, err := s.cfg.Store.ResellerSummary(r.Context(), s.cfg.Store.Conn()); err == nil {
+			out["resellers"] = map[string]any{"count": n, "debt": moneyList(debt)}
+		} else {
+			s.cfg.Log.Warn("overview resellers", "err", err)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }

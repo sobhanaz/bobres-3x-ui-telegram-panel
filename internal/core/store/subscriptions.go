@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -12,13 +13,17 @@ import (
 
 const subscriptionCols = `id, user_id, order_id, COALESCE(server_id::text, ''), client_email, sub_id, status,
 	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at,
-	notified_expiring_at, notified_low_traffic_at, notified_ended_at`
+	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label`
+
+func subscriptionDest(sc *Subscription) []any {
+	return []any{&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
+		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
+		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label}
+}
 
 func scanSubscription(row pgx.Row) (*Subscription, error) {
 	var sc Subscription
-	err := row.Scan(&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
-		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
-		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt)
+	err := row.Scan(subscriptionDest(&sc)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -34,11 +39,11 @@ func (s *Store) CreateSubscription(ctx context.Context, q querier, sub *Subscrip
 	got, err := scanSubscription(q.QueryRow(ctx, `
 		INSERT INTO core.subscriptions
 			(id, user_id, order_id, server_id, client_email, sub_id, status,
-			 expires_at, traffic_total_bytes, traffic_used_bytes)
-		VALUES ($1, $2, $3, NULLIF($4, '')::uuid, $5, $6, $7, $8, $9, $10)
+			 expires_at, traffic_total_bytes, traffic_used_bytes, label)
+		VALUES ($1, $2, $3, NULLIF($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING `+subscriptionCols,
 		sub.ID, sub.UserID, sub.OrderID, sub.ServerID, sub.ClientEmail,
-		sub.SubID, sub.Status, sub.ExpiresAt, sub.TrafficTotal, sub.TrafficUsed))
+		sub.SubID, sub.Status, sub.ExpiresAt, sub.TrafficTotal, sub.TrafficUsed, sub.Label))
 	if err != nil {
 		return nil, fmt.Errorf("create subscription: %w", err)
 	}
@@ -84,6 +89,49 @@ func (s *Store) ListSubscriptions(ctx context.Context, q querier, userID string,
 		out = append(out, *sc)
 	}
 	return out, rows.Err()
+}
+
+// ListUserSubscriptions is a page of a user's subscriptions (not the deleted
+// ones), newest first, with the number of matches. Query matches part of the
+// label (any case) or the end of the id (the bot shows its last 6 hex digits,
+// "#" optional).
+func (s *Store) ListUserSubscriptions(ctx context.Context, q querier, userID, query string, p Page) ([]Subscription, int64, error) {
+	p = p.clamp()
+	query = strings.TrimPrefix(strings.TrimSpace(query), "#")
+	_, _, like := search(query)
+	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+`, count(*) OVER () FROM core.subscriptions
+		WHERE user_id = $1 AND status <> 'deleted'
+		  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR ($4 <> '' AND replace(id::text, '-', '') LIKE '%' || $4))
+		ORDER BY created_at DESC, id DESC
+		LIMIT $5 OFFSET $6`, userID, query, like, idPart(query), p.Limit, p.Offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list user subscriptions: %w", err)
+	}
+	defer rows.Close()
+	var (
+		out   []Subscription
+		total int64
+	)
+	for rows.Next() {
+		var sc Subscription
+		if err := rows.Scan(append(subscriptionDest(&sc), &total)...); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, sc)
+	}
+	return out, total, rows.Err()
+}
+
+// SetSubscriptionLabel names a subscription (nil clears the name).
+func (s *Store) SetSubscriptionLabel(ctx context.Context, q querier, id string, label *string) error {
+	tag, err := q.Exec(ctx, `UPDATE core.subscriptions SET label = $2, updated_at = now() WHERE id = $1`, id, label)
+	if err != nil {
+		return fmt.Errorf("set subscription label: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ActivateSubscription records the provisioned panel client.

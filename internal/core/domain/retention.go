@@ -30,8 +30,8 @@ var (
 )
 
 // DiscountError says why a code cannot be used: unknown, expired, used_up,
-// already_used or currency. Its message is "discount: <reason>", which the
-// bot reads back.
+// already_used, currency or reseller (resellers get tier prices instead).
+// Its message is "discount: <reason>", which the bot reads back.
 type DiscountError struct{ Reason string }
 
 func (e *DiscountError) Error() string { return "discount: " + e.Reason }
@@ -103,12 +103,16 @@ func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID stri
 	return plan, sub, nil
 }
 
-// discountFor applies a discount code to a plan for a user and returns the
-// amount taken off and the normalized code ("" when code is empty).
-func (s *Service) discountFor(ctx context.Context, userID string, plan *store.Plan, code string) (int64, string, error) {
+// discountFor applies a discount code to a user's price for a plan (in the
+// plan's currency) and returns the amount taken off and the normalized code
+// ("" when code is empty). Resellers cannot use codes.
+func (s *Service) discountFor(ctx context.Context, u *store.User, price int64, currency, code string) (int64, string, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return 0, "", nil
+	}
+	if isReseller(u) {
+		return 0, "", &DiscountError{"reseller"}
 	}
 	if !discountCodeRe.MatchString(code) {
 		return 0, "", &DiscountError{"unknown"}
@@ -128,7 +132,7 @@ func (s *Service) discountFor(ctx context.Context, userID string, plan *store.Pl
 	case d.MaxUses != nil && d.Used >= *d.MaxUses:
 		return 0, "", &DiscountError{"used_up"}
 	}
-	used, err := s.st.HasRedeemed(ctx, s.st.Conn(), code, userID)
+	used, err := s.st.HasRedeemed(ctx, s.st.Conn(), code, u.ID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -138,12 +142,12 @@ func (s *Service) discountFor(ctx context.Context, userID string, plan *store.Pl
 	var off int64
 	switch {
 	case d.Percent != nil:
-		off = plan.Price * int64(*d.Percent) / 100
+		off = price * int64(*d.Percent) / 100
 	case d.Amount != nil:
-		if d.Currency == nil || *d.Currency != plan.Currency {
+		if d.Currency == nil || *d.Currency != currency {
 			return 0, "", &DiscountError{"currency"}
 		}
-		off = min(*d.Amount, plan.Price)
+		off = min(*d.Amount, price)
 	}
 	return off, code, nil
 }
@@ -161,23 +165,29 @@ type Quote struct {
 }
 
 // QuoteOrder prices an order without creating it (it fails as CreateOrder
-// would), so the bot can show what a discount code takes off.
+// would), so the bot can show what a discount code takes off. ListPrice is
+// the user's price before the code (a reseller's tier price).
 func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error) {
 	if p.Type == "" {
 		p.Type = OrderNew
 	}
-	if _, err := s.activeUser(ctx, nil, p.UserID); err != nil {
+	u, err := s.activeUser(ctx, nil, p.UserID)
+	if err != nil {
 		return nil, err
 	}
 	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
-	off, code, err := s.discountFor(ctx, p.UserID, plan, p.DiscountCode)
+	price, err := s.priceFor(ctx, u, plan)
 	if err != nil {
 		return nil, err
 	}
-	return &Quote{ListPrice: plan.Price, Discount: off, Total: plan.Price - off, Currency: plan.Currency, DiscountCode: code}, nil
+	off, code, err := s.discountFor(ctx, u, price, plan.Currency, p.DiscountCode)
+	if err != nil {
+		return nil, err
+	}
+	return &Quote{ListPrice: price, Discount: off, Total: price - off, Currency: plan.Currency, DiscountCode: code}, nil
 }
 
 // extendTargets is what a renewal or top-up sets, computed from the
@@ -225,37 +235,42 @@ func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.T
 
 // orderPaidEffects runs in the transaction that marks an order paid: the
 // discount code's use is counted, and a real purchase (not a trial or a free
-// order) may reward whoever invited the buyer.
+// order) may pay whoever invited the buyer: a reseller's commission on every
+// order, or anyone else's referral reward. A reseller's own purchases are
+// business purchases and pay nobody.
 func (s *Service) orderPaidEffects(ctx context.Context, tx pgx.Tx, o *store.Order, source string) error {
 	if o.DiscountCode != nil {
 		if _, err := s.st.RecordRedemption(ctx, tx, *o.DiscountCode, o.UserID, o.ID); err != nil {
 			return err
 		}
 	}
-	if o.Amount > 0 && source != events.PaidTrial && source != events.PaidFree {
-		return s.rewardReferrer(ctx, tx, o)
-	}
-	return nil
-}
-
-// rewardReferrer credits the inviter of the buyer with referral.reward_percent
-// of the buyer's first paid purchase. The ledger key is per invited user, so
-// only one purchase per invited user is ever rewarded.
-func (s *Service) rewardReferrer(ctx context.Context, tx pgx.Tx, o *store.Order) error {
-	pct := s.settingInt(ctx, "referral.reward_percent")
-	if pct <= 0 || pct > 100 {
+	if o.Amount <= 0 || source == events.PaidTrial || source == events.PaidFree {
 		return nil
 	}
 	buyer, err := s.st.GetUser(ctx, tx, o.UserID)
 	if err != nil {
 		return err
 	}
-	if buyer.ReferredBy == nil {
+	if isReseller(buyer) || buyer.ReferredBy == nil {
 		return nil
 	}
 	inviter, err := s.st.GetUser(ctx, tx, *buyer.ReferredBy)
 	if err != nil {
 		return err
+	}
+	if isReseller(inviter) {
+		return s.payCommission(ctx, tx, o, inviter)
+	}
+	return s.rewardReferrer(ctx, tx, o, buyer, inviter)
+}
+
+// rewardReferrer credits the inviter of the buyer with referral.reward_percent
+// of the buyer's first paid purchase. The ledger key is per invited user, so
+// only one purchase per invited user is ever rewarded.
+func (s *Service) rewardReferrer(ctx context.Context, tx pgx.Tx, o *store.Order, buyer, inviter *store.User) error {
+	pct := s.settingInt(ctx, "referral.reward_percent")
+	if pct <= 0 || pct > 100 {
+		return nil
 	}
 	reward := o.Amount * pct / 100
 	if inviter.Status != "active" || reward <= 0 {
@@ -293,21 +308,9 @@ func (s *Service) Referral(ctx context.Context, userID string) (*ReferralInfo, e
 	if err != nil {
 		return nil, err
 	}
-	code := ""
-	if u.RefCode != nil {
-		code = *u.RefCode
-	}
-	for i := 0; code == "" && i < 5; i++ {
-		code, err = s.st.SetRefCode(ctx, s.st.Conn(), userID, newRefCode())
-		if errors.Is(err, store.ErrRefCodeTaken) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	if code == "" {
-		return nil, errors.New("could not draw a free invite code")
+	code, err := s.refCode(ctx, u)
+	if err != nil {
+		return nil, err
 	}
 	invited, rewarded, earned, err := s.st.ReferralStats(ctx, s.st.Conn(), userID)
 	if err != nil {
@@ -315,6 +318,28 @@ func (s *Service) Referral(ctx context.Context, userID string) (*ReferralInfo, e
 	}
 	return &ReferralInfo{Code: code, Invited: invited, Rewarded: rewarded, Earned: earned,
 		RewardPercent: s.settingInt(ctx, "referral.reward_percent")}, nil
+}
+
+// refCode is a user's invite code, created on first request.
+func (s *Service) refCode(ctx context.Context, u *store.User) (string, error) {
+	code := ""
+	if u.RefCode != nil {
+		code = *u.RefCode
+	}
+	var err error
+	for i := 0; code == "" && i < 5; i++ {
+		code, err = s.st.SetRefCode(ctx, s.st.Conn(), u.ID, newRefCode())
+		if errors.Is(err, store.ErrRefCodeTaken) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	if code == "" {
+		return "", errors.New("could not draw a free invite code")
+	}
+	return code, nil
 }
 
 // newRefCode draws an 8-character invite code (lower case, no look-alikes).

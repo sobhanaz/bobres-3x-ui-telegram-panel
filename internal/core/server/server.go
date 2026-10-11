@@ -163,29 +163,41 @@ func (s *Server) GetUser(ctx context.Context, req *corev1.GetUserRequest) (*core
 	return userToProto(u), nil
 }
 
-// ListPlans returns the plan catalog.
+// ListPlans returns the plan catalog. With a user, each plan's price is what
+// that user pays (a reseller's tier price) and list_price the store price.
 func (s *Server) ListPlans(ctx context.Context, req *corev1.ListPlansRequest) (*corev1.ListPlansResponse, error) {
 	plans, err := s.st.ListPlans(ctx, s.st.Conn(), req.GetIncludeDisabled())
 	if err != nil {
 		return nil, fail(err)
 	}
+	var prices []int64
+	if req.GetUserId() != "" {
+		if prices, err = s.dom.PlanPrices(ctx, req.GetUserId(), plans); err != nil {
+			return nil, fail(err)
+		}
+	}
 	out := &corev1.ListPlansResponse{}
 	for i := range plans {
-		out.Plans = append(out.Plans, planToProto(&plans[i]))
+		pp := planToProto(&plans[i])
+		if prices != nil {
+			pp.Price = &commonv1.Money{Amount: prices[i], Currency: plans[i].Currency}
+		}
+		out.Plans = append(out.Plans, pp)
 	}
 	return out, nil
 }
 
 func planToProto(p *store.Plan) *corev1.Plan {
 	pp := &corev1.Plan{
-		Id:       p.ID,
-		NameI18N: p.NameI18n,
-		Kind:     p.Kind,
-		Price:    &commonv1.Money{Amount: p.Price, Currency: p.Currency},
-		Enabled:  p.Enabled,
-		IsTrial:  p.IsTrial,
-		Sort:     p.Sort,
-		IsTopup:  p.IsTopup,
+		Id:        p.ID,
+		NameI18N:  p.NameI18n,
+		Kind:      p.Kind,
+		Price:     &commonv1.Money{Amount: p.Price, Currency: p.Currency},
+		ListPrice: &commonv1.Money{Amount: p.Price, Currency: p.Currency},
+		Enabled:   p.Enabled,
+		IsTrial:   p.IsTrial,
+		Sort:      p.Sort,
+		IsTopup:   p.IsTopup,
 	}
 	if p.DurationDays != nil {
 		pp.DurationDays = *p.DurationDays
@@ -205,6 +217,7 @@ func (s *Server) CreateOrder(ctx context.Context, req *corev1.CreateOrderRequest
 		IdempotencyKey: req.GetIdempotencyKey(),
 		SubscriptionID: req.GetSubscriptionId(),
 		DiscountCode:   req.GetDiscountCode(),
+		Label:          req.GetLabel(),
 	})
 	if err != nil {
 		return nil, fail(err)
@@ -230,6 +243,9 @@ func orderToProto(o *store.Order) *corev1.Order {
 	if o.DiscountCode != nil {
 		out.DiscountCode = *o.DiscountCode
 		out.Discount = &commonv1.Money{Amount: o.DiscountAmount, Currency: o.Currency}
+	}
+	if o.Label != nil {
+		out.Label = *o.Label
 	}
 	return out
 }
@@ -259,14 +275,7 @@ func (s *Server) GetReferralInfo(ctx context.Context, req *corev1.GetReferralInf
 	}
 	out := &corev1.ReferralInfo{Code: r.Code, Invited: int32(min(r.Invited, math.MaxInt32)), //nolint:gosec // bounded
 		Rewarded: int32(min(r.Rewarded, math.MaxInt32)), RewardPercent: int32(r.RewardPercent)} //nolint:gosec // a percentage
-	currencies := make([]string, 0, len(r.Earned))
-	for c := range r.Earned {
-		currencies = append(currencies, c)
-	}
-	sort.Strings(currencies)
-	for _, c := range currencies {
-		out.Earned = append(out.Earned, &commonv1.Money{Amount: r.Earned[c], Currency: c})
-	}
+	out.Earned = moneyList(r.Earned)
 	return out, nil
 }
 
@@ -285,12 +294,12 @@ func (s *Server) GetWallet(ctx context.Context, req *corev1.GetWalletRequest) (*
 	if err != nil {
 		return nil, fail(err)
 	}
-	return &corev1.Wallet{
-		UserId:    w.UserID,
-		Currency:  w.Currency,
-		Balance:   w.Balance,
-		UpdatedAt: w.UpdatedAt.Unix(),
-	}, nil
+	return walletToProto(w), nil
+}
+
+func walletToProto(w *store.Wallet) *corev1.Wallet {
+	return &corev1.Wallet{UserId: w.UserID, Currency: w.Currency, Balance: w.Balance, UpdatedAt: w.UpdatedAt.Unix(),
+		CreditLimit: w.CreditLimit}
 }
 
 // ListLedgerEntries returns a user's ledger, newest first.
@@ -323,40 +332,111 @@ func (s *Server) ListLedgerEntries(ctx context.Context, req *corev1.ListLedgerEn
 	return out, nil
 }
 
-// ListSubscriptions returns the user's subscriptions.
+// maxSubscriptionPage is the most services one page of ListSubscriptions holds.
+const maxSubscriptionPage = 50
+
+// ListSubscriptions returns the user's subscriptions: the newest 100, or one
+// page of them (with the total) when the request pages or searches.
 func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscriptionsRequest) (*corev1.ListSubscriptionsResponse, error) {
-	subs, err := s.st.ListSubscriptions(ctx, s.st.Conn(), req.GetUserId(), 100)
+	out := &corev1.ListSubscriptionsResponse{}
+	var subs []store.Subscription
+	if req.GetPagination() == nil && req.GetQuery() == "" {
+		var err error
+		if subs, err = s.st.ListSubscriptions(ctx, s.st.Conn(), req.GetUserId(), 100); err != nil {
+			return nil, fail(err)
+		}
+	} else {
+		page, size := req.GetPagination().GetPage(), req.GetPagination().GetPageSize()
+		if size <= 0 {
+			size = 10
+		}
+		size = min(size, maxSubscriptionPage)
+		if page < 1 {
+			page = 1
+		}
+		var (
+			total int64
+			err   error
+		)
+		subs, total, err = s.st.ListUserSubscriptions(ctx, s.st.Conn(), req.GetUserId(), req.GetQuery(),
+			store.Page{Limit: int(size), Offset: int(page-1) * int(size)})
+		if err != nil {
+			return nil, fail(err)
+		}
+		out.PageInfo = &commonv1.PageInfo{Page: page, PageSize: size, Total: total}
+	}
+	for i := range subs {
+		out.Subscriptions = append(out.Subscriptions, subscriptionToProto(&subs[i]))
+	}
+	return out, nil
+}
+
+func subscriptionToProto(sc *store.Subscription) *corev1.Subscription {
+	sp := &corev1.Subscription{
+		Id:               sc.ID,
+		UserId:           sc.UserID,
+		OrderId:          sc.OrderID,
+		ServerId:         sc.ServerID,
+		ClientEmail:      sc.ClientEmail,
+		Status:           sc.Status,
+		TrafficUsedBytes: sc.TrafficUsed,
+		SubscriptionLink: sc.SubLink,
+	}
+	if sc.SubID != nil {
+		sp.SubId = *sc.SubID
+	}
+	if sc.ExpiresAt != nil {
+		sp.ExpiresAt = sc.ExpiresAt.Unix()
+	}
+	if sc.TrafficTotal != nil {
+		sp.TrafficTotalBytes = *sc.TrafficTotal
+	}
+	if sc.LastSyncedAt != nil {
+		sp.LastSyncedAt = sc.LastSyncedAt.Unix()
+	}
+	if sc.Label != nil {
+		sp.Label = *sc.Label
+	}
+	return sp
+}
+
+// SetSubscriptionLabel names one of a reseller's services.
+func (s *Server) SetSubscriptionLabel(ctx context.Context, req *corev1.SetSubscriptionLabelRequest) (*corev1.Subscription, error) {
+	sub, err := s.dom.SetSubscriptionLabel(ctx, req.GetUserId(), req.GetSubscriptionId(), req.GetLabel())
 	if err != nil {
 		return nil, fail(err)
 	}
-	out := &corev1.ListSubscriptionsResponse{}
-	for i := range subs {
-		sc := subs[i]
-		sp := &corev1.Subscription{
-			Id:          sc.ID,
-			UserId:      sc.UserID,
-			OrderId:     sc.OrderID,
-			ServerId:    sc.ServerID,
-			ClientEmail: sc.ClientEmail,
-			Status:      sc.Status,
-		}
-		if sc.SubID != nil {
-			sp.SubId = *sc.SubID
-		}
-		if sc.ExpiresAt != nil {
-			sp.ExpiresAt = sc.ExpiresAt.Unix()
-		}
-		if sc.TrafficTotal != nil {
-			sp.TrafficTotalBytes = *sc.TrafficTotal
-		}
-		sp.TrafficUsedBytes = sc.TrafficUsed
-		sp.SubscriptionLink = sc.SubLink
-		if sc.LastSyncedAt != nil {
-			sp.LastSyncedAt = sc.LastSyncedAt.Unix()
-		}
-		out.Subscriptions = append(out.Subscriptions, sp)
+	return subscriptionToProto(sub), nil
+}
+
+// GetResellerInfo is a reseller's panel: terms, balances and earnings.
+func (s *Server) GetResellerInfo(ctx context.Context, req *corev1.GetResellerInfoRequest) (*corev1.ResellerInfo, error) {
+	ri, err := s.dom.ResellerInfo(ctx, req.GetUserId())
+	if err != nil {
+		return nil, fail(err)
 	}
+	out := &corev1.ResellerInfo{TierName: ri.Terms.TierName, DiscountPercent: ri.Terms.DiscountPercent,
+		CommissionPercent: ri.Terms.CommissionPercent, Customers: ri.Customers, RefCode: ri.RefCode}
+	for _, w := range ri.Wallets {
+		out.Balances = append(out.Balances, &corev1.ResellerBalance{Currency: w.Currency, Balance: w.Balance,
+			CreditLimit: w.CreditLimit, Available: w.Balance + w.CreditLimit})
+	}
+	out.CommissionEarned = moneyList(ri.Earned)
 	return out, nil
+}
+
+// moneyList is amounts per currency, sorted by currency.
+func moneyList(m map[string]int64) []*commonv1.Money {
+	currencies := make([]string, 0, len(m))
+	for c := range m {
+		currencies = append(currencies, c)
+	}
+	sort.Strings(currencies)
+	out := make([]*commonv1.Money, 0, len(m))
+	for _, c := range currencies {
+		out = append(out, &commonv1.Money{Amount: m[c], Currency: c})
+	}
+	return out
 }
 
 // GetSettings returns flattened settings (key -> raw JSON string).

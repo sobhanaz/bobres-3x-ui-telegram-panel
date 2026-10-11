@@ -33,11 +33,17 @@ func userOf(u *store.User, wallets []store.Wallet) userJSON {
 	return out
 }
 
-// listUsers: GET /api/v1/users?q=&status=&role=&page=&size=
+// listUsers: GET /api/v1/users?q=&status=&role=&referred_by=&page=&size=
+// (referred_by: the users someone invited, a reseller's customers).
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	p, page, size := pageOf(r)
 	q := r.URL.Query()
-	f := store.UserFilter{Query: q.Get("q"), Status: q.Get("status"), Role: q.Get("role")}
+	referredBy, ok := queryID(r, "referred_by")
+	if !ok {
+		writeJSON(w, http.StatusOK, list{[]userJSON{}, 0, page, size})
+		return
+	}
+	f := store.UserFilter{Query: q.Get("q"), Status: q.Get("status"), Role: q.Get("role"), ReferredBy: referredBy}
 	rows, total, err := s.cfg.Store.ListUsers(r.Context(), s.cfg.Store.Conn(), f, p)
 	if err != nil {
 		s.fail(w, "list users", err)

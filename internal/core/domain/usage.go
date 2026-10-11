@@ -164,7 +164,7 @@ func (w *UsageWorker) record(ctx context.Context, id string, u Usage, uerr error
 		}
 		e := events.SubscriptionReminderEvent{
 			SubscriptionID: sub.ID, UserID: sub.UserID, TelegramID: user.TelegramID, Kind: kind, Days: days,
-			TrafficUsedBytes: sub.TrafficUsed, TopupAvailable: topups && sub.TrafficTotal != nil,
+			TrafficUsedBytes: sub.TrafficUsed, TopupAvailable: topups && sub.TrafficTotal != nil, Label: derefStr(sub.Label),
 		}
 		if sub.ExpiresAt != nil {
 			e.ExpiresAt = sub.ExpiresAt.Unix()
