@@ -54,6 +54,10 @@ type Checkout struct {
 	PlanID         string `json:"plan,omitempty"`
 	SubscriptionID string `json:"sub,omitempty"`
 	DiscountCode   string `json:"code,omitempty"`
+	// A reseller buying for a customer (the panel's Buy for a customer), and
+	// the name they gave the new service ("" = none).
+	ForCustomer bool   `json:"fc,omitempty"`
+	Label       string `json:"label,omitempty"`
 }
 
 func checkoutKey(userID int64, nonce string) string {

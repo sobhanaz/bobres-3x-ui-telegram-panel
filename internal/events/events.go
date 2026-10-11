@@ -78,6 +78,12 @@ const (
 	CreditReferral = "referral"
 	// CreditRefund: staff refunded an order to the wallet.
 	CreditRefund = "refund"
+	// CreditCommission: a reseller's commission on a purchase by a customer
+	// who joined through their link (OrderID is the customer's order: never
+	// show the customer to the reseller).
+	CreditCommission = "commission"
+	// CreditSettlement: staff recorded a payment the reseller made to the store.
+	CreditSettlement = "settlement"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
@@ -112,6 +118,7 @@ type SubscriptionProvisionedEvent struct {
 	SubscriptionLink string `json:"subscription_link"`
 	ExpiresAt        int64  `json:"expires_at,omitempty"` // unix seconds, 0 = no expiry
 	TrafficBytes     int64  `json:"traffic_bytes,omitempty"`
+	Label            string `json:"label,omitempty"` // the name a reseller gave the service
 }
 
 // ProvisionFailedEvent: provisioning keeps failing; an admin should look.
@@ -133,6 +140,7 @@ type SubscriptionExtendedEvent struct {
 	ExpiresAt         int64  `json:"expires_at,omitempty"`          // unix seconds, 0 = no expiry
 	TrafficTotalBytes int64  `json:"traffic_total_bytes,omitempty"` // 0 = unlimited
 	TrafficUsedBytes  int64  `json:"traffic_used_bytes,omitempty"`
+	Label             string `json:"label,omitempty"` // the name a reseller gave the service
 }
 
 // Kinds of subscription.reminder.v1.
@@ -154,6 +162,7 @@ type SubscriptionReminderEvent struct {
 	TrafficTotalBytes int64  `json:"traffic_total_bytes,omitempty"` // 0 = unlimited
 	TrafficUsedBytes  int64  `json:"traffic_used_bytes,omitempty"`
 	TopupAvailable    bool   `json:"topup_available,omitempty"` // traffic packages exist
+	Label             string `json:"label,omitempty"`           // the name a reseller gave the service
 }
 
 // TicketOpenedEvent: a customer started a ticket (staff are alerted).

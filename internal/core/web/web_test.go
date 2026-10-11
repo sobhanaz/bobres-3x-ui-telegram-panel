@@ -44,7 +44,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	if err := testdb.Truncate(ctx, st.DB(), `core.web_sessions, core.login_links, core.staff_credentials, core.audit_log, core.users`); err != nil {
+	if err := testdb.Truncate(ctx, st.DB(), `core.web_sessions, core.login_links, core.staff_credentials, core.audit_log, core.users, core.reseller_tiers`); err != nil {
 		t.Fatal(err)
 	}
 	env, err := bcrypto.NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))
@@ -316,6 +316,11 @@ func TestPermissions(t *testing.T) {
 		{"support", PermUsersWrite, false},
 		{"user", PermOverviewRead, false},
 		{"admin", "made.up", false},
+		{"owner", PermResellersWrite, true},
+		{"admin", PermResellersWrite, true},
+		{"support", PermResellersWrite, false},
+		{"reseller", PermResellersWrite, false},
+		{"reseller", PermOverviewRead, false},
 	} {
 		if got := Allowed(c.role, c.perm); got != c.want {
 			t.Errorf("%s %s: %v", c.role, c.perm, got)

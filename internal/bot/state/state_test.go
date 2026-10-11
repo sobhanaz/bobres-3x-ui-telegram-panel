@@ -60,6 +60,13 @@ func exercise(t *testing.T, s Store) {
 	if got, ok, err := s.LoadCheckout(ctx, 1, n); !ok || err != nil || got != want {
 		t.Fatalf("checkout round trip: %+v %v %v", got, ok, err)
 	}
+	forCustomer := Checkout{Type: "new", PlanID: "p1", ForCustomer: true, Label: "گوشی علی"}
+	if err := s.SaveCheckout(ctx, 1, n+"c", forCustomer); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, err := s.LoadCheckout(ctx, 1, n+"c"); !ok || err != nil || got != forCustomer {
+		t.Fatalf("a reseller's checkout round trip: %+v %v %v", got, ok, err)
+	}
 	if _, ok, _ := s.LoadCheckout(ctx, 2, n); ok {
 		t.Fatal("another user read the checkout")
 	}

@@ -12,13 +12,13 @@ import (
 
 const orderCols = `id, user_id, plan_id, type, status, amount, currency, idempotency_key, created_at, updated_at,
 	subscription_id, discount_code, discount_amount, targets_set, target_expires_at, target_traffic_bytes,
-	extend_days, extend_bytes, created_by, refunded_at, refund_amount`
+	extend_days, extend_bytes, created_by, refunded_at, refund_amount, label`
 
 func orderDest(o *Order) []any {
 	return []any{&o.ID, &o.UserID, &o.PlanID, &o.Type, &o.Status,
 		&o.Amount, &o.Currency, &o.IdempotencyKey, &o.CreatedAt, &o.UpdatedAt,
 		&o.SubscriptionID, &o.DiscountCode, &o.DiscountAmount, &o.TargetsSet, &o.TargetExpiresAt, &o.TargetTrafficBytes,
-		&o.ExtendDays, &o.ExtendBytes, &o.CreatedBy, &o.RefundedAt, &o.RefundAmount}
+		&o.ExtendDays, &o.ExtendBytes, &o.CreatedBy, &o.RefundedAt, &o.RefundAmount, &o.Label}
 }
 
 func scanOrder(row pgx.Row) (*Order, error) {
@@ -43,12 +43,12 @@ func (s *Store) CreateOrder(ctx context.Context, q querier, o *Order) (*Order, b
 	// xmax = 0 only for a freshly inserted row (an ON CONFLICT update sets it).
 	err := q.QueryRow(ctx, `
 		INSERT INTO core.orders (id, user_id, plan_id, type, status, amount, currency, idempotency_key,
-			subscription_id, discount_code, discount_amount, extend_days, extend_bytes, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			subscription_id, discount_code, discount_amount, extend_days, extend_bytes, created_by, label)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
 		RETURNING `+orderCols+`, (xmax = 0)`,
 		o.ID, o.UserID, o.PlanID, o.Type, o.Status, o.Amount, o.Currency, o.IdempotencyKey,
-		o.SubscriptionID, o.DiscountCode, o.DiscountAmount, o.ExtendDays, o.ExtendBytes, o.CreatedBy).
+		o.SubscriptionID, o.DiscountCode, o.DiscountAmount, o.ExtendDays, o.ExtendBytes, o.CreatedBy, o.Label).
 		Scan(append(orderDest(&got), &inserted)...)
 	if err != nil {
 		return nil, false, fmt.Errorf("create order: %w", err)
@@ -120,6 +120,17 @@ func (s *Store) TransitionOrder(ctx context.Context, q querier, id string, from 
 		return false, fmt.Errorf("transition order: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// CancelOpenOrders cancels a user's orders still waiting for payment and
+// returns how many it cancelled.
+func (s *Store) CancelOpenOrders(ctx context.Context, q querier, userID string) (int64, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.orders SET status = 'cancelled', updated_at = now()
+		WHERE user_id = $1 AND status IN ('created', 'awaiting_payment')`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("cancel open orders: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // CountTrialOrders returns how many orders the user made on trial plans

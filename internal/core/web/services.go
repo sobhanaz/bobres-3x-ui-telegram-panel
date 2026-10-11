@@ -24,6 +24,7 @@ type serviceJSON struct {
 	TrafficUsed  int64      `json:"traffic_used"`
 	LastSyncedAt *int64     `json:"last_synced_at"`
 	CreatedAt    int64      `json:"created_at"`
+	Label        *string    `json:"label"` // the name a reseller gave it
 }
 
 func serviceOf(r *store.SubscriptionRow) serviceJSON {
@@ -31,6 +32,7 @@ func serviceOf(r *store.SubscriptionRow) serviceJSON {
 		ID: r.ID, User: briefOf(r.UserID, r.TelegramID, r.Username), Plan: planRef{r.PlanID, r.PlanName},
 		Status: r.Status, ClientEmail: r.ClientEmail, SubLink: r.SubLink, ExpiresAt: unix(r.ExpiresAt),
 		TrafficTotal: r.TrafficTotal, TrafficUsed: r.TrafficUsed, LastSyncedAt: unix(r.LastSyncedAt), CreatedAt: r.CreatedAt.Unix(),
+		Label: r.Label,
 	}
 }
 

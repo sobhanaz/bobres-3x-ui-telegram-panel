@@ -87,6 +87,11 @@ export function roleOptions(canGrantOwner: boolean): StaffRole[] {
   return canGrantOwner ? ['support', 'admin', 'owner'] : ['support', 'admin']
 }
 
+/** isStaff: the roles that act in the dashboard (resellers work only in the bot). */
+export function isStaff(role: string): boolean {
+  return role === 'owner' || role === 'admin' || role === 'support'
+}
+
 /** addable: only active customers (not banned, not staff) can join the staff. */
 export function addable(u: Pick<UserItem, 'role' | 'status'>): boolean {
   return u.role === 'user' && u.status === 'active'
@@ -152,6 +157,11 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
     case 'canned_reply':
       // Saved replies are a tab of the support page.
       return { name: 'support', query: { tab: 'canned' } }
+    case 'reseller':
+      return uuidRe.test(id) ? { name: 'reseller', params: { id } } : null
+    case 'reseller_tier':
+      // Tiers are a tab of the Resellers page.
+      return { name: 'resellers', query: { tab: 'tiers' } }
   }
   return null
 }

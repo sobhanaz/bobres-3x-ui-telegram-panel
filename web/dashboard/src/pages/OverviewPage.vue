@@ -34,6 +34,8 @@ interface Overview {
   recent_orders: RecentOrder[]
   /** Support (M4): tickets waiting for staff; absent from older cores. */
   tickets?: { waiting: number; oldest_waiting_at: number | null }
+  /** Resellers (M5), for those who manage them: how many, and what they owe. */
+  resellers?: { count: number; debt: Money[] }
 }
 
 const { t, locale } = useI18n()
@@ -60,6 +62,12 @@ const oldestWait = computed(() => {
   const at = tickets.value?.oldest_waiting_at
   return tickets.value && tickets.value.waiting > 0 && at ? duration(Math.max(0, loadedAt.value - at), lang.value) : ''
 })
+// The reseller card: for those who manage resellers, once there are any.
+const resellers = computed(() => {
+  const r = auth.can('resellers.write') ? data.value?.resellers : undefined
+  return r && r.count > 0 ? r : null
+})
+const owing = computed(() => (resellers.value?.debt ?? []).filter((m) => m.amount > 0))
 const moneyLine = (list: Money[]) => (list.length ? list.map((m) => money(m, lang.value)).join(' · ') : t('overview.no_revenue'))
 const planName = (p: Record<string, string>) => p[lang.value] || p.en || p.fa || ''
 const statusSeverity = (s: string) =>
@@ -124,6 +132,15 @@ const statusSeverity = (s: string) =>
         <template #content>
           <div class="big" :class="{ warn: tickets.waiting > 0 }">{{ num(tickets.waiting, lang) }}</div>
           <div class="app-muted">{{ oldestWait ? t('overview.tickets_oldest', { time: oldestWait }) : t('overview.tickets_none') }}</div>
+        </template>
+      </Card>
+    </RouterLink>
+    <RouterLink v-if="resellers" :to="{ name: 'resellers', query: owing.length ? { in_debt: '1' } : {} }" class="card-link resellers-card">
+      <Card class="stat">
+        <template #subtitle>{{ t('overview.reseller_debt') }}</template>
+        <template #content>
+          <div class="mid" :class="{ warn: owing.length > 0 }">{{ owing.length ? moneyLine(owing) : t('overview.reseller_no_debt') }}</div>
+          <div class="app-muted">{{ t('overview.resellers_count', { n: num(resellers.count, lang) }) }}</div>
         </template>
       </Card>
     </RouterLink>

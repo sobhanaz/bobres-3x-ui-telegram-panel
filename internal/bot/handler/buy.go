@@ -45,9 +45,14 @@ func planLimits(r *req, p *corev1.Plan) string {
 }
 
 // plans returns the enabled, non-trial plans (regular plans and traffic
-// packages), or all plans including disabled ones for admins.
+// packages) at the user's own prices (a reseller's tier prices), or all plans
+// including disabled ones at store prices for admins.
 func (h *Handler) plans(r *req, all bool) ([]*corev1.Plan, error) {
-	resp, err := h.core.ListPlans(r.ctx, &corev1.ListPlansRequest{IncludeDisabled: all})
+	in := &corev1.ListPlansRequest{IncludeDisabled: all}
+	if !all {
+		in.UserId = r.user.GetId()
+	}
+	resp, err := h.core.ListPlans(r.ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -172,15 +177,20 @@ func (h *Handler) payButtons(r *req, kb *tg.Keyboard, cur string, amount int64, 
 
 // checkoutBack is where a payment menu's Back button leads.
 func checkoutBack(c state.Checkout) string {
-	if c.SubscriptionID != "" {
+	switch {
+	case c.SubscriptionID != "":
 		return "sub:" + c.SubscriptionID
+	case c.ForCustomer:
+		return "rs:buy"
 	}
 	return "buy"
 }
 
 // showCheckout shows what is bought (a new service, a renewal or a traffic
 // package, with any discount code) and how to pay for it. The menu is saved
-// under a fresh nonce, so its buttons carry no ids.
+// under a fresh nonce, so its buttons carry no ids. A reseller pays their
+// tier's price, uses no discount codes, and pays from the wallet down to
+// their credit limit.
 func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	p, err := h.findPlan(r, c.PlanID, false)
 	if err != nil {
@@ -188,6 +198,7 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 		return
 	}
 	price, cur := p.GetPrice().GetAmount(), p.GetPrice().GetCurrency()
+	reseller := r.isReseller()
 	var off int64
 	if c.DiscountCode != "" {
 		q, err := h.core.QuoteOrder(r.ctx, &corev1.QuoteOrderRequest{UserId: r.user.GetId(), PlanId: c.PlanID,
@@ -209,9 +220,18 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 		return
 	}
 	kb := &tg.Keyboard{}
-	wallet := tg.CB(r.t("btn.pay_wallet", "balance", r.money(w.GetBalance(), cur)), "pay:w:"+n)
-	h.payButtons(r, kb, cur, price, n, &wallet)
-	if c.DiscountCode == "" && price > 0 {
+	available := w.GetBalance() + w.GetCreditLimit()
+	var wallet *tg.Button
+	switch {
+	case !reseller:
+		b := tg.CB(r.t("btn.pay_wallet", "balance", r.money(w.GetBalance(), cur)), "pay:w:"+n)
+		wallet = &b
+	case available >= price: // on credit, down to the limit
+		b := tg.CB(r.t("btn.pay_credit", "available", r.money(available, cur)), "pay:w:"+n)
+		wallet = &b
+	}
+	h.payButtons(r, kb, cur, price, n, wallet)
+	if !reseller && c.DiscountCode == "" && price > 0 {
 		kb.Row(tg.CB(r.t("btn.discount"), "dc:"+n))
 	}
 	kb.Row(tg.CB(r.t("btn.back"), checkoutBack(c)), tg.CB(r.t("btn.home"), "home"))
@@ -227,6 +247,9 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	}
 	if off > 0 {
 		text += "\n" + r.t("discount.applied", "code", esc(c.DiscountCode), "off", r.money(off, cur))
+	}
+	if reseller {
+		text = r.labelled(c.Label, text) + "\n" + r.t("rs.checkout_available", "available", r.money(available, cur))
 	}
 	r.show(text, kb)
 }
@@ -264,9 +287,13 @@ func (h *Handler) onPay(r *req, rest string) {
 		r.fail(err)
 		return
 	}
+	if r.isReseller() { // a code from a menu of before they became one: their price instead
+		c.DiscountCode = ""
+	}
 	order, err := h.core.CreateOrder(r.ctx, &corev1.CreateOrderRequest{
 		UserId: r.user.GetId(), PlanId: c.PlanID, Type: c.Type, SubscriptionId: c.SubscriptionID,
 		DiscountCode: c.DiscountCode, IdempotencyKey: fmt.Sprintf("ord:%d:%s:%s", r.from.ID, c.PlanID, n),
+		Label: c.Label, // kept by core for a reseller's new service only
 	})
 	if err != nil {
 		r.fail(err)
@@ -293,7 +320,11 @@ func (h *Handler) onPay(r *req, rest string) {
 func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order *corev1.Order) {
 	_, err := h.core.PayOrderWithWallet(r.ctx, &corev1.PayOrderWithWalletRequest{OrderId: order.GetId(), UserId: r.user.GetId()})
 	if err == nil {
-		r.show(r.t("pay.wallet_done"), homeKeyboard(r))
+		kb := homeKeyboard(r)
+		if r.isReseller() {
+			kb = (&tg.Keyboard{}).Row(tg.CB(r.t("btn.reseller"), "rs"), tg.CB(r.t("btn.home"), "home"))
+		}
+		r.show(r.t("pay.wallet_done"), kb)
 		return
 	}
 	st, _ := status.FromError(err)
@@ -305,6 +336,13 @@ func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order 
 	w, _ := h.core.GetWallet(r.ctx, &corev1.GetWalletRequest{UserId: r.user.GetId(), Currency: cur})
 	n, ok := h.saveCheckout(r, c) // the same purchase, paid another way
 	if !ok {
+		return
+	}
+	if r.isReseller() { // past the credit limit
+		kb := &tg.Keyboard{}
+		h.payButtons(r, kb, cur, amount, n, nil)
+		kb.Row(tg.CB(r.t("btn.reseller"), "rs"), tg.CB(r.t("btn.home"), "home"))
+		r.show(r.t("rs.no_credit", "available", r.money(w.GetBalance()+w.GetCreditLimit(), cur), "price", r.money(amount, cur)), kb)
 		return
 	}
 	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.topup_and_buy"), "wtop"))

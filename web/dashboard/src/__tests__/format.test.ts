@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { asciiNumber, bytes, date, daysLeft, decimalOf, gbOf, latinDigits, money, num, planName, validAmount } from '../format'
+import { asciiNumber, bytes, date, daysLeft, decimalOf, gbOf, latinDigits, minorOf, money, num, planName, validAmount } from '../format'
 import { newKey, query } from '../api'
 
 describe('format', () => {
@@ -56,6 +56,23 @@ describe('traffic and typed amounts', () => {
     expect(decimalOf({ amount: 120000, currency: 'IRT' })).toBe('120000')
     expect(gbOf(50 * 2 ** 30)).toBe('50')
     expect(gbOf(1234567890)).toBe('1.15')
+  })
+  it('reads decimals back into minor units exactly', () => {
+    expect(minorOf('2.5', 'USDT')).toBe(2_500_000)
+    expect(minorOf('0.000007', 'USDT')).toBe(7)
+    expect(minorOf('-1.5', 'USDT')).toBe(-1_500_000)
+    expect(minorOf('120000', 'IRT')).toBe(120000)
+    expect(minorOf(' 42 ', 'IRT')).toBe(42)
+    expect(minorOf('-0', 'IRT')).toBe(0)
+    expect(minorOf('1.5', 'IRT')).toBeNull() // Toman has no fractions
+    expect(minorOf('1.2345678', 'USDT')).toBeNull()
+    expect(minorOf('12', 'EUR')).toBeNull()
+    expect(minorOf('', 'IRT')).toBeNull()
+    expect(minorOf('1e5', 'IRT')).toBeNull()
+    expect(minorOf('999999999999999.999999', 'USDT')).toBeNull() // past what a number holds exactly
+    for (const [amount, currency] of [[2_500_000, 'USDT'], [1_234_567, 'USDT'], [-7, 'USDT'], [120000, 'IRT']] as const) {
+      expect(minorOf(decimalOf({ amount, currency }), currency)).toBe(amount)
+    }
   })
   it('names plans and counts days', () => {
     expect(planName({ fa: 'ماهانه', en: 'Monthly' }, 'fa')).toBe('ماهانه')

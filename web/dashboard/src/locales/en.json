@@ -28,7 +28,8 @@
   "role": {
     "owner": "Owner",
     "admin": "Admin",
-    "support": "Support"
+    "support": "Support",
+    "reseller": "Reseller"
   },
   "nav": {
     "menu": "Menu",
@@ -158,7 +159,10 @@
     "col_date": "Date",
     "tickets": "Tickets waiting",
     "tickets_oldest": "The oldest has waited {time}",
-    "tickets_none": "Nobody is waiting"
+    "tickets_none": "Nobody is waiting",
+    "reseller_debt": "Reseller debt",
+    "reseller_no_debt": "Nobody owes",
+    "resellers_count": "{n} resellers"
   },
   "order": {
     "type": {
@@ -444,7 +448,9 @@
       "refund": "Refund",
       "adjust": "Change by staff",
       "referral": "Invitation reward",
-      "trial_grant": "Free trial"
+      "trial_grant": "Free trial",
+      "commission": "Reseller commission",
+      "settlement": "Reseller payment"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -628,7 +634,8 @@
       "ref": "Referrals",
       "renew": "Renewal",
       "topup": "Extra traffic",
-      "admin": "Admin panel"
+      "admin": "Admin panel",
+      "rs": "Reseller panel"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -939,7 +946,9 @@
       "dashboard": "Dashboard account",
       "ticket": "Support ticket",
       "canned_reply": "Saved reply",
-      "broadcast": "Broadcast"
+      "broadcast": "Broadcast",
+      "reseller": "Reseller",
+      "reseller_tier": "Reseller tier"
     },
     "group": {
       "payment": "Payments",
@@ -957,7 +966,9 @@
       "export": "Exports",
       "ticket": "Tickets",
       "canned": "Saved replies",
-      "broadcast": "Broadcasts"
+      "broadcast": "Broadcasts",
+      "reseller": "Resellers",
+      "reseller_tier": "Reseller tiers"
     },
     "action": {
       "payment": {
@@ -1057,6 +1068,16 @@
         "test": "Test broadcast sent",
         "halt": "Broadcast stopped by the bot",
         "finish": "Broadcast finished"
+      },
+      "reseller": {
+        "add": "Made a reseller",
+        "terms": "Reseller terms changed",
+        "payment": "Reseller payment recorded",
+        "remove": "Reseller removed"
+      },
+      "reseller_tier": {
+        "upsert": "Reseller tier saved",
+        "delete": "Reseller tier deleted"
       }
     }
   },
@@ -1352,5 +1373,98 @@
       "when": "Time",
       "empty": "No customer in this list."
     }
+  },
+  "reseller": {
+    "title": "Reseller",
+    "tab_resellers": "Resellers",
+    "tab_tiers": "Tiers",
+    "add": "Add reseller",
+    "search": "Telegram id or {'@'}username",
+    "all_tiers": "All tiers",
+    "only_in_debt": "Only those who owe",
+    "none": "No resellers yet. Make one from a customer's page, or with Add reseller.",
+    "none_match": "No reseller matches.",
+    "col_reseller": "Reseller",
+    "tier": "Tier",
+    "pick_tier": "Choose a tier",
+    "tier_option": "{name} ({discount} off, {commission} commission)",
+    "balance": "Balance",
+    "debt_amount": "Debt {amount}",
+    "credit_limit": "Credit limit",
+    "credit_limit_in": "Credit limit in {currency}",
+    "limit_hint": "How far below zero their wallet may go when they buy. 0 or empty: no credit.",
+    "limit_at_least": "They owe {amount}: the limit cannot be lower.",
+    "available": "Available to spend",
+    "customers": "Customers",
+    "customers_hint": "Customers who joined through this reseller's link. Each of their purchases earns the reseller a commission.",
+    "customers_none": "Nobody joined through this reseller's link yet.",
+    "commission": "Commission",
+    "discount_short": "{n} off",
+    "commission_short": "{n} commission",
+    "commission_earned": "Commission earned",
+    "commission_from_tier": "from the tier",
+    "commission_own": "set for this reseller",
+    "commission_override": "Commission for this reseller (%)",
+    "commission_override_hint": "Empty: the tier's {n}. At most 50.",
+    "commission_override_hint_plain": "Empty: the tier's. At most 50.",
+    "discount_off": "{n} off store prices",
+    "since": "Reseller since",
+    "note": "Note",
+    "note_hint": "Only staff see this note.",
+    "statement": "Statement",
+    "statement_hint": "Every movement of the reseller's wallet: purchases on credit, commissions and payments.",
+    "customer_page": "Customer page",
+    "open_page": "Reseller page",
+    "not_reseller": "This person is not a reseller (any more).",
+    "make": "Make reseller",
+    "make_intro": "The customer buys at the tier's prices in the bot, may spend on credit up to the limit, and earns a commission on customers who join through their link. They manage everything in the bot.",
+    "make_intro_for": "{who} will buy at the tier's prices in the bot, may spend on credit up to the limit, and earns a commission on customers who join through their link. They manage everything in the bot.",
+    "find_customer": "Find the customer",
+    "no_tiers": "There is no tier yet: create one first.",
+    "made": "Done: they are a reseller now",
+    "record_payment": "Record payment",
+    "payment_intro": "Money the reseller paid you outside the bot (cash, a card transfer). It goes to their wallet, lowers what they owe, and they are told in the bot.",
+    "balance_now": "Balance now",
+    "balance_after": "After this payment",
+    "payment_done": "Payment recorded. Balance now: {balance}",
+    "payment_recorded": "Payment recorded",
+    "change_terms": "Change terms",
+    "terms_intro": "Tier, credit limit, commission and note. New prices apply to their next purchase.",
+    "terms_saved": "Terms saved",
+    "terms_stale": "These terms changed after you opened them. Close this window and open it again to see the new values.",
+    "remove": "Remove reseller",
+    "remove_intro": "They become a regular customer again: store prices, no credit and no commission. Their services and the customers they brought stay as they are.",
+    "remove_blocked": "A reseller who owes money cannot be removed: record their payment first.",
+    "removed": "No longer a reseller"
+  },
+  "tier": {
+    "intro": "A tier sets what its resellers pay: a percentage off store prices, or a fixed price for a plan. The commission is the share of each purchase by a customer who joined through a reseller's link.",
+    "new": "New tier",
+    "edit": "Edit tier",
+    "none": "No tiers yet. Create one before making resellers.",
+    "open_tab": "Open Tiers",
+    "name": "Name",
+    "discount": "Discount (%)",
+    "discount_hint": "Off the store price, 0 to {max}.",
+    "commission": "Commission (%)",
+    "commission_hint": "Of each purchase by their customers, 0 to {max}.",
+    "fixed_prices": "Fixed prices",
+    "prices": "Prices",
+    "prices_hint": "A fixed price, in the plan's currency, replaces the discount for that plan. Leave it empty to use the discount.",
+    "plans_error": "The plans did not load.",
+    "no_plans": "No plans to price yet.",
+    "plan_off": "Not on sale",
+    "col_store": "Store price",
+    "col_fixed": "Fixed price",
+    "col_pays": "Reseller pays",
+    "fixed_for": "Fixed price for {plan}",
+    "fixed": "fixed price",
+    "from_discount": "with the discount",
+    "saved": "Tier saved",
+    "stale": "This tier changed after you opened it. Close this window and open it again to see the new values.",
+    "delete": "Delete tier",
+    "delete_confirm": "Delete the tier {name}?",
+    "deleted": "Tier deleted",
+    "in_use": "Resellers are on this tier: move them to another tier first."
   }
 }

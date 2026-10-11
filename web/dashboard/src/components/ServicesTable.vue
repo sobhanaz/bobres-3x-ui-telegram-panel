@@ -39,7 +39,10 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
   >
     <template #empty>{{ t('service.none') }}</template>
     <Column :header="t('service.col_id')">
-      <template #body="{ data: s }"><span class="app-ltr app-mono">{{ shortId(s.id) }}</span></template>
+      <template #body="{ data: s }">
+        <span class="app-ltr app-mono">{{ shortId(s.id) }}</span>
+        <div v-if="s.label" class="app-muted label"><bdi>{{ s.label }}</bdi></div>
+      </template>
     </Column>
     <Column v-if="!props.hideUser" :header="t('common.customer')">
       <template #body="{ data: s }"><UserLink :user="s.user" /></template>
@@ -66,3 +69,9 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
     </Column>
   </DataTable>
 </template>
+
+<style scoped>
+.label {
+  font-size: 0.8rem;
+}
+</style>

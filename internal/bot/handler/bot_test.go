@@ -55,6 +55,10 @@ type fakeTG struct {
 	// blocked: users who blocked the bot (403).
 	down    map[int64]bool
 	blocked map[int64]bool
+
+	// shown: each chat's message sent or edited last (what the user looks at
+	// after a tap, even when it edited an older message).
+	shown map[int64]*msg
 }
 
 type precheckAnswer struct {
@@ -65,7 +69,7 @@ type precheckAnswer struct {
 func newFakeTG() *fakeTG {
 	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{},
 		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}, docs: map[string]bool{},
-		members: map[int64]string{}}
+		members: map[int64]string{}, shown: map[int64]*msg{}}
 }
 
 func (f *fakeTG) GetChat(_ context.Context, chat string) (*tg.Chat, error) {
@@ -127,6 +131,7 @@ func (f *fakeTG) add(chat int64, m *msg) *tg.Message {
 	defer f.mu.Unlock()
 	m.id = len(f.chats[chat]) + 1
 	f.chats[chat] = append(f.chats[chat], m)
+	f.shown[chat] = m
 	return &tg.Message{MessageID: m.id, Chat: tg.Chat{ID: chat, Type: "private"}}
 }
 
@@ -189,6 +194,7 @@ func (f *fakeTG) EditMessageText(_ context.Context, chat int64, id int, text str
 				return &tg.APIError{Code: 400, Description: "Bad Request: there is no text in the message to edit"}
 			}
 			m.text, m.kb = text, kb
+			f.shown[chat] = m
 			return nil
 		}
 	}

@@ -34,6 +34,7 @@ type orderJSON struct {
 	Staff          string         `json:"staff"`  // the staff member who made it (an extension)
 	Extend         map[string]any `json:"extend"` // {days, bytes} of an extension
 	Refund         map[string]any `json:"refund"` // {amount, at} once refunded
+	Label          *string        `json:"label"`  // a reseller's name for the service it creates
 }
 
 func orderOf(o *store.OrderRow) orderJSON {
@@ -41,7 +42,7 @@ func orderOf(o *store.OrderRow) orderJSON {
 		ID: o.ID, User: briefOf(o.UserID, o.TelegramID, o.Username), Plan: planRef{o.PlanID, o.PlanName},
 		Type: o.Type, Status: o.Status, Amount: money{o.Amount, o.Currency}, SubscriptionID: o.SubscriptionID,
 		CreatedAt: o.CreatedAt.Unix(), UpdatedAt: o.UpdatedAt.Unix(), Attempts: o.Attempts, LastError: o.LastError,
-		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName,
+		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName, Label: o.Label,
 	}
 	if o.DiscountCode != nil {
 		out.Discount = map[string]any{"code": *o.DiscountCode, "amount": money{o.DiscountAmount, o.Currency}}

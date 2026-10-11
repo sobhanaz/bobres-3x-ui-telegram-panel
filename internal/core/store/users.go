@@ -18,10 +18,18 @@ var ErrNotFound = errors.New("store: not found")
 // field is a plain string, so it is read as ”.
 const userCols = `id, telegram_id, COALESCE(username, ''), language, role, status, referred_by, created_at, updated_at, ref_code, bot_blocked_at`
 
+// userColsU is userCols for a query that names the table u.
+const userColsU = `u.id, u.telegram_id, COALESCE(u.username, ''), u.language, u.role, u.status, u.referred_by, u.created_at,
+	u.updated_at, u.ref_code, u.bot_blocked_at`
+
+func userDest(u *User) []any {
+	return []any{&u.ID, &u.TelegramID, &u.Username, &u.Language, &u.Role,
+		&u.Status, &u.ReferredBy, &u.CreatedAt, &u.UpdatedAt, &u.RefCode, &u.BotBlockedAt}
+}
+
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.TelegramID, &u.Username, &u.Language, &u.Role,
-		&u.Status, &u.ReferredBy, &u.CreatedAt, &u.UpdatedAt, &u.RefCode, &u.BotBlockedAt)
+	err := row.Scan(userDest(&u)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

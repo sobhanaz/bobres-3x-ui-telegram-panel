@@ -98,8 +98,10 @@ func (p *fakeProv) record(op string) error {
 func (p *fakeProv) CreateClient(context.Context, string, string, int64, int64) (domain.ProvisionedClient, error) {
 	return domain.ProvisionedClient{}, errNotUsed
 }
-func (p *fakeProv) GetLinks(context.Context, string) (domain.Links, error) { return domain.Links{}, errNotUsed }
-func (p *fakeProv) Health(context.Context) (bool, string, error)           { return true, "", nil }
+func (p *fakeProv) GetLinks(context.Context, string) (domain.Links, error) {
+	return domain.Links{}, errNotUsed
+}
+func (p *fakeProv) Health(context.Context) (bool, string, error) { return true, "", nil }
 func (p *fakeProv) SetLimits(_ context.Context, id string, expires, traffic int64) error {
 	if err := p.record("limits:" + id); err != nil {
 		return err

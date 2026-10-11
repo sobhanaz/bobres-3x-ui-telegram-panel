@@ -352,9 +352,16 @@ func (s *Service) EnsureOwner(ctx context.Context) error {
 }
 
 // promoteOwner makes the configured owner an active owner, audited as the
-// system acting on the configuration.
+// system acting on the configuration. A reseller is left as they are (their
+// debt and customers would be orphaned): staff remove them as a reseller
+// first, and they become the owner on their next visit.
 func (s *Service) promoteOwner(ctx context.Context, u *store.User) error {
 	if u.Role == "owner" && u.Status == "active" {
+		return nil
+	}
+	if isReseller(u) {
+		s.cfg.Log.Error("the configured owner is a reseller: not made owner; remove them as a reseller in the dashboard first",
+			"telegram_id", u.TelegramID)
 		return nil
 	}
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {

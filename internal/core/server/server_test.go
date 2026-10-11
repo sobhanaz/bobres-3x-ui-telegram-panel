@@ -37,7 +37,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(st.Close)
-	if _, err := st.DB().Exec(ctx, "TRUNCATE core.ledger_entries, core.wallets, core.subscriptions, core.orders, core.plans, core.users CASCADE"); err != nil {
+	if _, err := st.DB().Exec(ctx, "TRUNCATE core.ledger_entries, core.wallets, core.subscriptions, core.orders, core.plans, core.users, core.reseller_tiers CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 	gs, err := grpcx.NewServer(nil, grpcauth.Peer{Name: "bot", Token: botToken})

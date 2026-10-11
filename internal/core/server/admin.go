@@ -74,7 +74,7 @@ func (s *Server) AdminFindUser(ctx context.Context, req *corev1.AdminFindUserReq
 	}
 	out := &corev1.AdminUserView{User: userToProto(v.User), Subscriptions: v.Subscriptions, Orders: v.Orders}
 	for _, w := range v.Wallets {
-		out.Wallets = append(out.Wallets, &corev1.Wallet{UserId: w.UserID, Currency: w.Currency, Balance: w.Balance, UpdatedAt: w.UpdatedAt.Unix()})
+		out.Wallets = append(out.Wallets, walletToProto(&w))
 	}
 	return out, nil
 }
@@ -87,7 +87,7 @@ func (s *Server) AdminAdjustBalance(ctx context.Context, req *corev1.AdminAdjust
 	if err != nil {
 		return nil, fail(err)
 	}
-	return &corev1.Wallet{UserId: w.UserID, Currency: w.Currency, Balance: w.Balance, UpdatedAt: w.UpdatedAt.Unix()}, nil
+	return walletToProto(w), nil
 }
 
 // AdminSetUserStatus bans or unbans a user.

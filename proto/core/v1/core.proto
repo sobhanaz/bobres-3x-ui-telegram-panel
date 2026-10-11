@@ -32,6 +32,9 @@ message Plan {
   bool is_trial = 8;
   int32 sort = 9;
   bool is_topup = 10; // a traffic package for an existing subscription
+  // The store price. price is what the user ListPlans was asked for pays (a
+  // reseller's tier price); without a user both are the store price.
+  common.v1.Money list_price = 11;
 }
 
 message Order {
@@ -47,13 +50,15 @@ message Order {
   string subscription_id = 10; // renew | traffic_topup: the subscription extended
   string discount_code = 11;
   common.v1.Money discount = 12; // already taken off amount
+  string label = 13; // a reseller's name for the service it creates
 }
 
 message Wallet {
   string user_id = 1;
   string currency = 2;
-  int64 balance = 3;
+  int64 balance = 3; // a reseller's may be negative: what they owe
   int64 updated_at = 4;
+  int64 credit_limit = 5; // resellers: the balance may go down to -credit_limit (0 for everyone else)
 }
 
 message LedgerEntry {
@@ -61,7 +66,7 @@ message LedgerEntry {
   string user_id = 2;
   string currency = 3;
   int64 amount = 4;
-  string kind = 5; // topup | purchase | refund | adjust | trial_grant
+  string kind = 5; // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement
   string ref_type = 6;
   string ref_id = 7;
   string idempotency_key = 8;
@@ -82,6 +87,7 @@ message Subscription {
   int64 traffic_used_bytes = 10;
   int64 last_synced_at = 11;
   string subscription_link = 12; // set once provisioned
+  string label = 13; // the name a reseller gave it ("" = none)
 }
 
 message Ticket {
@@ -262,6 +268,7 @@ message GetUserRequest {
 
 message ListPlansRequest {
   bool include_disabled = 1;
+  string user_id = 2; // optional: Plan.price is this user's price (a reseller's tier price)
 }
 
 message ListPlansResponse {
@@ -274,7 +281,10 @@ message CreateOrderRequest {
   string type = 3; // new | renew | traffic_topup
   string idempotency_key = 4;
   string subscription_id = 5; // renew | traffic_topup
-  string discount_code = 6;
+  string discount_code = 6; // refused for resellers (they pay tier prices)
+  // A reseller's name for the new service, at most 64 characters; ignored
+  // for anyone else and on renewals and top-ups.
+  string label = 7;
 }
 
 // QuoteOrderRequest prices an order before it is created, e.g. to show the
@@ -373,14 +383,48 @@ message ListLedgerEntriesResponse {
   common.v1.PageInfo page_info = 2;
 }
 
+// ListSubscriptionsRequest without pagination and query lists the newest
+// 100 (no page_info). With either, it is paged (page_size at most 50) and
+// page_info carries the total.
 message ListSubscriptionsRequest {
   string user_id = 1;
   common.v1.Pagination pagination = 2;
+  string query = 3; // part of the label, or the end of the id (the bot's #abc123)
 }
 
 message ListSubscriptionsResponse {
   repeated Subscription subscriptions = 1;
   common.v1.PageInfo page_info = 2;
+}
+
+// SetSubscriptionLabelRequest names one of a reseller's services
+// (PERMISSION_DENIED for anyone else; NOT_FOUND for a service not theirs).
+message SetSubscriptionLabelRequest {
+  string user_id = 1;
+  string subscription_id = 2;
+  string label = 3; // at most 64 characters; empty clears it
+}
+
+message GetResellerInfoRequest {
+  string user_id = 1;
+}
+
+message ResellerBalance {
+  string currency = 1;
+  int64 balance = 2; // negative: what they owe
+  int64 credit_limit = 3;
+  int64 available = 4; // balance + credit_limit: what they can spend
+}
+
+// ResellerInfo is a reseller's panel in the bot (NOT_FOUND for anyone else).
+message ResellerInfo {
+  string tier_name = 1;
+  int32 discount_percent = 2;
+  int32 commission_percent = 3; // the reseller's own rate, else the tier's
+  repeated ResellerBalance balances = 4; // per currency, IRT always listed
+  int64 customers = 5; // users who joined through their link
+  repeated common.v1.Money commission_earned = 6; // per currency
+  string ref_code = 7; // the invite code (created on first request)
 }
 
 message CreateSupportTicketRequest {
@@ -531,7 +575,7 @@ message AdminUserView {
 message AdminAdjustBalanceRequest {
   int64 actor_telegram_id = 1;
   string user_id = 2;
-  common.v1.Money delta = 3; // signed; the balance can never go below zero
+  common.v1.Money delta = 3; // signed; the balance can never go below zero (-credit_limit for a reseller)
   string reason = 4;
   string idempotency_key = 5;
 }
@@ -630,6 +674,9 @@ service CoreService {
   rpc SetUserBotBlocked(SetUserBotBlockedRequest) returns (SetUserBotBlockedResponse);
   rpc ClaimBroadcastBatch(ClaimBroadcastBatchRequest) returns (BroadcastBatch);
   rpc ReportBroadcastResults(ReportBroadcastResultsRequest) returns (BroadcastState);
+  // Resellers (milestone 5).
+  rpc SetSubscriptionLabel(SetSubscriptionLabelRequest) returns (Subscription);
+  rpc GetResellerInfo(GetResellerInfoRequest) returns (ResellerInfo);
 }
 
 message CanStartTrialRequest {

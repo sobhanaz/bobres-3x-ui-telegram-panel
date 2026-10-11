@@ -71,8 +71,8 @@ const actionOptions = computed(() => {
   ]
 })
 const entityNames = [
-  'user', 'subscription', 'order', 'plan', 'payment_intent', 'discount', 'ticket', 'canned_reply', 'broadcast',
-  'settings', 'text', 'branding', 'staff', 'dashboard',
+  'user', 'subscription', 'order', 'plan', 'payment_intent', 'discount', 'reseller', 'reseller_tier', 'ticket', 'canned_reply',
+  'broadcast', 'settings', 'text', 'branding', 'staff', 'dashboard',
 ]
 const entityLabel = (e: string) => (te('audit.entity.' + e) ? t('audit.entity.' + e) : e)
 const sourceLabel = (s: string) => (te('audit.source.' + s) ? t('audit.source.' + s) : s)

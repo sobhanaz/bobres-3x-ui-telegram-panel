@@ -631,4 +631,3 @@ func TestBroadcastReleaseDuringCancel(t *testing.T) {
 		t.Fatalf("after the cancel: %s pending=%d not cancelled=%d", b.Status, b.Pending, left)
 	}
 }
-

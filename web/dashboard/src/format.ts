@@ -133,6 +133,18 @@ export function decimalOf(m: Money): string {
   return (neg ? '-' : '') + digits.slice(0, -scale) + (frac ? '.' + frac : '')
 }
 
+/** minorOf reads a plain decimal ("2.5", "-1200") as minor units of a
+ * currency, the inverse of decimalOf; null when it is not one. */
+export function minorOf(s: string, currency: string): number | null {
+  const scale = scales[currency]
+  if (scale === undefined) return null
+  const m = /^(-?)(\d{1,15})(?:\.(\d+))?$/.exec(s.trim())
+  if (!m || (m[3] ?? '').length > scale) return null
+  const n = Number(m[2] + (m[3] ?? '').padEnd(scale, '0'))
+  if (!Number.isSafeInteger(n)) return null
+  return m[1] && n ? -n : n
+}
+
 /** gbOf writes a byte count as GB with at most 3 decimals ("1.5"). */
 export function gbOf(n: number): string {
   return String(Math.round((n / 2 ** 30) * 1000) / 1000)

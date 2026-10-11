@@ -4,7 +4,7 @@ Written 2026-10-07. PLAN.md section 10: "Web dashboard + branding editor." The o
 sections, every feature (including the later-phase pages), login both from the bot and with a
 password, two-factor codes required for passwords, and a calm dark + light look. It ships in six
 milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and sales), 3
-(store setup) and 4 (support and broadcasts) are built**; the rest is planned below.
+(store setup), 4 (support and broadcasts) and 5 (resellers) are built**; the rest is planned below.
 
 ## Milestones
 
@@ -19,7 +19,9 @@ milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and
    See "Milestone 3" below.
 4. **Support and broadcasts (built).** Tickets answered through the bot, broadcasts sent with a rate
    limit. See "Milestone 4" below.
-5. **Resellers.**
+5. **Resellers (built).** Resellers buy for their own customers at a tier price on credit, and earn a
+   commission on purchases by the customers who joined through their link. They work only in the
+   bot; owner and admins manage them in the dashboard. See "Milestone 5" below.
 6. **Infrastructure.** Several 3x-ui servers (servers per plan), payment gateways with encrypted
    keys, System (health, versions, update check, backups through a backup container), License
    (checked with internal/license).
@@ -428,6 +430,150 @@ The bot gains the core calls `AddTicketMessage`, `GetMyTickets`, `GetMyTicket`, 
 `GetTicketMessage`, `ReportTicketDelivery`, `SetUserBotBlocked`, `ClaimBroadcastBatch` and
 `ReportBroadcastResults`. Core gains the bot's `POST /internal/broadcasts/test`.
 
+## Milestone 5: resellers
+
+The owner chose both models (2026-10-10):
+
+- **Buying for customers:** a reseller buys and renews services for their own customers at a tier
+  price, with a credit limit (buy now, pay later).
+- **Commission:** customers who join through the reseller's link buy at store prices, and the
+  reseller earns a commission.
+
+Resellers work only in the Telegram bot. Owner and admins manage them in the dashboard
+(`resellers.write`). Reseller is not a staff role: `IsStaffRole`, the dashboard's permissions and the
+staff lists leave it out, so a reseller gets no login link and a staff member made one loses their
+session.
+
+- **Data (migration 00010):**
+  - `reseller_tiers`:
+    - name (unique, 1-40 characters)
+    - `discount_percent` (0-90) off the store price
+    - `commission_percent` (0-50)
+    - a version for edits
+  - `reseller_tier_prices`: an optional fixed price for one plan in one tier, in the plan's
+    currency. It overrides the discount.
+  - `resellers`:
+    - the user, their tier (a tier in use cannot be deleted)
+    - an optional `commission_percent` of their own
+    - a staff note (at most 500 characters)
+    - a version
+  - A reseller is a user with role `reseller` and a `resellers` row; the two are always changed
+    together.
+- **Credit per currency.** `wallets.credit_limit` is per currency, like the wallet. The check
+  `wallets_balance_check` became `balance >= -credit_limit`.
+  - A debit may take the balance down to `-credit_limit`, read under the wallet's row lock, and no
+    further. Credits and zero entries always go through, even while the balance is below zero.
+  - Wallets with no limit (everyone but resellers) behave exactly as before.
+  - Only resellers get a limit, a rule of the domain. Lowering a limit below the current debt is
+    refused, with the amount owed in the message; the database refuses it too.
+  - The Down refuses while any balance is negative. It keeps the new ledger kinds (the ledger is
+    append-only) and makes resellers customers again.
+- **Prices.** One `priceFor(user, plan)`, used by `CreateOrder`, `QuoteOrder` and the bot's plan
+  lists, for new orders, renewals and top-ups alike:
+  - an active reseller pays the tier's fixed price for the plan if set, else the store price less
+    the discount (rounded down)
+  - everyone else, a banned reseller included, pays the store price
+  - `ListPlans(user_id)` answers the user's price in `price` and the store price in `list_price`
+- **Discount codes are refused for resellers** (reason `reseller`): they get tier prices instead.
+- **Paying.** A reseller pays from the wallet as anyone does, down to `-credit_limit`. Gateways,
+  manual payments and top-ups work as for anyone; the money credited lowers the debt.
+- **Labels.** A reseller names the service they buy for a customer ("Ali's phone", at most 64
+  characters of plain text). The order keeps it (`orders.label`) and provisioning copies it to the
+  new service (`subscriptions.label`). Renewals and top-ups keep the service's name, and other
+  people's labels are ignored.
+  - The name travels in `subscription.provisioned/extended/reminder.v1` (`label`) for the bot's
+    texts.
+  - `SetSubscriptionLabel` renames one of the reseller's own services; anyone else's is not found.
+  - `ListSubscriptions` pages (at most 50) and searches by label or id suffix when asked. Without
+    paging or a search it answers the newest 100 as before.
+- **Settlement.** "Payment received" is recorded by staff: a credit of kind `settlement`, ref_type
+  `admin`, key `settlement:<request key>`.
+  - It has an audit entry `reseller.payment` with the reason and a `wallet.credited.v1` event with
+    reason `settlement`.
+  - A replay with the same key answers the first entry and changes nothing.
+- **Commission.** When a paid order has an amount and is not a trial or free order:
+  - **The buyer is a reseller:** nobody is paid. These are business purchases, so there is no
+    referral reward and no commission.
+  - **The buyer joined through an active reseller's link:** that reseller earns `amount × rate /
+    100`.
+    - The rate is their own if set, else the tier's.
+    - The credit has kind `commission`, ref_type `order` and key `commission:<order id>`, so every
+      order pays once. A 0 result pays nothing.
+    - The event is `wallet.credited.v1` with reason `commission`. The bot names the amount only,
+      never the customer.
+    - The referral reward is not paid then. A replay is a no-op; any other ledger conflict fails
+      the payment (never swallowed).
+  - **Anyone else:** the referral reward, unchanged.
+  - Every customer the reseller invited counts, including those who joined before they became a
+    reseller (attribution is `users.referred_by`, set once when a user is created). A banned
+    reseller earns nothing.
+- **Refunds do not reverse commissions,** as with referral rewards; staff can adjust a balance. A
+  refund of an order a reseller paid credits the reseller, which lowers their debt.
+- **Lifecycle** (all audited with a reason; entity `reseller`, id the user's):
+  - **Make** (`reseller.add`, before `{"role":"user"}`):
+    - the person must be an active customer (role `user`), never the configured owner
+    - the role changes with a compare-and-set, so a role changed meanwhile is a 409
+    - the terms and credit limits are set in the same transaction
+  - **Change terms** (`reseller.terms`, before and after):
+    - tier, own rate, note and credit limits per currency
+    - read at a version: a stale one is a 409
+    - currencies left out keep their limit
+  - **Remove** (`reseller.remove`): refused while any balance is negative. Credit limits go to 0,
+    the row goes, and the role returns to `user`.
+    - Their unpaid orders (`created`, `awaiting_payment`) are cancelled in the same transaction
+      (the audit's after counts them as `cancelled_orders`). Those orders carry tier prices, and
+      orders never expire: paid later as a customer, one would buy at the tier price and pay their
+      inviter a commission or the referral reward.
+    - A payment that still arrives for a cancelled order stays in the wallet
+      (`order_not_payable`), as for any order that is no longer payable.
+    - An order being created at a tier price holds the reseller's row (`FOR SHARE`) until it
+      commits, so a removal waits for it and then cancels it. An order that would be priced after
+      the removal is refused (`FailedPrecondition`); asked again, it gets the store price.
+  - **Tiers** (`reseller_tier.upsert`, `reseller_tier.delete`; entity `reseller_tier`, an optional
+    reason): create, change at a version with the whole price list, and delete. Deleting is a 409
+    while resellers are on the tier.
+- **Other roles.** `AddStaff` still takes customers only, so a reseller is removed as a reseller
+  first. The configured owner is not made owner while they are a reseller: core logs an error, and
+  removing them as a reseller lets the promotion happen. A reseller can be banned: the debt stays,
+  and they cannot buy while banned.
+- **Overview.** Revenue stays as it was (purchases on credit count when made). For
+  `resellers.write`, the overview adds `resellers: {count, debt}`, where debt is what negative
+  balances add up to, per currency.
+- **License.** The `resellers` feature of the license is not checked yet; the License page
+  (milestone 6) brings it.
+
+### API (milestone 5)
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/resellers?q=&tier=&in_debt=&page=&size=`, `GET /api/v1/resellers/{id}` | resellers.write |
+| `POST /api/v1/resellers` (make), `PUT /api/v1/resellers/{id}` (terms, with `version`) | resellers.write |
+| `POST /api/v1/resellers/{id}/payments` (with a request key), `POST /api/v1/resellers/{id}/remove` | resellers.write |
+| `GET`/`POST /api/v1/reseller-tiers`, `PUT`/`DELETE /api/v1/reseller-tiers/{id}` | resellers.write |
+| `GET /api/v1/users?referred_by=<id>` (a reseller's customers) | users.read |
+| `GET /api/v1/overview` gains `resellers` when the viewer has resellers.write | overview.read |
+
+- **A reseller item** has:
+  - `user` (`{id, telegram_id, username, status}`) and `tier` (`{id, name, discount_percent,
+    commission_percent}`)
+  - `commission_percent` (the effective rate) and `commission_override`
+  - `balances` (`[{currency, balance, credit_limit}]`, minor units) and `customers`
+  - `commission_earned` (`[{amount, currency}]`) and `created_at`
+
+  The page's item adds `note`, `version` and `can_remove`.
+- **Answers.** One item is answered as `{item}`, a payment as `{item, entry}`, a removal as
+  `{user_id, role}`, a tier deletion as 204, and field errors as 400 with `field`.
+- **Amounts** go in as decimal text in major units: credit limits as `[{currency, amount}]`, tier
+  prices as `[{plan_id, price}]` (empty for none). Tier prices come out the same way, with each
+  plan's currency.
+- **Detail tabs** reuse `/services?user=`, `/orders?user=` and `/ledger?user=`. Services and orders
+  now carry `label`.
+
+The bot gains `ListPlans.user_id` (with `Plan.list_price`), `CreateOrder.label`, `Subscription.label`,
+`ListSubscriptions` paging and `query`, `Wallet.credit_limit`, and the calls `SetSubscriptionLabel`
+and `GetResellerInfo` (tier, rates, balances with the limit and what is available, customers,
+commissions, the invite code).
+
 ## Tests
 
 - **Go.** TOTP against the RFC 6238 vectors and password hashing. The handlers end to end, over
@@ -491,6 +637,30 @@ The bot gains the core calls `AddTicketMessage`, `GetMyTickets`, `GetMyTicket`, 
   - My account's sessions, Persian and English, dark and light, phone width with no sideways
     scrolling
   - the embedded build under the real CSP with no violations (logo, `data:` preview, colour)
+- **Milestone 5 (Go).**
+  - Store: debits down to the credit limit and no further (also 20 at once), credits and zero
+    entries while in debt, limits per currency, the database check against a direct write, labels,
+    and the paged services list with its search (label in any case, `%` and `_` as letters, id
+    suffix).
+  - Domain:
+    - prices (fixed, discounted and rounded, customers, a banned reseller); quotes and orders for a
+      reseller; codes refused; labels kept and checked, ignored for customers and renewals
+    - paying on credit to the limit and refused beyond; the label through delivery, renewal and
+      reminder events; payments and refunds lowering the debt
+    - settlements once per key with their audit entry and event
+    - commissions once per order, at the reseller's own rate, never to a banned reseller, not on a
+      reseller's own purchases (nor their inviter's reward), for customers invited before the role,
+      and a conflicting key rolling the payment back
+    - make, terms (stale, below the debt, currencies left out), remove (refused in debt), tiers
+      (field errors, names, versions, in use), renaming, the reseller's panel, and the configured
+      owner not promoted while a reseller
+    - removal cancelling unpaid orders (paying one afterwards is refused, a late payment stays in
+      the wallet, nobody earns a commission), with an order in flight (cancelled after it commits)
+      and an order that comes after the removal (refused)
+  - The dashboard API: every endpoint's permissions (support 403, admin allowed), field errors, the
+    409s, replays, the customers filter, labels on services and orders, the audit trail, and the
+    overview field. gRPC: tier prices in `ListPlans`, labels, paging and search, renaming and the
+    panel. The migration's Down: refused in debt, the old check back, the new kinds kept.
 - **By hand, in a browser,** against a locally built core:
   - link login; password + code setup, login, and turning it off
   - Persian and English, dark and light, the phone drawer
