@@ -55,6 +55,7 @@ func (s *Server) AdminListPendingPayments(ctx context.Context, req *corev1.Admin
 
 // ReviewManualPayment approves or rejects a manual payment as the actor.
 func (s *Server) ReviewManualPayment(ctx context.Context, req *corev1.ReviewManualPaymentRequest) (*corev1.PaymentIntentRef, error) {
+	ctx = fromBot(ctx)
 	if err := s.needPayments(); err != nil {
 		return nil, err
 	}
@@ -80,6 +81,7 @@ func (s *Server) AdminFindUser(ctx context.Context, req *corev1.AdminFindUserReq
 
 // AdminAdjustBalance credits or debits a wallet by hand.
 func (s *Server) AdminAdjustBalance(ctx context.Context, req *corev1.AdminAdjustBalanceRequest) (*corev1.Wallet, error) {
+	ctx = fromBot(ctx)
 	w, err := s.dom.AdminAdjustBalance(ctx, req.GetActorTelegramId(), req.GetUserId(),
 		req.GetDelta().GetAmount(), req.GetDelta().GetCurrency(), req.GetReason(), req.GetIdempotencyKey())
 	if err != nil {
@@ -90,6 +92,7 @@ func (s *Server) AdminAdjustBalance(ctx context.Context, req *corev1.AdminAdjust
 
 // AdminSetUserStatus bans or unbans a user.
 func (s *Server) AdminSetUserStatus(ctx context.Context, req *corev1.AdminSetUserStatusRequest) (*corev1.User, error) {
+	ctx = fromBot(ctx)
 	u, err := s.dom.AdminSetUserStatus(ctx, req.GetActorTelegramId(), req.GetUserId(), req.GetStatus(), req.GetReason())
 	if err != nil {
 		return nil, fail(err)
@@ -99,6 +102,7 @@ func (s *Server) AdminSetUserStatus(ctx context.Context, req *corev1.AdminSetUse
 
 // AdminUpsertPlan creates or updates a plan.
 func (s *Server) AdminUpsertPlan(ctx context.Context, req *corev1.AdminUpsertPlanRequest) (*corev1.Plan, error) {
+	ctx = fromBot(ctx)
 	in := req.GetPlan()
 	p := &store.Plan{
 		ID: in.GetId(), NameI18n: in.GetNameI18N(), Kind: in.GetKind(),
@@ -120,6 +124,7 @@ func (s *Server) AdminUpsertPlan(ctx context.Context, req *corev1.AdminUpsertPla
 
 // AdminSetSetting changes one allowlisted setting.
 func (s *Server) AdminSetSetting(ctx context.Context, req *corev1.AdminSetSettingRequest) (*corev1.Settings, error) {
+	ctx = fromBot(ctx)
 	if err := s.dom.AdminSetSetting(ctx, req.GetActorTelegramId(), req.GetKey(), req.GetValue()); err != nil {
 		return nil, fail(err)
 	}
@@ -128,6 +133,7 @@ func (s *Server) AdminSetSetting(ctx context.Context, req *corev1.AdminSetSettin
 
 // AdminUpsertDiscount creates or changes a discount code.
 func (s *Server) AdminUpsertDiscount(ctx context.Context, req *corev1.AdminUpsertDiscountRequest) (*corev1.Discount, error) {
+	ctx = fromBot(ctx)
 	in := req.GetDiscount()
 	d := &store.Discount{Code: in.GetCode(), Enabled: in.GetEnabled()}
 	if p := in.GetPercent(); p != 0 {

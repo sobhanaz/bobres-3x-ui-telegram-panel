@@ -1,8 +1,2 @@
 # Vulnerabilities reviewed and accepted for now. Every entry needs a reason and a
 # condition for removal. tools/ci/vulncheck-gate.sh fails on anything else.
-
-# grpc server panic on missing :authority/Host (transport level). The fix exists only in
-# grpc-go master builds (v1.85.0-dev...); no stable release yet. Our gRPC ports are on
-# internal Docker networks only and accept authenticated peers, so only our own services
-# can reach them. Remove when google.golang.org/grpc v1.85.0 is released and adopted.
-GO-2026-6443

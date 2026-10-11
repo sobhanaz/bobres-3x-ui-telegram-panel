@@ -53,7 +53,7 @@ var supportPerms = map[string]bool{
 func Allowed(role, perm string) bool {
 	switch role {
 	case "owner":
-		return true
+		return contains(allPerms, perm) // a mistyped flag allows nobody
 	case "admin":
 		return !ownerOnly[perm] && contains(allPerms, perm)
 	case "support":

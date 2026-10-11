@@ -182,7 +182,7 @@ func reset(ctx context.Context, t *testing.T, dsn string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, "TRUNCATE "+strings.Join(tables, ", ")+" CASCADE"); err != nil {
+	if err := testdb.Truncate(ctx, conn, strings.Join(tables, ", ")); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -243,16 +243,14 @@ func (h *Handler) onStarsPaid(parent context.Context, m *tg.Message) {
 	h.log.Error("Stars payment not recorded as paid", "telegram_id", from.ID, "charge_id", sp.TelegramPaymentChargeID,
 		"payload", sp.InvoicePayload, "stars", sp.TotalAmount, "status", ref.GetStatus(), "reason", ref.GetFailureReason(), "err", err)
 	h.sendTo(ctx, m.Chat.ID, h.cat.T(lang, "pay.stars_unrecorded", "code", esc(sp.TelegramPaymentChargeID)))
-	if h.cfg.AdminTelegramID != 0 {
-		who := strconv.FormatInt(from.ID, 10)
-		if from.Username != "" {
-			who = "@" + from.Username + " (" + who + ")"
-		}
-		al := h.userLang(ctx, h.cfg.AdminTelegramID)
-		h.sendTo(ctx, h.cfg.AdminTelegramID, h.cat.T(al, "admin.stars_unrecorded",
-			"user", esc(who), "stars", i18n.Number(al, sp.TotalAmount),
-			"charge", esc(sp.TelegramPaymentChargeID), "payload", esc(sp.InvoicePayload)))
+	who := strconv.FormatInt(from.ID, 10)
+	if from.Username != "" {
+		who = "@" + from.Username + " (" + who + ")"
 	}
+	// Always sent, also to a staff member who paid: money was taken.
+	h.notifyStaff(ctx, 0, "admin.stars_unrecorded",
+		"user", esc(who), "stars", func(l string) string { return i18n.Number(l, sp.TotalAmount) },
+		"charge", esc(sp.TelegramPaymentChargeID), "payload", esc(sp.InvoicePayload))
 }
 
 // userLang is a user's language, or the default when unknown.

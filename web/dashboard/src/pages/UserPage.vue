@@ -150,6 +150,18 @@ const directions = computed(() => [
       <template v-else>{{ t('user.title') }}</template>
     </h1>
     <div v-if="detail" class="app-actions">
+      <RouterLink v-if="auth.can('audit.read')" :to="{ name: 'audit', query: { entity_id: id } }" class="p-button p-component p-button-text history">
+        <i class="pi pi-history" aria-hidden="true" />
+        <span>{{ t('audit.history') }}</span>
+      </RouterLink>
+      <RouterLink
+        v-if="auth.can('audit.read') && detail.user.role !== 'user'"
+        :to="{ name: 'audit', query: { actor: id } }"
+        class="p-button p-component p-button-text history"
+      >
+        <i class="pi pi-list" aria-hidden="true" />
+        <span>{{ t('audit.their_actions') }}</span>
+      </RouterLink>
       <Button v-if="auth.can('wallet.adjust')" :label="t('user.adjust_balance')" icon="pi pi-wallet" outlined @click="openBalance" />
       <Button
         v-if="detail.can_ban"
@@ -309,6 +321,10 @@ const directions = computed(() => [
 }
 .back {
   margin-inline-end: 0.25rem;
+}
+.history {
+  text-decoration: none;
+  gap: 0.5rem;
 }
 .app-page-title {
   display: flex;

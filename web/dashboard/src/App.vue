@@ -8,6 +8,7 @@ useUi() // applies the saved theme on start
 
 <template>
   <Toast position="top-center" />
-  <ConfirmDialog />
+  <!-- A long question wraps instead of stretching across the screen. -->
+  <ConfirmDialog :style="{ width: '32rem' }" :breakpoints="{ '575px': '92vw' }" />
   <RouterView />
 </template>

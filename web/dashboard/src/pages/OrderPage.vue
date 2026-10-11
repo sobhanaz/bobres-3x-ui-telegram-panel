@@ -95,6 +95,10 @@ async function refund(reason: string) {
       <span v-if="o" class="app-ltr app-mono app-muted">{{ shortId(o.id) }}</span>
     </h1>
     <div v-if="d" class="app-actions">
+      <RouterLink v-if="auth.can('audit.read')" :to="{ name: 'audit', query: { entity_id: d.order.id } }" class="p-button p-component p-button-text history">
+        <i class="pi pi-history" aria-hidden="true" />
+        <span>{{ t('audit.history') }}</span>
+      </RouterLink>
       <Button v-if="d.can.retry && auth.can('payments.review')" :label="t('order.retry')" icon="pi pi-replay" :loading="retrying" @click="retry" />
       <Button
         v-if="d.can.refund && auth.can('payments.review')"
@@ -186,6 +190,10 @@ async function refund(reason: string) {
 </template>
 
 <style scoped>
+.history {
+  text-decoration: none;
+  gap: 0.5rem;
+}
 .payments {
   margin-block-start: var(--app-gap);
 }

@@ -3,8 +3,8 @@
 Written 2026-10-07. PLAN.md section 10: "Web dashboard + branding editor." The owner chose all 17
 sections, every feature (including the later-phase pages), login both from the bot and with a
 password, two-factor codes required for passwords, and a calm dark + light look. It ships in six
-milestones, one pull request each. **Milestones 1 (foundation) and 2 (customers and sales) are
-built**; the rest is planned below.
+milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and sales) and 3
+(store setup) are built**; the rest is planned below.
 
 ## Milestones
 
@@ -15,7 +15,8 @@ built**; the rest is planned below.
 2. **Customers and sales (built).** Users, Services, Plans and packages, Orders and payments
    (the receipt review queue with the photos), Wallet and ledger with CSV export, Discounts and
    referrals. See "Milestone 2" below.
-3. **Store setup.** Branding and texts (every bot string), Settings, Staff, Audit log.
+3. **Store setup (built).** Branding and texts (every bot string), Settings, Staff, Audit log.
+   See "Milestone 3" below.
 4. **Support and broadcasts.** Tickets answered through the bot, broadcasts sent with a rate limit.
 5. **Resellers.**
 6. **Infrastructure.** Several 3x-ui servers (servers per plan), payment gateways with encrypted
@@ -229,6 +230,129 @@ Lists take `?page=&size=` (25 by default, at most 100) and answer `{items, total
 Amounts go in as decimal text in major units and come out as `{amount, currency}` in minor units.
 Changes that move money or add days take a request key, so a retried request happens once.
 
+## Milestone 3: store setup
+
+- **Settings are described in one place.** `domain.SettingSpecs` lists every setting: its group,
+  kind (text, int, bool, enum, time zone, URL, channel, colour), default, limits and the permission
+  needed to change it.
+  - Values are still stored as JSON strings, so older bots read them. They are normalised on write:
+    Persian digits become ASCII, `yes` becomes `true`, a colour becomes lower case.
+  - `SetSettings` checks every value, then writes them all in one transaction, with one audit entry
+    per changed key (the value before and after, and the key as the entry's item).
+  - **Payment details are the owner's.** Card number, USDT addresses and rates, and the Zarinpal link
+    need `gateways.write`; this also applies to the bot's `/set`. Before, any admin could change where
+    customers' money goes.
+  - The bot's `/set` list is built from the same table, so the two cannot drift apart.
+- **The Settings page** has the groups general (time zone), maintenance, required channel,
+  notifications, limits and payment details. Each card saves on its own.
+  - A save tells the bot at once (`POST /internal/settings/refresh` with core's service token); the
+    bot still reloads every minute.
+  - "Check" on the required channel asks the bot (`GET /internal/channel-check`) whether it is an
+    administrator there and can see who joined.
+- **Branding** keeps the store name, support contact, brand colour, terms and privacy links, and the
+  name of the Toman in prices (per language; the accounting currency stays the Toman).
+  - **Logo.** PNG, JPEG or WebP, at most 512 KB and 16-2048 pixels a side, checked by its bytes (not
+    by the name or the type sent). SVG is refused because it can carry script.
+    - It is stored in `core.assets`, not in settings: the bot reads every setting each minute.
+    - It is served at `/api/v1/brand/logo?v=<time>` with a sandboxing CSP, so the dashboard's CSP
+      (`img-src 'self'`) needs no change.
+  - `GET /api/v1/brand` is public (name, colour, logo), so the login page shows the store's look.
+  - The colour changes the dashboard's primary palette while it runs; the page warns when white text
+    on it would be hard to read.
+  - A `:` in the store name no longer breaks the authenticator app's label.
+- **Bot texts.** Every one of the bot's texts can be changed per language, with checks shared by core
+  and the bot (`internal/bot/i18n`, `ValidateOverride`).
+  - Each text knows where it is shown: an HTML message, a caption, a button, a short popup, an invoice
+    title or description, or text that is never shown to customers.
+  - **Checks.**
+    - An override must keep exactly the placeholders of the default text.
+    - HTML texts may only use Telegram's tags, properly nested, with links to https or tg only. They
+      are checked with sample values filled in, so `<code>{addresses}</code>` (whose value has tags)
+      is refused.
+    - Buttons and popups take no markup.
+    - Lengths are counted the way Telegram counts them, in UTF-16 units.
+  - The bot checks overrides again when it loads them and skips (and logs) any that would break a
+    message. Before, one broken text could make the menu, or the notification queue, stop.
+  - The page has a live check while typing, a safe preview (never `v-html`), reset, and per-language
+    export and import. An import is all or nothing.
+  - **The payment screens' texts are the owner's** (`gateways.write`, also through `/set`): they tell
+    customers where to send money, so an admin could otherwise put their own card number there. Admins
+    see them read-only, and may re-import them unchanged in an exported file. Admins can still write
+    free text in the other texts (the welcome, a plan's description); every change is in the audit
+    log with who made it.
+  - The Toman's name may not contain `<`, `>` or `&`: it goes into every price, inside HTML messages.
+- **The bot follows the settings** (`internal/bot/settings`, shared by the handler and the notifier):
+  - Gates come after the rate limit and never before a Stars payment: maintenance mode, then the
+    required channel. Both let staff (support too), the configured owner, `/paysupport`, payment
+    checks, receipts and TXIDs of payments under way, the language picker and a newcomer's `/start`
+    through.
+    - Maintenance: a popup for taps, the message at most once a minute per user.
+    - Required channel: `getChatMember` with a 3-second limit; members are remembered in Redis for 10
+      minutes, non-members never; Telegram errors let users in (logged). A newcomer is checked right
+      after picking a language.
+  - `limits.bot_per_10s` replaces the fixed 20; `limits.tickets_per_day` caps support messages.
+  - Staff alerts can go to every active owner and admin (`ListStaffContacts`, cached at each reload)
+    in their language, never about their own action; each kind can be turned off, and "every sale" on.
+  - `/terms`, terms and privacy buttons on the support screen, and `/dashboard` (plus a menu button)
+    so support staff can get a login link; `/admin` stays owner and admin.
+  - Time zone and the Toman's name change while the bot runs.
+  - When Telegram refuses a message's markup ("can't parse entities"), the bot sends it once more as
+    plain text instead of failing.
+- **Staff.** The owner sees each member's role, password and two-factor state, lock, last login and
+  live sessions.
+  - Actions: add a customer as staff, change a role, remove, see and end sessions, reset the password,
+    unlock.
+  - Every change needs a reason and ends the member's sessions, so their dashboard reloads with what
+    the new role may do.
+  - Removal also deletes the password login and unused login links.
+  - **Rules.**
+    - Nobody changes themselves here; that is what My account is for.
+    - Nobody changes the configured owner (`BOBRES_ADMIN_TELEGRAM_ID`); that is set with
+      `bobres menu`.
+    - Only the configured owner gives or takes the owner role. Any owner may, on an install that
+      names none.
+    - A change never leaves the store without an active owner. The owners are locked inside the
+      transaction, so two owners cannot demote each other at once.
+  - A person must have started the bot before they can be added; support staff get their login link
+    with `/dashboard` in the bot.
+  - **The configured owner gets the role at core's start-up**, and when `bobres admin link` runs.
+    Before, a customer made owner with `bobres menu` waited for their next language change. This is
+    audited as `staff.owner_bootstrap`.
+- **My account** lists the member's sessions, and can end one or all others.
+  - Replacing or removing a working password now needs the current authenticator code, so a stolen
+    session cannot take the password login over.
+  - The exception is a login link used in the last 10 minutes, which is fresh proof of the Telegram
+    account. It is also the way back for someone who lost their phone.
+- **Audit log.** Filters by action or group, item, period and staff member, with a CSV export.
+  - Each entry says where the change was made: dashboard, bot, cli or system.
+  - New entries: failed logins (with no actor, naming the account), logouts, login links made, CSV
+    exports, and the owner bootstrap.
+  - Changes to settings, plans, discounts and bans keep the value before.
+  - An entry's item can now be any text (a discount code, a setting key, `fa.welcome`), not only a
+    uuid.
+  - **The table is append-only:** database triggers refuse UPDATE, DELETE and TRUNCATE. Tests clear it
+    through `testdb.Truncate`, which switches the TRUNCATE trigger off inside its own transaction.
+- **Locks.** Failed logins from before a lock that has ended no longer count, so the next mistake
+  does not lock the account again at once. The owner can lift a lock from the Staff page.
+
+### API (milestone 3)
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/settings`, `PUT /api/v1/settings`, `POST /api/v1/settings/channel-check` | settings.write (payment details: gateways.write) |
+| `GET /api/v1/branding`, `PUT /api/v1/branding`, `PUT`/`DELETE /api/v1/branding/logo` | branding.write |
+| `GET /api/v1/texts`, `POST /api/v1/texts/check`, `PUT /api/v1/texts`, `GET /api/v1/texts.json`, `POST /api/v1/texts/import` | branding.write |
+| `GET /api/v1/brand`, `GET /api/v1/brand/logo` | public |
+| `GET /api/v1/staff`, `POST /api/v1/staff`, `PUT /api/v1/staff/{id}/role`, `POST /api/v1/staff/{id}/remove` | staff.write (owner) |
+| `GET /api/v1/staff/{id}/sessions`, `POST /api/v1/staff/{id}/sessions/revoke`, `POST /api/v1/staff/{id}/sessions/{sid}/revoke` | staff.write |
+| `POST /api/v1/staff/{id}/password/reset`, `POST /api/v1/staff/{id}/unlock` | staff.write |
+| `GET /api/v1/me/sessions`, `POST /api/v1/me/sessions/revoke-others`, `POST /api/v1/me/sessions/{sid}/revoke` | a session |
+| `GET /api/v1/audit`, `GET /api/v1/audit/actions`, `GET /api/v1/audit.csv` | audit.read |
+
+Field errors answer `{"error": "invalid", "field": ..., "message": ...}`; a text that cannot be used
+answers `problems` (code and argument per problem). A session's id is the hex of its stored hash, a
+one-way hash of the cookie, so it gives nothing away.
+
 ## Tests
 
 - **Go.** TOTP against the RFC 6238 vectors and password hashing. The handlers end to end, over
@@ -258,6 +382,40 @@ Changes that move money or add days take a request key, so a retried request hap
     (gone from the panel)
   - plans edited, balances changed with Persian digits, Persian and English, dark and light, phone
     width, the support role's view, and no CSP violations
+- **Milestone 3 (Go).**
+  - Core, over TLS against a real database:
+    - settings: normalising, all or nothing, field errors, the private-channel rule, payment details
+      refused to admins, support refused
+    - branding and the logo: SVG, tiny and oversized images refused; the public brand and the
+      served image with its sandbox CSP
+    - bot texts: live check, refused broken texts, export, an all-or-nothing import
+    - staff rules: self, configured owner, co-owners, the owner role, banned customers, sessions
+      ending on role changes and removal, reset, unlock
+    - two owners demoting each other (stale actor), my sessions, the password re-check, failed-login,
+      link and export audit entries, the append-only trigger, the owner bootstrap
+  - The text checker: every built-in text passes its own checks, and a table of broken overrides
+    (unclosed and crossed tags, script, links to http or javascript, raw `<` and `&`, markup in
+    buttons, Telegram lengths, `<code>{addresses}</code>`) is refused; the bot drops them on load.
+  - The bot (with a fake Telegram):
+    - maintenance and the required channel with every exemption, the member cache, failing open
+    - limits, alert switches and staff recipients, `/terms`, `/dashboard` for support, `/set`
+      showing core's reason
+    - the refresh and channel-check endpoints, and the plain-text fallback
+- **Milestone 3 (dashboard, vitest).** Branding helpers (contrast, the preview tokenizer, lengths), the
+  settings checks, the staff action rules and device names. The pages boot against a fake core:
+  - texts up to the live check
+  - the store form with a field error and the colour restored on leaving
+  - the settings cards and the maintenance confirm
+- **By hand (milestone 3),** a local core with a stand-in for the bot's internal endpoints, in the
+  browser:
+  - maintenance turned on after the confirm, the bot told at once, the audit entry with before/after
+    and IP; the channel check through the bot
+  - store name, colour and logo saved and applied to the sidebar, the tab title and the login page;
+    a broken welcome text refused live, a good one saved
+  - a customer added as support, a role changed, the audit log's details
+  - My account's sessions, Persian and English, dark and light, phone width with no sideways
+    scrolling
+  - the embedded build under the real CSP with no violations (logo, `data:` preview, colour)
 - **By hand, in a browser,** against a locally built core:
   - link login; password + code setup, login, and turning it off
   - Persian and English, dark and light, the phone drawer

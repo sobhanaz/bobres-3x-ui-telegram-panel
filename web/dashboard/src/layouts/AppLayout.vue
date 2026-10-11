@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
@@ -9,6 +9,7 @@ import { useAuth } from '../stores/auth'
 import { useUi } from '../stores/ui'
 import { groups, visibleSections } from '../sections'
 import { setLang, currentLang } from '../i18n'
+import { applyDocumentBrand } from '../theme'
 
 const { t } = useI18n()
 const auth = useAuth()
@@ -16,7 +17,9 @@ const ui = useUi()
 const route = useRoute()
 const router = useRouter()
 
-const logo = import.meta.env.BASE_URL + 'favicon.svg'
+// The store's uploaded logo, else the BOBRES icon; the tab shows the store too.
+const logo = computed(() => auth.me?.branding?.logo || import.meta.env.BASE_URL + 'favicon.svg')
+watchEffect(() => applyDocumentBrand(t('branding.doc_title', { brand: auth.brand }), auth.me?.branding?.logo))
 const drawer = ref(false)
 watch(() => route.fullPath, () => (drawer.value = false))
 
@@ -122,6 +125,17 @@ function toggleLang() {
   font-size: 1.1rem;
   color: var(--p-text-color);
   text-decoration: none;
+}
+.brand img {
+  flex: none;
+  object-fit: contain;
+  border-radius: 0.375rem;
+}
+.brand span {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 nav {
   display: flex;

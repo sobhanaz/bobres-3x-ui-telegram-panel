@@ -219,5 +219,18 @@
   "btn.adm_dashboard": "🖥 Dashboard",
   "btn.open_dashboard": "🖥 Open the dashboard",
   "admin.dashboard_link": "🖥 Your dashboard login link. It works once, within 2 minutes; don't forward it.",
-  "admin.dashboard_unavailable": "The dashboard has no address yet: the install has no domain set."
+  "admin.dashboard_unavailable": "The dashboard has no address yet: the install has no domain set.",
+  "maintenance": "🛠 The bot is under maintenance right now. Please try again a little later.",
+  "join.prompt": "📢 <b>Join our channel</b>\nTo use the bot, please join our channel first, then tap “I've joined”.",
+  "join.not_yet": "You haven't joined the channel yet. Join it first, then tap “I've joined” again.",
+  "btn.join_channel": "📢 Join the channel",
+  "btn.join_check": "✅ I've joined",
+  "support.limit": "⏳ You have reached today's limit of support messages. Please write again tomorrow.",
+  "btn.terms": "📜 Terms of service",
+  "btn.privacy": "🔒 Privacy policy",
+  "terms.title": "📜 <b>Terms and privacy</b>\nTap below to read them.",
+  "terms.none": "No terms of service or privacy policy have been published yet.",
+  "btn.dashboard": "🖥 Dashboard",
+  "admin.maintenance_on": "🚧 <b>Maintenance mode is on.</b> Customers only see the maintenance message. Turn it off with <code>/set maintenance.enabled false</code>.",
+  "admin.new_sale": "🛒 New sale: {user} bought <b>{plan}</b> for <b>{amount}</b>."
 }

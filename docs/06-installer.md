@@ -41,7 +41,10 @@ services are recreated. Scripts get the usage text instead, never a prompt.
 ## Status (2026-10-03)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
 `version`, `admin link` (2026-10-07). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
-`restore`, `config`, `secrets`, `license`, `admin add/reset-2fa`, `support-bundle`, and the hardening step (ufw, fail2ban).
+`restore`, `config`, `secrets`, `license`, `support-bundle`, and the hardening step (ufw, fail2ban).
+`admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
+a password or code, the owner manages staff on the dashboard's Staff page, and the owner themselves is
+changed with `bobres menu` ("Change the owner Telegram ID"), which core applies when it starts.
 
 ## CLI commands
 | Command | Purpose |
@@ -58,8 +61,7 @@ Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, 
 | `bobres secrets rotate <name>` | Rotate bot token/3x-ui token/DB password |
 | `bobres license status/activate/import` | License handling |
 | `bobres doctor` | Diagnose: DNS, TLS, ports, bot token, 3x-ui reachability/version, queue lag, disk; print fixes |
-| `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner) |
-| `bobres admin add/reset-2fa` | Break-glass staff management |
+| `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
 | `bobres support-bundle` | Redacted logs/config for support (no secrets, no user data) |
 
 ## Update safety

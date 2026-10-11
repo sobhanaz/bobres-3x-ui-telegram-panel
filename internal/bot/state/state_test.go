@@ -35,6 +35,20 @@ func exercise(t *testing.T, s Store) {
 	if again, _ := s.Once(ctx, k, time.Minute); again {
 		t.Fatal("second Once must be false")
 	}
+	flag := "bot:test:" + time.Now().Format(time.RFC3339Nano)
+	if set, err := s.Recall(ctx, flag); set || err != nil {
+		t.Fatalf("unset flag: %v %v", set, err)
+	}
+	if err := s.Remember(ctx, flag, 150*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if set, err := s.Recall(ctx, flag); !set || err != nil {
+		t.Fatalf("remembered flag: %v %v", set, err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if set, _ := s.Recall(ctx, flag); set {
+		t.Fatal("the flag outlived its ttl")
+	}
 	n := "n" + time.Now().Format("150405.000000")
 	if _, ok, err := s.LoadCheckout(ctx, 1, n); ok || err != nil {
 		t.Fatalf("unknown checkout: %v %v", ok, err)

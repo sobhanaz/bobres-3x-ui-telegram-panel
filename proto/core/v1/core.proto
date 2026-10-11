@@ -186,6 +186,19 @@ message CreateDashboardLinkRequest {
   int64 actor_telegram_id = 1; // a staff member (owner, admin or support)
 }
 
+message ListStaffContactsRequest {}
+
+// StaffContact is a staff member the bot may alert (owner or admin).
+message StaffContact {
+  int64 telegram_id = 1;
+  string language = 2;
+  string role = 3; // owner or admin
+}
+
+message ListStaffContactsResponse {
+  repeated StaffContact items = 1; // owners first
+}
+
 // DashboardLink is a one-time dashboard login link (works once, until expires_at).
 message DashboardLink {
   string url = 1; // empty when the install has no public domain
@@ -427,7 +440,11 @@ service CoreService {
   rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
   rpc CreateSupportTicket(CreateSupportTicketRequest) returns (Ticket);
   rpc GetSettings(GetSettingsRequest) returns (Settings);
-  rpc UpdateBranding(UpdateBrandingRequest) returns (Settings);
+  // UpdateBranding is not served (Unimplemented): branding is changed with
+  // AdminSetSetting or the dashboard, which check and audit every value.
+  rpc UpdateBranding(UpdateBrandingRequest) returns (Settings) {
+    option deprecated = true;
+  }
   rpc ReviewManualPayment(ReviewManualPaymentRequest) returns (PaymentIntentRef);
   rpc PayOrderWithWallet(PayOrderWithWalletRequest) returns (Order);
   rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentRef);
@@ -451,6 +468,8 @@ service CoreService {
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
   rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);
+  // ListStaffContacts lists the active owners and admins, for staff alerts.
+  rpc ListStaffContacts(ListStaffContactsRequest) returns (ListStaffContactsResponse);
 }
 
 message CanStartTrialRequest {

@@ -51,7 +51,7 @@ func ceilDiv(a, b int64) int64 { return (a + b - 1) / b }
 // settingInt reads a whole-number setting ("60,000" and "60000" both work);
 // 0 when unset or not a positive number.
 func (s *Service) settingInt(ctx context.Context, key string) int64 {
-	v := strings.NewReplacer(",", "", "_", "", " ", "", "٬", "").Replace(s.setting(ctx, key))
+	v := strings.NewReplacer(",", "", "_", "", " ", "", "٬", "").Replace(latinDigits(s.setting(ctx, key)))
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil || n <= 0 {
 		return 0

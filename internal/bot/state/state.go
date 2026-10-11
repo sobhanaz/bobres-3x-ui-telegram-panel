@@ -33,6 +33,10 @@ type Store interface {
 	Clear(ctx context.Context, userID int64) error
 	// Once reports true the first time key is seen within ttl.
 	Once(ctx context.Context, key string, ttl time.Duration) (bool, error)
+	// Remember sets a flag (key is the full key, e.g. bot:join:<user>) for
+	// ttl; Recall reports whether it is still set.
+	Remember(ctx context.Context, key string, ttl time.Duration) error
+	Recall(ctx context.Context, key string) (bool, error)
 	// SaveCheckout keeps what a payment menu sells, under the menu's nonce,
 	// for CheckoutTTL; LoadCheckout reads it back (ok=false once gone).
 	SaveCheckout(ctx context.Context, userID int64, nonce string, c Checkout) error
@@ -99,6 +103,17 @@ func (r *Redis) Once(ctx context.Context, k string, ttl time.Duration) (bool, er
 	return r.rdb.SetNX(ctx, "bot:once:"+k, 1, ttl).Result()
 }
 
+// Remember implements Store.
+func (r *Redis) Remember(ctx context.Context, k string, ttl time.Duration) error {
+	return r.rdb.Set(ctx, k, 1, ttl).Err()
+}
+
+// Recall implements Store.
+func (r *Redis) Recall(ctx context.Context, k string) (bool, error) {
+	n, err := r.rdb.Exists(ctx, k).Result()
+	return n > 0, err
+}
+
 // SaveCheckout implements Store.
 func (r *Redis) SaveCheckout(ctx context.Context, userID int64, nonce string, c Checkout) error {
 	raw, err := json.Marshal(c)
@@ -129,12 +144,14 @@ type Memory struct {
 	mu        sync.Mutex
 	state     map[int64]State
 	seen      map[string]time.Time
+	flags     map[string]time.Time
 	checkouts map[string]Checkout
 }
 
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
-	return &Memory{state: map[int64]State{}, seen: map[string]time.Time{}, checkouts: map[string]Checkout{}}
+	return &Memory{state: map[int64]State{}, seen: map[string]time.Time{}, flags: map[string]time.Time{},
+		checkouts: map[string]Checkout{}}
 }
 
 // SaveCheckout implements Store (no expiry in memory).
@@ -185,4 +202,20 @@ func (m *Memory) Once(_ context.Context, k string, ttl time.Duration) (bool, err
 	}
 	m.seen[k] = time.Now().Add(ttl)
 	return true, nil
+}
+
+// Remember implements Store.
+func (m *Memory) Remember(_ context.Context, k string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.flags[k] = time.Now().Add(ttl)
+	return nil
+}
+
+// Recall implements Store.
+func (m *Memory) Recall(_ context.Context, k string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	exp, ok := m.flags[k]
+	return ok && time.Now().Before(exp), nil
 }

@@ -19,6 +19,14 @@ end
 return n
 `)
 
+// giveBack undoes one count, only while the window is still open.
+var giveBack = redis.NewScript(`
+if redis.call('EXISTS', KEYS[1]) == 1 and tonumber(redis.call('GET', KEYS[1])) > 0 then
+  return redis.call('DECR', KEYS[1])
+end
+return 0
+`)
+
 // Limiter counts requests per key inside a window.
 type Limiter struct {
 	rdb    redis.Scripter
@@ -41,4 +49,13 @@ func (l *Limiter) Allow(ctx context.Context, key string, window time.Duration, m
 		return false, fmt.Errorf("ratelimit: %w", err)
 	}
 	return n <= int64(max), nil
+}
+
+// Give returns one request to key's window, for a request that did not
+// happen after all (it failed before doing anything).
+func (l *Limiter) Give(ctx context.Context, key string) error {
+	if err := giveBack.Run(ctx, l.rdb, []string{l.prefix + key}).Err(); err != nil {
+		return fmt.Errorf("ratelimit: %w", err)
+	}
+	return nil
 }

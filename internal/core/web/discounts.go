@@ -142,5 +142,6 @@ func (s *Server) setReferralReward(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "set referral reward", err)
 		return
 	}
+	s.refreshBot()
 	writeJSON(w, http.StatusOK, map[string]int{"reward_percent": req.RewardPercent})
 }

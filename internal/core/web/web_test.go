@@ -44,7 +44,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	if _, err := st.DB().Exec(ctx, `TRUNCATE core.web_sessions, core.login_links, core.staff_credentials, core.audit_log, core.users CASCADE`); err != nil {
+	if err := testdb.Truncate(ctx, st.DB(), `core.web_sessions, core.login_links, core.staff_credentials, core.audit_log, core.users`); err != nil {
 		t.Fatal(err)
 	}
 	env, err := bcrypto.NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))
@@ -207,7 +207,7 @@ func TestPasswordWithAuthenticatorCode(t *testing.T) {
 		t.Fatalf("wrong confirm code: %d %v", code, out)
 	}
 	code, me := b.do(http.MethodPost, "/api/v1/me/password/confirm", map[string]string{"code": c0})
-	if code != 200 || asJSON(me["password"]) != `{"enabled":true,"username":"boss"}` {
+	if code != 200 || asJSON(me["password"]) != `{"enabled":true,"reauth":false,"username":"boss"}` {
 		t.Fatalf("confirm: %d %v", code, me)
 	}
 

@@ -92,6 +92,7 @@ func (s *Server) exportLedger(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Content-Type", "text/csv; charset=utf-8")
 	h.Set("Content-Disposition", `attachment; filename="ledger-`+s.now().UTC().Format("20060102-1504")+`.csv"`)
+	s.audit(r.Context(), actor(r), "export.ledger", r.URL.Query())
 	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id", "entry_id"})

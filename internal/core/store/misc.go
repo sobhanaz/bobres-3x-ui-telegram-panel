@@ -55,13 +55,46 @@ func (s *Store) SetSetting(ctx context.Context, q querier, key string, value jso
 	return nil
 }
 
-// WriteAudit appends an audit_log row. Every sensitive write calls this with actor+reason.
+// DeleteSetting removes a setting, so its default applies again.
+func (s *Store) DeleteSetting(ctx context.Context, q querier, key string) error {
+	if _, err := q.Exec(ctx, `DELETE FROM core.settings WHERE key = $1`, key); err != nil {
+		return fmt.Errorf("delete setting: %w", err)
+	}
+	return nil
+}
+
+// LockSettings reads the given settings inside a transaction and holds them
+// until it ends, so a change and its audit "before" agree.
+func (s *Store) LockSettings(ctx context.Context, q querier, keys []string) (map[string]json.RawMessage, error) {
+	rows, err := q.Query(ctx, `SELECT key, value FROM core.settings WHERE key = ANY($1) FOR UPDATE`, keys)
+	if err != nil {
+		return nil, fmt.Errorf("lock settings: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]json.RawMessage{}
+	for rows.Next() {
+		var k string
+		var v json.RawMessage
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
+}
+
+// WriteAudit appends an audit_log row. Every sensitive write calls this with
+// actor+reason; the client's address comes from the context (WithClientIP)
+// when the change came through the dashboard.
 func (s *Store) WriteAudit(ctx context.Context, q querier, a *Audit) error {
 	a.ID = buuid.MustV7().String()
+	if a.IP == nil {
+		a.IP = clientIP(ctx)
+	}
 	_, err := q.Exec(ctx, `
-		INSERT INTO core.audit_log (id, actor_id, action, entity, entity_id, before, after, reason)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		a.ID, a.ActorID, a.Action, a.Entity, a.EntityID, a.Before, a.After, a.Reason)
+		INSERT INTO core.audit_log (id, actor_id, action, entity, entity_id, before, after, reason, ip, source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::inet, $10)`,
+		a.ID, a.ActorID, a.Action, a.Entity, a.EntityID, a.Before, a.After, a.Reason, a.IP, sourceOf(ctx))
 	if err != nil {
 		return fmt.Errorf("audit: %w", err)
 	}

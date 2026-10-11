@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
@@ -461,27 +463,47 @@ func (h *Handler) submitProof(r *req, st state.State, in *corev1.SubmitPaymentPr
 		"amount", func(lang string) string { return i18n.Money(lang, amount, st.Get("currency")) })
 }
 
-// notifyAdmin messages the configured admin in their language. An argument
-// value may be a func(lang) string, rendered in the admin's language.
+// alertToggles are the notify.* switches (on by default) of the staff alerts
+// that have one; other alerts, such as admin.stars_unrecorded, always go out.
+var alertToggles = map[string]string{
+	"admin.new_payment": "notify.new_payment",
+	"admin.new_ticket":  "notify.new_ticket",
+}
+
+// notifyAdmin alerts the staff about something the user did (not the user
+// themselves, when they are staff).
 func (h *Handler) notifyAdmin(r *req, key string, args ...any) {
-	if h.cfg.AdminTelegramID == 0 || h.cfg.AdminTelegramID == r.from.ID {
+	h.notifyStaff(r.ctx, r.from.ID, key, args...)
+}
+
+// notifyStaff messages everyone who gets staff alerts (notify.recipients),
+// each in their language, except the Telegram user skip (0: nobody), unless
+// the alert is switched off. An argument value may be a func(lang) string,
+// rendered in each recipient's language.
+func (h *Handler) notifyStaff(ctx context.Context, skip int64, key string, args ...any) {
+	if toggle, ok := alertToggles[key]; ok && !h.set.Bool(toggle, true) {
 		return
 	}
-	lang := "fa"
-	if u, err := h.core.GetUser(r.ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: h.cfg.AdminTelegramID}}); err == nil {
-		lang = u.GetLanguage()
-	}
-	for i := 1; i < len(args); i += 2 {
-		if f, ok := args[i].(func(string) string); ok {
-			args[i] = f(lang)
+	for _, c := range h.set.Recipients(h.cfg.AdminTelegramID) {
+		if c.TelegramID == skip {
+			continue
 		}
-	}
-	text := h.cat.T(lang, key, args...)
-	var kb *tg.Keyboard
-	if key == "admin.new_payment" {
-		kb = (&tg.Keyboard{}).Row(tg.CB(h.cat.T(lang, "btn.review_now"), "adm:pend"))
-	}
-	if _, err := h.tg.SendMessage(r.ctx, h.cfg.AdminTelegramID, text, kb); err != nil {
-		h.log.Warn("admin notification failed", "err", err)
+		lang := c.Language
+		if lang == "" {
+			lang = h.userLang(ctx, c.TelegramID)
+		}
+		rendered := slices.Clone(args)
+		for i := 1; i < len(rendered); i += 2 {
+			if f, ok := rendered[i].(func(string) string); ok {
+				rendered[i] = f(lang)
+			}
+		}
+		var kb *tg.Keyboard
+		if key == "admin.new_payment" {
+			kb = (&tg.Keyboard{}).Row(tg.CB(h.cat.T(lang, "btn.review_now"), "adm:pend"))
+		}
+		if _, err := h.tg.SendMessage(ctx, c.TelegramID, h.cat.T(lang, key, rendered...), kb); err != nil {
+			h.log.Warn("staff notification failed", "chat", c.TelegramID, "err", err)
+		}
 	}
 }

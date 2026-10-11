@@ -75,11 +75,10 @@ func (s *Service) UpsertUser(ctx context.Context, p UpsertUserParams) (*store.Us
 	if err != nil {
 		return nil, err
 	}
-	if s.cfg.OwnerTelegramID != 0 && u.TelegramID == s.cfg.OwnerTelegramID && u.Role != "owner" {
-		if err := s.st.SetUserRole(ctx, s.st.Conn(), u.ID, "owner", "active"); err != nil {
+	if s.IsConfiguredOwner(u) {
+		if err := s.promoteOwner(ctx, u); err != nil {
 			return nil, err
 		}
-		u.Role, u.Status = "owner", "active"
 	}
 	return u, nil
 }

@@ -17,6 +17,10 @@ const built: Record<string, RouteRecordRaw['component']> = {
   payments: () => import('./pages/PaymentsPage.vue'),
   ledger: () => import('./pages/LedgerPage.vue'),
   discounts: () => import('./pages/DiscountsPage.vue'),
+  branding: () => import('./pages/BrandingPage.vue'),
+  settings: () => import('./pages/SettingsPage.vue'),
+  staff: () => import('./pages/StaffPage.vue'),
+  audit: () => import('./pages/AuditPage.vue'),
 }
 
 // Item pages belong to their section (menu highlight, permission).

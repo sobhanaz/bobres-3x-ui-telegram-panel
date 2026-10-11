@@ -375,12 +375,18 @@ func (s *Service) UpsertDiscount(ctx context.Context, actor *store.User, d *stor
 	}
 	var out *store.Discount
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		var before any // nil for a new code
+		if old, err := s.st.GetDiscount(ctx, tx, d.Code); err == nil {
+			before = old
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
 		got, err := s.st.UpsertDiscount(ctx, tx, d)
 		if err != nil {
 			return err
 		}
 		out = got
-		return s.audit(ctx, tx, actor, "discount.upsert", "discount", "", got, "") // entity ids are uuids; the code is in the payload
+		return s.auditChange(ctx, tx, actor, "discount.upsert", "discount", got.Code, before, got, "")
 	})
 	return out, err
 }

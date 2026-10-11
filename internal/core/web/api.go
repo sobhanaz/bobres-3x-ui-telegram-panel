@@ -159,6 +159,9 @@ func (s *Server) usersByID(ctx context.Context, ids []string) map[string]*userBr
 // fail answers a domain or backend error: the reason when it helps staff,
 // a generic message otherwise.
 func (s *Server) fail(w http.ResponseWriter, what string, err error) {
+	if settingError(w, err) {
+		return
+	}
 	var de *domain.DiscountError
 	switch {
 	case errors.Is(err, store.ErrNotFound):
