@@ -199,6 +199,24 @@ func (r *req) money(amount int64, currency string) string {
 	return i18n.Money(r.lang, amount, currency)
 }
 
+// balance shows a wallet balance. A reseller's negative balance is what they
+// owe: shown as a debt, never with a bare minus (which reads wrongly in
+// Persian).
+func (r *req) balance(amount int64, currency string) string {
+	if amount < 0 {
+		return r.t("wallet.debt", "amount", r.money(-amount, currency))
+	}
+	return r.money(amount, currency)
+}
+
+// labelled puts the name a reseller gave a service above a text about it.
+func (r *req) labelled(label, text string) string {
+	if label == "" {
+		return text
+	}
+	return r.t("sub.label_line", "label", esc(label)) + "\n" + text
+}
+
 // show replaces the pressed menu (callbacks) or sends a new message.
 func (r *req) show(text string, kb *tg.Keyboard) {
 	if r.cb != nil && r.cb.Message != nil && !r.keep {
@@ -234,6 +252,12 @@ func (r *req) clearState() {
 // isStaff: an owner or admin (the admin panel and its commands).
 func (r *req) isStaff() bool {
 	return r.user != nil && r.user.GetStatus() == "active" && (r.user.GetRole() == "admin" || r.user.GetRole() == "owner")
+}
+
+// isReseller: an active reseller (the reseller panel, credit and tier
+// prices). Not a staff role: the gates treat them as customers.
+func (r *req) isReseller() bool {
+	return r.user != nil && r.user.GetStatus() == "active" && r.user.GetRole() == "reseller"
 }
 
 // isTeam: any staff role, support included (the dashboard; the gates let
@@ -439,6 +463,8 @@ func (h *Handler) routeCallback(r *req, data string) {
 		h.sendDashboardLink(r)
 	case "adm":
 		h.routeAdmin(r, rest)
+	case "rs":
+		h.routeReseller(r, rest)
 	default:
 		r.toast = r.t("error.expired")
 		h.showHome(r)
@@ -533,6 +559,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onDiscountCode(r, st)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason:
 		h.onAdminScene(r, st)
+	case sceneResellerLabel, sceneResellerFind, sceneResellerRename:
+		h.onResellerScene(r, st)
 	default:
 		r.clearState()
 		h.showHome(r)
@@ -550,6 +578,11 @@ const (
 	sceneAdminFind   = "adm_find"
 	sceneAdminAdjust = "adm_adjust"
 	sceneAdminReason = "adm_reason"
+	// A reseller's name for a service they buy for a customer, a search of
+	// their services, and a new name for one of them.
+	sceneResellerLabel  = "rs_label"
+	sceneResellerFind   = "rs_find"
+	sceneResellerRename = "rs_rename"
 )
 
 // nonce makes each rendered payment menu unique: a double tap on one button

@@ -29,6 +29,8 @@ func TestContexts(t *testing.T) {
 		"btn.buy": CtxButton, "sub.status.active": CtxButtonHTML, "error.rate": CtxToast,
 		"discount.bad.expired": CtxToastHTML, "pay.stars_title": CtxInvoiceTitle,
 		"sub.qr_caption": CtxCaption, "welcome": CtxHTML,
+		"rs.forbidden": CtxToastHTML, "rs.label_removed": CtxToast, "wallet.debt": CtxButtonHTML, "btn.rs_buy": CtxButton,
+		"rs.panel": CtxHTML,
 	}
 	for k, want := range cases {
 		if got := ContextOf(k); got != want {
@@ -48,6 +50,10 @@ func TestContexts(t *testing.T) {
 	}
 	if w, _ := c.Info("welcome"); !slices.Equal(w.Placeholders, []string{"brand"}) || w.Group != "general" {
 		t.Fatalf("welcome info: %+v", w)
+	}
+	// The reseller panel's texts have their own heading in the editor.
+	if p, _ := c.Info("rs.panel"); p.Group != "rs" || !slices.Equal(p.Placeholders, []string{"balances", "commission", "customers", "discount", "earned", "tier"}) {
+		t.Fatalf("rs.panel info: %+v", p)
 	}
 }
 
@@ -103,6 +109,10 @@ func TestValidateOverride(t *testing.T) {
 		{"welcome", "{brand}" + strings.Repeat("x", 3500), "too_long:3500"},
 		// {addresses} carries <code>, so it cannot sit inside <code>.
 		{"pay.crypto", "{amount} <code>{addresses}</code> {ref}", "tag_in_code:b"},
+		// {balances} carries <b> too (the reseller panel's money lines).
+		{"rs.panel", "{tier} {discount} {commission} <code>{balances}</code> {customers} {earned}", "tag_in_code:b"},
+		// The debt shown inside a balance is plain text.
+		{"wallet.debt", "<b>{amount}</b>", "markup_not_allowed:<"},
 		{"sub.ready", `<a href="{link}">x</a> {expires} {traffic}`, "bad_link:x"},
 	}
 	for _, tc := range bad {

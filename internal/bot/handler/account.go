@@ -49,7 +49,38 @@ func (h *Handler) subscriptions(r *req) ([]*corev1.Subscription, error) {
 	return resp.GetSubscriptions(), nil
 }
 
+// subscription finds one of the user's services by its id (nil when it is not
+// theirs). Core searches by the whole id, so a service older than the newest
+// 100 is found too; a name that happens to contain the id is skipped.
+func (h *Handler) subscription(r *req, id string) (*corev1.Subscription, error) {
+	resp, err := h.core.ListSubscriptions(r.ctx, &corev1.ListSubscriptionsRequest{UserId: r.user.GetId(), Query: id,
+		Pagination: &commonv1.Pagination{Page: 1, PageSize: 50}})
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range resp.GetSubscriptions() {
+		if s.GetId() == id {
+			return s, nil
+		}
+	}
+	return nil, nil
+}
+
+// serviceButton names a service in a list: its name (a reseller's) or its
+// short id, its status and when it ends.
+func (h *Handler) serviceButton(r *req, s *corev1.Subscription) string {
+	name := "#" + shortID(s.GetId())
+	if s.GetLabel() != "" {
+		name = s.GetLabel()
+	}
+	return name + " · " + r.t("subs.item", "status", r.t("sub.status."+s.GetStatus()), "expires", h.expires(r, s.GetExpiresAt()))
+}
+
 func (h *Handler) showServices(r *req) {
+	if r.isReseller() { // their customers' services: paged, with a search
+		h.showCustomerServices(r, 1, "")
+		return
+	}
 	subs, err := h.subscriptions(r)
 	if err != nil {
 		r.fail(err)
@@ -64,52 +95,52 @@ func (h *Handler) showServices(r *req) {
 		if i == 20 {
 			break
 		}
-		label := "#" + shortID(s.GetId()) + " · " + r.t("subs.item",
-			"status", r.t("sub.status."+s.GetStatus()), "expires", h.expires(r, s.GetExpiresAt()))
-		kb.Row(tg.CB(label, "sub:"+s.GetId()))
+		kb.Row(tg.CB(h.serviceButton(r, s), "sub:"+s.GetId()))
 	}
 	kb.Row(tg.CB(r.t("btn.home"), "home"))
 	r.show(r.t("subs.title"), kb)
 }
 
 func (h *Handler) showService(r *req, id string) {
-	subs, err := h.subscriptions(r)
+	s, err := h.subscription(r, id)
 	if err != nil {
 		r.fail(err)
 		return
 	}
-	for _, s := range subs {
-		if s.GetId() != id {
-			continue
-		}
-		if s.GetStatus() == "pending" || s.GetSubscriptionLink() == "" {
-			r.show(r.t("sub.not_ready"), backHome(r, "subs"))
-			return
-		}
-		kb := &tg.Keyboard{}
-		var extend []tg.Button
-		if renewable(s) {
-			extend = append(extend, tg.CB(r.t("btn.renew"), "rnw:"+id))
-		}
-		if toppable(s) && len(h.topupPlans(r)) > 0 {
-			extend = append(extend, tg.CB(r.t("btn.add_traffic"), "tup:"+id))
-		}
-		kb.Row(extend...).Row(tg.CB(r.t("btn.qr"), "qr:"+id)).
-			Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
-		text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
-			"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
-			"link", esc(s.GetSubscriptionLink()))
-		used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
-		switch {
-		case total > 0:
-			text += "\n" + r.t("sub.usage", "used", i18n.Bytes(r.lang, used), "total", i18n.Bytes(r.lang, total), "bar", usageBar(used, total))
-		case used > 0:
-			text += "\n" + r.t("sub.usage_unlimited", "used", i18n.Bytes(r.lang, used))
-		}
-		r.show(text, kb)
+	if s == nil {
+		h.showServices(r)
 		return
 	}
-	h.showServices(r)
+	if s.GetStatus() == "pending" || s.GetSubscriptionLink() == "" {
+		r.show(r.labelled(s.GetLabel(), r.t("sub.not_ready")), backHome(r, "subs"))
+		return
+	}
+	kb := &tg.Keyboard{}
+	var extend []tg.Button
+	if renewable(s) {
+		extend = append(extend, tg.CB(r.t("btn.renew"), "rnw:"+id))
+	}
+	if toppable(s) && len(h.topupPlans(r)) > 0 {
+		extend = append(extend, tg.CB(r.t("btn.add_traffic"), "tup:"+id))
+	}
+	kb.Row(extend...)
+	if r.isReseller() {
+		kb.Row(tg.CB(r.t("btn.qr"), "qr:"+id), tg.CB(r.t("btn.rename"), "rs:rn:"+id))
+	} else {
+		kb.Row(tg.CB(r.t("btn.qr"), "qr:"+id))
+	}
+	kb.Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
+	text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
+		"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
+		"link", esc(s.GetSubscriptionLink()))
+	used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
+	switch {
+	case total > 0:
+		text += "\n" + r.t("sub.usage", "used", i18n.Bytes(r.lang, used), "total", i18n.Bytes(r.lang, total), "bar", usageBar(used, total))
+	case used > 0:
+		text += "\n" + r.t("sub.usage_unlimited", "used", i18n.Bytes(r.lang, used))
+	}
+	r.show(r.labelled(s.GetLabel(), text), kb)
 }
 
 func (h *Handler) sendQR(r *req, id string) {
@@ -132,7 +163,12 @@ func (h *Handler) showWallet(r *req) {
 	}
 	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.topup"), "wtop"), tg.CB(r.t("btn.history"), "whist")).
 		Row(tg.CB(r.t("btn.home"), "home"))
-	r.show(r.t("wallet.title", "balance", r.money(w.GetBalance(), "IRT")), kb)
+	text := r.t("wallet.title", "balance", r.balance(w.GetBalance(), "IRT"))
+	if r.isReseller() {
+		text += "\n" + r.t("rs.wallet_credit", "limit", r.money(w.GetCreditLimit(), "IRT"),
+			"available", r.money(w.GetBalance()+w.GetCreditLimit(), "IRT"))
+	}
+	r.show(text, kb)
 }
 
 func (h *Handler) showTopupAmounts(r *req) {
@@ -217,6 +253,10 @@ func (h *Handler) onTopupAmount(r *req) {
 }
 
 func (h *Handler) showHistory(r *req) {
+	if r.isReseller() { // their statement: every page
+		h.showStatement(r, 1)
+		return
+	}
 	resp, err := h.core.ListLedgerEntries(r.ctx, &corev1.ListLedgerEntriesRequest{
 		UserId: r.user.GetId(), Pagination: &commonv1.Pagination{Page: 1, PageSize: 10},
 	})
@@ -231,14 +271,18 @@ func (h *Handler) showHistory(r *req) {
 	}
 	lines := []string{r.t("wallet.history_title"), ""}
 	for _, e := range resp.GetEntries() {
-		amount := r.money(e.GetAmount(), e.GetCurrency())
-		if e.GetAmount() > 0 {
-			amount = "+" + amount
-		}
-		lines = append(lines, fmt.Sprintf("%s · %s · %s",
-			i18n.Date(r.lang, time.Unix(e.GetCreatedAt(), 0)), r.t("ledger."+e.GetKind()), amount))
+		lines = append(lines, ledgerLine(r, e))
 	}
 	r.show(strings.Join(lines, "\n"), kb)
+}
+
+// ledgerLine is one wallet transaction: its day, kind and signed amount.
+func ledgerLine(r *req, e *corev1.LedgerEntry) string {
+	amount := r.money(e.GetAmount(), e.GetCurrency())
+	if e.GetAmount() > 0 {
+		amount = "+" + amount
+	}
+	return fmt.Sprintf("%s · %s · %s", i18n.Date(r.lang, time.Unix(e.GetCreatedAt(), 0)), r.t("ledger."+e.GetKind()), amount)
 }
 
 func (h *Handler) onTrial(r *req) {

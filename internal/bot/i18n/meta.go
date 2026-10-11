@@ -91,6 +91,9 @@ var contexts = map[string]Context{
 	"maintenance":            CtxToastHTML,
 	"join.not_yet":           CtxToast,
 	"support.closed":         CtxToast,
+	"rs.forbidden":           CtxToastHTML,
+	"rs.label_removed":       CtxToast,
+	"wallet.debt":            CtxButtonHTML,
 
 	"pay.stars_title":     CtxInvoiceTitle,
 	"pay.topup_title":     CtxInvoiceTitle,
@@ -127,6 +130,7 @@ var markupArgs = map[string][]string{
 	"support.thread":       {"messages"},
 	"pay.rejected":         {"reason"},
 	"pay.check_failed":     {"reason"},
+	"rs.panel":             {"balances"},
 }
 
 // onlyLangs are texts read in some languages only.

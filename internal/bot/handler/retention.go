@@ -16,18 +16,16 @@ import (
 
 // findSubscription returns one of the user's subscriptions.
 func (h *Handler) findSubscription(r *req, id string) (*corev1.Subscription, bool) {
-	subs, err := h.subscriptions(r)
+	s, err := h.subscription(r, id)
 	if err != nil {
 		r.fail(err)
 		return nil, false
 	}
-	for _, s := range subs {
-		if s.GetId() == id {
-			return s, true
-		}
+	if s == nil {
+		h.showServices(r)
+		return nil, false
 	}
-	h.showServices(r)
-	return nil, false
+	return s, true
 }
 
 // renewable: delivered and not disabled by an admin.
@@ -73,7 +71,8 @@ func (h *Handler) showRenewPlans(r *req, subID string) {
 		r.fail(err)
 		return
 	}
-	h.showPicker(r, state.Checkout{Type: "renew", SubscriptionID: subID}, ps, r.t("renew.pick", "id", shortID(subID)))
+	h.showPicker(r, state.Checkout{Type: "renew", SubscriptionID: subID}, ps,
+		r.labelled(s.GetLabel(), r.t("renew.pick", "id", shortID(subID))))
 }
 
 // showTopups handles "tup:<subscription id>": pick a traffic package.
@@ -86,7 +85,8 @@ func (h *Handler) showTopups(r *req, subID string) {
 		r.show(r.t("sub.not_extendable"), backHome(r, "sub:"+subID))
 		return
 	}
-	h.showPicker(r, state.Checkout{Type: "traffic_topup", SubscriptionID: subID}, h.topupPlans(r), r.t("topup.pick", "id", shortID(subID)))
+	h.showPicker(r, state.Checkout{Type: "traffic_topup", SubscriptionID: subID}, h.topupPlans(r),
+		r.labelled(s.GetLabel(), r.t("topup.pick", "id", shortID(subID))))
 }
 
 // showPicker lists plans for a saved renewal or top-up: "rp:<nonce>:<plan id>".
@@ -133,8 +133,15 @@ func (h *Handler) loadCheckout(r *req, n string) (state.Checkout, bool) {
 }
 
 // askDiscount handles "dc:<nonce>": the next message is a discount code.
+// A reseller (a menu from before they became one) pays their tier's price.
 func (h *Handler) askDiscount(r *req, n string) {
-	if _, ok := h.loadCheckout(r, n); !ok {
+	c, ok := h.loadCheckout(r, n)
+	if !ok {
+		return
+	}
+	if r.isReseller() {
+		r.toast, r.alert = r.t("discount.bad.reseller"), true
+		h.showCheckout(r, c)
 		return
 	}
 	r.setState(sceneDiscount, map[string]string{"co": n})
@@ -147,6 +154,12 @@ func (h *Handler) onDiscountCode(r *req, st state.State) {
 	c, ok := h.loadCheckout(r, st.Get("co"))
 	if !ok {
 		r.clearState()
+		return
+	}
+	if r.isReseller() { // became one since the question was asked
+		r.clearState()
+		r.send(r.t("discount.bad.reseller"), nil)
+		h.showCheckout(r, c)
 		return
 	}
 	q, err := h.core.QuoteOrder(r.ctx, &corev1.QuoteOrderRequest{UserId: r.user.GetId(), PlanId: c.PlanID,
@@ -173,7 +186,7 @@ func discountKey(err error) string {
 		return "error.generic"
 	}
 	switch reason {
-	case "expired", "used_up", "already_used", "currency":
+	case "expired", "used_up", "already_used", "currency", "reseller":
 		return "discount.bad." + reason
 	}
 	return "discount.bad.unknown"
@@ -185,8 +198,13 @@ func (h *Handler) referralsOn() bool {
 	return ok && n > 0
 }
 
-// showReferral handles "ref": the user's invite link and what it earned.
+// showReferral handles "ref": the user's invite link and what it earned. A
+// reseller's link earns their commission instead: their own link screen.
 func (h *Handler) showReferral(r *req) {
+	if r.isReseller() {
+		h.showResellerLink(r)
+		return
+	}
 	info, err := h.core.GetReferralInfo(r.ctx, &corev1.GetReferralInfoRequest{UserId: r.user.GetId()})
 	if err != nil {
 		r.fail(err)
@@ -197,17 +215,10 @@ func (h *Handler) showReferral(r *req) {
 		return
 	}
 	link := "https://t.me/" + h.cfg.BotUsername + "?start=r_" + info.GetCode()
-	earned := make([]string, 0, len(info.GetEarned()))
-	for _, m := range info.GetEarned() {
-		earned = append(earned, r.money(m.GetAmount(), m.GetCurrency()))
-	}
-	if len(earned) == 0 {
-		earned = append(earned, r.money(0, "IRT"))
-	}
 	share := "https://t.me/share/url?url=" + url.QueryEscape(link) + "&text=" + url.QueryEscape(r.t("ref.share_text", "brand", h.brand()))
 	kb := (&tg.Keyboard{}).Row(tg.Link(r.t("btn.share"), share)).Row(tg.CB(r.t("btn.home"), "home"))
 	r.show(r.t("ref.screen", "percent", i18n.Number(r.lang, int64(info.GetRewardPercent())), "link", esc(link),
-		"invited", i18n.Number(r.lang, int64(info.GetInvited())), "earned", strings.Join(earned, " · ")), kb)
+		"invited", i18n.Number(r.lang, int64(info.GetInvited())), "earned", earned(r, info.GetEarned())), kb)
 }
 
 // usageBar draws used/total as ten blocks.

@@ -151,8 +151,8 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			traffic = i18n.Bytes(lang, e.TrafficBytes)
 		}
 		kb := (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.services"), "sub:"+e.SubscriptionID))
-		if err := n.send(ctx, e.TelegramID, n.cat.T(lang, "sub.ready",
-			"link", html.EscapeString(e.SubscriptionLink), "expires", expires, "traffic", traffic), kb); err != nil {
+		if err := n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, n.cat.T(lang, "sub.ready",
+			"link", html.EscapeString(e.SubscriptionLink), "expires", expires, "traffic", traffic)), kb); err != nil {
 			return err
 		}
 		n.sendQR(ctx, lang, e)
@@ -173,18 +173,22 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
+		// A commission names the amount only: the customer who bought is
+		// never shown to the reseller.
 		key := map[string]string{
 			events.CreditOrderNotPayable: "wallet.credited_late",
 			events.CreditAdminAdjust:     "wallet.credited_admin",
 			events.CreditReferral:        "wallet.credited_referral",
 			events.CreditRefund:          "wallet.credited_refund",
+			events.CreditCommission:      "wallet.credited_commission",
+			events.CreditSettlement:      "wallet.credited_settlement",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"
 		}
 		lang := n.lang(ctx, e.TelegramID)
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, key,
-			"amount", i18n.Money(lang, e.Amount, e.Currency), "balance", i18n.Money(lang, e.Balance, e.Currency)), n.home(lang))
+			"amount", i18n.Money(lang, e.Amount, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
 
 	case events.SubscriptionExtended:
 		var e events.SubscriptionExtendedEvent
@@ -197,8 +201,8 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if e.Type == "traffic_topup" {
 			key = "sub.topped_up"
 		}
-		return n.send(ctx, e.TelegramID, n.cat.T(lang, key, "id", shortID(e.SubscriptionID),
-			"expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes)), kb)
+		return n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, n.cat.T(lang, key, "id", shortID(e.SubscriptionID),
+			"expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes))), kb)
 
 	case events.SubscriptionReminder:
 		var e events.SubscriptionReminderEvent
@@ -226,7 +230,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		default:
 			return nil // a newer core's reminder this bot does not know
 		}
-		return n.send(ctx, e.TelegramID, text, kb)
+		return n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, text), kb)
 
 	case events.ProvisionFailed:
 		var e events.ProvisionFailedEvent
@@ -518,6 +522,24 @@ func shortID(id string) string {
 		return id[len(id)-6:]
 	}
 	return id
+}
+
+// balance shows a wallet balance after a credit. A reseller's negative
+// balance is what they owe: shown as a debt, never with a bare minus.
+func (n *Notifier) balance(lang string, amount int64, currency string) string {
+	if amount < 0 {
+		return n.cat.T(lang, "wallet.debt", "amount", i18n.Money(lang, -amount, currency))
+	}
+	return i18n.Money(lang, amount, currency)
+}
+
+// labelled puts the name a reseller gave a service above a message about it
+// (they get the messages of the services they buy for customers).
+func (n *Notifier) labelled(lang, label, text string) string {
+	if label == "" {
+		return text
+	}
+	return n.cat.T(lang, "sub.label_line", "label", html.EscapeString(label)) + "\n" + text
 }
 
 func (n *Notifier) home(lang string) *tg.Keyboard {

@@ -30,6 +30,19 @@ func TestCatalogsHaveTheSameKeysAndPlaceholders(t *testing.T) {
 	}
 }
 
+// Every ledger kind core writes has a name in both languages: the wallet
+// history and a reseller's statement show it (a missing one shows its key).
+func TestLedgerKindsHaveNames(t *testing.T) {
+	c := MustLoad()
+	for _, kind := range []string{"topup", "purchase", "refund", "adjust", "trial_grant", "referral", "commission", "settlement"} {
+		for _, lang := range Languages {
+			if k := "ledger." + kind; c.T(lang, k) == k {
+				t.Errorf("%s: no text for %s", lang, k)
+			}
+		}
+	}
+}
+
 func sorted(s []string) []string {
 	out := append([]string(nil), s...)
 	for i := range out {

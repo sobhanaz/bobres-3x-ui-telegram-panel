@@ -82,7 +82,10 @@ func (h *Handler) showHome(r *req) {
 		Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.services"), "subs")).
 		Row(tg.CB(r.t("btn.wallet"), "wallet"), tg.CB(r.t("btn.trial"), "trial")).
 		Row(tg.CB(r.t("btn.support"), "support"), tg.CB(r.t("btn.language"), "lang"))
-	if h.referralsOn() {
+	switch {
+	case r.isReseller(): // their invite link is in the panel, with their commission
+		kb.Row(tg.CB(r.t("btn.reseller"), "rs"))
+	case h.referralsOn():
 		kb.Row(tg.CB(r.t("btn.invite"), "ref"))
 	}
 	switch {
