@@ -599,6 +599,26 @@ export interface UpdateCheck {
   error: string
 }
 
+/** One kept log line: a warning or an error, already redacted. */
+export interface LogLine {
+  time: number
+  /** WARN | ERROR */
+  level: string
+  msg: string
+  /** the line's other fields as a JSON object; '' or "{}" when none */
+  attrs?: string
+}
+
+/** GET /system/logs?service= (owner): the warnings and errors a service
+ * kept since it started (the newest 500), oldest first. */
+export interface SystemLogs {
+  service: string
+  lines: LogLine[] | null
+  /** '' | unreachable (core could not ask the service) | anything else, in
+   * a few English words */
+  error?: string
+}
+
 /** A license limit with its use: -1 = unlimited, 0 = none; used is null
  * when it could not be counted. */
 export interface LicenseLimit {

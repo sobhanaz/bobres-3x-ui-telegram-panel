@@ -1702,6 +1702,7 @@
     "tab": {
       "health": "Health",
       "updates": "Updates",
+      "logs": "Logs",
       "license": "License"
     },
     "refresh": "Check again",
@@ -1767,6 +1768,18 @@
         "not_checked": "The bot has not checked yet. It checks every 12 hours.",
         "unsupported": "This version of core does not report updates.",
         "other": "The check failed:"
+      }
+    },
+    "logs": {
+      "service": "Service",
+      "note": "Only warnings and errors since each service last started are kept (the newest 500). A restart clears them.",
+      "empty": "No warnings or errors since this service started.",
+      "lines": "Warnings and errors of {service}, newest first",
+      "load_error": "The logs could not be read.",
+      "reason": {
+        "unreachable": "Core could not reach {service}, so its logs could not be read.",
+        "not_configured": "Core has no address for {service}, so its logs can't be read.",
+        "other": "The logs of {service} could not be read:"
       }
     }
   },

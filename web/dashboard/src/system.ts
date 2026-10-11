@@ -1,4 +1,4 @@
-import type { ServiceHealth, SystemReply, UpdateCheck } from './types'
+import type { LogLine, ServiceHealth, SystemReply, UpdateCheck } from './types'
 
 // The System page's health tab: what each service's /healthz and /readyz
 // say, and whether every service runs the same version.
@@ -79,4 +79,42 @@ export function updateReason(u: Pick<UpdateCheck, 'latest' | 'error' | 'checked_
   if (e === 'bot unreachable' || e === 'bot_unreachable') return 'bot_unreachable'
   if (e) return 'other'
   return u.latest ? null : 'not_checked'
+}
+
+// The logs tab (owner): the warnings and errors each service kept since it
+// last started.
+
+/** The services whose logs core can read, in the order the picker lists
+ * them. */
+export const LOG_SERVICES = ['core', 'bot', 'payments', 'provisioner']
+
+export type LogLevel = 'warn' | 'error'
+
+/** logLevel reads a line's level; anything but an error counts as a
+ * warning (only warnings and errors are kept). */
+export function logLevel(l: Pick<LogLine, 'level'>): LogLevel {
+  return l.level.trim().toUpperCase().startsWith('ERR') ? 'error' : 'warn'
+}
+
+export const logSeverity: Record<LogLevel, 'warn' | 'danger'> = { warn: 'warn', error: 'danger' }
+
+/** newestFirst lists the lines newest first (services keep them oldest
+ * first); lines of the same second keep their reversed order. */
+export function newestFirst(lines: readonly LogLine[] | null | undefined): LogLine[] {
+  return [...(lines ?? [])].reverse().sort((a, b) => b.time - a.time)
+}
+
+/** logAttrs is a line's other fields to show, or '' when it has none. */
+export function logAttrs(l: Pick<LogLine, 'attrs'>): string {
+  const a = (l.attrs ?? '').trim()
+  return a === '{}' || a === 'null' ? '' : a
+}
+
+/** logsReason says why a service's logs could not be read: core could not
+ * ask it, or the service's own words; null when they were read. */
+export function logsReason(error: string | null | undefined): 'unreachable' | 'not_configured' | 'other' | null {
+  const e = (error ?? '').trim().toLowerCase()
+  if (!e) return null
+  if (e === 'unreachable') return 'unreachable'
+  return e === 'not configured' ? 'not_configured' : 'other'
 }

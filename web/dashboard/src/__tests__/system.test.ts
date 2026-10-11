@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import fa from '../locales/fa.json'
-import { absent, checkList, mismatched, serviceState, sortedServices, UPDATE_COMMAND, updateReason, updateState } from '../system'
+import { absent, checkList, logAttrs, logLevel, logsReason, mismatched, newestFirst, serviceState, sortedServices, UPDATE_COMMAND, updateReason, updateState } from '../system'
 import {
   bindingOf,
   bindings,
@@ -20,7 +20,7 @@ import {
   tokenProblem,
   warnings,
 } from '../license'
-import type { LicenseEntitlements, LicenseInfo, LicenseToken, ServiceHealth, SystemReply, UpdateCheck } from '../types'
+import type { LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemLogs, SystemReply, UpdateCheck } from '../types'
 
 const DAY = 86_400
 const iid = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa'
@@ -240,6 +240,29 @@ describe('license', () => {
     expect(tokenProblem('abc+/=.sig')).toBe('format')
     expect(tokenProblem('.sig')).toBe('format')
     expect(tokenProblem('a'.repeat(TOKEN_MAX) + '.b')).toBe('long')
+  })
+})
+
+describe('logs', () => {
+  const line = (time: number, level: string, msg: string, attrs = ''): LogLine => ({ time, level, msg, attrs })
+  it('lists the lines newest first, keeping the order within a second', () => {
+    const got = newestFirst([line(10, 'WARN', 'a'), line(20, 'ERROR', 'b'), line(20, 'WARN', 'c'), line(15, 'WARN', 'd')])
+    expect(got.map((l) => l.msg)).toEqual(['c', 'b', 'd', 'a'])
+    expect(newestFirst(null)).toEqual([])
+  })
+  it('reads the level, the other fields, and why logs could not be read', () => {
+    expect(logLevel({ level: 'ERROR' })).toBe('error')
+    expect(logLevel({ level: 'error' })).toBe('error')
+    expect(logLevel({ level: 'WARN' })).toBe('warn')
+    expect(logLevel({ level: 'WARN+2' })).toBe('warn')
+    expect(logAttrs({ attrs: '{"user":"[redacted]"}' })).toBe('{"user":"[redacted]"}')
+    expect(logAttrs({ attrs: '{}' })).toBe('')
+    expect(logAttrs({})).toBe('')
+    expect(logsReason('')).toBeNull()
+    expect(logsReason(undefined)).toBeNull()
+    expect(logsReason('unreachable')).toBe('unreachable')
+    expect(logsReason('not configured')).toBe('not_configured')
+    expect(logsReason('rpc error: code = Unimplemented')).toBe('other')
   })
 })
 
@@ -514,6 +537,105 @@ describe('system page', () => {
     expect(document.querySelector('.reason-title')?.textContent).toBe(text('system.updates.last_check_failed'))
     expect(reason()).toBe(text('system.updates.reason.unreachable'))
     expect(document.querySelector('.unverified')).toBeNull()
+  })
+
+  it('shows the owner each service’s recent warnings and errors, newest first', async () => {
+    const t0 = nowSec() - 600
+    const logs: Record<string, SystemLogs> = {
+      core: {
+        service: 'core',
+        lines: [
+          { time: t0, level: 'WARN', msg: 'slow query', attrs: '{"ms":1200}' },
+          { time: t0 + 60, level: 'ERROR', msg: 'payment webhook failed', attrs: '{}' },
+        ],
+        error: '',
+      },
+      bot: { service: 'bot', lines: [], error: '' },
+      payments: { service: 'payments', lines: null, error: 'unreachable' },
+      provisioner: { service: 'provisioner', lines: [], error: 'rpc error: code = Unimplemented' },
+    }
+    const { calls, router } = await boot('/admin/system', {
+      perms: ownerPerms, role: 'owner', license: { state: 'active', white_label: false },
+      answer: (url) => {
+        const m = /^\/api\/v1\/system\/logs\?service=(\w+)$/.exec(url)
+        return m ? json(200, logs[m[1]]) : undefined
+      },
+    })
+    await vi.waitFor(() => expect(rows()).toHaveLength(5))
+    // nothing read before the tab opens
+    expect(calls.some((c) => c.includes('/system/logs'))).toBe(false)
+    btn('.tab-logs').click()
+    await found('.log-line')
+    expect(router.currentRoute.value.query.tab).toBe('logs')
+    expect(calls).toContain('GET /api/v1/system/logs?service=core')
+    expect(document.querySelector('.logs .note')?.textContent?.trim()).toBe(text('system.logs.note'))
+    // English, left to right inside the right-to-left page, newest first
+    const list = document.querySelector('.log-lines') as HTMLElement
+    expect(document.documentElement.getAttribute('dir')).toBe('rtl')
+    expect(list.getAttribute('dir')).toBe('ltr')
+    const lines = [...list.querySelectorAll('.log-line')] as HTMLElement[]
+    expect(lines.map((l) => l.querySelector('.msg')?.textContent)).toEqual(['payment webhook failed', 'slow query'])
+    expect(lines.map((l) => l.querySelector('.level')?.textContent)).toEqual(['ERROR', 'WARN'])
+    expect(lines[0].querySelector('.level')?.classList.contains('p-tag-danger')).toBe(true)
+    expect(lines[0].querySelector('.attrs')).toBeNull()
+    expect(lines[1].querySelector('.attrs')?.textContent).toBe('{"ms":1200}')
+    expect(lines[1].querySelector('.msg')?.classList.contains('app-mono')).toBe(true)
+    expect(document.querySelector('.logs .empty')).toBeNull()
+
+    const pick = (name: string) => {
+      const label = text('system.service.' + name)
+      const b = [...document.querySelectorAll('.log-service button')].find((x) => x.textContent?.trim() === label) as HTMLButtonElement
+      b.click()
+    }
+    // nothing went wrong since the bot started
+    pick('bot')
+    const empty = await found('.logs .empty')
+    expect(empty.textContent?.trim()).toBe(text('system.logs.empty'))
+    expect(calls).toContain('GET /api/v1/system/logs?service=bot')
+    expect(document.querySelector('.log-line')).toBeNull()
+    // core could not ask the service
+    pick('payments')
+    const unread = await found('.logs-unread')
+    expect(unread.querySelector('.reason')?.textContent).toBe(fill(text('system.logs.reason.unreachable'), { service: text('system.service.payments') }))
+    expect(document.querySelector('.logs .empty')).toBeNull()
+    // the service's own words for anything else
+    pick('provisioner')
+    await vi.waitFor(() => expect(document.querySelector('.logs-unread .error')?.textContent).toBe('rpc error: code = Unimplemented'))
+    expect(document.querySelector('.logs-unread .reason')?.textContent).toBe(fill(text('system.logs.reason.other'), { service: text('system.service.provisioner') }))
+    // read again on demand; nothing is ever changed from here
+    btn('.logs button.refresh').click()
+    await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/system/logs?service=provisioner')).toHaveLength(2))
+    expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
+  })
+
+  it('says when the logs cannot be read, and tries again', async () => {
+    let fail = true
+    await boot('/admin/system?tab=logs', {
+      perms: ownerPerms, role: 'owner', license: { state: 'active', white_label: false },
+      answer: (url) => {
+        if (!url.startsWith('/api/v1/system/logs')) return undefined
+        if (fail) {
+          fail = false
+          return json(503, { error: 'unavailable', message: 'down' })
+        }
+        return json(200, { service: 'core', lines: [], error: '' })
+      },
+    })
+    const err = await found('.logs .load-error')
+    expect(err.textContent).toContain(text('system.logs.load_error'))
+    btn('.logs button.refresh').click()
+    await found('.logs .empty')
+    expect(document.querySelector('.logs .load-error')).toBeNull()
+  })
+
+  it('keeps the logs from admins', async () => {
+    // even from a link to the tab: the health tab instead
+    const { calls } = await boot('/admin/system?tab=logs')
+    await vi.waitFor(() => expect(rows()).toHaveLength(5))
+    expect(document.querySelector('.tab-health')?.getAttribute('aria-selected')).toBe('true')
+    expect(document.querySelector('.tab-logs')).toBeNull()
+    expect(document.querySelector('.logs')).toBeNull()
+    expect(calls.some((c) => c.includes('/system/logs'))).toBe(false)
   })
 
   it('shows admins the license read only, with this install’s id to copy', async () => {

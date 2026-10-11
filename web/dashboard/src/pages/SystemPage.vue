@@ -10,20 +10,24 @@ import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import HealthTab from '../components/system/HealthTab.vue'
 import LicenseTab from '../components/system/LicenseTab.vue'
+import LogsTab from '../components/system/LogsTab.vue'
 import UpdatesTab from '../components/system/UpdatesTab.vue'
 import { licenseSeverity, stateOf } from '../license'
 import { useAuth } from '../stores/auth'
 
 // The system (owner and admin): every service's health and version, whether
-// a newer release is out, and the license. The tab is in the address (?tab=), so the menu's license chip can
+// a newer release is out, the license, and for the owner the services' recent
+// warnings and errors. The tab is in the address (?tab=), so the menu's license chip can
 // open it; each tab loads the first time it is shown.
 const { t } = useI18n()
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
 
-const tabs = ['health', 'updates', 'license']
-const tabOf = (v: unknown) => (typeof v === 'string' && tabs.includes(v) ? v : 'health')
+// the logs carry Telegram ids: the owner's only (system.write)
+const canLogs = computed(() => auth.can('system.write'))
+const tabs = computed(() => (canLogs.value ? ['health', 'updates', 'logs', 'license'] : ['health', 'updates', 'license']))
+const tabOf = (v: unknown) => (typeof v === 'string' && tabs.value.includes(v) ? v : 'health')
 const tab = ref(tabOf(route.query.tab))
 const seen = reactive(new Set<string>([tab.value]))
 function showTab(v: string | number) {
@@ -51,6 +55,7 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
     <TabList>
       <Tab value="health" class="tab-health">{{ t('system.tab.health') }}</Tab>
       <Tab value="updates" class="tab-updates">{{ t('system.tab.updates') }}</Tab>
+      <Tab v-if="canLogs" value="logs" class="tab-logs">{{ t('system.tab.logs') }}</Tab>
       <Tab value="license" class="tab-license">
         {{ t('system.tab.license') }}
         <Tag v-if="licenseState && licenseState !== 'active'" :severity="licenseSeverity[licenseState]" :value="t('license.state.' + licenseState)" class="tab-state" />
@@ -62,6 +67,9 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
       </TabPanel>
       <TabPanel value="updates">
         <UpdatesTab v-if="seen.has('updates')" />
+      </TabPanel>
+      <TabPanel v-if="canLogs" value="logs">
+        <LogsTab v-if="seen.has('logs')" />
       </TabPanel>
       <TabPanel value="license">
         <LicenseTab v-if="seen.has('license')" />
