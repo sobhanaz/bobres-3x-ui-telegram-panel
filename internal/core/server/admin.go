@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -102,7 +103,7 @@ func (s *Server) AdminUpsertPlan(ctx context.Context, req *corev1.AdminUpsertPla
 	p := &store.Plan{
 		ID: in.GetId(), NameI18n: in.GetNameI18N(), Kind: in.GetKind(),
 		Price: in.GetPrice().GetAmount(), Currency: in.GetPrice().GetCurrency(),
-		Enabled: in.GetEnabled(), IsTrial: in.GetIsTrial(), Sort: in.GetSort(),
+		Enabled: in.GetEnabled(), IsTrial: in.GetIsTrial(), Sort: in.GetSort(), IsTopup: in.GetIsTopup(),
 	}
 	if d := in.GetDurationDays(); d > 0 {
 		p.DurationDays = &d
@@ -123,4 +124,59 @@ func (s *Server) AdminSetSetting(ctx context.Context, req *corev1.AdminSetSettin
 		return nil, fail(err)
 	}
 	return s.GetSettings(ctx, &corev1.GetSettingsRequest{})
+}
+
+// AdminUpsertDiscount creates or changes a discount code.
+func (s *Server) AdminUpsertDiscount(ctx context.Context, req *corev1.AdminUpsertDiscountRequest) (*corev1.Discount, error) {
+	in := req.GetDiscount()
+	d := &store.Discount{Code: in.GetCode(), Enabled: in.GetEnabled()}
+	if p := in.GetPercent(); p != 0 {
+		d.Percent = &p
+	}
+	if a := in.GetAmount(); a.GetAmount() != 0 {
+		amount, cur := a.GetAmount(), a.GetCurrency()
+		d.Amount, d.Currency = &amount, &cur
+	}
+	if m := in.GetMaxUses(); m != 0 {
+		d.MaxUses = &m
+	}
+	if e := in.GetExpiresAt(); e != 0 {
+		t := time.Unix(e, 0).UTC()
+		d.ExpiresAt = &t
+	}
+	got, err := s.dom.AdminUpsertDiscount(ctx, req.GetActorTelegramId(), d)
+	if err != nil {
+		return nil, fail(err)
+	}
+	return discountToProto(got), nil
+}
+
+// AdminListDiscounts lists the discount codes.
+func (s *Server) AdminListDiscounts(ctx context.Context, req *corev1.AdminListDiscountsRequest) (*corev1.AdminListDiscountsResponse, error) {
+	list, err := s.dom.AdminListDiscounts(ctx, req.GetActorTelegramId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.AdminListDiscountsResponse{}
+	for i := range list {
+		out.Discounts = append(out.Discounts, discountToProto(&list[i]))
+	}
+	return out, nil
+}
+
+func discountToProto(d *store.Discount) *corev1.Discount {
+	out := &corev1.Discount{Code: d.Code, Used: d.Used, Enabled: d.Enabled}
+	if d.Percent != nil {
+		out.Percent = *d.Percent
+	}
+	if d.Amount != nil && d.Currency != nil {
+		out.Amount = &commonv1.Money{Amount: *d.Amount, Currency: *d.Currency}
+	}
+	if d.MaxUses != nil {
+		out.MaxUses = *d.MaxUses
+	}
+	if d.ExpiresAt != nil {
+		out.ExpiresAt = d.ExpiresAt.Unix()
+	}
+	return out
 }

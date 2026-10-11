@@ -171,7 +171,10 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 1. First sellable slice: provisioner + core + bot: plans, wallet, purchase, subscription link/QR, trial,
    manual payment approval, admin in bot. One-command install on clean Ubuntu.
 2. Payments: Zarinpal, Telegram Stars, third-party crypto.
+   (Built: Telegram Stars, Zarinpal (off by default), payment screenshots approved by the admin for card,
+   Zarinpal link and USDT. Third-party crypto is on hold: the processors exclude Iran; see the Phase 2 design.)
 3. Retention: renew, traffic top-up, discounts, referrals, expiry/usage notifications.
+   (Built 2026-10-06: docs/superpowers/specs/2026-10-06-phase3-retention-design.md.)
 4. Dashboard (web) + branding editor.
 5. Resellers (tiers + credit), tickets.
 6. Auto crypto watcher, older 3x-ui adapters, license server + update channel.

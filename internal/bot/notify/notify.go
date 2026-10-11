@@ -1,5 +1,6 @@
 // Package notify turns core's events into Telegram messages: payment
-// results, wallet credits, delivered services, and admin alerts.
+// results, wallet credits, delivered and extended services, reminders before
+// a service ends, and admin alerts.
 package notify
 
 import (
@@ -103,6 +104,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		key := map[string]string{
 			events.CreditOrderNotPayable: "wallet.credited_late",
 			events.CreditAdminAdjust:     "wallet.credited_admin",
+			events.CreditReferral:        "wallet.credited_referral",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"
@@ -110,6 +112,48 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		lang := n.lang(ctx, e.TelegramID)
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, key,
 			"amount", i18n.Money(lang, e.Amount, e.Currency), "balance", i18n.Money(lang, e.Balance, e.Currency)), n.home(lang))
+
+	case events.SubscriptionExtended:
+		var e events.SubscriptionExtendedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		lang := n.lang(ctx, e.TelegramID)
+		kb := (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.view_service"), "sub:"+e.SubscriptionID))
+		key := "sub.renewed"
+		if e.Type == "traffic_topup" {
+			key = "sub.topped_up"
+		}
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, key, "id", shortID(e.SubscriptionID),
+			"expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes)), kb)
+
+	case events.SubscriptionReminder:
+		var e events.SubscriptionReminderEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		lang := n.lang(ctx, e.TelegramID)
+		row := []tg.Button{tg.CB(n.cat.T(lang, "btn.renew"), "rnw:"+e.SubscriptionID)}
+		if e.TopupAvailable && (e.Kind == events.ReminderLowTraffic || e.Kind == events.ReminderDepleted) {
+			row = append(row, tg.CB(n.cat.T(lang, "btn.add_traffic"), "tup:"+e.SubscriptionID))
+		}
+		kb := (&tg.Keyboard{}).Row(row...).Row(tg.CB(n.cat.T(lang, "btn.view_service"), "sub:"+e.SubscriptionID))
+		var text string
+		switch e.Kind {
+		case events.ReminderExpiring:
+			text = n.cat.T(lang, "reminder.expiring", "id", shortID(e.SubscriptionID),
+				"days", i18n.Number(lang, int64(e.Days)), "date", n.expires(lang, e.ExpiresAt))
+		case events.ReminderLowTraffic:
+			text = n.cat.T(lang, "reminder.low_traffic", "id", shortID(e.SubscriptionID),
+				"used", i18n.Bytes(lang, e.TrafficUsedBytes), "total", i18n.Bytes(lang, e.TrafficTotalBytes))
+		case events.ReminderExpired:
+			text = n.cat.T(lang, "reminder.expired", "id", shortID(e.SubscriptionID))
+		case events.ReminderDepleted:
+			text = n.cat.T(lang, "reminder.depleted", "id", shortID(e.SubscriptionID), "total", i18n.Bytes(lang, e.TrafficTotalBytes))
+		default:
+			return nil // a newer core's reminder this bot does not know
+		}
+		return n.send(ctx, e.TelegramID, text, kb)
 
 	case events.ProvisionFailed:
 		var e events.ProvisionFailedEvent
@@ -126,6 +170,29 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		return n.send(ctx, e.TelegramID, n.cat.T(n.lang(ctx, e.TelegramID), "sub.delayed"), nil)
 	}
 	return nil
+}
+
+func (n *Notifier) expires(lang string, unix int64) string {
+	if unix <= 0 {
+		return n.cat.T(lang, "sub.no_expiry")
+	}
+	return i18n.Date(lang, time.Unix(unix, 0))
+}
+
+func (n *Notifier) traffic(lang string, b int64) string {
+	if b <= 0 {
+		return n.cat.T(lang, "sub.unlimited")
+	}
+	return i18n.Bytes(lang, b)
+}
+
+// shortID is how services are named in messages: the last 6 characters.
+func shortID(id string) string {
+	id = strings.ReplaceAll(id, "-", "")
+	if len(id) > 6 {
+		return id[len(id)-6:]
+	}
+	return id
 }
 
 func (n *Notifier) home(lang string) *tg.Keyboard {

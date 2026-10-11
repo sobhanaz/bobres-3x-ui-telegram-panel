@@ -41,7 +41,10 @@ verifies its signature and checksum, and asks for your domain, Telegram ID, bot 
 Every item is also a command: `bobres status`, `bobres logs -f`, `bobres restart`, ... (`bobres help`).
 
 ## Status
-Phase 1 in progress (see `docs/superpowers/plans/2026-09-30-phase1-implementation.md`).
+Phases 1-3 are built: the sellable bot with manual payments, Phase 2 payments (Telegram Stars,
+Zarinpal, payment screenshots approved by the admin), Phase 3 retention (renewals, traffic
+packages, reminders, discount codes, referrals). Next: Phase 4, the web dashboard. Design notes
+are in `docs/superpowers/specs/`; the first real install is `docs/11-staging-run.md`.
 Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
 PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.
 

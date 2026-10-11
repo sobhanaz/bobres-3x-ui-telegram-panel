@@ -33,6 +33,27 @@ type Store interface {
 	Clear(ctx context.Context, userID int64) error
 	// Once reports true the first time key is seen within ttl.
 	Once(ctx context.Context, key string, ttl time.Duration) (bool, error)
+	// SaveCheckout keeps what a payment menu sells, under the menu's nonce,
+	// for CheckoutTTL; LoadCheckout reads it back (ok=false once gone).
+	SaveCheckout(ctx context.Context, userID int64, nonce string, c Checkout) error
+	LoadCheckout(ctx context.Context, userID int64, nonce string) (c Checkout, ok bool, err error)
+}
+
+// CheckoutTTL is how long a payment menu's buttons keep working.
+const CheckoutTTL = time.Hour
+
+// Checkout is what a payment menu sells: a plan, as a new service or for an
+// existing subscription (renew, traffic_topup), possibly with a discount code.
+// Buttons carry only the menu's nonce, so they fit Telegram's 64 bytes.
+type Checkout struct {
+	Type           string `json:"type"` // new | renew | traffic_topup
+	PlanID         string `json:"plan,omitempty"`
+	SubscriptionID string `json:"sub,omitempty"`
+	DiscountCode   string `json:"code,omitempty"`
+}
+
+func checkoutKey(userID int64, nonce string) string {
+	return "bot:co:" + strconv.FormatInt(userID, 10) + ":" + nonce
 }
 
 // Redis stores state as JSON under bot:state:<user>.
@@ -78,16 +99,58 @@ func (r *Redis) Once(ctx context.Context, k string, ttl time.Duration) (bool, er
 	return r.rdb.SetNX(ctx, "bot:once:"+k, 1, ttl).Result()
 }
 
+// SaveCheckout implements Store.
+func (r *Redis) SaveCheckout(ctx context.Context, userID int64, nonce string, c Checkout) error {
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return r.rdb.Set(ctx, checkoutKey(userID, nonce), raw, CheckoutTTL).Err()
+}
+
+// LoadCheckout implements Store.
+func (r *Redis) LoadCheckout(ctx context.Context, userID int64, nonce string) (Checkout, bool, error) {
+	raw, err := r.rdb.Get(ctx, checkoutKey(userID, nonce)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return Checkout{}, false, nil
+	}
+	if err != nil {
+		return Checkout{}, false, err
+	}
+	var c Checkout
+	if json.Unmarshal(raw, &c) != nil {
+		return Checkout{}, false, nil
+	}
+	return c, true, nil
+}
+
 // Memory is an in-process Store for tests and single-instance development.
 type Memory struct {
-	mu    sync.Mutex
-	state map[int64]State
-	seen  map[string]time.Time
+	mu        sync.Mutex
+	state     map[int64]State
+	seen      map[string]time.Time
+	checkouts map[string]Checkout
 }
 
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
-	return &Memory{state: map[int64]State{}, seen: map[string]time.Time{}}
+	return &Memory{state: map[int64]State{}, seen: map[string]time.Time{}, checkouts: map[string]Checkout{}}
+}
+
+// SaveCheckout implements Store (no expiry in memory).
+func (m *Memory) SaveCheckout(_ context.Context, userID int64, nonce string, c Checkout) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.checkouts[checkoutKey(userID, nonce)] = c
+	return nil
+}
+
+// LoadCheckout implements Store.
+func (m *Memory) LoadCheckout(_ context.Context, userID int64, nonce string) (Checkout, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.checkouts[checkoutKey(userID, nonce)]
+	return c, ok, nil
 }
 
 // Get implements Store.

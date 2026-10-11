@@ -10,7 +10,7 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-const planCols = `id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort`
+const planCols = `id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup`
 
 func scanPlan(row pgx.Row) (*Plan, error) {
 	var (
@@ -18,7 +18,7 @@ func scanPlan(row pgx.Row) (*Plan, error) {
 		name []byte
 	)
 	err := row.Scan(&p.ID, &name, &p.Kind, &p.DurationDays, &p.TrafficBytes,
-		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort)
+		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -74,15 +74,15 @@ func (s *Store) UpsertPlan(ctx context.Context, q querier, p *Plan) error {
 		return fmt.Errorf("plan name_i18n: %w", err)
 	}
 	_, err = q.Exec(ctx, `
-		INSERT INTO core.plans (id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO core.plans (id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (id) DO UPDATE SET
 			name_i18n = EXCLUDED.name_i18n, kind = EXCLUDED.kind,
 			duration_days = EXCLUDED.duration_days, traffic_bytes = EXCLUDED.traffic_bytes,
 			price = EXCLUDED.price, currency = EXCLUDED.currency, enabled = EXCLUDED.enabled,
-			is_trial = EXCLUDED.is_trial, sort = EXCLUDED.sort, updated_at = now()`,
+			is_trial = EXCLUDED.is_trial, sort = EXCLUDED.sort, is_topup = EXCLUDED.is_topup, updated_at = now()`,
 		p.ID, name, p.Kind, p.DurationDays, p.TrafficBytes,
-		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort)
+		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort, p.IsTopup)
 	if err != nil {
 		return fmt.Errorf("upsert plan: %w", err)
 	}

@@ -408,11 +408,40 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	before := map[string]string{}
 	for id := range subIDs {
 		links, err := c.SubLinks(ctx, id)
 		if err != nil || len(links) == 0 {
 			t.Fatalf("subscription %s on the panel: %v (%d links)", id, err, len(links))
 		}
+		before[id] = strings.Join(links, "\n")
 		fmt.Printf("panel has subscription %s with %d link(s)\n", id, len(links))
+	}
+
+	// Renewal (Phase 3): carol renews her newest service with the wallet. The
+	// real panel takes the new absolute limits (50 GB more: 100 GB), and every
+	// client keeps its identity: the same subscription serves the same links.
+	owner.press("adm")
+	owner.press("adm:find")
+	owner.text(strconv.FormatInt(customerID, 10))
+	owner.sees("@carol")
+	owner.press("adm:adj:")
+	owner.text("150000 renewal")
+	carol.sees("Support added 150,000 Toman")
+	carol.press("home")
+	carol.press("subs")
+	carol.press("sub:")
+	carol.press("rnw:")
+	carol.press("rp:")
+	carol.press("pay:w:")
+	carol.sees("Paid from your wallet")
+	if renewed := carol.sees("renewed."); !strings.Contains(renewed, "100 GB") {
+		t.Fatalf("renewal message: %q", renewed)
+	}
+	for id, was := range before {
+		links, err := c.SubLinks(ctx, id)
+		if err != nil || strings.Join(links, "\n") != was {
+			t.Fatalf("subscription %s changed after the renewal: %v\nbefore %s\nafter  %s", id, err, was, strings.Join(links, "\n"))
+		}
 	}
 }

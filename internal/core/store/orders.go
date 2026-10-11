@@ -4,17 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-const orderCols = `id, user_id, plan_id, type, status, amount, currency, idempotency_key, created_at, updated_at`
+const orderCols = `id, user_id, plan_id, type, status, amount, currency, idempotency_key, created_at, updated_at,
+	subscription_id, discount_code, discount_amount, targets_set, target_expires_at, target_traffic_bytes`
+
+func orderDest(o *Order) []any {
+	return []any{&o.ID, &o.UserID, &o.PlanID, &o.Type, &o.Status,
+		&o.Amount, &o.Currency, &o.IdempotencyKey, &o.CreatedAt, &o.UpdatedAt,
+		&o.SubscriptionID, &o.DiscountCode, &o.DiscountAmount, &o.TargetsSet, &o.TargetExpiresAt, &o.TargetTrafficBytes}
+}
 
 func scanOrder(row pgx.Row) (*Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.UserID, &o.PlanID, &o.Type, &o.Status,
-		&o.Amount, &o.Currency, &o.IdempotencyKey, &o.CreatedAt, &o.UpdatedAt)
+	err := row.Scan(orderDest(&o)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -23,8 +30,8 @@ func scanOrder(row pgx.Row) (*Order, error) {
 
 // CreateOrder inserts an order and reports whether it is new. A retry with the
 // same idempotency_key returns the existing order (inserted=false); the same
-// key for a different user/plan/type is ErrIdempotencyConflict rather than
-// someone else's order.
+// key for a different user/plan/type/subscription is ErrIdempotencyConflict
+// rather than someone else's order.
 func (s *Store) CreateOrder(ctx context.Context, q querier, o *Order) (*Order, bool, error) {
 	o.ID = buuid.MustV7().String()
 	var (
@@ -33,20 +40,43 @@ func (s *Store) CreateOrder(ctx context.Context, q querier, o *Order) (*Order, b
 	)
 	// xmax = 0 only for a freshly inserted row (an ON CONFLICT update sets it).
 	err := q.QueryRow(ctx, `
-		INSERT INTO core.orders (id, user_id, plan_id, type, status, amount, currency, idempotency_key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO core.orders (id, user_id, plan_id, type, status, amount, currency, idempotency_key,
+			subscription_id, discount_code, discount_amount)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
 		RETURNING `+orderCols+`, (xmax = 0)`,
-		o.ID, o.UserID, o.PlanID, o.Type, o.Status, o.Amount, o.Currency, o.IdempotencyKey).
-		Scan(&got.ID, &got.UserID, &got.PlanID, &got.Type, &got.Status,
-			&got.Amount, &got.Currency, &got.IdempotencyKey, &got.CreatedAt, &got.UpdatedAt, &inserted)
+		o.ID, o.UserID, o.PlanID, o.Type, o.Status, o.Amount, o.Currency, o.IdempotencyKey,
+		o.SubscriptionID, o.DiscountCode, o.DiscountAmount).
+		Scan(append(orderDest(&got), &inserted)...)
 	if err != nil {
 		return nil, false, fmt.Errorf("create order: %w", err)
 	}
-	if got.UserID != o.UserID || got.PlanID != o.PlanID || got.Type != o.Type {
+	if got.UserID != o.UserID || got.PlanID != o.PlanID || got.Type != o.Type || deref(got.SubscriptionID) != deref(o.SubscriptionID) {
 		return nil, false, ErrIdempotencyConflict
 	}
 	return &got, inserted, nil
+}
+
+// SetOrderTargets stores the limits a renewal or top-up applies, computed
+// once so every retry sets the same values.
+func (s *Store) SetOrderTargets(ctx context.Context, q querier, id string, expiresAt *time.Time, trafficBytes *int64) error {
+	tag, err := q.Exec(ctx, `
+		UPDATE core.orders SET targets_set = true, target_expires_at = $2, target_traffic_bytes = $3, updated_at = now()
+		WHERE id = $1`, id, expiresAt, trafficBytes)
+	if err != nil {
+		return fmt.Errorf("set order targets: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // OrderByIdempotencyKey returns the order created with key.

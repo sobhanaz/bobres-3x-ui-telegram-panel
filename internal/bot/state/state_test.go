@@ -35,6 +35,20 @@ func exercise(t *testing.T, s Store) {
 	if again, _ := s.Once(ctx, k, time.Minute); again {
 		t.Fatal("second Once must be false")
 	}
+	n := "n" + time.Now().Format("150405.000000")
+	if _, ok, err := s.LoadCheckout(ctx, 1, n); ok || err != nil {
+		t.Fatalf("unknown checkout: %v %v", ok, err)
+	}
+	want := Checkout{Type: "renew", PlanID: "p1", SubscriptionID: "s1", DiscountCode: "SPRING20"}
+	if err := s.SaveCheckout(ctx, 1, n, want); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, err := s.LoadCheckout(ctx, 1, n); !ok || err != nil || got != want {
+		t.Fatalf("checkout round trip: %+v %v %v", got, ok, err)
+	}
+	if _, ok, _ := s.LoadCheckout(ctx, 2, n); ok {
+		t.Fatal("another user read the checkout")
+	}
 }
 
 func TestMemory(t *testing.T) { exercise(t, NewMemory()) }

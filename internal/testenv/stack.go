@@ -61,6 +61,8 @@ type Stack struct {
 	Zarinpal *zpfake.Server
 	PaySite  *httptest.Server
 	Payments *paydomain.Service
+	// Usage is core's usage-sync worker; tests run it with SyncDue.
+	Usage *coredomain.UsageWorker
 }
 
 // ZarinpalMerchant is the merchant id the stack's Zarinpal gateway uses.
@@ -157,6 +159,7 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 		Panel:    panel,
 		Store:    cs,
 		Zarinpal: zp, PaySite: paySite, Payments: paySvc,
+		Usage: dom.NewUsageWorker(provClient, nil),
 	}
 }
 

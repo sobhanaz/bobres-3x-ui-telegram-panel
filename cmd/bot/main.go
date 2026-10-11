@@ -69,7 +69,7 @@ func setup(rt *app.Runtime) error {
 
 	cat := i18n.MustLoad()
 	h := handler.New(core, bot, state.NewRedis(rdb), cat, ratelimit.New(rdb, ""),
-		handler.Config{AdminTelegramID: cfg.AdminTelegramID, BotName: me.FirstName}, rt.Log)
+		handler.Config{AdminTelegramID: cfg.AdminTelegramID, BotName: me.FirstName, BotUsername: me.Username}, rt.Log)
 	if err := h.RefreshSettings(rt.Ctx); err != nil {
 		rt.Log.Warn("settings not loaded yet (core unreachable?); retrying in the background", "err", err)
 	}

@@ -12,6 +12,11 @@ type PanelAdapter interface {
 	CreateClient(ctx context.Context, email, subID string, expiryMs, trafficBytes int64, inboundIDs []int) error
 	// Renew extends expiry and/or traffic.
 	Renew(ctx context.Context, email string, addDays, addBytes int64) error
+	// SetLimits sets absolute limits (expiryMs unix ms, totalBytes; 0 =
+	// unlimited) and enables the client, so a retry is harmless.
+	SetLimits(ctx context.Context, email string, expiryMs, totalBytes int64) error
+	// Status reports a client's usage and current limits.
+	Status(ctx context.Context, email string) (ClientStatus, error)
 	Delete(ctx context.Context, email string) error
 	ResetTraffic(ctx context.Context, email string) error
 	Usage(ctx context.Context, email string) (usedBytes int64, err error)
@@ -24,6 +29,14 @@ type PanelAdapter interface {
 	Inbounds(ctx context.Context) ([]Inbound, error)
 	// HealthCheck pings the panel and reports health metadata.
 	HealthCheck(ctx context.Context) (version string, err error)
+}
+
+// ClientStatus is a client's usage and limits as the panel holds them.
+type ClientStatus struct {
+	UsedBytes  int64
+	TotalBytes int64 // 0 = unlimited
+	ExpiryMs   int64 // unix ms; 0 = unlimited, negative = starts on first use
+	Enabled    bool
 }
 
 // Inbound is one panel inbound with its enable flag.
