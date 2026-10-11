@@ -116,9 +116,17 @@ func (h *Handler) showPending(r *req) {
 	}
 	p := resp.GetPayments()[0]
 	method, proof := r.t("admin.method_card"), r.t("admin.proof_card", "ref", esc(p.GetReferenceNumber()))
-	if p.GetProvider() == "manual_crypto" {
+	switch {
+	case p.GetProvider() == "manual_crypto" && p.GetTxid() != "":
 		method = r.t("admin.method_crypto")
 		proof = r.t("admin.proof_crypto", "network", esc(p.GetNetwork()), "txid", esc(p.GetTxid()))
+	case p.GetProvider() == "manual_crypto":
+		method, proof = r.t("admin.method_crypto"), r.t("admin.proof_screenshot")
+	case p.GetProvider() == "manual_zarinpal":
+		method = r.t("admin.method_zarinpal_link")
+		if p.GetReferenceNumber() == "" {
+			proof = r.t("admin.proof_screenshot")
+		}
 	}
 	dup := ""
 	if p.GetPossibleDuplicate() {
@@ -130,8 +138,12 @@ func (h *Handler) showPending(r *req) {
 	kb := (&tg.Keyboard{}).
 		Row(tg.CB(r.t("btn.approve"), "adm:ok:"+p.GetIntentId()), tg.CB(r.t("btn.reject"), "adm:no:"+p.GetIntentId())).
 		Row(tg.CB(r.t("btn.back"), "adm"))
-	if p.GetReceiptFile() != "" {
-		if _, err := h.tg.SendPhoto(r.ctx, r.chatID, tg.Photo{FileID: p.GetReceiptFile()}, text, kb); err == nil {
+	if f := p.GetReceiptFile(); f != "" {
+		if _, err := h.tg.SendPhoto(r.ctx, r.chatID, tg.Photo{FileID: f}, text, kb); err == nil {
+			return
+		}
+		// A screenshot sent "as file" has a document id, which sendPhoto refuses.
+		if _, err := h.tg.SendDocument(r.ctx, r.chatID, f, text, kb); err == nil {
 			return
 		}
 	}

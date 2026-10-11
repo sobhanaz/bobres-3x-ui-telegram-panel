@@ -25,7 +25,7 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
-**Manual payment:** show card/address + amount + unique reference -> user sends receipt photo -> admin approve/reject buttons in admin chat -> result to user.
+**Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> admin approve/reject buttons in admin chat -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew.
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.

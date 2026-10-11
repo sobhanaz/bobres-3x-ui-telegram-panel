@@ -26,11 +26,12 @@ func TestMain(m *testing.M) { testdb.Main(m) }
 // --- a fake Telegram that keeps each chat's messages ---
 
 type msg struct {
-	id     int
-	text   string
-	kb     *tg.Keyboard
-	photo  bool
-	fileID string
+	id       int
+	text     string
+	kb       *tg.Keyboard
+	photo    bool
+	document bool
+	fileID   string
 }
 
 type fakeTG struct {
@@ -40,6 +41,7 @@ type fakeTG struct {
 	cbFrom   map[string]int64
 	invoices map[int64][]tg.Invoice
 	answers  map[string]precheckAnswer // by pre-checkout query id
+	docs     map[string]bool           // file ids users sent as documents
 }
 
 type precheckAnswer struct {
@@ -49,7 +51,7 @@ type precheckAnswer struct {
 
 func newFakeTG() *fakeTG {
 	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{},
-		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}}
+		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}, docs: map[string]bool{}}
 }
 
 func (f *fakeTG) SendInvoice(_ context.Context, chat int64, inv tg.Invoice) (*tg.Message, error) {
@@ -89,7 +91,17 @@ func (f *fakeTG) SendMessage(_ context.Context, chat int64, text string, kb *tg.
 }
 
 func (f *fakeTG) SendPhoto(_ context.Context, chat int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error) {
+	f.mu.Lock()
+	isDoc := f.docs[p.FileID]
+	f.mu.Unlock()
+	if isDoc { // like Telegram: a document's file id is not a photo
+		return nil, &tg.APIError{Code: 400, Description: "Bad Request: type of file mismatch"}
+	}
 	return f.add(chat, &msg{text: caption, kb: kb, photo: true, fileID: p.FileID}), nil
+}
+
+func (f *fakeTG) SendDocument(_ context.Context, chat int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error) {
+	return f.add(chat, &msg{text: caption, kb: kb, document: true, fileID: fileID}), nil
 }
 
 func (f *fakeTG) EditMessageText(_ context.Context, chat int64, id int, text string, kb *tg.Keyboard) error {
@@ -215,6 +227,17 @@ func (p *person) photo(fileID, caption string) {
 	p.w.h.Handle(context.Background(), tg.Update{UpdateID: p.w.updateID(), Message: &tg.Message{
 		MessageID: int(p.w.updateID()), From: p.from(), Chat: tg.Chat{ID: p.id, Type: "private"},
 		Caption: caption, Photo: []tg.PhotoSize{{FileID: fileID + "-small", Width: 90, Height: 90}, {FileID: fileID, Width: 1280, Height: 960}},
+	}})
+}
+
+// document sends an image as a file (uncompressed screenshot).
+func (p *person) document(fileID, mime, caption string) {
+	p.w.tg.mu.Lock()
+	p.w.tg.docs[fileID] = true
+	p.w.tg.mu.Unlock()
+	p.w.h.Handle(context.Background(), tg.Update{UpdateID: p.w.updateID(), Message: &tg.Message{
+		MessageID: int(p.w.updateID()), From: p.from(), Chat: tg.Chat{ID: p.id, Type: "private"},
+		Caption: caption, Document: &tg.Document{FileID: fileID, MimeType: mime, FileName: "receipt.jpg"},
 	}})
 }
 
@@ -725,4 +748,59 @@ func TestZarinpalPurchase(t *testing.T) {
 	u.eventuallySees("Your service is ready")
 	u.press("chk:")
 	u.sees("Payment received")
+}
+
+// Every manual method works like card-to-card: a screenshot, approved by an admin.
+func TestScreenshotForZarinpalLinkAndCrypto(t *testing.T) {
+	w := newWorld(t)
+	owner := setupStore(t, w)
+	owner.text("/set payments.zarinpal_link http://not-https.example")
+	owner.text("/set payments.zarinpal_link https://zarinp.al/teststore")
+	owner.text("/set payments.usdt_trc20 TXa1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q")
+	owner.text("/set payments.usdt_rate 60000")
+	u := w.person(701, "nima")
+	u.text("/start")
+	u.press("lang:en")
+
+	// Zarinpal payment link, receipt screenshot sent as an image file.
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:l:")
+	u.sees("Pay through Zarinpal")
+	if link := u.link("Open the payment page"); link != "https://zarinp.al/teststore" {
+		t.Fatalf("payment link: %q (an http link must have been refused)", link)
+	}
+	u.document("zl-receipt-file", "image/jpeg", "TRK-55")
+	u.sees("Received")
+	owner.sees("New payment to review")
+	owner.press("adm:pend")
+	owner.sees("Zarinpal link")
+	if m := w.tg.last(owner.id); !m.document || m.fileID != "zl-receipt-file" {
+		t.Fatalf("the admin must get the screenshot file itself: %+v", m)
+	}
+	owner.press("adm:ok:")
+	u.eventuallySees("Your service is ready")
+
+	// USDT: a screenshot of the transfer instead of the transaction hash.
+	u.press("home")
+	u.press("buy")
+	u.press("plan:")
+	u.press("pay:x:")
+	u.photo("usdt-transfer-shot", "")
+	u.sees("Received")
+	owner.press("adm:pend")
+	owner.sees("Screenshot attached")
+	if m := w.tg.last(owner.id); !m.photo || m.fileID != "usdt-transfer-shot" {
+		t.Fatalf("the admin must get the screenshot: %+v", m)
+	}
+	owner.press("adm:ok:")
+	w.eventually("two delivered services", func() bool {
+		n := 0
+		for _, m := range w.tg.all(701) {
+			if strings.Contains(m.text, "Your service is ready") {
+				n++
+			}
+		}
+		return n == 2
+	})
 }

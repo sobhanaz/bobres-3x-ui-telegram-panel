@@ -41,7 +41,8 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
 Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
 Built so far: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
-superpowers/specs/2026-10-04-phase2-payments-design.md). crypto-thirdparty is on hold: the candidate
+superpowers/specs/2026-10-04-phase2-payments-design.md); manual-zarinpal (the owner's Zarinpal
+payment link, paid outside the bot). Every manual method takes a screenshot that an admin approves. crypto-thirdparty is on hold: the candidate
 processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)
 and one settlement path (exactly once, amount fixed at creation, reconciler).
 

@@ -104,6 +104,11 @@ func (h *Handler) cardEnabled(currency string) bool {
 	return currency == "IRT" && h.setting("payments.card_number") != ""
 }
 
+// zarinpalLinkEnabled: the store's Zarinpal payment link, approved manually.
+func (h *Handler) zarinpalLinkEnabled(currency string) bool {
+	return currency == "IRT" && h.setting("payments.zarinpal_link") != ""
+}
+
 func (h *Handler) cryptoEnabled(currency string) bool {
 	if h.setting("payments.usdt_trc20") == "" && h.setting("payments.usdt_erc20") == "" {
 		return false
@@ -131,6 +136,9 @@ func (h *Handler) showPlan(r *req, planID string) {
 	}
 	if h.cryptoEnabled(cur) {
 		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+planID+":"+n))
+	}
+	if h.zarinpalLinkEnabled(cur) {
+		manual = append(manual, tg.CB(r.t("btn.pay_zarinpal_link"), "pay:l:"+planID+":"+n))
 	}
 	if gw := h.gatewayButtons(r, cur, price, "pay", planID, n); len(gw) > 0 {
 		kb.Row(gw...)
@@ -166,6 +174,8 @@ func (h *Handler) onPay(r *req, rest string) {
 		h.startManual(r, order, "manual_card", "", 0)
 	case "x":
 		h.startManual(r, order, "manual_crypto", "", 0)
+	case "l":
+		h.startManual(r, order, "manual_zarinpal", "", 0)
 	case "z":
 		h.startGateway(r, order, "zarinpal", planName(r, p), "", 0)
 	case "s":
@@ -196,6 +206,9 @@ func (h *Handler) payWithWallet(r *req, p *corev1.Plan, order *corev1.Order) {
 	}
 	if h.cryptoEnabled(cur) {
 		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+p.GetId()+":"+n))
+	}
+	if h.zarinpalLinkEnabled(cur) {
+		manual = append(manual, tg.CB(r.t("btn.pay_zarinpal_link"), "pay:l:"+p.GetId()+":"+n))
 	}
 	if gw := h.gatewayButtons(r, cur, p.GetPrice().GetAmount(), "pay", p.GetId(), n); len(gw) > 0 {
 		kb.Row(gw...)
@@ -237,7 +250,11 @@ func (h *Handler) startManual(r *req, order *corev1.Order, provider, key string,
 		"intent": intent.GetId(), "provider": provider,
 		"amount": fmt.Sprint(intent.GetAmount().GetAmount()), "currency": intent.GetAmount().GetCurrency(),
 	})
-	r.show(text, cancelKeyboard(r))
+	kb := cancelKeyboard(r)
+	if link := intent.GetDetails()["zarinpal_link"]; provider == "manual_zarinpal" && link != "" {
+		kb = &tg.Keyboard{InlineKeyboard: append([][]tg.Button{{tg.Link(r.t("btn.open_payment"), link)}}, kb.InlineKeyboard...)}
+	}
+	r.show(text, kb)
 }
 
 // instructions renders how to pay an intent in the user's language.
@@ -272,6 +289,11 @@ func (h *Handler) instructions(r *req, in *corev1.PaymentIntentRef) (string, boo
 			shown = r.t("pay.crypto_equiv", "usdt", i18n.Money(r.lang, cents*10_000, "USDT"), "amount", shown)
 		}
 		return r.t("pay.crypto", "amount", shown, "addresses", strings.Join(addrs, "\n"), "ref", esc(d["reference"])), true
+	case "manual_zarinpal":
+		if d["zarinpal_link"] == "" {
+			return "", false
+		}
+		return r.t("pay.zarinpal_link", "amount", r.money(amount, cur), "ref", esc(d["reference"])), true
 	}
 	return "", false
 }
@@ -283,7 +305,7 @@ func (h *Handler) onProof(r *req, st state.State) {
 	intent := st.Get("intent")
 	switch st.Scene {
 	case sceneReceipt:
-		file := r.msg.LargestPhoto()
+		file := r.msg.ImageFile()
 		if file == "" {
 			r.send(r.t("pay.need_photo"), cancelKeyboard(r))
 			return
@@ -307,6 +329,13 @@ func (h *Handler) onProof(r *req, st state.State) {
 		}
 		h.submitProof(r, st, &corev1.SubmitPaymentProofRequest{IntentId: intent, ReceiptFile: st.Get("file"), ReferenceNumber: ref})
 	case sceneTXID:
+		// A screenshot of the transfer is enough: an admin checks it, as with a
+		// card receipt. A pasted transaction hash still works.
+		if file := r.msg.ImageFile(); file != "" {
+			h.submitProof(r, st, &corev1.SubmitPaymentProofRequest{IntentId: intent, ReceiptFile: file,
+				ReferenceNumber: strings.TrimSpace(r.msg.Caption)})
+			return
+		}
 		txid := strings.Join(strings.Fields(r.msg.Text), "")
 		if !txidRe.MatchString(txid) {
 			r.send(r.t("pay.bad_txid"), cancelKeyboard(r))

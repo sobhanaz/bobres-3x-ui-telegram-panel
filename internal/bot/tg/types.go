@@ -2,6 +2,8 @@
 // uses, typed, with the token kept out of every error message.
 package tg
 
+import "strings"
+
 // User is a Telegram user or bot.
 type User struct {
 	ID           int64  `json:"id"`
@@ -36,8 +38,31 @@ type Message struct {
 	Text      string      `json:"text,omitempty"`
 	Caption   string      `json:"caption,omitempty"`
 	Photo     []PhotoSize `json:"photo,omitempty"`
+	// Document: a file, e.g. a screenshot sent "as file" (uncompressed).
+	Document *Document `json:"document,omitempty"`
 	// SuccessfulPayment: a Telegram Stars payment completed.
 	SuccessfulPayment *SuccessfulPayment `json:"successful_payment,omitempty"`
+}
+
+// Document is a file attached to a message.
+type Document struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	FileName     string `json:"file_name,omitempty"`
+	MimeType     string `json:"mime_type,omitempty"`
+	FileSize     int64  `json:"file_size,omitempty"`
+}
+
+// ImageFile returns the file id of a picture in the message: the largest photo
+// size, or an image sent as a file. "" when there is none.
+func (m *Message) ImageFile() string {
+	if id := m.LargestPhoto(); id != "" {
+		return id
+	}
+	if d := m.Document; d != nil && strings.HasPrefix(strings.ToLower(d.MimeType), "image/") {
+		return d.FileID
+	}
+	return ""
 }
 
 // SuccessfulPayment is the service message after a completed payment.

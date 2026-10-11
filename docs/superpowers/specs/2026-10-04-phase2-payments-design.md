@@ -114,6 +114,7 @@ facts that matter for the code are restated here).
 | Where | Key | Meaning |
 |---|---|---|
 | core setting | `payments.stars_rate` | Toman per Star; empty = no Stars |
+| core setting | `payments.zarinpal_link` | the owner's Zarinpal payment link (https); customers pay there and send a screenshot for admin approval (no merchant API needed) |
 | payments env | `BOBRES_ZARINPAL_MERCHANT_ID` | enables Zarinpal |
 | payments env | `BOBRES_ZARINPAL_SANDBOX` | sandbox host (tests; refused in prod) |
 | payments env | `BOBRES_ZARINPAL_PROXY` | http(s) proxy with a registered IP |

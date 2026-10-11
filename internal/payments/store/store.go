@@ -263,7 +263,7 @@ func (s *Store) ListPendingReceipts(ctx context.Context, limit int) ([]Pending, 
 		           WHERE d.reference_number = r.reference_number AND d.intent_id <> r.intent_id))
 		FROM payments.payment_intents i
 		JOIN payments.manual_receipts r ON r.intent_id = i.id
-		WHERE i.status = 'confirming' AND i.provider IN ('manual_card','manual_crypto')
+		WHERE i.status = 'confirming' AND i.provider IN ('manual_card','manual_crypto','manual_zarinpal')
 		ORDER BY r.submitted_at LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list pending: %w", err)

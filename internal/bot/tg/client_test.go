@@ -122,6 +122,24 @@ func TestSendPhotoUploadsAndByFileID(t *testing.T) {
 	}
 }
 
+func TestSendDocumentByFileID(t *testing.T) {
+	var got map[string]any
+	var called string
+	c, _ := fakeAPI(t, func(method string, body []byte, _ *http.Request) any {
+		called = method
+		_ = json.Unmarshal(body, &got)
+		return ok(map[string]any{"message_id": 4, "chat": map[string]any{"id": 1}})
+	})
+	kb := (&Keyboard{}).Row(CB("Approve", "adm:ok:1"))
+	if _, err := c.SendDocument(context.Background(), 1, "doc-9", "<b>receipt</b>", kb); err != nil {
+		t.Fatal(err)
+	}
+	if called != "sendDocument" || got["document"] != "doc-9" || got["caption"] != "<b>receipt</b>" ||
+		got["parse_mode"] != "HTML" || got["reply_markup"] == nil {
+		t.Fatalf("sendDocument %s %v", called, got)
+	}
+}
+
 func TestLargestPhoto(t *testing.T) {
 	m := &Message{Photo: []PhotoSize{{FileID: "s", Width: 90, Height: 90}, {FileID: "l", Width: 1280, Height: 960}, {FileID: "m", Width: 320, Height: 240}}}
 	if m.LargestPhoto() != "l" {

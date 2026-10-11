@@ -16,6 +16,9 @@ const (
 	ManualCard = "manual_card"
 	// ManualCrypto renders crypto address instructions.
 	ManualCrypto = "manual_crypto"
+	// ManualZarinpal: the store's Zarinpal payment link, approved by an admin
+	// from the receipt screenshot (no Zarinpal API).
+	ManualZarinpal = "manual_zarinpal"
 )
 
 // Instructions renders what the user must do to pay.

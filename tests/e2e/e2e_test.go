@@ -179,6 +179,16 @@ func (p *person) text(s string) {
 	}})
 }
 
+// photo sends a picture (a payment screenshot) with a caption.
+func (p *person) photo(fileID, caption string) {
+	p.w.t.Helper()
+	p.w.post("/_inject", map[string]any{"message": map[string]any{
+		"message_id": p.w.seq.Add(1), "date": time.Now().Unix(),
+		"chat": map[string]any{"id": p.id, "type": "private"}, "from": p.from(), "caption": caption,
+		"photo": []map[string]any{{"file_id": fileID, "file_unique_id": fileID + "-u", "width": 1280, "height": 960}},
+	}})
+}
+
 // press taps the newest button whose callback data equals data, or else
 // starts with it, waiting for it to appear.
 func (p *person) press(data string) {
@@ -348,27 +358,45 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	carol.paid(inv, 100, "e2e-charge-"+strconv.FormatInt(time.Now().UnixNano(), 10))
 	carol.sees("Payment received")
 
-	// Three distinct subscriptions are delivered (events are at-least-once, so a
+	// Card to card: carol sends the transfer screenshot with the bank reference
+	// as its caption; the owner sees it in the review queue and approves it.
+	owner.text("/set payments.card_number 6037-9911-2233-4455")
+	owner.sees("payments.card_number")
+	owner.text("/set payments.card_holder Test Store")
+	owner.sees("payments.card_holder")
+	carol.press("home")
+	carol.press("buy")
+	carol.press("plan:")
+	carol.press("pay:c:")
+	carol.sees("6037-9911-2233-4455")
+	carol.photo("e2e-card-receipt", "REF-778899")
+	carol.sees("Received. We will review your payment")
+	owner.sees("New payment to review")
+	owner.press("adm:pend")
+	owner.sees("REF-778899")
+	owner.press("adm:ok:")
+
+	// Four distinct subscriptions are delivered (events are at-least-once, so a
 	// repeated notification must not count twice) and all exist on the panel.
 	re := regexp.MustCompile(regexp.QuoteMeta(subBase) + `([A-Za-z0-9_-]+)`)
 	subIDs := map[string]bool{}
 	deadline := time.Now().Add(wait)
-	for len(subIDs) < 3 {
+	for len(subIDs) < 4 {
 		for _, m := range carol.messages() {
 			for _, mm := range re.FindAllStringSubmatch(m.text, -1) {
 				subIDs[mm[1]] = true
 			}
 		}
-		if len(subIDs) >= 3 {
+		if len(subIDs) >= 4 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("want 3 delivered subscriptions, got %v", subIDs)
+			t.Fatalf("want 4 delivered subscriptions, got %v", subIDs)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	if len(subIDs) != 3 {
-		t.Fatalf("want exactly 3 subscription links in the chat, got %v", subIDs)
+	if len(subIDs) != 4 {
+		t.Fatalf("want exactly 4 subscription links in the chat, got %v", subIDs)
 	}
 	var opts []xui.Option
 	if os.Getenv("XUI_TEST_ALLOW_PRIVATE") == "1" {

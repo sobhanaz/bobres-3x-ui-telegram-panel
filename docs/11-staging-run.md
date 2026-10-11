@@ -74,7 +74,8 @@ sudo ./bobres status
    link and QR, and the client must appear in the panel (Clients page) on every enabled inbound.
 4. Import the link into a VPN app (v2rayNG, Hiddify, Streisand) and open a website.
 5. Card payment: `/set payments.card_number ...` and `/set payments.card_holder ...`, buy the
-   test plan with "card", send a photo as receipt, approve it from the admin panel; the second
+   test plan with "card", send a screenshot of the transfer (photo or image file) with the
+   bank reference number as its caption, approve it from the admin panel; the second
    service must be delivered.
 6. Wallet: credit the second account from Admin → Find user → Adjust, buy with the wallet.
 7. `sudo ./bobres logs core` shows no errors; `sudo ./bobres uninstall` keeps the data,
@@ -91,6 +92,10 @@ panel is updated on the next start, and the data is kept.
   with "Pay with Telegram Stars" from a second account: Telegram shows the invoice, and the
   service is delivered after paying (a few Stars at a low test price are enough; refund
   them later with Telegram's refund from the bot's Stars balance if needed).
+- **Zarinpal link (manual, no merchant API):** `/set payments.zarinpal_link https://zarinp.al/yourname`.
+  Buy the test plan with "Zarinpal (payment link)", pay the shown amount on that page, send the payment
+  screenshot (the tracking code as caption is optional), approve it from the admin panel; the
+  service must be delivered. USDT works the same way: a screenshot of the transfer or the TXID.
 - **Zarinpal:** read the owner decisions in the Phase 2 design document first. Then
   re-run install with `--zarinpal-merchant-id <id>` (the sandbox is for tests only and is
   refused in production). Register this server's IP, or the proxy's
