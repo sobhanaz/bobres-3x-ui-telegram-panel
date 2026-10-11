@@ -24,7 +24,7 @@ it has no server; after that servers are added and changed in the dashboard (Ser
 ## Management menu
 `bobres` without a command, on a terminal, opens a numbered menu in the spirit of the x-ui script: status,
 live logs, start, stop, restart, show settings (secrets masked), change the bot token, the owner's Telegram
-ID or the first 3x-ui panel, check the server, uninstall. Settings changes re-run the installer with the one new
+ID or the first 3x-ui panel, back up now, show the backup key (after a confirmation), check the server, uninstall. Settings changes re-run the installer with the one new
 value, so they are validated the same way (bot token and panel checked online) and only the affected
 services are recreated. Scripts get the usage text instead, never a prompt. "Show settings" no longer reports
 Zarinpal from `.env`: with the payments key the gateway is managed in the dashboard (Payment gateways), and
@@ -53,8 +53,8 @@ dashboard has a server.
 
 ## Status (2026-10-03)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
-`version`, `admin link` (2026-10-07), `license status|import` (2026-10-11). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
-`restore`, `config`, `secrets`, `license activate` (needs the vendor server), `support-bundle`, and the hardening step (ufw, fail2ban).
+`version`, `admin link` (2026-10-07), `license status|import` (2026-10-11), `backup` (2026-10-11, see Backups). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`,
+`restore` (Phase 7), `config`, `secrets`, `license activate` (needs the vendor server), `support-bundle`, and the hardening step (ufw, fail2ban).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
 a password or code, the owner manages staff on the dashboard's Staff page, and the owner themselves is
 changed with `bobres menu` ("Change the owner Telegram ID"), which core applies when it starts.
@@ -69,7 +69,8 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
 | `bobres update [--check]` | Verify signed release, backup, migrate, roll out, health check, auto-rollback |
 | `bobres rollback` | Return to previous version (+ DB restore point) |
-| `bobres backup [--now]` / `restore <file>` | Encrypted dump, optional off-server upload (S3/SFTP); tested restore |
+| `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
+| `bobres restore <file>` | Phase 7: restore a backup with `BOBRES_BACKUP_KEY` (the file carries the master keys); optional off-server upload (S3/SFTP) |
 | `bobres config get/set` | Edit settings safely, validate, restart affected services |
 | `bobres secrets rotate <name>` | Rotate bot token/3x-ui token/DB password |
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container. `activate` (online, through the vendor server) comes later |
@@ -77,12 +78,62 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
 | `bobres support-bundle` | Redacted logs/config for support (no secrets, no user data) |
 
+## Backups
+The `backup` service (image `bobres-backup`, a `postgres:16-alpine` target in `deploy/Dockerfile`, so its pg_dump
+matches the server) backs up the whole `bobres` database every day at `BOBRES_BACKUP_TIME` (default 03:30) in
+`BOBRES_TIMEZONE`, and on demand (`bobres backup`, the menu, or the dashboard's System page, which calls its HTTP API
+with core's token). Each run:
+- refuses to start when `/opt/bobres/backups` has less free space than twice the last backup (100 MiB before the
+  first), and records why;
+- streams `pg_dump -Fc` (as the read-only role `svc_backup`; the password goes in `PGPASSWORD`, never on a command
+  line) straight into the encrypted file format of `internal/backup`, written to a temp file, synced and renamed to
+  `bobres-<UTC stamp>.bkp`, with a `.json` sidecar (size, sha256, created_at, sent_at, telegram_error, error);
+- hands the file to the bot (`POST /internal/backups/deliver`, token `BOBRES_TOKEN_BACKUP`), which sends it to the
+  owner's Telegram only (over 50 MB, or 2000 MB with a local Bot API, the owner gets a text instead and the file stays
+  here). Without `BOBRES_TOKEN_BACKUP` backups are kept on the server only;
+- keeps the newest 7 backups (and at most 7 records of failed runs). A failed run leaves its sidecar, no `.bkp`.
+
+**The backup key.** `bobres install` generates `BOBRES_BACKUP_KEY` and prints it once, in the summary of the install
+that created it; `bobres menu` > "Backup key" shows it again after a confirmation. It is never sent to Telegram. Store
+it away from the server: without it the backups cannot be read. Each backup also carries `BOBRES_CORE_MASTER_KEY`,
+`BOBRES_PROVISIONER_MASTER_KEY` and `BOBRES_PAYMENTS_MASTER_KEY` (encrypted, inside the file), so a backup plus the
+backup key is enough to restore on a new server. Restore is the Phase 7 `bobres restore`.
+
+**Older installs and pinned versions.** The service runs only with the Compose profile `backup` on
+(`COMPOSE_PROFILES=backup` in `.env`, with `BOBRES_BACKUP_URL=http://backup:8080` for core). `bobres install` turns
+it on when the install runs images that have the service: this CLI's own version, `latest`, or anything with a
+development build of the CLI. An install kept on an older pinned version has no `bobres-backup` image to pull, so its
+profile stays off and `compose up` works as before; `bobres install --version <new>` turns backups on. Once on, the
+profile stays on. Status, the menu and the health wait count `backup` only where the profile is on.
+
+**The database role.** New databases get `svc_backup` (LOGIN, `pg_read_all_data`, CONNECT; PostgreSQL 14+) from
+`postgres-init.sh`. Init scripts run only on a new database, so `bobres install` also creates or updates the role in
+the running database after `compose up` (idempotent; it runs psql in the postgres container, which reads
+`DB_BACKUP_PASSWORD` from its environment with `\getenv`). If that step fails (postgres not running) it is a
+warning; re-run `bobres install`, or by hand in `/opt/bobres`:
+
+```sh
+docker compose --project-name bobres -f docker-compose.yml --env-file .env exec -T postgres sh -c \
+  'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+\getenv pw DB_BACKUP_PASSWORD
+\getenv db POSTGRES_DB
+SELECT 'CREATE ROLE svc_backup LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'svc_backup') \gexec
+ALTER ROLE svc_backup WITH LOGIN PASSWORD :'pw';
+GRANT pg_read_all_data TO svc_backup;
+GRANT CONNECT ON DATABASE :"db" TO svc_backup;
+SQL
+```
+
+`/opt/bobres/backups` is created by the installer, mode 0700, owned by uid 65532 (the image's user). Adding
+`DB_BACKUP_PASSWORD` to the postgres service recreates the postgres container once on the upgrade.
+
 ## Update safety
 Pre-update backup -> pull + verify -> run migrations (forward-only, guarded) -> start new -> health gate -> switch -> keep previous images N days.
 Health gate fails -> automatic rollback and alert. Update channel: stable/beta.
 
 ## Uninstall
-Stops services, removes containers/units; data kept unless `--purge`; prints what remains.
+Stops services, removes containers/units; data kept unless `--purge`; prints what remains. `--purge` deletes the
+install directory, and with it every backup in `/opt/bobres/backups`: it warns first (copy them elsewhere).
 
 ## Open points
 - Installer and CLI binaries: GitHub releases of this (public) repository. Images: ghcr.io, which must be

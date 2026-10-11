@@ -49,7 +49,7 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 | Dashboard brute force | Rate limit, lockout, 2FA, secure cookies, CSRF tokens, short sessions |
 | SQL injection / XSS | Parameterized queries (pgx), Vue template escaping, CSP headers, input validation |
 | SSRF via admin-entered URLs (3x-ui URL, webhooks) | Allow/deny lists, block metadata/loopback ranges unless explicitly allowed |
-| Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted, support-bundle scrubs. The System page's logs (the newest 500 warnings and errors per service, in memory) are kept after the same redaction and shown to the owner only, since they carry Telegram ids |
+| Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted with `BOBRES_BACKUP_KEY` (which is never sent with them), support-bundle scrubs. The System page's logs (the newest 500 warnings and errors per service, in memory) are kept after the same redaction and shown to the owner only, since they carry Telegram ids |
 | Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel. The panel URL must be https; plain http is accepted only with allow-private, and every connection is then checked to go to a private, loopback or link-local address (`xui.ErrPublicPlaintext`). This bounds the first hop only: a private next hop that NATs or proxies onward is the operator's network, and a custom HTTP client (`xui.WithHTTPClient`) is refused for plain http |
 | Supply chain | Pinned deps, govulncheck, trivy, signed images + SBOM, minimal base images, CI with least-privilege tokens |
 | Malicious update / MITM of installer | Signature verification (ed25519/cosign), HTTPS, checksums, no unsigned code paths |
@@ -65,6 +65,17 @@ Since milestone 6a both are set from the dashboard, through core, without core e
   these without the matching key, so the keys are backed up with it.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
 - TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS later; auth is one interceptor), see PLAN.md §11.
+- Backups (the `backup` service, docs/06-installer.md): each file is encrypted with `BOBRES_BACKUP_KEY` (a random
+  file key per backup, wrapped with a key derived from it by HKDF; 64 KiB AES-256-GCM chunks with counters and a
+  final flag, so reordered, cut or edited files fail). The installer shows the key once and the menu shows it again
+  after a confirmation; it is never sent over Telegram, and the backup files are. **The archive carries the three
+  master keys** (owner decision, milestone 6b): a backup plus the backup key restores everything, including panel
+  tokens, gateway settings and staff 2FA secrets, so the backup key is as sensitive as the whole `.env`.
+- The backup service reads the database as `svc_backup`, a read-only role (`pg_read_all_data`, CONNECT; no
+  schema ownership, no writes), never as the admin role. Its password reaches pg_dump in `PGPASSWORD`, not on a
+  command line, and pg_dump gets no other environment. The service is on the backend network only (no internet);
+  core lists and starts backups with its token, and the service hands files only to the bot, with its own token
+  (`BOBRES_TOKEN_BACKUP`), which sends them to the configured owner and to no chat the caller names.
 - Key rotation procedures documented and scripted (`bobres secrets rotate`).
 
 ## Privacy

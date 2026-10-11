@@ -96,9 +96,10 @@ func installCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 // envOrder is the order of keys in the generated .env.
 var envOrder = []string{
 	"BOBRES_ENV", "BOBRES_LOG_LEVEL", "BOBRES_LOG_FORMAT", "BOBRES_VERSION", "BOBRES_DOMAIN",
-	"POSTGRES_PASSWORD", "DB_CORE_PASSWORD", "DB_PAYMENTS_PASSWORD", "DB_PROVISIONER_PASSWORD",
+	"POSTGRES_PASSWORD", "DB_CORE_PASSWORD", "DB_PAYMENTS_PASSWORD", "DB_PROVISIONER_PASSWORD", "DB_BACKUP_PASSWORD",
 	"REDIS_PASSWORD", "BOBRES_REDIS_URL",
 	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY",
+	"BOBRES_BACKUP_KEY", "BOBRES_BACKUP_TIME", "COMPOSE_PROFILES", "BOBRES_BACKUP_URL",
 	"BOBRES_TELEGRAM_BOT_TOKEN", "BOBRES_ADMIN_TELEGRAM_ID", "BOBRES_TIMEZONE",
 	"BOBRES_XUI_URL", "BOBRES_XUI_TOKEN", "BOBRES_XUI_SUB_URL", "BOBRES_XUI_ALLOW_PRIVATE",
 	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL", "BOBRES_ZARINPAL_HOST",
@@ -108,8 +109,10 @@ var envOrder = []string{
 // database password would lock the services out of an existing database).
 var generated = map[string]int{ // key -> random bytes (hex-encoded)
 	"POSTGRES_PASSWORD": 24, "DB_CORE_PASSWORD": 24, "DB_PAYMENTS_PASSWORD": 24, "DB_PROVISIONER_PASSWORD": 24,
-	"REDIS_PASSWORD": 24, "BOBRES_TOKEN_CORE": 32, "BOBRES_TOKEN_BOT": 32, "BOBRES_TOKEN_BACKUP": 32,
+	"DB_BACKUP_PASSWORD": 24, "REDIS_PASSWORD": 24, "BOBRES_TOKEN_CORE": 32, "BOBRES_TOKEN_BOT": 32, "BOBRES_TOKEN_BACKUP": 32,
 	"BOBRES_CORE_MASTER_KEY": 32, "BOBRES_PROVISIONER_MASTER_KEY": 32, "BOBRES_PAYMENTS_MASTER_KEY": 32,
+	// Encrypts the backups: shown once in the summary, again in the menu.
+	"BOBRES_BACKUP_KEY": 32,
 }
 
 var (
@@ -208,7 +211,7 @@ func (ins *installer) install(args []string) int {
 
 	defaults := map[string]string{
 		"BOBRES_ENV": "prod", "BOBRES_LOG_LEVEL": "info", "BOBRES_LOG_FORMAT": "json",
-		"BOBRES_TIMEZONE": "Asia/Tehran", "BOBRES_XUI_ALLOW_PRIVATE": "false",
+		"BOBRES_TIMEZONE": "Asia/Tehran", "BOBRES_XUI_ALLOW_PRIVATE": "false", "BOBRES_BACKUP_TIME": "03:30",
 	}
 	for k, v := range defaults {
 		if env[k] == "" {
@@ -220,6 +223,11 @@ func (ins *installer) install(args []string) int {
 	} else if env["BOBRES_VERSION"] == "" || !existing {
 		env["BOBRES_VERSION"] = imageTag(version.Version)
 	}
+	if backupImage(env["BOBRES_VERSION"]) {
+		enableBackups(env)
+	}
+	// The run that creates the backup key is the one that shows it.
+	newBackupKey := env["BOBRES_BACKUP_KEY"] == "" || strings.Contains(env["BOBRES_BACKUP_KEY"], "CHANGE_ME")
 	for k, n := range generated {
 		if env[k] == "" || strings.Contains(env[k], "CHANGE_ME") {
 			env[k] = randomHex(n)
@@ -262,13 +270,19 @@ func (ins *installer) install(args []string) int {
 	fmt.Fprintf(ins.out, "Wrote %s (.env is readable by root only).\n", *dir)
 	if *noStart {
 		fmt.Fprintf(ins.out, "Not starting (--no-start). Start with: cd %s && docker compose up -d\n", *dir)
+		if newBackupKey && !ins.quiet {
+			ins.backupKeyNotice(env)
+		}
 		return 0
 	}
-	if code := ins.start(ctx, *dir); code != 0 {
+	if code := ins.start(ctx, *dir, env); code != 0 {
 		return code
 	}
 	if !ins.quiet {
 		ins.summary(env, *dir)
+		if newBackupKey {
+			ins.backupKeyNotice(env)
+		}
 	}
 	return 0
 }
@@ -346,13 +360,89 @@ func (ins *installer) checks(domain string, existing bool) bool {
 }
 
 // start pulls and starts the stack, then waits until every service is healthy.
-func (ins *installer) start(ctx context.Context, dir string) int {
+func (ins *installer) start(ctx context.Context, dir string, env map[string]string) int {
 	fmt.Fprintln(ins.out, "Pulling images and starting the stack (this can take a few minutes)...")
 	if out, err := ins.run(ctx, dir, composeArgs("up", "-d")...); err != nil {
 		fmt.Fprintf(ins.errOut, "error: docker compose up failed: %v\n%s\n", err, out)
 		return 1
 	}
-	return waitHealthy(ctx, ins.run, ins.sleep, dir, ins.out, ins.errOut)
+	if backupEnabled(env) {
+		ins.ensureBackupRole(ctx, dir, env["DB_BACKUP_PASSWORD"])
+	}
+	return waitHealthy(ctx, ins.run, ins.sleep, dir, appServices(env), ins.out, ins.errOut)
+}
+
+// backupRoleScript creates or updates the backup service's read-only role in
+// a running database, for installs whose database predates it (postgres-init.sh
+// runs only on a new database). It runs in the postgres container, whose
+// environment has DB_BACKUP_PASSWORD; psql reads it with \getenv, so the
+// password is on no command line.
+const backupRoleScript = `test -n "$DB_BACKUP_PASSWORD" || { echo "DB_BACKUP_PASSWORD is not set in the postgres container" >&2; exit 3; }
+psql -v ON_ERROR_STOP=1 -q --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
+\getenv pw DB_BACKUP_PASSWORD
+\getenv db POSTGRES_DB
+SELECT 'CREATE ROLE svc_backup LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE'
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'svc_backup') \gexec
+ALTER ROLE svc_backup WITH LOGIN PASSWORD :'pw';
+GRANT pg_read_all_data TO svc_backup;
+GRANT CONNECT ON DATABASE :"db" TO svc_backup;
+SQL`
+
+// ensureBackupRole runs backupRoleScript. A failure is a warning: the store
+// runs without backups, and the next install (or the manual command in
+// docs/06-installer.md) creates the role.
+func (ins *installer) ensureBackupRole(ctx context.Context, dir, password string) {
+	out, err := ins.run(ctx, dir, composeArgs("exec", "-T", "postgres", "sh", "-c", backupRoleScript)...)
+	if err == nil {
+		return
+	}
+	msg := strings.TrimSpace(string(out))
+	if password != "" {
+		msg = strings.ReplaceAll(msg, password, "••••")
+	}
+	fmt.Fprintf(ins.errOut, "warning: the backup database role was not created (%v): backups fail until it exists.\n%s\n"+
+		"Re-run `bobres install` once the database is running, or see docs/06-installer.md (Backups).\n", err, msg)
+}
+
+// backupImage reports whether the images tagged v have the backup service:
+// the ones built from this CLI's own release, "latest", or anything for a
+// development build of the CLI (which runs images built from its source).
+func backupImage(v string) bool {
+	return v == "latest" || v == imageTag(version.Version) || version.Version == "dev"
+}
+
+// enableBackups turns the backup Compose profile on, with core's address for
+// it. Once on it stays on: an older pinned version is the operator's choice.
+func enableBackups(env map[string]string) {
+	if !backupEnabled(env) {
+		profiles := strings.Trim(env["COMPOSE_PROFILES"], ", ")
+		if profiles != "" {
+			profiles += ","
+		}
+		env["COMPOSE_PROFILES"] = profiles + "backup"
+	}
+	if env["BOBRES_BACKUP_URL"] == "" {
+		env["BOBRES_BACKUP_URL"] = "http://backup:8080"
+	}
+}
+
+// backupEnabled reports whether the install runs the backup service.
+func backupEnabled(env map[string]string) bool {
+	for _, p := range strings.Split(env["COMPOSE_PROFILES"], ",") {
+		if strings.TrimSpace(p) == "backup" {
+			return true
+		}
+	}
+	return false
+}
+
+// backupKeyNotice shows the backup key, on the install that creates it.
+func (ins *installer) backupKeyNotice(env map[string]string) {
+	fmt.Fprintf(ins.out, `
+Backup key (shown only now; bobres menu > "Backup key" shows it again):
+  %s
+Store this somewhere safe, away from this server: without it the backups cannot be read.
+`, env["BOBRES_BACKUP_KEY"])
 }
 
 func orUnknown(s string) string {
@@ -410,6 +500,13 @@ it holds the keys that encrypt your panel tokens and gateway settings.
 Manage the store from this server at any time: run  bobres  for the menu
 (status, logs, start/stop/restart, change the bot token, admin or panel).
 `, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
+	if backupEnabled(env) {
+		fmt.Fprintf(ins.out, "Backups: every day at %s (%s) into %s, each also sent to you on Telegram. One now: bobres backup\n",
+			env["BOBRES_BACKUP_TIME"], env["BOBRES_TIMEZONE"], filepath.Join(dir, "backups"))
+	} else {
+		fmt.Fprintf(ins.out, "Backups are off: version %s has no backup service. Upgrade with: bobres install --version %s\n",
+			env["BOBRES_VERSION"], imageTag(version.Version))
+	}
 	if env["BOBRES_XUI_URL"] == "" {
 		fmt.Fprintln(ins.out, "No 3x-ui panel yet: add your servers in the dashboard (Servers) before you sell.")
 	}
@@ -608,8 +705,22 @@ func writeFiles(dir string, env map[string]string) error {
 			return err
 		}
 	}
+	// The backup service (uid 65532 in its image) writes here; created now so
+	// Docker does not create it as root.
+	backups := filepath.Join(dir, "backups")
+	if err := os.MkdirAll(backups, 0o700); err != nil {
+		return fmt.Errorf("create %s: %w", backups, err)
+	}
+	if os.Geteuid() == 0 {
+		if err := os.Chown(backups, backupUID, backupUID); err != nil {
+			return fmt.Errorf("chown %s: %w", backups, err)
+		}
+	}
 	return nil
 }
+
+// backupUID owns the backups directory: the backup image's user.
+const backupUID = 65532
 
 // writeAtomic writes to a temp file in the same directory, then renames it.
 func writeAtomic(path string, data []byte, mode os.FileMode) error {

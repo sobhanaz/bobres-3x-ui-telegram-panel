@@ -29,9 +29,10 @@ type Core struct {
 	BotURL string
 	// PaymentsURL, ProvisionerURL and BackupURL are the other services'
 	// internal HTTP addresses; the System page asks their /healthz and
-	// /readyz. The defaults match the compose file. BackupURL has none yet
-	// (the compose file has no backup service): unset, the backup service
-	// shows as not installed without a network lookup.
+	// /readyz. The defaults match the compose file. BackupURL has none: the
+	// backup service is optional (a compose profile), and compose sets it
+	// only where the service runs; unset, it shows as not installed without
+	// a network lookup.
 	PaymentsURL    string
 	ProvisionerURL string
 	BackupURL      string

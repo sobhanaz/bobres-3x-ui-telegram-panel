@@ -65,6 +65,25 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 	}
 }
 
+// appServices are the BOBRES services the installer waits for: the backup
+// service only where its profile is on.
+func appServices(env map[string]string) []string {
+	s := []string{"core", "payments", "provisioner", "bot"}
+	if backupEnabled(env) {
+		s = append(s, "backup")
+	}
+	return s
+}
+
+// allServices are every container of an install, as status lists them.
+func allServices(env map[string]string) []string {
+	s := []string{"caddy", "postgres", "redis", "core", "payments", "provisioner", "bot"}
+	if backupEnabled(env) {
+		s = append(s, "backup")
+	}
+	return s
+}
+
 // requireInstall checks that dir holds an install and returns its .env.
 func (o *ops) requireInstall(dir string) (map[string]string, bool) {
 	env, ok, err := readEnv(filepath.Join(dir, ".env"))
@@ -102,7 +121,7 @@ func (o *ops) statusCmd(args []string) int {
 		return 1
 	}
 	rows := parseServices(out)
-	want := []string{"caddy", "postgres", "redis", "core", "payments", "provisioner", "bot"}
+	want := allServices(env)
 	fmt.Fprintln(o.out, "\nSERVICE       STATE        HEALTH")
 	problems := 0
 	seen := map[string]bool{}
@@ -225,9 +244,14 @@ func (o *ops) uninstallCmd(args []string) int {
 	if !ok {
 		return 2
 	}
+	if *purge {
+		// The backups live in the install directory: they go too.
+		fmt.Fprintf(o.out, "Warning: --purge also deletes every backup in %s. Copy them elsewhere first if you may need them.\n",
+			filepath.Join(*dir, "backups"))
+	}
 	if !*yes {
 		if *purge {
-			fmt.Fprintf(o.out, "This deletes ALL data of %s (users, orders, ledger, panel token) and %s.\nType the domain (%s) to confirm: ",
+			fmt.Fprintf(o.out, "This deletes ALL data of %s (users, orders, ledger, panel token, backups) and %s.\nType the domain (%s) to confirm: ",
 				orDash(env["BOBRES_DOMAIN"]), *dir, env["BOBRES_DOMAIN"])
 		} else {
 			fmt.Fprintf(o.out, "Stop and remove the BOBRES containers in %s? Data is kept. [y/N]: ", *dir)
@@ -262,28 +286,30 @@ func (o *ops) uninstallCmd(args []string) int {
 	return 0
 }
 
-// dirOnly parses the --dir flag of start/stop/restart and checks the install.
-func (o *ops) dirOnly(name string, args []string) (string, bool) {
+// dirOnly parses the --dir flag of start/stop/restart/backup and checks the
+// install, returning its .env.
+func (o *ops) dirOnly(name string, args []string) (string, map[string]string, bool) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
 	if err := fs.Parse(args); err != nil {
-		return "", false
+		return "", nil, false
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(o.errOut, "bobres %s: unexpected argument %q\n", name, fs.Arg(0))
-		return "", false
+		return "", nil, false
 	}
-	if _, ok := o.requireInstall(*dir); !ok {
-		return "", false
+	env, ok := o.requireInstall(*dir)
+	if !ok {
+		return "", nil, false
 	}
-	return *dir, true
+	return *dir, env, true
 }
 
 // startCmd starts the stack (creating containers removed by uninstall) and
 // waits until it is healthy.
 func (o *ops) startCmd(args []string) int {
-	dir, ok := o.dirOnly("start", args)
+	dir, env, ok := o.dirOnly("start", args)
 	if !ok {
 		return 2
 	}
@@ -292,12 +318,12 @@ func (o *ops) startCmd(args []string) int {
 		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	return waitHealthy(context.Background(), o.run, o.sleep, dir, o.out, o.errOut)
+	return waitHealthy(context.Background(), o.run, o.sleep, dir, appServices(env), o.out, o.errOut)
 }
 
 // stopCmd stops the containers; nothing is removed.
 func (o *ops) stopCmd(args []string) int {
-	dir, ok := o.dirOnly("stop", args)
+	dir, _, ok := o.dirOnly("stop", args)
 	if !ok {
 		return 2
 	}
@@ -312,7 +338,7 @@ func (o *ops) stopCmd(args []string) int {
 // restartCmd restarts the containers and waits until they are healthy. It does
 // not apply edited settings; `bobres install` (or the menu) does.
 func (o *ops) restartCmd(args []string) int {
-	dir, ok := o.dirOnly("restart", args)
+	dir, env, ok := o.dirOnly("restart", args)
 	if !ok {
 		return 2
 	}
@@ -321,14 +347,33 @@ func (o *ops) restartCmd(args []string) int {
 		fmt.Fprintf(o.errOut, "error: docker compose restart failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	return waitHealthy(context.Background(), o.run, o.sleep, dir, o.out, o.errOut)
+	return waitHealthy(context.Background(), o.run, o.sleep, dir, appServices(env), o.out, o.errOut)
 }
 
-// waitHealthy polls the services until core, payments, provisioner and bot
-// all report healthy, for five minutes at most.
+// backupCmd makes a backup now: the backup service's `run-now` asks the
+// running service (one backup at a time) and waits for the result.
+func (o *ops) backupCmd(args []string) int {
+	dir, env, ok := o.dirOnly("backup", args)
+	if !ok {
+		return 2
+	}
+	if !backupEnabled(env) {
+		fmt.Fprintf(o.errOut, "error: backups are off on this install (version %s has no backup service). Upgrade with: bobres install --version <new version>\n",
+			orDash(env["BOBRES_VERSION"]))
+		return 1
+	}
+	fmt.Fprintln(o.out, "Backing up the database (this can take a few minutes)...")
+	if err := o.stream(context.Background(), dir, composeArgs("exec", "-T", "backup", "/app", "run-now")...); err != nil {
+		fmt.Fprintf(o.errOut, "error: the backup did not complete: %v (see above; bobres logs backup)\n", err)
+		return 1
+	}
+	return 0
+}
+
+// waitHealthy polls the services until every one of want (appServices)
+// reports healthy, for five minutes at most.
 func waitHealthy(ctx context.Context, run func(context.Context, string, ...string) ([]byte, error),
-	sleep func(time.Duration), dir string, out, errOut io.Writer) int {
-	want := []string{"core", "payments", "provisioner", "bot"}
+	sleep func(time.Duration), dir string, want []string, out, errOut io.Writer) int {
 	deadline := 5 * time.Minute
 	for waited := time.Duration(0); ; waited += 5 * time.Second {
 		ps, err := run(ctx, dir, composeArgs("ps", "--format", "json")...)

@@ -146,13 +146,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Validate compose file
-        run: docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example config -q
+        run: |
+          docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example config -q
+          docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example --profile backup config -q
       - name: Build service images
         # Tagged the way the compose file expects released images, so the e2e
-        # install below runs exactly these builds (no pull).
+        # install below runs exactly these builds (no pull). The backup image
+        # is its own Dockerfile target (postgres:16-alpine, for pg_dump).
         run: |
-          for s in core bot payments provisioner; do
-            docker build -f deploy/Dockerfile --build-arg SERVICE=$s --build-arg VERSION=ci \
+          for s in core bot payments provisioner backup; do
+            target=""
+            if [ "$s" = backup ]; then target=backup; fi
+            docker build -f deploy/Dockerfile ${target:+--target "$target"} --build-arg SERVICE=$s --build-arg VERSION=ci \
               -t bobres-$s:ci -t ghcr.io/sobhanaz/bobres-$s:ci .
           done
       - name: Validate Caddyfile

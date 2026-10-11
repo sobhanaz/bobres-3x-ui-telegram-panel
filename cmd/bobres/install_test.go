@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
 const goodBotToken = "123456789:AAH-abcdefghijklmnopqrstuvwxyz012345" //nolint:gosec // test fixture, gitleaks:allow
@@ -81,7 +83,7 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	dir := t.TempDir()
 	docker := &fakeDocker{health: []string{
 		`[{"Service":"core","Health":"starting"}]`,
-		`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"}]`,
+		`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`,
 	}}
 	ins, out, errOut := testInstaller("", secrets, docker)
 	if code := ins.install(baseArgs(dir)); code != 0 {
@@ -122,6 +124,28 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		t.Fatalf("docker calls: %v", docker.calls)
 	}
 
+	// Backups: on (this CLI's own images have the service), the key shown
+	// once, the read-only database role created in the running database.
+	if !backupEnabled(env) || env["BOBRES_BACKUP_URL"] != "http://backup:8080" || env["BOBRES_BACKUP_TIME"] != "03:30" {
+		t.Errorf("backups not enabled: %q %q", env["COMPOSE_PROFILES"], env["BOBRES_BACKUP_URL"])
+	}
+	key := env["BOBRES_BACKUP_KEY"]
+	if len(key) != 64 || key == env["BOBRES_CORE_MASTER_KEY"] || len(env["DB_BACKUP_PASSWORD"]) != 48 {
+		t.Errorf("backup key %d chars, db password %d chars", len(key), len(env["DB_BACKUP_PASSWORD"]))
+	}
+	if strings.Count(out.String(), key) != 1 || !strings.Contains(out.String(), "without it the backups cannot be read") ||
+		!strings.Contains(out.String(), "bobres backup") {
+		t.Errorf("backup key not shown exactly once:\n%s", out)
+	}
+	role := docker.calls[1]
+	if !contains(role, "exec") || !contains(role, "postgres") || !strings.Contains(strings.Join(role, " "), "svc_backup") ||
+		strings.Contains(strings.Join(role, " "), env["DB_BACKUP_PASSWORD"]) {
+		t.Errorf("backup role call: %v", role)
+	}
+	if st, err := os.Stat(filepath.Join(dir, "backups")); err != nil || !st.IsDir() || st.Mode().Perm() != 0o700 {
+		t.Errorf("backups directory: %v %v", st, err)
+	}
+
 	// The generated files must be a valid Compose project (no daemon needed).
 	if _, err := exec.LookPath("docker"); err == nil {
 		cmd := exec.Command("docker", "compose", "-f", "docker-compose.yml", "--env-file", ".env", "config", "--format", "json")
@@ -134,6 +158,10 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		// expanded $token and passed just "panel".
 		if !strings.Contains(string(got), `"panel$$token"`) {
 			t.Fatalf("compose interpolated the $ inside the quoted token:\n%s", got)
+		}
+		// COMPOSE_PROFILES in .env turns the backup service on.
+		if !strings.Contains(string(got), `/bobres-backup:`) || !strings.Contains(string(got), `"BOBRES_BACKUP_URL": "http://backup:8080"`) {
+			t.Fatalf("the backup service is not in the installed project:\n%s", got)
 		}
 	}
 }
@@ -151,6 +179,11 @@ func TestReinstallKeepsSecrets(t *testing.T) {
 	_ = f.Close()
 
 	ins2, out, errOut := testInstaller("", nil, nil) // no env: everything comes from the existing .env
+	defer func() {
+		if strings.Contains(out.String(), first["BOBRES_BACKUP_KEY"]) {
+			t.Error("the backup key was shown again on a re-run")
+		}
+	}()
 	if code := ins2.install([]string{"--dir", dir, "--no-start", "--domain", "new.example.com"}); code != 0 {
 		t.Fatalf("rerun: %d %s", code, errOut)
 	}
@@ -346,6 +379,68 @@ func TestInstallWithoutPanel(t *testing.T) {
 	ins, _, errOut = testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": goodBotToken, "BOBRES_XUI_TOKEN": "t"}, nil)
 	if code := ins.install(append([]string{"--dir", t.TempDir()}, noPanel...)); code != 2 || !strings.Contains(errOut.String(), "needs the panel URL") {
 		t.Fatalf("token without URL: %d %s", code, errOut)
+	}
+}
+
+// An install kept on a version from before the backup service runs without
+// it; moving to this CLI's version turns it on.
+func TestBackupsFollowTheImageVersion(t *testing.T) {
+	old := version.Version
+	version.Version = "v1.4.0"
+	defer func() { version.Version = old }()
+
+	dir := t.TempDir()
+	docker := &fakeDocker{health: []string{`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},` +
+		`{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"}]`}}
+	ins, out, errOut := testInstaller("", secrets, docker)
+	if code := ins.install(append(baseArgs(dir), "--version", "1.2.0")); code != 0 {
+		t.Fatalf("pinned: %d %s", code, errOut)
+	}
+	env, _, _ := readEnv(filepath.Join(dir, ".env"))
+	if backupEnabled(env) || env["BOBRES_BACKUP_URL"] != "" || !strings.Contains(out.String(), "Backups are off") ||
+		!strings.Contains(out.String(), "--version 1.4.0") {
+		t.Fatalf("pinned old version: profiles %q\n%s", env["COMPOSE_PROFILES"], out)
+	}
+	for _, c := range docker.calls {
+		if contains(c, "exec") {
+			t.Fatalf("backup role created without the backup service: %v", c)
+		}
+	}
+
+	docker = &fakeDocker{health: []string{`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},` +
+		`{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`}}
+	ins, out, errOut = testInstaller("", nil, docker)
+	if code := ins.install([]string{"--dir", dir, "--version", "1.4.0"}); code != 0 {
+		t.Fatalf("upgrade: %d %s", code, errOut)
+	}
+	env, _, _ = readEnv(filepath.Join(dir, ".env"))
+	// The key was shown by the run that created it (the first), not again.
+	if !backupEnabled(env) || strings.Contains(out.String(), env["BOBRES_BACKUP_KEY"]) {
+		t.Fatalf("upgrade: profiles %q\n%s", env["COMPOSE_PROFILES"], out)
+	}
+	if !backupImage("latest") || backupImage("1.3.9") || !backupImage("1.4.0") {
+		t.Fatal("backupImage")
+	}
+}
+
+func TestEnableBackupsKeepsOtherProfiles(t *testing.T) {
+	env := map[string]string{"COMPOSE_PROFILES": "debug"}
+	enableBackups(env)
+	enableBackups(env)
+	if env["COMPOSE_PROFILES"] != "debug,backup" || !backupEnabled(env) || backupEnabled(map[string]string{"COMPOSE_PROFILES": "backups"}) {
+		t.Fatalf("profiles %q", env["COMPOSE_PROFILES"])
+	}
+}
+
+// A failed role creation is a warning that never shows the password.
+func TestBackupRoleFailureIsAWarning(t *testing.T) {
+	ins, _, errOut := testInstaller("", nil, nil)
+	ins.run = func(context.Context, string, ...string) ([]byte, error) {
+		return []byte("ERROR: something about pw-secret-123"), errors.New("exit status 3")
+	}
+	ins.ensureBackupRole(context.Background(), t.TempDir(), "pw-secret-123")
+	if !strings.Contains(errOut.String(), "warning: the backup database role was not created") || strings.Contains(errOut.String(), "pw-secret-123") {
+		t.Fatalf("warning: %s", errOut)
 	}
 }
 

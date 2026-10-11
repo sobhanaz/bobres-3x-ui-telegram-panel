@@ -686,8 +686,8 @@ The System page's health tab and its License tab. The update check, logs and bac
 - **Health and versions** (`system.read`: owner and admin). Core asks core itself (through its own HTTP port),
   the bot, payments, provisioner and the backup service for `/healthz` and `/readyz`, all at once, 3 seconds
   each (new core config `BOBRES_PAYMENTS_URL`, `BOBRES_PROVISIONER_URL`, `BOBRES_BACKUP_URL`; the first two
-  default to the compose names `http://<service>:8080`, the backup one to empty until the backup service is in
-  the compose file). Each service is `ok`, `not_ready` (the failed checks named), `down`, `not_configured`, or
+  default to the compose names `http://<service>:8080`, the backup one to empty: compose sets it to
+  `http://backup:8080` only where the backup profile is on). Each service is `ok`, `not_ready` (the failed checks named), `down`, `not_configured`, or
   `not_installed` (the backup service when it has no address or its name does not resolve, including Docker's
   SERVFAIL on internal networks). A version other than core's (a leading `v` ignored) is flagged per service and
   on the page. The servers and payment methods summaries are the overview's.
@@ -750,6 +750,26 @@ The System page's health tab and its License tab. The update check, logs and bac
   Telegram ids and usernames) answers `{service, lines, error}`, lines oldest first. `error` is `""`,
   `unreachable` (the service did not answer within 3 seconds; the details go to core's log) or
   `not configured` (the bot without `BOBRES_BOT_URL`); any other service name is 400.
+
+### Backups (milestone 6b, part 2: the service)
+
+- **A new `backup` service** (`cmd/backup` on `app.Run`; image `bobres-backup`, the Dockerfile's `backup` target
+  from `postgres:16-alpine`, uid 65532; backend network only; `./backups:/backups`). It runs behind the Compose
+  profile `backup`, which `bobres install` turns on (`COMPOSE_PROFILES=backup`, `BOBRES_BACKUP_URL` for core) when
+  the install's image version has the service, so a pinned older version still starts.
+- **A run** (`internal/backupsvc`; one at a time): disk check (free space at least twice the last backup, 100 MiB
+  before the first), `pg_dump -Fc` as the read-only `svc_backup` role streamed into `internal/backup.Write` (keys
+  member: the three master keys that are set) into a temp file, fsync, rename to `bobres-<UTC stamp>.bkp`, sidecar
+  `{file, size, sha256, created_at, sent_at, telegram_error, error}`, delivery to the bot's
+  `/internal/backups/deliver` (streamed from disk, 20 minutes; the outcome goes into the sidecar), then retention
+  (`backup.Prune`, 7). A failed run leaves its sidecar with the error and no `.bkp`. Daily at `BOBRES_BACKUP_TIME`
+  (03:30) in `BOBRES_TIMEZONE`.
+- **HTTP for core** (core's token): `GET /internal/backups` `{backups (sidecars, newest first), running,
+  last_error, next_run (unix), disk_free, dir}`; `POST /internal/backups/run` 202 `{started: true}` or 409
+  `{started: false, reason: "running"}`. `bobres backup` runs `/app run-now` in the container, which uses the
+  same API and waits.
+- **Next part:** core's endpoints over these and the dashboard's Backups tab ("Back up now" audited as
+  `system.backup`).
 
 ## Tests
 

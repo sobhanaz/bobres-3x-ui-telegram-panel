@@ -32,3 +32,16 @@ ALTER ROLE svc_core        SET search_path = core;
 ALTER ROLE svc_payments    SET search_path = payments;
 ALTER ROLE svc_provisioner SET search_path = provisioner;
 SQL
+
+# The backup service's role: read-only on everything (pg_read_all_data, PostgreSQL 14+),
+# for pg_dump. Only when the install has its password (installs from before the backup
+# service get the role from `bobres install`, which creates it idempotently).
+if [ -n "${DB_BACKUP_PASSWORD:-}" ]; then
+  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -v db="$POSTGRES_DB" \
+    -v backup_pw="$DB_BACKUP_PASSWORD" <<'SQL'
+CREATE ROLE svc_backup LOGIN PASSWORD :'backup_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+GRANT pg_read_all_data TO svc_backup;
+GRANT CONNECT ON DATABASE :"db" TO svc_backup;
+SQL
+fi
