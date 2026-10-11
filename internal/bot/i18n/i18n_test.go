@@ -84,6 +84,9 @@ func TestFormatting(t *testing.T) {
 		Money("fa", 1_250_000, "USDT"):  "۱٫۲۵ تتر",
 		Bytes("en", 50<<30):             "50 GB",
 		Bytes("fa", 3<<29):              "۱٫۵ گیگابایت",
+		FileSize("en", 48<<20+300<<10):  "48.3 MB",
+		FileSize("fa", 5<<19):           "۲٫۵ مگابایت",
+		FileSize("en", 3<<29):           "1.5 GB",
 		Number("en", -1234567):          "-1,234,567",
 	}
 	for got, want := range cases {

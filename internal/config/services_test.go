@@ -46,6 +46,22 @@ func TestLoadBot(t *testing.T) {
 	if c, err := LoadBot(); err != nil || c.TelegramAPIURL != "http://host.docker.internal:8081" {
 		t.Fatalf("API root: %v %+v", err, c.TelegramAPIURL)
 	}
+	// The backup service's token is optional, strict when set, and never
+	// the bot's own or core's.
+	t.Setenv("BOBRES_PEER_BACKUP_TOKEN", "short")
+	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "PEER_BACKUP_TOKEN") {
+		t.Fatalf("short backup token accepted: %v", err)
+	}
+	t.Setenv("BOBRES_PEER_CORE_TOKEN", coreTok)
+	t.Setenv("BOBRES_PEER_BACKUP_TOKEN", coreTok)
+	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "different") {
+		t.Fatalf("core's token accepted as the backup token: %v", err)
+	}
+	backupTok := strings.Repeat("b", 40)
+	t.Setenv("BOBRES_PEER_BACKUP_TOKEN", backupTok)
+	if c, err := LoadBot(); err != nil || c.PeerBackupToken != backupTok {
+		t.Fatalf("backup token: %v %q", err, c.PeerBackupToken)
+	}
 }
 
 func TestAdminTelegramIDIsStrict(t *testing.T) {

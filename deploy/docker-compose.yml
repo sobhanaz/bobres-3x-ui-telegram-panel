@@ -151,6 +151,9 @@ services:
       BOBRES_TELEGRAM_BOT_TOKEN: ${BOBRES_TELEGRAM_BOT_TOKEN:?set BOBRES_TELEGRAM_BOT_TOKEN}
       # Core's token: core may fetch receipt photos from the bot (/internal/files).
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      # The backup service's token: it hands each encrypted backup to the bot for the
+      # owner (/internal/backups/deliver). Empty = backups are not sent to Telegram.
+      BOBRES_PEER_BACKUP_TOKEN: ${BOBRES_TOKEN_BACKUP:-}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
       BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
       # Empty = long polling (no domain needed). Set both to receive updates by webhook

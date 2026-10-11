@@ -83,8 +83,9 @@ type Client struct {
 	base     string // <api root>/bot<token>/
 	fileBase string // <api root>/file/bot<token>/
 	hc       *http.Client
-	flood    *Flood // nil: not shared
-	meter    *Meter // nil: not counted
+	upload   *http.Client // document uploads: long timeout, never retried
+	flood    *Flood       // nil: not shared
+	meter    *Meter       // nil: not counted
 	noRetry  bool
 }
 
@@ -150,8 +151,15 @@ func New(token string, opts ...Option) *Client {
 	if i := strings.LastIndex(strings.TrimRight(base, "/"), "/bot"); i >= 0 {
 		fileBase = base[:i] + "/file" + base[i:]
 	}
-	return &Client{base: base, fileBase: fileBase, hc: s.hc, flood: s.flood, meter: s.meter, noRetry: s.noRetry}
+	// Uploads get a client of their own (on the same transport): a backup
+	// takes minutes from a slow server, far beyond the 75 s above.
+	upload := &http.Client{Timeout: UploadTimeout, Transport: s.hc.Transport}
+	return &Client{base: base, fileBase: fileBase, hc: s.hc, upload: upload, flood: s.flood, meter: s.meter, noRetry: s.noRetry}
 }
+
+// UploadTimeout bounds one document upload: 50 MB (2000 MB through a local
+// Bot API server) from a slow VPS.
+const UploadTimeout = 15 * time.Minute
 
 // File is a file Telegram keeps for the bot (a photo or document a user sent).
 type File struct {
@@ -247,10 +255,15 @@ func (c *Client) do(ctx context.Context, method string, body io.Reader, ctype st
 		return fmt.Errorf("telegram: build %s request", method)
 	}
 	req.Header.Set("Content-Type", ctype)
+	return c.roundTrip(c.hc, req, method, out)
+}
+
+// roundTrip sends req with hc and decodes the reply's result into out.
+func (c *Client) roundTrip(hc *http.Client, req *http.Request, method string, out any) error {
 	if countsAsSend(method) {
 		c.meter.Add()
 	}
-	resp, err := c.hc.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		var ue *url.Error // its message contains the URL, i.e. the token
 		if errors.As(err, &ue) {
@@ -545,4 +558,56 @@ func (c *Client) SendDocument(ctx context.Context, chatID int64, fileID, caption
 		return nil, err
 	}
 	return &m, nil
+}
+
+// SendDocumentUpload uploads size bytes of r as a document named name, with a
+// plain-text caption. The multipart body is streamed (never held in memory)
+// on the upload client, with an exact Content-Length. It is never retried,
+// not even after a 429: r is consumed by then. A 429 still slows every
+// client of the bot down (WithFlood).
+func (c *Client) SendDocumentUpload(ctx context.Context, chatID int64, name string, r io.Reader, size int64, caption string) (*Message, error) {
+	if size < 0 {
+		return nil, errors.New("telegram: sendDocument: negative size")
+	}
+	head, tail, ctype, err := documentForm(chatID, name, caption)
+	if err != nil {
+		return nil, err
+	}
+	body := io.MultiReader(bytes.NewReader(head), io.LimitReader(r, size), bytes.NewReader(tail))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"sendDocument", body)
+	if err != nil {
+		return nil, errors.New("telegram: build sendDocument request")
+	}
+	// A short r makes the transport fail the request instead of sending less.
+	req.ContentLength = int64(len(head)) + size + int64(len(tail))
+	req.Header.Set("Content-Type", ctype)
+	var m Message
+	err = c.roundTrip(c.upload, req, "sendDocument", &m)
+	if wait, ok := IsFlood(err); ok {
+		c.flood.Set(wait)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// documentForm is the multipart body of a document upload around the file's
+// bytes: everything before them (head) and after them (tail).
+func documentForm(chatID int64, name, caption string) (head, tail []byte, ctype string, err error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	_ = w.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	if caption != "" {
+		_ = w.WriteField("caption", caption)
+	}
+	if _, err := w.CreateFormFile("document", name); err != nil {
+		return nil, nil, "", err
+	}
+	n := buf.Len()
+	if err := w.Close(); err != nil {
+		return nil, nil, "", err
+	}
+	all := buf.Bytes()
+	return all[:n:n], all[n:], w.FormDataContentType(), nil
 }

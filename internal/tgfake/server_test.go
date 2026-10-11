@@ -1,7 +1,10 @@
 package tgfake
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -202,5 +205,27 @@ func TestStarsInvoiceAndPreCheckoutAreRecorded(t *testing.T) {
 	if len(sent) != 2 || sent[0].Method != "sendInvoice" || sent[0].Payload != "intent-1" || sent[0].Stars != 100 ||
 		sent[1].QueryID != "q1" || sent[1].OK == nil || *sent[1].OK || sent[1].Text != "expired" {
 		t.Fatalf("log: %+v", sent)
+	}
+}
+
+func TestDocumentUploadIsRecorded(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("123:abc", tg.WithAPIRoot(srv.URL))
+	data := bytes.Repeat([]byte{0xbb}, 3<<20)
+	m, err := c.SendDocumentUpload(context.Background(), 77, "bobres-20261011T033000Z.bkp", bytes.NewReader(data), int64(len(data)), "the caption")
+	if err != nil || m.Document == nil || m.Document.FileName != "bobres-20261011T033000Z.bkp" {
+		t.Fatalf("upload: %v %+v", err, m)
+	}
+	sum := sha256.Sum256(data)
+	sent := f.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("sent: %+v", sent)
+	}
+	got := sent[0]
+	if got.Method != "sendDocument" || got.ChatID != 77 || got.FileName != "bobres-20261011T033000Z.bkp" ||
+		got.FileSize != int64(len(data)) || got.FileSHA256 != hex.EncodeToString(sum[:]) || got.Text != "the caption" {
+		t.Errorf("recorded: %+v", got)
 	}
 }

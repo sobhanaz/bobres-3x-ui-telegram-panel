@@ -102,6 +102,8 @@ var contexts = map[string]Context{
 	"ref.share_text":      CtxPlain,
 	"paysupport.in_bot":   CtxPlain,
 	"admin.status_reason": CtxInternal,
+	// A backup file's caption is sent without a parse mode.
+	"backup.caption": CtxPlain,
 
 	"sub.qr_caption":     CtxCaption,
 	"admin.pending_item": CtxCaption,
@@ -150,6 +152,8 @@ func groupOf(key string) string {
 		return "sub"
 	case "plans":
 		return "plan"
+	case "backup": // sent to the owner only, beside the admin alerts
+		return "admin"
 	}
 	return first
 }

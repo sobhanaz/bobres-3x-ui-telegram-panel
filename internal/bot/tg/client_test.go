@@ -285,3 +285,87 @@ func TestGetChatAndMember(t *testing.T) {
 		}
 	}
 }
+
+// onlyReader hides a reader's other methods (WriterTo, Seeker), so the
+// client can only stream it.
+type onlyReader struct{ r io.Reader }
+
+func (o onlyReader) Read(p []byte) (int, error) { return o.r.Read(p) }
+
+func TestSendDocumentUploadStreams(t *testing.T) {
+	data := bytes.Repeat([]byte("0123456789abcdef"), 64<<10) // 1 MiB
+	var gotLen int64
+	var fields = map[string]string{}
+	var fileName string
+	var fileBytes []byte
+	c, _ := fakeAPI(t, func(method string, body []byte, r *http.Request) any {
+		if method != "sendDocument" {
+			return map[string]any{"ok": false, "error_code": 404, "description": "Not Found"}
+		}
+		gotLen = r.ContentLength
+		_, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				break
+			}
+			b, _ := io.ReadAll(p)
+			if p.FormName() == "document" {
+				fileName, fileBytes = p.FileName(), b
+			} else {
+				fields[p.FormName()] = string(b)
+			}
+		}
+		return ok(map[string]any{"message_id": 5, "chat": map[string]any{"id": 42}})
+	})
+	m, err := c.SendDocumentUpload(context.Background(), 42, "bobres-20261011T033000Z.bkp", onlyReader{bytes.NewReader(data)},
+		int64(len(data)), "a <plain> caption")
+	if err != nil || m.MessageID != 5 {
+		t.Fatalf("upload: %v %+v", err, m)
+	}
+	if fileName != "bobres-20261011T033000Z.bkp" || !bytes.Equal(fileBytes, data) {
+		t.Errorf("file %q, %d bytes", fileName, len(fileBytes))
+	}
+	if fields["chat_id"] != "42" || fields["caption"] != "a <plain> caption" || fields["parse_mode"] != "" {
+		t.Errorf("fields: %v", fields)
+	}
+	if gotLen <= int64(len(data)) {
+		t.Errorf("Content-Length %d: not exact", gotLen)
+	}
+	// A reader shorter than the size it claims fails the upload.
+	if _, err = c.SendDocumentUpload(context.Background(), 42, "x.bkp", strings.NewReader("short"), 100, ""); err == nil {
+		t.Error("short body sent")
+	}
+	if strings.Contains(fmt.Sprint(err), token) {
+		t.Errorf("error leaks the token: %v", err)
+	}
+}
+
+func TestSendDocumentUploadNoRetryOn429(t *testing.T) {
+	var calls atomic.Int32
+	flood := &Flood{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": 429, "description": "Too Many Requests: retry after 1",
+			"parameters": map[string]any{"retry_after": 1}})
+	}))
+	t.Cleanup(srv.Close)
+	c := New(token, WithBaseURL(srv.URL+"/bot"+token), WithFlood(flood))
+	start := time.Now()
+	_, err := c.SendDocumentUpload(context.Background(), 42, "x.bkp", strings.NewReader("payload"), 7, "")
+	if _, isFlood := IsFlood(err); !isFlood {
+		t.Fatalf("err = %v, want a 429", err)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Errorf("%d requests: a consumed body was sent again", n)
+	}
+	if time.Since(start) > 900*time.Millisecond {
+		t.Error("slept for a retry")
+	}
+	if !flood.Until().After(start) {
+		t.Error("the 429 did not reach the shared flood")
+	}
+}
