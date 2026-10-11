@@ -6,10 +6,9 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
-	"net/url"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +17,7 @@ import (
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/adapter"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
+	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -97,14 +97,28 @@ func (s *Server) adapterFor(sv *store.Server) (adapter.PanelAdapter, error) {
 	return a, nil
 }
 
+// canonicalID is a server id in canonical form; ok is false for a malformed one.
+func canonicalID(id string) (string, bool) {
+	u, err := buuid.Parse(strings.TrimSpace(id))
+	if err != nil {
+		return "", false
+	}
+	return u.String(), true
+}
+
 // server resolves a panel by id, or the first enabled panel when id is empty.
+// An id resolves a disabled panel too: its existing clients keep working.
 func (s *Server) server(ctx context.Context, id string) (*store.Server, adapter.PanelAdapter, error) {
 	var (
 		sv  *store.Server
 		err error
 	)
 	if id != "" {
-		sv, err = s.st.GetServer(ctx, id)
+		cid, ok := canonicalID(id)
+		if !ok {
+			return nil, nil, status.Error(codes.NotFound, "3x-ui server not found")
+		}
+		sv, err = s.st.GetServer(ctx, cid)
 	} else {
 		sv, err = s.st.FirstServer(ctx)
 	}
@@ -112,7 +126,7 @@ func (s *Server) server(ctx context.Context, id string) (*store.Server, adapter.
 	case errors.Is(err, store.ErrNotFound) && id != "":
 		return nil, nil, status.Error(codes.NotFound, "3x-ui server not found")
 	case errors.Is(err, store.ErrNotFound):
-		return nil, nil, status.Error(codes.FailedPrecondition, "no enabled 3x-ui server")
+		return nil, nil, s.noServer(ctx, "no enabled 3x-ui server")
 	case err != nil:
 		return nil, nil, status.Error(codes.Internal, "server lookup failed")
 	}
@@ -123,8 +137,18 @@ func (s *Server) server(ctx context.Context, id string) (*store.Server, adapter.
 	return sv, a, nil
 }
 
+// noServer explains why no server could be used: none is registered at all,
+// or (msg) none qualifies.
+func (s *Server) noServer(ctx context.Context, msg string) error {
+	if n, err := s.st.CountServers(ctx); err == nil && n == 0 {
+		return status.Error(codes.FailedPrecondition, "no 3x-ui server: add one in the dashboard (Servers)")
+	}
+	return status.Error(codes.FailedPrecondition, msg)
+}
+
 // subscription resolves a provisioned subscription and its panel. cm is nil
-// (with no error) when the subscription was never provisioned.
+// (with no error) when the subscription was never provisioned, or its
+// delivery has not finished (a reservation).
 func (s *Server) subscription(ctx context.Context, subscriptionID string) (*store.ClientMap, *store.Server, adapter.PanelAdapter, error) {
 	if subscriptionID == "" {
 		return nil, nil, nil, status.Error(codes.InvalidArgument, "subscription_id required")
@@ -136,6 +160,9 @@ func (s *Server) subscription(ctx context.Context, subscriptionID string) (*stor
 	if err != nil {
 		return nil, nil, nil, status.Error(codes.Internal, "client map lookup failed")
 	}
+	if cm.Pending {
+		return nil, nil, nil, nil
+	}
 	sv, a, err := s.server(ctx, cm.ServerID)
 	if err != nil {
 		return nil, nil, nil, err
@@ -143,20 +170,58 @@ func (s *Server) subscription(ctx context.Context, subscriptionID string) (*stor
 	return cm, sv, a, nil
 }
 
-func enabledInboundIDs(ins []adapter.Inbound) []int {
+// attachableInbounds lists the inbounds a new client of the server gets:
+// enabled in the panel and not detached in BOBRES.
+func (s *Server) attachableInbounds(ctx context.Context, serverID string, a adapter.PanelAdapter) ([]int, error) {
+	ins, err := a.Inbounds(ctx)
+	if err != nil {
+		return nil, s.panelError("panel inbounds", err)
+	}
+	attach, err := s.st.InboundAttach(ctx, serverID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "inbound settings lookup failed")
+	}
 	out := make([]int, 0, len(ins))
 	for _, in := range ins {
-		if in.Enabled {
+		if on, set := attach[in.ID]; in.Enabled && (on || !set) {
 			out = append(out, in.ID)
 		}
 	}
-	return out
+	if len(out) == 0 {
+		return nil, status.Error(codes.FailedPrecondition, "the panel has no enabled inbound to attach clients to")
+	}
+	return out, nil
 }
 
-// CreateClient provisions a subscription on the panel. It is safe to retry:
-// an already-mapped subscription is returned as is, and a client left on the
-// panel by an earlier attempt (whose response was lost) is adopted when it
-// carries our derived subscription id.
+// noSuchClient reports the panel's answer to a lookup of a client it does
+// not have: "record not found" inside a successful HTTP response, which is
+// how 3x-ui reports business errors (the xui client says "client ... not
+// found" for an empty record). Anything else says nothing about the client:
+// unreachable, a server error, a refused token, a page that is not the
+// panel's, or another refusal inside HTTP 200, such as "database is locked"
+// from a busy panel.
+func noSuchClient(err error) bool {
+	var ae *xui.APIError
+	if !errors.As(err, &ae) || ae.Status != http.StatusOK {
+		return false
+	}
+	m := strings.ToLower(ae.Msg)
+	return strings.Contains(m, "record not found") || (strings.HasPrefix(m, "client ") && strings.HasSuffix(m, " not found"))
+}
+
+// answered reports whether the panel answered a call. One that got no answer
+// (our client timed out, the connection dropped) may still be running there,
+// and finish after a lookup that follows it.
+func answered(err error) bool {
+	var ae *xui.APIError
+	return errors.As(err, &ae)
+}
+
+// CreateClient provisions a subscription on a panel. It is safe to retry: an
+// already-mapped subscription is returned as is, the server is reserved
+// before the panel is called (so a retry goes back to it), and a client left
+// on the panel by an earlier attempt (whose response was lost) is adopted
+// when it carries our derived subscription id.
 func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClientRequest) (*provisionerv1.Client, error) {
 	email := req.GetEmail()
 	if req.GetSubscriptionId() == "" || xui.ValidateIdentifier(email) != nil {
@@ -165,49 +230,135 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 	if req.GetDurationDays() < 0 || req.GetTrafficBytes() < 0 || req.GetDurationDays() > 36500 {
 		return nil, status.Error(codes.InvalidArgument, "duration_days and traffic_bytes out of range")
 	}
-	if cm, err := s.st.GetClientMap(ctx, req.GetSubscriptionId()); err == nil {
-		if cm.Email != email {
-			return nil, status.Error(codes.AlreadyExists, "subscription already provisioned with another email")
-		}
-		// A retry after the response was lost: report the limits the panel
-		// holds (zeros would read as "never expires" in core).
-		_, a, err := s.server(ctx, cm.ServerID)
-		if err != nil {
+	fresh := false
+	cm, err := s.st.GetClientMap(ctx, req.GetSubscriptionId())
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		if cm, fresh, err = s.reserve(ctx, req); err != nil {
 			return nil, err
 		}
-		st, err := a.Status(ctx, cm.Email)
-		if err != nil {
-			return nil, s.panelError("panel client", err)
-		}
-		return clientProto(cm, max(st.ExpiryMs, 0)/1000, st.TotalBytes), nil
-	} else if !errors.Is(err, store.ErrNotFound) {
+	case err != nil:
 		return nil, status.Error(codes.Internal, "client map lookup failed")
 	}
+	if cm.Email != email {
+		return nil, status.Error(codes.AlreadyExists, "subscription already provisioned with another email")
+	}
+	if !cm.Pending {
+		return s.existingClient(ctx, cm)
+	}
+	return s.createOnPanel(ctx, req, cm, fresh)
+}
 
-	sv, a, err := s.server(ctx, req.GetServerId())
+// existingClient answers a retry after the response was lost: it reports the
+// limits the panel holds (zeros would read as "never expires" in core).
+func (s *Server) existingClient(ctx context.Context, cm *store.ClientMap) (*provisionerv1.Client, error) {
+	_, a, err := s.server(ctx, cm.ServerID)
 	if err != nil {
 		return nil, err
 	}
-	ins, err := a.Inbounds(ctx)
+	st, err := a.Status(ctx, cm.Email)
 	if err != nil {
-		return nil, s.panelError("panel inbounds", err)
+		return nil, s.panelError("panel client", err)
 	}
-	inboundIDs := enabledInboundIDs(ins)
-	if len(inboundIDs) == 0 {
-		return nil, status.Error(codes.FailedPrecondition, "the panel has no enabled inbound to attach clients to")
+	return clientProto(cm, max(st.ExpiryMs, 0)/1000, st.TotalBytes), nil
+}
+
+// reserve picks the server for a new client and reserves it. fresh is false
+// when another attempt reserved (or finished) first: its row is returned.
+func (s *Server) reserve(ctx context.Context, req *provisionerv1.CreateClientRequest) (*store.ClientMap, bool, error) {
+	sv, err := s.pick(ctx, req.GetServerId(), req.GetCandidateServerIds())
+	if err != nil {
+		return nil, false, err
+	}
+	subID := s.st.SubIDFor(req.GetSubscriptionId())
+	cm, fresh, err := s.st.ReserveClient(ctx, &store.ClientMap{
+		SubscriptionID: req.GetSubscriptionId(), ServerID: sv.ID, Email: req.GetEmail(), XUISubID: &subID,
+	})
+	switch {
+	case errors.Is(err, store.ErrEmailTaken):
+		return nil, false, status.Error(codes.AlreadyExists, "another subscription already uses this email on the server")
+	case errors.Is(err, store.ErrNotFound):
+		return nil, false, status.Error(codes.Aborted, "the server was removed meanwhile; retry")
+	case err != nil:
+		return nil, false, status.Error(codes.Internal, "client reservation failed")
+	}
+	return cm, fresh, nil
+}
+
+// pick chooses the server for a new client: the explicit one (refused when
+// disabled), or the enabled, healthy candidate with the fewest clients per
+// weight.
+func (s *Server) pick(ctx context.Context, serverID string, candidates []string) (*store.Server, error) {
+	if serverID != "" {
+		sv, _, err := s.server(ctx, serverID)
+		if err != nil {
+			return nil, err
+		}
+		if !sv.Enabled {
+			return nil, status.Error(codes.FailedPrecondition, "the 3x-ui server is disabled: it takes no new clients")
+		}
+		return sv, nil
+	}
+	ids := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		if id, ok := canonicalID(c); ok {
+			c = id
+		}
+		ids = append(ids, c) // a malformed id stays, and matches nothing
+	}
+	sv, err := s.st.PickServer(ctx, ids)
+	switch {
+	case errors.Is(err, store.ErrNotFound) && len(ids) > 0:
+		return nil, s.noServer(ctx, "none of the candidate 3x-ui servers is enabled and healthy")
+	case errors.Is(err, store.ErrNotFound):
+		return nil, s.noServer(ctx, "no enabled and healthy 3x-ui server")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "server lookup failed")
+	}
+	return sv, nil
+}
+
+// createOnPanel creates (or adopts) the reserved client on its server and
+// turns the reservation into the client's row. When it fails, the
+// reservation stays unless no client of ours can be on that panel.
+func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateClientRequest, cm *store.ClientMap, fresh bool) (*provisionerv1.Client, error) {
+	email, subID := cm.Email, s.st.SubIDFor(cm.SubscriptionID)
+	// The reservation's server even when disabled since: an earlier attempt
+	// may have created the client there.
+	_, a, err := s.server(ctx, cm.ServerID)
+	if err != nil {
+		if fresh {
+			s.release(ctx, cm)
+		}
+		return nil, err
+	}
+	inboundIDs, err := s.attachableInbounds(ctx, cm.ServerID, a)
+	if err != nil {
+		if fresh {
+			s.release(ctx, cm)
+		} else {
+			s.releaseIfAbsent(ctx, a, cm, subID)
+		}
+		return nil, err
 	}
 	var expiryMs int64
 	if d := req.GetDurationDays(); d > 0 {
 		expiryMs = time.Now().Add(time.Duration(d) * 24 * time.Hour).UnixMilli()
 	}
-	subID := s.st.SubIDFor(req.GetSubscriptionId())
 	if err := a.CreateClient(ctx, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs); err != nil {
 		existing, lookupErr := a.ClientSubID(ctx, email)
 		switch {
+		case noSuchClient(lookupErr) && answered(err):
+			s.release(ctx, cm)
+			return nil, s.panelError("panel create", err)
+		case noSuchClient(lookupErr):
+			// The create may still land: the retry comes back here and adopts it.
+			return nil, s.panelError("panel create", err)
 		case lookupErr != nil:
 			s.log.Warn("3x-ui create failed", "err", err)
 			return nil, s.panelError("panel create", lookupErr)
 		case existing != subID:
+			s.release(ctx, cm) // the email is someone else's there, so none of ours is
 			return nil, status.Error(codes.AlreadyExists, "another client on the panel already uses this email")
 		}
 		// Ours, from an earlier attempt: adopt it with the limits it has.
@@ -215,14 +366,30 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 			expiryMs = max(st.ExpiryMs, 0)
 		}
 	}
-	cm := &store.ClientMap{
-		SubscriptionID: req.GetSubscriptionId(), ServerID: sv.ID, Email: email,
+	done := &store.ClientMap{
+		SubscriptionID: cm.SubscriptionID, ServerID: cm.ServerID, Email: email,
 		XUISubID: &subID, InboundIDs: toInt32s(inboundIDs),
 	}
-	if err := s.st.PutClientMap(ctx, cm); err != nil {
+	if err := s.st.PutClientMap(ctx, done); err != nil {
 		return nil, status.Error(codes.Internal, "client map persist failed")
 	}
-	return clientProto(cm, expiryMs/1000, req.GetTrafficBytes()), nil
+	return clientProto(done, expiryMs/1000, req.GetTrafficBytes()), nil
+}
+
+// release drops a reservation so a retry picks a server again.
+func (s *Server) release(ctx context.Context, cm *store.ClientMap) {
+	if err := s.st.ReleaseReservation(ctx, cm.SubscriptionID); err != nil {
+		s.log.Warn("releasing a client reservation failed", "err", err)
+	}
+}
+
+// releaseIfAbsent drops a reservation from an earlier attempt when the panel
+// says it has no client of ours under the email.
+func (s *Server) releaseIfAbsent(ctx context.Context, a adapter.PanelAdapter, cm *store.ClientMap, subID string) {
+	existing, err := a.ClientSubID(ctx, cm.Email)
+	if noSuchClient(err) || (err == nil && existing != subID) {
+		s.release(ctx, cm)
+	}
 }
 
 func clientProto(cm *store.ClientMap, expiresAt, traffic int64) *provisionerv1.Client {
@@ -287,16 +454,31 @@ func (s *Server) SetClientEnabled(ctx context.Context, req *provisionerv1.SetCli
 }
 
 // DeleteClient removes the client from the panel and the map (idempotent).
+// A reservation (a delivery that never finished) goes too, with the client
+// if an earlier attempt created one. A client the panel no longer has, or
+// whose email is someone else's there now, only leaves the map.
 func (s *Server) DeleteClient(ctx context.Context, req *provisionerv1.DeleteClientRequest) (*emptypb.Empty, error) {
-	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())
+	if req.GetSubscriptionId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "subscription_id required")
+	}
+	cm, err := s.st.GetClientMap(ctx, req.GetSubscriptionId())
+	if errors.Is(err, store.ErrNotFound) {
+		return &emptypb.Empty{}, nil
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "client map lookup failed")
+	}
+	_, a, err := s.server(ctx, cm.ServerID)
 	if err != nil {
 		return nil, err
 	}
-	if cm == nil {
-		return &emptypb.Empty{}, nil
-	}
 	if err := a.Delete(ctx, cm.Email); err != nil {
-		return nil, s.panelError("panel delete", err)
+		existing, lookupErr := a.ClientSubID(ctx, cm.Email)
+		gone := noSuchClient(lookupErr) ||
+			(lookupErr == nil && cm.XUISubID != nil && *cm.XUISubID != "" && existing != *cm.XUISubID)
+		if !gone {
+			return nil, s.panelError("panel delete", err)
+		}
 	}
 	if err := s.st.DeleteClientMap(ctx, req.GetSubscriptionId()); err != nil {
 		return nil, status.Error(codes.Internal, "client map delete failed")
@@ -376,129 +558,6 @@ func (s *Server) GetLinks(ctx context.Context, req *provisionerv1.GetLinksReques
 		QrPngBase64:      base64.StdEncoding.EncodeToString(png),
 		ConfigLinks:      configs,
 	}, nil
-}
-
-// ListInbounds lists panel inbounds for a server (or the default).
-func (s *Server) ListInbounds(ctx context.Context, req *provisionerv1.ListInboundsRequest) (*provisionerv1.ListInboundsResponse, error) {
-	_, a, err := s.server(ctx, req.GetServerId())
-	if err != nil {
-		return nil, err
-	}
-	ins, err := a.Inbounds(ctx)
-	if err != nil {
-		return nil, s.panelError("panel inbounds", err)
-	}
-	out := &provisionerv1.ListInboundsResponse{}
-	for _, in := range ins {
-		if in.ID < 0 || in.ID > math.MaxInt32 {
-			continue
-		}
-		out.Inbounds = append(out.Inbounds, &provisionerv1.Inbound{Id: int32(in.ID), Tag: in.Tag, Enabled: in.Enabled}) //nolint:gosec // range checked above
-	}
-	return out, nil
-}
-
-// AddServer registers a new 3x-ui panel (token encrypted at rest).
-func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequest) (*provisionerv1.XUIServer, error) {
-	sv, err := s.addServer(ctx, req.GetName(), req.GetBaseUrl(), req.GetApiToken(), req.GetSubBaseUrl(), req.GetAllowPrivate())
-	if err != nil {
-		return nil, err
-	}
-	return &provisionerv1.XUIServer{Id: sv.ID, Name: sv.Name, BaseUrl: sv.BaseURL, Enabled: sv.Enabled, SubBaseUrl: sv.SubBaseURL}, nil
-}
-
-func (s *Server) addServer(ctx context.Context, name, baseURL, token, subBaseURL string, allowPrivate bool) (*store.Server, error) {
-	name, baseURL, subBaseURL = strings.TrimSpace(name), strings.TrimSpace(baseURL), strings.TrimSpace(subBaseURL)
-	if name == "" {
-		return nil, status.Error(codes.InvalidArgument, "name, base_url and api_token required")
-	}
-	if err := s.validateServer(baseURL, token, subBaseURL, allowPrivate); err != nil {
-		return nil, err
-	}
-	sv, err := s.st.AddServer(ctx, &store.Server{
-		Name: name, BaseURL: baseURL, Token: token, Enabled: true,
-		SubBaseURL: subBaseURL, AllowPrivate: allowPrivate,
-	})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "server persist failed")
-	}
-	return sv, nil
-}
-
-// validateServer refuses what the panel client would refuse later (plain http
-// without allow-private, credentials in the URL...) and a malformed sub URL.
-func (s *Server) validateServer(baseURL, token, subBaseURL string, allowPrivate bool) error {
-	if baseURL == "" || token == "" {
-		return status.Error(codes.InvalidArgument, "name, base_url and api_token required")
-	}
-	if _, err := xui.New(baseURL, token, s.clientOptions(allowPrivate)...); err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	if subBaseURL != "" {
-		u, err := url.Parse(subBaseURL)
-		if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
-			return status.Error(codes.InvalidArgument, "sub_base_url must be an http(s) URL")
-		}
-	}
-	return nil
-}
-
-// EnsureDefaultServer registers the installer-provided panel as "default" on
-// first start and keeps that row in line with the environment afterwards, so
-// re-running `bobres install` with a corrected URL, token or option takes
-// effect. Until the dashboard manages panels, the environment is the only place
-// to change them. It reports whether anything was written.
-func (s *Server) EnsureDefaultServer(ctx context.Context, baseURL, token, subBaseURL string, allowPrivate bool) (bool, error) {
-	baseURL, subBaseURL = strings.TrimSpace(baseURL), strings.TrimSpace(subBaseURL)
-	if baseURL == "" {
-		return false, nil
-	}
-	sv, err := s.st.ServerByName(ctx, "default")
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		n, err := s.st.CountServers(ctx)
-		if err != nil {
-			return false, err
-		}
-		if n > 0 { // panels were registered another way; leave them alone
-			return false, nil
-		}
-		if _, err := s.addServer(ctx, "default", baseURL, token, subBaseURL, allowPrivate); err != nil {
-			return false, fmt.Errorf("register 3x-ui panel from BOBRES_XUI_URL: %w", err)
-		}
-		return true, nil
-	case err != nil:
-		return false, err
-	}
-	if sv.BaseURL == baseURL && sv.Token == token && sv.SubBaseURL == subBaseURL && sv.AllowPrivate == allowPrivate {
-		return false, nil
-	}
-	if err := s.validateServer(baseURL, token, subBaseURL, allowPrivate); err != nil {
-		return false, fmt.Errorf("update 3x-ui panel from BOBRES_XUI_URL: %w", err)
-	}
-	if err := s.st.UpdateServerConnection(ctx, sv.ID, baseURL, token, subBaseURL, allowPrivate); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// HealthCheck probes the panel and records its version.
-func (s *Server) HealthCheck(ctx context.Context, req *provisionerv1.HealthCheckRequest) (*provisionerv1.HealthCheckResponse, error) {
-	sv, a, err := s.server(ctx, req.GetServerId())
-	if err != nil {
-		return &provisionerv1.HealthCheckResponse{Healthy: false, Detail: status.Convert(err).Message()}, nil
-	}
-	ver, err := a.HealthCheck(ctx)
-	if err != nil {
-		s.log.Warn("3x-ui health check failed", "err", err)
-		detail := "panel unreachable"
-		if policyRefusal(err) {
-			detail = err.Error()
-		}
-		return &provisionerv1.HealthCheckResponse{Healthy: false, Detail: detail}, nil
-	}
-	_ = s.st.TouchHealth(ctx, sv.ID, ver)
-	return &provisionerv1.HealthCheckResponse{Healthy: true, PanelVersion: ver}, nil
 }
 
 func toInt32s(in []int) []int32 {

@@ -630,6 +630,19 @@ func (c *Client) InboundOptions(ctx context.Context) ([]InboundOption, error) {
 	return o, nil
 }
 
+// PanelVersion returns the version the panel reports in server/status
+// ("panelVersion": "3.9.0", or "dev+<commit>" for a dev build). Present in
+// v3.8.5 and v3.9.0; an admin token may read it.
+func (c *Client) PanelVersion(ctx context.Context) (string, error) {
+	var st struct {
+		PanelVersion string `json:"panelVersion"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/panel/api/server/status", nil, &st); err != nil {
+		return "", err
+	}
+	return sanitizeMsg(st.PanelVersion), nil
+}
+
 // SubLinks returns share URLs for a subscription ID.
 func (c *Client) SubLinks(ctx context.Context, subID string) ([]string, error) {
 	if err := validIdent(subID); err != nil {

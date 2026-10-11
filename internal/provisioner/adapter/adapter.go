@@ -3,7 +3,12 @@
 // adapters later.
 package adapter
 
-import "context"
+import (
+	"context"
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 // PanelAdapter is the 3x-ui-facing contract (latest v3.x semantics).
 type PanelAdapter interface {
@@ -30,8 +35,67 @@ type PanelAdapter interface {
 	// retried create can tell our own client from someone else's.
 	ClientSubID(ctx context.Context, email string) (string, error)
 	Inbounds(ctx context.Context) ([]Inbound, error)
-	// HealthCheck pings the panel and reports health metadata.
+	// HealthCheck pings the panel and reports its version (see PanelVersion).
 	HealthCheck(ctx context.Context) (version string, err error)
+	// PanelVersion is the panel's version, "v3.9.0", or UnknownVersion when
+	// the panel does not say. It never fails: the version is informational.
+	PanelVersion(ctx context.Context) string
+}
+
+// UnknownVersion stands for a v3 panel that did not report its version.
+const UnknownVersion = "v3.x"
+
+// The panel versions CI tests the adapter against (.github/workflows/ci.yml,
+// job xui), both inclusive. Move them with that matrix.
+const (
+	TestedMinVersion = "v3.8.5"
+	TestedMaxVersion = "v3.9.0"
+)
+
+var semver = regexp.MustCompile(`^v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})$`)
+
+// NormalizeVersion turns what the panel reports into "vX.Y.Z" (anything
+// else, such as "dev+1a2b3c4d", is kept as is, bounded).
+func NormalizeVersion(v string) string {
+	v = strings.TrimSpace(v)
+	switch {
+	case v == "":
+		return UnknownVersion
+	case semver.MatchString(v):
+		return "v" + strings.TrimPrefix(v, "v")
+	case len(v) > 32:
+		return v[:32]
+	}
+	return v
+}
+
+// Untested reports a version outside the tested range. An unknown version
+// is not flagged: the panel answered the v3 API.
+func Untested(v string) bool {
+	if v == UnknownVersion || v == "" {
+		return false
+	}
+	n, ok := versionNumber(v)
+	if !ok {
+		return true
+	}
+	lo, _ := versionNumber(TestedMinVersion)
+	hi, _ := versionNumber(TestedMaxVersion)
+	return n < lo || n > hi
+}
+
+// versionNumber orders "vX.Y.Z" as one number (each part below 10000).
+func versionNumber(v string) (int64, bool) {
+	m := semver.FindStringSubmatch(v)
+	if m == nil {
+		return 0, false
+	}
+	var n int64
+	for _, p := range m[1:] {
+		d, _ := strconv.ParseInt(p, 10, 64)
+		n = n*10000 + d
+	}
+	return n, true
 }
 
 // ClientStatus is a client's usage and limits as the panel holds them.
@@ -44,7 +108,9 @@ type ClientStatus struct {
 
 // Inbound is one panel inbound with its enable flag.
 type Inbound struct {
-	ID      int
-	Tag     string
-	Enabled bool
+	ID       int
+	Tag      string
+	Enabled  bool
+	Protocol string
+	Port     int
 }

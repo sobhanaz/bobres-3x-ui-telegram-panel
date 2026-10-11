@@ -37,24 +37,53 @@ message Links {
 message Inbound {
   int32 id = 1;
   string tag = 2;
-  bool enabled = 3;
+  bool enabled = 3; // the panel's own enable flag
+  // New clients are attached to it (when the panel also enables it). Set
+  // with SetInboundAttach; existing clients keep their inbounds.
+  bool attach = 4;
+  string protocol = 5;
+  int32 port = 6;
 }
 
+// XUIServer is a registered 3x-ui panel. The API token is never part of it.
 message XUIServer {
   string id = 1;
   string name = 2;
   string base_url = 3;
+  // From the last successful check: "v3.9.0", or "v3.x" when the panel did
+  // not say.
   string panel_version = 4;
   bool enabled = 5;
   string sub_base_url = 6;
+  bool allow_private = 7;
+  // Share of new clients: the server with the least clients/weight is picked.
+  int32 weight = 8;
+  // "env" (seeded from the installer's environment) or "dashboard".
+  string managed = 9;
+  bool has_token = 10;
+  // Clients mapped to this server, deliveries in progress included.
+  int64 clients = 11;
+  // The last health check; checked_at is 0 (and healthy meaningless) until
+  // the first one.
+  bool healthy = 12;
+  string health_error = 13;
+  int64 checked_at = 14; // unix seconds
+  // panel_version is outside the tested range (ListServersResponse).
+  bool version_untested = 15;
 }
 
 message CreateClientRequest {
   string subscription_id = 1;
+  // An explicit server; a disabled one is refused. Wins over
+  // candidate_server_ids.
   string server_id = 2;
   string email = 3;
   int64 duration_days = 4;
   int64 traffic_bytes = 5;
+  // The servers the subscription may go to (a plan's servers); empty = every
+  // enabled server. The healthy, enabled one with the least clients/weight is
+  // picked, and a retry stays on it.
+  repeated string candidate_server_ids = 6;
 }
 
 message RenewClientRequest {
@@ -112,6 +141,63 @@ message AddServerRequest {
   // The panel is on a private/loopback address (same host or LAN). Off by
   // default: the client refuses such addresses to block SSRF.
   bool allow_private = 5;
+  int32 weight = 6; // 1..1000; 0 = 100
+  // Save without testing the connection first (the panel is down for now).
+  bool skip_check = 7;
+}
+
+message ListServersRequest {}
+
+message ListServersResponse {
+  repeated XUIServer servers = 1;
+  // The panel versions BOBRES is tested against (both inclusive).
+  string tested_min_version = 2;
+  string tested_max_version = 3;
+}
+
+// UpdateServerRequest replaces a server's settings. The connection is tested
+// first when it changes (URL, token or allow_private) unless skip_check.
+message UpdateServerRequest {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3; // a disabled server gets no new clients; existing ones keep working
+  int32 weight = 4; // 1..1000
+  string sub_base_url = 5;
+  bool allow_private = 6;
+  string base_url = 7;
+  // Empty = keep the stored token. A new address (host or port) needs the
+  // token again, so the stored one is never sent to a host it was not
+  // entered for.
+  string api_token = 8;
+  bool skip_check = 9;
+}
+
+message DeleteServerRequest {
+  string id = 1;
+}
+
+// TestServerRequest names the connection to try: an existing server (id)
+// with its stored settings, or candidate settings. With an id, a base_url
+// tries a new address (allow_private from this request) and an api_token a
+// new token; the rules of UpdateServerRequest.api_token apply.
+message TestServerRequest {
+  string id = 1;
+  string base_url = 2;
+  string api_token = 3;
+  bool allow_private = 4;
+}
+
+message TestServerResponse {
+  bool ok = 1;
+  string panel_version = 2;
+  int32 inbounds = 3;
+  string detail = 4; // why it failed
+}
+
+message SetInboundAttachRequest {
+  string server_id = 1;
+  int32 inbound_id = 2;
+  bool attach = 3;
 }
 
 message HealthCheckRequest {
@@ -136,6 +222,13 @@ service ProvisionerService {
   rpc GetUsage(GetUsageRequest) returns (Usage);
   rpc GetLinks(GetLinksRequest) returns (Links);
   rpc ListInbounds(ListInboundsRequest) returns (ListInboundsResponse);
+  rpc SetInboundAttach(SetInboundAttachRequest) returns (google.protobuf.Empty);
   rpc AddServer(AddServerRequest) returns (XUIServer);
+  rpc ListServers(ListServersRequest) returns (ListServersResponse);
+  rpc UpdateServer(UpdateServerRequest) returns (XUIServer);
+  // DeleteServer refuses (FailedPrecondition) while clients are mapped to it.
+  rpc DeleteServer(DeleteServerRequest) returns (google.protobuf.Empty);
+  // TestServer connects and lists inbounds; it saves nothing.
+  rpc TestServer(TestServerRequest) returns (TestServerResponse);
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }

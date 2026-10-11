@@ -41,13 +41,23 @@ func setup(rt *app.Runtime) error {
 
 	srv := provisionserver.New(st)
 	srv.SetLogger(rt.Log)
-	changed, err := srv.EnsureDefaultServer(rt.Ctx, cfg.XUIURL, cfg.XUIToken, cfg.XUISubURL, cfg.XUIAllowPrivate)
+	// The environment only seeds an empty table: afterwards panels are
+	// managed in the dashboard, and an edit there is never reverted.
+	added, err := srv.EnsureDefaultServer(rt.Ctx, cfg.XUIURL, cfg.XUIToken, cfg.XUISubURL, cfg.XUIAllowPrivate)
 	if err != nil {
 		return err
 	}
-	if changed {
-		rt.Log.Info("default 3x-ui panel registered or updated from BOBRES_XUI_URL")
+	switch n, err := st.CountServers(rt.Ctx); {
+	case err != nil:
+		return err
+	case added:
+		rt.Log.Info("default 3x-ui panel registered from BOBRES_XUI_URL")
+	case n == 0:
+		rt.Log.Warn("no 3x-ui server yet: add one in the dashboard (Servers); provisioning fails until then")
+	case cfg.XUIURL != "":
+		rt.Log.Info("BOBRES_XUI_URL is not applied: it only seeds the first server; edit servers in the dashboard")
 	}
+	rt.Go("panel-health", func(ctx context.Context) error { return srv.RunHealth(ctx, provisionserver.HealthInterval) })
 
 	// Only core may call the provisioner (the only holder of 3x-ui tokens).
 	gs, err := grpcx.NewServer(rt.Log, grpcauth.Peer{Name: "core", Token: cfg.CoreToken})
