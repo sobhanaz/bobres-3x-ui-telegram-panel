@@ -24,6 +24,8 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/ratelimit"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/redisx"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
 func main() {
@@ -123,6 +125,13 @@ func setup(rt *app.Runtime) error {
 		rt.Mux.Handle("GET /internal/channel-check", runner.ChannelCheck(bot, me.ID, cfg.PeerCoreToken))
 		// "Send to me" from the broadcast composer.
 		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
+		// The System page's update check: the bot has internet access, core
+		// none. It reads the latest release's signed checksums.txt from GitHub
+		// every 12 hours (an hour after a failure) and verifies it with the
+		// installer's root keys; applying an update stays `bobres update`.
+		updates := release.NewChecker(version.Version, "", rt.Log)
+		rt.Go("update-check", updates.Run)
+		rt.Mux.Handle("GET /internal/update-check", runner.UpdateCheck(updates.Status, cfg.PeerCoreToken))
 	}
 
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)

@@ -16,7 +16,8 @@ type SystemHealth interface {
 
 // system: GET /api/v1/system, the System page's health tab: every service
 // with its version and readiness (a version other than core's is flagged),
-// the 3x-ui servers and the payment methods, all asked at once.
+// the 3x-ui servers, the payment methods and the bot's last update check
+// (core has no internet access), all asked at once.
 func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var (
@@ -25,6 +26,7 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		servers  []map[string]any
 		panel    map[string]any
 		gateways []map[string]any
+		updates  any = map[string]string{"error": "bot unreachable"}
 	)
 	if s.cfg.System != nil {
 		wg.Go(func() { report = s.cfg.System.Check(ctx) })
@@ -34,6 +36,14 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		wg.Go(func() { servers, panel = s.overviewServers(ctx, full) })
 	}
 	wg.Go(func() { gateways = s.overviewGateways(ctx) })
+	if s.cfg.Bot != nil {
+		wg.Go(func() {
+			// Within 3 seconds; a bot that is down is shown as such.
+			if u, err := s.cfg.Bot.CheckUpdates(ctx); err == nil {
+				updates = u
+			}
+		})
+	}
 	wg.Wait()
 	if report.Version == "" {
 		report.Version = version.Version
@@ -49,6 +59,6 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"checked_at": s.now().Unix(), "version": report.Version, "version_mismatch": report.VersionMismatch,
-		"services": report.Services, "servers": servers, "panel": panel, "gateways": gateways,
+		"services": report.Services, "servers": servers, "panel": panel, "gateways": gateways, "updates": updates,
 	})
 }

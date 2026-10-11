@@ -218,6 +218,20 @@ func TestSystemPage(t *testing.T) {
 	if gws := out["gateways"].([]any); len(gws) != 5 || obj(gws[0])["provider"] != "zarinpal" {
 		t.Fatalf("gateways: %v", gws)
 	}
+	// No bot configured: the update check says so.
+	if asJSON(out["updates"]) != `{"error":"bot unreachable"}` {
+		t.Fatalf("updates without a bot: %v", out["updates"])
+	}
+	fb := &fakeBot{}
+	f.api.cfg.Bot = fb
+	if _, out = b.do(http.MethodGet, "/api/v1/system", nil); asJSON(out["updates"]) !=
+		`{"channel":"stable","checked_at":1760000000,"current":"1.0.0","detail":"","error":"","latest":"1.1.0","newer":true,"verified":true}` {
+		t.Fatalf("updates: %v", out["updates"])
+	}
+	fb.down = true
+	if _, out = b.do(http.MethodGet, "/api/v1/system", nil); asJSON(out["updates"]) != `{"error":"bot unreachable"}` {
+		t.Fatalf("updates with the bot down: %v", out["updates"])
+	}
 
 	// Without a health checker or a provisioner the page still answers.
 	f.api.cfg.System, f.api.cfg.Servers = nil, nil

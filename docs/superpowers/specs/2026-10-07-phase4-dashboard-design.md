@@ -710,13 +710,31 @@ The System page's health tab and its License tab. The update check, logs and bac
 
 | Method and path | Permission |
 | --- | --- |
-| `GET /api/v1/system` (`{checked_at, version, version_mismatch, services, servers, panel, gateways}`) | system.read |
+| `GET /api/v1/system` (`{checked_at, version, version_mismatch, services, servers, panel, gateways, updates}`) | system.read |
 | `GET /api/v1/license` (state, reason, install id, domain, the token's ids and dates, binding, entitlements with use; never the token) | system.read |
 | `POST /api/v1/license/check` (`{token}`; the same answer for a token, saving nothing) | license.write |
 | `PUT /api/v1/license` (`{token, reason}`; 400 `{field: "token", code}` when it does not verify here or has expired) | license.write |
 | `GET /api/v1/me` gains `license: {state, white_label, powered_by}`; public `GET /api/v1/brand` gains `powered_by` | session / public |
 
 - A new action the license does not allow is 409 `{error: "state", license: "<gate>", message}`.
+
+### Update check (milestone 6b)
+
+- **The bot looks, core asks the bot** (core has no internet access). At start and every 12 hours (an hour
+  after a failure) the bot fetches the latest GitHub release's `checksums.txt`, `checksums.txt.sig`,
+  `keys.txt` and `keys.txt.sig.1-4` through its normal egress (20 s, `HTTPS_PROXY` honoured) and keeps the
+  outcome in memory.
+- **Verified like the installer.** `internal/release` ports `install.sh` `verify_release` (the same two
+  embedded root keys, checked against the script by a test): a root signs `keys.txt`, a listed and not
+  revoked release key signs `checksums.txt`, both unexpired, the version at least `min_version`. It keeps no
+  state, so there is no seq or downgrade check; `bobres update` verifies again before installing anything.
+- `GET /internal/update-check` (core's token) answers `{current, latest, channel, newer, verified, checked_at,
+  error, detail}`. `newer` is true only for a verified release above the running version; a `dev` or other
+  non-semver build never sees one. `error` is `""`, `not_checked`, `unreachable` (latest empty), `no_release`,
+  `invalid` (no version header) or `bad_signature` (unsigned, tampered with, revoked or expired: latest is the
+  claimed version, never offered as an update); `detail` is a short English reason.
+- `GET /api/v1/system` gains `updates`: the bot's answer, or `{error: "bot unreachable"}` when the bot is not
+  configured or does not answer within 3 seconds. Applying an update stays the `bobres update` command.
 
 ## Tests
 
