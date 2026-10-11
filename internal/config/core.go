@@ -94,6 +94,11 @@ type Payments struct {
 	// ZarinpalPublicURL is the domain registered with Zarinpal, serving the pay
 	// page and the callback; it must be reachable from Iran without a VPN.
 	ZarinpalPublicURL string
+	// MasterKey encrypts the gateway settings stored in the database (the
+	// merchant id and the proxy URL). Optional: without it the Zarinpal* values
+	// above are used as they are and cannot be changed from the dashboard. With
+	// it they only seed the database once, when it has no settings yet.
+	MasterKey string
 }
 
 // LoadPayments reads the payments service configuration.
@@ -120,15 +125,28 @@ func LoadPayments() (Payments, error) {
 	p.ZarinpalProxy = getenv("BOBRES_ZARINPAL_PROXY", "")
 	p.ZarinpalPublicURL = strings.TrimRight(getenv("BOBRES_ZARINPAL_PUBLIC_URL", getenv("BOBRES_PUBLIC_URL", "")), "/")
 	if p.ZarinpalMerchantID != "" {
-		u, err := url.Parse(p.ZarinpalPublicURL)
-		switch {
-		case err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || c.Env != "dev")):
-			errs = append(errs, errors.New("BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be the https URL of the domain registered with Zarinpal"))
-		case u.Path != "" || u.RawQuery != "":
-			errs = append(errs, errors.New("BOBRES_ZARINPAL_PUBLIC_URL must be just https://host[:port]"))
+		if err := CheckZarinpalPublicURL(p.ZarinpalPublicURL, c.Env); err != nil {
+			errs = append(errs, err)
 		}
 	}
+	if p.MasterKey, err = optionalMasterKey(); err != nil {
+		errs = append(errs, err)
+	}
 	return p, errors.Join(errs...)
+}
+
+// CheckZarinpalPublicURL reports why u cannot be where Zarinpal returns the
+// customer: it must be https://host[:port] (plain http only in dev). Payments
+// also asks it at runtime, when Zarinpal is switched on from the dashboard.
+func CheckZarinpalPublicURL(u, env string) error {
+	pu, err := url.Parse(u)
+	switch {
+	case err != nil || pu.Host == "" || (pu.Scheme != "https" && (pu.Scheme != "http" || env != "dev")):
+		return errors.New("BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be the https URL of the domain registered with Zarinpal")
+	case pu.Path != "" || pu.RawQuery != "":
+		return errors.New("BOBRES_ZARINPAL_PUBLIC_URL must be just https://host[:port]")
+	}
+	return nil
 }
 
 // Provisioner is the provisioner service configuration.

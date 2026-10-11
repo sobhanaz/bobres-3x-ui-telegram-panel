@@ -150,6 +150,74 @@ func (s *Store) ActivateSubscription(ctx context.Context, q querier, id, serverI
 	return nil
 }
 
+// MarkSubLinksStale flags the stored links of a server's services (those on
+// the panel) to be fetched again now, with no failed fetch counted, and
+// returns how many.
+func (s *Store) MarkSubLinksStale(ctx context.Context, q querier, serverID string) (int64, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.subscriptions SET sub_link_stale_at = now(), sub_link_attempts = 0
+		WHERE server_id = $1::uuid AND status NOT IN ('pending', 'deleted')`, serverID)
+	if err != nil {
+		return 0, fmt.Errorf("mark sub links stale: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// StaleSubLink is a service whose stored link must be fetched again.
+type StaleSubLink struct {
+	ID       string
+	ServerID string
+	StaleAt  time.Time
+	Attempts int // fetches the panel did not answer so far
+}
+
+// StaleSubLinks lists services whose link is due to be fetched again,
+// longest waiting first (one put back waits until its next try).
+func (s *Store) StaleSubLinks(ctx context.Context, q querier, limit int) ([]StaleSubLink, error) {
+	rows, err := q.Query(ctx, `SELECT id, COALESCE(server_id::text, ''), sub_link_stale_at, sub_link_attempts
+		FROM core.subscriptions WHERE sub_link_stale_at IS NOT NULL AND sub_link_stale_at <= now()
+		ORDER BY sub_link_stale_at, id LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("stale sub links: %w", err)
+	}
+	defer rows.Close()
+	var out []StaleSubLink
+	for rows.Next() {
+		var l StaleSubLink
+		if err := rows.Scan(&l.ID, &l.ServerID, &l.StaleAt, &l.Attempts); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// RefreshSubLink stores a service's fetched link ("" keeps the old one) and
+// clears the flag, unless the service was flagged again after staleAt (the
+// link may predate that change). It reports whether it stored anything.
+func (s *Store) RefreshSubLink(ctx context.Context, q querier, id, link string, staleAt time.Time) (bool, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.subscriptions
+		SET sub_link = COALESCE(NULLIF($2, ''), sub_link), sub_link_stale_at = NULL, sub_link_attempts = 0, updated_at = now()
+		WHERE id = $1 AND sub_link_stale_at = $3`, id, link, staleAt)
+	if err != nil {
+		return false, fmt.Errorf("refresh sub link: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// PostponeSubLink puts a flagged link back to be fetched after wait,
+// counting a failed fetch when failed, unless the service was flagged again
+// after staleAt (that new flag is due now). It reports whether it did.
+func (s *Store) PostponeSubLink(ctx context.Context, q querier, id string, staleAt time.Time, wait time.Duration, failed bool) (bool, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.subscriptions
+		SET sub_link_stale_at = now() + make_interval(secs => $3),
+		    sub_link_attempts = sub_link_attempts + CASE WHEN $4 THEN 1 ELSE 0 END
+		WHERE id = $1 AND sub_link_stale_at = $2`, id, staleAt, wait.Seconds(), failed)
+	if err != nil {
+		return false, fmt.Errorf("postpone sub link: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // LockSubscription returns a subscription and locks its row until tx ends, so
 // a renewal and the usage sync never compute from each other's half-states.
 func (s *Store) LockSubscription(ctx context.Context, tx pgx.Tx, id string) (*Subscription, error) {

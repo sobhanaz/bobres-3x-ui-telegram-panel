@@ -16,8 +16,10 @@ import (
 
 // Provisioner is core's view of the provisioner service.
 type Provisioner interface {
-	// CreateClient is idempotent per subscriptionID.
-	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64) (ProvisionedClient, error)
+	// CreateClient is idempotent per subscriptionID: a retry stays on the
+	// server the first attempt picked. candidates are the servers it may go
+	// to (a plan's servers; empty = any enabled server).
+	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string) (ProvisionedClient, error)
 	GetLinks(ctx context.Context, subscriptionID string) (Links, error)
 	Health(ctx context.Context) (healthy bool, detail string, err error)
 	// SetLimits sets absolute limits (unix seconds, bytes; 0 = unlimited) and
@@ -198,7 +200,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return true, w.extend(ctx, job)
 	}
 	days, traffic := planLimits(job.plan)
-	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic)
+	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs)
 	var links Links
 	if err == nil {
 		links, err = w.prov.GetLinks(ctx, job.sub.ID)

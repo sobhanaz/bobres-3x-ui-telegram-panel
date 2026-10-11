@@ -127,22 +127,33 @@ func TestMenuChangesSettingsThroughTheInstaller(t *testing.T) {
 }
 
 func TestMenuShowsSettingsWithoutSecrets(t *testing.T) {
-	dir := t.TempDir()
-	env := "BOBRES_DOMAIN=panel.example.com\nBOBRES_VERSION=1.2.3\nBOBRES_ADMIN_TELEGRAM_ID=4242\n" +
-		"BOBRES_TELEGRAM_BOT_TOKEN=" + goodBotToken + "\nBOBRES_XUI_URL=https://xui.example.com:2053/p\n" +
-		"BOBRES_XUI_TOKEN=supersecretpaneltoken\nPOSTGRES_PASSWORD=dbpass-should-not-show\n"
-	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	m, out, _, _, _ := testMenu(dir, "6\n\n0\n", &fakeOps{ps: healthyPS})
-	m.loop()
-	s := out.String()
-	if strings.Contains(s, goodBotToken) || strings.Contains(s, "supersecretpaneltoken") || strings.Contains(s, "dbpass") {
-		t.Fatalf("a secret is shown:\n%s", s)
-	}
-	for _, want := range []string{"123456789:••••", "••••oken", "4242", "https://xui.example.com:2053/p", "Zarinpal gateway:       off"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("settings missing %q:\n%s", want, s)
+	const merchant = "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b"
+	for _, c := range []struct {
+		key, zarinpal string
+	}{
+		{"", "Zarinpal gateway:       set in .env (re-run bobres install"},
+		{"BOBRES_PAYMENTS_MASTER_KEY=" + strings.Repeat("k", 64) + "\n", "Zarinpal gateway:       managed in the dashboard (Payment gateways)"},
+	} {
+		dir := t.TempDir()
+		env := "BOBRES_DOMAIN=panel.example.com\nBOBRES_VERSION=1.2.3\nBOBRES_ADMIN_TELEGRAM_ID=4242\n" +
+			"BOBRES_TELEGRAM_BOT_TOKEN=" + goodBotToken + "\nBOBRES_XUI_URL=https://xui.example.com:2053/p\n" +
+			"BOBRES_XUI_TOKEN=supersecretpaneltoken\nPOSTGRES_PASSWORD=dbpass-should-not-show\n" +
+			"BOBRES_ZARINPAL_MERCHANT_ID=" + merchant + "\n" + c.key
+		if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		m, out, _, _, _ := testMenu(dir, "6\n\n0\n", &fakeOps{ps: healthyPS})
+		m.loop()
+		s := out.String()
+		if strings.Contains(s, goodBotToken) || strings.Contains(s, "supersecretpaneltoken") || strings.Contains(s, "dbpass") ||
+			strings.Contains(s, merchant[len(merchant)-4:]) || strings.Contains(s, strings.Repeat("k", 8)) {
+			t.Fatalf("a secret is shown:\n%s", s)
+		}
+		// The gateway is not reported from .env: the dashboard holds what is live.
+		for _, want := range []string{"123456789:••••", "••••oken", "4242", "https://xui.example.com:2053/p", c.zarinpal, "Servers"} {
+			if !strings.Contains(s, want) {
+				t.Errorf("settings missing %q:\n%s", want, s)
+			}
 		}
 	}
 }

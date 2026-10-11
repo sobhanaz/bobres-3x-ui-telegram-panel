@@ -145,7 +145,7 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Show settings", run: func() { m.showSettings(env) }, group: true},
 		{label: "Change the bot token", run: m.changeBotToken},
 		{label: "Change the owner (admin) Telegram ID", run: m.changeAdmin},
-		{label: "Change the 3x-ui panel (URL, API token, subscription link)", run: func() { m.changePanel(env) }},
+		{label: "Change the first 3x-ui panel (used until the dashboard has a server)", run: func() { m.changePanel(env) }},
 		{label: "Dashboard login link (if the bot is down)", run: func() { m.ops.adminCmd([]string{"link", "--dir", m.dir}) }, group: true},
 		{label: "Check this server", run: func() { m.doctor([]string{"--domain", env["BOBRES_DOMAIN"]}) }},
 		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }},
@@ -197,9 +197,11 @@ func (m *menu) stop() {
 }
 
 func (m *menu) showSettings(env map[string]string) {
-	zp := "off"
-	if id := env["BOBRES_ZARINPAL_MERCHANT_ID"]; id != "" {
-		zp = "on (merchant " + mask(id) + ")"
+	// The dashboard keeps the gateway settings once payments has its key:
+	// .env only seeded them, so it is no guide to what is live.
+	zp := "managed in the dashboard (Payment gateways)"
+	if env["BOBRES_PAYMENTS_MASTER_KEY"] == "" {
+		zp = "set in .env (re-run bobres install to manage it in the dashboard)"
 	}
 	rows := [][2]string{
 		{"Install directory", m.dir},
@@ -207,7 +209,7 @@ func (m *menu) showSettings(env map[string]string) {
 		{"Domain", env["BOBRES_DOMAIN"]},
 		{"Owner Telegram ID", env["BOBRES_ADMIN_TELEGRAM_ID"]},
 		{"Bot token", mask(env["BOBRES_TELEGRAM_BOT_TOKEN"])},
-		{"3x-ui panel", env["BOBRES_XUI_URL"]},
+		{"First 3x-ui panel", env["BOBRES_XUI_URL"]},
 		{"3x-ui API token", mask(env["BOBRES_XUI_TOKEN"])},
 		{"Subscription prefix", env["BOBRES_XUI_SUB_URL"]},
 		{"Panel on a private net", env["BOBRES_XUI_ALLOW_PRIVATE"]},
@@ -217,7 +219,8 @@ func (m *menu) showSettings(env map[string]string) {
 	for _, r := range rows {
 		fmt.Fprintf(m.out, "  %-23s %s\n", r[0]+":", orDash(r[1]))
 	}
-	fmt.Fprintln(m.out, "\nPayment details (card, Zarinpal link, USDT), plans and texts are set in the bot: /admin and /set.")
+	fmt.Fprintln(m.out, "\nThe first panel only seeds an empty server list: servers are managed in the dashboard (Servers).")
+	fmt.Fprintln(m.out, "Payment methods, plans and texts are set in the dashboard (/admin in the bot) or with /set.")
 }
 
 func (m *menu) changeBotToken() {
@@ -247,7 +250,8 @@ func (m *menu) changeAdmin() {
 }
 
 func (m *menu) changePanel(env map[string]string) {
-	fmt.Fprintln(m.out, "Press Enter to keep a value.")
+	fmt.Fprintln(m.out, "BOBRES registers this panel only while it has no server; once one exists, add and change")
+	fmt.Fprintln(m.out, "servers in the dashboard (Servers). Press Enter to keep a value.")
 	u, ok := m.ask(fmt.Sprintf("3x-ui panel URL with its web base path [%s]: ", orDash(env["BOBRES_XUI_URL"])))
 	if !ok {
 		return

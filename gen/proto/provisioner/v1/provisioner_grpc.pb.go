@@ -29,7 +29,12 @@ const (
 	ProvisionerService_GetUsage_FullMethodName         = "/provisioner.v1.ProvisionerService/GetUsage"
 	ProvisionerService_GetLinks_FullMethodName         = "/provisioner.v1.ProvisionerService/GetLinks"
 	ProvisionerService_ListInbounds_FullMethodName     = "/provisioner.v1.ProvisionerService/ListInbounds"
+	ProvisionerService_SetInboundAttach_FullMethodName = "/provisioner.v1.ProvisionerService/SetInboundAttach"
 	ProvisionerService_AddServer_FullMethodName        = "/provisioner.v1.ProvisionerService/AddServer"
+	ProvisionerService_ListServers_FullMethodName      = "/provisioner.v1.ProvisionerService/ListServers"
+	ProvisionerService_UpdateServer_FullMethodName     = "/provisioner.v1.ProvisionerService/UpdateServer"
+	ProvisionerService_DeleteServer_FullMethodName     = "/provisioner.v1.ProvisionerService/DeleteServer"
+	ProvisionerService_TestServer_FullMethodName       = "/provisioner.v1.ProvisionerService/TestServer"
 	ProvisionerService_HealthCheck_FullMethodName      = "/provisioner.v1.ProvisionerService/HealthCheck"
 )
 
@@ -49,7 +54,14 @@ type ProvisionerServiceClient interface {
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*Usage, error)
 	GetLinks(ctx context.Context, in *GetLinksRequest, opts ...grpc.CallOption) (*Links, error)
 	ListInbounds(ctx context.Context, in *ListInboundsRequest, opts ...grpc.CallOption) (*ListInboundsResponse, error)
+	SetInboundAttach(ctx context.Context, in *SetInboundAttachRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AddServer(ctx context.Context, in *AddServerRequest, opts ...grpc.CallOption) (*XUIServer, error)
+	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
+	UpdateServer(ctx context.Context, in *UpdateServerRequest, opts ...grpc.CallOption) (*XUIServer, error)
+	// DeleteServer refuses (FailedPrecondition) while clients are mapped to it.
+	DeleteServer(ctx context.Context, in *DeleteServerRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// TestServer connects and lists inbounds; it saves nothing.
+	TestServer(ctx context.Context, in *TestServerRequest, opts ...grpc.CallOption) (*TestServerResponse, error)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 }
 
@@ -151,10 +163,60 @@ func (c *provisionerServiceClient) ListInbounds(ctx context.Context, in *ListInb
 	return out, nil
 }
 
+func (c *provisionerServiceClient) SetInboundAttach(ctx context.Context, in *SetInboundAttachRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, ProvisionerService_SetInboundAttach_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *provisionerServiceClient) AddServer(ctx context.Context, in *AddServerRequest, opts ...grpc.CallOption) (*XUIServer, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(XUIServer)
 	err := c.cc.Invoke(ctx, ProvisionerService_AddServer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListServersResponse)
+	err := c.cc.Invoke(ctx, ProvisionerService_ListServers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) UpdateServer(ctx context.Context, in *UpdateServerRequest, opts ...grpc.CallOption) (*XUIServer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(XUIServer)
+	err := c.cc.Invoke(ctx, ProvisionerService_UpdateServer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) DeleteServer(ctx context.Context, in *DeleteServerRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, ProvisionerService_DeleteServer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) TestServer(ctx context.Context, in *TestServerRequest, opts ...grpc.CallOption) (*TestServerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestServerResponse)
+	err := c.cc.Invoke(ctx, ProvisionerService_TestServer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +249,14 @@ type ProvisionerServiceServer interface {
 	GetUsage(context.Context, *GetUsageRequest) (*Usage, error)
 	GetLinks(context.Context, *GetLinksRequest) (*Links, error)
 	ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error)
+	SetInboundAttach(context.Context, *SetInboundAttachRequest) (*emptypb.Empty, error)
 	AddServer(context.Context, *AddServerRequest) (*XUIServer, error)
+	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
+	UpdateServer(context.Context, *UpdateServerRequest) (*XUIServer, error)
+	// DeleteServer refuses (FailedPrecondition) while clients are mapped to it.
+	DeleteServer(context.Context, *DeleteServerRequest) (*emptypb.Empty, error)
+	// TestServer connects and lists inbounds; it saves nothing.
+	TestServer(context.Context, *TestServerRequest) (*TestServerResponse, error)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 	mustEmbedUnimplementedProvisionerServiceServer()
 }
@@ -226,8 +295,23 @@ func (UnimplementedProvisionerServiceServer) GetLinks(context.Context, *GetLinks
 func (UnimplementedProvisionerServiceServer) ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListInbounds not implemented")
 }
+func (UnimplementedProvisionerServiceServer) SetInboundAttach(context.Context, *SetInboundAttachRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetInboundAttach not implemented")
+}
 func (UnimplementedProvisionerServiceServer) AddServer(context.Context, *AddServerRequest) (*XUIServer, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddServer not implemented")
+}
+func (UnimplementedProvisionerServiceServer) ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListServers not implemented")
+}
+func (UnimplementedProvisionerServiceServer) UpdateServer(context.Context, *UpdateServerRequest) (*XUIServer, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateServer not implemented")
+}
+func (UnimplementedProvisionerServiceServer) DeleteServer(context.Context, *DeleteServerRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteServer not implemented")
+}
+func (UnimplementedProvisionerServiceServer) TestServer(context.Context, *TestServerRequest) (*TestServerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestServer not implemented")
 }
 func (UnimplementedProvisionerServiceServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HealthCheck not implemented")
@@ -415,6 +499,24 @@ func _ProvisionerService_ListInbounds_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProvisionerService_SetInboundAttach_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetInboundAttachRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).SetInboundAttach(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_SetInboundAttach_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).SetInboundAttach(ctx, req.(*SetInboundAttachRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProvisionerService_AddServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddServerRequest)
 	if err := dec(in); err != nil {
@@ -429,6 +531,78 @@ func _ProvisionerService_AddServer_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProvisionerServiceServer).AddServer(ctx, req.(*AddServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_ListServers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListServersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).ListServers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_ListServers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).ListServers(ctx, req.(*ListServersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_UpdateServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).UpdateServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_UpdateServer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).UpdateServer(ctx, req.(*UpdateServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_DeleteServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).DeleteServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_DeleteServer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).DeleteServer(ctx, req.(*DeleteServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_TestServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).TestServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_TestServer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).TestServer(ctx, req.(*TestServerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -495,8 +669,28 @@ var ProvisionerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProvisionerService_ListInbounds_Handler,
 		},
 		{
+			MethodName: "SetInboundAttach",
+			Handler:    _ProvisionerService_SetInboundAttach_Handler,
+		},
+		{
 			MethodName: "AddServer",
 			Handler:    _ProvisionerService_AddServer_Handler,
+		},
+		{
+			MethodName: "ListServers",
+			Handler:    _ProvisionerService_ListServers_Handler,
+		},
+		{
+			MethodName: "UpdateServer",
+			Handler:    _ProvisionerService_UpdateServer_Handler,
+		},
+		{
+			MethodName: "DeleteServer",
+			Handler:    _ProvisionerService_DeleteServer_Handler,
+		},
+		{
+			MethodName: "TestServer",
+			Handler:    _ProvisionerService_TestServer_Handler,
 		},
 		{
 			MethodName: "HealthCheck",

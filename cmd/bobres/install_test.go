@@ -298,3 +298,67 @@ func TestImageTag(t *testing.T) {
 		}
 	}
 }
+
+// The first 3x-ui panel is optional: servers are added in the dashboard. A
+// fresh install asks for it once (Enter skips), a re-run never does, and a
+// URL and a token only go together.
+func TestInstallWithoutPanel(t *testing.T) {
+	noPanel := []string{"--domain", "panel.example.com", "--admin-id", "4242", "--no-start"}
+	bot := map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": goodBotToken}
+
+	// Without a terminal, nothing to ask: the stack starts with no server.
+	dir := t.TempDir()
+	ins, out, errOut := testInstaller("", bot, nil)
+	if code := ins.install(append([]string{"--dir", dir}, noPanel...)); code != 0 {
+		t.Fatalf("no panel: %d %s", code, errOut)
+	}
+	env, _, _ := readEnv(filepath.Join(dir, ".env"))
+	if env["BOBRES_XUI_URL"] != "" || env["BOBRES_XUI_TOKEN"] != "" || !strings.Contains(out.String(), "Enter to add servers later") {
+		t.Fatalf("panel: %q %q\n%s", env["BOBRES_XUI_URL"], env["BOBRES_XUI_TOKEN"], out)
+	}
+	if len(env["BOBRES_PAYMENTS_MASTER_KEY"]) != 64 || env["BOBRES_PAYMENTS_MASTER_KEY"] == env["BOBRES_CORE_MASTER_KEY"] {
+		t.Fatalf("payments master key: %q", env["BOBRES_PAYMENTS_MASTER_KEY"])
+	}
+
+	// A re-run does not ask again, and keeps the payments key.
+	ins, out, errOut = testInstaller("https://xui.example.com\n", nil, nil)
+	if code := ins.install([]string{"--dir", dir, "--no-start"}); code != 0 {
+		t.Fatalf("re-run: %d %s", code, errOut)
+	}
+	again, _, _ := readEnv(filepath.Join(dir, ".env"))
+	if strings.Contains(out.String(), "3x-ui panel URL") || again["BOBRES_XUI_URL"] != "" ||
+		again["BOBRES_PAYMENTS_MASTER_KEY"] != env["BOBRES_PAYMENTS_MASTER_KEY"] {
+		t.Fatalf("re-run asked for a panel or lost the key:\n%s", out)
+	}
+
+	// Interactively, Enter skips the panel and its token.
+	ins, out, errOut = testInstaller("panel.example.com\n4242\n"+goodBotToken+"\n\n", nil, nil)
+	if code := ins.install([]string{"--dir", t.TempDir(), "--no-start"}); code != 0 || strings.Contains(out.String(), "API token") {
+		t.Fatalf("interactive skip: %d %s\n%s", code, errOut, out)
+	}
+
+	// A URL needs its token, and a token its URL.
+	ins, _, errOut = testInstaller("", bot, nil)
+	if code := ins.install(append([]string{"--dir", t.TempDir(), "--xui-url", "https://xui.example.com"}, noPanel...)); code != 2 ||
+		!strings.Contains(errOut.String(), "BOBRES_XUI_TOKEN is required") {
+		t.Fatalf("URL without token: %d %s", code, errOut)
+	}
+	ins, _, errOut = testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": goodBotToken, "BOBRES_XUI_TOKEN": "t"}, nil)
+	if code := ins.install(append([]string{"--dir", t.TempDir()}, noPanel...)); code != 2 || !strings.Contains(errOut.String(), "needs the panel URL") {
+		t.Fatalf("token without URL: %d %s", code, errOut)
+	}
+}
+
+// The started stack's summary points to the dashboard when no panel is set.
+func TestSummaryWithoutPanel(t *testing.T) {
+	ins, out, _ := testInstaller("", nil, nil)
+	ins.summary(map[string]string{"BOBRES_DOMAIN": "panel.example.com"}, "/opt/bobres")
+	if !strings.Contains(out.String(), "add your servers in the dashboard") {
+		t.Fatalf("summary: %s", out)
+	}
+	ins, out, _ = testInstaller("", nil, nil)
+	ins.summary(map[string]string{"BOBRES_DOMAIN": "panel.example.com", "BOBRES_XUI_URL": "https://xui.example.com"}, "/opt/bobres")
+	if strings.Contains(out.String(), "No 3x-ui panel") {
+		t.Fatalf("summary with a panel: %s", out)
+	}
+}

@@ -10,7 +10,8 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-const planCols = `id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup`
+const planCols = `id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup,
+	ARRAY(SELECT ps.server_id::text FROM core.plan_servers ps WHERE ps.plan_id = plans.id ORDER BY ps.server_id)`
 
 func scanPlan(row pgx.Row) (*Plan, error) {
 	var (
@@ -18,12 +19,15 @@ func scanPlan(row pgx.Row) (*Plan, error) {
 		name []byte
 	)
 	err := row.Scan(&p.ID, &name, &p.Kind, &p.DurationDays, &p.TrafficBytes,
-		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup)
+		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup, &p.ServerIDs)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
+	}
+	if p.ServerIDs == nil {
+		p.ServerIDs = []string{}
 	}
 	if err := json.Unmarshal(name, &p.NameI18n); err != nil {
 		return nil, fmt.Errorf("plan name_i18n: %w", err)
@@ -64,7 +68,8 @@ func (s *Store) GetPlan(ctx context.Context, q querier, id string) (*Plan, error
 	return p, nil
 }
 
-// UpsertPlan inserts or updates a plan by id.
+// UpsertPlan inserts or updates a plan by id, and replaces its servers when
+// p.ServerIDs is not nil (an empty list: any server).
 func (s *Store) UpsertPlan(ctx context.Context, q querier, p *Plan) error {
 	if p.ID == "" {
 		p.ID = buuid.MustV7().String()
@@ -85,6 +90,18 @@ func (s *Store) UpsertPlan(ctx context.Context, q querier, p *Plan) error {
 		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort, p.IsTopup)
 	if err != nil {
 		return fmt.Errorf("upsert plan: %w", err)
+	}
+	if p.ServerIDs == nil {
+		return nil
+	}
+	// The servers no longer named go, the new ones come (one statement: both
+	// see the rows as they were).
+	_, err = q.Exec(ctx, `
+		WITH gone AS (DELETE FROM core.plan_servers WHERE plan_id = $1 AND server_id <> ALL($2::uuid[]))
+		INSERT INTO core.plan_servers (plan_id, server_id) SELECT $1, unnest($2::uuid[])
+		ON CONFLICT DO NOTHING`, p.ID, p.ServerIDs)
+	if err != nil {
+		return fmt.Errorf("plan servers: %w", err)
 	}
 	return nil
 }

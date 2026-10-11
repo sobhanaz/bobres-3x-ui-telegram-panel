@@ -44,8 +44,27 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   for resellers (`discount: reseller`, FAILED_PRECONDITION). Removing a reseller cancels their unpaid orders (paying
   one afterwards is FAILED_PRECONDITION `order not payable`); a `CreateOrder` that priced the plan for a reseller whose
   removal committed first is FAILED_PRECONDITION, and asked again it gets the store price.
+- core, payment method switches (milestone 6a, built): `ListPaymentMethods` leaves out Telegram Stars while
+  `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
+  turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments
+  already started go on; Zarinpal is switched in payments (`ListGateways` lists only the offered ones).
 - payments: `CreateIntent`, `GetIntent`, `SubmitReceipt`, `ReviewReceipt`, `ListProviders`; HTTP webhooks per provider behind the gateway.
+- payments, gateway settings (milestone 6a, built; core's token only): `ListGatewayConfigs` (provider, enabled,
+  configured, offered, sandbox, merchant_hint = last 4, proxy_set, key_missing, from_env, problem, updated_at/by;
+  never a secret), `SetGatewayConfig` (the whole state; an empty merchant_id or proxy keeps the stored one,
+  clear_proxy, actor_id; FAILED_PRECONDITION `<n> open zarinpal payments: ...` when the merchant id or sandbox would
+  change under open payments, or without the payments master key), `TestGateway` (Zarinpal's read-only
+  `unVerified`, stored or candidate settings, saves nothing; a refusal is `ok=false` with a safe detail),
+  `GatewayReport(provider, from, to)` (totals by status, failure reasons, open count and oldest open now, last error
+  and last paid).
 - provisioner: `CreateClient`, `RenewClient`, `ResetTraffic`, `DeleteClient`, `GetUsage`, `GetLinks`, `HealthCheck`, `ListInbounds`.
+- provisioner, servers (milestone 6a, built; core's token only): `CreateClient.candidate_server_ids` (a plan's
+  servers; empty = every enabled server; the healthy, enabled candidate with the least clients/weight is picked and
+  reserved, so a retry stays on it; FAILED_PRECONDITION when none fits or no server exists), `ListServers` (settings,
+  health, version with an untested flag and the tested range, clients, has_token; never the token), `AddServer`,
+  `UpdateServer` (the whole state; an empty token keeps the stored one, on the same host only; the connection is
+  tested first unless skip_check), `DeleteServer` (FAILED_PRECONDITION while clients exist), `TestServer` (saves
+  nothing; a failed connection is `ok=false` with a detail), `ListInbounds` (with `attach`), `SetInboundAttach`.
 
 ## Provider interface (payments)
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
@@ -58,12 +77,16 @@ and one settlement path (exactly once, amount fixed at creation, reconciler).
 
 ## 3x-ui adapter (provisioner)
 Interface `PanelAdapter` (add/update/delete client, usage, links, version). First impl: 3x-ui v3.x via Bearer token.
-Startup: detect version, warn outside tested range. Per-client mutex because `clients/update` replaces the row.
+A health loop checks every enabled server each 60 s and reads the panel version (`/panel/api/server/status`);
+`ListServers` flags versions outside the tested range (v3.8.5 to v3.9.0, the CI matrix). Per-client mutex because
+`clients/update` replaces the row.
 
 ## Public HTTP surface (via gateway)
 - `/webhooks/<provider>` (signature verified, replay-protected)
 - `/sub/<token>` subscription info page (branded)
-- `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`
+- `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`.
+  Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
+  owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".
 
 Internal only (never routed by Caddy): the bot's `GET /internal/files/{id}` hands core the receipt
 photos customers sent (core's service token; images and PDFs, 10 MB at most).

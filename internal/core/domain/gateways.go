@@ -86,8 +86,8 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 }
 
 // PaymentMethods lists the automated methods usable for a price (amount in
-// currency; 0 = any typical price): enabled in payments, priced (rates set)
-// here, and within the method's limits.
+// currency; 0 = any typical price): offered by payments, switched on and
+// priced (rates set) here, and within the method's limits.
 func (s *Service) PaymentMethods(ctx context.Context, pay PaymentsClient, currency string, amount int64) ([]string, error) {
 	gws, err := pay.ListGateways(ctx)
 	if err != nil {
@@ -99,6 +99,9 @@ func (s *Service) PaymentMethods(ctx context.Context, pay PaymentsClient, curren
 	}
 	var out []string
 	for _, g := range gws {
+		if !s.methodEnabled(ctx, g) {
+			continue
+		}
 		if _, _, err := s.gatewayCharge(ctx, g, probe, currency); err == nil {
 			out = append(out, g)
 		}
@@ -142,13 +145,5 @@ func (s *Service) orderDescription(ctx context.Context, planID string) string {
 	if err != nil {
 		return "Subscription"
 	}
-	if n := p.NameI18n["en"]; n != "" {
-		return n
-	}
-	for _, n := range p.NameI18n {
-		if n != "" {
-			return n
-		}
-	}
-	return "Subscription"
+	return planName(p, "Subscription")
 }

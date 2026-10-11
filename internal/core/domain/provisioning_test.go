@@ -18,6 +18,8 @@ type fakeProvisioner struct {
 	calls    []string
 	days     int64
 	traffic  int64
+	// candidates of the last CreateClient call (a plan's servers).
+	candidates []string
 	// SetLimits calls by subscription id, and failures to inject first.
 	limits      map[string][]limitsCall
 	limitsFails int
@@ -101,11 +103,12 @@ func (f *fakeProvisioner) limitsFor(subscriptionID string) []limitsCall {
 	return append([]limitsCall(nil), f.limits[subscriptionID]...)
 }
 
-func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64) (ProvisionedClient, error) {
+func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64, candidates []string) (ProvisionedClient, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, subscriptionID+"|"+email)
 	f.days, f.traffic = days, traffic
+	f.candidates = append([]string(nil), candidates...)
 	if f.failures > 0 {
 		f.failures--
 		return ProvisionedClient{}, errors.New("panel unreachable")

@@ -142,12 +142,14 @@ func setup(rt *app.Runtime) error {
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
-	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Secrets: secrets, Files: files,
-		Bot: bot, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
+		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)
 	rt.Go("usage-sync", dom.NewUsageWorker(prov, rt.Log).Run)
+	// Stored subscription links follow a server's new address.
+	rt.Go("sub-links", dom.NewSubLinkWorker(prov, prov, rt.Log).Run)
 	// Support tickets nobody answered back close themselves; broadcasts start on time.
 	rt.Go("tickets", dom.NewTicketWorker(rt.Log).Run)
 	rt.Go("broadcasts", dom.NewBroadcastWorker(rt.Log).Run)

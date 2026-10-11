@@ -56,11 +56,12 @@ func TestUpAppliesAllSchemas(t *testing.T) {
 	want := map[string][]string{
 		"core": {"users", "wallets", "ledger_entries", "plans", "orders",
 			"subscriptions", "tickets", "ticket_messages", "ticket_canned", "broadcasts", "broadcast_recipients", "audit_log", "settings", "staff_credentials", "web_sessions", "login_links",
-			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters", "reseller_tiers", "reseller_tier_prices", "resellers"},
+			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters", "reseller_tiers", "reseller_tier_prices", "resellers",
+			"plan_servers"},
 		"payments": {"payment_intents", "manual_receipts", "ledger_entries",
-			"outbox_payments", "inbox_payments", "outbox_payments_cursors"},
+			"outbox_payments", "inbox_payments", "outbox_payments_cursors", "gateway_configs"},
 		"provisioner": {"xui_servers", "provision_jobs", "client_map",
-			"outbox_provisioner", "inbox_provisioner", "outbox_provisioner_cursors"},
+			"outbox_provisioner", "inbox_provisioner", "outbox_provisioner_cursors", "server_inbounds"},
 	}
 	for schema, tables := range want {
 		for _, table := range tables {

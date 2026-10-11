@@ -173,8 +173,17 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 func TestSettingsPage(t *testing.T) {
 	f, b, bot := setupFixture(t)
 	code, out := b.do(http.MethodGet, "/api/v1/settings", nil)
-	if code != 200 || len(items(out)) == 0 || settingByKey(out, "branding.name") != nil || settingByKey(out, "referral.reward_percent") != nil {
-		t.Fatalf("get: %d %v", code, out)
+	if code != 200 || len(items(out)) == 0 || settingByKey(out, "branding.name") != nil || settingByKey(out, "referral.reward_percent") != nil ||
+		settingByKey(out, "payments.card_number") != nil || strings.Contains(asJSON(out["groups"]), "payments") {
+		t.Fatalf("get (payments live on the Payment gateways page): %d %v", code, out)
+	}
+	stored := func(key string) string {
+		t.Helper()
+		v, err := f.dom.Settings(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v[key]
 	}
 	if it := settingByKey(out, "limits.bot_per_10s"); it["default"] != "20" || it["min"] != float64(5) || it["editable"] != true {
 		t.Fatalf("limit item: %v", it)
@@ -184,7 +193,7 @@ func TestSettingsPage(t *testing.T) {
 	code, out = b.do(http.MethodPut, "/api/v1/settings", map[string]any{"values": map[string]string{
 		"limits.bot_per_10s": "۳۰", "maintenance.enabled": "yes", "payments.stars_rate": "۱٬۵۰۰"}})
 	if code != 200 || settingByKey(out, "limits.bot_per_10s")["value"] != "30" ||
-		settingByKey(out, "maintenance.enabled")["value"] != "true" || settingByKey(out, "payments.stars_rate")["value"] != "1500" {
+		settingByKey(out, "maintenance.enabled")["value"] != "true" || stored("payments.stars_rate") != "1500" {
 		t.Fatalf("put: %d %v", code, out)
 	}
 	waitFor(t, "the bot refresh", func() bool { return bot.refreshCount() == 1 })
@@ -214,7 +223,7 @@ func TestSettingsPage(t *testing.T) {
 	}
 	if code, out := b.do(http.MethodPut, "/api/v1/settings", map[string]any{"values": map[string]string{
 		"join.channel": "-1001234567890", "join.link": "https://t.me/+AbCdEf", "payments.card_number": "۶۰۳۷-۹۹۱۱-۲۲۲۲-۳۳۳۳"}}); code != 200 ||
-		settingByKey(out, "payments.card_number")["value"] != "6037-9911-2222-3333" {
+		stored("payments.card_number") != "6037-9911-2222-3333" {
 		t.Fatalf("private channel with link: %d %v", code, out)
 	}
 
@@ -235,7 +244,7 @@ func TestSettingsPage(t *testing.T) {
 	adm := f.browser()
 	adm.loginWithLink(8601)
 	code, out = adm.do(http.MethodGet, "/api/v1/settings", nil)
-	if code != 200 || settingByKey(out, "payments.card_number")["editable"] != false || settingByKey(out, "maintenance.enabled")["editable"] != true {
+	if code != 200 || settingByKey(out, "payments.card_number") != nil || settingByKey(out, "maintenance.enabled")["editable"] != true {
 		t.Fatalf("admin view: %d %v", code, out)
 	}
 	if code, out := adm.do(http.MethodPut, "/api/v1/settings", map[string]any{"values": map[string]string{"payments.card_number": "6037991122223333"}}); code != 403 || out["field"] != "payments.card_number" {

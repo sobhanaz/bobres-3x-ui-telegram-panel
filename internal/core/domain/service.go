@@ -35,6 +35,7 @@ type Service struct {
 	cfg   Config
 	kick  chan struct{} // wakes the provisioning worker
 	bkick chan struct{} // wakes the broadcast worker
+	lkick chan struct{} // wakes the subscription link worker
 }
 
 // New builds a Service publishing to core's outbox.
@@ -43,7 +44,7 @@ func New(st *store.Store, cfg Config) *Service {
 		cfg.Log = slog.Default()
 	}
 	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1),
-		bkick: make(chan struct{}, 1)}
+		bkick: make(chan struct{}, 1), lkick: make(chan struct{}, 1)}
 }
 
 func (s *Service) publish(ctx context.Context, tx pgx.Tx, topic string, payload any) error {

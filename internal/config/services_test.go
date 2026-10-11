@@ -145,3 +145,50 @@ func TestZarinpalConfig(t *testing.T) {
 		t.Fatal("a public URL with a path was accepted")
 	}
 }
+
+// The payments master key is optional (the gateway settings then stay as the
+// environment has them); when set it follows the other services' rules.
+func TestLoadPaymentsMasterKey(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("BOBRES_PEER_CORE_TOKEN", coreTok)
+	if c, err := LoadPayments(); err != nil || c.MasterKey != "" {
+		t.Fatalf("no key: %v %q", err, c.MasterKey)
+	}
+	for _, bad := range []string{"short", "CHANGE_ME" + strings.Repeat("k", 32)} {
+		t.Setenv("BOBRES_MASTER_KEY", bad)
+		if _, err := LoadPayments(); err == nil || !strings.Contains(err.Error(), "BOBRES_MASTER_KEY") {
+			t.Errorf("master key %q accepted: %v", bad, err)
+		}
+	}
+	key := strings.Repeat("p", 40)
+	t.Setenv("BOBRES_MASTER_KEY", key)
+	c, err := LoadPayments()
+	if err != nil || c.MasterKey != key {
+		t.Fatalf("key not loaded: %v", err)
+	}
+	// Logging the configuration never prints the key.
+	if s := c.String(); strings.Contains(s, key) {
+		t.Fatalf("master key in %q", s)
+	}
+}
+
+func TestCheckZarinpalPublicURL(t *testing.T) {
+	for _, tc := range []struct {
+		url, env string
+		ok       bool
+	}{
+		{"https://shop.example.com", "prod", true},
+		{"https://shop.example.com:8443", "prod", true},
+		{"http://localhost:8080", "dev", true},
+		{"http://shop.example.com", "prod", false},
+		{"http://shop.example.com", "staging", false},
+		{"https://shop.example.com/pay", "prod", false},
+		{"https://shop.example.com?x=1", "prod", false},
+		{"https://", "prod", false},
+		{"", "dev", false},
+	} {
+		if err := CheckZarinpalPublicURL(tc.url, tc.env); (err == nil) != tc.ok {
+			t.Errorf("%q in %s: %v", tc.url, tc.env, err)
+		}
+	}
+}

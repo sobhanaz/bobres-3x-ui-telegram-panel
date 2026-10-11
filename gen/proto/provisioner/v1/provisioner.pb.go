@@ -262,10 +262,15 @@ func (x *Links) GetConfigLinks() []string {
 }
 
 type Inbound struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
-	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Id      int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Tag     string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	Enabled bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"` // the panel's own enable flag
+	// New clients are attached to it (when the panel also enables it). Set
+	// with SetInboundAttach; existing clients keep their inbounds.
+	Attach        bool   `protobuf:"varint,4,opt,name=attach,proto3" json:"attach,omitempty"`
+	Protocol      string `protobuf:"bytes,5,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	Port          int32  `protobuf:"varint,6,opt,name=port,proto3" json:"port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -321,16 +326,55 @@ func (x *Inbound) GetEnabled() bool {
 	return false
 }
 
+func (x *Inbound) GetAttach() bool {
+	if x != nil {
+		return x.Attach
+	}
+	return false
+}
+
+func (x *Inbound) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *Inbound) GetPort() int32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+// XUIServer is a registered 3x-ui panel. The API token is never part of it.
 type XUIServer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	BaseUrl       string                 `protobuf:"bytes,3,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
-	PanelVersion  string                 `protobuf:"bytes,4,opt,name=panel_version,json=panelVersion,proto3" json:"panel_version,omitempty"`
-	Enabled       bool                   `protobuf:"varint,5,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	SubBaseUrl    string                 `protobuf:"bytes,6,opt,name=sub_base_url,json=subBaseUrl,proto3" json:"sub_base_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Id      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	BaseUrl string                 `protobuf:"bytes,3,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	// From the last successful check: "v3.9.0", or "v3.x" when the panel did
+	// not say.
+	PanelVersion string `protobuf:"bytes,4,opt,name=panel_version,json=panelVersion,proto3" json:"panel_version,omitempty"`
+	Enabled      bool   `protobuf:"varint,5,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	SubBaseUrl   string `protobuf:"bytes,6,opt,name=sub_base_url,json=subBaseUrl,proto3" json:"sub_base_url,omitempty"`
+	AllowPrivate bool   `protobuf:"varint,7,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	// Share of new clients: the server with the least clients/weight is picked.
+	Weight int32 `protobuf:"varint,8,opt,name=weight,proto3" json:"weight,omitempty"`
+	// "env" (seeded from the installer's environment) or "dashboard".
+	Managed  string `protobuf:"bytes,9,opt,name=managed,proto3" json:"managed,omitempty"`
+	HasToken bool   `protobuf:"varint,10,opt,name=has_token,json=hasToken,proto3" json:"has_token,omitempty"`
+	// Clients mapped to this server, deliveries in progress included.
+	Clients int64 `protobuf:"varint,11,opt,name=clients,proto3" json:"clients,omitempty"`
+	// The last health check; checked_at is 0 (and healthy meaningless) until
+	// the first one.
+	Healthy     bool   `protobuf:"varint,12,opt,name=healthy,proto3" json:"healthy,omitempty"`
+	HealthError string `protobuf:"bytes,13,opt,name=health_error,json=healthError,proto3" json:"health_error,omitempty"`
+	CheckedAt   int64  `protobuf:"varint,14,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"` // unix seconds
+	// panel_version is outside the tested range (ListServersResponse).
+	VersionUntested bool `protobuf:"varint,15,opt,name=version_untested,json=versionUntested,proto3" json:"version_untested,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *XUIServer) Reset() {
@@ -405,15 +449,84 @@ func (x *XUIServer) GetSubBaseUrl() string {
 	return ""
 }
 
+func (x *XUIServer) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
+	}
+	return false
+}
+
+func (x *XUIServer) GetWeight() int32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *XUIServer) GetManaged() string {
+	if x != nil {
+		return x.Managed
+	}
+	return ""
+}
+
+func (x *XUIServer) GetHasToken() bool {
+	if x != nil {
+		return x.HasToken
+	}
+	return false
+}
+
+func (x *XUIServer) GetClients() int64 {
+	if x != nil {
+		return x.Clients
+	}
+	return 0
+}
+
+func (x *XUIServer) GetHealthy() bool {
+	if x != nil {
+		return x.Healthy
+	}
+	return false
+}
+
+func (x *XUIServer) GetHealthError() string {
+	if x != nil {
+		return x.HealthError
+	}
+	return ""
+}
+
+func (x *XUIServer) GetCheckedAt() int64 {
+	if x != nil {
+		return x.CheckedAt
+	}
+	return 0
+}
+
+func (x *XUIServer) GetVersionUntested() bool {
+	if x != nil {
+		return x.VersionUntested
+	}
+	return false
+}
+
 type CreateClientRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
-	ServerId       string                 `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	Email          string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	DurationDays   int64                  `protobuf:"varint,4,opt,name=duration_days,json=durationDays,proto3" json:"duration_days,omitempty"`
-	TrafficBytes   int64                  `protobuf:"varint,5,opt,name=traffic_bytes,json=trafficBytes,proto3" json:"traffic_bytes,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// An explicit server; a disabled one is refused. Wins over
+	// candidate_server_ids.
+	ServerId     string `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	Email        string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	DurationDays int64  `protobuf:"varint,4,opt,name=duration_days,json=durationDays,proto3" json:"duration_days,omitempty"`
+	TrafficBytes int64  `protobuf:"varint,5,opt,name=traffic_bytes,json=trafficBytes,proto3" json:"traffic_bytes,omitempty"`
+	// The servers the subscription may go to (a plan's servers); empty = every
+	// enabled server. The healthy, enabled one with the least clients/weight is
+	// picked, and a retry stays on it.
+	CandidateServerIds []string `protobuf:"bytes,6,rep,name=candidate_server_ids,json=candidateServerIds,proto3" json:"candidate_server_ids,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CreateClientRequest) Reset() {
@@ -479,6 +592,13 @@ func (x *CreateClientRequest) GetTrafficBytes() int64 {
 		return x.TrafficBytes
 	}
 	return 0
+}
+
+func (x *CreateClientRequest) GetCandidateServerIds() []string {
+	if x != nil {
+		return x.CandidateServerIds
+	}
+	return nil
 }
 
 type RenewClientRequest struct {
@@ -931,7 +1051,10 @@ type AddServerRequest struct {
 	SubBaseUrl string `protobuf:"bytes,4,opt,name=sub_base_url,json=subBaseUrl,proto3" json:"sub_base_url,omitempty"`
 	// The panel is on a private/loopback address (same host or LAN). Off by
 	// default: the client refuses such addresses to block SSRF.
-	AllowPrivate  bool `protobuf:"varint,5,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	AllowPrivate bool  `protobuf:"varint,5,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	Weight       int32 `protobuf:"varint,6,opt,name=weight,proto3" json:"weight,omitempty"` // 1..1000; 0 = 100
+	// Save without testing the connection first (the panel is down for now).
+	SkipCheck     bool `protobuf:"varint,7,opt,name=skip_check,json=skipCheck,proto3" json:"skip_check,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1001,6 +1124,474 @@ func (x *AddServerRequest) GetAllowPrivate() bool {
 	return false
 }
 
+func (x *AddServerRequest) GetWeight() int32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *AddServerRequest) GetSkipCheck() bool {
+	if x != nil {
+		return x.SkipCheck
+	}
+	return false
+}
+
+type ListServersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListServersRequest) Reset() {
+	*x = ListServersRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListServersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListServersRequest) ProtoMessage() {}
+
+func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListServersRequest.ProtoReflect.Descriptor instead.
+func (*ListServersRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{16}
+}
+
+type ListServersResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Servers []*XUIServer           `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
+	// The panel versions BOBRES is tested against (both inclusive).
+	TestedMinVersion string `protobuf:"bytes,2,opt,name=tested_min_version,json=testedMinVersion,proto3" json:"tested_min_version,omitempty"`
+	TestedMaxVersion string `protobuf:"bytes,3,opt,name=tested_max_version,json=testedMaxVersion,proto3" json:"tested_max_version,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ListServersResponse) Reset() {
+	*x = ListServersResponse{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListServersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListServersResponse) ProtoMessage() {}
+
+func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListServersResponse.ProtoReflect.Descriptor instead.
+func (*ListServersResponse) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListServersResponse) GetServers() []*XUIServer {
+	if x != nil {
+		return x.Servers
+	}
+	return nil
+}
+
+func (x *ListServersResponse) GetTestedMinVersion() string {
+	if x != nil {
+		return x.TestedMinVersion
+	}
+	return ""
+}
+
+func (x *ListServersResponse) GetTestedMaxVersion() string {
+	if x != nil {
+		return x.TestedMaxVersion
+	}
+	return ""
+}
+
+// UpdateServerRequest replaces a server's settings. The connection is tested
+// first when it changes (URL, token or allow_private) unless skip_check.
+type UpdateServerRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Id           string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name         string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Enabled      bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"` // a disabled server gets no new clients; existing ones keep working
+	Weight       int32                  `protobuf:"varint,4,opt,name=weight,proto3" json:"weight,omitempty"`   // 1..1000
+	SubBaseUrl   string                 `protobuf:"bytes,5,opt,name=sub_base_url,json=subBaseUrl,proto3" json:"sub_base_url,omitempty"`
+	AllowPrivate bool                   `protobuf:"varint,6,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	BaseUrl      string                 `protobuf:"bytes,7,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	// Empty = keep the stored token. A new address (host or port) needs the
+	// token again, so the stored one is never sent to a host it was not
+	// entered for.
+	ApiToken      string `protobuf:"bytes,8,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
+	SkipCheck     bool   `protobuf:"varint,9,opt,name=skip_check,json=skipCheck,proto3" json:"skip_check,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateServerRequest) Reset() {
+	*x = UpdateServerRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateServerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateServerRequest) ProtoMessage() {}
+
+func (x *UpdateServerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateServerRequest.ProtoReflect.Descriptor instead.
+func (*UpdateServerRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *UpdateServerRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateServerRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateServerRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *UpdateServerRequest) GetWeight() int32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *UpdateServerRequest) GetSubBaseUrl() string {
+	if x != nil {
+		return x.SubBaseUrl
+	}
+	return ""
+}
+
+func (x *UpdateServerRequest) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
+	}
+	return false
+}
+
+func (x *UpdateServerRequest) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *UpdateServerRequest) GetApiToken() string {
+	if x != nil {
+		return x.ApiToken
+	}
+	return ""
+}
+
+func (x *UpdateServerRequest) GetSkipCheck() bool {
+	if x != nil {
+		return x.SkipCheck
+	}
+	return false
+}
+
+type DeleteServerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteServerRequest) Reset() {
+	*x = DeleteServerRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteServerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteServerRequest) ProtoMessage() {}
+
+func (x *DeleteServerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteServerRequest.ProtoReflect.Descriptor instead.
+func (*DeleteServerRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *DeleteServerRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// TestServerRequest names the connection to try: an existing server (id)
+// with its stored settings, or candidate settings. With an id, a base_url
+// tries a new address (allow_private from this request) and an api_token a
+// new token; the rules of UpdateServerRequest.api_token apply.
+type TestServerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	BaseUrl       string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	ApiToken      string                 `protobuf:"bytes,3,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
+	AllowPrivate  bool                   `protobuf:"varint,4,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestServerRequest) Reset() {
+	*x = TestServerRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestServerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestServerRequest) ProtoMessage() {}
+
+func (x *TestServerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestServerRequest.ProtoReflect.Descriptor instead.
+func (*TestServerRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *TestServerRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TestServerRequest) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *TestServerRequest) GetApiToken() string {
+	if x != nil {
+		return x.ApiToken
+	}
+	return ""
+}
+
+func (x *TestServerRequest) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
+	}
+	return false
+}
+
+type TestServerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	PanelVersion  string                 `protobuf:"bytes,2,opt,name=panel_version,json=panelVersion,proto3" json:"panel_version,omitempty"`
+	Inbounds      int32                  `protobuf:"varint,3,opt,name=inbounds,proto3" json:"inbounds,omitempty"`
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"` // why it failed
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestServerResponse) Reset() {
+	*x = TestServerResponse{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestServerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestServerResponse) ProtoMessage() {}
+
+func (x *TestServerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestServerResponse.ProtoReflect.Descriptor instead.
+func (*TestServerResponse) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *TestServerResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *TestServerResponse) GetPanelVersion() string {
+	if x != nil {
+		return x.PanelVersion
+	}
+	return ""
+}
+
+func (x *TestServerResponse) GetInbounds() int32 {
+	if x != nil {
+		return x.Inbounds
+	}
+	return 0
+}
+
+func (x *TestServerResponse) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type SetInboundAttachRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ServerId      string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	InboundId     int32                  `protobuf:"varint,2,opt,name=inbound_id,json=inboundId,proto3" json:"inbound_id,omitempty"`
+	Attach        bool                   `protobuf:"varint,3,opt,name=attach,proto3" json:"attach,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetInboundAttachRequest) Reset() {
+	*x = SetInboundAttachRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetInboundAttachRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetInboundAttachRequest) ProtoMessage() {}
+
+func (x *SetInboundAttachRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetInboundAttachRequest.ProtoReflect.Descriptor instead.
+func (*SetInboundAttachRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SetInboundAttachRequest) GetServerId() string {
+	if x != nil {
+		return x.ServerId
+	}
+	return ""
+}
+
+func (x *SetInboundAttachRequest) GetInboundId() int32 {
+	if x != nil {
+		return x.InboundId
+	}
+	return 0
+}
+
+func (x *SetInboundAttachRequest) GetAttach() bool {
+	if x != nil {
+		return x.Attach
+	}
+	return false
+}
+
 type HealthCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ServerId      string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
@@ -1010,7 +1601,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1022,7 +1613,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[16]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1035,7 +1626,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{16}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *HealthCheckRequest) GetServerId() string {
@@ -1056,7 +1647,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[17]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1068,7 +1659,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_provisioner_v1_provisioner_proto_msgTypes[17]
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1081,7 +1672,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{17}
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *HealthCheckResponse) GetHealthy() bool {
@@ -1132,11 +1723,14 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x05Links\x12+\n" +
 	"\x11subscription_link\x18\x01 \x01(\tR\x10subscriptionLink\x12\"\n" +
 	"\rqr_png_base64\x18\x02 \x01(\tR\vqrPngBase64\x12!\n" +
-	"\fconfig_links\x18\x03 \x03(\tR\vconfigLinks\"E\n" +
+	"\fconfig_links\x18\x03 \x03(\tR\vconfigLinks\"\x8d\x01\n" +
 	"\aInbound\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x10\n" +
 	"\x03tag\x18\x02 \x01(\tR\x03tag\x12\x18\n" +
-	"\aenabled\x18\x03 \x01(\bR\aenabled\"\xab\x01\n" +
+	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x16\n" +
+	"\x06attach\x18\x04 \x01(\bR\x06attach\x12\x1a\n" +
+	"\bprotocol\x18\x05 \x01(\tR\bprotocol\x12\x12\n" +
+	"\x04port\x18\x06 \x01(\x05R\x04port\"\xc0\x03\n" +
 	"\tXUIServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
@@ -1144,13 +1738,25 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\rpanel_version\x18\x04 \x01(\tR\fpanelVersion\x12\x18\n" +
 	"\aenabled\x18\x05 \x01(\bR\aenabled\x12 \n" +
 	"\fsub_base_url\x18\x06 \x01(\tR\n" +
-	"subBaseUrl\"\xbb\x01\n" +
+	"subBaseUrl\x12#\n" +
+	"\rallow_private\x18\a \x01(\bR\fallowPrivate\x12\x16\n" +
+	"\x06weight\x18\b \x01(\x05R\x06weight\x12\x18\n" +
+	"\amanaged\x18\t \x01(\tR\amanaged\x12\x1b\n" +
+	"\thas_token\x18\n" +
+	" \x01(\bR\bhasToken\x12\x18\n" +
+	"\aclients\x18\v \x01(\x03R\aclients\x12\x18\n" +
+	"\ahealthy\x18\f \x01(\bR\ahealthy\x12!\n" +
+	"\fhealth_error\x18\r \x01(\tR\vhealthError\x12\x1d\n" +
+	"\n" +
+	"checked_at\x18\x0e \x01(\x03R\tcheckedAt\x12)\n" +
+	"\x10version_untested\x18\x0f \x01(\bR\x0fversionUntested\"\xed\x01\n" +
 	"\x13CreateClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
 	"\tserver_id\x18\x02 \x01(\tR\bserverId\x12\x14\n" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12#\n" +
 	"\rduration_days\x18\x04 \x01(\x03R\fdurationDays\x12#\n" +
-	"\rtraffic_bytes\x18\x05 \x01(\x03R\ftrafficBytes\"u\n" +
+	"\rtraffic_bytes\x18\x05 \x01(\x03R\ftrafficBytes\x120\n" +
+	"\x14candidate_server_ids\x18\x06 \x03(\tR\x12candidateServerIds\"u\n" +
 	"\x12RenewClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x19\n" +
 	"\badd_days\x18\x02 \x01(\x03R\aaddDays\x12\x1b\n" +
@@ -1174,20 +1780,58 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13ListInboundsRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"K\n" +
 	"\x14ListInboundsResponse\x123\n" +
-	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\xa5\x01\n" +
+	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\xdc\x01\n" +
 	"\x10AddServerRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
 	"\tapi_token\x18\x03 \x01(\tR\bapiToken\x12 \n" +
 	"\fsub_base_url\x18\x04 \x01(\tR\n" +
 	"subBaseUrl\x12#\n" +
-	"\rallow_private\x18\x05 \x01(\bR\fallowPrivate\"1\n" +
+	"\rallow_private\x18\x05 \x01(\bR\fallowPrivate\x12\x16\n" +
+	"\x06weight\x18\x06 \x01(\x05R\x06weight\x12\x1d\n" +
+	"\n" +
+	"skip_check\x18\a \x01(\bR\tskipCheck\"\x14\n" +
+	"\x12ListServersRequest\"\xa6\x01\n" +
+	"\x13ListServersResponse\x123\n" +
+	"\aservers\x18\x01 \x03(\v2\x19.provisioner.v1.XUIServerR\aservers\x12,\n" +
+	"\x12tested_min_version\x18\x02 \x01(\tR\x10testedMinVersion\x12,\n" +
+	"\x12tested_max_version\x18\x03 \x01(\tR\x10testedMaxVersion\"\x89\x02\n" +
+	"\x13UpdateServerRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x16\n" +
+	"\x06weight\x18\x04 \x01(\x05R\x06weight\x12 \n" +
+	"\fsub_base_url\x18\x05 \x01(\tR\n" +
+	"subBaseUrl\x12#\n" +
+	"\rallow_private\x18\x06 \x01(\bR\fallowPrivate\x12\x19\n" +
+	"\bbase_url\x18\a \x01(\tR\abaseUrl\x12\x1b\n" +
+	"\tapi_token\x18\b \x01(\tR\bapiToken\x12\x1d\n" +
+	"\n" +
+	"skip_check\x18\t \x01(\bR\tskipCheck\"%\n" +
+	"\x13DeleteServerRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x80\x01\n" +
+	"\x11TestServerRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
+	"\tapi_token\x18\x03 \x01(\tR\bapiToken\x12#\n" +
+	"\rallow_private\x18\x04 \x01(\bR\fallowPrivate\"}\n" +
+	"\x12TestServerResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12#\n" +
+	"\rpanel_version\x18\x02 \x01(\tR\fpanelVersion\x12\x1a\n" +
+	"\binbounds\x18\x03 \x01(\x05R\binbounds\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\"m\n" +
+	"\x17SetInboundAttachRequest\x12\x1b\n" +
+	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x1d\n" +
+	"\n" +
+	"inbound_id\x18\x02 \x01(\x05R\tinboundId\x12\x16\n" +
+	"\x06attach\x18\x03 \x01(\bR\x06attach\"1\n" +
 	"\x12HealthCheckRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"l\n" +
 	"\x13HealthCheckResponse\x12\x18\n" +
 	"\ahealthy\x18\x01 \x01(\bR\ahealthy\x12#\n" +
 	"\rpanel_version\x18\x02 \x01(\tR\fpanelVersion\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail2\xf3\x06\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail2\x92\n" +
+	"\n" +
 	"\x12ProvisionerService\x12K\n" +
 	"\fCreateClient\x12#.provisioner.v1.CreateClientRequest\x1a\x16.provisioner.v1.Client\x12I\n" +
 	"\vRenewClient\x12\".provisioner.v1.RenewClientRequest\x1a\x16.provisioner.v1.Client\x12Q\n" +
@@ -1197,8 +1841,14 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\fResetTraffic\x12#.provisioner.v1.ResetTrafficRequest\x1a\x16.provisioner.v1.Client\x12B\n" +
 	"\bGetUsage\x12\x1f.provisioner.v1.GetUsageRequest\x1a\x15.provisioner.v1.Usage\x12B\n" +
 	"\bGetLinks\x12\x1f.provisioner.v1.GetLinksRequest\x1a\x15.provisioner.v1.Links\x12Y\n" +
-	"\fListInbounds\x12#.provisioner.v1.ListInboundsRequest\x1a$.provisioner.v1.ListInboundsResponse\x12H\n" +
+	"\fListInbounds\x12#.provisioner.v1.ListInboundsRequest\x1a$.provisioner.v1.ListInboundsResponse\x12S\n" +
+	"\x10SetInboundAttach\x12'.provisioner.v1.SetInboundAttachRequest\x1a\x16.google.protobuf.Empty\x12H\n" +
 	"\tAddServer\x12 .provisioner.v1.AddServerRequest\x1a\x19.provisioner.v1.XUIServer\x12V\n" +
+	"\vListServers\x12\".provisioner.v1.ListServersRequest\x1a#.provisioner.v1.ListServersResponse\x12N\n" +
+	"\fUpdateServer\x12#.provisioner.v1.UpdateServerRequest\x1a\x19.provisioner.v1.XUIServer\x12K\n" +
+	"\fDeleteServer\x12#.provisioner.v1.DeleteServerRequest\x1a\x16.google.protobuf.Empty\x12S\n" +
+	"\n" +
+	"TestServer\x12!.provisioner.v1.TestServerRequest\x1a\".provisioner.v1.TestServerResponse\x12V\n" +
 	"\vHealthCheck\x12\".provisioner.v1.HealthCheckRequest\x1a#.provisioner.v1.HealthCheckResponseBXZVgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1;provisionerv1b\x06proto3"
 
 var (
@@ -1213,7 +1863,7 @@ func file_provisioner_v1_provisioner_proto_rawDescGZIP() []byte {
 	return file_provisioner_v1_provisioner_proto_rawDescData
 }
 
-var file_provisioner_v1_provisioner_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_provisioner_v1_provisioner_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_provisioner_v1_provisioner_proto_goTypes = []any{
 	(*Client)(nil),                  // 0: provisioner.v1.Client
 	(*Usage)(nil),                   // 1: provisioner.v1.Usage
@@ -1231,39 +1881,57 @@ var file_provisioner_v1_provisioner_proto_goTypes = []any{
 	(*ListInboundsRequest)(nil),     // 13: provisioner.v1.ListInboundsRequest
 	(*ListInboundsResponse)(nil),    // 14: provisioner.v1.ListInboundsResponse
 	(*AddServerRequest)(nil),        // 15: provisioner.v1.AddServerRequest
-	(*HealthCheckRequest)(nil),      // 16: provisioner.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil),     // 17: provisioner.v1.HealthCheckResponse
-	(*emptypb.Empty)(nil),           // 18: google.protobuf.Empty
+	(*ListServersRequest)(nil),      // 16: provisioner.v1.ListServersRequest
+	(*ListServersResponse)(nil),     // 17: provisioner.v1.ListServersResponse
+	(*UpdateServerRequest)(nil),     // 18: provisioner.v1.UpdateServerRequest
+	(*DeleteServerRequest)(nil),     // 19: provisioner.v1.DeleteServerRequest
+	(*TestServerRequest)(nil),       // 20: provisioner.v1.TestServerRequest
+	(*TestServerResponse)(nil),      // 21: provisioner.v1.TestServerResponse
+	(*SetInboundAttachRequest)(nil), // 22: provisioner.v1.SetInboundAttachRequest
+	(*HealthCheckRequest)(nil),      // 23: provisioner.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),     // 24: provisioner.v1.HealthCheckResponse
+	(*emptypb.Empty)(nil),           // 25: google.protobuf.Empty
 }
 var file_provisioner_v1_provisioner_proto_depIdxs = []int32{
 	3,  // 0: provisioner.v1.ListInboundsResponse.inbounds:type_name -> provisioner.v1.Inbound
-	5,  // 1: provisioner.v1.ProvisionerService.CreateClient:input_type -> provisioner.v1.CreateClientRequest
-	6,  // 2: provisioner.v1.ProvisionerService.RenewClient:input_type -> provisioner.v1.RenewClientRequest
-	7,  // 3: provisioner.v1.ProvisionerService.SetClientLimits:input_type -> provisioner.v1.SetClientLimitsRequest
-	8,  // 4: provisioner.v1.ProvisionerService.SetClientEnabled:input_type -> provisioner.v1.SetClientEnabledRequest
-	9,  // 5: provisioner.v1.ProvisionerService.DeleteClient:input_type -> provisioner.v1.DeleteClientRequest
-	10, // 6: provisioner.v1.ProvisionerService.ResetTraffic:input_type -> provisioner.v1.ResetTrafficRequest
-	11, // 7: provisioner.v1.ProvisionerService.GetUsage:input_type -> provisioner.v1.GetUsageRequest
-	12, // 8: provisioner.v1.ProvisionerService.GetLinks:input_type -> provisioner.v1.GetLinksRequest
-	13, // 9: provisioner.v1.ProvisionerService.ListInbounds:input_type -> provisioner.v1.ListInboundsRequest
-	15, // 10: provisioner.v1.ProvisionerService.AddServer:input_type -> provisioner.v1.AddServerRequest
-	16, // 11: provisioner.v1.ProvisionerService.HealthCheck:input_type -> provisioner.v1.HealthCheckRequest
-	0,  // 12: provisioner.v1.ProvisionerService.CreateClient:output_type -> provisioner.v1.Client
-	0,  // 13: provisioner.v1.ProvisionerService.RenewClient:output_type -> provisioner.v1.Client
-	0,  // 14: provisioner.v1.ProvisionerService.SetClientLimits:output_type -> provisioner.v1.Client
-	0,  // 15: provisioner.v1.ProvisionerService.SetClientEnabled:output_type -> provisioner.v1.Client
-	18, // 16: provisioner.v1.ProvisionerService.DeleteClient:output_type -> google.protobuf.Empty
-	0,  // 17: provisioner.v1.ProvisionerService.ResetTraffic:output_type -> provisioner.v1.Client
-	1,  // 18: provisioner.v1.ProvisionerService.GetUsage:output_type -> provisioner.v1.Usage
-	2,  // 19: provisioner.v1.ProvisionerService.GetLinks:output_type -> provisioner.v1.Links
-	14, // 20: provisioner.v1.ProvisionerService.ListInbounds:output_type -> provisioner.v1.ListInboundsResponse
-	4,  // 21: provisioner.v1.ProvisionerService.AddServer:output_type -> provisioner.v1.XUIServer
-	17, // 22: provisioner.v1.ProvisionerService.HealthCheck:output_type -> provisioner.v1.HealthCheckResponse
-	12, // [12:23] is the sub-list for method output_type
-	1,  // [1:12] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	4,  // 1: provisioner.v1.ListServersResponse.servers:type_name -> provisioner.v1.XUIServer
+	5,  // 2: provisioner.v1.ProvisionerService.CreateClient:input_type -> provisioner.v1.CreateClientRequest
+	6,  // 3: provisioner.v1.ProvisionerService.RenewClient:input_type -> provisioner.v1.RenewClientRequest
+	7,  // 4: provisioner.v1.ProvisionerService.SetClientLimits:input_type -> provisioner.v1.SetClientLimitsRequest
+	8,  // 5: provisioner.v1.ProvisionerService.SetClientEnabled:input_type -> provisioner.v1.SetClientEnabledRequest
+	9,  // 6: provisioner.v1.ProvisionerService.DeleteClient:input_type -> provisioner.v1.DeleteClientRequest
+	10, // 7: provisioner.v1.ProvisionerService.ResetTraffic:input_type -> provisioner.v1.ResetTrafficRequest
+	11, // 8: provisioner.v1.ProvisionerService.GetUsage:input_type -> provisioner.v1.GetUsageRequest
+	12, // 9: provisioner.v1.ProvisionerService.GetLinks:input_type -> provisioner.v1.GetLinksRequest
+	13, // 10: provisioner.v1.ProvisionerService.ListInbounds:input_type -> provisioner.v1.ListInboundsRequest
+	22, // 11: provisioner.v1.ProvisionerService.SetInboundAttach:input_type -> provisioner.v1.SetInboundAttachRequest
+	15, // 12: provisioner.v1.ProvisionerService.AddServer:input_type -> provisioner.v1.AddServerRequest
+	16, // 13: provisioner.v1.ProvisionerService.ListServers:input_type -> provisioner.v1.ListServersRequest
+	18, // 14: provisioner.v1.ProvisionerService.UpdateServer:input_type -> provisioner.v1.UpdateServerRequest
+	19, // 15: provisioner.v1.ProvisionerService.DeleteServer:input_type -> provisioner.v1.DeleteServerRequest
+	20, // 16: provisioner.v1.ProvisionerService.TestServer:input_type -> provisioner.v1.TestServerRequest
+	23, // 17: provisioner.v1.ProvisionerService.HealthCheck:input_type -> provisioner.v1.HealthCheckRequest
+	0,  // 18: provisioner.v1.ProvisionerService.CreateClient:output_type -> provisioner.v1.Client
+	0,  // 19: provisioner.v1.ProvisionerService.RenewClient:output_type -> provisioner.v1.Client
+	0,  // 20: provisioner.v1.ProvisionerService.SetClientLimits:output_type -> provisioner.v1.Client
+	0,  // 21: provisioner.v1.ProvisionerService.SetClientEnabled:output_type -> provisioner.v1.Client
+	25, // 22: provisioner.v1.ProvisionerService.DeleteClient:output_type -> google.protobuf.Empty
+	0,  // 23: provisioner.v1.ProvisionerService.ResetTraffic:output_type -> provisioner.v1.Client
+	1,  // 24: provisioner.v1.ProvisionerService.GetUsage:output_type -> provisioner.v1.Usage
+	2,  // 25: provisioner.v1.ProvisionerService.GetLinks:output_type -> provisioner.v1.Links
+	14, // 26: provisioner.v1.ProvisionerService.ListInbounds:output_type -> provisioner.v1.ListInboundsResponse
+	25, // 27: provisioner.v1.ProvisionerService.SetInboundAttach:output_type -> google.protobuf.Empty
+	4,  // 28: provisioner.v1.ProvisionerService.AddServer:output_type -> provisioner.v1.XUIServer
+	17, // 29: provisioner.v1.ProvisionerService.ListServers:output_type -> provisioner.v1.ListServersResponse
+	4,  // 30: provisioner.v1.ProvisionerService.UpdateServer:output_type -> provisioner.v1.XUIServer
+	25, // 31: provisioner.v1.ProvisionerService.DeleteServer:output_type -> google.protobuf.Empty
+	21, // 32: provisioner.v1.ProvisionerService.TestServer:output_type -> provisioner.v1.TestServerResponse
+	24, // 33: provisioner.v1.ProvisionerService.HealthCheck:output_type -> provisioner.v1.HealthCheckResponse
+	18, // [18:34] is the sub-list for method output_type
+	2,  // [2:18] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_provisioner_v1_provisioner_proto_init() }
@@ -1277,7 +1945,7 @@ func file_provisioner_v1_provisioner_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_provisioner_v1_provisioner_proto_rawDesc), len(file_provisioner_v1_provisioner_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

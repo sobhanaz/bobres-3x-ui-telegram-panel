@@ -124,6 +124,11 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 	if _, err := s.activeUser(ctx, nil, p.UserID); err != nil {
 		return nil, err
 	}
+	// The owner switched the method off: payments already started go on,
+	// new ones are refused (the bot may still show it for a minute).
+	if !s.methodEnabled(ctx, p.Provider) {
+		return nil, stateErr("this payment method is turned off")
+	}
 	amount, currency := p.Amount, p.Currency
 	description := "Wallet top-up"
 	if p.OrderID != "" {

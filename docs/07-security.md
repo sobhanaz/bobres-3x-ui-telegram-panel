@@ -17,6 +17,25 @@ Internet -> gateway (Caddy) -> services on a private Docker network. Only gatewa
 Postgres/Redis are never published to the host. Provisioner is the only service with the 3x-ui token;
 payments is the only one with gateway secrets.
 
+Since milestone 6a both are set from the dashboard, through core, without core ever keeping them:
+- A 3x-ui API token and a Zarinpal merchant id or proxy URL pass through core only in the memory of one request. Core
+  never stores, logs or audits them, and no API answers them: the dashboard sees `has_token`, a merchant hint (last 4
+  characters) and `proxy_set`. The audit records `{"token":"changed"}`, `{"merchant_id":"changed"}` and
+  `{"proxy":"changed"|"cleared"}`. Error messages never repeat a typed secret (a proxy URL can carry a password).
+- The provisioner encrypts tokens with its own master key; payments encrypts the merchant id and proxy with
+  `BOBRES_PAYMENTS_MASTER_KEY` (its `BOBRES_MASTER_KEY`), a key of its own. Without that key payments runs Zarinpal
+  from `.env` as before and refuses changes; a stored setting it cannot decrypt is not used (the owner enters the
+  merchant id again).
+- A stored panel token is only ever sent to the host it was entered for: moving a server to another host or port
+  needs the token again.
+- `servers.write` is the owner's and admins'. Letting BOBRES reach a private address (`allow_private`) with a new
+  address or token is the owner's alone (403 for an admin, on save and on test), because the provisioner would
+  otherwise be a probe of the internal network. Connection tests are limited to 10 a minute per staff member.
+- Why a panel failed its health check names the panel's host and port, so only `servers.write` reads it (the Servers
+  page, and a server's `detail` on the overview). Everyone else who reads the overview, support included, sees "does
+  not answer".
+- `gateways.write` (Zarinpal settings, the manual methods' details and their on/off switches) is the owner's.
+
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
 |---|---|
@@ -40,7 +59,10 @@ payments is the only one with gateway secrets.
 | Subscription link leak | Long random tokens, rotate/reset button, optional per-device limits (HWID in 3x-ui) |
 
 ## Crypto and secrets
-- Secrets at rest: envelope encryption with an install master key (from `.env` / OS keyring); DB stores ciphertext for tokens and gateway keys.
+- Secrets at rest: envelope encryption with one master key per service (from `.env`: `BOBRES_CORE_MASTER_KEY`,
+  `BOBRES_PROVISIONER_MASTER_KEY`, `BOBRES_PAYMENTS_MASTER_KEY`, each passed to its own service only); the DB stores
+  ciphertext for panel tokens, gateway secrets and authenticator secrets. A backup of the database is useless for
+  these without the matching key, so the keys are backed up with it.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
 - TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS later; auth is one interceptor), see PLAN.md §11.
 - Key rotation procedures documented and scripted (`bobres secrets rotate`).

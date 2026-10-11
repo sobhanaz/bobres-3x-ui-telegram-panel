@@ -1261,6 +1261,877 @@ func (x *ListPendingReceiptsResponse) GetReceipts() []*PendingReceipt {
 	return nil
 }
 
+// GatewayConfig is an automated gateway's settings as staff see them: whether
+// the merchant id and the proxy are set, never their values.
+type GatewayConfig struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal
+	Enabled  bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`  // switched on by the owner
+	// It has credentials: payments already open keep being checked, even when
+	// switched off.
+	Configured   bool   `protobuf:"varint,3,opt,name=configured,proto3" json:"configured,omitempty"`
+	Sandbox      bool   `protobuf:"varint,4,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
+	MerchantHint string `protobuf:"bytes,5,opt,name=merchant_hint,json=merchantHint,proto3" json:"merchant_hint,omitempty"` // the merchant id's last 4 characters, "" when none
+	ProxySet     bool   `protobuf:"varint,6,opt,name=proxy_set,json=proxySet,proto3" json:"proxy_set,omitempty"`
+	// No payments master key: the settings come from the environment and
+	// cannot be changed ("add the payments key: re-run bobres install").
+	KeyMissing bool `protobuf:"varint,7,opt,name=key_missing,json=keyMissing,proto3" json:"key_missing,omitempty"`
+	// New payments can use it now: enabled, configured and no problem.
+	Offered bool `protobuf:"varint,8,opt,name=offered,proto3" json:"offered,omitempty"`
+	// Why the settings cannot be used: "" | unreadable (stored, but the master
+	// key is missing or another one) | sandbox_refused (sandbox in prod) |
+	// public_url (switched on, but the public URL is not https://host[:port]) |
+	// invalid (refused by the client).
+	Problem       string `protobuf:"bytes,9,opt,name=problem,proto3" json:"problem,omitempty"`
+	FromEnv       bool   `protobuf:"varint,10,opt,name=from_env,json=fromEnv,proto3" json:"from_env,omitempty"`       // read from the environment (key_missing)
+	UpdatedAt     int64  `protobuf:"varint,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // 0 for the environment's settings
+	UpdatedBy     string `protobuf:"bytes,12,opt,name=updated_by,json=updatedBy,proto3" json:"updated_by,omitempty"`  // core user id of the staff member, "" when none
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayConfig) Reset() {
+	*x = GatewayConfig{}
+	mi := &file_payments_v1_payments_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayConfig) ProtoMessage() {}
+
+func (x *GatewayConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayConfig.ProtoReflect.Descriptor instead.
+func (*GatewayConfig) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GatewayConfig) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *GatewayConfig) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetConfigured() bool {
+	if x != nil {
+		return x.Configured
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetSandbox() bool {
+	if x != nil {
+		return x.Sandbox
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetMerchantHint() string {
+	if x != nil {
+		return x.MerchantHint
+	}
+	return ""
+}
+
+func (x *GatewayConfig) GetProxySet() bool {
+	if x != nil {
+		return x.ProxySet
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetKeyMissing() bool {
+	if x != nil {
+		return x.KeyMissing
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetOffered() bool {
+	if x != nil {
+		return x.Offered
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetProblem() string {
+	if x != nil {
+		return x.Problem
+	}
+	return ""
+}
+
+func (x *GatewayConfig) GetFromEnv() bool {
+	if x != nil {
+		return x.FromEnv
+	}
+	return false
+}
+
+func (x *GatewayConfig) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *GatewayConfig) GetUpdatedBy() string {
+	if x != nil {
+		return x.UpdatedBy
+	}
+	return ""
+}
+
+type ListGatewayConfigsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGatewayConfigsRequest) Reset() {
+	*x = ListGatewayConfigsRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGatewayConfigsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGatewayConfigsRequest) ProtoMessage() {}
+
+func (x *ListGatewayConfigsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGatewayConfigsRequest.ProtoReflect.Descriptor instead.
+func (*ListGatewayConfigsRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{19}
+}
+
+type ListGatewayConfigsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Configs       []*GatewayConfig       `protobuf:"bytes,1,rep,name=configs,proto3" json:"configs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGatewayConfigsResponse) Reset() {
+	*x = ListGatewayConfigsResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGatewayConfigsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGatewayConfigsResponse) ProtoMessage() {}
+
+func (x *ListGatewayConfigsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGatewayConfigsResponse.ProtoReflect.Descriptor instead.
+func (*ListGatewayConfigsResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListGatewayConfigsResponse) GetConfigs() []*GatewayConfig {
+	if x != nil {
+		return x.Configs
+	}
+	return nil
+}
+
+// SetGatewayConfigRequest replaces a gateway's settings. enabled and sandbox
+// are the new values; an empty merchant_id or proxy keeps the stored one.
+// Switching off only stops offering it. The merchant id and the sandbox cannot
+// change while payments are open (FailedPrecondition, the count in the message).
+type SetGatewayConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Sandbox       bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
+	MerchantId    string                 `protobuf:"bytes,4,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"`
+	Proxy         string                 `protobuf:"bytes,5,opt,name=proxy,proto3" json:"proxy,omitempty"` // http(s)://[user:password@]host:port
+	ClearProxy    bool                   `protobuf:"varint,6,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
+	ActorId       string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // core user id of the staff member
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGatewayConfigRequest) Reset() {
+	*x = SetGatewayConfigRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGatewayConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGatewayConfigRequest) ProtoMessage() {}
+
+func (x *SetGatewayConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGatewayConfigRequest.ProtoReflect.Descriptor instead.
+func (*SetGatewayConfigRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *SetGatewayConfigRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *SetGatewayConfigRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *SetGatewayConfigRequest) GetSandbox() bool {
+	if x != nil {
+		return x.Sandbox
+	}
+	return false
+}
+
+func (x *SetGatewayConfigRequest) GetMerchantId() string {
+	if x != nil {
+		return x.MerchantId
+	}
+	return ""
+}
+
+func (x *SetGatewayConfigRequest) GetProxy() string {
+	if x != nil {
+		return x.Proxy
+	}
+	return ""
+}
+
+func (x *SetGatewayConfigRequest) GetClearProxy() bool {
+	if x != nil {
+		return x.ClearProxy
+	}
+	return false
+}
+
+func (x *SetGatewayConfigRequest) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+// GatewayCandidate is settings to test before saving them; an empty
+// merchant_id or proxy means the stored one.
+type GatewayCandidate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sandbox       bool                   `protobuf:"varint,1,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
+	MerchantId    string                 `protobuf:"bytes,2,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"`
+	Proxy         string                 `protobuf:"bytes,3,opt,name=proxy,proto3" json:"proxy,omitempty"`
+	ClearProxy    bool                   `protobuf:"varint,4,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayCandidate) Reset() {
+	*x = GatewayCandidate{}
+	mi := &file_payments_v1_payments_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayCandidate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayCandidate) ProtoMessage() {}
+
+func (x *GatewayCandidate) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayCandidate.ProtoReflect.Descriptor instead.
+func (*GatewayCandidate) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GatewayCandidate) GetSandbox() bool {
+	if x != nil {
+		return x.Sandbox
+	}
+	return false
+}
+
+func (x *GatewayCandidate) GetMerchantId() string {
+	if x != nil {
+		return x.MerchantId
+	}
+	return ""
+}
+
+func (x *GatewayCandidate) GetProxy() string {
+	if x != nil {
+		return x.Proxy
+	}
+	return ""
+}
+
+func (x *GatewayCandidate) GetClearProxy() bool {
+	if x != nil {
+		return x.ClearProxy
+	}
+	return false
+}
+
+// TestGatewayRequest checks credentials and their route (proxy, registered
+// IP) with a read-only call; nothing is stored, created or verified.
+type TestGatewayRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Candidate     *GatewayCandidate      `protobuf:"bytes,2,opt,name=candidate,proto3" json:"candidate,omitempty"` // unset: the stored settings
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestGatewayRequest) Reset() {
+	*x = TestGatewayRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestGatewayRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestGatewayRequest) ProtoMessage() {}
+
+func (x *TestGatewayRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestGatewayRequest.ProtoReflect.Descriptor instead.
+func (*TestGatewayRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *TestGatewayRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *TestGatewayRequest) GetCandidate() *GatewayCandidate {
+	if x != nil {
+		return x.Candidate
+	}
+	return nil
+}
+
+type TestGatewayResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`          // why it failed; never a secret or an address
+	Unverified    int32                  `protobuf:"varint,3,opt,name=unverified,proto3" json:"unverified,omitempty"` // paid payments the gateway still waits for us to verify
+	LatencyMs     int64                  `protobuf:"varint,4,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestGatewayResponse) Reset() {
+	*x = TestGatewayResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestGatewayResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestGatewayResponse) ProtoMessage() {}
+
+func (x *TestGatewayResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestGatewayResponse.ProtoReflect.Descriptor instead.
+func (*TestGatewayResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *TestGatewayResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *TestGatewayResponse) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *TestGatewayResponse) GetUnverified() int32 {
+	if x != nil {
+		return x.Unverified
+	}
+	return 0
+}
+
+func (x *TestGatewayResponse) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+// GatewayReportRequest: one payment method's payments created in [from, to)
+// (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
+type GatewayReportRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | stars | manual_card | manual_crypto | manual_zarinpal
+	From          int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
+	To            int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayReportRequest) Reset() {
+	*x = GatewayReportRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayReportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayReportRequest) ProtoMessage() {}
+
+func (x *GatewayReportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayReportRequest.ProtoReflect.Descriptor instead.
+func (*GatewayReportRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GatewayReportRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *GatewayReportRequest) GetFrom() int64 {
+	if x != nil {
+		return x.From
+	}
+	return 0
+}
+
+func (x *GatewayReportRequest) GetTo() int64 {
+	if x != nil {
+		return x.To
+	}
+	return 0
+}
+
+// GatewayStatusTotal is the payments of one status in a report.
+type GatewayStatusTotal struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Status         string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Count          int64                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Amounts        []*v1.Money            `protobuf:"bytes,3,rep,name=amounts,proto3" json:"amounts,omitempty"`                                     // sum charged, per currency
+	GatewayAmounts []*v1.Money            `protobuf:"bytes,4,rep,name=gateway_amounts,json=gatewayAmounts,proto3" json:"gateway_amounts,omitempty"` // sum asked at the gateway (IRR, XTR)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GatewayStatusTotal) Reset() {
+	*x = GatewayStatusTotal{}
+	mi := &file_payments_v1_payments_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayStatusTotal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayStatusTotal) ProtoMessage() {}
+
+func (x *GatewayStatusTotal) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayStatusTotal.ProtoReflect.Descriptor instead.
+func (*GatewayStatusTotal) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GatewayStatusTotal) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *GatewayStatusTotal) GetCount() int64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *GatewayStatusTotal) GetAmounts() []*v1.Money {
+	if x != nil {
+		return x.Amounts
+	}
+	return nil
+}
+
+func (x *GatewayStatusTotal) GetGatewayAmounts() []*v1.Money {
+	if x != nil {
+		return x.GatewayAmounts
+	}
+	return nil
+}
+
+type GatewayReasonCount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"` // e.g. expired, gateway_failed, amount_mismatch, reversed
+	Count         int64                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayReasonCount) Reset() {
+	*x = GatewayReasonCount{}
+	mi := &file_payments_v1_payments_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayReasonCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayReasonCount) ProtoMessage() {}
+
+func (x *GatewayReasonCount) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayReasonCount.ProtoReflect.Descriptor instead.
+func (*GatewayReasonCount) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *GatewayReasonCount) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *GatewayReasonCount) GetCount() int64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// GatewayEvent is one entry of the gateway audit trail.
+type GatewayEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	At            int64                  `protobuf:"varint,1,opt,name=at,proto3" json:"at,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // create | callback | check | confirm ...
+	IntentId      string                 `protobuf:"bytes,3,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"` // the error of an error event; never a secret or an address
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayEvent) Reset() {
+	*x = GatewayEvent{}
+	mi := &file_payments_v1_payments_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayEvent) ProtoMessage() {}
+
+func (x *GatewayEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayEvent.ProtoReflect.Descriptor instead.
+func (*GatewayEvent) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GatewayEvent) GetAt() int64 {
+	if x != nil {
+		return x.At
+	}
+	return 0
+}
+
+func (x *GatewayEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *GatewayEvent) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *GatewayEvent) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type GatewayReportResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	From          int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
+	To            int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
+	Totals        []*GatewayStatusTotal  `protobuf:"bytes,4,rep,name=totals,proto3" json:"totals,omitempty"`                                    // by status
+	Failures      []*GatewayReasonCount  `protobuf:"bytes,5,rep,name=failures,proto3" json:"failures,omitempty"`                                // failed or expired, most frequent first
+	OpenCount     int64                  `protobuf:"varint,6,opt,name=open_count,json=openCount,proto3" json:"open_count,omitempty"`            // open now, whatever the period
+	OldestOpenAt  int64                  `protobuf:"varint,7,opt,name=oldest_open_at,json=oldestOpenAt,proto3" json:"oldest_open_at,omitempty"` // 0 = none open
+	LastError     *GatewayEvent          `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`             // unset: none
+	LastPaid      *GatewayEvent          `protobuf:"bytes,9,opt,name=last_paid,json=lastPaid,proto3" json:"last_paid,omitempty"`                // unset: none
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayReportResponse) Reset() {
+	*x = GatewayReportResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayReportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayReportResponse) ProtoMessage() {}
+
+func (x *GatewayReportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayReportResponse.ProtoReflect.Descriptor instead.
+func (*GatewayReportResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GatewayReportResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *GatewayReportResponse) GetFrom() int64 {
+	if x != nil {
+		return x.From
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetTo() int64 {
+	if x != nil {
+		return x.To
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetTotals() []*GatewayStatusTotal {
+	if x != nil {
+		return x.Totals
+	}
+	return nil
+}
+
+func (x *GatewayReportResponse) GetFailures() []*GatewayReasonCount {
+	if x != nil {
+		return x.Failures
+	}
+	return nil
+}
+
+func (x *GatewayReportResponse) GetOpenCount() int64 {
+	if x != nil {
+		return x.OpenCount
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetOldestOpenAt() int64 {
+	if x != nil {
+		return x.OldestOpenAt
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetLastError() *GatewayEvent {
+	if x != nil {
+		return x.LastError
+	}
+	return nil
+}
+
+func (x *GatewayReportResponse) GetLastPaid() *GatewayEvent {
+	if x != nil {
+		return x.LastPaid
+	}
+	return nil
+}
+
 var File_payments_v1_payments_proto protoreflect.FileDescriptor
 
 const file_payments_v1_payments_proto_rawDesc = "" +
@@ -1367,7 +2238,87 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x1bListPendingReceiptsResponse\x124\n" +
 	"\aintents\x18\x01 \x03(\v2\x1a.payments.v1.PaymentIntentR\aintents\x120\n" +
 	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\x127\n" +
-	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts2\xb4\a\n" +
+	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts\"\xef\x02\n" +
+	"\rGatewayConfig\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x1e\n" +
+	"\n" +
+	"configured\x18\x03 \x01(\bR\n" +
+	"configured\x12\x18\n" +
+	"\asandbox\x18\x04 \x01(\bR\asandbox\x12#\n" +
+	"\rmerchant_hint\x18\x05 \x01(\tR\fmerchantHint\x12\x1b\n" +
+	"\tproxy_set\x18\x06 \x01(\bR\bproxySet\x12\x1f\n" +
+	"\vkey_missing\x18\a \x01(\bR\n" +
+	"keyMissing\x12\x18\n" +
+	"\aoffered\x18\b \x01(\bR\aoffered\x12\x18\n" +
+	"\aproblem\x18\t \x01(\tR\aproblem\x12\x19\n" +
+	"\bfrom_env\x18\n" +
+	" \x01(\bR\afromEnv\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\v \x01(\x03R\tupdatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_by\x18\f \x01(\tR\tupdatedBy\"\x1b\n" +
+	"\x19ListGatewayConfigsRequest\"R\n" +
+	"\x1aListGatewayConfigsResponse\x124\n" +
+	"\aconfigs\x18\x01 \x03(\v2\x1a.payments.v1.GatewayConfigR\aconfigs\"\xdc\x01\n" +
+	"\x17SetGatewayConfigRequest\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x18\n" +
+	"\asandbox\x18\x03 \x01(\bR\asandbox\x12\x1f\n" +
+	"\vmerchant_id\x18\x04 \x01(\tR\n" +
+	"merchantId\x12\x14\n" +
+	"\x05proxy\x18\x05 \x01(\tR\x05proxy\x12\x1f\n" +
+	"\vclear_proxy\x18\x06 \x01(\bR\n" +
+	"clearProxy\x12\x19\n" +
+	"\bactor_id\x18\a \x01(\tR\aactorId\"\x84\x01\n" +
+	"\x10GatewayCandidate\x12\x18\n" +
+	"\asandbox\x18\x01 \x01(\bR\asandbox\x12\x1f\n" +
+	"\vmerchant_id\x18\x02 \x01(\tR\n" +
+	"merchantId\x12\x14\n" +
+	"\x05proxy\x18\x03 \x01(\tR\x05proxy\x12\x1f\n" +
+	"\vclear_proxy\x18\x04 \x01(\bR\n" +
+	"clearProxy\"m\n" +
+	"\x12TestGatewayRequest\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12;\n" +
+	"\tcandidate\x18\x02 \x01(\v2\x1d.payments.v1.GatewayCandidateR\tcandidate\"|\n" +
+	"\x13TestGatewayResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\x12\x1e\n" +
+	"\n" +
+	"unverified\x18\x03 \x01(\x05R\n" +
+	"unverified\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\x04 \x01(\x03R\tlatencyMs\"V\n" +
+	"\x14GatewayReportRequest\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
+	"\x04from\x18\x02 \x01(\x03R\x04from\x12\x0e\n" +
+	"\x02to\x18\x03 \x01(\x03R\x02to\"\xa9\x01\n" +
+	"\x12GatewayStatusTotal\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x03R\x05count\x12*\n" +
+	"\aamounts\x18\x03 \x03(\v2\x10.common.v1.MoneyR\aamounts\x129\n" +
+	"\x0fgateway_amounts\x18\x04 \x03(\v2\x10.common.v1.MoneyR\x0egatewayAmounts\"B\n" +
+	"\x12GatewayReasonCount\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x03R\x05count\"g\n" +
+	"\fGatewayEvent\x12\x0e\n" +
+	"\x02at\x18\x01 \x01(\x03R\x02at\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1b\n" +
+	"\tintent_id\x18\x03 \x01(\tR\bintentId\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\"\x84\x03\n" +
+	"\x15GatewayReportResponse\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
+	"\x04from\x18\x02 \x01(\x03R\x04from\x12\x0e\n" +
+	"\x02to\x18\x03 \x01(\x03R\x02to\x127\n" +
+	"\x06totals\x18\x04 \x03(\v2\x1f.payments.v1.GatewayStatusTotalR\x06totals\x12;\n" +
+	"\bfailures\x18\x05 \x03(\v2\x1f.payments.v1.GatewayReasonCountR\bfailures\x12\x1d\n" +
+	"\n" +
+	"open_count\x18\x06 \x01(\x03R\topenCount\x12$\n" +
+	"\x0eoldest_open_at\x18\a \x01(\x03R\foldestOpenAt\x128\n" +
+	"\n" +
+	"last_error\x18\b \x01(\v2\x19.payments.v1.GatewayEventR\tlastError\x126\n" +
+	"\tlast_paid\x18\t \x01(\v2\x19.payments.v1.GatewayEventR\blastPaid2\x9b\n" +
+	"\n" +
 	"\x0fPaymentsService\x12L\n" +
 	"\fCreateIntent\x12 .payments.v1.CreateIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12F\n" +
 	"\tGetIntent\x12\x1d.payments.v1.GetIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12N\n" +
@@ -1380,7 +2331,11 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\vCheckIntent\x12\x1f.payments.v1.CheckIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12\\\n" +
 	"\x14PrecheckStarsPayment\x12(.payments.v1.PrecheckStarsPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12Z\n" +
 	"\x13ConfirmStarsPayment\x12'.payments.v1.ConfirmStarsPaymentRequest\x1a\x1a.payments.v1.PaymentIntent\x12S\n" +
-	"\fListGateways\x12 .payments.v1.ListGatewaysRequest\x1a!.payments.v1.ListGatewaysResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
+	"\fListGateways\x12 .payments.v1.ListGatewaysRequest\x1a!.payments.v1.ListGatewaysResponse\x12e\n" +
+	"\x12ListGatewayConfigs\x12&.payments.v1.ListGatewayConfigsRequest\x1a'.payments.v1.ListGatewayConfigsResponse\x12T\n" +
+	"\x10SetGatewayConfig\x12$.payments.v1.SetGatewayConfigRequest\x1a\x1a.payments.v1.GatewayConfig\x12P\n" +
+	"\vTestGateway\x12\x1f.payments.v1.TestGatewayRequest\x1a .payments.v1.TestGatewayResponse\x12V\n" +
+	"\rGatewayReport\x12!.payments.v1.GatewayReportRequest\x1a\".payments.v1.GatewayReportResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
 
 var (
 	file_payments_v1_payments_proto_rawDescOnce sync.Once
@@ -1394,7 +2349,7 @@ func file_payments_v1_payments_proto_rawDescGZIP() []byte {
 	return file_payments_v1_payments_proto_rawDescData
 }
 
-var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_payments_v1_payments_proto_goTypes = []any{
 	(*PaymentIntent)(nil),               // 0: payments.v1.PaymentIntent
 	(*CreateIntentRequest)(nil),         // 1: payments.v1.CreateIntentRequest
@@ -1414,53 +2369,81 @@ var file_payments_v1_payments_proto_goTypes = []any{
 	(*IntentRecord)(nil),                // 15: payments.v1.IntentRecord
 	(*ListIntentsResponse)(nil),         // 16: payments.v1.ListIntentsResponse
 	(*ListPendingReceiptsResponse)(nil), // 17: payments.v1.ListPendingReceiptsResponse
-	(*v1.Money)(nil),                    // 18: common.v1.Money
-	(*v1.Pagination)(nil),               // 19: common.v1.Pagination
-	(*v1.PageInfo)(nil),                 // 20: common.v1.PageInfo
+	(*GatewayConfig)(nil),               // 18: payments.v1.GatewayConfig
+	(*ListGatewayConfigsRequest)(nil),   // 19: payments.v1.ListGatewayConfigsRequest
+	(*ListGatewayConfigsResponse)(nil),  // 20: payments.v1.ListGatewayConfigsResponse
+	(*SetGatewayConfigRequest)(nil),     // 21: payments.v1.SetGatewayConfigRequest
+	(*GatewayCandidate)(nil),            // 22: payments.v1.GatewayCandidate
+	(*TestGatewayRequest)(nil),          // 23: payments.v1.TestGatewayRequest
+	(*TestGatewayResponse)(nil),         // 24: payments.v1.TestGatewayResponse
+	(*GatewayReportRequest)(nil),        // 25: payments.v1.GatewayReportRequest
+	(*GatewayStatusTotal)(nil),          // 26: payments.v1.GatewayStatusTotal
+	(*GatewayReasonCount)(nil),          // 27: payments.v1.GatewayReasonCount
+	(*GatewayEvent)(nil),                // 28: payments.v1.GatewayEvent
+	(*GatewayReportResponse)(nil),       // 29: payments.v1.GatewayReportResponse
+	(*v1.Money)(nil),                    // 30: common.v1.Money
+	(*v1.Pagination)(nil),               // 31: common.v1.Pagination
+	(*v1.PageInfo)(nil),                 // 32: common.v1.PageInfo
 }
 var file_payments_v1_payments_proto_depIdxs = []int32{
-	18, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
-	18, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
-	18, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
-	18, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
-	19, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
+	30, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
+	30, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
+	30, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
+	30, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
+	31, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 5: payments.v1.PendingReceipt.intent:type_name -> payments.v1.PaymentIntent
 	12, // 6: payments.v1.PendingReceipt.receipt:type_name -> payments.v1.ManualReceipt
-	19, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
+	31, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 8: payments.v1.IntentRecord.intent:type_name -> payments.v1.PaymentIntent
 	12, // 9: payments.v1.IntentRecord.receipt:type_name -> payments.v1.ManualReceipt
 	15, // 10: payments.v1.ListIntentsResponse.records:type_name -> payments.v1.IntentRecord
-	20, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
+	32, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
 	0,  // 12: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
-	20, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
+	32, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
 	13, // 14: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
-	1,  // 15: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
-	7,  // 16: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
-	8,  // 17: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
-	9,  // 18: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
-	10, // 19: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
-	11, // 20: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
-	14, // 21: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
-	2,  // 22: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
-	3,  // 23: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
-	4,  // 24: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
-	5,  // 25: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
-	0,  // 26: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 27: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 28: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
-	0,  // 29: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
-	0,  // 30: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
-	17, // 31: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
-	16, // 32: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
-	0,  // 33: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 34: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
-	0,  // 35: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
-	6,  // 36: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
-	26, // [26:37] is the sub-list for method output_type
-	15, // [15:26] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	18, // 15: payments.v1.ListGatewayConfigsResponse.configs:type_name -> payments.v1.GatewayConfig
+	22, // 16: payments.v1.TestGatewayRequest.candidate:type_name -> payments.v1.GatewayCandidate
+	30, // 17: payments.v1.GatewayStatusTotal.amounts:type_name -> common.v1.Money
+	30, // 18: payments.v1.GatewayStatusTotal.gateway_amounts:type_name -> common.v1.Money
+	26, // 19: payments.v1.GatewayReportResponse.totals:type_name -> payments.v1.GatewayStatusTotal
+	27, // 20: payments.v1.GatewayReportResponse.failures:type_name -> payments.v1.GatewayReasonCount
+	28, // 21: payments.v1.GatewayReportResponse.last_error:type_name -> payments.v1.GatewayEvent
+	28, // 22: payments.v1.GatewayReportResponse.last_paid:type_name -> payments.v1.GatewayEvent
+	1,  // 23: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
+	7,  // 24: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
+	8,  // 25: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
+	9,  // 26: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
+	10, // 27: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
+	11, // 28: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
+	14, // 29: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
+	2,  // 30: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
+	3,  // 31: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
+	4,  // 32: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
+	5,  // 33: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
+	19, // 34: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
+	21, // 35: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
+	23, // 36: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
+	25, // 37: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
+	0,  // 38: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 39: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 40: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
+	0,  // 41: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
+	0,  // 42: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
+	17, // 43: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
+	16, // 44: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
+	0,  // 45: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 46: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
+	0,  // 47: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
+	6,  // 48: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
+	20, // 49: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
+	18, // 50: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
+	24, // 51: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
+	29, // 52: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
+	38, // [38:53] is the sub-list for method output_type
+	23, // [23:38] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }
@@ -1474,7 +2457,7 @@ func file_payments_v1_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_payments_proto_rawDesc), len(file_payments_v1_payments_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
