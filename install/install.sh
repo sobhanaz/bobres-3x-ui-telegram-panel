@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# BOBRES bootstrap installer.
+# BOBRES bootstrap installer. One command, as root:
 #
-#   curl -fsSL https://get.example.com/install.sh | sudo bash
-#   curl -fsSL https://get.example.com/install.sh | sudo bash -s -- --domain panel.example.com
+#   bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
+#
+# or with sudo, optionally passing `bobres install` flags after `-s --`:
+#
+#   curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh | sudo bash
+#   curl -fsSL .../install.sh | sudo bash -s -- --domain panel.example.com
+#
+# Afterwards, run `bobres` for the management menu.
 #
 # What this does: checks the OS, installs Docker if missing, downloads the `bobres` CLI,
 # VERIFIES the release signature and checksum, installs it, then hands over to `bobres install`.
@@ -113,7 +119,8 @@ main() {
   export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   umask 022
 
-  local BASE_URL="${BOBRES_BASE_URL:-https://get.example.com/releases/latest}"
+  # The latest (non-pre-release) GitHub release of this repository.
+  local BASE_URL="${BOBRES_BASE_URL:-https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/latest/download}"
   local INSTALL_DIR="${BOBRES_BIN_DIR:-/usr/local/bin}"
   local RED="" GREEN="" YELLOW="" BOLD="" RESET=""
   if [ -t 1 ]; then
@@ -170,7 +177,7 @@ EOF
   fi
 
   # ---- root ----
-  [ "$(id -u)" -eq 0 ] || die "this installer must run as root. Try: curl -fsSL <url> | sudo bash"
+  [ "$(id -u)" -eq 0 ] || die "this installer must run as root. Try: curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh | sudo bash"
 
   # ---- platform ----
   [ "$(uname -s)" = "Linux" ] || die "only Linux is supported (Ubuntu 22.04/24.04, Debian 11/12/13)"

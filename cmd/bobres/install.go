@@ -40,11 +40,17 @@ type installer struct {
 	lookupIP  func(ctx context.Context, host string) ([]net.IP, error)
 	preflight func(domain string) []Result
 	sleep     func(time.Duration)
+	// quiet leaves out the first-steps summary (a settings change from the menu).
+	quiet bool
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
+	br, ok := in.(*bufio.Reader) // the menu shares its reader, so no typed-ahead input is lost
+	if !ok {
+		br = bufio.NewReader(in)
+	}
 	ins := &installer{
-		in: bufio.NewReader(in), out: out, errOut: errOut, getenv: os.Getenv,
+		in: br, out: out, errOut: errOut, getenv: os.Getenv,
 		lookupIP: func(ctx context.Context, host string) ([]net.IP, error) {
 			return net.DefaultResolver.LookupIP(ctx, "ip", host)
 		},
@@ -63,15 +69,24 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		preflight: func(domain string) []Result { return runDoctor(domain, false) },
 		sleep:     time.Sleep,
 	}
-	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		ins.readHide = func(prompt string) (string, error) {
-			fmt.Fprint(out, prompt)
-			b, err := term.ReadPassword(int(f.Fd()))
-			fmt.Fprintln(out)
-			return strings.TrimSpace(string(b)), err
-		}
+	if f, ok := in.(*os.File); ok {
+		ins.readHide = hiddenInput(f, out)
 	}
 	return ins
+}
+
+// hiddenInput reads a secret from the terminal f without echoing it; nil when
+// f is not a terminal.
+func hiddenInput(f *os.File, out io.Writer) func(prompt string) (string, error) {
+	if !term.IsTerminal(int(f.Fd())) {
+		return nil
+	}
+	return func(prompt string) (string, error) {
+		fmt.Fprint(out, prompt)
+		b, err := term.ReadPassword(int(f.Fd()))
+		fmt.Fprintln(out)
+		return strings.TrimSpace(string(b)), err
+	}
 }
 
 func installCmd(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -106,7 +121,7 @@ var (
 func (ins *installer) install(args []string) int {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(ins.errOut)
-	dir := fs.String("dir", "/opt/bobres", "install directory")
+	dir := fs.String("dir", defaultDir(), dirUsage)
 	domain := fs.String("domain", "", "public domain of this install (DNS must point here)")
 	adminID := fs.String("admin-id", "", "Telegram user id of the owner")
 	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path")
@@ -174,6 +189,9 @@ func (ins *installer) install(args []string) int {
 			return 2
 		}
 		set(q.key, v)
+		if q.key == "BOBRES_XUI_URL" {
+			ins.askPanelOnThisServer(env)
+		}
 	}
 
 	defaults := map[string]string{
@@ -237,7 +255,9 @@ func (ins *installer) install(args []string) int {
 	if code := ins.start(ctx, *dir); code != 0 {
 		return code
 	}
-	ins.summary(env, *dir)
+	if !ins.quiet {
+		ins.summary(env, *dir)
+	}
 	return 0
 }
 
@@ -261,6 +281,32 @@ func (ins *installer) ask(prompt string, secret bool) (string, error) {
 	return line, nil
 }
 
+// askPanelOnThisServer helps with the usual panel on the same server: a
+// localhost URL becomes host.docker.internal (localhost inside the containers
+// is the container itself), and plain http needs the private-panel option.
+func (ins *installer) askPanelOnThisServer(env map[string]string) {
+	u, err := url.Parse(env["BOBRES_XUI_URL"])
+	if err != nil || u.Scheme != "http" || env["BOBRES_XUI_ALLOW_PRIVATE"] == "true" {
+		return
+	}
+	if loopbackHost(u.Hostname()) {
+		host := "host.docker.internal"
+		if p := u.Port(); p != "" {
+			host += ":" + p
+		}
+		u.Host = host
+		a, _ := ins.ask(fmt.Sprintf("The panel is on this server: BOBRES reaches it as %s. Use that? [Y/n]: ", u), false)
+		if a == "" || strings.EqualFold(a, "y") || strings.EqualFold(a, "yes") {
+			env["BOBRES_XUI_URL"], env["BOBRES_XUI_ALLOW_PRIVATE"] = u.String(), "true"
+		}
+		return
+	}
+	a, _ := ins.ask("Plain http is only for a panel on this server or a private network. Is it? [y/N]: ", false)
+	if strings.EqualFold(a, "y") || strings.EqualFold(a, "yes") {
+		env["BOBRES_XUI_ALLOW_PRIVATE"] = "true"
+	}
+}
+
 func (ins *installer) checks(domain string, existing bool) bool {
 	ok := true
 	for _, r := range ins.preflight(domain) {
@@ -282,37 +328,12 @@ func (ins *installer) checks(domain string, existing bool) bool {
 
 // start pulls and starts the stack, then waits until every service is healthy.
 func (ins *installer) start(ctx context.Context, dir string) int {
-	compose := []string{"compose", "--project-name", "bobres", "-f", "docker-compose.yml", "--env-file", ".env"}
 	fmt.Fprintln(ins.out, "Pulling images and starting the stack (this can take a few minutes)...")
-	if out, err := ins.run(ctx, dir, append(compose, "up", "-d")...); err != nil {
+	if out, err := ins.run(ctx, dir, composeArgs("up", "-d")...); err != nil {
 		fmt.Fprintf(ins.errOut, "error: docker compose up failed: %v\n%s\n", err, out)
 		return 1
 	}
-	want := []string{"core", "payments", "provisioner", "bot"}
-	deadline := 5 * time.Minute
-	for waited := time.Duration(0); ; waited += 5 * time.Second {
-		out, err := ins.run(ctx, dir, append(compose, "ps", "--format", "json")...)
-		health := map[string]string{}
-		if err == nil {
-			health = parseHealth(out)
-		}
-		var pending []string
-		for _, s := range want {
-			if health[s] != "healthy" {
-				pending = append(pending, s+"="+orUnknown(health[s]))
-			}
-		}
-		if len(pending) == 0 {
-			fmt.Fprintln(ins.out, "All services are healthy.")
-			return 0
-		}
-		if waited >= deadline {
-			fmt.Fprintf(ins.errOut, "error: services not healthy after %s: %s\nInspect with: cd %s && docker compose logs\n",
-				deadline, strings.Join(pending, ", "), dir)
-			return 1
-		}
-		ins.sleep(5 * time.Second)
-	}
+	return waitHealthy(ctx, ins.run, ins.sleep, dir, ins.out, ins.errOut)
 }
 
 func orUnknown(s string) string {
@@ -366,6 +387,9 @@ Next steps (in Telegram, from the owner account %s):
 
 Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:
 it holds the keys that encrypt your panel token.
+
+Manage the store from this server at any time: run  bobres  for the menu
+(status, logs, start/stop/restart, change the bot token, admin or panel).
 `, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
 }
 
