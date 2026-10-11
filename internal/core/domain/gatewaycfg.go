@@ -178,6 +178,11 @@ func (s *Service) SetGatewayConfig(ctx context.Context, actor *store.User, ga Ga
 	if before == nil {
 		return nil, store.ErrNotFound
 	}
+	if u.Enabled && !before.Enabled {
+		if err := s.requireGateway(ctx, u.Provider); err != nil {
+			return nil, err
+		}
+	}
 	after, err := ga.SetGatewayConfig(ctx, u, actor.ID)
 	if err != nil {
 		return nil, err

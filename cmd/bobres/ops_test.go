@@ -241,3 +241,28 @@ func TestAdminLink(t *testing.T) {
 		t.Fatalf("no install: %d", code)
 	}
 }
+
+// bobres license status|import run core's license command in its container
+// (import passes stdin through).
+func TestLicenseCommand(t *testing.T) {
+	f := &fakeOps{}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	for i, sub := range []string{"status", "import"} {
+		if code := o.licenseCmd([]string{sub, "--dir", dir}); code != 0 {
+			t.Fatalf("license %s: %d %s", sub, code, errOut)
+		}
+		got := strings.Join(f.stream[i], " ")
+		if !strings.HasSuffix(got, "exec -T core /app license "+sub) || !strings.Contains(got, "--project-name bobres") {
+			t.Fatalf("compose args: %s", got)
+		}
+	}
+	for _, args := range [][]string{nil, {"activate"}, {"status", "--dir", dir, "extra"}, {"status", "--dir", t.TempDir()}} {
+		if code := o.licenseCmd(args); code != 2 {
+			t.Errorf("%v: %d", args, code)
+		}
+	}
+	if len(f.stream) != 2 {
+		t.Fatalf("refused commands still ran docker: %v", f.stream)
+	}
+}

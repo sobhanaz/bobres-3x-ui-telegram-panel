@@ -77,6 +77,24 @@ func TestLoadCore(t *testing.T) {
 	if c.ServiceToken != coreTok || c.BotToken != botTok {
 		t.Errorf("tokens not loaded: %+v", c)
 	}
+	// The peers' HTTP addresses default to the compose service names; the
+	// backup service is not in the compose file yet, so it has none.
+	if c.BotURL != "" || c.PaymentsURL != "http://payments:8080" || c.ProvisionerURL != "http://provisioner:8080" ||
+		c.BackupURL != "" || c.Domain != "" {
+		t.Errorf("peer defaults: %q %q %q %q %q", c.BotURL, c.PaymentsURL, c.ProvisionerURL, c.BackupURL, c.Domain)
+	}
+	t.Setenv("BOBRES_BACKUP_URL", "http://10.0.0.5:8081/")
+	t.Setenv("BOBRES_DOMAIN", " panel.example.com ")
+	if c, err = LoadCore(); err != nil || c.BackupURL != "http://10.0.0.5:8081" || c.Domain != "panel.example.com" {
+		t.Fatalf("backup URL and domain: %q %q %v", c.BackupURL, c.Domain, err)
+	}
+	for _, name := range []string{"BOBRES_BOT_URL", "BOBRES_PAYMENTS_URL", "BOBRES_PROVISIONER_URL", "BOBRES_BACKUP_URL"} {
+		t.Setenv(name, "payments:8080")
+		if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s without a scheme accepted: %v", name, err)
+		}
+		t.Setenv(name, "")
+	}
 	t.Setenv("BOBRES_MASTER_KEY", "short")
 	if _, err := LoadCore(); err == nil {
 		t.Fatal("short master key accepted")

@@ -162,8 +162,14 @@ func (s *Server) fail(w http.ResponseWriter, what string, err error) {
 	if settingError(w, err) {
 		return
 	}
-	var de *domain.DiscountError
+	var (
+		de *domain.DiscountError
+		lr *domain.LicenseRefusal
+	)
 	switch {
+	case errors.As(err, &lr):
+		// A new action the installed license does not allow: gate names it.
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "state", "license": lr.Gate, "message": lr.Msg})
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "no such item")
 	case errors.Is(err, domain.ErrForbidden):

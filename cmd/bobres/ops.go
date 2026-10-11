@@ -383,3 +383,36 @@ func (o *ops) adminCmd(args []string) int {
 	}
 	return 0
 }
+
+const licenseCmdUsage = "usage: bobres license status|import [--dir D]  (import reads the token on stdin)"
+
+// licenseCmd: "bobres license status" shows the installed license as core
+// sees it; "bobres license import" installs the token read from stdin (a
+// file or a paste ended with Ctrl-D). Both run inside the core container.
+func (o *ops) licenseCmd(args []string) int {
+	if len(args) == 0 || (args[0] != "status" && args[0] != "import") {
+		fmt.Fprintln(o.errOut, licenseCmdUsage)
+		return 2
+	}
+	fs := flag.NewFlagSet("license "+args[0], flag.ContinueOnError)
+	fs.SetOutput(o.errOut)
+	dir := fs.String("dir", defaultDir(), dirUsage)
+	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintln(o.errOut, licenseCmdUsage)
+		return 2
+	}
+	if _, ok := o.requireInstall(*dir); !ok {
+		return 2
+	}
+	if args[0] == "import" && interactive(o.in, o.out) {
+		fmt.Fprintln(o.out, "Paste the license token, then press Enter and Ctrl-D:")
+	}
+	if err := o.stream(context.Background(), *dir, composeArgs("exec", "-T", "core", "/app", "license", args[0])...); err != nil {
+		fmt.Fprintf(o.errOut, "error: %v (is core running? bobres status)\n", err)
+		return 1
+	}
+	return 0
+}

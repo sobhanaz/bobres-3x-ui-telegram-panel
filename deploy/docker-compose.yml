@@ -130,6 +130,11 @@ services:
       # Receipt photos for the dashboard come through the bot: core keeps no
       # bot token and has no internet access.
       BOBRES_BOT_URL: http://bot:8080
+      # The System page asks the other services' /healthz and /readyz here.
+      # No BOBRES_BACKUP_URL until the backup service is added to this file:
+      # without it the page shows the backup service as not installed.
+      BOBRES_PAYMENTS_URL: http://payments:8080
+      BOBRES_PROVISIONER_URL: http://provisioner:8080
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend]

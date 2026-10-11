@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 )
@@ -26,6 +27,16 @@ type Core struct {
 	// BotURL is the bot's internal HTTP address (http://bot:8080): core
 	// fetches receipt photos through it for the dashboard. Empty = none.
 	BotURL string
+	// PaymentsURL, ProvisionerURL and BackupURL are the other services'
+	// internal HTTP addresses; the System page asks their /healthz and
+	// /readyz. The defaults match the compose file. BackupURL has none yet
+	// (the compose file has no backup service): unset, the backup service
+	// shows as not installed without a network lookup.
+	PaymentsURL    string
+	ProvisionerURL string
+	BackupURL      string
+	// Domain is BOBRES_DOMAIN as it is (no scheme): a license is bound to it.
+	Domain string
 }
 
 // LoadCore reads the core service configuration, failing closed on missing
@@ -56,12 +67,29 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.PublicURL, err = publicURL()
 	keep(err)
-	if co.BotURL = strings.TrimRight(strings.TrimSpace(getenv("BOBRES_BOT_URL", "")), "/"); co.BotURL != "" {
-		if u, err := url.Parse(co.BotURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			keep(errors.New("BOBRES_BOT_URL must be an http(s) URL like http://bot:8080"))
-		}
-	}
+	co.BotURL, err = peerURL("BOBRES_BOT_URL", "", "http://bot:8080")
+	keep(err)
+	co.PaymentsURL, err = peerURL("BOBRES_PAYMENTS_URL", "http://payments:8080", "http://payments:8080")
+	keep(err)
+	co.ProvisionerURL, err = peerURL("BOBRES_PROVISIONER_URL", "http://provisioner:8080", "http://provisioner:8080")
+	keep(err)
+	co.BackupURL, err = peerURL("BOBRES_BACKUP_URL", "", "http://backup:8080")
+	keep(err)
+	co.Domain = strings.TrimSpace(getenv("BOBRES_DOMAIN", ""))
 	return co, errors.Join(errs...)
+}
+
+// peerURL reads another service's internal address (def when unset): an
+// http(s) URL with a host, no trailing slash.
+func peerURL(name, def, example string) (string, error) {
+	v := strings.TrimRight(strings.TrimSpace(getenv(name, def)), "/")
+	if v == "" {
+		return "", nil
+	}
+	if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", fmt.Errorf("%s must be an http(s) URL like %s", name, example)
+	}
+	return v, nil
 }
 
 // publicURL is BOBRES_PUBLIC_URL when set (an http(s) origin), else

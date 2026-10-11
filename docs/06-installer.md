@@ -53,8 +53,8 @@ dashboard has a server.
 
 ## Status (2026-10-03)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
-`version`, `admin link` (2026-10-07). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
-`restore`, `config`, `secrets`, `license`, `support-bundle`, and the hardening step (ufw, fail2ban).
+`version`, `admin link` (2026-10-07), `license status|import` (2026-10-11). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `update`, `rollback`, `backup`,
+`restore`, `config`, `secrets`, `license activate` (needs the vendor server), `support-bundle`, and the hardening step (ufw, fail2ban).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
 a password or code, the owner manages staff on the dashboard's Staff page, and the owner themselves is
 changed with `bobres menu` ("Change the owner Telegram ID"), which core applies when it starts.
@@ -72,7 +72,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres backup [--now]` / `restore <file>` | Encrypted dump, optional off-server upload (S3/SFTP); tested restore |
 | `bobres config get/set` | Edit settings safely, validate, restart affected services |
 | `bobres secrets rotate <name>` | Rotate bot token/3x-ui token/DB password |
-| `bobres license status/activate/import` | License handling |
+| `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container. `activate` (online, through the vendor server) comes later |
 | `bobres doctor` | Diagnose: DNS, TLS, ports, bot token, 3x-ui reachability/version, queue lag, disk; print fixes |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
 | `bobres support-bundle` | Redacted logs/config for support (no secrets, no user data) |

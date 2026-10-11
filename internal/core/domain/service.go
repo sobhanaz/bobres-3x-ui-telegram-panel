@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
 )
 
 // trialOnceConstraint is the partial unique index enforcing one trial grant per user.
@@ -26,6 +28,8 @@ type Config struct {
 	// Log receives what needs an operator's eye outside a request (nil: the
 	// default logger).
 	Log *slog.Logger
+	// License is what a license token is checked against.
+	License LicenseConfig
 }
 
 // Service composes the store with business rules.
@@ -36,6 +40,9 @@ type Service struct {
 	kick  chan struct{} // wakes the provisioning worker
 	bkick chan struct{} // wakes the broadcast worker
 	lkick chan struct{} // wakes the subscription link worker
+	// embedded is the license key ring built into core, read once.
+	keysOnce sync.Once
+	embedded license.KeyRing
 }
 
 // New builds a Service publishing to core's outbox.

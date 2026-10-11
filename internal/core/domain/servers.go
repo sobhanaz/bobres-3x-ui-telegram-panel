@@ -210,6 +210,9 @@ func (s *Service) AddServer(ctx context.Context, actor *store.User, sa ServerAdm
 	if privateNeedsOwner(actor, in.AllowPrivate, in.BaseURL, in.Token, nil) {
 		return nil, ErrPrivateOwnerOnly
 	}
+	if err := s.requireServerSlot(ctx, sa); err != nil {
+		return nil, err
+	}
 	sv, err := sa.AddServer(ctx, in)
 	if err != nil {
 		return nil, err

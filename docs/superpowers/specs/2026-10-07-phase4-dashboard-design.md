@@ -27,7 +27,8 @@ is planned below.
    - **6a, servers and payment gateways (built).** Several 3x-ui servers (servers per plan, health, inbounds), and
      payment gateways whose keys stay encrypted in the payments service. See "Milestone 6a" below.
    - **6b, System and License.** Health, versions, update check, backups through a backup container, and the
-     license (checked with internal/license).
+     license (checked with internal/license). Health, versions and the license are built: see "Milestone 6b
+     (part 1)" below.
 
 **Not in Phase 4:** restoring a backup from the dashboard (CLI only), a customer portal, the vendor
 license server.
@@ -677,6 +678,45 @@ and answers hints only.
   `sandbox_allowed` comes from core's own `BOBRES_ENV`.
 - **The bot's manual payment buttons** still follow the details only. The switches are enforced in core, so a
   switched-off method fails when chosen until the bot reads the switches too (open for the bot).
+
+## Milestone 6b (part 1): system health and the license
+
+The System page's health tab and its License tab. The update check, logs and backups follow in later parts.
+
+- **Health and versions** (`system.read`: owner and admin). Core asks core itself (through its own HTTP port),
+  the bot, payments, provisioner and the backup service for `/healthz` and `/readyz`, all at once, 3 seconds
+  each (new core config `BOBRES_PAYMENTS_URL`, `BOBRES_PROVISIONER_URL`, `BOBRES_BACKUP_URL`; the first two
+  default to the compose names `http://<service>:8080`, the backup one to empty until the backup service is in
+  the compose file). Each service is `ok`, `not_ready` (the failed checks named), `down`, `not_configured`, or
+  `not_installed` (the backup service when it has no address or its name does not resolve, including Docker's
+  SERVFAIL on internal networks). A version other than core's (a leading `v` ignored) is flagged per service and
+  on the page. The servers and payment methods summaries are the overview's.
+- **License** (`internal/license`; state for `system.read`, changes for `license.write`: the owner). Migration
+  core/00012 adds `core.install` (one random install id, made with the schema) and `core.license` (one token).
+  Tokens are verified on every read against the public keys built into core (`internal/license/keys/*.pub`,
+  none yet, so every token is "invalid: unknown key"), bound to `BOBRES_DOMAIN` (required) and to the install id
+  when the token names one. States: missing, invalid (with a reason code), active, grace, expired.
+  - **Policy:** missing or invalid never gates anything. A verified license gates only new actions: making a
+    reseller (`resellers`), adding a server beyond `max_servers`, adding admin or support staff beyond
+    `dashboard_staff_seats` (owners take none; an owner stepping down counts), switching on a payment method the
+    license does not name (wallet always allowed). Grace keeps the entitlements; expired grants none.
+  - Only a token that verifies here and has not expired can be installed; `license.set` audits its ids and
+    the reason, never the token. The CLI does the same (`bobres license status|import`, source `cli`).
+  - **Powered by BOBRES** only with a verified license without `white_label`; never on an unlicensed install.
+  - Vendor tool `tools/license` (`keygen` writes the private key outside any git checkout; `sign`). See
+    docs/05-license.md.
+
+### API (milestone 6b, part 1)
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/system` (`{checked_at, version, version_mismatch, services, servers, panel, gateways}`) | system.read |
+| `GET /api/v1/license` (state, reason, install id, domain, the token's ids and dates, binding, entitlements with use; never the token) | system.read |
+| `POST /api/v1/license/check` (`{token}`; the same answer for a token, saving nothing) | license.write |
+| `PUT /api/v1/license` (`{token, reason}`; 400 `{field: "token", code}` when it does not verify here or has expired) | license.write |
+| `GET /api/v1/me` gains `license: {state, white_label, powered_by}`; public `GET /api/v1/brand` gains `powered_by` | session / public |
+
+- A new action the license does not allow is 409 `{error: "state", license: "<gate>", message}`.
 
 ## Tests
 
