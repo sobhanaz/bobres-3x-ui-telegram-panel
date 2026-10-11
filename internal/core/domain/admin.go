@@ -316,19 +316,35 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 	if err := validatePlan(p); err != nil {
 		return nil, err
 	}
-	var before any // nil for a new plan
+	var (
+		before any // nil for a new plan
+		oldCur string
+	)
 	if p.ID != "" {
 		old, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID)
 		if err != nil {
 			return nil, err // editing a plan that does not exist
 		}
-		before = old
+		before, oldCur = old, old.Currency
 	}
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
 		}
-		return s.auditChange(ctx, tx, actor, "plan.upsert", "plan", p.ID, before, p, "")
+		if err := s.auditChange(ctx, tx, actor, "plan.upsert", "plan", p.ID, before, p, ""); err != nil {
+			return err
+		}
+		if oldCur == "" || oldCur == p.Currency {
+			return nil
+		}
+		// Reseller tiers' fixed prices were in the old currency: they go (the
+		// tiers' discount applies until staff set new ones).
+		n, err := s.st.DropStaleTierPrices(ctx, tx, p.ID)
+		if err != nil || n == 0 {
+			return err
+		}
+		return s.audit(ctx, tx, actor, "reseller_tier.prices_dropped", "plan", p.ID,
+			map[string]any{"from": oldCur, "to": p.Currency, "prices": n}, "")
 	})
 	if err != nil {
 		return nil, err

@@ -26,9 +26,12 @@ type ResellerTier struct {
 	DiscountPercent   int32
 	CommissionPercent int32
 	Prices            map[string]int64 // plan id -> fixed price, in the plan's currency
-	Version           int
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// Currencies: plan id -> the currency Prices were set in (writes only;
+	// reads return only prices still in their plan's currency).
+	Currencies map[string]string
+	Version    int
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // TierRow is a tier in the tiers list, with how many resellers are on it.
@@ -87,7 +90,7 @@ func (s *Store) InsertTier(ctx context.Context, q querier, t *ResellerTier) erro
 	if err != nil {
 		return tierWriteErr("insert tier", err)
 	}
-	return setTierPrices(ctx, q, t.ID, t.Prices)
+	return setTierPrices(ctx, q, t)
 }
 
 // UpdateTier replaces a tier's terms and its whole list of fixed prices when
@@ -109,24 +112,41 @@ func (s *Store) UpdateTier(ctx context.Context, q querier, t *ResellerTier, vers
 	if _, err := q.Exec(ctx, `DELETE FROM core.reseller_tier_prices WHERE tier_id = $1`, t.ID); err != nil {
 		return fmt.Errorf("update tier prices: %w", err)
 	}
-	return setTierPrices(ctx, q, t.ID, t.Prices)
+	return setTierPrices(ctx, q, t)
 }
 
-func setTierPrices(ctx context.Context, q querier, tierID string, prices map[string]int64) error {
-	if len(prices) == 0 {
+// setTierPrices stores t's fixed prices, each with the currency it was set
+// in (the plan's current one when t.Currencies leaves it out).
+func setTierPrices(ctx context.Context, q querier, t *ResellerTier) error {
+	if len(t.Prices) == 0 {
 		return nil
 	}
-	plans := make([]string, 0, len(prices))
-	amounts := make([]int64, 0, len(prices))
-	for id, p := range prices {
+	plans := make([]string, 0, len(t.Prices))
+	amounts := make([]int64, 0, len(t.Prices))
+	curs := make([]string, 0, len(t.Prices))
+	for id, p := range t.Prices {
 		plans = append(plans, id)
 		amounts = append(amounts, p)
+		curs = append(curs, t.Currencies[id])
 	}
-	if _, err := q.Exec(ctx, `INSERT INTO core.reseller_tier_prices (tier_id, plan_id, price)
-		SELECT $1, unnest($2::uuid[]), unnest($3::bigint[])`, tierID, plans, amounts); err != nil {
+	if _, err := q.Exec(ctx, `INSERT INTO core.reseller_tier_prices (tier_id, plan_id, price, currency)
+		SELECT $1, x.plan_id, x.price, COALESCE(NULLIF(x.currency, ''), p.currency)
+		FROM unnest($2::uuid[], $3::bigint[], $4::text[]) AS x(plan_id, price, currency)
+		JOIN core.plans p ON p.id = x.plan_id`, t.ID, plans, amounts, curs); err != nil {
 		return fmt.Errorf("tier prices: %w", err)
 	}
 	return nil
+}
+
+// DropStaleTierPrices removes a plan's fixed prices set in another currency
+// than its own (the plan's currency changed); it returns how many went.
+func (s *Store) DropStaleTierPrices(ctx context.Context, q querier, planID string) (int64, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM core.reseller_tier_prices tp USING core.plans p
+		WHERE tp.plan_id = $1 AND p.id = tp.plan_id AND tp.currency <> p.currency`, planID)
+	if err != nil {
+		return 0, fmt.Errorf("drop stale tier prices: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // GetTier loads a tier with its fixed prices; lock takes it FOR UPDATE.
@@ -149,9 +169,11 @@ func (s *Store) GetTier(ctx context.Context, q querier, id string, lock bool) (*
 	return &t, nil
 }
 
-// TierPrices returns a tier's fixed prices by plan id.
+// TierPrices returns a tier's fixed prices by plan id: those still in their
+// plan's currency.
 func (s *Store) TierPrices(ctx context.Context, q querier, tierID string) (map[string]int64, error) {
-	rows, err := q.Query(ctx, `SELECT plan_id, price FROM core.reseller_tier_prices WHERE tier_id = $1`, tierID)
+	rows, err := q.Query(ctx, `SELECT tp.plan_id, tp.price FROM core.reseller_tier_prices tp
+		JOIN core.plans p ON p.id = tp.plan_id AND p.currency = tp.currency WHERE tp.tier_id = $1`, tierID)
 	if err != nil {
 		return nil, fmt.Errorf("tier prices: %w", err)
 	}
@@ -193,7 +215,8 @@ func (s *Store) ListTiers(ctx context.Context, q querier) ([]TierRow, error) {
 	if err := rows.Err(); err != nil || len(out) == 0 {
 		return out, err
 	}
-	prows, err := q.Query(ctx, `SELECT tier_id, plan_id, price FROM core.reseller_tier_prices`)
+	prows, err := q.Query(ctx, `SELECT tp.tier_id, tp.plan_id, tp.price FROM core.reseller_tier_prices tp
+		JOIN core.plans p ON p.id = tp.plan_id AND p.currency = tp.currency`)
 	if err != nil {
 		return nil, fmt.Errorf("list tiers: prices: %w", err)
 	}

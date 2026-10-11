@@ -521,6 +521,9 @@ type TierInput struct {
 	DiscountPercent   int32
 	CommissionPercent int32
 	Prices            map[string]int64 // plan id -> fixed price (minor units of the plan's currency)
+	// Currencies: plan id -> the currency each price was read in (the plan's
+	// then); a plan whose currency changed since is refused.
+	Currencies map[string]string
 }
 
 func (s *Service) normalizeTier(ctx context.Context, in *TierInput) error {
@@ -551,6 +554,13 @@ func (s *Service) normalizeTier(ctx context.Context, in *TierInput) error {
 		if p := in.Prices[id]; p < 0 || p > maxTopupMinor {
 			return &FieldError{field, "out of range"}
 		}
+		if in.Currencies == nil {
+			in.Currencies = map[string]string{}
+		}
+		if c := in.Currencies[id]; c != "" && c != plan.Currency {
+			return &FieldError{field, "the plan's currency changed; reload"}
+		}
+		in.Currencies[id] = plan.Currency
 	}
 	return nil
 }
@@ -593,7 +603,7 @@ func (s *Service) CreateTier(ctx context.Context, actor *store.User, in TierInpu
 		return nil, err
 	}
 	t := &store.ResellerTier{Name: in.Name, DiscountPercent: in.DiscountPercent, CommissionPercent: in.CommissionPercent,
-		Prices: in.Prices}
+		Prices: in.Prices, Currencies: in.Currencies}
 	if t.Prices == nil {
 		t.Prices = map[string]int64{}
 	}
@@ -623,7 +633,7 @@ func (s *Service) UpdateTier(ctx context.Context, actor *store.User, id string, 
 		return nil, err
 	}
 	t := &store.ResellerTier{ID: id, Name: in.Name, DiscountPercent: in.DiscountPercent, CommissionPercent: in.CommissionPercent,
-		Prices: in.Prices}
+		Prices: in.Prices, Currencies: in.Currencies}
 	if t.Prices == nil {
 		t.Prices = map[string]int64{}
 	}

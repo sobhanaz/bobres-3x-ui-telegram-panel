@@ -1152,3 +1152,62 @@ func TestOrderAfterResellerRemovedIsRefused(t *testing.T) {
 		t.Fatalf("retry as a customer: %v %+v", err, o)
 	}
 }
+
+// A tier's fixed price is in the plan's currency when it was set: after the
+// plan moves to another currency it is dropped (audited) and never read in
+// the new one; the tier's discount applies instead.
+func TestTierPriceCurrencyChange(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	admin := staffMember(t, s, 9900, "admin")
+	plan := planWithLimits(t, s, 30, 50<<30)
+	plan.Price = 200_000
+	if err := s.UpsertPlan(ctx, s.Conn(), plan); err != nil {
+		t.Fatal(err)
+	}
+	other := planWithLimits(t, s, 30, 10<<30)
+	tier := seedTier(t, svc, admin, "Gold", 10, 0, map[string]int64{plan.ID: 150_000, other.ID: 900})
+	r := reseller(t, svc, s, admin, 9901, tier, 0)
+
+	plan.Currency, plan.Price = "USDT", 5_000_000
+	if _, err := svc.UpsertPlan(ctx, admin, plan); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: r.ID, PlanID: plan.ID, IdempotencyKey: "cur-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Currency != "USDT" || o.Amount != 4_500_000 { // 5 USDT less 10%
+		t.Fatalf("order %d %s, want 4500000 USDT", o.Amount, o.Currency)
+	}
+	got, err := svc.ListTiers(ctx)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("tiers: %v %+v", err, got)
+	}
+	if _, kept := got[0].Prices[plan.ID]; kept || got[0].Prices[other.ID] != 900 {
+		t.Fatalf("prices after the move: %v", got[0].Prices)
+	}
+	var n int
+	if err := s.Conn().QueryRow(ctx, `SELECT count(*) FROM core.audit_log
+		WHERE action = 'reseller_tier.prices_dropped' AND entity_id = $1`, plan.ID).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("audit entries: %d %v", n, err)
+	}
+
+	// A price stored in another currency than its plan's (written while the
+	// plan was changing) is never used.
+	if _, err := s.Conn().Exec(ctx, `INSERT INTO core.reseller_tier_prices (tier_id, plan_id, price, currency)
+		VALUES ($1, $2, 150000, 'IRT')`, tier.ID, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := svc.priceFor(ctx, r, plan); err != nil || p != 4_500_000 {
+		t.Fatalf("price with a stale fixed price: %d %v", p, err)
+	}
+
+	// A save that read the plan before the move is refused.
+	_, err = svc.UpdateTier(ctx, admin, tier.ID, tier.Version, TierInput{Name: "Gold", DiscountPercent: 10,
+		Prices: map[string]int64{plan.ID: 150_000}, Currencies: map[string]string{plan.ID: "IRT"}}, "")
+	var fe *FieldError
+	if !errors.As(err, &fe) || fe.Field != "prices."+plan.ID {
+		t.Fatalf("save in the old currency: %v", err)
+	}
+}

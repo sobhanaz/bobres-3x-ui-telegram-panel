@@ -21,6 +21,9 @@ CREATE TABLE reseller_tier_prices (
     tier_id uuid NOT NULL REFERENCES reseller_tiers (id) ON DELETE CASCADE,
     plan_id uuid NOT NULL REFERENCES plans (id) ON DELETE CASCADE,
     price   bigint NOT NULL CHECK (price >= 0),
+    -- the plan's currency when the price was set: a price in another currency
+    -- (the plan changed meanwhile) is ignored
+    currency text NOT NULL,
     PRIMARY KEY (tier_id, plan_id)
 );
 

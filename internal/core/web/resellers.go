@@ -364,7 +364,7 @@ type tierBody struct {
 // input reads the tier; false after answering a field error.
 func (b *tierBody) input(w http.ResponseWriter, currencies map[string]string) (domain.TierInput, bool) {
 	in := domain.TierInput{Name: b.Name, DiscountPercent: b.DiscountPercent, CommissionPercent: b.CommissionPercent,
-		Prices: map[string]int64{}}
+		Prices: map[string]int64{}, Currencies: map[string]string{}}
 	for _, p := range b.Prices {
 		id := strings.ToLower(strings.TrimSpace(p.PlanID))
 		field := "prices." + id
@@ -385,7 +385,7 @@ func (b *tierBody) input(w http.ResponseWriter, currencies map[string]string) (d
 			writeFieldError(w, field, "a price in the plan's currency")
 			return in, false
 		}
-		in.Prices[id] = v
+		in.Prices[id], in.Currencies[id] = v, cur
 	}
 	return in, true
 }
