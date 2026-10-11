@@ -722,3 +722,40 @@ func TestResellerInputHelpers(t *testing.T) {
 		}
 	}
 }
+
+// A service still being prepared can be named already.
+func TestResellerRenamesPendingService(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	rs := w.customer(1621, "rsp")
+	w.makeReseller(1621, 0, 10, 0)
+	ctx := context.Background()
+	st := w.stack.Store
+	plans, err := st.ListPlans(ctx, st.Conn(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(plans, func(p corestore.Plan) bool { return !p.IsTrial && !p.IsTopup })
+	o, _, err := st.CreateOrder(ctx, st.Conn(), &corestore.Order{UserID: w.storeUser(1621).ID, PlanID: plans[i].ID, Type: "new",
+		Status: "provisioning", Amount: plans[i].Price, Currency: plans[i].Currency, IdempotencyKey: "pending-" + buuid.MustV7().String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := st.CreateSubscription(ctx, st.Conn(), &corestore.Subscription{UserID: o.UserID, OrderID: o.ID,
+		ClientEmail: "pending-" + o.ID, Status: "pending"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rs.text("/menu")
+	rs.press("rs")
+	rs.press("rs:subs:1")
+	rs.press("sub:" + sub.ID)
+	rs.shownHas("being prepared")
+	rs.press("rs:rn:")
+	rs.text("Reza phone")
+	rs.shownHas("🏷 <b>Reza phone</b>")
+	if l := w.subscription(sub.ID).Label; l == nil || *l != "Reza phone" {
+		t.Fatalf("renamed: %v", l)
+	}
+}

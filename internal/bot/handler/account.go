@@ -112,7 +112,12 @@ func (h *Handler) showService(r *req, id string) {
 		return
 	}
 	if s.GetStatus() == "pending" || s.GetSubscriptionLink() == "" {
-		r.show(r.labelled(s.GetLabel(), r.t("sub.not_ready")), backHome(r, "subs"))
+		kb := backHome(r, "subs")
+		if r.isReseller() { // a name can be given before the service is ready
+			kb = (&tg.Keyboard{}).Row(tg.CB(r.t("btn.rename"), "rs:rn:"+id)).
+				Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
+		}
+		r.show(r.labelled(s.GetLabel(), r.t("sub.not_ready")), kb)
 		return
 	}
 	kb := &tg.Keyboard{}
