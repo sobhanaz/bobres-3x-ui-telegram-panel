@@ -79,9 +79,11 @@ function remove(s: ServerItem) {
         await api('DELETE', `/servers/${s.id}`)
         toast.add({ severity: 'success', summary: t('server.deleted'), life: 3000 })
       } catch (e) {
-        // 409: services on it, or plans still sending new services to it (core says which).
-        const summary = e instanceof ApiError && e.status === 409 && s.clients > 0 ? t('server.in_use') : errorText(e, t).text
-        toast.add({ severity: 'error', summary, life: 6000 })
+        // 409: services on it (maybe new since the list loaded), or plans
+        // still sending new services to it: then core's reason says which.
+        const err = errorText(e, t)
+        const inUse = e instanceof ApiError && e.status === 409 && !s.plans.length
+        toast.add({ severity: 'error', summary: inUse ? t('server.in_use') : err.text, detail: inUse ? undefined : err.detail || undefined, life: 6000 })
       }
       void load()
     },
