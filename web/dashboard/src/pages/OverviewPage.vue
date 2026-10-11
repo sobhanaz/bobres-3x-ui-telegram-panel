@@ -8,10 +8,14 @@ import Tag from 'primevue/tag'
 import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import Button from 'primevue/button'
+import { RouterLink } from 'vue-router'
 import { api } from '../api'
 import { useAuth } from '../stores/auth'
 import { dateTime, money, num, type Money, type Lang } from '../format'
 import { duration } from '../support'
+import { serverSummary } from '../servers'
+import { overviewGatewaySeverity, overviewGatewayState } from '../gateways'
+import type { OverviewGateway, OverviewServer } from '../types'
 
 interface RecentOrder {
   id: string
@@ -36,9 +40,13 @@ interface Overview {
   tickets?: { waiting: number; oldest_waiting_at: number | null }
   /** Resellers (M5), for those who manage them: how many, and what they owe. */
   resellers?: { count: number; debt: Money[] }
+  /** 3x-ui servers (M6), each with its health; panel stays their sum. */
+  servers?: OverviewServer[]
+  /** Payment methods (M6): offered or not, and whether payments go through. */
+  gateways?: OverviewGateway[]
 }
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const auth = useAuth()
 const data = ref<Overview | null>(null)
@@ -68,6 +76,23 @@ const resellers = computed(() => {
   return r && r.count > 0 ? r : null
 })
 const owing = computed(() => (resellers.value?.debt ?? []).filter((m) => m.amount > 0))
+// The servers card replaces the single panel card once core lists servers.
+// Only servers taking new services count: a switched-off one is not checked.
+const servers = computed(() => data.value?.servers ?? null)
+const summary = computed(() => serverSummary(servers.value ?? []))
+const serversTag = computed(() => {
+  const { live, down } = summary.value
+  if (!servers.value?.length) return { severity: 'warn', text: t('overview.servers_none') }
+  if (!live) return { severity: 'warn', text: t('overview.servers_all_off') }
+  if (down.length) return { severity: 'danger', text: t('overview.servers_down', { n: num(down.length, lang.value), total: num(live, lang.value) }) }
+  return { severity: 'success', text: t('overview.servers_ok') }
+})
+const serverClients = computed(() => (servers.value ?? []).reduce((n, s) => n + s.clients, 0))
+const gateways = computed(() => (data.value?.gateways?.length ? data.value.gateways : null))
+// A card opens its page for those who may use it; for others it is just a card.
+function linkTo(perm: string, name: string) {
+  return auth.can(perm) ? { is: RouterLink, attrs: { to: { name }, class: 'card-link' } } : { is: 'div', attrs: {} }
+}
 const moneyLine = (list: Money[]) => (list.length ? list.map((m) => money(m, lang.value)).join(' · ') : t('overview.no_revenue'))
 const planName = (p: Record<string, string>) => p[lang.value] || p.en || p.fa || ''
 const statusSeverity = (s: string) =>
@@ -154,7 +179,22 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
-    <Card class="stat">
+    <component :is="linkTo('servers.write', 'servers').is" v-if="servers" v-bind="linkTo('servers.write', 'servers').attrs" class="card-wrap servers-card">
+      <Card class="stat">
+        <template #subtitle>{{ t('overview.servers') }}</template>
+        <template #content>
+          <Tag :severity="serversTag.severity" :value="serversTag.text" class="servers-state" />
+          <div v-for="s in summary.down" :key="s.id" class="down">
+            <bdi>{{ s.name }}</bdi>
+            <div v-if="s.detail" class="app-muted app-ltr detail">{{ s.detail }}</div>
+          </div>
+          <div v-if="servers.length" class="app-muted count">
+            {{ t('overview.servers_clients', { n: num(serverClients, lang), servers: num(servers.length, lang) }) }}
+          </div>
+        </template>
+      </Card>
+    </component>
+    <Card v-else class="stat">
       <template #subtitle>{{ t('overview.panel') }}</template>
       <template #content>
         <template v-if="data">
@@ -164,6 +204,17 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
+    <component :is="linkTo('gateways.write', 'gateways').is" v-if="gateways" v-bind="linkTo('gateways.write', 'gateways').attrs" class="card-wrap gateways-card">
+      <Card class="stat">
+        <template #subtitle>{{ t('overview.gateways') }}</template>
+        <template #content>
+          <div v-for="g in gateways" :key="g.provider" class="gateway">
+            <span>{{ te('payment.provider.' + g.provider) ? t('payment.provider.' + g.provider) : g.provider }}</span>
+            <Tag :severity="overviewGatewaySeverity[overviewGatewayState(g)]" :value="t('overview.gateway_state.' + overviewGatewayState(g))" class="gateway-state" />
+          </div>
+        </template>
+      </Card>
+    </component>
   </div>
 
   <Card class="recent">
@@ -221,6 +272,22 @@ const statusSeverity = (s: string) =>
 .recent {
   margin-block-start: var(--app-gap);
 }
+.down {
+  margin-block-start: 0.4rem;
+}
+.count {
+  margin-block-start: 0.4rem;
+  font-size: 0.85rem;
+}
+.gateway {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.gateway + .gateway {
+  margin-block-start: 0.4rem;
+}
 .card-link {
   display: block;
   color: inherit;
@@ -230,7 +297,8 @@ const statusSeverity = (s: string) =>
 .card-link:hover .stat {
   box-shadow: 0 0 0 1px var(--p-primary-color);
 }
-.card-link .stat {
+.card-link .stat,
+.card-wrap .stat {
   block-size: 100%;
 }
 </style>

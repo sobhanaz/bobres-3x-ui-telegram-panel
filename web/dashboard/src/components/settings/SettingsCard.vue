@@ -28,8 +28,10 @@ import {
 import type { SettingItem, SettingsReply } from '../../types'
 
 // One group of settings with its own Save: only the keys that changed are
-// sent, and core answers every setting, which the page passes back in.
-const props = defineProps<{ group: string; items: SettingItem[] }>()
+// sent, and core answers every setting, which the page passes back in. The
+// Gateways page shows a payment method's settings this way, with its own
+// title and a state badge.
+const props = defineProps<{ group: string; items: SettingItem[]; title?: string; desc?: string }>()
 const emit = defineEmits<{ saved: [reply: SettingsReply] }>()
 const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
@@ -61,8 +63,8 @@ const locked = computed(() => props.items.some((i) => !i.editable))
 
 const titleId = computed(() => `settings-${props.group}-title`)
 const text = (key: string, fallback = '') => (te(key) ? t(key) : fallback)
-const title = computed(() => text(`settings.group.${props.group}.title`, props.group))
-const desc = computed(() => text(`settings.group.${props.group}.desc`))
+const title = computed(() => props.title || text(`settings.group.${props.group}.title`, props.group))
+const desc = computed(() => props.desc ?? text(`settings.group.${props.group}.desc`))
 const note = computed(() => text(`settings.group.${props.group}.note`))
 const lockNote = computed(() => (props.group === 'payments' ? t('settings.locked_payments') : t('settings.locked')))
 
@@ -173,7 +175,10 @@ async function send(values: Record<string, string>) {
 <template>
   <Card class="settings-card">
     <template #title>
-      <h2 :id="titleId" class="card-title">{{ title }}</h2>
+      <div class="title-row">
+        <h2 :id="titleId" class="card-title">{{ title }}</h2>
+        <slot name="badge" />
+      </div>
     </template>
     <template v-if="desc" #subtitle>{{ desc }}</template>
     <template #content>
@@ -217,6 +222,12 @@ async function send(values: Record<string, string>) {
 </template>
 
 <style scoped>
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
 .card-title {
   margin: 0;
   font-size: 1.1rem;

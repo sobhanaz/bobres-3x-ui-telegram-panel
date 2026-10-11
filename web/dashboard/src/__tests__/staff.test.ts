@@ -123,6 +123,11 @@ describe('audit links', () => {
     expect(auditLink(entry('settings', 'maintenance.enabled'))).toEqual({ name: 'settings' })
     expect(auditLink(entry('text', 'fa.welcome'))).toEqual({ name: 'branding', query: { tab: 'texts' } })
     expect(auditLink(entry('branding', 'logo'))).toEqual({ name: 'branding' })
+    // M6: servers, gateways, and the payment details now on the Gateways page
+    expect(auditLink(entry('server', uuid))).toEqual({ name: 'servers' })
+    expect(auditLink(entry('gateway', 'zarinpal'))).toEqual({ name: 'gateways' })
+    expect(auditLink(entry('settings', 'payments.card_number'))).toEqual({ name: 'gateways' })
+    expect(auditLink(entry('settings', 'payments.stars.enabled'))).toEqual({ name: 'gateways' })
   })
   it('filters dashboard entries by the staff member', () => {
     expect(auditLink(entry('dashboard'))).toEqual({ name: 'audit', query: { actor: uuid } })

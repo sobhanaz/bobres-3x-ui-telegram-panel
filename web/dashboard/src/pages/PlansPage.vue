@@ -10,16 +10,20 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Checkbox from 'primevue/checkbox'
+import MultiSelect from 'primevue/multiselect'
 import Tag from 'primevue/tag'
 import Message from 'primevue/message'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { asciiNumber, bytes, currencies, decimalOf, gbOf, money, num, validAmount, type Lang } from '../format'
-import type { PlanItem } from '../types'
+import { noUsableServer, serverNames, serverOptions } from '../servers'
+import { useAuth } from '../stores/auth'
+import type { PlanItem, ServerItem } from '../types'
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const toast = useToast()
+const auth = useAuth()
 
 const plans = ref<PlanItem[]>([])
 const loading = ref(true)
@@ -37,6 +41,33 @@ async function load() {
 }
 onMounted(load)
 
+// The 3x-ui servers, for the plan's server choice (those who manage servers).
+const canServers = computed(() => auth.can('servers.write'))
+const servers = ref<ServerItem[]>([])
+const serversReady = ref(false)
+const serversError = ref('')
+async function loadServers() {
+  serversError.value = ''
+  try {
+    servers.value = (await api<{ items: ServerItem[] }>('GET', '/servers')).items
+    serversReady.value = true
+  } catch (e) {
+    serversError.value = errorText(e, t).text
+  }
+}
+onMounted(() => {
+  if (canServers.value) void loadServers()
+})
+function serversText(p: PlanItem): string {
+  const ids = p.server_ids ?? []
+  if (!ids.length) return t('plan.servers_any')
+  // Until the servers are in, their names are not known.
+  if (!serversReady.value) return t('plan.servers_count', { n: num(ids.length, lang.value) })
+  return serverNames(ids, servers.value)
+    .map((n) => n || t('plan.server_removed'))
+    .join(lang.value === 'fa' ? '، ' : ', ')
+}
+
 // The editor: traffic in GB, the price in major units, as staff type them.
 interface Form {
   id: string
@@ -51,9 +82,13 @@ interface Form {
   is_trial: boolean
   is_topup: boolean
   sort: string
+  /** empty = any server */
+  server_ids: string[]
+  /** the plan came with its servers (core knows them): they go back on save */
+  has_servers: boolean
 }
 const blank = (): Form => ({ id: '', name_fa: '', name_en: '', kind: 'both', days: '30', gb: '', price: '', currency: 'IRT',
-  enabled: true, is_trial: false, is_topup: false, sort: '0' })
+  enabled: true, is_trial: false, is_topup: false, sort: '0', server_ids: [], has_servers: false })
 const form = ref<Form>(blank())
 const editing = ref(false)
 const busy = ref(false)
@@ -70,11 +105,24 @@ function edit(p?: PlanItem) {
       id: p.id, name_fa: p.name.fa ?? '', name_en: p.name.en ?? '', kind: p.kind,
       days: p.duration_days ? String(p.duration_days) : '', gb: p.traffic_bytes ? gbOf(p.traffic_bytes) : '',
       price: decimalOf(p.price), currency: p.price.currency, enabled: p.enabled, is_trial: p.is_trial,
-      is_topup: p.is_topup, sort: String(p.sort),
+      is_topup: p.is_topup, sort: String(p.sort), server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
     }
   }
+  if (canServers.value && serversError.value) void loadServers()
   editing.value = true
 }
+
+// The server choice shows once the servers are in; a new plan sends it, an
+// edited one sends it back when core gave it (so nothing is lost).
+const showServers = computed(() => canServers.value && serversReady.value)
+const sendServers = computed(() => (form.value.id ? form.value.has_servers : showServers.value))
+const serverChoices = computed(() =>
+  serverOptions(servers.value, form.value.server_ids).map((o) => ({
+    value: o.value,
+    label: o.removed ? t('plan.server_removed_id', { id: o.label }) : o.off ? t('plan.server_off', { name: o.label }) : o.label,
+  })),
+)
+const noUsable = computed(() => showServers.value && noUsableServer(servers.value, form.value.server_ids))
 
 const kinds = computed(() => [
   { label: t('plan.kind.time'), value: 'time' },
@@ -110,6 +158,7 @@ async function save() {
     is_trial: f.is_trial,
     is_topup: f.is_topup,
     sort: Number(asciiNumber(f.sort)) || 0,
+    ...(sendServers.value ? { server_ids: f.server_ids } : {}),
   }
   try {
     await api(f.id ? 'PUT' : 'POST', f.id ? `/plans/${f.id}` : '/plans', body)
@@ -131,6 +180,7 @@ async function toggle(p: PlanItem, enabled: boolean) {
     await api('PUT', `/plans/${p.id}`, {
       name: p.name, kind: p.kind, duration_days: p.duration_days, traffic_gb: p.traffic_bytes ? gbOf(p.traffic_bytes) : '',
       price: decimalOf(p.price), currency: p.price.currency, enabled, is_trial: p.is_trial, is_topup: p.is_topup, sort: p.sort,
+      ...(p.server_ids ? { server_ids: p.server_ids } : {}),
     })
     p.enabled = enabled
   } catch (e) {
@@ -173,6 +223,11 @@ async function toggle(p: PlanItem, enabled: boolean) {
     </Column>
     <Column :header="t('plan.price')">
       <template #body="{ data: p }">{{ p.price.amount ? money(p.price, lang) : t('plan.free') }}</template>
+    </Column>
+    <Column v-if="canServers" :header="t('plan.servers')">
+      <template #body="{ data: p }">
+        <span :class="['plan-servers', { 'app-muted': !p.server_ids?.length }]">{{ serversText(p) }}</span>
+      </template>
     </Column>
     <Column :header="t('plan.sales')">
       <template #body="{ data: p }">{{ num(p.sales, lang) }}</template>
@@ -233,6 +288,27 @@ async function toggle(p: PlanItem, enabled: boolean) {
           <InputText v-model="form.sort" inputmode="numeric" dir="ltr" />
         </label>
       </div>
+      <div v-if="showServers" class="app-field">
+        <span id="plan-servers-label">{{ t('plan.servers') }}</span>
+        <MultiSelect
+          v-model="form.server_ids"
+          :options="serverChoices"
+          option-label="label"
+          option-value="value"
+          display="chip"
+          :placeholder="t('plan.servers_any')"
+          :show-toggle-all="false"
+          aria-labelledby="plan-servers-label"
+          aria-describedby="plan-servers-help"
+          class="servers"
+          fluid
+        />
+        <small id="plan-servers-help" class="app-muted">{{ t('plan.servers_help') }}</small>
+        <Message v-if="noUsable" severity="warn" :closable="false" class="no-usable">{{ t('plan.servers_none_usable') }}</Message>
+      </div>
+      <Message v-else-if="canServers && serversError" severity="warn" :closable="false" class="servers-error">
+        {{ t('plan.servers_error') }} {{ serversError }}
+      </Message>
       <label v-if="!form.is_topup" class="app-check">
         <Checkbox v-model="form.is_trial" binary @update:model-value="(v: boolean) => v && (form.price = '0')" />
         <span>{{ t('plan.trial_hint') }}</span>

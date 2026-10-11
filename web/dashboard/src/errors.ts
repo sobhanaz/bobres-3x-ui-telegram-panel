@@ -15,10 +15,23 @@ export function errorText(e: unknown, t: T): { text: string; detail: string } {
     conflict: 'error.conflict',
     state: 'error.state',
     invalid: 'error.invalid',
+    rate_limited: 'error.rate_limited',
   }
-  const key = known[e.code]
+  const key = known[e.code] ?? (e.status === 429 ? 'error.rate_limited' : '')
   if (!key) return { text: t('error.generic'), detail: '' }
-  // The server explains state and input problems (in English): shown as a detail.
-  const detail = e.code === 'state' || e.code === 'invalid' ? e.message : ''
-  return { text: t(key), detail }
+  return { text: t(key), detail: explains(e) ? e.message : '' }
+}
+
+/** The server explains state and input problems, and a refusal of one field
+ * this role may not set (in English): shown as a detail. */
+function explains(e: ApiError): boolean {
+  return e.code === 'state' || e.code === 'invalid' || (e.code === 'forbidden' && typeof e.data.field === 'string')
+}
+
+/** fieldError is core's words about one field it refused, by the field's
+ * name: input it does not accept (400), or a field this role may not set
+ * (403). Empty for any other failure. */
+export function fieldError(e: unknown): Record<string, string> {
+  if (!(e instanceof ApiError) || (e.status !== 400 && e.status !== 403) || typeof e.data.field !== 'string') return {}
+  return { [e.data.field]: e.message }
 }

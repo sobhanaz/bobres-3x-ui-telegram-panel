@@ -236,7 +236,15 @@ describe('settings page', () => {
     password_available: true,
     brand: 'BOBRES',
   }
+  // The payment details moved to the Payment gateways page (M6): core no
+  // longer lists them here; an older core still may.
   const pay = (key: string, kind: SettingItem['kind'], extra: Partial<SettingItem> = {}) => item(key, kind, { editable: false, ...extra })
+  const payments: SettingItem[] = [
+    pay('payments.card_number', 'text', { value: '6037 9911 2345 6789' }),
+    pay('payments.card_holder', 'text'),
+    pay('payments.usdt_rate', 'int', { min: 1, max: 1e12 }),
+    pay('payments.zarinpal_link', 'url'),
+  ]
   const start: SettingItem[] = [
     tz,
     item('maintenance.enabled', 'bool', { default: 'false' }),
@@ -248,20 +256,19 @@ describe('settings page', () => {
     sales,
     recipients,
     perTen,
-    item('limits.tickets_per_day', 'int', { default: '10', min: 0, max: 100 }),
-    pay('payments.card_number', 'text', { value: '6037 9911 2345 6789' }),
-    pay('payments.card_holder', 'text'),
-    pay('payments.usdt_trc20', 'text'),
-    pay('payments.usdt_erc20', 'text'),
-    pay('payments.usdt_rate', 'int', { min: 1, max: 1e12 }),
-    pay('payments.stars_rate', 'int', { min: 1, max: 1e9 }),
-    pay('payments.zarinpal_link', 'url'),
+    // a setting this role may not change
+    item('limits.tickets_per_day', 'int', { default: '10', min: 0, max: 100, value: '5', editable: false }),
   ]
-  const groups = ['general', 'maintenance', 'join', 'notify', 'limits', 'payments']
+  const groups = ['general', 'maintenance', 'join', 'notify', 'limits']
   const text = (path: string) => path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], fa) ?? path
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
-  async function open(put: (values: Record<string, string>) => Response) {
+  async function open(
+    put: (values: Record<string, string>) => Response,
+    opts: { permissions?: string[]; items?: SettingItem[]; groups?: string[] } = {},
+  ) {
+    const items = opts.items ?? start
+    const listed = opts.groups ?? groups
     vi.resetModules()
     vi.spyOn(console, 'warn').mockImplementation(() => {}) // texts not merged into the catalogs yet
     window.history.replaceState(null, '', '/admin/settings')
@@ -273,8 +280,8 @@ describe('settings page', () => {
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET'
-        if (url === '/api/v1/me') return json(200, me)
-        if (url === '/api/v1/settings' && method === 'GET') return json(200, { items: start, groups } satisfies SettingsReply)
+        if (url === '/api/v1/me') return json(200, opts.permissions ? { ...me, permissions: opts.permissions } : me)
+        if (url === '/api/v1/settings' && method === 'GET') return json(200, { items, groups: listed } satisfies SettingsReply)
         if (url === '/api/v1/settings' && method === 'PUT') {
           const { values } = JSON.parse(String(init?.body)) as { values: Record<string, string> }
           puts.push(values)
@@ -287,7 +294,7 @@ describe('settings page', () => {
     await import('../main')
     const { router } = await import('../router')
     await router.isReady()
-    await vi.waitFor(() => expect(document.querySelectorAll('.settings-card')).toHaveLength(6))
+    await vi.waitFor(() => expect(document.querySelectorAll('.settings-card')).toHaveLength(5))
     return puts
   }
   const saved = (values: Record<string, string>) =>
@@ -319,11 +326,24 @@ describe('settings page', () => {
     await vi.waitFor(() => expect(puts).toEqual([{ 'limits.bot_per_10s': '30' }]))
     await vi.waitFor(() => expect(saveButton('limits.bot_per_10s').disabled).toBe(true))
     expect(input('limits.bot_per_10s').value).toBe('30')
-    // payments are read-only for an admin: no Save, a lock, the value still shown
-    expect(card('payments.card_number').querySelector('button[type=submit]')).toBeNull()
-    expect(card('payments.card_number').querySelector('.pi-lock')).not.toBeNull()
-    expect(input('payments.card_number').readOnly).toBe(true)
-    expect(input('payments.card_number').value).toBe('6037 9911 2345 6789')
+    // a setting the role may not change: a lock, read only, the value still shown, never sent
+    expect(card('limits.tickets_per_day').querySelector('.pi-lock')).not.toBeNull()
+    expect(input('limits.tickets_per_day').readOnly).toBe(true)
+    expect(input('limits.tickets_per_day').value).toBe('5')
+    expect(card('join.channel').querySelector('.pi-lock')).toBeNull()
+    // an admin is not sent to the Gateways page
+    expect(document.querySelector('a.payments-moved')).toBeNull()
+  })
+
+  it('leaves the payment details to the Payment gateways page', async () => {
+    // An older core still lists the payments group: it is not shown here.
+    await open(saved, { items: [...start, ...payments], groups: [...groups, 'payments'], permissions: ['overview.read', 'settings.write', 'gateways.write'] })
+    expect(input('payments.card_number')).toBeNull()
+    expect(document.body.textContent).not.toContain(text('settings.group.payments.title'))
+    // the owner gets a link there
+    const moved = document.querySelector('a.payments-moved') as HTMLAnchorElement
+    expect(moved.getAttribute('href')).toBe('/admin/gateways')
+    expect(document.querySelector('.intro')?.textContent).toContain(text('settings.payments_moved'))
   })
 
   it('shows core’s reason under the field it names, and a bot that cannot be reached', async () => {
