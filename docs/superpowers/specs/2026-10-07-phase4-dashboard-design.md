@@ -768,8 +768,16 @@ The System page's health tab and its License tab. The update check, logs and bac
   last_error, next_run (unix), disk_free, dir}`; `POST /internal/backups/run` 202 `{started: true}` or 409
   `{started: false, reason: "running"}`. `bobres backup` runs `/app run-now` in the container, which uses the
   same API and waits.
-- **Next part:** core's endpoints over these and the dashboard's Backups tab ("Back up now" audited as
-  `system.backup`).
+- **Core's API** (core asks with its service token, within 3 seconds; core has a backup client only when
+  `BOBRES_BACKUP_URL` is set, that is when the profile is on):
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/system/backups`: the service's list as it answers it, `{installed: false}` when the service is not installed, `{installed: true, error: "unreachable"}` when it does not answer (details in core's log) | system.read |
+| `POST /api/v1/system/backups/run`: 202 `{started: true}` (audited `system.backup`, source dashboard, no details), 409 `{started: false, reason: "running"}`, 503 `not_configured` (not installed) or `unavailable` (no answer) | system.write |
+| `GET /api/v1/system` gains `backups`: `{installed, last_created_at (unix, the newest backup that worked; null before one), last_error, next_run}`, `{installed: false}` or `{installed: true, error: "unreachable"}` | system.read |
+
+- **Next part:** the dashboard's Backups tab.
 
 ## Tests
 

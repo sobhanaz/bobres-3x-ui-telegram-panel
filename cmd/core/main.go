@@ -15,6 +15,7 @@ import (
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/backupclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/paymentsclient"
@@ -159,8 +160,15 @@ func setup(rt *app.Runtime) error {
 		{Name: "provisioner", URL: cfg.ProvisionerURL},
 		{Name: "backup", URL: cfg.BackupURL, Optional: true},
 	})
+	// The System page's backups tab (BOBRES_BACKUP_URL is set only when the
+	// install turned the backup profile on).
+	var backups web.Backups
+	if cfg.BackupURL != "" {
+		backups = backupclient.New(cfg.BackupURL, cfg.ServiceToken)
+	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
-		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
+		Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)
