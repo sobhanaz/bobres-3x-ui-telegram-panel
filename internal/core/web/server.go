@@ -43,6 +43,12 @@ type Config struct {
 	// Payments and Provisioner feed the overview and the sales pages.
 	Payments    domain.PaymentsClient
 	Provisioner domain.Provisioner
+	// Servers and Gateways are the provisioner's server registry and
+	// payments' gateway settings (nil: those pages answer 503).
+	Servers  domain.ServerAdmin
+	Gateways domain.GatewayAdmin
+	// Env is BOBRES_ENV ("prod" refuses the Zarinpal sandbox).
+	Env string
 	// Files fetches receipt photos through the bot (nil: not shown).
 	Files ReceiptFiles
 	// Bot reloads settings and checks channels (nil: the bot picks changes
@@ -61,7 +67,9 @@ type Server struct {
 	limiter *limiter
 	// tests limits broadcast test sends per staff member.
 	tests *limiter
-	now   func() time.Time
+	// probes limits connection tests (servers, gateways) per staff member.
+	probes *limiter
+	now    func() time.Time
 }
 
 // New builds the API.
@@ -69,7 +77,8 @@ func New(cfg Config) *Server {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute), now: time.Now}
+	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute),
+		probes: newLimiter(10, time.Minute), now: time.Now}
 }
 
 // Register mounts the API on /api/v1/ and the dashboard on /admin/.
@@ -175,6 +184,19 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/settings", PermSettingsWrite, s.getSettings)
 	s.route(api, "PUT /api/v1/settings", PermSettingsWrite, s.putSettings)
 	s.route(api, "POST /api/v1/settings/channel-check", PermSettingsWrite, s.checkChannel)
+
+	// Infrastructure: 3x-ui servers (owner and admin), payment gateways (owner).
+	s.route(api, "GET /api/v1/servers", PermServersWrite, s.listServers)
+	s.route(api, "POST /api/v1/servers", PermServersWrite, s.addServer)
+	s.route(api, "POST /api/v1/servers/test", PermServersWrite, s.testServer)
+	s.route(api, "PUT /api/v1/servers/{id}", PermServersWrite, s.updateServer)
+	s.route(api, "DELETE /api/v1/servers/{id}", PermServersWrite, s.deleteServer)
+	s.route(api, "GET /api/v1/servers/{id}/inbounds", PermServersWrite, s.listInbounds)
+	s.route(api, "PUT /api/v1/servers/{id}/inbounds/{inbound}", PermServersWrite, s.setInboundAttach)
+	s.route(api, "GET /api/v1/gateways", PermGatewaysWrite, s.listGateways)
+	s.route(api, "GET /api/v1/gateways/report", PermGatewaysWrite, s.gatewayReport)
+	s.route(api, "PUT /api/v1/gateways/{provider}", PermGatewaysWrite, s.putGateway)
+	s.route(api, "POST /api/v1/gateways/{provider}/test", PermGatewaysWrite, s.testGateway)
 
 	// Administration.
 	s.route(api, "GET /api/v1/staff", PermStaffWrite, s.listStaff)

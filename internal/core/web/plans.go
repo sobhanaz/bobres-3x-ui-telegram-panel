@@ -19,11 +19,18 @@ type planJSON struct {
 	IsTopup      bool              `json:"is_topup"`
 	Sort         int32             `json:"sort"`
 	Sales        int64             `json:"sales"`
+	// ServerIDs are the 3x-ui servers its new services go to ([] = any).
+	ServerIDs []string `json:"server_ids"`
 }
 
 func planOf(p *store.Plan, sales int64) planJSON {
+	ids := p.ServerIDs
+	if ids == nil {
+		ids = []string{}
+	}
 	return planJSON{ID: p.ID, Name: p.NameI18n, Kind: p.Kind, DurationDays: p.DurationDays, TrafficBytes: p.TrafficBytes,
-		Price: money{p.Price, p.Currency}, Enabled: p.Enabled, IsTrial: p.IsTrial, IsTopup: p.IsTopup, Sort: p.Sort, Sales: sales}
+		Price: money{p.Price, p.Currency}, Enabled: p.Enabled, IsTrial: p.IsTrial, IsTopup: p.IsTopup, Sort: p.Sort, Sales: sales,
+		ServerIDs: ids}
 }
 
 // listPlans: GET /api/v1/plans, every plan (also turned off) with its sales.
@@ -58,6 +65,8 @@ type planBody struct {
 	IsTrial      bool              `json:"is_trial"`
 	IsTopup      bool              `json:"is_topup"`
 	Sort         int32             `json:"sort"`
+	// ServerIDs: absent keeps the plan's servers (a new plan: any server).
+	ServerIDs *[]string `json:"server_ids"`
 }
 
 func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
@@ -89,6 +98,9 @@ func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
 	}
 	if bytes > 0 {
 		p.TrafficBytes = &bytes
+	}
+	if b.ServerIDs != nil {
+		p.ServerIDs = append([]string{}, *b.ServerIDs...)
 	}
 	return p, true
 }

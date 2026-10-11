@@ -13,6 +13,7 @@
     "conflict": "This clashes with an earlier change. Reload the page and try again.",
     "insufficient_funds": "The wallet balance is too low for this.",
     "invalid": "Some of what you entered is not accepted.",
+    "rate_limited": "Too many attempts. Wait a minute.",
     "not_found": "This item no longer exists.",
     "state": "This cannot be done right now.",
     "unavailable": "A service this needs (or the 3x-ui panel) did not answer. Try again in a minute."
@@ -90,7 +91,7 @@
     },
     "settings": {
       "title": "Settings",
-      "desc": "Maintenance mode, required channel, notifications, limits, time zone and payment details."
+      "desc": "Maintenance mode, required channel, notifications, limits, support and time zone."
     },
     "servers": {
       "title": "3x-ui servers",
@@ -98,7 +99,7 @@
     },
     "gateways": {
       "title": "Payment gateways",
-      "desc": "Turn gateways on or off, store their keys encrypted, test them."
+      "desc": "Turn payment methods on or off with their details, keep Zarinpal's keys encrypted, test it and see its payments."
     },
     "staff": {
       "title": "Staff",
@@ -162,7 +163,20 @@
     "tickets_none": "Nobody is waiting",
     "reseller_debt": "Reseller debt",
     "reseller_no_debt": "Nobody owes",
-    "resellers_count": "{n} resellers"
+    "resellers_count": "{n} resellers",
+    "servers": "3x-ui servers",
+    "servers_none": "No server yet",
+    "servers_ok": "All working",
+    "servers_all_off": "No server takes new services",
+    "servers_down": "{n} of {total} not answering",
+    "servers_clients": "{n} services on {servers} servers",
+    "gateways": "Payment gateways",
+    "gateway_state": {
+      "off": "Off",
+      "ok": "Working",
+      "incomplete": "On, details missing",
+      "down": "Problem"
+    }
   },
   "order": {
     "type": {
@@ -388,7 +402,16 @@
     "trial_hint": "Free trial (each customer can take it once)",
     "topup": "Traffic package",
     "topup_hint": "Traffic package (adds traffic to a running service)",
-    "saved": "Plan saved"
+    "saved": "Plan saved",
+    "servers": "Servers",
+    "servers_any": "Any server",
+    "servers_help": "New services of this plan are created only on these servers. Empty means any server. Renewals and traffic packages stay on the service's own server.",
+    "servers_none_usable": "None of these servers takes new services now, so orders for this plan would wait. Choose a server that is on.",
+    "servers_error": "The server list could not be loaded:",
+    "server_removed": "Removed server",
+    "server_removed_id": "Removed server ({id})",
+    "server_off": "{name} (off)",
+    "servers_count": "{n} servers"
   },
   "payment": {
     "queue": "Review queue",
@@ -838,6 +861,30 @@
         "zarinpal_link": {
           "label": "Zarinpal link",
           "help": "Your own Zarinpal payment link (https). Customers pay there and send the reference for you to review."
+        },
+        "manual_card": {
+          "enabled": {
+            "label": "Offer card to card",
+            "help": "When off, customers do not see card to card, even with a card number set."
+          }
+        },
+        "manual_crypto": {
+          "enabled": {
+            "label": "Offer USDT",
+            "help": "When off, customers do not see USDT, even with an address set."
+          }
+        },
+        "manual_zarinpal": {
+          "enabled": {
+            "label": "Offer the Zarinpal link",
+            "help": "When off, customers do not see the link, even when it is set."
+          }
+        },
+        "stars": {
+          "enabled": {
+            "label": "Offer Telegram Stars",
+            "help": "When off, customers do not see Stars, even with a rate set."
+          }
         }
       },
       "support": {
@@ -846,7 +893,8 @@
           "help": "A ticket whose customer has not written back this many days after a staff reply is closed, without a message. 0 turns this off."
         }
       }
-    }
+    },
+    "payments_moved": "Payment methods and their details:"
   },
   "staff": {
     "intro": "People who can use this dashboard. Every change logs that person out and is kept in the audit log with your reason.",
@@ -948,7 +996,9 @@
       "canned_reply": "Saved reply",
       "broadcast": "Broadcast",
       "reseller": "Reseller",
-      "reseller_tier": "Reseller tier"
+      "reseller_tier": "Reseller tier",
+      "server": "3x-ui server",
+      "gateway": "Payment gateway"
     },
     "group": {
       "payment": "Payments",
@@ -968,7 +1018,9 @@
       "canned": "Saved replies",
       "broadcast": "Broadcasts",
       "reseller": "Resellers",
-      "reseller_tier": "Reseller tiers"
+      "reseller_tier": "Reseller tiers",
+      "server": "3x-ui servers",
+      "gateway": "Payment gateways"
     },
     "action": {
       "payment": {
@@ -1078,6 +1130,15 @@
       "reseller_tier": {
         "upsert": "Reseller tier saved",
         "delete": "Reseller tier deleted"
+      },
+      "server": {
+        "add": "Server added",
+        "update": "Server changed",
+        "delete": "Server deleted",
+        "inbound": "Inbound choice changed"
+      },
+      "gateway": {
+        "update": "Gateway settings changed"
       }
     }
   },
@@ -1466,5 +1527,169 @@
     "delete_confirm": "Delete the tier {name}?",
     "deleted": "Tier deleted",
     "in_use": "Resellers are on this tier: move them to another tier first."
+  },
+  "secret": {
+    "set": "Set",
+    "set_hint": "Set · ends in {hint}",
+    "not_set": "Not set",
+    "will_clear": "Removed when you save",
+    "replace": "Replace",
+    "keep": "Keep the stored one",
+    "clear": "Remove",
+    "undo_clear": "Keep it",
+    "keep_hint": "Stored encrypted and never shown again. Leave it as it is to keep it.",
+    "new_placeholder": "The new value",
+    "show": "Show what you typed",
+    "hide": "Hide what you typed"
+  },
+  "server": {
+    "intro": "The 3x-ui panels services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
+    "add": "Add server",
+    "edit": "Edit server",
+    "none": "No servers yet. Add your 3x-ui panel to start selling.",
+    "name": "Name",
+    "base_url": "Panel address",
+    "base_url_help": "The panel's full address with its port and secret path, as you open it in a browser, for example https://panel.example.com:2053/path",
+    "token": "API token",
+    "token_help": "Create it in the 3x-ui panel under Settings, API tokens. It is stored encrypted in the provisioner service and never shown again.",
+    "sub_url": "Subscription address (optional)",
+    "sub_url_help": "Where customers' subscription links point, for example the panel's subscription domain. Empty uses the panel's own links. When it changes, existing links are updated within a few minutes.",
+    "weight": "Weight",
+    "weight_help": "This panel's share of new services compared with the others: weight 200 takes twice as many as 100. From 1 to 1000.",
+    "enabled": "Takes new services",
+    "enabled_help": "When off, no new service is created here; its existing services keep working, renewing and syncing.",
+    "allow_private": "Panel on a private network",
+    "allow_private_help": "Only for a panel on this server or your private network (for example 127.0.0.1 or a Docker network).",
+    "allow_private_warning": "BOBRES will reach private addresses for this panel and may use plain http there, so the token travels unencrypted inside your network. Turn this on only for a panel on this machine or your own private network.",
+    "private_owner_only": "Only the store owner can let BOBRES reach a panel on a private network.",
+    "private_owner_change": "Only the store owner can change the address or token of a panel on a private network. Keep them as they are, or ask the owner.",
+    "address_changed": "This server has {n} services. Change the address only when the same panel moved; pointing it to another panel leaves those services behind.",
+    "test": "Test connection",
+    "test_hint": "Tries the address and token without saving.",
+    "test_ok": "Connected: {version}, {n} inbounds.",
+    "test_failed": "The panel could not be reached with these details.",
+    "version_untested": "This panel version is outside the versions BOBRES is tested with; it may still work.",
+    "skip_check": "Save without testing",
+    "skip_check_help": "Saving normally tests the connection first. Tick this when the panel is down for now, for example to turn the server off.",
+    "saved": "Server saved",
+    "deleted": "Server deleted",
+    "delete": "Delete server",
+    "delete_confirm": "Delete the server {name}? Only a server without services can be deleted; the panel itself is not touched.",
+    "in_use": "A server with services cannot be deleted. Turn it off instead, so it takes no new services.",
+    "no_token": "No token",
+    "private": "Private network",
+    "health": "Health",
+    "health_state": {
+      "ok": "Working",
+      "down": "Not answering",
+      "unknown": "Not checked yet",
+      "off": "Off"
+    },
+    "checked_at": "Checked {time}",
+    "version": "Version",
+    "untested": "Untested",
+    "clients": "Services",
+    "plans": "Plans",
+    "plans_any": "Only plans open to any server",
+    "inbounds": "Inbounds",
+    "inbounds_of": "Inbounds of {name}",
+    "inbounds_note": "Choose which inbounds new services on this panel join. This affects new services only: existing services keep the inbounds they have, and nothing changes in the panel itself.",
+    "no_inbound": "No inbound is both on in the panel and chosen here, so new services on this server will fail.",
+    "no_inbounds": "This panel has no inbounds.",
+    "inbound": "Inbound",
+    "inbound_id": "ID {id}",
+    "in_panel": "In the panel",
+    "inbound_on": "On",
+    "inbound_off": "Off",
+    "attach": "New services join",
+    "attach_for": "New services join {tag}",
+    "invalid": {
+      "url": "A full address that starts with https://",
+      "https": "Use https, or turn on “Panel on a private network” for a plain-http panel there.",
+      "https_owner": "Use https. Only the store owner can add a plain-http panel on a private network.",
+      "credentials": "Put the token in its own field, not a user name or password in the address.",
+      "sub_url": "A full address that starts with https:// or http://",
+      "token": "A token has no spaces.",
+      "weight": "A whole number from {min} to {max}."
+    },
+    "token_again": "The panel's address moved to another host or port: enter the token again. A stored token is only sent to the address it was entered for.",
+    "version_range": "BOBRES is tested with panel versions {min} to {max}; this version may still work."
+  },
+  "gateway": {
+    "intro": "How customers pay. Zarinpal's merchant id and proxy are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
+    "key_missing_banner": "The payments service has no encryption key yet, so Zarinpal's settings still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
+    "key_missing": "Read only: add the payments key (run bobres install again) to change these here.",
+    "zarinpal_desc": "Online card payments through your Zarinpal merchant account; payments are confirmed automatically.",
+    "state": {
+      "on": "Offered",
+      "off": "Off",
+      "not_set": "Not set up",
+      "not_offered": "On, not offered"
+    },
+    "sandbox_on": "Sandbox",
+    "enabled": "Offer Zarinpal",
+    "enabled_help": "Turning it off only stops offering it: payments already started are still checked and credited.",
+    "sandbox": "Sandbox (test payments)",
+    "sandbox_help": "Payments go to Zarinpal's test system and no real money moves. Never leave it on for customers.",
+    "sandbox_prod": "Not available on a production install.",
+    "merchant": "Merchant id",
+    "merchant_help": "The 36-character id from your Zarinpal panel.",
+    "proxy": "Proxy (optional)",
+    "proxy_help": "Zarinpal only answers calls from registered IP addresses. If this server's IP is not registered, send the calls through a proxy that is. The proxy must be http or https and may include a user name and password.",
+    "open_payments": "{n} Zarinpal payments are still open. The merchant id and the sandbox cannot change until they finish, or those payments could not be confirmed.",
+    "invalid": {
+      "merchant": "The merchant id has 36 characters: letters a to f and digits, in five groups separated by dashes.",
+      "proxy": "A proxy address that starts with http:// or https://",
+      "needs_merchant": "Enter the merchant id before turning Zarinpal on."
+    },
+    "test": "Test connection",
+    "test_ok": "Zarinpal answered: the merchant id and the route to it work.",
+    "test_unverified": "{n} paid payments are waiting to be confirmed.",
+    "test_failed": "Zarinpal could not be reached or refused these details.",
+    "saved": "Zarinpal settings saved",
+    "health": {
+      "ok": "Payments go through",
+      "error": "The last attempt failed",
+      "idle": "No payments yet"
+    },
+    "last_paid": "Last paid {time}",
+    "open_count": "{n} open",
+    "oldest_open": "the oldest since {time}",
+    "last_error": "Last error",
+    "last_error_at": "Last error, {time}",
+    "report": "Payments",
+    "report_refresh": "Refresh the report",
+    "report_empty": "No payments in this period.",
+    "days_7": "Last 7 days",
+    "days_30": "Last 30 days",
+    "method": {
+      "manual_card": {
+        "title": "Card to card",
+        "desc": "Customers transfer to your card and send the receipt for you to review."
+      },
+      "manual_crypto": {
+        "title": "Crypto (USDT)",
+        "desc": "Customers send USDT to your address and the transaction id for you to review."
+      },
+      "manual_zarinpal": {
+        "title": "Zarinpal link",
+        "desc": "Customers pay on your own Zarinpal page and send the reference for you to review."
+      },
+      "stars": {
+        "title": "Telegram Stars",
+        "desc": "Customers pay with Telegram Stars inside the bot; no key is needed."
+      }
+    },
+    "method_state": {
+      "on": "Offered",
+      "off": "Off",
+      "incomplete": "On, details missing"
+    },
+    "problem": {
+      "unreadable": "The stored settings cannot be read (the payments key changed or is missing). Enter the merchant id again.",
+      "sandbox_refused": "The sandbox is refused on a production install: turn it off.",
+      "public_url": "The public payment address is not right (it must be https with a domain), so Zarinpal is not offered. Fix BOBRES_ZARINPAL_PUBLIC_URL in the .env file.",
+      "invalid": "These settings were refused, so Zarinpal is not offered. Check the merchant id and the proxy."
+    }
   }
 }

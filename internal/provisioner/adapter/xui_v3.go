@@ -103,16 +103,24 @@ func (a *XUIv3) Inbounds(ctx context.Context) ([]Inbound, error) {
 	}
 	out := make([]Inbound, 0, len(opts))
 	for _, o := range opts {
-		out = append(out, Inbound{ID: o.ID, Tag: o.Remark, Enabled: o.Enable})
+		out = append(out, Inbound{ID: o.ID, Tag: o.Remark, Enabled: o.Enable, Protocol: o.Protocol, Port: o.Port})
 	}
 	return out, nil
 }
 
 func (a *XUIv3) HealthCheck(ctx context.Context) (string, error) {
-	// A cheap authenticated call doubles as the health probe; the panel has
-	// no dedicated version endpoint on the v3 API we target.
+	// The call provisioning depends on doubles as the health probe: a token
+	// that may read the status but not the inbounds is not healthy.
 	if _, err := a.c.InboundOptions(ctx); err != nil {
 		return "", fmt.Errorf("health: %w", err)
 	}
-	return "v3.x", nil
+	return a.PanelVersion(ctx), nil
+}
+
+func (a *XUIv3) PanelVersion(ctx context.Context) string {
+	v, err := a.c.PanelVersion(ctx)
+	if err != nil {
+		return UnknownVersion
+	}
+	return NormalizeVersion(v)
 }

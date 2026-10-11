@@ -60,6 +60,8 @@ type Server struct {
 	latency  time.Duration
 	calls    map[string]int
 	lost     []string
+	version  string         // server/status panelVersion
+	failOn   map[string]int // route name → calls left to fail
 }
 
 // NewServer starts a fake panel that accepts only the given Bearer token.
@@ -68,6 +70,8 @@ func NewServer(token string) *Server {
 		token:   token,
 		clients: map[string]*record{},
 		calls:   map[string]int{},
+		failOn:  map[string]int{},
+		version: "3.9.0",
 		inbounds: []map[string]any{
 			{"id": 1, "remark": "reality", "protocol": "vless", "port": 443, "enable": true},
 			{"id": 2, "remark": "ws", "protocol": "vmess", "port": 8443, "enable": true},
@@ -88,12 +92,17 @@ func NewServer(token string) *Server {
 	route("/panel/api/clients/links/", "links", s.links)
 	route("/panel/api/clients/subLinks/", "subLinks", s.subLinks)
 	route("/panel/api/inbounds/options", "options", s.options)
+	route("/panel/api/server/status", "status", s.status)
 	s.Server = httptest.NewServer(mux)
 	return s
 }
 
 // SetFailNext makes the next n authenticated calls fail with HTTP 500.
 func (s *Server) SetFailNext(n int) { s.mu.Lock(); s.failNext = n; s.mu.Unlock() }
+
+// FailRoute makes the next n authenticated calls to one route (e.g. "add")
+// fail with HTTP 500, as a panel that drops the connection would.
+func (s *Server) FailRoute(name string, n int) { s.mu.Lock(); s.failOn[name] = n; s.mu.Unlock() }
 
 // SetLatency delays every call by d (respects request cancellation).
 func (s *Server) SetLatency(d time.Duration) { s.mu.Lock(); s.latency = d; s.mu.Unlock() }
@@ -110,6 +119,9 @@ func (s *Server) AddUsage(email string, up, down int64) {
 		r.down += down
 	}
 }
+
+// SetPanelVersion sets the panelVersion server/status reports ("" = none).
+func (s *Server) SetPanelVersion(v string) { s.mu.Lock(); s.version = v; s.mu.Unlock() }
 
 // SetInboundsEnabled flips the enable flag of every inbound.
 func (s *Server) SetInboundsEnabled(on bool) {
@@ -183,6 +195,9 @@ func (s *Server) wrap(name string, h http.HandlerFunc) http.HandlerFunc {
 		fail := s.failNext > 0
 		if fail {
 			s.failNext--
+		} else if s.failOn[name] > 0 {
+			fail = true
+			s.failOn[name]--
 		}
 		s.mu.Unlock()
 		if fail {
@@ -406,4 +421,16 @@ func (s *Server) options(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	reply(w, http.StatusOK, true, "", s.inbounds)
+}
+
+// status is a trimmed server/status: the real one also reports cpu, memory,
+// xray and more.
+func (s *Server) status(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	obj := map[string]any{"cpu": 1.5, "xray": map[string]any{"state": "running", "version": "26.3.27"}}
+	if s.version != "" {
+		obj["panelVersion"] = s.version
+	}
+	reply(w, http.StatusOK, true, "", obj)
 }

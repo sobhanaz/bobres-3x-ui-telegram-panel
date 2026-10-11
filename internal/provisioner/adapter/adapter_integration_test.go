@@ -15,7 +15,9 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -43,8 +45,13 @@ func TestIntegrationRealPanel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	if _, err := a.HealthCheck(ctx); err != nil {
+	// Both tested versions report panelVersion in server/status.
+	ver, err := a.HealthCheck(ctx)
+	if err != nil {
 		t.Fatalf("health: %v", err)
+	}
+	if ver == UnknownVersion || Untested(ver) {
+		t.Fatalf("panel version %q: not detected, or outside %s..%s", ver, TestedMinVersion, TestedMaxVersion)
 	}
 	ins, err := a.Inbounds(ctx)
 	if err != nil {
@@ -130,7 +137,16 @@ func TestIntegrationRealPanel(t *testing.T) {
 	if err := a.Delete(ctx, email); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := a.ClientSubID(ctx, email); err == nil {
-		t.Fatal("client still exists after delete")
+	// A missing client is a refusal inside HTTP 200 (3x-ui's business
+	// errors) saying "record not found": the provisioner relies on that text
+	// to drop a reservation or a deleted client's row, and keeps them on any
+	// other refusal (a busy panel).
+	var ae *xui.APIError
+	if _, err := a.ClientSubID(ctx, email); !errors.As(err, &ae) || ae.Status != http.StatusOK ||
+		!strings.Contains(strings.ToLower(ae.Msg), "record not found") {
+		t.Fatalf("lookup of a deleted client: %v", err)
+	}
+	if err := a.Delete(ctx, email); !errors.As(err, &ae) || ae.Status != http.StatusOK {
+		t.Fatalf("delete of a deleted client: %v", err)
 	}
 }

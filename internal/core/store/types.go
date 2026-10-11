@@ -31,6 +31,10 @@ type Plan struct {
 	IsTrial      bool
 	IsTopup      bool // a traffic package for an existing subscription
 	Sort         int32
+	// ServerIDs are the 3x-ui servers its new services may go to
+	// (plan_servers; empty = any). Reads fill it; UpsertPlan leaves the
+	// stored list alone when it is nil.
+	ServerIDs []string
 }
 
 // Order mirrors core.orders. Amount is what the customer pays, after

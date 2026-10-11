@@ -11,6 +11,10 @@ export interface Problem {
   params?: Record<string, number>
 }
 
+/** Groups core may still list that are edited on another page: the
+ * payment details are on the Payment gateways page. */
+export const movedGroups = ['payments']
+
 /** effective is what the bot uses: the stored value, or the default. */
 export function effective(item: SettingItem): string {
   return item.value !== '' ? item.value : item.default

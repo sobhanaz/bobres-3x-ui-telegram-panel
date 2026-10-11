@@ -30,6 +30,10 @@ const (
 	PaymentsService_PrecheckStarsPayment_FullMethodName = "/payments.v1.PaymentsService/PrecheckStarsPayment"
 	PaymentsService_ConfirmStarsPayment_FullMethodName  = "/payments.v1.PaymentsService/ConfirmStarsPayment"
 	PaymentsService_ListGateways_FullMethodName         = "/payments.v1.PaymentsService/ListGateways"
+	PaymentsService_ListGatewayConfigs_FullMethodName   = "/payments.v1.PaymentsService/ListGatewayConfigs"
+	PaymentsService_SetGatewayConfig_FullMethodName     = "/payments.v1.PaymentsService/SetGatewayConfig"
+	PaymentsService_TestGateway_FullMethodName          = "/payments.v1.PaymentsService/TestGateway"
+	PaymentsService_GatewayReport_FullMethodName        = "/payments.v1.PaymentsService/GatewayReport"
 )
 
 // PaymentsServiceClient is the client API for PaymentsService service.
@@ -52,6 +56,11 @@ type PaymentsServiceClient interface {
 	PrecheckStarsPayment(ctx context.Context, in *PrecheckStarsPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
 	ConfirmStarsPayment(ctx context.Context, in *ConfirmStarsPaymentRequest, opts ...grpc.CallOption) (*PaymentIntent, error)
 	ListGateways(ctx context.Context, in *ListGatewaysRequest, opts ...grpc.CallOption) (*ListGatewaysResponse, error)
+	// Gateway settings (the owner, through core). The secrets never come back.
+	ListGatewayConfigs(ctx context.Context, in *ListGatewayConfigsRequest, opts ...grpc.CallOption) (*ListGatewayConfigsResponse, error)
+	SetGatewayConfig(ctx context.Context, in *SetGatewayConfigRequest, opts ...grpc.CallOption) (*GatewayConfig, error)
+	TestGateway(ctx context.Context, in *TestGatewayRequest, opts ...grpc.CallOption) (*TestGatewayResponse, error)
+	GatewayReport(ctx context.Context, in *GatewayReportRequest, opts ...grpc.CallOption) (*GatewayReportResponse, error)
 }
 
 type paymentsServiceClient struct {
@@ -172,6 +181,46 @@ func (c *paymentsServiceClient) ListGateways(ctx context.Context, in *ListGatewa
 	return out, nil
 }
 
+func (c *paymentsServiceClient) ListGatewayConfigs(ctx context.Context, in *ListGatewayConfigsRequest, opts ...grpc.CallOption) (*ListGatewayConfigsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGatewayConfigsResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_ListGatewayConfigs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) SetGatewayConfig(ctx context.Context, in *SetGatewayConfigRequest, opts ...grpc.CallOption) (*GatewayConfig, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GatewayConfig)
+	err := c.cc.Invoke(ctx, PaymentsService_SetGatewayConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) TestGateway(ctx context.Context, in *TestGatewayRequest, opts ...grpc.CallOption) (*TestGatewayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestGatewayResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_TestGateway_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) GatewayReport(ctx context.Context, in *GatewayReportRequest, opts ...grpc.CallOption) (*GatewayReportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GatewayReportResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_GatewayReport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentsServiceServer is the server API for PaymentsService service.
 // All implementations must embed UnimplementedPaymentsServiceServer
 // for forward compatibility.
@@ -192,6 +241,11 @@ type PaymentsServiceServer interface {
 	PrecheckStarsPayment(context.Context, *PrecheckStarsPaymentRequest) (*PaymentIntent, error)
 	ConfirmStarsPayment(context.Context, *ConfirmStarsPaymentRequest) (*PaymentIntent, error)
 	ListGateways(context.Context, *ListGatewaysRequest) (*ListGatewaysResponse, error)
+	// Gateway settings (the owner, through core). The secrets never come back.
+	ListGatewayConfigs(context.Context, *ListGatewayConfigsRequest) (*ListGatewayConfigsResponse, error)
+	SetGatewayConfig(context.Context, *SetGatewayConfigRequest) (*GatewayConfig, error)
+	TestGateway(context.Context, *TestGatewayRequest) (*TestGatewayResponse, error)
+	GatewayReport(context.Context, *GatewayReportRequest) (*GatewayReportResponse, error)
 	mustEmbedUnimplementedPaymentsServiceServer()
 }
 
@@ -234,6 +288,18 @@ func (UnimplementedPaymentsServiceServer) ConfirmStarsPayment(context.Context, *
 }
 func (UnimplementedPaymentsServiceServer) ListGateways(context.Context, *ListGatewaysRequest) (*ListGatewaysResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListGateways not implemented")
+}
+func (UnimplementedPaymentsServiceServer) ListGatewayConfigs(context.Context, *ListGatewayConfigsRequest) (*ListGatewayConfigsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGatewayConfigs not implemented")
+}
+func (UnimplementedPaymentsServiceServer) SetGatewayConfig(context.Context, *SetGatewayConfigRequest) (*GatewayConfig, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetGatewayConfig not implemented")
+}
+func (UnimplementedPaymentsServiceServer) TestGateway(context.Context, *TestGatewayRequest) (*TestGatewayResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestGateway not implemented")
+}
+func (UnimplementedPaymentsServiceServer) GatewayReport(context.Context, *GatewayReportRequest) (*GatewayReportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GatewayReport not implemented")
 }
 func (UnimplementedPaymentsServiceServer) mustEmbedUnimplementedPaymentsServiceServer() {}
 func (UnimplementedPaymentsServiceServer) testEmbeddedByValue()                         {}
@@ -454,6 +520,78 @@ func _PaymentsService_ListGateways_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentsService_ListGatewayConfigs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGatewayConfigsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).ListGatewayConfigs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_ListGatewayConfigs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).ListGatewayConfigs(ctx, req.(*ListGatewayConfigsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_SetGatewayConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetGatewayConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).SetGatewayConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_SetGatewayConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).SetGatewayConfig(ctx, req.(*SetGatewayConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_TestGateway_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestGatewayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).TestGateway(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_TestGateway_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).TestGateway(ctx, req.(*TestGatewayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_GatewayReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GatewayReportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).GatewayReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_GatewayReport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).GatewayReport(ctx, req.(*GatewayReportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentsService_ServiceDesc is the grpc.ServiceDesc for PaymentsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -504,6 +642,22 @@ var PaymentsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListGateways",
 			Handler:    _PaymentsService_ListGateways_Handler,
+		},
+		{
+			MethodName: "ListGatewayConfigs",
+			Handler:    _PaymentsService_ListGatewayConfigs_Handler,
+		},
+		{
+			MethodName: "SetGatewayConfig",
+			Handler:    _PaymentsService_SetGatewayConfig_Handler,
+		},
+		{
+			MethodName: "TestGateway",
+			Handler:    _PaymentsService_TestGateway_Handler,
+		},
+		{
+			MethodName: "GatewayReport",
+			Handler:    _PaymentsService_GatewayReport_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

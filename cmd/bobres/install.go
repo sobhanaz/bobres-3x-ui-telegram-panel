@@ -98,7 +98,7 @@ var envOrder = []string{
 	"BOBRES_ENV", "BOBRES_LOG_LEVEL", "BOBRES_LOG_FORMAT", "BOBRES_VERSION", "BOBRES_DOMAIN",
 	"POSTGRES_PASSWORD", "DB_CORE_PASSWORD", "DB_PAYMENTS_PASSWORD", "DB_PROVISIONER_PASSWORD",
 	"REDIS_PASSWORD", "BOBRES_REDIS_URL",
-	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY",
+	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY",
 	"BOBRES_TELEGRAM_BOT_TOKEN", "BOBRES_ADMIN_TELEGRAM_ID", "BOBRES_TIMEZONE",
 	"BOBRES_XUI_URL", "BOBRES_XUI_TOKEN", "BOBRES_XUI_SUB_URL", "BOBRES_XUI_ALLOW_PRIVATE",
 	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL", "BOBRES_ZARINPAL_HOST",
@@ -109,7 +109,7 @@ var envOrder = []string{
 var generated = map[string]int{ // key -> random bytes (hex-encoded)
 	"POSTGRES_PASSWORD": 24, "DB_CORE_PASSWORD": 24, "DB_PAYMENTS_PASSWORD": 24, "DB_PROVISIONER_PASSWORD": 24,
 	"REDIS_PASSWORD": 24, "BOBRES_TOKEN_CORE": 32, "BOBRES_TOKEN_BOT": 32,
-	"BOBRES_CORE_MASTER_KEY": 32, "BOBRES_PROVISIONER_MASTER_KEY": 32,
+	"BOBRES_CORE_MASTER_KEY": 32, "BOBRES_PROVISIONER_MASTER_KEY": 32, "BOBRES_PAYMENTS_MASTER_KEY": 32,
 }
 
 var (
@@ -124,7 +124,7 @@ func (ins *installer) install(args []string) int {
 	dir := fs.String("dir", defaultDir(), dirUsage)
 	domain := fs.String("domain", "", "public domain of this install (DNS must point here)")
 	adminID := fs.String("admin-id", "", "Telegram user id of the owner")
-	xuiURL := fs.String("xui-url", "", "3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path")
+	xuiURL := fs.String("xui-url", "", "first 3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path; optional: servers can be added in the dashboard")
 	xuiSub := fs.String("xui-sub-url", "", "public prefix of the panel's subscription links, e.g. https://sub.example.com:2096/sub/")
 	allowPrivate := fs.Bool("xui-allow-private", false, "the panel is on this host or a private network")
 	zpMerchant := fs.String("zarinpal-merchant-id", "", "enable Zarinpal with this merchant id (36-character id from the Zarinpal panel)")
@@ -177,8 +177,6 @@ func (ins *installer) install(args []string) int {
 		{"BOBRES_DOMAIN", "Domain of this install (e.g. panel.example.com): "},
 		{"BOBRES_ADMIN_TELEGRAM_ID", "Your numeric Telegram user id (the owner): "},
 		{"BOBRES_TELEGRAM_BOT_TOKEN", "Telegram bot token from @BotFather: "},
-		{"BOBRES_XUI_URL", "3x-ui panel URL (https://host:port/path): "},
-		{"BOBRES_XUI_TOKEN", "3x-ui API token (panel Settings > Security): "},
 	} {
 		if env[q.key] != "" {
 			continue
@@ -189,9 +187,23 @@ func (ins *installer) install(args []string) int {
 			return 2
 		}
 		set(q.key, v)
-		if q.key == "BOBRES_XUI_URL" {
+	}
+	// The first 3x-ui panel is optional (servers are added in the dashboard)
+	// and asked on a fresh install only; the provisioner registers it while
+	// it has no server yet.
+	if !existing && env["BOBRES_XUI_URL"] == "" {
+		set("BOBRES_XUI_URL", ins.askOptional("3x-ui panel URL (https://host:port/path; Enter to add servers later in the dashboard): "))
+		if env["BOBRES_XUI_URL"] != "" {
 			ins.askPanelOnThisServer(env)
 		}
+	}
+	if env["BOBRES_XUI_URL"] != "" && env["BOBRES_XUI_TOKEN"] == "" {
+		v, err := ins.ask("3x-ui API token (panel Settings > Security): ", true)
+		if err != nil {
+			fmt.Fprintln(ins.errOut, "error: BOBRES_XUI_TOKEN is required with the panel URL (environment variable, or an interactive terminal)")
+			return 2
+		}
+		set("BOBRES_XUI_TOKEN", v)
 	}
 
 	defaults := map[string]string{
@@ -259,6 +271,13 @@ func (ins *installer) install(args []string) int {
 		ins.summary(env, *dir)
 	}
 	return 0
+}
+
+// askOptional reads an answer that may be left empty (Enter, or no terminal).
+func (ins *installer) askOptional(prompt string) string {
+	fmt.Fprint(ins.out, prompt)
+	line, _ := ins.in.ReadString('\n')
+	return strings.TrimSpace(line)
 }
 
 func (ins *installer) ask(prompt string, secret bool) (string, error) {
@@ -386,11 +405,14 @@ Next steps (in Telegram, from the owner account %s):
   5. Open the admin panel with /admin.
 
 Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:
-it holds the keys that encrypt your panel token.
+it holds the keys that encrypt your panel tokens and gateway settings.
 
 Manage the store from this server at any time: run  bobres  for the menu
 (status, logs, start/stop/restart, change the bot token, admin or panel).
 `, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
+	if env["BOBRES_XUI_URL"] == "" {
+		fmt.Fprintln(ins.out, "No 3x-ui panel yet: add your servers in the dashboard (Servers) before you sell.")
+	}
 }
 
 var merchantRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -440,21 +462,25 @@ func validateEnv(env map[string]string) []error {
 	if !botTokenRe.MatchString(env["BOBRES_TELEGRAM_BOT_TOKEN"]) {
 		errs = append(errs, errors.New("the bot token does not look like a @BotFather token (123456:ABC...)"))
 	}
+	// The first panel is optional; when set, URL and token go together.
 	privatePanel := env["BOBRES_XUI_ALLOW_PRIVATE"] == "true"
-	if u, err := url.Parse(env["BOBRES_XUI_URL"]); err != nil || u.Host == "" || u.User != nil ||
+	if panel := env["BOBRES_XUI_URL"]; panel == "" {
+		if env["BOBRES_XUI_TOKEN"] != "" {
+			errs = append(errs, errors.New("a 3x-ui API token needs the panel URL (--xui-url)"))
+		}
+	} else if u, err := url.Parse(panel); err != nil || u.Host == "" || u.User != nil ||
 		(u.Scheme != "https" && (u.Scheme != "http" || !privatePanel)) {
 		errs = append(errs, errors.New("the 3x-ui URL must be https://host[:port][/path] without credentials (http:// only with --xui-allow-private)"))
 	} else if loopbackHost(u.Hostname()) {
 		errs = append(errs, fmt.Errorf("the 3x-ui URL points to %s, which inside the BOBRES containers is the container itself: "+
 			"for a panel on this server use http://host.docker.internal:<port>/<path> with --xui-allow-private", u.Hostname()))
+	} else if env["BOBRES_XUI_TOKEN"] == "" {
+		errs = append(errs, errors.New("the 3x-ui API token is required with the panel URL"))
 	}
 	if sub := env["BOBRES_XUI_SUB_URL"]; sub != "" {
 		if u, err := url.Parse(sub); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 			errs = append(errs, errors.New("the subscription URL must be an http(s) URL"))
 		}
-	}
-	if env["BOBRES_XUI_TOKEN"] == "" {
-		errs = append(errs, errors.New("the 3x-ui API token is required"))
 	}
 	if m := env["BOBRES_ZARINPAL_MERCHANT_ID"]; m != "" && !merchantRe.MatchString(m) {
 		errs = append(errs, errors.New("the Zarinpal merchant id must be the 36-character id from the Zarinpal panel"))

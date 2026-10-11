@@ -18,8 +18,12 @@ type BotPeer interface {
 }
 
 // settingsGroups are the groups of the Settings page; branding and texts
-// have their own page, the referral reward is on the Discounts page.
-var settingsGroups = []string{"general", "maintenance", "join", "notify", "support", "limits", "payments"}
+// have their own page, the referral reward is on the Discounts page and the
+// payments group on the Payment gateways page (which saves it here too).
+var settingsGroups = []string{"general", "maintenance", "join", "notify", "support", "limits"}
+
+// savedGroups are the groups PUT /api/v1/settings takes.
+var savedGroups = append(slices.Clone(settingsGroups), "payments")
 
 type settingJSON struct {
 	Key      string   `json:"key"`
@@ -40,10 +44,15 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "settings", err)
 		return
 	}
-	role := actor(r).Role
+	items := settingItems(values, actor(r).Role, settingsGroups)
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "groups": settingsGroups})
+}
+
+// settingItems lists the settings of some groups as a role sees them.
+func settingItems(values map[string]string, role string, groups []string) []settingJSON {
 	items := []settingJSON{}
 	for _, sp := range domain.SettingSpecs {
-		if !slices.Contains(settingsGroups, sp.Group) {
+		if !slices.Contains(groups, sp.Group) {
 			continue
 		}
 		it := settingJSON{Key: sp.Key, Group: sp.Group, Kind: sp.Kind, Value: values[sp.Key], Default: sp.Default,
@@ -53,7 +62,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, it)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "groups": settingsGroups})
+	return items
 }
 
 // putSettings: PUT /api/v1/settings {values:{key:value}}, all or nothing.
@@ -67,7 +76,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	role := actor(r).Role
 	for k := range req.Values {
 		sp, ok := domain.SpecOf(k)
-		if !ok || !slices.Contains(settingsGroups, sp.Group) {
+		if !ok || !slices.Contains(savedGroups, sp.Group) {
 			writeFieldError(w, k, "not a setting of this page")
 			return
 		}

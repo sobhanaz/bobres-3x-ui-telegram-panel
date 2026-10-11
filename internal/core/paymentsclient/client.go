@@ -189,3 +189,78 @@ func (c *Client) ListPayments(ctx context.Context, f domain.PaymentFilter, page,
 	}
 	return out, resp.GetPageInfo().GetTotal(), nil
 }
+
+// Gateway settings (domain.GatewayAdmin). Secrets only ever go in.
+
+func gatewayConfigOf(p *paymentsv1.GatewayConfig) *domain.GatewayConfig {
+	return &domain.GatewayConfig{
+		Provider: p.GetProvider(), Enabled: p.GetEnabled(), Configured: p.GetConfigured(), Offered: p.GetOffered(),
+		Sandbox: p.GetSandbox(), MerchantHint: p.GetMerchantHint(), ProxySet: p.GetProxySet(),
+		KeyMissing: p.GetKeyMissing(), FromEnv: p.GetFromEnv(), Problem: p.GetProblem(),
+		UpdatedAt: p.GetUpdatedAt(), UpdatedBy: p.GetUpdatedBy(),
+	}
+}
+
+// GatewayConfigs implements domain.GatewayAdmin.
+func (c *Client) GatewayConfigs(ctx context.Context) ([]domain.GatewayConfig, error) {
+	resp, err := c.rpc.ListGatewayConfigs(ctx, &paymentsv1.ListGatewayConfigsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("payments.ListGatewayConfigs: %w", err)
+	}
+	out := make([]domain.GatewayConfig, 0, len(resp.GetConfigs()))
+	for _, g := range resp.GetConfigs() {
+		out = append(out, *gatewayConfigOf(g))
+	}
+	return out, nil
+}
+
+// SetGatewayConfig implements domain.GatewayAdmin.
+func (c *Client) SetGatewayConfig(ctx context.Context, u domain.GatewayUpdate, actorID string) (*domain.GatewayConfig, error) {
+	g, err := c.rpc.SetGatewayConfig(ctx, &paymentsv1.SetGatewayConfigRequest{
+		Provider: u.Provider, Enabled: u.Enabled, Sandbox: u.Sandbox, MerchantId: u.MerchantID, Proxy: u.Proxy,
+		ClearProxy: u.ClearProxy, ActorId: actorID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("payments.SetGatewayConfig: %w", err)
+	}
+	return gatewayConfigOf(g), nil
+}
+
+// TestGateway implements domain.GatewayAdmin.
+func (c *Client) TestGateway(ctx context.Context, provider string, cand *domain.GatewayCandidate) (*domain.GatewayTest, error) {
+	req := &paymentsv1.TestGatewayRequest{Provider: provider}
+	if cand != nil {
+		req.Candidate = &paymentsv1.GatewayCandidate{Sandbox: cand.Sandbox, MerchantId: cand.MerchantID, Proxy: cand.Proxy,
+			ClearProxy: cand.ClearProxy}
+	}
+	r, err := c.rpc.TestGateway(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("payments.TestGateway: %w", err)
+	}
+	return &domain.GatewayTest{OK: r.GetOk(), Detail: r.GetDetail(), Unverified: r.GetUnverified(), LatencyMS: r.GetLatencyMs()}, nil
+}
+
+func gatewayEventOf(e *paymentsv1.GatewayEvent) *domain.GatewayEvent {
+	if e == nil {
+		return nil
+	}
+	return &domain.GatewayEvent{At: e.GetAt(), Kind: e.GetKind(), IntentID: e.GetIntentId(), Detail: e.GetDetail()}
+}
+
+// GatewayReport implements domain.GatewayAdmin.
+func (c *Client) GatewayReport(ctx context.Context, provider string, from, to int64) (*domain.GatewayReport, error) {
+	r, err := c.rpc.GatewayReport(ctx, &paymentsv1.GatewayReportRequest{Provider: provider, From: from, To: to})
+	if err != nil {
+		return nil, fmt.Errorf("payments.GatewayReport: %w", err)
+	}
+	out := &domain.GatewayReport{Provider: r.GetProvider(), From: r.GetFrom(), To: r.GetTo(), OpenCount: r.GetOpenCount(),
+		OldestOpenAt: r.GetOldestOpenAt(), LastError: gatewayEventOf(r.GetLastError()), LastPaid: gatewayEventOf(r.GetLastPaid())}
+	for _, t := range r.GetTotals() {
+		st := domain.GatewayStatusTotal{Status: t.GetStatus(), Count: t.GetCount(), Amounts: map[string]int64{}}
+		for _, m := range t.GetAmounts() {
+			st.Amounts[m.GetCurrency()] += m.GetAmount()
+		}
+		out.Totals = append(out.Totals, st)
+	}
+	return out, nil
+}

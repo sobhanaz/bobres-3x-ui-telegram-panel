@@ -244,10 +244,11 @@ func TestServerIDIsHonoured(t *testing.T) {
 func TestAddServerValidation(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
+	// Saved without a test: the panel is never contacted.
 	sv, err := f.client.AddServer(ctx, &provisionerv1.AddServerRequest{
-		Name: "second", BaseUrl: "https://example.com", ApiToken: "tok", SubBaseUrl: "https://example.com:2096/sub/",
+		Name: "second", BaseUrl: "https://example.com", ApiToken: "tok", SubBaseUrl: "https://example.com:2096/sub/", SkipCheck: true,
 	})
-	if err != nil || sv.GetSubBaseUrl() == "" {
+	if err != nil || sv.GetSubBaseUrl() == "" || sv.GetWeight() != 100 || sv.GetManaged() != "dashboard" || !sv.GetHasToken() || sv.GetCheckedAt() != 0 {
 		t.Fatalf("AddServer: %v %+v", err, sv)
 	}
 	for name, req := range map[string]*provisionerv1.AddServerRequest{
@@ -255,10 +256,20 @@ func TestAddServerValidation(t *testing.T) {
 		"creds in url":  {Name: "x", BaseUrl: "https://user:pw@example.com", ApiToken: "t"}, //nolint:gosec // test fixture
 		"bad sub url":   {Name: "x", BaseUrl: "https://example.com", ApiToken: "t", SubBaseUrl: "ftp://x"},
 		"not a url":     {Name: "x", BaseUrl: "::::", ApiToken: "t"},
+		"no name":       {Name: "  ", BaseUrl: "https://example.com", ApiToken: "t"},
+		"long name":     {Name: strings.Repeat("ن", 65), BaseUrl: "https://example.com", ApiToken: "t"},
+		"weight":        {Name: "x", BaseUrl: "https://example.com", ApiToken: "t", Weight: 1001},
+		"negative":      {Name: "x", BaseUrl: "https://example.com", ApiToken: "t", Weight: -1},
 	} {
+		req.SkipCheck = true
 		if _, err := f.client.AddServer(ctx, req); status.Code(err) != codes.InvalidArgument {
 			t.Errorf("%s: want InvalidArgument, got %v", name, err)
 		}
+	}
+	if _, err := f.client.AddServer(ctx, &provisionerv1.AddServerRequest{
+		Name: "second", BaseUrl: "https://example.org", ApiToken: "tok", SkipCheck: true,
+	}); status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("duplicate name: %v", err)
 	}
 	if _, err := f.client.CreateClient(ctx, &provisionerv1.CreateClientRequest{
 		SubscriptionId: sub1, Email: "u42-bad", DurationDays: -1,
@@ -270,7 +281,9 @@ func TestAddServerValidation(t *testing.T) {
 	}
 }
 
-func TestEnsureDefaultServerOnlyOnce(t *testing.T) {
+// The environment seeds the first server only: once a server exists, it is
+// managed in the dashboard and the environment never overwrites it.
+func TestEnsureDefaultServerSeedsOnlyWhenEmpty(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	strict := New(f.st) // production options: no test relaxations
@@ -280,30 +293,44 @@ func TestEnsureDefaultServerOnlyOnce(t *testing.T) {
 	if _, err := f.st.DB().Exec(ctx, "TRUNCATE provisioner.client_map, provisioner.xui_servers CASCADE"); err != nil {
 		t.Fatal(err)
 	}
+	if added, err := strict.EnsureDefaultServer(ctx, "", "", "", false); err != nil || added {
+		t.Fatalf("no panel in the environment: added=%v err=%v", added, err)
+	}
 	if added, err := strict.EnsureDefaultServer(ctx, "http://insecure.example.com", "tok", "", false); err == nil || added {
 		t.Fatalf("an http panel URL must be refused at startup: added=%v err=%v", added, err)
 	}
 	if added, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || !added {
 		t.Fatalf("first start: added=%v err=%v", added, err)
 	}
-	// Same environment on restart: nothing to write.
-	if changed, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || changed {
-		t.Fatalf("restart: changed=%v err=%v", changed, err)
-	}
-	// Re-running install with a corrected panel takes effect.
-	if changed, err := strict.EnsureDefaultServer(ctx, "https://panel2.example.com/p", "tok2", "https://panel2.example.com:2096/sub/", false); err != nil || !changed {
-		t.Fatalf("corrected panel: changed=%v err=%v", changed, err)
-	}
 	sv, err := f.st.ServerByName(ctx, "default")
-	if err != nil || sv.BaseURL != "https://panel2.example.com/p" || sv.Token != "tok2" || sv.SubBaseURL != "https://panel2.example.com:2096/sub/" {
-		t.Fatalf("after update: %+v %v", sv, err)
+	if err != nil || sv.Managed != store.ManagedEnv || sv.Weight != store.DefaultWeight || sv.HealthOK != nil {
+		t.Fatalf("seeded: %+v %v", sv, err)
 	}
-	// An invalid correction is refused and leaves the row alone.
-	if changed, err := strict.EnsureDefaultServer(ctx, "http://panel3.example.com", "tok3", "", false); err == nil || changed {
-		t.Fatalf("invalid correction: changed=%v err=%v", changed, err)
+	// Re-running install with another panel no longer changes the row.
+	if added, err := strict.EnsureDefaultServer(ctx, "https://panel2.example.com/p", "tok2", "https://panel2.example.com:2096/sub/", true); err != nil || added {
+		t.Fatalf("restart with another panel: added=%v err=%v", added, err)
 	}
-	if sv, _ := f.st.ServerByName(ctx, "default"); sv.BaseURL != "https://panel2.example.com/p" {
-		t.Fatalf("row changed by an invalid correction: %+v", sv)
+	if got, _ := f.st.ServerByName(ctx, "default"); got.BaseURL != "https://panel.example.com" || got.Token != "tok" || got.SubBaseURL != "" || got.AllowPrivate {
+		t.Fatalf("the environment overwrote the row: %+v", got)
+	}
+	// A dashboard edit stays.
+	if _, err := f.client.UpdateServer(ctx, &provisionerv1.UpdateServerRequest{
+		Id: sv.ID, Name: "main", Enabled: true, Weight: 50, BaseUrl: "https://panel.example.com/base", SkipCheck: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || added {
+		t.Fatalf("restart after an edit: added=%v err=%v", added, err)
+	}
+	if got, _ := f.st.GetServer(ctx, sv.ID); got.Name != "main" || got.BaseURL != "https://panel.example.com/base" || got.Managed != store.ManagedDashboard {
+		t.Fatalf("the edit was reverted: %+v", got)
+	}
+	// With every server deleted, the next start seeds again.
+	if _, err := f.client.DeleteServer(ctx, &provisionerv1.DeleteServerRequest{Id: sv.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || !added {
+		t.Fatalf("empty again: added=%v err=%v", added, err)
 	}
 }
 

@@ -348,3 +348,22 @@ func TestSetEnabledKeepsTheLimits(t *testing.T) {
 		t.Fatal("an invalid email reached the panel")
 	}
 }
+
+func TestPanelVersion(t *testing.T) {
+	c, s := setup(t)
+	ctx := context.Background()
+	if v, err := c.PanelVersion(ctx); err != nil || v != "3.9.0" {
+		t.Fatalf("version: %q %v", v, err)
+	}
+	s.SetPanelVersion("3.8.5\n\x1b[31m")
+	if v, err := c.PanelVersion(ctx); err != nil || strings.ContainsAny(v, "\n\x1b") {
+		t.Fatalf("control characters reach the caller: %q %v", v, err)
+	}
+	s.SetFailNext(1)
+	if _, err := c.PanelVersion(ctx); err == nil {
+		t.Fatal("a failed status call returned a version")
+	}
+	if _, err := newClient(t, s.URL, "wrong").PanelVersion(ctx); !xui.IsUnauthorized(err) {
+		t.Fatalf("wrong token: %v", err)
+	}
+}

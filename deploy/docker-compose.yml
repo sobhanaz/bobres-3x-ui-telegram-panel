@@ -172,7 +172,12 @@ services:
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
       BOBRES_PUBLIC_URL: https://${BOBRES_DOMAIN}
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
-      # Zarinpal (off unless a merchant id is set). See docs/11-staging-run.md.
+      # Encrypts the gateway settings saved from the dashboard (merchant id, proxy).
+      # Optional so an install from before it still starts: without it Zarinpal runs
+      # from the values below and cannot be changed in the dashboard.
+      BOBRES_MASTER_KEY: ${BOBRES_PAYMENTS_MASTER_KEY:-}
+      # Zarinpal (off unless a merchant id is set). With the key above these only seed
+      # the dashboard's settings on the first start. See docs/11-staging-run.md.
       BOBRES_ZARINPAL_MERCHANT_ID: ${BOBRES_ZARINPAL_MERCHANT_ID:-}
       BOBRES_ZARINPAL_SANDBOX: ${BOBRES_ZARINPAL_SANDBOX:-false}
       BOBRES_ZARINPAL_PROXY: ${BOBRES_ZARINPAL_PROXY:-}
@@ -190,9 +195,10 @@ services:
       BOBRES_DATABASE_URL: postgres://svc_provisioner:${DB_PROVISIONER_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
       BOBRES_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:?set BOBRES_PROVISIONER_MASTER_KEY}
-      # First panel, registered on first start (later changes go through the dashboard).
-      BOBRES_XUI_URL: ${BOBRES_XUI_URL:?set BOBRES_XUI_URL}
-      BOBRES_XUI_TOKEN: ${BOBRES_XUI_TOKEN:?set BOBRES_XUI_TOKEN}
+      # Optional first panel, registered only while no server exists; servers are
+      # added and changed in the dashboard (Servers).
+      BOBRES_XUI_URL: ${BOBRES_XUI_URL:-}
+      BOBRES_XUI_TOKEN: ${BOBRES_XUI_TOKEN:-}
       BOBRES_XUI_SUB_URL: ${BOBRES_XUI_SUB_URL:-}
       BOBRES_XUI_ALLOW_PRIVATE: ${BOBRES_XUI_ALLOW_PRIVATE:-false}
     # A panel on this same server is reachable as http://host.docker.internal:<port>

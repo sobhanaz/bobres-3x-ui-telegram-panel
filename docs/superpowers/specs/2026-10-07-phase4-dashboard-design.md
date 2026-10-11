@@ -3,8 +3,9 @@
 Written 2026-10-07. PLAN.md section 10: "Web dashboard + branding editor." The owner chose all 17
 sections, every feature (including the later-phase pages), login both from the bot and with a
 password, two-factor codes required for passwords, and a calm dark + light look. It ships in six
-milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and sales), 3
-(store setup), 4 (support and broadcasts) and 5 (resellers) are built**; the rest is planned below.
+milestones, one pull request each (the sixth in two). **Milestones 1 (foundation), 2 (customers and sales), 3
+(store setup), 4 (support and broadcasts), 5 (resellers) and 6a (servers and payment gateways) are built**; 6b
+is planned below.
 
 ## Milestones
 
@@ -22,9 +23,11 @@ milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and
 5. **Resellers (built).** Resellers buy for their own customers at a tier price on credit, and earn a
    commission on purchases by the customers who joined through their link. They work only in the
    bot; owner and admins manage them in the dashboard. See "Milestone 5" below.
-6. **Infrastructure.** Several 3x-ui servers (servers per plan), payment gateways with encrypted
-   keys, System (health, versions, update check, backups through a backup container), License
-   (checked with internal/license).
+6. **Infrastructure,** in two pull requests:
+   - **6a, servers and payment gateways (built).** Several 3x-ui servers (servers per plan, health, inbounds), and
+     payment gateways whose keys stay encrypted in the payments service. See "Milestone 6a" below.
+   - **6b, System and License.** Health, versions, update check, backups through a backup container, and the
+     license (checked with internal/license).
 
 **Not in Phase 4:** restoring a backup from the dashboard (CLI only), a customer portal, the vendor
 license server.
@@ -574,6 +577,107 @@ The bot gains `ListPlans.user_id` (with `Plan.list_price`), `CreateOrder.label`,
 and `GetResellerInfo` (tier, rates, balances with the limit and what is available, customers,
 commissions, the invite code).
 
+## Milestone 6a: servers and payment gateways
+
+Two pages that change the infrastructure without core ever holding its secrets. The provisioner keeps the 3x-ui
+servers and their API tokens (under its own master key); payments keeps Zarinpal's merchant id and proxy (under a new
+master key of its own). Core forwards what staff type in the memory of one request, audits that something changed,
+and answers hints only.
+
+- **Servers** (`servers.write`: owner and admin).
+  - The provisioner (migration provisioner/00003) gives each server a unique name, a weight (1-1000), who manages it
+    (`env` or `dashboard`), the last health check (a loop every 60 s over enabled servers, which also reads the panel
+    version), and an attach switch per inbound (`server_inbounds`; new clients only).
+  - A new client goes to the healthy, enabled candidate with the least clients per weight. The provisioner reserves
+    it (`client_map.pending`) before calling the panel, so a retry stays on the same server.
+  - The environment's panel (`BOBRES_XUI_*`, now optional) is registered only while there is no server and never
+    overwrites one. With no server at all, provisioning fails with "no 3x-ui server", and the order waits and retries
+    like any failed delivery.
+  - **Servers per plan:** `plan_servers` (core migration 00011) names the servers a plan's new services may go to; no
+    row means any. Core sends them as `candidate_server_ids`. Renewals and top-ups stay on the service's server. The
+    ids are opaque: core never reads the provisioner's schema. A server a plan names (on sale or not) cannot be
+    deleted until staff take it out of the plan, so a plan never sells services nobody can deliver; a server removed
+    another way stays named (the page shows it as removed; a plan naming only removed servers cannot deliver).
+  - **Links follow the server.** The bot shows the stored `sub_link`. When a server's subscription address (or its
+    address) changes, core marks the stored links of its services (`subscriptions.sub_link_stale_at`). A worker then
+    fetches them again with `GetLinks`, 25 at a time with a pause. The marks survive a restart; a fetch from before a
+    second change is not stored. Only a provisioner that does not answer (its server list fails) pauses the worker,
+    with nothing counted. A panel that does not answer puts that service back for 1, 2, 4 ... minutes (at most an
+    hour, `sub_link_attempts` counts) and after 8 attempts its link is kept, like any other refusal. The links of a
+    switched-on server whose last health check failed, and which has no subscription address, wait 5 minutes without
+    asking the panel or counting. So one service or panel never holds up the others.
+  - Every write is audited (`server.add`, `server.update`, `server.delete`, `server.inbound`; entity `server`), with
+    the settings and `{"token":"changed"}` when a token was sent, never the token.
+- **Payment gateways** (`gateways.write`: the owner).
+  - **Zarinpal:** on/off, sandbox, and a write-only merchant id and proxy. Payments seeds them once from the
+    environment and then keeps them in `gateway_configs`, encrypted with `BOBRES_PAYMENTS_MASTER_KEY`.
+  - Switching off only stops offering it: open payments keep being checked. The merchant id and the sandbox cannot
+    change while payments are open; the 409 carries the count.
+  - A read-only test (Zarinpal's `unVerified`) and a report by status for the last 7 and 30 days.
+  - Audited in core as `gateway.update` (entity `gateway`): the switches before and after, plus
+    `{"merchant_id":"changed"}` and `{"proxy":"changed"|"cleared"}`.
+  - **Manual methods and Telegram Stars:** the new settings `payments.manual_card.enabled`,
+    `payments.manual_crypto.enabled`, `payments.manual_zarinpal.enabled` and `payments.stars.enabled`. They are bool,
+    owner only and on by default, so existing installs behave the same.
+  - Core enforces them: `ListPaymentMethods` leaves Stars out, and `CreatePaymentIntent` refuses a switched-off method
+    (FAILED_PRECONDITION). The bot's own buttons may lag by its one-minute cache.
+  - The details and switches stay settings: the payments group moved from the Settings page to this page, which saves
+    it through `PUT /api/v1/settings` (still owner only).
+- **Overview** gains `servers` (`[{id, name, healthy, detail, clients}]` from the provisioner's list; a server not yet
+  checked counts as healthy) and `gateways` (`[{provider, enabled, healthy}]`: Zarinpal from payments and its report,
+  the others from their settings). `panel` stays as the sum: healthy when every server taking new services answers.
+  Why a panel failed names its address, so a server's `detail` carries it only for `servers.write`; everyone else
+  reads "does not answer" (or "not checked yet", "takes no new services").
+
+### API (milestone 6a)
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/servers` (each with its health, version, clients, weight and the plans naming it; never the token) | servers.write |
+| `POST /api/v1/servers` (201 `{item}`; 409 when a server meant to be switched off could not be), `PUT /api/v1/servers/{id}` (every setting; `token: ""` keeps the stored one) | servers.write |
+| `DELETE /api/v1/servers/{id}` (204; 409 while a plan names it or services are on it) | servers.write |
+| `POST /api/v1/servers/test` (`{id?, base_url, token, allow_private}`; a failed connection is 200 `{ok:false, detail}`) | servers.write |
+| `GET /api/v1/servers/{id}/inbounds`, `PUT /api/v1/servers/{id}/inbounds/{inbound}` (`{attach}`, 204) | servers.write |
+| `GET /api/v1/plans` items and `POST`/`PUT /api/v1/plans` bodies carry `server_ids` (absent on a PUT keeps them) | plans.write |
+| `GET /api/v1/gateways` (`{providers, settings}`: Zarinpal with hints and health, and the payments settings) | gateways.write |
+| `PUT /api/v1/gateways/{provider}` (`{enabled, sandbox, merchant_id, proxy, clear_proxy}`; `""` keeps a secret) | gateways.write |
+| `POST /api/v1/gateways/{provider}/test` (candidate settings, or `{}` for the stored ones; saves nothing) | gateways.write |
+| `GET /api/v1/gateways/report?provider=&from=&to=` (unix seconds; default the last 30 days) | gateways.write |
+| `GET /api/v1/overview` gains `servers` (a panel's failure reason only for servers.write) and `gateways` | overview.read |
+
+- **Errors.** Field errors are 400 with `field` (`name`, `base_url`, `sub_base_url`, `token`, `weight`; `merchant_id`,
+  `proxy`, `sandbox`; `server_ids`). A taken server name is a field error on `name`. The provisioner's and payments'
+  refusals keep their reason as 409 `state` (a failed connection test, a server with clients or named by plans, the
+  payments key missing). Open payments blocking a merchant change are 409 `{error: "state", open: <count>}`. A service that does
+  not answer is 503.
+- **Limits.** Connection tests (servers and gateways) are limited to 10 a minute per staff member. Calls that may
+  test a connection wait up to 30 seconds (servers) or 40 (gateways).
+- The dashboard's request and response shapes are the ones in `web/dashboard/src/types.ts`. The server test answer has
+  no `version_untested`; the list carries it per server.
+
+### Decisions (milestone 6a, for the owner to veto)
+
+- **Private networks are the owner's.** Letting BOBRES reach a private address (`allow_private`) with a new address
+  or token is the owner's alone. An admin gets 403 (field `allow_private`) on add, edit and test, because the
+  provisioner would otherwise probe the compose network with a token of their choosing. Admins still rename,
+  reweight, switch off and test such a server as stored.
+- **A server added switched off** is added and then switched off at once (the provisioner adds servers switched on;
+  for that moment it may take a new service). Once added, the rest runs to the end even if the request is cancelled.
+  If switching it off fails, core deletes it again and answers 409 ("not added: try again"); if that fails too, the
+  audit says it is on and the 409 says to switch it off in the list. It never stays on silently.
+- **Links are refreshed** when the subscription address or the panel address changes (the latter changes the panel's
+  own links when no subscription address is set).
+- **Deleting a server a plan names is refused** (409 naming up to three plans, then how many more), on sale or not:
+  taking it out of the plans for staff could widen a plan to any server, and leaving it could sell services nobody
+  can deliver. Staff take it out of the plans first.
+- **A stored link that cannot be fetched** is tried again with a growing wait and kept after 8 attempts, so one
+  service never holds up the refresh; a provisioner that does not answer pauses it without counting.
+- **Why a panel failed** (its address) is shown on the Servers page and, on the overview, only to `servers.write`.
+- **Without the payments service**, the Payment gateways page answers 503 rather than a page without Zarinpal.
+  `sandbox_allowed` comes from core's own `BOBRES_ENV`.
+- **The bot's manual payment buttons** still follow the details only. The switches are enforced in core, so a
+  switched-off method fails when chosen until the bot reads the switches too (open for the bot).
+
 ## Tests
 
 - **Go.** TOTP against the RFC 6238 vectors and password hashing. The handlers end to end, over
@@ -661,6 +765,28 @@ commissions, the invite code).
     409s, replays, the customers filter, labels on services and orders, the audit trail, and the
     overview field. gRPC: tier prices in `ListPlans`, labels, paging and search, renaming and the
     panel. The migration's Down: refused in debt, the old check back, the new kinds kept.
+- **Milestone 6a (Go).**
+  - Core store and migration: plan servers (kept, replaced, cleared, refused when not ids), stale links (only
+    services on the panel, a second change wins, a link put back waits and counts, a new mark starts over), the
+    migration's Down and Up.
+  - Domain: server input checks with no secret in an error, audit entries with `"token": "changed"` and no token,
+    the owner-only private network rule, a new subscription address refreshing the stored links (and a rename not),
+    the worker pausing when the provisioner does not answer (before or during a fetch, nothing counted), one panel
+    that does not answer never holding up the rest (growing waits, the link kept after the last attempt, a down
+    panel's links waiting uncounted), keeping a link it refuses, a server switched off on add never left on silently
+    (deleted again, or reported and audited as on; a cancelled request still switches it off), a delete refused while
+    plans name the server, plan servers sent as candidates (and kept by the bot's plan edits), gateway saves audited
+    without the merchant id or proxy, the health rule, and the method switches in `ListPaymentMethods` and
+    `CreatePaymentIntent`.
+  - The dashboard API against fakes: every endpoint and permission (admin: servers yes, gateways no; support no),
+    field errors that never repeat a secret, the provisioner's and payments' refusals, the 409 with the open count,
+    the rate limits, plan `server_ids`, and the overview (a panel's failure reason hidden from support).
+  - End to end over gRPC: the real provisioner against the fake panel (a connection test refusing a wrong token, a
+    plan's service delivered on its server, its stored link following a new subscription address, a delete refused
+    while it has a client), and the real payments service against the fake Zarinpal (the merchant id stored
+    encrypted, the read-only test, a merchant change refused under an open payment while switching off works).
+  - The installer: no panel on a fresh install, never asked on a re-run, URL and token together, the payments key
+    generated and kept; the menu no longer reports Zarinpal from `.env`.
 - **By hand, in a browser,** against a locally built core:
   - link login; password + code setup, login, and turning it off
   - Persian and English, dark and light, the phone drawer

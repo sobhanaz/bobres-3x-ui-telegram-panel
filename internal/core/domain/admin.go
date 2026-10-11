@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/money"
+	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
 // requireStaff loads the actor and checks they are an active admin or owner.
@@ -311,11 +313,17 @@ func (s *Service) AdminUpsertPlan(ctx context.Context, actorTelegramID int64, p 
 	return s.UpsertPlan(ctx, actor, p)
 }
 
-// UpsertPlan is AdminUpsertPlan for an actor the caller has checked.
+// UpsertPlan is AdminUpsertPlan for an actor the caller has checked. A nil
+// p.ServerIDs keeps the plan's servers (the bot never sends them).
 func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Plan) (*store.Plan, error) {
 	if err := validatePlan(p); err != nil {
 		return nil, err
 	}
+	ids, err := planServerIDs(p.ServerIDs)
+	if err != nil {
+		return nil, err
+	}
+	p.ServerIDs = ids
 	var (
 		before any // nil for a new plan
 		oldCur string
@@ -326,8 +334,13 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 			return nil, err // editing a plan that does not exist
 		}
 		before, oldCur = old, old.Currency
+		if p.ServerIDs == nil {
+			p.ServerIDs = old.ServerIDs
+		}
+	} else if p.ServerIDs == nil {
+		p.ServerIDs = []string{}
 	}
-	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
+	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
 		}
@@ -350,6 +363,46 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 		return nil, err
 	}
 	return p, nil
+}
+
+// maxPlanServers bounds a plan's server list.
+const maxPlanServers = 100
+
+// planServerIDs checks a plan's servers: ids as the provisioner gives them,
+// each once, sorted (nil stays nil: keep the stored list). Whether they still
+// exist is the provisioner's to say when a service is created.
+func planServerIDs(ids []string) ([]string, error) {
+	if ids == nil {
+		return nil, nil
+	}
+	if len(ids) > maxPlanServers {
+		return nil, &FieldError{"server_ids", fmt.Sprintf("at most %d servers", maxPlanServers)}
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		u, err := buuid.Parse(strings.TrimSpace(id))
+		if err != nil {
+			return nil, &FieldError{"server_ids", "not a server id"}
+		}
+		if c := u.String(); !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// planName is a plan's English name, else any of its names, else fallback.
+func planName(p *store.Plan, fallback string) string {
+	if n := p.NameI18n["en"]; n != "" {
+		return n
+	}
+	for _, n := range p.NameI18n {
+		if n != "" {
+			return n
+		}
+	}
+	return fallback
 }
 
 func validatePlan(p *store.Plan) error {

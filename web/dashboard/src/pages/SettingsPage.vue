@@ -7,12 +7,15 @@ import Skeleton from 'primevue/skeleton'
 import SettingsCard from '../components/settings/SettingsCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
-import { effective, wideGroups } from '../settings'
+import { effective, movedGroups, wideGroups } from '../settings'
+import { useAuth } from '../stores/auth'
 import type { SettingItem, SettingsReply } from '../types'
 
 // The bot's settings, one card per group in the order core gives. Each card
 // saves on its own; core answers every setting, so all cards stay current.
+// The payment details live on the Payment gateways page (owner only).
 const { t } = useI18n()
+const auth = useAuth()
 
 const reply = ref<SettingsReply | null>(null)
 const loading = ref(true)
@@ -32,7 +35,7 @@ onMounted(load)
 
 const byGroup = computed(() => {
   const out: Record<string, SettingItem[]> = {}
-  for (const item of reply.value?.items ?? []) (out[item.group] ??= []).push(item)
+  for (const item of reply.value?.items ?? []) if (!movedGroups.includes(item.group)) (out[item.group] ??= []).push(item)
   return out
 })
 // Groups in core's order; a group core did not list still shows, at the end.
@@ -57,8 +60,13 @@ function saved(r: SettingsReply) {
   <div class="app-page-head">
     <h1 class="app-page-title">{{ t('section.settings.title') }}</h1>
   </div>
-  <p class="app-muted intro">{{ t('settings.intro') }}</p>
-
+  <p class="app-muted intro">
+    {{ t('settings.intro') }}
+    <template v-if="auth.can('gateways.write')">
+      {{ t('settings.payments_moved') }}
+      <RouterLink :to="{ name: 'gateways' }" class="payments-moved">{{ t('section.gateways.title') }}</RouterLink>
+    </template>
+  </p>
   <Message v-if="maintenanceOn" severity="warn" icon="pi pi-exclamation-triangle" :closable="false" class="banner">
     {{ t('settings.maintenance_on') }}
   </Message>

@@ -8,24 +8,29 @@
 // or keyed by field ({"authority": ["Invalid authority.", "-54"]}), success with an
 // "errors" ARRAY; a payment that is not verified in time goes back to the payer
 // when the terminal verifies manually; the customer must start from a page on the
-// merchant's registered domain; and since Sep 2026 calls are accepted only from
+// merchant's registered domain; since Sep 2026 calls are accepted only from
 // registered static egress IPs, so an optional proxy can route them through a
-// registered (Iranian) server.
+// registered (Iranian) server; and unVerified lists the paid payments not verified
+// yet without changing anything, which makes it the connection test (its answer
+// shape is documented by example only and not checked against the sandbox yet).
 package zarinpal
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
@@ -84,7 +89,8 @@ func New(c Config) (*Gateway, error) {
 	}
 	hc := c.HTTPClient
 	if hc == nil {
-		tr := &http.Transport{Proxy: nil, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 20 * time.Second}
+		tr := &http.Transport{Proxy: nil, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 20 * time.Second,
+			IdleConnTimeout: 90 * time.Second} // a replaced or tested client lets its connections go
 		if c.Proxy != "" {
 			pu, err := url.Parse(c.Proxy)
 			if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" {
@@ -100,6 +106,10 @@ func New(c Config) (*Gateway, error) {
 
 // Name implements gateway.Gateway.
 func (g *Gateway) Name() string { return Name }
+
+// CloseIdleConnections drops the client's idle connections (a tested
+// candidate or replaced settings that will not be used again).
+func (g *Gateway) CloseIdleConnections() { g.hc.CloseIdleConnections() }
 
 // StartPayURL is where the customer pays an authority.
 func (g *Gateway) StartPayURL(authority string) string { return g.base + "/pg/StartPay/" + authority }
@@ -222,6 +232,27 @@ func (g *Gateway) inquiry(ctx context.Context, authority string) string {
 	return strings.ToUpper(data.Status)
 }
 
+// Test checks the merchant id, the proxy and that the calls come from an IP
+// registered with Zarinpal, by asking for the paid payments still waiting to be
+// verified (unVerified). That call is read-only: nothing is created or settled.
+func (g *Gateway) Test(ctx context.Context) (gateway.TestResult, error) {
+	var data struct {
+		Code        flexInt         `json:"code"`
+		Authorities json.RawMessage `json:"authorities"`
+	}
+	if err := g.call(ctx, "/pg/v4/payment/unVerified.json", map[string]any{"merchant_id": g.merchant}, &data); err != nil {
+		return gateway.TestResult{}, err
+	}
+	if data.Code != 100 {
+		return gateway.TestResult{}, fmt.Errorf("zarinpal: unexpected unVerified response (code %d)", data.Code)
+	}
+	// The list's shape is only documented by example: a different one still
+	// proves the credentials work.
+	var list []json.RawMessage
+	_ = json.Unmarshal(data.Authorities, &list)
+	return gateway.TestResult{Unverified: len(list)}, nil
+}
+
 // Error is an error answer from Zarinpal.
 type Error struct {
 	Status  int
@@ -252,12 +283,13 @@ func (g *Gateway) call(ctx context.Context, path string, body, out any) error {
 		if errors.As(err, &ue) { // never echo the URL
 			err = ue.Err
 		}
-		return fmt.Errorf("zarinpal: request failed: %w", err)
+		return &netError{op: "request failed", kind: describe(err), err: err}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return fmt.Errorf("zarinpal: read response: %w", err)
+		// A connection cut after the headers names the proxy's address too.
+		return &netError{op: "read response", kind: describe(err), err: err}
 	}
 	var env struct {
 		Data    json.RawMessage `json:"data"`
@@ -283,6 +315,65 @@ func (g *Gateway) call(ctx context.Context, path string, body, out any) error {
 		}
 	}
 	return nil
+}
+
+// netError is a call whose connection failed, sending the request or reading
+// the answer, told by its kind only: the underlying error names the proxy's
+// address (part of a secret URL), and this text ends up in logs, gateway
+// events and the dashboard.
+type netError struct {
+	op   string // "request failed" or "read response"
+	kind string
+	err  error
+}
+
+func (e *netError) Error() string { return "zarinpal: " + e.op + ": " + e.kind }
+func (e *netError) Unwrap() error { return e.err }
+
+// describe names a transport failure without any address in it.
+func describe(err error) string {
+	var (
+		dns  *net.DNSError
+		op   *net.OpError
+		ne   net.Error
+		cert *tls.CertificateVerificationError
+		rec  tls.RecordHeaderError
+	)
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &ne) && ne.Timeout():
+		return "timed out"
+	case errors.As(err, &dns):
+		return "DNS lookup failed"
+	case errors.As(err, &op) && op.Op == "proxyconnect":
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return "the proxy refused the connection"
+		}
+		return "cannot connect to the proxy"
+	case errors.Is(err, syscall.ECONNRESET):
+		return "connection reset"
+	case errors.As(err, &op):
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return "connection refused"
+		}
+		return "cannot connect"
+	case errors.As(err, &cert), errors.As(err, &rec):
+		return "TLS handshake failed"
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "connection closed"
+	}
+	// A proxy that refuses the CONNECT leaves only its reason phrase.
+	for code := 400; code < 600; code++ {
+		if err.Error() != http.StatusText(code) {
+			continue
+		}
+		if code == http.StatusProxyAuthRequired {
+			return "the proxy wants other credentials (HTTP 407)"
+		}
+		return fmt.Sprintf("the proxy refused the connection (HTTP %d)", code)
+	}
+	return "connection failed"
 }
 
 // errorDetail reads the code and message of either error shape:

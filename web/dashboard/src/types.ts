@@ -140,6 +140,9 @@ export interface PlanItem {
   is_topup: boolean
   sort: number
   sales: number
+  /** the 3x-ui servers its new services may go to; empty = any (M6).
+   * Older cores leave it out. */
+  server_ids?: string[]
 }
 
 export interface DiscountItem {
@@ -398,4 +401,147 @@ export interface BroadcastRecipientItem {
   status: string
   error: string
   done_at: number | null
+}
+
+/** A 3x-ui panel (GET /servers, owner and admin). Its token is never sent
+ * back: has_token only says one is stored. */
+export interface ServerItem {
+  id: string
+  name: string
+  base_url: string
+  /** where subscription links point; '' = the panel's own links */
+  sub_base_url: string
+  /** takes new services; its existing services keep working when off */
+  enabled: boolean
+  /** may reach private addresses (and plain http there) */
+  allow_private: boolean
+  /** 1 to 1000: new services go where clients ÷ weight is lowest */
+  weight: number
+  panel_version: string
+  /** the version is outside the range BOBRES is tested with */
+  version_untested?: boolean
+  /** the last health check (meaningless while checked_at is null) */
+  healthy: boolean
+  /** why it failed, in the provisioner's words (English) */
+  health_error: string
+  /** null before the first check */
+  checked_at: number | null
+  /** services on this panel (deliveries in progress included) */
+  clients: number
+  has_token: boolean
+  /** the plans that name this server */
+  plans: PlanRef[]
+}
+
+/** GET /servers: the panels, and the panel versions BOBRES is tested with. */
+export interface ServersReply {
+  items: ServerItem[]
+  tested_min_version?: string
+  tested_max_version?: string
+}
+
+/** An inbound of a panel (GET /servers/{id}/inbounds). */
+export interface InboundItem {
+  id: number
+  tag: string
+  protocol?: string
+  port?: number
+  /** turned on in the panel itself */
+  enabled: boolean
+  /** new services join it; false = skipped (existing services keep theirs) */
+  attach: boolean
+}
+
+/** POST /servers/test: whether core reached the panel (nothing is saved). */
+export interface ServerTest {
+  ok: boolean
+  panel_version: string
+  inbounds: number
+  version_untested?: boolean
+  /** why not, in the provisioner's words (English) */
+  detail: string
+}
+
+/** What a gateway's payments say about it (from its report). */
+export interface GatewayHealth {
+  healthy: boolean
+  /** payments started and not finished yet */
+  open: number
+  oldest_open_at: number | null
+  last_paid_at: number | null
+  last_error_at: number | null
+  /** the last error, already redacted (English) */
+  last_error: string
+}
+
+/** An automated gateway's configuration (GET /gateways, owner only). The
+ * merchant id and proxy are never sent back: only a hint and whether set. */
+export interface GatewayConfig {
+  provider: string
+  /** offered to customers */
+  enabled: boolean
+  /** has a merchant id (open payments are still checked when not offered) */
+  configured: boolean
+  /** new payments can use it now: enabled, configured and no problem */
+  offered?: boolean
+  /** why the settings cannot be used: '' | unreadable | sandbox_refused |
+   * public_url | invalid */
+  problem?: string
+  sandbox: boolean
+  /** may the sandbox be turned on (never in production); absent = yes */
+  sandbox_allowed?: boolean
+  /** the merchant id's last 4 characters, '' when none */
+  merchant_hint: string
+  proxy_set: boolean
+  /** payments has no master key: the settings come from .env, read only */
+  key_missing: boolean
+  health?: GatewayHealth | null
+}
+
+/** GET /gateways: the automated gateways, and the payments settings (the
+ * manual methods and Stars, their switches and details) as settings items. */
+export interface GatewaysReply {
+  providers: GatewayConfig[]
+  settings: SettingItem[]
+}
+
+/** POST /gateways/{provider}/test: a read-only call to the gateway. */
+export interface GatewayTest {
+  ok: boolean
+  /** the gateway's or core's words when it failed (English) */
+  detail: string
+  /** paid payments the gateway still waits to have verified */
+  unverified?: number
+}
+
+/** GET /gateways/report: payments by status in a period, and the latest events. */
+export interface GatewayReport extends GatewayHealth {
+  provider: string
+  from: number
+  to: number
+  /** by status: how many, and the sum charged per currency */
+  totals: { status: string; count: number; amounts: Money[] }[]
+}
+
+/** A 3x-ui server on the overview (every staff member who reads it). */
+export interface OverviewServer {
+  id: string
+  name: string
+  /** its last check; a server not checked yet counts as answering */
+  healthy: boolean
+  /** why not, in English */
+  detail: string
+  clients: number
+  /** takes new services; absent from older cores (then: yes) */
+  enabled?: boolean
+}
+
+/** A payment method on the overview: offered or not, and whether it works. */
+export interface OverviewGateway {
+  provider: string
+  enabled: boolean
+  healthy: boolean
+  /** false: on, but a detail it needs is missing (not shown to customers);
+   * absent from older cores */
+  ready?: boolean
 }

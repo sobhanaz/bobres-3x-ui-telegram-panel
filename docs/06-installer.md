@@ -16,19 +16,32 @@ downloads the signed `bobres` CLI binary from the latest GitHub release of this 
 The wizard asks for what is missing; for a panel on the same server typed as `http://127.0.0.1:<port>/...`
 it offers `http://host.docker.internal:<port>/...` (what the containers can reach).
 
+The 3x-ui panel is optional (milestone 6a): a fresh install still asks for one (Enter skips it), a re-run
+never asks, and a URL needs its token (and a token its URL). The provisioner registers that panel only while
+it has no server; after that servers are added and changed in the dashboard (Servers), and `.env` edits of
+`BOBRES_XUI_*` change nothing. Without a panel the summary says to add a server in the dashboard before selling.
+
 ## Management menu
 `bobres` without a command, on a terminal, opens a numbered menu in the spirit of the x-ui script: status,
 live logs, start, stop, restart, show settings (secrets masked), change the bot token, the owner's Telegram
-ID or the 3x-ui panel, check the server, uninstall. Settings changes re-run the installer with the one new
+ID or the first 3x-ui panel, check the server, uninstall. Settings changes re-run the installer with the one new
 value, so they are validated the same way (bot token and panel checked online) and only the affected
-services are recreated. Scripts get the usage text instead, never a prompt.
+services are recreated. Scripts get the usage text instead, never a prompt. "Show settings" no longer reports
+Zarinpal from `.env`: with the payments key the gateway is managed in the dashboard (Payment gateways), and
+without it the menu says to re-run `bobres install`. The panel item says that the panel is used only until the
+dashboard has a server.
 
 ## `bobres install` steps
 1. **Preflight:** OS/arch, RAM (>=1 GB, warn <2), disk (>=10 GB), ports 80/443 free, clock sync, Docker/compose versions, outbound access to Telegram API, registry and license server.
 2. **DNS check:** domain resolves to this server's public IP; explain exactly what to fix if not.
 3. **Wizard** (skipped when flags given): domain, bot token (validated via getMe), admin Telegram ID, 3x-ui URL + API token (validated: reachable, version detected, compatible range), enabled gateways + keys, default language, brand name.
 4. **License:** activate key (or start trial), show entitlements.
-5. **Generate secrets:** DB/Redis passwords, internal service keys, session keys, encryption key. Write `/opt/bobres/.env` (chmod 600, owned by service user).
+5. **Generate secrets:** DB/Redis passwords, internal service keys, session keys, one master key per service
+   (`BOBRES_CORE_MASTER_KEY`, `BOBRES_PROVISIONER_MASTER_KEY`, `BOBRES_PAYMENTS_MASTER_KEY`). Write `/opt/bobres/.env`
+   (chmod 600, owned by service user). A re-run keeps every secret and fills only missing ones, so an install from
+   before milestone 6a gets its payments key then; until that re-run, compose passes an empty key (`:-`) and payments
+   keeps running Zarinpal from `.env`. The Zarinpal merchant id, proxy and sandbox in `.env` only seed the gateway
+   settings on the first start with the key; the public URL and `BOBRES_ZARINPAL_HOST` stay in `.env` (Caddy).
 6. **Render** `docker-compose.yml` + Caddyfile from templates; pull signed images (verify signatures).
 7. **Start** infra (Postgres, Redis), run migrations, start services, wait for health.
 8. **Harden:** ufw (22/80/443 only), fail2ban, unattended-upgrades, swap if low RAM, dedicated user. Each step is asked/announced, not silent.

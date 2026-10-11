@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
@@ -37,15 +39,23 @@ const (
 
 // Service composes the payments store with business rules.
 type Service struct {
-	st  *store.Store
-	ob  *eventbus.Outbox
-	gws map[string]gateway.Gateway
-	log *slog.Logger
+	st *store.Store
+	ob *eventbus.Outbox
+	// gws is the current set of automated gateways, replaced whole when the
+	// owner changes their settings; readers load it without locking.
+	gws atomic.Pointer[gatewaySet]
+	// gwMu is held shared while a gateway payment is being created and
+	// exclusively while the settings change, so no payment starts with a
+	// merchant id that is being replaced.
+	gwMu sync.RWMutex
+	log  *slog.Logger
 }
 
 // New builds a Service publishing to the payments outbox.
 func New(st *store.Store) *Service {
-	return &Service{st: st, ob: eventbus.NewOutbox("outbox_payments"), gws: map[string]gateway.Gateway{}, log: slog.New(slog.DiscardHandler)}
+	s := &Service{st: st, ob: eventbus.NewOutbox("outbox_payments"), log: slog.New(slog.DiscardHandler)}
+	s.gws.Store(&gatewaySet{configured: map[string]gateway.Gateway{}, offered: map[string]bool{}, opts: &GatewayOptions{}})
+	return s
 }
 
 // CreateIntent inserts a pending intent (idempotent per key) for the manual

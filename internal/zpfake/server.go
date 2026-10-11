@@ -2,7 +2,8 @@
 // mimics the behaviour BOBRES relies on, as documented: Rial amounts (or Toman
 // with currency IRT), the success envelope ("errors": []) and both error
 // envelopes ("errors": {"code", "message"} and, for an invalid authority, keyed
-// by field), verify answering 100 once and 101 afterwards, and inquiry statuses.
+// by field), verify answering 100 once and 101 afterwards, inquiry statuses, and
+// the read-only unVerified list (paid payments not verified yet).
 //
 // Pay/cancel stand in for the customer at the bank: POST /_pay/<authority>
 // with ?status=OK or NOK marks the payment and returns the callback URL the
@@ -17,6 +18,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -41,6 +43,7 @@ type Server struct {
 	seq      int64
 	calls    map[string]int
 	unpaidAs string // what inquiry reports before the customer pays ("" = IN_BANK)
+	merchant string // the only merchant id accepted ("" = any well-formed one)
 }
 
 // New starts a fake.
@@ -56,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/pg/v4/payment/request.json", s.request)
 	mux.HandleFunc("/pg/v4/payment/verify.json", s.verify)
 	mux.HandleFunc("/pg/v4/payment/inquiry.json", s.inquiry)
+	mux.HandleFunc("/pg/v4/payment/unVerified.json", s.unverified)
 	mux.HandleFunc("/pg/StartPay/", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "<html><body>fake Zarinpal payment page %s</body></html>", html.EscapeString(strings.TrimPrefix(r.URL.Path, "/pg/StartPay/")))
 	})
@@ -63,7 +67,8 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// Calls returns how often an API method was called ("request", "verify", "inquiry").
+// Calls returns how often an API method was called ("request", "verify",
+// "inquiry", "unverified").
 func (s *Server) Calls(name string) int { s.mu.Lock(); defer s.mu.Unlock(); return s.calls[name] }
 
 // Pay marks a payment paid (ok) or failed and returns the callback URL.
@@ -95,10 +100,36 @@ func (s *Server) Pay(authority string, ok bool) (string, error) {
 	return u.String(), nil
 }
 
+// AddPayment registers a payment of rial in status (IN_BANK, PAID, VERIFIED or
+// FAILED) as if it had been requested, and returns its authority.
+func (s *Server) AddPayment(rial int64, status string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seq++
+	auth := fmt.Sprintf("S%035d", s.seq)
+	p := &payment{amount: rial, currency: "IRR", callback: "https://shop.example.test/webhooks/zarinpal", status: status, desc: "added"}
+	if status == "PAID" || status == "VERIFIED" {
+		p.refID = 500000000 + s.seq
+	}
+	s.payments[auth] = p
+	return auth
+}
+
 // ReportUnpaidAs makes inquiry answer status (e.g. "FAILED") for payments the
 // customer has not paid or cancelled yet. The docs do not say what that is; the
 // sandbox answered IN_BANK (the default here) for an unopened session.
 func (s *Server) ReportUnpaidAs(status string) { s.mu.Lock(); defer s.mu.Unlock(); s.unpaidAs = status }
+
+// OnlyMerchant makes every call with another merchant id fail with -10, as
+// Zarinpal answers for an unknown terminal or an unregistered IP.
+func (s *Server) OnlyMerchant(id string) { s.mu.Lock(); defer s.mu.Unlock(); s.merchant = id }
+
+// knownMerchant reports whether calls with this merchant id are accepted.
+func (s *Server) knownMerchant(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return merchantRe.MatchString(id) && (s.merchant == "" || id == s.merchant)
+}
 
 // Currency returns the currency field the merchant sent ("" when absent).
 func (s *Server) Currency(authority string) string {
@@ -170,7 +201,7 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case in.Currency != "" && in.Currency != "IRR" && in.Currency != "IRT":
 		fail(w, http.StatusUnprocessableEntity, -9, "The input params invalid, validation error.")
-	case !merchantRe.MatchString(in.MerchantID):
+	case !s.knownMerchant(in.MerchantID):
 		fail(w, http.StatusUnprocessableEntity, -10, "Invalid merchant_id.")
 	case rial < 1000 || rial > 1_000_000_000 || in.CallbackURL == "" || in.Description == "" || len([]rune(in.Description)) > 500:
 		fail(w, http.StatusUnprocessableEntity, -9, "The input params invalid, validation error.")
@@ -194,11 +225,12 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	if !s.body(w, r, "verify", &in) {
 		return
 	}
+	known := s.knownMerchant(in.MerchantID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.payments[in.Authority]
 	switch {
-	case !merchantRe.MatchString(in.MerchantID):
+	case !known:
 		fail(w, http.StatusUnprocessableEntity, -10, "Invalid merchant_id.")
 	case p == nil:
 		invalidAuthority(w)
@@ -217,9 +249,14 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) inquiry(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Authority string `json:"authority"`
+		MerchantID string `json:"merchant_id"`
+		Authority  string `json:"authority"`
 	}
 	if !s.body(w, r, "inquiry", &in) {
+		return
+	}
+	if !s.knownMerchant(in.MerchantID) {
+		fail(w, http.StatusUnprocessableEntity, -10, "Invalid merchant_id.")
 		return
 	}
 	s.mu.Lock()
@@ -234,6 +271,36 @@ func (s *Server) inquiry(w http.ResponseWriter, r *http.Request) {
 		status = s.unpaidAs
 	}
 	ok(w, map[string]any{"code": 100, "message": "Success", "status": status})
+}
+
+// unverified lists the paid payments nobody has verified yet, as the merchant
+// panel's "unverified" list. It changes nothing.
+func (s *Server) unverified(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		MerchantID string `json:"merchant_id"`
+	}
+	if !s.body(w, r, "unverified", &in) {
+		return
+	}
+	if !s.knownMerchant(in.MerchantID) {
+		fail(w, http.StatusUnprocessableEntity, -10, "Invalid merchant_id.")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var paid []string
+	for auth, p := range s.payments {
+		if p.status == "PAID" {
+			paid = append(paid, auth)
+		}
+	}
+	sort.Strings(paid)
+	list := []map[string]any{}
+	for _, auth := range paid {
+		list = append(list, map[string]any{"authority": auth, "amount": s.payments[auth].amount,
+			"callback_url": s.payments[auth].callback, "referer": "", "date": "2026-10-01 12:00:00"})
+	}
+	ok(w, map[string]any{"code": 100, "message": "Success", "authorities": list})
 }
 
 func (s *Server) pay(w http.ResponseWriter, r *http.Request) {

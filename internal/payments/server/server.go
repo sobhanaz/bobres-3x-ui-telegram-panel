@@ -4,7 +4,9 @@ package server
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
+	"time"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	paymentsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1"
@@ -106,6 +108,101 @@ func (s *Server) ConfirmStarsPayment(ctx context.Context, req *paymentsv1.Confir
 // ListGateways lists the automated providers usable on this install.
 func (s *Server) ListGateways(context.Context, *paymentsv1.ListGatewaysRequest) (*paymentsv1.ListGatewaysResponse, error) {
 	return &paymentsv1.ListGatewaysResponse{Providers: s.svc.Gateways()}, nil
+}
+
+// ListGatewayConfigs lists the automated gateways' settings, without secrets.
+func (s *Server) ListGatewayConfigs(context.Context, *paymentsv1.ListGatewayConfigsRequest) (*paymentsv1.ListGatewayConfigsResponse, error) {
+	out := &paymentsv1.ListGatewayConfigsResponse{}
+	for _, c := range s.svc.GatewayConfigs() {
+		out.Configs = append(out.Configs, gatewayConfigToProto(c))
+	}
+	return out, nil
+}
+
+// SetGatewayConfig stores and applies a gateway's new settings.
+func (s *Server) SetGatewayConfig(ctx context.Context, req *paymentsv1.SetGatewayConfigRequest) (*paymentsv1.GatewayConfig, error) {
+	c, err := s.svc.SetGatewayConfig(ctx, domain.GatewayUpdate{
+		Provider: req.GetProvider(), Enabled: req.GetEnabled(), Sandbox: req.GetSandbox(),
+		MerchantID: req.GetMerchantId(), Proxy: req.GetProxy(), ClearProxy: req.GetClearProxy(), ActorID: req.GetActorId(),
+	})
+	if err != nil {
+		return nil, fail(err)
+	}
+	return gatewayConfigToProto(c), nil
+}
+
+// TestGateway checks a gateway's stored or candidate settings, read-only.
+func (s *Server) TestGateway(ctx context.Context, req *paymentsv1.TestGatewayRequest) (*paymentsv1.TestGatewayResponse, error) {
+	var cand *domain.GatewayCandidate
+	if c := req.GetCandidate(); c != nil {
+		cand = &domain.GatewayCandidate{Sandbox: c.GetSandbox(), MerchantID: c.GetMerchantId(), Proxy: c.GetProxy(), ClearProxy: c.GetClearProxy()}
+	}
+	r, err := s.svc.TestGateway(ctx, req.GetProvider(), cand)
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &paymentsv1.TestGatewayResponse{
+		Ok: r.OK, Detail: r.Detail, Unverified: int32(min(r.Unverified, math.MaxInt32)), //nolint:gosec // bounded
+		LatencyMs: r.Latency.Milliseconds(),
+	}, nil
+}
+
+// GatewayReport summarises one payment method over a period.
+func (s *Server) GatewayReport(ctx context.Context, req *paymentsv1.GatewayReportRequest) (*paymentsv1.GatewayReportResponse, error) {
+	var from, to time.Time
+	if req.GetFrom() < 0 || req.GetTo() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "the report period must be unix seconds")
+	}
+	if req.GetFrom() > 0 {
+		from = time.Unix(req.GetFrom(), 0)
+	}
+	if req.GetTo() > 0 {
+		to = time.Unix(req.GetTo(), 0)
+	}
+	r, err := s.svc.GatewayReport(ctx, req.GetProvider(), from, to)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &paymentsv1.GatewayReportResponse{
+		Provider: r.Provider, From: r.From.Unix(), To: r.To.Unix(), OpenCount: r.OpenCount,
+		LastError: gatewayEventToProto(r.LastError), LastPaid: gatewayEventToProto(r.LastPaid),
+	}
+	if r.OldestOpen != nil {
+		out.OldestOpenAt = r.OldestOpen.Unix()
+	}
+	for _, t := range r.Totals {
+		pt := &paymentsv1.GatewayStatusTotal{Status: t.Status, Count: t.Count}
+		for _, m := range t.Amounts {
+			pt.Amounts = append(pt.Amounts, &commonv1.Money{Amount: m.Amount, Currency: m.Currency})
+		}
+		for _, m := range t.GatewayAmounts {
+			pt.GatewayAmounts = append(pt.GatewayAmounts, &commonv1.Money{Amount: m.Amount, Currency: m.Currency})
+		}
+		out.Totals = append(out.Totals, pt)
+	}
+	for _, f := range r.Failures {
+		out.Failures = append(out.Failures, &paymentsv1.GatewayReasonCount{Reason: f.Reason, Count: f.Count})
+	}
+	return out, nil
+}
+
+func gatewayConfigToProto(c domain.GatewayConfig) *paymentsv1.GatewayConfig {
+	p := &paymentsv1.GatewayConfig{
+		Provider: c.Provider, Enabled: c.Enabled, Configured: c.Configured, Sandbox: c.Sandbox,
+		MerchantHint: c.MerchantHint, ProxySet: c.ProxySet, KeyMissing: c.KeyMissing, Offered: c.Offered,
+		Problem: c.Problem, FromEnv: c.FromEnv, UpdatedBy: c.UpdatedBy,
+	}
+	if !c.UpdatedAt.IsZero() {
+		p.UpdatedAt = c.UpdatedAt.Unix()
+	}
+	return p
+}
+
+func gatewayEventToProto(e *store.GatewayEvent) *paymentsv1.GatewayEvent {
+	if e == nil {
+		return nil
+	}
+	return &paymentsv1.GatewayEvent{At: e.At.Unix(), Kind: e.Kind, IntentId: e.IntentID, Detail: e.Detail}
 }
 
 // GetIntent returns one intent.
@@ -280,6 +377,10 @@ func fail(err error) error {
 		return status.Error(codes.AlreadyExists, "this payment was already settled")
 	case errors.Is(err, domain.ErrUnavailable):
 		return status.Error(codes.Unavailable, "the payment gateway is unavailable, try again shortly")
+	case errors.Is(err, domain.ErrKeyMissing):
+		return status.Error(codes.FailedPrecondition, "the payments master key is not set: add it (re-run bobres install) to change gateway settings")
+	case errors.Is(err, domain.ErrPrecondition):
+		return status.Error(codes.FailedPrecondition, strings.TrimPrefix(err.Error(), domain.ErrPrecondition.Error()+": "))
 	default:
 		return status.Error(codes.Internal, "internal error")
 	}

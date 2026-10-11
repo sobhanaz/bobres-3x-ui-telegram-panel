@@ -143,6 +143,8 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
       // Branding and the referral reward are settings edited on other pages.
       if (id.startsWith('branding.')) return { name: 'branding' }
       if (id.startsWith('referral.')) return { name: 'discounts' }
+      // The payment details and switches are on the Payment gateways page.
+      if (id.startsWith('payments.')) return { name: 'gateways' }
       return { name: 'settings' }
     case 'text':
       return { name: 'branding', query: { tab: 'texts' } }
@@ -162,6 +164,10 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
     case 'reseller_tier':
       // Tiers are a tab of the Resellers page.
       return { name: 'resellers', query: { tab: 'tiers' } }
+    case 'server':
+      return { name: 'servers' }
+    case 'gateway':
+      return { name: 'gateways' }
   }
   return null
 }

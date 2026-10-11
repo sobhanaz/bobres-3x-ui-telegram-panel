@@ -124,16 +124,21 @@ func (h *Handler) usdtRate() int64 {
 }
 
 func (h *Handler) cardEnabled(currency string) bool {
-	return currency == "IRT" && h.setting("payments.card_number") != ""
+	return currency == "IRT" && h.setting("payments.card_number") != "" && h.methodOn("manual_card")
 }
 
 // zarinpalLinkEnabled: the store's Zarinpal payment link, approved manually.
 func (h *Handler) zarinpalLinkEnabled(currency string) bool {
-	return currency == "IRT" && h.setting("payments.zarinpal_link") != ""
+	return currency == "IRT" && h.setting("payments.zarinpal_link") != "" && h.methodOn("manual_zarinpal")
+}
+
+// methodOn: staff did not switch a manual method off (core refuses it too).
+func (h *Handler) methodOn(method string) bool {
+	return h.setting("payments."+method+".enabled") != "false"
 }
 
 func (h *Handler) cryptoEnabled(currency string) bool {
-	if h.setting("payments.usdt_trc20") == "" && h.setting("payments.usdt_erc20") == "" {
+	if !h.methodOn("manual_crypto") || h.setting("payments.usdt_trc20") == "" && h.setting("payments.usdt_erc20") == "" {
 		return false
 	}
 	return currency == "USDT" || (currency == "IRT" && h.usdtRate() > 0)
