@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import fa from '../locales/fa.json'
-import { absent, checkList, mismatched, serviceState, sortedServices } from '../system'
+import { absent, checkList, mismatched, serviceState, sortedServices, UPDATE_COMMAND, updateReason, updateState } from '../system'
 import {
   bindingOf,
   bindings,
@@ -20,7 +20,7 @@ import {
   tokenProblem,
   warnings,
 } from '../license'
-import type { LicenseEntitlements, LicenseInfo, LicenseToken, ServiceHealth, SystemReply } from '../types'
+import type { LicenseEntitlements, LicenseInfo, LicenseToken, ServiceHealth, SystemReply, UpdateCheck } from '../types'
 
 const DAY = 86_400
 const iid = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa'
@@ -78,6 +78,38 @@ describe('system health', () => {
     }
     expect(mismatched(reply).map((s) => s.name)).toEqual(['bot', 'payments'])
     expect(mismatched({ services: [svc('bot', { version_mismatch: undefined })] })).toEqual([])
+  })
+})
+
+describe('update check', () => {
+  const upd = (over: Partial<UpdateCheck> = {}): UpdateCheck => ({
+    current: '1.5.0', latest: '1.6.0', newer: true, verified: true, checked_at: 1_790_000_000, error: '', ...over,
+  })
+  it('reads a newer release, up to date, or not known', () => {
+    expect(updateState(upd())).toBe('newer')
+    expect(updateState(upd({ latest: '1.5.0', newer: false }))).toBe('current')
+    expect(updateState(upd({ latest: '', newer: false, error: 'unreachable' }))).toBe('unknown')
+    // not checked yet
+    expect(updateState(upd({ latest: '', newer: false, checked_at: 0 }))).toBe('unknown')
+    // a release read before a later check failed still counts; "up to date" does not
+    expect(updateState(upd({ error: 'unreachable' }))).toBe('newer')
+    expect(updateState(upd({ latest: '1.5.0', newer: false, error: 'unreachable' }))).toBe('unknown')
+    // an older core says nothing
+    expect(updateState(undefined)).toBe('unknown')
+    expect(updateState(null)).toBe('unknown')
+  })
+  it('says why the latest release is not known', () => {
+    expect(updateReason(upd())).toBeNull()
+    expect(updateReason(upd({ latest: '', error: 'unreachable' }))).toBe('unreachable')
+    expect(updateReason(upd({ latest: '', error: 'bot unreachable' }))).toBe('bot_unreachable')
+    expect(updateReason(upd({ latest: '', error: 'checksums.txt: no version header' }))).toBe('other')
+    expect(updateReason(upd({ latest: '', checked_at: 0 }))).toBe('not_checked')
+    expect(updateReason(upd({ error: 'unreachable' }))).toBe('unreachable')
+    expect(updateReason(undefined)).toBe('unsupported')
+    for (const r of ['unreachable', 'bot_unreachable', 'not_checked', 'unsupported', 'other']) {
+      expect((fa.system.updates.reason as Record<string, string>)[r]).toBeTruthy()
+    }
+    expect(UPDATE_COMMAND).toBe('bobres update')
   })
 })
 
@@ -240,6 +272,7 @@ describe('system page', () => {
       { provider: 'zarinpal', enabled: true, healthy: true, ready: true },
       { provider: 'manual_card', enabled: false, healthy: true },
     ],
+    updates: { current: '1.4.0', latest: '1.5.0', newer: true, verified: false, checked_at: nowSec() - 3600, error: '' },
   })
   // as core's licenseView answers
   const missing = (): LicenseInfo => ({
@@ -398,6 +431,89 @@ describe('system page', () => {
     expect(calls.some((c) => c.includes('/api/v1/system') || c.includes('/api/v1/license'))).toBe(false)
     // and no license chip for them
     expect(document.querySelector('.license-chip')).toBeNull()
+  })
+
+  it('shows a newer release with the command to install it', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const { calls, router } = await boot('/admin/system')
+    await vi.waitFor(() => expect(rows()).toHaveLength(5))
+    btn('.tab-updates').click()
+    const card = await found('.update-available')
+    expect(router.currentRoute.value.query.tab).toBe('updates')
+    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
+    expect(document.querySelector('.current-version')?.textContent).toBe('1.4.0')
+    expect(document.querySelector('.latest-version')?.textContent).toBe('1.5.0')
+    expect(card.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.available'), { version: '\u20681.5.0\u2069' }))
+    expect(card.querySelector('.command')?.textContent).toBe('bobres update')
+    expect(document.querySelector('.updates .checked')?.textContent).toContain(text('system.updates.checked_at').split('{')[0])
+    // the bot could not check the signature: said, and that the CLI will
+    expect(document.querySelector('.unverified')?.textContent?.trim()).toBe(text('system.updates.unverified'))
+    expect(document.querySelector('.up-to-date')).toBeNull()
+    expect(document.querySelector('.not-checked')).toBeNull()
+    btn('button.copy-command').click()
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('bobres update'))
+    // nothing is applied from the page
+    expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
+    // checks again on demand
+    btn('.updates button.refresh').click()
+    await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(3))
+  })
+
+  it('says when this install is up to date', async () => {
+    const { calls } = await boot('/admin/system?tab=updates', {
+      answer: (url) => (url === '/api/v1/system'
+        ? json(200, { version: 'v1.6.0', services: [], updates: { current: '1.6.0', latest: '1.6.0', newer: false, verified: true, checked_at: nowSec(), error: '' } })
+        : undefined),
+    })
+    await found('.up-to-date')
+    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.current'))
+    expect(document.querySelector('.up-to-date')?.textContent).toBe(text('system.updates.up_to_date'))
+    expect(document.querySelector('.latest-version')?.textContent).toBe('1.6.0')
+    expect(document.querySelector('.update-available')).toBeNull()
+    expect(document.querySelector('.unverified')).toBeNull()
+    expect(document.querySelector('.not-checked')).toBeNull()
+    // the health tab was never opened
+    expect(document.querySelector('.services-health')).toBeNull()
+    expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(1)
+  })
+
+  it('says why updates could not be checked', async () => {
+    const reply = (updates: Partial<UpdateCheck> | null) => (url: string) => (url === '/api/v1/system'
+      ? json(200, { version: 'v1.5.0', services: [], ...(updates ? { updates: { current: '1.5.0', latest: '', newer: false, verified: false, checked_at: 0, error: '', ...updates } } : {}) })
+      : undefined)
+    const reason = () => document.querySelector('.not-checked .reason')?.textContent
+    // GitHub unreachable
+    await boot('/admin/system?tab=updates', { answer: reply({ error: 'unreachable', checked_at: nowSec() }) })
+    await found('.not-checked')
+    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.unknown'))
+    expect(document.querySelector('.reason-title')?.textContent).toBe(text('system.updates.could_not_check'))
+    expect(reason()).toBe(text('system.updates.reason.unreachable'))
+    expect(document.querySelector('.current-version')?.textContent).toBe('1.5.0')
+    expect(document.querySelector('.latest-version')?.textContent).toBe('—')
+    expect(document.querySelector('.update-available')).toBeNull()
+    expect(document.querySelector('.unverified')).toBeNull()
+    // core could not ask the bot
+    await boot('/admin/system?tab=updates', { answer: reply({ error: 'bot unreachable' }) })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.bot_unreachable')))
+    expect(document.querySelector('.updates .checked')).toBeNull()
+    // the bot's own words for anything else
+    await boot('/admin/system?tab=updates', { answer: reply({ error: 'checksums.txt: no version header' }) })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.other')))
+    expect(document.querySelector('.not-checked .error')?.textContent).toBe('checksums.txt: no version header')
+    // not checked yet
+    await boot('/admin/system?tab=updates', { answer: reply({}) })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.not_checked')))
+    // an older core: its own version, and no check
+    await boot('/admin/system?tab=updates', { answer: reply(null) })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.unsupported')))
+    expect(document.querySelector('.current-version')?.textContent).toBe('v1.5.0')
+    // a newer release read before the last check failed: still shown, with the failure
+    await boot('/admin/system?tab=updates', { answer: reply({ latest: '1.6.0', newer: true, verified: true, error: 'unreachable' }) })
+    await found('.update-available')
+    expect(document.querySelector('.reason-title')?.textContent).toBe(text('system.updates.last_check_failed'))
+    expect(reason()).toBe(text('system.updates.reason.unreachable'))
+    expect(document.querySelector('.unverified')).toBeNull()
   })
 
   it('shows admins the license read only, with this install’s id to copy', async () => {

@@ -1698,9 +1698,10 @@
     }
   },
   "system": {
-    "intro": "How every BOBRES service is doing, and this install's license.",
+    "intro": "How every BOBRES service is doing, whether a newer release is out, and this install's license.",
     "tab": {
       "health": "Health",
+      "updates": "Updates",
       "license": "License"
     },
     "refresh": "Check again",
@@ -1741,7 +1742,33 @@
     "gateways": "Payment methods",
     "gateways_none": "No payment method is turned on.",
     "gateways_manage": "Manage payment methods",
-    "not_configured": "Core has no address for this service in its settings."
+    "not_configured": "Core has no address for this service in its settings.",
+    "updates": {
+      "title": "Version",
+      "current": "This install",
+      "latest": "Latest release",
+      "checked_at": "Last checked {time}",
+      "state": {
+        "newer": "Update available",
+        "current": "Up to date",
+        "unknown": "Not known"
+      },
+      "up_to_date": "This install runs the latest release.",
+      "available": "Version {version} is available.",
+      "how": "To install it, run this on the server (as root):",
+      "copy_command": "Copy the update command",
+      "backup_first": "The update downloads the release, checks its signature and restarts the services. Take a backup first.",
+      "unverified": "The release signature was not checked here; bobres update checks it before installing anything.",
+      "could_not_check": "Could not check for updates.",
+      "last_check_failed": "The last check for updates failed.",
+      "reason": {
+        "unreachable": "GitHub could not be reached from the server.",
+        "bot_unreachable": "The bot, which checks for updates, did not answer.",
+        "not_checked": "The bot has not checked yet. It checks every 12 hours.",
+        "unsupported": "This version of core does not report updates.",
+        "other": "The check failed:"
+      }
+    }
   },
   "license": {
     "chip": {

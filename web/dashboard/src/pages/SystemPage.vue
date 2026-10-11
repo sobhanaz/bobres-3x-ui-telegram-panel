@@ -10,18 +10,19 @@ import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import HealthTab from '../components/system/HealthTab.vue'
 import LicenseTab from '../components/system/LicenseTab.vue'
+import UpdatesTab from '../components/system/UpdatesTab.vue'
 import { licenseSeverity, stateOf } from '../license'
 import { useAuth } from '../stores/auth'
 
-// The system (owner and admin): every service's health and version, and the
-// license. The tab is in the address (?tab=), so the menu's license chip can
+// The system (owner and admin): every service's health and version, whether
+// a newer release is out, and the license. The tab is in the address (?tab=), so the menu's license chip can
 // open it; each tab loads the first time it is shown.
 const { t } = useI18n()
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
 
-const tabs = ['health', 'license']
+const tabs = ['health', 'updates', 'license']
 const tabOf = (v: unknown) => (typeof v === 'string' && tabs.includes(v) ? v : 'health')
 const tab = ref(tabOf(route.query.tab))
 const seen = reactive(new Set<string>([tab.value]))
@@ -49,6 +50,7 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
   <Tabs :value="tab" class="system-tabs" @update:value="showTab">
     <TabList>
       <Tab value="health" class="tab-health">{{ t('system.tab.health') }}</Tab>
+      <Tab value="updates" class="tab-updates">{{ t('system.tab.updates') }}</Tab>
       <Tab value="license" class="tab-license">
         {{ t('system.tab.license') }}
         <Tag v-if="licenseState && licenseState !== 'active'" :severity="licenseSeverity[licenseState]" :value="t('license.state.' + licenseState)" class="tab-state" />
@@ -57,6 +59,9 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
     <TabPanels>
       <TabPanel value="health">
         <HealthTab v-if="seen.has('health')" />
+      </TabPanel>
+      <TabPanel value="updates">
+        <UpdatesTab v-if="seen.has('updates')" />
       </TabPanel>
       <TabPanel value="license">
         <LicenseTab v-if="seen.has('license')" />

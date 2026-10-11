@@ -1,4 +1,4 @@
-import type { ServiceHealth, SystemReply } from './types'
+import type { ServiceHealth, SystemReply, UpdateCheck } from './types'
 
 // The System page's health tab: what each service's /healthz and /readyz
 // say, and whether every service runs the same version.
@@ -51,4 +51,32 @@ export function checkList(s: Pick<ServiceHealth, 'checks'>): { name: string; ok:
  * its own. */
 export function mismatched(reply: Pick<SystemReply, 'services'>): ServiceHealth[] {
   return sortedServices(reply.services).filter((s) => s.name !== 'core' && !absent(s) && s.version_mismatch === true)
+}
+
+/** The command that installs an update on the server; the page only shows
+ * it, applying stays on the command line. */
+export const UPDATE_COMMAND = 'bobres update'
+
+export type UpdateState = 'newer' | 'current' | 'unknown'
+
+/** updateState reads the bot's update check: a newer release, up to date,
+ * or not known (the check failed, has not run yet, or core is too old to
+ * say). A newer release read before a later check failed still shows. */
+export function updateState(u: Pick<UpdateCheck, 'latest' | 'newer' | 'error'> | null | undefined): UpdateState {
+  if (!u || !u.latest) return 'unknown'
+  if (u.newer) return 'newer'
+  return u.error ? 'unknown' : 'current'
+}
+
+export type UpdateReason = 'unreachable' | 'bot_unreachable' | 'not_checked' | 'unsupported' | 'other'
+
+/** updateReason says why the latest release is not known, or why the last
+ * check failed; null when nothing went wrong. */
+export function updateReason(u: Pick<UpdateCheck, 'latest' | 'error' | 'checked_at'> | null | undefined): UpdateReason | null {
+  if (!u) return 'unsupported'
+  const e = (u.error ?? '').trim().toLowerCase()
+  if (e === 'unreachable') return 'unreachable'
+  if (e === 'bot unreachable' || e === 'bot_unreachable') return 'bot_unreachable'
+  if (e) return 'other'
+  return u.latest ? null : 'not_checked'
 }

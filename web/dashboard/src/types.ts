@@ -577,6 +577,26 @@ export interface SystemReply {
   servers?: OverviewServer[]
   gateways?: OverviewGateway[]
   checked_at?: number
+  /** the bot's cached update check; absent from older cores */
+  updates?: UpdateCheck | null
+}
+
+/** What the bot last read from the latest release (it checks every 12 h;
+ * core has no way out to the internet). */
+export interface UpdateCheck {
+  /** this install's version ("1.5.0") */
+  current: string
+  /** the latest release's version; '' when it could not be read */
+  latest: string
+  /** latest is newer than current */
+  newer: boolean
+  /** the release's signature was checked against the release key ring */
+  verified: boolean
+  /** when the bot last checked; 0 = not yet */
+  checked_at: number
+  /** '' | unreachable (GitHub) | bot unreachable (core could not ask the
+   * bot) | anything else, in a few English words */
+  error: string
 }
 
 /** A license limit with its use: -1 = unlimited, 0 = none; used is null
