@@ -55,14 +55,20 @@ func reopenable(in *store.Intent) bool {
 // gatewayCurrency is the only currency each automated provider is charged in.
 var gatewayCurrency = map[string]string{"zarinpal": "IRR", "stars": "XTR"}
 
-// SetGateways attaches the configured automated providers by name.
+// SetGateways attaches automated providers by name and offers them, with
+// no stored settings behind them (tests; production uses ConfigureGateways).
 func (s *Service) SetGateways(gws ...gateway.Gateway) {
-	s.gws = map[string]gateway.Gateway{}
+	s.gwMu.Lock()
+	defer s.gwMu.Unlock()
+	set := &gatewaySet{configured: map[string]gateway.Gateway{}, offered: map[string]bool{}, opts: s.gws.Load().opts}
 	for _, g := range gws {
 		if g != nil {
-			s.gws[g.Name()] = g
+			set.configured[g.Name()] = g
+			set.offered[g.Name()] = true
 		}
 	}
+	set.zp.enabled = set.offered[providerZarinpal]
+	s.gws.Store(set)
 }
 
 // SetLogger enables logging of gateway problems (no secrets are logged).
@@ -72,16 +78,17 @@ func (s *Service) SetLogger(l *slog.Logger) {
 	}
 }
 
-// Gateway returns a configured provider, or nil.
-func (s *Service) Gateway(name string) gateway.Gateway { return s.gws[name] }
+// Gateway returns a configured provider (offered or not), or nil.
+func (s *Service) Gateway(name string) gateway.Gateway { return s.gws.Load().configured[name] }
 
-// Gateways lists the automated providers usable on this install. Telegram
+// Gateways lists the automated providers offered for new payments. Telegram
 // Stars needs no credentials, so it is always listed; core decides whether to
-// offer it (it needs a Stars price).
+// offer it (it needs a Stars price and its switch on).
 func (s *Service) Gateways() []string {
+	set := s.gws.Load()
 	out := []string{Stars}
-	for _, name := range []string{"zarinpal"} {
-		if s.gws[name] != nil {
+	for _, name := range store.GatewayProviders {
+		if set.offered[name] && set.configured[name] != nil {
 			out = append(out, name)
 		}
 	}
@@ -106,8 +113,13 @@ func chargeOf(in *store.Intent) gateway.Charge {
 // gateway, and returns the intent with its external id and pay URL. A retry with
 // the same key returns the payment already created.
 func (s *Service) StartGateway(ctx context.Context, in *store.Intent, description, callbackURL string) (*store.Intent, error) {
-	g := s.gws[in.Provider]
-	if g == nil {
+	// Held until the gateway's payment is stored: a merchant id change waits
+	// for it, then sees the intent as open and is refused.
+	s.gwMu.RLock()
+	defer s.gwMu.RUnlock()
+	set := s.gws.Load()
+	g := set.configured[in.Provider]
+	if g == nil || !set.offered[in.Provider] {
 		return nil, invalid("payment method %q is not enabled", in.Provider)
 	}
 	if in.GatewayAmount == nil || *in.GatewayAmount <= 0 || in.GatewayCurrency == nil || *in.GatewayCurrency != gatewayCurrency[in.Provider] {
@@ -303,7 +315,8 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 	case !open && (o.reconciler || !reopenable(in)):
 		return in, nil
 	}
-	g := s.gws[in.Provider]
+	// A disabled gateway keeps checking the payments it already took.
+	g := s.gws.Load().configured[in.Provider]
 	if g == nil || in.ExternalID == nil {
 		return in, nil
 	}
@@ -337,6 +350,9 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 // must be verified soon: Zarinpal gives it back to the payer otherwise), then up
 // to 64. It returns how many intents it looked at.
 func (s *Service) ReconcileOnce(ctx context.Context, interval time.Duration) (int, error) {
+	if len(s.gws.Load().configured) == 0 {
+		return 0, nil // nothing to ask until a gateway is configured
+	}
 	due, err := s.st.DueGatewayIntents(ctx, interval, expiryGrace, 50)
 	if err != nil {
 		return 0, err
@@ -354,12 +370,9 @@ func (s *Service) ReconcileOnce(ctx context.Context, interval time.Duration) (in
 
 // RunReconciler runs ReconcileOnce every interval until ctx ends. It covers
 // lost callbacks, customers who close the browser before returning, and
-// installs whose gateway cannot reach a public webhook URL.
+// installs whose gateway cannot reach a public webhook URL. It runs even with
+// no gateway configured: one may be configured from the dashboard later.
 func (s *Service) RunReconciler(ctx context.Context, interval time.Duration) error {
-	if len(s.gws) == 0 {
-		<-ctx.Done()
-		return nil
-	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {

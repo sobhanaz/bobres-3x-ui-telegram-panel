@@ -10,11 +10,13 @@ import (
 	eventsv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/events/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	paymentserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
@@ -47,16 +49,34 @@ func setup(rt *app.Runtime) error {
 	}
 	svc := domain.New(st)
 	svc.SetLogger(rt.Log)
-	srv := paymentserver.New(svc, st)
-	if cfg.ZarinpalMerchantID != "" {
-		zp, err := zarinpal.New(zarinpal.Config{MerchantID: cfg.ZarinpalMerchantID, Sandbox: cfg.ZarinpalSandbox, Proxy: cfg.ZarinpalProxy})
-		if err != nil {
+	// The gateway settings live in the database, encrypted with this service's
+	// own master key; the environment only seeds them. Without a key they are
+	// the environment's, read-only, as before.
+	opts := domain.GatewayOptions{
+		Env:          cfg.Env,
+		PublicURLErr: config.CheckZarinpalPublicURL(cfg.ZarinpalPublicURL, cfg.Env),
+		Seed:         domain.ZarinpalSettings{MerchantID: cfg.ZarinpalMerchantID, Sandbox: cfg.ZarinpalSandbox, Proxy: cfg.ZarinpalProxy},
+		Build: func(z domain.ZarinpalSettings) (gateway.Gateway, error) {
+			g, err := zarinpal.New(zarinpal.Config{MerchantID: z.MerchantID, Sandbox: z.Sandbox, Proxy: z.Proxy})
+			if err != nil {
+				return nil, err
+			}
+			return g, nil
+		},
+	}
+	if cfg.MasterKey != "" {
+		if opts.Envelope, err = bcrypto.NewEnvelope([]byte(cfg.MasterKey)); err != nil {
 			return err
 		}
-		svc.SetGateways(zp)
-		srv.SetPublicURL(cfg.ZarinpalPublicURL)
-		rt.Log.Info("Zarinpal enabled", "sandbox", cfg.ZarinpalSandbox, "proxy", cfg.ZarinpalProxy != "", "public_url", cfg.ZarinpalPublicURL)
+	} else {
+		rt.Log.Warn("no payments master key (BOBRES_PAYMENTS_MASTER_KEY): gateway settings come from the environment and cannot be changed from the dashboard; re-run bobres install to add it")
 	}
+	if err := svc.ConfigureGateways(rt.Ctx, opts); err != nil {
+		return err
+	}
+	srv := paymentserver.New(svc, st)
+	// Always set: Zarinpal may be switched on from the dashboard at any time.
+	srv.SetPublicURL(cfg.ZarinpalPublicURL)
 	srv.Register(gs)
 	// Public pages behind Caddy: the Zarinpal pay page and return URL.
 	web.New(svc, st, rt.Log).Register(rt.Mux)

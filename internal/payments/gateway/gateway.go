@@ -75,5 +75,18 @@ type Gateway interface {
 	Check(ctx context.Context, externalID string, c Charge) (Result, error)
 }
 
+// Tester is a gateway that can check its credentials and its route (proxy,
+// registered IP) without creating or settling any payment.
+type Tester interface {
+	Test(ctx context.Context) (TestResult, error)
+}
+
+// TestResult is what a successful test learned.
+type TestResult struct {
+	// Unverified counts payments the gateway reports as paid but not verified
+	// yet (the reconciler verifies the ones that are ours).
+	Unverified int
+}
+
 // ErrNotConfigured means the provider has no credentials on this install.
 var ErrNotConfigured = errors.New("gateway: not configured")
