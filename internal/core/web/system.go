@@ -33,7 +33,7 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		panel    map[string]any
 		gateways []map[string]any
 		updates  any = map[string]string{"error": "bot unreachable"}
-		backups  = map[string]any{"installed": false}
+		backups      = map[string]any{"installed": false}
 	)
 	if s.cfg.System != nil {
 		wg.Go(func() { report = s.cfg.System.Check(ctx) })
