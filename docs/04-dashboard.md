@@ -31,7 +31,7 @@ Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban)
 13. **Branding and texts:** name, logo, colors, welcome message, all bot strings per language, legal links, currency.
 14. **Settings:** general, notifications, forced-join channel, rate limits, maintenance mode, timezone.
 15. **Staff:** invite, roles, 2FA status, sessions.
-16. **System:** health of every service, version, update available, backup status/run/restore, logs viewer (recent), license status.
+16. **System (owner and admin):** tabs. *Health*: every service (core, bot, payments, provisioner, backup) with its version, health and readiness checks, a warning when versions differ, and the 3x-ui servers and payment methods. *License*: state (none, invalid with the reason, active, grace, expired), tier, ids, dates and days left, the domain and install binding, this install's id to copy, and each entitlement with its use (a warning from 90%); the owner pastes or opens a token, checks it, and saves it with a reason. Still to come: update available, backup status/run/restore, logs viewer (recent). A missing or invalid license limits nothing; staff who see this page get a small chip in the top bar while the license needs a look. "Powered by BOBRES" shows at the foot of the dashboard and the login page only under a valid license without white label, never on an unlicensed install.
 17. **Audit log:** filterable, exportable.
 
 ## Non-goals for v1

@@ -25,6 +25,7 @@ const built: Record<string, RouteRecordRaw['component']> = {
   servers: () => import('./pages/ServersPage.vue'),
   gateways: () => import('./pages/GatewaysPage.vue'),
   staff: () => import('./pages/StaffPage.vue'),
+  system: () => import('./pages/SystemPage.vue'),
   audit: () => import('./pages/AuditPage.vue'),
 }
 

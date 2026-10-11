@@ -135,6 +135,7 @@ async function submit() {
         <p class="app-muted small">{{ t('login.no_password_yet') }}</p>
       </template>
     </Card>
+    <footer v-if="auth.publicBrand?.powered_by" class="powered-by app-muted">{{ t('license.powered_by') }}</footer>
   </div>
 </template>
 
@@ -142,6 +143,8 @@ async function submit() {
 .login {
   min-block-size: 100vh;
   display: grid;
+  /* the card in the middle, the attribution (when shown) at the bottom */
+  grid-template-rows: 1fr auto;
   place-items: center;
   padding: 1rem;
   box-sizing: border-box;
@@ -189,5 +192,9 @@ h3 {
 .small {
   font-size: 0.85rem;
   margin-block-end: 0;
+}
+.powered-by {
+  font-size: 0.8rem;
+  padding-block-start: 0.75rem;
 }
 </style>

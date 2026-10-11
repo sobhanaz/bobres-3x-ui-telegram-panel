@@ -545,3 +545,103 @@ export interface OverviewGateway {
    * absent from older cores */
   ready?: boolean
 }
+
+/** One BOBRES service on the System page: its /healthz and /readyz as core
+ * read them (each within 3 s). */
+export interface ServiceHealth {
+  /** core | bot | payments | provisioner | backup */
+  name: string
+  /** ok | not_ready (a readiness check failed) | down (no answer) |
+   * not_installed (an optional service this install does not run) |
+   * not_configured (core has no address for it) */
+  status: string
+  /** as the service reports it ("v1.2.3", "1.2.3", "dev"); '' when unknown */
+  version: string
+  /** the readiness checks: name → "ok" | "fail" */
+  checks?: Record<string, string> | null
+  /** why it is down or not ready, in a few English words */
+  detail?: string
+  latency_ms?: number
+  /** its version differs from core's */
+  version_mismatch?: boolean
+}
+
+/** GET /system (owner and admin): every service, and the summaries the
+ * overview shows. */
+export interface SystemReply {
+  services: ServiceHealth[]
+  /** core's own version, the one the others should match */
+  version: string
+  /** any service runs another version than core */
+  version_mismatch?: boolean
+  servers?: OverviewServer[]
+  gateways?: OverviewGateway[]
+  checked_at?: number
+}
+
+/** A license limit with its use: -1 = unlimited, 0 = none; used is null
+ * when it could not be counted. */
+export interface LicenseLimit {
+  limit: number
+  used: number | null
+  /** used is 90% of the limit or more */
+  near?: boolean
+  /** nothing more may be added */
+  full?: boolean
+}
+
+/** What a license grants, each limit with what this install uses. */
+export interface LicenseEntitlements {
+  white_label: boolean
+  resellers: boolean
+  crypto_watcher: boolean
+  max_servers: LicenseLimit
+  max_active_services: LicenseLimit
+  /** staff besides the owner */
+  dashboard_staff_seats: LicenseLimit
+  /** the payment methods it names, and those turned on now (the wallet,
+   * always allowed, left out) */
+  gateways: { licensed: string[]; enabled: string[] }
+  /** YYYY-MM-DD: newer releases are not installable; '' = no limit */
+  updates_until?: string
+}
+
+/** The contents of a license token whose signature checked out. */
+export interface LicenseToken {
+  license_id: string
+  customer: string
+  /** trial | standard | pro */
+  tier: string
+  /** the vendor key that signed it */
+  kid: string
+  issued_at: number
+  expires_at: number
+  grace_days: number
+  grace_ends_at?: number
+  /** what it is bound to ('' = not bound) */
+  domain: string
+  install_id: string
+}
+
+/** GET /license (owner and admin; never the token itself), and the answer of
+ * POST /license/check and PUT /license. */
+export interface LicenseInfo {
+  /** missing | invalid | active | grace | expired */
+  state: string
+  /** why it is invalid: malformed, bad_signature, unknown_key, version,
+   * domain, install_id, unbound, not_yet_valid ('' otherwise) */
+  reason: string
+  /** this install: its id and its BOBRES_DOMAIN */
+  install_id: string
+  domain: string
+  /** the vendor keys built into this core (0: no license can verify yet) */
+  keys?: number
+  /** null when there is none, or its signature was not accepted */
+  license: LicenseToken | null
+  /** the token's binding against this install */
+  binding?: { domain: string; install_id: string } | null
+  entitlements?: LicenseEntitlements | null
+  /** when it was saved, and by whom (GET /license only) */
+  updated_at?: number | null
+  updated_by?: { id: string; username: string } | null
+}
