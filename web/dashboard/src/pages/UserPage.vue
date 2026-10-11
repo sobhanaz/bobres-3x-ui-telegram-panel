@@ -24,11 +24,14 @@ import OrdersTable from '../components/OrdersTable.vue'
 import PaymentsTable from '../components/PaymentsTable.vue'
 import LedgerTable from '../components/LedgerTable.vue'
 import TicketsTable from '../components/support/TicketsTable.vue'
+import BalanceText from '../components/resellers/BalanceText.vue'
+import MakeResellerDialog from '../components/resellers/MakeResellerDialog.vue'
 import { api, newKey } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { useList } from '../composables/useList'
 import { asciiNumber, currencies, date, money, num, validAmount, type Lang } from '../format'
+import { isStaff } from '../staff'
 import type { LedgerItem, OrderItem, PaymentItem, ServiceItem, TicketItem, UserDetail } from '../types'
 
 // counts.tickets comes with core's M4 user answer (older answers leave it out).
@@ -148,6 +151,15 @@ function openBan() {
   actionError.value = ''
   banOpen.value = true
 }
+// Resellers are managed on their own page; an active customer can become one.
+const isReseller = computed(() => detail.value?.user.role === 'reseller')
+const canMakeReseller = computed(() => auth.can('resellers.write') && detail.value?.user.role === 'user' && detail.value.user.status === 'active')
+const making = ref(false)
+function madeReseller(rid: string) {
+  toast.add({ severity: 'success', summary: t('reseller.made'), life: 4000 })
+  void router.push({ name: 'reseller', params: { id: rid } })
+}
+
 const directions = computed(() => [
   { label: t('user.add_money'), value: 'add' },
   { label: t('user.take_money'), value: 'take' },
@@ -167,13 +179,18 @@ const directions = computed(() => [
         <span>{{ t('audit.history') }}</span>
       </RouterLink>
       <RouterLink
-        v-if="auth.can('audit.read') && detail.user.role !== 'user'"
+        v-if="auth.can('audit.read') && isStaff(detail.user.role)"
         :to="{ name: 'audit', query: { actor: id } }"
         class="p-button p-component p-button-text history"
       >
         <i class="pi pi-list" aria-hidden="true" />
         <span>{{ t('audit.their_actions') }}</span>
       </RouterLink>
+      <RouterLink v-if="isReseller && auth.can('resellers.write')" :to="{ name: 'reseller', params: { id } }" class="p-button p-component p-button-outlined history reseller-page">
+        <i class="pi pi-sitemap" aria-hidden="true" />
+        <span>{{ t('reseller.open_page') }}</span>
+      </RouterLink>
+      <Button v-if="canMakeReseller" :label="t('reseller.make')" icon="pi pi-sitemap" outlined class="make-reseller" @click="making = true" />
       <Button v-if="auth.can('wallet.adjust')" :label="t('user.adjust_balance')" icon="pi pi-wallet" outlined @click="openBalance" />
       <Button
         v-if="detail.can_ban"
@@ -209,7 +226,7 @@ const directions = computed(() => [
       <template #title>{{ t('user.wallet') }}</template>
       <template #content>
         <template v-if="detail">
-          <div v-for="w in detail.user.wallets" :key="w.currency" class="balance">{{ money(w, lang) }}</div>
+          <div v-for="w in detail.user.wallets" :key="w.currency" class="balance"><BalanceText :value="w" /></div>
           <p v-if="!detail.user.wallets.length" class="app-muted">{{ t('user.wallet_empty') }}</p>
         </template>
         <Skeleton v-else height="3rem" />
@@ -315,6 +332,8 @@ const directions = computed(() => [
       </div>
     </div>
   </ReasonDialog>
+
+  <MakeResellerDialog v-if="detail" v-model:visible="making" :user="detail.user" @made="madeReseller" />
 
   <ReasonDialog
     v-model:visible="banOpen"

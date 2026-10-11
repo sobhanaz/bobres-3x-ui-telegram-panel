@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addable, auditLink, deviceKind, deviceOf, entityIdLabel, isLocked, loginState, roleOptions, staffActions } from '../staff'
+import { addable, auditLink, deviceKind, deviceOf, entityIdLabel, isLocked, isStaff, loginState, roleOptions, staffActions } from '../staff'
 import type { StaffItem } from '../types'
 
 const now = 1_760_000_000
@@ -91,6 +91,10 @@ describe('staffActions', () => {
     expect(addable({ role: 'user', status: 'banned' })).toBe(false)
     expect(addable({ role: 'support', status: 'active' })).toBe(false)
     expect(addable({ role: 'reseller', status: 'active' })).toBe(false)
+  })
+  it('counts only dashboard roles as staff, not customers or resellers', () => {
+    for (const r of ['owner', 'admin', 'support']) expect(isStaff(r)).toBe(true)
+    for (const r of ['user', 'reseller', '']) expect(isStaff(r)).toBe(false)
   })
 })
 

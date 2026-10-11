@@ -54,6 +54,8 @@ export interface ServiceItem {
   traffic_used: number
   last_synced_at: number | null
   created_at: number
+  /** the name a reseller gave it (M5) */
+  label?: string | null
 }
 
 export interface OrderItem {
@@ -346,6 +348,49 @@ export interface BroadcastItem {
 export interface AudienceCount {
   total: number
   languages: { fa: number; en: number }
+}
+
+/** A reseller's wallet in one currency, in minor units: a negative balance
+ * is what they owe, down to -credit_limit. */
+export interface ResellerBalance {
+  currency: string
+  balance: number
+  credit_limit: number
+}
+
+/** A row of GET /resellers (owner and admin only). */
+export interface ResellerItem {
+  user: UserBrief & { status: string }
+  tier: { id: string; name: string; discount_percent: number; commission_percent: number }
+  /** the commission in force: the reseller's own, else the tier's */
+  commission_percent: number
+  commission_override: number | null
+  balances: ResellerBalance[]
+  /** customers who joined through the reseller's link */
+  customers: number
+  commission_earned: Money[]
+  created_at: number
+}
+
+/** GET /resellers/{id} {item}: the row, the staff note, the version a
+ * change must name, and whether removing is allowed (nothing owed). */
+export interface ResellerDetail extends ResellerItem {
+  note: string
+  version: number
+  can_remove: boolean
+}
+
+/** A reseller tier: a discount off store prices, or a fixed price per plan
+ * (a decimal in the plan's currency), and the commission on customers. */
+export interface TierItem {
+  id: string
+  name: string
+  discount_percent: number
+  commission_percent: number
+  prices: { plan_id: string; price: string; currency?: string }[]
+  /** resellers on this tier (it cannot be deleted while any are) */
+  resellers: number
+  version: number
 }
 
 export interface BroadcastRecipientItem {

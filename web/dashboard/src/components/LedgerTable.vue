@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import UserLink from './UserLink.vue'
+import BalanceText from './resellers/BalanceText.vue'
 import { dateTime, money, shortId, type Lang } from '../format'
 import type { LedgerItem } from '../types'
 
@@ -48,7 +49,8 @@ const kind = (k: string) => (te('ledger.kind.' + k) ? t('ledger.kind.' + k) : k)
       </template>
     </Column>
     <Column :header="t('ledger.balance_after')" body-class="app-nowrap">
-      <template #body="{ data: e }">{{ money(e.balance_after, lang) }}</template>
+      <!-- A reseller's wallet may go below zero: that reads as debt. -->
+      <template #body="{ data: e }"><BalanceText :value="e.balance_after" /></template>
     </Column>
     <Column :header="t('ledger.reference')">
       <template #body="{ data: e }">
