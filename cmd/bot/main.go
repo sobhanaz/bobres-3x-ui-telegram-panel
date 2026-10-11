@@ -22,6 +22,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/ratelimit"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/redisx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
@@ -132,6 +133,9 @@ func setup(rt *app.Runtime) error {
 		updates := release.NewChecker(version.Version, "", rt.Log)
 		rt.Go("update-check", updates.Run)
 		rt.Mux.Handle("GET /internal/update-check", runner.UpdateCheck(updates.Status, cfg.PeerCoreToken))
+		// The System page's logs tab (owner): this process's kept warnings
+		// and errors, already redacted.
+		rt.Mux.Handle("GET /internal/logs", runner.Logs(logging.Recent, cfg.PeerCoreToken))
 	}
 
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)

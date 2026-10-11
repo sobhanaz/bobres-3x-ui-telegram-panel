@@ -49,7 +49,7 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 | Dashboard brute force | Rate limit, lockout, 2FA, secure cookies, CSRF tokens, short sessions |
 | SQL injection / XSS | Parameterized queries (pgx), Vue template escaping, CSP headers, input validation |
 | SSRF via admin-entered URLs (3x-ui URL, webhooks) | Allow/deny lists, block metadata/loopback ranges unless explicitly allowed |
-| Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted, support-bundle scrubs |
+| Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted, support-bundle scrubs. The System page's logs (the newest 500 warnings and errors per service, in memory) are kept after the same redaction and shown to the owner only, since they carry Telegram ids |
 | Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel. The panel URL must be https; plain http is accepted only with allow-private, and every connection is then checked to go to a private, loopback or link-local address (`xui.ErrPublicPlaintext`). This bounds the first hop only: a private next hop that NATs or proxies onward is the operator's network, and a custom HTTP client (`xui.WithHTTPClient`) is refused for plain http |
 | Supply chain | Pinned deps, govulncheck, trivy, signed images + SBOM, minimal base images, CI with least-privilege tokens |
 | Malicious update / MITM of installer | Signature verification (ed25519/cosign), HTTPS, checksums, no unsigned code paths |

@@ -210,6 +210,22 @@ message HealthCheckResponse {
   string detail = 3;
 }
 
+// RecentLogsRequest asks for the service's kept warnings and errors (core's
+// System page, owner only).
+message RecentLogsRequest {}
+
+// LogLine is one kept log line, redacted like the service's stdout.
+message LogLine {
+  int64 time = 1; // unix seconds
+  string level = 2; // WARN | ERROR
+  string msg = 3;
+  string attrs = 4; // the other fields as a JSON object; a long one is cut and ends with "…"
+}
+
+message RecentLogsResponse {
+  repeated LogLine lines = 1; // the newest 500 since the service started, oldest first
+}
+
 // ProvisionerService is the only service that holds 3x-ui API tokens and
 // talks to 3x-ui panels directly.
 service ProvisionerService {
@@ -231,4 +247,6 @@ service ProvisionerService {
   // TestServer connects and lists inbounds; it saves nothing.
   rpc TestServer(TestServerRequest) returns (TestServerResponse);
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  // The service's kept warnings and errors, for the System page.
+  rpc RecentLogs(RecentLogsRequest) returns (RecentLogsResponse);
 }

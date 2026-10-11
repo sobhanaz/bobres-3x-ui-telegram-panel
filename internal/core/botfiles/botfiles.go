@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
 )
 
 // MaxFile matches the bot's own limit.
@@ -214,4 +216,32 @@ func (c *Client) CheckUpdates(ctx context.Context) (*UpdateCheck, error) {
 		return nil, fmt.Errorf("botfiles: update check: %w", err)
 	}
 	return &out, nil
+}
+
+// RecentLogs reads the bot's kept warnings and errors (already redacted),
+// oldest first, within 3 seconds.
+func (c *Client) RecentLogs(ctx context.Context) ([]logging.Line, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/internal/logs", nil)
+	if err != nil {
+		return nil, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("botfiles: logs: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("botfiles: logs: the bot answered %d", resp.StatusCode)
+	}
+	var out struct {
+		Lines []logging.Line `json:"lines"`
+	}
+	// 500 lines of at most about 2 KB each.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("botfiles: logs: %w", err)
+	}
+	return out.Lines, nil
 }

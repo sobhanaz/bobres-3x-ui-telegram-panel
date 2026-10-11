@@ -141,9 +141,12 @@ func setup(rt *app.Runtime) error {
 		files web.ReceiptFiles
 		bot   web.BotPeer
 	)
+	// The System page's logs tab: core reads its own buffer, asks the others.
+	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.ServiceToken)
 		files, bot = peer, peer
+		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
@@ -157,7 +160,7 @@ func setup(rt *app.Runtime) error {
 		{Name: "backup", URL: cfg.BackupURL, Optional: true},
 	})
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
-		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)

@@ -36,6 +36,7 @@ const (
 	ProvisionerService_DeleteServer_FullMethodName     = "/provisioner.v1.ProvisionerService/DeleteServer"
 	ProvisionerService_TestServer_FullMethodName       = "/provisioner.v1.ProvisionerService/TestServer"
 	ProvisionerService_HealthCheck_FullMethodName      = "/provisioner.v1.ProvisionerService/HealthCheck"
+	ProvisionerService_RecentLogs_FullMethodName       = "/provisioner.v1.ProvisionerService/RecentLogs"
 )
 
 // ProvisionerServiceClient is the client API for ProvisionerService service.
@@ -63,6 +64,8 @@ type ProvisionerServiceClient interface {
 	// TestServer connects and lists inbounds; it saves nothing.
 	TestServer(ctx context.Context, in *TestServerRequest, opts ...grpc.CallOption) (*TestServerResponse, error)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
+	// The service's kept warnings and errors, for the System page.
+	RecentLogs(ctx context.Context, in *RecentLogsRequest, opts ...grpc.CallOption) (*RecentLogsResponse, error)
 }
 
 type provisionerServiceClient struct {
@@ -233,6 +236,16 @@ func (c *provisionerServiceClient) HealthCheck(ctx context.Context, in *HealthCh
 	return out, nil
 }
 
+func (c *provisionerServiceClient) RecentLogs(ctx context.Context, in *RecentLogsRequest, opts ...grpc.CallOption) (*RecentLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecentLogsResponse)
+	err := c.cc.Invoke(ctx, ProvisionerService_RecentLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProvisionerServiceServer is the server API for ProvisionerService service.
 // All implementations must embed UnimplementedProvisionerServiceServer
 // for forward compatibility.
@@ -258,6 +271,8 @@ type ProvisionerServiceServer interface {
 	// TestServer connects and lists inbounds; it saves nothing.
 	TestServer(context.Context, *TestServerRequest) (*TestServerResponse, error)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
+	// The service's kept warnings and errors, for the System page.
+	RecentLogs(context.Context, *RecentLogsRequest) (*RecentLogsResponse, error)
 	mustEmbedUnimplementedProvisionerServiceServer()
 }
 
@@ -315,6 +330,9 @@ func (UnimplementedProvisionerServiceServer) TestServer(context.Context, *TestSe
 }
 func (UnimplementedProvisionerServiceServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HealthCheck not implemented")
+}
+func (UnimplementedProvisionerServiceServer) RecentLogs(context.Context, *RecentLogsRequest) (*RecentLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecentLogs not implemented")
 }
 func (UnimplementedProvisionerServiceServer) mustEmbedUnimplementedProvisionerServiceServer() {}
 func (UnimplementedProvisionerServiceServer) testEmbeddedByValue()                            {}
@@ -625,6 +643,24 @@ func _ProvisionerService_HealthCheck_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProvisionerService_RecentLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecentLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).RecentLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_RecentLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).RecentLogs(ctx, req.(*RecentLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProvisionerService_ServiceDesc is the grpc.ServiceDesc for ProvisionerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -695,6 +731,10 @@ var ProvisionerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HealthCheck",
 			Handler:    _ProvisionerService_HealthCheck_Handler,
+		},
+		{
+			MethodName: "RecentLogs",
+			Handler:    _ProvisionerService_RecentLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

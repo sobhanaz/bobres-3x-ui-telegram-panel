@@ -736,6 +736,21 @@ The System page's health tab and its License tab. The update check, logs and bac
 - `GET /api/v1/system` gains `updates`: the bot's answer, or `{error: "bot unreachable"}` when the bot is not
   configured or does not answer within 3 seconds. Applying an update stays the `bobres update` command.
 
+### Logs (milestone 6b)
+
+- **Kept in memory, after redaction.** Every service's logger (`internal/logging`) also writes its warnings
+  and errors, whatever the stdout level and format, through the same redaction into a ring of the newest 500
+  lines: `{time (unix seconds), level (WARN | ERROR), msg, attrs}`, `attrs` being the line's other fields as a
+  JSON object (`service` dropped) and `msg` and `attrs` cut at 1000 bytes with a trailing `…`. Nothing is
+  written to disk; a restart empties it. Postgres, Redis and Caddy stay with `bobres logs`.
+- **Who serves them.** Core reads its own; the bot answers `GET /internal/logs` (core's token,
+  `{lines}`); payments and provisioner a `RecentLogs` RPC on their existing services (core is their only
+  peer; their HTTP mux is public through Caddy).
+- `GET /api/v1/system/logs?service=core|bot|payments|provisioner` (`system.write`: the owner; the lines carry
+  Telegram ids and usernames) answers `{service, lines, error}`, lines oldest first. `error` is `""`,
+  `unreachable` (the service did not answer within 3 seconds; the details go to core's log) or
+  `not configured` (the bot without `BOBRES_BOT_URL`); any other service name is 400.
+
 ## Tests
 
 - **Go.** TOTP against the RFC 6238 vectors and password hashing. The handlers end to end, over

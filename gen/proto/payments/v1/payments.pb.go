@@ -2132,6 +2132,157 @@ func (x *GatewayReportResponse) GetLastPaid() *GatewayEvent {
 	return nil
 }
 
+// RecentLogsRequest asks for the service's kept warnings and errors (core's
+// System page, owner only).
+type RecentLogsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecentLogsRequest) Reset() {
+	*x = RecentLogsRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecentLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecentLogsRequest) ProtoMessage() {}
+
+func (x *RecentLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecentLogsRequest.ProtoReflect.Descriptor instead.
+func (*RecentLogsRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{30}
+}
+
+// LogLine is one kept log line, redacted like the service's stdout.
+type LogLine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Time          int64                  `protobuf:"varint,1,opt,name=time,proto3" json:"time,omitempty"`  // unix seconds
+	Level         string                 `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"` // WARN | ERROR
+	Msg           string                 `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
+	Attrs         string                 `protobuf:"bytes,4,opt,name=attrs,proto3" json:"attrs,omitempty"` // the other fields as a JSON object; a long one is cut and ends with "…"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogLine) Reset() {
+	*x = LogLine{}
+	mi := &file_payments_v1_payments_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogLine) ProtoMessage() {}
+
+func (x *LogLine) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
+func (*LogLine) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *LogLine) GetTime() int64 {
+	if x != nil {
+		return x.Time
+	}
+	return 0
+}
+
+func (x *LogLine) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *LogLine) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+func (x *LogLine) GetAttrs() string {
+	if x != nil {
+		return x.Attrs
+	}
+	return ""
+}
+
+type RecentLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lines         []*LogLine             `protobuf:"bytes,1,rep,name=lines,proto3" json:"lines,omitempty"` // the newest 500 since the service started, oldest first
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecentLogsResponse) Reset() {
+	*x = RecentLogsResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecentLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecentLogsResponse) ProtoMessage() {}
+
+func (x *RecentLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecentLogsResponse.ProtoReflect.Descriptor instead.
+func (*RecentLogsResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *RecentLogsResponse) GetLines() []*LogLine {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
 var File_payments_v1_payments_proto protoreflect.FileDescriptor
 
 const file_payments_v1_payments_proto_rawDesc = "" +
@@ -2317,7 +2468,15 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x0eoldest_open_at\x18\a \x01(\x03R\foldestOpenAt\x128\n" +
 	"\n" +
 	"last_error\x18\b \x01(\v2\x19.payments.v1.GatewayEventR\tlastError\x126\n" +
-	"\tlast_paid\x18\t \x01(\v2\x19.payments.v1.GatewayEventR\blastPaid2\x9b\n" +
+	"\tlast_paid\x18\t \x01(\v2\x19.payments.v1.GatewayEventR\blastPaid\"\x13\n" +
+	"\x11RecentLogsRequest\"[\n" +
+	"\aLogLine\x12\x12\n" +
+	"\x04time\x18\x01 \x01(\x03R\x04time\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\tR\x05level\x12\x10\n" +
+	"\x03msg\x18\x03 \x01(\tR\x03msg\x12\x14\n" +
+	"\x05attrs\x18\x04 \x01(\tR\x05attrs\"@\n" +
+	"\x12RecentLogsResponse\x12*\n" +
+	"\x05lines\x18\x01 \x03(\v2\x14.payments.v1.LogLineR\x05lines2\xea\n" +
 	"\n" +
 	"\x0fPaymentsService\x12L\n" +
 	"\fCreateIntent\x12 .payments.v1.CreateIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12F\n" +
@@ -2335,7 +2494,9 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x12ListGatewayConfigs\x12&.payments.v1.ListGatewayConfigsRequest\x1a'.payments.v1.ListGatewayConfigsResponse\x12T\n" +
 	"\x10SetGatewayConfig\x12$.payments.v1.SetGatewayConfigRequest\x1a\x1a.payments.v1.GatewayConfig\x12P\n" +
 	"\vTestGateway\x12\x1f.payments.v1.TestGatewayRequest\x1a .payments.v1.TestGatewayResponse\x12V\n" +
-	"\rGatewayReport\x12!.payments.v1.GatewayReportRequest\x1a\".payments.v1.GatewayReportResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
+	"\rGatewayReport\x12!.payments.v1.GatewayReportRequest\x1a\".payments.v1.GatewayReportResponse\x12M\n" +
+	"\n" +
+	"RecentLogs\x12\x1e.payments.v1.RecentLogsRequest\x1a\x1f.payments.v1.RecentLogsResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
 
 var (
 	file_payments_v1_payments_proto_rawDescOnce sync.Once
@@ -2349,7 +2510,7 @@ func file_payments_v1_payments_proto_rawDescGZIP() []byte {
 	return file_payments_v1_payments_proto_rawDescData
 }
 
-var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_payments_v1_payments_proto_goTypes = []any{
 	(*PaymentIntent)(nil),               // 0: payments.v1.PaymentIntent
 	(*CreateIntentRequest)(nil),         // 1: payments.v1.CreateIntentRequest
@@ -2381,69 +2542,75 @@ var file_payments_v1_payments_proto_goTypes = []any{
 	(*GatewayReasonCount)(nil),          // 27: payments.v1.GatewayReasonCount
 	(*GatewayEvent)(nil),                // 28: payments.v1.GatewayEvent
 	(*GatewayReportResponse)(nil),       // 29: payments.v1.GatewayReportResponse
-	(*v1.Money)(nil),                    // 30: common.v1.Money
-	(*v1.Pagination)(nil),               // 31: common.v1.Pagination
-	(*v1.PageInfo)(nil),                 // 32: common.v1.PageInfo
+	(*RecentLogsRequest)(nil),           // 30: payments.v1.RecentLogsRequest
+	(*LogLine)(nil),                     // 31: payments.v1.LogLine
+	(*RecentLogsResponse)(nil),          // 32: payments.v1.RecentLogsResponse
+	(*v1.Money)(nil),                    // 33: common.v1.Money
+	(*v1.Pagination)(nil),               // 34: common.v1.Pagination
+	(*v1.PageInfo)(nil),                 // 35: common.v1.PageInfo
 }
 var file_payments_v1_payments_proto_depIdxs = []int32{
-	30, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
-	30, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
-	30, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
-	30, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
-	31, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
+	33, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
+	33, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
+	33, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
+	33, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
+	34, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 5: payments.v1.PendingReceipt.intent:type_name -> payments.v1.PaymentIntent
 	12, // 6: payments.v1.PendingReceipt.receipt:type_name -> payments.v1.ManualReceipt
-	31, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
+	34, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 8: payments.v1.IntentRecord.intent:type_name -> payments.v1.PaymentIntent
 	12, // 9: payments.v1.IntentRecord.receipt:type_name -> payments.v1.ManualReceipt
 	15, // 10: payments.v1.ListIntentsResponse.records:type_name -> payments.v1.IntentRecord
-	32, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
+	35, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
 	0,  // 12: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
-	32, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
+	35, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
 	13, // 14: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
 	18, // 15: payments.v1.ListGatewayConfigsResponse.configs:type_name -> payments.v1.GatewayConfig
 	22, // 16: payments.v1.TestGatewayRequest.candidate:type_name -> payments.v1.GatewayCandidate
-	30, // 17: payments.v1.GatewayStatusTotal.amounts:type_name -> common.v1.Money
-	30, // 18: payments.v1.GatewayStatusTotal.gateway_amounts:type_name -> common.v1.Money
+	33, // 17: payments.v1.GatewayStatusTotal.amounts:type_name -> common.v1.Money
+	33, // 18: payments.v1.GatewayStatusTotal.gateway_amounts:type_name -> common.v1.Money
 	26, // 19: payments.v1.GatewayReportResponse.totals:type_name -> payments.v1.GatewayStatusTotal
 	27, // 20: payments.v1.GatewayReportResponse.failures:type_name -> payments.v1.GatewayReasonCount
 	28, // 21: payments.v1.GatewayReportResponse.last_error:type_name -> payments.v1.GatewayEvent
 	28, // 22: payments.v1.GatewayReportResponse.last_paid:type_name -> payments.v1.GatewayEvent
-	1,  // 23: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
-	7,  // 24: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
-	8,  // 25: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
-	9,  // 26: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
-	10, // 27: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
-	11, // 28: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
-	14, // 29: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
-	2,  // 30: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
-	3,  // 31: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
-	4,  // 32: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
-	5,  // 33: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
-	19, // 34: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
-	21, // 35: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
-	23, // 36: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
-	25, // 37: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
-	0,  // 38: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 39: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 40: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
-	0,  // 41: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
-	0,  // 42: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
-	17, // 43: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
-	16, // 44: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
-	0,  // 45: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 46: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
-	0,  // 47: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
-	6,  // 48: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
-	20, // 49: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
-	18, // 50: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
-	24, // 51: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
-	29, // 52: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
-	38, // [38:53] is the sub-list for method output_type
-	23, // [23:38] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	31, // 23: payments.v1.RecentLogsResponse.lines:type_name -> payments.v1.LogLine
+	1,  // 24: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
+	7,  // 25: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
+	8,  // 26: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
+	9,  // 27: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
+	10, // 28: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
+	11, // 29: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
+	14, // 30: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
+	2,  // 31: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
+	3,  // 32: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
+	4,  // 33: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
+	5,  // 34: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
+	19, // 35: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
+	21, // 36: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
+	23, // 37: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
+	25, // 38: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
+	30, // 39: payments.v1.PaymentsService.RecentLogs:input_type -> payments.v1.RecentLogsRequest
+	0,  // 40: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 41: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 42: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
+	0,  // 43: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
+	0,  // 44: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
+	17, // 45: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
+	16, // 46: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
+	0,  // 47: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 48: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
+	0,  // 49: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
+	6,  // 50: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
+	20, // 51: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
+	18, // 52: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
+	24, // 53: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
+	29, // 54: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
+	32, // 55: payments.v1.PaymentsService.RecentLogs:output_type -> payments.v1.RecentLogsResponse
+	40, // [40:56] is the sub-list for method output_type
+	24, // [24:40] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }
@@ -2457,7 +2624,7 @@ func file_payments_v1_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_payments_proto_rawDesc), len(file_payments_v1_payments_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

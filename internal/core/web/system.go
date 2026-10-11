@@ -3,9 +3,12 @@ package web
 import (
 	"context"
 	"net/http"
+	"slices"
 	"sync"
+	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/syshealth"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
@@ -61,4 +64,54 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		"checked_at": s.now().Unix(), "version": report.Version, "version_mismatch": report.VersionMismatch,
 		"services": report.Services, "servers": servers, "panel": panel, "gateways": gateways, "updates": updates,
 	})
+}
+
+// LogSource reads one service's kept warnings and errors (botfiles.Client,
+// paymentsclient.Client, provisionerclient.Client).
+type LogSource interface {
+	RecentLogs(ctx context.Context) ([]logging.Line, error)
+}
+
+// logServices are the services whose logs core can read. Postgres, Redis
+// and Caddy stay with `bobres logs`.
+var logServices = []string{"core", "bot", "payments", "provisioner"}
+
+// ownLogs is core's own buffer.
+type ownLogs struct{}
+
+func (ownLogs) RecentLogs(context.Context) ([]logging.Line, error) { return logging.Recent(), nil }
+
+// systemLogs: GET /api/v1/system/logs?service= (owner), the logs tab: the
+// newest 500 warnings and errors the service kept since it started, already
+// redacted, oldest first. A service that does not answer within 3 seconds
+// gives error "unreachable" (the details go to core's log).
+func (s *Server) systemLogs(w http.ResponseWriter, r *http.Request) {
+	service := r.URL.Query().Get("service")
+	if service == "" {
+		service = "core"
+	}
+	if !slices.Contains(logServices, service) {
+		writeError(w, http.StatusBadRequest, "invalid", "unknown service")
+		return
+	}
+	src := s.cfg.Logs[service]
+	if src == nil && service == "core" {
+		src = ownLogs{}
+	}
+	lines, errText := []logging.Line{}, ""
+	if src == nil {
+		errText = "not configured"
+	} else {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		got, err := src.RecentLogs(ctx)
+		cancel()
+		switch {
+		case err != nil:
+			s.cfg.Log.Warn("system logs", "service", service, "err", err)
+			errText = "unreachable"
+		case got != nil:
+			lines = got
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"service": service, "lines": lines, "error": errText})
 }
