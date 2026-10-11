@@ -33,8 +33,10 @@ type Backup struct {
 	// Location (BOBRES_TIMEZONE).
 	Hour, Minute int
 	Location     *time.Location
-	// CoreToken is core's service token: core lists and starts backups over
-	// HTTP with it. Empty = no HTTP API (the schedule still runs).
+	// CoreToken is the token core lists and starts backups with over HTTP
+	// (BOBRES_TOKEN_CORE_BACKUP in .env): one for this service only, not
+	// core's own service token, which payments, provisioner and the bot
+	// accept. Empty = no HTTP API (the schedule still runs).
 	CoreToken string
 	// BotURL and ServiceToken (this service's own token, BOBRES_TOKEN_BACKUP
 	// in .env) hand each backup to the bot for the owner's Telegram. Either

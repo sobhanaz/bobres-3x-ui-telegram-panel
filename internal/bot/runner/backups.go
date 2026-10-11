@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"regexp"
 	"time"
 
@@ -39,7 +38,6 @@ const (
 	ReasonNoOwner  = "no_owner"
 	ReasonTooBig   = "too_big"
 	ReasonBusy     = "busy"
-	ReasonSpool    = "spool_failed"
 	ReasonBlocked  = "blocked"
 	ReasonTelegram = "telegram_error"
 )
@@ -66,9 +64,7 @@ type Delivery struct {
 	Texts *i18n.Catalog
 	// Lang is the owner's language (nil: the first language).
 	Lang func(ctx context.Context) string
-	// TempDir holds the spooled file while it uploads ("": os.TempDir()).
-	TempDir string
-	Log     *slog.Logger
+	Log  *slog.Logger
 }
 
 // Deliver sends an encrypted backup to the owner's Telegram, for the backup
@@ -77,9 +73,13 @@ type Delivery struct {
 // Only the backup service may call it (its token); it takes no chat id: the
 // file goes to the configured owner and nobody else.
 //
-// The body is spooled to a temporary file (removed afterwards) and uploaded
-// before answering, with the connection's deadlines extended for it. The
-// answer is {"sent":true,"message_id"} or {"sent":false,"reason","error"}.
+// The body is streamed to Telegram as it arrives (Content-Length gives the
+// upload its exact size), never held in memory or on disk: the bot's /tmp
+// is a tmpfs inside its memory limit, and a backup through a local Bot API
+// may be 2000 MB. It is uploaded before answering, with the connection's
+// deadlines extended for it. A body that ends early fails the upload (the
+// size no longer matches) and is answered 400. The answer is
+// {"sent":true,"message_id"} or {"sent":false,"reason","error"}.
 // A file over Limit is not uploaded: the owner gets a text saying it is kept
 // on the server, and the reason is "too_big". With no owner configured the
 // answer is 409 with the reason "no_owner".
@@ -87,7 +87,7 @@ func Deliver(d Delivery) http.Handler {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}
-	busy := make(chan struct{}, 1) // one delivery at a time: each spools a file
+	busy := make(chan struct{}, 1) // one delivery at a time: each is a long upload
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The same bearer check as core's endpoints, with the backup token.
 		if !fromCore(r, d.Token) {
@@ -159,35 +159,17 @@ func Deliver(d Delivery) http.Handler {
 		_ = rc.SetReadDeadline(until)
 		_ = rc.SetWriteDeadline(until)
 
-		f, err := os.CreateTemp(d.TempDir, "bobres-backup-*.bkp")
-		if err != nil {
-			d.Log.Error("backup not spooled", "name", name, "err", err)
-			notSent(http.StatusInternalServerError, ReasonSpool, err)
-			return
-		}
-		defer func() {
-			_ = f.Close()
-			_ = os.Remove(f.Name())
-		}()
-		src := &readErr{r: http.MaxBytesReader(w, r.Body, MaxBackup)}
-		n, err := io.Copy(f, src)
-		switch {
-		case src.err != nil || (err == nil && n != size):
-			http.Error(w, "the body ended before Content-Length", http.StatusBadRequest)
-			return
-		case err != nil:
-			d.Log.Error("backup not spooled", "name", name, "err", err)
-			notSent(http.StatusInternalServerError, ReasonSpool, err)
-			return
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			notSent(http.StatusInternalServerError, ReasonSpool, err)
-			return
-		}
+		src := &bodyReader{r: http.MaxBytesReader(w, r.Body, MaxBackup)}
 		ctx, cancel := context.WithTimeout(r.Context(), tg.UploadTimeout)
 		defer cancel()
 		caption := d.Texts.T(lang, "backup.caption", "name", name, "size", i18n.FileSize(lang, size))
-		m, err := d.Bot.SendDocumentUpload(ctx, d.Owner, name, f, size, caption)
+		m, err := d.Bot.SendDocumentUpload(ctx, d.Owner, name, src, size, caption)
+		if src.short(size) {
+			// The upload could not be complete: the size it announced was wrong.
+			d.Log.Warn("backup body ended before Content-Length", "name", name, "size", size, "read", src.n, "err", src.err)
+			http.Error(w, "the body ended before Content-Length", http.StatusBadRequest)
+			return
+		}
 		if err != nil {
 			reason := ReasonTelegram
 			if tg.IsBlocked(err) {
@@ -208,17 +190,28 @@ func validStamp(s string) bool {
 	return err == nil
 }
 
-// readErr keeps the error reading r returned (other than io.EOF), to tell a
-// short request body from a full disk.
-type readErr struct {
+// bodyReader counts what the request body gave and keeps how it ended, to
+// tell a short or broken body from a refusal by Telegram.
+type bodyReader struct {
 	r   io.Reader
-	err error
+	n   int64
+	eof bool  // the body ended (io.EOF)
+	err error // reading it failed otherwise
 }
 
-func (e *readErr) Read(p []byte) (int, error) {
-	n, err := e.r.Read(p)
-	if err != nil && !errors.Is(err, io.EOF) {
-		e.err = err
+func (b *bodyReader) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	b.n += int64(n)
+	switch {
+	case errors.Is(err, io.EOF):
+		b.eof = true
+	case err != nil:
+		b.err = err
 	}
 	return n, err
+}
+
+// short reports whether the body failed or ended before size bytes.
+func (b *bodyReader) short(size int64) bool {
+	return b.err != nil || (b.eof && b.n < size)
 }

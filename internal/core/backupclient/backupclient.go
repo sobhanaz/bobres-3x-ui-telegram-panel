@@ -29,7 +29,8 @@ type Client struct {
 }
 
 // New returns a client for the backup service at baseURL
-// (http://backup:8080), presenting core's service token.
+// (http://backup:8080), presenting token: core's token for that service
+// only (BOBRES_BACKUP_TOKEN), never its own service token.
 func New(baseURL, token string) *Client {
 	return &Client{base: strings.TrimRight(baseURL, "/"), token: token, hc: &http.Client{Timeout: 10 * time.Second}}
 }

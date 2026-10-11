@@ -65,8 +65,8 @@ func setup(rt *app.Runtime) error {
 	return nil
 }
 
-// runNow asks the service running in this container for a backup, with
-// core's token, which the container has.
+// runNow asks the service running in this container for a backup, with the
+// token core uses for it (BOBRES_PEER_CORE_TOKEN), which the container has.
 func runNow() int {
 	token, err := config.Secret("BOBRES_PEER_CORE_TOKEN")
 	if err != nil || token == "" {

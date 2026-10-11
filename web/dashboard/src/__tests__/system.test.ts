@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import en from '../locales/en.json'
 import fa from '../locales/fa.json'
 import { bytes, dateTime } from '../format'
 import {
@@ -17,6 +18,7 @@ import {
   sortedServices,
   unixOf,
   updateCommand,
+  updateDetail,
   updateReason,
   updateState,
 } from '../system'
@@ -125,9 +127,25 @@ describe('update check', () => {
     expect(updateReason(upd({ latest: '', checked_at: 0 }))).toBe('not_checked')
     expect(updateReason(upd({ error: 'unreachable' }))).toBe('unreachable')
     expect(updateReason(undefined)).toBe('unsupported')
-    for (const r of ['unreachable', 'bot_unreachable', 'not_checked', 'unsupported', 'other']) {
+    // the bot's own codes, each explained (before its first check it says not_checked)
+    expect(updateReason(upd({ latest: '', newer: false, checked_at: 0, error: 'not_checked' }))).toBe('not_checked')
+    expect(updateReason(upd({ latest: '', newer: false, error: 'no_release' }))).toBe('no_release')
+    expect(updateReason(upd({ newer: false, verified: false, error: 'bad_signature' }))).toBe('bad_signature')
+    expect(updateReason(upd({ latest: '', newer: false, error: 'invalid' }))).toBe('invalid')
+    for (const r of ['unreachable', 'bot_unreachable', 'not_checked', 'no_release', 'bad_signature', 'invalid', 'unsupported', 'other']) {
       expect((fa.system.updates.reason as Record<string, string>)[r]).toBeTruthy()
+      expect((en.system.updates.reason as Record<string, string>)[r]).toBeTruthy()
     }
+    // the bot's detail goes with a failed signature check or an unknown error, not a code the page explains
+    const signed = upd({ newer: false, verified: false, error: 'bad_signature', detail: 'the release has no keys.txt' })
+    expect(updateDetail(signed, updateReason(signed))).toBe('the release has no keys.txt')
+    const odd = upd({ latest: '', error: 'rate_limited', detail: 'try later' })
+    expect(updateDetail(odd, updateReason(odd))).toBe('rate_limited: try later')
+    const plain = upd({ latest: '', error: 'checksums.txt: no version header' })
+    expect(updateDetail(plain, updateReason(plain))).toBe('checksums.txt: no version header')
+    const away = upd({ latest: '', error: 'unreachable', detail: 'checksums.txt: dial tcp: i/o timeout' })
+    expect(updateDetail(away, updateReason(away))).toBe('')
+    expect(updateDetail(null, 'unsupported')).toBe('')
     expect(updateCommand('v1.6.0')).toBe('sudo bobres install --version 1.6.0')
   })
 })
@@ -290,6 +308,9 @@ describe('backups', () => {
     expect(backupsState({ installed: false })).toBe('not_installed')
     expect(backupsState({ installed: true, error: 'unreachable' })).toBe('unreachable')
     expect(backupsState({ installed: true })).toBe('ok')
+    // the service's own list has no installed field: still a list
+    expect(backupsState({})).toBe('ok')
+    expect(backupsState({ error: 'unreachable' })).toBe('unreachable')
     expect(INSTALL_COMMAND).toBe('bobres install')
   })
   it('reads times as unix seconds, from core or from the service', () => {
@@ -317,7 +338,7 @@ describe('backups', () => {
     expect(notSentReason('telegram_error: Bad Request: file is too big')).toEqual({ reason: 'telegram_error', detail: 'Bad Request: file is too big' })
     expect(notSentReason('the bot is unreachable: dial tcp: refused')).toEqual({ reason: 'unreachable', detail: 'dial tcp: refused' })
     expect(notSentReason('the bot answered HTTP 502')).toEqual({ reason: 'other', detail: 'the bot answered HTTP 502' })
-    for (const r of ['too_big', 'no_owner', 'busy', 'spool_failed', 'blocked', 'telegram_error', 'unreachable', 'other']) {
+    for (const r of ['too_big', 'no_owner', 'busy', 'blocked', 'telegram_error', 'unreachable', 'other']) {
       expect((fa.system.backups.reason as Record<string, string>)[r]).toBeTruthy()
     }
   })
@@ -581,9 +602,24 @@ describe('system page', () => {
     await boot('/admin/system?tab=updates', { answer: reply({ error: 'checksums.txt: no version header' }) })
     await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.other')))
     expect(document.querySelector('.not-checked .error')?.textContent).toBe('checksums.txt: no version header')
-    // not checked yet
+    // not checked yet: what the bot says before its first check, not a raw code
+    await boot('/admin/system?tab=updates', { answer: reply({ error: 'not_checked' }) })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.not_checked')))
+    expect(document.querySelector('.not-checked .error')).toBeNull()
     await boot('/admin/system?tab=updates', { answer: reply({}) })
     await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.not_checked')))
+    // no release yet, and a release that failed the signature check (with the bot's detail)
+    await boot('/admin/system?tab=updates', { answer: reply({ error: 'no_release', checked_at: nowSec(), detail: 'checksums.txt: not found' }) })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.no_release')))
+    expect(document.querySelector('.not-checked .error')).toBeNull()
+    await boot('/admin/system?tab=updates', {
+      answer: reply({ latest: '1.6.0', error: 'bad_signature', checked_at: nowSec(), detail: 'the release is not signed (no checksums.txt.sig)' }),
+    })
+    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.bad_signature')))
+    expect(document.querySelector('.not-checked .error')?.textContent).toBe('the release is not signed (no checksums.txt.sig)')
+    expect(document.querySelector('.latest-version')?.textContent).toBe('1.6.0')
+    expect(document.querySelector('.update-available')).toBeNull()
+    expect(document.querySelector('.unverified')).toBeNull()
     // an older core: its own version, and no check
     await boot('/admin/system?tab=updates', { answer: reply(null) })
     await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.unsupported')))
@@ -608,6 +644,11 @@ describe('system page', () => {
       ],
       running: false, last_error: '', next_run: nowSec() + 20 * 3600, disk_free: 12 * 2 ** 30, dir: '/backups', ...over,
     }
+  }
+  // the backup service's own list, which core passed on as it was (no installed field)
+  const asTheServiceSays = (r: SystemBackups): SystemBackups => {
+    const { installed: _installed, ...rest } = r
+    return rest
   }
   // the tab reads the list again quickly while a backup is being made
   const quickPoll = async () => {
@@ -700,7 +741,7 @@ describe('system page', () => {
         if (url === '/api/v1/system/backups') {
           if (running) reads++
           if (done) running = false
-          return json(200, backupsReply({ backups: [], running }))
+          return json(200, asTheServiceSays(backupsReply({ backups: [], running })))
         }
       },
     })
@@ -738,9 +779,13 @@ describe('system page', () => {
     const warn = await found('.backups-unreachable')
     expect(warn.textContent?.trim()).toBe(text('system.backups.unreachable'))
     expect(document.querySelector('.backups-not-installed')).toBeNull()
-    reply = backupsReply()
+    // the service's list as it answers it, without installed: shown as a list
+    reply = asTheServiceSays(backupsReply())
     btn('.backups button.refresh').click()
     await found('.backup')
+    expect(document.querySelectorAll('.backup')).toHaveLength(4)
+    expect(document.querySelector('.backups-not-installed')).toBeNull()
+    expect(document.querySelector('.next-run')).not.toBeNull()
     expect(document.querySelector('button.run-backup')).toBeNull()
     expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
   })

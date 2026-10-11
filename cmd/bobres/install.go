@@ -24,6 +24,7 @@ import (
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/deploy"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"golang.org/x/term"
 )
@@ -98,7 +99,8 @@ var envOrder = []string{
 	"BOBRES_ENV", "BOBRES_LOG_LEVEL", "BOBRES_LOG_FORMAT", "BOBRES_VERSION", "BOBRES_DOMAIN",
 	"POSTGRES_PASSWORD", "DB_CORE_PASSWORD", "DB_PAYMENTS_PASSWORD", "DB_PROVISIONER_PASSWORD", "DB_BACKUP_PASSWORD",
 	"REDIS_PASSWORD", "BOBRES_REDIS_URL",
-	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY",
+	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP",
+	"BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY",
 	"BOBRES_BACKUP_KEY", "BOBRES_BACKUP_TIME", "COMPOSE_PROFILES", "BOBRES_BACKUP_URL",
 	"BOBRES_TELEGRAM_BOT_TOKEN", "BOBRES_ADMIN_TELEGRAM_ID", "BOBRES_TIMEZONE",
 	"BOBRES_XUI_URL", "BOBRES_XUI_TOKEN", "BOBRES_XUI_SUB_URL", "BOBRES_XUI_ALLOW_PRIVATE",
@@ -110,8 +112,10 @@ var envOrder = []string{
 var generated = map[string]int{ // key -> random bytes (hex-encoded)
 	"POSTGRES_PASSWORD": 24, "DB_CORE_PASSWORD": 24, "DB_PAYMENTS_PASSWORD": 24, "DB_PROVISIONER_PASSWORD": 24,
 	"DB_BACKUP_PASSWORD": 24, "REDIS_PASSWORD": 24, "BOBRES_TOKEN_CORE": 32, "BOBRES_TOKEN_BOT": 32, "BOBRES_TOKEN_BACKUP": 32,
-	"BOBRES_CORE_MASTER_KEY": 32, "BOBRES_PROVISIONER_MASTER_KEY": 32, "BOBRES_PAYMENTS_MASTER_KEY": 32,
-	// Encrypts the backups: shown once in the summary, again in the menu.
+	// BOBRES_TOKEN_CORE_BACKUP is what core presents to the backup service: never
+	// BOBRES_TOKEN_CORE, which would let the backup container act as core.
+	"BOBRES_TOKEN_CORE_BACKUP": 32, "BOBRES_CORE_MASTER_KEY": 32, "BOBRES_PROVISIONER_MASTER_KEY": 32, "BOBRES_PAYMENTS_MASTER_KEY": 32,
+	// Encrypts the backups: shown once by the run that saves it, again in the menu.
 	"BOBRES_BACKUP_KEY": 32,
 }
 
@@ -223,8 +227,12 @@ func (ins *installer) install(args []string) int {
 	} else if env["BOBRES_VERSION"] == "" || !existing {
 		env["BOBRES_VERSION"] = imageTag(version.Version)
 	}
+	// Follows the version both ways: a rollback to a release from before the
+	// backup service would otherwise fail to pull its image.
 	if backupImage(env["BOBRES_VERSION"]) {
 		enableBackups(env)
+	} else {
+		disableBackups(env)
 	}
 	// The run that creates the backup key is the one that shows it.
 	newBackupKey := env["BOBRES_BACKUP_KEY"] == "" || strings.Contains(env["BOBRES_BACKUP_KEY"], "CHANGE_ME")
@@ -263,6 +271,12 @@ func (ins *installer) install(args []string) int {
 		fmt.Fprintf(ins.out, "Bot token OK: @%s\n", name)
 	}
 
+	if newBackupKey {
+		// No later run shows the key, so the run that saves it does, however
+		// it ends: after the summary, after a failed start, with --no-start,
+		// and quietly from the menu too.
+		defer ins.savedBackupKeyNotice(envPath, env["BOBRES_BACKUP_KEY"])
+	}
 	if err := writeFiles(*dir, env); err != nil {
 		fmt.Fprintf(ins.errOut, "error: %v\n", err)
 		return 1
@@ -270,9 +284,6 @@ func (ins *installer) install(args []string) int {
 	fmt.Fprintf(ins.out, "Wrote %s (.env is readable by root only).\n", *dir)
 	if *noStart {
 		fmt.Fprintf(ins.out, "Not starting (--no-start). Start with: cd %s && docker compose up -d\n", *dir)
-		if newBackupKey && !ins.quiet {
-			ins.backupKeyNotice(env)
-		}
 		return 0
 	}
 	if code := ins.start(ctx, *dir, env); code != 0 {
@@ -280,9 +291,6 @@ func (ins *installer) install(args []string) int {
 	}
 	if !ins.quiet {
 		ins.summary(env, *dir)
-		if newBackupKey {
-			ins.backupKeyNotice(env)
-		}
 	}
 	return 0
 }
@@ -404,15 +412,25 @@ func (ins *installer) ensureBackupRole(ctx context.Context, dir, password string
 		"Re-run `bobres install` once the database is running, or see docs/06-installer.md (Backups).\n", err, msg)
 }
 
+// firstBackupRelease is the first release whose images include
+// bobres-backup (ghcr.io/sobhanaz/bobres-backup). An install pinned to an
+// older one has no backup image to pull.
+const firstBackupRelease = "0.1.0"
+
 // backupImage reports whether the images tagged v have the backup service:
-// the ones built from this CLI's own release, "latest", or anything for a
-// development build of the CLI (which runs images built from its source).
+// "latest", this CLI's own release, any release from firstBackupRelease on
+// (its pre-releases too), or anything for a development build of the CLI
+// (which runs images built from its source).
 func backupImage(v string) bool {
-	return v == "latest" || v == imageTag(version.Version) || version.Version == "dev"
+	if v == "latest" || v == imageTag(version.Version) || version.Version == "dev" {
+		return true
+	}
+	rel, _, _ := strings.Cut(strings.TrimPrefix(v, "v"), "-")
+	return release.Valid(rel) && release.Compare(rel, firstBackupRelease) >= 0
 }
 
 // enableBackups turns the backup Compose profile on, with core's address for
-// it. Once on it stays on: an older pinned version is the operator's choice.
+// it.
 func enableBackups(env map[string]string) {
 	if !backupEnabled(env) {
 		profiles := strings.Trim(env["COMPOSE_PROFILES"], ", ")
@@ -426,6 +444,19 @@ func enableBackups(env map[string]string) {
 	}
 }
 
+// disableBackups turns the backup Compose profile off (keeping any other
+// profile) and clears core's address for it, for images without the service.
+func disableBackups(env map[string]string) {
+	var keep []string
+	for _, p := range strings.Split(env["COMPOSE_PROFILES"], ",") {
+		if p = strings.TrimSpace(p); p != "" && p != "backup" {
+			keep = append(keep, p)
+		}
+	}
+	env["COMPOSE_PROFILES"] = strings.Join(keep, ",")
+	env["BOBRES_BACKUP_URL"] = ""
+}
+
 // backupEnabled reports whether the install runs the backup service.
 func backupEnabled(env map[string]string) bool {
 	for _, p := range strings.Split(env["COMPOSE_PROFILES"], ",") {
@@ -436,13 +467,18 @@ func backupEnabled(env map[string]string) bool {
 	return false
 }
 
-// backupKeyNotice shows the backup key, on the install that creates it.
-func (ins *installer) backupKeyNotice(env map[string]string) {
+// savedBackupKeyNotice shows the backup key, on the install that creates
+// it, once it is saved in the .env at envPath (a run that wrote nothing has
+// not created it: the next one makes another).
+func (ins *installer) savedBackupKeyNotice(envPath, key string) {
+	if saved, _, err := readEnv(envPath); err != nil || saved["BOBRES_BACKUP_KEY"] != key {
+		return
+	}
 	fmt.Fprintf(ins.out, `
 Backup key (shown only now; bobres menu > "Backup key" shows it again):
   %s
 Store this somewhere safe, away from this server: without it the backups cannot be read.
-`, env["BOBRES_BACKUP_KEY"])
+`, key)
 }
 
 func orUnknown(s string) string {
@@ -503,6 +539,7 @@ Manage the store from this server at any time: run  bobres  for the menu
 	if backupEnabled(env) {
 		fmt.Fprintf(ins.out, "Backups: every day at %s (%s) into %s, each also sent to you on Telegram. One now: bobres backup\n",
 			env["BOBRES_BACKUP_TIME"], env["BOBRES_TIMEZONE"], filepath.Join(dir, "backups"))
+		fmt.Fprintln(ins.out, `They are encrypted with your backup key: keep it away from this server (bobres menu > "Backup key" shows it).`)
 	} else {
 		fmt.Fprintf(ins.out, "Backups are off: version %s has no backup service. Upgrade with: bobres install --version %s\n",
 			env["BOBRES_VERSION"], imageTag(version.Version))

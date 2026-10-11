@@ -1766,7 +1766,10 @@
       "reason": {
         "unreachable": "GitHub could not be reached from the server.",
         "bot_unreachable": "The bot, which checks for updates, did not answer.",
-        "not_checked": "The bot has not checked yet. It checks every 12 hours.",
+        "not_checked": "The bot has not checked yet. It checks when it starts, then every 12 hours.",
+        "no_release": "No BOBRES release has been published yet.",
+        "bad_signature": "The latest release did not pass the signature check (unsigned, altered, or signed with a revoked or expired key). Do not install it.",
+        "invalid": "The latest release's checksum file does not say which version it is.",
         "unsupported": "This version of core does not report updates.",
         "other": "The check failed:"
       }
@@ -1800,7 +1803,6 @@
         "too_big": "Over Telegram's 50 MB limit, so it is kept on the server only.",
         "no_owner": "The bot has no owner set, so it is kept on the server only.",
         "busy": "The bot was busy sending another backup; it is kept on the server.",
-        "spool_failed": "The bot could not hold the file to send it; it is kept on the server.",
         "blocked": "The owner has blocked the bot, so it could not be sent; it is kept on the server.",
         "telegram_error": "Telegram refused it; it is kept on the server.",
         "unreachable": "The bot did not answer; it is kept on the server.",

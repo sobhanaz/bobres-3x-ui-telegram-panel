@@ -229,3 +229,21 @@ func TestDocumentUploadIsRecorded(t *testing.T) {
 		t.Errorf("recorded: %+v", got)
 	}
 }
+
+// A form cut short (no closing boundary) is refused and not recorded, as
+// Telegram would: it is not a smaller file.
+func TestCutShortUploadIsRefused(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	form := "--b\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n77\r\n" +
+		"--b\r\nContent-Disposition: form-data; name=\"document\"; filename=\"x.bkp\"\r\n\r\npart of the file"
+	resp, err := http.Post(srv.URL+"/bot123:abc/sendDocument", "multipart/form-data; boundary=b", strings.NewReader(form))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest || len(f.Sent()) != 0 {
+		t.Fatalf("%d, sent %+v", resp.StatusCode, f.Sent())
+	}
+}

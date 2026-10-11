@@ -7,10 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +32,6 @@ type deliverEnv struct {
 	fake *tgfake.Server
 	api  string // the fake's root
 	srv  *httptest.Server
-	tmp  string
 }
 
 func newDeliverEnv(t *testing.T, owner, limit int64, lang string) *deliverEnv {
@@ -40,14 +39,13 @@ func newDeliverEnv(t *testing.T, owner, limit int64, lang string) *deliverEnv {
 	fake := tgfake.New()
 	api := httptest.NewServer(fake.Handler())
 	t.Cleanup(api.Close)
-	tmp := t.TempDir()
 	h := Deliver(Delivery{
 		Bot: tg.New("123:abc", tg.WithAPIRoot(api.URL)), Token: backupTok, Owner: owner, Limit: limit,
-		Texts: i18n.MustLoad(), Lang: func(context.Context) string { return lang }, TempDir: tmp,
+		Texts: i18n.MustLoad(), Lang: func(context.Context) string { return lang },
 	})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &deliverEnv{fake: fake, api: api.URL, srv: srv, tmp: tmp}
+	return &deliverEnv{fake: fake, api: api.URL, srv: srv}
 }
 
 func (e *deliverEnv) post(t *testing.T, token, name, query string, body []byte) (int, map[string]any) {
@@ -72,13 +70,6 @@ func (e *deliverEnv) post(t *testing.T, token, name, query string, body []byte) 
 	raw, _ := io.ReadAll(resp.Body)
 	_ = json.Unmarshal(raw, &out)
 	return resp.StatusCode, out
-}
-
-func (e *deliverEnv) assertSpoolGone(t *testing.T) {
-	t.Helper()
-	if left, _ := os.ReadDir(e.tmp); len(left) != 0 {
-		t.Errorf("spooled file left behind: %v", left)
-	}
 }
 
 func randomBackup(t *testing.T, n int) []byte {
@@ -160,7 +151,6 @@ func TestDeliverTooBigWarnsTheOwner(t *testing.T) {
 		!strings.Contains(sent[0].Text, backupName) || !strings.Contains(sent[0].Text, "kept on the server") {
 		t.Fatalf("warning: %+v", sent)
 	}
-	e.assertSpoolGone(t)
 	if UploadLimit(false) != 50<<20 || UploadLimit(true) != 2000<<20 {
 		t.Error("upload limits")
 	}
@@ -186,7 +176,6 @@ func TestDeliverUploadsToTheOwner(t *testing.T) {
 	if !strings.Contains(got.Text, backupName) || !strings.Contains(got.Text, "پشتیبان") || strings.Contains(got.Text, "<") {
 		t.Errorf("caption: %q", got.Text)
 	}
-	e.assertSpoolGone(t)
 }
 
 func TestDeliverNeverRetriesAConsumedUpload(t *testing.T) {
@@ -209,10 +198,105 @@ func TestDeliverNeverRetriesAConsumedUpload(t *testing.T) {
 	if sent := e.fake.Sent(); len(sent) != 0 {
 		t.Errorf("sent: %+v", sent)
 	}
-	e.assertSpoolGone(t)
 
 	e.fake.FailChat(backupOwner, tgfake.Blocked())
 	if _, out := e.post(t, backupTok, backupName, "", []byte("data")); out["reason"] != ReasonBlocked {
 		t.Errorf("blocked: %v", out)
+	}
+}
+
+// streamSender reads an upload as Telegram would, and closes started once
+// the first part has arrived.
+type streamSender struct {
+	first   int
+	started chan struct{}
+	got     []byte
+}
+
+func (s *streamSender) SendMessage(context.Context, int64, string, *tg.Keyboard) (*tg.Message, error) {
+	return &tg.Message{MessageID: 1}, nil
+}
+
+func (s *streamSender) SendDocumentUpload(_ context.Context, _ int64, _ string, r io.Reader, size int64, _ string) (*tg.Message, error) {
+	head := make([]byte, s.first)
+	if _, err := io.ReadFull(r, head); err != nil {
+		return nil, err
+	}
+	close(s.started)
+	rest, err := io.ReadAll(io.LimitReader(r, size-int64(s.first)))
+	if err != nil {
+		return nil, err
+	}
+	s.got = append(head, rest...)
+	return &tg.Message{MessageID: 77}, nil
+}
+
+func deliverRequest(body io.Reader, size int64) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/internal/backups/deliver", body)
+	req.ContentLength = size
+	req.Header.Set("Authorization", "Bearer "+backupTok)
+	req.Header.Set("X-Backup-Name", backupName)
+	return req
+}
+
+// The backup goes to Telegram as it arrives, never waiting for the whole
+// file: through a local Bot API it may be 2000 MB, and the bot's /tmp is a
+// tmpfs inside its 512 MB memory limit.
+func TestDeliverStreamsTheBody(t *testing.T) {
+	data := randomBackup(t, 256<<10)
+	half := len(data) / 2
+	bot := &streamSender{first: half, started: make(chan struct{})}
+	h := Deliver(Delivery{Bot: bot, Token: backupTok, Owner: backupOwner, Limit: LocalUploadLimit, Texts: i18n.MustLoad()})
+	pr, pw := io.Pipe()
+	go func() {
+		_, _ = pw.Write(data[:half])
+		select {
+		case <-bot.started:
+			_, _ = pw.Write(data[half:])
+			_ = pw.Close()
+		case <-time.After(5 * time.Second):
+			_ = pw.CloseWithError(errors.New("the upload did not start before the whole backup arrived"))
+		}
+	}()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, deliverRequest(pr, int64(len(data))))
+	var out map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if rec.Code != http.StatusOK || out["sent"] != true || out["message_id"] != float64(77) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if !bytes.Equal(bot.got, data) {
+		t.Fatalf("uploaded %d bytes, not the backup", len(bot.got))
+	}
+}
+
+// A body that ends before its Content-Length, or breaks, is refused, and
+// Telegram never gets a whole file.
+func TestDeliverRefusesAShortBody(t *testing.T) {
+	fake := tgfake.New()
+	api := httptest.NewServer(fake.Handler())
+	t.Cleanup(api.Close)
+	h := Deliver(Delivery{Bot: tg.New("123:abc", tg.WithAPIRoot(api.URL)), Token: backupTok, Owner: backupOwner,
+		Limit: CloudUploadLimit, Texts: i18n.MustLoad()})
+
+	data := randomBackup(t, 64<<10)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, deliverRequest(bytes.NewReader(data[:1000]), int64(len(data))))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "ended before Content-Length") {
+		t.Fatalf("short body: %d %s", rec.Code, rec.Body)
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, _ = pw.Write(data[:4096])
+		_ = pw.CloseWithError(errors.New("connection reset"))
+	}()
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, deliverRequest(pr, int64(len(data))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("broken body: %d %s", rec.Code, rec.Body)
+	}
+	if sent := fake.Sent(); len(sent) != 0 {
+		t.Fatalf("sent: %+v", sent)
 	}
 }

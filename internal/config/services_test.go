@@ -116,6 +116,23 @@ func TestLoadCore(t *testing.T) {
 		t.Fatal("short master key accepted")
 	}
 	t.Setenv("BOBRES_MASTER_KEY", "")
+	// Core's token for the backup service: optional, strict when set, and
+	// never core's own token (the backup container would hold it) or the bot's.
+	if c.BackupToken != "" {
+		t.Fatalf("backup token without one set: %q", c.BackupToken)
+	}
+	backupTok := strings.Repeat("d", 40)
+	t.Setenv("BOBRES_BACKUP_TOKEN", backupTok)
+	if c, err := LoadCore(); err != nil || c.BackupToken != backupTok || c.ServiceToken != coreTok {
+		t.Fatalf("backup token: %v %q", err, c.BackupToken)
+	}
+	for _, bad := range []string{"short", coreTok, botTok} {
+		t.Setenv("BOBRES_BACKUP_TOKEN", bad)
+		if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), "BOBRES_BACKUP_TOKEN") {
+			t.Errorf("backup token %q accepted: %v", bad, err)
+		}
+	}
+	t.Setenv("BOBRES_BACKUP_TOKEN", "")
 	t.Setenv("BOBRES_PEER_BOT_TOKEN", coreTok)
 	if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), "different") {
 		t.Fatalf("one token for two identities accepted: %v", err)

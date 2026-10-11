@@ -296,18 +296,54 @@ func TestChecker(t *testing.T) {
 		}
 	})
 	t.Run("unreachable", func(t *testing.T) {
+		// Before any verified check: nothing is known.
 		srv, _ := fakeGitHub(t, files())
+		srv.Close()
 		c := newTestChecker("1.0.0", srv.URL, r.root.pub)
-		if st := c.Check(context.Background()); !st.Verified {
+		st := c.Check(context.Background())
+		if st.Error != ErrUnreachable || st.Latest != "" || st.Verified || st.Newer || st.CheckedAt != testNow.Unix() {
+			t.Fatalf("never verified: %+v", st)
+		}
+
+		// After one: the newer release stays known through an outage, with
+		// the failure and when it happened.
+		srv, _ = fakeGitHub(t, files())
+		c = newTestChecker("1.0.0", srv.URL, r.root.pub)
+		if st := c.Check(context.Background()); !st.Verified || !st.Newer {
 			t.Fatalf("first: %+v", st)
 		}
 		srv.Close()
-		st := c.Check(context.Background())
-		if st.Error != ErrUnreachable || st.Latest != "" || st.Verified || st.Newer || st.CheckedAt != testNow.Unix() {
+		later := testNow.Add(time.Hour)
+		c.now = func() time.Time { return later }
+		st = c.Check(context.Background())
+		want := Status{Current: "1.0.0", Latest: "1.4.0", Channel: "stable", Newer: true, Verified: true,
+			CheckedAt: later.Unix(), Error: ErrUnreachable, Detail: st.Detail}
+		if st != want || st.Detail == "" {
 			t.Fatalf("got %+v", st)
 		}
 		if c.Status() != st {
 			t.Fatal("the failed check was not kept")
+		}
+
+		// A release that is gone or fails the checks is not kept.
+		srv, _ = fakeGitHub(t, nil)
+		c.base = srv.URL + "/releases/latest/download"
+		if st := c.Check(context.Background()); st.Error != ErrNoRelease || st.Latest != "" || st.Newer || st.Verified {
+			t.Fatalf("no release after a verified one: %+v", st)
+		}
+	})
+	t.Run("unreachable after a bad signature", func(t *testing.T) {
+		f := files()
+		delete(f, "checksums.txt.sig")
+		srv, _ := fakeGitHub(t, f)
+		c := newTestChecker("1.0.0", srv.URL, r.root.pub)
+		if st := c.Check(context.Background()); st.Error != ErrBadSignature || st.Latest != "1.4.0" {
+			t.Fatalf("first: %+v", st)
+		}
+		srv.Close()
+		// an unverified claim is not carried over as if it were known
+		if st := c.Check(context.Background()); st.Error != ErrUnreachable || st.Latest != "" || st.Verified || st.Newer {
+			t.Fatalf("got %+v", st)
 		}
 	})
 	t.Run("server error", func(t *testing.T) {

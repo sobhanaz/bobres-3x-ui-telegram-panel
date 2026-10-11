@@ -104,21 +104,31 @@ func (s *Server) backupSummary(ctx context.Context) map[string]any {
 
 // systemBackups: GET /api/v1/system/backups (owner and admin), the backups
 // tab: the backup service's list as it answers it ({backups (newest first),
-// running, last_error, next_run, disk_free, dir}), {installed: false} when
-// the service is not installed, {installed: true, error: "unreachable"} when
-// it does not answer within 3 seconds (the details go to core's log).
+// running, last_error, next_run, disk_free, dir}) with installed: true,
+// {installed: false} when the service is not installed, {installed: true,
+// error: "unreachable"} when it does not answer within 3 seconds (the
+// details go to core's log).
 func (s *Server) systemBackups(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Backups == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"installed": false})
 		return
 	}
 	st, err := s.cfg.Backups.Status(r.Context())
+	var list map[string]json.RawMessage
+	if err == nil {
+		err = json.Unmarshal(st, &list)
+	}
+	if err == nil && list == nil {
+		err = errors.New("the backup list is null")
+	}
 	if err != nil {
 		s.cfg.Log.Warn("system backups", "err", err)
 		writeJSON(w, http.StatusOK, map[string]any{"installed": true, "error": "unreachable"})
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	// The service's own answer has no installed field; the backups tab reads it.
+	list["installed"] = json.RawMessage("true")
+	writeJSON(w, http.StatusOK, list)
 }
 
 // runBackup: POST /api/v1/system/backups/run (owner), "Back up now": 202

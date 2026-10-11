@@ -74,8 +74,11 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 - The backup service reads the database as `svc_backup`, a read-only role (`pg_read_all_data`, CONNECT; no
   schema ownership, no writes), never as the admin role. Its password reaches pg_dump in `PGPASSWORD`, not on a
   command line, and pg_dump gets no other environment. The service is on the backend network only (no internet);
-  core lists and starts backups with its token, and the service hands files only to the bot, with its own token
-  (`BOBRES_TOKEN_BACKUP`), which sends them to the configured owner and to no chat the caller names.
+  core lists and starts backups with a token for that service only (`BOBRES_TOKEN_CORE_BACKUP`), never its own
+  service token: the container holds the master keys, and core's token would let code running in it act as core
+  towards payments, provisioner and the bot (whose broadcast test sends any text to any chat). The service hands
+  files only to the bot, with its own token (`BOBRES_TOKEN_BACKUP`), which sends them to the configured owner and to
+  no chat the caller names.
 - Key rotation procedures documented and scripted (`bobres secrets rotate`).
 
 ## Privacy

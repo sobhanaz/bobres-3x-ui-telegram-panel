@@ -573,12 +573,13 @@ func (c *Client) SendDocumentUpload(ctx context.Context, chatID int64, name stri
 	if err != nil {
 		return nil, err
 	}
-	body := io.MultiReader(bytes.NewReader(head), io.LimitReader(r, size), bytes.NewReader(tail))
+	body := io.MultiReader(bytes.NewReader(head), &exactReader{r: r, left: size}, bytes.NewReader(tail))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"sendDocument", body)
 	if err != nil {
 		return nil, errors.New("telegram: build sendDocument request")
 	}
-	// A short r makes the transport fail the request instead of sending less.
+	// A short r fails the request mid-file: the form's closing part is never
+	// sent, so Telegram cannot take a shorter file for the whole one.
 	req.ContentLength = int64(len(head)) + size + int64(len(tail))
 	req.Header.Set("Content-Type", ctype)
 	var m Message
@@ -590,6 +591,29 @@ func (c *Client) SendDocumentUpload(ctx context.Context, chatID int64, name stri
 		return nil, err
 	}
 	return &m, nil
+}
+
+// exactReader reads exactly left bytes of r: an r that ends sooner is
+// io.ErrUnexpectedEOF, never io.EOF, so what follows it in a MultiReader is
+// not read.
+type exactReader struct {
+	r    io.Reader
+	left int64
+}
+
+func (e *exactReader) Read(p []byte) (int, error) {
+	if e.left <= 0 {
+		return 0, io.EOF
+	}
+	if int64(len(p)) > e.left {
+		p = p[:e.left]
+	}
+	n, err := e.r.Read(p)
+	e.left -= int64(n)
+	if errors.Is(err, io.EOF) && e.left > 0 {
+		err = io.ErrUnexpectedEOF
+	}
+	return n, err
 }
 
 // documentForm is the multipart body of a document upload around the file's

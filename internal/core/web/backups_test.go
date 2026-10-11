@@ -98,14 +98,16 @@ func TestSystemBackups(t *testing.T) {
 		t.Errorf("admin run: %d", code)
 	}
 
-	// The list as the service answers it.
+	// The list as the service answers it, with installed: true (the
+	// service's own answer has no such field; the backups tab reads it).
 	for name, b := range map[string]*browser{"owner": owner, "admin": adm} {
 		code, out := b.do(http.MethodGet, "/api/v1/system/backups", nil)
 		var want map[string]any
 		if err := json.Unmarshal([]byte(backupList), &want); err != nil {
 			t.Fatal(err)
 		}
-		if code != 200 || asJSON(out) != asJSON(want) {
+		want["installed"] = true
+		if code != 200 || out["installed"] != true || asJSON(out) != asJSON(want) {
 			t.Fatalf("%s list: %d %v", name, code, out)
 		}
 	}

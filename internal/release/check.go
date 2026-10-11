@@ -25,7 +25,9 @@ const (
 	ErrInvalid      = "invalid"       // checksums.txt has no version header
 )
 
-// Status is the outcome of the last update check.
+// Status is the outcome of the last update check. After a check GitHub did
+// not answer (Error unreachable), Latest, Channel, Newer and Verified are
+// the last verified check's, if there was one.
 type Status struct {
 	Current   string `json:"current"`
 	Latest    string `json:"latest"`  // "" when unknown
@@ -101,7 +103,9 @@ func (c *Checker) Run(ctx context.Context) error {
 }
 
 // Check fetches and verifies the latest release's metadata now, and keeps
-// the outcome.
+// the outcome. When GitHub does not answer, the release the last verified
+// check read stays known (with the failure), so an outage does not hide an
+// update.
 func (c *Checker) Check(ctx context.Context) Status {
 	st := c.check(ctx)
 	st.Current, st.CheckedAt = c.current, c.now().Unix()
@@ -109,6 +113,9 @@ func (c *Checker) Check(ctx context.Context) Status {
 		return st // shutting down: keep the last outcome
 	}
 	c.mu.Lock()
+	if st.Error == ErrUnreachable && c.last.Verified {
+		st.Latest, st.Channel, st.Newer, st.Verified = c.last.Latest, c.last.Channel, c.last.Newer, c.last.Verified
+	}
 	c.last = st
 	c.mu.Unlock()
 	return st

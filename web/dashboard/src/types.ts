@@ -594,9 +594,12 @@ export interface UpdateCheck {
   verified: boolean
   /** when the bot last checked; 0 = not yet */
   checked_at: number
-  /** '' | unreachable (GitHub) | bot unreachable (core could not ask the
-   * bot) | anything else, in a few English words */
+  /** '' | not_checked (not yet, since the bot started) | unreachable
+   * (GitHub) | no_release | bad_signature | invalid | bot unreachable (core
+   * could not ask the bot) | anything else, in a few English words */
   error: string
+  /** the bot's short English reason for the error; '' when fine */
+  detail?: string
 }
 
 /** One kept log line: a warning or an error, already redacted. */
@@ -629,8 +632,8 @@ export interface BackupFile {
   created_at: number | string
   /** when the bot sent it to the owner on Telegram; null = not sent */
   sent_at: number | string | null
-  /** why it was not sent: too_big | no_owner | busy | spool_failed |
-   * blocked | telegram_error[: …] | anything else, in English */
+  /** why it was not sent: too_big | no_owner | busy | blocked |
+   * telegram_error[: …] | anything else, in English */
   telegram_error?: string
   /** the run failed: why, in English */
   error?: string
@@ -640,7 +643,8 @@ export interface BackupFile {
  * installed false: this install has no backup service; error "unreachable":
  * core could not ask it. */
 export interface SystemBackups {
-  installed: boolean
+  /** true with the list; only false means not installed */
+  installed?: boolean
   error?: string
   /** newest first */
   backups?: BackupFile[] | null

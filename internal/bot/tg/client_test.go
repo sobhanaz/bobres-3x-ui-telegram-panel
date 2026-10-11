@@ -342,6 +342,46 @@ func TestSendDocumentUploadStreams(t *testing.T) {
 	}
 }
 
+// A reader that ends before the size it claims fails the upload mid-file:
+// the form's closing part never follows, so the server cannot take the
+// shorter file for the whole one.
+func TestSendDocumentUploadShortReaderNeverCompletesTheForm(t *testing.T) {
+	forms := make(chan string, 4)
+	c, _ := fakeAPI(t, func(_ string, body []byte, r *http.Request) any {
+		_, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+		var file []byte
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				if err == io.EOF {
+					forms <- fmt.Sprintf("complete form with a %d-byte file", len(file))
+				} else {
+					forms <- "incomplete"
+				}
+				break
+			}
+			b, _ := io.ReadAll(p)
+			if p.FormName() == "document" {
+				file = b
+			}
+		}
+		return ok(map[string]any{"message_id": 5, "chat": map[string]any{"id": 42}})
+	})
+	for _, r := range []io.Reader{strings.NewReader("short"), onlyReader{bytes.NewReader(bytes.Repeat([]byte("x"), 3000))}} {
+		if _, err := c.SendDocumentUpload(context.Background(), 42, "x.bkp", r, 100<<10, ""); err == nil {
+			t.Fatal("short body sent")
+		}
+		select {
+		case got := <-forms:
+			if got != "incomplete" {
+				t.Fatalf("the server got a %s", got)
+			}
+		case <-time.After(5 * time.Second): // the request never reached the handler: nothing taken either
+		}
+	}
+}
+
 func TestSendDocumentUploadNoRetryOn429(t *testing.T) {
 	var calls atomic.Int32
 	flood := &Flood{}

@@ -82,29 +82,34 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 The `backup` service (image `bobres-backup`, a `postgres:16-alpine` target in `deploy/Dockerfile`, so its pg_dump
 matches the server) backs up the whole `bobres` database every day at `BOBRES_BACKUP_TIME` (default 03:30) in
 `BOBRES_TIMEZONE`, and on demand (`bobres backup`, the menu, or the dashboard's System page, which calls its HTTP API
-with core's token). Each run:
+with `BOBRES_TOKEN_CORE_BACKUP`, a token core uses for this service only). Each run:
 - refuses to start when `/opt/bobres/backups` has less free space than twice the last backup (100 MiB before the
   first), and records why;
 - streams `pg_dump -Fc` (as the read-only role `svc_backup`; the password goes in `PGPASSWORD`, never on a command
   line) straight into the encrypted file format of `internal/backup`, written to a temp file, synced and renamed to
   `bobres-<UTC stamp>.bkp`, with a `.json` sidecar (size, sha256, created_at, sent_at, telegram_error, error);
-- hands the file to the bot (`POST /internal/backups/deliver`, token `BOBRES_TOKEN_BACKUP`), which sends it to the
-  owner's Telegram only (over 50 MB, or 2000 MB with a local Bot API, the owner gets a text instead and the file stays
-  here). Without `BOBRES_TOKEN_BACKUP` backups are kept on the server only;
+- hands the file to the bot (`POST /internal/backups/deliver`, token `BOBRES_TOKEN_BACKUP`), which streams it to the
+  owner's Telegram only, as it arrives (never kept in the bot's memory or its tmpfs `/tmp`, which share its 512 MB
+  limit); over 50 MB, or 2000 MB with a local Bot API, the owner gets a text instead and the file stays
+  here. Without `BOBRES_TOKEN_BACKUP` backups are kept on the server only;
 - keeps the newest 7 backups (and at most 7 records of failed runs). A failed run leaves its sidecar, no `.bkp`.
 
-**The backup key.** `bobres install` generates `BOBRES_BACKUP_KEY` and prints it once, in the summary of the install
-that created it; `bobres menu` > "Backup key" shows it again after a confirmation. It is never sent to Telegram. Store
+**The backup key.** `bobres install` generates `BOBRES_BACKUP_KEY` and prints it once, at the end of the run that
+saved it to `.env`, however that run ends (after the summary, after a failed start, with `--no-start`, or a quiet
+settings change from the menu); `bobres menu` > "Backup key" shows it again after a confirmation, and every summary
+says so. It is never sent to Telegram. Store
 it away from the server: without it the backups cannot be read. Each backup also carries `BOBRES_CORE_MASTER_KEY`,
 `BOBRES_PROVISIONER_MASTER_KEY` and `BOBRES_PAYMENTS_MASTER_KEY` (encrypted, inside the file), so a backup plus the
 backup key is enough to restore on a new server. Restore is the Phase 7 `bobres restore`.
 
 **Older installs and pinned versions.** The service runs only with the Compose profile `backup` on
-(`COMPOSE_PROFILES=backup` in `.env`, with `BOBRES_BACKUP_URL=http://backup:8080` for core). `bobres install` turns
-it on when the install runs images that have the service: this CLI's own version, `latest`, or anything with a
-development build of the CLI. An install kept on an older pinned version has no `bobres-backup` image to pull, so its
-profile stays off and `compose up` works as before; `bobres install --version <new>` turns backups on. Once on, the
-profile stays on. Status, the menu and the health wait count `backup` only where the profile is on.
+(`COMPOSE_PROFILES=backup` in `.env`, with `BOBRES_BACKUP_URL=http://backup:8080` for core). Every `bobres install`
+sets it from the version it runs: on for images that have the service (`latest`, any release from the first that
+ships `bobres-backup`, `firstBackupRelease` in `cmd/bobres/install.go`, its pre-releases included, this CLI's own
+version, or anything with a development build of the CLI), off for an older one, which has no `bobres-backup` image
+to pull. So an install kept on an older version starts as before, `bobres install --version <new>` turns backups on,
+and a rollback to an older version (`bobres install --version <old>`) turns them off again (other profiles stay)
+instead of failing in `compose up`. Status, the menu and the health wait count `backup` only where the profile is on.
 
 **The database role.** New databases get `svc_backup` (LOGIN, `pg_read_all_data`, CONNECT; PostgreSQL 14+) from
 `postgres-init.sh`. Init scripts run only on a new database, so `bobres install` also creates or updates the role in

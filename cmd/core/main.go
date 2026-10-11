@@ -161,10 +161,15 @@ func setup(rt *app.Runtime) error {
 		{Name: "backup", URL: cfg.BackupURL, Optional: true},
 	})
 	// The System page's backups tab (BOBRES_BACKUP_URL is set only when the
-	// install turned the backup profile on).
+	// install turned the backup profile on), with core's token for the backup
+	// service only: core's own token never goes to that container.
 	var backups web.Backups
-	if cfg.BackupURL != "" {
-		backups = backupclient.New(cfg.BackupURL, cfg.ServiceToken)
+	switch {
+	case cfg.BackupURL == "":
+	case cfg.BackupToken == "":
+		rt.Log.Warn("BOBRES_BACKUP_TOKEN is not set: the dashboard cannot list or start backups (re-run bobres install)")
+	default:
+		backups = backupclient.New(cfg.BackupURL, cfg.BackupToken)
 	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
 		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,

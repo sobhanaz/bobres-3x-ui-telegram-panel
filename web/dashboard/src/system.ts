@@ -68,17 +68,46 @@ export function updateState(u: Pick<UpdateCheck, 'latest' | 'newer' | 'error'> |
   return u.error ? 'unknown' : 'current'
 }
 
-export type UpdateReason = 'unreachable' | 'bot_unreachable' | 'not_checked' | 'unsupported' | 'other'
+export type UpdateReason =
+  | 'unreachable'
+  | 'bot_unreachable'
+  | 'not_checked'
+  | 'no_release'
+  | 'bad_signature'
+  | 'invalid'
+  | 'unsupported'
+  | 'other'
+
+/** The codes the bot's check gives (internal/release), each with its own
+ * explanation on the page. */
+const UPDATE_ERRORS: UpdateReason[] = ['unreachable', 'not_checked', 'no_release', 'bad_signature', 'invalid']
 
 /** updateReason says why the latest release is not known, or why the last
  * check failed; null when nothing went wrong. */
 export function updateReason(u: Pick<UpdateCheck, 'latest' | 'error' | 'checked_at'> | null | undefined): UpdateReason | null {
   if (!u) return 'unsupported'
   const e = (u.error ?? '').trim().toLowerCase()
-  if (e === 'unreachable') return 'unreachable'
   if (e === 'bot unreachable' || e === 'bot_unreachable') return 'bot_unreachable'
+  if (UPDATE_ERRORS.includes(e as UpdateReason)) return e as UpdateReason
   if (e) return 'other'
   return u.latest ? null : 'not_checked'
+}
+
+/** updateDetail is the bot's own words to show under the reason (English):
+ * its detail for a release that failed the checks, or the whole error for
+ * one the page does not know; '' otherwise. */
+export function updateDetail(u: Pick<UpdateCheck, 'error' | 'detail'> | null | undefined, reason: UpdateReason | null): string {
+  if (!u) return ''
+  const detail = (u.detail ?? '').trim()
+  switch (reason) {
+    case 'bad_signature':
+    case 'invalid':
+      return detail
+    case 'other':
+      return [(u.error ?? '').trim(), detail].filter(Boolean).join(': ')
+    default:
+      return ''
+  }
 }
 
 // The logs tab (owner): the warnings and errors each service kept since it
@@ -127,10 +156,11 @@ export const INSTALL_COMMAND = 'bobres install'
 
 export type BackupsState = 'not_installed' | 'unreachable' | 'ok'
 
-/** backupsState reads core's answer: this install has no backup service,
- * core could not ask it, or its list. */
+/** backupsState reads core's answer: this install has no backup service
+ * (core says installed: false), core could not ask it, or its list. A list
+ * without the flag is still a list: only false means not installed. */
 export function backupsState(r: Pick<SystemBackups, 'installed' | 'error'>): BackupsState {
-  if (!r.installed) return 'not_installed'
+  if (r.installed === false) return 'not_installed'
   return r.error ? 'unreachable' : 'ok'
 }
 
@@ -153,7 +183,7 @@ export function backupSent(b: Pick<BackupFile, 'sent_at' | 'error'>): BackupSent
 }
 
 /** The reasons the bot gives for a backup it did not send. */
-const NOT_SENT = ['too_big', 'no_owner', 'busy', 'spool_failed', 'blocked', 'telegram_error', 'unreachable']
+const NOT_SENT = ['too_big', 'no_owner', 'busy', 'blocked', 'telegram_error', 'unreachable']
 
 /** notSentReason reads why a backup was not sent: a reason the page explains
  * (with Telegram's own words, if any, as detail), or other with the whole

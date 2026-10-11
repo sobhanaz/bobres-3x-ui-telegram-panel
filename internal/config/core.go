@@ -36,6 +36,11 @@ type Core struct {
 	PaymentsURL    string
 	ProvisionerURL string
 	BackupURL      string
+	// BackupToken is what core presents to the backup service
+	// (BOBRES_BACKUP_TOKEN; BOBRES_TOKEN_CORE_BACKUP in .env): a token for
+	// that service only, so the backup container, which holds the master
+	// keys, never holds core's own token. Empty = no backups tab.
+	BackupToken string
 	// Domain is BOBRES_DOMAIN as it is (no scheme): a license is bound to it.
 	Domain string
 }
@@ -57,7 +62,10 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.BotToken, err = requireToken("BOBRES_PEER_BOT_TOKEN", c.Env)
 	keep(err)
-	keep(requireDistinct(map[string]string{"BOBRES_SERVICE_TOKEN": co.ServiceToken, "BOBRES_PEER_BOT_TOKEN": co.BotToken}))
+	co.BackupToken, err = optionalToken("BOBRES_BACKUP_TOKEN", c.Env)
+	keep(err)
+	keep(requireDistinct(map[string]string{"BOBRES_SERVICE_TOKEN": co.ServiceToken, "BOBRES_PEER_BOT_TOKEN": co.BotToken,
+		"BOBRES_BACKUP_TOKEN": co.BackupToken}))
 	co.PaymentsGRPCAddr = getenv("BOBRES_PAYMENTS_GRPC_ADDR", "")
 	keep(requireNonEmpty("BOBRES_PAYMENTS_GRPC_ADDR", co.PaymentsGRPCAddr))
 	co.ProvisionerGRPCAddr = getenv("BOBRES_PROVISIONER_GRPC_ADDR", "")

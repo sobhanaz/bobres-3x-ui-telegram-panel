@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -241,8 +242,9 @@ const maxField = 1 << 20
 
 // params reads JSON or form/multipart parameters into a flat map. A
 // multipart request is streamed: a file part is counted and hashed, never
-// kept, so a large upload costs no memory or disk.
-func params(r *http.Request) (map[string]any, *upload) {
+// kept, so a large upload costs no memory or disk. A multipart form cut
+// short (no closing boundary) is an error.
+func params(r *http.Request) (map[string]any, *upload, error) {
 	m := map[string]any{}
 	ct := r.Header.Get("Content-Type")
 	switch {
@@ -251,17 +253,25 @@ func params(r *http.Request) (map[string]any, *upload) {
 	case strings.HasPrefix(ct, "multipart/form-data"):
 		mr, err := r.MultipartReader()
 		if err != nil {
-			return m, nil
+			return m, nil, nil
 		}
 		var file *upload
 		for {
 			p, err := mr.NextPart()
+			if errors.Is(err, io.EOF) {
+				return m, file, nil
+			}
 			if err != nil {
-				return m, file
+				// Like Telegram, nothing from a form cut short (no closing
+				// boundary): it is not a smaller file.
+				return nil, nil, err
 			}
 			if p.FileName() != "" {
 				h := sha256.New()
-				n, _ := io.Copy(h, p)
+				n, err := io.Copy(h, p)
+				if err != nil {
+					return nil, nil, err
+				}
 				file = &upload{name: p.FileName(), size: n, sha256: hex.EncodeToString(h.Sum(nil))}
 				continue
 			}
@@ -276,7 +286,7 @@ func params(r *http.Request) (map[string]any, *upload) {
 			}
 		}
 	}
-	return m, nil
+	return m, nil, nil
 }
 
 func num(v any) int64 {
@@ -301,7 +311,11 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	p, file := params(r)
+	p, file, err := params(r)
+	if err != nil {
+		fail(w, http.StatusBadRequest, "Bad Request: incomplete request")
+		return
+	}
 	switch parts[1] {
 	case "getFile":
 		id := str(p["file_id"])

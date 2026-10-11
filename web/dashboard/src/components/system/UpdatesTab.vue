@@ -10,7 +10,7 @@ import Tag from 'primevue/tag'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, isolate, type Lang } from '../../format'
-import { updateCommand, updateReason, updateState, type UpdateState } from '../../system'
+import { updateCommand, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
 import type { SystemReply } from '../../types'
 
 // Whether a newer BOBRES release is out, as the bot last read it (core has
@@ -43,6 +43,7 @@ onMounted(load)
 const updates = computed(() => reply.value?.updates ?? null)
 const state = computed<UpdateState>(() => updateState(updates.value))
 const reason = computed(() => (reply.value ? updateReason(updates.value) : null))
+const detail = computed(() => updateDetail(updates.value, reason.value))
 const current = computed(() => updates.value?.current || reply.value?.version || '')
 const latest = computed(() => updates.value?.latest || '')
 const severity: Record<UpdateState, 'warn' | 'success' | 'secondary'> = { newer: 'warn', current: 'success', unknown: 'secondary' }
@@ -93,7 +94,8 @@ async function copyCommand() {
             <dd class="app-ltr latest-version">{{ latest || '—' }}</dd>
           </dl>
           <p v-if="state === 'current'" class="app-muted up-to-date">{{ t('system.updates.up_to_date') }}</p>
-          <p v-if="latest && updates && !updates.verified" class="app-muted unverified">
+          <!-- not checked here; a release that failed the check says so below -->
+          <p v-if="latest && updates && !updates.verified && reason !== 'bad_signature'" class="app-muted unverified">
             <i class="pi pi-info-circle" aria-hidden="true" />
             {{ t('system.updates.unverified') }}
           </p>
@@ -122,7 +124,7 @@ async function copyCommand() {
       <Message v-if="reason" :severity="state === 'unknown' ? 'secondary' : 'warn'" icon="pi pi-question-circle" :closable="false" class="not-checked">
         <div class="reason-title">{{ t(state === 'unknown' ? 'system.updates.could_not_check' : 'system.updates.last_check_failed') }}</div>
         <div class="reason">{{ t('system.updates.reason.' + reason) }}</div>
-        <div v-if="reason === 'other' && updates?.error" class="app-ltr detail error">{{ updates.error }}</div>
+        <div v-if="detail" class="app-ltr detail error">{{ detail }}</div>
       </Message>
     </template>
   </div>
