@@ -22,6 +22,10 @@ type fakeGW struct {
 	mu      sync.Mutex
 	result  map[string]gateway.Result
 	failErr error
+	// checkErr makes every Check fail (an unreachable or refusing gateway).
+	checkErr error
+	// returned records whether a Check was told the customer came back.
+	returned atomic.Bool
 }
 
 func (f *fakeGW) Name() string { return f.name }
@@ -35,8 +39,14 @@ func (f *fakeGW) Create(_ context.Context, c gateway.Charge) (gateway.Started, e
 	return gateway.Started{ExternalID: ext, PayURL: "https://pay.example.test/" + ext}, nil
 }
 
-func (f *fakeGW) Check(_ context.Context, ext string, _ gateway.Charge) (gateway.Result, error) {
+func (f *fakeGW) Check(_ context.Context, ext string, c gateway.Charge) (gateway.Result, error) {
 	f.checks.Add(1)
+	if c.Returned {
+		f.returned.Store(true)
+	}
+	if f.checkErr != nil {
+		return gateway.Result{}, f.checkErr
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r, ok := f.result[ext]; ok {
@@ -207,5 +217,80 @@ func TestReconcilerChecksDueIntentsWithBackoff(t *testing.T) {
 	}
 	if got, _ := st.GetIntent(ctx, nil, a.ID); got.CheckAttempts != 1 || got.Status != "pending" {
 		t.Fatalf("pending intent: %+v", got)
+	}
+}
+
+func TestReturnTellsTheGatewayTheSessionWasUsed(t *testing.T) {
+	svc, _ := testService(t)
+	gw := &fakeGW{name: "zarinpal"}
+	svc.SetGateways(gw)
+	ctx := context.Background()
+	in, _ := svc.StartGateway(ctx, gwIntent("ret1", 1_000_000), "", "")
+	if _, err := svc.CheckIntent(ctx, uid, in.ID, "check"); err != nil {
+		t.Fatal(err)
+	}
+	if gw.returned.Load() {
+		t.Fatal("a check press is not a return from the bank")
+	}
+	if _, err := svc.CheckAfterReturn(ctx, in.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !gw.returned.Load() {
+		t.Fatal("the return URL must tell the gateway the session was used")
+	}
+}
+
+// A gateway that keeps refusing an intent keeps it open while a confirmed
+// payment could still settle it, then expires it instead of polling forever.
+func TestPersistentGatewayErrorsEventuallyExpire(t *testing.T) {
+	svc, st := testService(t)
+	gw := &fakeGW{name: "zarinpal", checkErr: errors.New("zarinpal: error -11 (HTTP 401): Terminal is not active")}
+	svc.SetGateways(gw)
+	ctx := context.Background()
+	recent, _ := svc.StartGateway(ctx, gwIntent("pe1", 1_000_000), "", "")
+	old, _ := svc.StartGateway(ctx, gwIntent("pe2", 1_000_000), "", "")
+	for id, age := range map[string]string{recent.ID: "3 hours", old.ID: "49 hours"} {
+		if _, err := st.DB().Exec(ctx, `UPDATE payments.payment_intents
+			SET created_at = now() - $2::interval, expires_at = now() - $2::interval + interval '1 hour', checked_at = NULL
+			WHERE id = $1`, id, age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := svc.ReconcileOnce(ctx, time.Second); err != nil || n != 2 {
+		t.Fatalf("reconcile: %d %v", n, err)
+	}
+	if got, _ := st.GetIntent(ctx, nil, recent.ID); got.Status != "pending" {
+		t.Fatalf("an erroring intent a payment may still settle must stay open: %+v", got)
+	}
+	got, _ := st.GetIntent(ctx, nil, old.ID)
+	if got.Status != "expired" || got.FailureReason == nil || *got.FailureReason != ReasonExpired {
+		t.Fatalf("an intent erroring past the reopen window must expire: %+v", got)
+	}
+}
+
+// While an intent can still be paid, the reconciler checks it at least every
+// 8 intervals (a payment whose return was lost must be verified in time);
+// afterwards the backoff grows to 64 intervals.
+func TestReconcilerChecksPayableIntentsOften(t *testing.T) {
+	svc, st := testService(t)
+	gw := &fakeGW{name: "zarinpal"}
+	svc.SetGateways(gw)
+	ctx := context.Background()
+	payable, _ := svc.StartGateway(ctx, gwIntent("kc1", 1_000_000), "", "")
+	stale, _ := svc.StartGateway(ctx, gwIntent("kc2", 1_000_000), "", "")
+	if _, err := st.DB().Exec(ctx, `UPDATE payments.payment_intents
+		SET check_attempts = 6, checked_at = now() - interval '10 minutes' WHERE id = ANY($1)`, []string{payable.ID, stale.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().Exec(ctx, `UPDATE payments.payment_intents SET expires_at = now() - interval '2 hours' WHERE id = $1`, stale.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ReconcileOnce(ctx, time.Minute); err != nil || n != 1 {
+		t.Fatalf("due intents: %d %v (want only the payable one: 8 min gap vs 64)", n, err)
+	}
+	p, _ := st.GetIntent(ctx, nil, payable.ID)
+	s, _ := st.GetIntent(ctx, nil, stale.ID)
+	if p.CheckAttempts != 7 || s.CheckAttempts != 6 {
+		t.Fatalf("checked: payable %d stale %d", p.CheckAttempts, s.CheckAttempts)
 	}
 }
