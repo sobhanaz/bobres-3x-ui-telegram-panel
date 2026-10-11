@@ -182,6 +182,16 @@ message AdminListDiscountsResponse {
   repeated Discount discounts = 1;
 }
 
+message CreateDashboardLinkRequest {
+  int64 actor_telegram_id = 1; // a staff member (owner, admin or support)
+}
+
+// DashboardLink is a one-time dashboard login link (works once, until expires_at).
+message DashboardLink {
+  string url = 1; // empty when the install has no public domain
+  int64 expires_at = 2;
+}
+
 message GetOrderRequest {
   string id = 1;
 }
@@ -440,6 +450,7 @@ service CoreService {
   rpc GetReferralInfo(GetReferralInfoRequest) returns (ReferralInfo);
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
+  rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);
 }
 
 message CanStartTrialRequest {

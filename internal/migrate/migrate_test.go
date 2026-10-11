@@ -53,7 +53,7 @@ func TestUpAppliesAllSchemas(t *testing.T) {
 
 	want := map[string][]string{
 		"core": {"users", "wallets", "ledger_entries", "plans", "orders",
-			"subscriptions", "tickets", "audit_log", "settings", "staff",
+			"subscriptions", "tickets", "audit_log", "settings", "staff_credentials", "web_sessions", "login_links",
 			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters"},
 		"payments": {"payment_intents", "manual_receipts", "ledger_entries",
 			"outbox_payments", "inbox_payments", "outbox_payments_cursors"},

@@ -1,4 +1,15 @@
 # One Dockerfile for all four Go services: docker build --build-arg SERVICE=core -f deploy/Dockerfile .
+
+# The web dashboard: static files that core embeds (web/dashboard/embed.go). Built
+# on the build machine's own platform, since the files are the same for every
+# target: a multi-arch release does not run npm under emulation.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS dashboard
+WORKDIR /web
+COPY web/dashboard/package.json web/dashboard/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/dashboard/ ./
+RUN npm run build
+
 FROM golang:1.26-alpine AS build
 ARG SERVICE
 ARG VERSION=dev
@@ -7,6 +18,7 @@ ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
+COPY --from=dashboard /web/dist/app ./web/dashboard/dist/app
 RUN test -n "$SERVICE" && go build -trimpath \
     -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${VERSION}" \
     -o /out/app ./cmd/${SERVICE}

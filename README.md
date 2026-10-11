@@ -33,8 +33,9 @@ verifies its signature and checksum, and asks for your domain, Telegram ID, bot 
    7. Change the bot token
    8. Change the owner (admin) Telegram ID
    9. Change the 3x-ui panel (URL, API token, subscription link)
-  10. Check this server
-  11. Uninstall
+  10. Dashboard login link (if the bot is down)
+  11. Check this server
+  12. Uninstall
    0. Exit
 ```
 
@@ -43,8 +44,11 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres restart
 ## Status
 Phases 1-3 are built: the sellable bot with manual payments, Phase 2 payments (Telegram Stars,
 Zarinpal, payment screenshots approved by the admin), Phase 3 retention (renewals, traffic
-packages, reminders, discount codes, referrals). Next: Phase 4, the web dashboard. Design notes
-are in `docs/superpowers/specs/`; the first real install is `docs/11-staging-run.md`.
+packages, reminders, discount codes, referrals). Phase 4, the web dashboard at `https://<domain>/admin`,
+is in progress: its foundation is built (login from the bot's /admin "Dashboard" button or with a
+password and authenticator code, Persian/English, dark/light, the Overview); the other pages follow
+in five more milestones. Design notes are in `docs/superpowers/specs/`; the first real install is
+`docs/11-staging-run.md`.
 Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
 PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.
 
@@ -55,6 +59,9 @@ PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/RE
   go1.26.0 (the oldest patch); install a current 1.26.x instead.
   `make lint` needs golangci-lint v2: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`.
 - `make build`, `make test`, `make lint`, `make proto`.
+- The web dashboard (`web/dashboard`, Vue) needs Node.js 24: `make dashboard` builds it into the
+  folder core embeds (run it before `make build`), `make dashboard-test` type-checks and tests it.
+  For live editing, run a local core on port 8088 and `npm run dev` in `web/dashboard`.
 - Database tests need PostgreSQL 13+ (`BOBRES_TEST_DATABASE_URL`, a URL for any database on
   a server where the role may `CREATE DATABASE`; default: the local socket in `/tmp`) and
   Redis (`BOBRES_TEST_REDIS_ADDR`, default `127.0.0.1:6379`). Each test package gets its own

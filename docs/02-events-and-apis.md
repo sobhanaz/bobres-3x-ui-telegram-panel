@@ -53,7 +53,7 @@ Startup: detect version, warn outside tested range. Per-client mutex because `cl
 ## Public HTTP surface (via gateway)
 - `/webhooks/<provider>` (signature verified, replay-protected)
 - `/sub/<token>` subscription info page (branded)
-- `/admin/*` dashboard (session + 2FA), `/healthz`, `/readyz`
+- `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`
 
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.

@@ -213,5 +213,9 @@
   "admin.discounts_empty": "No discount codes yet.",
   "admin.discount_used": "{n} used",
   "admin.discount_until": "until {date}",
-  "admin.discount_off": "off"
+  "admin.discount_off": "off",
+  "btn.adm_dashboard": "🖥 Dashboard",
+  "btn.open_dashboard": "🖥 Open the dashboard",
+  "admin.dashboard_link": "🖥 Your dashboard login link. It works once, within 2 minutes; don't forward it.",
+  "admin.dashboard_unavailable": "The dashboard has no address yet: the install has no domain set."
 }

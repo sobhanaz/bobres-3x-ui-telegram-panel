@@ -68,35 +68,6 @@ func (s *Store) WriteAudit(ctx context.Context, q querier, a *Audit) error {
 	return nil
 }
 
-// CreateStaff inserts a staff row.
-func (s *Store) CreateStaff(ctx context.Context, q querier, st *Staff) error {
-	st.ID = buuid.MustV7().String()
-	_, err := q.Exec(ctx, `
-		INSERT INTO core.staff (id, username, password_hash, totp_secret_enc, role, status)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		st.ID, st.Username, st.PasswordHash, st.TOTPSecretEnc, st.Role, st.Status)
-	if err != nil {
-		return fmt.Errorf("create staff: %w", err)
-	}
-	return nil
-}
-
-// GetStaffByUsername returns a staff row for login.
-func (s *Store) GetStaffByUsername(ctx context.Context, q querier, username string) (*Staff, error) {
-	var st Staff
-	err := q.QueryRow(ctx, `
-		SELECT id, username, password_hash, totp_secret_enc, role, status
-		FROM core.staff WHERE username = $1`, username).
-		Scan(&st.ID, &st.Username, &st.PasswordHash, &st.TOTPSecretEnc, &st.Role, &st.Status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get staff: %w", err)
-	}
-	return &st, nil
-}
-
 // ClaimInbox records that an event was handled. It returns false when the
 // event was already claimed (a re-delivery), in which case the caller must not
 // apply it again. Call it inside the transaction that applies the event.

@@ -56,6 +56,10 @@
             "integration_id": 15368
           },
           {
+            "context": "Dashboard (types, tests, build)",
+            "integration_id": 15368
+          },
+          {
             "context": "Shell lint + signing tests",
             "integration_id": 15368
           },

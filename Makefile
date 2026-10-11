@@ -7,7 +7,7 @@ GOLANGCI_LINT_VERSION := v2.14.0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=$(VERSION)
 
-.PHONY: all build test lint vuln tidy fmt clean proto proto-lint $(SERVICES)
+.PHONY: all build test lint vuln tidy fmt clean proto proto-lint dashboard dashboard-test $(SERVICES)
 all: fmt lint test build
 
 proto:
@@ -16,6 +16,14 @@ proto:
 
 proto-lint:
 	cd proto && buf lint
+
+# The web dashboard (needs Node.js). Run before `make build`: core embeds what
+# web/dashboard/dist/app holds, or shows a "not built" notice at /admin.
+dashboard:
+	cd web/dashboard && npm ci --no-audit --no-fund && npm run build
+
+dashboard-test:
+	cd web/dashboard && npm run typecheck && npm test
 
 build:
 	@mkdir -p bin
@@ -39,4 +47,4 @@ tidy:
 	go mod tidy
 
 clean:
-	rm -rf bin
+	rm -rf bin web/dashboard/dist/app

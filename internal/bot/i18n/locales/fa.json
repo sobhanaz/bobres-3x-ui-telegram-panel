@@ -213,5 +213,9 @@
   "admin.discounts_empty": "هنوز کد تخفیفی ساخته نشده است.",
   "admin.discount_used": "{n} استفاده",
   "admin.discount_until": "تا {date}",
-  "admin.discount_off": "غیرفعال"
+  "admin.discount_off": "غیرفعال",
+  "btn.adm_dashboard": "🖥 داشبورد",
+  "btn.open_dashboard": "🖥 باز کردن داشبورد",
+  "admin.dashboard_link": "🖥 لینک ورود شما به داشبورد. فقط یک بار و تا ۲ دقیقه کار می‌کند؛ آن را برای کسی نفرستید.",
+  "admin.dashboard_unavailable": "داشبورد هنوز آدرسی ندارد: برای نصب، دامنه‌ای تنظیم نشده است."
 }

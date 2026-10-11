@@ -27,7 +27,7 @@ func testStore(t *testing.T) *Store {
 	}
 	t.Cleanup(s.Close)
 	if _, err := s.DB().Exec(ctx, `TRUNCATE core.ledger_entries, core.wallets, core.subscriptions, core.orders,
-		core.plans, core.users, core.tickets, core.audit_log, core.settings, core.staff, core.inbox_core,
+		core.plans, core.users, core.tickets, core.audit_log, core.settings, core.staff_credentials, core.web_sessions, core.login_links, core.inbox_core,
 		core.dead_letters CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

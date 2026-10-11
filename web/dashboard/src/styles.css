@@ -1,0 +1,75 @@
+/* BOBRES dashboard base styles. Logical properties only (inline-start/end),
+   so the layout mirrors itself in right-to-left Persian. */
+
+:root {
+  --app-font-fa: 'Vazirmatn', system-ui, sans-serif;
+  --app-font-en: 'Inter', system-ui, sans-serif;
+  --app-sidebar-width: 15.5rem;
+  --app-radius: 0.75rem;
+  --app-gap: 1rem;
+  color-scheme: light;
+}
+
+:root.app-dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  min-block-size: 100%;
+}
+
+body {
+  font-family: var(--app-font-en);
+  background: var(--p-surface-50);
+  color: var(--p-text-color);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root.app-dark body {
+  background: var(--p-surface-950);
+}
+
+html[lang='fa'] body {
+  font-family: var(--app-font-fa);
+  line-height: 1.75;
+  letter-spacing: 0; /* Persian letters connect: no tracking */
+}
+
+/* Directional icons point the reading direction; symbolic ones never flip. */
+[dir='rtl'] .app-flip {
+  scale: -1 1;
+}
+
+/* Technical values (ids, codes, URLs, numbers in English) stay left-to-right. */
+.app-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--app-font-en);
+}
+
+.app-page-title {
+  margin: 0 0 var(--app-gap);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.app-muted {
+  color: var(--p-text-muted-color);
+}
+
+.app-grid {
+  display: grid;
+  gap: var(--app-gap);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

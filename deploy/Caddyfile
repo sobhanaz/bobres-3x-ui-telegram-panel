@@ -84,10 +84,12 @@
 		}
 	}
 
-	# Admin dashboard: strict CSP (script/style/img from self only).
+	# Admin dashboard: strict CSP (scripts and fonts from self only), the same
+	# policy core sends (web/dashboard/embed.go; a test keeps them equal). Core
+	# sets caching: never for the page, a year for its content-hashed assets.
 	handle /admin* {
 		header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-		header Cache-Control "no-store"
+		header ?Cache-Control "no-store"
 		request_body {
 			max_size 10MB
 		}

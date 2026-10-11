@@ -24,6 +24,29 @@ type Server struct {
 	dom  *domain.Service
 	pay  domain.PaymentsClient
 	prov domain.Provisioner
+	// publicURL is the dashboard's origin, for login links.
+	publicURL string
+}
+
+// SetPublicURL sets the dashboard origin login links point to.
+func (s *Server) SetPublicURL(u string) { s.publicURL = u }
+
+// CreateDashboardLink makes a one-time dashboard login link for a staff member.
+func (s *Server) CreateDashboardLink(ctx context.Context, req *corev1.CreateDashboardLinkRequest) (*corev1.DashboardLink, error) {
+	if s.publicURL == "" {
+		return &corev1.DashboardLink{}, nil
+	}
+	token, exp, err := s.dom.CreateLoginLink(ctx, req.GetActorTelegramId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.DashboardLink{Url: DashboardLoginURL(s.publicURL, token), ExpiresAt: exp.Unix()}, nil
+}
+
+// DashboardLoginURL is the link a login token is sent as. The token is in the
+// fragment, so it never reaches server logs or a Referer header.
+func DashboardLoginURL(publicURL, token string) string {
+	return publicURL + "/admin/login#t=" + token
 }
 
 // New builds the handler set.
