@@ -103,9 +103,28 @@ func (w *UsageWorker) sync(ctx context.Context, cached *store.Subscription, topu
 	if uerr != nil {
 		w.log.Warn("usage unavailable", "subscription_id", cached.ID, "err", uerr)
 	}
+	return w.record(ctx, cached.ID, u, uerr, topups)
+}
+
+// SyncOne syncs one subscription now (staff asked). A panel that does not
+// answer is returned and nothing is recorded.
+func (w *UsageWorker) SyncOne(ctx context.Context, id string) error {
+	if _, err := w.svc.st.GetSubscription(ctx, w.svc.st.Conn(), id); err != nil {
+		return err
+	}
+	u, err := w.prov.Usage(ctx, id)
+	if err != nil {
+		return err
+	}
+	return w.record(ctx, id, u, nil, w.topupsOnSale(ctx))
+}
+
+// record stores a sync result (uerr: the panel did not answer) and sends the
+// reminder that is due.
+func (w *UsageWorker) record(ctx context.Context, id string, u Usage, uerr error, topups bool) error {
 	st := w.svc.st
 	return st.WithTx(ctx, func(tx pgx.Tx) error {
-		sub, err := st.LockSubscription(ctx, tx, cached.ID) // a renewal may have changed it meanwhile
+		sub, err := st.LockSubscription(ctx, tx, id) // a renewal may have changed it meanwhile
 		if err != nil {
 			return err
 		}

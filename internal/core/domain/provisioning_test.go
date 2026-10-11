@@ -23,6 +23,41 @@ type fakeProvisioner struct {
 	limitsFails int
 	// usage answers Usage by subscription id; a missing entry is an error.
 	usage map[string]Usage
+	// Staff operations by subscription id ("enable", "disable", "reset",
+	// "delete"), and an error to return from them.
+	ops    []string
+	opsErr error
+}
+
+func (f *fakeProvisioner) op(subscriptionID, what string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.opsErr != nil {
+		return f.opsErr
+	}
+	f.ops = append(f.ops, subscriptionID+"|"+what)
+	return nil
+}
+
+func (f *fakeProvisioner) SetEnabled(_ context.Context, subscriptionID string, enabled bool) error {
+	if enabled {
+		return f.op(subscriptionID, "enable")
+	}
+	return f.op(subscriptionID, "disable")
+}
+
+func (f *fakeProvisioner) ResetTraffic(_ context.Context, subscriptionID string) error {
+	return f.op(subscriptionID, "reset")
+}
+
+func (f *fakeProvisioner) Delete(_ context.Context, subscriptionID string) error {
+	return f.op(subscriptionID, "delete")
+}
+
+func (f *fakeProvisioner) opsDone() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.ops...)
 }
 
 type limitsCall struct{ expires, traffic int64 }

@@ -63,13 +63,14 @@ func (s *Store) SubscriptionByOrder(ctx context.Context, q querier, orderID stri
 	return sc, nil
 }
 
-// ListSubscriptions returns a user's subscriptions, newest first.
+// ListSubscriptions returns a user's subscriptions, newest first, without
+// the ones deleted from the panel (the customer's own list).
 func (s *Store) ListSubscriptions(ctx context.Context, q querier, userID string, limit int) ([]Subscription, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions
-		WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`, userID, limit)
+		WHERE user_id = $1 AND status <> 'deleted' ORDER BY created_at DESC LIMIT $2`, userID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions: %w", err)
 	}

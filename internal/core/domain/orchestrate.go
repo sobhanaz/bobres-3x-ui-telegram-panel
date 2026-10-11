@@ -22,6 +22,9 @@ type PaymentsClient interface {
 	SubmitTXID(ctx context.Context, userID, intentID, network, txid string) (status string, err error)
 	ListPending(ctx context.Context, limit int) ([]PendingPayment, error)
 	Review(ctx context.Context, reviewerID, intentID, decision, reason string) (status string, err error)
+	// ListPayments is the payment history (staff), newest first, with the
+	// number of matches.
+	ListPayments(ctx context.Context, f PaymentFilter, page, size int) ([]PaymentRecord, int64, error)
 	// Automated gateways (Phase 2).
 	StartGateway(ctx context.Context, p GatewayStart) (*GatewayIntent, error)
 	CheckIntent(ctx context.Context, userID, intentID string) (*GatewayIntent, error)
@@ -39,6 +42,33 @@ type PendingPayment struct {
 	Network, TXID                       string
 	SubmittedAt                         time.Time
 	PossibleDuplicate                   bool
+}
+
+// PaymentFilter narrows the payment history; empty fields match everything.
+type PaymentFilter struct {
+	UserID, OrderID, Status, Provider, IntentID string
+}
+
+// PaymentRecord is one payment in the history: what was charged where, its
+// outcome, and the proof the customer sent (manual payments) with its review.
+type PaymentRecord struct {
+	IntentID, OrderID, UserID, Provider, Status string
+	Amount                                      int64
+	Currency                                    string
+	GatewayAmount                               int64
+	GatewayCurrency                             string
+	ProviderRef, FailureReason                  string
+	CreatedAt                                   time.Time
+	Proof                                       *PaymentProof
+}
+
+// PaymentProof is a manual payment's proof and its review ("" decision =
+// not reviewed yet).
+type PaymentProof struct {
+	ReceiptFile, ReferenceNumber, Network, TXID string
+	SubmittedAt                                 time.Time
+	Decision, Reason, ReviewedBy                string
+	ReviewedAt                                  *time.Time
 }
 
 // CreatePaymentIntentParams carries bot/orchestration inputs.

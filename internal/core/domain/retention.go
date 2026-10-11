@@ -83,6 +83,8 @@ func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID stri
 		return nil, nil, fmt.Errorf("%w: it is not delivered yet", ErrNotExtendable)
 	case sub.Status == "disabled":
 		return nil, nil, fmt.Errorf("%w: it is disabled", ErrNotExtendable)
+	case sub.Status == "deleted":
+		return nil, nil, fmt.Errorf("%w: it was deleted", ErrNotExtendable)
 	}
 	if typ == OrderRenew {
 		if plan.IsTopup {
@@ -185,6 +187,26 @@ func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error)
 // subscription without expiry or traffic limit keeps it that way.
 func extendTargets(typ string, sub *store.Subscription, plan *store.Plan, now time.Time) (*time.Time, *int64) {
 	days, bytes := planLimits(plan)
+	return extendBy(typ, sub, days, bytes, now)
+}
+
+// orderLimits is what an order adds: a staff member's extension carries its
+// own days and traffic, any other order its plan's.
+func orderLimits(o *store.Order, plan *store.Plan) (days, bytes int64) {
+	if o.ExtendDays == nil && o.ExtendBytes == nil {
+		return planLimits(plan)
+	}
+	if o.ExtendDays != nil {
+		days = int64(*o.ExtendDays)
+	}
+	if o.ExtendBytes != nil {
+		bytes = *o.ExtendBytes
+	}
+	return days, bytes
+}
+
+// extendBy is extendTargets for a number of days and bytes.
+func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.Time) (*time.Time, *int64) {
 	expires, traffic := sub.ExpiresAt, sub.TrafficTotal
 	if typ == OrderRenew && days > 0 && expires != nil {
 		base := *expires
@@ -329,6 +351,11 @@ func (s *Service) AdminUpsertDiscount(ctx context.Context, actorTelegramID int64
 	if err != nil {
 		return nil, err
 	}
+	return s.UpsertDiscount(ctx, actor, d)
+}
+
+// UpsertDiscount is AdminUpsertDiscount for an actor the caller has checked.
+func (s *Service) UpsertDiscount(ctx context.Context, actor *store.User, d *store.Discount) (*store.Discount, error) {
 	d.Code = strings.ToUpper(strings.TrimSpace(d.Code))
 	if !discountCodeRe.MatchString(d.Code) {
 		return nil, invalid("a code is 3-32 letters, digits, _ or -")
@@ -347,7 +374,7 @@ func (s *Service) AdminUpsertDiscount(ctx context.Context, actorTelegramID int64
 		d.Currency = nil
 	}
 	var out *store.Discount
-	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		got, err := s.st.UpsertDiscount(ctx, tx, d)
 		if err != nil {
 			return err
@@ -356,6 +383,16 @@ func (s *Service) AdminUpsertDiscount(ctx context.Context, actorTelegramID int64
 		return s.audit(ctx, tx, actor, "discount.upsert", "discount", "", got, "") // entity ids are uuids; the code is in the payload
 	})
 	return out, err
+}
+
+// SetDiscountEnabled turns a discount code on or off, keeping its terms.
+func (s *Service) SetDiscountEnabled(ctx context.Context, actor *store.User, code string, enabled bool) (*store.Discount, error) {
+	d, err := s.st.GetDiscount(ctx, s.st.Conn(), strings.ToUpper(strings.TrimSpace(code)))
+	if err != nil {
+		return nil, err
+	}
+	d.Enabled = enabled
+	return s.UpsertDiscount(ctx, actor, d)
 }
 
 // AdminListDiscounts lists the discount codes.

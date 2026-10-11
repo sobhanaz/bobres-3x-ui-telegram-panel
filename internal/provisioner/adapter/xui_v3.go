@@ -52,6 +52,10 @@ func (a *XUIv3) SetLimits(ctx context.Context, email string, expiryMs, totalByte
 	return a.c.SetLimits(ctx, email, expiryMs, totalBytes)
 }
 
+func (a *XUIv3) SetEnabled(ctx context.Context, email string, enabled bool) error {
+	return a.c.SetEnabled(ctx, email, enabled)
+}
+
 func (a *XUIv3) Status(ctx context.Context, email string) (ClientStatus, error) {
 	d, err := a.c.GetClient(ctx, email)
 	if err != nil {

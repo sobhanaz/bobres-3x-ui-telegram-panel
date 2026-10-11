@@ -15,6 +15,9 @@ type PanelAdapter interface {
 	// SetLimits sets absolute limits (expiryMs unix ms, totalBytes; 0 =
 	// unlimited) and enables the client, so a retry is harmless.
 	SetLimits(ctx context.Context, email string, expiryMs, totalBytes int64) error
+	// SetEnabled turns the client off (it cannot connect) or on; its limits
+	// and usage stay.
+	SetEnabled(ctx context.Context, email string, enabled bool) error
 	// Status reports a client's usage and current limits.
 	Status(ctx context.Context, email string) (ClientStatus, error)
 	Delete(ctx context.Context, email string) error

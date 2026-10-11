@@ -124,6 +124,21 @@ func TestCreateProvisionFlow(t *testing.T) {
 	if _, err := f.client.ResetTraffic(ctx, &provisionerv1.ResetTrafficRequest{SubscriptionId: sub1}); err != nil {
 		t.Fatalf("ResetTraffic: %v", err)
 	}
+	for _, on := range []bool{false, true} {
+		if _, err := f.client.SetClientEnabled(ctx, &provisionerv1.SetClientEnabledRequest{SubscriptionId: sub1, Enabled: on}); err != nil {
+			t.Fatalf("SetClientEnabled(%v): %v", on, err)
+		}
+		u, err := f.client.GetUsage(ctx, &provisionerv1.GetUsageRequest{SubscriptionId: sub1})
+		if err != nil || u.GetEnabled() != on || u.GetTrafficTotalBytes() != 10<<30 || u.GetExpiresAt() == 0 {
+			t.Fatalf("after SetClientEnabled(%v): %v %+v", on, err, u)
+		}
+	}
+	if lost := f.fake.LostFields(); len(lost) != 0 {
+		t.Fatalf("an update lost the client's identity: %v", lost)
+	}
+	if _, err := f.client.SetClientEnabled(ctx, &provisionerv1.SetClientEnabledRequest{SubscriptionId: "00000000-0000-4000-8000-000000000999"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown subscription: %v", err)
+	}
 	ins, err := f.client.ListInbounds(ctx, &provisionerv1.ListInboundsRequest{})
 	if err != nil || len(ins.GetInbounds()) != 3 {
 		t.Fatalf("ListInbounds: %v %v", err, ins)

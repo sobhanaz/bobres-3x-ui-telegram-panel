@@ -256,6 +256,7 @@ type fakePayments struct {
 	pending    []PendingPayment
 	reviews    []string // reviewer|intent|decision
 	proofs     []string
+	history    []PaymentRecord
 }
 
 func (f *fakePayments) StartGateway(_ context.Context, p GatewayStart) (*GatewayIntent, error) {
@@ -296,6 +297,10 @@ func (f *fakePayments) SubmitTXID(_ context.Context, userID, intentID, network, 
 
 func (f *fakePayments) ListPending(context.Context, int) ([]PendingPayment, error) {
 	return f.pending, nil
+}
+
+func (f *fakePayments) ListPayments(context.Context, PaymentFilter, int, int) ([]PaymentRecord, int64, error) {
+	return f.history, int64(len(f.history)), nil
 }
 
 func (f *fakePayments) Review(_ context.Context, reviewerID, intentID, decision, _ string) (string, error) {

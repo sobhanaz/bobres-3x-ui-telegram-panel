@@ -138,6 +138,12 @@ func (s *Service) AdminReviewPayment(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return "", err
 	}
+	return s.ReviewPayment(ctx, actor, pay, intentID, decision, reason)
+}
+
+// ReviewPayment approves or rejects a manual payment. Like every staff
+// operation taking an actor, the caller has checked that the actor may.
+func (s *Service) ReviewPayment(ctx context.Context, actor *store.User, pay PaymentsClient, intentID, decision, reason string) (string, error) {
 	if decision != "approved" && decision != "rejected" {
 		return "", invalid("decision must be approved or rejected")
 	}
@@ -200,6 +206,11 @@ func (s *Service) AdminAdjustBalance(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return nil, err
 	}
+	return s.AdjustBalance(ctx, actor, userID, delta, currency, reason, idemKey)
+}
+
+// AdjustBalance is AdminAdjustBalance for an actor the caller has checked.
+func (s *Service) AdjustBalance(ctx context.Context, actor *store.User, userID string, delta int64, currency, reason, idemKey string) (*store.Wallet, error) {
 	reason = strings.TrimSpace(reason)
 	switch {
 	case delta == 0 || delta > maxTopupMinor || delta < -maxTopupMinor:
@@ -251,13 +262,19 @@ func (s *Service) AdminAdjustBalance(ctx context.Context, actorTelegramID int64,
 	return w, nil
 }
 
-// AdminSetUserStatus bans or unbans a user. The owner cannot be banned, and
-// nobody can ban themselves.
+// AdminSetUserStatus bans or unbans a customer. Nobody can ban themselves or
+// a staff member (owner, admin, support): staff are managed by the owner.
 func (s *Service) AdminSetUserStatus(ctx context.Context, actorTelegramID int64, userID, status, reason string) (*store.User, error) {
 	actor, err := s.requireStaff(ctx, actorTelegramID)
 	if err != nil {
 		return nil, err
 	}
+	return s.SetUserStatus(ctx, actor, userID, status, reason)
+}
+
+// SetUserStatus is AdminSetUserStatus for an actor the caller has checked.
+// Staff cannot ban staff: demote them first (an owner's decision).
+func (s *Service) SetUserStatus(ctx context.Context, actor *store.User, userID, status, reason string) (*store.User, error) {
 	if status != "active" && status != "banned" {
 		return nil, invalid("status must be active or banned")
 	}
@@ -268,7 +285,7 @@ func (s *Service) AdminSetUserStatus(ctx context.Context, actorTelegramID int64,
 	if err != nil {
 		return nil, err
 	}
-	if target.ID == actor.ID || target.Role == "owner" {
+	if target.ID == actor.ID || IsStaffRole(target.Role) {
 		return nil, ErrForbidden
 	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
@@ -290,10 +307,20 @@ func (s *Service) AdminUpsertPlan(ctx context.Context, actorTelegramID int64, p 
 	if err != nil {
 		return nil, err
 	}
+	return s.UpsertPlan(ctx, actor, p)
+}
+
+// UpsertPlan is AdminUpsertPlan for an actor the caller has checked.
+func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Plan) (*store.Plan, error) {
 	if err := validatePlan(p); err != nil {
 		return nil, err
 	}
-	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+	if p.ID != "" {
+		if _, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID); err != nil {
+			return nil, err // editing a plan that does not exist
+		}
+	}
+	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
 		}
@@ -320,6 +347,9 @@ func validatePlan(p *store.Plan) error {
 	if p.IsTrial && p.Price != 0 {
 		return invalid("a trial plan must be free")
 	}
+	if p.IsTopup && (p.IsTrial || p.Kind != "traffic") {
+		return invalid("a traffic package is a paid plan of kind traffic")
+	}
 	if p.DurationDays != nil && (*p.DurationDays < 0 || *p.DurationDays > 3650) {
 		return invalid("duration out of range")
 	}
@@ -341,6 +371,11 @@ func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, ke
 	if err != nil {
 		return err
 	}
+	return s.SetSetting(ctx, actor, key, value)
+}
+
+// SetSetting is AdminSetSetting for an actor the caller has checked.
+func (s *Service) SetSetting(ctx context.Context, actor *store.User, key, value string) error {
 	if _, ok := SettingKeys[key]; !ok {
 		return invalid("unknown setting %q", key)
 	}

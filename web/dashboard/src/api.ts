@@ -48,3 +48,18 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   }
   return data as T
 }
+
+/** query builds "?a=1&b=x" from the values that are set. */
+export function query(params: Record<string, string | number | boolean | undefined | null>): string {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  }
+  const s = q.toString()
+  return s ? '?' + s : ''
+}
+
+/** newKey is a request key: a change sent twice with it happens once. */
+export function newKey(): string {
+  return crypto.randomUUID().replaceAll('-', '')
+}

@@ -15,6 +15,7 @@ import (
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/paymentsclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/provisionerclient"
@@ -122,7 +123,13 @@ func setup(rt *app.Runtime) error {
 	} else {
 		rt.Log.Warn("no master key: dashboard password logins are off (login links from the bot still work)")
 	}
-	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Secrets: secrets,
+	var files web.ReceiptFiles
+	if cfg.BotURL != "" {
+		files = botfiles.New(cfg.BotURL, cfg.ServiceToken)
+	} else {
+		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos")
+	}
+	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Secrets: secrets, Files: files,
 		Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
