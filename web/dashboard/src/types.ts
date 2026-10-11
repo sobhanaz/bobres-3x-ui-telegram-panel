@@ -619,6 +619,49 @@ export interface SystemLogs {
   error?: string
 }
 
+/** One kept backup (or a failed run) as the backup service's sidecar says. */
+export interface BackupFile {
+  file: string
+  /** bytes; 0 for a failed run */
+  size: number
+  sha256: string
+  /** unix seconds (an RFC 3339 time from a service answering directly) */
+  created_at: number | string
+  /** when the bot sent it to the owner on Telegram; null = not sent */
+  sent_at: number | string | null
+  /** why it was not sent: too_big | no_owner | busy | spool_failed |
+   * blocked | telegram_error[: …] | anything else, in English */
+  telegram_error?: string
+  /** the run failed: why, in English */
+  error?: string
+}
+
+/** GET /system/backups (owner and admin): the backup service's state.
+ * installed false: this install has no backup service; error "unreachable":
+ * core could not ask it. */
+export interface SystemBackups {
+  installed: boolean
+  error?: string
+  /** newest first */
+  backups?: BackupFile[] | null
+  /** a backup is being made now */
+  running?: boolean
+  /** why the last run failed; '' when it did not */
+  last_error?: string
+  /** unix seconds of the next daily run; 0 = not known */
+  next_run?: number
+  /** free bytes where the backups are kept */
+  disk_free?: number
+  /** that folder, inside the backup service */
+  dir?: string
+}
+
+/** POST /system/backups/run (owner): 202 started, or 409 already running. */
+export interface BackupRun {
+  started: boolean
+  reason?: string
+}
+
 /** A license limit with its use: -1 = unlimited, 0 = none; used is null
  * when it could not be counted. */
 export interface LicenseLimit {

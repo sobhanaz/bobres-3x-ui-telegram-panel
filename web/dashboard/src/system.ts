@@ -1,4 +1,4 @@
-import type { LogLine, ServiceHealth, SystemReply, UpdateCheck } from './types'
+import type { BackupFile, LogLine, ServiceHealth, SystemBackups, SystemReply, UpdateCheck } from './types'
 
 // The System page's health tab: what each service's /healthz and /readyz
 // say, and whether every service runs the same version.
@@ -118,3 +118,58 @@ export function logsReason(error: string | null | undefined): 'unreachable' | 'n
   if (e === 'unreachable') return 'unreachable'
   return e === 'not configured' ? 'not_configured' : 'other'
 }
+
+// The backups tab: the backups the backup service keeps (the last 7), made
+// daily and on demand, each sent by the bot to the owner on Telegram.
+
+/** The command that adds the backup service to an install. */
+export const INSTALL_COMMAND = 'bobres install'
+
+export type BackupsState = 'not_installed' | 'unreachable' | 'ok'
+
+/** backupsState reads core's answer: this install has no backup service,
+ * core could not ask it, or its list. */
+export function backupsState(r: Pick<SystemBackups, 'installed' | 'error'>): BackupsState {
+  if (!r.installed) return 'not_installed'
+  return r.error ? 'unreachable' : 'ok'
+}
+
+/** unixOf reads a time as unix seconds: core gives seconds, the service
+ * itself an RFC 3339 time; null when there is none. */
+export function unixOf(v: number | string | null | undefined): number | null {
+  if (typeof v === 'number') return v > 0 ? v : null
+  if (!v) return null
+  const ms = Date.parse(v)
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000)
+}
+
+export type BackupSent = 'sent' | 'not_sent' | 'failed'
+
+/** backupSent says whether a backup reached the owner on Telegram, was kept
+ * on the server only, or is a run that failed (no file to send). */
+export function backupSent(b: Pick<BackupFile, 'sent_at' | 'error'>): BackupSent {
+  if (b.error) return 'failed'
+  return unixOf(b.sent_at) !== null ? 'sent' : 'not_sent'
+}
+
+/** The reasons the bot gives for a backup it did not send. */
+const NOT_SENT = ['too_big', 'no_owner', 'busy', 'spool_failed', 'blocked', 'telegram_error', 'unreachable']
+
+/** notSentReason reads why a backup was not sent: a reason the page explains
+ * (with Telegram's own words, if any, as detail), or other with the whole
+ * text; null when nothing was said. */
+export function notSentReason(e: string | null | undefined): { reason: string; detail: string } | null {
+  const s = (e ?? '').trim()
+  if (!s) return null
+  const i = s.indexOf(':')
+  const head = (i < 0 ? s : s.slice(0, i)).trim().toLowerCase()
+  const detail = i < 0 ? '' : s.slice(i + 1).trim()
+  if (NOT_SENT.includes(head)) return { reason: head, detail }
+  if (head === 'the bot is unreachable') return { reason: 'unreachable', detail }
+  return { reason: 'other', detail: s }
+}
+
+/** How often the tab reads the list again while a backup is being made:
+ * every ms for the first slowAfter reads, then five times slower (sending a
+ * big file to Telegram can take minutes), at most tries times. */
+export const backupPoll = { ms: 3000, slowAfter: 20, tries: 100 }

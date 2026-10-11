@@ -1698,10 +1698,11 @@
     }
   },
   "system": {
-    "intro": "How every BOBRES service is doing, whether a newer release is out, and this install's license.",
+    "intro": "How every BOBRES service is doing, whether a newer release is out, the backups, and this install's license.",
     "tab": {
       "health": "Health",
       "updates": "Updates",
+      "backups": "Backups",
       "logs": "Logs",
       "license": "License"
     },
@@ -1769,6 +1770,46 @@
         "unsupported": "This version of core does not report updates.",
         "other": "The check failed:"
       }
+    },
+    "backups": {
+      "run": "Back up now",
+      "started": "The backup has started. This list updates when it is done.",
+      "already_running": "A backup is already being made.",
+      "run_error": "The backup could not be started.",
+      "running": "A backup is being made now. This list updates by itself.",
+      "load_error": "The backups could not be read.",
+      "not_installed_title": "The backup service is not installed.",
+      "not_installed": "To add it, re-run bobres install on the server (as root) and turn backups on:",
+      "copy_command": "Copy the install command",
+      "unreachable": "Core could not reach the backup service, so the backups can't be listed. It may be restarting; see its state on the Health tab.",
+      "last_failed": "The last backup failed:",
+      "next_run": "Next backup",
+      "disk_free": "Free disk space",
+      "dir": "Folder (in the backup service)",
+      "kept": "The last 7 backups are kept on the server, encrypted; each is also sent to the owner on Telegram.",
+      "list": "Backups",
+      "list_label": "Backups, newest first",
+      "empty": "No backups yet.",
+      "sent": {
+        "sent": "Sent to Telegram",
+        "not_sent": "Not sent",
+        "failed": "Failed"
+      },
+      "sent_at": "Sent to the owner {time}",
+      "reason": {
+        "too_big": "Over Telegram's 50 MB limit, so it is kept on the server only.",
+        "no_owner": "The bot has no owner set, so it is kept on the server only.",
+        "busy": "The bot was busy sending another backup; it is kept on the server.",
+        "spool_failed": "The bot could not hold the file to send it; it is kept on the server.",
+        "blocked": "The owner has blocked the bot, so it could not be sent; it is kept on the server.",
+        "telegram_error": "Telegram refused it; it is kept on the server.",
+        "unreachable": "The bot did not answer; it is kept on the server.",
+        "other": "Not sent to Telegram; it is kept on the server:"
+      },
+      "failed": "This backup failed:",
+      "restore_title": "How to restore",
+      "restore": "Restoring is done on the server, with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
+      "restore_later": "The restore command (bobres restore) comes in a later update."
     },
     "logs": {
       "service": "Service",

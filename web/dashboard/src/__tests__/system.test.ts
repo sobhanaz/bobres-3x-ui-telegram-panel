@@ -1,6 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import fa from '../locales/fa.json'
-import { absent, checkList, logAttrs, logLevel, logsReason, mismatched, newestFirst, serviceState, sortedServices, UPDATE_COMMAND, updateReason, updateState } from '../system'
+import { bytes, dateTime } from '../format'
+import {
+  absent,
+  backupSent,
+  backupsState,
+  checkList,
+  INSTALL_COMMAND,
+  logAttrs,
+  logLevel,
+  logsReason,
+  mismatched,
+  newestFirst,
+  notSentReason,
+  serviceState,
+  sortedServices,
+  unixOf,
+  UPDATE_COMMAND,
+  updateReason,
+  updateState,
+} from '../system'
 import {
   bindingOf,
   bindings,
@@ -20,7 +39,7 @@ import {
   tokenProblem,
   warnings,
 } from '../license'
-import type { LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemLogs, SystemReply, UpdateCheck } from '../types'
+import type { BackupFile, LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemBackups, SystemLogs, SystemReply, UpdateCheck } from '../types'
 
 const DAY = 86_400
 const iid = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa'
@@ -263,6 +282,44 @@ describe('logs', () => {
     expect(logsReason('unreachable')).toBe('unreachable')
     expect(logsReason('not configured')).toBe('not_configured')
     expect(logsReason('rpc error: code = Unimplemented')).toBe('other')
+  })
+})
+
+describe('backups', () => {
+  it('reads core’s answer: not installed, unreachable, or the list', () => {
+    expect(backupsState({ installed: false })).toBe('not_installed')
+    expect(backupsState({ installed: true, error: 'unreachable' })).toBe('unreachable')
+    expect(backupsState({ installed: true })).toBe('ok')
+    expect(INSTALL_COMMAND).toBe('bobres install')
+  })
+  it('reads times as unix seconds, from core or from the service', () => {
+    expect(unixOf(1_790_000_000)).toBe(1_790_000_000)
+    expect(unixOf('2026-10-11T03:30:00Z')).toBe(Date.UTC(2026, 9, 11, 3, 30) / 1000)
+    expect(unixOf(0)).toBeNull()
+    expect(unixOf(null)).toBeNull()
+    expect(unixOf(undefined)).toBeNull()
+    expect(unixOf('')).toBeNull()
+    expect(unixOf('soon')).toBeNull()
+  })
+  it('says whether each backup was sent, kept on the server only, or failed', () => {
+    const b = (over: Partial<BackupFile>): BackupFile => ({ file: 'f', size: 1, sha256: '', created_at: 1, sent_at: null, ...over })
+    expect(backupSent(b({ sent_at: 1_790_000_000 }))).toBe('sent')
+    expect(backupSent(b({ sent_at: '2026-10-11T03:31:00Z' }))).toBe('sent')
+    expect(backupSent(b({ telegram_error: 'too_big' }))).toBe('not_sent')
+    expect(backupSent(b({}))).toBe('not_sent')
+    expect(backupSent(b({ error: 'pg_dump: connection refused', sent_at: 5 }))).toBe('failed')
+  })
+  it('explains why a backup was not sent', () => {
+    expect(notSentReason('')).toBeNull()
+    expect(notSentReason(undefined)).toBeNull()
+    expect(notSentReason('too_big')).toEqual({ reason: 'too_big', detail: '' })
+    expect(notSentReason('no_owner')).toEqual({ reason: 'no_owner', detail: '' })
+    expect(notSentReason('telegram_error: Bad Request: file is too big')).toEqual({ reason: 'telegram_error', detail: 'Bad Request: file is too big' })
+    expect(notSentReason('the bot is unreachable: dial tcp: refused')).toEqual({ reason: 'unreachable', detail: 'dial tcp: refused' })
+    expect(notSentReason('the bot answered HTTP 502')).toEqual({ reason: 'other', detail: 'the bot answered HTTP 502' })
+    for (const r of ['too_big', 'no_owner', 'busy', 'spool_failed', 'blocked', 'telegram_error', 'unreachable', 'other']) {
+      expect((fa.system.backups.reason as Record<string, string>)[r]).toBeTruthy()
+    }
   })
 })
 
@@ -537,6 +594,155 @@ describe('system page', () => {
     expect(document.querySelector('.reason-title')?.textContent).toBe(text('system.updates.last_check_failed'))
     expect(reason()).toBe(text('system.updates.reason.unreachable'))
     expect(document.querySelector('.unverified')).toBeNull()
+  })
+
+  const backupsReply = (over: Partial<SystemBackups> = {}): SystemBackups => {
+    const t0 = nowSec() - 3600
+    return {
+      installed: true,
+      backups: [
+        { file: 'bobres-20261011T033000Z.bkp', size: 3 * 2 ** 20, sha256: 'ab', created_at: t0, sent_at: t0 + 20 },
+        { file: 'bobres-20261010T033000Z.bkp', size: 80 * 2 ** 20, sha256: 'cd', created_at: t0 - DAY, sent_at: null, telegram_error: 'too_big' },
+        { file: '', size: 0, sha256: '', created_at: t0 - 2 * DAY, sent_at: null, error: 'pg_dump: connection refused' },
+        { file: 'bobres-20261008T033000Z.bkp', size: 2 ** 20, sha256: 'ef', created_at: t0 - 3 * DAY, sent_at: null, telegram_error: 'telegram_error: Forbidden: bot was blocked' },
+      ],
+      running: false, last_error: '', next_run: nowSec() + 20 * 3600, disk_free: 12 * 2 ** 30, dir: '/backups', ...over,
+    }
+  }
+  // the tab reads the list again quickly while a backup is being made
+  const quickPoll = async () => {
+    const { backupPoll } = await import('../system')
+    backupPoll.ms = 5
+  }
+
+  it('lists the backups, and lets the owner back up now until it is done', async () => {
+    let state = backupsReply()
+    let reads = 0
+    let done = false
+    const { calls, router } = await boot('/admin/system', {
+      perms: ownerPerms, role: 'owner', license: { state: 'active', white_label: false },
+      answer: (url, init) => {
+        if (url === '/api/v1/system/backups/run' && init?.method === 'POST') {
+          state = { ...state, running: true }
+          return json(202, { started: true })
+        }
+        if (url === '/api/v1/system/backups') {
+          if (state.running) reads++
+          if (done) state = { ...state, running: false }
+          return json(200, state)
+        }
+      },
+    })
+    await quickPoll()
+    await vi.waitFor(() => expect(rows()).toHaveLength(5))
+    expect(calls.some((c) => c.includes('/system/backups'))).toBe(false)
+    btn('.tab-backups').click()
+    await found('.backup')
+    expect(router.currentRoute.value.query.tab).toBe('backups')
+    const items = [...document.querySelectorAll('.backup')] as HTMLElement[]
+    expect(items).toHaveLength(4)
+    const r = backupsReply()
+    // newest first, in the user's calendar, with the size and whether it was sent
+    expect(items[0].querySelector('.time')?.textContent).toBe(dateTime(r.backups![0].created_at as number, 'fa'))
+    expect(items[0].querySelector('.size')?.textContent).toBe(bytes(3 * 2 ** 20, 'fa'))
+    expect(items[0].querySelector('.sent-state')?.textContent).toBe(text('system.backups.sent.sent'))
+    expect(items[0].querySelector('.sent-at')?.textContent).toBe(fill(text('system.backups.sent_at'), { time: dateTime(r.backups![0].sent_at as number, 'fa') }))
+    expect(items[0].querySelector('.file')?.textContent).toBe('bobres-20261011T033000Z.bkp')
+    // too big for Telegram: kept on the server
+    expect(items[1].querySelector('.sent-state')?.textContent).toBe(text('system.backups.sent.not_sent'))
+    expect(items[1].querySelector('.reason')?.textContent).toBe(text('system.backups.reason.too_big'))
+    // a failed run, with why
+    expect(items[2].querySelector('.sent-state')?.textContent).toBe(text('system.backups.sent.failed'))
+    expect(items[2].querySelector('.sent-state')?.classList.contains('p-tag-danger')).toBe(true)
+    expect(items[2].querySelector('.error')?.textContent).toBe('pg_dump: connection refused')
+    expect(items[2].querySelector('.size')).toBeNull()
+    // Telegram's own words
+    expect(items[3].querySelector('.reason')?.textContent).toBe(text('system.backups.reason.telegram_error'))
+    expect(items[3].querySelector('.error')?.textContent).toBe('Forbidden: bot was blocked')
+    // the next run, free space, and how to restore
+    expect(document.querySelector('.next-run')?.textContent).toBe(dateTime(r.next_run!, 'fa'))
+    expect(document.querySelector('.disk-free')?.textContent).toBe(bytes(12 * 2 ** 30, 'fa'))
+    expect(document.querySelector('.dir')?.textContent).toBe('/backups')
+    expect(document.querySelector('.restore-note')?.textContent).toContain(text('system.backups.restore_later'))
+    expect(document.querySelector('.backup-running')).toBeNull()
+
+    // back up now: shown as running, read again until done
+    const run = btn('button.run-backup')
+    expect(run.disabled).toBe(false)
+    run.click()
+    await vi.waitFor(() => expect(calls).toContain('POST /api/v1/system/backups/run'))
+    await found('.backup-running')
+    expect(btn('button.run-backup').disabled).toBe(true)
+    await vi.waitFor(() => expect(reads).toBeGreaterThanOrEqual(3))
+    expect(document.querySelector('.backup-running')).not.toBeNull()
+    done = true
+    await vi.waitFor(() => expect(document.querySelector('.backup-running')).toBeNull())
+    expect(btn('button.run-backup').disabled).toBe(false)
+    // and stops reading once it is done
+    const n = calls.length
+    await new Promise((res) => setTimeout(res, 40))
+    expect(calls.length).toBe(n)
+  })
+
+  it('waits for a backup already running, and says when one cannot start', async () => {
+    let running = false
+    let reads = 0
+    let post = 0
+    let done = false
+    const { calls } = await boot('/admin/system?tab=backups', {
+      perms: ownerPerms, role: 'owner', license: { state: 'active', white_label: false },
+      answer: (url) => {
+        if (url === '/api/v1/system/backups/run') {
+          if (++post === 1) return json(503, { error: 'unavailable', message: 'backup service unreachable' })
+          running = true
+          return json(409, { started: false, reason: 'running' })
+        }
+        if (url === '/api/v1/system/backups') {
+          if (running) reads++
+          if (done) running = false
+          return json(200, backupsReply({ backups: [], running }))
+        }
+      },
+    })
+    await quickPoll()
+    const empty = await found('.backups .empty')
+    expect(empty.textContent).toBe(text('system.backups.empty'))
+    btn('button.run-backup').click()
+    const err = await found('.run-error')
+    expect(err.textContent).toContain(text('system.backups.run_error'))
+    expect(document.querySelector('.backup-running')).toBeNull()
+    btn('button.run-backup').click()
+    await found('.backup-running')
+    expect(document.querySelector('.run-error')).toBeNull()
+    await vi.waitFor(() => expect(reads).toBeGreaterThanOrEqual(2))
+    done = true
+    await vi.waitFor(() => expect(document.querySelector('.backup-running')).toBeNull())
+    expect(calls.filter((c) => c.startsWith('POST ')).length).toBe(2)
+  })
+
+  it('says how to add the backup service, and when core cannot reach it', async () => {
+    let reply: SystemBackups = { installed: false }
+    const { calls } = await boot('/admin/system?tab=backups', {
+      answer: (url) => (url === '/api/v1/system/backups' ? json(200, reply) : undefined),
+    })
+    const box = await found('.backups-not-installed')
+    expect(box.querySelector('.title')?.textContent).toBe(text('system.backups.not_installed_title'))
+    expect(box.querySelector('.hint')?.textContent).toBe(text('system.backups.not_installed'))
+    expect(box.querySelector('.command')?.textContent).toBe('bobres install')
+    expect(document.querySelector('.backup-list')).toBeNull()
+    expect(document.querySelector('.restore-note')).toBeNull()
+    // admins see the backups, but only the owner backs up
+    expect(document.querySelector('button.run-backup')).toBeNull()
+    reply = { installed: true, error: 'unreachable' }
+    btn('.backups button.refresh').click()
+    const warn = await found('.backups-unreachable')
+    expect(warn.textContent?.trim()).toBe(text('system.backups.unreachable'))
+    expect(document.querySelector('.backups-not-installed')).toBeNull()
+    reply = backupsReply()
+    btn('.backups button.refresh').click()
+    await found('.backup')
+    expect(document.querySelector('button.run-backup')).toBeNull()
+    expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
   })
 
   it('shows the owner each service’s recent warnings and errors, newest first', async () => {
