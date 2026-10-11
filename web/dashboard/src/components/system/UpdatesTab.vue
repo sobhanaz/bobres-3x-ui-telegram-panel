@@ -10,7 +10,7 @@ import Tag from 'primevue/tag'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, isolate, type Lang } from '../../format'
-import { UPDATE_COMMAND, updateReason, updateState, type UpdateState } from '../../system'
+import { updateCommand, updateReason, updateState, type UpdateState } from '../../system'
 import type { SystemReply } from '../../types'
 
 // Whether a newer BOBRES release is out, as the bot last read it (core has
@@ -49,7 +49,7 @@ const severity: Record<UpdateState, 'warn' | 'success' | 'secondary'> = { newer:
 
 async function copyCommand() {
   try {
-    await navigator.clipboard.writeText(UPDATE_COMMAND)
+    await navigator.clipboard.writeText(updateCommand(latest.value))
     toast.add({ severity: 'info', summary: t('common.copied'), life: 2000 })
   } catch {
     /* clipboard blocked: the command is selectable */
@@ -104,7 +104,7 @@ async function copyCommand() {
         <div class="available-title">{{ t('system.updates.available', { version: isolate(latest) }) }}</div>
         <p class="available-hint">{{ t('system.updates.how') }}</p>
         <div class="command-row">
-          <code class="app-ltr app-mono command">{{ UPDATE_COMMAND }}</code>
+          <code class="app-ltr app-mono command">{{ updateCommand(latest) }}</code>
           <Button
             icon="pi pi-copy"
             text

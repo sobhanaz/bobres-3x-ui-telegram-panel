@@ -1759,8 +1759,8 @@
       "available": "Version {version} is available.",
       "how": "To install it, run this on the server (as root):",
       "copy_command": "Copy the update command",
-      "backup_first": "The update downloads the release, checks its signature and restarts the services. Take a backup first.",
-      "unverified": "The release signature was not checked here; bobres update checks it before installing anything.",
+      "backup_first": "Run it on the server: it keeps your settings and data, downloads that version and restarts the services. Take a backup first. If bobres doesn't know the version, update bobres itself with the install command from the README.",
+      "unverified": "The release signature was not checked here; check it on the release page before installing.",
       "could_not_check": "Could not check for updates.",
       "last_check_failed": "The last check for updates failed.",
       "reason": {
