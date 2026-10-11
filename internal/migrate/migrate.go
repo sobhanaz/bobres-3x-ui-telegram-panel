@@ -46,6 +46,12 @@ var globalMu sync.Mutex
 // risk goose bookkeeping statements landing on a connection with a different
 // search_path.
 func Up(ctx context.Context, dsn, schema string) error {
+	return upTo(ctx, dsn, schema, goose.MaxVersion)
+}
+
+// upTo applies the schema's migrations up to version (tests start from an
+// older schema this way).
+func upTo(ctx context.Context, dsn, schema string, version int64) error {
 	if !allowed[schema] {
 		return fmt.Errorf("%w: %q", ErrUnknownSchema, schema)
 	}
@@ -83,7 +89,7 @@ func Up(ctx context.Context, dsn, schema string) error {
 	if _, err := db.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
 		return fmt.Errorf("migrate: set search_path: %w", err)
 	}
-	if err := goose.UpContext(ctx, db, "migrations/"+schema); err != nil {
+	if err := goose.UpToContext(ctx, db, "migrations/"+schema, version); err != nil {
 		return fmt.Errorf("migrate: up %s: %w", schema, err)
 	}
 	return nil

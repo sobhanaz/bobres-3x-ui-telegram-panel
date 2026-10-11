@@ -133,7 +133,8 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	clear(h.gwMethods)
 	h.gwMu.Unlock()
 
-	if resp, err := h.core.ListStaffContacts(ctx, &corev1.ListStaffContactsRequest{}); err != nil {
+	// Support staff too: they get ticket alerts (settings.TicketRecipients).
+	if resp, err := h.core.ListStaffContacts(ctx, &corev1.ListStaffContactsRequest{IncludeSupport: true}); err != nil {
 		h.log.Warn("staff list not refreshed; alerts go to the last known one", "err", err)
 	} else {
 		staff := make([]settings.Contact, 0, len(resp.GetItems()))
@@ -184,6 +185,12 @@ type req struct {
 	lang   string
 	toast  string // callback answer text
 	alert  bool
+	// keep: the pressed message must stay as it is (a notification), so
+	// show sends a new message instead of editing it.
+	keep bool
+	// gated: a gate let the update through only to continue a ticket; what
+	// turns out to be anything else gets the gate's answer (answerGate).
+	gated bool
 }
 
 func (r *req) t(key string, args ...any) string { return r.h.cat.T(r.lang, key, args...) }
@@ -194,7 +201,7 @@ func (r *req) money(amount int64, currency string) string {
 
 // show replaces the pressed menu (callbacks) or sends a new message.
 func (r *req) show(text string, kb *tg.Keyboard) {
-	if r.cb != nil && r.cb.Message != nil {
+	if r.cb != nil && r.cb.Message != nil && !r.keep {
 		err := r.h.tg.EditMessageText(r.ctx, r.chatID, r.cb.Message.MessageID, text, kb)
 		if err == nil {
 			return
@@ -297,6 +304,10 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 		h.onStarsPaid(ctx, u.Message)
 		return
 	}
+	if u.MyChatMember != nil {
+		h.onMyChatMember(ctx, u.MyChatMember) // the user blocked the bot, or came back
+		return
+	}
 	if first, err := h.state.Once(ctx, "upd:"+strconv.FormatInt(u.UpdateID, 10), 24*time.Hour); err == nil && !first {
 		return // Telegram re-delivered an update we already handled
 	}
@@ -323,6 +334,9 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 
 	if user, err := h.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: from.ID}}); err == nil {
 		r.user, r.lang = user, user.GetLanguage()
+		if user.GetBotBlocked() { // writing again: they no longer block the bot
+			h.setBotBlocked(ctx, from.ID, false)
+		}
 	} else if status.Code(err) != codes.NotFound {
 		r.lang = i18n.Normalize(from.LanguageCode)
 		r.fail(err)
@@ -413,7 +427,10 @@ func (h *Handler) routeCallback(r *req, data string) {
 	case "trial":
 		h.onTrial(r)
 	case "support":
+		r.keep = rest == "m" // under a notification, which must stay as it is
 		h.onSupport(r)
+	case "tk":
+		h.onTicketButton(r, rest)
 	case "dash":
 		if !r.isTeam() {
 			r.toast, r.alert = r.t("admin.forbidden"), true
@@ -457,7 +474,11 @@ func (h *Handler) routeMessage(r *req) {
 		h.onScene(r, st)
 		return
 	}
-	h.showHome(r)
+	if replyToBot(r.msg) { // perhaps an answer to a staff reply
+		h.onTicketReply(r)
+		return
+	}
+	h.notForSupport(r)
 }
 
 func (h *Handler) onCommand(r *req, cmd, args string) {
@@ -507,7 +528,7 @@ func (h *Handler) onScene(r *req, st state.State) {
 	case sceneTopupAmount:
 		h.onTopupAmount(r)
 	case sceneTicket:
-		h.onTicket(r)
+		h.onTicket(r, st)
 	case sceneDiscount:
 		h.onDiscountCode(r, st)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason:

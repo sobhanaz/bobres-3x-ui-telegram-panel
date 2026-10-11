@@ -57,3 +57,30 @@ func TestRecipients(t *testing.T) {
 		t.Fatalf("staff unknown yet: the configured admin still gets alerts: %v", got)
 	}
 }
+
+// Support staff get ticket alerts (with notify.recipients = staff), never
+// payment ones.
+func TestTicketRecipients(t *testing.T) {
+	s := New()
+	s.SetStaff([]Contact{{TelegramID: 9, Role: "owner"}, {TelegramID: 5, Role: "admin"}, {TelegramID: 3, Language: "fa", Role: "support"}})
+	if got := s.TicketRecipients(9); len(got) != 1 || got[0].TelegramID != 9 {
+		t.Fatalf("owner only: %v", got)
+	}
+	s.Replace(map[string]string{"notify.recipients": "staff"})
+	if got := s.TicketRecipients(9); len(got) != 3 || got[2].TelegramID != 3 {
+		t.Fatalf("tickets with staff: %v", got)
+	}
+	if got := s.Recipients(9); len(got) != 2 || slices.ContainsFunc(got, func(c Contact) bool { return c.Role == "support" }) {
+		t.Fatalf("payments with staff: %v", got)
+	}
+	if c, ok := s.Contact(3); !ok || c.Language != "fa" {
+		t.Fatalf("contact: %+v %v", c, ok)
+	}
+	if _, ok := s.Contact(4); ok {
+		t.Fatal("not staff")
+	}
+	s.SetStaff([]Contact{{TelegramID: 3, Role: "support"}})
+	if got := s.Recipients(9); len(got) != 1 || got[0].TelegramID != 9 {
+		t.Fatalf("only support listed: payment alerts go to the configured admin: %v", got)
+	}
+}

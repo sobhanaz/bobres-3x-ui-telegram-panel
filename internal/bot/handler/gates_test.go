@@ -34,6 +34,22 @@ func (l *memLimiter) Allow(_ context.Context, key string, _ time.Duration, max i
 	return l.n[key] <= max, nil
 }
 
+// Give returns one count, as the Redis limiter does.
+func (l *memLimiter) Give(_ context.Context, key string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.n[key] > 0 {
+		l.n[key]--
+	}
+	return nil
+}
+
+func (l *memLimiter) count(key string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.n[key]
+}
+
 func (l *memLimiter) reset() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -221,27 +237,100 @@ func TestForcedJoin(t *testing.T) {
 	}
 }
 
+// limits.tickets_per_day counts every support message (an album once), and
+// a message that was not recorded is given back.
 func TestTicketsPerDay(t *testing.T) {
 	w := newWorld(t)
-	w.h.limiter = newMemLimiter("bot:tk:")
+	lim := newMemLimiter("bot:tk:")
+	w.h.limiter = lim
 	owner := setupStore(t, w)
 	owner.text("/set limits.tickets_per_day 2")
 	u := w.customer(821, "tina")
-	ticket := func(text string) {
-		u.text("/menu")
-		u.press("support")
-		u.text(text)
-	}
+	u.text("/menu")
+	u.press("support")
 	for i := range 3 {
-		ticket(fmt.Sprintf("help number %d", i))
+		u.text(fmt.Sprintf("help number %d", i))
 	}
 	u.lastHas("today's limit of support messages")
-	if n := owner.count("Support message from @tina"); n != 2 {
-		t.Fatalf("%d tickets reached the admin, want 2", n)
+	if n := len(w.ticketMessages(w.openTicket(821).ID)); n != 2 {
+		t.Fatalf("%d messages recorded, want 2", n)
 	}
+	owner.eventuallySees("New ticket <b>#")
+	w.drain()
+	if n := owner.count("New ticket"); n != 1 {
+		t.Fatalf("%d ticket alerts, want 1 (follow-ups are not alerted)", n)
+	}
+
+	// An album is one message; the limit holds for all of its parts.
+	lim.reset()
+	u.text("/menu")
+	u.press("support")
+	u.album("album-1", "shot-1", "shot-2", "shot-3")
+	u.text("and one more")
+	u.lastHas("Added to ticket")
+	u.album("album-2", "shot-4", "shot-5")
+	u.lastHas("today's limit of support messages")
+	if n := len(w.ticketMessages(w.openTicket(821).ID)); n != 6 {
+		t.Fatalf("%d messages recorded, want 6", n)
+	}
+	if n := u.count("today's limit"); n != 2 {
+		t.Fatalf("the limit was said %d times, want 2 (once per album)", n)
+	}
+
 	owner.text("/set limits.tickets_per_day 0") // no limit
-	ticket("help number 3")
-	u.lastHas("Your message was sent")
+	u.text("/menu")
+	u.press("support")
+	u.text("help number 3")
+	u.lastHas("Added to ticket")
+}
+
+// A Telegram reply outside any scene counts only when it answers a staff
+// reply. Over the limit core says which it is without saving it: a reply to
+// a staff answer gets the limit, any other reply the usual answer.
+func TestTicketLimitAndReplies(t *testing.T) {
+	w := newWorld(t)
+	lim := newMemLimiter("bot:tk:")
+	w.h.limiter = lim
+	owner := setupStore(t, w)
+	owner.text("/set limits.tickets_per_day 2")
+	u := w.customer(825, "rick")
+	key := "bot:tk:825"
+	u.text("/menu")
+	u.press("support")
+	u.text("help")
+	tk := w.openTicket(825)
+	w.staffReply(825, "an answer", false)
+	u.eventuallySees("an answer")
+	answer := u.last()
+
+	u.text("/menu")
+	u.replyTo("hello?", u.last().id) // the menu
+	u.lastHas("Main menu")
+	if n := lim.count(key); n != 1 {
+		t.Fatalf("a reply to the menu counted: %d", n)
+	}
+	u.replyTo("thanks", answer.id) // the second message today, the last allowed
+	u.lastHas("Added to ticket")
+
+	u.text("/menu")
+	u.replyTo("hello again?", u.last().id)
+	u.lastHas("Main menu")
+	if n := lim.count(key); n != 2 {
+		t.Fatalf("a reply to the menu over the limit counted: %d", n)
+	}
+	u.replyTo("one more thing", answer.id)
+	u.lastHas("today's limit of support messages")
+	if n := len(w.ticketMessages(tk.ID)); n != 3 || u.count("today's limit") != 1 {
+		t.Fatalf("over the limit: %d messages, limit said %d times", n, u.count("today's limit"))
+	}
+
+	// In the ticket scene the limit is said.
+	u.press("support")
+	u.text("more")
+	u.lastHas("today's limit of support messages")
+	if n := len(w.ticketMessages(tk.ID)); n != 3 {
+		t.Fatalf("%d messages recorded over the limit", n)
+	}
 }
 
 func TestConfigurableRateLimit(t *testing.T) {

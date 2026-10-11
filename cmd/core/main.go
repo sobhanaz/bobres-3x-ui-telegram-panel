@@ -148,6 +148,9 @@ func setup(rt *app.Runtime) error {
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)
 	rt.Go("usage-sync", dom.NewUsageWorker(prov, rt.Log).Run)
+	// Support tickets nobody answered back close themselves; broadcasts start on time.
+	rt.Go("tickets", dom.NewTicketWorker(rt.Log).Run)
+	rt.Go("broadcasts", dom.NewBroadcastWorker(rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).

@@ -267,3 +267,90 @@ export interface SessionItem {
   expires_at: number
   current: boolean
 }
+
+export interface TicketUser {
+  id: string
+  telegram_id: number
+  username: string
+  status: string
+  language: string
+  bot_blocked?: boolean
+}
+
+export interface TicketItem {
+  id: string
+  number: number
+  status: 'open' | 'answered' | 'closed'
+  category: string
+  subject: string
+  user: TicketUser
+  assignee: UserBrief | null
+  created_at: number
+  updated_at: number
+  last_customer_at: number | null
+  last_staff_at: number | null
+  closed_at: number | null
+  close_reason: string
+  last_message: { kind: string; preview: string; at: number } | null
+}
+
+export interface TicketMessageItem {
+  id: string
+  kind: 'customer' | 'staff' | 'note'
+  author: UserBrief | null
+  body: string
+  file: { type: string; mime: string; name: string; size: number; url: string } | null
+  delivery: { status: 'pending' | 'sent' | 'blocked' | 'failed'; at: number | null } | null
+  created_at: number
+}
+
+export interface TicketDetail {
+  ticket: TicketItem
+  messages: TicketMessageItem[]
+  can_manage: boolean
+}
+
+export interface TicketCounts {
+  waiting: number
+  mine: number
+  unassigned: number
+  answered: number
+}
+
+export interface CannedReply {
+  id: string
+  title: string
+  body: LangPair
+  sort: number
+}
+
+export interface BroadcastItem {
+  id: string
+  status: 'draft' | 'scheduled' | 'running' | 'paused' | 'done' | 'cancelled'
+  segment: 'all' | 'active' | 'expired' | 'never_bought'
+  language: '' | 'fa' | 'en'
+  texts: LangPair
+  button: { url: string; labels: LangPair } | null
+  scheduled_at: number | null
+  started_at: number | null
+  finished_at: number | null
+  counts: { total: number; pending: number; sent: number; blocked: number; failed: number; unknown: number }
+  rate_per_sec: number
+  eta_seconds: number | null
+  last_error: string
+  created_by: UserBrief
+  created_at: number
+  version: number
+}
+
+export interface AudienceCount {
+  total: number
+  languages: { fa: number; en: number }
+}
+
+export interface BroadcastRecipientItem {
+  user: UserBrief
+  status: string
+  error: string
+  done_at: number | null
+}

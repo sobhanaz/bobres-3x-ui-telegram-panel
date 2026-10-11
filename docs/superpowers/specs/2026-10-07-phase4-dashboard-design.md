@@ -3,8 +3,8 @@
 Written 2026-10-07. PLAN.md section 10: "Web dashboard + branding editor." The owner chose all 17
 sections, every feature (including the later-phase pages), login both from the bot and with a
 password, two-factor codes required for passwords, and a calm dark + light look. It ships in six
-milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and sales) and 3
-(store setup) are built**; the rest is planned below.
+milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and sales), 3
+(store setup) and 4 (support and broadcasts) are built**; the rest is planned below.
 
 ## Milestones
 
@@ -17,7 +17,8 @@ milestones, one pull request each. **Milestones 1 (foundation), 2 (customers and
    referrals. See "Milestone 2" below.
 3. **Store setup (built).** Branding and texts (every bot string), Settings, Staff, Audit log.
    See "Milestone 3" below.
-4. **Support and broadcasts.** Tickets answered through the bot, broadcasts sent with a rate limit.
+4. **Support and broadcasts (built).** Tickets answered through the bot, broadcasts sent with a rate
+   limit. See "Milestone 4" below.
 5. **Resellers.**
 6. **Infrastructure.** Several 3x-ui servers (servers per plan), payment gateways with encrypted
    keys, System (health, versions, update check, backups through a backup container), License
@@ -352,6 +353,80 @@ Changes that move money or add days take a request key, so a retried request hap
 Field errors answer `{"error": "invalid", "field": ..., "message": ...}`; a text that cannot be used
 answers `problems` (code and argument per problem). A session's id is the hex of its stored hash, a
 one-way hash of the cookie, so it gives nothing away.
+
+## Milestone 4: support and broadcasts
+
+- **A ticket is a conversation.** Each customer has at most one ticket that is not closed. Statuses:
+  - `open`: waiting for staff
+  - `answered`: staff replied
+  - `closed`
+
+  A message to a closed ticket starts a new one. Tickets are numbered (`#1024`).
+  - Migration 00009 turns the old one-message tickets into this. Each old text becomes the first
+    message, and a customer's older open tickets are closed as merged.
+- **Customers** write from the Support screen, after picking payment, service or other.
+  - A message can be text, a photo, an image file or a PDF. An album is confirmed once.
+  - They answer a reply with its [Reply] button or with Telegram's reply. They can close their ticket.
+  - Continuing a ticket passes maintenance mode and the required channel; starting one does not.
+  - Banned customers may still write: it is how they appeal.
+- **Staff replies go through the bot.** Core keeps the reply and publishes `ticket.replied.v1`. The
+  bot's notifier fetches it, sends it, and reports delivered, blocked or failed.
+  - A reply already reported is never sent twice.
+  - Events and audit entries carry ids, never message text.
+  - Replies come from the store, never with a staff name. Internal notes never reach the customer.
+- **Alerts.** Staff hear of a new ticket, and of a customer writing after an answer, but not of
+  every message.
+  - With `notify.recipients = staff` support staff get these alerts too. Payment, sale and
+    failed-delivery alerts still exclude them.
+  - A ticket with an assignee alerts only them.
+- **Tickets close by themselves** `support.autoclose_days` (default 7) after an answer the customer
+  did not reply to.
+- **Dashboard support.**
+  - The inbox: waiting, answered, closed. Filters for assignee and category, and a search by
+    `#number`, @username, Telegram id, id suffix or text.
+  - A ticket's thread: attachments come through the bot, and staff replies show their delivery.
+  - Saved replies in both languages, assigning, close and reopen.
+  - A menu badge with the waiting count, a Tickets tab on the user page, a card on the Overview.
+  - Assigning others and editing saved replies need the new `tickets.manage` (owner, admin).
+- **Broadcasts.**
+  - What staff compose:
+    - a text per language (Telegram's HTML subset, at most 4096 characters, checked live)
+    - an optional link button
+    - the audience: everyone, with an active service, expired with no active service, or never
+      bought; by language
+  - Banned users and users who blocked the bot are never in it.
+  - Staff can test-send to themselves, send now or schedule, then pause, resume or cancel.
+- **At most once.**
+  - When a broadcast starts, core puts its audience in line (a snapshot).
+  - The bot claims recipients under a 10-minute lease and reports each result.
+  - A claim never reported counts as unknown and is never sent again, so a crash cannot send twice.
+  - Unsent claims on pause, cancel or shutdown go back in line.
+- **Pacing.**
+  - Broadcasts send at most `limits.broadcast_per_sec` (default 20) minus the bot's own traffic,
+    on their own Telegram client.
+  - Any 429 pauses them until Telegram's `retry_after`, so replies to customers always go first.
+  - Repeated identical refusals, a revoked token or Telegram being unreachable pause the broadcast
+    with the reason shown.
+- **Users who blocked the bot** are marked (`users.bot_blocked_at`). The flag is set by a broadcast
+  result, a refused notification or Telegram's `my_chat_member` update. It is cleared when they
+  write again or unblock.
+
+### API (milestone 4)
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/tickets`, `GET /api/v1/tickets/counts`, `GET /api/v1/tickets/assignees`, `GET /api/v1/tickets/{id}` | tickets.write |
+| `POST /api/v1/tickets/{id}/messages`, `POST /api/v1/tickets/{id}/status`, `GET /api/v1/tickets/{id}/messages/{mid}/file` | tickets.write |
+| `PUT /api/v1/tickets/{id}/assignee` | tickets.write (others: tickets.manage) |
+| `GET /api/v1/canned-replies` | tickets.write |
+| `POST /api/v1/canned-replies`, `PUT`/`DELETE /api/v1/canned-replies/{id}` | tickets.manage |
+| `GET`/`POST /api/v1/broadcasts`, `GET`/`PUT`/`DELETE /api/v1/broadcasts/{id}` | broadcasts.write |
+| `POST /api/v1/broadcasts/audience`, `/check`, `/test` | broadcasts.write |
+| `POST /api/v1/broadcasts/{id}/send`, `/pause`, `/resume`, `/cancel`; `GET /api/v1/broadcasts/{id}/recipients` | broadcasts.write |
+
+The bot gains the core calls `AddTicketMessage`, `GetMyTickets`, `GetMyTicket`, `CloseMyTicket`,
+`GetTicketMessage`, `ReportTicketDelivery`, `SetUserBotBlocked`, `ClaimBroadcastBatch` and
+`ReportBroadcastResults`. Core gains the bot's `POST /internal/broadcasts/test`.
 
 ## Tests
 

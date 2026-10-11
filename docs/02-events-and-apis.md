@@ -24,7 +24,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | subscription.expiring.v1 / expired.v1 | core(scheduler) | notifier | Reminder triggers |
 | wallet.credited.v1 / debited.v1 | core | notifier | Balance change |
 | refund.requested.v1 / completed.v1 | core | payments | Refund flow |
-| ticket.opened.v1 / replied.v1 | core | notifier | Support |
+| ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 
 ## Purchase saga (happy path)

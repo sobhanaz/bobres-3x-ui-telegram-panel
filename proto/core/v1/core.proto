@@ -18,6 +18,7 @@ message User {
   string referred_by = 7; // uuid, optional
   int64 created_at = 8; // unix seconds
   int64 updated_at = 9;
+  bool bot_blocked = 10; // Telegram said the user blocked the bot
 }
 
 message Plan {
@@ -86,10 +87,156 @@ message Subscription {
 message Ticket {
   string id = 1;
   string user_id = 2;
-  string category = 3;
-  string text = 4;
-  string status = 5; // open | closed
+  string category = 3; // payment | service | other (general on old tickets)
+  string text = 4; // the subject: the first line of the first message
+  string status = 5; // open (waiting for staff) | answered | closed
   int64 created_at = 6;
+  int64 number = 7; // what customers and staff call it (#1024)
+  int64 updated_at = 8;
+  string last_from = 9; // customer | staff: who wrote last
+}
+
+// TicketMessage is one message of a ticket as the customer sees it (staff
+// notes are never sent to the bot).
+message TicketMessage {
+  string id = 1;
+  string kind = 2; // customer | staff
+  string body = 3;
+  bool has_file = 4;
+  int64 created_at = 5;
+}
+
+message AddTicketMessageRequest {
+  string user_id = 1;
+  string category = 2; // for a new ticket: payment | service | other
+  string ticket_id = 3; // optional: the ticket the customer answers (a button)
+  int64 reply_to_tg_message_id = 4; // optional: the delivered staff reply the customer answered
+  string text = 5;
+  string file_id = 6; // Telegram file id of a photo, image or PDF
+  string file_type = 7; // photo | document
+  string file_mime = 8;
+  string file_name = 9;
+  int64 file_size = 10;
+  int64 tg_message_id = 11; // the customer's message: makes a repeat harmless
+  // With reply_to_tg_message_id: only says whether it is this customer's
+  // delivered staff reply (NOT_FOUND otherwise); nothing is saved.
+  bool check_only = 12;
+}
+
+message AddTicketMessageResponse {
+  Ticket ticket = 1;
+  string message_id = 2;
+  bool created = 3; // false: this Telegram message was recorded already
+  bool new_ticket = 4;
+  int64 closed_number = 5; // the closed ticket the customer answered (a new one was started)
+}
+
+message GetMyTicketsRequest {
+  string user_id = 1;
+  int32 limit = 2; // recent tickets, at most 10
+}
+
+message MyTickets {
+  Ticket open = 1; // the ticket that is not closed, if any
+  repeated Ticket recent = 2;
+}
+
+message GetMyTicketRequest {
+  string user_id = 1;
+  string ticket_id = 2;
+  int32 last = 3; // the last N messages (default 3, at most 20)
+}
+
+message TicketThread {
+  Ticket ticket = 1;
+  repeated TicketMessage messages = 2; // oldest first
+}
+
+message CloseMyTicketRequest {
+  string user_id = 1;
+  string ticket_id = 2;
+}
+
+message GetTicketMessageRequest {
+  string message_id = 1;
+}
+
+// TicketMessageView is what the notifier needs to deliver a reply or alert
+// staff about a customer's message.
+message TicketMessageView {
+  string ticket_id = 1;
+  int64 ticket_number = 2;
+  int64 telegram_id = 3; // the customer
+  string language = 4; // the customer's
+  string username = 5; // the customer's
+  string kind = 6; // customer | staff | note
+  string body = 7;
+  bool has_file = 8;
+  string delivery = 9; // staff replies: pending | sent | blocked | failed
+  bool closed = 10; // the ticket is closed
+  string category = 11;
+  string url = 12; // the ticket in the dashboard ("" without a public https address)
+  string file_id = 13;
+  string file_type = 14;
+}
+
+message ReportTicketDeliveryRequest {
+  string message_id = 1;
+  string status = 2; // sent | blocked | failed
+  int64 tg_message_id = 3; // the delivered copy (sent)
+}
+
+message ReportTicketDeliveryResponse {}
+
+message SetUserBotBlockedRequest {
+  int64 telegram_id = 1;
+  bool blocked = 2;
+}
+
+message SetUserBotBlockedResponse {}
+
+message ClaimBroadcastBatchRequest {
+  int32 limit = 1; // at most 100
+}
+
+message BroadcastRecipient {
+  string user_id = 1;
+  int64 telegram_id = 2;
+  string language = 3;
+}
+
+message BroadcastBatch {
+  string broadcast_id = 1; // empty: nothing to send now
+  map<string, string> texts = 2; // language -> HTML text
+  string button_url = 3; // empty: no button
+  map<string, string> button_labels = 4;
+  repeated BroadcastRecipient recipients = 5;
+}
+
+enum BroadcastOutcome {
+  BROADCAST_OUTCOME_UNSPECIFIED = 0;
+  BROADCAST_OUTCOME_SENT = 1;
+  BROADCAST_OUTCOME_BLOCKED = 2; // the user blocked the bot (or deleted their account)
+  BROADCAST_OUTCOME_FAILED = 3; // Telegram refused this message
+  BROADCAST_OUTCOME_UNKNOWN = 4; // sent, but no answer: never retried
+  BROADCAST_OUTCOME_RELEASED = 5; // not attempted (pause, cancel, shutdown): back in line
+}
+
+message BroadcastResult {
+  string user_id = 1;
+  BroadcastOutcome outcome = 2;
+  int64 message_id = 3;
+  string error = 4;
+}
+
+message ReportBroadcastResultsRequest {
+  string broadcast_id = 1;
+  repeated BroadcastResult results = 2;
+  string halt_reason = 3; // non-empty: pause the broadcast and say why
+}
+
+message BroadcastState {
+  string status = 1; // running | paused | cancelled | done
 }
 
 message Settings {
@@ -186,7 +333,9 @@ message CreateDashboardLinkRequest {
   int64 actor_telegram_id = 1; // a staff member (owner, admin or support)
 }
 
-message ListStaffContactsRequest {}
+message ListStaffContactsRequest {
+  bool include_support = 1; // ticket alerts also reach support staff
+}
 
 // StaffContact is a staff member the bot may alert (owner or admin).
 message StaffContact {
@@ -470,6 +619,17 @@ service CoreService {
   rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);
   // ListStaffContacts lists the active owners and admins, for staff alerts.
   rpc ListStaffContacts(ListStaffContactsRequest) returns (ListStaffContactsResponse);
+  // Support tickets (milestone 4). CreateSupportTicket stays for older bots.
+  rpc AddTicketMessage(AddTicketMessageRequest) returns (AddTicketMessageResponse);
+  rpc GetMyTickets(GetMyTicketsRequest) returns (MyTickets);
+  rpc GetMyTicket(GetMyTicketRequest) returns (TicketThread);
+  rpc CloseMyTicket(CloseMyTicketRequest) returns (Ticket);
+  rpc GetTicketMessage(GetTicketMessageRequest) returns (TicketMessageView);
+  rpc ReportTicketDelivery(ReportTicketDeliveryRequest) returns (ReportTicketDeliveryResponse);
+  // Broadcasts (milestone 4): the bot claims recipients and reports results.
+  rpc SetUserBotBlocked(SetUserBotBlockedRequest) returns (SetUserBotBlockedResponse);
+  rpc ClaimBroadcastBatch(ClaimBroadcastBatchRequest) returns (BroadcastBatch);
+  rpc ReportBroadcastResults(ReportBroadcastResultsRequest) returns (BroadcastState);
 }
 
 message CanStartTrialRequest {

@@ -20,6 +20,7 @@ const (
 	PermBrandingWrite  = "branding.write"
 	PermSettingsWrite  = "settings.write"
 	PermTicketsWrite   = "tickets.write"
+	PermTicketsManage  = "tickets.manage" // canned replies, assigning others
 	PermBroadcastWrite = "broadcasts.write"
 	PermResellersWrite = "resellers.write"
 	PermServersWrite   = "servers.write"
@@ -34,7 +35,7 @@ const (
 var allPerms = []string{
 	PermOverviewRead, PermUsersRead, PermUsersWrite, PermWalletAdjust, PermServicesRead, PermServicesExtend,
 	PermServicesWrite, PermPlansWrite, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermDiscountsWrite,
-	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
+	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
 	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite,
 }
 

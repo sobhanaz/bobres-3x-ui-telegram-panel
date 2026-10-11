@@ -2,9 +2,10 @@
 // run: it answers the methods the bot uses, hands out injected updates
 // through getUpdates, and records everything the bot sends.
 //
-// Besides the Bot API paths (/bot<token>/<method>) it serves two helpers:
-// POST /_inject (an Update without update_id) and GET /_sent (the recorded
-// outgoing messages as JSON).
+// Besides the Bot API paths (/bot<token>/<method>) it serves three helpers:
+// POST /_inject (an Update without update_id), GET /_sent (the recorded
+// outgoing messages as JSON) and POST /_fail (a Failure for one chat, as
+// {"chat_id", "code", "description", "retry_after", "times"}).
 package tgfake
 
 import (
@@ -43,11 +44,71 @@ type Server struct {
 	webhook  string
 	notified chan struct{}
 	files    map[string][]byte // by file id, served by getFile and /file/
+	fails    map[int64]*Failure
 }
 
 // New returns an empty fake.
 func New() *Server {
-	return &Server{nextUpd: 1, nextMsg: 1, notified: make(chan struct{}, 1), files: map[string][]byte{}}
+	return &Server{nextUpd: 1, nextMsg: 1, notified: make(chan struct{}, 1), files: map[string][]byte{},
+		fails: map[int64]*Failure{}}
+}
+
+// Failure is what Telegram answers a send or edit to one chat with,
+// instead of delivering it.
+type Failure struct {
+	Code        int    `json:"code"`
+	Description string `json:"description"`
+	RetryAfter  int    `json:"retry_after,omitempty"` // seconds, with a 429
+	// Times is how many calls fail before the chat works again (0: until
+	// ClearChat).
+	Times int `json:"times,omitempty"`
+}
+
+// Blocked is the user having blocked the bot (403).
+func Blocked() Failure {
+	return Failure{Code: 403, Description: "Forbidden: bot was blocked by the user"}
+}
+
+// ChatNotFound is a chat Telegram does not know (the account is gone).
+func ChatNotFound() Failure { return Failure{Code: 400, Description: "Bad Request: chat not found"} }
+
+// Flood is a 429 asking to wait retryAfter seconds, for the next times calls.
+func Flood(retryAfter, times int) Failure {
+	return Failure{Code: 429, Description: "Too Many Requests: retry after " + strconv.Itoa(retryAfter), RetryAfter: retryAfter, Times: times}
+}
+
+// BadRequest is any other refusal of the message (400).
+func BadRequest(desc string) Failure { return Failure{Code: 400, Description: "Bad Request: " + desc} }
+
+// FailChat makes sends and edits to chatID fail with f.
+func (s *Server) FailChat(chatID int64, f Failure) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fails[chatID] = &f
+}
+
+// ClearChat makes chatID work again.
+func (s *Server) ClearChat(chatID int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.fails, chatID)
+}
+
+// failure is the failure due for a call to chatID, if any (counting it).
+func (s *Server) failure(chatID int64) *Failure {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, ok := s.fails[chatID]
+	if !ok {
+		return nil
+	}
+	out := *f
+	if f.Times > 0 {
+		if f.Times--; f.Times == 0 {
+			delete(s.fails, chatID)
+		}
+	}
+	return &out
 }
 
 // AddFile makes a file available by id (a photo a user sent).
@@ -93,6 +154,22 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(s.Sent())
 	})
+	mux.HandleFunc("/_fail", func(w http.ResponseWriter, r *http.Request) {
+		var f struct {
+			ChatID int64 `json:"chat_id"`
+			Failure
+		}
+		if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(&f) != nil || f.ChatID == 0 {
+			http.Error(w, `POST {"chat_id", "code", "description", "retry_after", "times"}`, http.StatusBadRequest)
+			return
+		}
+		if f.Code == 0 {
+			s.ClearChat(f.ChatID)
+		} else {
+			s.FailChat(f.ChatID, f.Failure)
+		}
+		reply(w, true)
+	})
 	mux.HandleFunc("/file/", s.file)
 	mux.HandleFunc("/", s.api)
 	return mux
@@ -121,9 +198,17 @@ func reply(w http.ResponseWriter, result any) {
 }
 
 func fail(w http.ResponseWriter, code int, desc string) {
+	failWith(w, Failure{Code: code, Description: desc})
+}
+
+func failWith(w http.ResponseWriter, f Failure) {
+	body := map[string]any{"ok": false, "error_code": f.Code, "description": f.Description}
+	if f.RetryAfter > 0 {
+		body["parameters"] = map[string]any{"retry_after": f.RetryAfter}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": code, "description": desc})
+	w.WriteHeader(f.Code)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func (s *Server) inject(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +288,10 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	case "getUpdates":
 		reply(w, s.pending(r, num(p["offset"]), num(p["timeout"])))
 	case "sendMessage", "sendPhoto", "sendDocument", "editMessageText", "editMessageReplyMarkup":
+		if f := s.failure(num(p["chat_id"])); f != nil {
+			failWith(w, *f)
+			return
+		}
 		text := str(p["text"])
 		if text == "" {
 			text = str(p["caption"])
@@ -222,7 +311,15 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		}
 		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id, Text: text, Markup: markup})
 		s.mu.Unlock()
-		reply(w, tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}, Text: text})
+		m := tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}, Text: text}
+		if parts[1] == "sendPhoto" { // Telegram answers with the photo's file id, for re-sending it
+			photo := str(p["photo"])
+			if photo == "" {
+				photo = "fake-photo-" + strconv.Itoa(id)
+			}
+			m.Photo = []tg.PhotoSize{{FileID: photo, Width: 320, Height: 320}}
+		}
+		reply(w, m)
 	case "sendInvoice":
 		var stars int64
 		if prices, ok := p["prices"].([]any); ok && len(prices) == 1 {

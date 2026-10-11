@@ -10,20 +10,6 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-// CreateTicket inserts a support ticket.
-func (s *Store) CreateTicket(ctx context.Context, q querier, t *Ticket) (*Ticket, error) {
-	t.ID = buuid.MustV7().String()
-	t.Status = "open"
-	err := q.QueryRow(ctx, `
-		INSERT INTO core.tickets (id, user_id, category, text, status)
-		VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
-		t.ID, t.UserID, t.Category, t.Text, t.Status).Scan(&t.CreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("create ticket: %w", err)
-	}
-	return t, nil
-}
-
 // GetSettings returns all settings flattened as key->raw JSON.
 func (s *Store) GetSettings(ctx context.Context, q querier) (map[string]json.RawMessage, error) {
 	rows, err := q.Query(ctx, `SELECT key, value FROM core.settings`)

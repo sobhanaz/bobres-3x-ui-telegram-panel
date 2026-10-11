@@ -90,6 +90,7 @@ var contexts = map[string]Context{
 	"admin.already_reviewed": CtxToastHTML,
 	"maintenance":            CtxToastHTML,
 	"join.not_yet":           CtxToast,
+	"support.closed":         CtxToast,
 
 	"pay.stars_title":     CtxInvoiceTitle,
 	"pay.topup_title":     CtxInvoiceTitle,
@@ -105,9 +106,11 @@ var contexts = map[string]Context{
 
 // contextPrefixes give whole families a context.
 var contextPrefixes = map[string]Context{
-	"btn.":          CtxButton,
-	"sub.status.":   CtxButtonHTML,
-	"discount.bad.": CtxToastHTML,
+	"btn.":            CtxButton,
+	"sub.status.":     CtxButtonHTML,
+	"discount.bad.":   CtxToastHTML,
+	"support.status.": CtxButtonHTML,
+	"support.cat.":    CtxButtonHTML,
 }
 
 // markupArgs are placeholders whose values carry tags (other rendered
@@ -121,6 +124,7 @@ var markupArgs = map[string][]string{
 	"admin.settings_title": {"list"},
 	"admin.discount_saved": {"line"},
 	"support.prompt":       {"contact"},
+	"support.thread":       {"messages"},
 	"pay.rejected":         {"reason"},
 	"pay.check_failed":     {"reason"},
 }

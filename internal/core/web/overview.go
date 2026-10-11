@@ -33,7 +33,14 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 			"created_at": ro.CreatedAt.Unix(), "telegram_id": ro.TelegramID, "username": ro.Username, "plan": ro.PlanName,
 		})
 	}
+	tickets := map[string]any{"waiting": int64(0), "oldest_waiting_at": nil}
+	if c, err := s.cfg.Store.CountTickets(r.Context(), s.cfg.Store.Conn(), ""); err == nil {
+		tickets = map[string]any{"waiting": c.Waiting, "oldest_waiting_at": unix(c.OldestWaiting)}
+	} else {
+		s.cfg.Log.Warn("overview tickets", "err", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"tickets":          tickets,
 		"users":            map[string]int64{"total": o.UsersTotal, "new_24h": o.UsersNew24h, "new_7d": o.UsersNew7d},
 		"services":         map[string]int64{"active": o.ServicesActive, "expiring": o.ServicesExpiring, "ended": o.ServicesEnded},
 		"orders":           map[string]int64{"paid_24h": o.OrdersPaid24h, "provision_failed": o.ProvisionFailed},

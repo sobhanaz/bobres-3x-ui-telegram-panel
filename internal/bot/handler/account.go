@@ -1,12 +1,9 @@
 package handler
 
 import (
-	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -279,16 +276,6 @@ func (h *Handler) onTrial(r *req) {
 	r.show(r.t("trial.started"), homeKeyboard(r))
 }
 
-func (h *Handler) onSupport(r *req) {
-	contact := ""
-	if c := h.setting("branding.support"); c != "" {
-		contact = r.t("support.contact", "contact", esc(c))
-	}
-	r.setState(sceneTicket, nil)
-	kb := (&tg.Keyboard{}).Row(h.legalButtons(r)...).Row(tg.CB(r.t("btn.cancel"), "cancel"))
-	r.show(r.t("support.prompt", "contact", contact), kb)
-}
-
 // legalButtons link to the store's terms and privacy policy, when set
 // (https links only: Telegram refuses a message with a bad link button).
 func (h *Handler) legalButtons(r *req) []tg.Button {
@@ -310,60 +297,4 @@ func (h *Handler) onTerms(r *req) {
 		return
 	}
 	r.send(r.t("terms.title"), (&tg.Keyboard{}).Row(links...).Row(tg.CB(r.t("btn.home"), "home")))
-}
-
-// allowTicket counts a support message against limits.tickets_per_day per
-// user and day (0: no limit). A limiter failure lets the message through.
-func (h *Handler) allowTicket(r *req) bool {
-	perDay := h.set.Int("limits.tickets_per_day", 10, 0, 100)
-	if h.limiter == nil || perDay == 0 {
-		return true
-	}
-	ok, err := h.limiter.Allow(r.ctx, ticketKey(r), 24*time.Hour, int(perDay))
-	return err != nil || ok
-}
-
-func ticketKey(r *req) string { return "bot:tk:" + strconv.FormatInt(r.from.ID, 10) }
-
-// giveTicket returns a counted support message whose ticket was not made.
-func (h *Handler) giveTicket(r *req) {
-	g, ok := h.limiter.(interface {
-		Give(ctx context.Context, key string) error
-	})
-	if !ok {
-		return
-	}
-	if err := g.Give(r.ctx, ticketKey(r)); err != nil {
-		h.log.Warn("ticket limit give back", "err", err)
-	}
-}
-
-const maxTicketRunes = 2000
-
-func (h *Handler) onTicket(r *req) {
-	text := strings.TrimSpace(r.msg.Text)
-	if text == "" {
-		text = strings.TrimSpace(r.msg.Caption)
-	}
-	if text == "" {
-		r.send(r.t("support.need_text"), cancelKeyboard(r))
-		return
-	}
-	if utf8.RuneCountInString(text) > maxTicketRunes {
-		text = string([]rune(text)[:maxTicketRunes])
-	}
-	if !h.allowTicket(r) {
-		r.clearState()
-		r.send(r.t("support.limit"), homeKeyboard(r))
-		return
-	}
-	t, err := h.core.CreateSupportTicket(r.ctx, &corev1.CreateSupportTicketRequest{UserId: r.user.GetId(), Category: "general", Text: text})
-	r.clearState()
-	if err != nil {
-		h.giveTicket(r) // no ticket was made: it does not count
-		r.fail(err)
-		return
-	}
-	r.send(r.t("support.sent", "id", shortID(t.GetId())), homeKeyboard(r))
-	h.notifyAdmin(r, "admin.new_ticket", "user", esc(displayName(r.user)), "text", esc(text))
 }

@@ -17,6 +17,12 @@ const (
 	ProvisionFailed         = "subscription.provision_failed.v1"
 	SubscriptionExtended    = "subscription.extended.v1"
 	SubscriptionReminder    = "subscription.reminder.v1"
+	// Support tickets: ids only (the outbox is kept for ever, bodies are not
+	// put in it); the bot fetches a message with GetTicketMessage.
+	TicketOpened          = "ticket.opened.v1"
+	TicketCustomerReplied = "ticket.customer_replied.v1"
+	TicketReplied         = "ticket.replied.v1"
+	TicketClosed          = "ticket.closed.v1"
 )
 
 // Topics core consumes from the payments feed.
@@ -148,4 +154,43 @@ type SubscriptionReminderEvent struct {
 	TrafficTotalBytes int64  `json:"traffic_total_bytes,omitempty"` // 0 = unlimited
 	TrafficUsedBytes  int64  `json:"traffic_used_bytes,omitempty"`
 	TopupAvailable    bool   `json:"topup_available,omitempty"` // traffic packages exist
+}
+
+// TicketOpenedEvent: a customer started a ticket (staff are alerted).
+type TicketOpenedEvent struct {
+	TicketID   string `json:"ticket_id"`
+	Number     int64  `json:"number"`
+	MessageID  string `json:"message_id"`
+	UserID     string `json:"user_id"`
+	TelegramID int64  `json:"telegram_id"`
+	Category   string `json:"category"`
+}
+
+// TicketCustomerRepliedEvent: a customer wrote again after staff answered.
+// AssigneeTelegramID is set when the ticket has an assignee, who alone is
+// alerted.
+type TicketCustomerRepliedEvent struct {
+	TicketID           string `json:"ticket_id"`
+	Number             int64  `json:"number"`
+	MessageID          string `json:"message_id"`
+	UserID             string `json:"user_id"`
+	TelegramID         int64  `json:"telegram_id"`
+	AssigneeTelegramID int64  `json:"assignee_telegram_id,omitempty"`
+}
+
+// TicketRepliedEvent: staff answered; the bot delivers the message and
+// reports back (ReportTicketDelivery). Closed: the reply also closed it.
+type TicketRepliedEvent struct {
+	TicketID   string `json:"ticket_id"`
+	Number     int64  `json:"number"`
+	MessageID  string `json:"message_id"`
+	TelegramID int64  `json:"telegram_id"`
+	Closed     bool   `json:"closed,omitempty"`
+}
+
+// TicketClosedEvent: staff closed a ticket without a reply.
+type TicketClosedEvent struct {
+	TicketID   string `json:"ticket_id"`
+	Number     int64  `json:"number"`
+	TelegramID int64  `json:"telegram_id"`
 }

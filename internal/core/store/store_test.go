@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -260,5 +261,46 @@ func TestInboxClaimAndDeadLetter(t *testing.T) {
 	}
 	if err := s.InsertDeadLetter(ctx, s.Conn(), d); err != nil {
 		t.Fatalf("dead letter not idempotent: %v", err)
+	}
+}
+
+// Six digits are a ticket number or the end of a ticket's id: about 6% of
+// ids end in six digits, and customers were shown that code.
+func TestTicketSearchSixDigits(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u, err := s.UpsertUser(ctx, s.Conn(), 501, "sara", "fa", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := "0192a000-0000-7000-8000-000000395654"
+	byNumber := "0192a000-0000-7000-8000-0000000abcde"
+	if _, err := s.DB().Exec(ctx, `INSERT INTO core.tickets (id, user_id, category, subject, status) VALUES ($1, $2, 'other', 'a', 'closed')`,
+		byID, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(ctx, `INSERT INTO core.tickets (id, number, user_id, category, subject, status) OVERRIDING SYSTEM VALUE
+		VALUES ($1, 395654, $2, 'other', 'b', 'closed')`, byNumber, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	for q, want := range map[string][]string{
+		"395654":  {byID, byNumber},
+		"#395654": {byNumber},
+		"0abcde":  {byNumber},
+		"95654":   nil, // a short number is only a ticket number
+	} {
+		rows, _, err := s.ListTickets(ctx, s.Conn(), TicketFilter{Query: q}, Page{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, r := range rows {
+			got = append(got, r.ID)
+		}
+		slices.Sort(got)
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
+			t.Errorf("search %q: %v, want %v", q, got, want)
+		}
 	}
 }

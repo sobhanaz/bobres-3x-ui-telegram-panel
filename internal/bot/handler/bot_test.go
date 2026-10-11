@@ -51,8 +51,10 @@ type fakeTG struct {
 	memberCalls int
 	memberErr   error
 
-	// down: chats whose messages fail (Telegram unreachable for them).
-	down map[int64]bool
+	// down: chats whose messages fail (Telegram unreachable for them);
+	// blocked: users who blocked the bot (403).
+	down    map[int64]bool
+	blocked map[int64]bool
 }
 
 type precheckAnswer struct {
@@ -130,12 +132,28 @@ func (f *fakeTG) add(chat int64, m *msg) *tg.Message {
 
 func (f *fakeTG) SendMessage(_ context.Context, chat int64, text string, kb *tg.Keyboard) (*tg.Message, error) {
 	f.mu.Lock()
-	down := f.down[chat]
+	down, blocked := f.down[chat], f.blocked[chat]
 	f.mu.Unlock()
 	if down {
 		return nil, &tg.APIError{Code: 502, Description: "Bad Gateway"}
 	}
+	if blocked {
+		return nil, &tg.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"}
+	}
+	if i18n.TextLength(text) > i18n.MaxMessage { // as Telegram
+		return nil, &tg.APIError{Code: 400, Description: "Bad Request: message is too long"}
+	}
 	return f.add(chat, &msg{text: text, kb: kb}), nil
+}
+
+// setBlocked makes a user block the bot (or unblock it).
+func (f *fakeTG) setBlocked(chat int64, blocked bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.blocked == nil {
+		f.blocked = map[int64]bool{}
+	}
+	f.blocked[chat] = blocked
 }
 
 // setDown makes messages to a chat fail (or work again).
@@ -228,13 +246,14 @@ func (m *msg) labels() []string {
 // --- simulated users ---
 
 type world struct {
-	t     *testing.T
-	h     *Handler
-	tg    *fakeTG
-	stack *testenv.Stack
-	feed  *eventbus.Consumer
-	next  int64
-	mu    sync.Mutex
+	t        *testing.T
+	h        *Handler
+	tg       *fakeTG
+	stack    *testenv.Stack
+	notifier *notify.Notifier
+	feed     *eventbus.Consumer
+	next     int64
+	mu       sync.Mutex
 }
 
 type person struct {
@@ -251,15 +270,16 @@ func newWorld(t *testing.T) *world {
 	ftg := newFakeTG()
 	cat := i18n.MustLoad()
 	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
+	n := notify.New(stack.Core, ftg, cat, h.Settings(), ownerID, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(stack.Feed),
-		Handle:     notify.New(stack.Core, ftg, cat, h.Settings(), ownerID, nil).Handle,
-		DeadLetter: func(context.Context, eventbus.Message, error) error { return nil },
+		Handle:     n.Handle,
+		DeadLetter: n.DeadLetter,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &world{t: t, h: h, tg: ftg, stack: stack, feed: feed}
+	return &world{t: t, h: h, tg: ftg, stack: stack, notifier: n, feed: feed}
 }
 
 func (w *world) person(id int64, username string) *person {

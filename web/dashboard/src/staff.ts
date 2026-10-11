@@ -145,6 +145,13 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
       return { name: 'branding' }
     case 'dashboard':
       return e.actor ? { name: 'audit', query: { actor: e.actor.id } } : null
+    case 'ticket':
+      return uuidRe.test(id) ? { name: 'ticket', params: { id } } : null
+    case 'broadcast':
+      return uuidRe.test(id) ? { name: 'broadcast', params: { id } } : null
+    case 'canned_reply':
+      // Saved replies are a tab of the support page.
+      return { name: 'support', query: { tab: 'canned' } }
   }
   return null
 }

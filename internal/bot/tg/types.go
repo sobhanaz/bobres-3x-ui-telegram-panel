@@ -65,8 +65,45 @@ type Message struct {
 	Photo     []PhotoSize `json:"photo,omitempty"`
 	// Document: a file, e.g. a screenshot sent "as file" (uncompressed).
 	Document *Document `json:"document,omitempty"`
+	// Attachments the bot does not take (only their presence matters).
+	Voice     *Media `json:"voice,omitempty"`
+	Audio     *Media `json:"audio,omitempty"`
+	Video     *Media `json:"video,omitempty"`
+	VideoNote *Media `json:"video_note,omitempty"`
+	Animation *Media `json:"animation,omitempty"`
+	Sticker   *Media `json:"sticker,omitempty"`
+	// MediaGroupID: the message is one part of an album.
+	MediaGroupID string `json:"media_group_id,omitempty"`
+	// ReplyToMessage: the message this one answers (Telegram's reply).
+	ReplyToMessage *Message `json:"reply_to_message,omitempty"`
 	// SuccessfulPayment: a Telegram Stars payment completed.
 	SuccessfulPayment *SuccessfulPayment `json:"successful_payment,omitempty"`
+}
+
+// Media is an attachment of a kind the bot does not take: a voice message,
+// audio, a video, a video note, an animation or a sticker.
+type Media struct {
+	FileID   string `json:"file_id"`
+	MimeType string `json:"mime_type,omitempty"`
+	FileSize int64  `json:"file_size,omitempty"`
+}
+
+// HasOtherMedia reports an attachment that is neither a photo nor a document
+// (a voice message, a video...).
+func (m *Message) HasOtherMedia() bool {
+	return m.Voice != nil || m.Audio != nil || m.Video != nil || m.VideoNote != nil || m.Animation != nil || m.Sticker != nil
+}
+
+// LargestPhotoSize returns the biggest size of the message's photo (nil
+// without a photo).
+func (m *Message) LargestPhotoSize() *PhotoSize {
+	var best *PhotoSize
+	for i := range m.Photo {
+		if p := &m.Photo[i]; best == nil || p.Width*p.Height > best.Width*best.Height {
+			best = p
+		}
+	}
+	return best
 }
 
 // Document is a file attached to a message.
@@ -144,12 +181,24 @@ type CallbackQuery struct {
 	Data    string   `json:"data,omitempty"`
 }
 
+// ChatMemberUpdated reports a change of a member's status in a chat. As
+// my_chat_member in a private chat it is the bot's own status there:
+// "kicked" when the user blocked the bot, "member" when they came back.
+type ChatMemberUpdated struct {
+	Chat          Chat       `json:"chat"`
+	From          User       `json:"from"`
+	Date          int64      `json:"date"`
+	OldChatMember ChatMember `json:"old_chat_member"`
+	NewChatMember ChatMember `json:"new_chat_member"`
+}
+
 // Update is one incoming event.
 type Update struct {
-	UpdateID         int64             `json:"update_id"`
-	Message          *Message          `json:"message,omitempty"`
-	CallbackQuery    *CallbackQuery    `json:"callback_query,omitempty"`
-	PreCheckoutQuery *PreCheckoutQuery `json:"pre_checkout_query,omitempty"`
+	UpdateID         int64              `json:"update_id"`
+	Message          *Message           `json:"message,omitempty"`
+	CallbackQuery    *CallbackQuery     `json:"callback_query,omitempty"`
+	PreCheckoutQuery *PreCheckoutQuery  `json:"pre_checkout_query,omitempty"`
+	MyChatMember     *ChatMemberUpdated `json:"my_chat_member,omitempty"`
 }
 
 // Sender returns the user who caused the update, or nil.
@@ -159,6 +208,8 @@ func (u *Update) Sender() *User {
 		return &u.CallbackQuery.From
 	case u.PreCheckoutQuery != nil:
 		return &u.PreCheckoutQuery.From
+	case u.MyChatMember != nil:
+		return &u.MyChatMember.From
 	case u.Message != nil:
 		return u.Message.From
 	default:

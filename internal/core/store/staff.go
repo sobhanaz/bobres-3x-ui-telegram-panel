@@ -10,12 +10,12 @@ import (
 )
 
 // ListStaffContacts lists the active owners and admins (owners first), the
-// people the bot alerts.
-func (s *Store) ListStaffContacts(ctx context.Context, q querier) ([]User, error) {
+// people the bot alerts; with support, support staff too (ticket alerts).
+func (s *Store) ListStaffContacts(ctx context.Context, q querier, support bool) ([]User, error) {
 	rows, err := q.Query(ctx, `
 		SELECT `+userCols+` FROM core.users
-		WHERE status = 'active' AND role IN ('owner', 'admin')
-		ORDER BY role = 'owner' DESC, created_at`)
+		WHERE status = 'active' AND (role IN ('owner', 'admin') OR ($1 AND role = 'support'))
+		ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, created_at`, support)
 	if err != nil {
 		return nil, fmt.Errorf("list staff contacts: %w", err)
 	}

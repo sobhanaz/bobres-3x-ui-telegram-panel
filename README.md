@@ -48,8 +48,9 @@ packages, reminders, discount codes, referrals). Phase 4, the web dashboard at `
 is in progress: its foundation (login with a link from the bot's /dashboard or with a password and
 authenticator code, Persian/English, dark/light, the Overview), the customers and sales pages (users,
 services, plans, orders and the receipt review queue, the ledger with CSV export, discount codes and
-referrals) and store setup (branding and every bot text, settings such as maintenance mode and a
-required channel, staff, the audit log) are built; the other pages follow in three more milestones. Design notes are in `docs/superpowers/specs/`; the first real install is
+referrals), store setup (branding and every bot text, settings such as maintenance mode and a
+required channel, staff, the audit log) and support and broadcasts (tickets answered through the bot,
+broadcasts with a rate limit) are built; resellers and infrastructure follow. Design notes are in `docs/superpowers/specs/`; the first real install is
 `docs/11-staging-run.md`.
 Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
 PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.

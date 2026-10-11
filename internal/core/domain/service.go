@@ -26,15 +26,17 @@ type Config struct {
 
 // Service composes the store with business rules.
 type Service struct {
-	st   *store.Store
-	ob   *eventbus.Outbox
-	cfg  Config
-	kick chan struct{} // wakes the provisioning worker
+	st    *store.Store
+	ob    *eventbus.Outbox
+	cfg   Config
+	kick  chan struct{} // wakes the provisioning worker
+	bkick chan struct{} // wakes the broadcast worker
 }
 
 // New builds a Service publishing to core's outbox.
 func New(st *store.Store, cfg Config) *Service {
-	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1)}
+	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1),
+		bkick: make(chan struct{}, 1)}
 }
 
 func (s *Service) publish(ctx context.Context, tx pgx.Tx, topic string, payload any) error {

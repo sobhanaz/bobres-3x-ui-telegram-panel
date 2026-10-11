@@ -14,7 +14,7 @@ import (
 type Contact struct {
 	TelegramID int64
 	Language   string
-	Role       string // owner or admin
+	Role       string // owner, admin or support
 }
 
 // Store is safe for concurrent use. The zero value is not usable; use New.
@@ -77,13 +77,32 @@ func (s *Store) Staff() []Contact {
 	return slices.Clone(s.staff)
 }
 
-// Recipients lists who gets staff alerts: with notify.recipients = staff,
-// every active owner and admin core listed at the last refresh; otherwise
-// (or while that list is empty) the configured admin, adminTG (0: nobody).
+// Recipients lists who gets staff alerts about payments, sales and failed
+// deliveries: with notify.recipients = staff, every active owner and admin
+// core listed at the last refresh (never support); otherwise (or while that
+// list is empty) the configured admin, adminTG (0: nobody).
 func (s *Store) Recipients(adminTG int64) []Contact {
+	return s.recipients(adminTG, false)
+}
+
+// TicketRecipients lists who gets support ticket alerts: as Recipients, but
+// with notify.recipients = staff support staff too.
+func (s *Store) TicketRecipients(adminTG int64) []Contact {
+	return s.recipients(adminTG, true)
+}
+
+func (s *Store) recipients(adminTG int64, support bool) []Contact {
 	staff := s.Staff()
-	if s.Get("notify.recipients") == "staff" && len(staff) > 0 {
-		return staff
+	if s.Get("notify.recipients") == "staff" {
+		var out []Contact
+		for _, c := range staff {
+			if c.Role != "support" || support {
+				out = append(out, c)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
 	}
 	if adminTG == 0 {
 		return nil
@@ -94,4 +113,15 @@ func (s *Store) Recipients(adminTG int64) []Contact {
 		}
 	}
 	return []Contact{{TelegramID: adminTG}}
+}
+
+// Contact is the cached staff member with this Telegram id (ok=false: not
+// staff, or not known yet).
+func (s *Store) Contact(telegramID int64) (Contact, bool) {
+	for _, c := range s.Staff() {
+		if c.TelegramID == telegramID {
+			return c, true
+		}
+	}
+	return Contact{}, false
 }

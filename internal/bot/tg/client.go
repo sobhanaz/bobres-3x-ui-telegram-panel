@@ -50,17 +50,51 @@ func IsNotModified(err error) bool {
 	return errors.As(err, &ae) && strings.Contains(ae.Description, "message is not modified")
 }
 
+// IsFlood reports a 429 (Too Many Requests) and how long Telegram asks to
+// wait (at least a second).
+func IsFlood(err error) (time.Duration, bool) {
+	var ae *APIError
+	if !errors.As(err, &ae) || ae.Code != http.StatusTooManyRequests {
+		return 0, false
+	}
+	return time.Duration(max(ae.RetryAfter, 1)) * time.Second, true
+}
+
+// IsRefused reports that Telegram refused the message itself, say as too
+// long (a 400): sending it again will not help. A blocked chat, a flood, a
+// refused bot token and a reply that is not Telegram's are not refusals.
+func IsRefused(err error) bool {
+	var ae *APIError
+	if !errors.As(err, &ae) || ae.Code < 400 || ae.Code >= 500 || IsBlocked(err) {
+		return false
+	}
+	switch ae.Code {
+	case http.StatusUnauthorized, http.StatusNotFound, http.StatusTooManyRequests:
+		return false
+	}
+	return ae.Description != nonJSON
+}
+
+// nonJSON describes a reply that is not the Bot API's (say, a proxy's page).
+const nonJSON = "unexpected non-JSON reply"
+
 // Client calls the Bot API.
 type Client struct {
 	base     string // <api root>/bot<token>/
 	fileBase string // <api root>/file/bot<token>/
 	hc       *http.Client
+	flood    *Flood // nil: not shared
+	meter    *Meter // nil: not counted
+	noRetry  bool
 }
 
 type settings struct {
-	root string // API root, default https://api.telegram.org
-	base string // full base including the token; set by WithBaseURL
-	hc   *http.Client
+	root    string // API root, default https://api.telegram.org
+	base    string // full base including the token; set by WithBaseURL
+	hc      *http.Client
+	flood   *Flood
+	meter   *Meter
+	noRetry bool
 }
 
 // Option customizes a Client.
@@ -81,8 +115,20 @@ func WithBaseURL(u string) Option {
 	return func(s *settings) { s.base = strings.TrimRight(u, "/") + "/" }
 }
 
-// WithHTTPClient replaces the HTTP client.
+// WithHTTPClient replaces the HTTP client (NewBulkHTTPClient gives bulk sends
+// connections of their own).
 func WithHTTPClient(hc *http.Client) Option { return func(s *settings) { s.hc = hc } }
+
+// WithFlood records every 429 the client sees in f, which the bot's clients
+// share.
+func WithFlood(f *Flood) Option { return func(s *settings) { s.flood = f } }
+
+// WithMeter counts the messages the client sends in m.
+func WithMeter(m *Meter) Option { return func(s *settings) { s.meter = m } }
+
+// WithNoRetry returns a 429 to the caller at once instead of sleeping and
+// retrying once: bulk senders wait on the shared Flood themselves.
+func WithNoRetry() Option { return func(s *settings) { s.noRetry = true } }
 
 // New returns a client for token.
 func New(token string, opts ...Option) *Client {
@@ -104,7 +150,7 @@ func New(token string, opts ...Option) *Client {
 	if i := strings.LastIndex(strings.TrimRight(base, "/"), "/bot"); i >= 0 {
 		fileBase = base[:i] + "/file" + base[i:]
 	}
-	return &Client{base: base, fileBase: fileBase, hc: s.hc}
+	return &Client{base: base, fileBase: fileBase, hc: s.hc, flood: s.flood, meter: s.meter, noRetry: s.noRetry}
 }
 
 // File is a file Telegram keeps for the bot (a photo or document a user sent).
@@ -170,7 +216,7 @@ type reply struct {
 }
 
 // call posts a JSON (or multipart) request and decodes result into out. A 429
-// is retried once after retry_after (capped at 30 s).
+// is retried once after retry_after (capped at 30 s), unless WithNoRetry.
 func (c *Client) call(ctx context.Context, method string, body func() (io.Reader, string, error), out any) error {
 	for attempt := 0; ; attempt++ {
 		rd, ctype, err := body()
@@ -178,8 +224,11 @@ func (c *Client) call(ctx context.Context, method string, body func() (io.Reader
 			return err
 		}
 		err = c.do(ctx, method, rd, ctype, out)
+		if wait, ok := IsFlood(err); ok {
+			c.flood.Set(wait) // every client of the bot slows down
+		}
 		var ae *APIError
-		if attempt == 0 && errors.As(err, &ae) && ae.Code == http.StatusTooManyRequests && ae.RetryAfter > 0 {
+		if !c.noRetry && attempt == 0 && errors.As(err, &ae) && ae.Code == http.StatusTooManyRequests && ae.RetryAfter > 0 {
 			wait := time.Duration(min(ae.RetryAfter, 30)) * time.Second
 			select {
 			case <-ctx.Done():
@@ -198,6 +247,9 @@ func (c *Client) do(ctx context.Context, method string, body io.Reader, ctype st
 		return fmt.Errorf("telegram: build %s request", method)
 	}
 	req.Header.Set("Content-Type", ctype)
+	if countsAsSend(method) {
+		c.meter.Add()
+	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		var ue *url.Error // its message contains the URL, i.e. the token
@@ -213,7 +265,7 @@ func (c *Client) do(ctx context.Context, method string, body io.Reader, ctype st
 	}
 	var r reply
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return &APIError{Code: resp.StatusCode, Description: "unexpected non-JSON reply"}
+		return &APIError{Code: resp.StatusCode, Description: nonJSON}
 	}
 	if !r.OK {
 		return &APIError{Code: r.ErrorCode, Description: r.Description, RetryAfter: r.Parameters.RetryAfter}
@@ -246,8 +298,9 @@ func (c *Client) GetMe(ctx context.Context) (*User, error) {
 }
 
 // allowedUpdates are the update types the bot handles. pre_checkout_query must
-// be listed explicitly, or Telegram never asks and every Stars payment times out.
-var allowedUpdates = []string{"message", "callback_query", "pre_checkout_query"}
+// be listed explicitly, or Telegram never asks and every Stars payment times out;
+// my_chat_member tells when a user blocks the bot or starts it again.
+var allowedUpdates = []string{"message", "callback_query", "pre_checkout_query", "my_chat_member"}
 
 // GetUpdates long-polls for updates after offset.
 func (c *Client) GetUpdates(ctx context.Context, offset int64, timeoutSec int) ([]Update, error) {

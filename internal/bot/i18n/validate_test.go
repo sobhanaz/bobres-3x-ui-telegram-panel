@@ -168,3 +168,43 @@ func TestCurrencyNamesAndLocation(t *testing.T) {
 		t.Fatal("nil location replaced the zone")
 	}
 }
+
+func TestValidateMessageAndLabel(t *testing.T) {
+	codes := func(_ string, probs []Problem) []string {
+		var out []string
+		for _, p := range probs {
+			out = append(out, p.Code+":"+p.Arg)
+		}
+		return out
+	}
+	for _, ok := range []string{
+		"<b>Sale</b> {50%} off &amp; more 🎉\r\n<a href=\"https://t.me/x\">join</a>",
+		strings.Repeat("😀", MaxMessage/2), // 2 units each: exactly the limit
+	} {
+		if got := codes(ValidateMessage(ok, MaxMessage)); len(got) != 0 {
+			t.Errorf("%.40q: %v", ok, got)
+		}
+	}
+	bad := map[string]string{
+		"":                                  "empty:",
+		"  \n ":                             "empty:",
+		"<b>open":                           "tag_unclosed:b",
+		`<a href="http://x.ir">x</a>`:       "bad_link:http://x.ir",
+		"1 < 2":                             "bad_entity:<",
+		"x\x07":                             `control_char:'\a'`,
+		strings.Repeat("😀", MaxMessage/2+1): "too_long:4096",
+	}
+	for v, want := range bad {
+		if got := codes(ValidateMessage(v, MaxMessage)); !slices.Contains(got, want) {
+			t.Errorf("%.40q: %v, want %s", v, got, want)
+		}
+	}
+	if v, probs := ValidateLabel("  Open   the\nstore "); len(probs) != 0 || v != "Open the store" {
+		t.Fatalf("label: %q %v", v, probs)
+	}
+	for v, want := range map[string]string{"": "empty:", "<b>x</b>": "markup_not_allowed:<", strings.Repeat("x", 65): "too_long:64"} {
+		if got := codes(ValidateLabel(v)); !slices.Contains(got, want) {
+			t.Errorf("label %.20q: %v, want %s", v, got, want)
+		}
+	}
+}

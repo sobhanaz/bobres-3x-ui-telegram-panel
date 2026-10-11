@@ -14,11 +14,12 @@ import (
 type BotPeer interface {
 	RefreshSettings(ctx context.Context) error
 	CheckChannel(ctx context.Context, chat string) (*botfiles.ChannelCheck, error)
+	TestBroadcast(ctx context.Context, t botfiles.TestBroadcast) (*botfiles.TestResult, error)
 }
 
 // settingsGroups are the groups of the Settings page; branding and texts
 // have their own page, the referral reward is on the Discounts page.
-var settingsGroups = []string{"general", "maintenance", "join", "notify", "limits", "payments"}
+var settingsGroups = []string{"general", "maintenance", "join", "notify", "support", "limits", "payments"}
 
 type settingJSON struct {
 	Key      string   `json:"key"`
