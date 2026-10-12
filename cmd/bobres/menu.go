@@ -154,15 +154,26 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 	}
 }
 
+// beaver is BOBRES the mascot in plain ASCII, beside the header's lines.
+var beaver = [...]string{" n____n ", "( o  o )", ` \_||_/ `}
+
 func (m *menu) header(env map[string]string, installed bool) {
-	fmt.Fprintf(m.out, "\n  %s  %s\n", m.paint("1", "BOBRES manager"), "bobres "+version.Version)
-	if !installed {
-		fmt.Fprintf(m.out, "  No install in %s yet.\n", m.dir)
-		m.rule()
-		return
+	lines := []string{m.paint("1", "BOBRES manager") + "  bobres " + version.Version}
+	if installed {
+		lines = append(lines,
+			fmt.Sprintf("%s  ·  %s  ·  version %s", m.dir, orDash(env["BOBRES_DOMAIN"]), orDash(env["BOBRES_VERSION"])),
+			"Store: "+m.state(env))
+	} else {
+		lines = append(lines, fmt.Sprintf("No install in %s yet.", m.dir))
 	}
-	fmt.Fprintf(m.out, "  %s  ·  %s  ·  version %s\n", m.dir, orDash(env["BOBRES_DOMAIN"]), orDash(env["BOBRES_VERSION"]))
-	fmt.Fprintf(m.out, "  Store: %s\n", m.state(env))
+	fmt.Fprintln(m.out)
+	for i, art := range beaver {
+		text := ""
+		if i < len(lines) {
+			text = lines[i]
+		}
+		fmt.Fprintln(m.out, strings.TrimRight("  "+art+"  "+text, " "))
+	}
 	m.rule()
 }
 

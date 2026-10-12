@@ -965,8 +965,10 @@ describe('system page', () => {
     expect(document.querySelector('.limits-warn')?.textContent).toBe(text('license.warnings'))
     // the owner may replace it
     expect(document.querySelector('.license-import')?.textContent).toContain(text('license.import.replace'))
-    // a valid license without white label shows the attribution, and no chip
+    // a valid license without white label shows the attribution (with the
+    // little beaver), and no chip
     expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
+    expect(document.querySelector('.powered-by img')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
     expect(document.querySelector('.license-chip')).toBeNull()
   })
 
@@ -1120,6 +1122,7 @@ describe('system page', () => {
   it('shows the attribution on the login page only when core says so', async () => {
     await boot('/admin/login', { loggedIn: false, brand: { powered_by: true } })
     await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))
+    expect(document.querySelector('.login .powered-by img')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
     await boot('/admin/login', { loggedIn: false })
     await found('.login')
     await new Promise((r) => setTimeout(r, 20))

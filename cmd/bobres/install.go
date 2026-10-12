@@ -538,6 +538,7 @@ Next steps (in Telegram, from the owner account %s):
   3. Add a plan:         /plan_add 150000 IRT 30 50 Monthly 50GB | ماهانه ۵۰ گیگ
   4. Offer a trial:      /trial 1 1
   5. Open the admin panel with /admin.
+  6. Bot photo:          /setuserpic in @BotFather (your logo, or docs/brand/bot-avatar.jpg on GitHub)
 
 Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:
 it holds the keys that encrypt your panel tokens and gateway settings.

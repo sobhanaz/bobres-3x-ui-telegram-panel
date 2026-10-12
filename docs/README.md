@@ -10,7 +10,7 @@
 | [05-license.md](05-license.md) | Signed license token, entitlements, enforcement |
 | [06-installer.md](06-installer.md) | One-command installer and `bobres` CLI |
 | [07-security.md](07-security.md) | Threat model and mitigations |
-| [08-brand.md](08-brand.md) | Brand, tone, copy deliverables |
+| [08-brand.md](08-brand.md) | Brand (BOBRES the beaver: assets, rules, prompts), tone, copy deliverables |
 | [09-legal-questions.md](09-legal-questions.md) | Questions for a lawyer (not legal advice) |
 | [11-staging-run.md](11-staging-run.md) | Checklist for the first install on a real server (end of Phase 1) |
 | [Phase 2 payments design](superpowers/specs/2026-10-04-phase2-payments-design.md) | Zarinpal, Telegram Stars, the gateway contract, and the owner decisions they need |

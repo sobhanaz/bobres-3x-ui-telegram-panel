@@ -73,11 +73,16 @@ export function applyBrandColor(hex?: string | null): void {
 }
 
 const defaultIcon = import.meta.env.BASE_URL + 'favicon.svg'
+const defaultTouchIcon = import.meta.env.BASE_URL + 'apple-touch-icon.png'
 
 /** applyDocumentBrand sets the browser tab's title and icon (the uploaded
- * logo, or the BOBRES icon). */
+ * logo, or the BOBRES icon). The home-screen icon follows it, so a store with
+ * its own logo never gets the BOBRES beaver on a phone. */
 export function applyDocumentBrand(title: string, logo?: string | null): void {
   document.title = title
+  const touch = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]')
+  const touchHref = logo || defaultTouchIcon
+  if (touch && touch.getAttribute('href') !== touchHref) touch.setAttribute('href', touchHref)
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (!link) return
   const href = logo || defaultIcon

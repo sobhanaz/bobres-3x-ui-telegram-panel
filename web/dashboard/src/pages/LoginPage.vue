@@ -14,6 +14,8 @@ import { ApiError } from '../api'
 import { latinDigits } from '../format'
 import { setLang, currentLang } from '../i18n'
 import { applyBrandColor, applyDocumentBrand } from '../theme'
+import mascotWave from '../assets/brand/bobres-wave.webp'
+import mascotStill from '../assets/brand/bobres-mascot.webp'
 
 const { t } = useI18n()
 const auth = useAuth()
@@ -22,7 +24,13 @@ const router = useRouter()
 
 // The store's public name, colour and logo (no session needed).
 const brandName = computed(() => auth.publicBrand?.name || auth.brand)
-const logo = computed(() => auth.publicBrand?.logo || import.meta.env.BASE_URL + 'favicon.svg')
+const icon = import.meta.env.BASE_URL + 'favicon.svg'
+const logo = computed(() => auth.publicBrand?.logo || icon)
+// BOBRES the beaver greets on a store with the default look (waving, or
+// standing still for those who turn motion off). A store with its own logo
+// (white label) never shows him, and he waits for /brand to answer so a
+// store's logo is never preceded by a flash of the mascot.
+const mascot = computed(() => auth.publicBrand !== null && !auth.publicBrand.logo)
 onMounted(() => {
   if (auth.publicBrand && !auth.me) applyBrandColor(auth.publicBrand.color)
   void auth.loadPublicBrand()
@@ -97,45 +105,51 @@ async function submit() {
     <div class="top">
       <Button :label="t('lang.switch')" text size="small" @click="setLang(currentLang() === 'fa' ? 'en' : 'fa')" />
     </div>
-    <Card class="card">
-      <template #title>
-        <div class="head">
-          <img :src="logo" alt="" width="36" height="36" class="logo" />
-          <div>
-            <div>{{ t('login.title') }}</div>
-            <div class="app-muted sub">{{ t('login.subtitle', { brand: brandName }) }}</div>
+    <div class="middle">
+      <picture v-if="mascot" class="mascot">
+        <source :srcset="mascotStill" media="(prefers-reduced-motion: reduce)" />
+        <img :src="mascotWave" alt="" width="420" height="420" decoding="async" />
+      </picture>
+      <Card class="card">
+        <template #title>
+          <div class="head">
+            <img :src="logo" alt="" width="36" height="36" class="logo" />
+            <div>
+              <div>{{ t('login.title') }}</div>
+              <div class="app-muted sub">{{ t('login.subtitle', { brand: brandName }) }}</div>
+            </div>
           </div>
-        </div>
-      </template>
-      <template #content>
-        <Message v-if="linking" severity="info" :closable="false">{{ t('login.link_working') }}</Message>
-        <Message v-if="error" severity="error" :closable="false" class="msg">{{ error }}</Message>
+        </template>
+        <template #content>
+          <Message v-if="linking" severity="info" :closable="false">{{ t('login.link_working') }}</Message>
+          <Message v-if="error" severity="error" :closable="false" class="msg">{{ error }}</Message>
 
-        <h3>{{ t('login.link_title') }}</h3>
-        <p class="app-muted">{{ t('login.link_hint') }}</p>
+          <h3>{{ t('login.link_title') }}</h3>
+          <p class="app-muted">{{ t('login.link_hint') }}</p>
 
-        <Divider />
+          <Divider />
 
-        <h3>{{ t('login.password_title') }}</h3>
-        <form class="form" @submit.prevent="submit">
-          <label>
-            <span>{{ t('login.username') }}</span>
-            <InputText v-model="username" autocomplete="username" dir="ltr" required />
-          </label>
-          <label>
-            <span>{{ t('login.password') }}</span>
-            <Password v-model="password" :feedback="false" toggle-mask input-class="w-full" autocomplete="current-password" required fluid />
-          </label>
-          <div class="code">
-            <span>{{ t('login.code') }}</span>
-            <InputOtp v-model="code" :length="6" integer-only dir="ltr" />
-          </div>
-          <Button type="submit" :label="t('login.submit')" :loading="busy" :disabled="!username || !password || code.length !== 6" />
-        </form>
-        <p class="app-muted small">{{ t('login.no_password_yet') }}</p>
-      </template>
-    </Card>
-    <footer v-if="auth.publicBrand?.powered_by" class="powered-by app-muted">{{ t('license.powered_by') }}</footer>
+          <h3>{{ t('login.password_title') }}</h3>
+          <form class="form" @submit.prevent="submit">
+            <label>
+              <span>{{ t('login.username') }}</span>
+              <InputText v-model="username" autocomplete="username" dir="ltr" required />
+            </label>
+            <label>
+              <span>{{ t('login.password') }}</span>
+              <Password v-model="password" :feedback="false" toggle-mask input-class="w-full" autocomplete="current-password" required fluid />
+            </label>
+            <div class="code">
+              <span>{{ t('login.code') }}</span>
+              <InputOtp v-model="code" :length="6" integer-only dir="ltr" />
+            </div>
+            <Button type="submit" :label="t('login.submit')" :loading="busy" :disabled="!username || !password || code.length !== 6" />
+          </form>
+          <p class="app-muted small">{{ t('login.no_password_yet') }}</p>
+        </template>
+      </Card>
+    </div>
+    <footer v-if="auth.publicBrand?.powered_by" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
   </div>
 </template>
 
@@ -154,8 +168,48 @@ async function submit() {
   inset-block-start: 0.75rem;
   inset-inline-end: 0.75rem;
 }
-.card {
+.middle {
   inline-size: min(28rem, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+.card {
+  inline-size: 100%;
+}
+/* The mascot's navy backdrop is a round badge in light mode and melts into
+   the navy page in dark mode. */
+.mascot {
+  display: block;
+  inline-size: clamp(7rem, 32vw, 10rem);
+}
+.mascot img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  border-radius: 50%;
+  box-shadow: 0 0.75rem 1.5rem -0.75rem rgb(15 23 42 / 0.55);
+}
+/* A slow float, only for those who have not asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .mascot {
+    animation: mascot-in 0.4s ease-out both;
+  }
+  .mascot img {
+    animation: mascot-float 6s ease-in-out infinite;
+  }
+}
+@keyframes mascot-in {
+  from {
+    opacity: 0;
+    scale: 0.92;
+  }
+}
+@keyframes mascot-float {
+  50% {
+    translate: 0 -0.4rem;
+  }
 }
 .head {
   display: flex;
@@ -194,7 +248,13 @@ h3 {
   margin-block-end: 0;
 }
 .powered-by {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.8rem;
   padding-block-start: 0.75rem;
+}
+.powered-by img {
+  flex: none;
 }
 </style>
