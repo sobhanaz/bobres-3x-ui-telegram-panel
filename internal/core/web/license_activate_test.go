@@ -31,7 +31,7 @@ func (f *fakeLicenseServer) RefreshLicense(context.Context, string) (string, err
 	return "", &domain.LicenseServerError{Status: 500, Code: "unused"}
 }
 
-const webKey = "BOBRES-7K2Q-9XMV-4HTD"
+const webKey = "BOBRES-AAAA-BBBB-CCCC"
 
 // POST /api/v1/license/activate: the owner only; the server's refusal is a
 // 400 on the key with its code, a server that cannot be reached a 502 (503

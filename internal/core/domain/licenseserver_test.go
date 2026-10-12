@@ -48,7 +48,7 @@ func (f *fakeLicenseServer) calls() int {
 	return len(f.activations) + len(f.refreshes)
 }
 
-const licKey = "BOBRES-7K2Q-9XMV-4HTD"
+const licKey = "BOBRES-AAAA-BBBB-CCCC"
 
 func TestActivateLicense(t *testing.T) {
 	svc, s := testService(t)

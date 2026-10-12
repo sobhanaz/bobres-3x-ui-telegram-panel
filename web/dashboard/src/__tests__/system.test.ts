@@ -413,9 +413,9 @@ describe('license', () => {
     expect(tokenProblem('a'.repeat(TOKEN_MAX) + '.b')).toBe('long')
   })
   it('takes a typed key without the breaks, digits and dashes a chat changes', () => {
-    expect(keyOf('  BOBRES-7K2Q-\n 9XWM-۴TPA\r\n')).toBe('BOBRES-7K2Q-9XWM-4TPA')
-    expect(keyOf('BOBRES\u20137K2Q\u20149XWM\u22124TPA')).toBe('BOBRES-7K2Q-9XWM-4TPA')
-    expect(keyProblem('BOBRES-7K2Q-9XWM-4TPA')).toBe('')
+    expect(keyOf('  BOBRES-7K2Q-\n 9XWM-۴TPA\r\n')).toBe('BOBRES-AAAA-BBBB-CCCC')
+    expect(keyOf('BOBRES\u20137K2Q\u20149XWM\u22124TPA')).toBe('BOBRES-AAAA-BBBB-CCCC')
+    expect(keyProblem('BOBRES-AAAA-BBBB-CCCC')).toBe('')
     expect(keyProblem('bobres-7k2q-9xwm-4tpa')).toBe('')
     expect(keyProblem(' BOBRES-7K2Q\n-9XWM ')).toBe('')
     expect(keyProblem('')).toBe('empty')
@@ -1413,7 +1413,7 @@ describe('system page', () => {
   })
 
   it('lets the owner activate with a license key and a reason', async () => {
-    const key = 'BOBRES-7K2Q-9XWM-4TPA'
+    const key = 'BOBRES-AAAA-BBBB-CCCC'
     let activated = false
     const t0 = nowSec()
     const renewed = (): LicenseInfo => {

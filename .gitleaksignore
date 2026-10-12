@@ -15,3 +15,10 @@ ad45aa90d1a297982b92151bf8bff512b7bff4aa:internal/core/web/usdt_test.go:generic-
 71dee437de261a2f77eb95f29db4f63c7ddbcfb7:internal/payments/gateway/trongrid/trongrid_test.go:generic-api-key:19
 71dee437de261a2f77eb95f29db4f63c7ddbcfb7:internal/payments/server/chain_test.go:generic-api-key:32
 845000bc83dc7e257a66cbacc78a1da7ce3f89fc:web/dashboard/src/__tests__/gateways.test.ts:generic-api-key:62
+# False positives: made-up license keys in the license activation tests. The tests now use
+# low-entropy keys; these pin the original commits' findings.
+1bf2a0d0ec8efec00bca3a6857acadb4a24d8913:cmd/bobres/license_activate_test.go:generic-api-key:19
+1bf2a0d0ec8efec00bca3a6857acadb4a24d8913:internal/core/botfiles/license_test.go:generic-api-key:53
+1bf2a0d0ec8efec00bca3a6857acadb4a24d8913:internal/core/domain/licenseserver_test.go:generic-api-key:51
+1bf2a0d0ec8efec00bca3a6857acadb4a24d8913:internal/core/web/license_activate_test.go:generic-api-key:34
+aeceda30b313154145d33b5729789acf2d4f8619:web/dashboard/src/__tests__/system.test.ts:generic-api-key:1416

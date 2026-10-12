@@ -50,7 +50,7 @@ func TestLicenseThroughTheBot(t *testing.T) {
 	c, answer, sent, botDown := licenseStack(t)
 	ctx := context.Background()
 	answer(http.StatusOK, `{"token":"new.sig"}`)
-	a := domain.LicenseActivation{Key: "BOBRES-7K2Q-9XMV", InstallID: "0b5c", Domain: "panel.example.com", Version: "1.2.3"}
+	a := domain.LicenseActivation{Key: "BOBRES-AAAA-BBBB", InstallID: "0b5c", Domain: "panel.example.com", Version: "1.2.3"}
 	tok, err := c.ActivateLicense(ctx, a)
 	if err != nil || tok != "new.sig" {
 		t.Fatalf("activate: %q %v", tok, err)

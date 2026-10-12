@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const cliKey = "BOBRES-7K2Q-9XMV-4HTD"
+const cliKey = "BOBRES-AAAA-BBBB-CCCC"
 
 // fakeVendor is the license server: it answers status and body and keeps
 // what it was sent.
