@@ -86,7 +86,8 @@ What the built installer does differently from this list:
 - **A re-run** keeps every secret, fills only missing values and recreates what changed.
 
 ## Bot profile photo
-The Bot API cannot set a bot's own profile photo, so the installer leaves it to the operator, and the summary's
+The bot sets its own menu commands, description and short description (08-brand.md, "Telegram bot profile").
+BOBRES does not set the bot's profile photo, so the installer leaves it to the operator, and the summary's
 first steps say so. In Telegram, from the account that created the bot: @BotFather > `/setuserpic` > choose the
 bot > send the store's own logo, or `docs/brand/bot-avatar.jpg` (the BOBRES beaver, 640x640) as a photo. See
 08-brand.md.

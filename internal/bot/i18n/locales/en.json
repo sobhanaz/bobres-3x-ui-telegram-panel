@@ -342,5 +342,13 @@
   "alert.license_expiring": "The license expires in {days} days, on {date}.",
   "alert.license_grace": "The license has expired; its grace period ends on {date}.",
   "alert.license_expired": "The license has expired: new resellers, servers, staff and payment methods are refused.",
-  "alert.check": "The {key} check reports a problem."
+  "alert.check": "The {key} check reports a problem.",
+  "profile.description": "Buy a VPN plan and get your connection link right away.\n\nRenew, add traffic, top up your wallet and talk to support, all here.\n\nPress Start to begin.",
+  "profile.about": "Fast, secure VPN: buy, renew and get support right here in Telegram.",
+  "profile.cmd.start": "Start the bot and open the main menu",
+  "profile.cmd.menu": "Main menu",
+  "profile.cmd.terms": "Terms of service and privacy",
+  "profile.cmd.paysupport": "Help with a payment",
+  "profile.cmd.admin": "Admin panel",
+  "profile.cmd.dashboard": "Log in to the web dashboard"
 }

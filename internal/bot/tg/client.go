@@ -339,6 +339,52 @@ func (c *Client) DeleteWebhook(ctx context.Context) error {
 	return c.call(ctx, "deleteWebhook", jsonBody(map[string]any{"drop_pending_updates": false}), nil)
 }
 
+// commandScope is the menu's audience: one private chat (chatID), else
+// every chat.
+func commandScope(chatID int64) map[string]any {
+	if chatID != 0 {
+		return map[string]any{"type": "chat", "chat_id": chatID}
+	}
+	return map[string]any{"type": "default"}
+}
+
+// withLang adds language_code to a request; "" means everyone without a
+// version of their own.
+func withLang(body map[string]any, lang string) map[string]any {
+	if lang != "" {
+		body["language_code"] = lang
+	}
+	return body
+}
+
+// SetMyCommands sets the command menu: in one private chat when chatID is
+// not 0, else for every chat, for the users of lang ("" = all others).
+func (c *Client) SetMyCommands(ctx context.Context, cmds []BotCommand, chatID int64, lang string) error {
+	return c.call(ctx, "setMyCommands", jsonBody(withLang(map[string]any{
+		"commands": cmds, "scope": commandScope(chatID),
+	}, lang)), nil)
+}
+
+// DeleteMyCommands removes a menu SetMyCommands set, so the broader one
+// applies again.
+func (c *Client) DeleteMyCommands(ctx context.Context, chatID int64, lang string) error {
+	return c.call(ctx, "deleteMyCommands", jsonBody(withLang(map[string]any{
+		"scope": commandScope(chatID),
+	}, lang)), nil)
+}
+
+// SetMyDescription sets the text an empty chat with the bot shows ("What
+// can this bot do?"), for the users of lang ("" = all others).
+func (c *Client) SetMyDescription(ctx context.Context, text, lang string) error {
+	return c.call(ctx, "setMyDescription", jsonBody(withLang(map[string]any{"description": text}, lang)), nil)
+}
+
+// SetMyShortDescription sets the bot's about text: its profile page, and
+// the preview when the bot is shared.
+func (c *Client) SetMyShortDescription(ctx context.Context, text, lang string) error {
+	return c.call(ctx, "setMyShortDescription", jsonBody(withLang(map[string]any{"short_description": text}, lang)), nil)
+}
+
 // IsParseError reports that Telegram refused a text's HTML markup.
 func IsParseError(err error) bool {
 	var ae *APIError

@@ -31,10 +31,21 @@ const (
 	CtxPlain Context = "plain"
 	// CtxInternal is never shown to customers (stored as a reason).
 	CtxInternal Context = "internal"
+	// CtxCommand describes a command in the bot's menu: one line of plain text.
+	CtxCommand Context = "command"
+	// CtxBotDescription is the text of an empty chat with the bot ("What can
+	// this bot do?"): plain text.
+	CtxBotDescription Context = "bot_description"
+	// CtxBotAbout is the bot's short description (its profile page and the
+	// preview when it is shared): one line of plain text.
+	CtxBotAbout Context = "bot_about"
 )
 
 // html reports whether the context is sent with the HTML parse mode.
 func (c Context) html() bool { return c == CtxHTML || c == CtxCaption }
+
+// oneLine reports whether Telegram shows the text on a single line.
+func (c Context) oneLine() bool { return c == CtxCommand || c == CtxBotAbout }
 
 // maxLen is the longest text the context takes, in UTF-16 units of the text
 // without tags. Messages and captions keep room for the inserted values.
@@ -50,6 +61,12 @@ func (c Context) maxLen() int {
 		return 255
 	case CtxCaption:
 		return 900
+	case CtxCommand: // Telegram's limits
+		return 256
+	case CtxBotDescription:
+		return 512
+	case CtxBotAbout:
+		return 120
 	}
 	return 3500
 }
@@ -112,6 +129,9 @@ var contexts = map[string]Context{
 
 	"sub.qr_caption":     CtxCaption,
 	"admin.pending_item": CtxCaption,
+
+	"profile.description": CtxBotDescription,
+	"profile.about":       CtxBotAbout,
 }
 
 // contextPrefixes give whole families a context.
@@ -121,6 +141,7 @@ var contextPrefixes = map[string]Context{
 	"discount.bad.":   CtxToastHTML,
 	"support.status.": CtxButtonHTML,
 	"support.cat.":    CtxButtonHTML,
+	"profile.cmd.":    CtxCommand,
 }
 
 // markupArgs are placeholders whose values carry tags (other rendered

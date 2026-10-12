@@ -409,3 +409,37 @@ func TestSendDocumentUploadNoRetryOn429(t *testing.T) {
 		t.Error("the 429 did not reach the shared flood")
 	}
 }
+
+func TestProfileMethods(t *testing.T) {
+	var calls []string
+	c, _ := fakeAPI(t, func(method string, body []byte, _ *http.Request) any {
+		calls = append(calls, method+" "+string(body))
+		return ok(true)
+	})
+	ctx := context.Background()
+	if err := c.SetMyCommands(ctx, []BotCommand{{"start", "Main menu"}}, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetMyCommands(ctx, []BotCommand{{"admin", "Admin panel"}}, 42, "fa"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteMyCommands(ctx, 42, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetMyDescription(ctx, "Buy a VPN", "en"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetMyShortDescription(ctx, "VPN store", ""); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`setMyCommands {"commands":[{"command":"start","description":"Main menu"}],"scope":{"type":"default"}}`,
+		`setMyCommands {"commands":[{"command":"admin","description":"Admin panel"}],"language_code":"fa","scope":{"chat_id":42,"type":"chat"}}`,
+		`deleteMyCommands {"scope":{"chat_id":42,"type":"chat"}}`,
+		`setMyDescription {"description":"Buy a VPN","language_code":"en"}`,
+		`setMyShortDescription {"short_description":"VPN store"}`,
+	}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests:\n%s\nwant:\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
+	}
+}

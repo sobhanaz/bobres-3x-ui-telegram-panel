@@ -641,7 +641,10 @@
       "invoice_title": "Invoice title",
       "invoice_desc": "Invoice description",
       "plain": "Plain text",
-      "internal": "Internal note, customers do not see it"
+      "internal": "Internal note, customers do not see it",
+      "command": "Command in the bot’s menu, one line",
+      "bot_description": "Text of an empty chat with the bot",
+      "bot_about": "Short description on the bot’s profile, one line"
     },
     "group": {
       "general": "General",
@@ -659,7 +662,8 @@
       "renew": "Renewal",
       "topup": "Extra traffic",
       "admin": "Admin panel",
-      "rs": "Reseller panel"
+      "rs": "Reseller panel",
+      "profile": "Bot profile"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -746,7 +750,7 @@
     "group": {
       "general": {
         "title": "General",
-        "desc": "The time zone the bot shows dates in."
+        "desc": "The time zone the bot shows dates in, and the bot’s own Telegram profile."
       },
       "maintenance": {
         "title": "Maintenance mode",
@@ -780,6 +784,10 @@
         "timezone": {
           "label": "Time zone",
           "help": "The bot shows dates (such as when a service ends) in this time zone. “Server default” is BOBRES_TIMEZONE, else Tehran. Dates in this dashboard follow your own device’s clock."
+        },
+        "bot_profile": {
+          "label": "Keep the bot’s Telegram profile up to date",
+          "help": "The bot sets its menu commands, its description (the text of an empty chat) and its short description (its profile page), in Persian and English, from its texts: edit them under Branding & texts → Bot texts → Bot profile. Turned off, it takes back its Persian and English ones and the staff menus, so what you set in {'@'}BotFather shows. The bot’s name and photo are always set in {'@'}BotFather."
         }
       },
       "maintenance": {

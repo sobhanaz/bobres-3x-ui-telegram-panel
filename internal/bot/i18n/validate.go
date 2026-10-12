@@ -112,6 +112,9 @@ func (c *Catalog) ValidateOverride(lang, key, value string) (string, []Problem) 
 			}
 		}
 	}
+	if info.Context.oneLine() && strings.Contains(value, "\n") {
+		add(ProblemControlChar, strconv.QuoteRune('\n'))
+	}
 
 	if n := TextLength(value); n > info.Max {
 		add(ProblemTooLong, strconv.Itoa(info.Max))
