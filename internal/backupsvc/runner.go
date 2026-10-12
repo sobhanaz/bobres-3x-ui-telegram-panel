@@ -1,8 +1,10 @@
 // Package backupsvc is the backup service: it dumps the database with
 // pg_dump, streams the dump through internal/backup's encrypted file format
 // into the backup directory, hands each file to the bot for the owner's
-// Telegram, and keeps the newest backup.Keep. One backup runs at a time, daily
-// at a set time and on demand (core's System page, `bobres backup`).
+// Telegram, copies it to S3-compatible storage when that is set up, and keeps
+// the newest backup.Keep (and the newest Offsite.Keep in the bucket). One
+// backup runs at a time, daily at a set time and on demand (core's System
+// page, `bobres backup`).
 package backupsvc
 
 import (
@@ -24,12 +26,17 @@ import (
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backup"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/s3"
 )
 
 const (
 	// DeliverTimeout bounds handing one backup to the bot (it uploads to
 	// Telegram before answering).
 	DeliverTimeout = 20 * time.Minute
+	// UploadTimeout bounds copying one backup to S3 (a few GB over a slow
+	// link), and pruneTimeout the bucket's retention after it.
+	UploadTimeout = 2 * time.Hour
+	pruneTimeout  = 5 * time.Minute
 	// MinFree is the free space a first backup needs; later ones need twice
 	// the size of the last.
 	MinFree = 100 << 20
@@ -68,10 +75,27 @@ type Options struct {
 	Location     *time.Location
 	// Client sends to the bot (nil: a plain client; DeliverTimeout applies).
 	Client *http.Client
+	// Offsite copies each backup to S3-compatible storage (zero: no copy).
+	Offsite Offsite
 	// Now and FreeSpace replace the clock and statfs in tests.
 	Now       func() time.Time
 	FreeSpace func(dir string) (uint64, error)
 	Log       *slog.Logger
+}
+
+// Offsite is the optional copy of each backup to S3-compatible storage. The
+// file is already encrypted, so the bucket holds nothing readable without
+// BOBRES_BACKUP_KEY.
+type Offsite struct {
+	// Client reaches the bucket (nil: no copy).
+	Client *s3.Client
+	// Prefix is "" or a folder ending in "/"; each backup is Prefix+its name.
+	Prefix string
+	// Keep is how many backups the bucket keeps under Prefix (at least 1).
+	Keep int
+	// Problem is why the copy is not set up although settings are there (a
+	// bad value): each backup records it as its upload error.
+	Problem string
 }
 
 // Runner runs backups one at a time.
@@ -96,6 +120,9 @@ func New(o Options) (*Runner, error) {
 	}
 	if o.Dump == nil {
 		return nil, errors.New("backupsvc: no dumper")
+	}
+	if o.Offsite.Client != nil && o.Offsite.Keep < 1 {
+		return nil, errors.New("backupsvc: the bucket must keep at least one backup")
 	}
 	if o.Location == nil {
 		o.Location = time.UTC
@@ -205,8 +232,9 @@ func (r *Runner) setNext(t time.Time) {
 	r.mu.Unlock()
 }
 
-// backup makes one backup: disk check, dump, sidecar, delivery, retention.
-// A failed run leaves only a sidecar holding its error.
+// backup makes one backup: disk check, dump, sidecar, delivery, upload,
+// retention. A failed run leaves only a sidecar holding its error; a failed
+// delivery or upload is recorded in the sidecar and the backup is kept.
 func (r *Runner) backup(ctx context.Context) (backup.Sidecar, error) {
 	start := r.o.Now().UTC().Truncate(time.Second)
 	name := backup.FileName(start)
@@ -246,8 +274,79 @@ func (r *Runner) backup(ctx context.Context) (backup.Sidecar, error) {
 			r.o.Log.Error("backup sidecar not written", "file", name, "err", err)
 		}
 	}
+	if r.upload(ctx, &sc) {
+		if err := backup.WriteSidecar(scPath, sc); err != nil {
+			r.o.Log.Error("backup sidecar not written", "file", name, "err", err)
+		}
+	}
 	r.prune()
 	return sc, nil
+}
+
+// upload copies the backup to S3 when that is set up, and records in sc when
+// and where, or why not. After a copy the bucket's retention runs. It reports
+// whether sc changed.
+func (r *Runner) upload(ctx context.Context, sc *backup.Sidecar) bool {
+	o := r.o.Offsite
+	switch {
+	case o.Problem != "":
+		sc.UploadError = "the S3 upload is not set up correctly: " + o.Problem
+		r.o.Log.Warn("backup not copied to S3; it is kept on the server", "file", sc.File, "reason", sc.UploadError)
+		return true
+	case o.Client == nil:
+		return false
+	}
+	key := o.Prefix + sc.File
+	if err := r.putS3(ctx, key, sc.File, sc.Size); err != nil {
+		sc.UploadError = shorten(err.Error(), 500)
+		r.o.Log.Warn("backup not copied to S3; it is kept on the server", "file", sc.File, "reason", sc.UploadError)
+		return true
+	}
+	t := r.o.Now().UTC()
+	sc.UploadedAt, sc.UploadedTo = &t, o.Client.URL(key)
+	r.o.Log.Info("backup copied to S3", "file", sc.File, "to", sc.UploadedTo)
+	r.pruneS3(ctx)
+	return true
+}
+
+// putS3 streams the backup file to key (in parts over the multipart
+// threshold), within UploadTimeout.
+func (r *Runner) putS3(ctx context.Context, key, name string, size int64) error {
+	f, err := os.Open(filepath.Join(r.o.Dir, name)) //nolint:gosec // our own file name in our own directory
+	if err != nil {
+		return fmt.Errorf("open the backup: %w", err)
+	}
+	defer f.Close() //nolint:errcheck // read-only
+	ctx, cancel := context.WithTimeout(ctx, UploadTimeout)
+	defer cancel()
+	return r.o.Offsite.Client.PutFile(ctx, key, f, size)
+}
+
+// pruneS3 keeps the newest Offsite.Keep backups under the prefix: older
+// bobres-<stamp>.bkp objects there are deleted, and nothing else (other
+// names, other folders). A failure is logged; the next backup tries again.
+func (r *Runner) pruneS3(ctx context.Context) {
+	o := r.o.Offsite
+	ctx, cancel := context.WithTimeout(ctx, pruneTimeout)
+	defer cancel()
+	objs, err := o.Client.List(ctx, o.Prefix+"bobres-")
+	if err != nil {
+		r.o.Log.Warn("old backups in S3 not pruned", "err", err)
+		return
+	}
+	var names []string
+	for _, obj := range objs {
+		if n := strings.TrimPrefix(obj.Key, o.Prefix); !strings.Contains(n, "/") && strings.HasSuffix(n, ".bkp") {
+			names = append(names, n)
+		}
+	}
+	for _, n := range backup.Prune(names, o.Keep) {
+		if err := o.Client.Delete(ctx, o.Prefix+n); err != nil {
+			r.o.Log.Warn("old backup in S3 not deleted", "key", o.Prefix+n, "err", err)
+			continue
+		}
+		r.o.Log.Info("old backup deleted from S3", "key", o.Prefix+n)
+	}
 }
 
 // checkDisk refuses a backup when the directory has less free space than
@@ -437,12 +536,33 @@ type Status struct {
 	NextRun  int64  `json:"next_run"`
 	DiskFree uint64 `json:"disk_free"`
 	Dir      string `json:"dir"`
+	// Offsite is the S3 upload: where the copies go, never the keys.
+	Offsite OffsiteStatus `json:"offsite"`
+}
+
+// OffsiteStatus is the S3 upload as the System page shows it.
+type OffsiteStatus struct {
+	// Configured: each backup is copied (false when off or not usable).
+	Configured   bool   `json:"configured"`
+	EndpointHost string `json:"endpoint_host,omitempty"`
+	Bucket       string `json:"bucket,omitempty"`
+	Prefix       string `json:"prefix,omitempty"`
+	Keep         int    `json:"keep,omitempty"`
+	// Error is why settings that are there cannot be used.
+	Error string `json:"error,omitempty"`
+}
+
+func (o Offsite) status() OffsiteStatus {
+	if o.Client == nil {
+		return OffsiteStatus{Error: o.Problem}
+	}
+	return OffsiteStatus{Configured: true, EndpointHost: o.Client.Host(), Bucket: o.Client.Bucket(), Prefix: o.Prefix, Keep: o.Keep}
 }
 
 // Status lists the backups and the runner's state.
 func (r *Runner) Status() Status {
 	r.mu.Lock()
-	st := Status{Running: r.running, LastError: r.lastErr, Dir: r.o.Dir}
+	st := Status{Running: r.running, LastError: r.lastErr, Dir: r.o.Dir, Offsite: r.o.Offsite.status()}
 	ran, next := r.ran, r.next
 	r.mu.Unlock()
 	if next.IsZero() {

@@ -7,7 +7,7 @@ import { ApiError } from './api'
 import { latinDigits, type Money } from './format'
 import { effective } from './settings'
 import { normalizeTronAddress, tronAddressProblem } from './tron'
-import type { GatewayConfig, GatewayHealth, GatewayReport, OverviewGateway, SettingItem, UnmatchedDeposit } from './types'
+import type { GatewayCheckError, GatewayConfig, GatewayHealth, GatewayReport, OverviewGateway, SettingItem, UnmatchedDeposit } from './types'
 
 /** Zarinpal's merchant id: the 36-character id from its panel. */
 const merchantRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -353,4 +353,32 @@ export function reportRows(week: GatewayReport | null, month: GatewayReport | nu
   return [...seen]
     .map((status) => ({ status, week: cell(week, status), month: cell(month, status) }))
     .filter((row) => row.week.count > 0 || row.month.count > 0 || statusOrder.includes(row.status))
+}
+
+/** A report's failed payment checks: how many in each period, the newest of
+ * the longer one, and how many more there are than it lists. */
+export interface CheckErrors {
+  week: number
+  month: number
+  items: GatewayCheckError[]
+  more: number
+}
+
+/** checkErrors reads the failed payment checks (payments could not ask the
+ * gateway, or it refused) of both periods; null when core does not report
+ * them (an older core) or there were none, so the report only says something
+ * when an outage left a trace. */
+export function checkErrors(week: GatewayReport | null, month: GatewayReport | null): CheckErrors | null {
+  const listed = (r: GatewayReport | null) => (Array.isArray(r?.check_errors) ? r.check_errors : null)
+  const count = (r: GatewayReport | null) => {
+    const n = r?.check_error_count
+    return Math.max(typeof n === 'number' && n > 0 ? n : 0, listed(r)?.length ?? 0)
+  }
+  const list = listed(month) ?? listed(week)
+  if (!list) return null
+  const w = count(week)
+  const m = Math.max(count(month), w)
+  if (!m) return null
+  const items = [...list].sort((a, b) => b.at - a.at)
+  return { week: w, month: m, items, more: Math.max(0, m - items.length) }
 }

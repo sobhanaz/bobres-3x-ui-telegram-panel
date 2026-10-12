@@ -153,6 +153,40 @@ func (s *Store) RecordGatewayEvent(ctx context.Context, tx pgx.Tx, intentID, pro
 	return nil
 }
 
+// RecordCheckError keeps a failed gateway check of an intent as a check/error
+// event, unless one was kept for that intent within every: an outage leaves a
+// trace without a row per check. Recorders of one intent (replicas, a
+// customer's check racing the reconciler) are serialised, so the window holds.
+// text must already be redacted. It reports whether it wrote.
+func (s *Store) RecordCheckError(ctx context.Context, intentID, provider, text string, every time.Duration) (bool, error) {
+	b, err := json.Marshal(map[string]any{"error": text})
+	if err != nil {
+		return false, fmt.Errorf("record check error: %w", err)
+	}
+	var wrote bool
+	err = s.WithTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('payments:check-error:' || $1, 0))`, intentID); err != nil {
+			return err
+		}
+		// A statement after the lock: it sees a row the previous holder committed.
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO payments.gateway_events (intent_id, provider, kind, outcome, detail)
+			SELECT $1, $2, 'check', 'error', $3
+			WHERE NOT EXISTS (SELECT 1 FROM payments.gateway_events
+				WHERE intent_id = $1 AND kind = 'check' AND outcome = 'error' AND created_at > now() - $4::interval)`,
+			intentID, provider, b, every.String())
+		if err != nil {
+			return err
+		}
+		wrote = tag.RowsAffected() == 1
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("record check error: %w", err)
+	}
+	return wrote, nil
+}
+
 // SettleStarsPaid settles a Stars intent with Telegram's charge id. Unlike
 // other gateways it also accepts an expired intent: Telegram has already taken
 // the Stars. The unique (provider, external_id) index means one charge settles

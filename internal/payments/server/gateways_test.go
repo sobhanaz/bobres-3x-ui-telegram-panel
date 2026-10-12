@@ -303,9 +303,26 @@ func TestGatewayReportRPC(t *testing.T) {
 			t.Fatalf("succeeded total: %v", tt)
 		}
 	}
+	if len(r.GetCheckErrors()) != 0 || r.GetCheckErrorCount() != 0 {
+		t.Fatalf("check errors before any: %v", r)
+	}
 	// Defaults: the last 30 days up to now.
 	if r, err := f.core.GatewayReport(ctx, &paymentsv1.GatewayReportRequest{Provider: "zarinpal"}); err != nil || r.GetTo()-r.GetFrom() != 30*24*3600 {
 		t.Fatalf("default period: %v %v", r, err)
+	}
+	// A failed check of the open payment is reported (kept once an hour).
+	for range 2 {
+		if _, err := f.st.RecordCheckError(ctx, "00000000-0000-7000-8000-00000000f0c2", "zarinpal", "zarinpal: request failed: timed out", time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err = f.core.GatewayReport(ctx, &paymentsv1.GatewayReportRequest{Provider: "zarinpal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ce := r.GetCheckErrors(); r.GetCheckErrorCount() != 1 || len(ce) != 1 || ce[0].GetKind() != "check" ||
+		ce[0].GetIntentId() != "00000000-0000-7000-8000-00000000f0c2" || ce[0].GetDetail() != "zarinpal: request failed: timed out" || ce[0].GetAt() == 0 {
+		t.Fatalf("check errors: %v", r)
 	}
 	for name, req := range map[string]*paymentsv1.GatewayReportRequest{
 		"negative":  {Provider: "zarinpal", From: -1},

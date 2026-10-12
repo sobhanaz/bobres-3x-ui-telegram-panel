@@ -49,7 +49,10 @@ func (c *Client) call(ctx context.Context, method, path string) (*http.Response,
 }
 
 // Status reads the service's GET /internal/backups answer ({backups,
-// running, last_error, next_run, disk_free, dir}) as it is, within 3 seconds.
+// running, last_error, next_run, disk_free, dir, offsite}) as it is, within
+// 3 seconds: fields core does not know (each backup's uploaded_at,
+// upload_error and uploaded_to, the offsite object) reach the dashboard
+// unchanged.
 func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()

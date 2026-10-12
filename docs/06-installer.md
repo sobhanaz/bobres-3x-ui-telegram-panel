@@ -22,6 +22,8 @@ The 3x-ui panel is optional (milestone 6a): a fresh install still asks for one (
 never asks, and a URL needs its token (and a token its URL). The provisioner registers that panel only while
 it has no server; after that servers are added and changed in the dashboard (Servers), and `.env` edits of
 `BOBRES_XUI_*` change nothing. Without a panel the summary says to add a server in the dashboard before selling.
+After the panel, a fresh install with backups also offers off-server copies of them in S3-compatible storage (Enter
+skips it; see Backups, "Off-server copies").
 
 ## Management menu
 `bobres` without a command, on a terminal, opens a numbered menu in the spirit of the x-ui script: status,
@@ -92,7 +94,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists, and whether the license covers it |
 | `bobres rollback [--yes]` | Undo the last update with its restore point: the previous CLI, install files and version, and the database from before the update |
 | `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
-| `bobres restore <file> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. Off-server upload (S3/SFTP) is still open |
+| `bobres restore <file \| s3://bucket/key> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. A backup in S3-compatible storage is downloaded into `backups/` first, with the install's S3 settings (see Off-server copies) |
 | `bobres config list / get <key> / set <key> <value>` | Show the settings (secrets masked) or change one of the safe ones: validated as install does, `.env` written in one rename (0600), only the services that read it recreated (see Settings and secrets) |
 | `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. Master keys and the backup key are not rotated |
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
@@ -111,14 +113,61 @@ with `BOBRES_TOKEN_CORE_BACKUP`, a token core uses for this service only). Each 
   first), and records why;
 - streams `pg_dump -Fc` (as the read-only role `svc_backup`; the password goes in `PGPASSWORD`, never on a command
   line) straight into the encrypted file format of `internal/backup`, written to a temp file, synced and renamed to
-  `bobres-<UTC stamp>.bkp`, with a `.json` sidecar (size, sha256, created_at, sent_at, telegram_error, error);
+  `bobres-<UTC stamp>.bkp`, with a `.json` sidecar (size, sha256, created_at, sent_at, telegram_error, error, and with
+  the S3 upload uploaded_at, uploaded_to, upload_error);
 - hands the file to the bot (`POST /internal/backups/deliver`, token `BOBRES_TOKEN_BACKUP`), which streams it to the
   owner's Telegram only, as it arrives (never kept in the bot's memory or its tmpfs `/tmp`, which share its 512 MB
   limit); over 50 MB, or 2000 MB with a local Bot API, the owner gets a text instead and the file stays
   here. Without `BOBRES_TOKEN_BACKUP` backups are kept on the server only;
+- copies the file to S3-compatible storage when that is set up (below), and records how it went;
 - keeps the newest 7 backups (and at most 7 records of failed runs). A failed run leaves its sidecar, no `.bkp`.
   The CLI's safety backups (`bobres-<stamp>-before-restore.bkp`, `-before-rollback.bkp`, below) are listed with
   them but neither counted nor pruned: the operator deletes them.
+
+**Off-server copies (S3-compatible, optional; milestone P7d).** A backup that only lives on the server is lost with
+the server, and Telegram takes files up to 50 MB. With `BOBRES_BACKUP_S3_ENDPOINT` set, the backup service copies
+each new backup, right after the Telegram delivery, to an S3-compatible bucket (Arvan Cloud, MinIO, Backblaze B2's
+S3 API, AWS S3):
+- **Settings** (`.env`, passed to the backup service only): `BOBRES_BACKUP_S3_ENDPOINT` (https only, no path),
+  `_BUCKET`, `_REGION` (signs the requests; empty: `us-east-1`), `_PREFIX` (a folder in the bucket; empty: none),
+  `_ACCESS_KEY`, `_SECRET_KEY`, and `_KEEP` (how many backups the bucket keeps; default 30). Empty endpoint = off.
+  A fresh `bobres install` asks for the endpoint after the panel (Enter skips it), then the bucket, region, folder and
+  the two keys (the secret key without echo); a re-run never asks. Flags: `--s3-endpoint`, `--s3-bucket`,
+  `--s3-region`, `--s3-prefix`; the keys come from `BOBRES_BACKUP_S3_ACCESS_KEY` / `_SECRET_KEY` in the environment
+  or are asked when missing (never flags: `ps` and the shell history keep command lines), and `--yes` without them
+  is an error. The plain settings are `bobres config` settings (below); to replace a key, edit `.env` and run
+  `sudo bobres install --skip-checks`. The installer and `config set` check them as the service does
+  (`config.ParseBackupS3`). In the backup service a setting that cannot be used never stops it: local backups and
+  Telegram go on, the log says why at startup, and each backup records it as its upload error.
+- **Addressing.** An endpoint that is the bucket name on a service host of three or more labels
+  (`https://my-shop.s3.example.com`) is used as it is (virtual-hosted style); any other endpoint
+  (`https://s3.example.com`) gets the bucket as the first path segment (path style), which every one of the services
+  above accepts. The three labels keep a server that only shares its first label with the bucket (MinIO at
+  `https://backups.example.com` with a bucket named `backups`) in path style.
+- **Requests.** `internal/s3`: AWS Signature Version 4 with the standard library only (no SDK), each request signed
+  with the SHA-256 of its payload (never `UNSIGNED-PAYLOAD`, so the storage refuses a body changed on the way). A file
+  up to 100 MiB goes in one PUT; a larger one as a multipart upload in 16 MiB parts (more for a file that would need
+  over 10,000), aborted when a part fails so no parts are left to pay for. A request that cannot reach the storage, or
+  gets 5xx or 429, is tried three times (1 s, then 4 s apart); redirects are reported, never followed. The upload has
+  two hours. The signer is tested against the AWS documentation's S3 examples, and everything against an in-memory
+  S3 server (`internal/s3/s3test`) that checks each signature from the wire request and each payload hash.
+- **What it uploads.** The `.bkp` file as it is on disk: already encrypted with `BOBRES_BACKUP_KEY` (which never
+  leaves the server), so the bucket holds nothing readable without that key. The object is `<prefix>/<file name>`.
+- **Retention.** After each successful upload the bucket keeps the newest `_KEEP` objects named
+  `<prefix>/bobres-<stamp>.bkp`; older ones are deleted. Nothing else is touched: other names, other folders, the
+  CLI's safety backups (which are not uploaded). A failed upload prunes nothing, and a failed prune is only logged
+  (the next backup tries again).
+- **Failures** never fail the local backup or the Telegram delivery: the sidecar gets `upload_error` (and the run
+  stays a success), or `uploaded_at` and `uploaded_to` (`s3://bucket/key`). The System page's Backups tab shows it per
+  backup; `GET /internal/backups` also answers `offsite` (`configured`, `endpoint_host`, `bucket`, `prefix`, `keep`,
+  and `error` when the settings cannot be used; never the keys). `bobres backup` prints where the copy went or why
+  not, and the support bundle's `backups.txt` lists it.
+- **Network.** The backup service has no internet without the upload: its second network is `offline` (internal,
+  no other service on it). With an endpoint the installer and `bobres config` set `BOBRES_BACKUP_NETWORK=egress`
+  (it follows the endpoint: shown by `config list`, never set by hand), and compose puts the service on `egress`.
+  So the container that holds the master keys reaches the internet only when the owner turns the copy on.
+- **Restore** from the bucket: `sudo bobres restore s3://<bucket>/<prefix>/bobres-<stamp>.bkp` (below), or download
+  the file with any S3 tool and restore it by its path.
 
 **The backup key.** `bobres install` generates `BOBRES_BACKUP_KEY` and prints it once, at the end of the run that
 saved it to `.env`, however that run ends (after the summary, after a failed start, with `--no-start`, or a quiet
@@ -162,13 +211,25 @@ SQL
 Runbooks: [restore](runbooks/restore.md) and [update and rollback](runbooks/update-rollback.md). All three exit 0 when
 done (or nothing was to do), 1 when refused or failed, 2 for usage errors, and take `--dir` like every other command.
 
-**`bobres restore <file> [--key-file F] [--yes] [--keep-keys]`** replaces the database with a backup's.
+**`bobres restore <file | s3://bucket/key> [--key-file F] [--yes] [--keep-keys]`** replaces the database with a backup's.
+0. **From S3-compatible storage** (`s3://bucket/key`): after the key checks of step 1, the object is downloaded with
+   this install's S3 settings (endpoint, region and keys; the bucket is the one named, so a new server restores from
+   the old server's bucket once `bobres install` has the S3 settings) into a new folder `backups/.s3-restore-*`,
+   owned by root with mode 0700 (the file 0600), so the backup service's user, who owns `backups/`, cannot write to
+   the download. That user can still rename the folder (a rename within `backups/` needs write permission on
+   `backups/` only), so the download is never opened again by its path: the check and the restore read the file
+   through the one descriptor it was downloaded with (step 2). It is removed when the command ends, whatever the
+   outcome (a killed run leaves it: delete it). Without S3 settings, or when the object is missing, nothing changes
+   and the error says so. Every later message names the `s3://` source.
 1. The key is `BOBRES_BACKUP_KEY` from `.env`, or the one line of `--key-file` for a backup made on another server (a
    fresh install there made its own key; a line copied from `.env`, `BOBRES_BACKUP_KEY=...`, works too). An install
    with no `BOBRES_BACKUP_KEY` of its own is refused first, with or without `--key-file`: the safety backup (step 5)
    needs it, and `sudo bobres install` creates it (keeping the settings).
 2. The whole file is verified before anything is touched: a wrong key, a damaged or cut file and a short key are
    refused. It prints when the backup was made, the size of the dump and the master key names (never the values).
+   The file is opened once: the restore (step 6) reads the same open file from its start, so what is restored is
+   what was checked, shown and confirmed, whatever is put at its path in between (a pipe, which cannot be read
+   twice, is refused).
 3. It asks, unless `--yes`: the current data is replaced.
 4. It stops core, bot, payments, provisioner and backup; postgres, redis and caddy stay up. First, so that nothing is
    written after the safety backup (it would be in neither that backup nor the restored data).
@@ -394,8 +455,13 @@ The settings it changes, and the services each one recreates:
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
 | `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, payments | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it |
+| `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |
+| `BOBRES_BACKUP_S3_BUCKET` / `_REGION` / `_PREFIX` | backup | a bucket name (lower-cased) / a region name / letters, digits, `. _ - /` (`config.ParseBackupS3`) |
+| `BOBRES_BACKUP_S3_KEEP` | backup | 1 to 1000, or empty (30) |
 
-- `get` prints the value alone on its line (for scripts); `BOBRES_ZARINPAL_HOST` can be read, never set.
+- `get` prints the value alone on its line (for scripts); `BOBRES_ZARINPAL_HOST` and `BOBRES_BACKUP_NETWORK` can be
+  read, never set. The S3 access and secret keys are secrets (`bobres install --s3-endpoint <url>` asks for them while
+  they are empty).
 - Any other key is refused with what changes it instead: a secret (every key but the plain settings the support bundle
   keeps) is never shown, and points to `bobres secrets rotate <name>` (master keys and the backup key to the runbook);
   `BOBRES_VERSION` to `bobres update`; `BOBRES_XUI_*` and the Zarinpal merchant and proxy to the dashboard.

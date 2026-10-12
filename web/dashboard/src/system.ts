@@ -307,6 +307,71 @@ export function notSentReason(e: string | null | undefined): { reason: string; d
   return { reason: 'other', detail: s }
 }
 
+export type OffsiteState = 'unsupported' | 'off' | 'broken' | 'on'
+
+/** offsiteState reads whether the backup service copies each backup to
+ * off-site storage (an S3-compatible bucket): set up, not set up, set up with
+ * settings it cannot use (error says why; nothing is copied), or not said at
+ * all (an older backup service, about which the tab says nothing). */
+export function offsiteState(r: Pick<SystemBackups, 'offsite'> | null | undefined): OffsiteState {
+  const o = r?.offsite
+  if (!o || typeof o !== 'object') return 'unsupported'
+  if (o.configured === true) return 'on'
+  return (o.error ?? '').trim() ? 'broken' : 'off'
+}
+
+/** offsiteWhere names the storage as a path-style address reads:
+ * host/bucket/prefix, or whichever parts the service gives; '' with neither
+ * host nor bucket. */
+export function offsiteWhere(r: Pick<SystemBackups, 'offsite'> | null | undefined): string {
+  const host = (r?.offsite?.endpoint_host ?? '').trim()
+  const bucket = (r?.offsite?.bucket ?? '').trim()
+  if (!host && !bucket) return ''
+  const prefix = (r?.offsite?.prefix ?? '').trim().replace(/^\/+/, '')
+  return [host, bucket].filter(Boolean).join('/') + (bucket && prefix ? '/' + prefix : '')
+}
+
+/** offsiteKeep is how many backups the bucket keeps; null when the service
+ * does not say. */
+export function offsiteKeep(r: Pick<SystemBackups, 'offsite'> | null | undefined): number | null {
+  const n = r?.offsite?.keep
+  return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : null
+}
+
+/** restoreFromOffsite is the command that restores a copy straight from
+ * off-site storage (bobres restore downloads it into backups/ first): each
+ * copy is s3://bucket/prefix + its file name, with the parts the service
+ * names. Each copied backup also says its own address (uploaded_to). */
+export function restoreFromOffsite(r: Pick<SystemBackups, 'offsite'> | null | undefined): string {
+  const bucket = (r?.offsite?.bucket ?? '').trim()
+  const prefix = (r?.offsite?.prefix ?? '').trim().replace(/^\/+/, '')
+  return `sudo bobres restore s3://${bucket || '<bucket>'}/${prefix}<file>`
+}
+
+/** The commands that set up or correct off-site storage on the server. A
+ * re-run of bobres install asks nothing about it on an existing install, so
+ * it is turned on with the endpoint and bucket flags (the installer then asks
+ * for the two keys); a plain setting the service cannot use is corrected with
+ * bobres config set, and a key is changed in .env, then applied by a re-run
+ * without the system checks. */
+export const OFFSITE_SETUP_COMMAND = 'sudo bobres install --s3-endpoint <url> --s3-bucket <bucket>'
+export const OFFSITE_SET_COMMAND = 'sudo bobres config set BOBRES_BACKUP_S3_<SETTING> <value>'
+export const OFFSITE_KEY_COMMAND = 'sudo bobres install --skip-checks'
+
+export type BackupUpload = 'uploaded' | 'upload_failed' | 'not_uploaded' | 'none'
+
+/** backupUpload says whether a backup was copied to off-site storage: copied
+ * (whenever that was, even if the storage was turned off since), the copy
+ * failed (upload_error says why), not copied (the storage is set up, but
+ * nothing was recorded: a backup made before it was), or nothing to say (a
+ * failed run has no file, and without the storage there is no copy). */
+export function backupUpload(b: Pick<BackupFile, 'error' | 'uploaded_at' | 'upload_error'>, offsite: OffsiteState): BackupUpload {
+  if (b.error) return 'none'
+  if (unixOf(b.uploaded_at) !== null) return 'uploaded'
+  if ((b.upload_error ?? '').trim()) return 'upload_failed'
+  return offsite === 'on' ? 'not_uploaded' : 'none'
+}
+
 /** How often the tab reads the list again while a backup is being made:
  * every ms for the first slowAfter reads, then five times slower (sending a
  * big file to Telegram can take minutes), at most tries times. */

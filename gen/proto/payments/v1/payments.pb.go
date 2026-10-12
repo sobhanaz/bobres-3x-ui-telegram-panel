@@ -2151,11 +2151,16 @@ type GatewayReportResponse struct {
 	Unmatched      []*ChainTransfer `protobuf:"bytes,10,rep,name=unmatched,proto3" json:"unmatched,omitempty"`
 	UnmatchedCount int64            `protobuf:"varint,11,opt,name=unmatched_count,json=unmatchedCount,proto3" json:"unmatched_count,omitempty"`
 	// usdt_trc20_auto only: the watcher's reads of the store's address.
-	LastScanAt    int64  `protobuf:"varint,12,opt,name=last_scan_at,json=lastScanAt,proto3" json:"last_scan_at,omitempty"`         // 0 = never read
-	LastScanOkAt  int64  `protobuf:"varint,13,opt,name=last_scan_ok_at,json=lastScanOkAt,proto3" json:"last_scan_ok_at,omitempty"` // 0 = never read successfully
-	ScanError     string `protobuf:"bytes,14,opt,name=scan_error,json=scanError,proto3" json:"scan_error,omitempty"`               // the last read's error, "" when it worked; never a secret
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LastScanAt   int64  `protobuf:"varint,12,opt,name=last_scan_at,json=lastScanAt,proto3" json:"last_scan_at,omitempty"`         // 0 = never read
+	LastScanOkAt int64  `protobuf:"varint,13,opt,name=last_scan_ok_at,json=lastScanOkAt,proto3" json:"last_scan_ok_at,omitempty"` // 0 = never read successfully
+	ScanError    string `protobuf:"bytes,14,opt,name=scan_error,json=scanError,proto3" json:"scan_error,omitempty"`               // the last read's error, "" when it worked; never a secret
+	// The failed payment checks (Zarinpal: the gateway could not be asked, or
+	// refused) kept in the period, newest first, at most 20, and how many there
+	// are. Each payment's failures are kept at most once an hour.
+	CheckErrors     []*GatewayEvent `protobuf:"bytes,15,rep,name=check_errors,json=checkErrors,proto3" json:"check_errors,omitempty"`
+	CheckErrorCount int64           `protobuf:"varint,16,opt,name=check_error_count,json=checkErrorCount,proto3" json:"check_error_count,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GatewayReportResponse) Reset() {
@@ -2284,6 +2289,20 @@ func (x *GatewayReportResponse) GetScanError() string {
 		return x.ScanError
 	}
 	return ""
+}
+
+func (x *GatewayReportResponse) GetCheckErrors() []*GatewayEvent {
+	if x != nil {
+		return x.CheckErrors
+	}
+	return nil
+}
+
+func (x *GatewayReportResponse) GetCheckErrorCount() int64 {
+	if x != nil {
+		return x.CheckErrorCount
+	}
+	return 0
 }
 
 // ChainTransfer is one USDT (TRC20) transfer the watcher saw arrive.
@@ -2992,7 +3011,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x02at\x18\x01 \x01(\x03R\x02at\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1b\n" +
 	"\tintent_id\x18\x03 \x01(\tR\bintentId\x12\x16\n" +
-	"\x06detail\x18\x04 \x01(\tR\x06detail\"\xcf\x04\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\"\xb9\x05\n" +
 	"\x15GatewayReportResponse\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\x03R\x04from\x12\x0e\n" +
@@ -3012,7 +3031,9 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"lastScanAt\x12%\n" +
 	"\x0flast_scan_ok_at\x18\r \x01(\x03R\flastScanOkAt\x12\x1d\n" +
 	"\n" +
-	"scan_error\x18\x0e \x01(\tR\tscanError\"\xce\x03\n" +
+	"scan_error\x18\x0e \x01(\tR\tscanError\x12<\n" +
+	"\fcheck_errors\x18\x0f \x03(\v2\x19.payments.v1.GatewayEventR\vcheckErrors\x12*\n" +
+	"\x11check_error_count\x18\x10 \x01(\x03R\x0fcheckErrorCount\"\xce\x03\n" +
 	"\rChainTransfer\x12\x12\n" +
 	"\x04txid\x18\x01 \x01(\tR\x04txid\x12\x1f\n" +
 	"\vevent_index\x18\x02 \x01(\x05R\n" +
@@ -3164,52 +3185,53 @@ var file_payments_v1_payments_proto_depIdxs = []int32{
 	28, // 21: payments.v1.GatewayReportResponse.last_error:type_name -> payments.v1.GatewayEvent
 	28, // 22: payments.v1.GatewayReportResponse.last_paid:type_name -> payments.v1.GatewayEvent
 	30, // 23: payments.v1.GatewayReportResponse.unmatched:type_name -> payments.v1.ChainTransfer
-	37, // 24: payments.v1.ChainTransfer.amount:type_name -> common.v1.Money
-	38, // 25: payments.v1.ListChainTransfersRequest.pagination:type_name -> common.v1.Pagination
-	30, // 26: payments.v1.ListChainTransfersResponse.transfers:type_name -> payments.v1.ChainTransfer
-	39, // 27: payments.v1.ListChainTransfersResponse.page_info:type_name -> common.v1.PageInfo
-	35, // 28: payments.v1.RecentLogsResponse.lines:type_name -> payments.v1.LogLine
-	1,  // 29: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
-	7,  // 30: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
-	8,  // 31: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
-	9,  // 32: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
-	10, // 33: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
-	11, // 34: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
-	14, // 35: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
-	2,  // 36: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
-	3,  // 37: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
-	4,  // 38: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
-	5,  // 39: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
-	19, // 40: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
-	21, // 41: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
-	23, // 42: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
-	25, // 43: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
-	32, // 44: payments.v1.PaymentsService.ListChainTransfers:input_type -> payments.v1.ListChainTransfersRequest
-	31, // 45: payments.v1.PaymentsService.ResolveChainTransfer:input_type -> payments.v1.ResolveChainTransferRequest
-	34, // 46: payments.v1.PaymentsService.RecentLogs:input_type -> payments.v1.RecentLogsRequest
-	0,  // 47: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 48: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 49: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
-	0,  // 50: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
-	0,  // 51: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
-	17, // 52: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
-	16, // 53: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
-	0,  // 54: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 55: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
-	0,  // 56: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
-	6,  // 57: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
-	20, // 58: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
-	18, // 59: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
-	24, // 60: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
-	29, // 61: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
-	33, // 62: payments.v1.PaymentsService.ListChainTransfers:output_type -> payments.v1.ListChainTransfersResponse
-	30, // 63: payments.v1.PaymentsService.ResolveChainTransfer:output_type -> payments.v1.ChainTransfer
-	36, // 64: payments.v1.PaymentsService.RecentLogs:output_type -> payments.v1.RecentLogsResponse
-	47, // [47:65] is the sub-list for method output_type
-	29, // [29:47] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	28, // 24: payments.v1.GatewayReportResponse.check_errors:type_name -> payments.v1.GatewayEvent
+	37, // 25: payments.v1.ChainTransfer.amount:type_name -> common.v1.Money
+	38, // 26: payments.v1.ListChainTransfersRequest.pagination:type_name -> common.v1.Pagination
+	30, // 27: payments.v1.ListChainTransfersResponse.transfers:type_name -> payments.v1.ChainTransfer
+	39, // 28: payments.v1.ListChainTransfersResponse.page_info:type_name -> common.v1.PageInfo
+	35, // 29: payments.v1.RecentLogsResponse.lines:type_name -> payments.v1.LogLine
+	1,  // 30: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
+	7,  // 31: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
+	8,  // 32: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
+	9,  // 33: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
+	10, // 34: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
+	11, // 35: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
+	14, // 36: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
+	2,  // 37: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
+	3,  // 38: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
+	4,  // 39: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
+	5,  // 40: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
+	19, // 41: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
+	21, // 42: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
+	23, // 43: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
+	25, // 44: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
+	32, // 45: payments.v1.PaymentsService.ListChainTransfers:input_type -> payments.v1.ListChainTransfersRequest
+	31, // 46: payments.v1.PaymentsService.ResolveChainTransfer:input_type -> payments.v1.ResolveChainTransferRequest
+	34, // 47: payments.v1.PaymentsService.RecentLogs:input_type -> payments.v1.RecentLogsRequest
+	0,  // 48: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 49: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 50: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
+	0,  // 51: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
+	0,  // 52: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
+	17, // 53: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
+	16, // 54: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
+	0,  // 55: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 56: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
+	0,  // 57: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
+	6,  // 58: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
+	20, // 59: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
+	18, // 60: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
+	24, // 61: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
+	29, // 62: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
+	33, // 63: payments.v1.PaymentsService.ListChainTransfers:output_type -> payments.v1.ListChainTransfersResponse
+	30, // 64: payments.v1.PaymentsService.ResolveChainTransfer:output_type -> payments.v1.ChainTransfer
+	36, // 65: payments.v1.PaymentsService.RecentLogs:output_type -> payments.v1.RecentLogsResponse
+	48, // [48:66] is the sub-list for method output_type
+	30, // [30:48] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }

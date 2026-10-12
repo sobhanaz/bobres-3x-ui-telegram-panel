@@ -57,6 +57,9 @@ type ops struct {
 	// httpc calls the vendor's license server (nil: a 30-second client;
 	// redirects are never followed).
 	httpc *http.Client
+	// s3c downloads a backup for `bobres restore s3://...` (nil: a plain
+	// client; the download's own timeout applies).
+	s3c *http.Client
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {

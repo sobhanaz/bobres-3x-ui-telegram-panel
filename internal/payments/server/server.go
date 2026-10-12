@@ -187,6 +187,10 @@ func (s *Server) GatewayReport(ctx context.Context, req *paymentsv1.GatewayRepor
 	for _, f := range r.Failures {
 		out.Failures = append(out.Failures, &paymentsv1.GatewayReasonCount{Reason: f.Reason, Count: f.Count})
 	}
+	out.CheckErrorCount = r.CheckErrorCount
+	for i := range r.CheckErrors {
+		out.CheckErrors = append(out.CheckErrors, gatewayEventToProto(&r.CheckErrors[i]))
+	}
 	if c := r.Chain; c != nil {
 		out.UnmatchedCount = c.UnmatchedCount
 		for i := range c.Unmatched {
