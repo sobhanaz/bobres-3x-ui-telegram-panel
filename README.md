@@ -148,6 +148,8 @@ through each service's outbox. The dashboard is Vue 3, built into the `core` bin
 - The web dashboard (`web/dashboard`, Vue) needs Node.js 24: `make dashboard` builds it into the
   folder core embeds (run it before `make build`), `make dashboard-test` type-checks and tests it.
   For live editing, run a local core on port 8088 and `npm run dev` in `web/dashboard`.
+- Two throwaway Ubuntu 24.04 "servers" in Docker (one for the bot stack, one for a 3x-ui panel),
+  to install and try everything as on real VPSes: `deploy/lab/README.md`.
 - Database tests need PostgreSQL 13+ (`BOBRES_TEST_DATABASE_URL`, a URL for any database on
   a server where the role may `CREATE DATABASE`; default: the local socket in `/tmp`) and
   Redis (`BOBRES_TEST_REDIS_ADDR`, default `127.0.0.1:6379`). Each test package gets its own
