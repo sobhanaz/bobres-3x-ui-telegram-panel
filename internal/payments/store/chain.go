@@ -5,8 +5,10 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -252,12 +254,15 @@ func (s *Store) UnpaidChainIntents(ctx context.Context, tx pgx.Tx, userID string
 // address can never carry an automatic payment's amount by chance.
 const chainCent = 10_000
 
-// AllocateChainAmount returns base plus the smallest offset in 1..maxOffset
-// that no on-chain intent to this address created within window has as its
-// amount (and that is not a whole cent), so a transfer of exactly that
-// amount can only be this payment's. It takes the lock that serialises
-// allocations (LockChainAmounts); the caller inserts the intent before
-// committing.
+// AllocateChainAmount returns base plus an offset in 1..maxOffset that no
+// on-chain intent to this address created within window has as its amount
+// (and that is not a whole cent), so a transfer of exactly that amount can
+// only be this payment's. The offset is picked at random among the free
+// ones, not the smallest: after a restore from a backup, the payments made
+// since the backup are gone but their customers still hold their amounts,
+// and the smallest free offset would hand the first of them to the next
+// customer almost surely. It takes the lock that serialises allocations
+// (LockChainAmounts); the caller inserts the intent before committing.
 func (s *Store) AllocateChainAmount(ctx context.Context, tx pgx.Tx, address string, base, maxOffset int64, window time.Duration) (int64, error) {
 	if err := s.LockChainAmounts(ctx, tx); err != nil {
 		return 0, fmt.Errorf("allocate amount: %w", err)
@@ -282,12 +287,57 @@ func (s *Store) AllocateChainAmount(ctx context.Context, tx pgx.Tx, address stri
 	if err := rows.Err(); err != nil {
 		return 0, fmt.Errorf("allocate amount: %w", err)
 	}
+	var free []int64
 	for off := int64(1); off <= maxOffset; off++ {
 		if a := base + off; !taken[a] && a%chainCent != 0 {
-			return a, nil
+			free = append(free, a)
 		}
 	}
-	return 0, ErrNoFreeAmount
+	if len(free) == 0 {
+		return 0, ErrNoFreeAmount
+	}
+	i, err := rand.Int(rand.Reader, big.NewInt(int64(len(free))))
+	if err != nil {
+		return 0, fmt.Errorf("allocate amount: %w", err)
+	}
+	return free[i.Int64()], nil
+}
+
+// NoteRestore notices a restore of the database from a backup: the
+// restore_guard row keeps that table's own OID, which a restore (it
+// recreates every table) changes. The first call writes the row; a call
+// that finds the OID changed records now as restored_at and reports
+// noticed. It returns when the latest restore was noticed (nil: none).
+func (s *Store) NoteRestore(ctx context.Context, tx pgx.Tx) (restoredAt *time.Time, noticed bool, err error) {
+	var at *time.Time
+	err = s.q(tx).QueryRow(ctx, `
+		INSERT INTO payments.restore_guard (id, table_oid) VALUES (true, 'payments.restore_guard'::regclass::oid)
+		ON CONFLICT (id) DO UPDATE SET table_oid = EXCLUDED.table_oid, restored_at = now()
+			WHERE payments.restore_guard.table_oid <> EXCLUDED.table_oid
+		RETURNING restored_at`).Scan(&at)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows): // the row was there, unchanged
+	case err != nil:
+		return nil, false, fmt.Errorf("note restore: %w", err)
+	default:
+		noticed = at != nil
+	}
+	restoredAt, err = s.RestoredAt(ctx, tx)
+	return restoredAt, noticed, err
+}
+
+// RestoredAt is when NoteRestore last noticed a restore (nil: never, or
+// before the guard's row was written).
+func (s *Store) RestoredAt(ctx context.Context, tx pgx.Tx) (*time.Time, error) {
+	var at *time.Time
+	err := s.q(tx).QueryRow(ctx, `SELECT restored_at FROM payments.restore_guard`).Scan(&at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("restored at: %w", err)
+	}
+	return at, nil
 }
 
 // ChainCandidates locks the on-chain intents a transfer of exactly value to

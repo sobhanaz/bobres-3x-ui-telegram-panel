@@ -84,6 +84,11 @@ func setup(rt *app.Runtime) error {
 	if err := svc.ConfigureGateways(rt.Ctx, opts); err != nil {
 		return err
 	}
+	// After a restore from a backup, automatic USDT holds back the transfers
+	// that could be an erased payment's (StartChain notes it again).
+	if err := svc.NoteRestore(rt.Ctx, nil); err != nil {
+		rt.Log.Warn("could not check for a database restore", "err", err)
+	}
 	srv := paymentserver.New(svc, st)
 	// Always set: Zarinpal may be switched on from the dashboard at any time.
 	srv.SetPublicURL(cfg.ZarinpalPublicURL)

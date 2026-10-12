@@ -116,6 +116,14 @@ func (s *Service) paymentReceived(ctx context.Context, tx pgx.Tx, p events.Payme
 		credited.Reason = events.CreditOrderNotPayable
 		return s.publish(ctx, tx, events.WalletCredited, credited)
 	}
+	// The order's discount code was used up meanwhile (or used by this
+	// customer on another order): the money stays in the wallet.
+	if err := s.checkDiscount(ctx, tx, o, true); errors.Is(err, ErrDiscount) {
+		credited.Reason = events.CreditDiscountUsed
+		return s.publish(ctx, tx, events.WalletCredited, credited)
+	} else if err != nil {
+		return err
+	}
 	if _, err := s.st.Debit(ctx, tx, o.UserID, o.Currency, o.Amount, &store.LedgerEntry{
 		Kind: "purchase", RefType: strptr("order"), RefID: strptr(o.ID),
 		IdempotencyKey: "purchase:" + o.ID,

@@ -106,27 +106,41 @@ type Summary struct {
 	NextRun       int64
 	// DiskFree is the free space on the backup disk, in bytes (0: unknown).
 	DiskFree uint64
+	// LastUploadError is why the newest good backup was not copied to
+	// S3-compatible storage ("" when it was, or when no copy was tried yet:
+	// the run is still copying it, or S3 was set up after it was made).
+	LastUploadError string
+	// OffsiteConfigured: each backup is copied to S3-compatible storage.
+	// OffsiteError is why the S3 settings that are there cannot be used.
+	OffsiteConfigured bool
+	OffsiteError      string
 }
 
 // Summarize reads a Status answer.
 func Summarize(status json.RawMessage) (Summary, error) {
 	var st struct {
 		Backups []struct {
-			CreatedAt time.Time `json:"created_at"`
-			Error     string    `json:"error"`
+			CreatedAt   time.Time `json:"created_at"`
+			Error       string    `json:"error"`
+			UploadError string    `json:"upload_error"`
 		} `json:"backups"`
 		LastError string `json:"last_error"`
 		NextRun   int64  `json:"next_run"`
 		DiskFree  uint64 `json:"disk_free"`
+		Offsite   struct {
+			Configured bool   `json:"configured"`
+			Error      string `json:"error"`
+		} `json:"offsite"`
 	}
 	if err := json.Unmarshal(status, &st); err != nil {
 		return Summary{}, fmt.Errorf("backupclient: summary: %w", err)
 	}
-	sum := Summary{LastError: st.LastError, NextRun: st.NextRun, DiskFree: st.DiskFree}
+	sum := Summary{LastError: st.LastError, NextRun: st.NextRun, DiskFree: st.DiskFree,
+		OffsiteConfigured: st.Offsite.Configured, OffsiteError: st.Offsite.Error}
 	// The list is newest first; a failed run's sidecar has an error and no file.
 	for _, b := range st.Backups {
 		if b.Error == "" {
-			sum.LastCreatedAt = &b.CreatedAt
+			sum.LastCreatedAt, sum.LastUploadError = &b.CreatedAt, b.UploadError
 			break
 		}
 	}

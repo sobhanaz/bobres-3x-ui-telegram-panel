@@ -10,8 +10,18 @@ import (
 // Core is the core service configuration.
 type Core struct {
 	Common
-	// ServiceToken is core's own token, presented to payments and provisioner.
+	// ServiceToken is core's own token, presented to payments
+	// (BOBRES_TOKEN_CORE in .env). Core presents a different token to each
+	// peer, so no peer holds a token another one accepts as core.
 	ServiceToken string
+	// ProvisionerToken is what core presents to provisioner
+	// (BOBRES_PROVISIONER_TOKEN; BOBRES_TOKEN_CORE_PROVISIONER in .env), and
+	// BotInternalToken what it presents to the bot's /internal endpoints
+	// (BOBRES_BOT_INTERNAL_TOKEN; BOBRES_TOKEN_CORE_BOT in .env). Unset, each
+	// is ServiceToken (a configuration from before them; the compose file
+	// always sets both, and core warns while one is missing).
+	ProvisionerToken string
+	BotInternalToken string
 	// BotToken is the bot's service token; core accepts calls carrying it.
 	BotToken            string
 	PaymentsGRPCAddr    string
@@ -64,8 +74,19 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.BackupToken, err = optionalToken("BOBRES_BACKUP_TOKEN", c.Env)
 	keep(err)
+	co.ProvisionerToken, err = optionalToken("BOBRES_PROVISIONER_TOKEN", c.Env)
+	keep(err)
+	co.BotInternalToken, err = optionalToken("BOBRES_BOT_INTERNAL_TOKEN", c.Env)
+	keep(err)
 	keep(requireDistinct(map[string]string{"BOBRES_SERVICE_TOKEN": co.ServiceToken, "BOBRES_PEER_BOT_TOKEN": co.BotToken,
-		"BOBRES_BACKUP_TOKEN": co.BackupToken}))
+		"BOBRES_BACKUP_TOKEN": co.BackupToken, "BOBRES_PROVISIONER_TOKEN": co.ProvisionerToken,
+		"BOBRES_BOT_INTERNAL_TOKEN": co.BotInternalToken}))
+	if co.ProvisionerToken == "" {
+		co.ProvisionerToken = co.ServiceToken
+	}
+	if co.BotInternalToken == "" {
+		co.BotInternalToken = co.ServiceToken
+	}
 	co.PaymentsGRPCAddr = getenv("BOBRES_PAYMENTS_GRPC_ADDR", "")
 	keep(requireNonEmpty("BOBRES_PAYMENTS_GRPC_ADDR", co.PaymentsGRPCAddr))
 	co.ProvisionerGRPCAddr = getenv("BOBRES_PROVISIONER_GRPC_ADDR", "")

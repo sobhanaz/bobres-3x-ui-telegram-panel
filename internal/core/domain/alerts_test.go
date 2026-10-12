@@ -50,31 +50,43 @@ func (f *fakeLister) ListServers(context.Context) (*ServerList, error) {
 	return &ServerList{Servers: f.servers}, nil
 }
 
-// fakeReporter is payments' gateway settings and Zarinpal's report.
+// fakeReporter is payments' gateway settings and the reports of Zarinpal
+// and automatic USDT.
 type fakeReporter struct {
-	enabled    bool
-	report     GatewayReport
-	configErr  error
-	reportErr  error
-	reportAsks int
+	enabled     bool
+	report      GatewayReport
+	usdtEnabled bool
+	usdtReport  GatewayReport
+	configErr   error
+	reportErr   error
+	reportAsks  int
+	usdtAsks    int
 }
 
 func (f *fakeReporter) GatewayConfigs(context.Context) ([]GatewayConfig, error) {
 	if f.configErr != nil {
 		return nil, f.configErr
 	}
-	return []GatewayConfig{{Provider: Stars, Enabled: true}, {Provider: Zarinpal, Enabled: f.enabled}}, nil
+	return []GatewayConfig{{Provider: Stars, Enabled: true}, {Provider: Zarinpal, Enabled: f.enabled},
+		{Provider: USDTAuto, Enabled: f.usdtEnabled}}, nil
 }
 
 func (f *fakeReporter) GatewayReport(_ context.Context, provider string, _, _ int64) (*GatewayReport, error) {
-	f.reportAsks++
-	if provider != Zarinpal {
+	var r GatewayReport
+	switch provider {
+	case Zarinpal:
+		f.reportAsks++
+		r = f.report
+	case USDTAuto:
+		f.usdtAsks++
+		r = f.usdtReport
+		r.Provider = USDTAuto
+	default:
 		return nil, fmt.Errorf("asked for %s", provider)
 	}
 	if f.reportErr != nil {
 		return nil, f.reportErr
 	}
-	r := f.report
 	return &r, nil
 }
 
@@ -651,6 +663,78 @@ func TestZarinpalChecks(t *testing.T) {
 	}
 }
 
+// Automatic USDT: while it is switched on, the watcher must read the
+// store's address (a failing read is forgiven for 5 minutes), and no
+// automatic payment may stay open for over 2 hours.
+func TestUSDTChecks(t *testing.T) {
+	gw := &fakeReporter{}
+	a := newAlertWorld(t, WatchdogSources{Gateways: gw})
+	now := a.now.Unix()
+
+	// Switched off: covered, nothing asked.
+	if p := probeOf(a, a.w.usdt); !p.covered || len(p.checks) != 0 || gw.usdtAsks != 0 {
+		t.Fatalf("off: %+v (asked %d)", p, gw.usdtAsks)
+	}
+
+	gw.usdtEnabled = true
+	gw.usdtReport = GatewayReport{LastScanAt: now - 20, LastScanOKAt: now - 20}
+	p := probeOf(a, a.w.usdt)
+	if !p.covered || checkOf(t, p, "gateway.usdt_auto.read").problem || checkOf(t, p, "gateway.usdt_auto.open").problem {
+		t.Fatalf("quiet: %+v", p)
+	}
+
+	// TronGrid refuses the key: a blip within 5 minutes of a good read is
+	// fine, then it is a problem, with the read's error.
+	gw.usdtReport = GatewayReport{LastScanAt: now - 10, LastScanOKAt: now - 4*60, ScanError: "trongrid: HTTP 401"}
+	if c := checkOf(t, probeOf(a, a.w.usdt), "gateway.usdt_auto.read"); c.problem {
+		t.Fatalf("a failed read within the grace: %+v", c)
+	}
+	gw.usdtReport.LastScanOKAt = now - 6*60
+	c := checkOf(t, probeOf(a, a.w.usdt), "gateway.usdt_auto.read")
+	if !c.problem || c.detail != "trongrid: HTTP 401" || c.title != "alert.usdt_failing" || c.severity != events.SeverityCritical {
+		t.Fatalf("failing reads: %+v", c)
+	}
+	gw.usdtReport.LastScanOKAt = 0 // it never read the address
+	if c := checkOf(t, probeOf(a, a.w.usdt), "gateway.usdt_auto.read"); !c.problem {
+		t.Fatalf("never read: %+v", c)
+	}
+
+	// An open payment: its 45 minutes, then until a complete read expires it.
+	gw.usdtReport = GatewayReport{LastScanOKAt: now, OpenCount: 2, OldestOpenAt: now - 119*60}
+	if c := checkOf(t, probeOf(a, a.w.usdt), "gateway.usdt_auto.open"); c.problem {
+		t.Fatalf("open for 119 minutes: %+v", c)
+	}
+	gw.usdtReport.OldestOpenAt = now - 121*60
+	if c := checkOf(t, probeOf(a, a.w.usdt), "gateway.usdt_auto.open"); !c.problem || c.args["count"] != "2" || c.title != "alert.usdt_stuck" {
+		t.Fatalf("stuck: %+v", c)
+	}
+
+	// Payments not answering: nothing known.
+	gw.reportErr = errors.New("unavailable")
+	if p := probeOf(a, a.w.usdt); p.covered {
+		t.Fatalf("report failed: %+v", p)
+	}
+	gw.reportErr, gw.configErr = nil, errors.New("unavailable")
+	if p := probeOf(a, a.w.usdt); p.covered {
+		t.Fatalf("configs failed: %+v", p)
+	}
+
+	// Through the watchdog: announced, and forgotten once switched off.
+	gw.configErr, gw.usdtReport = nil, GatewayReport{LastScanAt: now, ScanError: "trongrid: HTTP 401"}
+	a.step()
+	a.after(time.Minute)
+	a.step()
+	if got := a.expectSent(1); got[0].Key != "gateway.usdt_auto.read" || got[0].Severity != events.SeverityCritical {
+		t.Fatalf("announced: %+v", got)
+	}
+	gw.usdtEnabled = false
+	a.after(time.Minute)
+	a.step()
+	if st := a.state("gateway.usdt_auto.read"); st != nil {
+		t.Fatalf("kept after switching off: %+v", st)
+	}
+}
+
 // backupStatus is the backup service's answer at now: a failed run, then a
 // good backup made at lastGood.
 func backupStatus(now, lastGood time.Time, lastErr string, free uint64) string {
@@ -704,6 +788,52 @@ func TestBackupChecks(t *testing.T) {
 		a.w.src.Backups = b
 		if p = probeOf(a, a.w.backups); p.covered || len(p.checks) != 0 {
 			t.Fatalf("unreachable: %+v", p)
+		}
+	}
+}
+
+// With an off-site (S3) copy set up, the newest good backup must have been
+// copied, and the settings must be usable; without one nothing is checked.
+// A backup still being copied (no outcome yet) is not a problem.
+func TestBackupOffsiteCheck(t *testing.T) {
+	a := newAlertWorld(t, WatchdogSources{})
+	bk := &fakeBackups{}
+	a.w.src.Backups = bk
+	status := func(newest, offsite string) string {
+		return fmt.Sprintf(`{"backups":[{"file":"","created_at":%q,"error":"x"},{"file":"b.bkp","created_at":%q%s},`+
+			`{"file":"a.bkp","created_at":%q,"uploaded_at":%q}],"running":false,"last_error":"","next_run":0,`+
+			`"disk_free":%d,"dir":"/backups","offsite":%s}`,
+			a.now.Format(time.RFC3339), a.now.Add(-time.Hour).Format(time.RFC3339), newest,
+			a.now.Add(-25*time.Hour).Format(time.RFC3339), a.now.Add(-25*time.Hour).Format(time.RFC3339), uint64(10<<30), offsite)
+	}
+	const on = `{"configured":true,"endpoint_host":"s3.example.com","bucket":"b"}`
+	uploaded := fmt.Sprintf(`,"uploaded_at":%q,"uploaded_to":"s3://b/b.bkp"`, a.now.Add(-time.Hour).Format(time.RFC3339))
+
+	for name, c := range map[string]struct {
+		newest, offsite string
+		problem         bool
+		detail          string
+	}{
+		"copied":              {uploaded, on, false, ""},
+		"being copied":        {``, on, false, ""},
+		"copy failed":         {`,"upload_error":"the storage answered HTTP 403"`, on, true, "the storage answered HTTP 403"},
+		"settings unusable":   {`,"upload_error":"the S3 upload is not set up correctly: no bucket"`, `{"configured":false,"error":"no bucket"}`, true, "no bucket"},
+		"unusable, no backup": {``, `{"configured":false,"error":"no bucket"}`, true, "no bucket"},
+	} {
+		bk.raw = status(c.newest, c.offsite)
+		got := checkOf(t, probeOf(a, a.w.backups), "backup.offsite")
+		if got.problem != c.problem || got.detail != c.detail || got.title != "alert.backup_offsite" || got.severity != events.SeverityWarning {
+			t.Errorf("%s: %+v", name, got)
+		}
+	}
+
+	// No S3 set up (or a backup service from before it): no such check.
+	for _, raw := range []string{status(``, `{"configured":false}`), backupStatus(a.now, a.now.Add(-time.Hour), "", 10<<30)} {
+		bk.raw = raw
+		for _, c := range probeOf(a, a.w.backups).checks {
+			if c.key == "backup.offsite" {
+				t.Fatalf("checked without S3: %+v", c)
+			}
 		}
 	}
 }
@@ -1005,6 +1135,7 @@ func TestAlertTitlesExist(t *testing.T) {
 	titles := map[string][]string{
 		"alert.service_down": {"service"}, "alert.service_not_ready": {"service"}, "alert.server_down": {"server"},
 		"alert.zarinpal_failing": nil, "alert.zarinpal_stuck": {"count"}, "alert.backup_failed": nil,
+		"alert.usdt_failing": nil, "alert.usdt_stuck": {"count"}, "alert.backup_offsite": nil,
 		"alert.backup_stale": {"hours"}, "alert.disk_low": {"free"}, "alert.provision_failed": {"count"},
 		"alert.bot_lag": {"minutes"}, "alert.license_expiring": {"date", "days"}, "alert.license_grace": {"date"},
 		"alert.license_expired": nil,

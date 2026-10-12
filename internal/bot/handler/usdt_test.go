@@ -151,7 +151,7 @@ func TestUSDTAutomaticPurchase(t *testing.T) {
 
 	u.press("pay:u:")
 	amount, intent := u.usdtScreen()
-	if amount <= 2_500_000 || amount > 2_500_999 { // 150,000 / 60,000 = 2.50, plus a unique offset
+	if amount <= 2_500_000 || amount > 2_509_999 || amount%10_000 == 0 { // 150,000 / 60,000 = 2.50, plus a unique offset
 		t.Fatalf("exact amount %d", amount)
 	}
 	screen := u.last().text
@@ -244,7 +244,7 @@ func TestUSDTTopupAndExpiry(t *testing.T) {
 	u.press("wamt:200000")
 	u.press("wpay:u:")
 	amount, intent := u.usdtScreen()
-	if amount <= 3_340_000 || amount > 3_340_999 { // 200,000 / 60,000 = 3.333…, rounded up to 3.34
+	if amount <= 3_340_000 || amount > 3_349_999 || amount%10_000 == 0 { // 200,000 / 60,000 = 3.333…, rounded up to 3.34
 		t.Fatalf("exact amount %d", amount)
 	}
 	screen := u.last().text

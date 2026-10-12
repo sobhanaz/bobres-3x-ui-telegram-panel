@@ -180,6 +180,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		// never shown to the reseller.
 		key := map[string]string{
 			events.CreditOrderNotPayable: "wallet.credited_late",
+			events.CreditDiscountUsed:    "wallet.credited_discount_used",
 			events.CreditAdminAdjust:     "wallet.credited_admin",
 			events.CreditReferral:        "wallet.credited_referral",
 			events.CreditRefund:          "wallet.credited_refund",
@@ -380,6 +381,7 @@ func (n *Notifier) systemAlert(lang string, e events.SystemAlertEvent) string {
 var unmatchedReasons = map[string]bool{
 	events.UnmatchedNoPayment: true, events.UnmatchedAlreadyPaid: true,
 	events.UnmatchedClosed: true, events.UnmatchedAmbiguous: true,
+	events.UnmatchedAfterRestore: true,
 }
 
 // txidRe is a TRON transaction id as payments records it.

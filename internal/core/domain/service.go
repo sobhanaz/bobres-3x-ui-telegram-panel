@@ -257,6 +257,13 @@ func (s *Service) PayOrderWithWallet(ctx context.Context, orderID, userID string
 		if err != nil {
 			return err
 		}
+		// Before the balance check, so a customer short of money is not sent
+		// to top up for a price the code no longer gives. Without the code's
+		// lock: that is taken after the wallet's, when the order is marked
+		// paid (orderPaidEffects), and checked again there.
+		if err := s.checkDiscount(ctx, tx, o, false); err != nil {
+			return err
+		}
 		_, err = s.st.Debit(ctx, tx, o.UserID, o.Currency, o.Amount, &store.LedgerEntry{
 			Kind: "purchase", RefType: strptr("order"), RefID: strptr(o.ID),
 			IdempotencyKey: "purchase:" + o.ID,

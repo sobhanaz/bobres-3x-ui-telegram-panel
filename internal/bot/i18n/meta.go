@@ -86,6 +86,7 @@ var contexts = map[string]Context{
 	"sub.not_extendable":     CtxToastHTML,
 	"plan.unavailable":       CtxToastHTML,
 	"pay.duplicate":          CtxToastHTML,
+	"pay.txid_announced":     CtxToastHTML,
 	"cancelled":              CtxToastHTML,
 	"admin.forbidden":        CtxToastHTML,
 	"admin.reject_reason":    CtxToastHTML,
