@@ -173,8 +173,8 @@ jobs:
       # The real installer against the real stack AND a real 3x-ui panel: the
       # owner sets up a plan and the trial, a customer takes the trial and buys
       # with wallet credit, all through the bot (fake Telegram on the runner),
-      # and both VPN accounts must exist on the panel. Then status, logs and both
-      # uninstall modes.
+      # and both VPN accounts must exist on the panel. Then status and logs; the
+      # restore drill and both uninstall modes follow as their own steps.
       - name: End-to-end install against a real 3x-ui panel
         env:
           BOBRES_TELEGRAM_BOT_TOKEN: "123456789:AAH-ci-fake-token-abcdefghijklmnopqrstuv"
@@ -204,6 +204,55 @@ jobs:
           BOBRES_E2E_SUB_BASE=https://sub.example.test/sub/ \
           XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN="$xui_token" XUI_TEST_ALLOW_PRIVATE=1 \
             go test -tags e2e -count=1 -v ./tests/e2e/
+      # The restore drill on the real stack, with the store the e2e test filled:
+      # back up, write a marker row, restore that backup, and the marker must be
+      # gone, the data from before intact and every service healthy. The CLI
+      # runs as root here, as on a real server: the installer gives the backups
+      # directory to the backup service's user (65532) only when run as root.
+      - name: Restore drill (backup, change, restore)
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/bobres"
+          fail() { echo "::error title=Restore drill::$*"; exit 1; }
+          # The database's superuser is POSTGRES_USER (bobres); there is no postgres role.
+          sql() {
+            (cd "$dir" && sudo docker compose --project-name bobres -f docker-compose.yml --env-file .env \
+              exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -Atq -U "$POSTGRES_USER" -d "$POSTGRES_DB"')
+          }
+          # Hand the install back to the runner afterwards, also on failure, for
+          # the log dump and the uninstall steps.
+          trap 'sudo chown -R "$(id -u):$(id -g)" "$dir"' EXIT
+          sudo chown 65532:65532 "$dir/backups"
+          counts="SELECT format('%s users, %s orders, %s subscriptions', (SELECT count(*) FROM core.users),
+            (SELECT count(*) FROM core.orders), (SELECT count(*) FROM core.subscriptions))"
+          marker="SELECT count(*) FROM core.users WHERE telegram_id = 990001"
+          before=$(echo "$counts" | sql)
+          echo "Before the backup: $before"
+          case "$before" in 0\ users*) fail "the store is empty: the e2e test should have filled it" ;; esac
+
+          out=$(sudo /tmp/bobres backup --dir "$dir" 2>&1) || { echo "$out"; fail "bobres backup failed"; }
+          echo "$out"
+          file=$(echo "$out" | sed -n 's/^Backup \(bobres-[0-9]\{8\}T[0-9]\{6\}Z\.bkp\) written.*/\1/p')
+          [ -n "$file" ] || fail "bobres backup did not name the file it wrote"
+          echo "$out" | grep -q '^Sent to the owner on Telegram' || fail "the backup was not sent to the owner (fake Telegram)"
+
+          echo "INSERT INTO core.users (id, telegram_id) VALUES ('00000000-0000-0000-0000-00000000d001', 990001)" | sql
+          [ "$(echo "$marker" | sql)" = 1 ] || fail "the marker row was not written"
+          backups=$(sudo find "$dir/backups" -name 'bobres-*.bkp' | wc -l)
+
+          sudo /tmp/bobres restore "$dir/backups/$file" --dir "$dir" --yes || fail "bobres restore $file failed (see its output above)"
+
+          [ "$(echo "$marker" | sql)" = 0 ] || fail "the marker row written after the backup is still there after the restore"
+          after=$(echo "$counts" | sql)
+          [ "$after" = "$before" ] || fail "after the restore the store has $after; the backup had $before"
+          [ "$(sudo find "$dir/backups" -name 'bobres-*.bkp' | wc -l)" -gt "$backups" ] || fail "bobres restore kept no safety backup of the store it replaced"
+          [ "$(sudo stat -c %a "$dir/.env")" = 600 ] || fail ".env is not mode 600 after the restore"
+          sudo /tmp/bobres status --dir "$dir" || fail "the stack is not healthy after the restore"
+          echo "Restore drill passed: $after, marker gone, safety backup kept."
+      - name: Uninstall (keep the data, then purge)
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/bobres"
           /tmp/bobres uninstall --dir "$dir" --yes
           test -z "$(docker ps -aq --filter label=com.docker.compose.project=bobres)"
           docker volume ls -q | grep -q '^bobres_pg_data$'
@@ -215,6 +264,9 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/bobres" 2>/dev/null && docker compose --project-name bobres -f docker-compose.yml --env-file .env ps --all || true
           cd "$RUNNER_TEMP/bobres" 2>/dev/null && docker compose --project-name bobres -f docker-compose.yml --env-file .env logs --tail 200 || true
+          # The backups and their records (file, size, checksum, error; no secrets).
+          sudo ls -la "$RUNNER_TEMP/bobres/backups" || true
+          sudo sh -c 'cat "$1"/backups/*.json' sh "$RUNNER_TEMP/bobres" || true
           cat /tmp/tgfake.log || true
           curl -fsS localhost:8081/_sent || true
           docker logs --tail 100 xui || true
