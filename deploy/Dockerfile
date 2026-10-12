@@ -1,4 +1,7 @@
-# One Dockerfile for all four Go services: docker build --build-arg SERVICE=core -f deploy/Dockerfile .
+# One Dockerfile for every Go service: docker build --build-arg SERVICE=core -f deploy/Dockerfile .
+# The backup service has its own target (it needs pg_dump):
+#   docker build --target backup --build-arg SERVICE=backup -f deploy/Dockerfile .
+# The last stage stays the default, so builds without --target are unchanged.
 
 # The web dashboard: static files that core embeds (web/dashboard/embed.go). Built
 # on the build machine's own platform, since the files are the same for every
@@ -29,6 +32,19 @@ RUN test -n "$SERVICE" && go build -trimpath \
 FROM alpine:3.24 AS runtime-base
 RUN apk add --no-cache ca-certificates tzdata \
  && addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres
+
+# The backup service: pg_dump from the same major version as the database (pg_dump
+# must be at least the server's), plus the Go /app. It runs as the same non-root uid
+# as the other images; the installer gives that uid the host's backups directory.
+FROM postgres:16-alpine AS backup
+RUN addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres \
+ && mkdir -p /backups && chown 65532:65532 /backups && chmod 700 /backups
+COPY --from=build /out/app /app
+USER 65532:65532
+ENV BOBRES_BACKUP_DIR=/backups
+EXPOSE 8080
+ENTRYPOINT ["/app"]
+CMD []
 
 FROM scratch
 COPY --from=runtime-base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

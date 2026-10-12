@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 export GOTOOLCHAIN := local
 export PATH := $(PATH):$(HOME)/go/bin
-SERVICES := bot core payments provisioner
+SERVICES := bot core payments provisioner backup
 # Same version as the CI "Lint" job; golangci-lint v1 cannot lint a Go 1.26 module.
 GOLANGCI_LINT_VERSION := v2.14.0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)

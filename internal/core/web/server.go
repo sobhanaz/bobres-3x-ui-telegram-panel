@@ -56,6 +56,15 @@ type Config struct {
 	Bot BotPeer
 	// Secrets encrypts authenticator secrets; nil disables password logins.
 	Secrets *bcrypto.Envelope
+	// System asks every service's health for the System page (nil: no
+	// services are listed).
+	System SystemHealth
+	// Logs reads the bot's, payments' and provisioner's kept warnings and
+	// errors by service name (core reads its own; missing: not configured).
+	Logs map[string]LogSource
+	// Backups lists and starts backups (nil: the backup service is not
+	// installed).
+	Backups Backups
 	// Dashboard serves the built app under /admin/ (nil: not mounted).
 	Dashboard http.Handler
 	Log       *slog.Logger
@@ -197,6 +206,18 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/gateways/report", PermGatewaysWrite, s.gatewayReport)
 	s.route(api, "PUT /api/v1/gateways/{provider}", PermGatewaysWrite, s.putGateway)
 	s.route(api, "POST /api/v1/gateways/{provider}/test", PermGatewaysWrite, s.testGateway)
+
+	// System: health and versions (owner and admin), the license (state for
+	// owner and admin, changes by the owner).
+	s.route(api, "GET /api/v1/system", PermSystemRead, s.system)
+	// Logs carry Telegram ids: the owner only.
+	s.route(api, "GET /api/v1/system/logs", PermSystemWrite, s.systemLogs)
+	// Backups: the list for owner and admin, "back up now" for the owner.
+	s.route(api, "GET /api/v1/system/backups", PermSystemRead, s.systemBackups)
+	s.route(api, "POST /api/v1/system/backups/run", PermSystemWrite, s.runBackup)
+	s.route(api, "GET /api/v1/license", PermSystemRead, s.getLicense)
+	s.route(api, "POST /api/v1/license/check", PermLicenseWrite, s.checkLicense)
+	s.route(api, "PUT /api/v1/license", PermLicenseWrite, s.putLicense)
 
 	// Administration.
 	s.route(api, "GET /api/v1/staff", PermStaffWrite, s.listStaff)

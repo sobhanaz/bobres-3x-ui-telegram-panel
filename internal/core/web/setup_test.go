@@ -105,6 +105,15 @@ func (b *fakeBot) TestBroadcast(_ context.Context, t botfiles.TestBroadcast) (*b
 	return &botfiles.TestResult{OK: true, MessageID: 42}, nil
 }
 
+func (b *fakeBot) CheckUpdates(context.Context) (*botfiles.UpdateCheck, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.down {
+		return nil, errors.New("bot down")
+	}
+	return &botfiles.UpdateCheck{Current: "1.0.0", Latest: "1.1.0", Channel: "stable", Newer: true, Verified: true, CheckedAt: 1760000000}, nil
+}
+
 func (b *fakeBot) refreshCount() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()

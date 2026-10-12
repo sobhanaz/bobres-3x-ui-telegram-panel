@@ -382,6 +382,11 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
+	// Switching a payment method on is a new action a license may gate.
+	var gate *LicenseStatus
+	if touchesToggle(norm) {
+		gate = s.gatingLicense(ctx)
+	}
 	var changes []SettingChange
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		changes = nil
@@ -403,6 +408,11 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 		}
 		if err := checkTogether(final); err != nil {
 			return err
+		}
+		for _, p := range toggledOn(before, norm) {
+			if err := gatewayRefusal(gate, p); err != nil {
+				return err
+			}
 		}
 		for _, k := range keys {
 			if before[k] == norm[k] {

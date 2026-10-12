@@ -26,8 +26,13 @@ func New(service, level, format string) *slog.Logger {
 	return NewWithWriter(os.Stdout, service, level, format)
 }
 
-// NewWithWriter is New with an explicit destination (used by tests).
+// NewWithWriter is New with an explicit destination (used by tests). Every
+// logger also keeps its warnings and errors in the process's Recent buffer.
 func NewWithWriter(w io.Writer, service, level, format string) *slog.Logger {
+	return newLogger(w, recent, service, level, format)
+}
+
+func newLogger(w io.Writer, ring *Ring, service, level, format string) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: parseLevel(level), ReplaceAttr: redact}
 	var h slog.Handler
 	if format == "text" {
@@ -35,7 +40,10 @@ func NewWithWriter(w io.Writer, service, level, format string) *slog.Logger {
 	} else {
 		h = slog.NewJSONHandler(w, opts)
 	}
-	return slog.New(h).With("service", service)
+	// The buffer gets the same redaction as stdout, whatever the level and
+	// format set for stdout.
+	kept := slog.NewJSONHandler(ring, &slog.HandlerOptions{Level: slog.LevelWarn, ReplaceAttr: redact})
+	return slog.New(tee{h, kept}).With("service", service)
 }
 
 func parseLevel(s string) slog.Level {

@@ -298,6 +298,9 @@ func (s *Service) MakeReseller(ctx context.Context, actor *store.User, userID st
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	if err := s.requireResellers(ctx); err != nil {
+		return nil, err
+	}
 	t, err := s.st.GetUser(ctx, s.st.Conn(), userID)
 	if err != nil {
 		return nil, err

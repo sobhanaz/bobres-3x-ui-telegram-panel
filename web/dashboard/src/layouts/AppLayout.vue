@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
 import Menu from 'primevue/menu'
 import Badge from 'primevue/badge'
+import Tag from 'primevue/tag'
 import { useAuth } from '../stores/auth'
 import { useUi } from '../stores/ui'
 import { groups, visibleSections } from '../sections'
@@ -13,6 +14,7 @@ import { setLang, currentLang } from '../i18n'
 import { applyDocumentBrand } from '../theme'
 import { num, type Lang } from '../format'
 import { loadCounts, pollEvery, poller, ticketCounts } from '../support'
+import { licenseSeverity, poweredBy, stateOf } from '../license'
 
 const { t, locale } = useI18n()
 const auth = useAuth()
@@ -41,6 +43,17 @@ watch(canTickets, (v) => (v ? countsPoll.start() : countsPoll.stop()), { immedia
 onBeforeUnmount(() => countsPoll.stop())
 const waiting = computed(() => (canTickets.value ? (ticketCounts.value?.waiting ?? 0) : 0))
 const badgeOf = (key: string) => (key === 'support' && waiting.value > 0 ? num(waiting.value, locale.value as Lang) : '')
+
+// A license that needs a look (none, invalid, in grace or expired), for staff
+// who see the System page; and "Powered by BOBRES" under a valid license
+// without white label (never on an unlicensed install).
+const licenseChip = computed(() => {
+  const l = auth.me?.license
+  if (!l || !auth.can('system.read')) return null
+  const state = stateOf(l.state)
+  return state === 'active' ? null : state
+})
+const showPoweredBy = computed(() => poweredBy(auth.me?.license))
 
 const themeIcon = computed(() => ({ system: 'pi pi-desktop', dark: 'pi pi-moon', light: 'pi pi-sun' })[ui.theme])
 
@@ -102,6 +115,9 @@ function toggleLang() {
       <header class="topbar">
         <Button class="menu-btn" icon="pi pi-bars" text rounded :aria-label="t('nav.menu')" @click="drawer = true" />
         <span class="spacer" />
+        <RouterLink v-if="licenseChip" :to="{ name: 'system', query: { tab: 'license' } }" class="license-chip" :aria-label="t('license.chip.' + licenseChip)">
+          <Tag :severity="licenseSeverity[licenseChip]" :value="t('license.chip.' + licenseChip)" icon="pi pi-key" />
+        </RouterLink>
         <Button :label="t('lang.switch')" text size="small" @click="toggleLang" />
         <Button :icon="themeIcon" text rounded :aria-label="t('theme.' + ui.theme)" v-tooltip.bottom="t('theme.' + ui.theme)" @click="ui.cycleTheme()" />
         <Button text class="user-btn" @click="userMenu?.toggle($event)">
@@ -114,6 +130,7 @@ function toggleLang() {
       <main class="content">
         <RouterView />
       </main>
+      <footer v-if="showPoweredBy" class="powered-by app-muted">{{ t('license.powered_by') }}</footer>
     </div>
   </div>
 </template>
@@ -236,6 +253,17 @@ nav {
   font-size: 0.8rem;
   color: var(--p-text-muted-color);
 }
+.license-chip {
+  display: inline-flex;
+  margin-inline-end: 0.25rem;
+  text-decoration: none;
+}
+.powered-by {
+  margin-block-start: auto;
+  padding: 0.75rem 1rem 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+}
 .content {
   padding: 1.25rem;
   max-inline-size: 90rem;
@@ -254,6 +282,12 @@ nav {
     padding: 1rem;
   }
   .role {
+    display: none;
+  }
+}
+/* on a phone the chip keeps only its key icon */
+@media (max-width: 600px) {
+  .license-chip :deep(.p-tag-label) {
     display: none;
   }
 }

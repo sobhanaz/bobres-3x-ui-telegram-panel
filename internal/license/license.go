@@ -91,7 +91,29 @@ var (
 	ErrUnbound      = errors.New("license: token is not bound to a domain but binding is required")
 	ErrInvalid      = errors.New("license: invalid token contents")
 	ErrNotYetValid  = errors.New("license: token issued in the future")
+	// ErrUnknownKey: this build embeds no public key at all, so nothing can
+	// verify (every token is refused until the vendor adds one).
+	ErrUnknownKey = errors.New("license: no public keys configured")
 )
+
+// Reason is a short code for why a token was refused, for the dashboard and
+// the CLI: unknown_key, malformed, bad_signature, version, invalid, domain,
+// install_id, unbound, not_yet_valid (or "invalid" for anything else).
+func Reason(err error) string {
+	for _, r := range []struct {
+		err  error
+		code string
+	}{
+		{ErrUnknownKey, "unknown_key"}, {ErrMalformed, "malformed"}, {ErrBadSignature, "bad_signature"},
+		{ErrVersion, "version"}, {ErrDomain, "domain"}, {ErrInstallID, "install_id"}, {ErrUnbound, "unbound"},
+		{ErrNotYetValid, "not_yet_valid"}, {ErrInvalid, "invalid"},
+	} {
+		if errors.Is(err, r.err) {
+			return r.code
+		}
+	}
+	return "invalid"
+}
 
 // Sign creates a token string. Used by the vendor license server and tests.
 func Sign(priv ed25519.PrivateKey, t Token) (string, error) {
@@ -138,9 +160,24 @@ func NormalizeDomain(d string) string {
 // Binding is fail-closed: if the token names a domain or install ID, the
 // caller must supply a matching one. An empty value never matches a bound token.
 func Verify(keys KeyRing, raw string, o Options) (Token, error) {
+	t, err := Parse(keys, raw)
+	if err != nil {
+		return Token{}, err
+	}
+	if err := t.CheckBinding(o); err != nil {
+		return Token{}, err
+	}
+	return t, nil
+}
+
+// Parse checks the signature and the payload but not the bindings, so a
+// caller can show whom a correctly signed token was made for even when it
+// belongs to another install. Never act on a token from Parse alone: use
+// Verify (or CheckBinding) before trusting it.
+func Parse(keys KeyRing, raw string) (Token, error) {
 	var zero Token
 	if len(keys) == 0 {
-		return zero, errors.New("license: no public keys configured")
+		return zero, ErrUnknownKey
 	}
 	parts := strings.Split(strings.TrimSpace(raw), ".")
 	if len(parts) != 2 {
@@ -178,17 +215,23 @@ func Verify(keys KeyRing, raw string, o Options) (Token, error) {
 	if err := t.Validate(); err != nil {
 		return zero, err
 	}
+	return t, nil
+}
+
+// CheckBinding compares the token's domain and install ID with this
+// install's (fail closed, as Verify).
+func (t Token) CheckBinding(o Options) error {
 	if t.Domain == "" {
 		if o.RequireBound {
-			return zero, ErrUnbound
+			return ErrUnbound
 		}
 	} else if d := NormalizeDomain(o.Domain); d == "" || d != NormalizeDomain(t.Domain) {
-		return zero, ErrDomain
+		return ErrDomain
 	}
 	if t.InstallID != "" && (o.InstallID == "" || o.InstallID != t.InstallID) {
-		return zero, ErrInstallID
+		return ErrInstallID
 	}
-	return t, nil
+	return nil
 }
 
 // Check is Verify plus State, so callers cannot forget the expiry check.

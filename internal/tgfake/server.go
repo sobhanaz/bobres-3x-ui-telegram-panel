@@ -9,7 +9,11 @@
 package tgfake
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +36,11 @@ type Sent struct {
 	Stars   int64  `json:"stars,omitempty"`
 	QueryID string `json:"query_id,omitempty"`
 	OK      *bool  `json:"ok,omitempty"`
+	// An uploaded file (multipart sendDocument or sendPhoto): its name,
+	// size and SHA-256 (hex). Text then holds the caption.
+	FileName   string `json:"file_name,omitempty"`
+	FileSize   int64  `json:"file_size,omitempty"`
+	FileSHA256 string `json:"file_sha256,omitempty"`
 }
 
 // Server is the fake API state.
@@ -221,22 +230,63 @@ func (s *Server) inject(w http.ResponseWriter, r *http.Request) {
 	reply(w, map[string]int64{"update_id": id})
 }
 
-// params reads JSON or form/multipart parameters into a flat map.
-func params(r *http.Request) map[string]any {
+// upload is a file part of a multipart request, read as it streams in.
+type upload struct {
+	name   string
+	size   int64
+	sha256 string
+}
+
+// maxField bounds a multipart text field (a caption or a keyboard).
+const maxField = 1 << 20
+
+// params reads JSON or form/multipart parameters into a flat map. A
+// multipart request is streamed: a file part is counted and hashed, never
+// kept, so a large upload costs no memory or disk. A multipart form cut
+// short (no closing boundary) is an error.
+func params(r *http.Request) (map[string]any, *upload, error) {
 	m := map[string]any{}
 	ct := r.Header.Get("Content-Type")
 	switch {
 	case strings.HasPrefix(ct, "application/json"):
 		_ = json.NewDecoder(r.Body).Decode(&m)
+	case strings.HasPrefix(ct, "multipart/form-data"):
+		mr, err := r.MultipartReader()
+		if err != nil {
+			return m, nil, nil
+		}
+		var file *upload
+		for {
+			p, err := mr.NextPart()
+			if errors.Is(err, io.EOF) {
+				return m, file, nil
+			}
+			if err != nil {
+				// Like Telegram, nothing from a form cut short (no closing
+				// boundary): it is not a smaller file.
+				return nil, nil, err
+			}
+			if p.FileName() != "" {
+				h := sha256.New()
+				n, err := io.Copy(h, p)
+				if err != nil {
+					return nil, nil, err
+				}
+				file = &upload{name: p.FileName(), size: n, sha256: hex.EncodeToString(h.Sum(nil))}
+				continue
+			}
+			v, _ := io.ReadAll(io.LimitReader(p, maxField))
+			m[p.FormName()] = string(v)
+		}
 	default:
-		_ = r.ParseMultipartForm(8 << 20) //nolint:gosec // G120: loopback test fake; maxMemory bounds RAM and MaxBytesReader would not silence the rule
+		_ = r.ParseForm()
 		for k, v := range r.Form {
 			if len(v) > 0 {
 				m[k] = v[0]
 			}
 		}
 	}
-	return m
+	return m, nil, nil
 }
 
 func num(v any) int64 {
@@ -261,7 +311,11 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	p := params(r)
+	p, file, err := params(r)
+	if err != nil {
+		fail(w, http.StatusBadRequest, "Bad Request: incomplete request")
+		return
+	}
 	switch parts[1] {
 	case "getFile":
 		id := str(p["file_id"])
@@ -309,7 +363,11 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			id = s.nextMsg
 			s.nextMsg++
 		}
-		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id, Text: text, Markup: markup})
+		sent := Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id, Text: text, Markup: markup}
+		if file != nil {
+			sent.FileName, sent.FileSize, sent.FileSHA256 = file.name, file.size, file.sha256
+		}
+		s.sent = append(s.sent, sent)
 		s.mu.Unlock()
 		m := tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}, Text: text}
 		if parts[1] == "sendPhoto" { // Telegram answers with the photo's file id, for re-sending it
@@ -318,6 +376,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 				photo = "fake-photo-" + strconv.Itoa(id)
 			}
 			m.Photo = []tg.PhotoSize{{FileID: photo, Width: 320, Height: 320}}
+		}
+		if parts[1] == "sendDocument" && file != nil {
+			m.Document = &tg.Document{FileID: "fake-document-" + strconv.Itoa(id), FileName: file.name}
 		}
 		reply(w, m)
 	case "sendInvoice":

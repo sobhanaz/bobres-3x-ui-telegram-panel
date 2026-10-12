@@ -54,7 +54,7 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	f := &fakeOps{ps: healthyPS}
 	// status, live logs, start, stop (declined, then confirmed), restart,
 	// dashboard link, server check, uninstall (declined), exit
-	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n10\n\n11\n\n12\nn\n\n0\n", f)
+	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n12\n\n13\n\n14\nn\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -79,6 +79,29 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	}
 	if len(*doctors) != 1 || !contains((*doctors)[0], "panel.example.com") {
 		t.Fatalf("doctor: %v", *doctors)
+	}
+}
+
+func TestMenuBackups(t *testing.T) {
+	dir := t.TempDir()
+	env := "BOBRES_DOMAIN=panel.example.com\nBOBRES_VERSION=1.4.0\nCOMPOSE_PROFILES=backup\nBOBRES_BACKUP_TIME=03:30\n" +
+		"BOBRES_BACKUP_KEY=feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface\n"
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ps := strings.TrimSuffix(healthyPS, "]") + `,{"Service":"backup","State":"running","Health":"healthy"}]`
+	f := &fakeOps{ps: ps}
+	// backup key (declined, then confirmed), back up now, settings, exit
+	m, out, _, _, _ := testMenu(dir, "11\nn\n\n11\ny\n\n10\n\n6\n\n0\n", f)
+	if code := m.loop(); code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if strings.Count(out.String(), "feedface") != 8 || !strings.Contains(out.String(), "Cancelled.") ||
+		!strings.Contains(out.String(), "running (8/8 services)") || !strings.Contains(out.String(), "daily at 03:30") {
+		t.Fatalf("menu: %s", out)
+	}
+	if len(f.stream) != 1 || !contains(f.stream[0], "backup") || !contains(f.stream[0], "run-now") {
+		t.Fatalf("back up now: %v", f.stream)
 	}
 }
 

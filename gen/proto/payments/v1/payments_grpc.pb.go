@@ -34,6 +34,7 @@ const (
 	PaymentsService_SetGatewayConfig_FullMethodName     = "/payments.v1.PaymentsService/SetGatewayConfig"
 	PaymentsService_TestGateway_FullMethodName          = "/payments.v1.PaymentsService/TestGateway"
 	PaymentsService_GatewayReport_FullMethodName        = "/payments.v1.PaymentsService/GatewayReport"
+	PaymentsService_RecentLogs_FullMethodName           = "/payments.v1.PaymentsService/RecentLogs"
 )
 
 // PaymentsServiceClient is the client API for PaymentsService service.
@@ -61,6 +62,8 @@ type PaymentsServiceClient interface {
 	SetGatewayConfig(ctx context.Context, in *SetGatewayConfigRequest, opts ...grpc.CallOption) (*GatewayConfig, error)
 	TestGateway(ctx context.Context, in *TestGatewayRequest, opts ...grpc.CallOption) (*TestGatewayResponse, error)
 	GatewayReport(ctx context.Context, in *GatewayReportRequest, opts ...grpc.CallOption) (*GatewayReportResponse, error)
+	// The service's kept warnings and errors, for the System page.
+	RecentLogs(ctx context.Context, in *RecentLogsRequest, opts ...grpc.CallOption) (*RecentLogsResponse, error)
 }
 
 type paymentsServiceClient struct {
@@ -221,6 +224,16 @@ func (c *paymentsServiceClient) GatewayReport(ctx context.Context, in *GatewayRe
 	return out, nil
 }
 
+func (c *paymentsServiceClient) RecentLogs(ctx context.Context, in *RecentLogsRequest, opts ...grpc.CallOption) (*RecentLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecentLogsResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_RecentLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentsServiceServer is the server API for PaymentsService service.
 // All implementations must embed UnimplementedPaymentsServiceServer
 // for forward compatibility.
@@ -246,6 +259,8 @@ type PaymentsServiceServer interface {
 	SetGatewayConfig(context.Context, *SetGatewayConfigRequest) (*GatewayConfig, error)
 	TestGateway(context.Context, *TestGatewayRequest) (*TestGatewayResponse, error)
 	GatewayReport(context.Context, *GatewayReportRequest) (*GatewayReportResponse, error)
+	// The service's kept warnings and errors, for the System page.
+	RecentLogs(context.Context, *RecentLogsRequest) (*RecentLogsResponse, error)
 	mustEmbedUnimplementedPaymentsServiceServer()
 }
 
@@ -300,6 +315,9 @@ func (UnimplementedPaymentsServiceServer) TestGateway(context.Context, *TestGate
 }
 func (UnimplementedPaymentsServiceServer) GatewayReport(context.Context, *GatewayReportRequest) (*GatewayReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GatewayReport not implemented")
+}
+func (UnimplementedPaymentsServiceServer) RecentLogs(context.Context, *RecentLogsRequest) (*RecentLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecentLogs not implemented")
 }
 func (UnimplementedPaymentsServiceServer) mustEmbedUnimplementedPaymentsServiceServer() {}
 func (UnimplementedPaymentsServiceServer) testEmbeddedByValue()                         {}
@@ -592,6 +610,24 @@ func _PaymentsService_GatewayReport_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentsService_RecentLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecentLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).RecentLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_RecentLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).RecentLogs(ctx, req.(*RecentLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentsService_ServiceDesc is the grpc.ServiceDesc for PaymentsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -658,6 +694,10 @@ var PaymentsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GatewayReport",
 			Handler:    _PaymentsService_GatewayReport_Handler,
+		},
+		{
+			MethodName: "RecentLogs",
+			Handler:    _PaymentsService_RecentLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

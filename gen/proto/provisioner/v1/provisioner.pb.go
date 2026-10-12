@@ -1696,6 +1696,157 @@ func (x *HealthCheckResponse) GetDetail() string {
 	return ""
 }
 
+// RecentLogsRequest asks for the service's kept warnings and errors (core's
+// System page, owner only).
+type RecentLogsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecentLogsRequest) Reset() {
+	*x = RecentLogsRequest{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecentLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecentLogsRequest) ProtoMessage() {}
+
+func (x *RecentLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecentLogsRequest.ProtoReflect.Descriptor instead.
+func (*RecentLogsRequest) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{25}
+}
+
+// LogLine is one kept log line, redacted like the service's stdout.
+type LogLine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Time          int64                  `protobuf:"varint,1,opt,name=time,proto3" json:"time,omitempty"`  // unix seconds
+	Level         string                 `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"` // WARN | ERROR
+	Msg           string                 `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
+	Attrs         string                 `protobuf:"bytes,4,opt,name=attrs,proto3" json:"attrs,omitempty"` // the other fields as a JSON object; a long one is cut and ends with "…"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogLine) Reset() {
+	*x = LogLine{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogLine) ProtoMessage() {}
+
+func (x *LogLine) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
+func (*LogLine) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *LogLine) GetTime() int64 {
+	if x != nil {
+		return x.Time
+	}
+	return 0
+}
+
+func (x *LogLine) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *LogLine) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+func (x *LogLine) GetAttrs() string {
+	if x != nil {
+		return x.Attrs
+	}
+	return ""
+}
+
+type RecentLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lines         []*LogLine             `protobuf:"bytes,1,rep,name=lines,proto3" json:"lines,omitempty"` // the newest 500 since the service started, oldest first
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecentLogsResponse) Reset() {
+	*x = RecentLogsResponse{}
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecentLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecentLogsResponse) ProtoMessage() {}
+
+func (x *RecentLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_provisioner_v1_provisioner_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecentLogsResponse.ProtoReflect.Descriptor instead.
+func (*RecentLogsResponse) Descriptor() ([]byte, []int) {
+	return file_provisioner_v1_provisioner_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RecentLogsResponse) GetLines() []*LogLine {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
 var File_provisioner_v1_provisioner_proto protoreflect.FileDescriptor
 
 const file_provisioner_v1_provisioner_proto_rawDesc = "" +
@@ -1830,7 +1981,15 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13HealthCheckResponse\x12\x18\n" +
 	"\ahealthy\x18\x01 \x01(\bR\ahealthy\x12#\n" +
 	"\rpanel_version\x18\x02 \x01(\tR\fpanelVersion\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail2\x92\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x13\n" +
+	"\x11RecentLogsRequest\"[\n" +
+	"\aLogLine\x12\x12\n" +
+	"\x04time\x18\x01 \x01(\x03R\x04time\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\tR\x05level\x12\x10\n" +
+	"\x03msg\x18\x03 \x01(\tR\x03msg\x12\x14\n" +
+	"\x05attrs\x18\x04 \x01(\tR\x05attrs\"C\n" +
+	"\x12RecentLogsResponse\x12-\n" +
+	"\x05lines\x18\x01 \x03(\v2\x17.provisioner.v1.LogLineR\x05lines2\xe7\n" +
 	"\n" +
 	"\x12ProvisionerService\x12K\n" +
 	"\fCreateClient\x12#.provisioner.v1.CreateClientRequest\x1a\x16.provisioner.v1.Client\x12I\n" +
@@ -1849,7 +2008,9 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\fDeleteServer\x12#.provisioner.v1.DeleteServerRequest\x1a\x16.google.protobuf.Empty\x12S\n" +
 	"\n" +
 	"TestServer\x12!.provisioner.v1.TestServerRequest\x1a\".provisioner.v1.TestServerResponse\x12V\n" +
-	"\vHealthCheck\x12\".provisioner.v1.HealthCheckRequest\x1a#.provisioner.v1.HealthCheckResponseBXZVgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1;provisionerv1b\x06proto3"
+	"\vHealthCheck\x12\".provisioner.v1.HealthCheckRequest\x1a#.provisioner.v1.HealthCheckResponse\x12S\n" +
+	"\n" +
+	"RecentLogs\x12!.provisioner.v1.RecentLogsRequest\x1a\".provisioner.v1.RecentLogsResponseBXZVgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1;provisionerv1b\x06proto3"
 
 var (
 	file_provisioner_v1_provisioner_proto_rawDescOnce sync.Once
@@ -1863,7 +2024,7 @@ func file_provisioner_v1_provisioner_proto_rawDescGZIP() []byte {
 	return file_provisioner_v1_provisioner_proto_rawDescData
 }
 
-var file_provisioner_v1_provisioner_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_provisioner_v1_provisioner_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_provisioner_v1_provisioner_proto_goTypes = []any{
 	(*Client)(nil),                  // 0: provisioner.v1.Client
 	(*Usage)(nil),                   // 1: provisioner.v1.Usage
@@ -1890,48 +2051,54 @@ var file_provisioner_v1_provisioner_proto_goTypes = []any{
 	(*SetInboundAttachRequest)(nil), // 22: provisioner.v1.SetInboundAttachRequest
 	(*HealthCheckRequest)(nil),      // 23: provisioner.v1.HealthCheckRequest
 	(*HealthCheckResponse)(nil),     // 24: provisioner.v1.HealthCheckResponse
-	(*emptypb.Empty)(nil),           // 25: google.protobuf.Empty
+	(*RecentLogsRequest)(nil),       // 25: provisioner.v1.RecentLogsRequest
+	(*LogLine)(nil),                 // 26: provisioner.v1.LogLine
+	(*RecentLogsResponse)(nil),      // 27: provisioner.v1.RecentLogsResponse
+	(*emptypb.Empty)(nil),           // 28: google.protobuf.Empty
 }
 var file_provisioner_v1_provisioner_proto_depIdxs = []int32{
 	3,  // 0: provisioner.v1.ListInboundsResponse.inbounds:type_name -> provisioner.v1.Inbound
 	4,  // 1: provisioner.v1.ListServersResponse.servers:type_name -> provisioner.v1.XUIServer
-	5,  // 2: provisioner.v1.ProvisionerService.CreateClient:input_type -> provisioner.v1.CreateClientRequest
-	6,  // 3: provisioner.v1.ProvisionerService.RenewClient:input_type -> provisioner.v1.RenewClientRequest
-	7,  // 4: provisioner.v1.ProvisionerService.SetClientLimits:input_type -> provisioner.v1.SetClientLimitsRequest
-	8,  // 5: provisioner.v1.ProvisionerService.SetClientEnabled:input_type -> provisioner.v1.SetClientEnabledRequest
-	9,  // 6: provisioner.v1.ProvisionerService.DeleteClient:input_type -> provisioner.v1.DeleteClientRequest
-	10, // 7: provisioner.v1.ProvisionerService.ResetTraffic:input_type -> provisioner.v1.ResetTrafficRequest
-	11, // 8: provisioner.v1.ProvisionerService.GetUsage:input_type -> provisioner.v1.GetUsageRequest
-	12, // 9: provisioner.v1.ProvisionerService.GetLinks:input_type -> provisioner.v1.GetLinksRequest
-	13, // 10: provisioner.v1.ProvisionerService.ListInbounds:input_type -> provisioner.v1.ListInboundsRequest
-	22, // 11: provisioner.v1.ProvisionerService.SetInboundAttach:input_type -> provisioner.v1.SetInboundAttachRequest
-	15, // 12: provisioner.v1.ProvisionerService.AddServer:input_type -> provisioner.v1.AddServerRequest
-	16, // 13: provisioner.v1.ProvisionerService.ListServers:input_type -> provisioner.v1.ListServersRequest
-	18, // 14: provisioner.v1.ProvisionerService.UpdateServer:input_type -> provisioner.v1.UpdateServerRequest
-	19, // 15: provisioner.v1.ProvisionerService.DeleteServer:input_type -> provisioner.v1.DeleteServerRequest
-	20, // 16: provisioner.v1.ProvisionerService.TestServer:input_type -> provisioner.v1.TestServerRequest
-	23, // 17: provisioner.v1.ProvisionerService.HealthCheck:input_type -> provisioner.v1.HealthCheckRequest
-	0,  // 18: provisioner.v1.ProvisionerService.CreateClient:output_type -> provisioner.v1.Client
-	0,  // 19: provisioner.v1.ProvisionerService.RenewClient:output_type -> provisioner.v1.Client
-	0,  // 20: provisioner.v1.ProvisionerService.SetClientLimits:output_type -> provisioner.v1.Client
-	0,  // 21: provisioner.v1.ProvisionerService.SetClientEnabled:output_type -> provisioner.v1.Client
-	25, // 22: provisioner.v1.ProvisionerService.DeleteClient:output_type -> google.protobuf.Empty
-	0,  // 23: provisioner.v1.ProvisionerService.ResetTraffic:output_type -> provisioner.v1.Client
-	1,  // 24: provisioner.v1.ProvisionerService.GetUsage:output_type -> provisioner.v1.Usage
-	2,  // 25: provisioner.v1.ProvisionerService.GetLinks:output_type -> provisioner.v1.Links
-	14, // 26: provisioner.v1.ProvisionerService.ListInbounds:output_type -> provisioner.v1.ListInboundsResponse
-	25, // 27: provisioner.v1.ProvisionerService.SetInboundAttach:output_type -> google.protobuf.Empty
-	4,  // 28: provisioner.v1.ProvisionerService.AddServer:output_type -> provisioner.v1.XUIServer
-	17, // 29: provisioner.v1.ProvisionerService.ListServers:output_type -> provisioner.v1.ListServersResponse
-	4,  // 30: provisioner.v1.ProvisionerService.UpdateServer:output_type -> provisioner.v1.XUIServer
-	25, // 31: provisioner.v1.ProvisionerService.DeleteServer:output_type -> google.protobuf.Empty
-	21, // 32: provisioner.v1.ProvisionerService.TestServer:output_type -> provisioner.v1.TestServerResponse
-	24, // 33: provisioner.v1.ProvisionerService.HealthCheck:output_type -> provisioner.v1.HealthCheckResponse
-	18, // [18:34] is the sub-list for method output_type
-	2,  // [2:18] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	26, // 2: provisioner.v1.RecentLogsResponse.lines:type_name -> provisioner.v1.LogLine
+	5,  // 3: provisioner.v1.ProvisionerService.CreateClient:input_type -> provisioner.v1.CreateClientRequest
+	6,  // 4: provisioner.v1.ProvisionerService.RenewClient:input_type -> provisioner.v1.RenewClientRequest
+	7,  // 5: provisioner.v1.ProvisionerService.SetClientLimits:input_type -> provisioner.v1.SetClientLimitsRequest
+	8,  // 6: provisioner.v1.ProvisionerService.SetClientEnabled:input_type -> provisioner.v1.SetClientEnabledRequest
+	9,  // 7: provisioner.v1.ProvisionerService.DeleteClient:input_type -> provisioner.v1.DeleteClientRequest
+	10, // 8: provisioner.v1.ProvisionerService.ResetTraffic:input_type -> provisioner.v1.ResetTrafficRequest
+	11, // 9: provisioner.v1.ProvisionerService.GetUsage:input_type -> provisioner.v1.GetUsageRequest
+	12, // 10: provisioner.v1.ProvisionerService.GetLinks:input_type -> provisioner.v1.GetLinksRequest
+	13, // 11: provisioner.v1.ProvisionerService.ListInbounds:input_type -> provisioner.v1.ListInboundsRequest
+	22, // 12: provisioner.v1.ProvisionerService.SetInboundAttach:input_type -> provisioner.v1.SetInboundAttachRequest
+	15, // 13: provisioner.v1.ProvisionerService.AddServer:input_type -> provisioner.v1.AddServerRequest
+	16, // 14: provisioner.v1.ProvisionerService.ListServers:input_type -> provisioner.v1.ListServersRequest
+	18, // 15: provisioner.v1.ProvisionerService.UpdateServer:input_type -> provisioner.v1.UpdateServerRequest
+	19, // 16: provisioner.v1.ProvisionerService.DeleteServer:input_type -> provisioner.v1.DeleteServerRequest
+	20, // 17: provisioner.v1.ProvisionerService.TestServer:input_type -> provisioner.v1.TestServerRequest
+	23, // 18: provisioner.v1.ProvisionerService.HealthCheck:input_type -> provisioner.v1.HealthCheckRequest
+	25, // 19: provisioner.v1.ProvisionerService.RecentLogs:input_type -> provisioner.v1.RecentLogsRequest
+	0,  // 20: provisioner.v1.ProvisionerService.CreateClient:output_type -> provisioner.v1.Client
+	0,  // 21: provisioner.v1.ProvisionerService.RenewClient:output_type -> provisioner.v1.Client
+	0,  // 22: provisioner.v1.ProvisionerService.SetClientLimits:output_type -> provisioner.v1.Client
+	0,  // 23: provisioner.v1.ProvisionerService.SetClientEnabled:output_type -> provisioner.v1.Client
+	28, // 24: provisioner.v1.ProvisionerService.DeleteClient:output_type -> google.protobuf.Empty
+	0,  // 25: provisioner.v1.ProvisionerService.ResetTraffic:output_type -> provisioner.v1.Client
+	1,  // 26: provisioner.v1.ProvisionerService.GetUsage:output_type -> provisioner.v1.Usage
+	2,  // 27: provisioner.v1.ProvisionerService.GetLinks:output_type -> provisioner.v1.Links
+	14, // 28: provisioner.v1.ProvisionerService.ListInbounds:output_type -> provisioner.v1.ListInboundsResponse
+	28, // 29: provisioner.v1.ProvisionerService.SetInboundAttach:output_type -> google.protobuf.Empty
+	4,  // 30: provisioner.v1.ProvisionerService.AddServer:output_type -> provisioner.v1.XUIServer
+	17, // 31: provisioner.v1.ProvisionerService.ListServers:output_type -> provisioner.v1.ListServersResponse
+	4,  // 32: provisioner.v1.ProvisionerService.UpdateServer:output_type -> provisioner.v1.XUIServer
+	28, // 33: provisioner.v1.ProvisionerService.DeleteServer:output_type -> google.protobuf.Empty
+	21, // 34: provisioner.v1.ProvisionerService.TestServer:output_type -> provisioner.v1.TestServerResponse
+	24, // 35: provisioner.v1.ProvisionerService.HealthCheck:output_type -> provisioner.v1.HealthCheckResponse
+	27, // 36: provisioner.v1.ProvisionerService.RecentLogs:output_type -> provisioner.v1.RecentLogsResponse
+	20, // [20:37] is the sub-list for method output_type
+	3,  // [3:20] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_provisioner_v1_provisioner_proto_init() }
@@ -1945,7 +2112,7 @@ func file_provisioner_v1_provisioner_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_provisioner_v1_provisioner_proto_rawDesc), len(file_provisioner_v1_provisioner_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

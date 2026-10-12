@@ -7,9 +7,16 @@
 #   backend : INTERNAL. postgres, redis and all apps.
 #   egress  : outbound internet, only for services that must call Telegram / gateways / 3x-ui
 #             (bot, payments, provisioner).
+# Profiles
+#   backup  : the backup service. `bobres install` turns it on (COMPOSE_PROFILES=backup in .env)
+#             when the install runs images that have it and off when they do not, so an
+#             install pinned (or rolled back) to an older version, which has no backup image,
+#             still starts.
 # Secrets: each service gets ONLY what it needs (no shared env_file), its OWN database role
 # and its OWN service token. A server accepts only its legitimate callers: core accepts the
-# bot; payments and provisioner accept only core.
+# bot; payments and provisioner accept only core. Core calls the backup service with a token
+# for that service only (BOBRES_TOKEN_CORE_BACKUP), so the backup container, which holds the
+# master keys, never holds core's own token.
 
 x-app: &app
   restart: unless-stopped
@@ -79,6 +86,9 @@ services:
       DB_CORE_PASSWORD: ${DB_CORE_PASSWORD:?set DB_CORE_PASSWORD}
       DB_PAYMENTS_PASSWORD: ${DB_PAYMENTS_PASSWORD:?set DB_PAYMENTS_PASSWORD}
       DB_PROVISIONER_PASSWORD: ${DB_PROVISIONER_PASSWORD:?set DB_PROVISIONER_PASSWORD}
+      # The backup service's read-only role (postgres-init.sh; `bobres install` creates it
+      # on an existing database). Empty = no such role.
+      DB_BACKUP_PASSWORD: ${DB_BACKUP_PASSWORD:-}
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
@@ -130,6 +140,14 @@ services:
       # Receipt photos for the dashboard come through the bot: core keeps no
       # bot token and has no internet access.
       BOBRES_BOT_URL: http://bot:8080
+      # The System page asks the other services' /healthz and /readyz here.
+      BOBRES_PAYMENTS_URL: http://payments:8080
+      BOBRES_PROVISIONER_URL: http://provisioner:8080
+      # http://backup:8080 where the backup profile is on (the installer sets both);
+      # empty = the System page shows the backup service as not installed.
+      BOBRES_BACKUP_URL: ${BOBRES_BACKUP_URL:-}
+      # What core presents to the backup service: its own token for that one service.
+      BOBRES_BACKUP_TOKEN: ${BOBRES_TOKEN_CORE_BACKUP:-}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend]
@@ -146,6 +164,9 @@ services:
       BOBRES_TELEGRAM_BOT_TOKEN: ${BOBRES_TELEGRAM_BOT_TOKEN:?set BOBRES_TELEGRAM_BOT_TOKEN}
       # Core's token: core may fetch receipt photos from the bot (/internal/files).
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      # The backup service's token: it hands each encrypted backup to the bot for the
+      # owner (/internal/backups/deliver). Empty = backups are not sent to Telegram.
+      BOBRES_PEER_BACKUP_TOKEN: ${BOBRES_TOKEN_BACKUP:-}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
       BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
       # Empty = long polling (no domain needed). Set both to receive updates by webhook
@@ -207,6 +228,39 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
     networks: [backend, egress]
+
+  backup:
+    <<: *app
+    image: ghcr.io/sobhanaz/bobres-backup:${BOBRES_VERSION:-latest}
+    build: { <<: *build, target: backup, args: { SERVICE: backup, VERSION: "${BOBRES_VERSION:-dev}" } }
+    profiles: [backup]
+    # The image is postgres:16-alpine (for pg_dump): a tmpfs over its data VOLUME keeps
+    # Compose from creating an anonymous volume nothing uses.
+    tmpfs: [/tmp, /var/lib/postgresql/data]
+    environment:
+      <<: *common-env
+      # Optional values default to empty here even where the service needs them: Compose
+      # reads every service, so an older .env without them must still work with the
+      # profile off. The service refuses to start without its key or database.
+      BOBRES_BACKUP_DATABASE_URL: postgres://svc_backup:${DB_BACKUP_PASSWORD:-}@postgres:5432/bobres?sslmode=disable
+      BOBRES_BACKUP_KEY: ${BOBRES_BACKUP_KEY:-}
+      BOBRES_BACKUP_TIME: ${BOBRES_BACKUP_TIME:-03:30}
+      BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
+      # Core lists and starts backups (System page) with the token it has for this service
+      # only: never BOBRES_TOKEN_CORE, which payments, provisioner and the bot accept.
+      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE_BACKUP:-}
+      # Each backup goes to the bot, which sends it to the owner. Empty token = kept here only.
+      BOBRES_BOT_URL: http://bot:8080
+      BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_BACKUP:-}
+      # Carried inside each (encrypted) backup, so the file and BOBRES_BACKUP_KEY restore.
+      BOBRES_CORE_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:-}
+      BOBRES_PROVISIONER_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:-}
+      BOBRES_PAYMENTS_MASTER_KEY: ${BOBRES_PAYMENTS_MASTER_KEY:-}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [backend]
 
 networks:
   public: {}

@@ -86,6 +86,41 @@ func TestStatus(t *testing.T) {
 	}
 }
 
+func TestStatusWithBackups(t *testing.T) {
+	dir := installDir(t)
+	f, _ := os.OpenFile(filepath.Join(dir, ".env"), os.O_APPEND|os.O_WRONLY, 0o600)
+	_, _ = f.WriteString("COMPOSE_PROFILES=backup\n")
+	_ = f.Close()
+	o, out, _ := testOps("", &fakeOps{ps: healthyPS})
+	if code := o.statusCmd([]string{"--dir", dir}); code != 1 || !strings.Contains(out.String(), "backup        missing") {
+		t.Fatalf("status without the backup container: %d %s", code, out)
+	}
+	ps := strings.TrimSuffix(healthyPS, "]") + `,{"Service":"backup","State":"running","Health":"healthy"}]`
+	o, out, _ = testOps("", &fakeOps{ps: ps})
+	if code := o.statusCmd([]string{"--dir", dir}); code != 0 || !strings.Contains(out.String(), "backup        running      healthy") {
+		t.Fatalf("status: %d %s", code, out)
+	}
+}
+
+func TestBackupCommand(t *testing.T) {
+	f := &fakeOps{}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	if code := o.backupCmd([]string{"--dir", dir}); code != 1 || !strings.Contains(errOut.String(), "backups are off") || len(f.stream) != 0 {
+		t.Fatalf("without the profile: %d %s", code, errOut)
+	}
+	fh, _ := os.OpenFile(filepath.Join(dir, ".env"), os.O_APPEND|os.O_WRONLY, 0o600)
+	_, _ = fh.WriteString("COMPOSE_PROFILES=backup\n")
+	_ = fh.Close()
+	o, out, errOut := testOps("", f)
+	if code := o.backupCmd([]string{"--dir", dir}); code != 0 {
+		t.Fatalf("backup: %d %s", code, errOut)
+	}
+	if args := strings.Join(f.stream[0], " "); !strings.Contains(args, "exec -T backup /app run-now") || !strings.Contains(out.String(), "Backing up") {
+		t.Fatalf("backup args: %s", args)
+	}
+}
+
 func TestLogs(t *testing.T) {
 	f := &fakeOps{}
 	o, _, errOut := testOps("", f)
@@ -138,6 +173,9 @@ func TestUninstall(t *testing.T) {
 	}
 	if args := strings.Join(f.calls[0], " "); !strings.Contains(args, "down --remove-orphans --volumes") {
 		t.Fatalf("purge args: %s", args)
+	}
+	if !strings.Contains(out.String(), "also deletes every backup in "+filepath.Join(dir, "backups")) {
+		t.Fatalf("purge did not warn about the backups: %s", out)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatal("install directory still exists after --purge")
@@ -239,5 +277,30 @@ func TestAdminLink(t *testing.T) {
 	}
 	if code := o.adminCmd([]string{"link", "--dir", t.TempDir()}); code != 2 {
 		t.Fatalf("no install: %d", code)
+	}
+}
+
+// bobres license status|import run core's license command in its container
+// (import passes stdin through).
+func TestLicenseCommand(t *testing.T) {
+	f := &fakeOps{}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	for i, sub := range []string{"status", "import"} {
+		if code := o.licenseCmd([]string{sub, "--dir", dir}); code != 0 {
+			t.Fatalf("license %s: %d %s", sub, code, errOut)
+		}
+		got := strings.Join(f.stream[i], " ")
+		if !strings.HasSuffix(got, "exec -T core /app license "+sub) || !strings.Contains(got, "--project-name bobres") {
+			t.Fatalf("compose args: %s", got)
+		}
+	}
+	for _, args := range [][]string{nil, {"activate"}, {"status", "--dir", dir, "extra"}, {"status", "--dir", t.TempDir()}} {
+		if code := o.licenseCmd(args); code != 2 {
+			t.Errorf("%v: %d", args, code)
+		}
+	}
+	if len(f.stream) != 2 {
+		t.Fatalf("refused commands still ran docker: %v", f.stream)
 	}
 }

@@ -46,6 +46,22 @@ func TestLoadBot(t *testing.T) {
 	if c, err := LoadBot(); err != nil || c.TelegramAPIURL != "http://host.docker.internal:8081" {
 		t.Fatalf("API root: %v %+v", err, c.TelegramAPIURL)
 	}
+	// The backup service's token is optional, strict when set, and never
+	// the bot's own or core's.
+	t.Setenv("BOBRES_PEER_BACKUP_TOKEN", "short")
+	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "PEER_BACKUP_TOKEN") {
+		t.Fatalf("short backup token accepted: %v", err)
+	}
+	t.Setenv("BOBRES_PEER_CORE_TOKEN", coreTok)
+	t.Setenv("BOBRES_PEER_BACKUP_TOKEN", coreTok)
+	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "different") {
+		t.Fatalf("core's token accepted as the backup token: %v", err)
+	}
+	backupTok := strings.Repeat("b", 40)
+	t.Setenv("BOBRES_PEER_BACKUP_TOKEN", backupTok)
+	if c, err := LoadBot(); err != nil || c.PeerBackupToken != backupTok {
+		t.Fatalf("backup token: %v %q", err, c.PeerBackupToken)
+	}
 }
 
 func TestAdminTelegramIDIsStrict(t *testing.T) {
@@ -77,11 +93,46 @@ func TestLoadCore(t *testing.T) {
 	if c.ServiceToken != coreTok || c.BotToken != botTok {
 		t.Errorf("tokens not loaded: %+v", c)
 	}
+	// The peers' HTTP addresses default to the compose service names; the
+	// backup service is not in the compose file yet, so it has none.
+	if c.BotURL != "" || c.PaymentsURL != "http://payments:8080" || c.ProvisionerURL != "http://provisioner:8080" ||
+		c.BackupURL != "" || c.Domain != "" {
+		t.Errorf("peer defaults: %q %q %q %q %q", c.BotURL, c.PaymentsURL, c.ProvisionerURL, c.BackupURL, c.Domain)
+	}
+	t.Setenv("BOBRES_BACKUP_URL", "http://10.0.0.5:8081/")
+	t.Setenv("BOBRES_DOMAIN", " panel.example.com ")
+	if c, err = LoadCore(); err != nil || c.BackupURL != "http://10.0.0.5:8081" || c.Domain != "panel.example.com" {
+		t.Fatalf("backup URL and domain: %q %q %v", c.BackupURL, c.Domain, err)
+	}
+	for _, name := range []string{"BOBRES_BOT_URL", "BOBRES_PAYMENTS_URL", "BOBRES_PROVISIONER_URL", "BOBRES_BACKUP_URL"} {
+		t.Setenv(name, "payments:8080")
+		if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s without a scheme accepted: %v", name, err)
+		}
+		t.Setenv(name, "")
+	}
 	t.Setenv("BOBRES_MASTER_KEY", "short")
 	if _, err := LoadCore(); err == nil {
 		t.Fatal("short master key accepted")
 	}
 	t.Setenv("BOBRES_MASTER_KEY", "")
+	// Core's token for the backup service: optional, strict when set, and
+	// never core's own token (the backup container would hold it) or the bot's.
+	if c.BackupToken != "" {
+		t.Fatalf("backup token without one set: %q", c.BackupToken)
+	}
+	backupTok := strings.Repeat("d", 40)
+	t.Setenv("BOBRES_BACKUP_TOKEN", backupTok)
+	if c, err := LoadCore(); err != nil || c.BackupToken != backupTok || c.ServiceToken != coreTok {
+		t.Fatalf("backup token: %v %q", err, c.BackupToken)
+	}
+	for _, bad := range []string{"short", coreTok, botTok} {
+		t.Setenv("BOBRES_BACKUP_TOKEN", bad)
+		if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), "BOBRES_BACKUP_TOKEN") {
+			t.Errorf("backup token %q accepted: %v", bad, err)
+		}
+	}
+	t.Setenv("BOBRES_BACKUP_TOKEN", "")
 	t.Setenv("BOBRES_PEER_BOT_TOKEN", coreTok)
 	if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), "different") {
 		t.Fatalf("one token for two identities accepted: %v", err)

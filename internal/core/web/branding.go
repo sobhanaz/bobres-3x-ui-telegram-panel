@@ -151,7 +151,8 @@ func (s *Server) deleteLogo(w http.ResponseWriter, r *http.Request) {
 }
 
 // publicBrand: GET /api/v1/brand, what the login page shows before anyone
-// logs in (name, colour, logo; nothing private).
+// logs in (name, colour, logo, whether to say "Powered by BOBRES"; nothing
+// private).
 func (s *Server) publicBrand(w http.ResponseWriter, r *http.Request) {
 	v, err := s.cfg.Domain.Settings(r.Context())
 	if err != nil {
@@ -162,7 +163,8 @@ func (s *Server) publicBrand(w http.ResponseWriter, r *http.Request) {
 	if u := s.logoURL(r.Context()); u != "" {
 		logo = u
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"name": brandName(v), "color": v["branding.color"], "logo": logo})
+	writeJSON(w, http.StatusOK, map[string]any{"name": brandName(v), "color": v["branding.color"], "logo": logo,
+		"powered_by": s.poweredBy(r.Context())})
 }
 
 // logo: GET /api/v1/brand/logo, the image itself.

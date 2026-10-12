@@ -256,6 +256,22 @@ message GatewayReportResponse {
   GatewayEvent last_paid = 9; // unset: none
 }
 
+// RecentLogsRequest asks for the service's kept warnings and errors (core's
+// System page, owner only).
+message RecentLogsRequest {}
+
+// LogLine is one kept log line, redacted like the service's stdout.
+message LogLine {
+  int64 time = 1; // unix seconds
+  string level = 2; // WARN | ERROR
+  string msg = 3;
+  string attrs = 4; // the other fields as a JSON object; a long one is cut and ends with "…"
+}
+
+message RecentLogsResponse {
+  repeated LogLine lines = 1; // the newest 500 since the service started, oldest first
+}
+
 // PaymentsService owns payment intents, manual receipts, and the
 // payments-side ledger mirror used for provider reconciliation.
 service PaymentsService {
@@ -277,4 +293,6 @@ service PaymentsService {
   rpc SetGatewayConfig(SetGatewayConfigRequest) returns (GatewayConfig);
   rpc TestGateway(TestGatewayRequest) returns (TestGatewayResponse);
   rpc GatewayReport(GatewayReportRequest) returns (GatewayReportResponse);
+  // The service's kept warnings and errors, for the System page.
+  rpc RecentLogs(RecentLogsRequest) returns (RecentLogsResponse);
 }

@@ -27,7 +27,8 @@ is planned below.
    - **6a, servers and payment gateways (built).** Several 3x-ui servers (servers per plan, health, inbounds), and
      payment gateways whose keys stay encrypted in the payments service. See "Milestone 6a" below.
    - **6b, System and License.** Health, versions, update check, backups through a backup container, and the
-     license (checked with internal/license).
+     license (checked with internal/license). Health, versions and the license are built: see "Milestone 6b
+     (part 1)" below.
 
 **Not in Phase 4:** restoring a backup from the dashboard (CLI only), a customer portal, the vendor
 license server.
@@ -677,6 +678,106 @@ and answers hints only.
   `sandbox_allowed` comes from core's own `BOBRES_ENV`.
 - **The bot's manual payment buttons** still follow the details only. The switches are enforced in core, so a
   switched-off method fails when chosen until the bot reads the switches too (open for the bot).
+
+## Milestone 6b (part 1): system health and the license
+
+The System page's health tab and its License tab. The update check, logs and backups follow in later parts.
+
+- **Health and versions** (`system.read`: owner and admin). Core asks core itself (through its own HTTP port),
+  the bot, payments, provisioner and the backup service for `/healthz` and `/readyz`, all at once, 3 seconds
+  each (new core config `BOBRES_PAYMENTS_URL`, `BOBRES_PROVISIONER_URL`, `BOBRES_BACKUP_URL`; the first two
+  default to the compose names `http://<service>:8080`, the backup one to empty: compose sets it to
+  `http://backup:8080` only where the backup profile is on). Each service is `ok`, `not_ready` (the failed checks named), `down`, `not_configured`, or
+  `not_installed` (the backup service when it has no address or its name does not resolve, including Docker's
+  SERVFAIL on internal networks). A version other than core's (a leading `v` ignored) is flagged per service and
+  on the page. The servers and payment methods summaries are the overview's.
+- **License** (`internal/license`; state for `system.read`, changes for `license.write`: the owner). Migration
+  core/00012 adds `core.install` (one random install id, made with the schema) and `core.license` (one token).
+  Tokens are verified on every read against the public keys built into core (`internal/license/keys/*.pub`,
+  none yet, so every token is "invalid: unknown key"), bound to `BOBRES_DOMAIN` (required) and to the install id
+  when the token names one. States: missing, invalid (with a reason code), active, grace, expired.
+  - **Policy:** missing or invalid never gates anything. A verified license gates only new actions: making a
+    reseller (`resellers`), adding a server beyond `max_servers`, adding admin or support staff beyond
+    `dashboard_staff_seats` (owners take none; an owner stepping down counts), switching on a payment method the
+    license does not name (wallet always allowed). Grace keeps the entitlements; expired grants none.
+  - Only a token that verifies here and has not expired can be installed; `license.set` audits its ids and
+    the reason, never the token. The CLI does the same (`bobres license status|import`, source `cli`).
+  - **Powered by BOBRES** only with a verified license without `white_label`; never on an unlicensed install.
+  - Vendor tool `tools/license` (`keygen` writes the private key outside any git checkout; `sign`). See
+    docs/05-license.md.
+
+### API (milestone 6b, part 1)
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/system` (`{checked_at, version, version_mismatch, services, servers, panel, gateways, updates}`) | system.read |
+| `GET /api/v1/license` (state, reason, install id, domain, the token's ids and dates, binding, entitlements with use; never the token) | system.read |
+| `POST /api/v1/license/check` (`{token}`; the same answer for a token, saving nothing) | license.write |
+| `PUT /api/v1/license` (`{token, reason}`; 400 `{field: "token", code}` when it does not verify here or has expired) | license.write |
+| `GET /api/v1/me` gains `license: {state, white_label, powered_by}`; public `GET /api/v1/brand` gains `powered_by` | session / public |
+
+- A new action the license does not allow is 409 `{error: "state", license: "<gate>", message}`.
+
+### Update check (milestone 6b)
+
+- **The bot looks, core asks the bot** (core has no internet access). At start and every 12 hours (an hour
+  after a failure) the bot fetches the latest GitHub release's `checksums.txt`, `checksums.txt.sig`,
+  `keys.txt` and `keys.txt.sig.1-4` through its normal egress (20 s, `HTTPS_PROXY` honoured) and keeps the
+  outcome in memory.
+- **Verified like the installer.** `internal/release` ports `install.sh` `verify_release` (the same two
+  embedded root keys, checked against the script by a test): a root signs `keys.txt`, a listed and not
+  revoked release key signs `checksums.txt`, both unexpired, the version at least `min_version`. It keeps no
+  state, so there is no seq or downgrade check; `bobres update` verifies again before installing anything.
+- `GET /internal/update-check` (core's token) answers `{current, latest, channel, newer, verified, checked_at,
+  error, detail}`. `newer` is true only for a verified release above the running version; a `dev` or other
+  non-semver build never sees one. `error` is `""`, `not_checked`, `unreachable` (latest empty), `no_release`,
+  `invalid` (no version header) or `bad_signature` (unsigned, tampered with, revoked or expired: latest is the
+  claimed version, never offered as an update); `detail` is a short English reason.
+- `GET /api/v1/system` gains `updates`: the bot's answer, or `{error: "bot unreachable"}` when the bot is not
+  configured or does not answer within 3 seconds. Applying an update stays the `bobres update` command.
+
+### Logs (milestone 6b)
+
+- **Kept in memory, after redaction.** Every service's logger (`internal/logging`) also writes its warnings
+  and errors, whatever the stdout level and format, through the same redaction into a ring of the newest 500
+  lines: `{time (unix seconds), level (WARN | ERROR), msg, attrs}`, `attrs` being the line's other fields as a
+  JSON object (`service` dropped) and `msg` and `attrs` cut at 1000 bytes with a trailing `…`. Nothing is
+  written to disk; a restart empties it. Postgres, Redis and Caddy stay with `bobres logs`.
+- **Who serves them.** Core reads its own; the bot answers `GET /internal/logs` (core's token,
+  `{lines}`); payments and provisioner a `RecentLogs` RPC on their existing services (core is their only
+  peer; their HTTP mux is public through Caddy).
+- `GET /api/v1/system/logs?service=core|bot|payments|provisioner` (`system.write`: the owner; the lines carry
+  Telegram ids and usernames) answers `{service, lines, error}`, lines oldest first. `error` is `""`,
+  `unreachable` (the service did not answer within 3 seconds; the details go to core's log) or
+  `not configured` (the bot without `BOBRES_BOT_URL`); any other service name is 400.
+
+### Backups (milestone 6b, part 2: the service)
+
+- **A new `backup` service** (`cmd/backup` on `app.Run`; image `bobres-backup`, the Dockerfile's `backup` target
+  from `postgres:16-alpine`, uid 65532; backend network only; `./backups:/backups`). It runs behind the Compose
+  profile `backup`, which `bobres install` turns on (`COMPOSE_PROFILES=backup`, `BOBRES_BACKUP_URL` for core) when
+  the install's image version has the service, so a pinned older version still starts.
+- **A run** (`internal/backupsvc`; one at a time): disk check (free space at least twice the last backup, 100 MiB
+  before the first), `pg_dump -Fc` as the read-only `svc_backup` role streamed into `internal/backup.Write` (keys
+  member: the three master keys that are set) into a temp file, fsync, rename to `bobres-<UTC stamp>.bkp`, sidecar
+  `{file, size, sha256, created_at, sent_at, telegram_error, error}`, delivery to the bot's
+  `/internal/backups/deliver` (streamed from disk, 20 minutes; the outcome goes into the sidecar), then retention
+  (`backup.Prune`, 7). A failed run leaves its sidecar with the error and no `.bkp`. Daily at `BOBRES_BACKUP_TIME`
+  (03:30) in `BOBRES_TIMEZONE`.
+- **HTTP for core** (core's token): `GET /internal/backups` `{backups (sidecars, newest first), running,
+  last_error, next_run (unix), disk_free, dir}`; `POST /internal/backups/run` 202 `{started: true}` or 409
+  `{started: false, reason: "running"}`. `bobres backup` runs `/app run-now` in the container, which uses the
+  same API and waits.
+- **Core's API** (core asks with its service token, within 3 seconds; core has a backup client only when
+  `BOBRES_BACKUP_URL` is set, that is when the profile is on):
+
+| Method and path | Permission |
+| --- | --- |
+| `GET /api/v1/system/backups`: the service's list as it answers it, `{installed: false}` when the service is not installed, `{installed: true, error: "unreachable"}` when it does not answer (details in core's log) | system.read |
+| `POST /api/v1/system/backups/run`: 202 `{started: true}` (audited `system.backup`, source dashboard, no details), 409 `{started: false, reason: "running"}`, 503 `not_configured` (not installed) or `unavailable` (no answer) | system.write |
+| `GET /api/v1/system` gains `backups`: `{installed, last_created_at (unix, the newest backup that worked; null before one), last_error, next_run}`, `{installed: false}` or `{installed: true, error: "unreachable"}` | system.read |
+
+- **Next part:** the dashboard's Backups tab.
 
 ## Tests
 

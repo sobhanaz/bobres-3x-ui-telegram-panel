@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        service: [core, bot, payments, provisioner]
+        service: [core, bot, payments, provisioner, backup]
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v4
@@ -80,6 +80,8 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile
+          # The backup image is its own target (pg_dump); the others use the last stage.
+          target: ${{ matrix.service == 'backup' && 'backup' || '' }}
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |

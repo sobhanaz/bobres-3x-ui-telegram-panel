@@ -98,6 +98,11 @@ func (s *Service) AddStaff(ctx context.Context, actor *store.User, userID, role,
 	case role == "owner" && !s.CanGrantOwner(actor):
 		return nil, stateErr("only the store owner can add another owner")
 	}
+	if role != "owner" {
+		if err := s.requireStaffSeat(ctx); err != nil {
+			return nil, err
+		}
+	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.SetRole(ctx, tx, t.ID, "user", role); errors.Is(err, store.ErrNotFound) {
 			return stateErr("this person changed meanwhile; reload and try again")
@@ -136,6 +141,12 @@ func (s *Service) SetStaffRole(ctx context.Context, actor *store.User, id, role,
 	}
 	if (role == "owner" || t.Role == "owner") && !s.CanGrantOwner(actor) {
 		return nil, stateErr("only the store owner can give or take the owner role")
+	}
+	// An owner who becomes admin or support takes a seat.
+	if t.Role == "owner" {
+		if err := s.requireStaffSeat(ctx); err != nil {
+			return nil, err
+		}
 	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.keepAnOwner(ctx, tx, t); err != nil {

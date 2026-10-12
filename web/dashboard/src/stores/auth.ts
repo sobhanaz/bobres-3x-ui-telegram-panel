@@ -15,6 +15,8 @@ export interface Me {
   brand: string
   /** The store's look; older servers (and test fixtures) may leave it out. */
   branding?: { color: string; logo: string | null; currency: { fa: string; en: string } }
+  /** The license state and whether it hides "Powered by BOBRES" (M6). */
+  license?: { state: string; white_label: boolean; powered_by?: boolean }
 }
 
 /** The store's public look (GET /brand, no session): for the login page. */
@@ -22,6 +24,8 @@ export interface PublicBrand {
   name: string
   color: string
   logo: string | null
+  /** show "Powered by BOBRES": a valid license without white label */
+  powered_by?: boolean
 }
 
 export const useAuth = defineStore('auth', () => {
@@ -42,7 +46,7 @@ export const useAuth = defineStore('auth', () => {
   async function loadPublicBrand() {
     try {
       const b = await api<PublicBrand>('GET', '/brand')
-      publicBrand.value = { name: b.name || '', color: b.color || '', logo: b.logo || null }
+      publicBrand.value = { name: b.name || '', color: b.color || '', logo: b.logo || null, powered_by: b.powered_by === true }
       if (!me.value) applyBrandColor(publicBrand.value.color)
     } catch {
       /* defaults */

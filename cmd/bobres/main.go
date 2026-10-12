@@ -16,8 +16,8 @@ import (
 
 // notImplemented lists commands from docs/06-installer.md that land in later phases.
 var notImplemented = map[string]string{
-	"update": "phase 6", "rollback": "phase 6", "backup": "phase 7", "restore": "phase 7",
-	"config": "phase 1", "secrets": "phase 7", "license": "phase 6",
+	"update": "phase 6", "rollback": "phase 6", "restore": "phase 7",
+	"config": "phase 1", "secrets": "phase 7",
 	"support-bundle": "phase 7",
 }
 
@@ -61,6 +61,10 @@ func run(args []string, out, errOut io.Writer) int {
 		return newOps(stdin, out, errOut).uninstallCmd(args[1:])
 	case "admin":
 		return newOps(stdin, out, errOut).adminCmd(args[1:])
+	case "license":
+		return newOps(stdin, out, errOut).licenseCmd(args[1:])
+	case "backup":
+		return newOps(stdin, out, errOut).backupCmd(args[1:])
 	default:
 		if phase, ok := notImplemented[cmd]; ok {
 			fmt.Fprintf(errOut, "bobres %s: not implemented yet (planned for %s)\n", cmd, phase)
@@ -89,6 +93,8 @@ Available now:
   restart    Restart the store and wait until it is healthy
   uninstall  Remove the containers (data kept unless --purge)
   admin link Print a one-time dashboard login link (for when the bot is down)
+  license    Show the license (license status) or install one (license import < token.txt)
+  backup     Back up the database now (encrypted; kept in <dir>/backups and sent to the owner)
   doctor     Check this server (RAM, disk, ports, Docker, DNS)
   version    Print the version
 
@@ -96,8 +102,8 @@ Commands that work on an install take --dir (default: $BOBRES_DIR, else /opt/bob
 
 Coming later:
   config                                       (phase 1)
-  update rollback license                      (phase 6)
-  backup restore secrets support-bundle        (phase 7)
+  update rollback                              (phase 6)
+  restore secrets support-bundle               (phase 7)
 `)
 }
 

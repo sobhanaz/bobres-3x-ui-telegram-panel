@@ -998,7 +998,8 @@
       "reseller": "Reseller",
       "reseller_tier": "Reseller tier",
       "server": "3x-ui server",
-      "gateway": "Payment gateway"
+      "gateway": "Payment gateway",
+      "license": "License"
     },
     "group": {
       "payment": "Payments",
@@ -1020,7 +1021,8 @@
       "reseller": "Resellers",
       "reseller_tier": "Reseller tiers",
       "server": "3x-ui servers",
-      "gateway": "Payment gateways"
+      "gateway": "Payment gateways",
+      "license": "License"
     },
     "action": {
       "payment": {
@@ -1139,6 +1141,9 @@
       },
       "gateway": {
         "update": "Gateway settings changed"
+      },
+      "license": {
+        "set": "License saved"
       }
     }
   },
@@ -1691,5 +1696,258 @@
       "public_url": "The public payment address is not right (it must be https with a domain), so Zarinpal is not offered. Fix BOBRES_ZARINPAL_PUBLIC_URL in the .env file.",
       "invalid": "These settings were refused, so Zarinpal is not offered. Check the merchant id and the proxy."
     }
+  },
+  "system": {
+    "intro": "How every BOBRES service is doing, whether a newer release is out, the backups, and this install's license.",
+    "tab": {
+      "health": "Health",
+      "updates": "Updates",
+      "backups": "Backups",
+      "logs": "Logs",
+      "license": "License"
+    },
+    "refresh": "Check again",
+    "checked_at": "Checked {time}",
+    "load_error": "The system status could not be read.",
+    "services": "Services",
+    "col_service": "Service",
+    "col_version": "Version",
+    "col_state": "State",
+    "col_checks": "Readiness checks",
+    "col_detail": "Detail",
+    "service": {
+      "core": "Core",
+      "bot": "Telegram bot",
+      "payments": "Payments",
+      "provisioner": "Provisioner",
+      "backup": "Backups"
+    },
+    "state": {
+      "ok": "Working",
+      "not_ready": "Not ready",
+      "down": "Not answering",
+      "not_installed": "Not installed",
+      "not_configured": "Not configured"
+    },
+    "not_installed": "Not part of this install yet.",
+    "check": {
+      "db": "Database",
+      "grpc": "gRPC",
+      "redis": "Redis"
+    },
+    "check_ok": "{name}: passed",
+    "check_fail": "{name}: failed",
+    "mismatch": "Another version",
+    "version_mismatch": "Core runs version {version}, but these services run another one: {list}. Mixed versions can misbehave: restart them, or run bobres install again on the server, so all run the same release.",
+    "servers": "3x-ui servers",
+    "servers_manage": "Manage servers",
+    "gateways": "Payment methods",
+    "gateways_none": "No payment method is turned on.",
+    "gateways_manage": "Manage payment methods",
+    "not_configured": "Core has no address for this service in its settings.",
+    "updates": {
+      "title": "Version",
+      "current": "This install",
+      "latest": "Latest release",
+      "checked_at": "Last checked {time}",
+      "state": {
+        "newer": "Update available",
+        "current": "Up to date",
+        "unknown": "Not known"
+      },
+      "up_to_date": "This install runs the latest release.",
+      "available": "Version {version} is available.",
+      "how": "To install it, run this on the server (as root):",
+      "copy_command": "Copy the update command",
+      "backup_first": "Run it on the server: it keeps your settings and data, downloads that version and restarts the services. Take a backup first. If bobres doesn't know the version, update bobres itself with the install command from the README.",
+      "unverified": "The release signature was not checked here; check it on the release page before installing.",
+      "could_not_check": "Could not check for updates.",
+      "last_check_failed": "The last check for updates failed.",
+      "reason": {
+        "unreachable": "GitHub could not be reached from the server.",
+        "bot_unreachable": "The bot, which checks for updates, did not answer.",
+        "not_checked": "The bot has not checked yet. It checks when it starts, then every 12 hours.",
+        "no_release": "No BOBRES release has been published yet.",
+        "bad_signature": "The latest release did not pass the signature check (unsigned, altered, or signed with a revoked or expired key). Do not install it.",
+        "invalid": "The latest release's checksum file does not say which version it is.",
+        "unsupported": "This version of core does not report updates.",
+        "other": "The check failed:"
+      }
+    },
+    "backups": {
+      "run": "Back up now",
+      "started": "The backup has started. This list updates when it is done.",
+      "already_running": "A backup is already being made.",
+      "run_error": "The backup could not be started.",
+      "running": "A backup is being made now. This list updates by itself.",
+      "load_error": "The backups could not be read.",
+      "not_installed_title": "The backup service is not installed.",
+      "not_installed": "To add it, re-run bobres install on the server (as root) and turn backups on:",
+      "copy_command": "Copy the install command",
+      "unreachable": "Core could not reach the backup service, so the backups can't be listed. It may be restarting; see its state on the Health tab.",
+      "last_failed": "The last backup failed:",
+      "next_run": "Next backup",
+      "disk_free": "Free disk space",
+      "dir": "Folder (in the backup service)",
+      "kept": "The last 7 backups are kept on the server, encrypted; each is also sent to the owner on Telegram.",
+      "list": "Backups",
+      "list_label": "Backups, newest first",
+      "empty": "No backups yet.",
+      "sent": {
+        "sent": "Sent to Telegram",
+        "not_sent": "Not sent",
+        "failed": "Failed"
+      },
+      "sent_at": "Sent to the owner {time}",
+      "reason": {
+        "too_big": "Over Telegram's 50 MB limit, so it is kept on the server only.",
+        "no_owner": "The bot has no owner set, so it is kept on the server only.",
+        "busy": "The bot was busy sending another backup; it is kept on the server.",
+        "blocked": "The owner has blocked the bot, so it could not be sent; it is kept on the server.",
+        "telegram_error": "Telegram refused it; it is kept on the server.",
+        "unreachable": "The bot did not answer; it is kept on the server.",
+        "other": "Not sent to Telegram; it is kept on the server:"
+      },
+      "failed": "This backup failed:",
+      "restore_title": "How to restore",
+      "restore": "Restoring is done on the server, with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
+      "restore_later": "The restore command (bobres restore) comes in a later update."
+    },
+    "logs": {
+      "service": "Service",
+      "note": "Only warnings and errors since each service last started are kept (the newest 500). A restart clears them.",
+      "empty": "No warnings or errors since this service started.",
+      "lines": "Warnings and errors of {service}, newest first",
+      "load_error": "The logs could not be read.",
+      "reason": {
+        "unreachable": "Core could not reach {service}, so its logs could not be read.",
+        "not_configured": "Core has no address for {service}, so its logs can't be read.",
+        "other": "The logs of {service} could not be read:"
+      }
+    }
+  },
+  "license": {
+    "chip": {
+      "missing": "Unlicensed",
+      "invalid": "License invalid",
+      "grace": "License in grace",
+      "expired": "License expired"
+    },
+    "state": {
+      "missing": "No license",
+      "invalid": "Invalid",
+      "active": "Active",
+      "grace": "In grace",
+      "expired": "Expired"
+    },
+    "state_hint": {
+      "missing": "This install has no license. Nothing is limited: every feature keeps working.",
+      "invalid": "The saved license was not accepted, so this install counts as unlicensed. Nothing is limited.",
+      "active": "The license is valid. Its limits apply only to new servers, staff, resellers and payment methods; nothing already set up is removed.",
+      "grace": "The license has expired and is in its grace period: everything still works. Renew it before the grace ends.",
+      "expired": "The license and its grace period have ended. What is already set up keeps working, but new servers, staff, resellers and payment methods are refused until it is renewed."
+    },
+    "reason": {
+      "malformed": "The token is damaged or incomplete.",
+      "bad_signature": "Its signature does not match: the token was changed, or it is not from the BOBRES vendor.",
+      "unknown_key": "It was signed with a key this version does not know.",
+      "version": "Its format is newer than this version understands: update BOBRES.",
+      "domain": "It is for another domain than this install's.",
+      "install_id": "It is for another install.",
+      "unbound": "It is not bound to a domain or an install.",
+      "invalid": "Its contents are not valid.",
+      "not_yet_valid": "It is dated in the future: check the server's clock.",
+      "other": "It was not accepted.",
+      "expired": "It has expired: ask the seller to renew it."
+    },
+    "load_error": "The license could not be read.",
+    "updated_at": "Saved {time}",
+    "details": "License",
+    "tier_label": "Tier",
+    "tier": {
+      "trial": "Trial",
+      "standard": "Standard",
+      "pro": "Pro"
+    },
+    "license_id": "License id",
+    "customer": "Customer",
+    "kid": "Signing key",
+    "issued": "Issued",
+    "expires": "Expires",
+    "grace_ends": "Grace ends",
+    "left": {
+      "left": "{n} days left",
+      "grace": "{n} days of grace left",
+      "over": "Ended {n} days ago"
+    },
+    "binding": "Binding",
+    "binding_domain": "Domain",
+    "binding_install": "Install",
+    "binding_state": {
+      "match": "Matches",
+      "mismatch": "Does not match",
+      "unbound": "Not bound"
+    },
+    "bound_to": "Bound to {value}",
+    "this_install": "This install",
+    "install_id": "Install id",
+    "install_id_hint": "Give this id to the seller to get a license for this install.",
+    "domain": "Domain",
+    "domain_none": "Not set",
+    "copy_install_id": "Copy the install id",
+    "entitlements": "What it grants",
+    "ent": {
+      "servers": "3x-ui servers",
+      "active_services": "Active services",
+      "staff_seats": "Staff seats (the owner is not counted)",
+      "gateways": "Payment methods",
+      "resellers": "Resellers",
+      "white_label": "White label (no “Powered by BOBRES”)",
+      "crypto_watcher": "Automatic crypto payments",
+      "updates_until": "Updates until"
+    },
+    "usage": "{used} of {limit}",
+    "unlimited": "Unlimited",
+    "unlimited_used": "{used}, unlimited",
+    "none_allowed": "None allowed",
+    "use_unknown": "{limit} (use unknown)",
+    "limit_state": {
+      "near": "Near the limit",
+      "full": "At the limit: no new ones",
+      "over": "Over the limit: no new ones"
+    },
+    "feature": {
+      "on": "Included",
+      "off": "Not included"
+    },
+    "gateways_none": "None besides the wallet",
+    "gateways_outside": "On but not in the license: {list}. They keep working, but cannot be turned on again once turned off.",
+    "wallet_always": "The wallet is always allowed.",
+    "updates_any": "No limit",
+    "warnings": "Some limits are reached or nearly reached. Existing ones keep working; new ones beyond the limit are refused.",
+    "owner_only": "Only the owner can add or replace the license.",
+    "import": {
+      "add": "Add a license",
+      "replace": "Replace the license",
+      "hint": "Paste the license token from the seller, or open the file it came in. Check it first: saving takes effect at once.",
+      "token": "License token",
+      "file": "Open a file",
+      "check": "Check",
+      "save": "Save license",
+      "result": "This token:",
+      "problem": {
+        "long": "This is too long to be a license token.",
+        "format": "This does not look like a license token (two parts joined by a dot)."
+      },
+      "file_too_big": "This file is too big to be a license.",
+      "file_unreadable": "The file could not be read.",
+      "confirm_title": "Save this license?",
+      "confirm_message": "It replaces the license in use now, and its limits apply to new actions at once.",
+      "expired_warn": "This license has expired, so it cannot be saved: ask the seller to renew it.",
+      "saved": "License saved"
+    },
+    "powered_by": "Powered by BOBRES",
+    "no_keys": "This version ships without a vendor key, so no license can be checked yet.",
+    "updated_by": "Saved {time} by {name}"
   }
 }

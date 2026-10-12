@@ -180,6 +180,19 @@ func Bytes(lang string, b int64) string {
 	return s + " GB"
 }
 
+// FileSize formats a file's size in MB (binary, one decimal) below 1 GB and
+// in GB (as Bytes) from there, e.g. "48.3 MB", "۴۸٫۳ مگابایت".
+func FileSize(lang string, b int64) string {
+	if b >= 1<<30 {
+		return Bytes(lang, b)
+	}
+	s := strconv.FormatFloat(float64(b)/float64(1<<20), 'f', 1, 64)
+	if Normalize(lang) == "fa" {
+		return Digits(lang, s) + " مگابایت"
+	}
+	return s + " MB"
+}
+
 var persianMonths = [...]string{"فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"}
 
 // Date formats a day: Jalali in Persian ("۱۱ آبان ۱۴۰۵"), "2 Nov 2026" in English.

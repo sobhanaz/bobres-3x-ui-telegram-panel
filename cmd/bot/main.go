@@ -22,8 +22,11 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/ratelimit"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/redisx"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
 func main() {
@@ -123,6 +126,27 @@ func setup(rt *app.Runtime) error {
 		rt.Mux.Handle("GET /internal/channel-check", runner.ChannelCheck(bot, me.ID, cfg.PeerCoreToken))
 		// "Send to me" from the broadcast composer.
 		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
+		// The System page's update check: the bot has internet access, core
+		// none. It reads the latest release's signed checksums.txt from GitHub
+		// every 12 hours (an hour after a failure) and verifies it with the
+		// installer's root keys; applying an update stays `bobres update`.
+		updates := release.NewChecker(version.Version, "", rt.Log)
+		rt.Go("update-check", updates.Run)
+		rt.Mux.Handle("GET /internal/update-check", runner.UpdateCheck(updates.Status, cfg.PeerCoreToken))
+		// The System page's logs tab (owner): this process's kept warnings
+		// and errors, already redacted.
+		rt.Mux.Handle("GET /internal/logs", runner.Logs(logging.Recent, cfg.PeerCoreToken))
+	}
+
+	if cfg.PeerBackupToken != "" {
+		// The backup service hands each encrypted backup to the bot, which
+		// sends it to the owner only (never a chat the caller names).
+		rt.Mux.Handle("POST /internal/backups/deliver", runner.Deliver(runner.Delivery{
+			Bot: bot, Token: cfg.PeerBackupToken, Owner: cfg.AdminTelegramID,
+			Limit: runner.UploadLimit(cfg.TelegramAPIURL != ""), Texts: cat,
+			Lang: func(ctx context.Context) string { return ownerLang(ctx, core, h, cfg.AdminTelegramID) },
+			Log:  rt.Log,
+		}))
 	}
 
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)
@@ -142,4 +166,17 @@ func setup(rt *app.Runtime) error {
 	rt.Go("polling", func(ctx context.Context) error { return runner.Poll(ctx, bot, d, rt.Log) })
 	rt.Log.Info("receiving updates by long polling")
 	return nil
+}
+
+// ownerLang is the owner's language: as staff core listed, else as a user of
+// the bot, else the first language.
+func ownerLang(ctx context.Context, core corev1.CoreServiceClient, h *handler.Handler, owner int64) string {
+	if c, ok := h.Settings().Contact(owner); ok && c.Language != "" {
+		return c.Language
+	}
+	u, err := core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: owner}})
+	if err != nil || u.GetLanguage() == "" {
+		return i18n.Languages[0]
+	}
+	return u.GetLanguage()
 }

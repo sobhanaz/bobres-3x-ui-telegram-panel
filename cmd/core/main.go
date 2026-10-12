@@ -15,24 +15,30 @@ import (
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/backupclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/paymentsclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/provisionerclient"
 	coreserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/syshealth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/web"
 	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/web/dashboard"
 )
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "login-link" {
 		os.Exit(loginLink(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "license" {
+		os.Exit(licenseCmd(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	}
 	os.Exit(app.Run("core", os.Args[1:], setup))
 }
@@ -99,7 +105,7 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(st.Close)
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID})
+	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, License: domain.LicenseConfig{Domain: cfg.Domain}})
 	// A new owner set with bobres menu gets the role now, not at their next /start.
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)
@@ -136,14 +142,38 @@ func setup(rt *app.Runtime) error {
 		files web.ReceiptFiles
 		bot   web.BotPeer
 	)
+	// The System page's logs tab: core reads its own buffer, asks the others.
+	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.ServiceToken)
 		files, bot = peer, peer
+		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
+	// The System page asks every service's /healthz and /readyz (core its
+	// own through its HTTP port); the backup service may not be installed.
+	system := syshealth.New(version.Version, []syshealth.Peer{
+		{Name: "core", URL: selfURL(cfg.HTTPAddr)},
+		{Name: "bot", URL: cfg.BotURL},
+		{Name: "payments", URL: cfg.PaymentsURL},
+		{Name: "provisioner", URL: cfg.ProvisionerURL},
+		{Name: "backup", URL: cfg.BackupURL, Optional: true},
+	})
+	// The System page's backups tab (BOBRES_BACKUP_URL is set only when the
+	// install turned the backup profile on), with core's token for the backup
+	// service only: core's own token never goes to that container.
+	var backups web.Backups
+	switch {
+	case cfg.BackupURL == "":
+	case cfg.BackupToken == "":
+		rt.Log.Warn("BOBRES_BACKUP_TOKEN is not set: the dashboard cannot list or start backups (re-run bobres install)")
+	default:
+		backups = backupclient.New(cfg.BackupURL, cfg.BackupToken)
+	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
-		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
+		Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)

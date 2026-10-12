@@ -181,7 +181,7 @@ func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 	if c, err := s.cfg.Store.CredentialsFor(r.Context(), s.cfg.Store.Conn(), u.ID); err == nil && c.TOTPConfirmedAt != nil {
 		password = map[string]any{"enabled": true, "username": c.Username, "reauth": s.needsReauth(st, c)}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"user": map[string]any{"id": u.ID, "telegram_id": u.TelegramID, "username": u.Username,
 			"role": u.Role, "language": u.Language},
 		"permissions":        Permissions(u.Role),
@@ -192,7 +192,11 @@ func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 		"brand":              brandName(settings),
 		"branding": map[string]any{"color": settings["branding.color"], "logo": logo,
 			"currency": langPair{settings["branding.currency.fa"], settings["branding.currency.en"]}},
-	})
+	}
+	if lic := s.licenseBadge(r.Context()); lic != nil {
+		out["license"] = lic
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // startPassword sets a new password and authenticator secret for the staff

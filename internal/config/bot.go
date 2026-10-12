@@ -24,6 +24,10 @@ type Bot struct {
 	// PeerCoreToken is core's service token: core fetches receipt photos
 	// through the bot with it (/internal/files). Empty = no such endpoint.
 	PeerCoreToken string
+	// PeerBackupToken is the backup service's token: it hands the bot each
+	// encrypted backup for the owner (/internal/backups/deliver). Empty = no
+	// such endpoint.
+	PeerBackupToken string
 }
 
 // LoadBot reads the bot service configuration, failing closed on missing secrets.
@@ -54,7 +58,10 @@ func LoadBot() (Bot, error) {
 	keep(err)
 	b.PeerCoreToken, err = optionalToken("BOBRES_PEER_CORE_TOKEN", c.Env)
 	keep(err)
-	keep(requireDistinct(map[string]string{"BOBRES_SERVICE_TOKEN": b.ServiceToken, "BOBRES_PEER_CORE_TOKEN": b.PeerCoreToken}))
+	b.PeerBackupToken, err = optionalToken("BOBRES_PEER_BACKUP_TOKEN", c.Env)
+	keep(err)
+	keep(requireDistinct(map[string]string{"BOBRES_SERVICE_TOKEN": b.ServiceToken, "BOBRES_PEER_CORE_TOKEN": b.PeerCoreToken,
+		"BOBRES_PEER_BACKUP_TOKEN": b.PeerBackupToken}))
 	if b.TelegramAPIURL = getenv("BOBRES_TELEGRAM_API_URL", ""); b.TelegramAPIURL != "" {
 		if u, err := url.Parse(b.TelegramAPIURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			keep(errors.New("BOBRES_TELEGRAM_API_URL must be an http(s) URL"))

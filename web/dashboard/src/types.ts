@@ -545,3 +545,190 @@ export interface OverviewGateway {
    * absent from older cores */
   ready?: boolean
 }
+
+/** One BOBRES service on the System page: its /healthz and /readyz as core
+ * read them (each within 3 s). */
+export interface ServiceHealth {
+  /** core | bot | payments | provisioner | backup */
+  name: string
+  /** ok | not_ready (a readiness check failed) | down (no answer) |
+   * not_installed (an optional service this install does not run) |
+   * not_configured (core has no address for it) */
+  status: string
+  /** as the service reports it ("v1.2.3", "1.2.3", "dev"); '' when unknown */
+  version: string
+  /** the readiness checks: name → "ok" | "fail" */
+  checks?: Record<string, string> | null
+  /** why it is down or not ready, in a few English words */
+  detail?: string
+  latency_ms?: number
+  /** its version differs from core's */
+  version_mismatch?: boolean
+}
+
+/** GET /system (owner and admin): every service, and the summaries the
+ * overview shows. */
+export interface SystemReply {
+  services: ServiceHealth[]
+  /** core's own version, the one the others should match */
+  version: string
+  /** any service runs another version than core */
+  version_mismatch?: boolean
+  servers?: OverviewServer[]
+  gateways?: OverviewGateway[]
+  checked_at?: number
+  /** the bot's cached update check; absent from older cores */
+  updates?: UpdateCheck | null
+}
+
+/** What the bot last read from the latest release (it checks every 12 h;
+ * core has no way out to the internet). */
+export interface UpdateCheck {
+  /** this install's version ("1.5.0") */
+  current: string
+  /** the latest release's version; '' when it could not be read */
+  latest: string
+  /** latest is newer than current */
+  newer: boolean
+  /** the release's signature was checked against the release key ring */
+  verified: boolean
+  /** when the bot last checked; 0 = not yet */
+  checked_at: number
+  /** '' | not_checked (not yet, since the bot started) | unreachable
+   * (GitHub) | no_release | bad_signature | invalid | bot unreachable (core
+   * could not ask the bot) | anything else, in a few English words */
+  error: string
+  /** the bot's short English reason for the error; '' when fine */
+  detail?: string
+}
+
+/** One kept log line: a warning or an error, already redacted. */
+export interface LogLine {
+  time: number
+  /** WARN | ERROR */
+  level: string
+  msg: string
+  /** the line's other fields as a JSON object; '' or "{}" when none */
+  attrs?: string
+}
+
+/** GET /system/logs?service= (owner): the warnings and errors a service
+ * kept since it started (the newest 500), oldest first. */
+export interface SystemLogs {
+  service: string
+  lines: LogLine[] | null
+  /** '' | unreachable (core could not ask the service) | anything else, in
+   * a few English words */
+  error?: string
+}
+
+/** One kept backup (or a failed run) as the backup service's sidecar says. */
+export interface BackupFile {
+  file: string
+  /** bytes; 0 for a failed run */
+  size: number
+  sha256: string
+  /** unix seconds (an RFC 3339 time from a service answering directly) */
+  created_at: number | string
+  /** when the bot sent it to the owner on Telegram; null = not sent */
+  sent_at: number | string | null
+  /** why it was not sent: too_big | no_owner | busy | blocked |
+   * telegram_error[: …] | anything else, in English */
+  telegram_error?: string
+  /** the run failed: why, in English */
+  error?: string
+}
+
+/** GET /system/backups (owner and admin): the backup service's state.
+ * installed false: this install has no backup service; error "unreachable":
+ * core could not ask it. */
+export interface SystemBackups {
+  /** true with the list; only false means not installed */
+  installed?: boolean
+  error?: string
+  /** newest first */
+  backups?: BackupFile[] | null
+  /** a backup is being made now */
+  running?: boolean
+  /** why the last run failed; '' when it did not */
+  last_error?: string
+  /** unix seconds of the next daily run; 0 = not known */
+  next_run?: number
+  /** free bytes where the backups are kept */
+  disk_free?: number
+  /** that folder, inside the backup service */
+  dir?: string
+}
+
+/** POST /system/backups/run (owner): 202 started, or 409 already running. */
+export interface BackupRun {
+  started: boolean
+  reason?: string
+}
+
+/** A license limit with its use: -1 = unlimited, 0 = none; used is null
+ * when it could not be counted. */
+export interface LicenseLimit {
+  limit: number
+  used: number | null
+  /** used is 90% of the limit or more */
+  near?: boolean
+  /** nothing more may be added */
+  full?: boolean
+}
+
+/** What a license grants, each limit with what this install uses. */
+export interface LicenseEntitlements {
+  white_label: boolean
+  resellers: boolean
+  crypto_watcher: boolean
+  max_servers: LicenseLimit
+  max_active_services: LicenseLimit
+  /** staff besides the owner */
+  dashboard_staff_seats: LicenseLimit
+  /** the payment methods it names, and those turned on now (the wallet,
+   * always allowed, left out) */
+  gateways: { licensed: string[]; enabled: string[] }
+  /** YYYY-MM-DD: newer releases are not installable; '' = no limit */
+  updates_until?: string
+}
+
+/** The contents of a license token whose signature checked out. */
+export interface LicenseToken {
+  license_id: string
+  customer: string
+  /** trial | standard | pro */
+  tier: string
+  /** the vendor key that signed it */
+  kid: string
+  issued_at: number
+  expires_at: number
+  grace_days: number
+  grace_ends_at?: number
+  /** what it is bound to ('' = not bound) */
+  domain: string
+  install_id: string
+}
+
+/** GET /license (owner and admin; never the token itself), and the answer of
+ * POST /license/check and PUT /license. */
+export interface LicenseInfo {
+  /** missing | invalid | active | grace | expired */
+  state: string
+  /** why it is invalid: malformed, bad_signature, unknown_key, version,
+   * domain, install_id, unbound, not_yet_valid ('' otherwise) */
+  reason: string
+  /** this install: its id and its BOBRES_DOMAIN */
+  install_id: string
+  domain: string
+  /** the vendor keys built into this core (0: no license can verify yet) */
+  keys?: number
+  /** null when there is none, or its signature was not accepted */
+  license: LicenseToken | null
+  /** the token's binding against this install */
+  binding?: { domain: string; install_id: string } | null
+  entitlements?: LicenseEntitlements | null
+  /** when it was saved, and by whom (GET /license only) */
+  updated_at?: number | null
+  updated_by?: { id: string; username: string } | null
+}

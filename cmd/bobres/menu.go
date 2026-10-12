@@ -146,6 +146,8 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Change the bot token", run: m.changeBotToken},
 		{label: "Change the owner (admin) Telegram ID", run: m.changeAdmin},
 		{label: "Change the first 3x-ui panel (used until the dashboard has a server)", run: func() { m.changePanel(env) }},
+		{label: "Back up now", run: func() { m.ops.backupCmd(d) }, group: true},
+		{label: "Backup key", run: func() { m.backupKey(env) }},
 		{label: "Dashboard login link (if the bot is down)", run: func() { m.ops.adminCmd([]string{"link", "--dir", m.dir}) }, group: true},
 		{label: "Check this server", run: func() { m.doctor([]string{"--domain", env["BOBRES_DOMAIN"]}) }},
 		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }},
@@ -160,18 +162,18 @@ func (m *menu) header(env map[string]string, installed bool) {
 		return
 	}
 	fmt.Fprintf(m.out, "  %s  ·  %s  ·  version %s\n", m.dir, orDash(env["BOBRES_DOMAIN"]), orDash(env["BOBRES_VERSION"]))
-	fmt.Fprintf(m.out, "  Store: %s\n", m.state())
+	fmt.Fprintf(m.out, "  Store: %s\n", m.state(env))
 	m.rule()
 }
 
 // state summarises the containers in one line.
-func (m *menu) state() string {
+func (m *menu) state(env map[string]string) string {
 	out, err := m.ops.run(context.Background(), m.dir, composeArgs("ps", "--all", "--format", "json")...)
 	if err != nil {
 		return m.paint("33", "unknown (is Docker running?)")
 	}
 	rows := parseServices(out)
-	want := []string{"caddy", "postgres", "redis", "core", "payments", "provisioner", "bot"}
+	want := allServices(env)
 	up := 0
 	for _, s := range want {
 		if r, ok := rows[s]; ok && r.State == "running" && (r.Health == "" || r.Health == "healthy") {
@@ -196,6 +198,29 @@ func (m *menu) stop() {
 	m.ops.stopCmd([]string{"--dir", m.dir})
 }
 
+// backupState describes the backup schedule for the settings list.
+func (m *menu) backupState(env map[string]string) string {
+	if !backupEnabled(env) {
+		return "off (this version has no backup service)"
+	}
+	return fmt.Sprintf("daily at %s, kept in %s", orDash(env["BOBRES_BACKUP_TIME"]), filepath.Join(m.dir, "backups"))
+}
+
+// backupKey shows BOBRES_BACKUP_KEY after a confirmation: whoever sees it can
+// read every backup.
+func (m *menu) backupKey(env map[string]string) {
+	key := env["BOBRES_BACKUP_KEY"]
+	if key == "" {
+		fmt.Fprintln(m.out, "This install has no backup key yet: run  bobres install  to create one.")
+		return
+	}
+	if !m.confirm("Show the backup key? Anyone who has it can read your backups. [y/N]: ") {
+		fmt.Fprintln(m.out, "Cancelled.")
+		return
+	}
+	fmt.Fprintf(m.out, "\n  %s\n\nStore this somewhere safe, away from this server: without it the backups cannot be read.\n", key)
+}
+
 func (m *menu) showSettings(env map[string]string) {
 	// The dashboard keeps the gateway settings once payments has its key:
 	// .env only seeded them, so it is no guide to what is live.
@@ -215,6 +240,7 @@ func (m *menu) showSettings(env map[string]string) {
 		{"Panel on a private net", env["BOBRES_XUI_ALLOW_PRIVATE"]},
 		{"Zarinpal gateway", zp},
 		{"Time zone", env["BOBRES_TIMEZONE"]},
+		{"Backups", m.backupState(env)},
 	}
 	for _, r := range rows {
 		fmt.Fprintf(m.out, "  %-23s %s\n", r[0]+":", orDash(r[1]))
