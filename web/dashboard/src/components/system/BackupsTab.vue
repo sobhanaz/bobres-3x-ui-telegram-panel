@@ -9,13 +9,30 @@ import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { bytes, dateTime, type Lang } from '../../format'
-import { backupPoll, backupSent, backupsState, INSTALL_COMMAND, notSentReason, unixOf, type BackupSent } from '../../system'
+import { bytes, dateTime, isolate, num, type Lang } from '../../format'
+import {
+  backupPoll,
+  backupSent,
+  backupsState,
+  backupUpload,
+  INSTALL_COMMAND,
+  notSentReason,
+  OFFSITE_KEY_COMMAND,
+  OFFSITE_SET_COMMAND,
+  OFFSITE_SETUP_COMMAND,
+  offsiteKeep,
+  offsiteState,
+  offsiteWhere,
+  restoreFromOffsite,
+  unixOf,
+  type BackupSent,
+} from '../../system'
 import { useAuth } from '../../stores/auth'
 import type { BackupRun, SystemBackups } from '../../types'
 
 // The backups the backup service keeps on the server (the last 7), made daily
-// and on demand, each sent by the bot to the owner on Telegram. The owner can
+// and on demand, each sent by the bot to the owner on Telegram and, when it is
+// set up, copied to off-site storage (an S3-compatible bucket). The owner can
 // start one now; restoring stays on the server, with the backup key.
 const { t, locale } = useI18n()
 const toast = useToast()
@@ -74,6 +91,11 @@ onBeforeUnmount(() => {
 
 const state = computed(() => (reply.value ? backupsState(reply.value) : null))
 const running = computed(() => state.value === 'ok' && reply.value?.running === true)
+const offsite = computed(() => offsiteState(reply.value))
+const where = computed(() => offsiteWhere(reply.value))
+const offsiteProblem = computed(() => (reply.value?.offsite?.error ?? '').trim())
+const bucketKeeps = computed(() => offsiteKeep(reply.value))
+const restoreCommand = computed(() => restoreFromOffsite(reply.value))
 const list = computed(() =>
   (reply.value?.backups ?? []).map((b) => ({
     ...b,
@@ -81,6 +103,8 @@ const list = computed(() =>
     sentAt: unixOf(b.sent_at),
     sent: backupSent(b),
     why: notSentReason(b.telegram_error),
+    upload: backupUpload(b, offsite.value),
+    uploadedAt: unixOf(b.uploaded_at),
   })),
 )
 const nextRun = computed(() => unixOf(reply.value?.next_run))
@@ -199,8 +223,31 @@ async function copyCommand() {
               <dt>{{ t('system.backups.dir') }}</dt>
               <dd class="app-ltr app-mono dir">{{ reply.dir }}</dd>
             </template>
+            <template v-if="offsite !== 'unsupported'">
+              <dt>{{ t('system.backups.offsite.title') }}</dt>
+              <dd class="offsite" :class="'offsite-' + offsite">
+                <template v-if="offsite === 'on'">
+                  <i class="pi pi-cloud-upload" aria-hidden="true" />
+                  <span class="offsite-state">{{ t('system.backups.offsite.on') }}</span>
+                  <span v-if="where" class="app-ltr app-mono offsite-where">{{ where }}</span>
+                </template>
+                <template v-else-if="offsite === 'broken'">
+                  <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+                  <span class="offsite-state">{{ t('system.backups.offsite.broken') }}</span>
+                  <span class="app-ltr detail offsite-error">{{ offsiteProblem }}</span>
+                </template>
+                <span v-else class="offsite-state">{{ t('system.backups.offsite.off') }}</span>
+              </dd>
+            </template>
           </dl>
           <p class="app-muted kept">{{ t('system.backups.kept') }}</p>
+          <p v-if="offsite === 'on'" class="app-muted kept offsite-kept">
+            {{ bucketKeeps ? t('system.backups.offsite.kept_n', { n: num(bucketKeeps, lang) }) : t('system.backups.offsite.kept') }}
+          </p>
+          <p v-else-if="offsite === 'broken'" class="app-muted kept offsite-hint">
+            {{ t('system.backups.offsite.fix', { command: isolate(OFFSITE_SET_COMMAND), file: isolate('.env'), key_command: isolate(OFFSITE_KEY_COMMAND) }) }}
+          </p>
+          <p v-else-if="offsite === 'off'" class="app-muted kept offsite-hint">{{ t('system.backups.offsite.how', { command: isolate(OFFSITE_SETUP_COMMAND) }) }}</p>
         </template>
       </Card>
 
@@ -224,6 +271,20 @@ async function copyCommand() {
                 <span class="reason">{{ t('system.backups.reason.' + b.why.reason) }}</span>
                 <div v-if="b.why.detail" class="app-ltr detail error">{{ b.why.detail }}</div>
               </div>
+              <div v-if="b.upload === 'uploaded'" class="upload uploaded">
+                <i class="pi pi-check" aria-hidden="true" />
+                <span class="upload-state">{{
+                  b.uploadedAt ? t('system.backups.upload.uploaded_at', { time: dateTime(b.uploadedAt, lang) }) : t('system.backups.upload.uploaded')
+                }}</span>
+                <span v-if="b.uploaded_to" class="app-ltr app-mono upload-to">{{ b.uploaded_to }}</span>
+              </div>
+              <div v-else-if="b.upload === 'upload_failed'" class="upload upload-failed">
+                <span class="upload-state">{{ t('system.backups.upload.failed') }}</span>
+                <div class="app-ltr detail error upload-error">{{ b.upload_error }}</div>
+              </div>
+              <div v-else-if="b.upload === 'not_uploaded'" class="app-muted upload not-uploaded">
+                <span class="upload-state">{{ t('system.backups.upload.not_uploaded') }}</span>
+              </div>
               <div v-if="b.file" class="app-ltr app-mono file">{{ b.file }}</div>
             </li>
           </ol>
@@ -235,6 +296,7 @@ async function copyCommand() {
       <div class="title">{{ t('system.backups.restore_title') }}</div>
       <p class="hint">{{ t('system.backups.restore') }}</p>
       <p class="hint later">{{ t('system.backups.restore_later') }}</p>
+      <p v-if="offsite === 'on'" class="hint later restore-offsite">{{ t('system.backups.offsite.restore', { command: isolate(restoreCommand) }) }}</p>
     </Message>
   </div>
 </template>
@@ -285,6 +347,9 @@ async function copyCommand() {
   margin-block: 0.75rem 0;
   font-size: 0.85rem;
 }
+.kept + .kept {
+  margin-block-start: 0.3rem;
+}
 .empty {
   margin: 0;
 }
@@ -318,9 +383,40 @@ async function copyCommand() {
   unicode-bidi: isolate;
 }
 .why,
-.sent-at {
+.sent-at,
+.upload {
   margin-block-start: 0.3rem;
   font-size: 0.9rem;
+}
+.uploaded,
+.offsite-on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.4rem;
+}
+.uploaded .pi,
+.offsite-on .pi {
+  color: var(--p-message-success-simple-color, var(--p-green-600));
+}
+.offsite-broken .pi {
+  color: var(--p-orange-500);
+  margin-inline-end: 0.35rem;
+}
+.uploaded .upload-state {
+  color: var(--p-text-muted-color);
+}
+.offsite-where,
+.upload-to {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  overflow-wrap: anywhere;
+}
+.upload-to {
+  flex-basis: 100%;
+}
+.offsite-error {
+  display: block;
 }
 .file {
   margin-block-start: 0.25rem;

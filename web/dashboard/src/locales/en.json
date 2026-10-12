@@ -1672,6 +1672,13 @@
     "report_empty": "No payments in this period.",
     "days_7": "Last 7 days",
     "days_30": "Last 30 days",
+    "check_errors": {
+      "title": "Failed payment checks",
+      "counts": "{week} in the last 7 days, {month} in the last 30 days",
+      "hint": "Payments could not ask the gateway about these payments, or the gateway refused. Open payments are checked again by themselves; each payment is listed at most once an hour.",
+      "payment": "Payment",
+      "more": "The newest {shown} of {total} are shown."
+    },
     "usdt": {
       "desc": "Customers send an exact USDT amount on TRON (TRC20) to your address. The payment is found on the chain and confirmed automatically, with no transaction id to review. Toman prices are converted with the USDT rate of the Crypto (USDT) card, which stays available as the manual fallback.",
       "enabled": "Offer automatic USDT",
@@ -1899,6 +1906,23 @@
         "other": "Not sent to Telegram; it is kept on the server:"
       },
       "failed": "This backup failed:",
+      "upload": {
+        "uploaded": "Copied to off-site storage",
+        "uploaded_at": "Copied to off-site storage {time}",
+        "failed": "Not copied to off-site storage; it is kept on the server:",
+        "not_uploaded": "Not copied to off-site storage."
+      },
+      "offsite": {
+        "title": "Off-site storage",
+        "on": "Set up",
+        "off": "Not set up",
+        "broken": "Set up, but its settings can't be used, so backups are not copied:",
+        "kept": "Each new backup is also copied, still encrypted, to off-site storage, so a copy survives losing this server.",
+        "kept_n": "Each new backup is also copied, still encrypted, to off-site storage, which keeps the newest {n}, so a copy survives losing this server.",
+        "how": "Optional: to copy each backup to an S3-compatible storage (Arvan, MinIO, Backblaze B2, AWS), run {command} on the server; it then asks for the storage's two keys.",
+        "fix": "To correct the setting named above, run {command} on the server. For the access or secret key, edit the {file} file on the server, then run {key_command}.",
+        "restore": "To restore a copy from off-site storage, run {command} on the server (it downloads the file first), or download it from the storage yourself."
+      },
       "restore_title": "How to restore",
       "restore": "Restoring is done on the server, with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
       "restore_later": "To restore, run sudo bobres restore <file> on the server (see the restore runbook)."

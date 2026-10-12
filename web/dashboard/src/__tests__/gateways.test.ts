@@ -4,10 +4,12 @@ import PrimeVue from 'primevue/config'
 import fa from '../locales/fa.json'
 import en from '../locales/en.json'
 import { ApiError } from '../api'
+import { dateTime } from '../format'
 import {
   apiKeyMax,
   apiKeyValid,
   blockedByOpen,
+  checkErrors,
   depositKey,
   depositNoteMax,
   healthState,
@@ -334,6 +336,24 @@ describe('gateway report', () => {
     expect(rows[5].week.count).toBe(0)
     expect(reportRows(null, null).map((r) => r.status)).toEqual(['succeeded', 'confirming', 'pending', 'failed', 'expired'])
   })
+  it('reads the failed payment checks of both periods, newest first', () => {
+    const iid = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa'
+    const withChecks = (list: GatewayReport['check_errors'], count?: number): GatewayReport => ({ ...report([]), check_errors: list, check_error_count: count })
+    const old = { at: t0 - 7200, intent_id: iid, detail: 'zarinpal: verify: context deadline exceeded' }
+    const recent = { at: t0 - 60, intent_id: iid, detail: 'zarinpal: verify: HTTP 503' }
+    // an older core does not report them, and none is nothing to say
+    expect(checkErrors(report([]), report([]))).toBeNull()
+    expect(checkErrors(null, null)).toBeNull()
+    expect(checkErrors(withChecks([], 0), withChecks([], 0))).toBeNull()
+    expect(checkErrors(withChecks(null), withChecks(null))).toBeNull()
+    // the newest of the month, the count of each period, and how many more there are
+    expect(checkErrors(withChecks([recent], 1), withChecks([old, recent], 45))).toEqual({ week: 1, month: 45, items: [recent, old], more: 43 })
+    // a count is never below what is listed
+    expect(checkErrors(withChecks([recent]), withChecks([recent, old]))).toEqual({ week: 1, month: 2, items: [recent, old], more: 0 })
+    expect(checkErrors(withChecks([recent], 1), withChecks([recent], -3))).toEqual({ week: 1, month: 1, items: [recent], more: 0 })
+    // only the week's list (the month's report did not come back)
+    expect(checkErrors(withChecks([recent], 3), null)).toEqual({ week: 3, month: 3, items: [recent], more: 2 })
+  })
 })
 
 // The write-only field on its own.
@@ -565,6 +585,8 @@ describe('gateways page', () => {
     const reports = calls.filter((c) => c.startsWith('GET /api/v1/gateways/report?'))
     expect(reports).toHaveLength(2)
     expect(reports.every((c) => c.includes('provider=zarinpal'))).toBe(true)
+    // this core reports no failed checks: nothing about them
+    expect(zp().querySelector('.check-errors')).toBeNull()
 
     expect(save().disabled).toBe(true)
     ;(document.getElementById('zarinpal-enabled') as HTMLInputElement).click()
@@ -575,6 +597,52 @@ describe('gateways page', () => {
     await vi.waitFor(() => expect(zp().querySelector('.state')?.textContent).toBe(text('gateway.state.on')))
     expect(document.querySelector('.p-toast')?.textContent).toContain(text('gateway.saved'))
     await vi.waitFor(() => expect(save().disabled).toBe(true))
+  })
+
+  it('shows the payment checks that failed, newest first', async () => {
+    const iid = (n: number) => `aaaaaaaa-1111-4aaa-8aaa-${String(n).repeat(12).slice(0, 12)}`
+    const checks = [
+      { at: t0 - 7200, intent_id: iid(1), detail: 'zarinpal: verify: context deadline exceeded' },
+      { at: t0 - 60, intent_id: iid(2), detail: 'zarinpal: verify: HTTP 503 [address]' },
+      { at: t0 - 30, intent_id: '', detail: '' },
+    ]
+    let count = { week: 2, month: 23 }
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [config()], settings: payments() }), (url) => {
+      if (!url.startsWith('/api/v1/gateways/report?')) return undefined
+      const q = new URLSearchParams(url.split('?')[1])
+      const days = (Number(q.get('to')) - Number(q.get('from'))) / 86_400
+      return json(200, {
+        provider: 'zarinpal', from: Number(q.get('from')), to: Number(q.get('to')), healthy: false, open: 0, oldest_open_at: null, last_paid_at: null,
+        last_error_at: t0 - 30, last_error: 'zarinpal: verify: HTTP 503', ...(days === 7 ? week : month),
+        check_errors: days === 7 ? checks.slice(1) : checks, check_error_count: days === 7 ? count.week : count.month,
+      })
+    })
+    await found('.zarinpal-card')
+    const box = await shown(zp(), '.check-errors')
+    expect(box.querySelector('.checks-title')?.textContent?.trim()).toBe(text('gateway.check_errors.title'))
+    // how many in each period, in the user's digits
+    expect(box.querySelector('.checks-count')?.textContent).toBe(fill(text('gateway.check_errors.counts'), { week: '۲', month: '۲۳' }))
+    expect(box.querySelector('.checks-hint')?.textContent).toBe(text('gateway.check_errors.hint'))
+    // the month's newest first, each with its time, payment and the error (left to right)
+    const items = [...box.querySelectorAll('.check-error')] as HTMLElement[]
+    expect(items).toHaveLength(3)
+    expect(items.map((i) => i.querySelector('.check-at')?.textContent)).toEqual([dateTime(t0 - 30, 'fa'), dateTime(t0 - 60, 'fa'), dateTime(t0 - 7200, 'fa')])
+    expect(items[0].querySelector('.check-payment')).toBeNull()
+    expect(items[0].querySelector('.check-detail')).toBeNull()
+    expect(items[1].querySelector('.check-payment')?.textContent).toContain('222222')
+    expect(items[1].querySelector('.check-payment')?.textContent).toContain(text('gateway.check_errors.payment'))
+    expect(items[1].querySelector('.check-detail')?.textContent).toBe('zarinpal: verify: HTTP 503 [address]')
+    expect(items[1].querySelector('.check-detail')?.classList.contains('app-ltr')).toBe(true)
+    expect(items[2].querySelector('.check-detail')?.textContent).toBe('zarinpal: verify: context deadline exceeded')
+    // more than are listed
+    expect(box.querySelector('.checks-more')?.textContent?.trim()).toBe(fill(text('gateway.check_errors.more'), { shown: '۳', total: '۲۳' }))
+
+    // none left in either period: the report says nothing about them
+    count = { week: 0, month: 0 }
+    checks.length = 0
+    ;(zp().querySelector('.report button.refresh') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(zp().querySelector('.check-errors')).toBeNull())
+    expect(zp().querySelector('.week-succeeded')?.textContent).toBe('۵')
   })
 
   it('replaces the merchant id, refused while payments are open', async () => {

@@ -14,6 +14,7 @@ import {
   alertTextKey,
   backupSent,
   backupsState,
+  backupUpload,
   channelOf,
   checkList,
   fills,
@@ -25,7 +26,14 @@ import {
   mismatched,
   newestFirst,
   notSentReason,
+  OFFSITE_KEY_COMMAND,
+  OFFSITE_SET_COMMAND,
+  OFFSITE_SETUP_COMMAND,
+  offsiteKeep,
+  offsiteState,
+  offsiteWhere,
   openAlerts,
+  restoreFromOffsite,
   serviceState,
   sortedServices,
   unixOf,
@@ -551,6 +559,72 @@ describe('backups', () => {
       expect((fa.system.backups.reason as Record<string, string>)[r]).toBeTruthy()
     }
   })
+  it('reads whether off-site storage is set up, and where', () => {
+    // an older backup service says nothing about it
+    expect(offsiteState({})).toBe('unsupported')
+    expect(offsiteState({ offsite: null })).toBe('unsupported')
+    expect(offsiteState(null)).toBe('unsupported')
+    expect(offsiteState({ offsite: { configured: false } })).toBe('off')
+    expect(offsiteState({ offsite: { configured: false, error: '  ' } })).toBe('off')
+    expect(offsiteState({ offsite: { configured: true, endpoint_host: 's3.example.test', bucket: 'bobres' } })).toBe('on')
+    // settings that are there but cannot be used: nothing is copied
+    expect(offsiteState({ offsite: { configured: false, error: 'BOBRES_BACKUP_S3_BUCKET is required with BOBRES_BACKUP_S3_ENDPOINT' } })).toBe('broken')
+    expect(offsiteWhere({ offsite: { configured: true, endpoint_host: ' s3.example.test ', bucket: 'bobres' } })).toBe('s3.example.test/bobres')
+    expect(offsiteWhere({ offsite: { configured: true, endpoint_host: 's3.example.test', bucket: 'bobres', prefix: 'shop/backups/' } })).toBe('s3.example.test/bobres/shop/backups/')
+    expect(offsiteWhere({ offsite: { configured: true, bucket: 'bobres' } })).toBe('bobres')
+    expect(offsiteWhere({ offsite: { configured: false, endpoint_host: '', bucket: '' } })).toBe('')
+    expect(offsiteWhere({})).toBe('')
+    expect(offsiteKeep({ offsite: { configured: true, keep: 30 } })).toBe(30)
+    expect(offsiteKeep({ offsite: { configured: true, keep: 0 } })).toBeNull()
+    expect(offsiteKeep({ offsite: { configured: true } })).toBeNull()
+    expect(offsiteKeep({})).toBeNull()
+    // each copy is s3://bucket/prefix + its file name, as bobres restore takes it
+    expect(restoreFromOffsite({ offsite: { configured: true, bucket: ' bobres ' } })).toBe('sudo bobres restore s3://bobres/<file>')
+    expect(restoreFromOffsite({ offsite: { configured: true, bucket: 'bobres', prefix: 'shop/' } })).toBe('sudo bobres restore s3://bobres/shop/<file>')
+    expect(restoreFromOffsite({ offsite: { configured: true } })).toBe('sudo bobres restore s3://<bucket>/<file>')
+  })
+  it('gives the commands that set up or correct off-site storage, as the CLI takes them', () => {
+    // a re-run of bobres install asks nothing about the storage: the two flags
+    // turn it on (it then asks for the keys); a plain setting is corrected with
+    // bobres config set, and a key in .env, then a re-run without the checks
+    expect(OFFSITE_SETUP_COMMAND).toBe('sudo bobres install --s3-endpoint <url> --s3-bucket <bucket>')
+    expect(OFFSITE_SET_COMMAND).toBe('sudo bobres config set BOBRES_BACKUP_S3_<SETTING> <value>')
+    expect(OFFSITE_KEY_COMMAND).toBe('sudo bobres install --skip-checks')
+    // both languages take the commands as values (kept whole in right-to-left
+    // text), and neither says to answer questions a re-run never asks
+    const holes = (m: string) => [...m.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort()
+    for (const [lang, page] of [['en', en], ['fa', fa]] as const) {
+      expect(holes(page.system.backups.offsite.how), lang).toEqual(['command'])
+      expect(holes(page.system.backups.offsite.fix), lang).toEqual(['command', 'file', 'key_command'])
+    }
+    expect(en.system.backups.offsite.how + en.system.backups.offsite.fix).not.toMatch(/re-run|question/i)
+    expect(fa.system.backups.offsite.how + fa.system.backups.offsite.fix).not.toMatch(/دوباره|پرسش/)
+    // and the CLI has those flags and settings (in a full checkout)
+    const cli = (f: string) => resolve(dirname(fileURLToPath(import.meta.url)), `../../../../cmd/bobres/${f}`)
+    if (existsSync(cli('install.go')) && existsSync(cli('config.go'))) {
+      const install = readFileSync(cli('install.go'), 'utf8')
+      for (const flag of ['s3-endpoint', 's3-bucket', 'skip-checks']) expect(install, flag).toMatch(new RegExp(`fs\\.\\w+\\("${flag}"`))
+      const config = readFileSync(cli('config.go'), 'utf8')
+      for (const k of ['ENDPOINT', 'BUCKET', 'REGION', 'PREFIX', 'KEEP']) expect(config, k).toContain(`{name: "BOBRES_BACKUP_S3_${k}"`)
+    }
+  })
+  it('says whether each backup was copied to off-site storage', () => {
+    const b = (over: Partial<BackupFile>): BackupFile => ({ file: 'f', size: 1, sha256: '', created_at: 1, sent_at: null, ...over })
+    expect(backupUpload(b({ uploaded_at: '2026-10-11T03:32:00Z' }), 'on')).toBe('uploaded')
+    expect(backupUpload(b({ uploaded_at: 1_790_000_000 }), 'on')).toBe('uploaded')
+    // copied before the storage was turned off: still a copy
+    expect(backupUpload(b({ uploaded_at: 1_790_000_000 }), 'off')).toBe('uploaded')
+    expect(backupUpload(b({ upload_error: 'PUT: 403 AccessDenied' }), 'on')).toBe('upload_failed')
+    expect(backupUpload(b({ upload_error: 'PUT: 403 AccessDenied' }), 'off')).toBe('upload_failed')
+    // set up, but nothing recorded (made before it was)
+    expect(backupUpload(b({}), 'on')).toBe('not_uploaded')
+    expect(backupUpload(b({ uploaded_at: null, upload_error: '  ' }), 'on')).toBe('not_uploaded')
+    expect(backupUpload(b({ uploaded_at: 'soon' }), 'on')).toBe('not_uploaded')
+    // nothing to say without the storage, or for a failed run (no file)
+    expect(backupUpload(b({}), 'off')).toBe('none')
+    expect(backupUpload(b({}), 'unsupported')).toBe('none')
+    expect(backupUpload(b({ error: 'pg_dump: connection refused', upload_error: 'skipped' }), 'on')).toBe('none')
+  })
 })
 
 describe('system page', () => {
@@ -1032,6 +1106,11 @@ describe('system page', () => {
     expect(document.querySelector('.dir')?.textContent).toBe('/backups')
     expect(document.querySelector('.restore-note')?.textContent).toContain(text('system.backups.restore_later'))
     expect(document.querySelector('.backup-running')).toBeNull()
+    // an older backup service says nothing about off-site storage: neither does the tab
+    expect(document.querySelector('.offsite')).toBeNull()
+    expect(document.querySelector('.upload')).toBeNull()
+    expect(document.querySelector('.offsite-hint')).toBeNull()
+    expect(document.querySelector('.restore-offsite')).toBeNull()
 
     // back up now: shown as running, read again until done
     const run = btn('button.run-backup')
@@ -1085,6 +1164,106 @@ describe('system page', () => {
     done = true
     await vi.waitFor(() => expect(document.querySelector('.backup-running')).toBeNull())
     expect(calls.filter((c) => c.startsWith('POST ')).length).toBe(2)
+  })
+
+  it('shows which backups were copied to off-site storage, and why not', async () => {
+    const t0 = backupsAt - 3600
+    const base = backupsReply()
+    const [first, tooBig, failedRun, blocked] = base.backups!
+    const copied = backupsReply({
+      // as the backup service answers: where the copies go, how many the bucket keeps
+      offsite: { configured: true, endpoint_host: 's3.example.test', bucket: 'bobres-backups', prefix: 'shop/', keep: 30 },
+      backups: [
+        { ...first, uploaded_at: t0 + 40, uploaded_to: 's3://bobres-backups/shop/bobres-20261011T033000Z.bkp' },
+        { ...tooBig, upload_error: 'PUT bobres-20261010T033000Z.bkp: 403 AccessDenied' },
+        // a failed run has no file to copy
+        { ...failedRun, upload_error: 'no file' },
+        // made before off-site storage was set up
+        blocked,
+      ],
+    })
+    let reply: SystemBackups = copied
+    await boot('/admin/system?tab=backups', {
+      answer: (url) => (url === '/api/v1/system/backups' ? json(200, reply) : undefined),
+    })
+    await found('.backup .upload')
+    // set up, and where (left to right in the right-to-left page)
+    const where = document.querySelector('.offsite') as HTMLElement
+    expect(where.classList.contains('offsite-on')).toBe(true)
+    expect(where.querySelector('.offsite-state')?.textContent).toBe(text('system.backups.offsite.on'))
+    expect(where.querySelector('.offsite-where')?.textContent).toBe('s3.example.test/bobres-backups/shop/')
+    expect(where.querySelector('.offsite-where')?.classList.contains('app-ltr')).toBe(true)
+    expect(document.querySelector('.offsite-kept')?.textContent?.trim()).toBe(fill(text('system.backups.offsite.kept_n'), { n: '۳۰' }))
+    expect(document.querySelector('.offsite-hint')).toBeNull()
+    // restoring a copy straight from the storage, the command kept whole inside the sentence
+    expect(document.querySelector('.restore-offsite')?.textContent).toBe(
+      fill(text('system.backups.offsite.restore'), { command: '\u2068sudo bobres restore s3://bobres-backups/shop/<file>\u2069' }),
+    )
+    const items = [...document.querySelectorAll('.backup')] as HTMLElement[]
+    expect(items).toHaveLength(4)
+    // copied, when and where (what bobres restore takes)
+    expect(items[0].querySelector('.uploaded .upload-state')?.textContent).toBe(fill(text('system.backups.upload.uploaded_at'), { time: dateTime(t0 + 40, 'fa') }))
+    expect(items[0].querySelector('.upload-to')?.textContent).toBe('s3://bobres-backups/shop/bobres-20261011T033000Z.bkp')
+    expect(items[0].querySelector('.upload-to')?.classList.contains('app-ltr')).toBe(true)
+    expect(items[1].querySelector('.upload-to')).toBeNull()
+    // the copy failed: kept on the server, with the storage's own words
+    expect(items[1].querySelector('.upload-failed .upload-state')?.textContent).toBe(text('system.backups.upload.failed'))
+    expect(items[1].querySelector('.upload-error')?.textContent).toBe('PUT bobres-20261010T033000Z.bkp: 403 AccessDenied')
+    expect(items[1].querySelector('.upload-error')?.classList.contains('app-ltr')).toBe(true)
+    // the Telegram reason still shows beside it
+    expect(items[1].querySelector('.reason')?.textContent).toBe(text('system.backups.reason.too_big'))
+    // nothing for a failed run
+    expect(items[2].querySelector('.upload')).toBeNull()
+    // no record: not copied
+    expect(items[3].querySelector('.not-uploaded')?.textContent?.trim()).toBe(text('system.backups.upload.not_uploaded'))
+
+    // not set up: said once, with how to add it; no line per backup
+    reply = backupsReply({ offsite: { configured: false, endpoint_host: '', bucket: '' } })
+    btn('.backups button.refresh').click()
+    await found('.offsite-off')
+    expect(document.querySelector('.offsite .offsite-state')?.textContent).toBe(text('system.backups.offsite.off'))
+    expect(document.querySelector('.offsite-where')).toBeNull()
+    // with the install command that turns it on (a plain re-run asks nothing), kept whole
+    const how = document.querySelector('.offsite-hint')?.textContent?.trim()
+    expect(how).toBe(fill(text('system.backups.offsite.how'), { command: '\u2068sudo bobres install --s3-endpoint <url> --s3-bucket <bucket>\u2069' }))
+    expect(how).toContain('\u2068sudo bobres install --s3-endpoint <url> --s3-bucket <bucket>\u2069')
+    expect(document.querySelector('.offsite-kept')).toBeNull()
+    expect(document.querySelector('.restore-offsite')).toBeNull()
+    expect(document.querySelector('.backup .upload')).toBeNull()
+
+    // set up with settings the service cannot use: said, with why and how to fix it; each backup says it was not copied
+    const problem = 'BOBRES_BACKUP_S3_ENDPOINT must be an https URL without a path or credentials (https://s3.example.com)'
+    reply = backupsReply({
+      offsite: { configured: false, error: problem },
+      backups: [{ ...first, upload_error: 'the S3 upload is not set up correctly: ' + problem }],
+    })
+    btn('.backups button.refresh').click()
+    await found('.offsite-broken')
+    expect(document.querySelector('.offsite .offsite-state')?.textContent).toBe(text('system.backups.offsite.broken'))
+    expect(document.querySelector('.offsite-error')?.textContent).toBe(problem)
+    expect(document.querySelector('.offsite-error')?.classList.contains('app-ltr')).toBe(true)
+    // corrected with bobres config set, or a key in .env and a re-run without the checks; each command kept whole
+    const fix = document.querySelector('.offsite-hint')?.textContent?.trim()
+    const fixCommands = {
+      command: '\u2068sudo bobres config set BOBRES_BACKUP_S3_<SETTING> <value>\u2069',
+      file: '\u2068.env\u2069',
+      key_command: '\u2068sudo bobres install --skip-checks\u2069',
+    }
+    expect(fix).toBe(fill(text('system.backups.offsite.fix'), fixCommands))
+    for (const v of Object.values(fixCommands)) expect(fix).toContain(v)
+    expect(document.querySelector('.offsite-kept')).toBeNull()
+    expect(document.querySelector('.restore-offsite')).toBeNull()
+    expect(document.querySelector('.backup .upload-error')?.textContent).toBe('the S3 upload is not set up correctly: ' + problem)
+
+    // turned off since: the copies made meanwhile still show, from the service's own answer (RFC 3339 times)
+    reply = asTheServiceSays(backupsReply({
+      offsite: { configured: false },
+      backups: [{ ...first, created_at: new Date(t0 * 1000).toISOString(), uploaded_at: new Date((t0 + 40) * 1000).toISOString() }],
+    }))
+    btn('.backups button.refresh').click()
+    await found('.backup .uploaded')
+    expect(document.querySelector('.uploaded .upload-state')?.textContent).toBe(fill(text('system.backups.upload.uploaded_at'), { time: dateTime(t0 + 40, 'fa') }))
+    expect(document.querySelector('.offsite-off')).not.toBeNull()
   })
 
   it('says how to add the backup service, and when core cannot reach it', async () => {

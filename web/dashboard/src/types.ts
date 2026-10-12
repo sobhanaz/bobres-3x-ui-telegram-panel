@@ -553,6 +553,24 @@ export interface GatewayReport extends GatewayHealth {
   unmatched?: UnmatchedDeposit[]
   /** usdt_trc20_auto only: how many deposits are still to handle in all */
   unmatched_count?: number
+  /** the failed payment checks (Zarinpal) kept in the period, newest first,
+   * at most 20; absent from older cores */
+  check_errors?: GatewayCheckError[] | null
+  /** how many failed checks there are in the period (the list may hold
+   * fewer) */
+  check_error_count?: number
+}
+
+/** A failed payment check: payments could not ask the gateway about a
+ * payment, or the gateway refused. Each payment's are kept at most once an
+ * hour, so an outage leaves a trace without flooding the report. */
+export interface GatewayCheckError {
+  /** unix seconds */
+  at: number
+  /** the payment it was checking; '' when none */
+  intent_id: string
+  /** the error, already redacted (English) */
+  detail: string
 }
 
 /** A 3x-ui server on the overview (every staff member who reads it). */
@@ -704,6 +722,31 @@ export interface BackupFile {
   telegram_error?: string
   /** the run failed: why, in English */
   error?: string
+  /** when the encrypted file was copied to off-site storage (an
+   * S3-compatible bucket); null or absent = not copied */
+  uploaded_at?: number | string | null
+  /** where it was copied: s3://bucket/key (what bobres restore takes) */
+  uploaded_to?: string
+  /** why the copy to off-site storage failed, in English (the backup itself
+   * is kept on the server) */
+  upload_error?: string
+}
+
+/** The backup service's off-site storage: an S3-compatible bucket each new
+ * backup is copied to. Only where it is, never its keys. */
+export interface BackupOffsite {
+  /** each backup is copied (false when not set up, or when its settings
+   * cannot be used: then error says why) */
+  configured: boolean
+  /** the storage's host name (s3.ir-thr-at1.arvanstorage.ir) */
+  endpoint_host?: string
+  bucket?: string
+  /** '' or a folder ending in "/": each backup is prefix + its file name */
+  prefix?: string
+  /** how many backups the bucket keeps */
+  keep?: number
+  /** why settings that are there cannot be used, in English */
+  error?: string
 }
 
 /** GET /system/backups (owner and admin): the backup service's state.
@@ -725,6 +768,8 @@ export interface SystemBackups {
   disk_free?: number
   /** that folder, inside the backup service */
   dir?: string
+  /** off-site storage; absent from older backup services */
+  offsite?: BackupOffsite | null
 }
 
 /** POST /system/backups/run (owner): 202 started, or 409 already running. */
