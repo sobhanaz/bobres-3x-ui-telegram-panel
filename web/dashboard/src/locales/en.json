@@ -810,6 +810,10 @@
           "label": "Service could not be created",
           "help": "When a paid service could not be created on the 3x-ui panel and needs a look."
         },
+        "system_alerts": {
+          "label": "System problems",
+          "help": "When a service, a 3x-ui server, Zarinpal, the backups, the disk, paid orders, the bot's messages or the license has a problem, once a day while it lasts, and when it is fixed. Open problems always show on the System page."
+        },
         "sales": {
           "label": "Every sale",
           "help": "A message for every paid order, with the customer, plan and amount."
@@ -1745,6 +1749,36 @@
     "gateways_none": "No payment method is turned on.",
     "gateways_manage": "Manage payment methods",
     "not_configured": "Core has no address for this service in its settings.",
+    "alerts": {
+      "title": "Open problems",
+      "count": "Open problems: {n}",
+      "none": "No open problems: every check passes.",
+      "unreadable": "The open problems could not be read just now. Check again in a minute.",
+      "list_label": "Open problems, most severe first",
+      "since": "Since {time}",
+      "severity": {
+        "critical": "Critical",
+        "warning": "Warning"
+      },
+      "note": "Core checks every minute: the services, the 3x-ui servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages and the license. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
+      "settings": "Alert settings",
+      "kind": {
+        "service_down": "The {service} service is down",
+        "service_not_ready": "The {service} service is running but not ready (a database, Redis or gRPC check fails)",
+        "server_down": "The 3x-ui server {server} does not answer",
+        "zarinpal_failing": "Zarinpal payments are failing",
+        "zarinpal_stuck": "{count} Zarinpal payments are still open; the oldest started over 3 hours ago",
+        "backup_failed": "The last backup failed",
+        "backup_stale": "No new backup for {hours} hours",
+        "disk_low": "The disk is almost full: {free} free",
+        "provision_failed": "{count} paid orders could not be delivered in the last hour",
+        "bot_lag": "The bot is {minutes} minutes behind on its messages (deliveries, receipts, alerts)",
+        "license_expiring": "The license expires in {days} days, on {date}",
+        "license_grace": "The license has expired; its grace period ends on {date}",
+        "license_expired": "The license has expired: new resellers, servers, staff and payment methods are refused",
+        "check": "The {key} check reports a problem"
+      }
+    },
     "updates": {
       "title": "Version",
       "current": "This install",
@@ -1811,7 +1845,7 @@
       "failed": "This backup failed:",
       "restore_title": "How to restore",
       "restore": "Restoring is done on the server, with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
-      "restore_later": "The restore command (bobres restore) comes in a later update."
+      "restore_later": "To restore, run sudo bobres restore <file> on the server (see the restore runbook)."
     },
     "logs": {
       "service": "Service",

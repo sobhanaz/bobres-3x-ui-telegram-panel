@@ -12,14 +12,31 @@ import { errorText } from '../../errors'
 import { dateTime, isolate, num, type Lang } from '../../format'
 import { overviewGatewaySeverity, overviewGatewayState } from '../../gateways'
 import { healthSeverity } from '../../servers'
-import { absent, checkList, mismatched, serviceSeverity, serviceState, sortedServices } from '../../system'
+import {
+  absent,
+  ALERT_FALLBACK,
+  alertArgs,
+  alertLevel,
+  alertSeverity,
+  alertsState,
+  alertTextKey,
+  checkList,
+  fills,
+  mismatched,
+  openAlerts,
+  serviceSeverity,
+  serviceState,
+  sortedServices,
+  unixOf,
+  worstLevel,
+} from '../../system'
 import { useAuth } from '../../stores/auth'
-import type { OverviewServer, ServiceHealth, SystemReply } from '../../types'
+import type { OverviewServer, ServiceHealth, SystemAlert, SystemReply } from '../../types'
 
-// Every service's health and version as core sees them (it asks each one in
-// parallel, 3 s at most), with the 3x-ui servers and payment methods the
-// overview also shows.
-const { t, te, locale } = useI18n()
+// The open problems core's watchdog found, then every service's health and
+// version as core sees them (it asks each one in parallel, 3 s at most),
+// with the 3x-ui servers and payment methods the overview also shows.
+const { t, te, tm, locale } = useI18n()
 const auth = useAuth()
 const lang = computed(() => locale.value as Lang)
 
@@ -60,6 +77,23 @@ const mismatchText = computed(() =>
 const servers = computed(() => reply.value?.servers ?? null)
 const serverHealth = (s: OverviewServer) => (s.enabled === false ? 'off' : s.healthy ? 'ok' : 'down')
 const gateways = computed(() => reply.value?.gateways ?? null)
+
+// Open problems: none shown by an older core, which has no watchdog.
+const alertsAre = computed(() => alertsState(reply.value))
+const alerts = computed(() => openAlerts(reply.value))
+const worst = computed(() => (alerts.value ? worstLevel(alerts.value) : null))
+// Named as the bot's Telegram message names it (service names as on this
+// page), else in core's words, else by the check's key.
+function alertTitle(a: SystemAlert): string {
+  const args = alertArgs(a, lang.value, (k, v) => (k === 'service' ? label('system.service.', v) : v))
+  const own = alertTextKey(a)
+  if (own && te(own) && fills(tm(own), args)) return t(own, args)
+  return a.title?.trim() || t(ALERT_FALLBACK, args)
+}
+const alertSince = (a: SystemAlert) => {
+  const at = unixOf(a.since)
+  return at === null ? '' : t('system.alerts.since', { time: dateTime(at, lang.value) })
+}
 </script>
 
 <template>
@@ -77,6 +111,45 @@ const gateways = computed(() => reply.value?.gateways ?? null)
     <Message v-if="others.length" severity="warn" icon="pi pi-exclamation-triangle" :closable="false" class="banner mismatch-banner">
       {{ mismatchText }}
     </Message>
+
+    <Card v-if="alertsAre !== 'unsupported'" class="alerts-card">
+      <template #title>
+        <span class="alerts-title">
+          {{ t('system.alerts.title') }}
+          <Tag
+            v-if="alerts && worst"
+            :severity="alertSeverity[worst]"
+            :value="num(alerts.length, lang)"
+            :aria-label="t('system.alerts.count', { n: num(alerts.length, lang) })"
+            class="alerts-count"
+          />
+        </span>
+      </template>
+      <template #content>
+        <p v-if="!alerts" class="app-muted alerts-unreadable">
+          <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+          <span>{{ t('system.alerts.unreadable') }}</span>
+        </p>
+        <p v-else-if="!alerts.length" class="all-clear">
+          <i class="pi pi-check-circle" aria-hidden="true" />
+          <span>{{ t('system.alerts.none') }}</span>
+        </p>
+        <ul v-else class="alerts" :aria-label="t('system.alerts.list_label')">
+          <li v-for="a in alerts" :key="a.key" :class="['row', 'alert', 'alert-' + alertLevel(a)]">
+            <div class="row-main">
+              <Tag :severity="alertSeverity[alertLevel(a)]" :value="t('system.alerts.severity.' + alertLevel(a))" class="alert-severity" />
+              <bdi class="alert-title">{{ alertTitle(a) }}</bdi>
+              <span class="app-muted alert-since">{{ alertSince(a) }}</span>
+            </div>
+            <div v-if="a.detail?.trim()" class="app-muted app-ltr detail alert-detail">{{ a.detail.trim() }}</div>
+          </li>
+        </ul>
+        <p class="app-muted alerts-note">
+          {{ t('system.alerts.note') }}
+          <RouterLink v-if="auth.can('settings.write')" :to="{ name: 'settings' }" class="settings-link">{{ t('system.alerts.settings') }}</RouterLink>
+        </p>
+      </template>
+    </Card>
 
     <Card class="services-card">
       <template #title>{{ t('system.services') }}</template>
@@ -218,5 +291,38 @@ const gateways = computed(() => reply.value?.gateways ?? null)
 .manage {
   display: inline-block;
   margin-block-start: 0.75rem;
+}
+.alerts-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.alerts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.alert-title {
+  font-weight: 500;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.alert-since {
+  font-size: 0.85rem;
+}
+.all-clear,
+.alerts-unreadable {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+.all-clear .pi {
+  color: var(--p-message-success-simple-color, var(--p-green-600));
+  font-size: 1.1rem;
+}
+.alerts-note {
+  font-size: 0.85rem;
+  margin-block: 0.75rem 0;
 }
 </style>
