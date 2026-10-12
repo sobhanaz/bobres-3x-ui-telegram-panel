@@ -261,6 +261,11 @@ type fakePayments struct {
 
 func (f *fakePayments) StartGateway(_ context.Context, p GatewayStart) (*GatewayIntent, error) {
 	f.started = append(f.started, p)
+	if p.Provider == USDTAuto { // payments makes the amount unique and names the address
+		return &GatewayIntent{ID: "00000000-0000-7000-8000-0000000000a2", Status: "pending", Provider: p.Provider,
+			Amount: p.Amount, Currency: p.Currency, GatewayAmount: p.GatewayAmount + 7, GatewayCurrency: p.GatewayCurrency,
+			PayAddress: testTronAddress, ExpiresAt: 1_800_000_000}, nil
+	}
 	return &GatewayIntent{ID: "00000000-0000-7000-8000-0000000000g1", Status: "pending", Provider: p.Provider,
 		Amount: p.Amount, Currency: p.Currency, GatewayAmount: p.GatewayAmount, GatewayCurrency: p.GatewayCurrency,
 		PayURL: "https://pay.example.test/x"}, nil

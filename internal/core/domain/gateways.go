@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -12,6 +13,10 @@ import (
 const (
 	Zarinpal = "zarinpal"
 	Stars    = "stars"
+	// USDTAuto is automatic USDT on TRON (TRC20): the customer sends an exact
+	// amount to the store's address and payments' watcher finds it on chain.
+	// It is switched on in payments (the Gateways page), like Zarinpal.
+	USDTAuto = "usdt_trc20_auto"
 )
 
 // GatewayStart asks payments to start an automated payment.
@@ -34,6 +39,12 @@ type GatewayIntent struct {
 	GatewayCurrency               string
 	PayURL                        string
 	FailureReason                 string
+	// Automatic USDT: the address to send GatewayAmount to, and the end of
+	// the window the amount is held for (unix seconds; 0 = none). ExternalID
+	// is the settling transaction's hash once paid.
+	PayAddress string
+	ExpiresAt  int64
+	ExternalID string
 }
 
 // Zarinpal's per-payment limits (the gateway works in Rial: x10).
@@ -42,8 +53,22 @@ const (
 	zarinpalMaxToman = 100_000_000
 )
 
+// Automatic USDT's per-payment limits, in micro-USDT (scale 6). Payments
+// adds 1 to 999 micro-USDT to what core asks, so that every open payment has
+// its own exact amount.
+const (
+	// usdtMin: 0.1 USDT. Payments treats a transfer under 0.1 USDT that
+	// matches nothing as dust (address poisoning) and tells nobody, so a
+	// smaller payment paid wrong would go unseen.
+	usdtMin = 100_000
+	// usdtMax: 1,000,000 USDT, as payments allows.
+	usdtMax = 1_000_000_000_000
+	// usdtCent: Toman prices are converted to whole cents of USDT.
+	usdtCent = 10_000
+)
+
 func isGateway(provider string) bool {
-	return provider == Zarinpal || provider == Stars
+	return provider == Zarinpal || provider == Stars || provider == USDTAuto
 }
 
 func ceilDiv(a, b int64) int64 { return (a + b - 1) / b }
@@ -61,7 +86,8 @@ func (s *Service) settingInt(ctx context.Context, key string) int64 {
 
 // gatewayCharge converts a price into what a gateway charges: Zarinpal takes
 // Rial (Toman x 10), Telegram Stars a whole number of Stars (payments.stars_rate
-// Toman per Star, rounded up so a payment never falls short).
+// Toman per Star, rounded up so a payment never falls short), automatic USDT
+// micro-USDT (see usdtCharge).
 func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int64, currency string) (int64, string, error) {
 	if amount <= 0 {
 		return 0, "", invalid("amount must be positive")
@@ -81,8 +107,44 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 			return 0, "", invalid("Telegram Stars is not set up for this price (payments.stars_rate)")
 		}
 		return ceilDiv(amount, rate), "XTR", nil
+	case USDTAuto:
+		return s.usdtCharge(ctx, amount, currency)
 	}
 	return 0, "", invalid("unsupported payment method %q", provider)
+}
+
+// usdtCharge is what automatic USDT asks before payments makes it unique: a
+// USDT price as it is; a Toman price at payments.usdt_rate (Toman per USDT,
+// the rate manual USDT uses too) in whole cents, rounded up so a payment
+// never falls short: ceil(amount*100/rate) * 10,000 micro-USDT.
+func (s *Service) usdtCharge(ctx context.Context, amount int64, currency string) (int64, string, error) {
+	var base int64
+	switch currency {
+	case "USDT":
+		base = amount
+	case "IRT":
+		rate := s.settingInt(ctx, "payments.usdt_rate")
+		if rate <= 0 {
+			return 0, "", invalid("automatic USDT is not set up for this price (payments.usdt_rate)")
+		}
+		if amount > (math.MaxInt64-rate)/100 { // amount*100 + rate - 1 must fit
+			return 0, "", invalid("automatic USDT takes at most 1,000,000 USDT per payment")
+		}
+		cents := ceilDiv(amount*100, rate)
+		if cents > usdtMax/usdtCent {
+			return 0, "", invalid("automatic USDT takes at most 1,000,000 USDT per payment")
+		}
+		base = cents * usdtCent
+	default:
+		return 0, "", invalid("automatic USDT takes Toman and USDT prices only")
+	}
+	switch {
+	case base < usdtMin:
+		return 0, "", invalid("automatic USDT takes at least 0.1 USDT per payment")
+	case base > usdtMax:
+		return 0, "", invalid("automatic USDT takes at most 1,000,000 USDT per payment")
+	}
+	return base, "USDT", nil
 }
 
 // PaymentMethods lists the automated methods usable for a price (amount in

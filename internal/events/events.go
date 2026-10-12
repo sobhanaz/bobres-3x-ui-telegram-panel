@@ -25,6 +25,13 @@ const (
 	TicketClosed          = "ticket.closed.v1"
 	// SystemAlert: core's watchdog found a problem, or one was fixed.
 	SystemAlert = "system.alert.v1"
+	// DepositUnmatched: USDT reached the store's TRON address but matched no
+	// automatic payment (DepositUnmatchedEvent); staff credit it by hand.
+	DepositUnmatched = "payment.deposit_unmatched.v1"
+	// DepositClaimed: a manual USDT proof carries a transaction the watcher
+	// had seen reach the store's address (DepositClaimedEvent); staff check
+	// the proof's customer really sent it before approving.
+	DepositClaimed = "payment.deposit_claimed.v1"
 )
 
 // Topics core consumes from the payments feed.
@@ -35,7 +42,70 @@ const (
 	// payment.succeeded; it is applied with the same idempotency key, so
 	// whichever arrives first credits the wallet and the other is a no-op.
 	PaymentsLegacyWalletCredited = "wallet.credited.v1"
+	// PaymentsDepositUnmatched: the automatic USDT watcher recorded a deposit
+	// it could not match (DepositUnmatchedEvent); core passes it on to the
+	// bot as DepositUnmatched.
+	PaymentsDepositUnmatched = "payment.deposit_unmatched.v1"
+	// PaymentsDepositClaimed: a manual crypto proof took a deposit the
+	// watcher had seen (DepositClaimedEvent); core passes it on to the bot as
+	// DepositClaimed.
+	PaymentsDepositClaimed = "payment.deposit_claimed.v1"
 )
+
+// Why a deposit is unmatched (DepositUnmatchedEvent.Reason).
+const (
+	// UnmatchedNoPayment: no automatic payment to the address has exactly
+	// this amount (underpaid, overpaid, an exchange took its fee, or not a
+	// customer).
+	UnmatchedNoPayment = "no_payment"
+	// UnmatchedAlreadyPaid: the payment with this amount is paid already (a
+	// second transfer).
+	UnmatchedAlreadyPaid = "already_paid"
+	// UnmatchedClosed: the payment with this amount can no longer be paid
+	// (over 48 hours old, or failed).
+	UnmatchedClosed = "closed"
+	// UnmatchedAmbiguous: more than one payment has this amount; nothing is
+	// guessed.
+	UnmatchedAmbiguous = "ambiguous"
+)
+
+// DepositUnmatchedEvent: USDT (TRC20) reached the store's address and was
+// credited to nobody. Staff find the customer (the amount, the sender, the
+// time), credit their wallet by hand, then mark the deposit handled on the
+// dashboard. It is announced once per deposit; dust (under 0.1 USDT) never.
+// The bot sends it to the staff who get payment alerts (notify.recipients).
+// Addresses and the transaction id are public chain data.
+type DepositUnmatchedEvent struct {
+	TxID       string `json:"txid"` // lower-case hex, no 0x
+	EventIndex int    `json:"event_index"`
+	Network    string `json:"network"` // TRC20
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Amount     int64  `json:"amount"`     // micro-USDT (scale 6)
+	Currency   string `json:"currency"`   // USDT
+	BlockTime  int64  `json:"block_time"` // unix seconds
+	Reason     string `json:"reason"`     // Unmatched*
+}
+
+// DepositClaimedEvent: a manual crypto payment's proof (IntentID) names a
+// USDT (TRC20) transfer the watcher had seen reach the store's address, and
+// took it. The transaction id of a transfer to the store is public, so
+// anyone may send it as their proof: staff check the proof's customer really
+// sent it before approving. Nobody credits it by hand. The bot sends it to
+// the staff who get payment alerts (notify.recipients), always.
+type DepositClaimedEvent struct {
+	TxID       string `json:"txid"` // lower-case hex, no 0x
+	EventIndex int    `json:"event_index"`
+	Network    string `json:"network"` // TRC20
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Amount     int64  `json:"amount"`     // micro-USDT (scale 6)
+	Currency   string `json:"currency"`   // USDT
+	BlockTime  int64  `json:"block_time"` // unix seconds
+	Reason     string `json:"reason"`     // what it is without the proof: no_payment | dust
+	IntentID   string `json:"intent_id"`  // the manual crypto payment whose proof carries it
+	Proof      string `json:"proof"`      // the proof's state: waiting | approved
+}
 
 // PaymentEvent is the payload of payments' payment.* events.
 type PaymentEvent struct {
@@ -52,7 +122,7 @@ type PaymentEvent struct {
 const (
 	PaidByWallet  = "wallet"
 	PaidManually  = "manual"
-	PaidByGateway = "gateway" // Zarinpal, Telegram Stars
+	PaidByGateway = "gateway" // Zarinpal, Telegram Stars, automatic USDT
 	PaidTrial     = "trial"
 	PaidFree      = "free"
 )

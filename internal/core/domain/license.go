@@ -30,8 +30,8 @@ const (
 )
 
 // LicenseGateways are the payment methods a license names. The wallet is
-// always allowed.
-var LicenseGateways = []string{Zarinpal, Stars, "manual_card", "manual_crypto", "manual_zarinpal"}
+// always allowed. Automatic USDT also needs the crypto_watcher feature.
+var LicenseGateways = []string{Zarinpal, Stars, USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
 
 // LicenseConfig is what a license is checked against.
 type LicenseConfig struct {
@@ -120,8 +120,8 @@ func LicenseReasonText(code string) string {
 }
 
 // LicenseRefusal is a new action the installed license does not allow (409).
-// Gate names the entitlement: resellers, max_servers, dashboard_staff_seats
-// or gateways.
+// Gate names the entitlement: resellers, max_servers, dashboard_staff_seats,
+// gateways or crypto_watcher.
 type LicenseRefusal struct{ Gate, Msg string }
 
 func (e *LicenseRefusal) Error() string { return ErrState.Error() + ": " + e.Msg }
@@ -359,6 +359,7 @@ var gateAction = map[string]string{
 	"max_servers":           "add servers",
 	"dashboard_staff_seats": "add staff",
 	"gateways":              "switch payment methods on",
+	"crypto_watcher":        "switch automatic USDT on",
 }
 
 // requireResellers: making a reseller needs the resellers feature.
@@ -416,7 +417,8 @@ func (s *Service) requireStaffSeat(ctx context.Context) error {
 }
 
 // requireGateway: switching a payment method on needs it in the license
-// (the wallet is always allowed).
+// (the wallet is always allowed); automatic USDT also needs the
+// crypto_watcher feature.
 func (s *Service) requireGateway(ctx context.Context, provider string) error {
 	if provider == "wallet" {
 		return nil
@@ -426,7 +428,13 @@ func (s *Service) requireGateway(ctx context.Context, provider string) error {
 
 // gatewayRefusal: st (nil: no gating license) does not include provider.
 func gatewayRefusal(st *LicenseStatus, provider string) error {
-	if st == nil || st.Entitlements().HasGateway(provider) {
+	if st == nil {
+		return nil
+	}
+	if provider == USDTAuto && !st.Entitlements().HasFeature("crypto_watcher") {
+		return refusal(st, "crypto_watcher", "the license does not include the automatic USDT watcher (crypto_watcher)")
+	}
+	if st.Entitlements().HasGateway(provider) {
 		return nil
 	}
 	return refusal(st, "gateways", "the license does not include the payment method "+provider)

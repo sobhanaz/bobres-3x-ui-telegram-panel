@@ -11,9 +11,11 @@ import (
 )
 
 // Payment gateway settings (milestone 6a). Payments keeps Zarinpal's merchant
-// id and proxy encrypted under its own key; core forwards what the owner
-// types and audits that something changed, never the values. The manual
-// methods and Telegram Stars are switched on and off with settings
+// id and proxy, and automatic USDT's address, TronGrid API key and proxy,
+// encrypted under its own key; core forwards what the owner types and audits
+// that something changed, never a secret (the USDT address is public:
+// customers are shown it, so the audit keeps it). The manual methods and
+// Telegram Stars are switched on and off with settings
 // (payments.<method>.enabled), checked here.
 
 // GatewayAdmin is core's view of payments' gateway settings.
@@ -24,6 +26,11 @@ type GatewayAdmin interface {
 	// ones with a read-only call; nothing is stored.
 	TestGateway(ctx context.Context, provider string, c *GatewayCandidate) (*GatewayTest, error)
 	GatewayReport(ctx context.Context, provider string, from, to int64) (*GatewayReport, error)
+	// ChainTransfers is automatic USDT's transfer log, newest first, with the
+	// number of matches (page from 1).
+	ChainTransfers(ctx context.Context, f ChainTransferFilter, page, size int) ([]ChainTransfer, int64, error)
+	// ResolveChainTransfer marks an unmatched deposit handled by staff.
+	ResolveChainTransfer(ctx context.Context, txid string, index int, actorID, note string) (*ChainTransfer, error)
 }
 
 // GatewayConfig is an automated gateway's settings as payments reports
@@ -35,6 +42,8 @@ type GatewayConfig struct {
 	Offered      bool // new payments can use it now
 	Sandbox      bool
 	MerchantHint string // the merchant id's last 4 characters
+	Address      string // automatic USDT: the store's TRON address (public)
+	APIKeySet    bool   // automatic USDT: a TronGrid API key is set
 	ProxySet     bool
 	KeyMissing   bool   // payments has no master key: read only
 	FromEnv      bool   // the settings come from the environment
@@ -43,13 +52,16 @@ type GatewayConfig struct {
 	UpdatedBy    string
 }
 
-// GatewayUpdate replaces a gateway's settings. MerchantID and Proxy are
-// write-only: "" keeps the stored value.
+// GatewayUpdate replaces a gateway's settings. MerchantID, Proxy and APIKey
+// are write-only, and they and Address keep the stored value when "".
 type GatewayUpdate struct {
 	Provider          string
 	Enabled, Sandbox  bool
 	MerchantID, Proxy string
 	ClearProxy        bool
+	// Automatic USDT: the store's TRON address and TronGrid's API key.
+	Address, APIKey string
+	ClearAPIKey     bool
 }
 
 // GatewayCandidate is settings to test before saving them ("" = stored).
@@ -57,6 +69,8 @@ type GatewayCandidate struct {
 	Sandbox           bool
 	MerchantID, Proxy string
 	ClearProxy        bool
+	Address, APIKey   string // automatic USDT
+	ClearAPIKey       bool   // automatic USDT
 }
 
 // GatewayTest is the result of a gateway test.
@@ -91,11 +105,29 @@ type GatewayReport struct {
 	OldestOpenAt int64 // 0 = none open
 	LastError    *GatewayEvent
 	LastPaid     *GatewayEvent
+	// Automatic USDT only: the deposits staff must still credit by hand
+	// (whatever the period; newest first, at most 50) and how many there
+	// are, and the watcher's reads of the store's address (unix seconds, 0 =
+	// never; ScanError is the last read's error, "" when it worked).
+	Unmatched                []ChainTransfer
+	UnmatchedCount           int64
+	LastScanAt, LastScanOKAt int64
+	ScanError                string
 }
 
+// chainReadGrace: automatic USDT is unhealthy once its reads of the address
+// have failed for this long (the watcher reads every 30 seconds; TronGrid
+// refuses one now and then).
+const chainReadGrace = 5 * time.Minute
+
 // Healthy: payments go through. No error so far, a payment went through
-// since the last error, or that error is over an hour old.
+// since the last error, or that error is over an hour old. Automatic USDT:
+// the watcher can read the chain (its last read worked, or one worked within
+// the last 5 minutes).
 func (r *GatewayReport) Healthy(now time.Time) bool {
+	if r.Provider == USDTAuto {
+		return r.ScanError == "" || (r.LastScanOKAt > 0 && now.Sub(time.Unix(r.LastScanOKAt, 0)) <= chainReadGrace)
+	}
 	switch {
 	case r.LastError == nil:
 		return true
@@ -114,7 +146,7 @@ var methodToggles = map[string]string{
 }
 
 // MethodToggle is the setting that switches a payment method on and off; ""
-// when it has none (Zarinpal is switched in payments).
+// when it has none (Zarinpal and automatic USDT are switched in payments).
 func MethodToggle(provider string) string { return methodToggles[provider] }
 
 // methodEnabled: the owner left the method switched on (unset counts as on,
@@ -151,18 +183,62 @@ func checkGatewaySecrets(merchant, proxy string, clearProxy bool) (string, strin
 	return merchant, proxy, nil
 }
 
-// gatewayAudit is what an audit entry keeps of a gateway's settings.
+// gatewayAudit is what an audit entry keeps of a gateway's settings: the
+// switches, and automatic USDT's address (public, and who changed where
+// customers' money goes matters most).
 func gatewayAudit(c *GatewayConfig) map[string]any {
+	if c.Provider == USDTAuto {
+		return map[string]any{"enabled": c.Enabled, "address": c.Address}
+	}
 	return map[string]any{"enabled": c.Enabled, "sandbox": c.Sandbox}
 }
 
+// sameAudit: two audit snapshots say the same (their values are strings and
+// bools).
+func sameAudit(a, b map[string]any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if w, ok := b[k]; !ok || w != v {
+			return false
+		}
+	}
+	return true
+}
+
+// checkProviderFields checks the fields only one provider has: automatic
+// USDT's address and API key (normalised), Zarinpal's merchant id and
+// sandbox.
+func checkProviderFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
+	if provider != USDTAuto {
+		switch {
+		case normalizeTronAddress(address) != "":
+			return "", "", &FieldError{"address", "only automatic USDT has an address"}
+		case strings.TrimSpace(apiKey) != "" || clearKey:
+			return "", "", &FieldError{"api_key", "only automatic USDT has an API key"}
+		}
+		return "", "", nil
+	}
+	switch {
+	case merchant != "":
+		return "", "", &FieldError{"merchant_id", "automatic USDT has no merchant id"}
+	case sandbox:
+		return "", "", &FieldError{"sandbox", "automatic USDT has no sandbox"}
+	}
+	return checkChainSecrets(address, apiKey, clearKey)
+}
+
 // SetGatewayConfig saves a gateway's settings in payments and audits the
-// change: the switches before and after, and "changed" or "cleared" for a
-// secret that was sent (never its value).
+// change: the switches (and automatic USDT's address) before and after, and
+// "changed" or "cleared" for a secret that was sent (never its value).
 func (s *Service) SetGatewayConfig(ctx context.Context, actor *store.User, ga GatewayAdmin, u GatewayUpdate) (*GatewayConfig, error) {
 	var err error
 	u.Provider = strings.ToLower(strings.TrimSpace(u.Provider))
 	if u.MerchantID, u.Proxy, err = checkGatewaySecrets(u.MerchantID, u.Proxy, u.ClearProxy); err != nil {
+		return nil, err
+	}
+	if u.Address, u.APIKey, err = checkProviderFields(u.Provider, u.Address, u.APIKey, u.ClearAPIKey, u.MerchantID, u.Sandbox); err != nil {
 		return nil, err
 	}
 	configs, err := ga.GatewayConfigs(ctx)
@@ -197,7 +273,13 @@ func (s *Service) SetGatewayConfig(ctx context.Context, actor *store.User, ga Ga
 	case u.Proxy != "":
 		a["proxy"] = "changed"
 	}
-	if len(a) == len(b) && a["enabled"] == b["enabled"] && a["sandbox"] == b["sandbox"] {
+	switch {
+	case u.ClearAPIKey && before.APIKeySet:
+		a["api_key"] = "cleared"
+	case u.APIKey != "":
+		a["api_key"] = "changed"
+	}
+	if sameAudit(a, b) {
 		return after, nil // nothing changed
 	}
 	if err := s.auditChange(ctx, nil, actor, "gateway.update", "gateway", u.Provider, b, a, ""); err != nil {
@@ -215,7 +297,12 @@ func (s *Service) TestGateway(ctx context.Context, ga GatewayAdmin, provider str
 		if err != nil {
 			return nil, err
 		}
-		c = &GatewayCandidate{Sandbox: c.Sandbox, MerchantID: m, Proxy: p, ClearProxy: c.ClearProxy}
+		a, k, err := checkProviderFields(provider, c.Address, c.APIKey, c.ClearAPIKey, m, c.Sandbox)
+		if err != nil {
+			return nil, err
+		}
+		c = &GatewayCandidate{Sandbox: c.Sandbox, MerchantID: m, Proxy: p, ClearProxy: c.ClearProxy,
+			Address: a, APIKey: k, ClearAPIKey: c.ClearAPIKey}
 	}
 	return ga.TestGateway(ctx, provider, c)
 }

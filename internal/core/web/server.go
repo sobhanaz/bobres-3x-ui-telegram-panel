@@ -206,6 +206,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/gateways/report", PermGatewaysWrite, s.gatewayReport)
 	s.route(api, "PUT /api/v1/gateways/{provider}", PermGatewaysWrite, s.putGateway)
 	s.route(api, "POST /api/v1/gateways/{provider}/test", PermGatewaysWrite, s.testGateway)
+	s.route(api, "GET /api/v1/gateways/deposits", PermGatewaysWrite, s.listDeposits)
+	s.route(api, "POST /api/v1/gateways/deposits/resolve", PermGatewaysWrite, s.resolveDeposit)
 
 	// System: health and versions (owner and admin), the license (state for
 	// owner and admin, changes by the owner).

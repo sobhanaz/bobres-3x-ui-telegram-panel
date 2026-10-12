@@ -16,16 +16,17 @@ import (
 )
 
 // Payment gateways (milestone 6a): the owner only. Zarinpal's merchant id
-// and proxy stay encrypted in the payments service and never come back; the
-// manual methods and Telegram Stars are settings (the payments group), saved
-// through PUT /api/v1/settings.
+// and proxy, and automatic USDT's TronGrid API key and proxy, stay encrypted
+// in the payments service and never come back (automatic USDT's address
+// does: customers are shown it); the manual methods and Telegram Stars are
+// settings (the payments group), saved through PUT /api/v1/settings.
 
 // gatewayTimeout: saving may wait for Zarinpal payments being created, and a
 // test may wait for Zarinpal (payments gives each up to 25 seconds).
 const gatewayTimeout = 40 * time.Second
 
 // reportProviders are the payment methods a report covers.
-var reportProviders = []string{domain.Zarinpal, domain.Stars, "manual_card", "manual_crypto", "manual_zarinpal"}
+var reportProviders = []string{domain.Zarinpal, domain.Stars, domain.USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
 
 type gatewayHealthJSON struct {
 	Healthy      bool   `json:"healthy"`
@@ -34,6 +35,12 @@ type gatewayHealthJSON struct {
 	LastPaidAt   *int64 `json:"last_paid_at"`
 	LastErrorAt  *int64 `json:"last_error_at"`
 	LastError    string `json:"last_error"`
+	// Automatic USDT only: the watcher's last read of the store's address,
+	// its last read that worked, and the deposits staff must still credit
+	// by hand.
+	LastScanAt     *int64 `json:"last_scan_at,omitempty"`
+	LastScanOKAt   *int64 `json:"last_scan_ok_at,omitempty"`
+	UnmatchedCount *int64 `json:"unmatched_count,omitempty"`
 }
 
 type gatewayJSON struct {
@@ -46,6 +53,8 @@ type gatewayJSON struct {
 	SandboxAllowed *bool              `json:"sandbox_allowed,omitempty"`
 	MerchantHint   string             `json:"merchant_hint"`
 	ProxySet       bool               `json:"proxy_set"`
+	Address        *string            `json:"address,omitempty"` // automatic USDT only (public)
+	KeySet         *bool              `json:"key_set,omitempty"` // automatic USDT only: a TronGrid key is stored
 	KeyMissing     bool               `json:"key_missing"`
 	FromEnv        bool               `json:"from_env"`
 	UpdatedAt      *int64             `json:"updated_at"`
@@ -67,6 +76,14 @@ func healthOf(r *domain.GatewayReport, now time.Time) *gatewayHealthJSON {
 	if r.LastError != nil {
 		h.LastErrorAt, h.LastError = unixOrNull(r.LastError.At), r.LastError.Detail
 	}
+	if r.Provider == domain.USDTAuto {
+		h.LastScanAt, h.LastScanOKAt = unixOrNull(r.LastScanAt), unixOrNull(r.LastScanOKAt)
+		n := r.UnmatchedCount
+		h.UnmatchedCount = &n
+		if r.ScanError != "" { // the watcher cannot read the chain now
+			h.LastErrorAt, h.LastError = unixOrNull(r.LastScanAt), r.ScanError
+		}
+	}
 	return h
 }
 
@@ -74,6 +91,11 @@ func (s *Server) gatewayOf(c *domain.GatewayConfig, health *gatewayHealthJSON) g
 	out := gatewayJSON{Provider: c.Provider, Enabled: c.Enabled, Configured: c.Configured, Offered: c.Offered,
 		Problem: c.Problem, Sandbox: c.Sandbox, MerchantHint: c.MerchantHint, ProxySet: c.ProxySet,
 		KeyMissing: c.KeyMissing, FromEnv: c.FromEnv, UpdatedAt: unixOrNull(c.UpdatedAt), Health: health}
+	if c.Provider == domain.USDTAuto {
+		address, keySet := c.Address, c.APIKeySet
+		out.Address, out.KeySet = &address, &keySet
+		return out // no sandbox
+	}
 	if s.cfg.Env != "" {
 		allowed := s.cfg.Env != "prod" // payments refuses the sandbox in production
 		out.SandboxAllowed = &allowed
@@ -136,18 +158,23 @@ func (s *Server) listGateways(w http.ResponseWriter, r *http.Request) {
 }
 
 // putGateway: PUT /api/v1/gateways/{provider} {enabled, sandbox, merchant_id,
-// proxy, clear_proxy}; "" keeps a stored secret.
+// proxy, clear_proxy} for Zarinpal, {enabled, address, api_key,
+// clear_api_key, proxy, clear_proxy} for automatic USDT; "" keeps a stored
+// value.
 func (s *Server) putGateway(w http.ResponseWriter, r *http.Request) {
 	ga, ok := s.gateways(w)
 	if !ok {
 		return
 	}
 	var b struct {
-		Enabled    bool   `json:"enabled"`
-		Sandbox    bool   `json:"sandbox"`
-		MerchantID string `json:"merchant_id"`
-		Proxy      string `json:"proxy"`
-		ClearProxy bool   `json:"clear_proxy"`
+		Enabled     bool   `json:"enabled"`
+		Sandbox     bool   `json:"sandbox"`
+		MerchantID  string `json:"merchant_id"`
+		Proxy       string `json:"proxy"`
+		ClearProxy  bool   `json:"clear_proxy"`
+		Address     string `json:"address"`
+		APIKey      string `json:"api_key"`
+		ClearAPIKey bool   `json:"clear_api_key"`
 	}
 	if !readJSON(w, r, &b) {
 		return
@@ -155,7 +182,8 @@ func (s *Server) putGateway(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), gatewayTimeout)
 	defer cancel()
 	c, err := s.cfg.Domain.SetGatewayConfig(ctx, actor(r), ga, domain.GatewayUpdate{Provider: r.PathValue("provider"),
-		Enabled: b.Enabled, Sandbox: b.Sandbox, MerchantID: b.MerchantID, Proxy: b.Proxy, ClearProxy: b.ClearProxy})
+		Enabled: b.Enabled, Sandbox: b.Sandbox, MerchantID: b.MerchantID, Proxy: b.Proxy, ClearProxy: b.ClearProxy,
+		Address: b.Address, APIKey: b.APIKey, ClearAPIKey: b.ClearAPIKey})
 	if err != nil {
 		s.gatewayFail(w, "save gateway", err)
 		return
@@ -172,10 +200,13 @@ func (s *Server) testGateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var b struct {
-		Sandbox    *bool  `json:"sandbox"`
-		MerchantID string `json:"merchant_id"`
-		Proxy      string `json:"proxy"`
-		ClearProxy bool   `json:"clear_proxy"`
+		Sandbox     *bool  `json:"sandbox"`
+		MerchantID  string `json:"merchant_id"`
+		Proxy       string `json:"proxy"`
+		ClearProxy  bool   `json:"clear_proxy"`
+		Address     string `json:"address"`
+		APIKey      string `json:"api_key"`
+		ClearAPIKey bool   `json:"clear_api_key"`
 	}
 	if !readJSON(w, r, &b) {
 		return
@@ -185,9 +216,9 @@ func (s *Server) testGateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var cand *domain.GatewayCandidate
-	if b.Sandbox != nil || b.MerchantID != "" || b.Proxy != "" || b.ClearProxy {
+	if b.Sandbox != nil || b.MerchantID != "" || b.Proxy != "" || b.ClearProxy || b.Address != "" || b.APIKey != "" || b.ClearAPIKey {
 		cand = &domain.GatewayCandidate{Sandbox: b.Sandbox != nil && *b.Sandbox, MerchantID: b.MerchantID, Proxy: b.Proxy,
-			ClearProxy: b.ClearProxy}
+			ClearProxy: b.ClearProxy, Address: b.Address, APIKey: b.APIKey, ClearAPIKey: b.ClearAPIKey}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), gatewayTimeout)
 	defer cancel()
@@ -237,15 +268,130 @@ func (s *Server) gatewayReport(w http.ResponseWriter, r *http.Request) {
 		totals = append(totals, map[string]any{"status": t.Status, "count": t.Count, "amounts": moneyList(t.Amounts)})
 	}
 	h := healthOf(rep, s.now())
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"provider": rep.Provider, "from": rep.From, "to": rep.To, "totals": totals,
 		"healthy": h.Healthy, "open": h.Open, "oldest_open_at": h.OldestOpenAt,
 		"last_paid_at": h.LastPaidAt, "last_error_at": h.LastErrorAt, "last_error": h.LastError,
-	})
+	}
+	if provider == domain.USDTAuto {
+		// The deposits staff must still credit by hand, whatever the period.
+		unmatched := make([]depositJSON, 0, len(rep.Unmatched))
+		for i := range rep.Unmatched {
+			unmatched = append(unmatched, depositOf(&rep.Unmatched[i], nil))
+		}
+		out["unmatched"], out["unmatched_count"] = unmatched, rep.UnmatchedCount
+		out["last_scan_at"], out["last_scan_ok_at"], out["scan_error"] = h.LastScanAt, h.LastScanOKAt, rep.ScanError
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// depositJSON is one USDT transfer that reached the store's address.
+// Addresses and the transaction id are public chain data.
+type depositJSON struct {
+	TxID       string     `json:"txid"`
+	EventIndex int        `json:"event_index"`
+	Network    string     `json:"network"`
+	From       string     `json:"from"`
+	To         string     `json:"to"`
+	Amount     money      `json:"amount"`
+	At         int64      `json:"at"` // block time
+	Outcome    string     `json:"outcome"`
+	Reason     string     `json:"reason,omitempty"`      // why it matched nothing, in a few English words
+	ReasonCode string     `json:"reason_code,omitempty"` // no_payment | already_paid | closed | ambiguous | dust
+	IntentID   string     `json:"intent_id,omitempty"`
+	RecordedAt *int64     `json:"recorded_at"`
+	ResolvedAt *int64     `json:"resolved_at,omitempty"`
+	ResolvedBy *userBrief `json:"resolved_by,omitempty"`
+	Note       string     `json:"note,omitempty"`
+}
+
+func depositOf(t *domain.ChainTransfer, users map[string]*userBrief) depositJSON {
+	d := depositJSON{TxID: t.TxID, EventIndex: t.EventIndex, Network: t.Network, From: t.From, To: t.To,
+		Amount: money{Amount: t.Amount, Currency: t.Currency}, At: t.BlockTime, Outcome: t.Outcome, ReasonCode: t.Reason,
+		IntentID: t.IntentID, RecordedAt: unixOrNull(t.RecordedAt), ResolvedAt: unixOrNull(t.ResolvedAt), Note: t.Note}
+	if t.Reason != "" {
+		d.Reason = domain.UnmatchedText(t.Reason)
+	}
+	if t.ResolvedBy != "" {
+		d.ResolvedBy = users[t.ResolvedBy]
+		if d.ResolvedBy == nil {
+			d.ResolvedBy = &userBrief{ID: t.ResolvedBy}
+		}
+	}
+	return d
+}
+
+// listDeposits: GET /api/v1/gateways/deposits?outcome=&txid=&intent_id=&page=&size=,
+// automatic USDT's transfer log, newest first (outcome unmatched: the
+// deposits to credit by hand).
+func (s *Server) listDeposits(w http.ResponseWriter, r *http.Request) {
+	ga, ok := s.gateways(w)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	intentID, ok := queryID(r, "intent_id")
+	if !ok {
+		writeFieldError(w, "intent_id", "a payment id")
+		return
+	}
+	_, page, size := pageOf(r)
+	found, total, err := s.cfg.Domain.ChainTransfers(r.Context(), ga, domain.ChainTransferFilter{Outcome: q.Get("outcome"),
+		TxID: q.Get("txid"), IntentID: intentID}, page, size)
+	if err != nil {
+		s.depositFail(w, "list deposits", err)
+		return
+	}
+	var ids []string
+	for i := range found {
+		if found[i].ResolvedBy != "" {
+			ids = append(ids, found[i].ResolvedBy)
+		}
+	}
+	users := s.usersByID(r.Context(), ids)
+	items := make([]depositJSON, 0, len(found))
+	for i := range found {
+		items = append(items, depositOf(&found[i], users))
+	}
+	writeJSON(w, http.StatusOK, list{Items: items, Total: total, Page: page, Size: size})
+}
+
+// resolveDeposit: POST /api/v1/gateways/deposits/resolve {txid, event_index,
+// note}: an unmatched deposit was handled (the customer credited by hand
+// through their balance, or the sender refunded). Audited with the note.
+func (s *Server) resolveDeposit(w http.ResponseWriter, r *http.Request) {
+	ga, ok := s.gateways(w)
+	if !ok {
+		return
+	}
+	var b struct {
+		TxID       string `json:"txid"`
+		EventIndex int    `json:"event_index"`
+		Note       string `json:"note"`
+	}
+	if !readJSON(w, r, &b) {
+		return
+	}
+	t, err := s.cfg.Domain.ResolveDeposit(r.Context(), actor(r), ga, b.TxID, b.EventIndex, b.Note)
+	if err != nil {
+		s.depositFail(w, "resolve deposit", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deposit": depositOf(t, s.usersByID(r.Context(), []string{t.ResolvedBy}))})
+}
+
+// depositFail is gatewayFail for a deposit: an unknown one is 404.
+func (s *Server) depositFail(w http.ResponseWriter, what string, err error) {
+	if st, ok := status.FromError(unwrapAll(err)); ok && st.Code() == codes.NotFound {
+		writeError(w, http.StatusNotFound, "not_found", "no such deposit")
+		return
+	}
+	s.gatewayFail(w, what, err)
 }
 
 // openRe reads the count payments puts first when open payments block a
-// change of the merchant id or the sandbox.
+// change of the merchant id or the sandbox (Zarinpal), or of the address
+// (automatic USDT).
 var openRe = regexp.MustCompile(`^(\d+) open `)
 
 // gatewayFail answers payments' refusals with their reason (it never puts a
@@ -289,6 +435,10 @@ func gatewayField(msg string) string {
 		return "proxy"
 	case strings.Contains(m, "sandbox"):
 		return "sandbox"
+	case strings.Contains(m, "api key"):
+		return "api_key"
+	case strings.Contains(m, "address"):
+		return "address"
 	}
 	return ""
 }

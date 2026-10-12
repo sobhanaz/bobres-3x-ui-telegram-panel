@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // fakeGateways is payments' gateway settings: it keeps the secrets (as the
@@ -19,10 +22,15 @@ type fakeGateways struct {
 	cfg      GatewayConfig
 	merchant string
 	proxy    string
+	apiKey   string
 	actor    string
 	tested   []*GatewayCandidate
 	report   *GatewayReport
 	sets     int
+	// automatic USDT's transfer log, and the deposits resolved
+	transfers []ChainTransfer
+	resolved  []string // txid#index|actor|note
+	filters   []ChainTransferFilter
 }
 
 func (f *fakeGateways) GatewayConfigs(context.Context) ([]GatewayConfig, error) {
@@ -45,6 +53,21 @@ func (f *fakeGateways) SetGatewayConfig(_ context.Context, u GatewayUpdate, acto
 	case u.Proxy != "":
 		f.proxy = u.Proxy
 	}
+	if u.Provider == USDTAuto {
+		if u.Address != "" {
+			f.cfg.Address = u.Address
+		}
+		switch {
+		case u.ClearAPIKey:
+			f.apiKey = ""
+		case u.APIKey != "":
+			f.apiKey = u.APIKey
+		}
+		f.cfg.Enabled, f.cfg.Configured, f.cfg.APIKeySet = u.Enabled, f.cfg.Address != "", f.apiKey != ""
+		f.cfg.ProxySet, f.cfg.Offered = f.proxy != "", u.Enabled && f.cfg.Address != ""
+		out := f.cfg
+		return &out, nil
+	}
 	f.cfg.Enabled, f.cfg.Sandbox, f.cfg.Configured = u.Enabled, u.Sandbox, f.merchant != ""
 	f.cfg.ProxySet, f.cfg.Offered = f.proxy != "", u.Enabled && f.merchant != ""
 	if f.merchant != "" {
@@ -52,6 +75,38 @@ func (f *fakeGateways) SetGatewayConfig(_ context.Context, u GatewayUpdate, acto
 	}
 	out := f.cfg
 	return &out, nil
+}
+
+func (f *fakeGateways) ChainTransfers(_ context.Context, flt ChainTransferFilter, _, _ int) ([]ChainTransfer, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.filters = append(f.filters, flt)
+	var out []ChainTransfer
+	for _, t := range f.transfers {
+		if (flt.Outcome == "" || t.Outcome == flt.Outcome) && (flt.TxID == "" || t.TxID == flt.TxID) {
+			out = append(out, t)
+		}
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeGateways) ResolveChainTransfer(_ context.Context, txid string, index int, actorID, note string) (*ChainTransfer, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.transfers {
+		t := &f.transfers[i]
+		if t.TxID != txid || t.EventIndex != index {
+			continue
+		}
+		if t.Outcome != "unmatched" {
+			return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", status.Error(codes.FailedPrecondition, "this transfer is "+t.Outcome+", not unmatched"))
+		}
+		t.Outcome, t.ResolvedBy, t.Note = "resolved", actorID, note
+		f.resolved = append(f.resolved, fmt.Sprintf("%s#%d|%s|%s", txid, index, actorID, note))
+		out := *t
+		return &out, nil
+	}
+	return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", status.Error(codes.NotFound, "no such transfer"))
 }
 
 func (f *fakeGateways) TestGateway(_ context.Context, _ string, c *GatewayCandidate) (*GatewayTest, error) {
