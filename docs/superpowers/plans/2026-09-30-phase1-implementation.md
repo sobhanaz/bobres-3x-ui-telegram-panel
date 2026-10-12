@@ -22,6 +22,8 @@
 Tests: every package runs against a throwaway Postgres (and Redis) in CI; `internal/testenv` starts the whole backend in-process and the bot tests drive it through a fake Telegram.
 
 Still open for Phase 1: native-speaker review of the Persian texts; running the integration test against a real 3x-ui v3 panel; dropping the GO-2026-6443 allowlist entry once grpc v1.85.0 is released.
+Update (2026-10-12): the integration test runs in CI against real v3.8.5 and v3.9.0 panels since PR #19, and the
+allowlist is empty. The Persian review and the first install on a real server (11-staging-run.md) are still to do.
 
 ## Global Constraints
 

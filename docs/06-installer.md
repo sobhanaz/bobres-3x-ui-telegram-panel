@@ -1,6 +1,6 @@
-# 06 - Installer and `bobres` CLI spec (DRAFT)
+# 06 - Installer and `bobres` CLI spec
 
-Target OS: Ubuntu 22.04/24.04 and Debian 11/12, amd64 + arm64. Root or sudo required.
+Target OS: Ubuntu 22.04/24.04 and Debian 11/12/13, amd64 + arm64. Root or sudo required.
 
 ## One-command install
 ```bash
@@ -40,7 +40,7 @@ without it the menu says to re-run `bobres install`. The panel item says that th
 dashboard has a server.
 
 ## `bobres install` steps
-1. **Preflight:** OS/arch, RAM (>=1 GB, warn <2), disk (>=10 GB), ports 80/443 free, clock sync, Docker/compose versions, outbound access to Telegram API, registry and license server.
+1. **Preflight:** OS/arch, RAM (a 1 GB server passes with a warning: refused under 900 MB of MemTotal, since a 1 GB server reports a little under 1024; warns under 1800 MB, below a 2 GB server), disk (>=10 GB), ports 80/443 free, clock sync, Docker/compose versions, outbound access to Telegram API, registry and license server.
 2. **DNS check:** domain resolves to this server's public IP; explain exactly what to fix if not.
 3. **Wizard** (skipped when flags given): domain, bot token (validated via getMe), admin Telegram ID, 3x-ui URL + API token (validated: reachable, version detected, compatible range), enabled gateways + keys, default language, brand name.
 4. **License:** activate key (or start trial), show entitlements.
@@ -59,6 +59,32 @@ dashboard has a server.
 9. **Verify:** hit /readyz, send test message to admin ("BOBRES is live"), print summary with URLs and first-login link.
 10. **Idempotent:** re-running detects an existing install and offers repair/upgrade instead of overwriting.
 
+What the built installer does differently from this list:
+- **Preflight** runs `bobres doctor`'s checks: OS and CPU, RAM, disk, ports 80/443, Docker and Compose, and DNS (a DNS
+  failure only warns, since certificates are issued once DNS points here). There is no clock, registry or
+  license-server check.
+- **The wizard** asks for the domain, the owner's Telegram ID, the bot token (checked with getMe, on every run without
+  `--offline`, the menu's changes included: through the Bot API server in `BOBRES_TELEGRAM_API_URL` when it is set,
+  with `host.docker.internal` read as 127.0.0.1, else api.telegram.org), an optional first 3x-ui panel and, with
+  backups, optional S3 settings. Payment methods, the default language and the brand name are set later on the
+  dashboard (Zarinpal can also come from flags).
+- **The license** is a separate step: `bobres license activate` or the dashboard's License tab (License activation,
+  below). An install without one runs with nothing gated.
+- **Images:** BOBRES's own five (core, bot, payments, provisioner, backup) run by digest, not by tag. The release
+  workflow reads each image's digest from ghcr.io (anonymously, as a store pulls it), checks that the digest carries
+  the keyless cosign signature of that workflow for that tag, and builds the digests into the CLI
+  (`bobres version --images` lists them). The CLI's checksum is in the Ed25519-signed `checksums.txt`, which
+  install.sh and `bobres update` verify before they run it. The install writes the digests to `.env`
+  (`BOBRES_IMAGE_DIGEST_<SERVICE>=@sha256:...`) and `docker-compose.yml` appends them to each image's tag, so Docker
+  pulls exactly that content, whatever the tag points to now. The servers do not check cosign signatures
+  themselves. The images run by tag when `BOBRES_VERSION` is not the CLI's own version (`--version` with another
+  version, or a newer CLI from the one-liner on an install that keeps its version until `bobres update`), and with
+  a development build. Caddy, Postgres and Redis (`caddy:2-alpine`, `postgres:16-alpine`, `redis:7-alpine`) come
+  from Docker Hub by tag.
+- **Verify:** the install waits until every service is healthy and prints the first steps and the backup key. It
+  sends no test message.
+- **A re-run** keeps every secret, fills only missing values and recreates what changed.
+
 ## Bot profile photo
 The Bot API cannot set a bot's own profile photo, so the installer leaves it to the operator, and the summary's
 first steps say so. In Telegram, from the account that created the bot: @BotFather > `/setuserpic` > choose the
@@ -76,7 +102,8 @@ Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, 
 License activation), `backup` (2026-10-11, see Backups),
 `restore`, `update` and `rollback` (2026-10-12, see Restore, update and rollback), `support-bundle` (2026-10-12, see
 Support bundle), `harden` and the install's hardening step, `config list|get|set`, `secrets rotate`, the menu's
-restore/update/rollback items and the update's install time limit (2026-10-12, see Hardening, Settings and secrets).
+restore/update/rollback items and the update's install time limit (2026-10-12, see Hardening, Settings and secrets),
+and off-server backup copies with `restore s3://...` (2026-10-12, P7d, see Backups).
 The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`.
 Operator runbooks: [runbooks/](runbooks/README.md).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
@@ -88,7 +115,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 |---|---|
 | `bobres` / `bobres menu` | Management menu (terminal only) |
 | `bobres install / uninstall` | Set up / remove (uninstall keeps data unless `--purge`) |
-| `bobres status` | Service health, versions, license, disk, backup age |
+| `bobres status` | Services (state and health), version, domain, free disk; exit 1 when a service is not healthy |
 | `bobres logs [service] [-f]` | Tail logs |
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
 | `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists, and whether the license covers it |
@@ -99,7 +126,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. Master keys and the backup key are not rotated |
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements, how it came) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container |
-| `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER` in `.env`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
+| `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER`, set with `bobres config set`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
 | `bobres doctor` | Diagnose: OS, RAM, disk, ports, Docker, DNS, and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures) |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
 | `bobres support-bundle [--offline]` | A redacted tar.gz for support in the install directory: versions, `compose ps`, the doctor's checks, the newest 300 log lines per service, the `.env` key names (never a value), disk and memory, the backups list (see Support bundle). Never the database, a backup or a secret value |
@@ -256,9 +283,13 @@ done (or nothing was to do), 1 when refused or failed, 2 for usage errors, and t
 
 Every file the CLI rewrites (`.env`, the restore point, the swapped CLI) goes through `writeAtomic`: a temp file,
 synced, renamed, then the directory synced, so a power cut leaves the old file or the new one, never an empty `.env`.
+The CLI reads `.env` as Compose does: in an unquoted value, ` #` starts a comment (`KEY=value # note` is `value`); a
+quoted value keeps its `#` and ends at its closing quote. A rewrite keeps such a comment at the end of its key's line
+(an empty value before one is written `''`); comment lines of their own are not kept.
 
 **Update channel.** `BOBRES_UPDATE_CHANNEL=stable|beta` in `.env` (unset: stable; the bot gets it through the compose
-file and fails to start on another value), overridden for one run by `bobres update --channel`. `internal/release`
+file and fails to start on another value, so it is set with `bobres config set BOBRES_UPDATE_CHANNEL beta`, which
+checks it and recreates the bot), overridden for one run by `bobres update --channel`. `internal/release`
 resolves the release (`Source.Resolve`): **stable** is `releases/latest/download`, which GitHub points at the latest
 release that is not a pre-release, and a release whose signed header says `channel beta` is refused there; **beta** asks
 GitHub's API for the newest 30 releases (`api.github.com/repos/.../releases`; drafts and tags that are not
@@ -455,6 +486,8 @@ The settings it changes, and the services each one recreates:
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
 | `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, payments | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it |
+| `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel) |
+| `BOBRES_LICENSE_SERVER` | bot | an https URL without credentials, or empty (no online activation or refresh; see License activation) |
 | `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |
 | `BOBRES_BACKUP_S3_BUCKET` / `_REGION` / `_PREFIX` | backup | a bucket name (lower-cased) / a region name / letters, digits, `. _ - /` (`config.ParseBackupS3`) |
 | `BOBRES_BACKUP_S3_KEEP` | backup | 1 to 1000, or empty (30) |
@@ -503,11 +536,13 @@ The settings it changes, and the services each one recreates:
 
 ## License activation
 `BOBRES_LICENSE_SERVER` is the vendor's license server ([13-license-server.md](13-license-server.md)). The seller
-gives its address with the license key. It is not in `.env` by default: add the line (`sudo nano /opt/bobres/.env`),
-then run `sudo bobres start`, which recreates the bot with it (`bobres restart` does not apply `.env` changes, and
-`bobres config` does not set this key). It must be an https URL: with anything else the bot does not start. The compose file
-passes it to the bot, which makes the calls for the dashboard and for the daily refresh, because core has no internet
-access. Without it, online activation is off and a token pasted or imported by hand still works.
+gives its address with the license key. It is not in `.env` by default: set it with
+`sudo bobres config set BOBRES_LICENSE_SERVER https://<the address>`, which checks it (https, no credentials), writes
+`.env` and recreates the bot with it (see Settings and secrets; `bobres restart` does not apply `.env` changes). It
+must be an https URL: with anything else the bot does not start, which is why `.env` is not edited by hand for it. The
+compose file passes it to the bot, which makes the calls for the dashboard and for the daily refresh, because core has
+no internet access. Without it (`bobres config set BOBRES_LICENSE_SERVER ""` empties it), online activation is off
+and a token pasted or imported by hand still works.
 
 **`bobres license activate [<key>] [--server URL] [--dir D]`** (exit 0 installed, 1 refused or failed, 2 usage or no
 server):
@@ -549,4 +584,4 @@ install directory, and with it every backup in `/opt/bobres/backups`: it warns f
   or install.sh and `bobres update` refuse it ([releases runbook](runbooks/releases.md)). Re-signing moves the
   release's `# issued` day, which `updates_until` is compared with; `tools/sign/sign.sh` has no option to keep it.
 - Non-Docker (systemd binaries) mode: not planned for v1.
-- Installing 3x-ui itself for customers who do not have one yet (optional helper, later).
+- Installing 3x-ui itself for customers who do not have one yet (an optional helper; not built).

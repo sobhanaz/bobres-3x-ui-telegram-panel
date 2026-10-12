@@ -1,7 +1,7 @@
-# 02 - Event catalog and service APIs (DRAFT)
+# 02 - Event catalog and service APIs
 
 Services: `bot`, `core`, `payments`, `provisioner` (+ Caddy gateway).
-Sync calls: gRPC (internal network only). Async: each service's transactional outbox, pulled by consumers over gRPC (`events.v1.EventFeedService`, one cursor per consumer, kept by the producer; NATS JetStream can replace the transport later). Payload types live in `internal/events`. Contracts in `proto/` (buf). Service auth: one token per service, servers accept only their legitimate callers; mTLS later.
+Sync calls: gRPC (internal network only). Async: each service's transactional outbox, pulled by consumers over gRPC (`events.v1.EventFeedService`, one cursor per consumer, kept by the producer; NATS JetStream can replace the transport if load ever needs it). Payload types live in `internal/events`. Contracts in `proto/` (buf). Service auth: one token per service, servers accept only their legitimate callers (mTLS is not built).
 
 ## Rules
 - Events are past-tense facts, versioned: `order.paid.v1`. Additive changes only within a version.
@@ -26,6 +26,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | refund.requested.v1 / completed.v1 | core | payments | Refund flow |
 | ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | subscription.provisioned.v1 / extended.v1 / reminder.v1 `label` | core | notifier | The name a reseller gave the service (empty for customers), for the bot's texts |
+| payment.deposit_unmatched.v1 / deposit_claimed.v1 | payments, then core | notifier(staff alerts) | Phase 6a. USDT reached the store's TRON address but matched no automatic payment (`reason`: no_payment, already_paid, closed, ambiguous), so staff credit it by hand; or a manual USDT proof carries a transaction the watcher had seen, so staff check it before approving. Core passes both on to the bot |
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes are numbers, free is bytes, date is unix seconds, the rest names), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
 
@@ -70,10 +71,11 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 ## Provider interface (payments)
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
 Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
-Built so far: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
+Built: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
 superpowers/specs/2026-10-04-phase2-payments-design.md); manual-zarinpal (the owner's Zarinpal
-payment link, paid outside the bot). Every manual method takes a screenshot that an admin approves. crypto-thirdparty is on hold: the candidate
-processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)
+payment link, paid outside the bot); the crypto watcher, `usdt_trc20_auto` (Phase 6a: an exact, unique USDT amount to
+the store's TRON address, found through TronGrid every 30 s). Every manual method takes a screenshot that an admin
+approves. crypto-thirdparty is not built: the candidate processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)
 and one settlement path (exactly once, amount fixed at creation, reconciler).
 
 ## 3x-ui adapter (provisioner)
@@ -94,7 +96,10 @@ photos customers sent (core's service token; images and PDFs, 10 MB at most).
 
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.
-- Implemented so far: payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and
-  applies each intent exactly once); core publishes `order.paid.v1`, `wallet.credited.v1`, `payment.rejected.v1`
-  for the bot.
-- Whether bot->core is gRPC or shared library in early phases.
+- Implemented (2026-10-12): payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and
+  applies each intent exactly once) and `payment.deposit_unmatched.v1` / `deposit_claimed.v1`. Core publishes for the
+  bot: `order.paid.v1`, `wallet.credited.v1`, `payment.rejected.v1`, `subscription.provisioned.v1`, `extended.v1`,
+  `provision_failed.v1` and `reminder.v1`, the four `ticket.*.v1`, `system.alert.v1` and the two deposit events.
+  The other rows of the catalog are not events: those steps are gRPC calls (orders, payment intents, provisioning,
+  the usage sync) or happen inside core (licenses). Expiry and traffic reminders are `subscription.reminder.v1`.
+- DECIDED: bot -> core is gRPC (core's CoreService), from Phase 1 on.

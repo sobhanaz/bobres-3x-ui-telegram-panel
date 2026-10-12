@@ -15,7 +15,8 @@ Status (2026-10-12, Phase 6b): built and tested. Not deployed: the vendor has to
 - **Installs never talk to it from core.** Core has no internet access. `bobres license activate` (it asks for the
   key without echoing it) calls it from the host, and the dashboard's activation and the daily refresh go through
   the bot, which only passes the call on and never stores a token. Core verifies every answer before installing it.
-  Both ways need the server's address as `BOBRES_LICENSE_SERVER` in the install's `.env`.
+  Both ways need the server's address as `BOBRES_LICENSE_SERVER` in the install's `.env`, set with
+  `sudo bobres config set BOBRES_LICENSE_SERVER https://...`.
 - **It does not change the install policy.** A missing or invalid license still gates nothing on an install, and
   a license only ever gates new actions. Revoking a license means the server stops refreshing it: the install
   keeps its last token until that token expires and its grace ends. After that, new servers, staff, resellers and
@@ -222,8 +223,9 @@ location /v1/ {
 Check from outside: `curl -s https://license.example.com/v1/activate -d '{}'` answers `400 invalid`. If every
 request gets `https_required`, the proxy is not in `BOBRES_LICENSESRV_TRUSTED_PROXIES` (for example, a Docker
 network address) or does not send `X-Forwarded-Proto`. Installs need the URL as `BOBRES_LICENSE_SERVER`
-(`https://license.example.com`, https only) in `/opt/bobres/.env`. The compose file passes it to the bot, and
-`sudo bobres start` applies a change.
+(`https://license.example.com`, https only) in `/opt/bobres/.env`. The compose file passes it to the bot.
+`sudo bobres config set BOBRES_LICENSE_SERVER https://license.example.com` checks the URL, writes it and recreates
+the bot; a value edited into `.env` by hand that is not https stops the bot.
 
 ## Daily work
 
@@ -254,8 +256,8 @@ licensesrv key create -customer "Acme VPN" -tier standard -entitlements standard
   a license with no end date (pair it with `updates_until`).
 - `-grace-days` defaults to 14.
 - The key is printed once on stdout; stderr has the license id. Send the key privately, with the server's address.
-  The customer adds `BOBRES_LICENSE_SERVER=https://license.example.com` to `/opt/bobres/.env` and runs
-  `sudo bobres start`. Then they either use "Activate with a license key" on the License tab, or run
+  The customer runs `sudo bobres config set BOBRES_LICENSE_SERVER https://license.example.com` (it checks the URL
+  and recreates the bot). Then they either use "Activate with a license key" on the License tab, or run
   `sudo bobres license activate`, which asks for the key and does not echo it. From a file, they run
   `sudo bobres license activate < key.txt` and delete the file afterwards.
 - Tell the customer not to put the key on the command line (`sudo bobres license activate BOBRES-…`). It works, but
@@ -297,7 +299,7 @@ grace, then new actions are gated.
 | "Activation says the key has moved too often" | `key show` lists the moves and the refused attempt. Either the customer waits for the date in the message, or you make a new license (`key create`) and revoke the old one |
 | "My key does not work" | `invalid_key`: a typo, or a key from a license whose key was lost. Keys cannot be shown again; make a new license |
 | A customer moved their store to a new domain or server | Expected: their activation uses one move. The old install stops refreshing (`not_active`) and decays |
-| A customer's install stopped refreshing | `key show` gives the last-seen time and version. The bot needs internet access, and `BOBRES_LICENSE_SERVER` must be in the install's `/opt/bobres/.env`, applied with `sudo bobres start`. Without it the bot answers `not_configured` and core logs "license refresh failed" every 3 hours |
+| A customer's install stopped refreshing | `key show` gives the last-seen time and version. The bot needs internet access, and `BOBRES_LICENSE_SERVER` must be set on the install (`sudo bobres config get BOBRES_LICENSE_SERVER`; `sudo bobres config set BOBRES_LICENSE_SERVER https://...` sets it and recreates the bot). Without it the bot answers `not_configured` and core logs "license refresh failed" every 3 hours |
 | A leaked key | Revoke the license and make a new one for the customer. A leaked key lets someone else take the license, within the move limit |
 
 ## Hardening

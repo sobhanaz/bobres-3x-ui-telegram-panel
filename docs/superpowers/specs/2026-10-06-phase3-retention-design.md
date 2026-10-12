@@ -83,6 +83,7 @@ owner can change.
 
 ## Not done (later)
 
-- Per-plan renewal prices, automatic renewal from the wallet, reseller discounts.
+- Per-plan renewal prices, automatic renewal from the wallet. (Reseller prices came with Phase 4 milestone 5:
+  resellers see their tier's price on renewals and traffic packages too.)
 - A configurable reminder schedule (3 days / 1 day / 80% are constants).
 - Bulk usage reads (one panel call per subscription today; fine for hundreds of services).

@@ -11,12 +11,13 @@ release: [06-installer.md](../06-installer.md), "Restore, update and rollback"; 
 | `stable` (default) | GitHub's latest release that is not a pre-release (`releases/latest/download`) | install.sh, `bobres update`, the bot's update check |
 | `beta` | The highest version among the newest 30 releases GitHub's API lists (`api.github.com/repos/.../releases`), pre-releases included. A stable release counts too when it is the highest | `bobres update --channel beta`, the bot's update check |
 
-A store picks its channel with `BOBRES_UPDATE_CHANNEL=stable|beta` in `/opt/bobres/.env`. The bot reads it (the
+A store picks its channel with `BOBRES_UPDATE_CHANNEL=stable|beta` in `/opt/bobres/.env`, set with
+`sudo bobres config set BOBRES_UPDATE_CHANNEL beta` (see the last section). The bot reads it (the
 dashboard's **System → Updates** tab shows the channel), `bobres update` and the menu read it, and
 `bobres update --channel stable|beta` overrides it for one run. install.sh installs the latest stable release
 unless `BOBRES_BASE_URL` points at another one, and refuses a release signed for beta unless it runs with
 `BOBRES_UPDATE_CHANNEL=beta` (install.sh uses it only to accept that release; to keep the store on beta afterwards,
-set it in `.env` too, see the last section):
+set it with `bobres config` too, see the last section):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh \
@@ -135,11 +136,12 @@ publish a release (or re-sign the latest one as above, which copies the new list
 ## Change a store's channel (store owners)
 
 ```sh
-sudo nano /opt/bobres/.env        # add or change: BOBRES_UPDATE_CHANNEL=beta   (or stable)
-sudo bobres start                 # recreates the bot with the new setting
-sudo bobres update --check        # "Channel: beta"
+sudo bobres config set BOBRES_UPDATE_CHANNEL beta   # or stable; checks it, writes .env, recreates the bot
+sudo bobres update --check                          # "Channel: beta"
 ```
 
+- `bobres config set` accepts only `stable` or `beta` and waits until the bot is healthy again. Do not edit `.env` by
+  hand for it: the bot does not start with another value.
 - Beta releases are less tested. Take a backup you keep off the server first (`sudo bobres backup`, then copy it).
 - The beta channel lists releases through `api.github.com` (60 requests an hour per address, plenty for the bot's
   check every 12 hours and an occasional update). Where that host is filtered, the check says GitHub could not be

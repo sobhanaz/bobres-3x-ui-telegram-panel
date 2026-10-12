@@ -60,10 +60,12 @@ reason. Delete the file afterwards; keep the token private.
 instead of a token:
 
 ```sh
-sudo nano /opt/bobres/.env        # add: BOBRES_LICENSE_SERVER=https://<the address from the seller>
-sudo bobres start                 # recreates the bot with it (restart does not)
+sudo bobres config set BOBRES_LICENSE_SERVER https://<the address from the seller>   # checks it, recreates the bot
 sudo bobres license activate      # asks for the key; it is not shown
 ```
+
+`bobres config set` refuses an address that is not https (the bot would not start with it) and waits until the bot
+is healthy again. Do not edit `.env` by hand for it: a typo there stops the bot.
 
 From a file: `sudo bobres license activate < /root/key.txt`, then delete the file. Do not type the key after
 `activate`: it would stay in the shell history and in sudo's log, and the key alone can move the license to another
@@ -72,11 +74,11 @@ by itself; the Source row of `bobres license status` then says "renewed online o
 
 | Message | Fix |
 |---|---|
-| "Online activation is not set up" (dashboard), or `no license server` (CLI) | `BOBRES_LICENSE_SERVER` is not in `.env`, or the bot was not recreated: the steps above |
+| "Online activation is not set up" (dashboard), or `no license server` (CLI) | `BOBRES_LICENSE_SERVER` is not set (`sudo bobres config get BOBRES_LICENSE_SERVER` prints an empty line): the steps above. Set but the bot not recreated since (set with `--no-restart`, or while the store was stopped): `sudo bobres start` |
 | `the license server refused: ... (invalid_key)` | A typo in the key, or a key that no longer exists: ask the seller |
 | `... (reactivation_limit)` | The key moved to another install too often this year (the message has the date): ask the seller |
-| `the license server did not answer` | The address is wrong, or this server cannot reach it |
-| The renewal date in `bobres license status` stops moving | The daily refresh fails: `sudo bobres logs core \| grep "license refresh"`. Check `BOBRES_LICENSE_SERVER` and the bot's internet access. Nothing is limited before the token's expiry and grace end |
+| `the license server did not answer` | The address is wrong (`sudo bobres config set BOBRES_LICENSE_SERVER <the right one>`), or this server cannot reach it |
+| The renewal date in `bobres license status` stops moving | The daily refresh fails: `sudo bobres logs core \| grep "license refresh"`. Check `sudo bobres config get BOBRES_LICENSE_SERVER` and the bot's internet access. Nothing is limited before the token's expiry and grace end |
 
 **Renew before the end.** The License tab and `bobres license status` show the days left and the grace end. In grace
 nothing changes yet; after it, new servers, staff, resellers and payment methods are refused until a new token is
