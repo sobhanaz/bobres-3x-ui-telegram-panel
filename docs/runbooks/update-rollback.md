@@ -121,5 +121,6 @@ Use a backup made while that version ran (or older): a newer version's database 
 - The same update rolls back twice.
 
 Send: the full output of the command, `bobres status`, `/opt/bobres/.restore-point/restore-point.json` (it holds no
-secrets; never send the rest of that folder: `files/.env` is the server's secrets), and `bobres logs --tail 300` (read it
-through before you send it).
+secrets; never send the rest of that folder: `files/.env` is the server's secrets), and `sudo bobres support-bundle`
+(redacted logs and status, with the restore point's versions; read it through before you send it). See the
+[runbooks index](README.md#escalate).
