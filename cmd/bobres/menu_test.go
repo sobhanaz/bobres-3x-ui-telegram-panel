@@ -44,6 +44,10 @@ func TestMenuWithoutInstallOffersInstall(t *testing.T) {
 	if !strings.Contains(out.String(), "No install in "+dir) || !strings.Contains(out.String(), "Install BOBRES") {
 		t.Fatalf("menu: %s", out)
 	}
+	// the header's lines start in one column beside the ASCII beaver
+	if !strings.Contains(out.String(), "\n   n____n   BOBRES manager  bobres ") || !strings.Contains(out.String(), "\n  ( o  o )  No install in "+dir+" yet.\n   \\_||_/\n") {
+		t.Fatalf("menu header: %s", out)
+	}
 	if len(*doctors) != 1 || len(*installs) != 1 || (*installs)[0].quiet || !contains((*installs)[0].args, dir) {
 		t.Fatalf("doctor %v install %+v", *doctors, *installs)
 	}

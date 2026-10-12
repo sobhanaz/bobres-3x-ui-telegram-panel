@@ -59,15 +59,20 @@ describe('brand colour', () => {
     expect(update).toHaveBeenCalledTimes(2)
   })
   it('names the browser tab and uses the logo as its icon', () => {
-    document.head.innerHTML = '<link rel="icon" type="image/svg+xml" href="/admin/favicon.svg" />'
+    document.head.innerHTML =
+      '<link rel="icon" type="image/svg+xml" href="/admin/favicon.svg" /><link rel="apple-touch-icon" href="/admin/apple-touch-icon.png" />'
     const link = document.querySelector('link[rel="icon"]')!
+    const touch = document.querySelector('link[rel="apple-touch-icon"]')!
     applyDocumentBrand('Shop · Dashboard', '/api/v1/brand/logo?v=1')
     expect(document.title).toBe('Shop · Dashboard')
     expect(link.getAttribute('href')).toBe('/api/v1/brand/logo?v=1')
     expect(link.hasAttribute('type')).toBe(false)
+    // the home-screen icon is the store's too: no beaver on a white-labelled phone
+    expect(touch.getAttribute('href')).toBe('/api/v1/brand/logo?v=1')
     applyDocumentBrand('BOBRES · Dashboard', null)
     expect(link.getAttribute('href')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
     expect(link.getAttribute('type')).toBe('image/svg+xml')
+    expect(touch.getAttribute('href')).toBe(import.meta.env.BASE_URL + 'apple-touch-icon.png')
     document.head.innerHTML = ''
   })
 })

@@ -783,8 +783,11 @@ describe('system page', () => {
     expect(document.querySelector('.unverified')).toBeNull()
   })
 
+  // One moment for every reply, so the times a test expects match the ones
+  // the page shows even when the clock passes a minute meanwhile.
+  const backupsAt = nowSec()
   const backupsReply = (over: Partial<SystemBackups> = {}): SystemBackups => {
-    const t0 = nowSec() - 3600
+    const t0 = backupsAt - 3600
     return {
       installed: true,
       backups: [
@@ -793,7 +796,7 @@ describe('system page', () => {
         { file: '', size: 0, sha256: '', created_at: t0 - 2 * DAY, sent_at: null, error: 'pg_dump: connection refused' },
         { file: 'bobres-20261008T033000Z.bkp', size: 2 ** 20, sha256: 'ef', created_at: t0 - 3 * DAY, sent_at: null, telegram_error: 'telegram_error: Forbidden: bot was blocked' },
       ],
-      running: false, last_error: '', next_run: nowSec() + 20 * 3600, disk_free: 12 * 2 ** 30, dir: '/backups', ...over,
+      running: false, last_error: '', next_run: backupsAt + 20 * 3600, disk_free: 12 * 2 ** 30, dir: '/backups', ...over,
     }
   }
   // the backup service's own list, which core passed on as it was (no installed field)
@@ -1116,8 +1119,10 @@ describe('system page', () => {
     expect(document.querySelector('.limits-warn')?.textContent).toBe(text('license.warnings'))
     // the owner may replace it
     expect(document.querySelector('.license-import')?.textContent).toContain(text('license.import.replace'))
-    // a valid license without white label shows the attribution, and no chip
+    // a valid license without white label shows the attribution (with the
+    // little beaver), and no chip
     expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
+    expect(document.querySelector('.powered-by img')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
     expect(document.querySelector('.license-chip')).toBeNull()
   })
 
@@ -1271,6 +1276,7 @@ describe('system page', () => {
   it('shows the attribution on the login page only when core says so', async () => {
     await boot('/admin/login', { loggedIn: false, brand: { powered_by: true } })
     await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))
+    expect(document.querySelector('.login .powered-by img')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
     await boot('/admin/login', { loggedIn: false })
     await found('.login')
     await new Promise((r) => setTimeout(r, 20))

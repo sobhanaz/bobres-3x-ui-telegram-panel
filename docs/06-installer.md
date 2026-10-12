@@ -55,6 +55,12 @@ dashboard has a server.
 9. **Verify:** hit /readyz, send test message to admin ("BOBRES is live"), print summary with URLs and first-login link.
 10. **Idempotent:** re-running detects an existing install and offers repair/upgrade instead of overwriting.
 
+## Bot profile photo
+The Bot API cannot set a bot's own profile photo, so the installer leaves it to the operator, and the summary's
+first steps say so. In Telegram, from the account that created the bot: @BotFather > `/setuserpic` > choose the
+bot > send the store's own logo, or `docs/brand/bot-avatar.jpg` (the BOBRES beaver, 640x640) as a photo. See
+08-brand.md.
+
 ## Layout on server
 `/opt/bobres/{bobres.yml, .env, docker-compose.yml, Caddyfile, data/, backups/, logs/}`, and `.restore-point/` after
 an update (root only); state in named volumes. install.sh and `bobres update` record the last verified key list and

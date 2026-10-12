@@ -566,6 +566,10 @@ func TestSummaryWithoutPanel(t *testing.T) {
 	if !strings.Contains(out.String(), "add your servers in the dashboard") {
 		t.Fatalf("summary: %s", out)
 	}
+	// the Bot API cannot set the bot's own photo: the summary says where to
+	if !strings.Contains(out.String(), "/setuserpic in @BotFather") {
+		t.Fatalf("summary without the bot photo hint: %s", out)
+	}
 	ins, out, _ = testInstaller("", nil, nil)
 	ins.summary(map[string]string{"BOBRES_DOMAIN": "panel.example.com", "BOBRES_XUI_URL": "https://xui.example.com"}, "/opt/bobres")
 	if strings.Contains(out.String(), "No 3x-ui panel") {

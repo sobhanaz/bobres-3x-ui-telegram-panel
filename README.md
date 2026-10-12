@@ -1,3 +1,5 @@
+![BOBRES, the beaver mascot with a teal shield: Your VPN store on Telegram](docs/brand/bobres-banner.webp)
+
 # BOBRES 3x-ui Telegram Panel
 
 Telegram bot and management panel for selling and managing 3x-ui (Xray) VPN subscriptions.
@@ -73,3 +75,9 @@ PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/RE
   Redis (`BOBRES_TEST_REDIS_ADDR`, default `127.0.0.1:6379`). Each test package gets its own
   throwaway database. They skip when the servers are missing, except with
   `BOBRES_TEST_REQUIRE_DB=1` (CI), where they fail.
+
+## Meet BOBRES
+
+<img src="docs/brand/bobres-wave.webp" alt="BOBRES the beaver waving" width="160">
+
+The beaver is BOBRES: a friendly, sturdy builder whose shield stands for security. The brand kit and its rules are in `docs/08-brand.md`.

@@ -23,7 +23,8 @@ const route = useRoute()
 const router = useRouter()
 
 // The store's uploaded logo, else the BOBRES icon; the tab shows the store too.
-const logo = computed(() => auth.me?.branding?.logo || import.meta.env.BASE_URL + 'favicon.svg')
+const icon = import.meta.env.BASE_URL + 'favicon.svg'
+const logo = computed(() => auth.me?.branding?.logo || icon)
 watchEffect(() => applyDocumentBrand(t('branding.doc_title', { brand: auth.brand }), auth.me?.branding?.logo))
 const drawer = ref(false)
 watch(() => route.fullPath, () => (drawer.value = false))
@@ -130,7 +131,7 @@ function toggleLang() {
       <main class="content">
         <RouterView />
       </main>
-      <footer v-if="showPoweredBy" class="powered-by app-muted">{{ t('license.powered_by') }}</footer>
+      <footer v-if="showPoweredBy" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
     </div>
   </div>
 </template>
@@ -261,8 +262,14 @@ nav {
 .powered-by {
   margin-block-start: auto;
   padding: 0.75rem 1rem 1rem;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   font-size: 0.8rem;
+}
+.powered-by img {
+  flex: none;
 }
 .content {
   padding: 1.25rem;

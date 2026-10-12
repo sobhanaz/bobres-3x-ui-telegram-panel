@@ -60,3 +60,61 @@ describe('login link', () => {
     expect(window.location.hash).toBe('')
   })
 })
+
+describe('login page look', () => {
+  const unmount = () => (document.getElementById('app') as (HTMLElement & { __vue_app__?: { unmount(): void } }) | null)?.__vue_app__?.unmount()
+  afterEach(unmount)
+
+  /** Opens /admin/login logged out; brand answers GET /brand. */
+  async function openLogin(brand: () => Response) {
+    unmount()
+    vi.resetModules()
+    window.history.replaceState(null, '', '/admin/login')
+    document.body.innerHTML = '<div id="app"></div>'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/v1/me') return json(401, { error: 'unauthorized', message: 'log in first' })
+        if (url === '/api/v1/brand') return brand()
+        return json(503, { error: 'unavailable', message: 'not in this test' })
+      }),
+    )
+    await import('../main')
+    const { router } = await import('../router')
+    await router.isReady()
+  }
+  const found = <T extends Element>(selector: string) =>
+    vi.waitFor(() => {
+      const el = document.querySelector<T>(selector)
+      expect(el, selector).not.toBeNull()
+      return el!
+    })
+
+  it('greets with BOBRES the beaver on the default look', async () => {
+    await openLogin(() => json(200, { name: 'Shop', color: '', logo: null }))
+    const img = await found<HTMLImageElement>('.login .mascot img')
+    expect(img.getAttribute('src')).toContain('bobres-wave')
+    expect(img.getAttribute('alt')).toBe('')
+    // a still beaver for those who turn motion off
+    const still = document.querySelector('.login .mascot source')
+    expect(still?.getAttribute('media')).toBe('(prefers-reduced-motion: reduce)')
+    expect(still?.getAttribute('srcset')).toContain('bobres-mascot')
+    // bundled with the app, never from another site (the CSP allows 'self' only)
+    expect(img.getAttribute('src')).toMatch(/^\//)
+    expect(still?.getAttribute('srcset')).toMatch(/^\//)
+    expect(document.querySelector('.login .logo')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
+  })
+
+  it('shows a store logo and no beaver (white label)', async () => {
+    await openLogin(() => json(200, { name: 'Shop', color: '', logo: '/api/v1/brand/logo?v=1' }))
+    await vi.waitFor(() => expect(document.querySelector('.login .logo')?.getAttribute('src')).toBe('/api/v1/brand/logo?v=1'))
+    expect(document.querySelector('.mascot')).toBeNull()
+  })
+
+  it('shows no beaver while the look is unknown', async () => {
+    await openLogin(() => json(503, { error: 'unavailable', message: 'down' }))
+    await found('.login .card')
+    await new Promise((r) => setTimeout(r, 20))
+    expect(document.querySelector('.mascot')).toBeNull()
+  })
+})
