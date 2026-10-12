@@ -55,7 +55,7 @@ func (v *vendor) token(edit func(*license.Token)) string {
 // install stores a token directly (as an older version might have).
 func install(t *testing.T, s *store.Store, raw string) {
 	t.Helper()
-	if err := s.SetLicense(context.Background(), s.Conn(), raw, nil); err != nil {
+	if err := s.SetLicense(context.Background(), s.Conn(), raw, nil, store.LicenseManual); err != nil {
 		t.Fatal(err)
 	}
 }

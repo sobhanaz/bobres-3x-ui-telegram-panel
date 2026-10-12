@@ -96,7 +96,8 @@ Available now:
   restart    Restart the store and wait until it is healthy
   uninstall  Remove the containers (data kept unless --purge)
   admin link Print a one-time dashboard login link (for when the bot is down)
-  license    Show the license (license status) or install one (license import < token.txt)
+  license    Show the license (license status), install one (license import < token.txt)
+             or activate a license key with the vendor's license server (license activate)
   backup     Back up the database now (encrypted; kept in <dir>/backups and sent to the owner)
   restore    Replace the data with a backup's: bobres restore <file> [--key-file F] [--yes]
   update     Update to the latest release (backup first, automatic rollback); --check only looks

@@ -127,15 +127,23 @@ func setup(rt *app.Runtime) error {
 		// "Send to me" from the broadcast composer.
 		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
 		// The System page's update check: the bot has internet access, core
-		// none. It reads the latest release's signed checksums.txt from GitHub
-		// every 12 hours (an hour after a failure) and verifies it with the
-		// installer's root keys; applying an update stays `bobres update`.
-		updates := release.NewChecker(version.Version, "", rt.Log)
+		// none. It reads the newest release of BOBRES_UPDATE_CHANNEL (stable:
+		// the latest release; beta: the highest version GitHub's API lists,
+		// pre-releases included) every 12 hours (an hour after a failure) and
+		// verifies its signed checksums.txt with the installer's root keys;
+		// applying an update stays `bobres update`.
+		updates := release.NewChecker(version.Version, cfg.UpdateChannel, rt.Log)
 		rt.Go("update-check", updates.Run)
 		rt.Mux.Handle("GET /internal/update-check", runner.UpdateCheck(updates.Status, cfg.PeerCoreToken))
 		// The System page's logs tab (owner): this process's kept warnings
 		// and errors, already redacted.
 		rt.Mux.Handle("GET /internal/logs", runner.Logs(logging.Recent, cfg.PeerCoreToken))
+		// Activating a license key and the daily renewal: core has no
+		// internet access, so the bot passes its calls to the vendor's
+		// license server (BOBRES_LICENSE_SERVER) and keeps nothing.
+		lic := runner.LicenseProxy{Server: cfg.LicenseServer, CoreToken: cfg.PeerCoreToken, Log: rt.Log}
+		rt.Mux.Handle("POST /internal/license/activate", lic.Handler(runner.LicenseActivate))
+		rt.Mux.Handle("POST /internal/license/refresh", lic.Handler(runner.LicenseRefresh))
 	}
 
 	if cfg.PeerBackupToken != "" {

@@ -8,12 +8,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 )
 
 // composeProject is the Compose project name every bobres command uses, so
@@ -50,6 +54,9 @@ type ops struct {
 	freeGB func(path string) float64
 	sleep  func(time.Duration)
 	now    func() time.Time
+	// httpc calls the vendor's license server (nil: a 30-second client;
+	// redirects are never followed).
+	httpc *http.Client
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
@@ -440,12 +447,17 @@ func (o *ops) adminCmd(args []string) int {
 	return 0
 }
 
-const licenseCmdUsage = "usage: bobres license status|import [--dir D]  (import reads the token on stdin)"
+const licenseCmdUsage = "usage: bobres license status|import [--dir D]  (import reads the token on stdin)\n" +
+	"       " + licenseActivateUsage
 
 // licenseCmd: "bobres license status" shows the installed license as core
 // sees it; "bobres license import" installs the token read from stdin (a
 // file or a paste ended with Ctrl-D). Both run inside the core container.
+// "bobres license activate" gets the token from the license server.
 func (o *ops) licenseCmd(args []string) int {
+	if len(args) > 0 && args[0] == "activate" {
+		return o.licenseActivate(args[1:])
+	}
 	if len(args) == 0 || (args[0] != "status" && args[0] != "import") {
 		fmt.Fprintln(o.errOut, licenseCmdUsage)
 		return 2
@@ -471,4 +483,186 @@ func (o *ops) licenseCmd(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+const licenseActivateUsage = "usage: bobres license activate [<key>] [--server URL] [--dir D]  " +
+	"(without <key> it is asked for, or read on stdin: out of the shell history)"
+
+// licenseActivate: "bobres license activate [<key>]" turns a license key
+// into this install's license. The host makes the call (core has no internet
+// access): it reads the install id and domain from core (/app license info),
+// sends them with the key to the license server's /v1/activate
+// (BOBRES_LICENSE_SERVER, https only, no redirects) and pipes the token it
+// answers into /app license import --activated, which verifies it. Core then
+// renews it once a day through the bot. The key is never printed or kept.
+func (o *ops) licenseActivate(args []string) int {
+	fs := flag.NewFlagSet("license activate", flag.ContinueOnError)
+	fs.SetOutput(o.errOut)
+	dir := fs.String("dir", defaultDir(), dirUsage)
+	server := fs.String("server", "", "the license server (default: BOBRES_LICENSE_SERVER from the environment, else from <dir>/.env)")
+	rest, err := parseArgs(fs, args)
+	if err != nil {
+		return 2
+	}
+	var key string
+	switch len(rest) {
+	case 0:
+		if key, err = o.readLicenseKey(); err != nil {
+			fmt.Fprintf(o.errOut, "error: read the license key: %v\n", err)
+			return 2
+		}
+	case 1:
+		key = rest[0]
+	default:
+		fmt.Fprintln(o.errOut, licenseActivateUsage)
+		return 2
+	}
+	if key = strings.TrimSpace(key); key == "" || strings.ContainsFunc(key, unicode.IsSpace) {
+		fmt.Fprintln(o.errOut, licenseActivateUsage)
+		return 2
+	}
+	env, ok := o.requireInstall(*dir)
+	if !ok {
+		return 2
+	}
+	url, err := licenseServer(*server, env, *dir)
+	if err != nil {
+		fmt.Fprintf(o.errOut, "error: %v\n", err)
+		return 2
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// 1. This install as core binds a license to it.
+	var info bytes.Buffer
+	if err := o.pipe(ctx, *dir, strings.NewReader(""), &info, composeArgs("exec", "-T", "core", "/app", "license", "info", "--json")...); err != nil {
+		fmt.Fprintf(o.errOut, "error: read this install's id from core: %v (is core running? bobres status)\n", err)
+		return 1
+	}
+	var inst licenseActivation
+	if err := json.Unmarshal(info.Bytes(), &inst); err != nil || inst.InstallID == "" {
+		fmt.Fprintln(o.errOut, "error: core did not say this install's id (is this core older than this bobres? run bobres update)")
+		return 1
+	}
+	if inst.Domain == "" {
+		fmt.Fprintln(o.errOut, "error: this install has no domain (BOBRES_DOMAIN), and a license is bound to one")
+		return 1
+	}
+	inst.Key = key
+
+	// 2. The license server answers a token bound to it.
+	fmt.Fprintf(o.out, "Activating the license for %s (install %s) with %s ...\n", inst.Domain, inst.InstallID, url)
+	token, err := o.requestLicense(ctx, url, inst)
+	if err != nil {
+		fmt.Fprintf(o.errOut, "error: %v\nNothing was changed.\n", err)
+		return 1
+	}
+
+	// 3. Core verifies it and installs it.
+	if err := o.pipe(ctx, *dir, strings.NewReader(token+"\n"), o.out,
+		composeArgs("exec", "-T", "core", "/app", "license", "import", "--activated")...); err != nil {
+		fmt.Fprintf(o.errOut, "error: core did not install the license: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// licenseActivation is the license server's POST /v1/activate body; core's
+// `license info --json` gives the install id, domain and version.
+type licenseActivation struct {
+	Key       string `json:"key"`
+	InstallID string `json:"install_id"`
+	Domain    string `json:"domain"`
+	Version   string `json:"version"`
+}
+
+// maxLicenseKeyInput bounds what is read as a license key.
+const maxLicenseKeyInput = 4 << 10
+
+// readLicenseKey asks for the key without echoing it on a terminal, else
+// reads the first line of stdin.
+func (o *ops) readLicenseKey() (string, error) {
+	if f, ok := o.in.(*os.File); ok {
+		if read := hiddenInput(f, o.out); read != nil {
+			return read("License key: ")
+		}
+	}
+	b, err := io.ReadAll(io.LimitReader(o.in, maxLicenseKeyInput))
+	if err != nil {
+		return "", err
+	}
+	line, _, _ := strings.Cut(string(b), "\n")
+	return strings.TrimSpace(line), nil
+}
+
+// licenseServer is the license server's address: --server, else
+// BOBRES_LICENSE_SERVER from the environment, else from .env; https only.
+func licenseServer(flagValue string, env map[string]string, dir string) (string, error) {
+	raw := flagValue
+	if raw == "" {
+		raw = os.Getenv("BOBRES_LICENSE_SERVER")
+	}
+	if strings.TrimSpace(raw) == "" {
+		raw = env["BOBRES_LICENSE_SERVER"]
+	}
+	url, err := config.LicenseServerURL(raw)
+	if err != nil {
+		return "", err
+	}
+	if url == "" {
+		return "", fmt.Errorf("no license server: set BOBRES_LICENSE_SERVER=https://… in %s, or pass --server https://…",
+			filepath.Join(dir, ".env"))
+	}
+	return url, nil
+}
+
+// maxLicenseAnswer bounds the license server's answer.
+const maxLicenseAnswer = 64 << 10
+
+// requestLicense POSTs a to the license server's /v1/activate and answers
+// its token, or its refusal in words. Errors never hold the key.
+func (o *ops) requestLicense(ctx context.Context, server string, a licenseActivation) (string, error) {
+	body, err := json.Marshal(a)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server+"/v1/activate", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("the license server address is not usable: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	hc := &http.Client{Timeout: 30 * time.Second}
+	if o.httpc != nil {
+		c := *o.httpc
+		hc = &c
+	}
+	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := hc.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("the license server did not answer: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var out struct {
+		Token   string `json:"token"`
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxLicenseAnswer+1))
+	if err == nil && len(raw) <= maxLicenseAnswer {
+		err = json.Unmarshal(raw, &out)
+	} else if err == nil {
+		err = errors.New("too long")
+	}
+	switch {
+	case err == nil && resp.StatusCode == http.StatusOK && out.Token != "":
+		return out.Token, nil
+	case err == nil && resp.StatusCode/100 == 4 && out.Error != "":
+		msg := fmt.Sprintf("the license server refused: %s (%s)", out.Message, out.Error)
+		if ra := resp.Header.Get("Retry-After"); resp.StatusCode == http.StatusTooManyRequests && ra != "" {
+			msg += "; try again in " + ra + " seconds"
+		}
+		return "", errors.New(msg)
+	}
+	return "", fmt.Errorf("the license server answered %d", resp.StatusCode)
 }

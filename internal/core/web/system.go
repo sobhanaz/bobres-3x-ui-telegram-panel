@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/backupclient"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/syshealth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
@@ -24,8 +26,9 @@ type SystemHealth interface {
 // system: GET /api/v1/system, the System page's health tab: every service
 // with its version and readiness (a version other than core's is flagged),
 // the 3x-ui servers, the payment methods, the bot's last update check (core
-// has no internet access), the newest backup and the watchdog's open
-// problems, all asked at once.
+// has no internet access; with the channel the bot follows and whether the
+// license covers the release, licenseCovers), the newest backup and the
+// watchdog's open problems, all asked at once.
 func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	role := actor(r).Role
@@ -52,6 +55,7 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		wg.Go(func() {
 			// Within 3 seconds; a bot that is down is shown as such.
 			if u, err := s.cfg.Bot.CheckUpdates(ctx); err == nil {
+				u.Covered = s.licenseCovers(ctx, u)
 				updates = u
 			}
 		})
@@ -77,6 +81,27 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		"services": report.Services, "servers": servers, "panel": panel, "gateways": gateways, "updates": updates,
 		"backups": backups, "alerts": alerts,
 	})
+}
+
+// licenseCovers says whether the installed license covers the release the
+// bot found (bobres update refuses one it does not): a license verified for
+// this install, expired included, covers releases issued up to its
+// updates_until. nil when there is none to ask (missing or invalid gates
+// nothing), no release is known, or the bot does not say when it was issued.
+func (s *Server) licenseCovers(ctx context.Context, u *botfiles.UpdateCheck) *bool {
+	if u.Latest == "" || release.IssuedDay(u.Issued) == "" {
+		return nil
+	}
+	lic, err := s.cfg.Domain.License(ctx)
+	if err != nil {
+		s.cfg.Log.Warn("system: license for the update check", "err", err)
+		return nil
+	}
+	if !lic.Valid() || lic.Token == nil {
+		return nil
+	}
+	covered := release.Covered(lic.Token.Entitlements.UpdatesUntil, u.Issued)
+	return &covered
 }
 
 // alertDetailPerms: a check's detail (its error) is shown only to staff who

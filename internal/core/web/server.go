@@ -65,6 +65,9 @@ type Config struct {
 	// Backups lists and starts backups (nil: the backup service is not
 	// installed).
 	Backups Backups
+	// LicenseServer reaches the vendor's license server through the bot, to
+	// activate a license key (nil: no bot, activation answers 503).
+	LicenseServer domain.LicenseServer
 	// Dashboard serves the built app under /admin/ (nil: not mounted).
 	Dashboard http.Handler
 	Log       *slog.Logger
@@ -220,6 +223,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/license", PermSystemRead, s.getLicense)
 	s.route(api, "POST /api/v1/license/check", PermLicenseWrite, s.checkLicense)
 	s.route(api, "PUT /api/v1/license", PermLicenseWrite, s.putLicense)
+	s.route(api, "POST /api/v1/license/activate", PermLicenseWrite, s.activateLicense)
 
 	// Administration.
 	s.route(api, "GET /api/v1/staff", PermStaffWrite, s.listStaff)
