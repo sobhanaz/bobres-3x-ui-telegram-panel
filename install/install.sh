@@ -43,23 +43,82 @@ MCowBQYDK2VwAyEADz7vJ+DMVvKQyotUaJSpnIOlvdbig/KAUzO49wfq3ng=
 PUBKEY
 RELEASE_ROOTS=("$RELEASE_ROOT_1" "$RELEASE_ROOT_2")
 
-# semver_lt A B -> success if A < B (plain X.Y.Z only)
-semver_lt() {
-  local a1 a2 a3 b1 b2 b3
-  IFS=. read -r a1 a2 a3 <<<"$1"
-  IFS=. read -r b1 b2 b3 <<<"$2"
-  a1=${a1:-0}; a2=${a2:-0}; a3=${a3:-0}; b1=${b1:-0}; b2=${b2:-0}; b3=${b3:-0}
-  [ "$a1" -lt "$b1" ] && return 0; [ "$a1" -gt "$b1" ] && return 1
-  [ "$a2" -lt "$b2" ] && return 0; [ "$a2" -gt "$b2" ] && return 1
-  [ "$a3" -lt "$b3" ]
+# semver_num N -> N if it is a number (digits only), else 0
+semver_num() {
+  case $1 in ""|*[!0-9]*) echo 0 ;; *) echo "$1" ;; esac
 }
 
-# verify_release DIR STATE_DIR
+# semver_lt A B -> success if A < B, in semver 2.0 order (internal/release.Compare): X.Y.Z,
+# then a pre-release sorts before its release (1.2.0-rc.1 < 1.2.0), and pre-releases compare
+# identifier by identifier: numbers as numbers (rc.9 < rc.10) and before words, words in
+# ASCII order, and more identifiers after fewer. A leading v and +build are ignored.
+semver_lt() {
+  local a=${1#v} b=${2#v} apre="" bpre="" a1 a2 a3 b1 b2 b3 x y
+  a=${a%%+*}; b=${b%%+*}
+  case $a in *-*) apre=${a#*-}; a=${a%%-*} ;; esac
+  case $b in *-*) bpre=${b#*-}; b=${b%%-*} ;; esac
+  IFS=. read -r a1 a2 a3 <<<"$a"
+  IFS=. read -r b1 b2 b3 <<<"$b"
+  a1=$(semver_num "${a1:-}"); a2=$(semver_num "${a2:-}"); a3=$(semver_num "${a3:-}")
+  b1=$(semver_num "${b1:-}"); b2=$(semver_num "${b2:-}"); b3=$(semver_num "${b3:-}")
+  [ "$a1" -lt "$b1" ] && return 0; [ "$a1" -gt "$b1" ] && return 1
+  [ "$a2" -lt "$b2" ] && return 0; [ "$a2" -gt "$b2" ] && return 1
+  [ "$a3" -lt "$b3" ] && return 0; [ "$a3" -gt "$b3" ] && return 1
+  # the same X.Y.Z: a release is above its pre-releases
+  [ "$apre" = "$bpre" ] && return 1
+  [ -z "$apre" ] && return 1
+  [ -z "$bpre" ] && return 0
+  while :; do
+    [ -z "$apre" ] && return 0   # A ran out first: fewer identifiers sort first
+    [ -z "$bpre" ] && return 1
+    x=${apre%%.*}; y=${bpre%%.*}
+    case $apre in *.*) apre=${apre#*.} ;; *) apre="" ;; esac
+    case $bpre in *.*) bpre=${bpre#*.} ;; *) bpre="" ;; esac
+    [ "$x" = "$y" ] && continue
+    case "$x" in
+      ""|*[!0-9]*)
+        case "$y" in ""|*[!0-9]*) [ "$x" \< "$y" ]; return ;; esac
+        return 1 ;;                # a word sorts after a number
+      *)
+        case "$y" in ""|*[!0-9]*) return 0 ;; esac
+        semver_numlt "$x" "$y"; return ;;
+    esac
+  done
+}
+
+# semver_numlt X Y -> success if the number X < Y (digits only, any length: compared without
+# leading zeros by length, then digit by digit; the same number written differently, 01 and 1,
+# by its text)
+semver_numlt() {
+  local x=${1#"${1%%[!0]*}"} y=${2#"${2%%[!0]*}"}
+  x=${x:-0}; y=${y:-0}
+  [ "${#x}" -lt "${#y}" ] && return 0; [ "${#x}" -gt "${#y}" ] && return 1
+  [ "$x" = "$y" ] && { [ "$1" \< "$2" ]; return; }
+  [ "$x" \< "$y" ]
+}
+
+# release_channel VALUE -> the update channel install.sh takes releases from (stable or beta,
+# as internal/release.ParseChannel reads BOBRES_UPDATE_CHANNEL: empty is stable, any case);
+# fails on anything else.
+release_channel() {
+  local c
+  c=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  case $c in
+    ""|stable) echo stable ;;
+    beta) echo beta ;;
+    *) return 1 ;;
+  esac
+}
+
+# verify_release DIR STATE_DIR [CHANNEL]
 # DIR holds checksums.txt, checksums.txt.sig, keys.txt, keys.txt.sig.N. Prints the verified
 # version on success (last line "VERSION=x.y.z" is not used; use RELEASE_VERSION/KEYS_SEQ globals).
 # On failure prints a reason to stderr and returns 1. Nothing is written to STATE_DIR here.
+# CHANNEL (default stable) is the channel the install follows: stable refuses a release whose
+# signed header says "channel beta" (internal/release.ChannelAllows), so a pre-release that ends
+# up as GitHub's latest release is not installed unless BOBRES_UPDATE_CHANNEL=beta asks for it.
 verify_release() {
-  local dir=$1 state=$2 now root ok=0 n=0 f
+  local dir=$1 state=$2 channel=${3:-stable} now root ok=0 n=0 f
   now=$(date -u +%Y-%m-%dT%H:%MZ)
 
   # 1. keys.txt must carry a valid signature from ANY embedded root
@@ -107,6 +166,11 @@ verify_release() {
     || { echo "release signature is INVALID; refusing to install (the download may have been tampered with)" >&2; return 1; }
   [ "$now" \< "$rexp" ] || { echo "release metadata expired at $rexp (stale or replayed release)" >&2; return 1; }
   if semver_lt "$ver" "$minver"; then echo "release $ver is below the minimum allowed $minver" >&2; return 1; fi
+  local rchan
+  rchan=$(awk '$1=="#" && $2=="channel"{print $3; exit}' "$dir/checksums.txt")
+  if [ "$rchan" = "beta" ] && [ "$channel" != "beta" ]; then
+    echo "release $ver is a beta release (a pre-release) and this install follows stable: to install it, run install.sh with BOBRES_UPDATE_CHANNEL=beta" >&2; return 1
+  fi
   if [ -f "$state/release.version" ]; then
     local cur; cur=$(cat "$state/release.version")
     if [ -n "$cur" ] && semver_lt "$ver" "$cur"; then echo "release $ver is older than installed $cur (downgrade refused)" >&2; return 1; fi
@@ -121,6 +185,9 @@ main() {
 
   # The latest (non-pre-release) GitHub release of this repository.
   local BASE_URL="${BOBRES_BASE_URL:-https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/latest/download}"
+  # The channel followed: stable refuses a release signed for beta, wherever it is downloaded
+  # from (even when GitHub serves it as the latest release).
+  local CHANNEL
   local INSTALL_DIR="${BOBRES_BIN_DIR:-/usr/local/bin}"
   local RED="" GREEN="" YELLOW="" BOLD="" RESET=""
   if [ -t 1 ]; then
@@ -148,6 +215,10 @@ where it would show up in 'ps' and shell history).
 Environment:
   BOBRES_BASE_URL  Where release files are downloaded from (must be https://)
   BOBRES_BIN_DIR   Where the bobres binary is installed (default /usr/local/bin)
+  BOBRES_UPDATE_CHANNEL
+                   stable (default) or beta. On stable a release signed for beta (a
+                   pre-release) is refused; set beta, with BOBRES_BASE_URL pointing at
+                   the pre-release, to install one.
 EOF
   }
 
@@ -164,6 +235,9 @@ EOF
     esac
     shift
   done
+
+  CHANNEL="$(release_channel "${BOBRES_UPDATE_CHANNEL:-}")" \
+    || die "BOBRES_UPDATE_CHANNEL must be stable or beta (got '${BOBRES_UPDATE_CHANNEL:-}')"
 
   # ---- transport: HTTPS only (tests may set BOBRES_ALLOW_INSECURE_HTTP=1) ----
   case "$BASE_URL" in
@@ -251,7 +325,7 @@ EOF
 
   info "Verifying release signature"
   local STATE_DIR="${BOBRES_STATE_DIR:-/var/lib/bobres}"
-  verify_release "$WORK" "$STATE_DIR" || die "verification failed; refusing to install"
+  verify_release "$WORK" "$STATE_DIR" "$CHANNEL" || die "verification failed; refusing to install"
 
   info "Verifying checksum"
   local EXPECTED ACTUAL

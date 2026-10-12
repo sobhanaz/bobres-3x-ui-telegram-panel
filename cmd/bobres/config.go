@@ -61,6 +61,16 @@ var configKeys = []configKey{
 		}},
 	{name: "BOBRES_ZARINPAL_PUBLIC_URL", services: []string{"caddy", "payments"}, optional: true,
 		help: "https://host registered with Zarinpal for the pay page (empty: https://<domain>)"},
+	{name: "BOBRES_UPDATE_CHANNEL", services: []string{"bot"}, lower: true,
+		help: "stable or beta: which releases the update check and bobres update offer", check: oneOf("stable", "beta")},
+	{name: "BOBRES_LICENSE_SERVER", services: []string{"bot"}, optional: true,
+		help: "the vendor's license server, https://... (empty: no online activation or refresh)",
+		check: func(v string) error {
+			if u, err := url.Parse(v); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+				return errors.New("BOBRES_LICENSE_SERVER must be an https URL without credentials")
+			}
+			return nil
+		}},
 }
 
 // derivedKeys follow another setting: shown, never set.

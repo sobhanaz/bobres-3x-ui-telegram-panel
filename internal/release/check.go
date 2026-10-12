@@ -36,13 +36,17 @@ const (
 )
 
 // Status is the outcome of the last update check. After a check GitHub did
-// not answer (Error unreachable), Latest, Channel, Newer and Verified are
-// the last verified check's, if there was one.
+// not answer (Error unreachable), Latest, Issued, Newer and Verified are the
+// last verified check's, if there was one.
 type Status struct {
-	Current   string `json:"current"`
-	Latest    string `json:"latest"`  // "" when unknown
-	Channel   string `json:"channel"` // stable or beta, "" when unknown
-	Newer     bool   `json:"newer"`   // Latest is verified and newer than Current
+	Current string `json:"current"`
+	Latest  string `json:"latest"`  // "" when unknown
+	Channel string `json:"channel"` // the channel this install follows: stable or beta
+	// Issued is when Latest was signed (its header's "# issued",
+	// 2006-01-02T15:04Z), "" when unknown: core checks it against the
+	// license's updates_until.
+	Issued    string `json:"issued,omitempty"`
+	Newer     bool   `json:"newer"` // Latest is verified and newer than Current
 	Verified  bool   `json:"verified"`
 	CheckedAt int64  `json:"checked_at"` // unix seconds, 0 before the first check
 	Error     string `json:"error"`      // "" or one of the Err* codes
@@ -52,7 +56,8 @@ type Status struct {
 // Checker looks for a newer release now and then and keeps the answer.
 type Checker struct {
 	current string
-	base    string
+	channel string
+	src     Source
 	hc      *http.Client
 	roots   []string
 	now     func() time.Time
@@ -69,21 +74,20 @@ type Checker struct {
 // maxFile bounds each downloaded metadata file.
 const maxFile = 256 << 10
 
-// NewChecker checks the release files under base (DefaultBaseURL when "")
-// against the embedded Roots, for a bot at version current. The client's
-// default transport is the process's normal egress (it honours HTTPS_PROXY).
-func NewChecker(current, base string, log *slog.Logger) *Checker {
-	if base == "" {
-		base = DefaultBaseURL
-	}
+// NewChecker checks the newest release of channel (stable or beta, as
+// ParseChannel reads it) on GitHub against the embedded Roots, for a bot at
+// version current. The client's default transport is the process's normal
+// egress (it honours HTTPS_PROXY).
+func NewChecker(current, channel string, log *slog.Logger) *Checker {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
+	hc := &http.Client{Timeout: 20 * time.Second}
 	return &Checker{
-		current: current, base: base, roots: Roots, now: time.Now, log: log,
-		hc:    &http.Client{Timeout: 20 * time.Second},
+		current: current, channel: channel, src: DefaultSource(hc), roots: Roots, now: time.Now, log: log,
+		hc:    hc,
 		Every: 12 * time.Hour, Retry: time.Hour,
-		last: Status{Current: current, Error: ErrNotChecked},
+		last: Status{Current: current, Channel: channel, Error: ErrNotChecked},
 	}
 }
 
@@ -118,13 +122,13 @@ func (c *Checker) Run(ctx context.Context) error {
 // update.
 func (c *Checker) Check(ctx context.Context) Status {
 	st := c.check(ctx)
-	st.Current, st.CheckedAt = c.current, c.now().Unix()
+	st.Current, st.Channel, st.CheckedAt = c.current, c.channel, c.now().Unix()
 	if ctx.Err() != nil && st.Error != "" {
 		return st // shutting down: keep the last outcome
 	}
 	c.mu.Lock()
 	if st.Error == ErrUnreachable && c.last.Verified {
-		st.Latest, st.Channel, st.Newer, st.Verified = c.last.Latest, c.last.Channel, c.last.Newer, c.last.Verified
+		st.Latest, st.Issued, st.Newer, st.Verified = c.last.Latest, c.last.Issued, c.last.Newer, c.last.Verified
 	}
 	c.last = st
 	c.mu.Unlock()
@@ -133,9 +137,16 @@ func (c *Checker) Check(ctx context.Context) Status {
 
 func (c *Checker) check(ctx context.Context) Status {
 	fail := func(code string, err error) Status { return Status{Error: code, Detail: err.Error()} }
-	sums, err := c.fetch(ctx, "checksums.txt")
+	base, want, err := c.src.Resolve(ctx, c.channel)
 	switch {
-	case errors.Is(err, errNotFound):
+	case errors.Is(err, ErrNotFound):
+		return fail(ErrNoRelease, err)
+	case err != nil:
+		return fail(ErrUnreachable, err)
+	}
+	sums, err := c.fetch(ctx, base, "checksums.txt")
+	switch {
+	case errors.Is(err, ErrNotFound):
 		return fail(ErrNoRelease, err)
 	case err != nil:
 		return fail(ErrUnreachable, err)
@@ -148,30 +159,30 @@ func (c *Checker) check(ctx context.Context) Status {
 	// version is shown, but never as an update to apply.
 	claimed := func(code string, err error) Status {
 		st := fail(code, err)
-		st.Latest, st.Channel = h.Version, h.Channel
+		st.Latest = h.Version
 		return st
 	}
-	sig, err := c.fetch(ctx, "checksums.txt.sig")
+	sig, err := c.fetch(ctx, base, "checksums.txt.sig")
 	if err != nil {
-		if !errors.Is(err, errNotFound) {
+		if !errors.Is(err, ErrNotFound) {
 			return fail(ErrUnreachable, err)
 		}
 		return claimed(ErrBadSignature, errors.New("the release is not signed (no checksums.txt.sig)"))
 	}
-	keys, err := c.fetch(ctx, "keys.txt")
+	keys, err := c.fetch(ctx, base, "keys.txt")
 	if err != nil {
-		if !errors.Is(err, errNotFound) {
+		if !errors.Is(err, ErrNotFound) {
 			return fail(ErrUnreachable, err)
 		}
 		return claimed(ErrBadSignature, errors.New("the release has no keys.txt"))
 	}
 	var keySigs [][]byte
 	for n := 1; n <= 4; n++ { // as many as the installer looks for
-		s, err := c.fetch(ctx, "keys.txt.sig."+strconv.Itoa(n))
+		s, err := c.fetch(ctx, base, "keys.txt.sig."+strconv.Itoa(n))
 		switch {
 		case err == nil:
 			keySigs = append(keySigs, s)
-		case !errors.Is(err, errNotFound):
+		case !errors.Is(err, ErrNotFound):
 			return fail(ErrUnreachable, err)
 		}
 	}
@@ -179,17 +190,23 @@ func (c *Checker) check(ctx context.Context) Status {
 	if err != nil {
 		return claimed(ErrBadSignature, err)
 	}
+	// The beta channel found the version through GitHub's API, which is
+	// not signed: the signed header must name the same one.
+	if want != "" && rel.Version != want {
+		return claimed(ErrBadSignature, fmt.Errorf("the files of release %s are signed for %s", want, rel.Version))
+	}
+	if !ChannelAllows(c.channel, rel.Channel) {
+		return claimed(ErrBadSignature, fmt.Errorf("release %s is signed for the %s channel, and this install follows %s", rel.Version, rel.Channel, c.channel))
+	}
 	return Status{
-		Latest: rel.Version, Channel: rel.Channel, Verified: true,
+		Latest: rel.Version, Issued: rel.Issued, Verified: true,
 		// "dev" and other non-release builds cannot tell.
 		Newer: Valid(c.current) && Compare(rel.Version, c.current) > 0,
 	}
 }
 
-var errNotFound = errors.New("not found")
-
-func (c *Checker) fetch(ctx context.Context, name string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/"+name, nil)
+func (c *Checker) fetch(ctx context.Context, base, name string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/"+name, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +217,7 @@ func (c *Checker) fetch(ctx context.Context, name string) ([]byte, error) {
 	defer func() { _ = resp.Body.Close() }()
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, fmt.Errorf("%s: %w", name, errNotFound)
+		return nil, fmt.Errorf("%s: %w", name, ErrNotFound)
 	case resp.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("%s: answered %d", name, resp.StatusCode)
 	}

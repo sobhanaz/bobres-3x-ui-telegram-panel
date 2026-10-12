@@ -126,7 +126,12 @@ jobs:
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$keyfile"
           chmod 600 "$keyfile"
           test -n "$RELEASE_KEY_ID" || { echo "RELEASE_KEY_ID repo variable is not set"; exit 1; }
-          tools/sign/sign.sh --version "$GITHUB_REF_NAME" --key-id "$RELEASE_KEY_ID" --key "$keyfile" dist
+          # A pre-release tag (v0.1.0-rc.1) is signed for the beta channel: on the stable channel
+          # bobres update and the bot's check refuse it, even if it ends up as the latest
+          # release. The same test marks it --prerelease below.
+          channel=stable
+          case "$GITHUB_REF_NAME" in *-*) channel=beta ;; esac
+          tools/sign/sign.sh --version "$GITHUB_REF_NAME" --channel "$channel" --key-id "$RELEASE_KEY_ID" --key "$keyfile" dist
           # prove the signature verifies against the PUBLIC key committed in the repo before publishing
           openssl pkeyutl -verify -pubin -inkey install/release-signing.pub.pem -rawin \
             -in dist/checksums.txt -sigfile dist/checksums.txt.sig

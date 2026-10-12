@@ -15,6 +15,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [License](license.md) | The License tab is not "Active", or an action is refused by the license |
 | [Restore a backup](restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
+| [Releases and update channels](releases.md) | Publish a stable or beta release, re-sign a quiet stable channel (signatures expire after 45 days), or move a store between stable and beta |
 
 ## System alerts in Telegram
 

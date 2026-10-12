@@ -242,3 +242,29 @@ func TestConfigSetUnhealthy(t *testing.T) {
 		t.Fatalf("errors: %s", errOut)
 	}
 }
+
+// The update channel and the license server are settings: listed in clear,
+// set with their own checks, and the bot restarts.
+func TestConfigChannelAndLicenseServer(t *testing.T) {
+	for _, c := range []struct {
+		name, value string
+		ok          bool
+	}{
+		{"BOBRES_UPDATE_CHANNEL", "beta", true},
+		{"BOBRES_UPDATE_CHANNEL", "nightly", false},
+		{"BOBRES_LICENSE_SERVER", "https://license.example.com", true},
+		{"BOBRES_LICENSE_SERVER", "http://license.example.com", false},
+		{"BOBRES_LICENSE_SERVER", "https://user:pw@license.example.com", false},
+	} {
+		k, found := settable(c.name)
+		if !found || len(k.services) != 1 || k.services[0] != "bot" {
+			t.Fatalf("%s: settable %v %+v", c.name, found, k)
+		}
+		if err := k.check(c.value); (err == nil) != c.ok {
+			t.Errorf("%s=%q: %v, want ok=%v", c.name, c.value, err, c.ok)
+		}
+		if !notSecretEnv[c.name] {
+			t.Errorf("%s is masked as a secret", c.name)
+		}
+	}
+}

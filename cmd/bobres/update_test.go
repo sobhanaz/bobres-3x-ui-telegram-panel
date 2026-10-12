@@ -318,10 +318,11 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("restore point: %v %v", rp, err)
 	}
 	rpDir := filepath.Join(ut.dir, ".restore-point")
+	noFloor := "" // install.sh had recorded no release before
 	wantRP := restorePoint{
 		FromVersion: "1.2.3", ToVersion: "1.3.0", BackupFile: filepath.Join(rpDir, backup.FileName(opsNow)),
 		CreatedAt: opsNow, CLIPath: ut.exe, CLIBackupPath: filepath.Join(rpDir, "bobres"), FilesDir: filepath.Join(rpDir, "files"),
-		SchemaVersions: map[string]int64{"core": 3, "payments": 2, "provisioner": 4},
+		SchemaVersions: map[string]int64{"core": 3, "payments": 2, "provisioner": 4}, ReleaseFloor: &noFloor,
 	}
 	if !reflect.DeepEqual(*rp, wantRP) {
 		t.Fatalf("restore point\n got %+v\nwant %+v", *rp, wantRP)

@@ -37,7 +37,9 @@ const timeLayout = "2006-01-02T15:04Z"
 // Header is checksums.txt's signed header.
 type Header struct {
 	Version, Channel, KeyID string
-	Expires                 string
+	// Issued is when the release was signed ("" in a header without it),
+	// Expires when its metadata stops being accepted (timeLayout).
+	Issued, Expires string
 }
 
 // ParseHeader reads checksums.txt's "# version X.Y.Z" header lines (the
@@ -62,6 +64,8 @@ func ParseHeader(sums []byte) Header {
 			set(&h.Channel)
 		case "key_id":
 			set(&h.KeyID)
+		case "issued":
+			set(&h.Issued)
 		case "expires":
 			set(&h.Expires)
 		}
@@ -214,9 +218,18 @@ func Valid(v string) bool {
 	return ok
 }
 
+// Prerelease reports whether v is a valid pre-release version (1.2.0-rc.1).
+func Prerelease(v string) bool {
+	s, ok := parseSemver(v)
+	return ok && s.pre != ""
+}
+
 // Compare compares two versions: -1, 0 or 1. A pre-release sorts before its
-// release (pre-releases between themselves by their text). A version that does
-// not parse sorts before any that does.
+// release; pre-releases between themselves as semver 2.0 says (its section
+// 11): identifier by identifier, numeric ones as numbers (rc.10 after rc.9)
+// and before any with letters, others in ASCII order, and more identifiers
+// after fewer when the rest are equal. A version that does not parse sorts
+// before any that does.
 func Compare(a, b string) int {
 	va, okA := parseSemver(a)
 	vb, okB := parseSemver(b)
@@ -229,11 +242,8 @@ func Compare(a, b string) int {
 		return 1
 	}
 	for i := range va.n {
-		if va.n[i] != vb.n[i] {
-			if va.n[i] < vb.n[i] {
-				return -1
-			}
-			return 1
+		if c := cmpInt(va.n[i], vb.n[i]); c != 0 {
+			return c
 		}
 	}
 	switch {
@@ -244,5 +254,61 @@ func Compare(a, b string) int {
 	case vb.pre == "":
 		return -1
 	}
-	return strings.Compare(va.pre, vb.pre)
+	return comparePre(strings.Split(va.pre, "."), strings.Split(vb.pre, "."))
+}
+
+// comparePre compares two pre-release labels split at their dots.
+func comparePre(a, b []string) int {
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i] == b[i] {
+			continue
+		}
+		na, numA := numeric(a[i])
+		nb, numB := numeric(b[i])
+		switch {
+		case numA && numB:
+			if c := cmpNumeric(na, nb); c != 0 {
+				return c
+			}
+			// the same number written differently (01 and 1): by their text
+			return strings.Compare(a[i], b[i])
+		case numA:
+			return -1
+		case numB:
+			return 1
+		}
+		return strings.Compare(a[i], b[i])
+	}
+	return cmpInt(len(a), len(b))
+}
+
+// numeric reads a pre-release identifier made of digits only: its digits
+// without leading zeros ("" for zero), which cmpNumeric orders as numbers of
+// any length (one too long for an int included), as install.sh's
+// semver_numlt does.
+func numeric(s string) (string, bool) {
+	if s == "" || strings.Trim(s, "0123456789") != "" {
+		return "", false
+	}
+	return strings.TrimLeft(s, "0"), true
+}
+
+// cmpNumeric compares two numbers written as digits without leading zeros:
+// the one with more digits is the larger, else the first digit that differs
+// decides.
+func cmpNumeric(a, b string) int {
+	if c := cmpInt(len(a), len(b)); c != 0 {
+		return c
+	}
+	return strings.Compare(a, b)
+}
+
+func cmpInt(a, b int) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
 }
