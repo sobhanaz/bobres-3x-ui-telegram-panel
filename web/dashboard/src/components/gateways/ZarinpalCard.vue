@@ -8,11 +8,12 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import SecretField from '../SecretField.vue'
+import GatewayHealthRow from './GatewayHealthRow.vue'
 import GatewayReport from './GatewayReport.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { dateTime, num, type Lang } from '../../format'
-import { blockedByOpen, healthState, openPayments, zarinpalBody, zarinpalDirty, zarinpalFormOf, zarinpalProblems, zarinpalTestBody } from '../../gateways'
+import { num, type Lang } from '../../format'
+import { blockedByOpen, openPayments, zarinpalBody, zarinpalDirty, zarinpalFormOf, zarinpalProblems, zarinpalTestBody } from '../../gateways'
 import type { GatewayConfig, GatewayTest } from '../../types'
 
 // Zarinpal: offered or not, the sandbox, a write-only merchant id and proxy,
@@ -68,7 +69,6 @@ const proxyError = computed(() => fieldErrors.value.proxy || (problems.value.inc
 const open = computed(() => props.config.health?.open ?? 0)
 // A new merchant id or sandbox is refused while payments are open.
 const merchantBlocked = computed(() => blockedByOpen(form.value, props.config))
-const health = computed(() => healthState(props.config.health))
 // Offered, turned on but not usable (the problem says why), off, or not set up.
 const state = computed(() => {
   const c = props.config
@@ -213,22 +213,7 @@ async function test() {
           />
         </div>
 
-        <div class="health" aria-live="polite">
-          <Tag
-            :severity="health === 'ok' ? 'success' : health === 'error' ? 'danger' : 'secondary'"
-            :value="t('gateway.health.' + health)"
-            class="health-state"
-          />
-          <span v-if="config.health?.last_paid_at" class="app-muted small">{{ t('gateway.last_paid', { time: dateTime(config.health.last_paid_at, lang) }) }}</span>
-          <span v-if="open" class="app-muted small open-count">
-            {{ t('gateway.open_count', { n: num(open, lang) }) }}<template v-if="config.health?.oldest_open_at">
-              · {{ t('gateway.oldest_open', { time: dateTime(config.health.oldest_open_at, lang) }) }}</template>
-          </span>
-          <div v-if="config.health?.last_error" class="last-error small">
-            <span class="app-muted">{{ config.health.last_error_at ? t('gateway.last_error_at', { time: dateTime(config.health.last_error_at, lang) }) : t('gateway.last_error') }}</span>
-            <span class="app-ltr detail error-text">{{ config.health.last_error }}</span>
-          </div>
-        </div>
+        <GatewayHealthRow :health="config.health" />
 
         <Message v-if="result" :severity="result.severity" :closable="false" class="test-result" aria-live="polite">
           {{ result.text }}
@@ -309,26 +294,6 @@ async function test() {
 }
 .merchant-blocked {
   grid-column: 1 / -1;
-}
-.health {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.75rem;
-  margin-block-end: 1rem;
-}
-.last-error {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 0.5rem;
-}
-.last-error .error-text {
-  margin: 0;
-}
-.small {
-  font-size: 0.85rem;
 }
 .detail {
   font-size: 0.85rem;

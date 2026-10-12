@@ -1,11 +1,13 @@
 // Helpers for the Payment gateways page: the Zarinpal form (write-only
-// merchant id and proxy), the cards of the manual methods and Stars (their
-// settings), and the payments report; and the overview's gateways card.
+// merchant id and proxy), the automatic USDT form (address, write-only
+// TronGrid key and proxy) and its unmatched deposits, the cards of the manual methods and Stars (their settings),
+// and the payments report; and the overview's gateways card.
 // Core and payments check everything again. Pure functions (no API, no Vue).
 import { ApiError } from './api'
 import { latinDigits, type Money } from './format'
 import { effective } from './settings'
-import type { GatewayConfig, GatewayHealth, GatewayReport, OverviewGateway, SettingItem } from './types'
+import { normalizeTronAddress, tronAddressProblem } from './tron'
+import type { GatewayConfig, GatewayHealth, GatewayReport, OverviewGateway, SettingItem, UnmatchedDeposit } from './types'
 
 /** Zarinpal's merchant id: the 36-character id from its panel. */
 const merchantRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -87,6 +89,136 @@ export function blockedByOpen(f: ZarinpalForm, c: GatewayConfig): boolean {
 export function openPayments(e: unknown): number | null {
   if (!(e instanceof ApiError) || e.status !== 409) return null
   return typeof e.data.open === 'number' ? e.data.open : null
+}
+
+// ---- Automatic USDT (TRC20): the watcher finds exact amounts sent to the
+// store's TRON address. The address is public (customers see it) and comes
+// back; the TronGrid API key and the proxy are write-only.
+
+export const usdtAuto = 'usdt_trc20_auto'
+
+/** A TronGrid API key: letters, digits and dashes (it is a UUID today), as
+ * core and payments accept it. */
+export const apiKeyMax = 128
+const apiKeyRe = /^[A-Za-z0-9-]{8,128}$/
+
+export function apiKeyValid(raw: string): boolean {
+  return apiKeyRe.test(raw.trim())
+}
+
+/** The automatic USDT card, as staff edit it. */
+export interface UsdtForm {
+  enabled: boolean
+  /** the address as typed; it starts as the stored one */
+  address: string
+  /** a new API key; '' keeps the stored one */
+  apiKey: string
+  clearApiKey: boolean
+  /** a new proxy for the TronGrid calls; '' keeps the stored one */
+  proxy: string
+  clearProxy: boolean
+}
+
+export function usdtFormOf(c: GatewayConfig): UsdtForm {
+  return { enabled: c.enabled, address: c.address ?? '', apiKey: '', clearApiKey: false, proxy: '', clearProxy: false }
+}
+
+/** usdtAddressError is what is wrong with the typed address: format or
+ * checksum (a character is wrong), or required (a stored address can be
+ * replaced, not removed); '' when nothing. */
+export function usdtAddressError(f: UsdtForm, c: GatewayConfig): '' | 'format' | 'checksum' | 'required' {
+  const a = normalizeTronAddress(f.address)
+  if (!a) return c.address ? 'required' : ''
+  return tronAddressProblem(a)
+}
+
+/** usdtProblems lists the fields that are not right yet, by the names core
+ * uses. Turning it on needs an address. */
+export function usdtProblems(f: UsdtForm, c: GatewayConfig): string[] {
+  const out: string[] = []
+  if (usdtAddressError(f, c)) out.push('address')
+  if (f.apiKey.trim() && !apiKeyValid(f.apiKey)) out.push('api_key')
+  if (f.proxy.trim() && !proxyValid(f.proxy)) out.push('proxy')
+  if (f.enabled && !normalizeTronAddress(f.address) && !c.address) out.push('enabled')
+  return out
+}
+
+/** usdtDirty: the form would change something. */
+export function usdtDirty(f: UsdtForm, c: GatewayConfig): boolean {
+  return (
+    f.enabled !== c.enabled ||
+    normalizeTronAddress(f.address) !== (c.address ?? '') ||
+    !!f.apiKey.trim() ||
+    f.clearApiKey ||
+    !!f.proxy.trim() ||
+    f.clearProxy
+  )
+}
+
+/** usdtBody is what PUT /gateways/usdt_trc20_auto takes: the whole address,
+ * and '' to keep the API key or the proxy. */
+export function usdtBody(f: UsdtForm) {
+  return {
+    enabled: f.enabled,
+    address: normalizeTronAddress(f.address),
+    api_key: f.clearApiKey ? '' : f.apiKey.trim(),
+    clear_api_key: f.clearApiKey,
+    proxy: f.clearProxy ? '' : f.proxy.trim(),
+    clear_proxy: f.clearProxy,
+  }
+}
+
+/** usdtTestBody is what POST /gateways/usdt_trc20_auto/test takes: the typed
+ * values ('' for the stored key and proxy). A test changes nothing. */
+export function usdtTestBody(f: UsdtForm) {
+  const { address, api_key, clear_api_key, proxy, clear_proxy } = usdtBody(f)
+  return { address, api_key, clear_api_key, proxy, clear_proxy }
+}
+
+/** usdtBlockedByOpen: the form changes the address while automatic payments
+ * are open, which payments refuses (USDT sent to the old address would not
+ * be found). */
+export function usdtBlockedByOpen(f: UsdtForm, c: GatewayConfig): boolean {
+  const open = c.health?.open ?? 0
+  return !!c.address && open > 0 && normalizeTronAddress(f.address) !== c.address
+}
+
+const txidRe = /^[0-9a-f]{64}$/i
+
+/** tronscanUrl is where staff can look a transaction up, or '' when the id
+ * is not one. */
+export function tronscanUrl(txid: string): string {
+  return txidRe.test(txid) ? 'https://tronscan.org/#/transaction/' + txid.toLowerCase() : ''
+}
+
+/** Why a deposit matched nothing, as core names it (reason_code). */
+export const unmatchedReasons = ['no_payment', 'already_paid', 'closed', 'ambiguous', 'dust'] as const
+
+/** unmatchedReason is how a deposit's reason shows: the catalog key of a
+ * reason the dashboard knows; otherwise core's own words or the code itself
+ * (English, left to right); null when core said nothing. */
+export function unmatchedReason(d: Pick<UnmatchedDeposit, 'reason' | 'reason_code'>): { key: string } | { raw: string } | null {
+  const code = d.reason_code ?? ''
+  if ((unmatchedReasons as readonly string[]).includes(code)) return { key: 'gateway.usdt.reason.' + code }
+  const raw = d.reason || code
+  return raw ? { raw } : null
+}
+
+/** depositKey tells the transfers apart: one transaction may carry more
+ * than one. */
+export function depositKey(d: Pick<UnmatchedDeposit, 'txid' | 'event_index'>): string {
+  return d.txid.toLowerCase() + '#' + d.event_index
+}
+
+/** The note staff may leave on a handled deposit: payments counts it in
+ * bytes (at most 500), so a Persian note gets this many characters (a
+ * character takes at most 3 bytes in a text field). */
+export const depositNoteMax = 160
+
+/** resolveBody is what POST /gateways/deposits/resolve takes: the transfer
+ * (its transaction and its place in it) and the note. */
+export function resolveBody(d: Pick<UnmatchedDeposit, 'txid' | 'event_index'>, note: string) {
+  return { txid: d.txid, event_index: d.event_index, note: note.trim() }
 }
 
 /** ok: payments go through; error: the last event was an error; idle:

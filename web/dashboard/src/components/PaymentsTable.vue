@@ -5,7 +5,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import UserLink from './UserLink.vue'
 import StatusTag from './StatusTag.vue'
-import { dateTime, money, type Lang } from '../format'
+import { dateTime, decimalOf, money, type Lang } from '../format'
 import type { PaymentItem } from '../types'
 
 const props = withDefaults(
@@ -50,8 +50,13 @@ const lang = computed(() => locale.value as Lang)
     <Column :header="t('common.amount')" body-class="app-nowrap">
       <template #body="{ data: p }">
         {{ money(p.amount, lang) }}
-        <div v-if="p.gateway_amount && p.gateway_amount.currency !== p.amount.currency" class="app-muted small">
-          {{ money(p.gateway_amount, lang) }}
+        <div
+          v-if="p.gateway_amount && (p.gateway_amount.currency !== p.amount.currency || p.gateway_amount.amount !== p.amount.amount)"
+          class="app-muted small gateway-amount"
+        >
+          <!-- the exact amount to send (automatic USDT), as the wallet shows it -->
+          <span v-if="p.gateway_amount.currency === 'USDT'" class="app-ltr app-mono">{{ decimalOf(p.gateway_amount) }} USDT</span>
+          <template v-else>{{ money(p.gateway_amount, lang) }}</template>
         </div>
       </template>
     </Column>
@@ -71,7 +76,7 @@ const lang = computed(() => locale.value as Lang)
           <div v-if="p.proof.reference" class="app-ltr app-mono small">{{ p.proof.reference }}</div>
           <div v-if="p.proof.txid" class="app-ltr app-mono small txid">{{ p.proof.txid }}</div>
         </template>
-        <span v-else-if="p.provider_ref" class="app-ltr app-mono small">{{ p.provider_ref }}</span>
+        <div v-else-if="p.provider_ref" :class="['app-ltr', 'app-mono', 'small', { txid: p.provider === 'usdt_trc20_auto' }]" :title="p.provider_ref">{{ p.provider_ref }}</div>
       </template>
     </Column>
   </DataTable>

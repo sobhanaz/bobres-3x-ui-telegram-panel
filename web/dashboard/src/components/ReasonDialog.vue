@@ -19,8 +19,10 @@ const props = withDefaults(
     detail?: string
     reasonOptional?: boolean
     canConfirm?: boolean
+    /** the longest reason the server takes */
+    maxlength?: number
   }>(),
-  { message: '', danger: false, busy: false, error: '', detail: '', reasonOptional: false, canConfirm: true },
+  { message: '', danger: false, busy: false, error: '', detail: '', reasonOptional: false, canConfirm: true, maxlength: 500 },
 )
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ confirm: [reason: string] }>()
@@ -40,7 +42,7 @@ function confirm() {
     <slot />
     <label class="field">
       <span>{{ reasonOptional ? t('common.reason_optional') : t('common.reason') }}</span>
-      <Textarea v-model="reason" rows="2" auto-resize maxlength="500" fluid />
+      <Textarea v-model="reason" rows="2" auto-resize :maxlength="maxlength" fluid />
       <small class="app-muted">{{ t('common.reason_hint') }}</small>
     </label>
     <Message v-if="error" severity="error" :closable="false" class="msg">

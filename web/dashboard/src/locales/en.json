@@ -426,6 +426,7 @@
       "manual_crypto": "Crypto (USDT)",
       "manual_zarinpal": "Zarinpal link",
       "zarinpal": "Zarinpal",
+      "usdt_trc20_auto": "USDT TRC20 (automatic)",
       "stars": "Telegram Stars",
       "wallet": "Wallet"
     },
@@ -1625,7 +1626,7 @@
     "version_range": "BOBRES is tested with panel versions {min} to {max}; this version may still work."
   },
   "gateway": {
-    "intro": "How customers pay. Zarinpal's merchant id and proxy are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
+    "intro": "How customers pay. Zarinpal's merchant id and proxy, and the TronGrid key of automatic USDT, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
     "key_missing_banner": "The payments service has no encryption key yet, so Zarinpal's settings still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
     "key_missing": "Read only: add the payments key (run bobres install again) to change these here.",
     "zarinpal_desc": "Online card payments through your Zarinpal merchant account; payments are confirmed automatically.",
@@ -1671,6 +1672,49 @@
     "report_empty": "No payments in this period.",
     "days_7": "Last 7 days",
     "days_30": "Last 30 days",
+    "usdt": {
+      "desc": "Customers send an exact USDT amount on TRON (TRC20) to your address. The payment is found on the chain and confirmed automatically, with no transaction id to review. Toman prices are converted with the USDT rate of the Crypto (USDT) card, which stays available as the manual fallback.",
+      "enabled": "Offer automatic USDT",
+      "enabled_help": "Customers see the exact amount to send, your address and a deadline. Turning it off stops offering it.",
+      "address": "TRON (TRC20) address",
+      "address_help": "The wallet that receives the USDT; customers see it. It cannot change while automatic payments are open.",
+      "api_key": "TronGrid API key (optional)",
+      "api_key_help": "Payments are found through TronGrid. Without a key it allows few requests; with many customers, add a free key from trongrid.io. Stored encrypted and never shown again.",
+      "proxy_help": "Payments are found by calling TronGrid from this server. If TronGrid cannot be reached from here (it may be blocked in some countries), send the calls through a proxy that can reach it. The proxy must be http or https and may include a user name and password. Stored encrypted and never shown again.",
+      "open_payments": "{n} automatic USDT payments are still open. The address cannot change until they finish, or USDT sent to the old address would not be found.",
+      "invalid": {
+        "address_format": "A TRON address starts with T and has 34 letters and digits.",
+        "address_checksum": "This address is not valid: one of its characters is wrong. Copy it again from your wallet.",
+        "address_required": "Enter the address: it can be replaced, not removed.",
+        "needs_address": "Enter the address before turning it on.",
+        "api_key": "A TronGrid key has letters, digits and dashes, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx."
+      },
+      "test_ok": "TronGrid answered: this address can be watched.",
+      "test_failed": "TronGrid could not be reached or refused the request.",
+      "saved": "Automatic USDT settings saved",
+      "problem": {
+        "unreadable": "The stored settings cannot be read (the payments key changed or is missing). Enter the address and the key again.",
+        "invalid": "These settings were refused, so automatic USDT is not offered. Check the address and the key."
+      },
+      "unmatched": "Unmatched deposits",
+      "unmatched_help": "USDT that reached your address but matched no payment: a different amount, or too late. Nothing was credited for it. Find the customer, use Change balance on their page, then mark the deposit handled.",
+      "unmatched_more": "The newest {shown} of {n} are listed. Mark them handled to see the rest.",
+      "unmatched_empty": "No unmatched deposits.",
+      "from": "From",
+      "copy_txid": "Copy the transaction id",
+      "tronscan": "Open on Tronscan",
+      "reason": {
+        "no_payment": "No open payment has exactly this amount: underpaid, overpaid, or an exchange took its fee.",
+        "already_paid": "The payment with this amount was already paid: this is a second transfer.",
+        "closed": "The payment with this amount can no longer be paid (over 48 hours old, or failed).",
+        "ambiguous": "More than one payment has this amount, so none was chosen.",
+        "dust": "Under 0.1 USDT (dust). Such transfers are often sent to plant a look-alike address in your wallet history."
+      },
+      "resolve": "Mark handled",
+      "resolve_title": "Mark this deposit handled",
+      "resolve_message": "Do this only after you credited the customer by hand (Change balance on their page) or sent the USDT back. The deposit leaves this list and its transaction id is no longer accepted as a payment proof, so the same USDT is never credited twice. This cannot be undone.",
+      "resolved": "Deposit marked handled"
+    },
     "method": {
       "manual_card": {
         "title": "Card to card",

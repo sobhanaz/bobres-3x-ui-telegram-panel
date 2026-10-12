@@ -475,7 +475,8 @@ export interface GatewayHealth {
 }
 
 /** An automated gateway's configuration (GET /gateways, owner only). The
- * merchant id and proxy are never sent back: only a hint and whether set. */
+ * merchant id, the proxy and the TronGrid API key are never sent back: only a
+ * hint and whether set. */
 export interface GatewayConfig {
   provider: string
   /** offered to customers */
@@ -492,7 +493,13 @@ export interface GatewayConfig {
   sandbox_allowed?: boolean
   /** the merchant id's last 4 characters, '' when none */
   merchant_hint: string
+  /** a proxy is stored (Zarinpal's, or automatic USDT's for TronGrid) */
   proxy_set: boolean
+  /** usdt_trc20_auto: the TRON (TRC20) address that receives USDT, '' when
+   * none (public: customers see it) */
+  address?: string
+  /** usdt_trc20_auto: a TronGrid API key is stored */
+  key_set?: boolean
   /** payments has no master key: the settings come from .env, read only */
   key_missing: boolean
   health?: GatewayHealth | null
@@ -514,6 +521,26 @@ export interface GatewayTest {
   unverified?: number
 }
 
+/** USDT that reached the store's TRON address in the period but matched no
+ * payment (another amount, or too late): nothing was credited. */
+export interface UnmatchedDeposit {
+  /** the transaction id (64 hex digits) */
+  txid: string
+  /** the transfer's place in its transaction, from 0 (one transaction may
+   * carry more than one); with txid, what marks it handled */
+  event_index: number
+  /** the sender's TRON address */
+  from: string
+  amount: Money
+  /** its block time, unix seconds */
+  at: number
+  /** why it matched nothing, in core's words (English); absent when not said */
+  reason?: string
+  /** why, as a code: no_payment | already_paid | closed | ambiguous | dust
+   * (others may come) */
+  reason_code?: string
+}
+
 /** GET /gateways/report: payments by status in a period, and the latest events. */
 export interface GatewayReport extends GatewayHealth {
   provider: string
@@ -521,6 +548,11 @@ export interface GatewayReport extends GatewayHealth {
   to: number
   /** by status: how many, and the sum charged per currency */
   totals: { status: string; count: number; amounts: Money[] }[]
+  /** usdt_trc20_auto only: the deposits still to handle, whatever the
+   * period (the newest, at most 50) */
+  unmatched?: UnmatchedDeposit[]
+  /** usdt_trc20_auto only: how many deposits are still to handle in all */
+  unmatched_count?: number
 }
 
 /** A 3x-ui server on the overview (every staff member who reads it). */
