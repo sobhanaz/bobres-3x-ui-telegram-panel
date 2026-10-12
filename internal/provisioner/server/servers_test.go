@@ -582,6 +582,41 @@ func TestAddServerTestsTheConnection(t *testing.T) {
 	if strings.Contains(string(raw), panelTok) {
 		t.Fatal("AddServer returned the token")
 	}
+	if !sv.GetEnabled() {
+		t.Fatal("a request without enabled (an older caller) added the server switched off")
+	}
+}
+
+// enabled=false saves the server switched off in the insert itself: it is
+// never on, so no client lands on it, and it is still tested and listed.
+func TestAddServerSwitchedOff(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	other := xuifake.NewServer(panelTok)
+	t.Cleanup(other.Close)
+	f.disable(t, f.server) // only the new server could take the client
+	sv, err := f.client.AddServer(ctx, &provisionerv1.AddServerRequest{Name: "off", BaseUrl: other.URL, ApiToken: panelTok,
+		Enabled: proto.Bool(false)})
+	if err != nil || sv.GetEnabled() || !sv.GetHealthy() || sv.GetPanelVersion() != "v3.9.0" {
+		t.Fatalf("add switched off: %v %+v", err, sv)
+	}
+	var enabled, untouched bool
+	if err := f.st.DB().QueryRow(ctx, `SELECT enabled, updated_at = created_at FROM provisioner.xui_servers WHERE id = $1`,
+		sv.GetId()).Scan(&enabled, &untouched); err != nil || enabled || !untouched {
+		t.Fatalf("row: enabled %v, never updated %v, %v", enabled, untouched, err)
+	}
+	if _, err := f.create(t, 1); status.Code(err) != codes.FailedPrecondition || other.Calls("add") != 0 {
+		t.Fatalf("a client on the switched-off server: %v", err)
+	}
+	if lv := f.listed(t, sv.GetId()); lv.GetEnabled() {
+		t.Fatalf("listed: %+v", lv)
+	}
+
+	on, err := f.client.AddServer(ctx, &provisionerv1.AddServerRequest{Name: "on", BaseUrl: other.URL, ApiToken: panelTok,
+		Enabled: proto.Bool(true), SkipCheck: true})
+	if err != nil || !on.GetEnabled() {
+		t.Fatalf("add switched on: %v %+v", err, on)
+	}
 }
 
 func TestDeleteServer(t *testing.T) {

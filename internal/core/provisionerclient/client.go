@@ -125,11 +125,12 @@ func (c *Client) ListServers(ctx context.Context) (*domain.ServerList, error) {
 	return out, nil
 }
 
-// AddServer implements domain.ServerAdmin.
+// AddServer implements domain.ServerAdmin. The server is saved switched on
+// or off as asked, in one step.
 func (c *Client) AddServer(ctx context.Context, in domain.ServerInput) (*domain.Server, error) {
 	s, err := c.rpc.AddServer(ctx, &provisionerv1.AddServerRequest{
 		Name: in.Name, BaseUrl: in.BaseURL, ApiToken: in.Token, SubBaseUrl: in.SubBaseURL,
-		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck,
+		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.AddServer: %w", err)

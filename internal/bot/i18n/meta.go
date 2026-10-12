@@ -126,6 +126,7 @@ var markupArgs = map[string][]string{
 	"pay.crypto":           {"addresses"},
 	"admin.pending_item":   {"proof", "dup", "method"},
 	"admin.title":          {"panel"},
+	"admin.servers_down":   {"names"},
 	"admin.settings_title": {"list"},
 	"admin.discount_saved": {"line"},
 	"support.prompt":       {"contact"},

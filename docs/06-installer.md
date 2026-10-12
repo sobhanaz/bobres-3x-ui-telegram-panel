@@ -56,9 +56,11 @@ release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`).
 ## Status (2026-10-12)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
 `version`, `admin link` (2026-10-07), `license status|import` (2026-10-11), `backup` (2026-10-11, see Backups),
-`restore`, `update` and `rollback` (2026-10-12, see Restore, update and rollback). The bootstrap `install.sh` downloads
-the latest GitHub release, verifies it and hands over to `bobres install`. Not yet: `config`, `secrets`, `license activate`
-(needs the vendor server), `support-bundle`, and the hardening step (ufw, fail2ban).
+`restore`, `update` and `rollback` (2026-10-12, see Restore, update and rollback), `support-bundle` (2026-10-12, see
+Support bundle). The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to
+`bobres install`. Not yet: `config`, `secrets` (the [rotate secrets](runbooks/rotate-secrets.md) runbook covers it by
+hand), `license activate` (needs the vendor server), and the hardening step (ufw, fail2ban). Operator runbooks:
+[runbooks/](runbooks/README.md).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
 a password or code, the owner manages staff on the dashboard's Staff page, and the owner themselves is
 changed with `bobres menu` ("Change the owner Telegram ID"), which core applies when it starts.
@@ -80,7 +82,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container. `activate` (online, through the vendor server) comes later |
 | `bobres doctor` | Diagnose: DNS, TLS, ports, bot token, 3x-ui reachability/version, queue lag, disk; print fixes |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
-| `bobres support-bundle` | Redacted logs/config for support (no secrets, no user data) |
+| `bobres support-bundle [--offline]` | A redacted tar.gz for support in the install directory: versions, `compose ps`, the doctor's checks, the newest 300 log lines per service, the `.env` key names (never a value), disk and memory, the backups list (see Support bundle). Never the database, a backup or a secret value |
 
 ## Backups
 The `backup` service (image `bobres-backup`, a `postgres:16-alpine` target in `deploy/Dockerfile`, so its pg_dump
@@ -234,6 +236,37 @@ restore point) and install files, restores the database as above and starts. No 
 it explains and exits 1. Only the last update can be rolled back; to go further back, `bobres install --version <old>`
 moves the images and `bobres restore` the data. `release.version` is not lowered by a rollback: a later update goes to
 the release rolled back from, or newer.
+
+## Support bundle
+`bobres support-bundle [--dir D] [--offline]` writes `<dir>/bobres-support-<UTC stamp>.tar.gz` (mode 0600, through
+`writeAtomic`) and prints its path. It holds `README.txt` (what is inside, and what could not be collected),
+`versions.txt` (the CLI, `BOBRES_VERSION`, the OS, Docker, Compose and `compose images`), `compose-ps.txt`
+(`compose ps --all`), `doctor.txt` (the doctor's checks; `--offline` skips DNS and the public IP), `logs/<service>.log`
+(`compose logs --timestamps --tail 300` for every service status lists, at most 2 MB each), `env-keys.txt` (each `.env`
+key as set, empty or placeholder, and the file's mode), `system.txt` (disk of the install directory and
+`/var/lib/docker`, the backups folder's size, RAM and swap, `docker system df`) and `backups.txt` (the backups folder's
+names and sizes, what each sidecar says, and the restore point's versions). It never runs `compose config`,
+`inspect` or anything in a container, never opens a `.bkp` file or the database, and never follows a link in
+`backups/` (the backup service's user owns it); a sidecar is opened non-blocking and read only when the open file is
+regular, so one swapped for a named pipe cannot hang it. Each docker command has 30 seconds; a part that fails is described in
+its file and the rest is still written (exit 0), so it works when Docker is the problem. Exit 1 only when the file
+cannot be written, 2 for usage errors.
+
+Every text is redacted before it is packed, line by line: first every `.env` value of 6 characters or more wherever it
+appears (all keys but plain settings such as the domain, version, time zone and admin id), then `scheme://user:pass@`
+(internal/logging's pattern), Telegram bot tokens, `Bearer`/`Basic` credentials, credential headers (Authorization,
+Cookie, X-Api-Key, the webhook secret header), JSON fields, JSON lists and `name=value` pairs whose name holds one of
+internal/logging's secret words (token, secret, password, key, auth, dsn, license, signature...) or `merchant`, a UUID
+within a few characters after "merchant" (a Zarinpal merchant id), hex strings of 32+ characters, and base64 or
+base64url runs of 32+ characters that mix letters and digits. Booleans stay (`database_url_set=true`), and so do order,
+user and service UUIDs, backup stamps and file paths (a run with a lower-case path segment is judged segment by
+segment), because support needs them. Visitors' data goes last: Caddy logs every request with the visitor's address and
+browser, so `User-Agent` headers and fields (the word `agent` joins the secret words) lose their value, and every
+public IPv4 or IPv6 address (customers on `/pay/*`, staff on `/admin`, the server's own) becomes `[IP-1]`, `[IP-2]`...,
+numbered in the order met so lines from one address can still be matched. Private, loopback, link-local and unspecified
+addresses (Docker's networks) stay; a candidate must parse as an address and stand alone, so times and versions such as
+`1.2.3.4.5` are kept. The logs can still show Telegram ids, usernames, order ids, panel host names and which pages were
+opened when, so the operator reads the bundle before sending it.
 
 ## Uninstall
 Stops services, removes containers/units; data kept unless `--purge`; prints what remains. `--purge` deletes the

@@ -246,6 +246,43 @@ func TestConsumerDeadLettersAndMovesOn(t *testing.T) {
 	}
 }
 
+// strictSource fails an ack on an ended context, as the gRPC feed and the
+// database do.
+type strictSource struct{ fakeSource }
+
+func (s *strictSource) Ack(ctx context.Context, upTo int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.fakeSource.Ack(ctx, upTo)
+}
+
+// A shutdown during a batch must still ack the events already applied:
+// otherwise they come back after the restart and a customer is notified twice.
+func TestConsumerAcksAppliedEventsOnShutdown(t *testing.T) {
+	src := &strictSource{fakeSource{msgs: msgs(3)}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, _ := NewConsumer(ConsumerConfig{
+		Source: src,
+		Handle: func(ctx context.Context, m Message) error {
+			if m.EventID == "b" {
+				cancel() // the shutdown arrives while b is being applied
+				return nil
+			}
+			return ctx.Err()
+		},
+		DeadLetter: func(context.Context, Message, error) error { t.Fatal("unexpected dead letter"); return nil },
+	})
+	n, err := c.Step(ctx)
+	if n != 2 || src.acked != 2 {
+		t.Fatalf("handled=%d acked=%d err=%v; want a and b acked", n, src.acked, err)
+	}
+	if err == nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want c's cancellation", err)
+	}
+}
+
 func TestConsumerKeepsEventWhenDeadLetterFails(t *testing.T) {
 	src := &fakeSource{msgs: msgs(1)}
 	c, _ := NewConsumer(ConsumerConfig{

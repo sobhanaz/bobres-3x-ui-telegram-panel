@@ -63,6 +63,9 @@ type Stack struct {
 	Payments *paydomain.Service
 	// Usage is core's usage-sync worker; tests run it with SyncDue.
 	Usage *coredomain.UsageWorker
+	// Gates switch Postgres, the provisioner and core off and on, and lose
+	// the panel's replies (nil unless started WithGates).
+	Gates *Gates
 }
 
 // ZarinpalMerchant is the merchant id the stack's Zarinpal gateway uses.
@@ -70,7 +73,7 @@ const ZarinpalMerchant = "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b"
 
 // Start runs the backend until the test ends. ownerTelegramID becomes the
 // owner on first contact.
-func Start(t *testing.T, ownerTelegramID int64) *Stack {
+func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -81,8 +84,10 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 		}
 	}
 	reset(ctx, t, dsn)
+	gates := newGates(t, dsn, opts)
+	svcDSN := gates.dsn(t, dsn) // what the services connect with
 
-	ps, err := paystore.New(ctx, dsn)
+	ps, err := paystore.New(ctx, svcDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,20 +117,20 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vs, err := provstore.New(ctx, dsn, env)
+	vs, err := provstore.New(ctx, svcDSN, env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(vs.Close)
 	prov := provserver.New(vs, xui.AllowInsecureHTTP(), xui.AllowPrivateAddresses())
-	if _, err := prov.EnsureDefaultServer(ctx, panel.URL, PanelTok, SubBase, true); err != nil {
+	if _, err := prov.EnsureDefaultServer(ctx, gates.panel(t, panel.URL), PanelTok, SubBase, true); err != nil {
 		t.Fatal(err)
 	}
 	vgs := server(t, "core", CoreToken)
 	prov.Register(vgs)
-	provAddr := serve(t, vgs)
+	provAddr := gates.provisioner(t, serve(t, vgs))
 
-	cs, err := corestore.New(ctx, dsn)
+	cs, err := corestore.New(ctx, svcDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +157,7 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 	cgs := server(t, "bot", BotToken)
 	csrv.Register(cgs)
 	eventsv1.RegisterEventFeedServiceServer(cgs, eventbus.NewFeedServer(eventbus.NewFeed(cs.DB(), "outbox_core")))
-	coreConn := Dial(t, serve(t, cgs), BotToken)
+	coreConn := Dial(t, gates.core(t, serve(t, cgs)), BotToken)
 	return &Stack{
 		Core:     corev1.NewCoreServiceClient(coreConn),
 		Feed:     eventsv1.NewEventFeedServiceClient(coreConn),
@@ -160,6 +165,7 @@ func Start(t *testing.T, ownerTelegramID int64) *Stack {
 		Store:    cs,
 		Zarinpal: zp, PaySite: paySite, Payments: paySvc,
 		Usage: dom.NewUsageWorker(provClient, nil),
+		Gates: gates,
 	}
 }
 

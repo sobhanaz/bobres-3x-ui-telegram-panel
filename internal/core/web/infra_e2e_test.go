@@ -236,6 +236,28 @@ func TestServersEndToEnd(t *testing.T) {
 	}
 }
 
+// A server added switched off through the real provisioner is written
+// switched off by the insert itself: its row was never changed afterwards,
+// so it never took new services, even for a moment.
+func TestServerAddedSwitchedOffEndToEnd(t *testing.T) {
+	f, b, _, _ := salesFixture(t)
+	prov, panel, vs := realProvisioner(t)
+	f.api.cfg.Servers, f.api.cfg.Provisioner = prov, prov
+	ctx := context.Background()
+
+	code, out := b.do(http.MethodPost, "/api/v1/servers", map[string]any{"name": "Spare", "base_url": panel.URL,
+		"token": e2ePanelTok, "weight": 100, "enabled": false, "allow_private": true, "skip_check": false})
+	sv := item(out)
+	if code != http.StatusCreated || sv["enabled"] != false || sv["healthy"] != true {
+		t.Fatalf("add switched off: %d %v", code, out)
+	}
+	var enabled, untouched bool
+	if err := vs.DB().QueryRow(ctx, `SELECT enabled, updated_at = created_at FROM provisioner.xui_servers WHERE id = $1`,
+		sv["id"]).Scan(&enabled, &untouched); err != nil || enabled || !untouched {
+		t.Fatalf("row: enabled %v, never updated %v, %v", enabled, untouched, err)
+	}
+}
+
 // Gateways through the real payments service: the merchant id is saved
 // encrypted and comes back as a hint, the read-only test reaches the fake
 // Zarinpal, an open payment blocks a merchant change (409 with the count)

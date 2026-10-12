@@ -128,12 +128,19 @@ func (c *Consumer) Step(ctx context.Context) (int, error) {
 		done, handled = m.Seq, handled+1
 	}
 	if done > 0 {
-		if err := c.cfg.Source.Ack(ctx, done); err != nil {
+		// Acked even when ctx ended meanwhile (a shutdown): what was applied
+		// must not be applied again after the restart.
+		actx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ackTimeout)
+		defer cancel()
+		if err := c.cfg.Source.Ack(actx, done); err != nil {
 			return handled, errors.Join(stepErr, fmt.Errorf("ack: %w", err))
 		}
 	}
 	return handled, stepErr
 }
+
+// ackTimeout bounds an ack, which outlives a cancelled Step.
+const ackTimeout = 5 * time.Second
 
 // apply runs the handler; a nil return means the event is done (applied or
 // dead-lettered) and may be acknowledged.

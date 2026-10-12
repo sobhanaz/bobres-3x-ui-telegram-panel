@@ -1054,7 +1054,11 @@ type AddServerRequest struct {
 	AllowPrivate bool  `protobuf:"varint,5,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
 	Weight       int32 `protobuf:"varint,6,opt,name=weight,proto3" json:"weight,omitempty"` // 1..1000; 0 = 100
 	// Save without testing the connection first (the panel is down for now).
-	SkipCheck     bool `protobuf:"varint,7,opt,name=skip_check,json=skipCheck,proto3" json:"skip_check,omitempty"`
+	SkipCheck bool `protobuf:"varint,7,opt,name=skip_check,json=skipCheck,proto3" json:"skip_check,omitempty"`
+	// Whether the server takes new clients from the start. Unset means on, as
+	// for callers from before it existed; false saves it switched off, so it
+	// is never briefly on.
+	Enabled       *bool `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1134,6 +1138,13 @@ func (x *AddServerRequest) GetWeight() int32 {
 func (x *AddServerRequest) GetSkipCheck() bool {
 	if x != nil {
 		return x.SkipCheck
+	}
+	return false
+}
+
+func (x *AddServerRequest) GetEnabled() bool {
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
 	}
 	return false
 }
@@ -1931,7 +1942,7 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13ListInboundsRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"K\n" +
 	"\x14ListInboundsResponse\x123\n" +
-	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\xdc\x01\n" +
+	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\x87\x02\n" +
 	"\x10AddServerRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
@@ -1941,7 +1952,10 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\rallow_private\x18\x05 \x01(\bR\fallowPrivate\x12\x16\n" +
 	"\x06weight\x18\x06 \x01(\x05R\x06weight\x12\x1d\n" +
 	"\n" +
-	"skip_check\x18\a \x01(\bR\tskipCheck\"\x14\n" +
+	"skip_check\x18\a \x01(\bR\tskipCheck\x12\x1d\n" +
+	"\aenabled\x18\b \x01(\bH\x00R\aenabled\x88\x01\x01B\n" +
+	"\n" +
+	"\b_enabled\"\x14\n" +
 	"\x12ListServersRequest\"\xa6\x01\n" +
 	"\x13ListServersResponse\x123\n" +
 	"\aservers\x18\x01 \x03(\v2\x19.provisioner.v1.XUIServerR\aservers\x12,\n" +
@@ -2106,6 +2120,7 @@ func file_provisioner_v1_provisioner_proto_init() {
 	if File_provisioner_v1_provisioner_proto != nil {
 		return
 	}
+	file_provisioner_v1_provisioner_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

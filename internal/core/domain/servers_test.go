@@ -27,6 +27,7 @@ type fakeServers struct {
 	next                            int
 	listErr, failUpdate, failDelete error
 	added                           func() // runs once a server is added
+	ignoresEnabled                  bool   // an older provisioner: adds servers switched on
 }
 
 func (f *fakeServers) ListServers(context.Context) (*ServerList, error) {
@@ -53,7 +54,8 @@ func (f *fakeServers) AddServer(_ context.Context, in ServerInput) (*Server, err
 	}
 	f.next++
 	sv := Server{ID: fmt.Sprintf("00000000-0000-7000-8000-%012d", f.next), Name: in.Name, BaseURL: in.BaseURL,
-		SubBaseURL: in.SubBaseURL, Enabled: true, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: "dashboard", HasToken: true}
+		SubBaseURL: in.SubBaseURL, Enabled: in.Enabled || f.ignoresEnabled, AllowPrivate: in.AllowPrivate, Weight: in.Weight,
+		Managed: "dashboard", HasToken: true}
 	if f.tokens == nil {
 		f.tokens = map[string]string{}
 	}
@@ -240,7 +242,7 @@ func TestServerWritesAreAuditedWithoutTheToken(t *testing.T) {
 		t.Fatalf("a token reached the audit log: %s", all)
 	}
 
-	// A server added switched off is switched off at once.
+	// A server added switched off is saved switched off.
 	off, err := svc.AddServer(ctx, own, fs, ServerInput{Name: "Spare", BaseURL: "https://spare.example.com", Token: "t"})
 	if err != nil || off.Enabled {
 		t.Fatalf("added switched off: %+v %v", off, err)
@@ -320,45 +322,46 @@ func TestPrivateServersAreTheOwners(t *testing.T) {
 	}
 }
 
-// A server added switched off never takes new services unnoticed: when
-// switching it off fails it is taken out again, and when that fails too
-// staff are told it is on (and so is the audit). A cancelled request still
-// switches it off.
+// A server added switched off is saved off in one step, so it never takes
+// new services, even for a moment, and nothing done afterwards can fail and
+// leave it on. A cancelled request is still audited.
 func TestNewServerSwitchedOffNeverStaysOnSilently(t *testing.T) {
 	svc, s := testService(t)
 	ctx := context.Background()
 	own := owner(t, svc)
-	busy := fmt.Errorf("provisioner.UpdateServer: %w", status.Error(codes.Unavailable, "busy"))
-	fs := &fakeServers{failUpdate: busy}
+	// Nothing switches the server off afterwards or takes it out again.
+	busy := fmt.Errorf("provisioner: %w", status.Error(codes.Unavailable, "busy"))
+	fs := &fakeServers{failUpdate: busy, failDelete: busy}
 	in := ServerInput{Name: "Spare", BaseURL: "https://spare.example.com", Token: "t"}
 
-	if sv, err := svc.AddServer(ctx, own, fs, in); !errors.Is(err, ErrState) || !strings.Contains(err.Error(), "not added") || sv != nil {
-		t.Fatalf("switching off failed: %+v %v", sv, err)
+	sv, err := svc.AddServer(ctx, own, fs, in)
+	if err != nil || sv.Enabled || len(fs.servers) != 1 || fs.servers[0].Enabled {
+		t.Fatalf("added switched off: %+v %v %+v", sv, err, fs.servers)
 	}
-	if len(fs.servers) != 0 || auditCount(t, s, "server.add") != 0 {
-		t.Fatalf("left behind: %+v, %d audit entries", fs.servers, auditCount(t, s, "server.add"))
+	if e := auditJSON(t, s, "server.add"); len(e) != 1 || !strings.Contains(e[0], `"enabled": false`) {
+		t.Fatalf("server.add: %v", e)
 	}
 
-	fs.failDelete = status.Error(codes.FailedPrecondition, "the server still has 1 clients: delete or move them first")
+	// An older provisioner (during an update) saves it switched on anyway:
+	// staff are told, and the audit says it is on.
+	fs.ignoresEnabled = true
+	in.Name = "Spare 2"
 	if sv, err := svc.AddServer(ctx, own, fs, in); !errors.Is(err, ErrState) || !strings.Contains(err.Error(), "takes new services") || sv != nil {
-		t.Fatalf("removing it failed too: %+v %v", sv, err)
+		t.Fatalf("older provisioner: %+v %v", sv, err)
 	}
-	if len(fs.servers) != 1 || !fs.servers[0].Enabled {
-		t.Fatalf("servers: %+v", fs.servers)
-	}
-	if e := auditJSON(t, s, "server.add"); len(e) != 1 || !strings.Contains(e[0], `"enabled": true`) {
+	if e := auditJSON(t, s, "server.add"); len(e) != 2 || !strings.Contains(e[1], `"enabled": true`) {
 		t.Fatalf("the audit hides that it is on: %v", e)
 	}
 
-	fs.failUpdate, fs.failDelete = nil, nil
+	fs.ignoresEnabled = false
 	cctx, cancel := context.WithCancel(ctx)
 	fs.added = cancel // the browser goes away while the panel is tested
-	in.Name = "Spare 2"
-	sv, err := svc.AddServer(cctx, own, fs, in)
-	if err != nil || sv.Enabled || fs.servers[1].Enabled {
+	in.Name = "Spare 3"
+	sv, err = svc.AddServer(cctx, own, fs, in)
+	if err != nil || sv.Enabled || fs.servers[2].Enabled {
 		t.Fatalf("cancelled: %+v %v", sv, err)
 	}
-	if auditCount(t, s, "server.add") != 2 {
+	if auditCount(t, s, "server.add") != 3 {
 		t.Fatal("the cancelled add was not audited")
 	}
 }

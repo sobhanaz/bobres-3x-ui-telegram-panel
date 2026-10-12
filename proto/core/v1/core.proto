@@ -533,8 +533,22 @@ message AdminStats {
   int64 active_subscriptions = 3;
   int64 pending_payments = 4;
   int64 provision_failed_orders = 5;
+  // Every server taking new services answers (servers_* below); the detail
+  // says why not, in English.
   bool panel_healthy = 6;
   string panel_detail = 7;
+  // The 3x-ui servers from the provisioner's list. servers_known is false
+  // when the provisioner did not answer. Only the servers taking new
+  // services count (the others are not checked): servers_healthy of
+  // servers_total answered their last health check or are not checked yet,
+  // and servers_down names the others.
+  bool servers_known = 8;
+  int32 servers_total = 9;
+  int32 servers_healthy = 10;
+  repeated string servers_down = 11;
+  // Every server of the list, the switched-off ones included: 0 means no
+  // 3x-ui server was added yet.
+  int32 servers_listed = 12;
 }
 
 message AdminListPendingPaymentsRequest {

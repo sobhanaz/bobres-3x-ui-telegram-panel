@@ -17,7 +17,6 @@ import (
 // notImplemented lists commands from docs/06-installer.md that land in later phases.
 var notImplemented = map[string]string{
 	"config": "phase 1", "secrets": "phase 7",
-	"support-bundle": "phase 7",
 }
 
 // stdin feeds interactive prompts (replaced in tests).
@@ -70,6 +69,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return newUpdater(newOps(stdin, out, errOut)).updateCmd(args[1:])
 	case "rollback":
 		return newUpdater(newOps(stdin, out, errOut)).rollbackCmd(args[1:])
+	case "support-bundle":
+		return newBundler(newOps(stdin, out, errOut)).supportBundleCmd(args[1:])
 	default:
 		if phase, ok := notImplemented[cmd]; ok {
 			fmt.Fprintf(errOut, "bobres %s: not implemented yet (planned for %s)\n", cmd, phase)
@@ -104,13 +105,15 @@ Available now:
   update     Update to the latest release (backup first, automatic rollback); --check only looks
   rollback   Undo the last update (previous version, and the database from before it)
   doctor     Check this server (RAM, disk, ports, Docker, DNS)
+  support-bundle
+             Write a redacted tar.gz for support into <dir> (versions, status, logs; no secrets)
   version    Print the version
 
 Commands that work on an install take --dir (default: $BOBRES_DIR, else /opt/bobres).
 
 Coming later:
   config                                       (phase 1)
-  secrets support-bundle                       (phase 7)
+  secrets                                      (phase 7)
 `)
 }
 
