@@ -413,9 +413,9 @@ describe('license', () => {
     expect(tokenProblem('a'.repeat(TOKEN_MAX) + '.b')).toBe('long')
   })
   it('takes a typed key without the breaks, digits and dashes a chat changes', () => {
-    expect(keyOf('  BOBRES-7K2Q-\n 9XWM-۴TPA\r\n')).toBe('BOBRES-AAAA-BBBB-CCCC')
-    expect(keyOf('BOBRES\u20137K2Q\u20149XWM\u22124TPA')).toBe('BOBRES-AAAA-BBBB-CCCC')
-    expect(keyProblem('BOBRES-AAAA-BBBB-CCCC')).toBe('')
+    expect(keyOf('  BOBRES-7K2Q-\n 9XWM-۴TPA\r\n')).toBe('BOBRES-7K2Q-9XWM-4TPA')
+    expect(keyOf('BOBRES\u20137K2Q\u20149XWM\u22124TPA')).toBe('BOBRES-7K2Q-9XWM-4TPA')
+    expect(keyProblem('BOBRES-7K2Q-9XWM-4TPA')).toBe('')
     expect(keyProblem('bobres-7k2q-9xwm-4tpa')).toBe('')
     expect(keyProblem(' BOBRES-7K2Q\n-9XWM ')).toBe('')
     expect(keyProblem('')).toBe('empty')
@@ -1413,7 +1413,7 @@ describe('system page', () => {
   })
 
   it('lets the owner activate with a license key and a reason', async () => {
-    const key = 'BOBRES-AAAA-BBBB-CCCC'
+    const key = 'BOBRES-AAAA-BBBB-CCC4'
     let activated = false
     const t0 = nowSec()
     const renewed = (): LicenseInfo => {
@@ -1453,7 +1453,7 @@ describe('system page', () => {
     type(input, 'lic_7Q2')
     await vi.waitFor(() => expect(card.querySelector('.key-problem')?.textContent).toBe(text('license.activate.problem.format')))
     // typed with a break and a Persian digit: sent as one key
-    type(input, ' BOBRES-7K2Q-9XWM-\n۴TPA ')
+    type(input, ' BOBRES-AAAA-BBBB-\nCCC۴ ')
     await vi.waitFor(() => expect(activate().disabled).toBe(false))
     expect(card.querySelector('.key-problem')).toBeNull()
     activate().click()
