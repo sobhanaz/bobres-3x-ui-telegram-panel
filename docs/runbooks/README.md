@@ -16,6 +16,29 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Restore a backup](restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
 
+## System alerts in Telegram
+
+Core checks the store every minute and the bot messages the staff who get alerts (the owner, or every owner and admin
+with **Settings → Staff notifications → Recipients**; never support staff) when something goes wrong, again when it is
+fixed, and about a problem still open after 6 hours, then once a day. A problem must be seen twice in a row (a minute
+apart), so a service restarting during an update is not announced. It is called fixed only once it has passed for 5
+minutes, and a problem back within 30 minutes of its fix is announced only if it still fails when those 30 minutes are
+over, so a check that comes and goes sends one alert, not one every few minutes. The open problems also show on the dashboard's
+**System** page, **Health** tab. **Settings → Staff notifications → System problems** turns the messages off (the
+checks and the System page go on). The bot cannot send alerts about itself while it is down: they arrive, with the
+"Fixed" message, once it is back.
+
+| Alert | Runbook |
+|---|---|
+| A service is down or not ready | First look (below), then the runbook of that service's problem |
+| A 3x-ui server does not answer | [3x-ui down](xui-down.md) |
+| Zarinpal payments are failing, or one has been open for over 3 hours | [Payment stuck](payment-stuck.md) |
+| The last backup failed, or no new backup for over 26 hours | [Backups not arriving](backups-not-arriving.md) |
+| The disk is almost full (under 2 GB) | [Disk full](disk-full.md) |
+| Paid orders could not be delivered in the last hour | [Provisioning backlog](provisioning-backlog.md) |
+| The bot is behind on its messages (over 10 minutes) | `bobres logs --tail 200 bot`; [Bot token revoked](bot-token-revoked.md) if Telegram refuses the token |
+| The license expires soon, is in its grace period or has expired | [License](license.md) |
+
 ## Before you start
 
 All commands run on the server as root. The install is in `/opt/bobres` unless you installed it elsewhere: then add

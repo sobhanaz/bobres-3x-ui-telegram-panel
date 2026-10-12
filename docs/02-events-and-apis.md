@@ -27,6 +27,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | subscription.provisioned.v1 / extended.v1 / reminder.v1 `label` | core | notifier | The name a reseller gave the service (empty for customers), for the bot's texts |
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
+| system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes are numbers, free is bytes, date is unix seconds, the rest names), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
 
 ## Purchase saga (happy path)
 bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pays -> `payment.succeeded`
