@@ -20,6 +20,9 @@ const (
 	testCoreTok   = "core-token-0123456789abcdef0123456789"  //gitleaks:allow test fixture
 	testBotTok    = "bot-token-0123456789abcdef01234567890"  //gitleaks:allow test fixture
 	testBackupTok = "backup-token-0123456789abcdef012345678" //gitleaks:allow test fixture
+	// What core presents to the bot and to provisioner.
+	testCoreBotTok  = "core-to-bot-token-" + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	testCoreProvTok = "core-to-provisioner-token-" + "pppppppppppppppppppppppppppppppp"
 )
 
 // Each setting the bot reads from .env reaches it through the compose file
@@ -39,9 +42,9 @@ func TestComposeGivesTheBotItsSettings(t *testing.T) {
 		t.Errorf("the bot's license server is %q: BOBRES_LICENSE_SERVER from .env does not reach it", c.LicenseServer)
 	}
 	if c.UpdateChannel != "beta" || c.TelegramAPIURL != "http://host.docker.internal:8081" || c.AdminTelegramID != 4242 ||
-		c.PeerCoreToken != testCoreTok || c.PeerBackupToken != testBackupTok {
+		c.PeerCoreToken != testCoreBotTok || c.PeerBackupToken != testBackupTok {
 		t.Errorf("the bot's settings from .env: channel %q, API %q, owner %d, peer tokens set %v %v", c.UpdateChannel,
-			c.TelegramAPIURL, c.AdminTelegramID, c.PeerCoreToken == testCoreTok, c.PeerBackupToken == testBackupTok)
+			c.TelegramAPIURL, c.AdminTelegramID, c.PeerCoreToken == testCoreBotTok, c.PeerBackupToken == testBackupTok)
 	}
 
 	unset := installEnv(nil)
@@ -67,17 +70,22 @@ func TestComposeGivesTheBotItsSettings(t *testing.T) {
 }
 
 // installEnv is an install's .env: the template's lines with test secrets in
-// place of its CHANGE_ME values, then extra.
+// place of its CHANGE_ME values (each different, as bobres install makes
+// them), then extra.
 func installEnv(extra map[string]string) map[string]string {
 	env := map[string]string{}
 	for _, line := range strings.Split(string(EnvExample), "\n") {
 		line = strings.TrimSpace(line)
 		if k, v, ok := strings.Cut(line, "="); ok && line[0] != '#' {
+			if strings.Contains(v, "CHANGE_ME") {
+				v = "test-" + strings.ToLower(strings.ReplaceAll(k, "_", "-")) + "-" + strings.Repeat("x", 32)
+			}
 			env[k] = v
 		}
 	}
 	for k, v := range map[string]string{
 		"BOBRES_TOKEN_CORE": testCoreTok, "BOBRES_TOKEN_BOT": testBotTok, "BOBRES_TOKEN_BACKUP": testBackupTok,
+		"BOBRES_TOKEN_CORE_BOT": testCoreBotTok, "BOBRES_TOKEN_CORE_PROVISIONER": testCoreProvTok,
 		"BOBRES_TELEGRAM_BOT_TOKEN": "123:abc", "BOBRES_ADMIN_TELEGRAM_ID": "4242", "BOBRES_REDIS_URL": "redis://redis:6379/0",
 	} {
 		env[k] = v

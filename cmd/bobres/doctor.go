@@ -30,9 +30,14 @@ type Result struct {
 	Detail string
 }
 
+// The RAM thresholds are in MiB of MemTotal, which is a little under the
+// size a server is sold with (the kernel and firmware keep some, and a "GB"
+// may be 1000 MB): a "1 GB" VPS reports roughly 920 to 1000, a "2 GB" one
+// roughly 1850 to 2000. So a 1 GB server (the supported minimum) passes with
+// a warning, and a 2 GB one (recommended) passes.
 const (
-	minRAMMB    = 1024
-	warnRAMMB   = 2048
+	minRAMMB    = 900  // under this, not even a 1 GB server
+	warnRAMMB   = 1800 // under this, smaller than a 2 GB server
 	minDiskGB   = 10
 	supportedOS = "linux"
 )
@@ -52,7 +57,7 @@ func checkRAM(mb int) Result {
 	case mb <= 0:
 		return Result{"RAM", Skip, "could not read memory size"}
 	case mb < minRAMMB:
-		return Result{"RAM", Fail, fmt.Sprintf("%d MB, need at least %d MB", mb, minRAMMB)}
+		return Result{"RAM", Fail, fmt.Sprintf("%d MB, need a server with at least 1 GB (%d MB usable)", mb, minRAMMB)}
 	case mb < warnRAMMB:
 		return Result{"RAM", Warn, fmt.Sprintf("%d MB works but 2 GB+ is recommended", mb)}
 	default:

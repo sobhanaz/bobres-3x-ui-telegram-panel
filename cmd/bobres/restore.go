@@ -579,7 +579,7 @@ func applyMasterKeys(dir string, archive map[string]string, keep bool) ([]string
 	if len(changed) == 0 || keep {
 		return changed, nil
 	}
-	return changed, writeAtomic(envPath, renderEnv(env), 0o600)
+	return changed, writeEnv(envPath, env)
 }
 
 // reportKeys says which master keys differed (names only).

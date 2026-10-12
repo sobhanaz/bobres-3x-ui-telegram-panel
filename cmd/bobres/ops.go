@@ -613,8 +613,11 @@ func licenseServer(flagValue string, env map[string]string, dir string) (string,
 		return "", err
 	}
 	if url == "" {
-		return "", fmt.Errorf("no license server: set BOBRES_LICENSE_SERVER=https://… in %s, or pass --server https://…",
-			filepath.Join(dir, ".env"))
+		set := "sudo bobres config set BOBRES_LICENSE_SERVER https://…"
+		if dir != defaultDir() {
+			set += " --dir " + dir
+		}
+		return "", fmt.Errorf("no license server: set the vendor's address with  %s  (or pass --server https://…)", set)
 	}
 	return url, nil
 }

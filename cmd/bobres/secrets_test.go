@@ -85,7 +85,10 @@ func TestRotateServiceTokens(t *testing.T) {
 	}
 	env, _ := readEnvFile(t, dir)
 	seen := map[string]bool{}
-	for _, k := range []string{"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP"} {
+	if len(serviceTokens) != 6 {
+		t.Fatalf("service tokens: %v", serviceTokens)
+	}
+	for _, k := range serviceTokens {
 		if env[k] == before[k] || !strings.HasPrefix(env[k], "new") || !strings.HasSuffix(env[k], "-32") || seen[env[k]] {
 			t.Errorf("%s: %q", k, env[k])
 		}

@@ -150,7 +150,7 @@ func TestLicenseActivateRefusals(t *testing.T) {
 		"two keys":         {[]string{"activate", "a", "b", "--dir", dir, "--server", srv.URL}, "", "usage:"},
 		"a key with space": {[]string{"activate", "BOBRES-1 2", "--dir", dir, "--server", srv.URL}, "", "usage:"},
 		"no install":       {[]string{"activate", cliKey, "--dir", t.TempDir(), "--server", srv.URL}, "", "no install found"},
-		"no server":        {[]string{"activate", cliKey, "--dir", dir}, "", "no license server: set BOBRES_LICENSE_SERVER"},
+		"no server":        {[]string{"activate", cliKey, "--dir", dir}, "", "no license server: set the vendor's address with  sudo bobres config set BOBRES_LICENSE_SERVER https://… --dir " + dir},
 		"a plain server":   {[]string{"activate", cliKey, "--dir", dir, "--server", "http://license.example.com"}, "", "https URL"},
 		"a bad flag":       {[]string{"activate", cliKey, "--dir", dir, "--nope"}, "", "flag provided but not defined"},
 	} {
@@ -162,6 +162,11 @@ func TestLicenseActivateRefusals(t *testing.T) {
 	}
 	if len(v.sent) != 0 {
 		t.Fatalf("wrong use reached the server: %v", v.sent)
+	}
+	// In the default install directory the command needs no --dir.
+	if _, err := licenseServer("", map[string]string{}, defaultDir()); err == nil ||
+		!strings.HasSuffix(err.Error(), "sudo bobres config set BOBRES_LICENSE_SERVER https://…  (or pass --server https://…)") {
+		t.Fatalf("default dir: %v", err)
 	}
 
 	// Core cannot say who it is: the server is not asked.

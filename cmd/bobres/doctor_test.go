@@ -26,10 +26,38 @@ func TestCheckRAMThresholds(t *testing.T) {
 	cases := []struct {
 		mb   int
 		want Status
-	}{{0, Skip}, {512, Fail}, {1023, Fail}, {1024, Warn}, {2047, Warn}, {2048, Pass}, {8192, Pass}}
+	}{
+		{0, Skip}, {512, Fail}, {899, Fail},
+		// A "1 GB" server reports a little less than 1024 MiB: supported, with a warning.
+		{900, Warn}, {961, Warn}, {1024, Warn}, {1799, Warn},
+		// A "2 GB" server reports a little less than 2048 MiB: recommended, no warning.
+		{1800, Pass}, {1950, Pass}, {2048, Pass}, {8192, Pass},
+	}
 	for _, c := range cases {
 		if got := checkRAM(c.mb).Status; got != c.want {
 			t.Errorf("%d MB: got %s want %s", c.mb, got, c.want)
+		}
+	}
+	if d := checkRAM(512).Detail; !strings.Contains(d, "at least 1 GB") {
+		t.Errorf("refusal: %q", d)
+	}
+	if d := checkRAM(961).Detail; !strings.Contains(d, "2 GB+ is recommended") {
+		t.Errorf("warning: %q", d)
+	}
+}
+
+// The installer's preflight refuses only what doctor fails: a 1 GB server
+// passes it with the RAM warning, a smaller one is refused.
+func TestPreflightOnA1GBServer(t *testing.T) {
+	for _, c := range []struct {
+		mb   int
+		pass bool
+	}{{961, true}, {1990, true}, {600, false}} {
+		ins, _, errOut := testInstaller("", secrets, nil)
+		ins.preflight = func(string) []Result { return []Result{{"OS/arch", Pass, "linux/amd64"}, checkRAM(c.mb)} }
+		code := ins.install(append(baseArgs(t.TempDir()), "--no-start"))
+		if (code == 0) != c.pass || (!c.pass && !strings.Contains(errOut.String(), "System checks failed")) {
+			t.Errorf("%d MB: exit %d %s", c.mb, code, errOut)
 		}
 	}
 }

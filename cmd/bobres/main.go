@@ -32,6 +32,9 @@ func run(args []string, out, errOut io.Writer) int {
 	}
 	switch cmd := args[0]; cmd {
 	case "version", "--version":
+		if len(args) > 1 && args[1] == "--images" {
+			return versionImages(out, errOut)
+		}
 		fmt.Fprintln(out, "bobres", version.Version)
 		return 0
 	case "menu":
@@ -108,7 +111,7 @@ Available now:
   doctor     Check this server (RAM, disk, ports, Docker, DNS, hardening)
   support-bundle
              Write a redacted tar.gz for support into <dir> (versions, status, logs; no secrets)
-  version    Print the version
+  version    Print the version (--images: the image digests this release pins)
 
 Commands that work on an install take --dir (default: $BOBRES_DIR, else /opt/bobres).
 `)

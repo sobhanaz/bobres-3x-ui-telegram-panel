@@ -132,6 +132,25 @@ chan() {
 chan "" stable; chan stable stable; chan " Beta " beta; chan BETA beta
 DESC="channel nightly refused"; expect_fail release_channel nightly
 
+# The license: nothing reads a BOBRES_LICENSE variable (no Go code, not this script), so
+# neither the help nor the --license refusal may send the operator there; both name what does
+# install one once the store is up.
+help=$( (main --help) 2>&1 )
+case $help in
+  *BOBRES_LICENSE*) bad "help sends the license to BOBRES_LICENSE, which nothing reads" ;;
+  *"bobres license activate"*"bobres license import"*"System > License"*) ok "help says how a license is installed" ;;
+  *) bad "help says how a license is installed: $help" ;;
+esac
+for arg in --license --license=BOBRES-AAAA-BBBB-CCCC; do
+  why=$( (main "$arg") 2>&1 ); code=$?
+  case $why in
+    *BOBRES_LICENSE*) bad "$arg refusal sends the license to BOBRES_LICENSE" ;;
+    *"sudo bobres license activate"*"System > License"*) [ "$code" -eq 1 ] && ok "$arg refused with the way to activate" ||
+      bad "$arg refused with exit $code" ;;
+    *) bad "$arg refused with the way to activate: $why" ;;
+  esac
+done
+
 RELEASE_ROOTS=("$(cat "$T/rel/rel-a.pub.pem")")
 rm -f "$STATE"/*
 DESC="unknown root rejected"; expect_fail verify_release "$T/good" "$STATE"
