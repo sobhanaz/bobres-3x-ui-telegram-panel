@@ -372,3 +372,15 @@ func TestChecker(t *testing.T) {
 		}
 	})
 }
+
+func TestDownloadURL(t *testing.T) {
+	const want = "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/download/v1.4.0"
+	for _, v := range []string{"1.4.0", "v1.4.0", " 1.4.0 "} {
+		if got := DownloadURL(v); got != want {
+			t.Errorf("DownloadURL(%q) = %q", v, got)
+		}
+	}
+	if DefaultBaseURL != "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/latest/download" {
+		t.Fatalf("DefaultBaseURL = %q", DefaultBaseURL)
+	}
+}

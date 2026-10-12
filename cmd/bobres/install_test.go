@@ -572,3 +572,26 @@ func TestSummaryWithoutPanel(t *testing.T) {
 		t.Fatalf("summary with a panel: %s", out)
 	}
 }
+
+// bobres update runs the new CLI's install with --quiet --yes: no summary,
+// and never a prompt (a value still missing is an error, not a question).
+func TestInstallQuietYes(t *testing.T) {
+	dir := t.TempDir()
+	answers := "panel.example.com\n4242\n" + goodBotToken + "\n\n"
+	ins, _, errOut := testInstaller(answers, nil, nil)
+	if code := ins.install([]string{"--dir", dir, "--no-start", "--yes"}); code != 2 || !strings.Contains(errOut.String(), "BOBRES_DOMAIN is required") {
+		t.Fatalf("--yes asked instead of failing: %d %s", code, errOut)
+	}
+
+	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
+	ins, out, errOut := testInstaller("", secrets, &fakeDocker{health: []string{healthy}})
+	if code := ins.install(append(baseArgs(dir), "--quiet", "--yes", "--version", "1.2.3")); code != 0 {
+		t.Fatalf("quiet install: %d %s", code, errOut)
+	}
+	if strings.Contains(out.String(), "/plan_add") || !strings.Contains(out.String(), "All services are healthy") {
+		t.Fatalf("--quiet still printed the first steps:\n%s", out)
+	}
+	if env, _, _ := readEnv(filepath.Join(dir, ".env")); env["BOBRES_VERSION"] != "1.2.3" {
+		t.Fatalf("version: %q", env["BOBRES_VERSION"])
+	}
+}

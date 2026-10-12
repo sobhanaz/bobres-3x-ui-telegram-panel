@@ -96,8 +96,8 @@ func TestRunDispatch(t *testing.T) {
 	}
 	out.Reset()
 	errOut.Reset()
-	if code := run([]string{"update"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "not implemented") {
-		t.Fatalf("update: %d %q", code, errOut.String())
+	if code := run([]string{"secrets"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "not implemented") {
+		t.Fatalf("secrets: %d %q", code, errOut.String())
 	}
 	errOut.Reset()
 	if code := run([]string{"bogus"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "unknown command") {

@@ -8,13 +8,23 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
+// releasesURL is this repository's GitHub releases.
+const releasesURL = "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases"
+
 // DefaultBaseURL is where the latest (non-pre-release) GitHub release's files
 // are, as in install/install.sh.
-const DefaultBaseURL = "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/latest/download"
+const DefaultBaseURL = releasesURL + "/latest/download"
+
+// DownloadURL is where release v's files are (its tag is vX.Y.Z), as
+// DefaultBaseURL is for the latest one.
+func DownloadURL(v string) string {
+	return releasesURL + "/download/v" + strings.TrimPrefix(strings.TrimSpace(v), "v")
+}
 
 // Errors a Status reports (Detail says more).
 const (

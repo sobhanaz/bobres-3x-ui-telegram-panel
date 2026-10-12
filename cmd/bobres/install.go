@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/deploy"
@@ -141,8 +142,16 @@ func (ins *installer) install(args []string) int {
 	noStart := fs.Bool("no-start", false, "write the files but do not start the stack")
 	offline := fs.Bool("offline", false, "skip network checks (bot token)")
 	skipChecks := fs.Bool("skip-checks", false, "skip the system checks")
+	quiet := fs.Bool("quiet", false, "leave out the first-steps summary (bobres update runs install this way)")
+	yes := fs.Bool("yes", false, "never ask: a value still missing is an error (bobres update runs install this way)")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *quiet {
+		ins.quiet = true
+	}
+	if *yes {
+		ins.in, ins.readHide = bufio.NewReader(strings.NewReader("")), nil
 	}
 	ctx := context.Background()
 
@@ -759,26 +768,62 @@ func writeFiles(dir string, env map[string]string) error {
 // backupUID owns the backups directory: the backup image's user.
 const backupUID = 65532
 
-// writeAtomic writes to a temp file in the same directory, then renames it.
+// writeAtomic writes to a temp file in the same directory, syncs it, renames
+// it, then syncs the directory: after a power cut the file is either the old
+// one or the new one, never empty (.env holds the backup key).
 func writeAtomic(path string, data []byte, mode os.FileMode) error {
+	return writeAtomicAs(path, data, mode, -1)
+}
+
+// writeAtomicAs is writeAtomic giving the file to uid (-1: kept) by its open
+// descriptor, before the rename: never by path, in a directory another user
+// controls, where the path could be swapped for a link.
+func writeAtomicAs(path string, data []byte, mode os.FileMode, uid int) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	defer os.Remove(tmp.Name()) //nolint:errcheck // gone after a successful rename
-	if err := tmp.Chmod(mode); err != nil {
+	fail := func(err error) error {
 		_ = tmp.Close()
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+	if err := tmp.Chmod(mode); err != nil {
+		return fail(err)
+	}
+	if uid >= 0 {
+		if err := tmp.Chown(uid, uid); err != nil {
+			return fail(err)
+		}
+	}
 	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write %s: %w", path, err)
+		return fail(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(err)
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := syncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+// syncDir flushes a directory's entries (a rename into it) to disk. A file
+// system that cannot sync a directory is not an error.
+func syncDir(dir string) error {
+	d, err := os.Open(dir) //nolint:gosec // a directory this CLI writes in
+	if err != nil {
+		return err
+	}
+	defer d.Close() //nolint:errcheck // read-only
+	if err := d.Sync(); err != nil && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, errors.ErrUnsupported) {
+		return fmt.Errorf("sync %s: %w", dir, err)
 	}
 	return nil
 }
