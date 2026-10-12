@@ -14,9 +14,11 @@ import {
   alertTextKey,
   backupSent,
   backupsState,
+  channelOf,
   checkList,
   fills,
   INSTALL_COMMAND,
+  issuedDay,
   logAttrs,
   logLevel,
   logsReason,
@@ -40,11 +42,20 @@ import {
   entitlementRows,
   graceEndsAt,
   isValid,
+  KEY_MAX,
+  KEY_REASONS,
+  keyOf,
+  keyProblem,
+  keyRefusal,
+  licenseEnds,
   limitState,
   normalizeDomain,
   outsideLicense,
   poweredBy,
   reasonKey,
+  renews,
+  SOURCES,
+  sourceKey,
   stateOf,
   timeLeft,
   TOKEN_MAX,
@@ -231,6 +242,46 @@ describe('update check', () => {
     expect(updateDetail(null, 'unsupported')).toBe('')
     expect(UPDATE_COMMAND).toBe('sudo bobres update')
   })
+  it('flags a newer release the license does not cover', () => {
+    expect(updateState(upd({ covered: false }))).toBe('not_covered')
+    // read before a later check failed: still not covered
+    expect(updateState(upd({ covered: false, error: 'unreachable' }))).toBe('not_covered')
+    expect(updateState(upd({ covered: true }))).toBe('newer')
+    // no valid license to ask, or an older core: installable
+    expect(updateState(upd({ covered: null }))).toBe('newer')
+    expect(updateState(upd())).toBe('newer')
+    // nothing newer: nothing to cover
+    expect(updateState(upd({ latest: '1.5.0', newer: false, covered: false }))).toBe('current')
+    for (const lang of [fa, en]) {
+      expect(lang.system.updates.state.not_covered).toBeTruthy()
+      expect(lang.system.updates.not_covered).toContain('{version}')
+      expect(lang.system.updates.not_covered_hint).toBeTruthy()
+    }
+  })
+  it('reads the day the latest release was signed', () => {
+    expect(issuedDay(upd({ issued: '2027-03-01T10:04Z' }))).toBe('2027-03-01')
+    expect(issuedDay(upd({ issued: ' 2027-03-01T23:59Z ' }))).toBe('2027-03-01')
+    // not said, or not the header's form
+    expect(issuedDay(upd())).toBe('')
+    expect(issuedDay(upd({ issued: '' }))).toBe('')
+    expect(issuedDay(upd({ issued: 'yesterday' }))).toBe('')
+    expect(issuedDay(upd({ issued: '2027-03-01' }))).toBe('')
+    expect(issuedDay(null)).toBe('')
+  })
+  it('reads the channel this install follows', () => {
+    expect(channelOf(upd({ channel: 'stable' }))).toBe('stable')
+    expect(channelOf(upd({ channel: ' Beta ' }))).toBe('beta')
+    // the bot does not say, or says something else
+    expect(channelOf(upd({ channel: '' }))).toBeNull()
+    expect(channelOf(upd({ channel: 'nightly' }))).toBeNull()
+    expect(channelOf(upd())).toBeNull()
+    expect(channelOf(null)).toBeNull()
+    expect(channelOf(undefined)).toBeNull()
+    for (const lang of [fa, en]) {
+      expect(lang.system.updates.channel_name.stable).toBeTruthy()
+      expect(lang.system.updates.channel_name.beta).toBeTruthy()
+    }
+  })
 })
 
 describe('license', () => {
@@ -360,6 +411,81 @@ describe('license', () => {
     expect(tokenProblem('abc+/=.sig')).toBe('format')
     expect(tokenProblem('.sig')).toBe('format')
     expect(tokenProblem('a'.repeat(TOKEN_MAX) + '.b')).toBe('long')
+  })
+  it('takes a typed key without the breaks, digits and dashes a chat changes', () => {
+    expect(keyOf('  BOBRES-7K2Q-\n 9XWM-۴TPA\r\n')).toBe('BOBRES-7K2Q-9XWM-4TPA')
+    expect(keyOf('BOBRES\u20137K2Q\u20149XWM\u22124TPA')).toBe('BOBRES-7K2Q-9XWM-4TPA')
+    expect(keyProblem('BOBRES-7K2Q-9XWM-4TPA')).toBe('')
+    expect(keyProblem('bobres-7k2q-9xwm-4tpa')).toBe('')
+    expect(keyProblem(' BOBRES-7K2Q\n-9XWM ')).toBe('')
+    expect(keyProblem('')).toBe('empty')
+    expect(keyProblem(' \n ')).toBe('empty')
+    // a token belongs in the token box
+    expect(keyProblem('eyJ2IjoxfQ.c2ln')).toBe('token')
+    expect(keyProblem('BOBRES-' + 'A'.repeat(KEY_MAX))).toBe('long')
+    // the license id, which shows on this page, is not the key
+    expect(keyProblem('lic_7Q2')).toBe('format')
+    expect(keyProblem('BOBRES')).toBe('format')
+    expect(keyProblem('BOBRES-')).toBe('format')
+    expect(keyProblem('BOBRES--7K2Q')).toBe('format')
+    expect(keyProblem('LICENSE-7K2Q-9XWM')).toBe('format')
+    expect(keyProblem('BOBRES-7K2Q_9XWM')).toBe('format')
+    for (const lang of [fa, en]) {
+      for (const p of ['token', 'long', 'format']) expect((lang.license.activate.problem as Record<string, string>)[p]).toBeTruthy()
+    }
+  })
+  it('explains why a key was refused, and a token the license server answered', () => {
+    for (const lang of [fa, en]) {
+      for (const r of [...KEY_REASONS, 'other']) expect((lang.license.activate.reason as Record<string, string>)[r]).toBeTruthy()
+    }
+    const no = (status: number, data: Record<string, unknown>, message = 'license server: no') => keyRefusal({ status, data, message })
+    // the license server's refusal, as core passes it on
+    expect(no(400, { error: 'refused', field: 'key', code: 'invalid_key' })).toEqual({ reason: 'license.activate.reason.invalid_key', detail: '' })
+    expect(no(400, { error: 'refused', field: 'key', code: 'revoked' })).toEqual({ reason: 'license.activate.reason.revoked', detail: '' })
+    // with its words when they carry a date
+    const moved = 'license server: this license key has moved to another install 3 times in the last year (the most allowed); the next move is possible on 2027-03-01, or ask the vendor'
+    expect(no(400, { error: 'refused', field: 'key', code: 'reactivation_limit' }, moved)).toEqual({ reason: 'license.activate.reason.reactivation_limit', detail: moved })
+    expect(no(400, { error: 'refused', field: 'key', code: 'expired' }, 'license server: this license ended on 2026-09-30; renew it with the vendor'))
+      .toEqual({ reason: 'license.activate.reason.expired', detail: 'license server: this license ended on 2026-09-30; renew it with the vendor' })
+    // a code the page has no sentence for, and core's own refusal of the typed key: core's words
+    expect(no(400, { error: 'refused', field: 'key', code: 'invalid' }, 'license server: the license key is not in the BOBRES-XXXX-XXXX-... form'))
+      .toEqual({ reason: 'license.activate.reason.other', detail: 'license server: the license key is not in the BOBRES-XXXX-XXXX-... form' })
+    expect(no(400, { error: 'invalid', field: 'key' }, 'this is too long for a license key')).toEqual({ reason: 'license.activate.reason.other', detail: 'this is too long for a license key' })
+    // the token it answered does not verify here: as for a pasted token (expired among them)
+    expect(no(400, { error: 'invalid', field: 'token', code: 'domain' }, 'token: x')).toEqual({ reason: 'license.reason.domain', detail: '' })
+    expect(no(400, { error: 'invalid', field: 'token', code: 'expired' }, 'token: x')).toEqual({ reason: 'license.reason.expired', detail: '' })
+    expect(no(400, { error: 'invalid', field: 'token', code: 'odd' }, 'token: x')).toEqual({ reason: 'license.reason.other', detail: '' })
+    // anything else is not about the key
+    expect(no(400, { error: 'invalid', field: 'reason', message: 'a reason is required' })).toBeNull()
+    expect(no(400, { error: 'invalid', field: 'token' })).toBeNull()
+    expect(no(400, { error: 'invalid' })).toBeNull()
+    expect(no(502, { error: 'unavailable', field: 'key', code: 'unreachable' })).toBeNull()
+    expect(no(429, { error: 'rate_limited', code: 'rate_limited' })).toBeNull()
+  })
+  it('says how the license in use came, and when it renews online', () => {
+    for (const src of SOURCES) {
+      expect(sourceKey(src)).toBe('license.source.' + src)
+      expect((fa.license.source as Record<string, string>)[src]).toBeTruthy()
+      expect((en.license.source as Record<string, string>)[src]).toBeTruthy()
+    }
+    expect(sourceKey('')).toBe('')
+    expect(sourceKey(null)).toBe('')
+    expect(sourceKey(undefined)).toBe('')
+    expect(sourceKey('import')).toBe('')
+    // a short token the license server renews until the license ends
+    const short = token(now, { expires_at: now + 30 * DAY, license_ends_at: now + 300 * DAY })
+    expect(licenseEnds(short)).toBe(now + 300 * DAY)
+    // a token that runs to the license's end, or does not say
+    expect(licenseEnds({ expires_at: now, license_ends_at: now })).toBeNull()
+    for (const l of [{ expires_at: now }, { expires_at: now, license_ends_at: 0 }, { expires_at: now, license_ends_at: null }]) expect(licenseEnds(l)).toBeNull()
+    // core renews only a license activated with a key
+    expect(renews({ license: short, source: 'activation' })).toBe(true)
+    expect(renews({ license: token(now), source: 'refresh' })).toBe(true)
+    expect(renews({ license: short, source: 'manual' })).toBe(false)
+    expect(renews({ license: null, source: 'activation' })).toBe(false)
+    // an older core that does not say: read from the token
+    expect(renews({ license: short })).toBe(true)
+    expect(renews({ license: token(now), source: null })).toBe(false)
   })
 })
 
@@ -703,6 +829,10 @@ describe('system page', () => {
     expect(document.querySelector('.unverified')?.textContent?.trim()).toBe(text('system.updates.unverified'))
     expect(document.querySelector('.up-to-date')).toBeNull()
     expect(document.querySelector('.not-checked')).toBeNull()
+    // a bot that does not say which channel it follows: no channel shown
+    expect(document.querySelector('.channel')).toBeNull()
+    expect(document.querySelector('.channel-hint')).toBeNull()
+    expect(document.querySelector('.not-covered')).toBeNull()
     btn('button.copy-command').click()
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('sudo bobres update'))
     // nothing is applied from the page
@@ -710,6 +840,48 @@ describe('system page', () => {
     // checks again on demand
     btn('.updates button.refresh').click()
     await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(3))
+  })
+
+  it('shows the channel, and a newer release the license does not cover', async () => {
+    const reply = (updates: Partial<UpdateCheck>) => (url: string) => (url === '/api/v1/system'
+      ? json(200, { version: 'v1.5.0', services: [], updates: { current: '1.5.0', latest: '1.6.0-rc.2', newer: true, verified: true, checked_at: nowSec(), error: '', ...updates } })
+      : undefined)
+    const { calls, router } = await boot('/admin/system?tab=updates', { answer: reply({ channel: 'beta', covered: false, issued: '2027-03-01T10:04Z' }) })
+    const box = await found('.not-covered')
+    // the day to compare with the license's "updates until"
+    expect(document.querySelector('.released')?.textContent).toBe('2027-03-01')
+    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.not_covered'))
+    expect(document.querySelector('.update-state')?.classList.contains('p-tag-info')).toBe(true)
+    expect(box.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.not_covered'), { version: '⁨1.6.0-rc.2⁩' }))
+    expect(box.querySelector('.available-hint')?.textContent).toBe(text('system.updates.not_covered_hint'))
+    // bobres update would refuse it: no command to run
+    expect(document.querySelector('.update-available')).toBeNull()
+    expect(document.querySelector('.command')).toBeNull()
+    // the beta channel, and what going back to stable means
+    expect(document.querySelector('.channel-name')?.textContent).toBe(text('system.updates.channel_name.beta'))
+    expect(document.querySelector('.channel-hint')?.textContent).toBe(text('system.updates.channel_hint'))
+    expect(document.querySelector('.beta-note')?.textContent?.trim()).toBe(text('system.updates.beta_note'))
+    // the license's updates date is on its tab
+    expect(calls.some((c) => c.includes('/api/v1/license'))).toBe(false)
+    ;(box.querySelector('a.license-link') as HTMLAnchorElement).click()
+    await found('.license-state')
+    expect(router.currentRoute.value.query.tab).toBe('license')
+    expect(calls).toContain('GET /api/v1/license')
+
+    // stable, and no valid license to ask: installable as before
+    await boot('/admin/system?tab=updates', { answer: reply({ channel: 'stable', covered: null }) })
+    await found('.update-available')
+    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
+    expect(document.querySelector('.channel-name')?.textContent).toBe(text('system.updates.channel_name.stable'))
+    expect(document.querySelector('.beta-note')).toBeNull()
+    expect(document.querySelector('.not-covered')).toBeNull()
+    // the bot did not say when it was signed
+    expect(document.querySelector('.released')).toBeNull()
+    // covered by the license
+    await boot('/admin/system?tab=updates', { answer: reply({ channel: 'stable', covered: true }) })
+    await found('.update-available')
+    expect(document.querySelector('.not-covered')).toBeNull()
+    expect(document.querySelector('.command')?.textContent).toBe('sudo bobres update')
   })
 
   it('says when this install is up to date', async () => {
@@ -1061,8 +1233,9 @@ describe('system page', () => {
     // nothing granted, no binding to compare
     expect(document.querySelector('.entitlements')).toBeNull()
     expect(document.querySelector('.binding-domain')).toBeNull()
-    // only the owner adds a license
+    // only the owner adds a license, online or pasted
     expect(document.querySelector('.license-import')).toBeNull()
+    expect(document.querySelector('.license-activate')).toBeNull()
     expect(document.querySelector('.owner-only')?.textContent).toBe(text('license.owner_only'))
     btn('button.copy-install').click()
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(iid))
@@ -1102,6 +1275,12 @@ describe('system page', () => {
     expect(document.querySelector('.grace-ends')).not.toBeNull()
     expect(document.querySelector('.updated')?.textContent).toContain('\u2068@boss\u2069')
     expect(document.querySelector('.no-keys')).toBeNull()
+    // a core that does not say how it came or when it renewed, and a token to the license's end
+    expect(document.querySelector('.source')).toBeNull()
+    expect(document.querySelector('.refreshed')).toBeNull()
+    expect(document.querySelector('.license-ends')).toBeNull()
+    expect(document.querySelector('.renews-hint')).toBeNull()
+    expect(document.querySelector('.expires')?.previousElementSibling?.textContent).toBe(text('license.expires'))
     // bound to this domain (as core compares it), not to an install
     expect(document.querySelector('.binding-domain')?.textContent).toContain(text('license.binding_state.match'))
     expect(document.querySelector('.binding-domain')?.textContent).toContain('Shop.Example.com.')
@@ -1117,7 +1296,8 @@ describe('system page', () => {
     expect(ent('white_label').querySelector('.feature')?.textContent).toBe(text('license.feature.off'))
     expect(ent('updates_until').textContent).toContain('2027-09-30')
     expect(document.querySelector('.limits-warn')?.textContent).toBe(text('license.warnings'))
-    // the owner may replace it
+    // the owner may replace it, online or with a token
+    expect(document.querySelector('.license-activate')?.textContent).toContain(text('license.activate.title'))
     expect(document.querySelector('.license-import')?.textContent).toContain(text('license.import.replace'))
     // a valid license without white label shows the attribution (with the
     // little beaver), and no chip
@@ -1230,6 +1410,178 @@ describe('system page', () => {
     expect(card.querySelector('button.save')).toBeNull()
     // nothing was saved: the page still shows no license
     expect(document.querySelector('.license-state')?.textContent).toBe(text('license.state.missing'))
+  })
+
+  it('lets the owner activate with a license key and a reason', async () => {
+    const key = 'BOBRES-7K2Q-9XWM-4TPA'
+    let activated = false
+    const t0 = nowSec()
+    const renewed = (): LicenseInfo => {
+      const a = active()
+      return { ...a, license: { ...a.license!, expires_at: t0 + 30 * DAY, license_ends_at: t0 + 300 * DAY }, updated_at: t0, refreshed_at: null, source: 'activation' }
+    }
+    const { calls } = await boot('/admin/system?tab=license', {
+      perms: ownerPerms, role: 'owner', license: { state: 'missing', white_label: false },
+      answer: (url, init) => {
+        if (url === '/api/v1/license/activate' && init?.method === 'POST') {
+          activated = true
+          return json(200, renewed())
+        }
+        if (url === '/api/v1/license' && activated) return json(200, renewed())
+        if (url === '/api/v1/me' && activated) {
+          return json(200, {
+            user: { id: 'u1', telegram_id: 1, username: 'boss', role: 'owner', language: 'fa' }, permissions: ownerPerms, csrf: 'c',
+            session: { method: 'link', expires_at: 2e9 }, password: { enabled: false }, password_available: true, brand: 'Shop',
+            license: { state: 'active', white_label: false },
+          })
+        }
+      },
+    })
+    const card = await found('.license-activate')
+    expect(card.textContent).toContain(text('license.activate.title'))
+    // above the token box, which is for an install that cannot reach the server
+    const cards = [...document.querySelectorAll('.license > .p-card')]
+    expect(cards.indexOf(card)).toBeLessThan(cards.indexOf(document.querySelector('.license-import')!))
+    const input = card.querySelector('input.key-input') as HTMLInputElement
+    expect(input.getAttribute('autocomplete')).toBe('off')
+    const activate = () => btn('.license-activate button.activate')
+    expect(activate().disabled).toBe(true)
+    // a token pasted here, and the license id, are not the key
+    type(input, 'eyJ2IjoxfQ.c2ln')
+    await vi.waitFor(() => expect(card.querySelector('.key-problem')?.textContent).toBe(text('license.activate.problem.token')))
+    expect(activate().disabled).toBe(true)
+    type(input, 'lic_7Q2')
+    await vi.waitFor(() => expect(card.querySelector('.key-problem')?.textContent).toBe(text('license.activate.problem.format')))
+    // typed with a break and a Persian digit: sent as one key
+    type(input, ' BOBRES-7K2Q-9XWM-\n۴TPA ')
+    await vi.waitFor(() => expect(activate().disabled).toBe(false))
+    expect(card.querySelector('.key-problem')).toBeNull()
+    activate().click()
+    const dialog = await found('.p-dialog')
+    expect(dialog.textContent).toContain(text('license.activate.confirm_message'))
+    const confirm = () => [...dialog.querySelectorAll('.p-dialog-footer button')].pop() as HTMLButtonElement
+    expect(confirm().disabled).toBe(true)
+    type(dialog.querySelector('textarea'), 'bought the standard tier')
+    await vi.waitFor(() => expect(confirm().disabled).toBe(false))
+    confirm().click()
+    await vi.waitFor(() => expect(sent(calls, 'POST', '/license/activate')).toEqual([{ key, reason: 'bought the standard tier' }]))
+    await vi.waitFor(() => expect(document.querySelector('.p-dialog')).toBeNull())
+    // the page, the chip and the footer follow the new license
+    await vi.waitFor(() => expect(document.querySelector('.license-state')?.textContent).toBe(text('license.state.active')))
+    await vi.waitFor(() => expect(document.querySelector('.license-chip')).toBeNull())
+    expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
+    // the key is gone from the page, and was never in an address
+    expect((document.querySelector('input.key-input') as HTMLInputElement).value).toBe('')
+    expect(calls.filter((c) => c.includes('7K2Q')).every((c) => c.startsWith('POST /api/v1/license/activate {'))).toBe(true)
+    expect(calls.some((c) => c.startsWith('PUT ') || c.includes('/license/check'))).toBe(false)
+    // a short token core renews online: when the license itself ends, and how it came
+    expect(document.querySelector('.expires')?.previousElementSibling?.textContent).toBe(text('license.token_expires'))
+    expect(document.querySelector('.license-ends')?.textContent).toBe(date(t0 + 300 * DAY, 'fa'))
+    expect(document.querySelector('.renews-hint')?.textContent).toBe(text('license.renews_hint'))
+    expect(document.querySelector('.source')?.textContent).toBe('· ' + text('license.source.activation'))
+    // not renewed yet
+    expect(document.querySelector('.refreshed')).toBeNull()
+  })
+
+  it('says when the license server last renewed the license', async () => {
+    const t0 = nowSec()
+    const a = active()
+    await boot('/admin/system?tab=license', {
+      answer: (url) => (url === '/api/v1/license'
+        ? json(200, { ...a, license: { ...a.license!, license_ends_at: null }, updated_at: t0 - 3 * DAY, source: 'refresh', refreshed_at: t0 - 3600 })
+        : undefined),
+    })
+    await found('.refreshed')
+    expect(document.querySelector('.refreshed')?.textContent).toBe(fill(text('license.refreshed_at'), { time: dateTime(t0 - 3600, 'fa') }))
+    expect(document.querySelector('.source')?.textContent).toBe('· ' + text('license.source.refresh'))
+    // who installed it is kept
+    expect(document.querySelector('.updated')?.textContent).toContain('\u2068@boss\u2069')
+    // renewed daily, though the token does not say when the license ends
+    expect(document.querySelector('.renews-hint')).not.toBeNull()
+    expect(document.querySelector('.license-ends')).toBeNull()
+    expect(document.querySelector('.expires')?.previousElementSibling?.textContent).toBe(text('license.token_expires'))
+    // a token added by hand is not renewed
+    await boot('/admin/system?tab=license', {
+      answer: (url) => (url === '/api/v1/license' ? json(200, { ...a, source: 'manual', refreshed_at: null }) : undefined),
+    })
+    await found('.source')
+    expect(document.querySelector('.source')?.textContent).toBe('· ' + text('license.source.manual'))
+    expect(document.querySelector('.renews-hint')).toBeNull()
+    expect(document.querySelector('.refreshed')).toBeNull()
+    expect(document.querySelector('.expires')?.previousElementSibling?.textContent).toBe(text('license.expires'))
+  })
+
+  it('shows why a key was refused, and when the license server cannot be reached', async () => {
+    const moved = 'license server: this license key has moved to another install 3 times in the last year (the most allowed); the next move is possible on 2027-03-01, or ask the vendor'
+    // as core answers them
+    const answers = [
+      json(400, { error: 'refused', field: 'key', code: 'reactivation_limit', message: moved }),
+      json(400, { error: 'invalid', field: 'token', code: 'domain', message: 'token: the license is for another domain' }),
+      json(400, { error: 'refused', field: 'key', code: 'suspended', message: 'license server: the license is suspended' }),
+      json(502, { error: 'unavailable', code: 'unreachable', message: 'the bot did not answer' }),
+      json(503, { error: 'unavailable', code: 'not_configured', message: 'no license server is set (BOBRES_LICENSE_SERVER on the bot)' }),
+      json(409, { error: 'state', message: 'this install has no domain (BOBRES_DOMAIN), and a license is bound to one' }),
+    ]
+    const { calls } = await boot('/admin/system?tab=license', {
+      perms: ownerPerms, role: 'owner',
+      answer: (url) => (url === '/api/v1/license/activate' ? answers.shift() : undefined),
+    })
+    const card = await found('.license-activate')
+    const input = card.querySelector('input.key-input')
+    const reason = () => card.querySelector('.key-refused .key-reason')?.textContent
+    async function tryKey(key: string) {
+      type(input, key)
+      await vi.waitFor(() => expect(btn('.license-activate button.activate').disabled).toBe(false))
+      btn('.license-activate button.activate').click()
+      const dialog = await found('.p-dialog')
+      type(dialog.querySelector('textarea'), 'moved to a new server')
+      const confirm = [...dialog.querySelectorAll('.p-dialog-footer button')].pop() as HTMLButtonElement
+      await vi.waitFor(() => expect(confirm.disabled).toBe(false))
+      confirm.click()
+      return dialog
+    }
+    const cancel = async (dialog: Element) => {
+      ;([...dialog.querySelectorAll('.p-dialog-footer button')][0] as HTMLButtonElement).click()
+      await vi.waitFor(() => expect(document.querySelector('.p-dialog')).toBeNull())
+    }
+    // refused by the license server: said next to the key, with its date, the dialog closed
+    await tryKey('BOBRES-AAAA-BBBB')
+    await vi.waitFor(() => expect(reason()).toBe(text('license.activate.reason.reactivation_limit')))
+    await vi.waitFor(() => expect(document.querySelector('.p-dialog')).toBeNull())
+    expect(card.querySelector('.key-refused .detail')?.textContent).toBe(moved)
+    expect(card.querySelector('input.key-input')?.getAttribute('aria-describedby')).toBe('license-key-refused')
+    // typing again hides it: it belongs to the key it refused
+    type(input, 'BOBRES-AAAA-BBBC')
+    await vi.waitFor(() => expect(card.querySelector('.key-refused')).toBeNull())
+    // the license it answered does not verify here: as for a pasted token
+    await tryKey('BOBRES-CCCC-DDDD')
+    await vi.waitFor(() => expect(reason()).toBe(text('license.reason.domain')))
+    expect(card.querySelector('.key-refused .detail')).toBeNull()
+    // a code the page does not know: core's own words
+    await tryKey('BOBRES-EEEE-FFFF')
+    await vi.waitFor(() => expect(reason()).toBe(text('license.activate.reason.other')))
+    expect(card.querySelector('.key-refused .detail')?.textContent).toBe('license server: the license is suspended')
+    // the bot or the license server did not answer: said in the dialog, with core's words
+    let dialog = await tryKey('BOBRES-GGGG-HHHH')
+    await vi.waitFor(() => expect(dialog.querySelector('.msg')?.textContent).toContain(text('license.activate.unreachable')))
+    expect(dialog.querySelector('.msg .detail')?.textContent).toBe('the bot did not answer')
+    expect(card.querySelector('.key-refused')).toBeNull()
+    await cancel(dialog)
+    // no license server set up on this install
+    dialog = await tryKey('BOBRES-GGGG-HHHH')
+    await vi.waitFor(() => expect(dialog.querySelector('.msg')?.textContent).toContain(text('license.activate.not_configured')))
+    expect(dialog.querySelector('.msg .detail')?.textContent).toBe('no license server is set (BOBRES_LICENSE_SERVER on the bot)')
+    await cancel(dialog)
+    // no domain to bind it to: core's words
+    dialog = await tryKey('BOBRES-GGGG-HHHH')
+    await vi.waitFor(() => expect(dialog.querySelector('.msg')?.textContent).toContain(text('error.state')))
+    expect(dialog.querySelector('.msg .detail')?.textContent).toBe('this install has no domain (BOBRES_DOMAIN), and a license is bound to one')
+    expect(sent(calls, 'POST', '/license/activate').map((b) => b.key)).toEqual([
+      'BOBRES-AAAA-BBBB', 'BOBRES-CCCC-DDDD', 'BOBRES-EEEE-FFFF', 'BOBRES-GGGG-HHHH', 'BOBRES-GGGG-HHHH', 'BOBRES-GGGG-HHHH',
+    ])
+    // nothing was installed: the page still shows no license
+    expect(document.querySelector('.license-state')?.textContent).toBe(text('license.state.missing'))
+    expect(calls.filter((c) => c === 'GET /api/v1/license')).toHaveLength(1)
   })
 
   it('says an expired license cannot be saved, and reads a token file', async () => {

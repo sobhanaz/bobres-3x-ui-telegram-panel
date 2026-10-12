@@ -145,15 +145,35 @@ export function fills(message: unknown, args: Record<string, string>): boolean {
  * applying stays on the server. */
 export const UPDATE_COMMAND = 'sudo bobres update'
 
-export type UpdateState = 'newer' | 'current' | 'unknown'
+export type UpdateState = 'newer' | 'not_covered' | 'current' | 'unknown'
 
-/** updateState reads the bot's update check: a newer release, up to date,
- * or not known (the check failed, has not run yet, or core is too old to
- * say). A newer release read before a later check failed still shows. */
-export function updateState(u: Pick<UpdateCheck, 'latest' | 'newer' | 'error'> | null | undefined): UpdateState {
+/** updateState reads the bot's update check: a newer release, a newer one
+ * the license does not cover (its updates_until is before the release's
+ * date, so bobres update refuses it), up to date, or not known (the check
+ * failed, has not run yet, or core is too old to say). A newer release read
+ * before a later check failed still shows. Without a valid license to ask
+ * (covered null or absent) a newer release is installable. */
+export function updateState(u: Pick<UpdateCheck, 'latest' | 'newer' | 'error' | 'covered'> | null | undefined): UpdateState {
   if (!u || !u.latest) return 'unknown'
-  if (u.newer) return 'newer'
+  if (u.newer) return u.covered === false ? 'not_covered' : 'newer'
   return u.error ? 'unknown' : 'current'
+}
+
+/** issuedDay is the day the latest release was signed (YYYY-MM-DD, UTC),
+ * the day core compares with the license's updates_until; '' when the bot
+ * does not say. */
+export function issuedDay(u: Pick<UpdateCheck, 'issued'> | null | undefined): string {
+  const m = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}Z$/.exec((u?.issued ?? '').trim())
+  return m ? m[1] : ''
+}
+
+export type UpdateChannel = 'stable' | 'beta'
+
+/** channelOf is the release channel this install follows (case does not
+ * matter); null when the bot does not say. */
+export function channelOf(u: Pick<UpdateCheck, 'channel'> | null | undefined): UpdateChannel | null {
+  const c = (u?.channel ?? '').trim().toLowerCase()
+  return c === 'stable' || c === 'beta' ? c : null
 }
 
 export type UpdateReason =

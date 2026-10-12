@@ -657,6 +657,16 @@ export interface UpdateCheck {
   error: string
   /** the bot's short English reason for the error; '' when fine */
   detail?: string
+  /** the release channel this install follows (BOBRES_UPDATE_CHANNEL):
+   * stable | beta; '' or absent when the bot does not say */
+  channel?: string
+  /** when latest was signed (2006-01-02T15:04Z, UTC); absent when the bot
+   * does not say */
+  issued?: string
+  /** the installed license covers latest (its updates_until is not before
+   * the release's date); null when there is no valid license to ask or the
+   * date is not known (allowed then), absent from older cores */
+  covered?: boolean | null
 }
 
 /** One kept log line: a warning or an error, already redacted. */
@@ -765,6 +775,10 @@ export interface LicenseToken {
   /** what it is bound to ('' = not bound) */
   domain: string
   install_id: string
+  /** when the license itself ends, for a short token the license server
+   * renews (expires_at is the token's own end); null when the token does
+   * not say (no end date, or an older token) */
+  license_ends_at?: number | null
 }
 
 /** GET /license (owner and admin; never the token itself), and the answer of
@@ -788,4 +802,12 @@ export interface LicenseInfo {
   /** when it was saved, and by whom (GET /license only) */
   updated_at?: number | null
   updated_by?: { id: string; username: string } | null
+  /** when the daily refresh last installed a renewed token from the license
+   * server; null when it has not since the license was installed (GET
+   * /license only, absent from older cores) */
+  refreshed_at?: number | null
+  /** how the token in use came: manual (pasted here or imported with
+   * bobres license) | activation (with a license key) | refresh (renewed by
+   * the license server since); null when none is installed */
+  source?: string | null
 }
