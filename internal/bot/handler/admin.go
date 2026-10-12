@@ -244,7 +244,17 @@ func (h *Handler) reviewItem(r *req, intentID, decision, reason string, msgID in
 		done = r.t("admin.rejected")
 	}
 	if err != nil {
-		if status.Code(err) != codes.FailedPrecondition {
+		switch {
+		case status.Code(err) == codes.AlreadyExists && strings.Contains(status.Convert(err).Message(), "already paid another payment"):
+			// Its TXID paid an automatic USDT payment (or another proof): the
+			// item keeps its buttons, to be rejected.
+			if r.cb != nil {
+				r.toast, r.alert = r.t("admin.txid_used"), true
+			} else {
+				r.send(r.t("admin.txid_used"), nil)
+			}
+			return
+		case status.Code(err) != codes.FailedPrecondition:
 			r.fail(err)
 			return
 		}

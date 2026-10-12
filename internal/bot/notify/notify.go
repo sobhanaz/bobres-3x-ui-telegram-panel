@@ -1,7 +1,8 @@
 // Package notify turns core's events into Telegram messages: payment
 // results, wallet credits, delivered and extended services, reminders before
 // a service ends, support staff's replies, and admin alerts (core's
-// watchdog's system alerts among them).
+// watchdog's system alerts, USDT deposits that matched no payment and manual
+// USDT proofs that name a deposit the watcher saw among them).
 package notify
 
 import (
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -258,6 +260,26 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		return n.alert(ctx, 0, func(lang string) string { return n.systemAlert(lang, e) })
 
+	case events.DepositUnmatched:
+		var e events.DepositUnmatchedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		// Always sent: money arrived and nobody was credited.
+		return n.alertTo(ctx, n.set.Recipients(n.adminTG), 0, func(lang string) (string, *tg.Keyboard) {
+			return n.unmatchedDeposit(lang, e)
+		})
+
+	case events.DepositClaimed:
+		var e events.DepositClaimedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		// Always sent: a public transaction id may be sent as anyone's proof.
+		return n.alertTo(ctx, n.set.Recipients(n.adminTG), 0, func(lang string) (string, *tg.Keyboard) {
+			return n.claimedDeposit(lang, e)
+		})
+
 	case events.TicketOpened:
 		var e events.TicketOpenedEvent
 		if err := decode(m, &e); err != nil {
@@ -352,6 +374,81 @@ func (n *Notifier) systemAlert(lang string, e events.SystemAlertEvent) string {
 		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
 	}
 	return text
+}
+
+// unmatchedReasons are the reasons payments gives for an unmatched deposit.
+var unmatchedReasons = map[string]bool{
+	events.UnmatchedNoPayment: true, events.UnmatchedAlreadyPaid: true,
+	events.UnmatchedClosed: true, events.UnmatchedAmbiguous: true,
+}
+
+// txidRe is a TRON transaction id as payments records it.
+var txidRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// unmatchedDeposit renders a USDT deposit that matched no payment for the
+// staff in lang: the exact amount, who sent it, where, when, the transaction
+// and why, with a link to the transaction on Tronscan and the dashboard,
+// where it is marked handled. Every value is escaped: the sender is anyone
+// on the chain.
+func (n *Notifier) unmatchedDeposit(lang string, e events.DepositUnmatchedEvent) (string, *tg.Keyboard) {
+	reason := html.EscapeString(e.Reason)
+	if unmatchedReasons[e.Reason] {
+		reason = n.cat.T(lang, "admin.unmatched_reason."+e.Reason)
+	}
+	part := ""
+	if e.EventIndex > 0 {
+		part = " " + n.cat.T(lang, "admin.unmatched_part", "n", i18n.Number(lang, int64(e.EventIndex)+1))
+	}
+	txid := strings.ToLower(strings.TrimPrefix(e.TxID, "0x"))
+	text := n.cat.T(lang, "admin.unmatched_deposit",
+		"amount", i18n.Exact(e.Amount, e.Currency), "currency", html.EscapeString(e.Currency),
+		"from", html.EscapeString(e.From), "to", html.EscapeString(e.To),
+		"when", i18n.DateTime(lang, time.Unix(e.BlockTime, 0)), "txid", html.EscapeString(e.TxID),
+		"part", part, "reason", reason)
+	kb := &tg.Keyboard{}
+	if txidRe.MatchString(txid) {
+		kb.Row(tg.Link(n.cat.T(lang, "btn.tronscan"), "https://tronscan.org/#/transaction/"+txid))
+	}
+	kb.Row(tg.CB(n.cat.T(lang, "btn.dashboard"), "dash"))
+	return text, kb
+}
+
+// claimedDeposit renders, for the staff in lang, a manual USDT proof that
+// carries a transaction the watcher had seen reach the store's address: the
+// exact amount, who sent it, the transaction and the payment's reference (as
+// the customer was shown it), with a link to the transaction on Tronscan and
+// the payments to review while the proof waits. Every value is escaped: the
+// sender is anyone on the chain.
+func (n *Notifier) claimedDeposit(lang string, e events.DepositClaimedEvent) (string, *tg.Keyboard) {
+	part := ""
+	if e.EventIndex > 0 {
+		part = " " + n.cat.T(lang, "admin.unmatched_part", "n", i18n.Number(lang, int64(e.EventIndex)+1))
+	}
+	txid := strings.ToLower(strings.TrimPrefix(e.TxID, "0x"))
+	text := n.cat.T(lang, "admin.deposit_claimed",
+		"amount", i18n.Exact(e.Amount, e.Currency), "currency", html.EscapeString(e.Currency),
+		"from", html.EscapeString(e.From), "txid", html.EscapeString(e.TxID), "part", part,
+		"ref", html.EscapeString(paymentReference(e.IntentID)))
+	kb := &tg.Keyboard{}
+	if txidRe.MatchString(txid) {
+		kb.Row(tg.Link(n.cat.T(lang, "btn.tronscan"), "https://tronscan.org/#/transaction/"+txid))
+	}
+	if e.Proof == "waiting" {
+		kb.Row(tg.CB(n.cat.T(lang, "btn.review_now"), "adm:pend"))
+	} else {
+		kb.Row(tg.CB(n.cat.T(lang, "btn.dashboard"), "dash"))
+	}
+	return text, kb
+}
+
+// paymentReference is the reference a customer is shown for a payment (core's
+// domain.PaymentReference): the last 8 hex digits of its id, upper case.
+func paymentReference(intentID string) string {
+	ref := strings.ReplaceAll(intentID, "-", "")
+	if len(ref) > 8 {
+		ref = ref[len(ref)-8:]
+	}
+	return strings.ToUpper(ref)
 }
 
 // duration names how long a problem lasted: minutes under an hour, hours

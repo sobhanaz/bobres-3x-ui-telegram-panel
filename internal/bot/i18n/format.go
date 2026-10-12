@@ -165,6 +165,25 @@ func Money(lang string, minor int64, currency string) string {
 	return Digits(lang, s) + " " + name
 }
 
+// Exact writes minor units with every decimal of the currency, in Latin
+// digits and without separators, e.g. "2.500123" USDT: the amount a customer
+// copies into a wallet, in every language, never rounded or trimmed.
+func Exact(minor int64, currency string) string {
+	scale := currencyScale[currency]
+	sign := ""
+	if minor < 0 {
+		sign, minor = "-", -minor
+	}
+	if scale == 0 {
+		return sign + strconv.FormatInt(minor, 10)
+	}
+	div := int64(1)
+	for i := 0; i < scale; i++ {
+		div *= 10
+	}
+	return fmt.Sprintf("%s%d.%0*d", sign, minor/div, scale, minor%div)
+}
+
 // Bytes formats a traffic amount in GB (binary), e.g. "50 GB", "۱٫۵ گیگابایت".
 func Bytes(lang string, b int64) string {
 	gb := float64(b) / float64(1<<30)
@@ -203,6 +222,21 @@ func Date(lang string, t time.Time) string {
 		return Digits(lang, strconv.Itoa(d)) + " " + persianMonths[m-1] + " " + Digits(lang, strconv.Itoa(y))
 	}
 	return t.Format("2 Jan 2006")
+}
+
+// Clock formats a time of day in the store's time zone, 24-hour: "14:05",
+// "۱۴:۰۵".
+func Clock(lang string, t time.Time) string {
+	return Digits(lang, t.In(CurrentLocation()).Format("15:04"))
+}
+
+// DateTime is a day and its time: "2 Nov 2026, 14:05", "۱۱ آبان ۱۴۰۵، ۱۴:۰۵".
+func DateTime(lang string, t time.Time) string {
+	sep := ", "
+	if Normalize(lang) == "fa" {
+		sep = "، "
+	}
+	return Date(lang, t) + sep + Clock(lang, t)
 }
 
 // GregorianToJalali converts a Gregorian date to the Persian (Solar Hijri)

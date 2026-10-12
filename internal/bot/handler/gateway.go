@@ -14,7 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Automated payment methods (Phase 2): Zarinpal and Telegram Stars.
+// Automated payment methods: Zarinpal, Telegram Stars and automatic USDT
+// (TRC20, usdt.go).
 
 const methodsTTL = time.Minute // how stale the list of usable methods may be
 
@@ -44,8 +45,8 @@ func (h *Handler) gatewayMethods(ctx context.Context, currency string, amount in
 	return resp.GetProviders()
 }
 
-// gatewayButtons are the automated payment buttons, "<verb>:<z|s>:<target>:<nonce>"
-// ("<verb>:<z|s>:<nonce>" without a target).
+// gatewayButtons are the automated payment buttons, "<verb>:<z|s|u>:<target>:<nonce>"
+// ("<verb>:<z|s|u>:<nonce>" without a target).
 func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, target, n string) []tg.Button {
 	suffix := ":" + n
 	if target != "" {
@@ -58,6 +59,8 @@ func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, ta
 			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z"+suffix))
 		case "stars":
 			out = append(out, tg.CB(r.t("btn.pay_stars"), verb+":s"+suffix))
+		case usdtAuto:
+			out = append(out, tg.CB(r.t("btn.pay_usdt_auto"), verb+":u"+suffix))
 		}
 	}
 	return out
@@ -71,8 +74,9 @@ func truncRunes(s string, n int) string {
 	return string(r)
 }
 
-// startGateway starts a Zarinpal payment (a link to our pay page) or sends a
-// Telegram Stars invoice, for an order or a wallet top-up.
+// startGateway starts a Zarinpal payment (a link to our pay page), sends a
+// Telegram Stars invoice or shows where to send automatic USDT, for an order
+// or a wallet top-up.
 func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key string, topup int64) {
 	in := &corev1.CreatePaymentIntentRequest{UserId: r.user.GetId(), Provider: provider}
 	if order != nil {
@@ -90,15 +94,14 @@ func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key
 	switch intent.GetStatus() {
 	case "pending":
 	case "succeeded":
-		r.show(r.t("pay.check_paid"), homeKeyboard(r))
+		r.show(paidText(r, intent), homeKeyboard(r))
 		return
 	default: // failed or expired: this screen's payment is over, start again
 		reason := intent.GetFailureReason()
 		if intent.GetStatus() == "expired" {
 			reason = "expired"
 		}
-		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey(reason))),
-			(&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home")))
+		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey(reason))), retryKeyboard(r))
 		return
 	}
 	amount := r.money(intent.GetAmount().GetAmount(), intent.GetAmount().GetCurrency())
@@ -127,11 +130,22 @@ func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key
 			return
 		}
 		r.show(r.t("pay.stars", "stars", i18n.Number(r.lang, stars), "amount", amount), homeKeyboard(r))
+	case usdtAuto:
+		h.showUSDT(r, intent)
 	}
 }
 
 // onCheckPayment handles "chk:<intent id>": the customer says they paid.
+// An automatic USDT payment not seen yet is not asked about again for a few
+// seconds (checkWait): a TRC20 transfer takes about a minute to confirm.
 func (h *Handler) onCheckPayment(r *req, intentID string) {
+	waitKey := "chk:wait:" + intentID
+	if h.checkWait > 0 {
+		if recent, err := h.state.Recall(r.ctx, waitKey); err == nil && recent {
+			r.toast, r.alert = r.t("pay.check_wait"), true
+			return
+		}
+	}
 	ref, err := h.core.CheckPayment(r.ctx, &corev1.CheckPaymentRequest{UserId: r.user.GetId(), IntentId: intentID})
 	if err != nil {
 		r.fail(err)
@@ -139,16 +153,24 @@ func (h *Handler) onCheckPayment(r *req, intentID string) {
 	}
 	switch ref.GetStatus() {
 	case "succeeded":
-		r.show(r.t("pay.check_paid"), homeKeyboard(r))
+		r.show(paidText(r, ref), homeKeyboard(r))
 	case "failed", "expired":
 		reason := ref.GetFailureReason()
 		if ref.GetStatus() == "expired" {
 			reason = "expired"
 		}
-		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey(reason))),
-			(&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home")))
+		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey(reason))), retryKeyboard(r))
 	default:
-		r.toast, r.alert = r.t("pay.check_pending"), true
+		if ref.GetProvider() != usdtAuto {
+			r.toast, r.alert = r.t("pay.check_pending"), true
+			return
+		}
+		if h.checkWait > 0 {
+			if err := h.state.Remember(r.ctx, waitKey, h.checkWait); err != nil {
+				h.log.Debug("check cooldown not saved", "err", err)
+			}
+		}
+		r.toast, r.alert = r.t("pay.usdt_check_pending"), true
 	}
 }
 

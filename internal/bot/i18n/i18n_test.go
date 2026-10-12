@@ -106,6 +106,38 @@ func TestFormatting(t *testing.T) {
 	}
 }
 
+// Exact is what a customer copies into a wallet: every decimal, Latin
+// digits whatever the language, no separators, never rounded.
+func TestExactAndClock(t *testing.T) {
+	for _, c := range []struct {
+		minor    int64
+		currency string
+		want     string
+	}{
+		{2_500_123, "USDT", "2.500123"},
+		{2_500_100, "USDT", "2.500100"}, // trailing zeros kept: the amount is exact
+		{1_234_000_001, "USDT", "1234.000001"},
+		{7, "USDT", "0.000007"},
+		{150_000, "IRT", "150000"},
+		{-1_500_000, "USDT", "-1.500000"},
+	} {
+		if got := Exact(c.minor, c.currency); got != c.want {
+			t.Errorf("Exact(%d, %s) = %q, want %q", c.minor, c.currency, got, c.want)
+		}
+	}
+	at := time.Date(2026, 11, 2, 9, 5, 0, 0, CurrentLocation())
+	for got, want := range map[string]string{
+		Clock("en", at):    "09:05",
+		Clock("fa", at):    "۰۹:۰۵",
+		DateTime("en", at): "2 Nov 2026, 09:05",
+		DateTime("fa", at): "۱۱ آبان ۱۴۰۵، ۰۹:۰۵",
+	} {
+		if got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	}
+}
+
 func TestJalali(t *testing.T) {
 	for _, c := range []struct {
 		gy, gm, gd, jy, jm, jd int
