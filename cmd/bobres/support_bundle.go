@@ -48,7 +48,7 @@ type bundler struct {
 }
 
 func newBundler(o *ops) *bundler {
-	return &bundler{ops: o, doctor: runDoctor, readFile: os.ReadFile, disk: diskGB}
+	return &bundler{ops: o, doctor: doctorResults, readFile: os.ReadFile, disk: diskGB}
 }
 
 // bundleFile is one text file of the bundle.

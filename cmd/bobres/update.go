@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -45,6 +46,14 @@ const (
 	// minUpdateGB is the free disk an update needs: the backup and the new
 	// images.
 	minUpdateGB = 2
+	// installLimit bounds the new CLI's install run (pulling the images,
+	// starting, its own five-minute health wait).
+	installLimit = 20 * time.Minute
+)
+
+var (
+	errInstallTimeout = errors.New("the install took too long")
+	errInterrupted    = errors.New("interrupted")
 )
 
 // installFiles are the files `bobres install` writes that an update changes
@@ -88,8 +97,14 @@ type updater struct {
 	stateDir string
 	// exe is the running bobres binary, symlinks resolved.
 	exe func() (string, error)
-	// runCLI runs a bobres binary with its output going to the user.
+	// runCLI runs a bobres binary with its output going to the user. When
+	// ctx ends, the binary and everything it started are killed.
 	runCLI func(ctx context.Context, exe string, args ...string) error
+	// installTimeout bounds the install run (installLimit).
+	installTimeout time.Duration
+	// interrupts delivers Ctrl+C, SIGTERM and SIGHUP while the install runs,
+	// until stop is called.
+	interrupts func() (c <-chan os.Signal, stop func())
 }
 
 func newUpdater(o *ops) *updater {
@@ -107,12 +122,30 @@ func newUpdater(o *ops) *updater {
 			return filepath.EvalSymlinks(p)
 		},
 		runCLI: func(ctx context.Context, exe string, args ...string) error {
-			cmd := exec.CommandContext(ctx, exe, args...) //nolint:gosec // our own binary, arguments built here
-			// No stdin: install --yes never asks.
-			cmd.Stdout, cmd.Stderr = o.out, o.errOut
-			return cmd.Run()
+			return runInGroup(ctx, o.out, o.errOut, exe, args...)
+		},
+		installTimeout: installLimit,
+		interrupts: func() (<-chan os.Signal, func()) {
+			c := make(chan os.Signal, 1)
+			signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+			return c, func() { signal.Stop(c) }
 		},
 	}
+}
+
+// runInGroup runs a program in a process group of its own, its output going
+// to out and errOut and no stdin (install --yes never asks). When ctx ends,
+// the whole group is killed: the program and what it started, docker compose
+// included, which could otherwise go on recreating containers after a
+// rollback.
+func runInGroup(ctx context.Context, out, errOut io.Writer, exe string, args ...string) error {
+	cmd := exec.CommandContext(ctx, exe, args...) //nolint:gosec // our own binary, arguments built here
+	cmd.Stdout, cmd.Stderr = out, errOut
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	// A killed group can leave the output pipe open in a stray process.
+	cmd.WaitDelay = 10 * time.Second
+	return cmd.Run()
 }
 
 // defaultStateDir is install.sh's state directory: $BOBRES_STATE_DIR, else
@@ -240,6 +273,13 @@ func (u *updater) installed(env map[string]string) string {
 // check prints the current version, the release's and whether it is newer.
 // It needs no install and works on development builds.
 func (u *updater) check(ctx context.Context, dir, base, want string) int {
+	_, code := u.checkNewer(ctx, dir, base, want)
+	return code
+}
+
+// checkNewer is check, also saying whether the release is newer than the
+// install.
+func (u *updater) checkNewer(ctx context.Context, dir, base, want string) (newer bool, code int) {
 	current := imageTag(u.current)
 	if env, ok, err := readEnv(filepath.Join(dir, ".env")); err == nil && ok && env["BOBRES_VERSION"] != "" {
 		current = env["BOBRES_VERSION"]
@@ -247,7 +287,7 @@ func (u *updater) check(ctx context.Context, dir, base, want string) int {
 	t, err := u.verify(ctx, base, want)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v\n", err)
-		return 1
+		return false, 1
 	}
 	label := "Latest: "
 	if want != "" {
@@ -259,10 +299,11 @@ func (u *updater) check(ctx context.Context, dir, base, want string) int {
 		fmt.Fprintf(u.out, "Newer:   unknown (this install runs %q, not a release version)\n", current)
 	case release.Compare(t.Version, current) > 0:
 		fmt.Fprintln(u.out, "Newer:   yes. Update with: sudo bobres update")
+		return true, 0
 	default:
 		fmt.Fprintln(u.out, "Newer:   no, this install is up to date.")
 	}
-	return 0
+	return false, 0
 }
 
 // target is a release whose signature checked out.
@@ -501,8 +542,8 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	// GB free, RAM, ports), and its Telegram check goes straight to
 	// api.telegram.org, which a filtered network reaches only through
 	// BOBRES_TELEGRAM_API_URL.
-	if err := u.runCLI(ctx, exe, "install", "--version", t.Version, "--dir", dir, "--quiet", "--yes", "--skip-checks", "--offline"); err != nil {
-		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("the install of %s failed (%v)", t.Version, err))
+	if err := u.install(ctx, exe, dir, t.Version); err != nil {
+		return u.autoRollback(ctx, dir, rp, err.Error())
 	}
 	newEnv, _, err := readEnv(filepath.Join(dir, ".env"))
 	if err != nil {
@@ -518,6 +559,43 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	fmt.Fprintf(u.out, "\nBOBRES is updated to %s.\nIf something is wrong with it: sudo bobres rollback   (back to %s, with the database as of %s)\n",
 		t.Version, from, rp.CreatedAt.Format("2006-01-02 15:04 MST"))
 	return 0
+}
+
+// install runs the new CLI's install of version, at most installTimeout. Its
+// own process group does not get the terminal's Ctrl+C, so an interrupt
+// (or SIGTERM, or a hang-up) ends it here, like the time limit; either way
+// the whole group is killed and the update rolls back.
+func (u *updater) install(ctx context.Context, exe, dir, version string) error {
+	limit := u.installTimeout
+	if limit <= 0 {
+		limit = installLimit
+	}
+	ictx, interrupt := context.WithCancelCause(ctx)
+	defer interrupt(nil)
+	ictx, cancel := context.WithTimeoutCause(ictx, limit, errInstallTimeout)
+	defer cancel()
+	if u.interrupts != nil {
+		sigs, stop := u.interrupts()
+		defer stop()
+		go func() {
+			select {
+			case <-sigs:
+				interrupt(errInterrupted)
+			case <-ictx.Done():
+			}
+		}()
+	}
+	err := u.runCLI(ictx, exe, "install", "--version", version, "--dir", dir, "--quiet", "--yes", "--skip-checks", "--offline")
+	if err == nil {
+		return nil
+	}
+	switch cause := context.Cause(ictx); {
+	case errors.Is(cause, errInstallTimeout):
+		return fmt.Errorf("the install of %s did not finish within %s: it was stopped, with the docker compose it ran", version, limit)
+	case errors.Is(cause, errInterrupted):
+		return fmt.Errorf("the install of %s was interrupted: it was stopped, with the docker compose it ran", version)
+	}
+	return fmt.Errorf("the install of %s failed (%w)", version, err)
 }
 
 // stageRestorePoint builds the update's restore point beside the current
