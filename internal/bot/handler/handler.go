@@ -125,7 +125,7 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
 		if !h.dropped[k] { // once, not at every refresh
-			h.log.Warn("text override ignored: it would break the messages it is used in; the default text is used", "key", k)
+			h.log.Warn("text override ignored: it would break the messages it is used in; the default text is used", "text", k)
 		}
 	}
 	h.dropped = dropped

@@ -17,7 +17,8 @@ Telegram itself and your panel's settings, and the parts added in Phases 4 to 7 
 - Your 3x-ui panel, v3.8.5 or newer:
   - the panel URL including its web base path, e.g. `https://panel.example.com:2053/abc123`;
   - an API token: Settings → Security → API tokens → create, scope `admin`;
-  - the subscription prefix: Settings → Subscription (e.g. `https://panel.example.com:2096/sub/`);
+  - the subscription prefix: Settings → Subscription (e.g. `https://panel.example.com:2096/sub/`;
+    new panels use a random path instead of `/sub/`, so copy it from there);
   - at least one enabled inbound (new customers are attached to every enabled inbound).
 - Panel on the same VPS:
   - If the panel has its own TLS certificate, use its public https URL and leave out
@@ -89,8 +90,10 @@ sudo bobres status     # or ./bobres for the downloaded binary; plain `bobres` o
 
 Anything that fails here: run `sudo ./bobres logs <service>` and keep the output for the fix.
 Panel problems are logged by the provisioner (`sudo ./bobres logs provisioner`). To correct
-the panel URL, token or options, run `install` again with the right values: the default
-panel is updated on the next start, and the data is kept.
+the panel URL, token, subscription prefix or options, edit the server in the dashboard
+(**Servers**): the installer's panel values only seed the first server, so running `install`
+again does not change it. A changed subscription prefix also refreshes the links of the
+services already sold on that server.
 
 ## 5. Phase 2 payments (when you enable them)
 

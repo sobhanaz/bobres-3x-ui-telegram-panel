@@ -250,6 +250,31 @@ func TestReinstallKeepsSecrets(t *testing.T) {
 	}
 }
 
+// The panel values only seed the first server, so a re-run that changes
+// them says where a panel is changed instead.
+func TestReinstallPanelChangeNote(t *testing.T) {
+	dir := t.TempDir()
+	ins, _, errOut := testInstaller("", secrets, nil)
+	if code := ins.install(append(baseArgs(dir), "--no-start")); code != 0 {
+		t.Fatalf("first: %d %s", code, errOut)
+	}
+	const note = "edit it in the dashboard (Servers)"
+	ins2, out, errOut := testInstaller("", nil, nil)
+	if code := ins2.install([]string{"--dir", dir, "--no-start", "--domain", "new.example.com"}); code != 0 {
+		t.Fatalf("rerun: %d %s", code, errOut)
+	}
+	if strings.Contains(out.String(), note) {
+		t.Errorf("note without a panel change: %s", out)
+	}
+	ins3, out, errOut := testInstaller("", nil, nil)
+	if code := ins3.install([]string{"--dir", dir, "--no-start", "--xui-sub-url", "https://xui.example.com:2096/x9k2/"}); code != 0 {
+		t.Fatalf("rerun with a new prefix: %d %s", code, errOut)
+	}
+	if !strings.Contains(out.String(), note) {
+		t.Errorf("no note after a panel change: %s", out)
+	}
+}
+
 // An install from before core had a token for each peer gets the missing
 // ones on its next install run (bobres update runs one), keeping the rest.
 func TestReinstallAddsTheMissingServiceTokens(t *testing.T) {

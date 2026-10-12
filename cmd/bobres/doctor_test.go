@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -171,5 +172,17 @@ func TestDoctorOfflineRuns(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// doctor on a live install: the busy ports are the install's own gateway.
+func TestOwnGateway(t *testing.T) {
+	rs := []Result{checkPort(80, true), checkPort(443, true), {"DNS", Fail, "elsewhere"}}
+	if got := ownGateway(slices.Clone(rs), false); got[0].Status != Fail || got[1].Status != Fail {
+		t.Fatalf("no gateway running: %+v", got)
+	}
+	got := ownGateway(slices.Clone(rs), true)
+	if got[0].Status != Pass || got[1].Status != Pass || got[2].Status != Fail || !strings.Contains(got[0].Detail, "Caddy") {
+		t.Fatalf("gateway running: %+v", got)
 	}
 }

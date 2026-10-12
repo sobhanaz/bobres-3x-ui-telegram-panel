@@ -198,6 +198,7 @@ func (ins *installer) install(args []string) int {
 			env[key] = v
 		}
 	}
+	panelBefore := panelValues(env)
 	set("BOBRES_DOMAIN", *domain)
 	set("BOBRES_ADMIN_TELEGRAM_ID", *adminID)
 	set("BOBRES_XUI_URL", *xuiURL)
@@ -220,6 +221,10 @@ func (ins *installer) install(args []string) int {
 	// shell history keep command lines.
 	set("BOBRES_BACKUP_S3_ACCESS_KEY", ins.getenv("BOBRES_BACKUP_S3_ACCESS_KEY"))
 	set("BOBRES_BACKUP_S3_SECRET_KEY", ins.getenv("BOBRES_BACKUP_S3_SECRET_KEY"))
+	if existing && env["BOBRES_XUI_URL"] != "" && panelValues(env) != panelBefore {
+		fmt.Fprintln(ins.out, "Note: the 3x-ui panel values only add the first server while the store has none. "+
+			"To change a panel the store already uses, edit it in the dashboard (Servers).")
+	}
 
 	// Ask for what is still missing (secrets without echo).
 	for _, q := range []struct{ key, prompt string }{
@@ -693,6 +698,12 @@ Server hardening (firewall, fail2ban, security updates, swap): sudo bobres harde
 }
 
 var merchantRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// panelValues are the .env values of the first 3x-ui panel, which the
+// provisioner reads only to add a server while it has none.
+func panelValues(env map[string]string) [4]string {
+	return [4]string{env["BOBRES_XUI_URL"], env["BOBRES_XUI_TOKEN"], env["BOBRES_XUI_SUB_URL"], env["BOBRES_XUI_ALLOW_PRIVATE"]}
+}
 
 // loopbackHost: localhost or a loopback IP literal.
 func loopbackHost(h string) bool {
