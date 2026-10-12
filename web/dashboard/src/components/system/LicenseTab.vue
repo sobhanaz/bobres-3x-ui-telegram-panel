@@ -7,6 +7,7 @@ import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
+import LicenseActivate from './LicenseActivate.vue'
 import LicenseImport from './LicenseImport.vue'
 import { api } from '../../api'
 import { errorText } from '../../errors'
@@ -16,9 +17,12 @@ import {
   bindingSeverity,
   entitlementRows,
   graceEndsAt,
+  licenseEnds,
   licenseSeverity,
   limitSeverity,
   reasonKey,
+  renews,
+  sourceKey,
   stateOf,
   timeLeft,
   warnings,
@@ -29,7 +33,9 @@ import type { LicenseInfo } from '../../types'
 
 // The license: its state (a missing or invalid one limits nothing), what it
 // binds to, what it grants against what this install uses, and for the owner
-// a way to add or replace it. Admins see it read only.
+// a way to add or replace it: activated online with the seller's key, or a
+// token pasted for an install that cannot reach the license server. Admins
+// see it read only.
 const { t, te, locale } = useI18n()
 const auth = useAuth()
 const toast = useToast()
@@ -66,6 +72,10 @@ const savedBy = computed(() => {
   const u = info.value?.updated_by
   return u ? isolate(u.username ? '@' + u.username : u.id) : ''
 })
+const source = computed(() => sourceKey(info.value?.source))
+const refreshedAt = computed(() => info.value?.refreshed_at ?? 0)
+const renewing = computed(() => (info.value ? renews(info.value) : false))
+const endsOn = computed(() => (lic.value ? licenseEnds(lic.value) : null))
 const rows = computed(() => (info.value ? entitlementRows(info.value) : []))
 const warned = computed(() => warnings(rows.value) > 0)
 const canWrite = computed(() => auth.can('license.write'))
@@ -129,7 +139,12 @@ async function copyInstall() {
               <dd class="app-ltr app-mono kid">{{ lic.kid }}</dd>
               <dt>{{ t('license.issued') }}</dt>
               <dd>{{ date(lic.issued_at, lang) }}</dd>
-              <dt>{{ t('license.expires') }}</dt>
+              <!-- a short token the license server renews: the license's own end first -->
+              <template v-if="endsOn">
+                <dt>{{ t('license.license_ends') }}</dt>
+                <dd class="license-ends">{{ date(endsOn, lang) }}</dd>
+              </template>
+              <dt>{{ t(renewing ? 'license.token_expires' : 'license.expires') }}</dt>
               <dd class="expires">
                 {{ date(lic.expires_at, lang) }}
                 <span v-if="left" :class="['days-left', 'app-muted', left.kind]">· {{ t('license.left.' + left.kind, { n: num(left.days, lang) }) }}</span>
@@ -139,9 +154,12 @@ async function copyInstall() {
                 <dd class="grace-ends">{{ date(graceEndsAt(lic), lang) }}</dd>
               </template>
             </dl>
+            <p v-if="renewing" class="app-muted renews-hint">{{ t('license.renews_hint') }}</p>
             <p v-if="info.updated_at" class="app-muted updated">
               {{ savedBy ? t('license.updated_by', { time: dateTime(info.updated_at, lang), name: savedBy }) : t('license.updated_at', { time: dateTime(info.updated_at, lang) }) }}
+              <span v-if="source" class="source">· {{ t(source) }}</span>
             </p>
+            <p v-if="refreshedAt > 0" class="app-muted refreshed">{{ t('license.refreshed_at', { time: dateTime(refreshedAt, lang) }) }}</p>
           </template>
         </Card>
 
@@ -212,7 +230,10 @@ async function copyInstall() {
         </template>
       </Card>
 
-      <LicenseImport v-if="canWrite" :replacing="state !== 'missing'" @saved="saved" />
+      <template v-if="canWrite">
+        <LicenseActivate @saved="saved" />
+        <LicenseImport :replacing="state !== 'missing'" @saved="saved" />
+      </template>
       <p v-else class="app-muted owner-only">{{ t('license.owner_only') }}</p>
     </template>
   </div>
@@ -259,8 +280,13 @@ async function copyInstall() {
   overflow-wrap: anywhere;
 }
 .install-hint,
+.renews-hint,
 .updated {
   margin-block: 0.75rem 0;
+  font-size: 0.9rem;
+}
+.refreshed {
+  margin-block: 0.25rem 0;
   font-size: 0.9rem;
 }
 .sub {

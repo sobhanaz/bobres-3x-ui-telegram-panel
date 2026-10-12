@@ -56,6 +56,28 @@ sudo bobres license import < /root/license.txt
 `license.set`. Or on the dashboard: System > License, paste the token or open the file, check it, then save it with a
 reason. Delete the file afterwards; keep the token private.
 
+**Activate with a license key.** Use this when the seller gave a key (`BOBRES-…`) and a license server address
+instead of a token:
+
+```sh
+sudo nano /opt/bobres/.env        # add: BOBRES_LICENSE_SERVER=https://<the address from the seller>
+sudo bobres start                 # recreates the bot with it (restart does not)
+sudo bobres license activate      # asks for the key; it is not shown
+```
+
+From a file: `sudo bobres license activate < /root/key.txt`, then delete the file. Do not type the key after
+`activate`: it would stay in the shell history and in sudo's log, and the key alone can move the license to another
+server. On the dashboard: System > License, "Activate with a license key". Core then renews the license once a day
+by itself; the Source row of `bobres license status` then says "renewed online on <date>".
+
+| Message | Fix |
+|---|---|
+| "Online activation is not set up" (dashboard), or `no license server` (CLI) | `BOBRES_LICENSE_SERVER` is not in `.env`, or the bot was not recreated: the steps above |
+| `the license server refused: ... (invalid_key)` | A typo in the key, or a key that no longer exists: ask the seller |
+| `... (reactivation_limit)` | The key moved to another install too often this year (the message has the date): ask the seller |
+| `the license server did not answer` | The address is wrong, or this server cannot reach it |
+| The renewal date in `bobres license status` stops moving | The daily refresh fails: `sudo bobres logs core \| grep "license refresh"`. Check `BOBRES_LICENSE_SERVER` and the bot's internet access. Nothing is limited before the token's expiry and grace end |
+
 **Renew before the end.** The License tab and `bobres license status` show the days left and the grace end. In grace
 nothing changes yet; after it, new servers, staff, resellers and payment methods are refused until a new token is
 installed.

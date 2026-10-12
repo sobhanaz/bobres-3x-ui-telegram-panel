@@ -63,6 +63,11 @@ type LicenseStatus struct {
 	UpdatedAt     *time.Time
 	UpdatedBy     *string
 	UpdatedByName string
+	// Source is how the stored token came: manual, activation or refresh
+	// ("" for a candidate or when none is installed). RefreshedAt is when
+	// the daily refresh installed it (nil unless Source is refresh).
+	Source      string
+	RefreshedAt *time.Time
 }
 
 // Valid: the token verified for this install, so its entitlements gate new
@@ -193,6 +198,7 @@ func (s *Service) License(ctx context.Context) (*LicenseStatus, error) {
 	}
 	st := s.evaluate(row.Token, id)
 	st.UpdatedAt, st.UpdatedBy, st.UpdatedByName = &row.UpdatedAt, row.UpdatedBy, row.UpdatedByName
+	st.Source, st.RefreshedAt = row.Source, row.RefreshedAt
 	return st, nil
 }
 
@@ -237,6 +243,18 @@ func licenseAudit(t *license.Token) map[string]any {
 // expired, replacing any other (actor nil: the CLI). It is audited as
 // license.set with the license's ids.
 func (s *Service) SetLicense(ctx context.Context, actor *store.User, raw, reason string) (*LicenseStatus, error) {
+	return s.installLicense(ctx, actor, raw, reason, store.LicenseManual)
+}
+
+// SetActivatedLicense is SetLicense for a token the license server answered
+// to an activation (`bobres license activate`): the daily refresh renews it.
+func (s *Service) SetActivatedLicense(ctx context.Context, actor *store.User, raw, reason string) (*LicenseStatus, error) {
+	return s.installLicense(ctx, actor, raw, reason, store.LicenseActivation)
+}
+
+// installLicense installs raw as SetLicense says, noting how it came
+// (source: store.LicenseManual or store.LicenseActivation).
+func (s *Service) installLicense(ctx context.Context, actor *store.User, raw, reason, source string) (*LicenseStatus, error) {
 	reason, err := needReasonText(reason)
 	if err != nil {
 		return nil, err
@@ -271,10 +289,12 @@ func (s *Service) SetLicense(ctx context.Context, actor *store.User, raw, reason
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
-		if err := s.st.SetLicense(ctx, tx, raw, by); err != nil {
+		if err := s.st.SetLicense(ctx, tx, raw, by, source); err != nil {
 			return err
 		}
-		return s.auditChange(ctx, tx, actor, "license.set", "license", st.Token.LicenseID, before, licenseAudit(st.Token), reason)
+		after := licenseAudit(st.Token)
+		after["source"] = source
+		return s.auditChange(ctx, tx, actor, "license.set", "license", st.Token.LicenseID, before, after, reason)
 	})
 	if err != nil {
 		return nil, err

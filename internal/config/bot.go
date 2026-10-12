@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"net/url"
+	"strings"
 )
 
 // Bot is the bot service configuration.
@@ -21,6 +22,11 @@ type Bot struct {
 	// TelegramAPIURL replaces https://api.telegram.org (a local Bot API server,
 	// or the fake used by the CI end-to-end run). Empty = Telegram.
 	TelegramAPIURL string
+	// LicenseServer is the vendor's license server (BOBRES_LICENSE_SERVER,
+	// https only, no trailing slash): core activates and renews its license
+	// through the bot (/internal/license/*), which keeps nothing. Empty =
+	// those answer 503.
+	LicenseServer string
 	// PeerCoreToken is core's service token: core fetches receipt photos
 	// through the bot with it (/internal/files). Empty = no such endpoint.
 	PeerCoreToken string
@@ -28,6 +34,10 @@ type Bot struct {
 	// encrypted backup for the owner (/internal/backups/deliver). Empty = no
 	// such endpoint.
 	PeerBackupToken string
+
+	// UpdateChannel is the release channel the update check follows
+	// (BOBRES_UPDATE_CHANNEL): stable (the default) or beta.
+	UpdateChannel string
 }
 
 // LoadBot reads the bot service configuration, failing closed on missing secrets.
@@ -67,5 +77,22 @@ func LoadBot() (Bot, error) {
 			keep(errors.New("BOBRES_TELEGRAM_API_URL must be an http(s) URL"))
 		}
 	}
+	b.LicenseServer, err = LicenseServerURL(getenv("BOBRES_LICENSE_SERVER", ""))
+	keep(err)
+
+	b.UpdateChannel, err = updateChannel()
+	keep(err)
+
 	return b, errors.Join(errs...)
+}
+
+// updateChannel reads BOBRES_UPDATE_CHANNEL: stable when unset.
+func updateChannel() (string, error) {
+	switch c := strings.ToLower(strings.TrimSpace(getenv("BOBRES_UPDATE_CHANNEL", ""))); c {
+	case "", "stable":
+		return "stable", nil
+	case "beta":
+		return c, nil
+	}
+	return "", errors.New("BOBRES_UPDATE_CHANNEL must be stable or beta")
 }

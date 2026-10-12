@@ -1,6 +1,7 @@
 // Package botfiles calls the bot's internal endpoints for the dashboard:
 // files customers sent (receipt photos), reloading settings, checking a
-// channel, the update check. Core keeps no bot token and has no internet access.
+// channel, the update check, the license server. Core keeps no bot token and
+// has no internet access.
 package botfiles
 
 import (
@@ -13,8 +14,11 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+	"unicode/utf8"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
 // MaxFile matches the bot's own limit.
@@ -183,14 +187,24 @@ func (c *Client) TestBroadcast(ctx context.Context, t TestBroadcast) (*TestResul
 
 // UpdateCheck is the bot's last look for a newer release (release.Status).
 type UpdateCheck struct {
-	Current   string `json:"current"`
-	Latest    string `json:"latest"`
-	Channel   string `json:"channel"`
+	Current string `json:"current"`
+	Latest  string `json:"latest"`
+	// Channel is the release channel the bot follows (stable or beta; an
+	// older bot sent the latest release's own channel here).
+	Channel string `json:"channel"`
+	// Issued is when Latest was signed (2006-01-02T15:04Z), "" when the bot
+	// does not say.
+	Issued    string `json:"issued,omitempty"`
 	Newer     bool   `json:"newer"`
 	Verified  bool   `json:"verified"`
 	CheckedAt int64  `json:"checked_at"`
 	Error     string `json:"error"`
 	Detail    string `json:"detail"`
+	// Covered is core's own answer, never the bot's: whether the installed
+	// license covers Latest (its updates_until is not before the day Latest
+	// was issued); nil when there is no valid license or the day is not
+	// known.
+	Covered *bool `json:"covered,omitempty"`
 }
 
 // CheckUpdates reads the bot's cached update check (it does not make the bot
@@ -244,4 +258,75 @@ func (c *Client) RecentLogs(ctx context.Context) ([]logging.Line, error) {
 		return nil, fmt.Errorf("botfiles: logs: %w", err)
 	}
 	return out.Lines, nil
+}
+
+// ActivateLicense asks the vendor's license server, through the bot, for a
+// token for a license key bound to this install (domain.LicenseServer).
+func (c *Client) ActivateLicense(ctx context.Context, a domain.LicenseActivation) (string, error) {
+	return c.license(ctx, "activate", a)
+}
+
+// RefreshLicense asks the license server, through the bot, to renew the
+// installed token (the token is the credential), saying core's version.
+func (c *Client) RefreshLicense(ctx context.Context, token string) (string, error) {
+	return c.license(ctx, "refresh", map[string]string{"token": token, "version": version.Version})
+}
+
+// maxLicenseAnswer bounds what the bot passes back from the license server.
+const maxLicenseAnswer = 64 << 10
+
+// license POSTs body to the bot's /internal/license/<call> and reads the
+// license server's answer: {"token"} on 200, else {"error","message"} as a
+// *domain.LicenseServerError (the server's refusal, or the bot's own
+// not_configured, unreachable or server_error). Neither the key nor a token
+// is ever in an error.
+func (c *Client) license(ctx context.Context, call string, body any) (string, error) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/license/"+call, bytes.NewReader(data))
+	if err != nil {
+		return "", fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return "", &domain.LicenseServerError{Status: http.StatusBadGateway, Code: domain.LicenseUnreachable,
+			Message: "the bot did not answer"}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var out struct {
+		Token   string `json:"token"`
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxLicenseAnswer+1))
+	if err == nil && len(raw) <= maxLicenseAnswer {
+		err = json.Unmarshal(raw, &out)
+	} else if err == nil {
+		err = errors.New("too long")
+	}
+	switch {
+	case err == nil && resp.StatusCode == http.StatusOK && out.Token != "":
+		return out.Token, nil
+	case err == nil && resp.StatusCode != http.StatusOK && out.Error != "":
+		return "", &domain.LicenseServerError{Status: resp.StatusCode, Code: clip(out.Error, 64), Message: clip(out.Message, 300)}
+	}
+	// Not the bot's or the server's JSON (the bot refused core's token, or
+	// an older bot without these endpoints).
+	return "", &domain.LicenseServerError{Status: http.StatusBadGateway, Code: domain.LicenseServerFailed,
+		Message: fmt.Sprintf("the bot answered %d", resp.StatusCode)}
+}
+
+// clip cuts s to at most n bytes on a rune boundary.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

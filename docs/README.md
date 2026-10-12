@@ -14,6 +14,7 @@
 | [09-legal-questions.md](09-legal-questions.md) | Questions for a lawyer (not legal advice) |
 | [11-staging-run.md](11-staging-run.md) | Checklist for the first install on a real server (end of Phase 1) |
 | [12-load-test.md](12-load-test.md) | Load test: numbers, limits, what to watch |
+| [13-license-server.md](13-license-server.md) | The vendor's license server (`licensesrv`): license keys, activation, daily refresh, revocation; the vendor's runbook |
 | [runbooks/](runbooks/README.md) | Operator runbooks: payment stuck, provisioning backlog, 3x-ui down, bot token, disk, backups, secrets, license, restore, update; and `bobres support-bundle` |
 | [Phase 2 payments design](superpowers/specs/2026-10-04-phase2-payments-design.md) | Zarinpal, Telegram Stars, the gateway contract, and the owner decisions they need |
 

@@ -185,3 +185,81 @@ export function canSave(state: string | undefined): boolean {
   const st = stateOf(state)
   return st === 'active' || st === 'grace'
 }
+
+// Online activation: the owner types the license key the seller gave
+// (BOBRES-XXXX-…); core sends it with this install's id and domain to the
+// license server through the bot (core has no way out), checks the license
+// it answers and installs it. The key is a secret: sent once, never kept or
+// shown again.
+
+/** The longest key the page sends (core takes 200; a key is about 46). */
+export const KEY_MAX = 200
+
+/** keyOf is a typed or pasted key without the spaces and line breaks a mail
+ * or chat may add, Persian digits read as digits, and the long dashes some
+ * apps swap in read as plain ones. The license server reads it in upper case. */
+export function keyOf(raw: string): string {
+  return latinDigits(raw).replace(/\s+/g, '').replace(/[\u2010-\u2015\u2212]/g, '-')
+}
+
+/** keyProblem: nothing typed, a license token (it goes in the token box),
+ * too long, or not BOBRES- and groups of letters and digits (the license
+ * server checks the exact form). */
+export function keyProblem(raw: string): '' | 'empty' | 'token' | 'long' | 'format' {
+  const key = keyOf(raw)
+  if (!key) return 'empty'
+  if (tokenProblem(raw) === '') return 'token'
+  if (key.length > KEY_MAX) return 'long'
+  return /^BOBRES(-[A-Z0-9]+)+$/i.test(key) ? '' : 'format'
+}
+
+/** The license server's reasons for refusing a key, each with a sentence;
+ * for some its own words follow (they carry a date: when the license ended,
+ * or when it may move again). */
+export const KEY_REASONS = ['invalid_key', 'revoked', 'expired', 'reactivation_limit']
+const KEY_DATED = ['expired', 'reactivation_limit']
+
+/** keyRefusal reads core's 400 about an activation: the license server
+ * refused the key (error refused, its code), core did not take the typed
+ * key (no code), or the license the server answered does not verify here
+ * (field token, explained as for a pasted token). reason is the locale key,
+ * detail core's own words when the sentence needs them; null for any other
+ * failure. */
+export function keyRefusal(e: { status: number; data: Record<string, unknown>; message: string }): { reason: string; detail: string } | null {
+  if (e.status !== 400) return null
+  const { field } = e.data
+  const code = typeof e.data.code === 'string' ? e.data.code : ''
+  if (field === 'token' && code) return { reason: reasonKey(code), detail: '' }
+  if (field !== 'key') return null
+  if (e.data.error === 'refused' && KEY_REASONS.includes(code)) {
+    return { reason: 'license.activate.reason.' + code, detail: KEY_DATED.includes(code) ? e.message : '' }
+  }
+  return { reason: 'license.activate.reason.other', detail: e.message }
+}
+
+/** How the token in use came (core.license.source), each with its words:
+ * added by hand (pasted here or imported with bobres license), activated
+ * with a key, or renewed by the license server since. */
+export const SOURCES = ['manual', 'activation', 'refresh']
+
+/** sourceKey is the locale key of how the token in use came; '' when core
+ * does not say (an older core) or says something the page does not know. */
+export function sourceKey(source: string | null | undefined): string {
+  return source && SOURCES.includes(source) ? 'license.source.' + source : ''
+}
+
+/** licenseEnds is when the license itself ends, for a short token the
+ * license server renews (the token's expires_at is its own end); null when
+ * the token does not say or ends with the license. */
+export function licenseEnds(l: Pick<LicenseToken, 'expires_at' | 'license_ends_at'>): number | null {
+  return l.license_ends_at && l.license_ends_at > l.expires_at ? l.license_ends_at : null
+}
+
+/** renews: core renews the token from the license server every day (a
+ * license activated with a key); an older core that does not say how it
+ * came is read from the token ending before the license. */
+export function renews(info: Pick<LicenseInfo, 'license' | 'source'>): boolean {
+  if (!info.license) return false
+  if (info.source === 'activation' || info.source === 'refresh') return true
+  return !info.source && licenseEnds(info.license) !== null
+}

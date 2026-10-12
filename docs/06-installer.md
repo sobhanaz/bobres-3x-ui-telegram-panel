@@ -12,7 +12,9 @@ curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-pane
 ```
 The script is small, readable, checksum/signature verified, and only bootstraps: it installs Docker if needed,
 downloads the signed `bobres` CLI binary from the latest GitHub release of this repository
-(`BOBRES_BASE_URL` overrides the location), verifies it (Ed25519), then hands over to `bobres install`.
+(`BOBRES_BASE_URL` overrides the location), verifies it (Ed25519), then hands over to `bobres install`. A release
+signed for the beta channel (a pre-release) is refused unless `BOBRES_UPDATE_CHANNEL=beta` is set for install.sh,
+even when GitHub serves it as the latest release.
 The wizard asks for what is missing; for a panel on the same server typed as `http://127.0.0.1:<port>/...`
 it offers `http://host.docker.internal:<port>/...` (what the containers can reach).
 
@@ -68,12 +70,13 @@ release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`).
 
 ## Status (2026-10-12)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
-`version`, `admin link` (2026-10-07), `license status|import` (2026-10-11), `backup` (2026-10-11, see Backups),
+`version`, `admin link` (2026-10-07), `license status|import` (2026-10-11), `license activate` (2026-10-12, see
+License activation), `backup` (2026-10-11, see Backups),
 `restore`, `update` and `rollback` (2026-10-12, see Restore, update and rollback), `support-bundle` (2026-10-12, see
 Support bundle), `harden` and the install's hardening step, `config list|get|set`, `secrets rotate`, the menu's
 restore/update/rollback items and the update's install time limit (2026-10-12, see Hardening, Settings and secrets).
-The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`. Not
-yet: `license activate` (needs the vendor server). Operator runbooks: [runbooks/](runbooks/README.md).
+The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`.
+Operator runbooks: [runbooks/](runbooks/README.md).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
 a password or code, the owner manages staff on the dashboard's Staff page, and the owner themselves is
 changed with `bobres menu` ("Change the owner Telegram ID"), which core applies when it starts.
@@ -86,14 +89,15 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres status` | Service health, versions, license, disk, backup age |
 | `bobres logs [service] [-f]` | Tail logs |
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
-| `bobres update [--check] [--version X] [--yes]` | Verify the signed release, back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists |
+| `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists, and whether the license covers it |
 | `bobres rollback [--yes]` | Undo the last update with its restore point: the previous CLI, install files and version, and the database from before the update |
 | `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
 | `bobres restore <file> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. Off-server upload (S3/SFTP) is still open |
 | `bobres config list / get <key> / set <key> <value>` | Show the settings (secrets masked) or change one of the safe ones: validated as install does, `.env` written in one rename (0600), only the services that read it recreated (see Settings and secrets) |
 | `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. Master keys and the backup key are not rotated |
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
-| `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container. `activate` (online, through the vendor server) comes later |
+| `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements, how it came) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container |
+| `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER` in `.env`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
 | `bobres doctor` | Diagnose: OS, RAM, disk, ports, Docker, DNS, and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures) |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
 | `bobres support-bundle [--offline]` | A redacted tar.gz for support in the install directory: versions, `compose ps`, the doctor's checks, the newest 300 log lines per service, the `.env` key names (never a value), disk and memory, the backups list (see Support bundle). Never the database, a backup or a secret value |
@@ -192,17 +196,46 @@ done (or nothing was to do), 1 when refused or failed, 2 for usage errors, and t
 Every file the CLI rewrites (`.env`, the restore point, the swapped CLI) goes through `writeAtomic`: a temp file,
 synced, renamed, then the directory synced, so a power cut leaves the old file or the new one, never an empty `.env`.
 
-**`bobres update --check [--version X]`** fetches `checksums.txt`, its signature, `keys.txt` and `keys.txt.sig.N` of
-the latest release (or of `releases/download/vX`, `release.DownloadURL`), verifies them as install.sh does (the
-embedded roots, `internal/release`, and the key list's `seq` against `keys.seq`, below) and prints the current version,
-the release's and whether it is newer. It needs no install and works on a development build.
+**Update channel.** `BOBRES_UPDATE_CHANNEL=stable|beta` in `.env` (unset: stable; the bot gets it through the compose
+file and fails to start on another value), overridden for one run by `bobres update --channel`. `internal/release`
+resolves the release (`Source.Resolve`): **stable** is `releases/latest/download`, which GitHub points at the latest
+release that is not a pre-release, and a release whose signed header says `channel beta` is refused there; **beta** asks
+GitHub's API for the newest 30 releases (`api.github.com/repos/.../releases`; drafts and tags that are not
+`vX.Y.Z[-pre]` left out), takes the highest by `release.Compare`, pre-releases included, and verifies
+`releases/download/v<it>` with that version required (the API's answer is not signed). `release.Compare` and
+install.sh's `semver_lt` order pre-releases as semver 2.0 does (`rc.9` < `rc.10` < the release; numeric parts of any
+length by their value; `TestCompareMatchesInstaller` runs both on the same pairs). release.yml signs every tag with a
+`-` with `--channel beta` and marks it a pre-release. install.sh refuses a release signed for beta unless it runs
+with `BOBRES_UPDATE_CHANNEL=beta` (`verify_release`'s channel argument). A beta install that goes back to stable stays
+on its pre-release (`bobres update` says so and exits 0) until a stable release is newer. A beta that was tried and
+rolled back does not hold anything back: `release.version` (the floor) is written only once an update holds, and
+`bobres rollback` puts back the one from before the update. Runbook: [releases](runbooks/releases.md).
 
-**`bobres update [--version X] [--yes]`**
+**License coverage (`updates_until`).** The signed header's `# issued` (`release.ParseHeader`) is the release's day
+(UTC). When the install's license verifies for it (active, grace or expired) and carries `updates_until`, a release
+issued after that day is not covered (`release.Covered`): `bobres update` refuses it, and `--check` and the menu say
+"Newer: yes, but not covered by your license" (the menu then offers no update). The CLI reads the license with
+`compose exec -T core /app license status` (its "State" and "Updates until" rows, which every core with a license
+command prints); when core cannot be asked it warns and does not refuse. A missing or invalid license, a license
+without `updates_until` or a release without `# issued` gates nothing. The dashboard's System page gets the same
+answer from core (`updates.covered`: core compares the bot's `issued` with its own license; absent when there is no
+valid license or no date).
+
+**`bobres update --check [--version X] [--channel C]`** fetches `checksums.txt`, its signature, `keys.txt` and
+`keys.txt.sig.N` of the channel's newest release (or of `releases/download/vX`, `release.DownloadURL`), verifies them
+as install.sh does (the embedded roots, `internal/release`, and the key list's `seq` against `keys.seq`, below) and
+prints the current version, the channel, the release's version and whether it is newer (and covered by the license;
+a release older than `release.version` is "Newer: yes, but older than release X, which this server installed
+before", which `bobres update` refuses, so the menu does not offer it). It needs no install and works on a development
+build.
+
+**`bobres update [--version X] [--channel C] [--yes]`**
 1. Verifies the release, as install.sh's `verify_release` does. It refuses an unsigned, tampered, revoked or expired
    release; a key list whose `seq` is lower than `$BOBRES_STATE_DIR/keys.seq` (default `/var/lib/bobres`: an older
    list, still signed and unexpired, may name a release key revoked since); a release older than
-   `release.version` there or than the install (going back is `rollback`); and files under `vX` signed for another
-   version. The same version is nothing to do.
+   `release.version` there or than the install (going back is `rollback`); files under `vX` signed for another
+   version; on stable, a release signed for beta; and a release the license does not cover (above). The same version
+   is nothing to do.
 2. Checks for 2 GB free in the install directory and in `/var/lib/docker` (the backup and the new images). The
    install's own checks (10 GB, RAM, ports, the Telegram API) are for a new server and are skipped in step 7.
 3. Asks, unless `--yes`.
@@ -211,7 +244,8 @@ the release's and whether it is newer. It needs no install and works on a develo
    schema's highest goose `version_id`), a backup of the database (as restore step 5, while the store keeps running),
    copies of `.env`, `docker-compose.yml`, `Caddyfile` and `postgres-init.sh` in `files/`, a copy of the running CLI
    (`bobres`), and `restore-point.json` (`from_version`, `to_version`, `backup_file`, `created_at`, `cli_path`,
-   `cli_backup_path`, `files_dir`, `schema_versions`, later `used_at`). It is outside `backups/` on purpose: uid 65532
+   `cli_backup_path`, `files_dir`, `schema_versions`, `release_floor` (`release.version` before the update, "" for
+   none), later `used_at`). It is outside `backups/` on purpose: uid 65532
    controls that folder (it could swap in its own compose file for root to start), and operators copy `backups/` off
    the server, which must never carry `.env` and its `BOBRES_BACKUP_KEY` in the clear. The restore point's backup is
    not pruned, so it lasts as long as the restore point. `bobres rollback` trusts the folder only when root owns it
@@ -219,12 +253,14 @@ the release's and whether it is newer. It needs no install and works on a develo
 6. Swaps the CLI: the running binary is hard-linked to `bobres.prev` next to it, and the new one is written beside it
    and renamed over it. Only then does the new restore point replace the current one, which is set aside as
    `.restore-point.prev` until the update holds: a failed attempt never loses the previous update's restore point.
-   `keys.seq` and `release.version` are written then, as install.sh writes them after installing a CLI (never
-   lowered).
+   `keys.seq` is written then, as install.sh writes it after installing a CLI (never lowered): the key list was
+   verified whatever becomes of the update.
 7. Runs the new binary's `install --version X --dir D --quiet --yes --skip-checks --offline`: it re-renders compose
    from its embedded copy, pulls the images, starts and waits. `--quiet` leaves out the first-steps summary; `--yes`
    never asks (a missing value is an error).
-8. Waits until healthy; then `.restore-point.prev` goes.
+8. Waits until healthy; then `release.version` is written (never lowered), as install.sh writes it, and
+   `.restore-point.prev` goes. An update that rolls back leaves `release.version` as it was, so a tried release (a
+   beta above all) never becomes the floor that refuses the releases below it.
 
 When the install fails or the store is not healthy within five minutes, it **rolls back on its own**. It reads the
 migration versions again:
@@ -255,8 +291,10 @@ asks, stops the app services, saves the current data in `backups/bobres-<stamp>-
 update; when that fails nothing changes and the services start again), then puts back the previous CLI (from the
 restore point) and install files, restores the database as above and starts. No restore point, or one already used:
 it explains and exits 1. Only the last update can be rolled back; to go further back, `bobres install --version <old>`
-moves the images and `bobres restore` the data. `release.version` is not lowered by a rollback: a later update goes to
-the release rolled back from, or newer.
+moves the images and `bobres restore` the data. `release.version` goes back to the restore point's `release_floor`
+(removed when that is ""): the update undone no longer counts as installed, so a later update may take a release
+below it (a stable patch after an undone beta). It is only lowered, and not when it is above the release rolled back
+from (install.sh installed a newer one since); a restore point without `release_floor` leaves it as it is.
 
 ## Support bundle
 `bobres support-bundle [--dir D] [--offline]` writes `<dir>/bobres-support-<UTC stamp>.tar.gz` (mode 0600, through
@@ -397,6 +435,39 @@ The settings it changes, and the services each one recreates:
   re-encryption with a new key is future work), nor the backup key (older backups open only with it): the command
   explains and points to the [rotate secrets](runbooks/rotate-secrets.md) runbook.
 
+## License activation
+`BOBRES_LICENSE_SERVER` is the vendor's license server ([13-license-server.md](13-license-server.md)). The seller
+gives its address with the license key. It is not in `.env` by default: add the line (`sudo nano /opt/bobres/.env`),
+then run `sudo bobres start`, which recreates the bot with it (`bobres restart` does not apply `.env` changes, and
+`bobres config` does not set this key). It must be an https URL: with anything else the bot does not start. The compose file
+passes it to the bot, which makes the calls for the dashboard and for the daily refresh, because core has no internet
+access. Without it, online activation is off and a token pasted or imported by hand still works.
+
+**`bobres license activate [<key>] [--server URL] [--dir D]`** (exit 0 installed, 1 refused or failed, 2 usage or no
+server):
+- **The key.** Leave `<key>` out. The CLI then asks for the key without echoing it on a terminal, or reads the first
+  line of stdin (`sudo bobres license activate < key.txt`, then delete the file). A key given as the argument also
+  works, but it stays in the shell history and in sudo's log (`COMMAND=...` in `auth.log` or the journal), and other
+  users can see it in `ps` while the command runs. The key alone is enough to move the license to another install.
+- **The server.** `--server`, else `BOBRES_LICENSE_SERVER` from the environment, else from `.env`. Only https is
+  accepted, and redirects are not followed.
+- **The steps.** The host makes the call. The CLI reads the install id, domain and version from core
+  (`compose exec -T core /app license info --json`) and POSTs them with the key to `<server>/v1/activate`. It pipes
+  the token from the answer into `/app license import --activated`. That command verifies the token (signature,
+  domain, install id, dates) and installs it with source `activation` (audited as `license.set` from the CLI).
+- **Refusals.** A wrong key, a revoked license or too many moves prints the server's message and code, and nothing
+  changes. The key is never printed, logged or kept.
+
+The dashboard does the same without the host: System > License, "Activate with a license key" (the owner; a reason
+is required). That is `POST /api/v1/license/activate {key, reason}` (license.write, at most 10 a minute). Core sends
+it to the bot (`POST /internal/license/activate`, with core's token), and the bot sends it to the license server.
+Without `BOBRES_LICENSE_SERVER` on the bot, the form answers "Online activation is not set up" (503
+`not_configured`).
+
+An activated license is then renewed once a day through the bot (`/internal/license/refresh`). After a failure, core
+asks again after 3 hours. A failed refresh changes nothing: the token simply runs into its grace and expiry. See
+05-license.md, "Activation and daily refresh".
+
 ## Uninstall
 Stops services, removes containers/units; data kept unless `--purge`; prints what remains. `--purge` deletes the
 install directory, and with it every backup in `/opt/bobres/backups`: it warns first (copy them elsewhere).
@@ -406,7 +477,10 @@ install directory, and with it every backup in `/opt/bobres/backups`: it warns f
   public for customers to pull without logging in (private registry auth via license is still open).
 - Re-running the one-liner on an existing install updates the CLI and repairs the install, but keeps the
   running image version; moving to a new version is `bobres update` (with backup and rollback).
-- Update channel (stable/beta) and keeping the previous images for N days: not built; `bobres update` follows the
-  latest non-pre-release (or `--version X`), and a rollback pulls the previous images again if they were pruned.
+- Keeping the previous images for N days: not built; a rollback pulls the previous images again if they were pruned.
+  (The stable/beta update channel is built: see Restore, update and rollback.)
+- Release signatures expire 45 days after signing: a stable channel with no release for that long must be re-signed,
+  or install.sh and `bobres update` refuse it ([releases runbook](runbooks/releases.md)). Re-signing moves the
+  release's `# issued` day, which `updates_until` is compared with; `tools/sign/sign.sh` has no option to keep it.
 - Non-Docker (systemd binaries) mode: not planned for v1.
 - Installing 3x-ui itself for customers who do not have one yet (optional helper, later).

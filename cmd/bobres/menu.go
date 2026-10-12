@@ -310,11 +310,12 @@ func listBackups(dir string) []os.FileInfo {
 	return files
 }
 
-// update checks for a newer release and, when there is one, runs bobres
-// update, which asks before it changes anything. After an update the menu
-// ends: the bobres running it was replaced.
+// update checks for a newer release (of the install's update channel) and,
+// when there is one the license covers, runs bobres update, which asks
+// before it changes anything. After an update the menu ends: the bobres
+// running it was replaced.
 func (m *menu) update() {
-	newer, code := m.upd.checkNewer(context.Background(), m.dir, m.upd.latestURL, "")
+	newer, code := m.upd.checkNewer(context.Background(), m.dir, "", "")
 	if code != 0 || !newer {
 		return
 	}

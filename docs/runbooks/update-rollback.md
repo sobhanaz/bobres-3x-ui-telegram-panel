@@ -13,8 +13,14 @@ server:
 sudo bobres update --check
 ```
 
-It prints this install's version, the latest release (its signature verified) and whether it is newer. Exit 1 means
-the check failed (GitHub unreachable, or a release that does not pass the signature check: never install that one).
+It prints this install's version, the update channel, the latest release (its signature verified) and whether it is
+newer. Exit 1 means the check failed (GitHub unreachable, or a release that does not pass the signature check: never
+install that one). "Newer: yes, but not covered by your license" means the license's updates ended before that release
+came out: `bobres update` will not install it (see the table below).
+
+The store follows the **stable** channel unless `/opt/bobres/.env` says `BOBRES_UPDATE_CHANNEL=beta` (pre-releases
+too). `--channel stable|beta` overrides it for one command. How to change channel, and what going back to stable
+means: [Releases and update channels](releases.md#change-a-stores-channel-store-owners).
 
 ## Update
 
@@ -56,10 +62,17 @@ exits 1, and the restore point of the update before (if any) is the current one 
 |---|---|---|
 | `the release did not pass the signature check` / `not signed` | Tampered, unsigned, revoked or expired | Do not install it. Check the system clock (`date -u`); otherwise escalate |
 | `release X is older than this install` | Update never goes back | `sudo bobres rollback` (the last update), or see "Going further back" |
-| `release X is older than release Y, which this server installed before` | `/var/lib/bobres/release.version` says a newer release was installed here (also after a rollback) | Update to Y or newer. Never a release older than one this server ran |
+| `release X is older than release Y, which this server installed before` | `/var/lib/bobres/release.version` says a newer release was installed here and held (an update that rolled back, on its own or with `bobres rollback`, does not count) | Update to Y or newer. Never a release older than one this server ran |
 | `the release's key list (seq N) is older than the one this server has seen` | An old key list, as a replay of an old release would bring | Do not install it. Escalate |
 | `GB free in ...: an update needs at least 2 GB` | Not enough room for the backup and the new images | Free some space (old `-before-restore`/`-before-rollback` backups, `docker image prune`), run again. Nothing was changed |
 | `BOBRES already runs X` | Nothing to do | - |
+| `release X is newer than your license covers: it was issued on D, and the license's updates end on U` | The license includes the releases published until its "Updates until" date (`sudo bobres license status`) | Renew the license's updates with the seller. The current version keeps working. Nothing was changed |
+| `warning: the license could not be read` | Core did not answer, so the license's update date was not checked | Nothing to fix for the update; check `bobres status` afterwards |
+| `release X is a beta release and this install follows stable` | The release is a pre-release (signed for the beta channel) | Use the stable releases, or `--channel beta` if you want that pre-release |
+| `BOBRES runs the pre-release X, newer than the latest stable release` | This store took a beta, then went back to stable | Nothing to do: it updates once a stable release is newer (or use `--channel beta`) |
+| `the beta channel's releases could not be listed` | `api.github.com` did not answer (filtered, or over its 60 requests an hour) | Try again later, or use the stable channel, which needs only `github.com` |
+| `BOBRES_UPDATE_CHANNEL in .env: unknown update channel` | A typo in `.env` | Set it to `stable` or `beta` (or remove the line), then `sudo bobres start` |
+| `release metadata expired at ... (stale or replayed release)` with a correct clock | No release was published or re-signed for 45 days | Escalate: the vendor must re-sign the release ([releases runbook](releases.md)) |
 | `checksum mismatch for bobres_linux_amd64` | The download was changed or cut | Run it again; if it repeats, escalate. Nothing was changed |
 | `no CLI for this system` | The release has no binary for this CPU | Escalate |
 | `this bobres is a development build` | A CLI built from source cannot replace itself | Install the released CLI with the install command from the README |
@@ -82,8 +95,9 @@ since the update are undone (they stay in the backup it just made). Exit 1 when 
 already used, when its backup does not open, or when its folder could be changed by someone other than root.
 
 Only the last update has a restore point, and it works once. After a rollback, run `sudo bobres update` again once the
-problem is fixed: to the release you rolled back from or a newer one (`/var/lib/bobres/release.version` remembers it,
-as install.sh does).
+problem is fixed. The rollback also puts back `/var/lib/bobres/release.version` (the "never older than what this
+server installed" floor) as it was before the update, so the update undone does not hold back the releases below it:
+after a beta you rolled back, the next stable release installs as usual.
 
 The `-before-rollback` backup is not one of the 7 daily backups and is never pruned: delete it once you no longer need
 it.

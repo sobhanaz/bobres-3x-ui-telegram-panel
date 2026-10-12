@@ -10,12 +10,13 @@ import Tag from 'primevue/tag'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, isolate, type Lang } from '../../format'
-import { UPDATE_COMMAND, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
+import { channelOf, issuedDay, UPDATE_COMMAND, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
 import type { SystemReply } from '../../types'
 
-// Whether a newer BOBRES release is out, as the bot last read it (core has
-// no way out; the bot checks every 12 h). Installing it stays on the server's
-// command line: the page shows the command (bobres update).
+// Whether a newer BOBRES release is out on the channel this install follows
+// (stable or beta), as the bot last read it (core has no way out; the bot
+// checks every 12 h), and whether the license covers it. Installing it stays
+// on the server's command line: the page shows the command (bobres update).
 const { t, locale } = useI18n()
 const toast = useToast()
 const lang = computed(() => locale.value as Lang)
@@ -46,7 +47,9 @@ const reason = computed(() => (reply.value ? updateReason(updates.value) : null)
 const detail = computed(() => updateDetail(updates.value, reason.value))
 const current = computed(() => updates.value?.current || reply.value?.version || '')
 const latest = computed(() => updates.value?.latest || '')
-const severity: Record<UpdateState, 'warn' | 'success' | 'secondary'> = { newer: 'warn', current: 'success', unknown: 'secondary' }
+const channel = computed(() => channelOf(updates.value))
+const released = computed(() => (latest.value ? issuedDay(updates.value) : ''))
+const severity: Record<UpdateState, 'warn' | 'info' | 'success' | 'secondary'> = { newer: 'warn', not_covered: 'info', current: 'success', unknown: 'secondary' }
 
 async function copyCommand() {
   try {
@@ -92,7 +95,22 @@ async function copyCommand() {
             <dd class="app-ltr current-version">{{ current || '—' }}</dd>
             <dt>{{ t('system.updates.latest') }}</dt>
             <dd class="app-ltr latest-version">{{ latest || '—' }}</dd>
+            <template v-if="released">
+              <dt>{{ t('system.updates.released') }}</dt>
+              <dd class="app-ltr released">{{ released }}</dd>
+            </template>
+            <template v-if="channel">
+              <dt>{{ t('system.updates.channel') }}</dt>
+              <dd class="channel">
+                <Tag :severity="channel === 'beta' ? 'warn' : 'secondary'" :value="t('system.updates.channel_name.' + channel)" class="channel-name" />
+              </dd>
+            </template>
           </dl>
+          <p v-if="channel" class="app-muted channel-hint">{{ t('system.updates.channel_hint') }}</p>
+          <p v-if="channel === 'beta'" class="app-muted beta-note">
+            <i class="pi pi-flag" aria-hidden="true" />
+            {{ t('system.updates.beta_note') }}
+          </p>
           <p v-if="state === 'current'" class="app-muted up-to-date">{{ t('system.updates.up_to_date') }}</p>
           <!-- not checked here; a release that failed the check says so below -->
           <p v-if="latest && updates && !updates.verified && reason !== 'bad_signature'" class="app-muted unverified">
@@ -119,6 +137,13 @@ async function copyCommand() {
           />
         </div>
         <p class="available-note">{{ t('system.updates.backup_first') }}</p>
+      </Message>
+
+      <!-- bobres update refuses a release the license does not cover: no command -->
+      <Message v-if="state === 'not_covered'" severity="info" icon="pi pi-lock" :closable="false" class="not-covered">
+        <div class="available-title">{{ t('system.updates.not_covered', { version: isolate(latest) }) }}</div>
+        <p class="available-hint">{{ t('system.updates.not_covered_hint') }}</p>
+        <RouterLink :to="{ name: 'system', query: { tab: 'license' } }" class="license-link">{{ t('system.updates.see_license') }}</RouterLink>
       </Message>
 
       <Message v-if="reason" :severity="state === 'unknown' ? 'secondary' : 'warn'" icon="pi pi-question-circle" :closable="false" class="not-checked">
@@ -155,10 +180,16 @@ async function copyCommand() {
   margin-block-end: 0.6rem;
 }
 .up-to-date,
-.unverified {
+.unverified,
+.channel-hint,
+.beta-note {
   margin-block: 0.75rem 0;
 }
-.unverified .pi {
+.channel-hint {
+  font-size: 0.9rem;
+}
+.unverified .pi,
+.beta-note .pi {
   margin-inline-end: 0.3rem;
   vertical-align: middle;
 }

@@ -139,14 +139,15 @@ func setup(rt *app.Runtime) error {
 		rt.Log.Warn("no master key: dashboard password logins are off (login links from the bot still work)")
 	}
 	var (
-		files web.ReceiptFiles
-		bot   web.BotPeer
+		files  web.ReceiptFiles
+		bot    web.BotPeer
+		licSrv domain.LicenseServer
 	)
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.ServiceToken)
-		files, bot = peer, peer
+		files, bot, licSrv = peer, peer, peer
 		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
@@ -173,7 +174,12 @@ func setup(rt *app.Runtime) error {
 	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
 		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
-		Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		LicenseServer: licSrv, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+	// An activated license is renewed once a day through the bot (core has
+	// no internet access); a pasted or imported one is left alone.
+	if licSrv != nil {
+		rt.Go("license-refresh", dom.NewLicenseRefresher(licSrv, rt.Log).Run)
+	}
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)

@@ -1827,14 +1827,26 @@
       "title": "Version",
       "current": "This install",
       "latest": "Latest release",
+      "released": "Released",
+      "channel": "Channel",
+      "channel_name": {
+        "stable": "Stable",
+        "beta": "Beta"
+      },
+      "channel_hint": "The channel is BOBRES_UPDATE_CHANNEL (stable or beta) in the server's .env file.",
+      "beta_note": "This install follows beta releases: newer pre-releases, less tested. Going back to stable does not downgrade: the install stays on its version until a stable release is newer.",
       "checked_at": "Last checked {time}",
       "state": {
         "newer": "Update available",
+        "not_covered": "Not covered by your license",
         "current": "Up to date",
         "unknown": "Not known"
       },
       "up_to_date": "This install runs the latest release.",
       "available": "Version {version} is available.",
+      "not_covered": "Version {version} is out, but your license does not cover it.",
+      "not_covered_hint": "Your license includes the releases published until its “Updates until” date, and this one came out later, so bobres update will not install it. Renew the license's updates with the seller to get it; this version keeps working as it is.",
+      "see_license": "See the license",
       "how": "To install it, run this on the server (as root):",
       "copy_command": "Copy the update command",
       "backup_first": "It checks the release signature, backs up the database, installs the new version and rolls back on its own if the store does not come back healthy; sudo bobres rollback undoes the last update later. If bobres answers \"not implemented yet\", update bobres itself first with the install command from the README.",
@@ -1952,12 +1964,15 @@
     "kid": "Signing key",
     "issued": "Issued",
     "expires": "Expires",
+    "token_expires": "Token valid until",
     "grace_ends": "Grace ends",
+    "license_ends": "License ends",
     "left": {
       "left": "{n} days left",
       "grace": "{n} days of grace left",
       "over": "Ended {n} days ago"
     },
+    "renews_hint": "This install renews the token from the license server every day until the license ends. If it cannot, the token lasts until its own date, then its grace period.",
     "binding": "Binding",
     "binding_domain": "Domain",
     "binding_install": "Install",
@@ -2005,9 +2020,9 @@
     "warnings": "Some limits are reached or nearly reached. Existing ones keep working; new ones beyond the limit are refused.",
     "owner_only": "Only the owner can add or replace the license.",
     "import": {
-      "add": "Add a license",
-      "replace": "Replace the license",
-      "hint": "Paste the license token from the seller, or open the file it came in. Check it first: saving takes effect at once.",
+      "add": "Add a license token",
+      "replace": "Replace with a license token",
+      "hint": "For an install that cannot reach the license server: paste the license token from the seller, or open the file it came in. Check it first: saving takes effect at once.",
       "token": "License token",
       "file": "Open a file",
       "check": "Check",
@@ -2024,8 +2039,38 @@
       "expired_warn": "This license has expired, so it cannot be saved: ask the seller to renew it.",
       "saved": "License saved"
     },
+    "activate": {
+      "title": "Activate with a license key",
+      "hint": "Enter the license key the seller gave you. The bot sends it, with this install's id and domain, to the license server; the license it answers is checked here and replaces the one in use now. Keep the key private: whoever has it can move the license to another install.",
+      "key": "License key",
+      "key_hint": "It starts with BOBRES-. This install sends it once and does not keep it.",
+      "activate": "Activate",
+      "problem": {
+        "token": "This is a license token, not a key: paste it in the token box below.",
+        "long": "This is too long to be a license key.",
+        "format": "This does not look like a license key (BOBRES- and groups of letters and digits)."
+      },
+      "confirm_title": "Activate this license?",
+      "confirm_message": "The license server's answer replaces the license in use now, and its limits apply to new actions at once. Moving a license to a new install or domain uses up one of its re-activations for the year.",
+      "done": "License activated",
+      "unreachable": "The license server could not be reached, or it failed (the bot passes the request on). Try again later, or paste a license token from the seller below.",
+      "not_configured": "Online activation is not set up on this install (BOBRES_LICENSE_SERVER, read by the bot). Paste a license token from the seller below instead.",
+      "reason": {
+        "invalid_key": "No license has this key: check it for typos, or ask the seller.",
+        "revoked": "The seller has revoked this license.",
+        "expired": "This license has ended: renew it with the seller.",
+        "reactivation_limit": "This license has moved to another install as often as a year allows. The license server says when it may move again; or ask the seller.",
+        "other": "The key was not accepted."
+      }
+    },
     "powered_by": "Powered by BOBRES",
     "no_keys": "This version ships without a vendor key, so no license can be checked yet.",
-    "updated_by": "Saved {time} by {name}"
+    "updated_by": "Saved {time} by {name}",
+    "source": {
+      "manual": "a token added by hand",
+      "activation": "activated with a license key",
+      "refresh": "renewed by the license server"
+    },
+    "refreshed_at": "Last renewed from the license server {time}"
   }
 }

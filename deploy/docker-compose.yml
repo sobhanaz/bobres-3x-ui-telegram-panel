@@ -176,6 +176,14 @@ services:
       # Empty = api.telegram.org. A local Bot API server on this host is reachable
       # as http://host.docker.internal:<port> (see extra_hosts).
       BOBRES_TELEGRAM_API_URL: ${BOBRES_TELEGRAM_API_URL:-}
+      # The releases the update check (the dashboard's Updates tab) follows: stable, or
+      # beta for pre-releases too. bobres update reads the same line from .env.
+      BOBRES_UPDATE_CHANNEL: ${BOBRES_UPDATE_CHANNEL:-stable}
+      # The vendor's license server (https only). Core has no internet access, so the
+      # dashboard's "Activate with a license key" and core's daily license refresh go
+      # through the bot to it. Empty = both answer "not set up". bobres license activate
+      # reads the same line from .env.
+      BOBRES_LICENSE_SERVER: ${BOBRES_LICENSE_SERVER:-}
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       core: { condition: service_healthy }

@@ -78,7 +78,11 @@ type restorePoint struct {
 	// (nil: not known), so a rollback restores the database only when
 	// migrations ran.
 	SchemaVersions map[string]int64 `json:"schema_versions,omitempty"`
-	UsedAt         *time.Time       `json:"used_at,omitempty"`
+	// ReleaseFloor is install.sh's release.version from before the update
+	// ("" for none; nil in a restore point of a bobres that did not keep
+	// it): undoing the update puts it back (putBackFloor).
+	ReleaseFloor *string    `json:"release_floor,omitempty"`
+	UsedAt       *time.Time `json:"used_at,omitempty"`
 }
 
 // updater holds what update and rollback reach beyond Docker: the release
@@ -87,7 +91,8 @@ type restorePoint struct {
 type updater struct {
 	*ops
 	current    string              // this CLI's version
-	latestURL  string              // the latest release's files
+	latestURL  string              // the latest stable release's files
+	apiURL     string              // the list of every release (the beta channel)
 	versionURL func(string) string // one release's files
 	hc         *http.Client
 	roots      []string // the release root keys
@@ -105,12 +110,15 @@ type updater struct {
 	// interrupts delivers Ctrl+C, SIGTERM and SIGHUP while the install runs,
 	// until stop is called.
 	interrupts func() (c <-chan os.Signal, stop func())
+	// licenseStatus is what core's `license status` prints for the install
+	// in dir (nil: the license is not asked).
+	licenseStatus func(ctx context.Context, dir string) ([]byte, error)
 }
 
 func newUpdater(o *ops) *updater {
 	return &updater{
 		ops: o, current: version.Version,
-		latestURL: release.DefaultBaseURL, versionURL: release.DownloadURL,
+		latestURL: release.DefaultBaseURL, apiURL: release.APIURL, versionURL: release.DownloadURL,
 		hc:    &http.Client{}, // fetch sets each download's time limit
 		roots: release.Roots, platform: runtime.GOOS + "_" + runtime.GOARCH,
 		stateDir: defaultStateDir(),
@@ -129,6 +137,11 @@ func newUpdater(o *ops) *updater {
 			c := make(chan os.Signal, 1)
 			signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 			return c, func() { signal.Stop(c) }
+		},
+		licenseStatus: func(ctx context.Context, dir string) ([]byte, error) {
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			return o.run(ctx, dir, composeArgs("exec", "-T", "core", "/app", "license", "status")...)
 		},
 	}
 }
@@ -157,24 +170,29 @@ func defaultStateDir() string {
 	return "/var/lib/bobres"
 }
 
-// updateCmd: `bobres update [--check] [--version X] [--yes] [--dir D]`.
-// --check only prints whether a newer verified release exists. Otherwise it
-// verifies the release, takes a backup, leaves a restore point, swaps in the
-// new CLI, runs its install and waits until healthy; when that fails it
-// rolls back on its own. Exit 0 when done (or nothing to do), 1 when refused
-// or failed, 2 for usage errors.
+const updateUsage = "usage: bobres update [--check] [--version X] [--channel stable|beta] [--yes] [--dir D]"
+
+// updateCmd: `bobres update [--check] [--version X] [--channel C] [--yes]
+// [--dir D]`. --check only prints whether a newer verified release exists.
+// Otherwise it verifies the release, takes a backup, leaves a restore point,
+// swaps in the new CLI, runs its install and waits until healthy; when that
+// fails it rolls back on its own. The release is the newest of the channel
+// (--channel, else BOBRES_UPDATE_CHANNEL in .env, else stable), or
+// --version's. Exit 0 when done (or nothing to do), 1 when refused or
+// failed, 2 for usage errors.
 func (u *updater) updateCmd(args []string) int {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(u.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
 	check := fs.Bool("check", false, "only check for a newer release (signature verified) and print it")
-	ver := fs.String("version", "", "update to this release (default: the latest)")
+	ver := fs.String("version", "", "update to this release (default: the newest of the channel)")
+	channelFlag := fs.String("channel", "", "the releases to follow: stable, or beta for pre-releases too (default: BOBRES_UPDATE_CHANNEL in .env, else stable)")
 	yes := fs.Bool("yes", false, "do not ask for confirmation")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintln(u.errOut, "usage: bobres update [--check] [--version X] [--yes] [--dir D]")
+		fmt.Fprintln(u.errOut, updateUsage)
 		return 2
 	}
 	want := strings.TrimPrefix(strings.TrimSpace(*ver), "v")
@@ -182,16 +200,25 @@ func (u *updater) updateCmd(args []string) int {
 		fmt.Fprintf(u.errOut, "error: --version must be a release version like 1.2.3 (got %q)\n", *ver)
 		return 2
 	}
-	base := u.latestURL
-	if want != "" {
-		base = u.versionURL(want)
+	if *channelFlag != "" {
+		c, err := release.ParseChannel(*channelFlag)
+		if err != nil {
+			fmt.Fprintf(u.errOut, "error: --channel: %v\n", err)
+			return 2
+		}
+		*channelFlag = c
 	}
 	ctx := context.Background()
 	if *check {
-		return u.check(ctx, *dir, base, want)
+		return u.check(ctx, *dir, *channelFlag, want)
 	}
 	env, ok := u.requireInstall(*dir)
 	if !ok {
+		return 2
+	}
+	channel, err := channelOf(*channelFlag, env)
+	if err != nil {
+		fmt.Fprintf(u.errOut, "error: %v\n", err)
 		return 2
 	}
 	if !release.Valid(u.current) {
@@ -202,10 +229,17 @@ func (u *updater) updateCmd(args []string) int {
 	from := u.installed(env)
 
 	fmt.Fprintln(u.out, "Checking the release signature...")
-	t, err := u.verify(ctx, base, want)
+	t, err := u.find(ctx, channel, want)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v. Nothing was changed.\n", err)
 		return 1
+	}
+	// Back on stable after a beta: nothing to do until stable passes it
+	// (going back is rollback's, and the floor below refuses it anyway).
+	if want == "" && channel == release.ChannelStable && release.Prerelease(from) && release.Compare(t.Version, from) < 0 {
+		fmt.Fprintf(u.out, "BOBRES runs the pre-release %s, newer than the latest stable release (%s): it stays on it until a stable release is newer.\n"+
+			"To update on the beta channel instead: sudo bobres update --channel beta\n", from, t.Version)
+		return 0
 	}
 	// As install.sh: never below a release this server installed before
 	// (a replayed old release, even with this install's .env behind).
@@ -227,6 +261,14 @@ func (u *updater) updateCmd(args []string) int {
 	case c == 0:
 		fmt.Fprintf(u.out, "BOBRES already runs %s: nothing to update.\n", from)
 		return 0
+	}
+	// A valid license with an end to its updates covers the releases issued
+	// until then; a missing or invalid one gates nothing.
+	if until := u.updatesUntil(ctx, *dir); !release.Covered(until, t.Issued) {
+		fmt.Fprintf(u.errOut, "error: release %s is newer than your license covers: it was issued on %s, and the license's updates end on %s. Nothing was changed.\n"+
+			"Renew the license's updates with your seller (sudo bobres license status shows the license); %s keeps working as it is.\n",
+			t.Version, release.IssuedDay(t.Issued), until, from)
+		return 1
 	}
 	if _, ok := checksum(t.sums, "bobres_"+u.platform); !ok {
 		fmt.Fprintf(u.errOut, "error: release %s has no bobres_%s (no CLI for this system). Nothing was changed.\n", t.Version, u.platform)
@@ -272,19 +314,27 @@ func (u *updater) installed(env map[string]string) string {
 
 // check prints the current version, the release's and whether it is newer.
 // It needs no install and works on development builds.
-func (u *updater) check(ctx context.Context, dir, base, want string) int {
-	_, code := u.checkNewer(ctx, dir, base, want)
+func (u *updater) check(ctx context.Context, dir, channel, want string) int {
+	_, code := u.checkNewer(ctx, dir, channel, want)
 	return code
 }
 
 // checkNewer is check, also saying whether the release is newer than the
-// install.
-func (u *updater) checkNewer(ctx context.Context, dir, base, want string) (newer bool, code int) {
+// install and this install's license covers it (so bobres update would take
+// it). The release is want's, else the newest of channel ("": the install's
+// BOBRES_UPDATE_CHANNEL, else stable).
+func (u *updater) checkNewer(ctx context.Context, dir, channel, want string) (newer bool, code int) {
 	current := imageTag(u.current)
-	if env, ok, err := readEnv(filepath.Join(dir, ".env")); err == nil && ok && env["BOBRES_VERSION"] != "" {
+	env, haveEnv, err := readEnv(filepath.Join(dir, ".env"))
+	haveEnv = haveEnv && err == nil
+	if haveEnv && env["BOBRES_VERSION"] != "" {
 		current = env["BOBRES_VERSION"]
 	}
-	t, err := u.verify(ctx, base, want)
+	if channel, err = channelOf(channel, env); err != nil {
+		fmt.Fprintf(u.errOut, "error: %v\n", err)
+		return false, 1
+	}
+	t, err := u.find(ctx, channel, want)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v\n", err)
 		return false, 1
@@ -293,17 +343,139 @@ func (u *updater) checkNewer(ctx context.Context, dir, base, want string) (newer
 	if want != "" {
 		label = "Release:"
 	}
-	fmt.Fprintf(u.out, "Current: %s (bobres CLI %s)\n%s %s (%s, signature verified)\n", current, u.current, label, t.Version, orDash(t.Channel))
+	fmt.Fprintf(u.out, "Current: %s (bobres CLI %s)\nChannel: %s\n%s %s (%s, signature verified)\n", current, u.current, channel, label, t.Version, orDash(t.Channel))
 	switch {
 	case !release.Valid(current):
 		fmt.Fprintf(u.out, "Newer:   unknown (this install runs %q, not a release version)\n", current)
 	case release.Compare(t.Version, current) > 0:
+		// As bobres update: never below a release this server installed before.
+		floor, err := u.lastRelease()
+		if err != nil {
+			fmt.Fprintf(u.errOut, "warning: %v: the release this server installed last is not checked.\n", err)
+		}
+		if floor != "" && release.Compare(t.Version, floor) < 0 {
+			fmt.Fprintf(u.out, "Newer:   yes, but older than release %s, which this server installed before:\n"+
+				"         bobres update refuses it as a downgrade and waits for a newer release.\n", floor)
+			return false, 0
+		}
+		until := ""
+		if haveEnv { // an install: its license may limit the updates
+			until = u.updatesUntil(ctx, dir)
+		}
+		if !release.Covered(until, t.Issued) {
+			fmt.Fprintf(u.out, "Newer:   yes, but not covered by your license: it was issued on %s, and the license's updates end on %s.\n"+
+				"         bobres update will not install it; renew the license's updates with your seller.\n", release.IssuedDay(t.Issued), until)
+			return false, 0
+		}
 		fmt.Fprintln(u.out, "Newer:   yes. Update with: sudo bobres update")
 		return true, 0
+	case want == "" && channel == release.ChannelStable && release.Prerelease(current):
+		fmt.Fprintln(u.out, "Newer:   no, this install runs a pre-release newer than the latest stable release (beta releases: --channel beta).")
 	default:
 		fmt.Fprintln(u.out, "Newer:   no, this install is up to date.")
 	}
 	return false, 0
+}
+
+// channelOf is the channel to follow: flag (already checked) when set, else
+// the install's BOBRES_UPDATE_CHANNEL, else stable.
+func channelOf(flag string, env map[string]string) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	c, err := release.ParseChannel(env["BOBRES_UPDATE_CHANNEL"])
+	if err != nil {
+		return "", fmt.Errorf("BOBRES_UPDATE_CHANNEL in .env: %w (fix that line, or remove it for stable)", err)
+	}
+	return c, nil
+}
+
+// find resolves and verifies the release to look at: want's, else the
+// newest of channel (on beta through GitHub's API, whose unsigned answer the
+// signed files must then match). On stable a release signed for beta is
+// refused.
+func (u *updater) find(ctx context.Context, channel, want string) (*target, error) {
+	base := ""
+	if want != "" {
+		base = u.versionURL(want)
+	} else {
+		var err error
+		if base, want, err = u.resolve(ctx, channel); err != nil {
+			return nil, err
+		}
+	}
+	t, err := u.verify(ctx, base, want)
+	if err != nil {
+		return nil, err
+	}
+	if !release.ChannelAllows(channel, t.Channel) {
+		return nil, fmt.Errorf("release %s is a %s release and this install follows %s: to take it, add --channel %s", t.Version, t.Channel, channel, t.Channel)
+	}
+	return t, nil
+}
+
+// resolve is where the newest release of channel is, and the version it
+// must be (release.Source.Resolve), within a minute.
+func (u *updater) resolve(ctx context.Context, channel string) (base, want string, err error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	src := release.Source{Latest: u.latestURL, API: u.apiURL, Download: u.versionURL, HC: u.hc}
+	base, want, err = src.Resolve(ctx, channel)
+	switch {
+	case errors.Is(err, release.ErrNotFound):
+		return "", "", errors.New("no BOBRES release has been published yet")
+	case err != nil:
+		return "", "", fmt.Errorf("the beta channel's releases could not be listed: %w (is api.github.com reachable from this server?)", err)
+	}
+	return base, want, nil
+}
+
+// updatesUntil is the end of the updates the install's license covers
+// (YYYY-MM-DD), "" when there is none: no license, one that does not verify
+// here (neither gates anything), one with no end, or core could not tell
+// (said as a warning; the update is not refused for it).
+func (u *updater) updatesUntil(ctx context.Context, dir string) string {
+	if u.licenseStatus == nil {
+		return ""
+	}
+	out, err := u.licenseStatus(ctx, dir)
+	until, known := parseUpdatesUntil(out)
+	if err != nil || !known {
+		fmt.Fprintln(u.errOut, "warning: the license could not be read (is core running? bobres status): its updates_until is not checked.")
+		return ""
+	}
+	return until
+}
+
+// validLicenseStates are the states of a license verified for this install
+// as `license status` prints them (expired included: its updates_until still
+// says which releases it covers).
+var validLicenseStates = map[string]bool{"active": true, "grace": true, "expired": true}
+
+// parseUpdatesUntil reads core's `license status` text: the "Updates until"
+// of a license verified for this install ("" for none, or for a license
+// that is missing or invalid), and whether the text was that command's.
+func parseUpdatesUntil(out []byte) (until string, known bool) {
+	valid := false
+	for _, line := range strings.Split(string(out), "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		switch strings.TrimSpace(key) {
+		case "State":
+			known = true
+			state, _, _ := strings.Cut(value, " ")
+			valid = validLicenseStates[strings.TrimSuffix(state, ":")]
+		case "Updates until":
+			until = value
+		}
+	}
+	if !valid {
+		return "", known
+	}
+	return until, known
 }
 
 // target is a release whose signature checked out.
@@ -414,10 +586,11 @@ func (u *updater) lastRelease() (string, error) {
 	return s, nil
 }
 
-// recordRelease writes what install.sh writes once it has installed a CLI:
-// the key list's sequence number and the release, each never lowered (they
-// are the floor later releases are checked against).
-func (u *updater) recordRelease(t *target) error {
+// recordKeysSeq writes what install.sh writes of a verified key list once it
+// has installed a CLI: its sequence number, never lowered (an older list may
+// name a key revoked since). It does not wait for the update to hold: the
+// list was verified whatever becomes of the update.
+func (u *updater) recordKeysSeq(t *target) error {
 	if u.stateDir == "" {
 		return nil
 	}
@@ -425,20 +598,58 @@ func (u *updater) recordRelease(t *target) error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(u.stateDir, 0o755); err != nil { //nolint:gosec // as install.sh makes it
+		return err
+	}
+	return writeAtomic(filepath.Join(u.stateDir, "keys.seq"), []byte(strconv.Itoa(max(seq, t.KeysSeq))+"\n"), 0o644)
+}
+
+// recordRelease writes the release as install.sh does (release.version,
+// never lowered: the floor later releases are checked against), once the
+// update holds. An update that rolled back leaves it as it was, so a tried
+// beta does not become the floor that refuses the stable releases below it.
+func (u *updater) recordRelease(t *target) error {
+	if u.stateDir == "" {
+		return nil
+	}
 	ver, err := u.lastRelease()
 	if err != nil {
 		return err
 	}
-	if ver == "" || release.Compare(t.Version, ver) > 0 {
-		ver = t.Version
+	if ver != "" && release.Compare(t.Version, ver) <= 0 {
+		return nil
 	}
 	if err := os.MkdirAll(u.stateDir, 0o755); err != nil { //nolint:gosec // as install.sh makes it
 		return err
 	}
-	if err := writeAtomic(filepath.Join(u.stateDir, "keys.seq"), []byte(strconv.Itoa(max(seq, t.KeysSeq))+"\n"), 0o644); err != nil {
-		return err
+	return writeAtomic(filepath.Join(u.stateDir, "release.version"), []byte(t.Version+"\n"), 0o644)
+}
+
+// putBackFloor is called once an update is undone: release.version goes
+// back to what it was before the update (the restore point's), so a release
+// the store no longer runs does not stay the floor. It is only lowered, and
+// only when it is not above the release the update installed (then
+// something else raised it since, install.sh say). A restore point that did
+// not keep the floor changes nothing.
+func (u *updater) putBackFloor(rp *restorePoint) {
+	if rp.ReleaseFloor == nil || u.stateDir == "" {
+		return
 	}
-	return writeAtomic(filepath.Join(u.stateDir, "release.version"), []byte(ver+"\n"), 0o644)
+	prev := *rp.ReleaseFloor
+	cur, err := u.lastRelease()
+	if err != nil || cur == "" || release.Compare(cur, rp.ToVersion) > 0 ||
+		(prev != "" && (!release.Valid(prev) || release.Compare(prev, cur) >= 0)) {
+		return
+	}
+	path := filepath.Join(u.stateDir, "release.version")
+	if prev == "" {
+		err = os.Remove(path)
+	} else {
+		err = writeAtomic(path, []byte(prev+"\n"), 0o644)
+	}
+	if err != nil {
+		fmt.Fprintf(u.errOut, "warning: the release state in %s was not put back to what it was before the update: %v\n", u.stateDir, err)
+	}
 }
 
 // fetch downloads one release file, at most max bytes. A metadata file gets
@@ -532,7 +743,7 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 		fmt.Fprintf(u.errOut, "error: save the restore point: %v. Nothing was changed.\n", err)
 		return 1
 	}
-	if err := u.recordRelease(t); err != nil {
+	if err := u.recordKeysSeq(t); err != nil {
 		fmt.Fprintf(u.errOut, "warning: the release state in %s was not updated: %v\n", u.stateDir, err)
 	}
 	fmt.Fprintf(u.out, "Restore point saved in %s (the database as of %s, the install files and the previous bobres).\n"+
@@ -552,7 +763,11 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	if waitHealthy(ctx, u.run, u.sleep, dir, appServices(newEnv), u.out, u.errOut) != 0 {
 		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("BOBRES %s did not become healthy", t.Version))
 	}
-	// The update holds: the restore point of the one before is spent.
+	// The update holds: its release is the floor now, and the restore point
+	// of the one before is spent.
+	if err := u.recordRelease(t); err != nil {
+		fmt.Fprintf(u.errOut, "warning: the release state in %s was not updated: %v\n", u.stateDir, err)
+	}
 	if err := os.RemoveAll(active + ".prev"); err != nil {
 		fmt.Fprintf(u.errOut, "warning: %v\n", err)
 	}
@@ -632,6 +847,9 @@ func (u *updater) stageRestorePoint(ctx context.Context, dir string, env map[str
 		FromVersion: from, ToVersion: to, BackupFile: filepath.Join(active, name), CreatedAt: created,
 		CLIPath: exe, CLIBackupPath: filepath.Join(active, restorePointCLI),
 		FilesDir: filepath.Join(active, restorePointFiles), SchemaVersions: versions,
+	}
+	if floor, err := u.lastRelease(); err == nil { // else not known: a rollback leaves the floor as it is
+		rp.ReleaseFloor = &floor
 	}
 	if err := copyFiles(dir, filepath.Join(stage, restorePointFiles)); err != nil {
 		return fail(fmt.Errorf("save the install files: %w", err))
@@ -867,10 +1085,12 @@ func (u *updater) putBackCLI(rp *restorePoint) {
 }
 
 // retire is called once an update is undone: its restore point has done its
-// job. The restore point of the update before, set aside while this one ran,
-// is the current one again. Without one, a restore point whose backup was
-// restored stays (used), and one that changed nothing goes.
+// job, and the release floor goes back to what it was (putBackFloor). The
+// restore point of the update before, set aside while this one ran, is the
+// current one again. Without one, a restore point whose backup was restored
+// stays (used), and one that changed nothing goes.
 func (u *updater) retire(dir string, rp *restorePoint) {
+	u.putBackFloor(rp)
 	active := restorePointPath(dir)
 	prev := active + ".prev"
 	var err error
