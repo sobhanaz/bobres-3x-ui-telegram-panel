@@ -1759,8 +1759,8 @@
       "available": "Version {version} is available.",
       "how": "To install it, run this on the server (as root):",
       "copy_command": "Copy the update command",
-      "backup_first": "Run it on the server: it keeps your settings and data, downloads that version and restarts the services. Take a backup first. If bobres doesn't know the version, update bobres itself with the install command from the README.",
-      "unverified": "The release signature was not checked here; check it on the release page before installing.",
+      "backup_first": "It checks the release signature, backs up the database, installs the new version and rolls back on its own if the store does not come back healthy; sudo bobres rollback undoes the last update later. If bobres answers \"not implemented yet\", update bobres itself first with the install command from the README.",
+      "unverified": "The bot did not check this release's signature. bobres update checks it before installing anything.",
       "could_not_check": "Could not check for updates.",
       "last_check_failed": "The last check for updates failed.",
       "reason": {

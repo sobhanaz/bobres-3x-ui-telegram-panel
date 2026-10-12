@@ -53,9 +53,11 @@ export function mismatched(reply: Pick<SystemReply, 'services'>): ServiceHealth[
   return sortedServices(reply.services).filter((s) => s.name !== 'core' && !absent(s) && s.version_mismatch === true)
 }
 
-/** updateCommand installs a release on the server (bobres install keeps the
- * settings and data); the page only shows it, applying stays on the server. */
-export const updateCommand = (version: string) => `sudo bobres install --version ${version.replace(/^v/, '')}`
+/** UPDATE_COMMAND installs the latest release on the server: bobres update
+ * checks its signature, backs up the database first and rolls back on its
+ * own if the store does not come back healthy. The page only shows it;
+ * applying stays on the server. */
+export const UPDATE_COMMAND = 'sudo bobres update'
 
 export type UpdateState = 'newer' | 'current' | 'unknown'
 
