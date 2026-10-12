@@ -43,6 +43,9 @@ type OpenIntentsError struct {
 }
 
 func (e *OpenIntentsError) Error() string {
+	if e.Provider == USDTAuto {
+		return fmt.Sprintf("%d open %s payments: the address cannot change until they close", e.Count, e.Provider)
+	}
 	return fmt.Sprintf("%d open %s payments: the merchant id and the sandbox cannot change until they close", e.Count, e.Provider)
 }
 
@@ -99,6 +102,9 @@ type GatewayOptions struct {
 	// Build makes the Zarinpal client and validates the settings (tests point
 	// it at a fake).
 	Build func(ZarinpalSettings) (gateway.Gateway, error)
+	// BuildChain makes the TronGrid client of the automatic USDT watcher and
+	// validates its settings (tests point it at a fake). Nil = no watcher.
+	BuildChain func(ChainSettings) (gateway.ChainSource, error)
 }
 
 // gatewaySet is one snapshot of the automated gateways. It is never changed
@@ -134,6 +140,8 @@ type GatewayConfig struct {
 	Offered      bool
 	Sandbox      bool
 	MerchantHint string // the merchant id's last 4 characters, "" when none
+	Address      string // usdt_trc20_auto: the store's TRC20 address (public)
+	APIKeySet    bool   // usdt_trc20_auto: a TronGrid API key is set
 	ProxySet     bool
 	KeyMissing   bool // no payments master key: read-only
 	FromEnv      bool // the settings come from the environment
@@ -171,6 +179,19 @@ func (s *Service) ConfigureGateways(ctx context.Context, o GatewayOptions) error
 		"offered", set.offered[providerZarinpal], "from_env", zp.fromEnv, "settings", zp.settings)
 	if zp.problem != "" {
 		s.log.Warn("Zarinpal settings cannot be used", "problem", zp.problem, "why", problemText(zp.problem))
+	}
+	s.chainMu.Lock()
+	defer s.chainMu.Unlock()
+	cs, err := s.loadChain(ctx, &o)
+	if err != nil {
+		return err
+	}
+	s.chain.Store(cs)
+	if o.BuildChain != nil {
+		s.log.Info("automatic USDT settings", "readable", cs.readable(), "offered", cs.offered(), "settings", cs.settings)
+		if cs.problem != "" {
+			s.log.Warn("automatic USDT settings cannot be used", "problem", cs.problem, "why", problemText(cs.problem))
+		}
 	}
 	return nil
 }
@@ -329,7 +350,7 @@ func problemText(p string) string {
 	case ProblemPublicURL:
 		return "BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be https://host[:port]"
 	case ProblemInvalid:
-		return "the stored merchant id or proxy is refused by the Zarinpal client"
+		return "the stored settings are refused by the gateway's client"
 	}
 	return p
 }
@@ -350,13 +371,14 @@ func (set *gatewaySet) view() GatewayConfig {
 	return c
 }
 
-// GatewayConfigs lists the automated gateways' settings (staff view).
+// GatewayConfigs lists the automated gateways' settings (staff view):
+// Zarinpal, then automatic USDT.
 func (s *Service) GatewayConfigs() []GatewayConfig {
-	return []GatewayConfig{s.gws.Load().view()}
+	return []GatewayConfig{s.gws.Load().view(), s.chain.Load().view()}
 }
 
 // GatewayUpdate changes a gateway's settings. Enabled and Sandbox are the new
-// values; an empty merchant id or proxy keeps the stored one.
+// values; an empty merchant id, address, API key or proxy keeps the stored one.
 type GatewayUpdate struct {
 	Provider   string
 	Enabled    bool
@@ -364,7 +386,11 @@ type GatewayUpdate struct {
 	MerchantID string
 	Proxy      string
 	ClearProxy bool
-	ActorID    string // the core staff user making the change
+	// usdt_trc20_auto: the store's TRC20 address and the TronGrid API key.
+	Address     string
+	APIKey      string
+	ClearAPIKey bool
+	ActorID     string // the core staff user making the change
 }
 
 // SetGatewayConfig validates, stores and applies new settings. Switching off
@@ -372,6 +398,9 @@ type GatewayUpdate struct {
 // checked. The merchant id and the sandbox cannot change while payments are
 // open and being checked, or they could never be verified.
 func (s *Service) SetGatewayConfig(ctx context.Context, u GatewayUpdate) (GatewayConfig, error) {
+	if u.Provider == USDTAuto {
+		return s.setChainConfig(ctx, u)
+	}
 	if u.Provider != providerZarinpal {
 		return GatewayConfig{}, invalid("unknown gateway %q", u.Provider)
 	}
@@ -387,6 +416,9 @@ func (s *Service) SetGatewayConfig(ctx context.Context, u GatewayUpdate) (Gatewa
 	merchant, proxy := strings.ToLower(strings.TrimSpace(u.MerchantID)), strings.TrimSpace(u.Proxy)
 	if u.ClearProxy && proxy != "" {
 		return GatewayConfig{}, invalid("set a proxy or clear it, not both")
+	}
+	if u.Address != "" || u.APIKey != "" || u.ClearAPIKey {
+		return GatewayConfig{}, invalid("Zarinpal has no address and no API key")
 	}
 
 	s.gwMu.Lock()
@@ -473,19 +505,22 @@ func (s *Service) SetGatewayConfig(ctx context.Context, u GatewayUpdate) (Gatewa
 }
 
 // closeIdle lets a client that will not be used again drop its connections.
-func closeIdle(g gateway.Gateway) {
+func closeIdle(g any) {
 	if c, ok := g.(interface{ CloseIdleConnections() }); ok {
 		c.CloseIdleConnections()
 	}
 }
 
 // GatewayCandidate is settings to test before saving them; an empty merchant
-// id or proxy means the stored one.
+// id, address, API key or proxy means the stored one.
 type GatewayCandidate struct {
-	Sandbox    bool
-	MerchantID string
-	Proxy      string
-	ClearProxy bool
+	Sandbox     bool
+	MerchantID  string
+	Proxy       string
+	ClearProxy  bool
+	Address     string // usdt_trc20_auto
+	APIKey      string // usdt_trc20_auto
+	ClearAPIKey bool   // usdt_trc20_auto
 }
 
 // GatewayTest is a connection test's outcome. A gateway that cannot be
@@ -504,6 +539,9 @@ const gatewayTestTimeout = 25 * time.Second
 // the stored settings (through the very client in use), or a candidate built
 // the same way. Nothing is stored and no payment is created or verified.
 func (s *Service) TestGateway(ctx context.Context, providerName string, cand *GatewayCandidate) (GatewayTest, error) {
+	if providerName == USDTAuto {
+		return s.testChain(ctx, cand)
+	}
 	if providerName != providerZarinpal {
 		return GatewayTest{}, invalid("unknown gateway %q", providerName)
 	}
@@ -566,13 +604,15 @@ func (s *Service) TestGateway(ctx context.Context, providerName string, cand *Ga
 }
 
 // reportProviders are the providers a report can be asked for.
-var reportProviders = []string{providerZarinpal, Stars, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
+var reportProviders = []string{providerZarinpal, Stars, USDTAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
 
 // maxReportSpan bounds a report's period.
 const maxReportSpan = 366 * 24 * time.Hour
 
 // GatewayReport summarises a provider's payments created in [from, to)
-// (default: the 30 days up to now) and what is open now.
+// (default: the 30 days up to now) and what is open now; for automatic USDT
+// also the unmatched deposits staff must still credit by hand and how the
+// watcher's reads go.
 func (s *Service) GatewayReport(ctx context.Context, providerName string, from, to time.Time) (*store.GatewayReport, error) {
 	if !slices.Contains(reportProviders, providerName) {
 		return nil, invalid("unknown payment method %q", providerName)
@@ -589,5 +629,12 @@ func (s *Service) GatewayReport(ctx context.Context, providerName string, from, 
 	if to.Sub(from) > maxReportSpan {
 		return nil, invalid("a report covers at most 366 days")
 	}
-	return s.st.GatewayReport(ctx, providerName, from, to)
+	r, err := s.st.GatewayReport(ctx, providerName, from, to)
+	if err != nil || providerName != USDTAuto {
+		return r, err
+	}
+	if r.Chain, err = s.st.ChainReport(ctx, s.chain.Load().settings.Address); err != nil {
+		return nil, err
+	}
+	return r, nil
 }

@@ -5,14 +5,17 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
+import UnmatchedDeposits from './UnmatchedDeposits.vue'
 import { api, query } from '../../api'
 import { errorText } from '../../errors'
 import { money, num, type Lang } from '../../format'
 import { reportRange, reportRows } from '../../gateways'
 import type { GatewayReport } from '../../types'
 
-// A gateway's payments of the last 7 and 30 days, by status, side by side.
-const props = defineProps<{ provider: string }>()
+// A gateway's payments of the last 7 and 30 days, by status, side by side;
+// with `unmatched`, also the deposits that matched no payment and are still
+// to handle, whatever their age (when core reports them).
+const props = withDefaults(defineProps<{ provider: string; unmatched?: boolean }>(), { unmatched: false })
 const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 
@@ -42,6 +45,8 @@ async function load() {
 onMounted(load)
 
 const rows = computed(() => (week.value || month.value ? reportRows(week.value, month.value) : []))
+const deposits = computed(() => (props.unmatched && !error.value && Array.isArray(month.value?.unmatched) ? month.value.unmatched : null))
+const depositCount = computed(() => (typeof month.value?.unmatched_count === 'number' ? month.value.unmatched_count : undefined))
 const statusLabel = (s: string) => (te('payment.status.' + s) ? t('payment.status.' + s) : s)
 const totalText = (list: { amount: number; currency: string }[]) => list.map((m) => money(m, lang.value)).join(' · ')
 </script>
@@ -71,6 +76,7 @@ const totalText = (list: { amount: number; currency: string }[]) => list.map((m)
         </template>
       </Column>
     </DataTable>
+    <UnmatchedDeposits v-if="deposits" :items="deposits" :count="depositCount" class="deposits" @changed="load" />
   </section>
 </template>
 
@@ -88,5 +94,8 @@ const totalText = (list: { amount: number; currency: string }[]) => list.map((m)
 }
 .small {
   font-size: 0.8rem;
+}
+.deposits {
+  margin-block-start: 1.25rem;
 }
 </style>

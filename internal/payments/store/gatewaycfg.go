@@ -18,15 +18,17 @@ type GatewayConfig struct {
 	Sandbox     bool
 	MerchantEnc []byte // nil = no merchant id
 	ProxyEnc    []byte // nil = no proxy
+	AddressEnc  []byte // usdt_trc20_auto: the store's TRC20 address; nil = none
+	APIKeyEnc   []byte // usdt_trc20_auto: the TronGrid API key; nil = none
 	UpdatedAt   time.Time
 	UpdatedBy   *string // the staff user; nil for the environment seed
 }
 
-const gatewayConfigCols = `provider, enabled, sandbox, merchant_enc, proxy_enc, updated_at, updated_by::text`
+const gatewayConfigCols = `provider, enabled, sandbox, merchant_enc, proxy_enc, address_enc, api_key_enc, updated_at, updated_by::text`
 
 func scanGatewayConfig(row pgx.Row) (*GatewayConfig, error) {
 	var c GatewayConfig
-	err := row.Scan(&c.Provider, &c.Enabled, &c.Sandbox, &c.MerchantEnc, &c.ProxyEnc, &c.UpdatedAt, &c.UpdatedBy)
+	err := row.Scan(&c.Provider, &c.Enabled, &c.Sandbox, &c.MerchantEnc, &c.ProxyEnc, &c.AddressEnc, &c.APIKeyEnc, &c.UpdatedAt, &c.UpdatedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -59,13 +61,15 @@ func (s *Store) SeedGatewayConfig(ctx context.Context, c *GatewayConfig) (bool, 
 // SaveGatewayConfig writes a provider's settings whole and returns the row.
 func (s *Store) SaveGatewayConfig(ctx context.Context, tx pgx.Tx, c *GatewayConfig) (*GatewayConfig, error) {
 	saved, err := scanGatewayConfig(s.q(tx).QueryRow(ctx, `
-		INSERT INTO payments.gateway_configs (provider, enabled, sandbox, merchant_enc, proxy_enc, updated_at, updated_by)
-		VALUES ($1, $2, $3, $4, $5, now(), $6)
+		INSERT INTO payments.gateway_configs (provider, enabled, sandbox, merchant_enc, proxy_enc, address_enc, api_key_enc,
+			updated_at, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $7, $8, now(), $6)
 		ON CONFLICT (provider) DO UPDATE SET enabled = EXCLUDED.enabled, sandbox = EXCLUDED.sandbox,
 			merchant_enc = EXCLUDED.merchant_enc, proxy_enc = EXCLUDED.proxy_enc,
+			address_enc = EXCLUDED.address_enc, api_key_enc = EXCLUDED.api_key_enc,
 			updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
 		RETURNING `+gatewayConfigCols,
-		c.Provider, c.Enabled, c.Sandbox, c.MerchantEnc, c.ProxyEnc, c.UpdatedBy))
+		c.Provider, c.Enabled, c.Sandbox, c.MerchantEnc, c.ProxyEnc, c.UpdatedBy, c.AddressEnc, c.APIKeyEnc))
 	if err != nil {
 		return nil, fmt.Errorf("save gateway config: %w", err)
 	}
@@ -76,11 +80,13 @@ func (s *Store) SaveGatewayConfig(ctx context.Context, tx pgx.Tx, c *GatewayConf
 // confirming. For an automated gateway (Zarinpal) these are the reconciler's
 // queue: an intent whose creation failed there has no external id (nobody was
 // sent to pay it) and is left out, and an expired one stays open until the
-// reconciler has asked the gateway. Any other intent past its expiry (an
-// unpaid Stars invoice) can no longer be paid.
+// reconciler has asked the gateway. An on-chain payment ($3) likewise stays
+// open past its expiry until the watcher, having read the chain past it,
+// expires it. Any other intent past its expiry (an unpaid Stars invoice) can
+// no longer be paid.
 const openIntentWhere = `provider = $1 AND status IN ('pending','confirming')
 	AND (external_id IS NOT NULL OR provider <> ALL($2))
-	AND (provider = ANY($2) OR expires_at IS NULL OR expires_at > now())`
+	AND (provider = ANY($2) OR provider = ANY($3) OR expires_at IS NULL OR expires_at > now())`
 
 // OpenIntents counts a provider's open payments and returns when the oldest
 // was created (nil when there is none).
@@ -91,7 +97,7 @@ func (s *Store) OpenIntents(ctx context.Context, tx pgx.Tx, provider string) (in
 	)
 	if err := s.q(tx).QueryRow(ctx, `
 		SELECT count(*), min(created_at) FROM payments.payment_intents WHERE `+openIntentWhere,
-		provider, GatewayProviders).Scan(&n, &oldest); err != nil {
+		provider, GatewayProviders, ChainProviders).Scan(&n, &oldest); err != nil {
 		return 0, nil, fmt.Errorf("open intents: %w", err)
 	}
 	return n, oldest, nil
@@ -138,6 +144,7 @@ type GatewayReport struct {
 	OldestOpen *time.Time
 	LastError  *GatewayEvent
 	LastPaid   *GatewayEvent
+	Chain      *ChainReport // usdt_trc20_auto only
 }
 
 // GatewayReport builds the report for one provider.

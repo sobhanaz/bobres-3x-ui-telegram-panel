@@ -74,6 +74,10 @@ type Handler struct {
 
 	gwMu      sync.Mutex
 	gwMethods map[string]methodsEntry // currency -> usable automated methods
+
+	// checkWait: how long an automatic USDT payment's Check button rests
+	// after finding nothing (0: never).
+	checkWait time.Duration
 }
 
 // New builds a Handler. limiter may be nil.
@@ -85,7 +89,7 @@ func New(core corev1.CoreServiceClient, t Telegram, st state.Store, cat *i18n.Ca
 		cfg.Location = defaultLocation()
 	}
 	return &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
-		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}}
+		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}, checkWait: defaultCheckWait}
 }
 
 func defaultLocation() *time.Location {
@@ -297,6 +301,9 @@ func (r *req) fail(err error) {
 		key = "plan.unavailable"
 	case st.Code() == codes.AlreadyExists && strings.Contains(msg, "already submitted"):
 		key = "pay.duplicate"
+	case st.Code() == codes.InvalidArgument && (strings.Contains(msg, "payment method ") && strings.HasSuffix(msg, " is not enabled") ||
+		strings.Contains(msg, "is not set up for this price")):
+		key = "pay.not_configured" // switched off (or its rate removed) since the menu was shown
 	case st.Code() == codes.Unavailable || st.Code() == codes.DeadlineExceeded:
 		key = "error.unavailable"
 	default:

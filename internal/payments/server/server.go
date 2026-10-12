@@ -59,6 +59,8 @@ func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentR
 		out, err = s.svc.StartStars(ctx, in)
 	case "zarinpal":
 		out, err = s.svc.StartGateway(ctx, in, req.GetDescription(), s.publicURL+"/webhooks/"+req.GetProvider())
+	case domain.USDTAuto:
+		out, err = s.svc.StartChain(ctx, in)
 	default:
 		out, err = s.svc.CreateIntent(ctx, in)
 	}
@@ -124,6 +126,7 @@ func (s *Server) SetGatewayConfig(ctx context.Context, req *paymentsv1.SetGatewa
 	c, err := s.svc.SetGatewayConfig(ctx, domain.GatewayUpdate{
 		Provider: req.GetProvider(), Enabled: req.GetEnabled(), Sandbox: req.GetSandbox(),
 		MerchantID: req.GetMerchantId(), Proxy: req.GetProxy(), ClearProxy: req.GetClearProxy(), ActorID: req.GetActorId(),
+		Address: req.GetAddress(), APIKey: req.GetApiKey(), ClearAPIKey: req.GetClearApiKey(),
 	})
 	if err != nil {
 		return nil, fail(err)
@@ -135,7 +138,8 @@ func (s *Server) SetGatewayConfig(ctx context.Context, req *paymentsv1.SetGatewa
 func (s *Server) TestGateway(ctx context.Context, req *paymentsv1.TestGatewayRequest) (*paymentsv1.TestGatewayResponse, error) {
 	var cand *domain.GatewayCandidate
 	if c := req.GetCandidate(); c != nil {
-		cand = &domain.GatewayCandidate{Sandbox: c.GetSandbox(), MerchantID: c.GetMerchantId(), Proxy: c.GetProxy(), ClearProxy: c.GetClearProxy()}
+		cand = &domain.GatewayCandidate{Sandbox: c.GetSandbox(), MerchantID: c.GetMerchantId(), Proxy: c.GetProxy(), ClearProxy: c.GetClearProxy(),
+			Address: c.GetAddress(), APIKey: c.GetApiKey(), ClearAPIKey: c.GetClearApiKey()}
 	}
 	r, err := s.svc.TestGateway(ctx, req.GetProvider(), cand)
 	if err != nil {
@@ -183,14 +187,84 @@ func (s *Server) GatewayReport(ctx context.Context, req *paymentsv1.GatewayRepor
 	for _, f := range r.Failures {
 		out.Failures = append(out.Failures, &paymentsv1.GatewayReasonCount{Reason: f.Reason, Count: f.Count})
 	}
+	if c := r.Chain; c != nil {
+		out.UnmatchedCount = c.UnmatchedCount
+		for i := range c.Unmatched {
+			out.Unmatched = append(out.Unmatched, chainTransferToProto(&c.Unmatched[i]))
+		}
+		if cur := c.Cursor; cur != nil {
+			if cur.ScannedAt != nil {
+				out.LastScanAt = cur.ScannedAt.Unix()
+			}
+			if cur.OKAt != nil {
+				out.LastScanOkAt = cur.OKAt.Unix()
+			}
+			if cur.LastError != nil {
+				out.ScanError = *cur.LastError
+			}
+		}
+	}
 	return out, nil
+}
+
+// ListChainTransfers is the automatic USDT transfer log, newest first.
+func (s *Server) ListChainTransfers(ctx context.Context, req *paymentsv1.ListChainTransfersRequest) (*paymentsv1.ListChainTransfersResponse, error) {
+	page, size := int(req.GetPagination().GetPage()), int(req.GetPagination().GetPageSize())
+	if size <= 0 || size > 200 {
+		size = 25
+	}
+	if page <= 0 {
+		page = 1
+	}
+	list, total, err := s.svc.ListChainTransfers(ctx, store.ChainTransferFilter{
+		Outcome: req.GetOutcome(), TxID: req.GetTxid(), IntentID: req.GetIntentId(), Value: req.GetValue(),
+	}, size, (page-1)*size)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &paymentsv1.ListChainTransfersResponse{
+		PageInfo: &commonv1.PageInfo{Page: int32(page), PageSize: int32(size), Total: total}, //nolint:gosec // bounded above
+	}
+	for i := range list {
+		out.Transfers = append(out.Transfers, chainTransferToProto(&list[i]))
+	}
+	return out, nil
+}
+
+// ResolveChainTransfer marks an unmatched deposit handled by staff.
+func (s *Server) ResolveChainTransfer(ctx context.Context, req *paymentsv1.ResolveChainTransferRequest) (*paymentsv1.ChainTransfer, error) {
+	t, err := s.svc.ResolveChainTransfer(ctx, req.GetActorId(), req.GetTxid(), int(req.GetEventIndex()), req.GetNote())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return chainTransferToProto(t), nil
+}
+
+func chainTransferToProto(t *store.ChainTransfer) *paymentsv1.ChainTransfer {
+	p := &paymentsv1.ChainTransfer{
+		Txid: t.TxID, EventIndex: int32(min(t.EventIndex, math.MaxInt32)), Network: t.Network, //nolint:gosec // bounded
+		FromAddress: t.From, ToAddress: t.To, Amount: &commonv1.Money{Amount: t.Value, Currency: "USDT"},
+		BlockTime: t.BlockTS.Unix(), Outcome: t.Outcome, RecordedAt: t.CreatedAt.Unix(),
+	}
+	for dst, src := range map[*string]*string{&p.Reason: t.Reason, &p.IntentId: t.IntentID, &p.ResolvedBy: t.ResolvedBy, &p.Note: t.Note} {
+		if src != nil {
+			*dst = *src
+		}
+	}
+	if t.ResolvedAt != nil {
+		p.ResolvedAt = t.ResolvedAt.Unix()
+	}
+	if t.AnnounceAt != nil && t.Outcome == store.TransferUnmatched {
+		p.HeldUntil = t.AnnounceAt.Unix()
+	}
+	return p
 }
 
 func gatewayConfigToProto(c domain.GatewayConfig) *paymentsv1.GatewayConfig {
 	p := &paymentsv1.GatewayConfig{
 		Provider: c.Provider, Enabled: c.Enabled, Configured: c.Configured, Sandbox: c.Sandbox,
 		MerchantHint: c.MerchantHint, ProxySet: c.ProxySet, KeyMissing: c.KeyMissing, Offered: c.Offered,
-		Problem: c.Problem, FromEnv: c.FromEnv, UpdatedBy: c.UpdatedBy,
+		Problem: c.Problem, FromEnv: c.FromEnv, UpdatedBy: c.UpdatedBy, Address: c.Address, ApiKeySet: c.APIKeySet,
 	}
 	if !c.UpdatedAt.IsZero() {
 		p.UpdatedAt = c.UpdatedAt.Unix()
@@ -354,6 +428,9 @@ func intentToProto(in *store.Intent) *paymentsv1.PaymentIntent {
 	if in.FailureReason != nil {
 		p.FailureReason = *in.FailureReason
 	}
+	if in.PayAddress != nil {
+		p.PayAddress = *in.PayAddress
+	}
 	return p
 }
 
@@ -371,6 +448,8 @@ func fail(err error) error {
 		return status.Error(codes.FailedPrecondition, "this payment cannot change state now")
 	case errors.Is(err, store.ErrDuplicateProof):
 		return status.Error(codes.AlreadyExists, "this transaction was already submitted")
+	case errors.Is(err, domain.ErrTXIDUsed):
+		return status.Error(codes.AlreadyExists, "this transaction already paid another payment")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return status.Error(codes.AlreadyExists, "idempotency key reused for a different payment")
 	case errors.Is(err, domain.ErrAlreadyPaid):

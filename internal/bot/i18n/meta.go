@@ -71,6 +71,10 @@ var contexts = map[string]Context{
 	"lang.changed":           CtxToast,
 	"admin.status_done":      CtxToast,
 	"pay.check_pending":      CtxToast,
+	"pay.usdt_check_pending": CtxToast,
+	"pay.check_wait":         CtxToast,
+	"admin.txid_used":        CtxToastHTML,
+	"admin.unmatched_part":   CtxButtonHTML,
 	"error.generic":          CtxToastHTML,
 	"error.banned":           CtxToastHTML,
 	"error.unavailable":      CtxToastHTML,
@@ -138,6 +142,9 @@ var markupArgs = map[string][]string{
 	"alert.warning":        {"title"},
 	"alert.repeat":         {"title"},
 	"alert.resolved":       {"title"},
+
+	// An unmatched deposit's reason is a rendered text.
+	"admin.unmatched_deposit": {"reason"},
 }
 
 // onlyLangs are texts read in some languages only.

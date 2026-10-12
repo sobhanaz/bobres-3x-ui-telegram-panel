@@ -5,6 +5,7 @@ package paymentsclient
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
@@ -96,11 +97,12 @@ func gatewayIntent(in *paymentsv1.PaymentIntent) *domain.GatewayIntent {
 		Amount: in.GetAmount().GetAmount(), Currency: in.GetAmount().GetCurrency(),
 		GatewayAmount: in.GetGatewayAmount().GetAmount(), GatewayCurrency: in.GetGatewayAmount().GetCurrency(),
 		PayURL: in.GetPayUrl(), FailureReason: in.GetFailureReason(),
+		PayAddress: in.GetPayAddress(), ExpiresAt: in.GetExpiresAt(), ExternalID: in.GetExternalId(),
 	}
 }
 
-// StartGateway starts an automated payment (Zarinpal) or fixes the
-// Stars of a Telegram Stars invoice.
+// StartGateway starts an automated payment (Zarinpal, automatic USDT) or
+// fixes the Stars of a Telegram Stars invoice.
 func (c *Client) StartGateway(ctx context.Context, p domain.GatewayStart) (*domain.GatewayIntent, error) {
 	in, err := c.rpc.CreateIntent(ctx, &paymentsv1.CreateIntentRequest{
 		OrderId: p.OrderID, UserId: p.UserID, Provider: p.Provider,
@@ -197,7 +199,7 @@ func gatewayConfigOf(p *paymentsv1.GatewayConfig) *domain.GatewayConfig {
 		Provider: p.GetProvider(), Enabled: p.GetEnabled(), Configured: p.GetConfigured(), Offered: p.GetOffered(),
 		Sandbox: p.GetSandbox(), MerchantHint: p.GetMerchantHint(), ProxySet: p.GetProxySet(),
 		KeyMissing: p.GetKeyMissing(), FromEnv: p.GetFromEnv(), Problem: p.GetProblem(),
-		UpdatedAt: p.GetUpdatedAt(), UpdatedBy: p.GetUpdatedBy(),
+		UpdatedAt: p.GetUpdatedAt(), UpdatedBy: p.GetUpdatedBy(), Address: p.GetAddress(), APIKeySet: p.GetApiKeySet(),
 	}
 }
 
@@ -218,7 +220,7 @@ func (c *Client) GatewayConfigs(ctx context.Context) ([]domain.GatewayConfig, er
 func (c *Client) SetGatewayConfig(ctx context.Context, u domain.GatewayUpdate, actorID string) (*domain.GatewayConfig, error) {
 	g, err := c.rpc.SetGatewayConfig(ctx, &paymentsv1.SetGatewayConfigRequest{
 		Provider: u.Provider, Enabled: u.Enabled, Sandbox: u.Sandbox, MerchantId: u.MerchantID, Proxy: u.Proxy,
-		ClearProxy: u.ClearProxy, ActorId: actorID,
+		ClearProxy: u.ClearProxy, ActorId: actorID, Address: u.Address, ApiKey: u.APIKey, ClearApiKey: u.ClearAPIKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("payments.SetGatewayConfig: %w", err)
@@ -231,7 +233,7 @@ func (c *Client) TestGateway(ctx context.Context, provider string, cand *domain.
 	req := &paymentsv1.TestGatewayRequest{Provider: provider}
 	if cand != nil {
 		req.Candidate = &paymentsv1.GatewayCandidate{Sandbox: cand.Sandbox, MerchantId: cand.MerchantID, Proxy: cand.Proxy,
-			ClearProxy: cand.ClearProxy}
+			ClearProxy: cand.ClearProxy, Address: cand.Address, ApiKey: cand.APIKey, ClearApiKey: cand.ClearAPIKey}
 	}
 	r, err := c.rpc.TestGateway(ctx, req)
 	if err != nil {
@@ -254,7 +256,12 @@ func (c *Client) GatewayReport(ctx context.Context, provider string, from, to in
 		return nil, fmt.Errorf("payments.GatewayReport: %w", err)
 	}
 	out := &domain.GatewayReport{Provider: r.GetProvider(), From: r.GetFrom(), To: r.GetTo(), OpenCount: r.GetOpenCount(),
-		OldestOpenAt: r.GetOldestOpenAt(), LastError: gatewayEventOf(r.GetLastError()), LastPaid: gatewayEventOf(r.GetLastPaid())}
+		OldestOpenAt: r.GetOldestOpenAt(), LastError: gatewayEventOf(r.GetLastError()), LastPaid: gatewayEventOf(r.GetLastPaid()),
+		UnmatchedCount: r.GetUnmatchedCount(), LastScanAt: r.GetLastScanAt(), LastScanOKAt: r.GetLastScanOkAt(),
+		ScanError: r.GetScanError()}
+	for _, t := range r.GetUnmatched() {
+		out.Unmatched = append(out.Unmatched, chainTransferOf(t))
+	}
 	for _, t := range r.GetTotals() {
 		st := domain.GatewayStatusTotal{Status: t.GetStatus(), Count: t.GetCount(), Amounts: map[string]int64{}}
 		for _, m := range t.GetAmounts() {
@@ -263,4 +270,41 @@ func (c *Client) GatewayReport(ctx context.Context, provider string, from, to in
 		out.Totals = append(out.Totals, st)
 	}
 	return out, nil
+}
+
+func chainTransferOf(t *paymentsv1.ChainTransfer) domain.ChainTransfer {
+	return domain.ChainTransfer{
+		TxID: t.GetTxid(), EventIndex: int(t.GetEventIndex()), Network: t.GetNetwork(), From: t.GetFromAddress(),
+		To: t.GetToAddress(), Amount: t.GetAmount().GetAmount(), Currency: t.GetAmount().GetCurrency(),
+		BlockTime: t.GetBlockTime(), Outcome: t.GetOutcome(), Reason: t.GetReason(), IntentID: t.GetIntentId(),
+		RecordedAt: t.GetRecordedAt(), ResolvedBy: t.GetResolvedBy(), ResolvedAt: t.GetResolvedAt(), Note: t.GetNote(),
+	}
+}
+
+// ChainTransfers implements domain.GatewayAdmin.
+func (c *Client) ChainTransfers(ctx context.Context, f domain.ChainTransferFilter, page, size int) ([]domain.ChainTransfer, int64, error) {
+	resp, err := c.rpc.ListChainTransfers(ctx, &paymentsv1.ListChainTransfersRequest{
+		Outcome: f.Outcome, Txid: f.TxID, IntentId: f.IntentID,
+		Pagination: &commonv1.Pagination{Page: int32(min(max(page, 1), math.MaxInt32)), PageSize: int32(min(max(size, 1), 200))}, //nolint:gosec // bounded
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("payments.ListChainTransfers: %w", err)
+	}
+	out := make([]domain.ChainTransfer, 0, len(resp.GetTransfers()))
+	for _, t := range resp.GetTransfers() {
+		out = append(out, chainTransferOf(t))
+	}
+	return out, resp.GetPageInfo().GetTotal(), nil
+}
+
+// ResolveChainTransfer implements domain.GatewayAdmin.
+func (c *Client) ResolveChainTransfer(ctx context.Context, txid string, index int, actorID, note string) (*domain.ChainTransfer, error) {
+	t, err := c.rpc.ResolveChainTransfer(ctx, &paymentsv1.ResolveChainTransferRequest{
+		Txid: txid, EventIndex: int32(min(max(index, 0), math.MaxInt32)), ActorId: actorID, Note: note, //nolint:gosec // bounded
+	})
+	if err != nil {
+		return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", err)
+	}
+	out := chainTransferOf(t)
+	return &out, nil
 }

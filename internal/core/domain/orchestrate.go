@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,7 +76,7 @@ type PaymentProof struct {
 type CreatePaymentIntentParams struct {
 	UserID         string
 	OrderID        string // empty for a wallet top-up
-	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | stars
+	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | stars | usdt_trc20_auto
 	Amount         int64  // top-ups only; an order's amount comes from the order
 	Currency       string
 	IdempotencyKey string
@@ -91,7 +92,9 @@ type IntentResult struct {
 	Currency     string
 	Instructions string
 	// Details holds card_number, card_holder, usdt_trc20, usdt_erc20 and
-	// reference, so the bot can render instructions in the user's language.
+	// reference, so the bot can render instructions in the user's language;
+	// automatic USDT adds pay_address, network (TRC20) and expires_at (unix
+	// seconds; see GatewayDetails).
 	Details map[string]string
 	// Automated gateways: where to pay and what is charged there.
 	PayURL          string
@@ -164,9 +167,11 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 		if err != nil {
 			return nil, err
 		}
+		details := GatewayDetails(gi)
+		details["reference"] = PaymentReference(gi.ID)
 		return &IntentResult{
 			IntentID: gi.ID, Status: gi.Status, OrderID: p.OrderID, Provider: p.Provider,
-			Amount: amount, Currency: currency, Details: map[string]string{"reference": PaymentReference(gi.ID)},
+			Amount: amount, Currency: currency, Details: details,
 			PayURL: gi.PayURL, GatewayAmount: gi.GatewayAmount, GatewayCurrency: gi.GatewayCurrency,
 			Description: description,
 		}, nil
@@ -182,6 +187,28 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 		Amount: amount, Currency: currency, Details: details,
 		Instructions: renderInstructions(p.Provider, amount, currency, details),
 	}, nil
+}
+
+// GatewayDetails is what the bot shows of an automated payment besides its
+// amounts: for automatic USDT, the address to send GatewayAmount to
+// (pay_address), the network (TRC20), until when (expires_at, unix seconds)
+// and, once paid, the transaction (txid). Empty for the other gateways.
+func GatewayDetails(gi *GatewayIntent) map[string]string {
+	out := map[string]string{}
+	if gi.Provider != USDTAuto {
+		return out
+	}
+	if gi.PayAddress != "" {
+		out["pay_address"], out["network"] = gi.PayAddress, "TRC20"
+	}
+	if gi.ExpiresAt > 0 {
+		out["expires_at"] = strconv.FormatInt(gi.ExpiresAt, 10)
+	}
+	if gi.Status == "succeeded" && gi.ExternalID != "" {
+		txid, _, _ := strings.Cut(gi.ExternalID, "#")
+		out["txid"] = txid
+	}
+	return out
 }
 
 // paymentDetails reads the operator's payment settings for a provider.

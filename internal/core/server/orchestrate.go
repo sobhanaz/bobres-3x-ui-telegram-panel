@@ -89,6 +89,11 @@ func gatewayRef(gi *domain.GatewayIntent) *corev1.PaymentIntentRef {
 	if gi.GatewayCurrency != "" {
 		ref.GatewayAmount = &commonv1.Money{Amount: gi.GatewayAmount, Currency: gi.GatewayCurrency}
 	}
+	// Automatic USDT: the address, network, window and (once paid) the
+	// transaction, so a "check" screen can show them again.
+	if d := domain.GatewayDetails(gi); len(d) > 0 {
+		ref.Details = d
+	}
 	return ref
 }
 

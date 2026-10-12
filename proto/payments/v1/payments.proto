@@ -10,7 +10,7 @@ message PaymentIntent {
   string id = 1;
   string order_id = 2; // empty for wallet top-ups
   string user_id = 3;
-  string provider = 4; // wallet | manual_card | manual_crypto | zarinpal | stars
+  string provider = 4; // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | stars | usdt_trc20_auto
   common.v1.Money amount = 5;
   string status = 6; // pending|confirming|succeeded|failed|expired
   string provider_ref = 7; // gateways: bank reference or transaction hash
@@ -18,11 +18,18 @@ message PaymentIntent {
   int64 created_at = 9;
   int64 updated_at = 10;
   // Automated gateways: what the customer pays there, fixed at creation (IRR for
-  // Zarinpal, XTR for Telegram Stars).
+  // Zarinpal, XTR for Telegram Stars, USDT for usdt_trc20_auto: the exact,
+  // unique amount to send, scale 6).
   common.v1.Money gateway_amount = 11;
   string pay_url = 12; // where the customer pays (Zarinpal: a page on this install)
-  string external_id = 13; // the gateway's id for the payment
+  // The gateway's id for the payment (usdt_trc20_auto: the settling
+  // transaction's hash, lower case, "#n" appended for its n-th transfer).
+  string external_id = 13;
   string failure_reason = 14; // why a gateway payment failed
+  // usdt_trc20_auto: the TRON address to send gateway_amount to, on TRC20,
+  // until expires_at. A later exact payment still settles, within 48 hours of
+  // created_at.
+  string pay_address = 15;
 }
 
 message CreateIntentRequest {
@@ -31,13 +38,24 @@ message CreateIntentRequest {
   string provider = 3;
   common.v1.Money amount = 4;
   string idempotency_key = 5;
-  // Automated gateways (zarinpal, stars): the amount to charge at the
-  // gateway, computed by core from its rates. Not used by manual providers.
+  // Automated gateways (zarinpal, stars, usdt_trc20_auto): the amount to
+  // charge at the gateway, computed by core from its rates. Not used by manual
+  // providers. usdt_trc20_auto: USDT (scale 6), at most 1,000,000 USDT;
+  // payments adds 1 to 9,999 micro-USDT so the amount is unique (never a
+  // whole cent), and the returned intent's gateway_amount is what the
+  // customer must send. The same customer asking again for the same payment
+  // (order or top-up, amount) while it is open gets that payment back.
+  // FailedPrecondition "automatic USDT: too many unpaid automatic USDT
+  // payments ..." when the customer holds 10 unpaid ones from the last 2
+  // days, and "automatic USDT: every unique amount for this price is in use
+  // ..." when no unique amount is left.
   common.v1.Money gateway_amount = 6;
   string description = 7; // shown at the gateway, e.g. the plan name
 }
 
-// CheckIntentRequest asks the gateway about an open intent now.
+// CheckIntentRequest asks the gateway about an open intent now
+// (usdt_trc20_auto: reads the payment's address on chain, at most every 10
+// seconds per address).
 message CheckIntentRequest {
   string intent_id = 1;
   string user_id = 2; // must own the intent
@@ -78,6 +96,13 @@ message SubmitReceiptRequest {
   string reference_number = 4;
 }
 
+// SubmitTXIDRequest: a manual crypto proof. AlreadyExists ("this transaction
+// was already submitted") when the TXID is another payment's proof (with or
+// without 0x), settled an automatic USDT payment, or was credited by staff as
+// an unmatched deposit; FailedPrecondition ("this transaction carries an
+// automatic USDT payment's exact amount ...") when its transfer carries an
+// automatic payment's unique amount. An unmatched deposit with this TXID
+// becomes this payment's proof (payment.deposit_claimed.v1 tells staff).
 message SubmitTXIDRequest {
   string intent_id = 1;
   string user_id = 2;
@@ -85,6 +110,12 @@ message SubmitTXIDRequest {
   string txid = 4;
 }
 
+// ReviewManualPaymentRequest: approving a crypto proof whose TXID paid
+// something else since (an automatic USDT payment, an unmatched deposit staff
+// resolved) is refused: AlreadyExists "this transaction already paid another
+// payment"; so is one whose transfer carries an automatic payment's unique
+// amount: FailedPrecondition "this transaction carries an automatic USDT
+// payment's exact amount ...". The reason is at most 500 characters.
 message ReviewManualPaymentRequest {
   string intent_id = 1;
   string reviewer_id = 2;
@@ -147,9 +178,9 @@ message ListPendingReceiptsResponse {
 }
 
 // GatewayConfig is an automated gateway's settings as staff see them: whether
-// the merchant id and the proxy are set, never their values.
+// the merchant id, the API key and the proxy are set, never their values.
 message GatewayConfig {
-  string provider = 1; // zarinpal
+  string provider = 1; // zarinpal | usdt_trc20_auto
   bool enabled = 2; // switched on by the owner
   // It has credentials: payments already open keep being checked, even when
   // switched off.
@@ -170,6 +201,10 @@ message GatewayConfig {
   bool from_env = 10; // read from the environment (key_missing)
   int64 updated_at = 11; // 0 for the environment's settings
   string updated_by = 12; // core user id of the staff member, "" when none
+  // usdt_trc20_auto: the store's TRC20 address (public: customers are shown
+  // it), "" when none. configured = it has an address and can be read.
+  string address = 13;
+  bool api_key_set = 14; // usdt_trc20_auto: a TronGrid API key is set
 }
 
 message ListGatewayConfigsRequest {}
@@ -179,30 +214,41 @@ message ListGatewayConfigsResponse {
 }
 
 // SetGatewayConfigRequest replaces a gateway's settings. enabled and sandbox
-// are the new values; an empty merchant_id or proxy keeps the stored one.
-// Switching off only stops offering it. The merchant id and the sandbox cannot
-// change while payments are open (FailedPrecondition, the count in the message).
+// are the new values; an empty merchant_id, address, api_key or proxy keeps
+// the stored one. Switching off only stops offering it. Zarinpal: the merchant
+// id and the sandbox cannot change while payments are open; usdt_trc20_auto:
+// the address cannot change while payments to another address are open
+// (FailedPrecondition, the count in the message).
 message SetGatewayConfigRequest {
   string provider = 1;
   bool enabled = 2;
-  bool sandbox = 3;
-  string merchant_id = 4;
+  bool sandbox = 3; // zarinpal only
+  string merchant_id = 4; // zarinpal only
   string proxy = 5; // http(s)://[user:password@]host:port
   bool clear_proxy = 6;
   string actor_id = 7; // core user id of the staff member
+  // usdt_trc20_auto: the store's TRON address (T + 33 base58 characters,
+  // checksum verified) and TronGrid's TRON-PRO-API-KEY (optional, write-only).
+  string address = 8;
+  string api_key = 9;
+  bool clear_api_key = 10;
 }
 
 // GatewayCandidate is settings to test before saving them; an empty
-// merchant_id or proxy means the stored one.
+// merchant_id, address, api_key or proxy means the stored one.
 message GatewayCandidate {
   bool sandbox = 1;
   string merchant_id = 2;
   string proxy = 3;
   bool clear_proxy = 4;
+  string address = 5; // usdt_trc20_auto
+  string api_key = 6; // usdt_trc20_auto
+  bool clear_api_key = 7; // usdt_trc20_auto
 }
 
 // TestGatewayRequest checks credentials and their route (proxy, registered
-// IP) with a read-only call; nothing is stored, created or verified.
+// IP) with a read-only call; nothing is stored, created or verified
+// (usdt_trc20_auto: one TronGrid read of the address).
 message TestGatewayRequest {
   string provider = 1;
   GatewayCandidate candidate = 2; // unset: the stored settings
@@ -218,7 +264,7 @@ message TestGatewayResponse {
 // GatewayReportRequest: one payment method's payments created in [from, to)
 // (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
 message GatewayReportRequest {
-  string provider = 1; // zarinpal | stars | manual_card | manual_crypto | manual_zarinpal
+  string provider = 1; // zarinpal | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
   int64 from = 2;
   int64 to = 3;
 }
@@ -228,7 +274,7 @@ message GatewayStatusTotal {
   string status = 1;
   int64 count = 2;
   repeated common.v1.Money amounts = 3; // sum charged, per currency
-  repeated common.v1.Money gateway_amounts = 4; // sum asked at the gateway (IRR, XTR)
+  repeated common.v1.Money gateway_amounts = 4; // sum asked at the gateway (IRR, XTR, USDT)
 }
 
 message GatewayReasonCount {
@@ -239,7 +285,7 @@ message GatewayReasonCount {
 // GatewayEvent is one entry of the gateway audit trail.
 message GatewayEvent {
   int64 at = 1;
-  string kind = 2; // create | callback | check | confirm ...
+  string kind = 2; // create | callback | check | confirm | scan | match ...
   string intent_id = 3;
   string detail = 4; // the error of an error event; never a secret or an address
 }
@@ -254,6 +300,73 @@ message GatewayReportResponse {
   int64 oldest_open_at = 7; // 0 = none open
   GatewayEvent last_error = 8; // unset: none
   GatewayEvent last_paid = 9; // unset: none
+  // usdt_trc20_auto only: the deposits staff must still credit by hand
+  // (outcome unmatched, whatever the period, and announced: not those a
+  // manual proof may still claim, see ChainTransfer.held_until), newest
+  // first, at most 50, and how many there are.
+  repeated ChainTransfer unmatched = 10;
+  int64 unmatched_count = 11;
+  // usdt_trc20_auto only: the watcher's reads of the store's address.
+  int64 last_scan_at = 12; // 0 = never read
+  int64 last_scan_ok_at = 13; // 0 = never read successfully
+  string scan_error = 14; // the last read's error, "" when it worked; never a secret
+}
+
+// ChainTransfer is one USDT (TRC20) transfer the watcher saw arrive.
+message ChainTransfer {
+  string txid = 1; // lower-case hex, no 0x
+  int32 event_index = 2; // the transfer's place in its transaction, from 0
+  string network = 3; // TRC20
+  string from_address = 4;
+  string to_address = 5;
+  common.v1.Money amount = 6; // USDT, scale 6
+  int64 block_time = 7; // unix seconds
+  // matched (it settled intent_id) | unmatched (no payment has exactly this
+  // amount: credit it by hand, then resolve it) | manual (intent_id, a manual
+  // crypto payment, carries this TXID) | resolved (handled by staff) |
+  // ignored (dust under 0.1 USDT)
+  string outcome = 8;
+  // unmatched: no_payment | already_paid | closed | ambiguous |
+  // shadowed_exact_match (an automatic payment asked for exactly this amount,
+  // but a manual proof carrying this TXID was approved before the watcher saw
+  // it: the automatic payer was not credited); ignored: dust
+  string reason = 9;
+  string intent_id = 10;
+  int64 recorded_at = 11;
+  string resolved_by = 12; // core user id of the staff member
+  int64 resolved_at = 13;
+  string note = 14;
+  // unmatched, no_payment: a manual proof carrying this TXID may still claim
+  // it (the address may take manual USDT too), so staff are told to credit it
+  // by hand only from this time (unix seconds) if still unmatched; 0 =
+  // announced already, or nothing pending.
+  int64 held_until = 15;
+}
+
+// ResolveChainTransferRequest marks an unmatched deposit handled (credited by
+// hand or refunded). FailedPrecondition when it is not unmatched (or
+// ignored); its TXID can no longer be sent as a manual proof.
+message ResolveChainTransferRequest {
+  string txid = 1;
+  int32 event_index = 2;
+  string actor_id = 3; // core user id of the staff member
+  string note = 4; // at most 500 characters
+}
+
+// ListChainTransfersRequest filters the USDT transfer log; every field is optional.
+message ListChainTransfersRequest {
+  string outcome = 1; // matched | unmatched | manual | resolved | ignored
+  string txid = 2; // one transaction (with or without 0x)
+  string intent_id = 3; // the transfers tied to one payment
+  common.v1.Pagination pagination = 4;
+  // micro-USDT: only transfers of exactly this amount (0 = any), e.g. the
+  // deposits matching what a manual proof under review should have sent
+  int64 value = 5;
+}
+
+message ListChainTransfersResponse {
+  repeated ChainTransfer transfers = 1; // newest first
+  common.v1.PageInfo page_info = 2;
 }
 
 // RecentLogsRequest asks for the service's kept warnings and errors (core's
@@ -293,6 +406,9 @@ service PaymentsService {
   rpc SetGatewayConfig(SetGatewayConfigRequest) returns (GatewayConfig);
   rpc TestGateway(TestGatewayRequest) returns (TestGatewayResponse);
   rpc GatewayReport(GatewayReportRequest) returns (GatewayReportResponse);
+  // Automatic USDT: the transfer log, and marking an unmatched deposit handled.
+  rpc ListChainTransfers(ListChainTransfersRequest) returns (ListChainTransfersResponse);
+  rpc ResolveChainTransfer(ResolveChainTransferRequest) returns (ChainTransfer);
   // The service's kept warnings and errors, for the System page.
   rpc RecentLogs(RecentLogsRequest) returns (RecentLogsResponse);
 }

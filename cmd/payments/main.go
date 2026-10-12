@@ -17,6 +17,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/trongrid"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	paymentserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
@@ -63,6 +64,15 @@ func setup(rt *app.Runtime) error {
 			}
 			return g, nil
 		},
+		// Automatic USDT reads the store's address on TronGrid, through the
+		// optional proxy set with it.
+		BuildChain: func(c domain.ChainSettings) (gateway.ChainSource, error) {
+			cl, err := trongrid.New(trongrid.Config{APIKey: c.APIKey, Proxy: c.Proxy})
+			if err != nil {
+				return nil, err
+			}
+			return cl, nil
+		},
 	}
 	if cfg.MasterKey != "" {
 		if opts.Envelope, err = bcrypto.NewEnvelope([]byte(cfg.MasterKey)); err != nil {
@@ -82,6 +92,8 @@ func setup(rt *app.Runtime) error {
 	web.New(svc, st, rt.Log).Register(rt.Mux)
 	// Catches payments whose return was lost (closed browser, no callback).
 	rt.Go("gateway-reconciler", func(ctx context.Context) error { return svc.RunReconciler(ctx, 30*time.Second) })
+	// Reads the store's TRON address for automatic USDT payments.
+	rt.Go("chain-watcher", func(ctx context.Context) error { return svc.RunChainWatcher(ctx, 30*time.Second) })
 	eventsv1.RegisterEventFeedServiceServer(gs, eventbus.NewFeedServer(eventbus.NewFeed(st.DB(), "outbox_payments")))
 	return rt.ServeGRPC(cfg.GRPCAddr, gs)
 }

@@ -21,6 +21,21 @@ import (
 func (s *Service) HandlePaymentEvent(ctx context.Context, m eventbus.Message) error {
 	switch m.Topic {
 	case events.PaymentsPaymentSucceeded, events.PaymentsPaymentRejected, events.PaymentsLegacyWalletCredited:
+	case events.PaymentsDepositUnmatched:
+		// Money nobody was credited for: staff are told, nothing moves.
+		err := s.depositUnmatched(ctx, m)
+		if isDataError(err) {
+			return eventbus.Permanent(err)
+		}
+		return err
+	case events.PaymentsDepositClaimed:
+		// A manual proof names a deposit the watcher saw: staff are told,
+		// nothing moves.
+		err := s.depositClaimed(ctx, m)
+		if isDataError(err) {
+			return eventbus.Permanent(err)
+		}
+		return err
 	default:
 		return nil
 	}

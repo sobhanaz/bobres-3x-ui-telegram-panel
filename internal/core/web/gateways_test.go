@@ -26,6 +26,15 @@ type fakeGateways struct {
 	reports  []string // provider|from|to
 	failNext error
 	down     bool
+	// automatic USDT, listed after Zarinpal when set: its settings, its
+	// report, its transfer log and what was resolved.
+	usdt       *domain.GatewayConfig
+	apiKey     string
+	usdtReport domain.GatewayReport
+	transfers  []domain.ChainTransfer
+	filters    []domain.ChainTransferFilter
+	resolved   []string // txid#index|actor|note
+	testedFor  []string
 }
 
 func (f *fakeGateways) fail() error {
@@ -43,6 +52,9 @@ func (f *fakeGateways) GatewayConfigs(context.Context) ([]domain.GatewayConfig, 
 	if f.down {
 		return nil, fmt.Errorf("payments.ListGatewayConfigs: %w", status.Error(codes.Unavailable, "down"))
 	}
+	if f.usdt != nil {
+		return []domain.GatewayConfig{f.cfg, *f.usdt}, nil
+	}
 	return []domain.GatewayConfig{f.cfg}, nil
 }
 
@@ -53,6 +65,21 @@ func (f *fakeGateways) SetGatewayConfig(_ context.Context, u domain.GatewayUpdat
 		return nil, fmt.Errorf("payments.SetGatewayConfig: %w", err)
 	}
 	f.actor = actorID
+	if u.Provider == domain.USDTAuto && f.usdt != nil {
+		if u.Address != "" {
+			f.usdt.Address = u.Address
+		}
+		switch {
+		case u.ClearAPIKey:
+			f.apiKey = ""
+		case u.APIKey != "":
+			f.apiKey = u.APIKey
+		}
+		f.usdt.Enabled, f.usdt.APIKeySet, f.usdt.Configured = u.Enabled, f.apiKey != "", f.usdt.Address != ""
+		f.usdt.Offered = u.Enabled && f.usdt.Configured
+		out := *f.usdt
+		return &out, nil
+	}
 	if u.MerchantID != "" {
 		f.merchant = u.MerchantID
 		f.cfg.MerchantHint = u.MerchantID[len(u.MerchantID)-4:]
@@ -70,13 +97,19 @@ func (f *fakeGateways) SetGatewayConfig(_ context.Context, u domain.GatewayUpdat
 	return &out, nil
 }
 
-func (f *fakeGateways) TestGateway(_ context.Context, _ string, c *domain.GatewayCandidate) (*domain.GatewayTest, error) {
+func (f *fakeGateways) TestGateway(_ context.Context, provider string, c *domain.GatewayCandidate) (*domain.GatewayTest, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.fail(); err != nil {
 		return nil, fmt.Errorf("payments.TestGateway: %w", err)
 	}
-	f.tested = append(f.tested, c)
+	f.tested, f.testedFor = append(f.tested, c), append(f.testedFor, provider)
+	if provider == domain.USDTAuto {
+		if c != nil && c.APIKey == "00000000-dead-beef-0000-000000000000" {
+			return &domain.GatewayTest{Detail: "trongrid: the API key was refused (HTTP 401)"}, nil
+		}
+		return &domain.GatewayTest{OK: true, LatencyMS: 80}, nil
+	}
 	if c != nil && c.MerchantID == "9f8e7d6c-5b4a-4321-8fed-cba987654321" {
 		return &domain.GatewayTest{Detail: "Zarinpal refused the merchant id (-10)"}, nil
 	}
@@ -91,8 +124,51 @@ func (f *fakeGateways) GatewayReport(_ context.Context, provider string, from, t
 	}
 	f.reports = append(f.reports, fmt.Sprintf("%s|%d|%d", provider, from, to))
 	r := f.report
+	if provider == domain.USDTAuto {
+		r = f.usdtReport
+	}
 	r.Provider = provider
 	return &r, nil
+}
+
+func (f *fakeGateways) ChainTransfers(_ context.Context, flt domain.ChainTransferFilter, _, _ int) ([]domain.ChainTransfer, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.fail(); err != nil {
+		return nil, 0, fmt.Errorf("payments.ListChainTransfers: %w", err)
+	}
+	f.filters = append(f.filters, flt)
+	var out []domain.ChainTransfer
+	for _, t := range f.transfers {
+		if (flt.Outcome == "" || t.Outcome == flt.Outcome) && (flt.TxID == "" || t.TxID == flt.TxID) &&
+			(flt.IntentID == "" || t.IntentID == flt.IntentID) {
+			out = append(out, t)
+		}
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeGateways) ResolveChainTransfer(_ context.Context, txid string, index int, actorID, note string) (*domain.ChainTransfer, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.fail(); err != nil {
+		return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", err)
+	}
+	for i := range f.transfers {
+		t := &f.transfers[i]
+		if t.TxID != txid || t.EventIndex != index {
+			continue
+		}
+		if t.Outcome != "unmatched" {
+			return nil, fmt.Errorf("payments.ResolveChainTransfer: %w",
+				status.Error(codes.FailedPrecondition, "this transfer is "+t.Outcome+", not unmatched"))
+		}
+		t.Outcome, t.ResolvedBy, t.ResolvedAt, t.Note = "resolved", actorID, 1_800_000_500, note
+		f.resolved = append(f.resolved, fmt.Sprintf("%s#%d|%s|%s", txid, index, actorID, note))
+		out := *t
+		return &out, nil
+	}
+	return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", status.Error(codes.NotFound, "no such transfer"))
 }
 
 const (

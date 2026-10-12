@@ -22,12 +22,14 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	paydomain "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/trongrid"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	payserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
 	paystore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
 	provserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/server"
 	provstore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tronfake"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xuifake"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/zpfake"
@@ -98,6 +100,14 @@ func realProvisioner(t *testing.T) (*provisionerclient.Client, *xuifake.Server, 
 // knows one merchant.
 func realPayments(t *testing.T) (*paymentsclient.Client, *paystore.Store) {
 	t.Helper()
+	pay, ps, _ := startPayments(t, nil)
+	return pay, ps
+}
+
+// startPayments runs payments as realPayments does; with chain, automatic
+// USDT reads that fake TronGrid through the real client.
+func startPayments(t *testing.T, chain *tronfake.Server) (*paymentsclient.Client, *paystore.Store, *paydomain.Service) {
+	t.Helper()
 	ctx := context.Background()
 	dsn := testdb.DSN(t)
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
@@ -108,7 +118,8 @@ func realPayments(t *testing.T) (*paymentsclient.Client, *paystore.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(ps.Close)
-	if _, err := ps.DB().Exec(ctx, `TRUNCATE payments.gateway_configs, payments.payment_intents, payments.outbox_payments CASCADE`); err != nil {
+	if _, err := ps.DB().Exec(ctx, `TRUNCATE payments.gateway_configs, payments.payment_intents, payments.outbox_payments,
+		payments.outbox_payments_cursors, payments.chain_transfers, payments.chain_cursors, payments.gateway_events CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	zp := zpfake.New()
@@ -119,16 +130,27 @@ func realPayments(t *testing.T) (*paymentsclient.Client, *paystore.Store) {
 		t.Fatal(err)
 	}
 	svc := paydomain.New(ps)
-	if err := svc.ConfigureGateways(ctx, paydomain.GatewayOptions{Env: "prod", Envelope: envl,
+	svc.SetUnmatchedHold(0) // unmatched deposits are announced at once, not held for a manual proof
+	opts := paydomain.GatewayOptions{Env: "prod", Envelope: envl,
 		Build: func(z paydomain.ZarinpalSettings) (gateway.Gateway, error) {
 			return zarinpal.New(zarinpal.Config{MerchantID: z.MerchantID, Sandbox: z.Sandbox, Proxy: z.Proxy, BaseURL: zp.URL})
-		}}); err != nil {
+		}}
+	if chain != nil {
+		opts.BuildChain = func(c paydomain.ChainSettings) (gateway.ChainSource, error) {
+			cl, err := trongrid.New(trongrid.Config{APIKey: c.APIKey, Proxy: c.Proxy, BaseURL: chain.URL})
+			if err != nil {
+				return nil, err
+			}
+			return cl, nil
+		}
+	}
+	if err := svc.ConfigureGateways(ctx, opts); err != nil {
 		t.Fatal(err)
 	}
 	srv := payserver.New(svc, ps)
 	srv.SetPublicURL("https://shop.example.test")
 	conn := serveCore(t, srv.Register)
-	return paymentsclient.New(paymentsv1.NewPaymentsServiceClient(conn)), ps
+	return paymentsclient.New(paymentsv1.NewPaymentsServiceClient(conn)), ps, svc
 }
 
 // Servers through the real provisioner: added after a real connection test,

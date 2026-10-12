@@ -6,3 +6,12 @@ e369488df15116463a3d757f5830768d102ddde4:tests/e2e/e2e_test.go:generic-api-key:1
 149245f4c17b9abc6c586297c348cb842dc796cb:cmd/bobres/support_bundle_test.go:generic-api-key:27
 149245f4c17b9abc6c586297c348cb842dc796cb:cmd/bobres/support_bundle_test.go:generic-api-key:28
 149245f4c17b9abc6c586297c348cb842dc796cb:cmd/bobres/support_bundle_test.go:generic-api-key:45
+# False positives: made-up TronGrid API keys in the automatic USDT tests. The tests now use
+# low-entropy values; these pin the original commits' findings.
+ad45aa90d1a297982b92151bf8bff512b7bff4aa:internal/core/domain/chain_test.go:generic-api-key:22
+ad45aa90d1a297982b92151bf8bff512b7bff4aa:internal/core/web/usdt_test.go:generic-api-key:20
+71dee437de261a2f77eb95f29db4f63c7ddbcfb7:internal/payments/domain/chain_test.go:generic-api-key:30
+71dee437de261a2f77eb95f29db4f63c7ddbcfb7:internal/payments/domain/chain_test.go:generic-api-key:31
+71dee437de261a2f77eb95f29db4f63c7ddbcfb7:internal/payments/gateway/trongrid/trongrid_test.go:generic-api-key:19
+71dee437de261a2f77eb95f29db4f63c7ddbcfb7:internal/payments/server/chain_test.go:generic-api-key:32
+845000bc83dc7e257a66cbacc78a1da7ce3f89fc:web/dashboard/src/__tests__/gateways.test.ts:generic-api-key:62

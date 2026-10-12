@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,6 +38,7 @@ func (f *fakeCore) GetUser(_ context.Context, in *corev1.GetUserRequest, _ ...gr
 type sentText struct {
 	chat int64
 	text string
+	kb   *tg.Keyboard
 }
 
 // fakeTG records what was sent; chats in fail refuse with that error.
@@ -46,13 +48,13 @@ type fakeTG struct {
 	fail map[int64]error
 }
 
-func (f *fakeTG) SendMessage(_ context.Context, chatID int64, text string, _ *tg.Keyboard) (*tg.Message, error) {
+func (f *fakeTG) SendMessage(_ context.Context, chatID int64, text string, kb *tg.Keyboard) (*tg.Message, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.fail[chatID]; err != nil {
 		return nil, err
 	}
-	f.sent = append(f.sent, sentText{chatID, text})
+	f.sent = append(f.sent, sentText{chatID, text, kb})
 	return &tg.Message{MessageID: len(f.sent)}, nil
 }
 
@@ -225,5 +227,217 @@ func TestAlertDurations(t *testing.T) {
 	}
 	if got := n.duration("fa", 6*time.Hour); got != "۶ ساعت" {
 		t.Errorf("fa: %q", got)
+	}
+}
+
+func handleDeposit(t *testing.T, n *Notifier, e events.DepositUnmatchedEvent) error {
+	t.Helper()
+	payload, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n.Handle(context.Background(), eventbus.Message{Topic: events.DepositUnmatched, Payload: payload})
+}
+
+const depositTx = "4f1c0e9a5b7d2c3e8f6a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
+
+var overpaid = events.DepositUnmatchedEvent{TxID: depositTx, Network: "TRC20", From: "TAuD2W5vggcdy1cNpem4uH3HreRMyPQLHT",
+	To: "TS3xQSYkuSNpuUzmCprGpTHHKq9XVTgu3r", Amount: 2_600_100, Currency: "USDT",
+	BlockTime: time.Date(2026, 11, 2, 9, 5, 0, 0, i18n.CurrentLocation()).Unix(), Reason: events.UnmatchedNoPayment}
+
+// A USDT deposit that matched no payment reaches the staff who get payment
+// alerts, each in their language, with the exact amount, the sender, the
+// transaction (and a link to it) and why, and is always sent (money nobody
+// was credited for); a broken payload is dropped, an alert nobody got is
+// retried.
+func TestUnmatchedDepositAlert(t *testing.T) {
+	n, tgf, set := alertNotifier(t)
+	set.SetStaff([]settings.Contact{
+		{TelegramID: ownerTG, Language: "fa", Role: "owner"},
+		{TelegramID: adminTG, Language: "en", Role: "admin"},
+		{TelegramID: supportTG, Language: "en", Role: "support"},
+	})
+	set.Replace(map[string]string{"notify.recipients": "staff", "notify.system_alerts": "false", "notify.sales": "false"})
+	if err := handleDeposit(t, n, overpaid); err != nil {
+		t.Fatal(err)
+	}
+	got := tgf.take()
+	if len(got) != 2 || got[0].chat != ownerTG || got[1].chat != adminTG {
+		t.Fatalf("recipients: %+v", got)
+	}
+	want := "⚠️ <b>USDT arrived that matches no payment</b>\nAmount: <code>2.600100</code> USDT\n" +
+		"From: <code>TAuD2W5vggcdy1cNpem4uH3HreRMyPQLHT</code>\nTo: <code>TS3xQSYkuSNpuUzmCprGpTHHKq9XVTgu3r</code>\n" +
+		"When: 2 Nov 2026, 09:05\nTransaction: <code>" + depositTx + "</code>\n" +
+		"Why: No open payment has exactly this amount: underpaid, overpaid, an exchange took its fee, or not one of your customers.\n\n" +
+		"Nobody was credited. Find the customer (the amount, the sender, the time), credit their wallet by hand, then mark the deposit handled on the dashboard (Payment gateways)."
+	if got[1].text != want {
+		t.Fatalf("en text:\n got %q\nwant %q", got[1].text, want)
+	}
+	fa := got[0].text
+	for _, sub := range []string{"<code>2.600100</code> USDT", "۱۱ آبان ۱۴۰۵، ۰۹:۰۵", "هیچ پرداخت بازی دقیقاً این مبلغ را ندارد", "<code>" + depositTx + "</code>"} {
+		if !strings.Contains(fa, sub) {
+			t.Errorf("fa text has no %q: %q", sub, fa)
+		}
+	}
+	for _, s := range got {
+		var link, dash bool
+		for _, row := range s.kb.InlineKeyboard {
+			for _, b := range row {
+				link = link || b.URL == "https://tronscan.org/#/transaction/"+depositTx
+				dash = dash || b.CallbackData == "dash"
+			}
+		}
+		if !link || !dash {
+			t.Errorf("buttons for %d: %+v", s.chat, s.kb)
+		}
+	}
+
+	// A second transfer in one transaction is named; a hostile sender, an
+	// unknown reason and a transaction id that is not one are escaped and
+	// get no link.
+	odd := overpaid
+	odd.EventIndex, odd.From, odd.Reason, odd.TxID = 1, "<b>T</b>&x", "newer_reason<i>", "<script>"
+	set.Replace(map[string]string{})
+	if err := handleDeposit(t, n, odd); err != nil {
+		t.Fatal(err)
+	}
+	got = tgf.take()
+	if len(got) != 1 || got[0].chat != ownerTG {
+		t.Fatalf("to the owner: %+v", got)
+	}
+	for _, sub := range []string{"<code>&lt;b&gt;T&lt;/b&gt;&amp;x</code>", "newer_reason&lt;i&gt;", "<code>&lt;script&gt;</code> (انتقال ۲ این تراکنش)"} {
+		if !strings.Contains(got[0].text, sub) {
+			t.Errorf("no %q in %q", sub, got[0].text)
+		}
+	}
+	for _, row := range got[0].kb.InlineKeyboard {
+		for _, b := range row {
+			if b.URL != "" {
+				t.Errorf("a link for a malformed transaction id: %+v", b)
+			}
+		}
+	}
+	for _, r := range []string{events.UnmatchedAlreadyPaid, events.UnmatchedClosed, events.UnmatchedAmbiguous} {
+		e := overpaid
+		e.Reason = r
+		if text, _ := n.unmatchedDeposit("en", e); !strings.Contains(text, "Why: "+n.cat.T("en", "admin.unmatched_reason."+r)) ||
+			strings.Contains(text, "admin.unmatched_reason") {
+			t.Errorf("%s: %q", r, text)
+		}
+	}
+
+	// Nobody reachable: retried; a broken payload: dropped.
+	tgf.fail = map[int64]error{ownerTG: errors.New("network")}
+	if err := handleDeposit(t, n, overpaid); err == nil {
+		t.Fatal("an alert nobody got was not retried")
+	}
+	tgf.fail = nil
+	if err := n.Handle(context.Background(), eventbus.Message{Topic: events.DepositUnmatched, Payload: []byte("[")}); !eventbus.IsPermanent(err) {
+		t.Fatalf("broken payload: %v", err)
+	}
+}
+
+func handleClaim(t *testing.T, n *Notifier, e events.DepositClaimedEvent) error {
+	t.Helper()
+	payload, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n.Handle(context.Background(), eventbus.Message{Topic: events.DepositClaimed, Payload: payload})
+}
+
+var claimedByProof = events.DepositClaimedEvent{TxID: depositTx, Network: "TRC20", From: "TAuD2W5vggcdy1cNpem4uH3HreRMyPQLHT",
+	To: "TS3xQSYkuSNpuUzmCprGpTHHKq9XVTgu3r", Amount: 2_600_100, Currency: "USDT",
+	BlockTime: time.Date(2026, 11, 2, 9, 5, 0, 0, i18n.CurrentLocation()).Unix(), Reason: events.UnmatchedNoPayment,
+	IntentID: "0192f0c8-7b1a-7c3d-9e4f-5a6b7c8d9e0f", Proof: "waiting"}
+
+// A manual USDT proof that names a deposit the watcher saw reaches the staff
+// who get payment alerts, each in their language, with the exact amount, the
+// sender, the transaction (and a link to it) and the payment's reference,
+// and is always sent (anyone may copy a public transaction id); a broken
+// payload is dropped, an alert nobody got is retried.
+func TestClaimedDepositAlert(t *testing.T) {
+	n, tgf, set := alertNotifier(t)
+	set.SetStaff([]settings.Contact{
+		{TelegramID: ownerTG, Language: "fa", Role: "owner"},
+		{TelegramID: adminTG, Language: "en", Role: "admin"},
+		{TelegramID: supportTG, Language: "en", Role: "support"},
+	})
+	set.Replace(map[string]string{"notify.recipients": "staff", "notify.system_alerts": "false", "notify.sales": "false",
+		"notify.new_payment": "false"})
+	if err := handleClaim(t, n, claimedByProof); err != nil {
+		t.Fatal(err)
+	}
+	got := tgf.take()
+	if len(got) != 2 || got[0].chat != ownerTG || got[1].chat != adminTG {
+		t.Fatalf("recipients: %+v", got)
+	}
+	want := "⚠️ <b>A manual USDT proof uses a deposit the watcher saw</b>\n" +
+		"A customer sent this transaction as the proof of a manual USDT payment. The automatic USDT watcher had already seen it reach your address.\n" +
+		"Amount: <code>2.600100</code> USDT\nFrom: <code>TAuD2W5vggcdy1cNpem4uH3HreRMyPQLHT</code>\n" +
+		"Transaction: <code>" + depositTx + "</code>\nPayment reference: <code>7C8D9E0F</code>\n\n" +
+		"Anyone can copy a public transaction id. Before approving the proof, check that this customer really sent it. Never credit this deposit by hand."
+	if got[1].text != want {
+		t.Fatalf("en text:\n got %q\nwant %q", got[1].text, want)
+	}
+	fa := got[0].text
+	for _, sub := range []string{"<code>2.600100</code> USDT", "<code>TAuD2W5vggcdy1cNpem4uH3HreRMyPQLHT</code>",
+		"<code>" + depositTx + "</code>", "کد پیگیری پرداخت: <code>7C8D9E0F</code>", "دستی شارژ نکنید"} {
+		if !strings.Contains(fa, sub) {
+			t.Errorf("fa text has no %q: %q", sub, fa)
+		}
+	}
+	for _, s := range got {
+		var link, review bool
+		for _, row := range s.kb.InlineKeyboard {
+			for _, b := range row {
+				link = link || b.URL == "https://tronscan.org/#/transaction/"+depositTx
+				review = review || b.CallbackData == "adm:pend"
+			}
+		}
+		if !link || !review {
+			t.Errorf("buttons for %d: %+v", s.chat, s.kb)
+		}
+	}
+
+	// A proof approved already: the dashboard, not the review queue. A second
+	// transfer in one transaction is named; a hostile sender and a
+	// transaction id that is not one are escaped and get no link.
+	odd := claimedByProof
+	odd.EventIndex, odd.From, odd.TxID, odd.Proof = 1, "<b>T</b>&x", "<script>", "approved"
+	set.Replace(map[string]string{})
+	if err := handleClaim(t, n, odd); err != nil {
+		t.Fatal(err)
+	}
+	got = tgf.take()
+	if len(got) != 1 || got[0].chat != ownerTG {
+		t.Fatalf("to the owner: %+v", got)
+	}
+	for _, sub := range []string{"<code>&lt;b&gt;T&lt;/b&gt;&amp;x</code>", "<code>&lt;script&gt;</code> (انتقال ۲ این تراکنش)"} {
+		if !strings.Contains(got[0].text, sub) {
+			t.Errorf("no %q in %q", sub, got[0].text)
+		}
+	}
+	var dash bool
+	for _, row := range got[0].kb.InlineKeyboard {
+		for _, b := range row {
+			if b.URL != "" || b.CallbackData == "adm:pend" {
+				t.Errorf("approved proof, malformed transaction id: %+v", b)
+			}
+			dash = dash || b.CallbackData == "dash"
+		}
+	}
+	if !dash {
+		t.Errorf("no dashboard button: %+v", got[0].kb)
+	}
+
+	// Nobody reachable: retried; a broken payload: dropped.
+	tgf.fail = map[int64]error{ownerTG: errors.New("network")}
+	if err := handleClaim(t, n, claimedByProof); err == nil {
+		t.Fatal("an alert nobody got was not retried")
+	}
+	tgf.fail = nil
+	if err := n.Handle(context.Background(), eventbus.Message{Topic: events.DepositClaimed, Payload: []byte("[")}); !eventbus.IsPermanent(err) {
+		t.Fatalf("broken payload: %v", err)
 	}
 }
