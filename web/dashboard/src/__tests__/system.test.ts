@@ -17,7 +17,7 @@ import {
   serviceState,
   sortedServices,
   unixOf,
-  updateCommand,
+  UPDATE_COMMAND,
   updateDetail,
   updateReason,
   updateState,
@@ -146,7 +146,7 @@ describe('update check', () => {
     const away = upd({ latest: '', error: 'unreachable', detail: 'checksums.txt: dial tcp: i/o timeout' })
     expect(updateDetail(away, updateReason(away))).toBe('')
     expect(updateDetail(null, 'unsupported')).toBe('')
-    expect(updateCommand('v1.6.0')).toBe('sudo bobres install --version 1.6.0')
+    expect(UPDATE_COMMAND).toBe('sudo bobres update')
   })
 })
 
@@ -546,14 +546,14 @@ describe('system page', () => {
     expect(document.querySelector('.current-version')?.textContent).toBe('1.4.0')
     expect(document.querySelector('.latest-version')?.textContent).toBe('1.5.0')
     expect(card.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.available'), { version: '\u20681.5.0\u2069' }))
-    expect(card.querySelector('.command')?.textContent).toBe('sudo bobres install --version 1.5.0')
+    expect(card.querySelector('.command')?.textContent).toBe('sudo bobres update')
     expect(document.querySelector('.updates .checked')?.textContent).toContain(text('system.updates.checked_at').split('{')[0])
     // the bot could not check the signature: said, and that the CLI will
     expect(document.querySelector('.unverified')?.textContent?.trim()).toBe(text('system.updates.unverified'))
     expect(document.querySelector('.up-to-date')).toBeNull()
     expect(document.querySelector('.not-checked')).toBeNull()
     btn('button.copy-command').click()
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('sudo bobres install --version 1.5.0'))
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('sudo bobres update'))
     // nothing is applied from the page
     expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
     // checks again on demand

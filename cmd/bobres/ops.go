@@ -43,8 +43,13 @@ type ops struct {
 	run func(ctx context.Context, dir string, args ...string) ([]byte, error)
 	// stream runs a docker command with its output going straight to the user.
 	stream func(ctx context.Context, dir string, args ...string) error
+	// pipe runs a docker command reading stdin from in and writing stdout to
+	// w (nil: discarded), its errors going to the user: a database dump
+	// streamed out of or into a container.
+	pipe   func(ctx context.Context, dir string, in io.Reader, w io.Writer, args ...string) error
 	freeGB func(path string) float64
 	sleep  func(time.Duration)
+	now    func() time.Time
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
@@ -60,8 +65,14 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 			cmd.Dir, cmd.Stdout, cmd.Stderr, cmd.Stdin = dir, out, errOut, os.Stdin
 			return cmd.Run()
 		},
+		pipe: func(ctx context.Context, dir string, in io.Reader, w io.Writer, args ...string) error {
+			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
+			cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr = dir, in, w, errOut
+			return cmd.Run()
+		},
 		freeGB: freeDiskGB,
 		sleep:  time.Sleep,
+		now:    time.Now,
 	}
 }
 

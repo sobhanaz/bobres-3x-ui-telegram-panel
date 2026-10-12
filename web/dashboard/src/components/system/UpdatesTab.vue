@@ -10,12 +10,12 @@ import Tag from 'primevue/tag'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, isolate, type Lang } from '../../format'
-import { updateCommand, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
+import { UPDATE_COMMAND, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
 import type { SystemReply } from '../../types'
 
 // Whether a newer BOBRES release is out, as the bot last read it (core has
 // no way out; the bot checks every 12 h). Installing it stays on the server's
-// command line: the page shows the command.
+// command line: the page shows the command (bobres update).
 const { t, locale } = useI18n()
 const toast = useToast()
 const lang = computed(() => locale.value as Lang)
@@ -50,7 +50,7 @@ const severity: Record<UpdateState, 'warn' | 'success' | 'secondary'> = { newer:
 
 async function copyCommand() {
   try {
-    await navigator.clipboard.writeText(updateCommand(latest.value))
+    await navigator.clipboard.writeText(UPDATE_COMMAND)
     toast.add({ severity: 'info', summary: t('common.copied'), life: 2000 })
   } catch {
     /* clipboard blocked: the command is selectable */
@@ -106,7 +106,7 @@ async function copyCommand() {
         <div class="available-title">{{ t('system.updates.available', { version: isolate(latest) }) }}</div>
         <p class="available-hint">{{ t('system.updates.how') }}</p>
         <div class="command-row">
-          <code class="app-ltr app-mono command">{{ updateCommand(latest) }}</code>
+          <code class="app-ltr app-mono command">{{ UPDATE_COMMAND }}</code>
           <Button
             icon="pi pi-copy"
             text
