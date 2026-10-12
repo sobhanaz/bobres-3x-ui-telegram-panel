@@ -45,10 +45,20 @@ func TestIntegrationRealPanel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Both tested versions report panelVersion in server/status.
-	ver, err := a.HealthCheck(ctx)
-	if err != nil {
-		t.Fatalf("health: %v", err)
+	// Both tested versions report panelVersion in server/status. Right after
+	// the panel starts, the status can be missing until its first collection
+	// (seen on v3.8.5), so the version is asked for a little while; the
+	// service's health loop asks again every minute in the same way.
+	var ver string
+	for deadline := time.Now().Add(30 * time.Second); ; {
+		v, err := a.HealthCheck(ctx)
+		if err != nil {
+			t.Fatalf("health: %v", err)
+		}
+		if ver = v; ver != UnknownVersion || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(2 * time.Second)
 	}
 	if ver == UnknownVersion || Untested(ver) {
 		t.Fatalf("panel version %q: not detected, or outside %s..%s", ver, TestedMinVersion, TestedMaxVersion)
