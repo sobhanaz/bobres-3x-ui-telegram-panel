@@ -268,10 +268,16 @@ func (s *Server) gatewayReport(w http.ResponseWriter, r *http.Request) {
 		totals = append(totals, map[string]any{"status": t.Status, "count": t.Count, "amounts": moneyList(t.Amounts)})
 	}
 	h := healthOf(rep, s.now())
+	// The failed payment checks (Zarinpal) kept in the period, newest first.
+	checkErrors := make([]checkErrorJSON, 0, len(rep.CheckErrors))
+	for _, e := range rep.CheckErrors {
+		checkErrors = append(checkErrors, checkErrorJSON{At: e.At, IntentID: e.IntentID, Detail: e.Detail})
+	}
 	out := map[string]any{
 		"provider": rep.Provider, "from": rep.From, "to": rep.To, "totals": totals,
 		"healthy": h.Healthy, "open": h.Open, "oldest_open_at": h.OldestOpenAt,
 		"last_paid_at": h.LastPaidAt, "last_error_at": h.LastErrorAt, "last_error": h.LastError,
+		"check_errors": checkErrors, "check_error_count": rep.CheckErrorCount,
 	}
 	if provider == domain.USDTAuto {
 		// The deposits staff must still credit by hand, whatever the period.
@@ -283,6 +289,15 @@ func (s *Server) gatewayReport(w http.ResponseWriter, r *http.Request) {
 		out["last_scan_at"], out["last_scan_ok_at"], out["scan_error"] = h.LastScanAt, h.LastScanOKAt, rep.ScanError
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// checkErrorJSON is one failed payment check in a report: payments could not
+// ask the gateway about the payment, or the gateway refused. Each payment's
+// are kept at most once an hour; detail is already redacted by payments.
+type checkErrorJSON struct {
+	At       int64  `json:"at"`
+	IntentID string `json:"intent_id"`
+	Detail   string `json:"detail"`
 }
 
 // depositJSON is one USDT transfer that reached the store's address.

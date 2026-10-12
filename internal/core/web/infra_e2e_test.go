@@ -340,10 +340,19 @@ func TestGatewaysEndToEnd(t *testing.T) {
 	if ms, err := f.dom.PaymentMethods(ctx, pay, "IRT", 150_000); err != nil || len(ms) != 0 {
 		t.Fatalf("methods while switched off: %v %v", ms, err)
 	}
+	// A check of it failed: payments kept it, and the report passes it on.
+	if _, err := ps.RecordCheckError(ctx, res.IntentID, "zarinpal", "zarinpal: request failed: timed out", time.Hour); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now().Unix()
 	code, out = b.do(http.MethodGet, "/api/v1/gateways/report?provider=zarinpal&from="+itoa(now-86400)+"&to="+itoa(now+60), nil)
 	if code != 200 || out["open"] != float64(1) || !strings.Contains(asJSON(out["totals"]), `"status":"pending"`) {
 		t.Fatalf("report: %d %v", code, out)
+	}
+	checkErrs, _ := out["check_errors"].([]any)
+	if out["check_error_count"] != float64(1) || len(checkErrs) != 1 ||
+		checkErrs[0].(map[string]any)["intent_id"] != res.IntentID || checkErrs[0].(map[string]any)["detail"] != "zarinpal: request failed: timed out" {
+		t.Fatalf("report check errors: %v %v", out["check_errors"], out["check_error_count"])
 	}
 	var audit string
 	if err := f.st.DB().QueryRow(ctx, `SELECT string_agg(coalesce(before::text,'') || coalesce(after::text,''), ' ') FROM core.audit_log WHERE entity = 'gateway'`).Scan(&audit); err != nil {

@@ -258,7 +258,12 @@ func (c *Client) GatewayReport(ctx context.Context, provider string, from, to in
 	out := &domain.GatewayReport{Provider: r.GetProvider(), From: r.GetFrom(), To: r.GetTo(), OpenCount: r.GetOpenCount(),
 		OldestOpenAt: r.GetOldestOpenAt(), LastError: gatewayEventOf(r.GetLastError()), LastPaid: gatewayEventOf(r.GetLastPaid()),
 		UnmatchedCount: r.GetUnmatchedCount(), LastScanAt: r.GetLastScanAt(), LastScanOKAt: r.GetLastScanOkAt(),
-		ScanError: r.GetScanError()}
+		ScanError: r.GetScanError(), CheckErrorCount: r.GetCheckErrorCount()}
+	for _, e := range r.GetCheckErrors() {
+		if ev := gatewayEventOf(e); ev != nil {
+			out.CheckErrors = append(out.CheckErrors, *ev)
+		}
+	}
 	for _, t := range r.GetUnmatched() {
 		out.Unmatched = append(out.Unmatched, chainTransferOf(t))
 	}

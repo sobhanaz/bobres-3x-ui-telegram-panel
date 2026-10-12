@@ -228,7 +228,10 @@ func TestGatewaysAPI(t *testing.T) {
 	f.api.cfg.Env = "prod"
 	fg.report = domain.GatewayReport{OpenCount: 2, OldestOpenAt: 1_700_000_000,
 		LastError: &domain.GatewayEvent{At: 1_700_000_100, Kind: "create", Detail: "the proxy refused the connection"},
-		Totals:    []domain.GatewayStatusTotal{{Status: "succeeded", Count: 3, Amounts: map[string]int64{"IRT": 450_000}}}}
+		Totals:    []domain.GatewayStatusTotal{{Status: "succeeded", Count: 3, Amounts: map[string]int64{"IRT": 450_000}}},
+		CheckErrors: []domain.GatewayEvent{{At: 1_700_000_090, Kind: "check", IntentID: "00000000-0000-7000-8000-00000000c0e1",
+			Detail: "zarinpal: request failed: timed out"}},
+		CheckErrorCount: 4}
 
 	code, out := b.do(http.MethodGet, "/api/v1/gateways", nil)
 	providers, _ := out["providers"].([]any)
@@ -334,6 +337,11 @@ func TestGatewaysAPI(t *testing.T) {
 	}
 	if last := fg.reports[len(fg.reports)-1]; last != "zarinpal|1700000000|1700604800" {
 		t.Fatalf("report asked: %s", last)
+	}
+	// The failed payment checks payments kept in the period.
+	if asJSON(out["check_errors"]) != `[{"at":1700000090,"detail":"zarinpal: request failed: timed out","intent_id":"00000000-0000-7000-8000-00000000c0e1"}]` ||
+		out["check_error_count"] != float64(4) {
+		t.Fatalf("report check errors: %v %v", out["check_errors"], out["check_error_count"])
 	}
 	if code, _ := b.do(http.MethodGet, "/api/v1/gateways/report", nil); code != 200 || fg.reports[len(fg.reports)-1] != "zarinpal|0|0" {
 		t.Fatalf("default report: %d %v", code, fg.reports)

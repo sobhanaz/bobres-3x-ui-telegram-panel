@@ -41,6 +41,14 @@ const expiryGrace = 45 * time.Minute
 // by a confirmed payment that was missed (lost return, expiry passed).
 const reopenWindow = 48 * time.Hour
 
+// checkErrorEvery: a failed gateway check is kept as a check/error event at
+// most this often per intent, so an outage shows in the report without a row
+// per check (the reconciler may ask every few seconds).
+const checkErrorEvery = time.Hour
+
+// maxCheckErrorText bounds the error kept for a failed check.
+const maxCheckErrorText = 300
+
 // reopenable: a closed intent a confirmed payment may still settle.
 func reopenable(in *store.Intent) bool {
 	if in.Status != "failed" && in.Status != "expired" {
@@ -342,6 +350,7 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 	r, err := g.Check(ctx, *in.ExternalID, c)
 	if err != nil {
 		s.log.Warn("gateway check failed", "provider", in.Provider, "intent", in.ID, "err", err)
+		s.recordCheckError(ctx, in, err)
 		// A gateway that keeps refusing this intent (a changed merchant id, a
 		// suspended terminal) must not keep it open forever: once even a
 		// confirmed payment could no longer settle it, it expires.
@@ -351,6 +360,23 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 		return in, nil
 	}
 	return s.applyResult(ctx, in, r, kind, o.reconciler)
+}
+
+// recordCheckError keeps a failed check in the gateway trail, at most once per
+// intent per checkErrorEvery. The gateway clients' errors carry no secret or
+// address. A check cut short on our side (shutdown, the caller gave up) is not
+// the gateway's failure and is not kept.
+func (s *Service) recordCheckError(ctx context.Context, in *store.Intent, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+	text := err.Error()
+	if r := []rune(text); len(r) > maxCheckErrorText {
+		text = string(r[:maxCheckErrorText])
+	}
+	if _, rerr := s.st.RecordCheckError(ctx, in.ID, in.Provider, text, checkErrorEvery); rerr != nil {
+		s.log.Warn("record gateway check error", "provider", in.Provider, "intent", in.ID, "err", rerr)
+	}
 }
 
 // ReconcileOnce checks the open gateway intents that are due: a fresh intent

@@ -26,6 +26,8 @@ type fakeGW struct {
 	checkErr error
 	// returned records whether a Check was told the customer came back.
 	returned atomic.Bool
+	// onCheck runs at the start of every Check (a test cancels its context).
+	onCheck func()
 }
 
 func (f *fakeGW) Name() string { return f.name }
@@ -39,8 +41,14 @@ func (f *fakeGW) Create(_ context.Context, c gateway.Charge) (gateway.Started, e
 	return gateway.Started{ExternalID: ext, PayURL: "https://pay.example.test/" + ext}, nil
 }
 
-func (f *fakeGW) Check(_ context.Context, ext string, c gateway.Charge) (gateway.Result, error) {
+func (f *fakeGW) Check(ctx context.Context, ext string, c gateway.Charge) (gateway.Result, error) {
 	f.checks.Add(1)
+	if f.onCheck != nil {
+		f.onCheck()
+		if err := ctx.Err(); err != nil {
+			return gateway.Result{}, err
+		}
+	}
 	if c.Returned {
 		f.returned.Store(true)
 	}
@@ -292,5 +300,109 @@ func TestReconcilerChecksPayableIntentsOften(t *testing.T) {
 	s, _ := st.GetIntent(ctx, nil, stale.ID)
 	if p.CheckAttempts != 7 || s.CheckAttempts != 6 {
 		t.Fatalf("checked: payable %d stale %d", p.CheckAttempts, s.CheckAttempts)
+	}
+}
+
+// checkErrors counts an intent's check/error events.
+func checkErrors(t *testing.T, st *store.Store, intentID string) int {
+	t.Helper()
+	var n int
+	if err := st.DB().QueryRow(context.Background(), `SELECT count(*) FROM payments.gateway_events
+		WHERE intent_id = $1 AND kind = 'check' AND outcome = 'error'`, intentID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// A gateway outage leaves a trace: each intent's failed checks are kept as
+// check/error events, at most once an hour however often it is asked (the
+// reconciler, the customer's "check payment", the return page), and the
+// report shows them.
+func TestFailedChecksAreKeptOncePerIntentPerHour(t *testing.T) {
+	svc, st := testService(t)
+	gw := &fakeGW{name: "zarinpal"}
+	svc.SetGateways(gw)
+	ctx := context.Background()
+	a, _ := svc.StartGateway(ctx, gwIntent("ce1", 1_000_000), "", "")
+	b, _ := svc.StartGateway(ctx, gwIntent("ce2", 1_000_000), "", "")
+	gw.checkErr = errors.New("zarinpal: request failed: timed out")
+	due := func() {
+		t.Helper()
+		if _, err := st.DB().Exec(ctx, `UPDATE payments.payment_intents SET checked_at = NULL WHERE id = ANY($1)`,
+			[]string{a.ID, b.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 5 {
+		due()
+		if n, err := svc.ReconcileOnce(ctx, time.Second); err != nil || n != 2 {
+			t.Fatalf("reconcile: %d %v", n, err)
+		}
+	}
+	due()
+	if _, err := svc.CheckIntent(ctx, uid, a.ID, "check"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CheckAfterReturn(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if gw.checks.Load() != 12 || checkErrors(t, st, a.ID) != 1 || checkErrors(t, st, b.ID) != 1 {
+		t.Fatalf("asked %d times; kept %d and %d errors, want one per intent", gw.checks.Load(),
+			checkErrors(t, st, a.ID), checkErrors(t, st, b.ID))
+	}
+	// The intents stay open: a payment may still settle them.
+	if got, _ := st.GetIntent(ctx, nil, a.ID); got.Status != "pending" {
+		t.Fatalf("a failed check closed the intent: %+v", got)
+	}
+
+	r, err := svc.GatewayReport(ctx, providerZarinpal, time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.CheckErrorCount != 2 || len(r.CheckErrors) != 2 || r.CheckErrors[0].Detail != "zarinpal: request failed: timed out" {
+		t.Fatalf("report: %d %+v", r.CheckErrorCount, r.CheckErrors)
+	}
+	// Failed checks are not the gateway's last error: one timed-out poll must
+	// not mark it unhealthy (and alert the owner) for an hour.
+	if r.LastError != nil {
+		t.Fatalf("a failed check is the last error: %+v", r.LastError)
+	}
+
+	// An hour later the outage is still on: one more each.
+	if _, err := st.DB().Exec(ctx, `UPDATE payments.gateway_events SET created_at = created_at - interval '61 minutes'
+		WHERE kind = 'check' AND outcome = 'error'`); err != nil {
+		t.Fatal(err)
+	}
+	due()
+	if _, err := svc.ReconcileOnce(ctx, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if checkErrors(t, st, a.ID) != 2 || checkErrors(t, st, b.ID) != 2 {
+		t.Fatalf("after an hour: %d and %d errors, want 2 each", checkErrors(t, st, a.ID), checkErrors(t, st, b.ID))
+	}
+
+	// A working check keeps nothing.
+	gw.checkErr = nil
+	c, _ := svc.StartGateway(ctx, gwIntent("ce3", 1_000_000), "", "")
+	if _, err := svc.CheckIntent(ctx, uid, c.ID, "check"); err != nil || checkErrors(t, st, c.ID) != 0 {
+		t.Fatalf("working check: %v, %d errors", err, checkErrors(t, st, c.ID))
+	}
+}
+
+// A check cut short on our side (shutdown, the caller gave up) is not the
+// gateway's failure: nothing is kept.
+func TestCanceledCheckIsNotKept(t *testing.T) {
+	svc, st := testService(t)
+	gw := &fakeGW{name: "zarinpal"}
+	svc.SetGateways(gw)
+	in, _ := svc.StartGateway(context.Background(), gwIntent("cc1", 1_000_000), "", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gw.onCheck = cancel
+	if _, err := svc.CheckIntent(ctx, uid, in.ID, "check"); err != nil {
+		t.Fatal(err)
+	}
+	if gw.checks.Load() != 1 || checkErrors(t, st, in.ID) != 0 {
+		t.Fatalf("asked %d times, kept %d errors", gw.checks.Load(), checkErrors(t, st, in.ID))
 	}
 }

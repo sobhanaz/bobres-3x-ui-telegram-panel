@@ -105,6 +105,10 @@ type GatewayReport struct {
 	OldestOpenAt int64 // 0 = none open
 	LastError    *GatewayEvent
 	LastPaid     *GatewayEvent
+	// The failed payment checks (Zarinpal) kept in the period, newest first,
+	// at most 20 (each payment's at most once an hour), and how many there are.
+	CheckErrors     []GatewayEvent
+	CheckErrorCount int64
 	// Automatic USDT only: the deposits staff must still credit by hand
 	// (whatever the period; newest first, at most 50) and how many there
 	// are, and the watcher's reads of the store's address (unix seconds, 0 =

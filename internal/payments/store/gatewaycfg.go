@@ -142,10 +142,19 @@ type GatewayReport struct {
 	Failures   []ReasonCount // failed or expired, by reason, most frequent first
 	OpenCount  int64
 	OldestOpen *time.Time
-	LastError  *GatewayEvent
+	LastError  *GatewayEvent // not a failed check: those are CheckErrors
 	LastPaid   *GatewayEvent
-	Chain      *ChainReport // usdt_trc20_auto only
+	// CheckErrors are the failed payment checks (the gateway could not be
+	// asked, or refused) kept in [From, To), newest first, at most
+	// MaxCheckErrors; CheckErrorCount is how many there are. Each intent's
+	// are kept at most once an hour.
+	CheckErrors     []GatewayEvent
+	CheckErrorCount int64
+	Chain           *ChainReport // usdt_trc20_auto only
 }
+
+// MaxCheckErrors bounds the failed checks a report lists.
+const MaxCheckErrors = 20
 
 // GatewayReport builds the report for one provider.
 func (s *Store) GatewayReport(ctx context.Context, provider string, from, to time.Time) (*GatewayReport, error) {
@@ -212,7 +221,40 @@ func (s *Store) GatewayReport(ctx context.Context, provider string, from, to tim
 	if r.LastPaid, err = s.lastGatewayEvent(ctx, provider, "paid"); err != nil {
 		return nil, err
 	}
+	if r.CheckErrors, r.CheckErrorCount, err = s.checkErrors(ctx, provider, from, to); err != nil {
+		return nil, err
+	}
 	return r, nil
+}
+
+// checkErrors returns the provider's failed checks kept in [from, to), newest
+// first (at most MaxCheckErrors), and how many there are.
+func (s *Store) checkErrors(ctx context.Context, provider string, from, to time.Time) ([]GatewayEvent, int64, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT created_at, kind, COALESCE(intent_id::text, ''), COALESCE(detail->>'error', ''), count(*) OVER ()
+		FROM payments.gateway_events
+		WHERE provider = $1 AND kind = 'check' AND outcome = 'error' AND created_at >= $2 AND created_at < $3
+		ORDER BY id DESC LIMIT $4`, provider, from, to, MaxCheckErrors)
+	if err != nil {
+		return nil, 0, fmt.Errorf("check errors: %w", err)
+	}
+	defer rows.Close()
+	var (
+		out   []GatewayEvent
+		total int64
+	)
+	for rows.Next() {
+		var e GatewayEvent
+		if err := rows.Scan(&e.At, &e.Kind, &e.IntentID, &e.Detail, &total); err != nil {
+			return nil, 0, fmt.Errorf("check errors: %w", err)
+		}
+		e.Detail = addressRe.ReplaceAllString(e.Detail, "[address]")
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("check errors: %w", err)
+	}
+	return out, total, nil
 }
 
 // addMoney adds m to the total of its currency.
@@ -230,12 +272,17 @@ func addMoney(list []Money, m Money) []Money {
 // errors were scrubbed at the source could name the proxy's address.
 var addressRe = regexp.MustCompile(`(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+):[0-9]{1,5}\b`)
 
-// lastGatewayEvent returns the provider's latest event with this outcome.
+// lastGatewayEvent returns the provider's latest event with this outcome. A
+// failed check is not the gateway's last error: core's health and alerts read
+// that, and one timed-out or rate-limited poll (the next one retries) would
+// mark the gateway unhealthy, and alert, for an hour. The report lists failed
+// checks apart (checkErrors).
 func (s *Store) lastGatewayEvent(ctx context.Context, provider, outcome string) (*GatewayEvent, error) {
 	var e GatewayEvent
 	err := s.db.QueryRow(ctx, `
 		SELECT created_at, kind, COALESCE(intent_id::text, ''), COALESCE(detail->>'error', '')
-		FROM payments.gateway_events WHERE provider = $1 AND outcome = $2
+		FROM payments.gateway_events
+		WHERE provider = $1 AND outcome = $2 AND NOT (kind = 'check' AND outcome = 'error')
 		ORDER BY id DESC LIMIT 1`, provider, outcome).Scan(&e.At, &e.Kind, &e.IntentID, &e.Detail)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

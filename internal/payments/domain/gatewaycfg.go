@@ -610,9 +610,9 @@ var reportProviders = []string{providerZarinpal, Stars, USDTAuto, provider.Manua
 const maxReportSpan = 366 * 24 * time.Hour
 
 // GatewayReport summarises a provider's payments created in [from, to)
-// (default: the 30 days up to now) and what is open now; for automatic USDT
-// also the unmatched deposits staff must still credit by hand and how the
-// watcher's reads go.
+// (default: the 30 days up to now), what is open now and the failed payment
+// checks kept in the period (Zarinpal); for automatic USDT also the unmatched
+// deposits staff must still credit by hand and how the watcher's reads go.
 func (s *Service) GatewayReport(ctx context.Context, providerName string, from, to time.Time) (*store.GatewayReport, error) {
 	if !slices.Contains(reportProviders, providerName) {
 		return nil, invalid("unknown payment method %q", providerName)

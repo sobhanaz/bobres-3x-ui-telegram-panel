@@ -310,6 +310,11 @@ message GatewayReportResponse {
   int64 last_scan_at = 12; // 0 = never read
   int64 last_scan_ok_at = 13; // 0 = never read successfully
   string scan_error = 14; // the last read's error, "" when it worked; never a secret
+  // The failed payment checks (Zarinpal: the gateway could not be asked, or
+  // refused) kept in the period, newest first, at most 20, and how many there
+  // are. Each payment's failures are kept at most once an hour.
+  repeated GatewayEvent check_errors = 15;
+  int64 check_error_count = 16;
 }
 
 // ChainTransfer is one USDT (TRC20) transfer the watcher saw arrive.

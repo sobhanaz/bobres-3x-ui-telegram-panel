@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func cfgStore(t *testing.T) *Store {
@@ -149,6 +153,167 @@ func TestGatewayReport(t *testing.T) {
 	r, err = s.GatewayReport(ctx, "manual_card", from, to)
 	if err != nil || len(r.Totals) != 0 || r.OpenCount != 0 || r.OldestOpen != nil || r.LastError != nil || r.LastPaid != nil {
 		t.Fatalf("empty report: %+v %v", r, err)
+	}
+}
+
+// A failed check is kept at most once per intent per window, even when
+// replicas and customers record at the same moment.
+func TestRecordCheckErrorIsRateLimited(t *testing.T) {
+	s := cfgStore(t)
+	ctx := context.Background()
+	rial := &Money{Amount: 100_000, Currency: "IRR"}
+	a := intentAt(t, s, "zarinpal", "pending", "IRT", 10_000, rial, time.Now(), "C1", "", nil)
+	b := intentAt(t, s, "zarinpal", "pending", "IRT", 10_000, rial, time.Now(), "C2", "", nil)
+	c := intentAt(t, s, "zarinpal", "pending", "IRT", 10_000, rial, time.Now(), "C3", "", nil)
+	count := func(id string) int {
+		t.Helper()
+		var n int
+		if err := s.DB().QueryRow(ctx, `SELECT count(*) FROM payments.gateway_events
+			WHERE intent_id = $1 AND kind = 'check' AND outcome = 'error'`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if wrote, err := s.RecordCheckError(ctx, a, "zarinpal", "zarinpal: request failed: timed out", time.Hour); err != nil || !wrote {
+		t.Fatalf("first: %v %v", wrote, err)
+	}
+	if wrote, err := s.RecordCheckError(ctx, a, "zarinpal", "zarinpal: request failed: connection reset", time.Hour); err != nil || wrote {
+		t.Fatalf("within the hour: %v %v", wrote, err)
+	}
+	// Other events of the intent do not count, and each intent has its own window.
+	if err := s.RecordGatewayEvent(ctx, nil, b, "zarinpal", "create", "error", map[string]any{"error": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if wrote, err := s.RecordCheckError(ctx, b, "zarinpal", "zarinpal: request failed: timed out", time.Hour); err != nil || !wrote {
+		t.Fatalf("another intent: %v %v", wrote, err)
+	}
+	var (
+		wg    sync.WaitGroup
+		wrote atomic.Int32
+	)
+	gate := make(chan struct{})
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-gate
+			ok, err := s.RecordCheckError(ctx, c, "zarinpal", "zarinpal: request failed: timed out", time.Hour)
+			if err != nil {
+				t.Errorf("concurrent: %v", err)
+			}
+			if ok {
+				wrote.Add(1)
+			}
+		}()
+	}
+	close(gate)
+	wg.Wait()
+	if wrote.Load() != 1 || count(c) != 1 {
+		t.Fatalf("concurrent recorders wrote %d (rows %d), want 1", wrote.Load(), count(c))
+	}
+	// A recorder whose row is not committed yet holds the next one back,
+	// which then sees that row: without the lock it would not, and write too.
+	d := intentAt(t, s, "zarinpal", "pending", "IRT", 10_000, rial, time.Now(), "C4", "", nil)
+	type result struct {
+		wrote bool
+		err   error
+	}
+	done := make(chan result, 1)
+	err := s.WithTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('payments:check-error:' || $1, 0))`, d); err != nil {
+			return err
+		}
+		if err := s.RecordGatewayEvent(ctx, tx, d, "zarinpal", "check", "error", map[string]any{"error": "first"}); err != nil {
+			return err
+		}
+		go func() {
+			ok, err := s.RecordCheckError(ctx, d, "zarinpal", "second", time.Hour)
+			done <- result{ok, err}
+		}()
+		select {
+		case r := <-done:
+			done <- r
+			t.Error("a recorder did not wait for the one in progress")
+		case <-time.After(300 * time.Millisecond):
+		}
+		return nil
+	})
+	if r := <-done; err != nil || r.err != nil || r.wrote || count(d) != 1 {
+		t.Fatalf("held back: wrote %v (rows %d), %v %v", r.wrote, count(d), r.err, err)
+	}
+	// Once the window has passed, the next failure is kept again.
+	if _, err := s.DB().Exec(ctx, `UPDATE payments.gateway_events SET created_at = now() - interval '61 minutes' WHERE intent_id = $1`, a); err != nil {
+		t.Fatal(err)
+	}
+	if wrote, err := s.RecordCheckError(ctx, a, "zarinpal", "zarinpal: request failed: timed out", time.Hour); err != nil || !wrote || count(a) != 2 {
+		t.Fatalf("after the window: %v %v rows %d", wrote, err, count(a))
+	}
+}
+
+// The report lists the failed checks kept in its period, newest first, at
+// most MaxCheckErrors, with how many there are, addresses scrubbed.
+func TestGatewayReportCheckErrors(t *testing.T) {
+	s := cfgStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	from, to := now.Add(-24*time.Hour), now.Add(time.Minute)
+	rial := &Money{Amount: 100_000, Currency: "IRR"}
+	in := intentAt(t, s, "zarinpal", "pending", "IRT", 10_000, rial, now, "E1", "", nil)
+
+	r, err := s.GatewayReport(ctx, "zarinpal", from, to)
+	if err != nil || r.CheckErrors != nil || r.CheckErrorCount != 0 {
+		t.Fatalf("none yet: %+v %d %v", r.CheckErrors, r.CheckErrorCount, err)
+	}
+	for i := range MaxCheckErrors + 5 {
+		if err := s.RecordGatewayEvent(ctx, nil, in, "zarinpal", "check", "error",
+			map[string]any{"error": fmt.Sprintf("zarinpal: error -12 (HTTP 429): busy %d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Outside the period, another kind, another outcome, another provider: not listed.
+	if _, err := s.DB().Exec(ctx, `INSERT INTO payments.gateway_events (intent_id, provider, kind, outcome, detail, created_at)
+		VALUES ($1, 'zarinpal', 'check', 'error', '{"error":"old"}', now() - interval '2 days')`, in); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []struct{ provider, kind, outcome string }{
+		{"zarinpal", "create", "error"}, {"zarinpal", "check", "paid"}, {"stars", "check", "error"},
+	} {
+		if err := s.RecordGatewayEvent(ctx, nil, in, e.provider, e.kind, e.outcome, map[string]any{"error": "other"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The newest names an address (older events could): scrubbed when read.
+	if err := s.RecordGatewayEvent(ctx, nil, in, "zarinpal", "check", "error",
+		map[string]any{"error": "zarinpal: request failed: dial tcp 203.0.113.10:3128: connect: connection refused"}); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err = s.GatewayReport(ctx, "zarinpal", from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.CheckErrorCount != MaxCheckErrors+6 || len(r.CheckErrors) != MaxCheckErrors {
+		t.Fatalf("listed %d of %d, want %d of %d", len(r.CheckErrors), r.CheckErrorCount, MaxCheckErrors, MaxCheckErrors+6)
+	}
+	first := r.CheckErrors[0]
+	if first.Kind != "check" || first.IntentID != in || first.Detail != "zarinpal: request failed: dial tcp [address]: connect: connection refused" {
+		t.Fatalf("newest: %+v", first)
+	}
+	if got := r.CheckErrors[1].Detail; got != fmt.Sprintf("zarinpal: error -12 (HTTP 429): busy %d", MaxCheckErrors+4) {
+		t.Fatalf("second newest: %q", got)
+	}
+	// A failed check is not the gateway's last error (core's health and
+	// alerts read that): the older failed create is. A paid check still is
+	// its last payment.
+	if r.LastError == nil || r.LastError.Kind != "create" || r.LastError.Detail != "other" {
+		t.Fatalf("last error: %+v", r.LastError)
+	}
+	if r.LastPaid == nil || r.LastPaid.Kind != "check" {
+		t.Fatalf("last paid: %+v", r.LastPaid)
+	}
+	// The other providers' reports have none.
+	if r, err := s.GatewayReport(ctx, "manual_card", from, to); err != nil || len(r.CheckErrors) != 0 || r.CheckErrorCount != 0 {
+		t.Fatalf("manual_card: %+v %v", r, err)
 	}
 }
 
