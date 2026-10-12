@@ -123,5 +123,11 @@ func report(out io.Writer, sc backup.Sidecar, dir string) error {
 	default:
 		fmt.Fprintln(out, "Kept on the server only (sending to Telegram is not set up).")
 	}
+	switch {
+	case sc.UploadedAt != nil:
+		fmt.Fprintf(out, "Copied off the server to %s.\n", sc.UploadedTo)
+	case sc.UploadError != "":
+		fmt.Fprintf(out, "Not copied off the server (%s); it is kept here.\n", sc.UploadError)
+	}
 	return nil
 }

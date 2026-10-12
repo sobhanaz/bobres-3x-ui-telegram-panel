@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -306,6 +307,78 @@ func TestRestoreAsks(t *testing.T) {
 	o, out, _ = dbOps("y\n", f)
 	if code := o.restoreCmd([]string{file, "--dir", dir}); code != 0 || len(f.restored) != 1 {
 		t.Fatalf("confirmed: %d %q\n%s", code, f.steps, out)
+	}
+}
+
+// swapOnRead is the operator's answer, read after swap runs: what the backup
+// service's user could do while the question waits.
+type swapOnRead struct {
+	io.Reader
+	swap func()
+}
+
+func (s *swapOnRead) Read(p []byte) (int, error) {
+	if s.swap != nil {
+		s.swap()
+		s.swap = nil
+	}
+	return s.Reader.Read(p)
+}
+
+// The check and the restore read the same open file: another valid backup
+// put at its path after the check is not what gets restored.
+func TestRestoreReadsTheCheckedFile(t *testing.T) {
+	dir := restoreInstall(t)
+	file := writeBackup(t, installKey, backupKeys(), "DUMP THAT WAS CHECKED")
+	planted := writeBackup(t, installKey, installMasterKeys, "DUMP PUT THERE LATER")
+	db := &fakeDB{dump: "CURRENT"}
+	o, out, errOut := dbOps("", db)
+	o.in = &swapOnRead{Reader: strings.NewReader("y\n"), swap: func() {
+		if err := os.Rename(file, file+".moved"); err != nil {
+			t.Error(err)
+		}
+		if err := os.Rename(planted, file); err != nil {
+			t.Error(err)
+		}
+	}}
+	if code := o.restoreCmd([]string{file, "--dir", dir}); code != 0 {
+		t.Fatalf("restore: %d\n%s\n%s", code, out, errOut)
+	}
+	if len(db.restored) != 1 || db.restored[0] != "DUMP THAT WAS CHECKED" {
+		t.Fatalf("restored %q, want the checked backup's dump", db.restored)
+	}
+	// The master keys are the checked backup's too.
+	env, _, _ := readEnv(filepath.Join(dir, ".env"))
+	if env["BOBRES_CORE_MASTER_KEY"] != backupKeys()["BOBRES_CORE_MASTER_KEY"] {
+		t.Fatal("the master keys are not the checked backup's")
+	}
+}
+
+// A backup given as a named pipe cannot be read a second time for the
+// restore: it is refused after the check, before anything is touched.
+func TestRestoreRefusesAPipe(t *testing.T) {
+	dir := restoreInstall(t)
+	raw, err := os.ReadFile(writeBackup(t, installKey, backupKeys(), "DUMP"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fifo := filepath.Join(t.TempDir(), "backup.bkp")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skipf("no named pipes here: %v", err)
+	}
+	go func() {
+		w, err := os.OpenFile(fifo, os.O_WRONLY, 0)
+		if err != nil {
+			return
+		}
+		_, _ = w.Write(raw)
+		_ = w.Close()
+	}()
+	db := &fakeDB{}
+	o, _, errOut := dbOps("", db)
+	if code := o.restoreCmd([]string{fifo, "--dir", dir, "--yes"}); code != 1 || !strings.Contains(errOut.String(), "not a pipe") ||
+		!strings.Contains(errOut.String(), "Nothing was changed") || len(db.steps) != 0 {
+		t.Fatalf("a pipe: %d %q %s", code, db.steps, errOut)
 	}
 }
 

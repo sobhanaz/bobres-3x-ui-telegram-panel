@@ -71,10 +71,25 @@ var configKeys = []configKey{
 			}
 			return nil
 		}},
+	// The S3 upload's plain settings; its keys are secrets (bobres install asks
+	// for them). install's validateEnv checks them together.
+	{name: "BOBRES_BACKUP_S3_ENDPOINT", services: []string{"backup"}, optional: true,
+		help: "copy each backup to this S3-compatible storage, https://host (empty: no copy); BOBRES_BACKUP_NETWORK follows it"},
+	{name: "BOBRES_BACKUP_S3_BUCKET", services: []string{"backup"}, optional: true, lower: true,
+		help: "the bucket the backups are copied to"},
+	{name: "BOBRES_BACKUP_S3_REGION", services: []string{"backup"}, optional: true,
+		help: "the bucket's region (empty: us-east-1)"},
+	{name: "BOBRES_BACKUP_S3_PREFIX", services: []string{"backup"}, optional: true,
+		help: "a folder in the bucket for the backups (empty: none)"},
+	{name: "BOBRES_BACKUP_S3_KEEP", services: []string{"backup"}, optional: true,
+		help: fmt.Sprintf("how many backups the bucket keeps (empty: %d)", config.DefaultS3Keep)},
 }
 
 // derivedKeys follow another setting: shown, never set.
-var derivedKeys = map[string]string{"BOBRES_ZARINPAL_HOST": "BOBRES_ZARINPAL_PUBLIC_URL"}
+var derivedKeys = map[string]string{
+	"BOBRES_ZARINPAL_HOST":  "BOBRES_ZARINPAL_PUBLIC_URL",
+	"BOBRES_BACKUP_NETWORK": "BOBRES_BACKUP_S3_ENDPOINT",
+}
 
 func oneOf(allowed ...string) func(string) error {
 	return func(v string) error {
@@ -127,6 +142,8 @@ func keyHint(name string) string {
 		return "bobres secrets rotate redis-password"
 	case name == "BOBRES_BACKUP_KEY":
 		return `bobres menu > "Backup key" shows it; docs/runbooks/rotate-secrets.md replaces it`
+	case name == "BOBRES_BACKUP_S3_ACCESS_KEY" || name == "BOBRES_BACKUP_S3_SECRET_KEY":
+		return "bobres install --s3-endpoint <url> asks for it while it is empty; to replace it, edit .env and run bobres install --skip-checks"
 	case name == "BOBRES_VERSION":
 		return "bobres update"
 	case strings.HasPrefix(name, "BOBRES_XUI_"):
@@ -309,6 +326,7 @@ func (o *ops) configSet(dir, name, value string, noRestart bool) int {
 	next := maps.Clone(env)
 	next[name] = value
 	next["BOBRES_ZARINPAL_HOST"] = zarinpalHost(next)
+	next["BOBRES_BACKUP_NETWORK"] = backupNetwork(next)
 	if errs := newErrors(env, next); len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintln(o.errOut, "error:", e)

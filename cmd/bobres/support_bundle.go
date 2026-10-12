@@ -319,6 +319,12 @@ func sidecarText(path string) string {
 	if s.TelegramError != "" {
 		out += "    telegram: " + s.TelegramError + "\n"
 	}
+	switch {
+	case s.UploadedAt != nil:
+		out += "    copied to " + s.UploadedTo + " " + s.UploadedAt.UTC().Format(time.RFC3339) + "\n"
+	case s.UploadError != "":
+		out += "    s3: " + s.UploadError + "\n"
+	}
 	if s.Error != "" {
 		out += "    error: " + s.Error + "\n"
 	}
@@ -502,6 +508,8 @@ var notSecretEnv = map[string]bool{
 	"BOBRES_XUI_ALLOW_PRIVATE": true, "BOBRES_ZARINPAL_SANDBOX": true, "BOBRES_ZARINPAL_PUBLIC_URL": true,
 	"BOBRES_ZARINPAL_HOST": true, "BOBRES_TELEGRAM_WEBHOOK_URL": true, "BOBRES_TELEGRAM_API_URL": true,
 	"BOBRES_UPDATE_CHANNEL": true, "BOBRES_LICENSE_SERVER": true,
+	"BOBRES_BACKUP_S3_ENDPOINT": true, "BOBRES_BACKUP_S3_BUCKET": true, "BOBRES_BACKUP_S3_REGION": true,
+	"BOBRES_BACKUP_S3_PREFIX": true, "BOBRES_BACKUP_S3_KEEP": true, "BOBRES_BACKUP_NETWORK": true,
 }
 
 // minLiteral is the shortest .env value scrubbed as it is: shorter ones

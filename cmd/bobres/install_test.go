@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
@@ -99,7 +100,11 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	}
 	env, _, _ := readEnv(filepath.Join(dir, ".env"))
 	optional := map[string]bool{"BOBRES_XUI_SUB_URL": true, "BOBRES_ZARINPAL_MERCHANT_ID": true,
-		"BOBRES_ZARINPAL_PROXY": true, "BOBRES_ZARINPAL_PUBLIC_URL": true, "BOBRES_ZARINPAL_HOST": true}
+		"BOBRES_ZARINPAL_PROXY": true, "BOBRES_ZARINPAL_PUBLIC_URL": true, "BOBRES_ZARINPAL_HOST": true,
+		"BOBRES_BACKUP_NETWORK": true} // the S3 upload is optional too
+	for _, k := range config.BackupS3Keys {
+		optional[k] = true
+	}
 	for _, k := range envOrder {
 		if !optional[k] && env[k] == "" {
 			t.Errorf("%s missing", k)

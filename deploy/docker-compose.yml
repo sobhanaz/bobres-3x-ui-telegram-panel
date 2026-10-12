@@ -6,7 +6,9 @@
 #             core has NO internet egress: a compromised dashboard cannot phone home.
 #   backend : INTERNAL. postgres, redis and all apps.
 #   egress  : outbound internet, only for services that must call Telegram / gateways / 3x-ui
-#             (bot, payments, provisioner).
+#             (bot, payments, provisioner), and the backup service while it copies backups to
+#             S3-compatible storage (BOBRES_BACKUP_NETWORK=egress, set with the S3 endpoint).
+#   offline : INTERNAL, the backup service alone: its second network when it has no S3 copy.
 # Profiles
 #   backup  : the backup service. `bobres install` turns it on (COMPOSE_PROFILES=backup in .env)
 #             when the install runs images that have it and off when they do not, so an
@@ -264,11 +266,25 @@ services:
       BOBRES_CORE_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:-}
       BOBRES_PROVISIONER_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:-}
       BOBRES_PAYMENTS_MASTER_KEY: ${BOBRES_PAYMENTS_MASTER_KEY:-}
+      # Optional: a copy of each (still encrypted) backup in S3-compatible storage, which
+      # keeps the newest BOBRES_BACKUP_S3_KEEP. Empty endpoint = no copy. Settings that
+      # cannot be used do not stop the service: each backup records why it was not copied.
+      BOBRES_BACKUP_S3_ENDPOINT: ${BOBRES_BACKUP_S3_ENDPOINT:-}
+      BOBRES_BACKUP_S3_BUCKET: ${BOBRES_BACKUP_S3_BUCKET:-}
+      BOBRES_BACKUP_S3_REGION: ${BOBRES_BACKUP_S3_REGION:-}
+      BOBRES_BACKUP_S3_PREFIX: ${BOBRES_BACKUP_S3_PREFIX:-}
+      BOBRES_BACKUP_S3_ACCESS_KEY: ${BOBRES_BACKUP_S3_ACCESS_KEY:-}
+      BOBRES_BACKUP_S3_SECRET_KEY: ${BOBRES_BACKUP_S3_SECRET_KEY:-}
+      BOBRES_BACKUP_S3_KEEP: ${BOBRES_BACKUP_S3_KEEP:-30}
     volumes:
       - ./backups:/backups
     depends_on:
       postgres: { condition: service_healthy }
-    networks: [backend]
+    networks:
+      - backend
+      # The internet only for the S3 copy: `bobres install` and `bobres config` set
+      # BOBRES_BACKUP_NETWORK=egress with BOBRES_BACKUP_S3_ENDPOINT, and empty without it.
+      - ${BOBRES_BACKUP_NETWORK:-offline}
 
 networks:
   public: {}
@@ -277,6 +293,8 @@ networks:
   backend:
     internal: true
   egress: {}
+  offline:
+    internal: true
 
 volumes:
   pg_data: {}

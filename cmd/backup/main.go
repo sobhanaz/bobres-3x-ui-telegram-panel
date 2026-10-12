@@ -2,7 +2,9 @@
 // dumps the database with pg_dump as the read-only svc_backup role, encrypts
 // the dump with BOBRES_BACKUP_KEY together with the services' master keys,
 // keeps the newest seven in /backups, and hands each one to the bot, which
-// sends it to the owner's Telegram. Core lists and starts backups over HTTP.
+// sends it to the owner's Telegram. With BOBRES_BACKUP_S3_* set it also copies
+// each one to S3-compatible storage, which keeps the newest
+// BOBRES_BACKUP_S3_KEEP. Core lists and starts backups over HTTP.
 //
 // `backup run-now` (what `bobres backup` runs in the container) asks the
 // running service for a backup and waits for it.
@@ -22,6 +24,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/app"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backupsvc"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/s3"
 )
 
 func main() {
@@ -47,7 +50,8 @@ func setup(rt *app.Runtime) error {
 		Dump:   backupsvc.PgDump{URL: cfg.DumpURL},
 		BotURL: cfg.BotURL, Token: cfg.ServiceToken,
 		Hour: cfg.Hour, Minute: cfg.Minute, Location: cfg.Location,
-		Log: rt.Log,
+		Offsite: offsite(rt, cfg),
+		Log:     rt.Log,
 	})
 	if err != nil {
 		return err
@@ -63,6 +67,33 @@ func setup(rt *app.Runtime) error {
 	rt.Mux.Handle("GET /internal/backups", backupsvc.List(r, cfg.CoreToken))
 	rt.Mux.Handle("POST /internal/backups/run", backupsvc.Start(r, cfg.CoreToken))
 	return nil
+}
+
+// offsite is the S3 upload from cfg. Settings that cannot be used do not stop
+// the service (local backups and Telegram go on): each backup records why.
+func offsite(rt *app.Runtime, cfg config.Backup) backupsvc.Offsite {
+	problem := ""
+	if cfg.S3Err != nil {
+		problem = cfg.S3Err.Error()
+	}
+	var client *s3.Client
+	if problem == "" && cfg.S3.Enabled() {
+		var err error
+		client, err = s3.New(s3.Config{Endpoint: cfg.S3.Endpoint, Bucket: cfg.S3.Bucket, Region: cfg.S3.Region,
+			AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey})
+		if err != nil {
+			problem = err.Error()
+		}
+	}
+	switch {
+	case problem != "":
+		rt.Log.Warn("the S3 upload is not set up correctly: backups are kept here and sent to Telegram, not copied", "err", problem)
+		return backupsvc.Offsite{Problem: problem}
+	case client == nil:
+		return backupsvc.Offsite{}
+	}
+	rt.Log.Info("each backup is copied to S3", "s3", cfg.S3)
+	return backupsvc.Offsite{Client: client, Prefix: cfg.S3.Prefix, Keep: cfg.S3.Keep}
 }
 
 // runNow asks the service running in this container for a backup, with the

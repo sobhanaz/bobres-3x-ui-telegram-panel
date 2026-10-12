@@ -91,7 +91,13 @@ type Sidecar struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	SentAt        *time.Time `json:"sent_at"`
 	TelegramError string     `json:"telegram_error,omitempty"`
-	Error         string     `json:"error,omitempty"`
+	// UploadedAt is when the file was copied to S3-compatible storage and
+	// UploadedTo where (s3://bucket/key); UploadError is why it was not. The
+	// file stays here either way. All three are absent without an upload.
+	UploadedAt  *time.Time `json:"uploaded_at,omitempty"`
+	UploadedTo  string     `json:"uploaded_to,omitempty"`
+	UploadError string     `json:"upload_error,omitempty"`
+	Error       string     `json:"error,omitempty"`
 }
 
 // ReadSidecar reads a sidecar file.

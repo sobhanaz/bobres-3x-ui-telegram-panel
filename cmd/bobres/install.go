@@ -25,6 +25,7 @@ import (
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/deploy"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"golang.org/x/term"
@@ -109,6 +110,8 @@ var envOrder = []string{
 	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP",
 	"BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY",
 	"BOBRES_BACKUP_KEY", "BOBRES_BACKUP_TIME", "COMPOSE_PROFILES", "BOBRES_BACKUP_URL",
+	"BOBRES_BACKUP_S3_ENDPOINT", "BOBRES_BACKUP_S3_BUCKET", "BOBRES_BACKUP_S3_REGION", "BOBRES_BACKUP_S3_PREFIX",
+	"BOBRES_BACKUP_S3_ACCESS_KEY", "BOBRES_BACKUP_S3_SECRET_KEY", "BOBRES_BACKUP_S3_KEEP", "BOBRES_BACKUP_NETWORK",
 	"BOBRES_TELEGRAM_BOT_TOKEN", "BOBRES_ADMIN_TELEGRAM_ID", "BOBRES_TIMEZONE",
 	"BOBRES_XUI_URL", "BOBRES_XUI_TOKEN", "BOBRES_XUI_SUB_URL", "BOBRES_XUI_ALLOW_PRIVATE",
 	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL", "BOBRES_ZARINPAL_HOST",
@@ -144,6 +147,10 @@ func (ins *installer) install(args []string) int {
 	zpMerchant := fs.String("zarinpal-merchant-id", "", "enable Zarinpal with this merchant id (36-character id from the Zarinpal panel)")
 	zpProxy := fs.String("zarinpal-proxy", "", "http(s) proxy on a server whose IP is registered in the Zarinpal panel")
 	zpPublic := fs.String("zarinpal-public-url", "", "domain registered with Zarinpal for the pay page and callback (default: https://<domain>)")
+	s3Endpoint := fs.String("s3-endpoint", "", "copy each backup to this S3-compatible storage, https://host (Arvan, MinIO, Backblaze B2, AWS); the keys are asked")
+	s3Bucket := fs.String("s3-bucket", "", "the bucket for --s3-endpoint")
+	s3Region := fs.String("s3-region", "", "the bucket's region (default: us-east-1)")
+	s3Prefix := fs.String("s3-prefix", "", "a folder in the bucket for the backups (default: none)")
 	imageVersion := fs.String("version", "", "image tag to run (default: this CLI's version)")
 	noStart := fs.Bool("no-start", false, "write the files but do not start the stack")
 	offline := fs.Bool("offline", false, "skip network checks (bot token)")
@@ -196,6 +203,14 @@ func (ins *installer) install(args []string) int {
 	set("BOBRES_ZARINPAL_PUBLIC_URL", *zpPublic)
 	// A Zarinpal domain other than the main one is served by the same Caddy site.
 	env["BOBRES_ZARINPAL_HOST"] = zarinpalHost(env)
+	set("BOBRES_BACKUP_S3_ENDPOINT", strings.TrimRight(strings.TrimSpace(*s3Endpoint), "/"))
+	set("BOBRES_BACKUP_S3_BUCKET", strings.ToLower(*s3Bucket))
+	set("BOBRES_BACKUP_S3_REGION", *s3Region)
+	set("BOBRES_BACKUP_S3_PREFIX", *s3Prefix)
+	// The keys only from the environment (or asked), never a flag: ps and the
+	// shell history keep command lines.
+	set("BOBRES_BACKUP_S3_ACCESS_KEY", ins.getenv("BOBRES_BACKUP_S3_ACCESS_KEY"))
+	set("BOBRES_BACKUP_S3_SECRET_KEY", ins.getenv("BOBRES_BACKUP_S3_SECRET_KEY"))
 
 	// Ask for what is still missing (secrets without echo).
 	for _, q := range []struct{ key, prompt string }{
@@ -252,6 +267,10 @@ func (ins *installer) install(args []string) int {
 	} else {
 		disableBackups(env)
 	}
+	if code := ins.askS3(env, existing); code != 0 {
+		return code
+	}
+	env["BOBRES_BACKUP_NETWORK"] = backupNetwork(env)
 	// The run that creates the backup key is the one that shows it.
 	newBackupKey := env["BOBRES_BACKUP_KEY"] == "" || strings.Contains(env["BOBRES_BACKUP_KEY"], "CHANGE_ME")
 	for k, n := range generated {
@@ -319,6 +338,74 @@ func (ins *installer) install(args []string) int {
 		ins.summary(env, *dir)
 	}
 	return 0
+}
+
+// askS3 completes the optional copy of each backup to S3-compatible storage.
+// A fresh install with backups asks for an endpoint (Enter skips it), then
+// its bucket, region and folder; a re-run never asks for one. Once there is
+// an endpoint, a missing bucket or key is asked (the secret key without
+// echo), as the panel's token is. It returns an exit code (0: go on).
+func (ins *installer) askS3(env map[string]string, existing bool) int {
+	if !backupEnabled(env) {
+		return 0
+	}
+	asked := false
+	if !existing && env["BOBRES_BACKUP_S3_ENDPOINT"] == "" {
+		fmt.Fprintln(ins.out, "Off-server copies of the backups (optional): each backup also goes to an S3-compatible bucket "+
+			"(Arvan, MinIO, Backblaze B2, AWS), still encrypted.")
+		v := strings.TrimRight(ins.askOptional("S3 endpoint, https://... (Enter to skip): "), "/")
+		if v == "" {
+			return 0
+		}
+		env["BOBRES_BACKUP_S3_ENDPOINT"], asked = v, true
+	}
+	if env["BOBRES_BACKUP_S3_ENDPOINT"] == "" {
+		return 0
+	}
+	if env["BOBRES_BACKUP_S3_BUCKET"] == "" {
+		v, err := ins.ask("S3 bucket name: ", false)
+		if err != nil {
+			fmt.Fprintln(ins.errOut, "error: BOBRES_BACKUP_S3_BUCKET is required with the S3 endpoint (--s3-bucket, or an interactive terminal)")
+			return 2
+		}
+		env["BOBRES_BACKUP_S3_BUCKET"] = strings.ToLower(v)
+	}
+	if asked {
+		if v := ins.askOptional("S3 region (Enter for us-east-1): "); v != "" {
+			env["BOBRES_BACKUP_S3_REGION"] = v
+		}
+		if v := ins.askOptional("Folder in the bucket for the backups (Enter for none): "); v != "" {
+			env["BOBRES_BACKUP_S3_PREFIX"] = v
+		}
+	}
+	for _, q := range []struct {
+		key, prompt string
+		secret      bool
+	}{
+		{"BOBRES_BACKUP_S3_ACCESS_KEY", "S3 access key: ", false},
+		{"BOBRES_BACKUP_S3_SECRET_KEY", "S3 secret key: ", true},
+	} {
+		if env[q.key] != "" {
+			continue
+		}
+		v, err := ins.ask(q.prompt, q.secret)
+		if err != nil {
+			fmt.Fprintf(ins.errOut, "error: %s is required with the S3 endpoint (environment variable, or an interactive terminal)\n", q.key)
+			return 2
+		}
+		env[q.key] = v
+	}
+	return 0
+}
+
+// backupNetwork is the backup service's second network: egress (the
+// internet) while backups are copied to S3, else "" (compose then puts it on
+// the internal "offline" network of its own: no internet).
+func backupNetwork(env map[string]string) string {
+	if strings.TrimSpace(env["BOBRES_BACKUP_S3_ENDPOINT"]) != "" {
+		return "egress"
+	}
+	return ""
 }
 
 // askOptional reads an answer that may be left empty (Enter, or no terminal).
@@ -568,6 +655,9 @@ Server hardening (firewall, fail2ban, security updates, swap): sudo bobres harde
 		fmt.Fprintf(ins.out, "Backups: every day at %s (%s) into %s, each also sent to you on Telegram. One now: bobres backup\n",
 			env["BOBRES_BACKUP_TIME"], env["BOBRES_TIMEZONE"], filepath.Join(dir, "backups"))
 		fmt.Fprintln(ins.out, `They are encrypted with your backup key: keep it away from this server (bobres menu > "Backup key" shows it).`)
+		if s, err := config.ParseBackupS3(env); err == nil && s.Enabled() {
+			fmt.Fprintf(ins.out, "Each backup is also copied to %s (the newest %d are kept there).\n", s.Target(), s.Keep)
+		}
 	} else {
 		fmt.Fprintf(ins.out, "Backups are off: version %s has no backup service. Upgrade with: bobres install --version %s\n",
 			env["BOBRES_VERSION"], imageTag(version.Version))
@@ -657,12 +747,23 @@ func validateEnv(env map[string]string) []error {
 			errs = append(errs, errors.New("the Zarinpal proxy must be an http(s) URL"))
 		}
 	}
+	if _, err := config.ParseBackupS3(env); err != nil {
+		errs = append(errs, splitErrors(err)...)
+	}
 	for k, v := range env {
 		if strings.ContainsAny(v, "'\n\r") {
 			errs = append(errs, fmt.Errorf("%s contains a quote or a line break", k))
 		}
 	}
 	return errs
+}
+
+// splitErrors lists the errors errors.Join put together, one per line.
+func splitErrors(err error) []error {
+	if j, ok := err.(interface{ Unwrap() []error }); ok { //nolint:errorlint // only a joined error is split
+		return j.Unwrap()
+	}
+	return []error{err}
 }
 
 // readEnv parses KEY=VALUE lines (quotes stripped). A missing file is not an error.

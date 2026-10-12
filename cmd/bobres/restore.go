@@ -10,16 +10,22 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backup"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/s3"
 )
 
-const restoreUsage = "usage: bobres restore <file> [--dir D] [--key-file F] [--yes] [--keep-keys]"
+const restoreUsage = "usage: bobres restore <file | s3://bucket/key> [--dir D] [--key-file F] [--yes] [--keep-keys]"
+
+// s3Download bounds downloading a backup from S3-compatible storage.
+const s3Download = 2 * time.Hour
 
 // dumpScript dumps the whole database in pg_dump's custom format to stdout.
 // It runs in the postgres container as the superuser over the local socket
@@ -48,8 +54,10 @@ const restoreScript = `{
 // restoreCmd replaces the database with a backup's: it checks the whole file
 // first, stops the app services, takes a safety backup of the current data,
 // loads the dump in one transaction, puts the backup's master keys in .env,
-// then starts and waits until healthy. Exit 0 when done, 1 when refused or
-// failed, 2 for usage errors.
+// then starts and waits until healthy. The backup is a file, or an object in
+// S3-compatible storage (s3://bucket/key, with this install's S3 settings),
+// downloaded first. Exit 0 when done, 1 when refused or failed, 2 for usage
+// errors.
 func (o *ops) restoreCmd(args []string) int {
 	fs := flag.NewFlagSet("restore", flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
@@ -65,7 +73,7 @@ func (o *ops) restoreCmd(args []string) int {
 		fmt.Fprintln(o.errOut, restoreUsage)
 		return 2
 	}
-	file := files[0]
+	source := files[0]
 	env, ok := o.requireInstall(*dir)
 	if !ok {
 		return 2
@@ -84,20 +92,46 @@ func (o *ops) restoreCmd(args []string) int {
 		return 1
 	}
 
+	ctx := context.Background()
+	// The file is opened once: the check and the restore read the same open
+	// file, so whatever is put at its path in between (backups/ is the backup
+	// service user's) is not what gets restored.
+	var file *os.File
+	if strings.HasPrefix(source, s3Scheme) {
+		dl, done, err := o.downloadBackup(ctx, *dir, env, source)
+		if err != nil {
+			fmt.Fprintf(o.errOut, "error: %s: %v. Nothing was changed.\n", source, err)
+			return 1
+		}
+		defer done()
+		file = dl
+	} else {
+		file, err = os.Open(source) //nolint:gosec // the operator's own file
+		if err != nil {
+			fmt.Fprintf(o.errOut, "error: %s: %v. Nothing was changed.\n", source, err)
+			return 1
+		}
+		defer file.Close() //nolint:errcheck // read-only
+	}
+
 	// 1. The whole file is checked before anything is touched.
-	sum, err := verifyBackupFile(file, key)
+	sum, err := verifyBackup(file, key)
+	if err == nil {
+		if _, serr := file.Seek(0, io.SeekStart); serr != nil {
+			err = fmt.Errorf("it cannot be read a second time for the restore (a file is needed, not a pipe): %w", serr)
+		}
+	}
 	if err != nil {
-		fmt.Fprintf(o.errOut, "error: %s: %v. Nothing was changed.\n", file, err)
+		fmt.Fprintf(o.errOut, "error: %s: %v. Nothing was changed.\n", source, err)
 		return 1
 	}
-	describeBackup(o.out, file, sum)
+	describeBackup(o.out, source, sum)
 	if !*yes && !o.confirm(fmt.Sprintf("\nThis REPLACES all current data of %s (customers, orders, ledger, settings) with the backup's.\n"+
 		"A backup of the current data is taken first. Continue? [y/N]: ", orDash(env["BOBRES_DOMAIN"]))) {
 		fmt.Fprintln(o.out, "Cancelled. Nothing was changed.")
 		return 1
 	}
 
-	ctx := context.Background()
 	// The services stop first, so that nothing is written after the safety
 	// backup is taken (it would be in neither that backup nor the restore).
 	if err := o.stopApp(ctx, *dir, env); err != nil {
@@ -114,7 +148,7 @@ func (o *ops) restoreCmd(args []string) int {
 	safetyPath := filepath.Join(*dir, "backups", safety)
 	fmt.Fprintf(o.out, "Current data saved in %s\n", safetyPath)
 
-	archiveKeys, err := o.loadDump(ctx, *dir, file, key)
+	archiveKeys, err := o.loadDumpFrom(ctx, *dir, file, key)
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: the restore failed: %v\nThe database was not changed (the restore runs in one transaction). Starting the services again...\n", err)
 		o.startAndWait(ctx, *dir)
@@ -125,7 +159,7 @@ func (o *ops) restoreCmd(args []string) int {
 	changed, err := applyMasterKeys(*dir, archiveKeys, *keepKeys)
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: the database is restored, but .env could not take the backup's master keys: %v\n"+
-			"Fix it and run: bobres restore %s --yes   (or go back with: bobres restore %s --yes)\n", err, file, safetyPath)
+			"Fix it and run: bobres restore %s --yes   (or go back with: bobres restore %s --yes)\n", err, source, safetyPath)
 		return 1
 	}
 	o.reportKeys(changed, *keepKeys)
@@ -136,9 +170,99 @@ func (o *ops) restoreCmd(args []string) int {
 		return 1
 	}
 	fmt.Fprintf(o.out, "\nRestore complete: the store runs on the data of %s (backup made %s).\nThe data from before the restore is in %s\n",
-		filepath.Base(file), sum.Created.Format("2006-01-02 15:04 MST"), safetyPath)
+		path.Base(filepath.ToSlash(source)), sum.Created.Format("2006-01-02 15:04 MST"), safetyPath)
 	return 0
 }
+
+// s3Scheme marks a backup in S3-compatible storage: s3://bucket/key.
+const s3Scheme = "s3://"
+
+// parseS3Source splits s3://bucket/key.
+func parseS3Source(src string) (bucket, key string, err error) {
+	rest := strings.TrimPrefix(src, s3Scheme)
+	bucket, key, _ = strings.Cut(rest, "/")
+	switch {
+	case !config.ValidBucket(bucket):
+		return "", "", fmt.Errorf("%q is not a bucket name (s3://bucket/folder/bobres-<stamp>.bkp)", bucket)
+	case key == "" || strings.HasSuffix(key, "/"):
+		return "", "", errors.New("no object key after the bucket (s3://bucket/folder/bobres-<stamp>.bkp)")
+	}
+	return bucket, key, nil
+}
+
+// downloadBackup downloads s3://bucket/key with this install's S3 settings
+// (its endpoint, region and keys; the bucket is the one named) into a new
+// folder in <dir>/backups, which is on the disk meant for backups. The
+// folder is the running user's (root), mode 0700, and the file 0600, so the
+// backup service's user, who owns backups/, cannot write to the download.
+// That user can still rename the folder (renaming within backups/ needs
+// write permission on backups/ only), so the file is never opened again by
+// its path: it comes back open, at its start, and the check and the restore
+// both read that open file. done closes it and removes the folder.
+func (o *ops) downloadBackup(ctx context.Context, dir string, env map[string]string, src string) (*os.File, func(), error) {
+	bucket, key, err := parseS3Source(src)
+	if err != nil {
+		return nil, nil, err
+	}
+	settings, err := config.ParseBackupS3(env)
+	if err != nil || !settings.Enabled() {
+		why := "this install has no S3 settings"
+		if err != nil {
+			why = "this install's S3 settings are not usable: " + strings.ReplaceAll(err.Error(), "\n", "; ")
+		}
+		return nil, nil, fmt.Errorf("%s (BOBRES_BACKUP_S3_ENDPOINT and its keys in .env; sudo bobres install --s3-endpoint <url> --s3-bucket <bucket> "+
+			"sets them up). Or download the file yourself and restore it by its path", why)
+	}
+	cfg := s3.Config{Endpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region,
+		AccessKey: settings.AccessKey, SecretKey: settings.SecretKey, HTTPClient: o.s3c}.WithBucket(bucket)
+	client, err := s3.New(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	bdir := filepath.Join(dir, "backups")
+	if err := os.MkdirAll(bdir, 0o700); err != nil {
+		return nil, nil, err
+	}
+	tmp, err := os.MkdirTemp(bdir, ".s3-restore-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	name := path.Base(key)
+	if !safeFileRe.MatchString(name) {
+		name = "backup.bkp"
+	}
+	f, err := os.OpenFile(filepath.Join(tmp, name), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // in our own new folder
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		return nil, nil, err
+	}
+	done := func() {
+		_ = f.Close()
+		_ = os.RemoveAll(tmp)
+	}
+	fmt.Fprintf(o.out, "Downloading %s into %s...\n", src, bdir)
+	dctx, cancel := context.WithTimeout(ctx, s3Download)
+	defer cancel()
+	n, err := client.Get(dctx, key, f)
+	if err == nil {
+		err = f.Sync()
+	}
+	if err == nil {
+		_, err = f.Seek(0, io.SeekStart)
+	}
+	if err != nil {
+		done()
+		if s3.IsNotFound(err) {
+			return nil, nil, fmt.Errorf("there is no such backup in the bucket (%w)", err)
+		}
+		return nil, nil, fmt.Errorf("the download failed: %w", err)
+	}
+	fmt.Fprintf(o.out, "Downloaded %s.\n", humanSize(n))
+	return f, done, nil
+}
+
+// safeFileRe is a plain file name: what a downloaded backup is saved as.
+var safeFileRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$`)
 
 // parseArgs parses flags placed before or after the positional arguments
 // (bobres restore FILE --yes), where flag.Parse alone stops at the first
@@ -198,14 +322,19 @@ func restoreKey(env map[string]string, keyFile string) ([]byte, error) {
 	return []byte(key), nil
 }
 
-// verifyBackupFile reads the whole backup and checks every part of it.
+// verifyBackupFile reads the whole backup at path and checks every part of it.
 func verifyBackupFile(path string, key []byte) (backup.Summary, error) {
 	f, err := os.Open(path) //nolint:gosec // the operator's own file
 	if err != nil {
 		return backup.Summary{}, err
 	}
 	defer f.Close() //nolint:errcheck // read-only
-	s, err := backup.Verify(f, key)
+	return verifyBackup(f, key)
+}
+
+// verifyBackup reads the whole backup from r and checks every part of it.
+func verifyBackup(r io.Reader, key []byte) (backup.Summary, error) {
+	s, err := backup.Verify(r, key)
 	if err != nil {
 		return s, errors.New(backupProblem(err))
 	}
@@ -399,15 +528,21 @@ func (o *ops) stopApp(ctx context.Context, dir string, env map[string]string) er
 	return nil
 }
 
-// loadDump streams the backup's dump, decrypted as it is read, into
-// restoreScript in the postgres container. It returns the backup's master keys.
+// loadDump streams the dump of the backup at file, decrypted as it is read,
+// into restoreScript in the postgres container. It returns the backup's
+// master keys.
 func (o *ops) loadDump(ctx context.Context, dir, file string, key []byte) (map[string]string, error) {
 	f, err := os.Open(file) //nolint:gosec // the operator's own file
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close() //nolint:errcheck // read-only
-	r, err := backup.Open(f, key)
+	return o.loadDumpFrom(ctx, dir, f, key)
+}
+
+// loadDumpFrom is loadDump for the backup read from src.
+func (o *ops) loadDumpFrom(ctx context.Context, dir string, src io.Reader, key []byte) (map[string]string, error) {
+	r, err := backup.Open(src, key)
 	if err != nil {
 		return nil, errors.New(backupProblem(err))
 	}
