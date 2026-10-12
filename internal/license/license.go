@@ -58,6 +58,11 @@ type Token struct {
 	ExpiresAt    time.Time    `json:"expires_at"`
 	GraceDays    int          `json:"grace_days"`
 	Entitlements Entitlements `json:"entitlements"`
+	// LicenseEndsAt is when the license itself ends, for display. The vendor
+	// server issues short-lived tokens (expires_at at most 30 days ahead) and
+	// sets it; nil means the license has no end date or the token predates
+	// the field. Cores that do not know it ignore it.
+	LicenseEndsAt *time.Time `json:"license_ends_at,omitempty"`
 }
 
 // State is the runtime status of a verified license.
@@ -259,6 +264,9 @@ func (t Token) Validate() error {
 	}
 	if t.ExpiresAt.IsZero() || !t.ExpiresAt.After(t.IssuedAt) {
 		errs = append(errs, errors.New("expires_at must be after issued_at"))
+	}
+	if t.LicenseEndsAt != nil && t.LicenseEndsAt.Before(t.ExpiresAt) {
+		errs = append(errs, errors.New("license_ends_at must not be before expires_at"))
 	}
 	if t.GraceDays < 0 || t.GraceDays > maxGraceDays {
 		errs = append(errs, fmt.Errorf("grace_days must be 0..%d", maxGraceDays))

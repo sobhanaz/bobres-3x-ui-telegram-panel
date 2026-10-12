@@ -166,6 +166,7 @@ func TestValidateRejectsUnsafeTokens(t *testing.T) {
 		"negative grace":       func(t *Token) { t.GraceDays = -1 },
 		"limit below -1":       func(t *Token) { t.Entitlements.MaxServers = -5 },
 		"wrong version":        func(t *Token) { t.V = 9 },
+		"license ends early":   func(t *Token) { end := t.ExpiresAt.Add(-time.Second); t.LicenseEndsAt = &end },
 	}
 	for name, f := range mut {
 		tok := sample(now)
@@ -252,4 +253,40 @@ func TestEntitlementsAndLimits(t *testing.T) {
 	if WithinLimit((Entitlements{}).MaxServers, 1) {
 		t.Fatal("token omitting max_servers must allow zero servers, not unlimited")
 	}
+}
+
+func TestLicenseEndsAtIsOptional(t *testing.T) {
+	pub, priv := keypair(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	tok := sample(now)
+	raw := sign(t, priv, tok)
+	if strings.Contains(decodePayload(t, raw), "license_ends_at") {
+		t.Fatal("an unset license_ends_at must be left out of the payload")
+	}
+	got, err := Verify(ring(pub), raw, okOpts)
+	if err != nil || got.LicenseEndsAt != nil {
+		t.Fatalf("without license_ends_at: %v %+v", err, got.LicenseEndsAt)
+	}
+	end := now.Add(300 * 24 * time.Hour)
+	tok.LicenseEndsAt = &end
+	got, err = Verify(ring(pub), sign(t, priv, tok), okOpts)
+	if err != nil || got.LicenseEndsAt == nil || !got.LicenseEndsAt.Equal(end) {
+		t.Fatalf("with license_ends_at: %v %+v", err, got.LicenseEndsAt)
+	}
+	// Ending exactly when the token expires is consistent.
+	same := tok.ExpiresAt
+	tok.LicenseEndsAt = &same
+	if _, err := Verify(ring(pub), sign(t, priv, tok), okOpts); err != nil {
+		t.Fatalf("license_ends_at == expires_at: %v", err)
+	}
+}
+
+// decodePayload returns a token's payload JSON.
+func decodePayload(t *testing.T, raw string) string {
+	t.Helper()
+	b, err := base64.RawURLEncoding.DecodeString(strings.SplitN(raw, ".", 2)[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
