@@ -92,6 +92,9 @@ func (s *Service) Gateways() []string {
 			out = append(out, name)
 		}
 	}
+	if s.chain.Load().offered() {
+		out = append(out, USDTAuto)
+	}
 	return out
 }
 
@@ -307,6 +310,12 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 	}
 	if userID != "" && in.UserID != userID {
 		return nil, ErrForbidden
+	}
+	if in.Provider == USDTAuto {
+		if o.reconciler || o.fromReturn {
+			return in, nil // the watcher reads the chain itself; there is no return page
+		}
+		return s.checkChain(ctx, in)
 	}
 	open := in.Status == "pending" || in.Status == "confirming"
 	switch {

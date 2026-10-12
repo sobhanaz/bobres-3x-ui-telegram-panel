@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
@@ -48,13 +49,28 @@ type Service struct {
 	// exclusively while the settings change, so no payment starts with a
 	// merchant id that is being replaced.
 	gwMu sync.RWMutex
+	// chain is the automatic USDT watcher's settings, replaced whole like gws;
+	// chainMu is held shared while a payment is created and exclusively while
+	// the settings change, so no payment starts at an address being replaced.
+	chain   atomic.Pointer[chainState]
+	chainMu sync.RWMutex
+	// scanMu is held while the watcher reads the chain, and guards cutShort:
+	// the addresses whose last read was cut short (its page limit, or a page
+	// that failed).
+	scanMu   sync.Mutex
+	cutShort map[string]bool
+	// hold is how long an unmatched deposit a manual proof may claim waits
+	// before it is announced (nanoseconds; SetUnmatchedHold).
+	hold atomic.Int64
 	log  *slog.Logger
 }
 
 // New builds a Service publishing to the payments outbox.
 func New(st *store.Store) *Service {
-	s := &Service{st: st, ob: eventbus.NewOutbox("outbox_payments"), log: slog.New(slog.DiscardHandler)}
+	s := &Service{st: st, ob: eventbus.NewOutbox("outbox_payments"), log: slog.New(slog.DiscardHandler), cutShort: map[string]bool{}}
 	s.gws.Store(&gatewaySet{configured: map[string]gateway.Gateway{}, offered: map[string]bool{}, opts: &GatewayOptions{}})
+	s.chain.Store(&chainState{})
+	s.hold.Store(int64(chainUnmatchedHold))
 	return s
 }
 
@@ -70,20 +86,26 @@ func (s *Service) CreateIntent(ctx context.Context, in *store.Intent) (*store.In
 }
 
 func (s *Service) createIntent(ctx context.Context, in *store.Intent) (*store.Intent, error) {
-	if in.IdempotencyKey == "" {
-		return nil, invalid("idempotency key required")
-	}
-	if in.UserID == "" {
-		return nil, invalid("user id required")
-	}
-	if in.Amount <= 0 {
-		return nil, invalid("amount must be positive")
-	}
-	if money.Scale(in.Currency) < 0 {
-		return nil, invalid("unsupported currency %q", in.Currency)
+	if err := validIntent(in); err != nil {
+		return nil, err
 	}
 	in.Status = "pending"
 	return s.st.CreateIntent(ctx, nil, in)
+}
+
+// validIntent checks what every intent needs.
+func validIntent(in *store.Intent) error {
+	switch {
+	case in.IdempotencyKey == "":
+		return invalid("idempotency key required")
+	case in.UserID == "":
+		return invalid("user id required")
+	case in.Amount <= 0:
+		return invalid("amount must be positive")
+	case money.Scale(in.Currency) < 0:
+		return invalid("unsupported currency %q", in.Currency)
+	}
+	return nil
 }
 
 // SubmitReceipt stores a receipt screenshot for any manual payment and moves
@@ -113,7 +135,10 @@ func (s *Service) SubmitReceipt(ctx context.Context, userID, intentID, fileID, r
 }
 
 // SubmitTXID stores a crypto TXID and moves to confirming. A TXID can pay for
-// one intent only (enforced by a unique index, case-insensitive).
+// one intent only: one manual proof (a unique index, case-insensitive, and
+// the same hash with or without 0x), and never one the automatic USDT
+// watcher settled a payment with or staff credited as an unmatched deposit.
+// An unmatched deposit with this hash becomes this payment's proof.
 func (s *Service) SubmitTXID(ctx context.Context, userID, intentID, network, txid string) (*store.Intent, error) {
 	network, txid = strings.ToUpper(strings.TrimSpace(network)), strings.TrimSpace(txid)
 	if txid == "" || network == "" {
@@ -148,10 +173,22 @@ func (s *Service) submit(ctx context.Context, userID, intentID string, allowed [
 		if err := fill(in, r); err != nil {
 			return err
 		}
+		if r.TXID != nil {
+			if err := s.guardSubmittedTXID(ctx, tx, intentID, *r.TXID); err != nil {
+				return err
+			}
+		}
 		if err := s.st.SaveReceipt(ctx, tx, r); err != nil {
 			return err
 		}
-		out, err = s.st.TransitionConfirming(ctx, tx, intentID)
+		if out, err = s.st.TransitionConfirming(ctx, tx, intentID); err != nil {
+			return err
+		}
+		if r.TXID != nil {
+			if key := txidKey(*r.TXID); key != "" {
+				err = s.claimChainTransfers(ctx, tx, key, intentID)
+			}
+		}
 		return err
 	})
 	if err != nil {
@@ -173,16 +210,20 @@ func (s *Service) Review(ctx context.Context, reviewerID, intentID, decision, re
 		return nil, invalid("reviewer required")
 	}
 	reason = strings.TrimSpace(reason)
-	if len(reason) > maxReasonLen {
+	if utf8.RuneCountInString(reason) > maxReasonLen {
 		return nil, invalid("reason too long")
 	}
 	var out *store.Intent
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
-		var (
-			in  *store.Intent
-			err error
-		)
+		key, err := s.lockReceiptTXID(ctx, tx, intentID)
+		if err != nil {
+			return err
+		}
+		var in *store.Intent
 		if decision == "approved" {
+			if err := s.guardApprovedTXID(ctx, tx, intentID, key); err != nil {
+				return err
+			}
 			in, err = s.st.TransitionSucceeded(ctx, tx, intentID)
 			if err != nil {
 				return err
@@ -194,6 +235,9 @@ func (s *Service) Review(ctx context.Context, reviewerID, intentID, decision, re
 		} else {
 			in, err = s.st.TransitionFailed(ctx, tx, intentID)
 			if err != nil {
+				return err
+			}
+			if err := s.releaseChainTransfers(ctx, tx, intentID); err != nil {
 				return err
 			}
 		}

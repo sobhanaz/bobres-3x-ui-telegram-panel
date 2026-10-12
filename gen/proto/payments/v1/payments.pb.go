@@ -27,7 +27,7 @@ type PaymentIntent struct {
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	OrderId     string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-ups
 	UserId      string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | zarinpal | stars
+	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | stars | usdt_trc20_auto
 	Amount      *v1.Money              `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
 	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`                              // pending|confirming|succeeded|failed|expired
 	ProviderRef string                 `protobuf:"bytes,7,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"` // gateways: bank reference or transaction hash
@@ -35,11 +35,18 @@ type PaymentIntent struct {
 	CreatedAt   int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt   int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// Automated gateways: what the customer pays there, fixed at creation (IRR for
-	// Zarinpal, XTR for Telegram Stars).
+	// Zarinpal, XTR for Telegram Stars, USDT for usdt_trc20_auto: the exact,
+	// unique amount to send, scale 6).
 	GatewayAmount *v1.Money `protobuf:"bytes,11,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
-	PayUrl        string    `protobuf:"bytes,12,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"`                      // where the customer pays (Zarinpal: a page on this install)
-	ExternalId    string    `protobuf:"bytes,13,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`          // the gateway's id for the payment
-	FailureReason string    `protobuf:"bytes,14,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"` // why a gateway payment failed
+	PayUrl        string    `protobuf:"bytes,12,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"` // where the customer pays (Zarinpal: a page on this install)
+	// The gateway's id for the payment (usdt_trc20_auto: the settling
+	// transaction's hash, lower case, "#n" appended for its n-th transfer).
+	ExternalId    string `protobuf:"bytes,13,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
+	FailureReason string `protobuf:"bytes,14,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"` // why a gateway payment failed
+	// usdt_trc20_auto: the TRON address to send gateway_amount to, on TRC20,
+	// until expires_at. A later exact payment still settles, within 48 hours of
+	// created_at.
+	PayAddress    string `protobuf:"bytes,15,opt,name=pay_address,json=payAddress,proto3" json:"pay_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -172,6 +179,13 @@ func (x *PaymentIntent) GetFailureReason() string {
 	return ""
 }
 
+func (x *PaymentIntent) GetPayAddress() string {
+	if x != nil {
+		return x.PayAddress
+	}
+	return ""
+}
+
 type CreateIntentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrderId        string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // optional, empty for top-ups
@@ -179,8 +193,17 @@ type CreateIntentRequest struct {
 	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	// Automated gateways (zarinpal, stars): the amount to charge at the
-	// gateway, computed by core from its rates. Not used by manual providers.
+	// Automated gateways (zarinpal, stars, usdt_trc20_auto): the amount to
+	// charge at the gateway, computed by core from its rates. Not used by manual
+	// providers. usdt_trc20_auto: USDT (scale 6), at most 1,000,000 USDT;
+	// payments adds 1 to 9,999 micro-USDT so the amount is unique (never a
+	// whole cent), and the returned intent's gateway_amount is what the
+	// customer must send. The same customer asking again for the same payment
+	// (order or top-up, amount) while it is open gets that payment back.
+	// FailedPrecondition "automatic USDT: too many unpaid automatic USDT
+	// payments ..." when the customer holds 10 unpaid ones from the last 2
+	// days, and "automatic USDT: every unique amount for this price is in use
+	// ..." when no unique amount is left.
 	GatewayAmount *v1.Money `protobuf:"bytes,6,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
 	Description   string    `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"` // shown at the gateway, e.g. the plan name
 	unknownFields protoimpl.UnknownFields
@@ -266,7 +289,9 @@ func (x *CreateIntentRequest) GetDescription() string {
 	return ""
 }
 
-// CheckIntentRequest asks the gateway about an open intent now.
+// CheckIntentRequest asks the gateway about an open intent now
+// (usdt_trc20_auto: reads the payment's address on chain, at most every 10
+// seconds per address).
 type CheckIntentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IntentId      string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
@@ -658,6 +683,13 @@ func (x *SubmitReceiptRequest) GetReferenceNumber() string {
 	return ""
 }
 
+// SubmitTXIDRequest: a manual crypto proof. AlreadyExists ("this transaction
+// was already submitted") when the TXID is another payment's proof (with or
+// without 0x), settled an automatic USDT payment, or was credited by staff as
+// an unmatched deposit; FailedPrecondition ("this transaction carries an
+// automatic USDT payment's exact amount ...") when its transfer carries an
+// automatic payment's unique amount. An unmatched deposit with this TXID
+// becomes this payment's proof (payment.deposit_claimed.v1 tells staff).
 type SubmitTXIDRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IntentId      string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
@@ -726,6 +758,12 @@ func (x *SubmitTXIDRequest) GetTxid() string {
 	return ""
 }
 
+// ReviewManualPaymentRequest: approving a crypto proof whose TXID paid
+// something else since (an automatic USDT payment, an unmatched deposit staff
+// resolved) is refused: AlreadyExists "this transaction already paid another
+// payment"; so is one whose transfer carries an automatic payment's unique
+// amount: FailedPrecondition "this transaction carries an automatic USDT
+// payment's exact amount ...". The reason is at most 500 characters.
 type ReviewManualPaymentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IntentId      string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
@@ -1262,10 +1300,10 @@ func (x *ListPendingReceiptsResponse) GetReceipts() []*PendingReceipt {
 }
 
 // GatewayConfig is an automated gateway's settings as staff see them: whether
-// the merchant id and the proxy are set, never their values.
+// the merchant id, the API key and the proxy are set, never their values.
 type GatewayConfig struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
-	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal
+	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | usdt_trc20_auto
 	Enabled  bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`  // switched on by the owner
 	// It has credentials: payments already open keep being checked, even when
 	// switched off.
@@ -1282,10 +1320,14 @@ type GatewayConfig struct {
 	// key is missing or another one) | sandbox_refused (sandbox in prod) |
 	// public_url (switched on, but the public URL is not https://host[:port]) |
 	// invalid (refused by the client).
-	Problem       string `protobuf:"bytes,9,opt,name=problem,proto3" json:"problem,omitempty"`
-	FromEnv       bool   `protobuf:"varint,10,opt,name=from_env,json=fromEnv,proto3" json:"from_env,omitempty"`       // read from the environment (key_missing)
-	UpdatedAt     int64  `protobuf:"varint,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // 0 for the environment's settings
-	UpdatedBy     string `protobuf:"bytes,12,opt,name=updated_by,json=updatedBy,proto3" json:"updated_by,omitempty"`  // core user id of the staff member, "" when none
+	Problem   string `protobuf:"bytes,9,opt,name=problem,proto3" json:"problem,omitempty"`
+	FromEnv   bool   `protobuf:"varint,10,opt,name=from_env,json=fromEnv,proto3" json:"from_env,omitempty"`       // read from the environment (key_missing)
+	UpdatedAt int64  `protobuf:"varint,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // 0 for the environment's settings
+	UpdatedBy string `protobuf:"bytes,12,opt,name=updated_by,json=updatedBy,proto3" json:"updated_by,omitempty"`  // core user id of the staff member, "" when none
+	// usdt_trc20_auto: the store's TRC20 address (public: customers are shown
+	// it), "" when none. configured = it has an address and can be read.
+	Address       string `protobuf:"bytes,13,opt,name=address,proto3" json:"address,omitempty"`
+	ApiKeySet     bool   `protobuf:"varint,14,opt,name=api_key_set,json=apiKeySet,proto3" json:"api_key_set,omitempty"` // usdt_trc20_auto: a TronGrid API key is set
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1404,6 +1446,20 @@ func (x *GatewayConfig) GetUpdatedBy() string {
 	return ""
 }
 
+func (x *GatewayConfig) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *GatewayConfig) GetApiKeySet() bool {
+	if x != nil {
+		return x.ApiKeySet
+	}
+	return false
+}
+
 type ListGatewayConfigsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1485,18 +1541,25 @@ func (x *ListGatewayConfigsResponse) GetConfigs() []*GatewayConfig {
 }
 
 // SetGatewayConfigRequest replaces a gateway's settings. enabled and sandbox
-// are the new values; an empty merchant_id or proxy keeps the stored one.
-// Switching off only stops offering it. The merchant id and the sandbox cannot
-// change while payments are open (FailedPrecondition, the count in the message).
+// are the new values; an empty merchant_id, address, api_key or proxy keeps
+// the stored one. Switching off only stops offering it. Zarinpal: the merchant
+// id and the sandbox cannot change while payments are open; usdt_trc20_auto:
+// the address cannot change while payments to another address are open
+// (FailedPrecondition, the count in the message).
 type SetGatewayConfigRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
-	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Sandbox       bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
-	MerchantId    string                 `protobuf:"bytes,4,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"`
-	Proxy         string                 `protobuf:"bytes,5,opt,name=proxy,proto3" json:"proxy,omitempty"` // http(s)://[user:password@]host:port
-	ClearProxy    bool                   `protobuf:"varint,6,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
-	ActorId       string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // core user id of the staff member
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Provider   string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Enabled    bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Sandbox    bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`                        // zarinpal only
+	MerchantId string                 `protobuf:"bytes,4,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"` // zarinpal only
+	Proxy      string                 `protobuf:"bytes,5,opt,name=proxy,proto3" json:"proxy,omitempty"`                             // http(s)://[user:password@]host:port
+	ClearProxy bool                   `protobuf:"varint,6,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
+	ActorId    string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // core user id of the staff member
+	// usdt_trc20_auto: the store's TRON address (T + 33 base58 characters,
+	// checksum verified) and TronGrid's TRON-PRO-API-KEY (optional, write-only).
+	Address       string `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
+	ApiKey        string `protobuf:"bytes,9,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	ClearApiKey   bool   `protobuf:"varint,10,opt,name=clear_api_key,json=clearApiKey,proto3" json:"clear_api_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1580,14 +1643,38 @@ func (x *SetGatewayConfigRequest) GetActorId() string {
 	return ""
 }
 
+func (x *SetGatewayConfigRequest) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *SetGatewayConfigRequest) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *SetGatewayConfigRequest) GetClearApiKey() bool {
+	if x != nil {
+		return x.ClearApiKey
+	}
+	return false
+}
+
 // GatewayCandidate is settings to test before saving them; an empty
-// merchant_id or proxy means the stored one.
+// merchant_id, address, api_key or proxy means the stored one.
 type GatewayCandidate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sandbox       bool                   `protobuf:"varint,1,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
 	MerchantId    string                 `protobuf:"bytes,2,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"`
 	Proxy         string                 `protobuf:"bytes,3,opt,name=proxy,proto3" json:"proxy,omitempty"`
 	ClearProxy    bool                   `protobuf:"varint,4,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
+	Address       string                 `protobuf:"bytes,5,opt,name=address,proto3" json:"address,omitempty"`                               // usdt_trc20_auto
+	ApiKey        string                 `protobuf:"bytes,6,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`                   // usdt_trc20_auto
+	ClearApiKey   bool                   `protobuf:"varint,7,opt,name=clear_api_key,json=clearApiKey,proto3" json:"clear_api_key,omitempty"` // usdt_trc20_auto
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1650,8 +1737,30 @@ func (x *GatewayCandidate) GetClearProxy() bool {
 	return false
 }
 
+func (x *GatewayCandidate) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *GatewayCandidate) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *GatewayCandidate) GetClearApiKey() bool {
+	if x != nil {
+		return x.ClearApiKey
+	}
+	return false
+}
+
 // TestGatewayRequest checks credentials and their route (proxy, registered
-// IP) with a read-only call; nothing is stored, created or verified.
+// IP) with a read-only call; nothing is stored, created or verified
+// (usdt_trc20_auto: one TronGrid read of the address).
 type TestGatewayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
@@ -1776,7 +1885,7 @@ func (x *TestGatewayResponse) GetLatencyMs() int64 {
 // (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
 type GatewayReportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | stars | manual_card | manual_crypto | manual_zarinpal
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
 	From          int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
 	To            int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1840,7 +1949,7 @@ type GatewayStatusTotal struct {
 	Status         string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	Count          int64                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	Amounts        []*v1.Money            `protobuf:"bytes,3,rep,name=amounts,proto3" json:"amounts,omitempty"`                                     // sum charged, per currency
-	GatewayAmounts []*v1.Money            `protobuf:"bytes,4,rep,name=gateway_amounts,json=gatewayAmounts,proto3" json:"gateway_amounts,omitempty"` // sum asked at the gateway (IRR, XTR)
+	GatewayAmounts []*v1.Money            `protobuf:"bytes,4,rep,name=gateway_amounts,json=gatewayAmounts,proto3" json:"gateway_amounts,omitempty"` // sum asked at the gateway (IRR, XTR, USDT)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1959,7 +2068,7 @@ func (x *GatewayReasonCount) GetCount() int64 {
 type GatewayEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	At            int64                  `protobuf:"varint,1,opt,name=at,proto3" json:"at,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // create | callback | check | confirm ...
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // create | callback | check | confirm | scan | match ...
 	IntentId      string                 `protobuf:"bytes,3,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
 	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"` // the error of an error event; never a secret or an address
 	unknownFields protoimpl.UnknownFields
@@ -2025,16 +2134,26 @@ func (x *GatewayEvent) GetDetail() string {
 }
 
 type GatewayReportResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
-	From          int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
-	To            int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
-	Totals        []*GatewayStatusTotal  `protobuf:"bytes,4,rep,name=totals,proto3" json:"totals,omitempty"`                                    // by status
-	Failures      []*GatewayReasonCount  `protobuf:"bytes,5,rep,name=failures,proto3" json:"failures,omitempty"`                                // failed or expired, most frequent first
-	OpenCount     int64                  `protobuf:"varint,6,opt,name=open_count,json=openCount,proto3" json:"open_count,omitempty"`            // open now, whatever the period
-	OldestOpenAt  int64                  `protobuf:"varint,7,opt,name=oldest_open_at,json=oldestOpenAt,proto3" json:"oldest_open_at,omitempty"` // 0 = none open
-	LastError     *GatewayEvent          `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`             // unset: none
-	LastPaid      *GatewayEvent          `protobuf:"bytes,9,opt,name=last_paid,json=lastPaid,proto3" json:"last_paid,omitempty"`                // unset: none
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Provider     string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	From         int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
+	To           int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
+	Totals       []*GatewayStatusTotal  `protobuf:"bytes,4,rep,name=totals,proto3" json:"totals,omitempty"`                                    // by status
+	Failures     []*GatewayReasonCount  `protobuf:"bytes,5,rep,name=failures,proto3" json:"failures,omitempty"`                                // failed or expired, most frequent first
+	OpenCount    int64                  `protobuf:"varint,6,opt,name=open_count,json=openCount,proto3" json:"open_count,omitempty"`            // open now, whatever the period
+	OldestOpenAt int64                  `protobuf:"varint,7,opt,name=oldest_open_at,json=oldestOpenAt,proto3" json:"oldest_open_at,omitempty"` // 0 = none open
+	LastError    *GatewayEvent          `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`             // unset: none
+	LastPaid     *GatewayEvent          `protobuf:"bytes,9,opt,name=last_paid,json=lastPaid,proto3" json:"last_paid,omitempty"`                // unset: none
+	// usdt_trc20_auto only: the deposits staff must still credit by hand
+	// (outcome unmatched, whatever the period, and announced: not those a
+	// manual proof may still claim, see ChainTransfer.held_until), newest
+	// first, at most 50, and how many there are.
+	Unmatched      []*ChainTransfer `protobuf:"bytes,10,rep,name=unmatched,proto3" json:"unmatched,omitempty"`
+	UnmatchedCount int64            `protobuf:"varint,11,opt,name=unmatched_count,json=unmatchedCount,proto3" json:"unmatched_count,omitempty"`
+	// usdt_trc20_auto only: the watcher's reads of the store's address.
+	LastScanAt    int64  `protobuf:"varint,12,opt,name=last_scan_at,json=lastScanAt,proto3" json:"last_scan_at,omitempty"`         // 0 = never read
+	LastScanOkAt  int64  `protobuf:"varint,13,opt,name=last_scan_ok_at,json=lastScanOkAt,proto3" json:"last_scan_ok_at,omitempty"` // 0 = never read successfully
+	ScanError     string `protobuf:"bytes,14,opt,name=scan_error,json=scanError,proto3" json:"scan_error,omitempty"`               // the last read's error, "" when it worked; never a secret
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2132,6 +2251,412 @@ func (x *GatewayReportResponse) GetLastPaid() *GatewayEvent {
 	return nil
 }
 
+func (x *GatewayReportResponse) GetUnmatched() []*ChainTransfer {
+	if x != nil {
+		return x.Unmatched
+	}
+	return nil
+}
+
+func (x *GatewayReportResponse) GetUnmatchedCount() int64 {
+	if x != nil {
+		return x.UnmatchedCount
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetLastScanAt() int64 {
+	if x != nil {
+		return x.LastScanAt
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetLastScanOkAt() int64 {
+	if x != nil {
+		return x.LastScanOkAt
+	}
+	return 0
+}
+
+func (x *GatewayReportResponse) GetScanError() string {
+	if x != nil {
+		return x.ScanError
+	}
+	return ""
+}
+
+// ChainTransfer is one USDT (TRC20) transfer the watcher saw arrive.
+type ChainTransfer struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Txid        string                 `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`                                // lower-case hex, no 0x
+	EventIndex  int32                  `protobuf:"varint,2,opt,name=event_index,json=eventIndex,proto3" json:"event_index,omitempty"` // the transfer's place in its transaction, from 0
+	Network     string                 `protobuf:"bytes,3,opt,name=network,proto3" json:"network,omitempty"`                          // TRC20
+	FromAddress string                 `protobuf:"bytes,4,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
+	ToAddress   string                 `protobuf:"bytes,5,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
+	Amount      *v1.Money              `protobuf:"bytes,6,opt,name=amount,proto3" json:"amount,omitempty"`                         // USDT, scale 6
+	BlockTime   int64                  `protobuf:"varint,7,opt,name=block_time,json=blockTime,proto3" json:"block_time,omitempty"` // unix seconds
+	// matched (it settled intent_id) | unmatched (no payment has exactly this
+	// amount: credit it by hand, then resolve it) | manual (intent_id, a manual
+	// crypto payment, carries this TXID) | resolved (handled by staff) |
+	// ignored (dust under 0.1 USDT)
+	Outcome string `protobuf:"bytes,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// unmatched: no_payment | already_paid | closed | ambiguous |
+	// shadowed_exact_match (an automatic payment asked for exactly this amount,
+	// but a manual proof carrying this TXID was approved before the watcher saw
+	// it: the automatic payer was not credited); ignored: dust
+	Reason     string `protobuf:"bytes,9,opt,name=reason,proto3" json:"reason,omitempty"`
+	IntentId   string `protobuf:"bytes,10,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
+	RecordedAt int64  `protobuf:"varint,11,opt,name=recorded_at,json=recordedAt,proto3" json:"recorded_at,omitempty"`
+	ResolvedBy string `protobuf:"bytes,12,opt,name=resolved_by,json=resolvedBy,proto3" json:"resolved_by,omitempty"` // core user id of the staff member
+	ResolvedAt int64  `protobuf:"varint,13,opt,name=resolved_at,json=resolvedAt,proto3" json:"resolved_at,omitempty"`
+	Note       string `protobuf:"bytes,14,opt,name=note,proto3" json:"note,omitempty"`
+	// unmatched, no_payment: a manual proof carrying this TXID may still claim
+	// it (the address may take manual USDT too), so staff are told to credit it
+	// by hand only from this time (unix seconds) if still unmatched; 0 =
+	// announced already, or nothing pending.
+	HeldUntil     int64 `protobuf:"varint,15,opt,name=held_until,json=heldUntil,proto3" json:"held_until,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChainTransfer) Reset() {
+	*x = ChainTransfer{}
+	mi := &file_payments_v1_payments_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChainTransfer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChainTransfer) ProtoMessage() {}
+
+func (x *ChainTransfer) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChainTransfer.ProtoReflect.Descriptor instead.
+func (*ChainTransfer) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ChainTransfer) GetTxid() string {
+	if x != nil {
+		return x.Txid
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetEventIndex() int32 {
+	if x != nil {
+		return x.EventIndex
+	}
+	return 0
+}
+
+func (x *ChainTransfer) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetFromAddress() string {
+	if x != nil {
+		return x.FromAddress
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetToAddress() string {
+	if x != nil {
+		return x.ToAddress
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetAmount() *v1.Money {
+	if x != nil {
+		return x.Amount
+	}
+	return nil
+}
+
+func (x *ChainTransfer) GetBlockTime() int64 {
+	if x != nil {
+		return x.BlockTime
+	}
+	return 0
+}
+
+func (x *ChainTransfer) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetRecordedAt() int64 {
+	if x != nil {
+		return x.RecordedAt
+	}
+	return 0
+}
+
+func (x *ChainTransfer) GetResolvedBy() string {
+	if x != nil {
+		return x.ResolvedBy
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetResolvedAt() int64 {
+	if x != nil {
+		return x.ResolvedAt
+	}
+	return 0
+}
+
+func (x *ChainTransfer) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *ChainTransfer) GetHeldUntil() int64 {
+	if x != nil {
+		return x.HeldUntil
+	}
+	return 0
+}
+
+// ResolveChainTransferRequest marks an unmatched deposit handled (credited by
+// hand or refunded). FailedPrecondition when it is not unmatched (or
+// ignored); its TXID can no longer be sent as a manual proof.
+type ResolveChainTransferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Txid          string                 `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	EventIndex    int32                  `protobuf:"varint,2,opt,name=event_index,json=eventIndex,proto3" json:"event_index,omitempty"`
+	ActorId       string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // core user id of the staff member
+	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`                      // at most 500 characters
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveChainTransferRequest) Reset() {
+	*x = ResolveChainTransferRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveChainTransferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveChainTransferRequest) ProtoMessage() {}
+
+func (x *ResolveChainTransferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveChainTransferRequest.ProtoReflect.Descriptor instead.
+func (*ResolveChainTransferRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ResolveChainTransferRequest) GetTxid() string {
+	if x != nil {
+		return x.Txid
+	}
+	return ""
+}
+
+func (x *ResolveChainTransferRequest) GetEventIndex() int32 {
+	if x != nil {
+		return x.EventIndex
+	}
+	return 0
+}
+
+func (x *ResolveChainTransferRequest) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *ResolveChainTransferRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+// ListChainTransfersRequest filters the USDT transfer log; every field is optional.
+type ListChainTransfersRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Outcome    string                 `protobuf:"bytes,1,opt,name=outcome,proto3" json:"outcome,omitempty"`                   // matched | unmatched | manual | resolved | ignored
+	Txid       string                 `protobuf:"bytes,2,opt,name=txid,proto3" json:"txid,omitempty"`                         // one transaction (with or without 0x)
+	IntentId   string                 `protobuf:"bytes,3,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"` // the transfers tied to one payment
+	Pagination *v1.Pagination         `protobuf:"bytes,4,opt,name=pagination,proto3" json:"pagination,omitempty"`
+	// micro-USDT: only transfers of exactly this amount (0 = any), e.g. the
+	// deposits matching what a manual proof under review should have sent
+	Value         int64 `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListChainTransfersRequest) Reset() {
+	*x = ListChainTransfersRequest{}
+	mi := &file_payments_v1_payments_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListChainTransfersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListChainTransfersRequest) ProtoMessage() {}
+
+func (x *ListChainTransfersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListChainTransfersRequest.ProtoReflect.Descriptor instead.
+func (*ListChainTransfersRequest) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ListChainTransfersRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *ListChainTransfersRequest) GetTxid() string {
+	if x != nil {
+		return x.Txid
+	}
+	return ""
+}
+
+func (x *ListChainTransfersRequest) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *ListChainTransfersRequest) GetPagination() *v1.Pagination {
+	if x != nil {
+		return x.Pagination
+	}
+	return nil
+}
+
+func (x *ListChainTransfersRequest) GetValue() int64 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
+type ListChainTransfersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Transfers     []*ChainTransfer       `protobuf:"bytes,1,rep,name=transfers,proto3" json:"transfers,omitempty"` // newest first
+	PageInfo      *v1.PageInfo           `protobuf:"bytes,2,opt,name=page_info,json=pageInfo,proto3" json:"page_info,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListChainTransfersResponse) Reset() {
+	*x = ListChainTransfersResponse{}
+	mi := &file_payments_v1_payments_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListChainTransfersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListChainTransfersResponse) ProtoMessage() {}
+
+func (x *ListChainTransfersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_payments_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListChainTransfersResponse.ProtoReflect.Descriptor instead.
+func (*ListChainTransfersResponse) Descriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ListChainTransfersResponse) GetTransfers() []*ChainTransfer {
+	if x != nil {
+		return x.Transfers
+	}
+	return nil
+}
+
+func (x *ListChainTransfersResponse) GetPageInfo() *v1.PageInfo {
+	if x != nil {
+		return x.PageInfo
+	}
+	return nil
+}
+
 // RecentLogsRequest asks for the service's kept warnings and errors (core's
 // System page, owner only).
 type RecentLogsRequest struct {
@@ -2142,7 +2667,7 @@ type RecentLogsRequest struct {
 
 func (x *RecentLogsRequest) Reset() {
 	*x = RecentLogsRequest{}
-	mi := &file_payments_v1_payments_proto_msgTypes[30]
+	mi := &file_payments_v1_payments_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2154,7 +2679,7 @@ func (x *RecentLogsRequest) String() string {
 func (*RecentLogsRequest) ProtoMessage() {}
 
 func (x *RecentLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[30]
+	mi := &file_payments_v1_payments_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2167,7 +2692,7 @@ func (x *RecentLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecentLogsRequest.ProtoReflect.Descriptor instead.
 func (*RecentLogsRequest) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{30}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{34}
 }
 
 // LogLine is one kept log line, redacted like the service's stdout.
@@ -2183,7 +2708,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_payments_v1_payments_proto_msgTypes[31]
+	mi := &file_payments_v1_payments_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2195,7 +2720,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[31]
+	mi := &file_payments_v1_payments_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2208,7 +2733,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{31}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *LogLine) GetTime() int64 {
@@ -2248,7 +2773,7 @@ type RecentLogsResponse struct {
 
 func (x *RecentLogsResponse) Reset() {
 	*x = RecentLogsResponse{}
-	mi := &file_payments_v1_payments_proto_msgTypes[32]
+	mi := &file_payments_v1_payments_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2260,7 +2785,7 @@ func (x *RecentLogsResponse) String() string {
 func (*RecentLogsResponse) ProtoMessage() {}
 
 func (x *RecentLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_payments_proto_msgTypes[32]
+	mi := &file_payments_v1_payments_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2273,7 +2798,7 @@ func (x *RecentLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecentLogsResponse.ProtoReflect.Descriptor instead.
 func (*RecentLogsResponse) Descriptor() ([]byte, []int) {
-	return file_payments_v1_payments_proto_rawDescGZIP(), []int{32}
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RecentLogsResponse) GetLines() []*LogLine {
@@ -2287,7 +2812,7 @@ var File_payments_v1_payments_proto protoreflect.FileDescriptor
 
 const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
-	"\x1apayments/v1/payments.proto\x12\vpayments.v1\x1a\x15common/v1/types.proto\"\xcb\x03\n" +
+	"\x1apayments/v1/payments.proto\x12\vpayments.v1\x1a\x15common/v1/types.proto\"\xec\x03\n" +
 	"\rPaymentIntent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x17\n" +
@@ -2307,7 +2832,9 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\apay_url\x18\f \x01(\tR\x06payUrl\x12\x1f\n" +
 	"\vexternal_id\x18\r \x01(\tR\n" +
 	"externalId\x12%\n" +
-	"\x0efailure_reason\x18\x0e \x01(\tR\rfailureReason\"\x93\x02\n" +
+	"\x0efailure_reason\x18\x0e \x01(\tR\rfailureReason\x12\x1f\n" +
+	"\vpay_address\x18\x0f \x01(\tR\n" +
+	"payAddress\"\x93\x02\n" +
 	"\x13CreateIntentRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +
@@ -2389,7 +2916,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x1bListPendingReceiptsResponse\x124\n" +
 	"\aintents\x18\x01 \x03(\v2\x1a.payments.v1.PaymentIntentR\aintents\x120\n" +
 	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\x127\n" +
-	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts\"\xef\x02\n" +
+	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts\"\xa9\x03\n" +
 	"\rGatewayConfig\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x1e\n" +
@@ -2408,10 +2935,12 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\v \x01(\x03R\tupdatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_by\x18\f \x01(\tR\tupdatedBy\"\x1b\n" +
+	"updated_by\x18\f \x01(\tR\tupdatedBy\x12\x18\n" +
+	"\aaddress\x18\r \x01(\tR\aaddress\x12\x1e\n" +
+	"\vapi_key_set\x18\x0e \x01(\bR\tapiKeySet\"\x1b\n" +
 	"\x19ListGatewayConfigsRequest\"R\n" +
 	"\x1aListGatewayConfigsResponse\x124\n" +
-	"\aconfigs\x18\x01 \x03(\v2\x1a.payments.v1.GatewayConfigR\aconfigs\"\xdc\x01\n" +
+	"\aconfigs\x18\x01 \x03(\v2\x1a.payments.v1.GatewayConfigR\aconfigs\"\xb3\x02\n" +
 	"\x17SetGatewayConfigRequest\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x18\n" +
@@ -2421,14 +2950,21 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x05proxy\x18\x05 \x01(\tR\x05proxy\x12\x1f\n" +
 	"\vclear_proxy\x18\x06 \x01(\bR\n" +
 	"clearProxy\x12\x19\n" +
-	"\bactor_id\x18\a \x01(\tR\aactorId\"\x84\x01\n" +
+	"\bactor_id\x18\a \x01(\tR\aactorId\x12\x18\n" +
+	"\aaddress\x18\b \x01(\tR\aaddress\x12\x17\n" +
+	"\aapi_key\x18\t \x01(\tR\x06apiKey\x12\"\n" +
+	"\rclear_api_key\x18\n" +
+	" \x01(\bR\vclearApiKey\"\xdb\x01\n" +
 	"\x10GatewayCandidate\x12\x18\n" +
 	"\asandbox\x18\x01 \x01(\bR\asandbox\x12\x1f\n" +
 	"\vmerchant_id\x18\x02 \x01(\tR\n" +
 	"merchantId\x12\x14\n" +
 	"\x05proxy\x18\x03 \x01(\tR\x05proxy\x12\x1f\n" +
 	"\vclear_proxy\x18\x04 \x01(\bR\n" +
-	"clearProxy\"m\n" +
+	"clearProxy\x12\x18\n" +
+	"\aaddress\x18\x05 \x01(\tR\aaddress\x12\x17\n" +
+	"\aapi_key\x18\x06 \x01(\tR\x06apiKey\x12\"\n" +
+	"\rclear_api_key\x18\a \x01(\bR\vclearApiKey\"m\n" +
 	"\x12TestGatewayRequest\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12;\n" +
 	"\tcandidate\x18\x02 \x01(\v2\x1d.payments.v1.GatewayCandidateR\tcandidate\"|\n" +
@@ -2456,7 +2992,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x02at\x18\x01 \x01(\x03R\x02at\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1b\n" +
 	"\tintent_id\x18\x03 \x01(\tR\bintentId\x12\x16\n" +
-	"\x06detail\x18\x04 \x01(\tR\x06detail\"\x84\x03\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\"\xcf\x04\n" +
 	"\x15GatewayReportResponse\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\x03R\x04from\x12\x0e\n" +
@@ -2468,7 +3004,56 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x0eoldest_open_at\x18\a \x01(\x03R\foldestOpenAt\x128\n" +
 	"\n" +
 	"last_error\x18\b \x01(\v2\x19.payments.v1.GatewayEventR\tlastError\x126\n" +
-	"\tlast_paid\x18\t \x01(\v2\x19.payments.v1.GatewayEventR\blastPaid\"\x13\n" +
+	"\tlast_paid\x18\t \x01(\v2\x19.payments.v1.GatewayEventR\blastPaid\x128\n" +
+	"\tunmatched\x18\n" +
+	" \x03(\v2\x1a.payments.v1.ChainTransferR\tunmatched\x12'\n" +
+	"\x0funmatched_count\x18\v \x01(\x03R\x0eunmatchedCount\x12 \n" +
+	"\flast_scan_at\x18\f \x01(\x03R\n" +
+	"lastScanAt\x12%\n" +
+	"\x0flast_scan_ok_at\x18\r \x01(\x03R\flastScanOkAt\x12\x1d\n" +
+	"\n" +
+	"scan_error\x18\x0e \x01(\tR\tscanError\"\xce\x03\n" +
+	"\rChainTransfer\x12\x12\n" +
+	"\x04txid\x18\x01 \x01(\tR\x04txid\x12\x1f\n" +
+	"\vevent_index\x18\x02 \x01(\x05R\n" +
+	"eventIndex\x12\x18\n" +
+	"\anetwork\x18\x03 \x01(\tR\anetwork\x12!\n" +
+	"\ffrom_address\x18\x04 \x01(\tR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x05 \x01(\tR\ttoAddress\x12(\n" +
+	"\x06amount\x18\x06 \x01(\v2\x10.common.v1.MoneyR\x06amount\x12\x1d\n" +
+	"\n" +
+	"block_time\x18\a \x01(\x03R\tblockTime\x12\x18\n" +
+	"\aoutcome\x18\b \x01(\tR\aoutcome\x12\x16\n" +
+	"\x06reason\x18\t \x01(\tR\x06reason\x12\x1b\n" +
+	"\tintent_id\x18\n" +
+	" \x01(\tR\bintentId\x12\x1f\n" +
+	"\vrecorded_at\x18\v \x01(\x03R\n" +
+	"recordedAt\x12\x1f\n" +
+	"\vresolved_by\x18\f \x01(\tR\n" +
+	"resolvedBy\x12\x1f\n" +
+	"\vresolved_at\x18\r \x01(\x03R\n" +
+	"resolvedAt\x12\x12\n" +
+	"\x04note\x18\x0e \x01(\tR\x04note\x12\x1d\n" +
+	"\n" +
+	"held_until\x18\x0f \x01(\x03R\theldUntil\"\x81\x01\n" +
+	"\x1bResolveChainTransferRequest\x12\x12\n" +
+	"\x04txid\x18\x01 \x01(\tR\x04txid\x12\x1f\n" +
+	"\vevent_index\x18\x02 \x01(\x05R\n" +
+	"eventIndex\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x12\n" +
+	"\x04note\x18\x04 \x01(\tR\x04note\"\xb3\x01\n" +
+	"\x19ListChainTransfersRequest\x12\x18\n" +
+	"\aoutcome\x18\x01 \x01(\tR\aoutcome\x12\x12\n" +
+	"\x04txid\x18\x02 \x01(\tR\x04txid\x12\x1b\n" +
+	"\tintent_id\x18\x03 \x01(\tR\bintentId\x125\n" +
+	"\n" +
+	"pagination\x18\x04 \x01(\v2\x15.common.v1.PaginationR\n" +
+	"pagination\x12\x14\n" +
+	"\x05value\x18\x05 \x01(\x03R\x05value\"\x88\x01\n" +
+	"\x1aListChainTransfersResponse\x128\n" +
+	"\ttransfers\x18\x01 \x03(\v2\x1a.payments.v1.ChainTransferR\ttransfers\x120\n" +
+	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\"\x13\n" +
 	"\x11RecentLogsRequest\"[\n" +
 	"\aLogLine\x12\x12\n" +
 	"\x04time\x18\x01 \x01(\x03R\x04time\x12\x14\n" +
@@ -2476,8 +3061,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x03msg\x18\x03 \x01(\tR\x03msg\x12\x14\n" +
 	"\x05attrs\x18\x04 \x01(\tR\x05attrs\"@\n" +
 	"\x12RecentLogsResponse\x12*\n" +
-	"\x05lines\x18\x01 \x03(\v2\x14.payments.v1.LogLineR\x05lines2\xea\n" +
-	"\n" +
+	"\x05lines\x18\x01 \x03(\v2\x14.payments.v1.LogLineR\x05lines2\xaf\f\n" +
 	"\x0fPaymentsService\x12L\n" +
 	"\fCreateIntent\x12 .payments.v1.CreateIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12F\n" +
 	"\tGetIntent\x12\x1d.payments.v1.GetIntentRequest\x1a\x1a.payments.v1.PaymentIntent\x12N\n" +
@@ -2494,7 +3078,9 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x12ListGatewayConfigs\x12&.payments.v1.ListGatewayConfigsRequest\x1a'.payments.v1.ListGatewayConfigsResponse\x12T\n" +
 	"\x10SetGatewayConfig\x12$.payments.v1.SetGatewayConfigRequest\x1a\x1a.payments.v1.GatewayConfig\x12P\n" +
 	"\vTestGateway\x12\x1f.payments.v1.TestGatewayRequest\x1a .payments.v1.TestGatewayResponse\x12V\n" +
-	"\rGatewayReport\x12!.payments.v1.GatewayReportRequest\x1a\".payments.v1.GatewayReportResponse\x12M\n" +
+	"\rGatewayReport\x12!.payments.v1.GatewayReportRequest\x1a\".payments.v1.GatewayReportResponse\x12e\n" +
+	"\x12ListChainTransfers\x12&.payments.v1.ListChainTransfersRequest\x1a'.payments.v1.ListChainTransfersResponse\x12\\\n" +
+	"\x14ResolveChainTransfer\x12(.payments.v1.ResolveChainTransferRequest\x1a\x1a.payments.v1.ChainTransfer\x12M\n" +
 	"\n" +
 	"RecentLogs\x12\x1e.payments.v1.RecentLogsRequest\x1a\x1f.payments.v1.RecentLogsResponseBRZPgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/payments/v1;paymentsv1b\x06proto3"
 
@@ -2510,7 +3096,7 @@ func file_payments_v1_payments_proto_rawDescGZIP() []byte {
 	return file_payments_v1_payments_proto_rawDescData
 }
 
-var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_payments_v1_payments_proto_goTypes = []any{
 	(*PaymentIntent)(nil),               // 0: payments.v1.PaymentIntent
 	(*CreateIntentRequest)(nil),         // 1: payments.v1.CreateIntentRequest
@@ -2542,75 +3128,88 @@ var file_payments_v1_payments_proto_goTypes = []any{
 	(*GatewayReasonCount)(nil),          // 27: payments.v1.GatewayReasonCount
 	(*GatewayEvent)(nil),                // 28: payments.v1.GatewayEvent
 	(*GatewayReportResponse)(nil),       // 29: payments.v1.GatewayReportResponse
-	(*RecentLogsRequest)(nil),           // 30: payments.v1.RecentLogsRequest
-	(*LogLine)(nil),                     // 31: payments.v1.LogLine
-	(*RecentLogsResponse)(nil),          // 32: payments.v1.RecentLogsResponse
-	(*v1.Money)(nil),                    // 33: common.v1.Money
-	(*v1.Pagination)(nil),               // 34: common.v1.Pagination
-	(*v1.PageInfo)(nil),                 // 35: common.v1.PageInfo
+	(*ChainTransfer)(nil),               // 30: payments.v1.ChainTransfer
+	(*ResolveChainTransferRequest)(nil), // 31: payments.v1.ResolveChainTransferRequest
+	(*ListChainTransfersRequest)(nil),   // 32: payments.v1.ListChainTransfersRequest
+	(*ListChainTransfersResponse)(nil),  // 33: payments.v1.ListChainTransfersResponse
+	(*RecentLogsRequest)(nil),           // 34: payments.v1.RecentLogsRequest
+	(*LogLine)(nil),                     // 35: payments.v1.LogLine
+	(*RecentLogsResponse)(nil),          // 36: payments.v1.RecentLogsResponse
+	(*v1.Money)(nil),                    // 37: common.v1.Money
+	(*v1.Pagination)(nil),               // 38: common.v1.Pagination
+	(*v1.PageInfo)(nil),                 // 39: common.v1.PageInfo
 }
 var file_payments_v1_payments_proto_depIdxs = []int32{
-	33, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
-	33, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
-	33, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
-	33, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
-	34, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
+	37, // 0: payments.v1.PaymentIntent.amount:type_name -> common.v1.Money
+	37, // 1: payments.v1.PaymentIntent.gateway_amount:type_name -> common.v1.Money
+	37, // 2: payments.v1.CreateIntentRequest.amount:type_name -> common.v1.Money
+	37, // 3: payments.v1.CreateIntentRequest.gateway_amount:type_name -> common.v1.Money
+	38, // 4: payments.v1.ListPendingReceiptsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 5: payments.v1.PendingReceipt.intent:type_name -> payments.v1.PaymentIntent
 	12, // 6: payments.v1.PendingReceipt.receipt:type_name -> payments.v1.ManualReceipt
-	34, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
+	38, // 7: payments.v1.ListIntentsRequest.pagination:type_name -> common.v1.Pagination
 	0,  // 8: payments.v1.IntentRecord.intent:type_name -> payments.v1.PaymentIntent
 	12, // 9: payments.v1.IntentRecord.receipt:type_name -> payments.v1.ManualReceipt
 	15, // 10: payments.v1.ListIntentsResponse.records:type_name -> payments.v1.IntentRecord
-	35, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
+	39, // 11: payments.v1.ListIntentsResponse.page_info:type_name -> common.v1.PageInfo
 	0,  // 12: payments.v1.ListPendingReceiptsResponse.intents:type_name -> payments.v1.PaymentIntent
-	35, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
+	39, // 13: payments.v1.ListPendingReceiptsResponse.page_info:type_name -> common.v1.PageInfo
 	13, // 14: payments.v1.ListPendingReceiptsResponse.receipts:type_name -> payments.v1.PendingReceipt
 	18, // 15: payments.v1.ListGatewayConfigsResponse.configs:type_name -> payments.v1.GatewayConfig
 	22, // 16: payments.v1.TestGatewayRequest.candidate:type_name -> payments.v1.GatewayCandidate
-	33, // 17: payments.v1.GatewayStatusTotal.amounts:type_name -> common.v1.Money
-	33, // 18: payments.v1.GatewayStatusTotal.gateway_amounts:type_name -> common.v1.Money
+	37, // 17: payments.v1.GatewayStatusTotal.amounts:type_name -> common.v1.Money
+	37, // 18: payments.v1.GatewayStatusTotal.gateway_amounts:type_name -> common.v1.Money
 	26, // 19: payments.v1.GatewayReportResponse.totals:type_name -> payments.v1.GatewayStatusTotal
 	27, // 20: payments.v1.GatewayReportResponse.failures:type_name -> payments.v1.GatewayReasonCount
 	28, // 21: payments.v1.GatewayReportResponse.last_error:type_name -> payments.v1.GatewayEvent
 	28, // 22: payments.v1.GatewayReportResponse.last_paid:type_name -> payments.v1.GatewayEvent
-	31, // 23: payments.v1.RecentLogsResponse.lines:type_name -> payments.v1.LogLine
-	1,  // 24: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
-	7,  // 25: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
-	8,  // 26: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
-	9,  // 27: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
-	10, // 28: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
-	11, // 29: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
-	14, // 30: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
-	2,  // 31: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
-	3,  // 32: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
-	4,  // 33: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
-	5,  // 34: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
-	19, // 35: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
-	21, // 36: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
-	23, // 37: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
-	25, // 38: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
-	30, // 39: payments.v1.PaymentsService.RecentLogs:input_type -> payments.v1.RecentLogsRequest
-	0,  // 40: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 41: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 42: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
-	0,  // 43: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
-	0,  // 44: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
-	17, // 45: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
-	16, // 46: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
-	0,  // 47: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
-	0,  // 48: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
-	0,  // 49: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
-	6,  // 50: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
-	20, // 51: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
-	18, // 52: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
-	24, // 53: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
-	29, // 54: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
-	32, // 55: payments.v1.PaymentsService.RecentLogs:output_type -> payments.v1.RecentLogsResponse
-	40, // [40:56] is the sub-list for method output_type
-	24, // [24:40] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	30, // 23: payments.v1.GatewayReportResponse.unmatched:type_name -> payments.v1.ChainTransfer
+	37, // 24: payments.v1.ChainTransfer.amount:type_name -> common.v1.Money
+	38, // 25: payments.v1.ListChainTransfersRequest.pagination:type_name -> common.v1.Pagination
+	30, // 26: payments.v1.ListChainTransfersResponse.transfers:type_name -> payments.v1.ChainTransfer
+	39, // 27: payments.v1.ListChainTransfersResponse.page_info:type_name -> common.v1.PageInfo
+	35, // 28: payments.v1.RecentLogsResponse.lines:type_name -> payments.v1.LogLine
+	1,  // 29: payments.v1.PaymentsService.CreateIntent:input_type -> payments.v1.CreateIntentRequest
+	7,  // 30: payments.v1.PaymentsService.GetIntent:input_type -> payments.v1.GetIntentRequest
+	8,  // 31: payments.v1.PaymentsService.SubmitReceipt:input_type -> payments.v1.SubmitReceiptRequest
+	9,  // 32: payments.v1.PaymentsService.SubmitTXID:input_type -> payments.v1.SubmitTXIDRequest
+	10, // 33: payments.v1.PaymentsService.ReviewManualPayment:input_type -> payments.v1.ReviewManualPaymentRequest
+	11, // 34: payments.v1.PaymentsService.ListPendingReceipts:input_type -> payments.v1.ListPendingReceiptsRequest
+	14, // 35: payments.v1.PaymentsService.ListIntents:input_type -> payments.v1.ListIntentsRequest
+	2,  // 36: payments.v1.PaymentsService.CheckIntent:input_type -> payments.v1.CheckIntentRequest
+	3,  // 37: payments.v1.PaymentsService.PrecheckStarsPayment:input_type -> payments.v1.PrecheckStarsPaymentRequest
+	4,  // 38: payments.v1.PaymentsService.ConfirmStarsPayment:input_type -> payments.v1.ConfirmStarsPaymentRequest
+	5,  // 39: payments.v1.PaymentsService.ListGateways:input_type -> payments.v1.ListGatewaysRequest
+	19, // 40: payments.v1.PaymentsService.ListGatewayConfigs:input_type -> payments.v1.ListGatewayConfigsRequest
+	21, // 41: payments.v1.PaymentsService.SetGatewayConfig:input_type -> payments.v1.SetGatewayConfigRequest
+	23, // 42: payments.v1.PaymentsService.TestGateway:input_type -> payments.v1.TestGatewayRequest
+	25, // 43: payments.v1.PaymentsService.GatewayReport:input_type -> payments.v1.GatewayReportRequest
+	32, // 44: payments.v1.PaymentsService.ListChainTransfers:input_type -> payments.v1.ListChainTransfersRequest
+	31, // 45: payments.v1.PaymentsService.ResolveChainTransfer:input_type -> payments.v1.ResolveChainTransferRequest
+	34, // 46: payments.v1.PaymentsService.RecentLogs:input_type -> payments.v1.RecentLogsRequest
+	0,  // 47: payments.v1.PaymentsService.CreateIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 48: payments.v1.PaymentsService.GetIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 49: payments.v1.PaymentsService.SubmitReceipt:output_type -> payments.v1.PaymentIntent
+	0,  // 50: payments.v1.PaymentsService.SubmitTXID:output_type -> payments.v1.PaymentIntent
+	0,  // 51: payments.v1.PaymentsService.ReviewManualPayment:output_type -> payments.v1.PaymentIntent
+	17, // 52: payments.v1.PaymentsService.ListPendingReceipts:output_type -> payments.v1.ListPendingReceiptsResponse
+	16, // 53: payments.v1.PaymentsService.ListIntents:output_type -> payments.v1.ListIntentsResponse
+	0,  // 54: payments.v1.PaymentsService.CheckIntent:output_type -> payments.v1.PaymentIntent
+	0,  // 55: payments.v1.PaymentsService.PrecheckStarsPayment:output_type -> payments.v1.PaymentIntent
+	0,  // 56: payments.v1.PaymentsService.ConfirmStarsPayment:output_type -> payments.v1.PaymentIntent
+	6,  // 57: payments.v1.PaymentsService.ListGateways:output_type -> payments.v1.ListGatewaysResponse
+	20, // 58: payments.v1.PaymentsService.ListGatewayConfigs:output_type -> payments.v1.ListGatewayConfigsResponse
+	18, // 59: payments.v1.PaymentsService.SetGatewayConfig:output_type -> payments.v1.GatewayConfig
+	24, // 60: payments.v1.PaymentsService.TestGateway:output_type -> payments.v1.TestGatewayResponse
+	29, // 61: payments.v1.PaymentsService.GatewayReport:output_type -> payments.v1.GatewayReportResponse
+	33, // 62: payments.v1.PaymentsService.ListChainTransfers:output_type -> payments.v1.ListChainTransfersResponse
+	30, // 63: payments.v1.PaymentsService.ResolveChainTransfer:output_type -> payments.v1.ChainTransfer
+	36, // 64: payments.v1.PaymentsService.RecentLogs:output_type -> payments.v1.RecentLogsResponse
+	47, // [47:65] is the sub-list for method output_type
+	29, // [29:47] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }
@@ -2624,7 +3223,7 @@ func file_payments_v1_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_payments_proto_rawDesc), len(file_payments_v1_payments_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   33,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

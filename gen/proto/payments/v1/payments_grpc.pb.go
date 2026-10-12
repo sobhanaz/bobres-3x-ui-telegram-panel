@@ -34,6 +34,8 @@ const (
 	PaymentsService_SetGatewayConfig_FullMethodName     = "/payments.v1.PaymentsService/SetGatewayConfig"
 	PaymentsService_TestGateway_FullMethodName          = "/payments.v1.PaymentsService/TestGateway"
 	PaymentsService_GatewayReport_FullMethodName        = "/payments.v1.PaymentsService/GatewayReport"
+	PaymentsService_ListChainTransfers_FullMethodName   = "/payments.v1.PaymentsService/ListChainTransfers"
+	PaymentsService_ResolveChainTransfer_FullMethodName = "/payments.v1.PaymentsService/ResolveChainTransfer"
 	PaymentsService_RecentLogs_FullMethodName           = "/payments.v1.PaymentsService/RecentLogs"
 )
 
@@ -62,6 +64,9 @@ type PaymentsServiceClient interface {
 	SetGatewayConfig(ctx context.Context, in *SetGatewayConfigRequest, opts ...grpc.CallOption) (*GatewayConfig, error)
 	TestGateway(ctx context.Context, in *TestGatewayRequest, opts ...grpc.CallOption) (*TestGatewayResponse, error)
 	GatewayReport(ctx context.Context, in *GatewayReportRequest, opts ...grpc.CallOption) (*GatewayReportResponse, error)
+	// Automatic USDT: the transfer log, and marking an unmatched deposit handled.
+	ListChainTransfers(ctx context.Context, in *ListChainTransfersRequest, opts ...grpc.CallOption) (*ListChainTransfersResponse, error)
+	ResolveChainTransfer(ctx context.Context, in *ResolveChainTransferRequest, opts ...grpc.CallOption) (*ChainTransfer, error)
 	// The service's kept warnings and errors, for the System page.
 	RecentLogs(ctx context.Context, in *RecentLogsRequest, opts ...grpc.CallOption) (*RecentLogsResponse, error)
 }
@@ -224,6 +229,26 @@ func (c *paymentsServiceClient) GatewayReport(ctx context.Context, in *GatewayRe
 	return out, nil
 }
 
+func (c *paymentsServiceClient) ListChainTransfers(ctx context.Context, in *ListChainTransfersRequest, opts ...grpc.CallOption) (*ListChainTransfersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListChainTransfersResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_ListChainTransfers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) ResolveChainTransfer(ctx context.Context, in *ResolveChainTransferRequest, opts ...grpc.CallOption) (*ChainTransfer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChainTransfer)
+	err := c.cc.Invoke(ctx, PaymentsService_ResolveChainTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paymentsServiceClient) RecentLogs(ctx context.Context, in *RecentLogsRequest, opts ...grpc.CallOption) (*RecentLogsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RecentLogsResponse)
@@ -259,6 +284,9 @@ type PaymentsServiceServer interface {
 	SetGatewayConfig(context.Context, *SetGatewayConfigRequest) (*GatewayConfig, error)
 	TestGateway(context.Context, *TestGatewayRequest) (*TestGatewayResponse, error)
 	GatewayReport(context.Context, *GatewayReportRequest) (*GatewayReportResponse, error)
+	// Automatic USDT: the transfer log, and marking an unmatched deposit handled.
+	ListChainTransfers(context.Context, *ListChainTransfersRequest) (*ListChainTransfersResponse, error)
+	ResolveChainTransfer(context.Context, *ResolveChainTransferRequest) (*ChainTransfer, error)
 	// The service's kept warnings and errors, for the System page.
 	RecentLogs(context.Context, *RecentLogsRequest) (*RecentLogsResponse, error)
 	mustEmbedUnimplementedPaymentsServiceServer()
@@ -315,6 +343,12 @@ func (UnimplementedPaymentsServiceServer) TestGateway(context.Context, *TestGate
 }
 func (UnimplementedPaymentsServiceServer) GatewayReport(context.Context, *GatewayReportRequest) (*GatewayReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GatewayReport not implemented")
+}
+func (UnimplementedPaymentsServiceServer) ListChainTransfers(context.Context, *ListChainTransfersRequest) (*ListChainTransfersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListChainTransfers not implemented")
+}
+func (UnimplementedPaymentsServiceServer) ResolveChainTransfer(context.Context, *ResolveChainTransferRequest) (*ChainTransfer, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveChainTransfer not implemented")
 }
 func (UnimplementedPaymentsServiceServer) RecentLogs(context.Context, *RecentLogsRequest) (*RecentLogsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecentLogs not implemented")
@@ -610,6 +644,42 @@ func _PaymentsService_GatewayReport_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentsService_ListChainTransfers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListChainTransfersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).ListChainTransfers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_ListChainTransfers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).ListChainTransfers(ctx, req.(*ListChainTransfersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentsService_ResolveChainTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveChainTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).ResolveChainTransfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_ResolveChainTransfer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).ResolveChainTransfer(ctx, req.(*ResolveChainTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PaymentsService_RecentLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecentLogsRequest)
 	if err := dec(in); err != nil {
@@ -694,6 +764,14 @@ var PaymentsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GatewayReport",
 			Handler:    _PaymentsService_GatewayReport_Handler,
+		},
+		{
+			MethodName: "ListChainTransfers",
+			Handler:    _PaymentsService_ListChainTransfers_Handler,
+		},
+		{
+			MethodName: "ResolveChainTransfer",
+			Handler:    _PaymentsService_ResolveChainTransfer_Handler,
 		},
 		{
 			MethodName: "RecentLogs",

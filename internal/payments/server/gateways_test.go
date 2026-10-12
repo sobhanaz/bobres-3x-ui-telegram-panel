@@ -167,8 +167,12 @@ func TestGatewayConfigRPCs(t *testing.T) {
 	ctx := context.Background()
 	list, err := f.core.ListGatewayConfigs(ctx, &paymentsv1.ListGatewayConfigsRequest{})
 	noSecrets(t, "ListGatewayConfigs", list, err)
-	if err != nil || len(list.GetConfigs()) != 1 {
+	if err != nil || len(list.GetConfigs()) != 2 {
 		t.Fatalf("list: %v %v", list, err)
+	}
+	// Zarinpal first, then automatic USDT (not set up here).
+	if u := list.GetConfigs()[1]; u.GetProvider() != "usdt_trc20_auto" || u.GetEnabled() || u.GetConfigured() || u.GetAddress() != "" {
+		t.Fatalf("automatic USDT config: %v", u)
 	}
 	c := list.GetConfigs()[0]
 	if c.GetProvider() != "zarinpal" || !c.GetEnabled() || !c.GetConfigured() || !c.GetOffered() || c.GetMerchantHint() != "1a2b" ||
