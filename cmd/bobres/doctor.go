@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -176,7 +178,15 @@ func resolveHost(domain string) []string {
 	return ips
 }
 
-// runDoctor runs every check. offline skips network lookups.
+// doctorResults is what bobres doctor reports: the server checks, then the
+// hardening state (bobres harden).
+func doctorResults(domain string, offline bool) []Result {
+	h := newHardener(strings.NewReader(""), io.Discard, io.Discard)
+	return append(runDoctor(domain, offline), h.report(context.Background())...)
+}
+
+// runDoctor runs every check. offline skips network lookups. The installer's
+// preflight runs it too, without the hardening state.
 func runDoctor(domain string, offline bool) []Result {
 	rs := []Result{
 		checkOS(runtime.GOOS, runtime.GOARCH),

@@ -126,6 +126,7 @@ var markupArgs = map[string][]string{
 	"pay.crypto":           {"addresses"},
 	"admin.pending_item":   {"proof", "dup", "method"},
 	"admin.title":          {"panel"},
+	"admin.servers_down":   {"names"},
 	"admin.settings_title": {"list"},
 	"admin.discount_saved": {"line"},
 	"support.prompt":       {"contact"},
@@ -133,6 +134,10 @@ var markupArgs = map[string][]string{
 	"pay.rejected":         {"reason"},
 	"pay.check_failed":     {"reason"},
 	"rs.panel":             {"balances"},
+	"alert.critical":       {"title"},
+	"alert.warning":        {"title"},
+	"alert.repeat":         {"title"},
+	"alert.resolved":       {"title"},
 }
 
 // onlyLangs are texts read in some languages only.
@@ -152,7 +157,7 @@ func groupOf(key string) string {
 		return "sub"
 	case "plans":
 		return "plan"
-	case "backup": // sent to the owner only, beside the admin alerts
+	case "backup", "alert": // sent to staff only, beside the admin alerts
 		return "admin"
 	}
 	return first

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"math"
 	"time"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
@@ -21,11 +22,18 @@ func (s *Server) AdminGetStats(ctx context.Context, req *corev1.AdminGetStatsReq
 	if err != nil {
 		return nil, fail(err)
 	}
-	return &corev1.AdminStats{
+	out := &corev1.AdminStats{
 		UsersTotal: st.UsersTotal, UsersToday: st.UsersSince, ActiveSubscriptions: st.ActiveSubscriptions,
 		PendingPayments: st.PendingPayments, ProvisionFailedOrders: st.ProvisionFailedOrders,
 		PanelHealthy: st.PanelHealthy, PanelDetail: st.PanelDetail,
-	}, nil
+	}
+	if h := st.Servers; h != nil {
+		out.ServersKnown, out.ServersDown = true, h.Down
+		out.ServersTotal = int32(min(h.Total, math.MaxInt32))     //nolint:gosec // bounded
+		out.ServersHealthy = int32(min(h.Healthy, math.MaxInt32)) //nolint:gosec // bounded
+		out.ServersListed = int32(min(h.Listed, math.MaxInt32))   //nolint:gosec // bounded
+	}
+	return out, nil
 }
 
 // AdminListPendingPayments returns the manual payment review queue.

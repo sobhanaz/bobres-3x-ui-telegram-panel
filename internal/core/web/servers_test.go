@@ -56,7 +56,7 @@ func (f *fakeServers) AddServer(_ context.Context, in domain.ServerInput) (*doma
 	}
 	f.next++
 	sv := domain.Server{ID: fmt.Sprintf("00000000-0000-7000-8000-%012d", f.next), Name: in.Name, BaseURL: in.BaseURL,
-		SubBaseURL: in.SubBaseURL, Enabled: true, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: "dashboard",
+		SubBaseURL: in.SubBaseURL, Enabled: in.Enabled, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: "dashboard",
 		HasToken: true, PanelVersion: "v3.9.0", Healthy: true, CheckedAt: 1_800_000_000}
 	if f.tokens == nil {
 		f.tokens = map[string]string{}
@@ -351,25 +351,16 @@ func TestServersAPI(t *testing.T) {
 	}
 }
 
-// A server added switched off that cannot be switched off is taken out
-// again: 409 with the reason, not 201 with a server taking new services.
+// A server added switched off is saved switched off in one step: no later
+// switch-off that could fail and leave it taking new services.
 func TestServerAddedSwitchedOffIsNeverLeftOn(t *testing.T) {
 	_, b, fs := serversFixture(t)
-	fs.failUpdate = status.Error(codes.InvalidArgument, "weight must be 1..1000")
+	fs.failUpdate = status.Error(codes.InvalidArgument, "weight must be 1..1000") // never needed
 	code, out := b.do(http.MethodPost, "/api/v1/servers", map[string]any{"name": "Spare", "base_url": "https://spare.example.com",
 		"token": panelToken, "weight": 100, "enabled": false})
-	if code != http.StatusConflict || out["error"] != "state" || !strings.Contains(out["message"].(string), "not added") ||
+	if code != http.StatusCreated || item(out)["enabled"] != false || len(fs.servers) != 1 || fs.servers[0].Enabled ||
 		strings.Contains(asJSON(out), panelToken) {
-		t.Fatalf("add switched off: %d %v", code, out)
-	}
-	if len(fs.servers) != 0 {
-		t.Fatalf("left behind: %+v", fs.servers)
-	}
-	fs.failUpdate = nil
-	code, out = b.do(http.MethodPost, "/api/v1/servers", map[string]any{"name": "Spare", "base_url": "https://spare.example.com",
-		"token": panelToken, "weight": 100, "enabled": false})
-	if code != http.StatusCreated || item(out)["enabled"] != false || fs.servers[0].Enabled {
-		t.Fatalf("add switched off: %d %v", code, out)
+		t.Fatalf("add switched off: %d %v %+v", code, out, fs.servers)
 	}
 }
 

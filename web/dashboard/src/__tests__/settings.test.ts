@@ -253,6 +253,7 @@ describe('settings page', () => {
     item('notify.new_payment', 'bool', { default: 'true' }),
     item('notify.new_ticket', 'bool', { default: 'true' }),
     item('notify.provision_failed', 'bool', { default: 'true' }),
+    item('notify.system_alerts', 'bool', { default: 'true' }),
     sales,
     recipients,
     perTen,
@@ -357,6 +358,24 @@ describe('settings page', () => {
     expect(check.disabled).toBe(false)
     check.click()
     await vi.waitFor(() => expect(card('join.channel').textContent).toContain(text('settings.check.unreachable')))
+  })
+
+  it('turns the system problem alerts off and on in the notifications card', async () => {
+    const puts = await open(saved)
+    const toggle = input('notify.system_alerts')
+    // on by default, in the staff notifications card, with what it sends
+    expect(toggle.checked).toBe(true)
+    expect(card('notify.system_alerts')).toBe(card('notify.recipients'))
+    const field = toggle.closest('.field') as HTMLElement
+    expect(field.querySelector('.label')?.textContent?.trim()).toBe(text('settings.field.notify.system_alerts.label'))
+    expect(field.querySelector('.help')?.textContent).toBe(text('settings.field.notify.system_alerts.help'))
+    toggle.click()
+    await vi.waitFor(() => expect(saveButton('notify.system_alerts').disabled).toBe(false))
+    saveButton('notify.system_alerts').click()
+    await vi.waitFor(() => expect(puts).toEqual([{ 'notify.system_alerts': 'false' }]))
+    // saved: nothing left to save, and the switch stays off
+    await vi.waitFor(() => expect(saveButton('notify.system_alerts').disabled).toBe(true))
+    expect(input('notify.system_alerts').checked).toBe(false)
   })
 
   it('asks before turning maintenance on, then warns at the top', async () => {

@@ -1,6 +1,7 @@
 // Package notify turns core's events into Telegram messages: payment
 // results, wallet credits, delivered and extended services, reminders before
-// a service ends, support staff's replies, and admin alerts.
+// a service ends, support staff's replies, and admin alerts (core's
+// watchdog's system alerts among them).
 package notify
 
 import (
@@ -247,6 +248,16 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		return n.send(ctx, e.TelegramID, n.cat.T(n.lang(ctx, e.TelegramID), "sub.delayed"), nil)
 
+	case events.SystemAlert:
+		var e events.SystemAlertEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		if !n.set.Bool("notify.system_alerts", true) {
+			return nil
+		}
+		return n.alert(ctx, 0, func(lang string) string { return n.systemAlert(lang, e) })
+
 	case events.TicketOpened:
 		var e events.TicketOpenedEvent
 		if err := decode(m, &e); err != nil {
@@ -279,10 +290,11 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 	return nil
 }
 
-// alert messages everyone who gets staff alerts about payments, sales and
-// failed deliveries (notify.recipients; never support staff), each in their
-// language, except the Telegram user skip (0: nobody). It fails only when
-// nobody got it, so a retry does not repeat it to those who did.
+// alert messages everyone who gets staff alerts about payments, sales,
+// failed deliveries and system problems (notify.recipients; never support
+// staff), each in their language, except the Telegram user skip (0:
+// nobody). It fails only when nobody got it, so a retry does not repeat it
+// to those who did.
 func (n *Notifier) alert(ctx context.Context, skip int64, text func(lang string) string) error {
 	return n.alertTo(ctx, n.set.Recipients(n.adminTG), skip, func(lang string) (string, *tg.Keyboard) {
 		return text(lang), nil
@@ -313,6 +325,45 @@ func (n *Notifier) alertTo(ctx context.Context, to []settings.Contact, skip int6
 		return nil
 	}
 	return failed
+}
+
+// systemAlert renders one of core's watchdog alerts in lang: a heading by
+// severity (or "still not fixed after", "fixed after"), the problem in a
+// sentence, and the check's own words (an error) under it. A problem this
+// bot has no text for is named by its check.
+func (n *Notifier) systemAlert(lang string, e events.SystemAlertEvent) string {
+	title := n.cat.T(lang, "alert.check", "key", html.EscapeString(e.Key))
+	if _, known := n.cat.Info(e.TitleKey); known && strings.HasPrefix(e.TitleKey, "alert.") {
+		title = n.cat.T(lang, e.TitleKey, i18n.AlertArgs(lang, e.Args, html.EscapeString)...)
+	}
+	lasted := n.duration(lang, time.Unix(e.At, 0).Sub(time.Unix(e.Since, 0)))
+	var text string
+	switch {
+	case e.State == events.AlertResolved:
+		return n.cat.T(lang, "alert.resolved", "duration", lasted, "title", title)
+	case e.Repeat:
+		text = n.cat.T(lang, "alert.repeat", "duration", lasted, "title", title)
+	case e.Severity == events.SeverityCritical:
+		text = n.cat.T(lang, "alert.critical", "title", title)
+	default:
+		text = n.cat.T(lang, "alert.warning", "title", title)
+	}
+	if d := strings.TrimSpace(e.Detail); d != "" {
+		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
+	}
+	return text
+}
+
+// duration names how long a problem lasted: minutes under an hour, hours
+// under two days, days from there.
+func (n *Notifier) duration(lang string, d time.Duration) string {
+	switch {
+	case d < time.Hour:
+		return n.cat.T(lang, "alert.duration_minutes", "n", i18n.Number(lang, max(int64(d/time.Minute), 1)))
+	case d < 48*time.Hour:
+		return n.cat.T(lang, "alert.duration_hours", "n", i18n.Number(lang, int64(d/time.Hour)))
+	}
+	return n.cat.T(lang, "alert.duration_days", "n", i18n.Number(lang, int64(d/(24*time.Hour))))
 }
 
 // ticketPreview is the start of a customer's message for a staff alert:

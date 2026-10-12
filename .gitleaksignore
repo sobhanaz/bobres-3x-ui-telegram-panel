@@ -1,3 +1,8 @@
 # False positive: an example environment assignment in the e2e package comment (no secret).
 # The comment was reworded in 006e482; this pins the old commit's finding.
 e369488df15116463a3d757f5830768d102ddde4:tests/e2e/e2e_test.go:generic-api-key:10
+# False positives: made-up keys in the support-bundle redaction test (they prove the bundle
+# redacts these shapes). The test now builds low-entropy values; this pins the old commit's findings.
+149245f4c17b9abc6c586297c348cb842dc796cb:cmd/bobres/support_bundle_test.go:generic-api-key:27
+149245f4c17b9abc6c586297c348cb842dc796cb:cmd/bobres/support_bundle_test.go:generic-api-key:28
+149245f4c17b9abc6c586297c348cb842dc796cb:cmd/bobres/support_bundle_test.go:generic-api-key:45

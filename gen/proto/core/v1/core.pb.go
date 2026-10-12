@@ -4809,10 +4809,24 @@ type AdminStats struct {
 	ActiveSubscriptions   int64                  `protobuf:"varint,3,opt,name=active_subscriptions,json=activeSubscriptions,proto3" json:"active_subscriptions,omitempty"`
 	PendingPayments       int64                  `protobuf:"varint,4,opt,name=pending_payments,json=pendingPayments,proto3" json:"pending_payments,omitempty"`
 	ProvisionFailedOrders int64                  `protobuf:"varint,5,opt,name=provision_failed_orders,json=provisionFailedOrders,proto3" json:"provision_failed_orders,omitempty"`
-	PanelHealthy          bool                   `protobuf:"varint,6,opt,name=panel_healthy,json=panelHealthy,proto3" json:"panel_healthy,omitempty"`
-	PanelDetail           string                 `protobuf:"bytes,7,opt,name=panel_detail,json=panelDetail,proto3" json:"panel_detail,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Every server taking new services answers (servers_* below); the detail
+	// says why not, in English.
+	PanelHealthy bool   `protobuf:"varint,6,opt,name=panel_healthy,json=panelHealthy,proto3" json:"panel_healthy,omitempty"`
+	PanelDetail  string `protobuf:"bytes,7,opt,name=panel_detail,json=panelDetail,proto3" json:"panel_detail,omitempty"`
+	// The 3x-ui servers from the provisioner's list. servers_known is false
+	// when the provisioner did not answer. Only the servers taking new
+	// services count (the others are not checked): servers_healthy of
+	// servers_total answered their last health check or are not checked yet,
+	// and servers_down names the others.
+	ServersKnown   bool     `protobuf:"varint,8,opt,name=servers_known,json=serversKnown,proto3" json:"servers_known,omitempty"`
+	ServersTotal   int32    `protobuf:"varint,9,opt,name=servers_total,json=serversTotal,proto3" json:"servers_total,omitempty"`
+	ServersHealthy int32    `protobuf:"varint,10,opt,name=servers_healthy,json=serversHealthy,proto3" json:"servers_healthy,omitempty"`
+	ServersDown    []string `protobuf:"bytes,11,rep,name=servers_down,json=serversDown,proto3" json:"servers_down,omitempty"`
+	// Every server of the list, the switched-off ones included: 0 means no
+	// 3x-ui server was added yet.
+	ServersListed int32 `protobuf:"varint,12,opt,name=servers_listed,json=serversListed,proto3" json:"servers_listed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AdminStats) Reset() {
@@ -4892,6 +4906,41 @@ func (x *AdminStats) GetPanelDetail() string {
 		return x.PanelDetail
 	}
 	return ""
+}
+
+func (x *AdminStats) GetServersKnown() bool {
+	if x != nil {
+		return x.ServersKnown
+	}
+	return false
+}
+
+func (x *AdminStats) GetServersTotal() int32 {
+	if x != nil {
+		return x.ServersTotal
+	}
+	return 0
+}
+
+func (x *AdminStats) GetServersHealthy() int32 {
+	if x != nil {
+		return x.ServersHealthy
+	}
+	return 0
+}
+
+func (x *AdminStats) GetServersDown() []string {
+	if x != nil {
+		return x.ServersDown
+	}
+	return nil
+}
+
+func (x *AdminStats) GetServersListed() int32 {
+	if x != nil {
+		return x.ServersListed
+	}
+	return 0
 }
 
 type AdminListPendingPaymentsRequest struct {
@@ -6185,7 +6234,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x06qr_png\x18\x02 \x01(\fR\x05qrPng\x12!\n" +
 	"\fconfig_links\x18\x03 \x03(\tR\vconfigLinks\"B\n" +
 	"\x14AdminGetStatsRequest\x12*\n" +
-	"\x11actor_telegram_id\x18\x01 \x01(\x03R\x0factorTelegramId\"\xac\x02\n" +
+	"\x11actor_telegram_id\x18\x01 \x01(\x03R\x0factorTelegramId\"\xe9\x03\n" +
 	"\n" +
 	"AdminStats\x12\x1f\n" +
 	"\vusers_total\x18\x01 \x01(\x03R\n" +
@@ -6196,7 +6245,13 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x10pending_payments\x18\x04 \x01(\x03R\x0fpendingPayments\x126\n" +
 	"\x17provision_failed_orders\x18\x05 \x01(\x03R\x15provisionFailedOrders\x12#\n" +
 	"\rpanel_healthy\x18\x06 \x01(\bR\fpanelHealthy\x12!\n" +
-	"\fpanel_detail\x18\a \x01(\tR\vpanelDetail\"c\n" +
+	"\fpanel_detail\x18\a \x01(\tR\vpanelDetail\x12#\n" +
+	"\rservers_known\x18\b \x01(\bR\fserversKnown\x12#\n" +
+	"\rservers_total\x18\t \x01(\x05R\fserversTotal\x12'\n" +
+	"\x0fservers_healthy\x18\n" +
+	" \x01(\x05R\x0eserversHealthy\x12!\n" +
+	"\fservers_down\x18\v \x03(\tR\vserversDown\x12%\n" +
+	"\x0eservers_listed\x18\f \x01(\x05R\rserversListed\"c\n" +
 	"\x1fAdminListPendingPaymentsRequest\x12*\n" +
 	"\x11actor_telegram_id\x18\x01 \x01(\x03R\x0factorTelegramId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xff\x02\n" +

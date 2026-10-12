@@ -1,4 +1,5 @@
-import type { BackupFile, LogLine, ServiceHealth, SystemBackups, SystemReply, UpdateCheck } from './types'
+import { bytes, date, isolate, num, type Lang } from './format'
+import type { BackupFile, LogLine, ServiceHealth, SystemAlert, SystemBackups, SystemReply, UpdateCheck } from './types'
 
 // The System page's health tab: what each service's /healthz and /readyz
 // say, and whether every service runs the same version.
@@ -51,6 +52,91 @@ export function checkList(s: Pick<ServiceHealth, 'checks'>): { name: string; ok:
  * its own. */
 export function mismatched(reply: Pick<SystemReply, 'services'>): ServiceHealth[] {
   return sortedServices(reply.services).filter((s) => s.name !== 'core' && !absent(s) && s.version_mismatch === true)
+}
+
+// The open problems core's watchdog found: each check that failed twice in a
+// row, since when. The bot messages staff when one starts, once a day while
+// it lasts and when it is fixed (notify.system_alerts).
+
+export type AlertLevel = 'critical' | 'warning'
+
+/** alertLevel reads a problem's severity: critical (customers are affected
+ * now) or a warning (needs a look soon); anything else counts as a warning. */
+export function alertLevel(a: Pick<SystemAlert, 'severity'>): AlertLevel {
+  return (a.severity ?? '').trim().toLowerCase() === 'critical' ? 'critical' : 'warning'
+}
+
+export const alertSeverity: Record<AlertLevel, 'danger' | 'warn'> = {
+  critical: 'danger',
+  warning: 'warn',
+}
+
+export type AlertsState = 'unsupported' | 'unreadable' | 'ok'
+
+/** alertsState reads core's answer: no alerts at all (an older core, which
+ * has no watchdog), null (core could not read them), or the list. Neither
+ * of the first two is ever shown as "all clear". */
+export function alertsState(reply: Pick<SystemReply, 'alerts'> | null | undefined): AlertsState {
+  if (!reply || reply.alerts === undefined) return 'unsupported'
+  return Array.isArray(reply.alerts) ? 'ok' : 'unreadable'
+}
+
+/** openAlerts lists the problems critical first, then the oldest first (as
+ * core does); null when there is no list (see alertsState). */
+export function openAlerts(reply: Pick<SystemReply, 'alerts'> | null | undefined): SystemAlert[] | null {
+  if (!reply || !Array.isArray(reply.alerts)) return null
+  const rank = (a: SystemAlert) => (alertLevel(a) === 'critical' ? 0 : 1)
+  const since = (a: SystemAlert) => unixOf(a.since) ?? Number.MAX_SAFE_INTEGER
+  return [...reply.alerts].sort((a, b) => rank(a) - rank(b) || since(a) - since(b) || a.key.localeCompare(b.key))
+}
+
+/** worstLevel is the most severe level among the problems, or null when
+ * there are none. */
+export function worstLevel(list: readonly SystemAlert[]): AlertLevel | null {
+  if (!list.length) return null
+  return list.some((a) => alertLevel(a) === 'critical') ? 'critical' : 'warning'
+}
+
+/** alertTextKey is the page's text for a problem: the bot's text key
+ * (alert.backup_stale) under system.alerts.kind, so the page and the
+ * Telegram message name it the same way; '' without one. */
+export function alertTextKey(a: Pick<SystemAlert, 'title_key'>): string {
+  const name = (a.title_key ?? '').trim().replace(/^alert\./, '')
+  return /^[a-z0-9_]+$/.test(name) ? 'system.alerts.kind.' + name : ''
+}
+
+/** ALERT_FALLBACK names a check the page has no text for, by its key (the
+ * bot's alert.check). */
+export const ALERT_FALLBACK = 'system.alerts.kind.check'
+
+/** alertArgs are a problem's values for its text, as the bot writes them:
+ * count, days, hours and minutes as numbers, free (bytes) as a size, date
+ * (unix seconds) as a day, and anything else as a name (service names
+ * through name), each kept whole inside a sentence. key is the check's key
+ * when core does not give one. */
+export function alertArgs(
+  a: Pick<SystemAlert, 'key' | 'args'>,
+  lang: Lang,
+  name: (arg: string, value: string) => string = (_, v) => v,
+): Record<string, string> {
+  const out: Record<string, string> = { key: isolate(a.key) }
+  for (const [k, raw] of Object.entries(a.args ?? {})) {
+    const v = String(raw)
+    const n = /^-?\d+$/.test(v.trim()) ? Number(v) : NaN
+    if (Number.isNaN(n)) out[k] = isolate(name(k, v))
+    else if (['count', 'days', 'hours', 'minutes'].includes(k)) out[k] = num(n, lang)
+    else if (k === 'free') out[k] = bytes(n, lang)
+    else if (k === 'date') out[k] = date(n, lang)
+    else out[k] = isolate(name(k, v))
+  }
+  return out
+}
+
+/** fills: every {value} a text needs is in args, so it never shows a hole
+ * (a newer core may name a problem with other values). */
+export function fills(message: unknown, args: Record<string, string>): boolean {
+  if (typeof message !== 'string') return true
+  return [...message.matchAll(/\{\s*([A-Za-z0-9_]+)\s*\}/g)].every((m) => (args[m[1]] ?? '') !== '')
 }
 
 /** UPDATE_COMMAND installs the latest release on the server: bobres update

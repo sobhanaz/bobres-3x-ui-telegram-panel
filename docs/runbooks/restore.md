@@ -133,4 +133,5 @@ bobres logs --tail 100 core
 - No backup opens with any key you have.
 - The store is unhealthy after the restore and after going back to the safety backup.
 
-Send: the output of the command, `bobres status`, and `bobres logs --tail 300` (read it through before you send it).
+Send: the output of the command, `bobres status`, and `sudo bobres support-bundle` (redacted logs and status; read it
+through before you send it). See the [runbooks index](README.md#escalate).

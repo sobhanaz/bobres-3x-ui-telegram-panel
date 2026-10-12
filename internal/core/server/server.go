@@ -22,7 +22,7 @@ type Server struct {
 	st   *store.Store
 	dom  *domain.Service
 	pay  domain.PaymentsClient
-	prov domain.Provisioner
+	prov Provisioner
 	// publicURL is the dashboard's origin, for login links.
 	publicURL string
 }

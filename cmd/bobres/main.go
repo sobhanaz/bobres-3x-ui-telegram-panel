@@ -14,12 +14,6 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
-// notImplemented lists commands from docs/06-installer.md that land in later phases.
-var notImplemented = map[string]string{
-	"config": "phase 1", "secrets": "phase 7",
-	"support-bundle": "phase 7",
-}
-
 // stdin feeds interactive prompts (replaced in tests).
 var stdin io.Reader = os.Stdin
 
@@ -70,11 +64,15 @@ func run(args []string, out, errOut io.Writer) int {
 		return newUpdater(newOps(stdin, out, errOut)).updateCmd(args[1:])
 	case "rollback":
 		return newUpdater(newOps(stdin, out, errOut)).rollbackCmd(args[1:])
+	case "support-bundle":
+		return newBundler(newOps(stdin, out, errOut)).supportBundleCmd(args[1:])
+	case "harden":
+		return hardenCmd(args[1:], stdin, out, errOut)
+	case "config":
+		return newOps(stdin, out, errOut).configCmd(args[1:])
+	case "secrets":
+		return newRotator(newOps(stdin, out, errOut)).secretsCmd(args[1:])
 	default:
-		if phase, ok := notImplemented[cmd]; ok {
-			fmt.Fprintf(errOut, "bobres %s: not implemented yet (planned for %s)\n", cmd, phase)
-			return 2
-		}
 		fmt.Fprintf(errOut, "bobres: unknown command %q\n\n", cmd)
 		usage(errOut)
 		return 2
@@ -103,14 +101,15 @@ Available now:
   restore    Replace the data with a backup's: bobres restore <file> [--key-file F] [--yes]
   update     Update to the latest release (backup first, automatic rollback); --check only looks
   rollback   Undo the last update (previous version, and the database from before it)
-  doctor     Check this server (RAM, disk, ports, Docker, DNS)
+  config     Show or change a setting: config list | get <key> | set <key> <value>
+  secrets    Rotate a secret: secrets rotate bot-token|db-passwords|service-tokens|redis-password
+  harden     Firewall (ufw), fail2ban, automatic security updates and swap, each asked first
+  doctor     Check this server (RAM, disk, ports, Docker, DNS, hardening)
+  support-bundle
+             Write a redacted tar.gz for support into <dir> (versions, status, logs; no secrets)
   version    Print the version
 
 Commands that work on an install take --dir (default: $BOBRES_DIR, else /opt/bobres).
-
-Coming later:
-  config                                       (phase 1)
-  secrets support-bundle                       (phase 7)
 `)
 }
 
@@ -122,7 +121,7 @@ func doctorCmd(args []string, out, errOut io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	results := runDoctor(*domain, *offline)
+	results := doctorResults(*domain, *offline)
 	for _, r := range results {
 		fmt.Fprintf(out, "%-5s %-18s %s\n", r.Status, r.Name, r.Detail)
 	}

@@ -183,6 +183,13 @@ func setup(rt *app.Runtime) error {
 	// Support tickets nobody answered back close themselves; broadcasts start on time.
 	rt.Go("tickets", dom.NewTicketWorker(rt.Log).Run)
 	rt.Go("broadcasts", dom.NewBroadcastWorker(rt.Log).Run)
+	// System alerts: every minute the watchdog checks the services, the 3x-ui
+	// servers, Zarinpal, backups and the disk (backups is nil when the backup
+	// service is not installed), deliveries, the bot's event feed and the
+	// license; the bot tells the staff when one goes wrong and when it is
+	// fixed (system.alert.v1).
+	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups}
+	rt.Go("watchdog", dom.NewWatchdog(watch, rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).
@@ -198,8 +205,9 @@ func setup(rt *app.Runtime) error {
 	}
 	rt.Go("payments-events", payEvents.Run)
 
-	// The bot is core's only gRPC client; it also pulls core's event feed.
-	gs, err := grpcx.NewServer(rt.Log, grpcauth.Peer{Name: "bot", Token: cfg.BotToken})
+	// The bot is core's only gRPC client; it also pulls core's event feed,
+	// whose cursor is kept under this name (the watchdog reads its lag).
+	gs, err := grpcx.NewServer(rt.Log, grpcauth.Peer{Name: domain.BotFeedConsumer, Token: cfg.BotToken})
 	if err != nil {
 		return err
 	}

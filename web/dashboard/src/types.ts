@@ -579,6 +579,31 @@ export interface SystemReply {
   checked_at?: number
   /** the bot's cached update check; absent from older cores */
   updates?: UpdateCheck | null
+  /** the watchdog's open problems: empty when all is clear, null when core
+   * could not read them; absent from older cores */
+  alerts?: SystemAlert[] | null
+}
+
+/** One open problem core's watchdog found (core.alert_state): a check that
+ * failed twice in a row. The bot tells staff on Telegram when one starts,
+ * once a day while it lasts and when it is fixed. */
+export interface SystemAlert {
+  /** the check: service.bot, server.<id>, backup.stale... */
+  key: string
+  /** critical (customers are affected now) | warning (needs a look soon) */
+  severity: string
+  /** the bot's text for it (alert.backup_stale), named the same way here */
+  title_key?: string
+  /** its values, as strings: count, days, hours and minutes are whole
+   * numbers, free is a size in bytes, date is unix seconds, anything else
+   * (service, server) is a name */
+  args?: Record<string, string | number> | null
+  /** what is wrong in a few English words, when core gives it */
+  title?: string
+  /** a few English words from the check (an error), or '' */
+  detail?: string
+  /** when the problem was first seen: unix seconds (or an RFC 3339 time) */
+  since: number | string
 }
 
 /** What the bot last read from the latest release (it checks every 12 h;

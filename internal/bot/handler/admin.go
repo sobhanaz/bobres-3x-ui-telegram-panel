@@ -107,10 +107,6 @@ func (h *Handler) showAdmin(r *req) {
 		r.fail(err)
 		return
 	}
-	panel := r.t("admin.panel_ok")
-	if !st.GetPanelHealthy() {
-		panel = r.t("admin.panel_down", "detail", esc(st.GetPanelDetail()))
-	}
 	pending := r.t("admin.unknown")
 	if st.GetPendingPayments() >= 0 {
 		pending = i18n.Number(r.lang, st.GetPendingPayments())
@@ -123,11 +119,43 @@ func (h *Handler) showAdmin(r *req) {
 	text := r.t("admin.title",
 		"users", i18n.Number(r.lang, st.GetUsersTotal()), "today", i18n.Number(r.lang, st.GetUsersToday()),
 		"active", i18n.Number(r.lang, st.GetActiveSubscriptions()), "pending", pending,
-		"failed", i18n.Number(r.lang, st.GetProvisionFailedOrders()), "panel", panel)
+		"failed", i18n.Number(r.lang, st.GetProvisionFailedOrders()), "panel", serversLine(r, st))
 	if h.set.Bool("maintenance.enabled", false) {
 		text = r.t("admin.maintenance_on") + "\n\n" + text
 	}
 	r.show(text, kb)
+}
+
+// shownDown is how many servers that do not answer the admin screen names.
+const shownDown = 5
+
+// serversLine sums up the 3x-ui servers for the admin screen, from core's
+// copy of the provisioner's list: how many of those taking new services
+// answer, and the names of the others (the first few).
+func serversLine(r *req, st *corev1.AdminStats) string {
+	if !st.GetServersKnown() {
+		return r.t("admin.panel_down", "detail", esc(st.GetPanelDetail()))
+	}
+	total, healthy := int64(st.GetServersTotal()), int64(st.GetServersHealthy())
+	switch {
+	case st.GetServersListed() == 0 && total == 0:
+		return r.t("admin.servers_empty")
+	case total == 0:
+		return r.t("admin.servers_none")
+	}
+	down := st.GetServersDown()
+	if len(down) == 0 {
+		return r.t("admin.servers_ok", "healthy", i18n.Number(r.lang, healthy), "total", i18n.Number(r.lang, total))
+	}
+	names := make([]string, 0, shownDown+1)
+	for _, n := range down[:min(len(down), shownDown)] {
+		names = append(names, "<b>"+esc(n)+"</b>")
+	}
+	if more := len(down) - shownDown; more > 0 {
+		names = append(names, r.t("admin.servers_more", "n", i18n.Number(r.lang, int64(more))))
+	}
+	return r.t("admin.servers_down", "healthy", i18n.Number(r.lang, healthy), "total", i18n.Number(r.lang, total),
+		"names", strings.Join(names, " · "))
 }
 
 // showPending sends the oldest payment awaiting review as a new message (a

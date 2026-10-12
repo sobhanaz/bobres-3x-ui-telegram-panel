@@ -105,8 +105,8 @@ const (
 	defaultWeight = 100
 )
 
-// addFollowUp bounds what AddServer does once the server exists (switching
-// it off, the audit entry).
+// addFollowUp bounds what AddServer does once the server exists (the audit
+// entry).
 const addFollowUp = 10 * time.Second
 
 // ErrPrivateOwnerOnly: only the owner lets the provisioner reach private
@@ -198,10 +198,10 @@ func serverAudit(sv *Server, tokenSent bool) map[string]any {
 }
 
 // AddServer registers a panel; the provisioner tests the connection first
-// unless SkipCheck. The provisioner adds servers switched on: one added
-// switched off is switched off right after (nothing is tested again). When
-// that fails the server is taken out again, so it never takes new services
-// against the owner's wish; if even that fails, staff are told it is on.
+// unless SkipCheck. It saves the server switched on or off as asked, in one
+// step, so one added switched off never takes new services. Should the
+// provisioner still answer that it is on (an older one, during an update),
+// staff are told so.
 func (s *Service) AddServer(ctx context.Context, actor *store.User, sa ServerAdmin, in ServerInput) (*Server, error) {
 	in, err := normalizeServer(in, true)
 	if err != nil {
@@ -217,32 +217,16 @@ func (s *Service) AddServer(ctx context.Context, actor *store.User, sa ServerAdm
 	if err != nil {
 		return nil, err
 	}
-	// The server exists now: the rest runs to the end even if the request is
-	// cancelled (or its time is used up by the connection test).
+	// The server exists now: the audit entry is written even if the request
+	// is cancelled (or its time is used up by the connection test).
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), addFollowUp)
 	defer cancel()
-	var stillOn error
-	if !in.Enabled && sv.Enabled {
-		off := in
-		off.Token, off.SkipCheck = "", true
-		got, err := sa.UpdateServer(ctx, sv.ID, off)
-		if err == nil {
-			sv = got
-		} else {
-			s.cfg.Log.Warn("new server: switching it off failed", "server_id", sv.ID, "err", err)
-			derr := sa.DeleteServer(ctx, sv.ID)
-			if derr == nil {
-				return nil, stateErr("the server could not be saved switched off, so it was not added: try again")
-			}
-			s.cfg.Log.Warn("new server: removing it again failed", "server_id", sv.ID, "err", derr)
-			stillOn = stateErr("the server was added but takes new services, as switching it off failed: switch it off in the list")
-		}
-	}
 	if err := s.audit(ctx, nil, actor, "server.add", "server", sv.ID, serverAudit(sv, true), ""); err != nil {
 		return nil, err
 	}
-	if stillOn != nil {
-		return nil, stillOn
+	if !in.Enabled && sv.Enabled {
+		s.cfg.Log.Warn("new server: the provisioner saved it switched on", "server_id", sv.ID)
+		return nil, stateErr("the server was added but takes new services (the provisioner is older than core): switch it off in the list")
 	}
 	return sv, nil
 }

@@ -95,12 +95,14 @@ func (c *Client) Run(ctx context.Context) error {
 }
 
 // Summary is the newest backup and the schedule, for the System page's
-// health tab.
+// health tab and core's watchdog.
 type Summary struct {
 	// LastCreatedAt is the newest backup that worked (nil: none kept).
 	LastCreatedAt *time.Time
 	LastError     string
 	NextRun       int64
+	// DiskFree is the free space on the backup disk, in bytes (0: unknown).
+	DiskFree uint64
 }
 
 // Summarize reads a Status answer.
@@ -112,11 +114,12 @@ func Summarize(status json.RawMessage) (Summary, error) {
 		} `json:"backups"`
 		LastError string `json:"last_error"`
 		NextRun   int64  `json:"next_run"`
+		DiskFree  uint64 `json:"disk_free"`
 	}
 	if err := json.Unmarshal(status, &st); err != nil {
 		return Summary{}, fmt.Errorf("backupclient: summary: %w", err)
 	}
-	sum := Summary{LastError: st.LastError, NextRun: st.NextRun}
+	sum := Summary{LastError: st.LastError, NextRun: st.NextRun, DiskFree: st.DiskFree}
 	// The list is newest first; a failed run's sidecar has an error and no file.
 	for _, b := range st.Backups {
 		if b.Error == "" {

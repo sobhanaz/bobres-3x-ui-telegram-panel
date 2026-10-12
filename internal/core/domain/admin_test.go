@@ -3,11 +3,14 @@ package domain
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func owner(t *testing.T, svc *Service) *store.User {
@@ -32,9 +35,9 @@ func TestAdminOperationsRequireStaff(t *testing.T) {
 	svc, s := testService(t)
 	ctx := context.Background()
 	user := seedUser(t, s, 4001)
-	pay, prov := &fakePayments{}, &fakeProvisioner{}
+	pay, fs := &fakePayments{}, &fakeServers{}
 	checks := map[string]error{}
-	_, checks["stats"] = svc.AdminStats(ctx, 4001, pay, prov)
+	_, checks["stats"] = svc.AdminStats(ctx, 4001, pay, fs)
 	_, checks["pending"] = svc.AdminListPendingPayments(ctx, 4001, pay, 10)
 	_, checks["review"] = svc.AdminReviewPayment(ctx, 4001, pay, "i", "approved", "")
 	_, checks["find"] = svc.AdminFindUser(ctx, 4001, "4001")
@@ -42,7 +45,7 @@ func TestAdminOperationsRequireStaff(t *testing.T) {
 	_, checks["status"] = svc.AdminSetUserStatus(ctx, 4001, user.ID, "banned", "r")
 	_, checks["plan"] = svc.AdminUpsertPlan(ctx, 4001, &store.Plan{})
 	checks["setting"] = svc.AdminSetSetting(ctx, 4001, "branding.name", "x")
-	_, checks["unknown actor"] = svc.AdminStats(ctx, 999999, pay, prov)
+	_, checks["unknown actor"] = svc.AdminStats(ctx, 999999, pay, fs)
 	for name, err := range checks {
 		if !errors.Is(err, ErrForbidden) {
 			t.Errorf("%s by a regular user: want ErrForbidden, got %v", name, err)
@@ -207,8 +210,63 @@ func TestProofAndLinks(t *testing.T) {
 func TestAdminStatsDegradeGracefully(t *testing.T) {
 	svc, _ := testService(t)
 	owner(t, svc)
-	st, err := svc.AdminStats(context.Background(), ownerTG, &fakePayments{}, &fakeProvisioner{})
-	if err != nil || st.UsersTotal != 1 || !st.PanelHealthy || st.PendingPayments != 0 {
+	fs := &fakeServers{servers: []Server{{ID: "a", Name: "DE", Enabled: true, Healthy: true, CheckedAt: 1}}}
+	st, err := svc.AdminStats(context.Background(), ownerTG, &fakePayments{}, fs)
+	if err != nil || st.UsersTotal != 1 || !st.PanelHealthy || st.PendingPayments != 0 || st.Servers == nil {
 		t.Fatalf("stats: %v %+v", err, st)
+	}
+	fs.setListErr(status.Error(codes.Unavailable, "down"))
+	st, err = svc.AdminStats(context.Background(), ownerTG, &fakePayments{}, fs)
+	if err != nil || st.UsersTotal != 1 || st.PanelHealthy || st.Servers != nil || st.PanelDetail != "provisioner unreachable" {
+		t.Fatalf("provisioner down: %v %+v", err, st)
+	}
+}
+
+// The admin stats sum up every server taking new services from the
+// provisioner's list (its last checks), not one panel: how many answer, and
+// the names of those that do not. Switched-off servers are not checked, so
+// they do not count; one not checked yet counts as answering.
+func TestAdminStatsCountEveryServer(t *testing.T) {
+	svc, _ := testService(t)
+	owner(t, svc)
+	ctx := context.Background()
+	fs := &fakeServers{}
+	stats := func() *Stats {
+		t.Helper()
+		st, err := svc.AdminStats(ctx, ownerTG, &fakePayments{}, fs)
+		if err != nil || st.Servers == nil {
+			t.Fatalf("stats: %v %+v", err, st)
+		}
+		return st
+	}
+
+	if st := stats(); st.PanelHealthy || st.PanelDetail != "no 3x-ui server yet" || st.Servers.Total != 0 || st.Servers.Listed != 0 {
+		t.Fatalf("no server: %+v %+v", st, st.Servers)
+	}
+	fs.servers = []Server{{ID: "a", Name: "Spare", Enabled: false, Healthy: false, CheckedAt: 1}}
+	if st := stats(); st.PanelHealthy || st.PanelDetail != "no server takes new services" || st.Servers.Total != 0 ||
+		st.Servers.Listed != 1 {
+		t.Fatalf("all switched off: %+v %+v", st, st.Servers)
+	}
+
+	fs.servers = []Server{
+		{ID: "a", Name: "DE", Enabled: true, Healthy: true, CheckedAt: 1},
+		{ID: "b", Name: "FR", Enabled: true, Healthy: false, HealthError: "connection refused", CheckedAt: 1},
+		{ID: "c", Name: "New", Enabled: true}, // not checked yet
+		{ID: "d", Name: "Spare", Enabled: false, Healthy: false, CheckedAt: 1},
+		{ID: "e", Name: "NL", Enabled: true, Healthy: false, CheckedAt: 1},
+	}
+	st := stats()
+	if h := st.Servers; h.Total != 4 || h.Healthy != 2 || h.Listed != 5 || !slices.Equal(h.Down, []string{"FR", "NL"}) {
+		t.Fatalf("servers: %+v", h)
+	}
+	if st.PanelHealthy || st.PanelDetail != "2 of 4 servers do not answer: FR, NL" {
+		t.Fatalf("panel: %v %q", st.PanelHealthy, st.PanelDetail)
+	}
+
+	fs.servers[1].Healthy, fs.servers[4].Healthy = true, true
+	st = stats()
+	if h := st.Servers; h.Total != 4 || h.Healthy != 4 || len(h.Down) != 0 || !st.PanelHealthy || st.PanelDetail != "" {
+		t.Fatalf("all answer: %+v %+v", st, h)
 	}
 }
