@@ -54,7 +54,7 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	f := &fakeOps{ps: healthyPS}
 	// status, live logs, start, stop (declined, then confirmed), restart,
 	// dashboard link, server check, uninstall (declined), exit
-	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n12\n\n13\n\n14\nn\n\n0\n", f)
+	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n16\n\n17\nn\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -211,5 +211,113 @@ func TestNoCommandWithoutTerminalPrintsUsage(t *testing.T) {
 	stdout = &out // not a terminal: a script gets the usage, never a menu waiting for input
 	if code := run(nil, &out, &errOut); code != 0 || !strings.Contains(out.String(), "management menu") {
 		t.Fatalf("%d %s", code, out.String())
+	}
+}
+
+// opsMenu is a menu over o, whose reader it shares.
+func opsMenu(dir, stdin string, o *ops, out, errOut *bytes.Buffer) *menu {
+	br := bufio.NewReader(strings.NewReader(stdin))
+	o.in = br
+	return &menu{in: br, out: out, errOut: errOut, dir: dir, ops: o,
+		install: func([]string, map[string]string, bool) int { return 0 },
+		doctor:  func([]string) int { return 0 },
+		shield:  func(fn func()) { fn() },
+	}
+}
+
+func TestMenuRestore(t *testing.T) {
+	dir := restoreInstall(t)
+	bdir := filepath.Join(dir, "backups")
+	if err := os.MkdirAll(bdir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for stamp, dump := range map[string]string{"20261010T033000Z": "DUMP OF THE 10TH", "20261011T033000Z": "DUMP OF THE 11TH"} {
+		b, _ := os.ReadFile(writeBackup(t, installKey, backupKeys(), dump))
+		if err := os.WriteFile(filepath.Join(bdir, "bobres-"+stamp+".bkp"), b, 0o600); err != nil { //nolint:gosec // the test's own folder
+			t.Fatal(err)
+		}
+	}
+	other := writeBackup(t, otherKey, backupKeys(), "DUMP FROM ANOTHER SERVER")
+	// A link in the backup service's folder is not offered.
+	if err := os.Symlink(other, filepath.Join(bdir, "bobres-20261012T033000Z.bkp")); err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(t.TempDir(), "key.txt")
+	if err := os.WriteFile(keyFile, []byte(otherKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeDB{}
+	o, out, errOut := dbOps("", f)
+	// cancel; a number that is not there; #1 (the newest), confirmed; a
+	// path with its key file, declined at the confirmation; exit
+	in := strings.Join([]string{"12", "", "", "12", "9", "", "12", "1", "y", "", "12", other, keyFile, "n", "", "0", ""}, "\n")
+	m := opsMenu(dir, in, o, out, errOut)
+	if code := m.loop(); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	s := out.String()
+	if strings.Contains(s, "20261012") || !strings.Contains(s, "1. bobres-20261011T033000Z.bkp") || !strings.Contains(s, "2. bobres-20261010T033000Z.bkp") {
+		t.Fatalf("listing:\n%s", s)
+	}
+	for _, want := range []string{"Cancelled.", "There is no backup 9.", "Restore complete", "Cancelled. Nothing was changed."} {
+		if !strings.Contains(s, want) {
+			t.Errorf("output missing %q:\n%s", want, s)
+		}
+	}
+	// One restore ran, of the newest; the other server's backup opened with its key file.
+	if len(f.restored) != 1 || f.restored[0] != "DUMP OF THE 11TH" {
+		t.Fatalf("restored %q", f.restored)
+	}
+	if strings.Count(s, "(checked: key and contents are good)") != 2 {
+		t.Fatalf("both files must be verified first:\n%s", s)
+	}
+}
+
+func TestMenuUpdateAndRollback(t *testing.T) {
+	ut := newUpdateTest(t, "")
+	ut.cli.do = installs(ut.dir, "1.3.0")
+	m := opsMenu(ut.dir, "13\ny\n", ut.u.ops, ut.out, ut.errOut)
+	m.upd = ut.u
+	// The update asks, runs, then the menu ends: its bobres was replaced.
+	if code := m.loop(); code != 0 {
+		t.Fatalf("exit %d: %s", code, ut.errOut)
+	}
+	for _, want := range []string{"Newer:   yes", "Update BOBRES from 1.2.3 to 1.3.0?", "BOBRES is updated to 1.3.0", "run  bobres  again for the new menu"} {
+		if !strings.Contains(ut.out.String(), want) {
+			t.Errorf("missing %q:\n%s", want, ut.out)
+		}
+	}
+	if b, _ := os.ReadFile(ut.exe); string(b) != newCLI || strings.Contains(ut.out.String(), "Press Enter") {
+		t.Fatalf("CLI %q\n%s", b, ut.out)
+	}
+
+	// Nothing newer: no question, the menu goes on.
+	ut.out.Reset()
+	ut.u.current = "v1.3.0"
+	m = opsMenu(ut.dir, "13\n\n0\n", ut.u.ops, ut.out, ut.errOut)
+	m.upd = ut.u
+	if code := m.loop(); code != 0 || !strings.Contains(ut.out.String(), "Newer:   no") || strings.Contains(ut.out.String(), "[y/N]") {
+		t.Fatalf("up to date: %d\n%s", code, ut.out)
+	}
+
+	// Roll back: asked, done, and the menu ends.
+	ut.out.Reset()
+	m = opsMenu(ut.dir, "14\ny\n", ut.u.ops, ut.out, ut.errOut)
+	m.upd = ut.u
+	if code := m.loop(); code != 0 {
+		t.Fatalf("rollback: %d %s", code, ut.errOut)
+	}
+	if !strings.Contains(ut.out.String(), "Rolled back: BOBRES runs 1.2.3") || !strings.Contains(ut.out.String(), "The previous bobres is back") {
+		t.Fatalf("rollback:\n%s\n%s", ut.out, ut.errOut)
+	}
+	if b, _ := os.ReadFile(ut.exe); string(b) != oldCLI {
+		t.Fatalf("CLI %q", b)
+	}
+	// No restore point left to use: said, and the menu goes on.
+	ut.errOut.Reset()
+	m = opsMenu(ut.dir, "14\n\n0\n", ut.u.ops, ut.out, ut.errOut)
+	m.upd = ut.u
+	if code := m.loop(); code != 0 || !strings.Contains(ut.errOut.String(), "already used") {
+		t.Fatalf("used restore point: %d %s", code, ut.errOut)
 	}
 }

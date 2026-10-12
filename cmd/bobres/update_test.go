@@ -13,10 +13,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -94,12 +96,23 @@ type fakeCLI struct {
 	// binary is what the binary file held when it ran.
 	binary []string
 	do     func() error
+	// hang: the run never ends on its own, only when its context does (as
+	// the real one is killed); started is closed once it runs.
+	hang    bool
+	started chan struct{}
 }
 
-func (c *fakeCLI) run(_ context.Context, exe string, args ...string) error {
+func (c *fakeCLI) run(ctx context.Context, exe string, args ...string) error {
 	c.calls = append(c.calls, args)
 	b, _ := os.ReadFile(exe) //nolint:gosec // the test's own file
 	c.binary = append(c.binary, string(b))
+	if c.hang {
+		if c.started != nil {
+			close(c.started)
+		}
+		<-ctx.Done()
+		return errors.New("signal: killed")
+	}
 	if c.do != nil {
 		return c.do()
 	}
@@ -970,4 +983,100 @@ func TestUpdateRollbackFailsThenManualRollback(t *testing.T) {
 			t.Errorf("backup of %v before the rollback missing", opsNow.Add(d))
 		}
 	}
+}
+
+// An install that hangs is stopped at the time limit, then rolled back.
+func TestUpdateInstallTimeLimit(t *testing.T) {
+	ut := newUpdateTest(t, "")
+	envBefore := ut.read(t, ".env")
+	ut.u.installTimeout = 50 * time.Millisecond
+	ut.cli.hang = true
+	if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 1 {
+		t.Fatalf("exit %d: %s", code, ut.errOut)
+	}
+	if !strings.Contains(ut.errOut.String(), "the install of 1.3.0 did not finish within 50ms: it was stopped, with the docker compose it ran. Rolling back to 1.2.3") {
+		t.Fatalf("output: %s", ut.errOut)
+	}
+	if b, _ := os.ReadFile(ut.exe); string(b) != oldCLI || ut.read(t, ".env") != envBefore {
+		t.Fatalf("not rolled back: CLI %q", b)
+	}
+	if contains(ut.db.steps, "restore") { // no migration ran: the data stays
+		t.Fatalf("steps %q", ut.db.steps)
+	}
+}
+
+// Ctrl+C reaches only bobres (the install has its own process group): the
+// install is stopped and the update rolls back.
+func TestUpdateInterruptedInstallRollsBack(t *testing.T) {
+	ut := newUpdateTest(t, "")
+	sigs := make(chan os.Signal, 1)
+	stopped := false
+	ut.u.interrupts = func() (<-chan os.Signal, func()) { return sigs, func() { stopped = true } }
+	ut.cli.hang, ut.cli.started = true, make(chan struct{})
+	go func() {
+		<-ut.cli.started
+		sigs <- os.Interrupt
+	}()
+	if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 1 {
+		t.Fatalf("exit %d: %s", code, ut.errOut)
+	}
+	if !strings.Contains(ut.errOut.String(), "the install of 1.3.0 was interrupted") || !stopped {
+		t.Fatalf("stopped %v, output: %s", stopped, ut.errOut)
+	}
+	if b, _ := os.ReadFile(ut.exe); string(b) != oldCLI {
+		t.Fatal("the CLI was not swapped back")
+	}
+}
+
+// runInGroup kills the whole process group at the deadline: here a script
+// and the process it left in the background, as docker compose would be.
+func TestRunInGroupKillsTheGroup(t *testing.T) {
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "child.pid")
+	script := filepath.Join(dir, "bobres")
+	body := "#!/bin/sh\nsleep 60 &\necho $! > '" + pidFile + "'\necho started\nwait\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil { //nolint:gosec // a test script is executable
+		t.Fatal(err)
+	}
+	// The deadline comes once the background process runs.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		defer cancel()
+		for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if b, _ := os.ReadFile(pidFile); strings.HasSuffix(string(b), "\n") { //nolint:gosec // the test's own file
+				return
+			}
+		}
+	}()
+	var out bytes.Buffer
+	runErr := runInGroup(ctx, &out, &out, script)
+	if runErr == nil {
+		t.Fatalf("the run ended on its own: %s", out.String())
+	}
+	b, err := os.ReadFile(pidFile)
+	pid, perr := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || perr != nil || !strings.Contains(out.String(), "started") {
+		t.Fatalf("the script did not start (%v): %v %v %q", runErr, err, perr, out.String())
+	}
+	for deadline := time.Now().Add(5 * time.Second); processAlive(pid); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+			t.Fatalf("the background process %d outlived the kill", pid)
+		}
+	}
+}
+
+// processAlive reports whether pid runs (a zombie waiting for its new parent
+// to reap it does not count).
+func processAlive(pid int) bool {
+	if syscall.Kill(pid, 0) != nil {
+		return false
+	}
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output() //nolint:gosec // a test's own child
+	if err != nil {
+		return len(out) > 0
+	}
+	st := strings.TrimSpace(string(out))
+	return st != "" && !strings.HasPrefix(st, "Z")
 }

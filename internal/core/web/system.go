@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,9 +24,12 @@ type SystemHealth interface {
 // system: GET /api/v1/system, the System page's health tab: every service
 // with its version and readiness (a version other than core's is flagged),
 // the 3x-ui servers, the payment methods, the bot's last update check (core
-// has no internet access) and the newest backup, all asked at once.
+// has no internet access), the newest backup and the watchdog's open
+// problems, all asked at once.
 func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	role := actor(r).Role
+	full := Allowed(role, PermServersWrite)
 	var (
 		wg       sync.WaitGroup
 		report   syshealth.Report
@@ -34,14 +38,15 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		gateways []map[string]any
 		updates  any = map[string]string{"error": "bot unreachable"}
 		backups      = map[string]any{"installed": false}
+		alerts   []map[string]any
 	)
 	if s.cfg.System != nil {
 		wg.Go(func() { report = s.cfg.System.Check(ctx) })
 	}
 	if s.cfg.Servers != nil {
-		full := Allowed(actor(r).Role, PermServersWrite)
 		wg.Go(func() { servers, panel = s.overviewServers(ctx, full) })
 	}
+	wg.Go(func() { alerts = s.openAlerts(ctx, role) })
 	wg.Go(func() { gateways = s.overviewGateways(ctx) })
 	if s.cfg.Bot != nil {
 		wg.Go(func() {
@@ -70,8 +75,38 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"checked_at": s.now().Unix(), "version": report.Version, "version_mismatch": report.VersionMismatch,
 		"services": report.Services, "servers": servers, "panel": panel, "gateways": gateways, "updates": updates,
-		"backups": backups,
+		"backups": backups, "alerts": alerts,
 	})
+}
+
+// alertDetailPerms: a check's detail (its error) is shown only to staff who
+// may read it elsewhere: a server's to those who manage servers (as on the
+// overview), Zarinpal's to the owner (the gateway pages are owner-only).
+var alertDetailPerms = map[string]string{"server.": PermServersWrite, "gateway.": PermGatewaysWrite}
+
+// openAlerts are the watchdog's open problems, critical first, then the
+// oldest: {key, severity (critical | warning), title_key (the bot's alert.*
+// text), args, title (that text in English), detail, since (unix)}; null
+// when they could not be read, so the page does not say "all clear". The
+// detail is "" for a role that may not read it (alertDetailPerms).
+func (s *Server) openAlerts(ctx context.Context, role string) []map[string]any {
+	list, err := s.cfg.Domain.OpenAlerts(ctx)
+	if err != nil {
+		s.cfg.Log.Warn("system: open problems", "err", err)
+		return nil
+	}
+	out := make([]map[string]any, 0, len(list))
+	for _, a := range list {
+		detail := a.Detail
+		for prefix, perm := range alertDetailPerms {
+			if strings.HasPrefix(a.Key, prefix) && !Allowed(role, perm) {
+				detail = ""
+			}
+		}
+		out = append(out, map[string]any{"key": a.Key, "severity": a.Severity, "title_key": a.TitleKey, "args": a.Args,
+			"title": a.Title, "detail": detail, "since": a.Since.Unix()})
+	}
+	return out
 }
 
 // Backups lists and starts backups on the backup service

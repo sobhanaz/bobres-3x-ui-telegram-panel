@@ -1,12 +1,21 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import en from '../locales/en.json'
 import fa from '../locales/fa.json'
-import { bytes, dateTime } from '../format'
+import { bytes, date, dateTime } from '../format'
 import {
   absent,
+  ALERT_FALLBACK,
+  alertArgs,
+  alertLevel,
+  alertsState,
+  alertTextKey,
   backupSent,
   backupsState,
   checkList,
+  fills,
   INSTALL_COMMAND,
   logAttrs,
   logLevel,
@@ -14,6 +23,7 @@ import {
   mismatched,
   newestFirst,
   notSentReason,
+  openAlerts,
   serviceState,
   sortedServices,
   unixOf,
@@ -21,6 +31,7 @@ import {
   updateDetail,
   updateReason,
   updateState,
+  worstLevel,
 } from '../system'
 import {
   bindingOf,
@@ -41,7 +52,7 @@ import {
   tokenProblem,
   warnings,
 } from '../license'
-import type { BackupFile, LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemBackups, SystemLogs, SystemReply, UpdateCheck } from '../types'
+import type { BackupFile, LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemAlert, SystemBackups, SystemLogs, SystemReply, UpdateCheck } from '../types'
 
 const DAY = 86_400
 const iid = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa'
@@ -99,6 +110,78 @@ describe('system health', () => {
     }
     expect(mismatched(reply).map((s) => s.name)).toEqual(['bot', 'payments'])
     expect(mismatched({ services: [svc('bot', { version_mismatch: undefined })] })).toEqual([])
+  })
+})
+
+describe('open problems', () => {
+  const alert = (key: string, over: Partial<SystemAlert> = {}): SystemAlert => ({ key, severity: 'warning', title_key: '', args: {}, detail: '', since: 1_790_000_000, ...over })
+  it('reads the severity, never taking an unknown one for harmless', () => {
+    expect(alertLevel(alert('a', { severity: 'critical' }))).toBe('critical')
+    expect(alertLevel(alert('a', { severity: ' Critical ' }))).toBe('critical')
+    expect(alertLevel(alert('a', { severity: 'warning' }))).toBe('warning')
+    expect(alertLevel(alert('a', { severity: 'odd' }))).toBe('warning')
+    expect(alertLevel(alert('a', { severity: '' }))).toBe('warning')
+  })
+  it('lists them critical first, then the oldest first, as core does', () => {
+    const list = [
+      alert('disk.low', { since: 300 }),
+      alert('service.bot', { severity: 'critical', since: 500 }),
+      alert('backup.stale', { since: '1970-01-01T00:03:20Z' }),
+      alert('server.s2', { severity: 'critical', since: 400 }),
+      alert('bot.lag', { since: 300 }),
+    ]
+    expect(openAlerts({ alerts: list })!.map((a) => a.key)).toEqual(['server.s2', 'service.bot', 'backup.stale', 'bot.lag', 'disk.low'])
+    expect(worstLevel(list)).toBe('critical')
+    expect(worstLevel([alert('license')])).toBe('warning')
+    expect(worstLevel([])).toBeNull()
+    // all clear, core could not read them, and an older core without a watchdog
+    expect(alertsState({ alerts: [] })).toBe('ok')
+    expect(alertsState({ alerts: null })).toBe('unreadable')
+    expect(alertsState({})).toBe('unsupported')
+    expect(alertsState(null)).toBe('unsupported')
+    expect(openAlerts({ alerts: [] })).toEqual([])
+    expect(openAlerts({})).toBeNull()
+    expect(openAlerts({ alerts: null })).toBeNull()
+    expect(openAlerts(null)).toBeNull()
+  })
+  it('names a problem as the bot’s message does, with its values written the same way', () => {
+    expect(alertTextKey({ title_key: 'alert.backup_stale' })).toBe('system.alerts.kind.backup_stale')
+    expect(alertTextKey({ title_key: '' })).toBe('')
+    expect(alertTextKey({})).toBe('')
+    expect(alertTextKey({ title_key: 'alert.<b>' })).toBe('')
+    // every text the bot has for a problem is here too, in both languages
+    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'backup_failed', 'backup_stale',
+      'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'check']
+    expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
+    expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
+    expect(ALERT_FALLBACK).toBe('system.alerts.kind.check')
+    // and with the same values as the bot's own catalogs (in a full checkout)
+    const holes = (m: string) => [...m.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort()
+    for (const [lang, page] of [['en', en], ['fa', fa]] as const) {
+      const file = resolve(dirname(fileURLToPath(import.meta.url)), `../../../../internal/bot/i18n/locales/${lang}.json`)
+      if (!existsSync(file)) continue
+      const bot = JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>
+      const problems = Object.keys(bot)
+        .filter((k) => k.startsWith('alert.') && !/^alert\.(critical|warning|repeat|resolved|duration_\w+)$/.test(k))
+        .map((k) => k.slice('alert.'.length))
+      expect(problems.sort(), lang).toEqual(Object.keys(page.system.alerts.kind).sort())
+      for (const k of problems) expect(holes((page.system.alerts.kind as Record<string, string>)[k]), `${lang} ${k}`).toEqual(holes(bot['alert.' + k]))
+    }
+    // numbers in the language's digits, a size, a day; names kept whole; the key when core gives none
+    const day = Date.UTC(2026, 9, 21, 12) / 1000
+    const args = { count: '3', days: '9', hours: '30', minutes: '12', free: String(1.5 * 2 ** 30), date: String(day), server: 'nl-1', service: 'bot' }
+    expect(alertArgs(alert('x.y', { args }), 'fa', (k, v) => (k === 'service' ? 'ربات' : v))).toEqual({
+      key: '\u2068x.y\u2069', count: '۳', days: '۹', hours: '۳۰', minutes: '۱۲', free: bytes(1.5 * 2 ** 30, 'fa'), date: date(day, 'fa'),
+      server: '\u2068nl-1\u2069', service: '\u2068ربات\u2069',
+    })
+    expect(alertArgs(alert('x.y', { args }), 'en').count).toBe('3')
+    expect(alertArgs(alert('x.y', { args: { key: 'other' } }), 'en').key).toBe('\u2068other\u2069')
+    expect(alertArgs(alert('x.y', { args: null }), 'en')).toEqual({ key: '\u2068x.y\u2069' })
+    // a text is used only when every value it needs is there
+    expect(fills('No new backup for {hours} hours', { hours: '30' })).toBe(true)
+    expect(fills('No new backup for {hours} hours', { key: 'x' })).toBe(false)
+    expect(fills('The last backup failed', {})).toBe(true)
+    expect(fills(undefined, {})).toBe(true)
   })
 })
 
@@ -523,6 +606,74 @@ describe('system page', () => {
     await vi.waitFor(() => expect(rows()).toHaveLength(5))
     expect(document.querySelector('.load-error')).toBeNull()
     expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(2)
+  })
+
+  it('shows the open problems, critical first, with when each began', async () => {
+    const t0 = nowSec()
+    const alerts: SystemAlert[] = [
+      { key: 'backup.stale', severity: 'warning', title_key: 'alert.backup_stale', args: { hours: '30' }, detail: '', since: t0 - 7200 },
+      { key: 'mystery.check', severity: 'odd', title_key: 'alert.mystery', args: {}, detail: '', since: t0 - 60 },
+      { key: 'service.bot', severity: 'critical', title_key: 'alert.service_down', args: { service: 'bot' }, detail: 'dial tcp 172.18.0.4:8080: connect: connection refused', since: t0 - 600 },
+      // a text whose value core did not give: core's words instead of a hole
+      { key: 'server.s2', severity: 'warning', title_key: 'alert.server_down', args: {}, title: 'nl-1 does not answer', detail: '', since: t0 - 30 },
+    ]
+    const { calls } = await boot('/admin/system', { answer: (url) => (url === '/api/v1/system' ? json(200, { ...systemReply(), alerts }) : undefined) })
+    await vi.waitFor(() => expect(document.querySelectorAll('.alerts .alert')).toHaveLength(4))
+    // above the services
+    const cards = [...document.querySelectorAll('.health > .p-card')]
+    expect(cards.indexOf(document.querySelector('.alerts-card')!)).toBeLessThan(cards.indexOf(document.querySelector('.services-card')!))
+    const count = document.querySelector('.alerts-count')!
+    expect(count.textContent).toBe('۴')
+    expect(count.classList.contains('p-tag-danger')).toBe(true)
+    expect(count.getAttribute('aria-label')).toBe(fill(text('system.alerts.count'), { n: '۴' }))
+    const [bot, backup, odd, server] = [...document.querySelectorAll('.alerts .alert')] as HTMLElement[]
+    // critical first, named as the bot names it, with the service as this page names it
+    expect(bot.querySelector('.alert-severity')?.textContent).toBe(text('system.alerts.severity.critical'))
+    expect(bot.querySelector('.alert-severity')?.classList.contains('p-tag-danger')).toBe(true)
+    expect(bot.querySelector('.alert-title')?.textContent).toBe(fill(text('system.alerts.kind.service_down'), { service: '\u2068' + text('system.service.bot') + '\u2069' }))
+    expect(bot.querySelector('.alert-since')?.textContent).toBe(fill(text('system.alerts.since'), { time: dateTime(t0 - 600, 'fa') }))
+    expect(bot.querySelector('.alert-detail')?.textContent).toBe('dial tcp 172.18.0.4:8080: connect: connection refused')
+    // then the warnings, oldest first, numbers in Persian digits
+    expect(backup.querySelector('.alert-severity')?.textContent).toBe(text('system.alerts.severity.warning'))
+    expect(backup.querySelector('.alert-severity')?.classList.contains('p-tag-warn')).toBe(true)
+    expect(backup.querySelector('.alert-title')?.textContent).toBe(fill(text('system.alerts.kind.backup_stale'), { hours: '۳۰' }))
+    expect(backup.querySelector('.alert-since')?.textContent).toBe(fill(text('system.alerts.since'), { time: dateTime(t0 - 7200, 'fa') }))
+    expect(backup.querySelector('.alert-detail')).toBeNull()
+    // a check this page has no text for, and an unknown severity: a warning, named by its key
+    expect(odd.querySelector('.alert-severity')?.textContent).toBe(text('system.alerts.severity.warning'))
+    expect(odd.querySelector('.alert-title')?.textContent).toBe(fill(text('system.alerts.kind.check'), { key: '\u2068mystery.check\u2069' }))
+    expect(server.querySelector('.alert-title')?.textContent).toBe('nl-1 does not answer')
+    expect(document.querySelector('.all-clear')).toBeNull()
+    // where the Telegram alerts are turned on or off
+    expect(document.querySelector('.alerts-note')?.textContent).toContain(text('system.alerts.note'))
+    expect(document.querySelector('a.settings-link')?.getAttribute('href')).toBe('/admin/settings')
+    // read only: nothing is sent from here
+    expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
+  })
+
+  it('says all is clear when nothing is open, when they cannot be read, and nothing on an older core', async () => {
+    await boot('/admin/system', {
+      perms: adminPerms.filter((p) => p !== 'settings.write'),
+      answer: (url) => (url === '/api/v1/system' ? json(200, { ...systemReply(), alerts: [] }) : undefined),
+    })
+    const clear = await found('.all-clear')
+    expect(clear.textContent?.trim()).toBe(text('system.alerts.none'))
+    expect(document.querySelector('.alerts .alert')).toBeNull()
+    expect(document.querySelector('.alerts-count')).toBeNull()
+    // no settings link for staff who cannot change settings
+    expect(document.querySelector('.alerts-note')).not.toBeNull()
+    expect(document.querySelector('a.settings-link')).toBeNull()
+    // core could not read them: said, never "all clear"
+    await boot('/admin/system', { answer: (url) => (url === '/api/v1/system' ? json(200, { ...systemReply(), alerts: null }) : undefined) })
+    const unreadable = await found('.alerts-unreadable')
+    expect(unreadable.textContent?.trim()).toBe(text('system.alerts.unreadable'))
+    expect(document.querySelector('.all-clear')).toBeNull()
+    expect(document.querySelector('.alerts-count')).toBeNull()
+    // a core without the watchdog: no card, rather than a false all clear
+    await boot('/admin/system')
+    await vi.waitFor(() => expect(rows()).toHaveLength(5))
+    expect(document.querySelector('.alerts-card')).toBeNull()
+    expect(document.querySelector('.all-clear')).toBeNull()
   })
 
   it('keeps the page from support staff', async () => {

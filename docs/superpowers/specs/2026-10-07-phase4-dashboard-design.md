@@ -779,6 +779,57 @@ The System page's health tab and its License tab. The update check, logs and bac
 
 - **Next part:** the dashboard's Backups tab.
 
+### System alerts (Phase 7, P7c)
+
+No Prometheus or Grafana (too heavy for a small VPS): core's own watchdog, and the bot's staff alerts.
+
+- **The watchdog** (`domain.Watchdog`, the worker `watchdog` in cmd/core) runs every minute, its sources asked at
+  once, each within 10 s. Each check has a key:
+
+| Key | Problem when | Text (`alert.*`) and values | Severity |
+| --- | --- | --- | --- |
+| `service.<name>` | a service is `down` or `not_ready` (`internal/core/syshealth`; not installed and not configured ones are not watched, except the backup service when core has its address and token: then a name Docker does not resolve is a stopped or restarting container, so `down`) | `service_down` / `service_not_ready` {service} | critical |
+| `server.<id>` | an enabled 3x-ui server failed its last health check (`ListServers`; never checked: skipped) | `server_down` {server} | critical |
+| `gateway.zarinpal.error` | Zarinpal is switched on and its report is not healthy (an error since the last paid payment, under an hour old) | `zarinpal_failing` | critical |
+| `gateway.zarinpal.open` | Zarinpal is switched on and an open payment is over 3 hours old (payments keeps one open by design for its 1-hour pay window, 45 minutes of grace and its reconciler's backoff of up to 32 minutes, so a checkout the customer left is not stuck) | `zarinpal_stuck` {count} | critical |
+| `backup.failed` | the backup service is installed and its last run failed | `backup_failed` | warning |
+| `backup.stale` | the newest good backup is over 26 hours old (none yet: not checked). While the service does not answer, the newest one it last reported still ages (after a restart of core: the time it stopped answering), so backups do not stop silently | `backup_stale` {hours} | warning |
+| `backup.disk` | the backup disk has under 2 GB free (unknown: not checked) | `disk_low` {free} | warning |
+| `orders.provision_failed` | an order's last delivery attempt failed in the last hour (one being retried right now still counts: it is `provisioning` with its last error) | `provision_failed` {count} | critical |
+| `events.bot_lag` | the oldest core event the bot has not read is over 10 minutes old (the feed keeps a cursor per gRPC caller: `bot`, the peer name cmd/core gives it, `domain.BotFeedConsumer`) | `bot_lag` {minutes} | critical |
+| `license.expiry` | a license that verified here expires within 14 days, is in its grace period or has expired (missing or invalid: not watched) | `license_expiring` {days, date} / `license_grace` {date} / `license_expired` | warning |
+
+- **On change only.** `core.alert_state` (migration core/00013: `key` PK, `state` ok | pending | problem, `since`,
+  `last_sent_at`, `passing_since`, `detail`, `severity`, `title_key`, `args`) keeps each check's state across
+  restarts.
+  - A check seen failing once is `pending` (nothing is sent: a service restarting during `bobres update` is not
+    announced); seen failing again a minute later it is a `problem`, announced as open since it was first seen.
+  - A problem that passes stays open (and on the System page) until it has passed for 5 minutes (`passing_since`);
+    failing again starts those 5 minutes over. Then it is announced as resolved, its duration counted until it first
+    passed. A pending check that passes goes back to ok quietly.
+  - A check that fails again within 30 minutes of its fix stays `pending` until those 30 minutes are over, and is
+    announced then if it still fails. So a check that flaps (a server behind a filtered link, the disk near 2 GB)
+    sends one alert, not a problem and a fix every few minutes.
+  - A problem still open after 6 hours is sent again then, and every 24 hours after that (`repeat: true`, with
+    the current values, e.g. the days left).
+  - Another problem on the same check (the license from expiring to grace) is announced as new.
+  - A source that did not answer (the provisioner, payments, the backup service) leaves its checks as they were:
+    its own service check reports it (only `backup.stale` can still become a problem, above). A check its source
+    no longer makes (a server removed or switched off, Zarinpal switched off, the backup service uninstalled, the
+    license removed) is forgotten without a message.
+  - State changes and their events commit together.
+- **Delivery.** Core publishes `system.alert.v1` (see 02-events-and-apis.md). The bot sends it to the staff alert
+  recipients (`notify.recipients`, like failed deliveries; never support staff), each in their language: a heading
+  by severity (or "still not fixed after", "fixed after"), the sentence, and the check's own words in `<code>`.
+  The setting `notify.system_alerts` (bool, default true) turns the messages off; the checks and the System page
+  go on. Alerts about the bot itself or its feed reach Telegram once the bot is back (then the problem and its
+  fix arrive together); the System page shows them at once.
+- **API.** `GET /api/v1/system` gains `alerts`: the open problems (state `problem`), critical first, then the
+  oldest: `[{key, severity, title_key, args, title (the bot's English text, without tags), detail, since
+  (unix)}]`, `[]` when all is well, `null` when they could not be read. A server's error is shown only to staff
+  who may manage servers, as on the overview, and Zarinpal's only to the owner, as on the gateway pages
+  (`gateways.write`); the others get `detail: ""`.
+
 ## Tests
 
 - **Go.** TOTP against the RFC 6238 vectors and password hashing. The handlers end to end, over

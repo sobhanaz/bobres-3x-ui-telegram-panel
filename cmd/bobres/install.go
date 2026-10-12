@@ -42,6 +42,8 @@ type installer struct {
 	lookupIP  func(ctx context.Context, host string) ([]net.IP, error)
 	preflight func(domain string) []Result
 	sleep     func(time.Duration)
+	// harden runs the hardening step (bobres harden); nil skips it.
+	harden func(ctx context.Context, opt hardenOptions) int
 	// quiet leaves out the first-steps summary (a settings change from the menu).
 	quiet bool
 }
@@ -73,6 +75,10 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 	}
 	if f, ok := in.(*os.File); ok {
 		ins.readHide = hiddenInput(f, out)
+	}
+	// It asks on the installer's reader, as it is when the step runs.
+	ins.harden = func(ctx context.Context, opt hardenOptions) int {
+		return newHardener(ins.in, ins.out, ins.errOut).apply(ctx, opt)
 	}
 	return ins
 }
@@ -143,8 +149,14 @@ func (ins *installer) install(args []string) int {
 	offline := fs.Bool("offline", false, "skip network checks (bot token)")
 	skipChecks := fs.Bool("skip-checks", false, "skip the system checks")
 	quiet := fs.Bool("quiet", false, "leave out the first-steps summary (bobres update runs install this way)")
-	yes := fs.Bool("yes", false, "never ask: a value still missing is an error (bobres update runs install this way)")
+	yes := fs.Bool("yes", false, "never ask: a value still missing is an error, and the hardening step is skipped (bobres update runs install this way)")
+	noHarden := fs.Bool("no-harden", false, "skip the hardening step (firewall, fail2ban, security updates, swap; bobres harden runs it later)")
+	sshPort := fs.Int("ssh-port", 0, "hardening: an SSH port the firewall keeps open (needed when it cannot be detected)")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *sshPort < 0 || *sshPort > 65535 {
+		fmt.Fprintln(ins.errOut, "error: --ssh-port must be a port number")
 		return 2
 	}
 	if *quiet {
@@ -183,10 +195,7 @@ func (ins *installer) install(args []string) int {
 	set("BOBRES_ZARINPAL_PROXY", *zpProxy)
 	set("BOBRES_ZARINPAL_PUBLIC_URL", *zpPublic)
 	// A Zarinpal domain other than the main one is served by the same Caddy site.
-	env["BOBRES_ZARINPAL_HOST"] = ""
-	if u, err := url.Parse(env["BOBRES_ZARINPAL_PUBLIC_URL"]); err == nil && u.Hostname() != "" && !strings.EqualFold(u.Hostname(), env["BOBRES_DOMAIN"]) {
-		env["BOBRES_ZARINPAL_HOST"] = u.Hostname()
-	}
+	env["BOBRES_ZARINPAL_HOST"] = zarinpalHost(env)
 
 	// Ask for what is still missing (secrets without echo).
 	for _, q := range []struct{ key, prompt string }{
@@ -297,6 +306,14 @@ func (ins *installer) install(args []string) int {
 	}
 	if code := ins.start(ctx, *dir, env); code != 0 {
 		return code
+	}
+	// Step 8: asked step by step, so never from a run that cannot ask (--yes,
+	// as bobres update runs it) or a settings change from the menu (quiet).
+	if ins.harden != nil && !*noHarden && !*yes && !ins.quiet {
+		fmt.Fprintln(ins.out, "\nServer hardening (skip it with --no-harden; run it again any time with: sudo bobres harden)")
+		if ins.harden(ctx, hardenOptions{sshPort: *sshPort, dir: *dir}) != 0 {
+			fmt.Fprintln(ins.errOut, "The store is installed; the hardening did not finish (see above). Run it again with: sudo bobres harden")
+		}
 	}
 	if !ins.quiet {
 		ins.summary(env, *dir)
@@ -544,6 +561,7 @@ it holds the keys that encrypt your panel tokens and gateway settings.
 
 Manage the store from this server at any time: run  bobres  for the menu
 (status, logs, start/stop/restart, change the bot token, admin or panel).
+Server hardening (firewall, fail2ban, security updates, swap): sudo bobres harden; bobres doctor shows it.
 `, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
 	if backupEnabled(env) {
 		fmt.Fprintf(ins.out, "Backups: every day at %s (%s) into %s, each also sent to you on Telegram. One now: bobres backup\n",
@@ -648,14 +666,19 @@ func validateEnv(env map[string]string) []error {
 
 // readEnv parses KEY=VALUE lines (quotes stripped). A missing file is not an error.
 func readEnv(path string) (map[string]string, bool, error) {
-	env := map[string]string{}
 	b, err := os.ReadFile(path) //nolint:gosec // operator-chosen install dir
 	if errors.Is(err, os.ErrNotExist) {
-		return env, false, nil
+		return map[string]string{}, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
+	return parseEnv(b), true, nil
+}
+
+// parseEnv reads the KEY=VALUE lines of an env file (quotes stripped).
+func parseEnv(b []byte) map[string]string {
+	env := map[string]string{}
 	for _, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -671,7 +694,7 @@ func readEnv(path string) (map[string]string, bool, error) {
 		}
 		env[strings.TrimSpace(k)] = v
 	}
-	return env, true, nil
+	return env
 }
 
 // renderEnv writes the env file; values with characters Compose would

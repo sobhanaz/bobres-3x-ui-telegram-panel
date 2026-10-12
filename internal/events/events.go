@@ -23,6 +23,8 @@ const (
 	TicketCustomerReplied = "ticket.customer_replied.v1"
 	TicketReplied         = "ticket.replied.v1"
 	TicketClosed          = "ticket.closed.v1"
+	// SystemAlert: core's watchdog found a problem, or one was fixed.
+	SystemAlert = "system.alert.v1"
 )
 
 // Topics core consumes from the payments feed.
@@ -202,4 +204,38 @@ type TicketClosedEvent struct {
 	TicketID   string `json:"ticket_id"`
 	Number     int64  `json:"number"`
 	TelegramID int64  `json:"telegram_id"`
+}
+
+// System alert states and severities.
+const (
+	AlertProblem  = "problem"
+	AlertResolved = "resolved"
+
+	SeverityCritical = "critical" // customers are affected now
+	SeverityWarning  = "warning"  // needs a look soon
+)
+
+// SystemAlertEvent: one of core's watchdog checks went wrong (problem), was
+// fixed (resolved: it has passed for 5 minutes), or is still wrong after 6
+// hours and then once a day (problem, Repeat). The bot sends it to the staff
+// who get alerts about failed deliveries (notify.recipients; never support
+// staff).
+//
+// TitleKey is the bot's text (alert.*). Args are its values, all strings:
+// count, days, hours and minutes are whole numbers, free is a size in
+// bytes, date is unix seconds, and anything else (service, server) is a
+// name. Detail is a few English words from the check (an error), or "".
+type SystemAlertEvent struct {
+	Key      string            `json:"key"` // the check: service.bot, server.<id>, backup.stale...
+	Severity string            `json:"severity"`
+	State    string            `json:"state"`
+	TitleKey string            `json:"title_key"`
+	Args     map[string]string `json:"args,omitempty"`
+	Detail   string            `json:"detail,omitempty"`
+	Since    int64             `json:"since"` // unix seconds: when the problem was first seen
+	// At is this run of the watchdog in unix seconds; for resolved, the run
+	// that first saw the check pass again (so At - Since is how long it
+	// lasted).
+	At     int64 `json:"at"`
+	Repeat bool  `json:"repeat,omitempty"`
 }

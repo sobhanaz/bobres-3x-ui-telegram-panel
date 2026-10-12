@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -35,7 +36,11 @@ type menu struct {
 	// shield runs fn with Ctrl+C reaching only the child process (live logs),
 	// so it ends the logs and not the menu.
 	shield func(fn func())
-	color  bool
+	// upd runs update and rollback.
+	upd   *updater
+	color bool
+	// quit ends the menu after an item: bobres itself was replaced.
+	quit bool
 }
 
 type menuItem struct {
@@ -65,6 +70,7 @@ func menuCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 		return ins.install(args)
 	}
 	m.doctor = func(args []string) int { return doctorCmd(args, out, errOut) }
+	m.upd = newUpdater(m.ops)
 	m.shield = func(fn func()) {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt) // caught, not ignored: the child still gets the default action
@@ -119,6 +125,9 @@ func (m *menu) loop() int {
 		}
 		fmt.Fprintln(m.out)
 		items[n-1].run()
+		if m.quit {
+			return 0
+		}
 		if _, ok := m.ask("\nPress Enter to return to the menu..."); !ok {
 			fmt.Fprintln(m.out)
 			return 0
@@ -148,6 +157,9 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Change the first 3x-ui panel (used until the dashboard has a server)", run: func() { m.changePanel(env) }},
 		{label: "Back up now", run: func() { m.ops.backupCmd(d) }, group: true},
 		{label: "Backup key", run: func() { m.backupKey(env) }},
+		{label: "Restore a backup", run: m.restore},
+		{label: "Update BOBRES (check for a new release)", run: m.update, group: true},
+		{label: "Roll back the last update", run: m.rollback},
 		{label: "Dashboard login link (if the bot is down)", run: func() { m.ops.adminCmd([]string{"link", "--dir", m.dir}) }, group: true},
 		{label: "Check this server", run: func() { m.doctor([]string{"--domain", env["BOBRES_DOMAIN"]}) }},
 		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }},
@@ -219,6 +231,96 @@ func (m *menu) backupKey(env map[string]string) {
 		return
 	}
 	fmt.Fprintf(m.out, "\n  %s\n\nStore this somewhere safe, away from this server: without it the backups cannot be read.\n", key)
+}
+
+// maxListedBackups is how many of the newest backups the restore item lists.
+const maxListedBackups = 15
+
+// restore lists the newest backups in <dir>/backups, takes one by number or
+// any file by path (with the key file of another server), then runs
+// bobres restore, which checks the file and asks before it changes anything.
+func (m *menu) restore() {
+	bdir := filepath.Join(m.dir, "backups")
+	files := listBackups(bdir)
+	if len(files) == 0 {
+		fmt.Fprintf(m.out, "No backups in %s.\n", bdir)
+	} else {
+		fmt.Fprintln(m.out, "Backups on this server, newest first:")
+		for i, f := range files {
+			fmt.Fprintf(m.out, "  %2d. %s  (%s)\n", i+1, f.Name(), humanSize(f.Size()))
+		}
+	}
+	choice, ok := m.ask("Choose a backup by its number, or type the path of a backup file (Enter to cancel): ")
+	if !ok || choice == "" {
+		fmt.Fprintln(m.out, "Cancelled.")
+		return
+	}
+	var args []string
+	if n, err := strconv.Atoi(choice); err == nil {
+		if n < 1 || n > len(files) {
+			fmt.Fprintf(m.out, "There is no backup %d.\n", n)
+			return
+		}
+		args = []string{filepath.Join(bdir, files[n-1].Name())}
+	} else {
+		args = []string{choice}
+		kf, ok := m.ask("Key file, for a backup made on another server (Enter: this install's backup key): ")
+		if !ok {
+			return
+		}
+		if kf != "" {
+			args = append(args, "--key-file", kf)
+		}
+	}
+	m.ops.restoreCmd(append(args, "--dir", m.dir))
+}
+
+// listBackups are the newest backup files in dir (regular files only: the
+// backup service's user owns the folder), newest first.
+func listBackups(dir string) []os.FileInfo {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var files []os.FileInfo
+	for _, e := range entries {
+		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".bkp") || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if fi, err := e.Info(); err == nil {
+			files = append(files, fi)
+		}
+	}
+	// The names carry the UTC time they were made: bobres-20261012T033000Z...
+	sort.Slice(files, func(i, j int) bool { return files[i].Name() > files[j].Name() })
+	if len(files) > maxListedBackups {
+		files = files[:maxListedBackups]
+	}
+	return files
+}
+
+// update checks for a newer release and, when there is one, runs bobres
+// update, which asks before it changes anything. After an update the menu
+// ends: the bobres running it was replaced.
+func (m *menu) update() {
+	newer, code := m.upd.checkNewer(context.Background(), m.dir, m.upd.latestURL, "")
+	if code != 0 || !newer {
+		return
+	}
+	fmt.Fprintln(m.out)
+	if m.upd.updateCmd([]string{"--dir", m.dir}) == 0 {
+		fmt.Fprintln(m.out, "\nbobres itself was updated: run  bobres  again for the new menu.")
+		m.quit = true
+	}
+}
+
+// rollback runs bobres rollback, which asks first. Afterwards the menu ends:
+// the previous bobres is back.
+func (m *menu) rollback() {
+	if m.upd.rollbackCmd([]string{"--dir", m.dir}) == 0 {
+		fmt.Fprintln(m.out, "\nThe previous bobres is back: run  bobres  again for its menu.")
+		m.quit = true
+	}
 }
 
 func (m *menu) showSettings(env map[string]string) {

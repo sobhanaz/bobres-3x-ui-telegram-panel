@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -96,8 +97,17 @@ func TestRunDispatch(t *testing.T) {
 	}
 	out.Reset()
 	errOut.Reset()
-	if code := run([]string{"secrets"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "not implemented") {
+	if code := run([]string{"secrets"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "usage: bobres secrets rotate") {
 		t.Fatalf("secrets: %d %q", code, errOut.String())
+	}
+	errOut.Reset()
+	if code := run([]string{"config"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "usage: bobres config") {
+		t.Fatalf("config: %d %q", code, errOut.String())
+	}
+	errOut.Reset()
+	// Usage errors only: a real run would change this machine.
+	if code := run([]string{"harden", "extra"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "usage: bobres harden") {
+		t.Fatalf("harden: %d %q", code, errOut.String())
 	}
 	errOut.Reset()
 	if code := run([]string{"bogus"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "unknown command") {
@@ -125,7 +135,11 @@ func TestDoctorOfflineRuns(t *testing.T) {
 	if code != 0 && code != 1 {
 		t.Fatalf("unexpected exit %d: %s", code, errOut.String())
 	}
-	for _, want := range []string{"OS/arch", "RAM", "Disk", "Port 80", "Port 443", "Docker", "DNS", "passed"} {
+	wants := []string{"OS/arch", "RAM", "Disk", "Port 80", "Port 443", "Docker", "DNS", "passed"}
+	if runtime.GOOS != "linux" { // the hardening state: skipped off Linux, without running anything
+		wants = append(wants, "SKIP  Hardening")
+	}
+	for _, want := range wants {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output missing %q:\n%s", want, out.String())
 		}
