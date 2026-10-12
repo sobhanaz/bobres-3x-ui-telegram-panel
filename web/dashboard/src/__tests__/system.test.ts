@@ -632,8 +632,11 @@ describe('system page', () => {
     expect(document.querySelector('.unverified')).toBeNull()
   })
 
+  // One moment for every reply, so the times a test expects match the ones
+  // the page shows even when the clock passes a minute meanwhile.
+  const backupsAt = nowSec()
   const backupsReply = (over: Partial<SystemBackups> = {}): SystemBackups => {
-    const t0 = nowSec() - 3600
+    const t0 = backupsAt - 3600
     return {
       installed: true,
       backups: [
@@ -642,7 +645,7 @@ describe('system page', () => {
         { file: '', size: 0, sha256: '', created_at: t0 - 2 * DAY, sent_at: null, error: 'pg_dump: connection refused' },
         { file: 'bobres-20261008T033000Z.bkp', size: 2 ** 20, sha256: 'ef', created_at: t0 - 3 * DAY, sent_at: null, telegram_error: 'telegram_error: Forbidden: bot was blocked' },
       ],
-      running: false, last_error: '', next_run: nowSec() + 20 * 3600, disk_free: 12 * 2 ** 30, dir: '/backups', ...over,
+      running: false, last_error: '', next_run: backupsAt + 20 * 3600, disk_free: 12 * 2 ** 30, dir: '/backups', ...over,
     }
   }
   // the backup service's own list, which core passed on as it was (no installed field)
