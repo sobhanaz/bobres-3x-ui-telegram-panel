@@ -16,7 +16,7 @@ import (
 
 const (
 	store   = "TCKR37NfLumfScqBQX6qrnJR3mZkv6xGqi"
-	apiKey  = "4a6e2c1d-7b8f-4e3a-9c5d-1f2e3d4c5b6a" //nolint:gosec // test fixture
+	apiKey  = "11111111-2222-4333-8444-555555555555" //nolint:gosec // test fixture
 	proxyPW = "pr0xy-pw"                             //nolint:gosec // test fixture
 )
 

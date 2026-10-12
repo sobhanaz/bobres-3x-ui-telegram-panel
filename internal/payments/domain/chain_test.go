@@ -27,8 +27,8 @@ const (
 	storeAddr     = "TCKR37NfLumfScqBQX6qrnJR3mZkv6xGqi"
 	storeAddr2    = "TWxtFn4btLxwjWcZJvyS6T5iQaHztZnxcF"
 	otherContract = "TVmTPtVpHTgWzHYnGDbih1QDTuQo6J1Eef"   // a contract that calls its coin "USDT"
-	tronKey       = "4a6e2c1d-7b8f-4e3a-9c5d-1f2e3d4c5b6a" //nolint:gosec // test fixture
-	tronKey2      = "9d8c7b6a-5f4e-4d3c-8b2a-1a0f9e8d7c6b" //nolint:gosec // test fixture
+	tronKey       = "11111111-2222-4333-8444-555555555555" //nolint:gosec // test fixture
+	tronKey2      = "66666666-7777-4888-8999-000000000000" //nolint:gosec // test fixture
 )
 
 type chainFix struct {

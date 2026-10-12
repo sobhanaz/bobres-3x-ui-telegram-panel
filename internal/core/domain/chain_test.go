@@ -19,7 +19,7 @@ import (
 const (
 	testTronAddress  = "TS3xQSYkuSNpuUzmCprGpTHHKq9XVTgu3r"
 	otherTronAddress = "TSbS3MrjbYDWGmAjvqzwTVCpiqsu7uR9Fb"
-	testTronKey      = "25f66928-0b70-48cd-9ac6-da6f8247c663" //nolint:gosec // test fixture
+	testTronKey      = "11111111-2222-4333-8444-555555555555" //nolint:gosec // test fixture
 	testTXID         = "8f0c1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7"
 )
 

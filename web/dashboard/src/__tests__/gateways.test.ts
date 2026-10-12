@@ -59,7 +59,7 @@ const newAddress = 'TSbS3MrjbYDWGmAjvqzwTVCpiqsu7uR9Fb'
 const sender = 'TK6wsfvEmv3S45xFxQXE2DqEtu8SVAXTut'
 // the store's address with one character wrong
 const typo = store.slice(0, 10) + (store[10] === 'z' ? 'y' : 'z') + store.slice(11)
-const apiKey = '25f66928-0b70-48cd-9ac6-da6f8247c663'
+const apiKey = '11111111-2222-4333-8444-555555555555'
 const usdtConfig = (over: Partial<GatewayConfig> = {}): GatewayConfig => ({
   provider: 'usdt_trc20_auto',
   enabled: true,
