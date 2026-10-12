@@ -13,8 +13,15 @@ import (
 // SetPayments injects the payments client for orchestration RPCs.
 func (s *Server) SetPayments(p domain.PaymentsClient) { s.pay = p }
 
-// SetProvisioner injects the provisioner client (links, panel health).
-func (s *Server) SetProvisioner(p domain.Provisioner) { s.prov = p }
+// Provisioner is the provisioner client as the RPCs use it: VPN accounts
+// and links, and the server list (the admin stats).
+type Provisioner interface {
+	domain.Provisioner
+	domain.ServerAdmin
+}
+
+// SetProvisioner injects the provisioner client.
+func (s *Server) SetProvisioner(p Provisioner) { s.prov = p }
 
 func (s *Server) needPayments() error {
 	if s.pay == nil {

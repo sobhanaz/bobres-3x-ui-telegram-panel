@@ -72,18 +72,50 @@ func (s *Service) auditChange(ctx context.Context, q pgx.Tx, actor *store.User, 
 	return s.st.WriteAudit(ctx, s.st.Conn(), a)
 }
 
-// Stats are the admin panel's headline figures. PendingPayments is -1 and
-// PanelHealthy false (with a detail) when a backend could not be reached.
+// Stats are the admin panel's headline figures. PendingPayments is -1, and
+// Servers nil with PanelHealthy false, when a backend could not be reached.
 type Stats struct {
 	store.UserCounts
 	PendingPayments int64
-	PanelHealthy    bool
-	PanelDetail     string
+	Servers         *ServerHealth
+	// PanelHealthy: every server taking new services answers; PanelDetail
+	// says why not, in English.
+	PanelHealthy bool
+	PanelDetail  string
+}
+
+// ServerHealth sums up the 3x-ui servers that take new services (the
+// switched-off ones are not checked), as the dashboard's overview does:
+// Healthy of Total answered their last health check or are not checked yet,
+// and Down names the others, in the list's order. Listed counts every server,
+// the switched-off ones included.
+type ServerHealth struct {
+	Total, Healthy, Listed int
+	Down                   []string
+}
+
+// Health sums up the servers of the list.
+func (l *ServerList) Health() ServerHealth {
+	h := ServerHealth{Listed: len(l.Servers)}
+	for i := range l.Servers {
+		sv := &l.Servers[i]
+		if !sv.Enabled {
+			continue
+		}
+		h.Total++
+		if sv.CheckedAt == 0 || sv.Healthy {
+			h.Healthy++
+		} else {
+			h.Down = append(h.Down, sv.Name)
+		}
+	}
+	return h
 }
 
 // AdminStats gathers the figures; an unreachable backend degrades the result
-// instead of failing it.
-func (s *Service) AdminStats(ctx context.Context, actorTelegramID int64, pay PaymentsClient, prov Provisioner) (*Stats, error) {
+// instead of failing it. The servers' health comes from the provisioner's
+// list (its last checks), so no panel is called here.
+func (s *Service) AdminStats(ctx context.Context, actorTelegramID int64, pay PaymentsClient, sa ServerAdmin) (*Stats, error) {
 	if _, err := s.requireStaff(ctx, actorTelegramID); err != nil {
 		return nil, err
 	}
@@ -91,14 +123,26 @@ func (s *Service) AdminStats(ctx context.Context, actorTelegramID int64, pay Pay
 	if err != nil {
 		return nil, err
 	}
-	out := &Stats{UserCounts: c, PendingPayments: -1}
+	out := &Stats{UserCounts: c, PendingPayments: -1, PanelDetail: "provisioner unreachable"}
 	if pending, err := pay.ListPending(ctx, 200); err == nil {
 		out.PendingPayments = int64(len(pending))
 	}
-	if ok, detail, err := prov.Health(ctx); err != nil {
-		out.PanelDetail = "provisioner unreachable"
-	} else {
-		out.PanelHealthy, out.PanelDetail = ok, detail
+	list, err := sa.ListServers(ctx)
+	if err != nil {
+		return out, nil
+	}
+	h := list.Health()
+	out.Servers = &h
+	out.PanelHealthy = h.Total > 0 && len(h.Down) == 0
+	switch {
+	case len(list.Servers) == 0:
+		out.PanelDetail = "no 3x-ui server yet"
+	case h.Total == 0:
+		out.PanelDetail = "no server takes new services"
+	case len(h.Down) > 0:
+		out.PanelDetail = fmt.Sprintf("%d of %d servers do not answer: %s", len(h.Down), h.Total, strings.Join(h.Down, ", "))
+	default:
+		out.PanelDetail = ""
 	}
 	return out, nil
 }

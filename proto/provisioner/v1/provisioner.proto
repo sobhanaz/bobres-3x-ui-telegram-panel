@@ -144,6 +144,10 @@ message AddServerRequest {
   int32 weight = 6; // 1..1000; 0 = 100
   // Save without testing the connection first (the panel is down for now).
   bool skip_check = 7;
+  // Whether the server takes new clients from the start. Unset means on, as
+  // for callers from before it existed; false saves it switched off, so it
+  // is never briefly on.
+  optional bool enabled = 8;
 }
 
 message ListServersRequest {}

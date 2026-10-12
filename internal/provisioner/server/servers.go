@@ -68,14 +68,16 @@ func (s *Server) ListServers(ctx context.Context, _ *provisionerv1.ListServersRe
 }
 
 // AddServer registers a new 3x-ui panel (token encrypted at rest). The
-// connection is tested first unless skip_check.
+// connection is tested first unless skip_check. It is saved switched on
+// unless the request says enabled=false (unset is on, for older callers).
 func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequest) (*provisionerv1.XUIServer, error) {
 	weight := req.GetWeight()
 	if weight == 0 {
 		weight = store.DefaultWeight
 	}
+	enabled := req.Enabled == nil || req.GetEnabled()
 	sv, err := s.addServer(ctx, &store.Server{
-		Name: req.GetName(), BaseURL: req.GetBaseUrl(), Token: req.GetApiToken(), Enabled: true,
+		Name: req.GetName(), BaseURL: req.GetBaseUrl(), Token: req.GetApiToken(), Enabled: enabled,
 		SubBaseURL: req.GetSubBaseUrl(), AllowPrivate: req.GetAllowPrivate(), Weight: weight, Managed: store.ManagedDashboard,
 	}, !req.GetSkipCheck())
 	if err != nil {
