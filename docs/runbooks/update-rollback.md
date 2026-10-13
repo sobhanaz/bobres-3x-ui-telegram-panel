@@ -71,14 +71,13 @@ exits 1, and the restore point of the update before (if any) is the current one 
 | `release X is a beta release and this install follows stable` | The release is a pre-release (signed for the beta channel) | Use the stable releases, or `--channel beta` if you want that pre-release |
 | `BOBRES runs the pre-release X, newer than the latest stable release` | This store took a beta, then went back to stable | Nothing to do: it updates once a stable release is newer (or use `--channel beta`) |
 | `the beta channel's releases could not be listed` | `api.github.com` did not answer (filtered, or over its 60 requests an hour) | Try again later, or use the stable channel, which needs only `github.com` |
-| `BOBRES_UPDATE_CHANNEL in .env: unknown update channel` | A typo in `.env` | Set it to `stable` or `beta` (or remove the line), then `sudo bobres start` |
+| `BOBRES_UPDATE_CHANNEL in .env: unknown update channel` | A typo in `.env` | `sudo bobres config set BOBRES_UPDATE_CHANNEL stable` (or `beta`): it checks the value and recreates the bot |
 | `release metadata expired at ... (stale or replayed release)` with a correct clock | No release was published or re-signed for 45 days | Escalate: the vendor must re-sign the release ([releases runbook](releases.md)) |
 | `checksum mismatch for bobres_linux_amd64` | The download was changed or cut | Run it again; if it repeats, escalate. Nothing was changed |
 | `no CLI for this system` | The release has no binary for this CPU | Escalate |
 | `this bobres is a development build` | A CLI built from source cannot replace itself | Install the released CLI with the install command from the README |
 | `the backup before the update failed` | The database could not be backed up | Nothing was changed. Check `bobres status` and `df -h /opt/bobres`, fix, run again |
 | `download ...: ... (is GitHub reachable from this server?)` | No route to GitHub | Check the server's network or proxy; GitHub must be reachable for updates |
-| `bobres update: not implemented yet` | An old `bobres` | Update `bobres` itself first with the install command from the README, then `sudo bobres update` |
 
 ## Roll back the last update
 

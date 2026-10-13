@@ -90,6 +90,12 @@ const (
 	chainDust = 100_000
 	// chainNetwork is the only network watched.
 	chainNetwork = "TRC20"
+	// chainRestoreHold: after a restore of the database, a transfer made
+	// within this long of it that matches a payment created since is not
+	// settled but left to staff (UnmatchedAfterRestore): a customer whose
+	// payment the restore erased may still send the amount they were told,
+	// within their 45 minutes, and a new payment may have been given it.
+	chainRestoreHold = chainPayWindow + chainSkew
 )
 
 // Why a transfer is unmatched or ignored (chain_transfers.reason).
@@ -110,6 +116,12 @@ const (
 	// before the watcher saw it: the automatic payer was not credited for it
 	// (the transfer is credited once, through that proof).
 	UnmatchedShadowed = "shadowed_exact_match"
+	// UnmatchedAfterRestore: the payment with exactly this amount was
+	// created after the database was restored from a backup, and the
+	// transfer came within chainRestoreHold of the restore: it may be the
+	// money of a customer whose payment the restore erased and who was told
+	// the same amount, so nothing is settled and staff check who sent it.
+	UnmatchedAfterRestore = "after_restore"
 	// IgnoredDust: below chainDust.
 	IgnoredDust = "dust"
 )
@@ -129,7 +141,7 @@ type DepositUnmatchedEvent struct {
 	Amount     int64  `json:"amount"`   // micro-USDT (scale 6)
 	Currency   string `json:"currency"` // USDT
 	BlockTime  int64  `json:"block_time"`
-	Reason     string `json:"reason"` // no_payment | already_paid | closed | ambiguous | shadowed_exact_match
+	Reason     string `json:"reason"` // no_payment | already_paid | closed | ambiguous | shadowed_exact_match | after_restore
 }
 
 // TopicDepositClaimed is published on the payments feed when a manual crypto
@@ -162,6 +174,10 @@ var (
 	// amount, so it is not a manual proof.
 	ErrTXIDAutomatic = fmt.Errorf("%w: this transaction carries an automatic USDT payment's exact amount: "+
 		"it is handled as an automatic deposit, not as a manual proof", ErrPrecondition)
+	// ErrTXIDAnnounced: the transaction is an unmatched deposit staff were
+	// already told to credit by hand, so it is no longer a manual proof.
+	ErrTXIDAnnounced = fmt.Errorf("%w: this transaction reached the store as an unmatched deposit, and staff "+
+		"were told to credit it by hand: ask support", ErrPrecondition)
 	// ErrNoUniqueAmount: every unique amount for this price is held.
 	ErrNoUniqueAmount = fmt.Errorf("%w: automatic USDT: every unique amount for this price is in use; "+
 		"use another payment method or try again later", ErrPrecondition)
@@ -238,6 +254,11 @@ func (s *Service) StartChain(ctx context.Context, in *store.Intent) (*store.Inte
 		if err := s.st.LockChainAmounts(ctx, tx); err != nil {
 			return err
 		}
+		// Before any amount is given out after a restore, the restore is on
+		// record, so the watcher knows which payments came after it.
+		if err := s.NoteRestore(ctx, tx); err != nil {
+			return err
+		}
 		// The customer asks again for a payment still open (a new menu, a new
 		// button): it is shown again with its amount, rather than holding
 		// another one.
@@ -277,6 +298,20 @@ func (s *Service) StartChain(ctx context.Context, in *store.Intent) (*store.Inte
 		return nil, err
 	}
 	return out, nil
+}
+
+// NoteRestore records a restore of the database from a backup, if there was
+// one since payments last looked (store.NoteRestore), in tx (nil: on its
+// own). Payments calls it when it starts, so the guard's row is written
+// before the first backup that follows, and StartChain again before it gives
+// out an amount.
+func (s *Service) NoteRestore(ctx context.Context, tx pgx.Tx) error {
+	_, noticed, err := s.st.NoteRestore(ctx, tx)
+	if noticed {
+		s.log.Warn("the database was restored from a backup: for the next 47 minutes, automatic USDT transfers " +
+			"that match a payment created since are left to staff (unmatched deposits, reason after_restore)")
+	}
+	return err
 }
 
 // RunChainWatcher reads the chain every interval until ctx ends. It runs
@@ -598,6 +633,10 @@ func (s *Service) recordTransfer(ctx context.Context, t chainTransfer) (bool, er
 		if err != nil {
 			return err
 		}
+		restoredAt, err := s.st.RestoredAt(ctx, tx)
+		if err != nil {
+			return err
+		}
 		cands, err := s.st.ChainCandidates(ctx, tx, t.to, t.value, t.blockTS, chainSkew, reopenWindow)
 		if err != nil {
 			return err
@@ -621,6 +660,8 @@ func (s *Service) recordTransfer(ctx context.Context, t chainTransfer) (bool, er
 		// What the transfer is by its amount alone.
 		reason := ""
 		switch {
+		case len(open) == 1 && heldAfterRestore(open[0], t.blockTS, restoredAt):
+			rec.Outcome, reason = store.TransferUnmatched, UnmatchedAfterRestore
 		case len(open) == 1:
 			rec.Outcome, rec.IntentID = store.TransferMatched, &open[0].ID
 		case len(open) > 1:
@@ -824,26 +865,46 @@ func (s *Service) scanDone(ctx context.Context, addr string, err error) {
 	}
 }
 
+// heldAfterRestore: in was created after the database was restored (at
+// restoredAt) and the transfer came within chainRestoreHold of the restore.
+// The restore erased the payments made since the backup, but not what their
+// customers were told: one of them may send the amount in was given.
+func heldAfterRestore(in *store.Intent, blockTS time.Time, restoredAt *time.Time) bool {
+	return restoredAt != nil && !in.CreatedAt.Before(*restoredAt) && blockTS.Before(restoredAt.Add(chainRestoreHold))
+}
+
 // automaticDeposit: an unmatched transfer whose amount an automatic payment
-// asked for (paid already, closed, more than one, or taken by a proof
-// approved before the watcher saw it). It belongs to the automatic path:
-// staff credit its sender by hand, and no manual proof may take it.
+// asked for (paid already, closed, more than one, taken by a proof approved
+// before the watcher saw it, or held after a restore). It belongs to the
+// automatic path: staff credit its sender by hand, and no manual proof may
+// take it.
 func automaticDeposit(t *store.ChainTransfer) bool {
 	if t.Outcome != store.TransferUnmatched || t.Reason == nil {
 		return false
 	}
 	switch *t.Reason {
-	case UnmatchedAlreadyPaid, UnmatchedClosed, UnmatchedAmbiguous, UnmatchedShadowed:
+	case UnmatchedAlreadyPaid, UnmatchedClosed, UnmatchedAmbiguous, UnmatchedShadowed, UnmatchedAfterRestore:
 		return true
 	}
 	return false
 }
 
+// announcedDeposit: an unmatched transfer staff were told about (at once,
+// or once its hold ended), and told to credit by hand. From then on it is
+// the staff's to credit, from the deposit, and no manual proof may take it:
+// staff credit it by hand first and mark it handled afterwards, and a proof
+// approved in between would credit the same USDT a second time.
+func announcedDeposit(t *store.ChainTransfer) bool {
+	return t.Outcome == store.TransferUnmatched && t.AnnounceAt == nil
+}
+
 // guardSubmittedTXID refuses a manual crypto proof whose transaction already
 // paid: settled a payment automatically, was credited by staff from an
-// unmatched deposit, or is another payment's proof (with or without 0x); and
-// one whose transfer carries an automatic payment's unique amount. It holds
-// the hash's lock until the submission commits.
+// unmatched deposit, or is another payment's proof (with or without 0x); one
+// whose transfer carries an automatic payment's unique amount; and one whose
+// transfer staff were already told to credit by hand (announcedDeposit). A
+// deposit still in its hold may be claimed. It holds the hash's lock until
+// the submission commits.
 func (s *Service) guardSubmittedTXID(ctx context.Context, tx pgx.Tx, intentID, txid string) error {
 	key := txidKey(txid)
 	if key == "" {
@@ -862,6 +923,8 @@ func (s *Service) guardSubmittedTXID(ctx context.Context, tx pgx.Tx, intentID, t
 			return store.ErrDuplicateProof
 		case automaticDeposit(t):
 			return ErrTXIDAutomatic
+		case announcedDeposit(t):
+			return ErrTXIDAnnounced
 		}
 	}
 	other, err := s.st.ManualReceiptByTXID(ctx, tx, key, intentID)
@@ -893,7 +956,8 @@ func (s *Service) lockReceiptTXID(ctx context.Context, tx pgx.Tx, intentID strin
 // transaction (key, locked) paid something else since it was submitted: the
 // watcher settled an automatic payment with it, or staff credited it as an
 // unmatched deposit, or another proof of it was approved; or whose transfer
-// turned out to carry an automatic payment's unique amount.
+// turned out to carry an automatic payment's unique amount, or is an
+// unmatched deposit staff were told to credit by hand.
 func (s *Service) guardApprovedTXID(ctx context.Context, tx pgx.Tx, intentID, key string) error {
 	if key == "" {
 		return nil
@@ -908,6 +972,8 @@ func (s *Service) guardApprovedTXID(ctx context.Context, tx pgx.Tx, intentID, ke
 			return ErrTXIDUsed
 		case automaticDeposit(t):
 			return ErrTXIDAutomatic
+		case announcedDeposit(t):
+			return ErrTXIDAnnounced
 		}
 	}
 	other, err := s.st.ManualReceiptByTXID(ctx, tx, key, intentID)

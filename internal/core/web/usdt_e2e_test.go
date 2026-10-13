@@ -164,7 +164,8 @@ func TestUSDTEndToEnd(t *testing.T) {
 	}
 	expires, _ := strconv.ParseInt(r1.Details["expires_at"], 10, 64)
 	for _, r := range []*domain.IntentResult{r1, r2} {
-		if r.GatewayCurrency != "USDT" || r.GatewayAmount <= 2_500_000 || r.GatewayAmount > 2_500_999 || r.Details["pay_address"] != usdtStore ||
+		if r.GatewayCurrency != "USDT" || r.GatewayAmount <= 2_500_000 || r.GatewayAmount > 2_509_999 || r.GatewayAmount%10_000 == 0 ||
+			r.Details["pay_address"] != usdtStore ||
 			r.Details["network"] != "TRC20" || r.Amount != 150_000 || r.Currency != "IRT" {
 			t.Fatalf("intent: %+v", r)
 		}
@@ -217,14 +218,18 @@ func TestUSDTEndToEnd(t *testing.T) {
 
 	// The second customer overpays by a micro-USDT: no exact match, so no
 	// credit; staff hear of it once, and see it on the dashboard.
-	wrongTx := chain.Pay(usdtStore, r2.GatewayAmount+1)
+	wrong := r2.GatewayAmount + 1 // offsets are random: never the first customer's (paid) amount
+	if wrong == r1.GatewayAmount {
+		wrong = r2.GatewayAmount - 1
+	}
+	wrongTx := chain.Pay(usdtStore, wrong)
 	if _, err := svc.ScanChainOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 	deliverPayments(t, f, ps)
 	alerts := coreOutbox(t, f, mark, events.DepositUnmatched)
 	var dep events.DepositUnmatchedEvent
-	if len(alerts) != 1 || json.Unmarshal(alerts[0], &dep) != nil || dep.TxID != wrongTx || dep.Amount != r2.GatewayAmount+1 ||
+	if len(alerts) != 1 || json.Unmarshal(alerts[0], &dep) != nil || dep.TxID != wrongTx || dep.Amount != wrong ||
 		dep.Currency != "USDT" || dep.To != usdtStore || dep.From != tronfake.Sender || dep.Reason != events.UnmatchedNoPayment {
 		t.Fatalf("staff alert: %s", alerts)
 	}

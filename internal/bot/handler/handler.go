@@ -301,6 +301,8 @@ func (r *req) fail(err error) {
 		key = "plan.unavailable"
 	case st.Code() == codes.AlreadyExists && strings.Contains(msg, "already submitted"):
 		key = "pay.duplicate"
+	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "unmatched deposit"):
+		key = "pay.txid_announced" // staff were told to credit that transfer by hand
 	case st.Code() == codes.InvalidArgument && (strings.Contains(msg, "payment method ") && strings.HasSuffix(msg, " is not enabled") ||
 		strings.Contains(msg, "is not set up for this price")):
 		key = "pay.not_configured" // switched off (or its rate removed) since the menu was shown

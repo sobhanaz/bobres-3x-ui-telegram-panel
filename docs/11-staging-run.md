@@ -1,11 +1,12 @@
 # First real install (staging run)
 
-The last Phase 1 step: one install on a real server with a real bot and a real 3x-ui panel,
-then one real purchase. CI covers the core path with a fake Telegram and a throwaway 3x-ui
-container (the `docker` and `xui` jobs): install, a trial and a wallet purchase provisioned
-on the panel, status, logs and uninstall. It does not cover card payment with receipt
-approval, QR codes, reinstalling over existing data, or a VPN app actually connecting. This
-run checks those, plus your network, your domain, Telegram itself and your panel's settings.
+The last step before the first public release (v0.1.0): one install on a real server with a
+real bot and a real 3x-ui panel, then one real purchase. CI covers the core path with a fake
+Telegram and a throwaway 3x-ui container (the `docker` and `xui` jobs): install, a trial and a
+wallet purchase provisioned on the panel, a backup and a restore, status, logs and uninstall. It
+does not cover card payment with receipt approval, QR codes, reinstalling over existing data,
+or a VPN app actually connecting. This run checks those, plus your network, your domain,
+Telegram itself and your panel's settings, and the parts added in Phases 4 to 7 (section 7).
 
 ## 1. What you need
 
@@ -40,9 +41,9 @@ The repository is public, so `install/install.sh` downloads the CLI from its lat
 release (a pre-release such as `-rc.1` is not "latest": use a plain `v0.1.0` tag for the
 one-command install, or step 3's manual way for a release candidate). One thing to check
 before customers install:
-- The four `bobres-*` image packages on GHCR must be public, or every customer must log in to
-  pull them: GitHub → your profile → Packages → each `bobres-*` → Package settings → Change
-  visibility → Public. For your own server you can instead log in once as root (the installer
+- The five `bobres-*` image packages on GHCR (core, bot, payments, provisioner, backup) must be
+  public, or every customer must log in to pull them: GitHub → your profile → Packages → each
+  `bobres-*` → Package settings → Change visibility → Public. For your own server you can instead log in once as root (the installer
   runs docker as root). This reads the token without echoing it or saving it in the history:
   `read -rs PAT && echo "$PAT" | sudo docker login ghcr.io -u sobhanaz --password-stdin; unset PAT`
 
@@ -125,6 +126,26 @@ panel is updated on the next start, and the data is kept.
   test client's expiry to tomorrow or its traffic close to the limit, and the bot warns the
   customer once, with Renew / Add traffic buttons.
 
-## 7. After it passes
+## 7. Phases 4 to 7
 
-Tag `v0.1.0`. Phase 1 is done when this checklist passes on a real server.
+Commands use the `dc` helper from the [runbooks README](runbooks/README.md#before-you-start).
+
+- **Dashboard:** send `/dashboard` to the bot and open the link. The Overview loads; **System →
+  Health** shows every service healthy, on the same version; **Servers** shows the panel from the
+  install, healthy, with its version.
+- **Backups:** `sudo bobres backup`. The file arrives in the owner's Telegram, and **System →
+  Backups** lists it. With S3 storage set up, the backup shows its off-site copy.
+- **System alerts:** `dc stop provisioner`, wait 3 minutes: the owner gets "The provisioner service
+  is down". `dc start provisioner`: a "Fixed" message follows about 5 minutes later.
+- **Restore (test store only):** `sudo bobres restore /opt/bobres/backups/<newest>.bkp`. The store
+  comes back healthy with the data of that backup.
+- **Support bundle:** `sudo bobres support-bundle`, then open it and check that no token or
+  password is in it.
+- **Automatic USDT (when you enable it):** set the store's TRON address in **Payment gateways**,
+  test it, then buy the test plan with "USDT TRC20 (automatic)" and send exactly the amount shown.
+  The service arrives within a minute or two of the transfer.
+
+## 8. After it passes
+
+Tag `v0.1.0` (the owner's decision: the release publishes the images and the CLI). Make the five
+`bobres-*` image packages on GHCR public first (section 2).

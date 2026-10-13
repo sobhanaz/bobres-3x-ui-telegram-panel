@@ -1,4 +1,4 @@
-# 03 - Bot UX flows and menu map (DRAFT)
+# 03 - Bot UX flows and menu map
 
 All texts live in i18n files (fa + en), overridable per install from the dashboard. Persian is RTL:
 avoid mixing raw English inside RTL lines; use consistent numerals; test long-line wrapping.
@@ -23,6 +23,9 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Key flows
 **Buy:** plan list -> plan detail (price, GB, days) -> discount code (optional) -> payment method
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).
+**Automatic USDT (Phase 6a):** the payment screen shows the exact amount to send (copyable, Latin digits), the store's
+TRON address, the deadline (45 minutes) and a Check button. The payment settles by itself once the transfer is seen on
+the chain. A different amount is an unmatched deposit: staff are told and credit it by hand.
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> admin approve/reject buttons in admin chat -> result to user.
@@ -35,9 +38,12 @@ chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; pa
 
 ## Admin in bot (quick actions, full power is in dashboard)
 Stats snapshot, find user, add balance, ban/unban, approve receipts, broadcast (queued), toggle gateway, panel health.
-Built so far (2026-10-10): `/admin` for owners and admins (it says when maintenance mode is on), `/set key value`
-(it shows why core refused a value; payment details are the owner's), and `/dashboard` plus a menu button that send
-any staff member, support included, a one-time dashboard login link.
+Built: `/admin` for owners and admins (it says when maintenance mode is on): stats (users, active services, payments
+to review, failed deliveries, the servers' health), the payments to review with approve and reject, find a user
+(adjust a balance, ban or unban), plans and the trial, and settings. `/set key value` (it shows why core refused a
+value; payment details are the owner's). `/plan_add`, `/trial`, `/topup_add`, `/discount_add`, `/discounts`,
+`/discount_off`. `/dashboard` plus a menu button send any staff member, support included, a one-time dashboard login
+link. Broadcasts and the payment methods' switches are on the dashboard.
 
 ## Store rules the bot applies (dashboard Settings, 2026-10-10)
 - **Maintenance mode:** customers get the maintenance text (a popup for taps, the message at most once a minute).
@@ -85,6 +91,8 @@ Welcome, help, each menu, each flow confirmation, each error (payment failed, ex
 panel down), empty states, delivery message, connect guides (Android/iOS/Windows/macOS), FAQ.
 
 ## Open points
-- Forced channel join before use? (optional toggle)
-- Anti-abuse for trial: Telegram account age heuristics, one per Telegram ID, optional phone check.
-- Webhook vs long polling default (long polling = no domain needed for the bot alone).
+- DECIDED: forced channel join is an optional setting (the required channel, above).
+- Anti-abuse for trial: one per Telegram ID is built. Telegram account age heuristics and an optional phone check
+  are not.
+- DECIDED: long polling by default (no domain needed for the bot alone). Webhook mode is optional:
+  `BOBRES_TELEGRAM_WEBHOOK_URL` with `BOBRES_TELEGRAM_WEBHOOK_SECRET`, delivered to `/tg/webhook`.

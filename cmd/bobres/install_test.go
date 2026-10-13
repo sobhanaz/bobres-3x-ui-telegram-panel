@@ -7,10 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -62,7 +67,7 @@ func testInstaller(stdinText string, env map[string]string, docker *fakeDocker) 
 		in: bufio.NewReader(strings.NewReader(stdinText)), out: &out, errOut: &errOut,
 		getenv:   func(k string) string { return env[k] },
 		run:      docker.run,
-		checkBot: func(context.Context, string) (string, error) { return "test_bot", nil },
+		checkBot: func(context.Context, string, string) (string, error) { return "test_bot", nil },
 		lookupIP: func(_ context.Context, host string) ([]net.IP, error) {
 			if host == "public.example.com" {
 				return []net.IP{net.ParseIP("93.184.216.34")}, nil
@@ -105,6 +110,9 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	for _, k := range config.BackupS3Keys {
 		optional[k] = true
 	}
+	for _, svc := range imageServices { // a development build pins no images
+		optional[digestKey(svc)] = true
+	}
 	for _, k := range envOrder {
 		if !optional[k] && env[k] == "" {
 			t.Errorf("%s missing", k)
@@ -114,7 +122,7 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		}
 	}
 	tokens := map[string]bool{}
-	for _, k := range []string{"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP"} {
+	for _, k := range serviceTokens {
 		if len(env[k]) != 64 || tokens[env[k]] {
 			t.Errorf("service token %s: %q (64 hex characters, each different)", k, env[k])
 		}
@@ -173,9 +181,10 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		if !strings.Contains(string(got), `/bobres-backup:`) || !strings.Contains(string(got), `"BOBRES_BACKUP_URL": "http://backup:8080"`) {
 			t.Fatalf("the backup service is not in the installed project:\n%s", got)
 		}
-		// The backup container holds the master keys: it gets the token core
-		// uses for it alone, never core's own (which payments, provisioner
-		// and the bot accept).
+		// Core presents a token of its own to each service it calls, which
+		// that service accepts and no other container holds: none of them
+		// can act as core toward another (the backup container holds the
+		// master keys, the bot parses all Telegram input).
 		var project struct {
 			Services map[string]struct {
 				Environment map[string]string `json:"environment"`
@@ -184,14 +193,23 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		if err := json.Unmarshal(got, &project); err != nil {
 			t.Fatalf("compose config: %v", err)
 		}
-		backupEnv, coreEnv := project.Services["backup"].Environment, project.Services["core"].Environment
-		if backupEnv["BOBRES_PEER_CORE_TOKEN"] != env["BOBRES_TOKEN_CORE_BACKUP"] || coreEnv["BOBRES_BACKUP_TOKEN"] != env["BOBRES_TOKEN_CORE_BACKUP"] ||
-			coreEnv["BOBRES_SERVICE_TOKEN"] != env["BOBRES_TOKEN_CORE"] {
-			t.Error("core to backup: the backup service must accept BOBRES_TOKEN_CORE_BACKUP, and core send it")
-		}
-		for k, v := range backupEnv {
-			if v == env["BOBRES_TOKEN_CORE"] {
-				t.Errorf("the backup container holds core's own token as %s", k)
+		coreEnv := project.Services["core"].Environment
+		for peer, tok := range map[string]struct{ core, dotenv string }{
+			"payments":    {"BOBRES_SERVICE_TOKEN", "BOBRES_TOKEN_CORE"},
+			"provisioner": {"BOBRES_PROVISIONER_TOKEN", "BOBRES_TOKEN_CORE_PROVISIONER"},
+			"bot":         {"BOBRES_BOT_INTERNAL_TOKEN", "BOBRES_TOKEN_CORE_BOT"},
+			"backup":      {"BOBRES_BACKUP_TOKEN", "BOBRES_TOKEN_CORE_BACKUP"},
+		} {
+			v := env[tok.dotenv]
+			if coreEnv[tok.core] != v || project.Services[peer].Environment["BOBRES_PEER_CORE_TOKEN"] != v {
+				t.Errorf("core to %s: %s must accept %s, and core send it as %s", peer, peer, tok.dotenv, tok.core)
+			}
+			for svc, s := range project.Services {
+				for k, val := range s.Environment {
+					if svc != "core" && svc != peer && val == v {
+						t.Errorf("%s holds %s (what %s accepts as core) as %s", svc, tok.dotenv, peer, k)
+					}
+				}
 			}
 		}
 	}
@@ -229,6 +247,43 @@ func TestReinstallKeepsSecrets(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Existing install") {
 		t.Errorf("output: %s", out)
+	}
+}
+
+// An install from before core had a token for each peer gets the missing
+// ones on its next install run (bobres update runs one), keeping the rest.
+func TestReinstallAddsTheMissingServiceTokens(t *testing.T) {
+	for _, k := range serviceTokens {
+		if n, ok := generated[k]; !ok || n < 32 || !slices.Contains(envOrder, k) {
+			t.Errorf("%s is not a generated .env key of 32+ random bytes", k)
+		}
+	}
+	dir := t.TempDir()
+	ins, _, errOut := testInstaller("", secrets, nil)
+	if code := ins.install(append(baseArgs(dir), "--no-start")); code != 0 {
+		t.Fatalf("first: %d %s", code, errOut)
+	}
+	first, _, _ := readEnv(filepath.Join(dir, ".env"))
+	old := map[string]string{}
+	for k, v := range first {
+		if k != "BOBRES_TOKEN_CORE_PROVISIONER" && k != "BOBRES_TOKEN_CORE_BOT" {
+			old[k] = v
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), renderEnv(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ins, _, errOut = testInstaller("", nil, nil)
+	if code := ins.install([]string{"--dir", dir, "--no-start"}); code != 0 {
+		t.Fatalf("rerun: %d %s", code, errOut)
+	}
+	second, _, _ := readEnv(filepath.Join(dir, ".env"))
+	seen := map[string]bool{}
+	for _, k := range serviceTokens {
+		if v := second[k]; len(v) != 64 || seen[v] || (old[k] != "" && v != old[k]) {
+			t.Errorf("%s after the re-run: %q (kept when set, else new; all different)", k, v)
+		}
+		seen[second[k]] = true
 	}
 }
 
@@ -338,7 +393,7 @@ func TestInstallStopsOnFailedChecksAndBadToken(t *testing.T) {
 		t.Fatalf("a DNS problem alone must not block the install: %d", code)
 	}
 	ins, _, errOut = testInstaller("", secrets, nil)
-	ins.checkBot = func(context.Context, string) (string, error) { return "", errors.New("401 Unauthorized") }
+	ins.checkBot = func(context.Context, string, string) (string, error) { return "", errors.New("401 Unauthorized") }
 	if code := ins.install(baseArgs(t.TempDir())); code != 1 || !strings.Contains(errOut.String(), "rejected the bot token") {
 		t.Fatalf("bad token: %d %s", code, errOut)
 	}
@@ -602,5 +657,187 @@ func TestInstallQuietYes(t *testing.T) {
 	}
 	if env, _, _ := readEnv(filepath.Join(dir, ".env")); env["BOBRES_VERSION"] != "1.2.3" {
 		t.Fatalf("version: %q", env["BOBRES_VERSION"])
+	}
+}
+
+// The installer's bot token check, which the menu's settings changes run
+// too, goes where the bot goes: the Bot API server in
+// BOBRES_TELEGRAM_API_URL (a server that reaches Telegram only through it),
+// else api.telegram.org.
+func TestInstallChecksTheTokenThroughTheBotAPIServer(t *testing.T) {
+	token := "123456789:" + strings.Repeat("a", 35)
+	var mu sync.Mutex
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked = append(asked, r.URL.Path)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/bot"+token+"/getMe" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"ok":false,"error_code":401,"description":"Unauthorized"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"id":123456789,"is_bot":true,"first_name":"Relay","username":"relay_bot"}}`))
+	}))
+	defer srv.Close()
+	requests := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(asked)
+	}
+
+	dir := fullInstall(t, false)
+	env, _ := readEnvFile(t, dir)
+	env["BOBRES_TELEGRAM_API_URL"] = srv.URL
+	if err := os.WriteFile(filepath.Join(dir, ".env"), renderEnv(env), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The menu's "Change the bot token": the installer with the new token.
+	ins, out, errOut := testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": token}, nil)
+	ins.checkBot = botUsername
+	if code := ins.install([]string{"--dir", dir, "--skip-checks", "--no-start"}); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := requests(); !strings.Contains(out.String(), "Bot token OK: @relay_bot") || len(got) != 1 || got[0] != "/bot"+token+"/getMe" {
+		t.Fatalf("getMe through the server: %v\n%s", got, out)
+	}
+	if env, _ := readEnvFile(t, dir); env["BOBRES_TELEGRAM_BOT_TOKEN"] != token || env["BOBRES_TELEGRAM_API_URL"] != srv.URL {
+		t.Fatalf("saved: %q %q", env["BOBRES_TELEGRAM_BOT_TOKEN"], env["BOBRES_TELEGRAM_API_URL"])
+	}
+
+	// A token the server refuses changes nothing, and the error names it.
+	_, before := readEnvFile(t, dir)
+	ins, _, errOut = testInstaller("", map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": "123456789:" + strings.Repeat("b", 35)}, nil)
+	ins.checkBot = botUsername
+	if code := ins.install([]string{"--dir", dir, "--skip-checks", "--no-start"}); code != 1 ||
+		!strings.Contains(errOut.String(), "through the Bot API server "+srv.URL) || !strings.Contains(errOut.String(), "401 Unauthorized") {
+		t.Fatalf("refused token: %d %s", code, errOut)
+	}
+	if _, after := readEnvFile(t, dir); after != before || len(requests()) != 2 {
+		t.Fatalf(".env changed or the server was not asked: %v", requests())
+	}
+}
+
+func TestTelegramAPIRoot(t *testing.T) {
+	for v, want := range map[string]string{
+		"":                                 "", // api.telegram.org
+		"http://host.docker.internal:8081": "http://127.0.0.1:8081",
+		"http://HOST.docker.internal":      "http://127.0.0.1",
+		"https://tg.example.com:8443/":     "https://tg.example.com:8443/",
+		" http://10.0.0.5:8081 ":           "http://10.0.0.5:8081",
+		// Not a URL the bot could use: the check asks api.telegram.org.
+		"ftp://tg.example.com": "",
+		"https://user:pw@x":    "",
+		"tg.example.com:8081":  "",
+		"https://":             "",
+	} {
+		if got := telegramAPIRoot(map[string]string{"BOBRES_TELEGRAM_API_URL": v}); got != want {
+			t.Errorf("%q: %q, want %q", v, got, want)
+		}
+	}
+}
+
+// .env lines with a comment are read as Compose reads them: an unquoted
+// value ends before " #", and a quoted one keeps its # and ends at its
+// closing quote.
+func TestParseEnvComments(t *testing.T) {
+	pw := strings.Repeat("ab", 8) + "#" + strings.Repeat("cd", 8)
+	src := "# a comment line\n" +
+		"  # an indented one\n" +
+		"DOMAIN=panel.example.com # the store\n" +
+		"HASH=ab#cd\n" +
+		"SINGLE='" + pw + "' # quoted: the # is the password's\n" +
+		"DOUBLE=\"" + pw + "\"#right after the quote\n" +
+		"INSIDE='" + pw + " # still the value'\n" +
+		"ESCAPED=\"a\\\"b\" # c\n" +
+		"SPACES=   info   \n" +
+		"EMPTY='' # none yet\n" +
+		"BARE=\n" +
+		"HASHONLY= # Compose reads this as the value\n" +
+		"NOTE=keep me\r\n" +
+		"UNCLOSED='abc\n" +
+		"AFTER='abc' def\n"
+	want := map[string][2]string{
+		"DOMAIN":   {"panel.example.com", "# the store"},
+		"HASH":     {"ab#cd", ""},
+		"SINGLE":   {pw, "# quoted: the # is the password's"},
+		"DOUBLE":   {pw, "#right after the quote"},
+		"INSIDE":   {pw + " # still the value", ""},
+		"ESCAPED":  {`a\"b`, "# c"},
+		"SPACES":   {"info", ""},
+		"EMPTY":    {"", "# none yet"},
+		"BARE":     {"", ""},
+		"HASHONLY": {"# Compose reads this as the value", ""},
+		"NOTE":     {"keep me", ""},
+		"UNCLOSED": {"'abc", ""},
+		"AFTER":    {"'abc' def", ""},
+	}
+	env, comments := parseEnv([]byte(src)), envComments([]byte(src))
+	if len(env) != len(want) {
+		t.Errorf("keys: %v", env)
+	}
+	for k, w := range want {
+		if env[k] != w[0] || comments[k] != w[1] {
+			t.Errorf("%s: value %q comment %q, want %q %q", k, env[k], comments[k], w[0], w[1])
+		}
+	}
+}
+
+// Rewriting .env (bobres config set, the installer's re-run) keeps each value
+// without its comment, and the comment at the end of its line.
+func TestEnvRewriteKeepsComments(t *testing.T) {
+	dir := fullInstall(t, false)
+	path := filepath.Join(dir, ".env")
+	b, err := os.ReadFile(path) //nolint:gosec // the test's own folder
+	if err != nil {
+		t.Fatal(err)
+	}
+	pw := strings.Repeat("ab", 8) + "#" + strings.Repeat("cd", 8)
+	s := regexp.MustCompile(`(?m)^BOBRES_TIMEZONE=.*$`).ReplaceAllString(string(b), "BOBRES_TIMEZONE=Asia/Tehran   # the owner's time zone")
+	s = regexp.MustCompile(`(?m)^DB_CORE_PASSWORD=.*$`).ReplaceAllString(s, "DB_CORE_PASSWORD='"+pw+"' # set by hand")
+	s += "OPERATOR_PROXY=http://10.0.0.1:3128 # the office proxy\n"
+	if err := os.WriteFile(path, []byte(s), 0o600); err != nil { //nolint:gosec // the test's own folder
+		t.Fatal(err)
+	}
+	check := func(what string) {
+		t.Helper()
+		env, raw := readEnvFile(t, dir)
+		if env["BOBRES_TIMEZONE"] != "Asia/Tehran" || env["DB_CORE_PASSWORD"] != pw || env["OPERATOR_PROXY"] != "http://10.0.0.1:3128" {
+			t.Fatalf("%s: values %q %q %q", what, env["BOBRES_TIMEZONE"], env["DB_CORE_PASSWORD"], env["OPERATOR_PROXY"])
+		}
+		for _, line := range []string{
+			"\nBOBRES_TIMEZONE=Asia/Tehran # the owner's time zone\n",
+			"\nDB_CORE_PASSWORD='" + pw + "' # set by hand\n",
+			"\nOPERATOR_PROXY=http://10.0.0.1:3128 # the office proxy\n",
+		} {
+			if !strings.Contains(raw, line) {
+				t.Fatalf("%s: no line %q in\n%s", what, line, raw)
+			}
+		}
+	}
+
+	o, _, errOut := dbOps("", &fakeDB{})
+	if code := o.configSet(dir, "BOBRES_LOG_LEVEL", "debug", true); code != 0 {
+		t.Fatalf("config set: %d %s", code, errOut)
+	}
+	check("config set")
+	if env, _ := readEnvFile(t, dir); env["BOBRES_LOG_LEVEL"] != "debug" {
+		t.Fatalf("log level: %q", env["BOBRES_LOG_LEVEL"])
+	}
+
+	ins, _, errOut := testInstaller("", nil, nil)
+	if code := ins.install([]string{"--dir", dir, "--skip-checks", "--no-start", "--offline"}); code != 0 {
+		t.Fatalf("re-run: %d %s", code, errOut)
+	}
+	check("installer re-run")
+
+	// An empty value keeps its comment quoted, or Compose would read the
+	// comment as the value.
+	env := map[string]string{"BOBRES_XUI_SUB_URL": ""}
+	out := string(renderEnvComments(env, map[string]string{"BOBRES_XUI_SUB_URL": "# later"}))
+	if !strings.Contains(out, "\nBOBRES_XUI_SUB_URL='' # later\n") || parseEnv([]byte(out))["BOBRES_XUI_SUB_URL"] != "" {
+		t.Fatalf("empty value with a comment:\n%s", out)
 	}
 }

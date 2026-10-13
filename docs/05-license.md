@@ -39,8 +39,8 @@ vendor's license server ([13-license-server.md](13-license-server.md)), which is
 - `kid` names the vendor key that signed it; it must be the key that verifies (rotation).
 - Limits: `-1` is unlimited and `0` (or a missing field) is none, so a forgotten limit fails closed.
 - `grace_days` is 0..90; `expires_at` must be after `issued_at`; `issued_at` gets 5 minutes of clock skew.
-- Gateway names: `zarinpal`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The wallet is
-  always allowed.
+- Gateway names: `zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
+  wallet is always allowed. Automatic USDT (`usdt_trc20_auto`, Phase 6a) also needs the `crypto_watcher` feature.
 - `updates_until` (YYYY-MM-DD) covers the releases issued up to that day: the release's day is the `# issued` line of
   its signed `checksums.txt` (UTC). `bobres update` refuses a later one, and its `--check`, the menu and the
   dashboard's Updates tab say "not covered by your license" (06-installer.md, "License coverage"). Running versions
@@ -72,8 +72,9 @@ With a verified license, core refuses (409 `{"error": "state", "license": "<gate
 - `max_servers`: adding a 3x-ui server beyond the limit;
 - `dashboard_staff_seats`: adding an admin or support member beyond the seats, or an owner stepping down
   to admin or support when the seats are full (owners take no seat; nobody is removed over a limit);
-- `gateways`: switching a payment method on (Zarinpal in Payment gateways, or a manual method's or
-  Stars' switch from off to on) that the license does not name.
+- `gateways`: switching a payment method on (Zarinpal or automatic USDT in Payment gateways, or a manual
+  method's or Stars' switch from off to on) that the license does not name;
+- `crypto_watcher`: switching automatic USDT on without the `crypto_watcher` feature.
 
 The License tab shows each entitlement with its use (servers from the provisioner, active services, staff
 seats, the payment methods switched on) and warns from 90 % of a limit.
@@ -116,8 +117,9 @@ bot attribution in Phase 4. `/api/v1/me` carries `license: {state, white_label, 
 ## Activation and daily refresh
 The vendor's license server ([13-license-server.md](13-license-server.md)) turns a secret license key
 (`BOBRES-XXXX-…`) into a short-lived token (30 days at most) bound to this install's id and domain. An install
-reaches it only when `BOBRES_LICENSE_SERVER=https://…` is in `.env` (the seller gives the address). The compose file
-passes it to the bot, and `bobres start` applies a change (06-installer.md, "License activation"). Core has no
+reaches it only when `BOBRES_LICENSE_SERVER=https://…` is in `.env` (the seller gives the address), set with
+`sudo bobres config set BOBRES_LICENSE_SERVER https://…`, which checks it and recreates the bot. The compose file
+passes it to the bot (06-installer.md, "License activation"). Core has no
 internet access, so every call goes through the bot or the host, and core verifies every answer as it verifies a
 pasted token.
 - **Activation.** There are two ways:
@@ -143,8 +145,9 @@ pasted token.
   until its `expires_at`, then runs through `grace_days`, then is `expired` like any other token. Core logs "license
   refresh failed" each time.
 
-## Later
-- Vendor admin UI: licenses, plans to entitlement templates, customers, activations, revocations, trials.
+## Not built
+- A vendor admin web UI (licenses, plans as entitlement templates, customers, activations, revocations, trials). The
+  license server's CLI is the admin interface (13-license-server.md).
 
 ## Privacy
 Only an install with `BOBRES_LICENSE_SERVER` set sends anything. Activation sends the license key, the install id,

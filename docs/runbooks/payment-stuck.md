@@ -14,14 +14,17 @@ no service arrived. That is a delivery problem: [provisioning backlog](provision
 - The Payment gateways page shows "The last attempt failed" with a last error, or "{n} paid payments are waiting to
   be confirmed".
 - The bot alerted staff: "A Stars payment was not recorded".
+- A system alert ([runbooks README](README.md#system-alerts-in-telegram)): Zarinpal payments are failing, or one has
+  been open for over 3 hours; automatic USDT payments are not being checked, or one has been open for over 2 hours.
 
 ## How a payment settles
 
 | Method | Settles when |
 |---|---|
-| Card to card, crypto (USDT), Zarinpal link | A staff member **approves** the receipt in the review queue. Nothing is automatic |
+| Card to card, USDT (manual), Zarinpal link | A staff member **approves** the receipt in the review queue. Nothing is automatic |
 | Zarinpal (online) | The customer comes back from the bank page, or the payments service asks Zarinpal itself: every 30 seconds for a new payment, less often as checks pile up (at most 4 minutes apart while it can still be paid). The customer's "I paid, check" button asks at once |
 | Telegram Stars | Telegram confirms it to the bot, which records it at once |
+| USDT TRC20 (automatic) | The payments service sees the exact amount arrive at the store's TRON address. It reads TronGrid every 30 seconds, and sooner when the customer taps the Check button. A payment has 45 minutes; a late transfer of the exact amount still settles within 48 hours. Any other transfer is an **unmatched deposit**: nothing is credited and staff are told |
 
 A Zarinpal payment that is not confirmed expires 45 minutes after its pay window. For **48 hours** after it was
 started, it is still settled if Zarinpal confirms it: when the customer taps "I paid, check", or comes back from the
@@ -59,7 +62,23 @@ bank page. After that, or when the amount did not match, only a person can settl
          WHERE intent_id = '<payment id>' ORDER BY created_at;"
    ```
 
-4. **Paid in payments, not in core.** The payment shows **Paid** but the order still waits: the payment event did not
+4. **Automatic USDT**: on the **Payment gateways** page (owner), the automatic USDT card:
+   - **Test connection**: "TronGrid answered" means the address can be watched.
+   - **Unmatched deposits** lists USDT that reached the address but paid nothing, with the amount, the sender, the
+     time and the reason (another amount, a second transfer, too late, or two payments with that amount).
+
+   Then the watcher's own view (addresses and transaction ids are public chain data):
+
+   ```sh
+   bobres logs --tail 300 payments | grep -i -E 'chain watcher|usdt'
+   bsql "SELECT address, last_ts, scanned_at, ok_at, left(last_error, 200) AS last_error FROM payments.chain_cursors;"
+   bsql "SELECT block_ts, value, outcome, reason, txid FROM payments.chain_transfers ORDER BY block_ts DESC LIMIT 20;"
+   ```
+
+   `value` is in micro-USDT (1 USDT = 1,000,000). `ok_at` should be under a minute old. When no read has worked for
+   5 minutes, staff get the system alert "Automatic USDT payments are not being checked" (`gateway.usdt_auto.read`).
+
+5. **Paid in payments, not in core.** The payment shows **Paid** but the order still waits: the payment event did not
    reach core.
 
    ```sh
@@ -93,6 +112,16 @@ payment expired to tap **"I paid, check"** in the bot, within 48 hours of starti
 money arrived: credit the customer by hand (Users > the customer > Wallet > **Change balance**, with the Zarinpal
 reference as the reason); they buy from the wallet. If the amount was wrong, refund it in the Zarinpal panel instead.
 Never edit the database.
+
+**Automatic USDT, unmatched deposit.** The customer sent another amount (often an exchange's fee), paid twice, or paid
+after 48 hours. Find the customer by the amount, the time and what they tell you (ask for the transaction id). Then
+credit them by hand (Users > the customer > Wallet > **Change balance**, with the transaction id as the reason), or send
+the USDT back, and **Mark handled** on the deposit. Transfers under 0.1 USDT are ignored: they are often sent to plant a
+look-alike address in your wallet's history.
+
+**Automatic USDT, TronGrid cannot be reached** (the test fails, `chain watcher: read failed` in the log): add a free
+TronGrid API key, or a proxy if TronGrid is blocked from this server, in Payment gateways. Once reads work again, the
+watcher reads back from where it stopped and settles the exact payments it missed (within 48 hours of their start).
 
 **Stars payment not recorded** (the staff alert names the user, the Stars and the charge id): credit the customer by
 hand with Change balance (the alert's charge id as the reason). BOBRES cannot refund Stars yet.

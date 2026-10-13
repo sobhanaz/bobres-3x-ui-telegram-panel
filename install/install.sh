@@ -209,8 +209,10 @@ Installer flags:
   --check          Only run system checks, install nothing
 
 Everything else is passed to 'bobres install' (for example --domain).
-Pass your license with the BOBRES_LICENSE environment variable (not on the command line,
-where it would show up in 'ps' and shell history).
+The license is installed after the store is up, never by this script:
+  sudo bobres license activate        (a license key; it is asked for, out of 'ps' and history)
+  sudo bobres license import < token  (a license token file)
+or in the dashboard: System > License.
 
 Environment:
   BOBRES_BASE_URL  Where release files are downloaded from (must be https://)
@@ -229,7 +231,9 @@ EOF
       -h|--help) usage; return 0 ;;
       -v|--version) echo "install.sh ${VERSION_SCRIPT}"; return 0 ;;
       --check) CHECK_ONLY=1 ;;
-      --license|--license=*) die "pass the license via the BOBRES_LICENSE environment variable, not on the command line" ;;
+      # Nothing here installs a license (no flag, no environment variable): refuse the flag
+      # rather than install an unlicensed store the operator thinks is licensed.
+      --license|--license=*) die "install.sh does not take a license: after the install, run 'sudo bobres license activate' (or use System > License in the dashboard)" ;;
       --) shift; PASSTHROUGH+=("$@"); break ;;
       *) PASSTHROUGH+=("$1") ;;
     esac

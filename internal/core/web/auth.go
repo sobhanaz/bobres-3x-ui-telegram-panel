@@ -30,10 +30,38 @@ var dummyHash = sync.OnceValue(func() string {
 	return h
 })
 
+// hashSlot takes one of the password-hashing slots; release it when done.
+// With wait false a full set answers false at once, so a burst of logins
+// is refused instead of queueing 32 MiB buffers until core runs out of
+// memory.
+func (s *Server) hashSlot(ctx context.Context, wait bool) (release func(), ok bool) {
+	release = func() { <-s.hashing }
+	if !wait {
+		select {
+		case s.hashing <- struct{}{}:
+			return release, true
+		default:
+			return nil, false
+		}
+	}
+	select {
+	case s.hashing <- struct{}{}:
+		return release, true
+	case <-ctx.Done():
+		return nil, false
+	}
+}
+
+// busy answers a login refused because every hashing slot is taken.
+func busy(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "2")
+	writeError(w, http.StatusTooManyRequests, "rate_limited", "too many logins at once; try again in a few seconds")
+}
+
 // loginWithLink exchanges a one-time link token (from the bot or the server
 // CLI) for a session.
 func (s *Server) loginWithLink(w http.ResponseWriter, r *http.Request) {
-	if !s.limiter.allow("auth:"+clientIP(r), s.now()) {
+	if !s.limiter.allow("auth:"+clientKey(r), s.now()) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts; wait a minute")
 		return
 	}
@@ -62,7 +90,7 @@ func (s *Server) loginWithLink(w http.ResponseWriter, r *http.Request) {
 // loginWithPassword checks username, password and authenticator code
 // together, so a failure never tells which one was wrong.
 func (s *Server) loginWithPassword(w http.ResponseWriter, r *http.Request) {
-	if !s.limiter.allow("auth:"+clientIP(r), s.now()) {
+	if !s.limiter.allow("auth:"+clientKey(r), s.now()) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts; wait a minute")
 		return
 	}
@@ -84,21 +112,32 @@ func (s *Server) loginWithPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	const wrong = "wrong username, password or code"
 	ctx, conn := r.Context(), s.cfg.Store.Conn()
+	// Taken before the lookup, so a busy answer does not tell whether the
+	// username exists.
+	release, ok := s.hashSlot(ctx, false)
+	if !ok {
+		busy(w)
+		return
+	}
 	creds, err := s.cfg.Store.CredentialsByUsername(ctx, conn, strings.ToLower(strings.TrimSpace(in.Username)))
 	if errors.Is(err, store.ErrNotFound) {
 		webauth.CheckPassword(dummyHash(), in.Password)
+		release()
 		writeError(w, http.StatusUnauthorized, "login_failed", wrong)
 		return
 	}
 	if err != nil {
+		release()
 		s.internal(w, "load credentials", err)
 		return
 	}
 	if creds.LockedUntil != nil && creds.LockedUntil.After(s.now()) {
+		release()
 		writeError(w, http.StatusLocked, "locked", "too many failed logins; try again in 15 minutes or use a link from the bot")
 		return
 	}
 	passOK := webauth.CheckPassword(creds.PasswordHash, in.Password)
+	release()
 	step, codeOK := int64(0), false
 	if secret, err := s.cfg.Secrets.Decrypt(creds.TOTPSecretEnc); err == nil && creds.TOTPConfirmedAt != nil {
 		step, codeOK = webauth.CheckTOTP(string(secret), in.Code, s.now(), creds.TOTPLastStep)
@@ -226,7 +265,13 @@ func (s *Server) startPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid", err.Error())
 		return
 	}
+	release, ok := s.hashSlot(r.Context(), true)
+	if !ok {
+		busy(w)
+		return
+	}
 	hash, err := webauth.HashPassword(in.Password)
+	release()
 	if err != nil {
 		s.internal(w, "hash password", err)
 		return

@@ -170,7 +170,8 @@ describe('open problems', () => {
     expect(alertTextKey({ title_key: 'alert.<b>' })).toBe('')
     // every text the bot has for a problem is here too, in both languages
     const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'backup_failed', 'backup_stale',
-      'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'check']
+      'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'check',
+      'backup_offsite', 'usdt_failing', 'usdt_stuck']
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(ALERT_FALLBACK).toBe('system.alerts.kind.check')
@@ -288,6 +289,23 @@ describe('update check', () => {
     for (const lang of [fa, en]) {
       expect(lang.system.updates.channel_name.stable).toBeTruthy()
       expect(lang.system.updates.channel_name.beta).toBeTruthy()
+    }
+  })
+  it('sends a failed update to the runbook, not to an answer no released CLI gives', () => {
+    // every released bobres has update: the old "not implemented yet" answer cannot appear
+    for (const [lang, page] of [['en', en], ['fa', fa]] as const) {
+      expect(page.system.updates.backup_first, lang).not.toMatch(/not implemented|README/i)
+      expect(page.system.updates.backup_first, lang).toContain('sudo bobres rollback')
+    }
+    expect(en.system.updates.backup_first).toContain('update and rollback runbook')
+    expect(fa.system.updates.backup_first).toContain('راهنمای به‌روزرسانی و بازگشت')
+    // the runbook is there, and the CLI has no such answer (in a full checkout)
+    const repo = (f: string) => resolve(dirname(fileURLToPath(import.meta.url)), `../../../../${f}`)
+    if (existsSync(repo('docs/runbooks/update-rollback.md'))) {
+      expect(readFileSync(repo('docs/runbooks/update-rollback.md'), 'utf8')).toContain('## Roll back the last update')
+    }
+    if (existsSync(repo('cmd/bobres/update.go'))) {
+      expect(readFileSync(repo('cmd/bobres/update.go'), 'utf8')).not.toContain('not implemented')
     }
   })
 })

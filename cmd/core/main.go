@@ -121,7 +121,12 @@ func setup(rt *app.Runtime) error {
 	pay := paymentsclient.New(paymentsv1.NewPaymentsServiceClient(payConn))
 	csrv.SetPayments(pay)
 
-	provConn, err := grpcx.Dial(cfg.ProvisionerGRPCAddr, cfg.ServiceToken)
+	// Each peer gets a token of its own from core: with one shared token, any
+	// peer could act as core toward the others.
+	if cfg.ProvisionerToken == cfg.ServiceToken || cfg.BotInternalToken == cfg.ServiceToken {
+		rt.Log.Warn("BOBRES_PROVISIONER_TOKEN or BOBRES_BOT_INTERNAL_TOKEN is not set: core presents one token to several services (re-run bobres install)")
+	}
+	provConn, err := grpcx.Dial(cfg.ProvisionerGRPCAddr, cfg.ProvisionerToken)
 	if err != nil {
 		return fmt.Errorf("dial provisioner %s: %w", cfg.ProvisionerGRPCAddr, err)
 	}
@@ -146,7 +151,7 @@ func setup(rt *app.Runtime) error {
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
-		peer := botfiles.New(cfg.BotURL, cfg.ServiceToken)
+		peer := botfiles.New(cfg.BotURL, cfg.BotInternalToken)
 		files, bot, licSrv = peer, peer, peer
 		logs["bot"] = peer
 	} else {

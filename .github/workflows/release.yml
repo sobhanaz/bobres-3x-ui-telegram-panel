@@ -1,7 +1,9 @@
 name: Release
 
 # Triggered by pushing a tag like v0.1.0. Publishes signed multi-arch images to ghcr.io
-# and attaches CLI binaries + checksums to a GitHub release.
+# and attaches CLI binaries + checksums to a GitHub release. The release is created last,
+# only once every image is pushed, public and signed: the CLI carries the images' digests
+# (its install pins them), and its checksum is signed with the Ed25519 release key.
 on:
   push:
     tags: ["v*"]
@@ -96,7 +98,10 @@ jobs:
 
   cli:
     name: CLI binaries + release
-    needs: verify
+    # After EVERY image, not beside them: a release published while an image build failed
+    # would be GitHub's latest, so install.sh would install a CLI whose `bobres install`
+    # cannot pull its images, and every store's `bobres update` would fail and roll back.
+    needs: [verify, images]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -105,15 +110,49 @@ jobs:
           go-version: "1.26.x" # latest patch, see ci.yml
           check-latest: true
           cache: true
-      - name: Build bobres for all platforms
+      - uses: sigstore/cosign-installer@v3
+      - name: Check the images and record their digests
+        id: images
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          identity="https://github.com/${REPO}/.github/workflows/release.yml@${GITHUB_REF}"
+          digests=""
+          for svc in core bot payments provisioner backup; do
+            ref="ghcr.io/${OWNER}/bobres-${svc}"
+            # Without logging in, as a store pulls it: this fails while the package is still
+            # private (make each ghcr.io package public once, then re-run the failed jobs).
+            digest="$(docker buildx imagetools inspect "${ref}:${ver}" --format '{{json .Manifest}}' | jq -r .digest)"
+            if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::${ref}:${ver} cannot be pulled anonymously (digest '${digest}')"; exit 1
+            fi
+            # Signed by this workflow for this tag (the images job), so the digest the CLI
+            # pins below is the image that was built and signed here.
+            cosign verify --certificate-identity "$identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "${ref}@${digest}" >/dev/null
+            echo "${ref}:${ver}@${digest}"
+            digests="${digests:+${digests},}${svc}=${digest}"
+          done
+          echo "digests=${digests}" >> "$GITHUB_OUTPUT"
+      - name: Build bobres for all platforms
+        env:
+          IMAGE_DIGESTS: ${{ steps.images.outputs.digests }}
+        run: |
+          set -euo pipefail
           mkdir -p dist
+          # main.imageDigests: `bobres install` runs each image by its digest (cmd/bobres/images.go),
+          # and the CLI is covered by the signed checksums below.
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             os="${target%/*}"; arch="${target#*/}"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
-              -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${GITHUB_REF_NAME}" \
+              -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${GITHUB_REF_NAME} -X main.imageDigests=${IMAGE_DIGESTS}" \
               -o "dist/bobres_${os}_${arch}" ./cmd/bobres
           done
+          # Exit 1 unless the CLI pins all five images.
+          dist/bobres_linux_amd64 version --images
       - name: Sign checksums (Ed25519)
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}

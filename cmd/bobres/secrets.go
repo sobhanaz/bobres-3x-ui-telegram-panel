@@ -51,16 +51,7 @@ type rotator struct {
 }
 
 func newRotator(o *ops) *rotator {
-	r := &rotator{
-		ops: o, random: randomHex,
-		checkBot: func(ctx context.Context, token, apiRoot string) (string, error) {
-			me, err := tg.New(token, tg.WithAPIRoot(apiRoot)).GetMe(ctx)
-			if err != nil {
-				return "", err
-			}
-			return me.Username, nil
-		},
-	}
+	r := &rotator{ops: o, random: randomHex, checkBot: botUsername}
 	if f, ok := o.in.(*os.File); ok {
 		r.readHide = hiddenInput(f, o.out)
 	}
@@ -153,6 +144,29 @@ func (r *rotator) readSecret(prompt string) (string, error) {
 	return "", err
 }
 
+// botUsername asks Telegram whose token this is (getMe at apiRoot; "" for
+// api.telegram.org) and answers the bot's user name.
+func botUsername(ctx context.Context, token, apiRoot string) (string, error) {
+	me, err := tg.New(token, tg.WithAPIRoot(apiRoot)).GetMe(ctx)
+	if err != nil {
+		return "", err
+	}
+	return me.Username, nil
+}
+
+// telegramAPIRoot is where this server checks a bot token: the Bot API server
+// in BOBRES_TELEGRAM_API_URL, which the bot uses, when it is an http(s) URL
+// without credentials (as seen from the host: hostAPIRoot), else ""
+// (api.telegram.org).
+func telegramAPIRoot(env map[string]string) string {
+	v := strings.TrimSpace(env["BOBRES_TELEGRAM_API_URL"])
+	u, err := url.Parse(v)
+	if v == "" || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return ""
+	}
+	return hostAPIRoot(v)
+}
+
 // hostAPIRoot is BOBRES_TELEGRAM_API_URL as seen from this server: the
 // containers reach the host as host.docker.internal, the CLI as 127.0.0.1.
 func hostAPIRoot(v string) string {
@@ -184,7 +198,7 @@ func (r *rotator) rotateBotToken(ctx context.Context, dir string, env map[string
 	}
 	if !offline {
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		name, err := r.checkBot(cctx, tok, hostAPIRoot(env["BOBRES_TELEGRAM_API_URL"]))
+		name, err := r.checkBot(cctx, tok, telegramAPIRoot(env))
 		cancel()
 		if err != nil {
 			fmt.Fprintf(r.errOut, "error: Telegram rejected the token or is unreachable: %v (--offline skips this check). Nothing was changed.\n", err)
@@ -204,7 +218,7 @@ func (r *rotator) rotateServiceTokens(ctx context.Context, dir string, env map[s
 	}
 	// All pairs change at once, so no service is left with a stale peer token.
 	values := map[string]string{}
-	for _, k := range []string{"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP"} {
+	for _, k := range serviceTokens {
 		values[k] = r.random(generated[k])
 	}
 	return r.rotate(ctx, dir, env, rotation{what: "service tokens", values: values, services: services})
@@ -313,7 +327,7 @@ func (r *rotator) rotate(ctx context.Context, dir string, env map[string]string,
 			return 1
 		}
 	}
-	if err := writeAtomic(envPath, renderEnv(next), 0o600); err != nil {
+	if err := writeEnv(envPath, next); err != nil {
 		fmt.Fprintf(r.errOut, "error: %v\n", err)
 		if rot.roles != nil && r.setRolePasswords(ctx, dir, rot.roles, old) != nil {
 			fmt.Fprintf(r.errOut, "The database has the new passwords and .env the old ones; the .env from before is in %s. See docs/runbooks/rotate-secrets.md.\n", copyPath)
@@ -352,7 +366,7 @@ func (r *rotator) rotate(ctx context.Context, dir string, env map[string]string,
 			return 1
 		}
 	}
-	if err := writeAtomic(envPath, renderEnv(env), 0o600); err != nil {
+	if err := writeEnv(envPath, env); err != nil {
 		fmt.Fprintf(r.errOut, "error: %v\nThe .env from before is in %s: copy it back over %s and run bobres start.\n", err, copyPath, envPath)
 		return 1
 	}
@@ -381,7 +395,7 @@ func (r *rotator) syncRestorePoint(dir string, values map[string]string) {
 	env, _, err := readEnv(path)
 	if err == nil {
 		maps.Copy(env, values)
-		err = writeAtomic(path, renderEnv(env), 0o600)
+		err = writeEnv(path, env)
 	}
 	if err != nil {
 		fmt.Fprintf(r.errOut, "warning: the last update's restore point keeps the old values (%v): after bobres rollback, rotate again.\n", err)

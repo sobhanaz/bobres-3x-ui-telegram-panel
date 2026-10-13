@@ -233,15 +233,61 @@ func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.T
 	return expires, traffic
 }
 
+// checkDiscount runs in the transaction that pays an order with a discount
+// code. The checks when the order was created cannot see orders created
+// alongside it and paid first, so they are made again: the customer used
+// the code on another paid order meanwhile (already_used), or its uses ran
+// out (used_up). Either is a *DiscountError and the order cannot be paid at
+// its discounted price. With lock the code's row is held until the
+// transaction ends, so two orders paying with one code take turns; it is
+// taken after the buyer's wallet (Credit, Debit) wherever both are, so two
+// payments never wait for each other's locks.
+func (s *Service) checkDiscount(ctx context.Context, tx pgx.Tx, o *store.Order, lock bool) error {
+	if o.DiscountCode == nil {
+		return nil
+	}
+	var (
+		d   *store.Discount
+		err error
+	)
+	if lock {
+		d, err = s.st.LockDiscount(ctx, tx, *o.DiscountCode)
+	} else {
+		d, err = s.st.GetDiscount(ctx, tx, *o.DiscountCode)
+	}
+	if err != nil {
+		return err
+	}
+	used, err := s.st.HasRedeemed(ctx, tx, d.Code, o.UserID)
+	if err != nil {
+		return err
+	}
+	switch {
+	case used:
+		return &DiscountError{"already_used"}
+	case d.MaxUses != nil && d.Used >= *d.MaxUses:
+		return &DiscountError{"used_up"}
+	}
+	return nil
+}
+
 // orderPaidEffects runs in the transaction that marks an order paid: the
-// discount code's use is counted, and a real purchase (not a trial or a free
-// order) may pay whoever invited the buyer: a reseller's commission on every
-// order, or anyone else's referral reward. A reseller's own purchases are
-// business purchases and pay nobody.
+// discount code's use is counted (refused, as checkDiscount, when the code no
+// longer allows it), and a real purchase (not a trial or a free order) may
+// pay whoever invited the buyer: a reseller's commission on every order, or
+// anyone else's referral reward. A reseller's own purchases are business
+// purchases and pay nobody.
 func (s *Service) orderPaidEffects(ctx context.Context, tx pgx.Tx, o *store.Order, source string) error {
 	if o.DiscountCode != nil {
-		if _, err := s.st.RecordRedemption(ctx, tx, *o.DiscountCode, o.UserID, o.ID); err != nil {
+		if err := s.checkDiscount(ctx, tx, o, true); err != nil {
 			return err
+		}
+		recorded, err := s.st.RecordRedemption(ctx, tx, *o.DiscountCode, o.UserID, o.ID)
+		if err != nil {
+			return err
+		}
+		if !recorded {
+			return &DiscountError{"already_used"}
 		}
 	}
 	if o.Amount <= 0 || source == events.PaidTrial || source == events.PaidFree {

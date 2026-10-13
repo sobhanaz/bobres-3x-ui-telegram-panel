@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -439,5 +440,155 @@ func TestReferralRewards(t *testing.T) {
 	}
 	if info, _ := svc.Referral(ctx, inviter.ID); info.Invited != 1 || info.Rewarded != 1 || info.Earned["IRT"] != 100 || info.RewardPercent != 10 {
 		t.Fatalf("stats: %+v", info)
+	}
+}
+
+// A code is checked again when the order is paid: orders created with it
+// before the first one was paid cannot all be paid at the discounted price.
+func TestDiscountCodeCheckedWhenPaid(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	if _, err := svc.UpsertUser(ctx, UpsertUserParams{TelegramID: ownerTG}); err != nil {
+		t.Fatal(err)
+	}
+	plan := seedPlan(t, s, false, 100000)
+	half, one := int32(50), int32(1)
+	for code, max := range map[string]*int32{"WELCOME50": &one, "HALF": nil} {
+		if _, err := svc.AdminUpsertDiscount(ctx, ownerTG, &store.Discount{Code: code, Percent: &half, MaxUses: max, Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reason := func(err error) string {
+		var de *DiscountError
+		if errors.As(err, &de) {
+			return de.Reason
+		}
+		return "no discount error: " + errorString(err)
+	}
+	order := func(u *store.User, code, key string) *store.Order {
+		t.Helper()
+		o, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: u.ID, PlanID: plan.ID, IdempotencyKey: key, DiscountCode: code})
+		if err != nil || o.Amount != 50000 {
+			t.Fatalf("order %s: %+v %v", key, o, err)
+		}
+		return o
+	}
+
+	// One customer, three orders with a once-only code, created before any
+	// is paid: the first pays at half price, the others are refused.
+	u := seedUser(t, s, 4501)
+	a, b, c := order(u, "WELCOME50", "w-a"), order(u, "WELCOME50", "w-b"), order(u, "WELCOME50", "w-c")
+	fund(t, s, u.ID, 300000)
+	if _, err := svc.PayOrderWithWallet(ctx, a.ID, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range []*store.Order{b, c} {
+		if _, err := svc.PayOrderWithWallet(ctx, o.ID, u.ID); reason(err) != "already_used" {
+			t.Fatalf("second order with the code paid: %v", err)
+		}
+		if got, _ := s.GetOrder(ctx, s.Conn(), o.ID); got.Status != "awaiting_payment" {
+			t.Fatalf("refused order is %s", got.Status)
+		}
+	}
+	if bal, _, _ := ledger(t, s, u.ID); bal != 250000 {
+		t.Fatalf("balance %d, want 250000 (one half-price purchase)", bal)
+	}
+	if d, _ := s.GetDiscount(ctx, s.Conn(), "WELCOME50"); d.Used != 1 {
+		t.Fatalf("used_count %d", d.Used)
+	}
+
+	// Another customer's order made before the only use was taken: used up,
+	// even with too little money in the wallet (no top-up for a lost price).
+	v := seedUser(t, s, 4502)
+	vo := order(v, "HALF", "h-v") // the HALF code, then a WELCOME50 order made earlier:
+	if _, err := s.DB().Exec(ctx, `UPDATE core.orders SET discount_code = 'WELCOME50' WHERE id = $1`, vo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PayOrderWithWallet(ctx, vo.ID, v.ID); reason(err) != "used_up" {
+		t.Fatalf("an order past the code's uses: %v", err)
+	}
+
+	// A payment that arrives for a refused order stays in the wallet.
+	w := seedUser(t, s, 4503)
+	first, second := order(w, "HALF", "h-1"), order(w, "HALF", "h-2")
+	pay := func(id, intent string, o *store.Order) {
+		t.Helper()
+		m := payEvent(t, id, events.PaymentsPaymentSucceeded, events.PaymentEvent{IntentID: intent, OrderID: o.ID,
+			UserID: w.ID, Provider: "manual_card", Amount: 50000, Currency: "IRT"})
+		if err := svc.HandlePaymentEvent(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pay("h-e1", "00000000-0000-7000-8000-0000000045a1", first)
+	pay("h-e2", "00000000-0000-7000-8000-0000000045a2", second)
+	if got, _ := s.GetOrder(ctx, s.Conn(), first.ID); got.Status != "paid" {
+		t.Fatalf("first order %s", got.Status)
+	}
+	if got, _ := s.GetOrder(ctx, s.Conn(), second.ID); got.Status != "awaiting_payment" {
+		t.Fatalf("second order with the code: %s", got.Status)
+	}
+	if bal, _, _ := ledger(t, s, w.ID); bal != 50000 {
+		t.Fatalf("balance %d, want the second payment (50000)", bal)
+	}
+	var reasons []string
+	for _, raw := range outboxEvents(t, s, events.WalletCredited) {
+		var e events.WalletCreditedEvent
+		if json.Unmarshal(raw, &e) == nil && e.UserID == w.ID {
+			reasons = append(reasons, e.Reason)
+		}
+	}
+	if strings.Join(reasons, ",") != events.CreditDiscountUsed { // the first paid its order: no credit notice
+		t.Fatalf("wallet credits: %v", reasons)
+	}
+}
+
+// Two orders with a once-only code, paid at the same moment (one from the
+// wallet, one by a payment arriving): exactly one gets the discounted
+// price, and neither waits forever on the other's locks.
+func TestDiscountCodePaidConcurrently(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	if _, err := svc.UpsertUser(ctx, UpsertUserParams{TelegramID: ownerTG}); err != nil {
+		t.Fatal(err)
+	}
+	plan := seedPlan(t, s, false, 100000)
+	half, one := int32(50), int32(1)
+	for round := range 5 {
+		code := fmt.Sprintf("RACE%d", round)
+		if _, err := svc.AdminUpsertDiscount(ctx, ownerTG, &store.Discount{Code: code, Percent: &half, MaxUses: &one, Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+		u := seedUser(t, s, int64(4600+round))
+		var orders [2]*store.Order
+		for i := range orders {
+			o, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: u.ID, PlanID: plan.ID, DiscountCode: code,
+				IdempotencyKey: fmt.Sprintf("race-%d-%d", round, i)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			orders[i] = o
+		}
+		fund(t, s, u.ID, 50000)
+		pay := payEvent(t, fmt.Sprintf("race-e%d", round), events.PaymentsPaymentSucceeded, events.PaymentEvent{
+			IntentID: fmt.Sprintf("00000000-0000-7000-8000-0000000046%02d", round), OrderID: orders[1].ID, UserID: u.ID,
+			Provider: "manual_card", Amount: 50000, Currency: "IRT"})
+		errs := make(chan error, 2)
+		go func() { _, err := svc.PayOrderWithWallet(ctx, orders[0].ID, u.ID); errs <- err }()
+		go func() { errs <- svc.HandlePaymentEvent(ctx, pay) }()
+		for range 2 {
+			if err := <-errs; err != nil && !errors.Is(err, ErrDiscount) {
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+		paid := 0
+		for _, o := range orders {
+			if got, _ := s.GetOrder(ctx, s.Conn(), o.ID); got.Status == "paid" {
+				paid++
+			}
+		}
+		d, _ := s.GetDiscount(ctx, s.Conn(), code)
+		if bal, _, _ := ledger(t, s, u.ID); paid != 1 || d.Used != 1 || bal != 50000 {
+			t.Fatalf("round %d: %d orders paid, used %d, balance %d", round, paid, d.Used, bal)
+		}
 	}
 }

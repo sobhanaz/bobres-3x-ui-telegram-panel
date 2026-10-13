@@ -312,7 +312,7 @@ type depositJSON struct {
 	At         int64      `json:"at"` // block time
 	Outcome    string     `json:"outcome"`
 	Reason     string     `json:"reason,omitempty"`      // why it matched nothing, in a few English words
-	ReasonCode string     `json:"reason_code,omitempty"` // no_payment | already_paid | closed | ambiguous | dust
+	ReasonCode string     `json:"reason_code,omitempty"` // no_payment | already_paid | closed | ambiguous | after_restore | dust
 	IntentID   string     `json:"intent_id,omitempty"`
 	RecordedAt *int64     `json:"recorded_at"`
 	ResolvedAt *int64     `json:"resolved_at,omitempty"`

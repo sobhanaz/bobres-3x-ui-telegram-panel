@@ -3,9 +3,9 @@
 Written 2026-10-07. PLAN.md section 10: "Web dashboard + branding editor." The owner chose all 17
 sections, every feature (including the later-phase pages), login both from the bot and with a
 password, two-factor codes required for passwords, and a calm dark + light look. It ships in six
-milestones, one pull request each (the sixth in two). **Milestones 1 (foundation), 2 (customers and sales), 3
-(store setup), 4 (support and broadcasts), 5 (resellers) and 6a (servers and payment gateways) are built**; 6b
-is planned below.
+milestones, one pull request each (the sixth in two). **All six are built** (2026-10-12): 1 (foundation), 2
+(customers and sales), 3 (store setup), 4 (support and broadcasts), 5 (resellers), 6a (servers and payment gateways)
+and 6b (System page, backups and license).
 
 ## Milestones
 
@@ -26,9 +26,8 @@ is planned below.
 6. **Infrastructure,** in two pull requests:
    - **6a, servers and payment gateways (built).** Several 3x-ui servers (servers per plan, health, inbounds), and
      payment gateways whose keys stay encrypted in the payments service. See "Milestone 6a" below.
-   - **6b, System and License.** Health, versions, update check, backups through a backup container, and the
-     license (checked with internal/license). Health, versions and the license are built: see "Milestone 6b
-     (part 1)" below.
+   - **6b, System and License (built).** Health, versions, update check, logs, backups through a backup container,
+     and the license (checked with internal/license). See "Milestone 6b (part 1)" and the sections after it.
 
 **Not in Phase 4:** restoring a backup from the dashboard (CLI only), a customer portal, the vendor
 license server.
@@ -116,7 +115,7 @@ license server.
 
 - **Sections.** The menu groups the 17 sections into Store, Customers, Sales, Setup and
   Administration. A section that is not built yet shows what it will do, the milestone that builds
-  it, and that the bot's /admin panel covers it meanwhile.
+  it, and that the bot's /admin panel covers it meanwhile. (Since milestone 6b every section is built.)
 - **Language.** Persian by default, right-to-left; English is left-to-right. The choice is
   remembered in the browser. Layout uses logical CSS properties only, so it mirrors itself.
   - Mixed-direction text (usernames, plan names) is isolated with `<bdi>`.
@@ -681,7 +680,8 @@ and answers hints only.
 
 ## Milestone 6b (part 1): system health and the license
 
-The System page's health tab and its License tab. The update check, logs and backups follow in later parts.
+The System page's health tab and its License tab. The update check, logs and backups are the sections after this
+one (all built).
 
 - **Health and versions** (`system.read`: owner and admin). Core asks core itself (through its own HTTP port),
   the bot, payments, provisioner and the backup service for `/healthz` and `/readyz`, all at once, 3 seconds

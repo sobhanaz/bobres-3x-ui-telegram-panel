@@ -750,9 +750,9 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 		"bobres %s installed (the previous one is also kept as %s.prev).\nInstalling BOBRES %s...\n",
 		active, rp.CreatedAt.Format("2006-01-02 15:04 MST"), t.Version, exe, t.Version)
 	// An existing install: bobres install's checks were for a new server (10
-	// GB free, RAM, ports), and its Telegram check goes straight to
-	// api.telegram.org, which a filtered network reaches only through
-	// BOBRES_TELEGRAM_API_URL.
+	// GB free, RAM, ports), and its online checks (the bot token with
+	// Telegram, a plain-http panel's address) are of values this store
+	// already runs with: an update does not depend on Telegram answering.
 	if err := u.install(ctx, exe, dir, t.Version); err != nil {
 		return u.autoRollback(ctx, dir, rp, err.Error())
 	}

@@ -121,6 +121,10 @@ The `bobres install` summary suggests it among the first steps.
 7. Legal pages templates: Terms, Privacy, Refund policy, Acceptable use (drafts only; lawyer must review).
 8. Copyright and licensing text: "© 2026 BOBRES. All rights reserved." Third-party notices file (Go deps, fonts).
 
+Status (2026-10-12): 1 to 5 are written. The bot's texts exist in fa and en and every one can be changed on the
+dashboard; the dashboard and the CLI have their own. 6: the docs in `docs/` and CHANGELOG.md; no landing page yet. 7
+and 8 are not written: they wait for the legal review. The Persian texts still need a native speaker's review.
+
 ## Copy sample (draft, not final)
 - EN welcome: "Welcome to {brand}. Pick a plan, pay, and get your connection in seconds."
 - FA welcome (draft): «به {brand} خوش آمدید. پلن انتخاب کنید، پرداخت کنید و در چند ثانیه متصل شوید.»

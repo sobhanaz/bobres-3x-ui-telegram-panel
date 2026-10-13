@@ -44,7 +44,7 @@ func chainService(t *testing.T, enabled bool) *chainFix {
 	t.Helper()
 	svc, st, _ := cfgService(t)
 	ctx := context.Background()
-	if _, err := st.DB().Exec(ctx, `TRUNCATE payments.chain_transfers, payments.chain_cursors`); err != nil {
+	if _, err := st.DB().Exec(ctx, `TRUNCATE payments.chain_transfers, payments.chain_cursors, payments.restore_guard`); err != nil {
 		t.Fatal(err)
 	}
 	fake := tronfake.New()
@@ -82,6 +82,12 @@ func keyUUID(kind, name string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(kind + ":" + name))
 	return fmt.Sprintf("00000000-0000-7000-8000-%012x", h.Sum64()&0xffffffffffff)
+}
+
+// uniqueAmount: a is base plus an offset of 1 to maxChainOffset micro-USDT,
+// and not a whole cent.
+func uniqueAmount(a, base int64) bool {
+	return a > base && a <= base+maxChainOffset && a%10_000 != 0
 }
 
 func (f *chainFix) start(t *testing.T, key string, base int64) *store.Intent {
@@ -180,20 +186,20 @@ func TestUSDTExactPaymentSettlesOnceEvenConcurrently(t *testing.T) {
 	f := chainService(t, true)
 	ctx := context.Background()
 	in := f.start(t, "u1", 5_000_000)
-	if in.GatewayAmount == nil || *in.GatewayAmount != 5_000_001 || *in.GatewayCurrency != "USDT" ||
+	if in.GatewayAmount == nil || !uniqueAmount(*in.GatewayAmount, 5_000_000) || *in.GatewayCurrency != "USDT" ||
 		in.PayAddress == nil || *in.PayAddress != storeAddr || in.Status != "pending" || in.ExternalID != nil {
 		t.Fatalf("intent: %+v", in)
 	}
 	if left := time.Until(*in.ExpiresAt); left < 44*time.Minute || left > 46*time.Minute {
 		t.Fatalf("pay window: %v", left)
 	}
-	if again := f.start(t, "u1", 5_000_000); again.ID != in.ID || *again.GatewayAmount != 5_000_001 {
+	if again := f.start(t, "u1", 5_000_000); again.ID != in.ID || *again.GatewayAmount != *in.GatewayAmount {
 		t.Fatalf("retry made another payment: %+v", again)
 	}
 	if f.scan(t) != 0 || f.intent(t, in.ID).Status != "pending" {
 		t.Fatal("settled before anything was paid")
 	}
-	txid := f.fake.Pay(storeAddr, 5_000_001)
+	txid := f.fake.Pay(storeAddr, *in.GatewayAmount)
 
 	replica := New(f.st) // a second payments replica on the same database
 	if err := replica.ConfigureGateways(ctx, f.opts); err != nil {
@@ -231,7 +237,7 @@ func TestUSDTExactPaymentSettlesOnceEvenConcurrently(t *testing.T) {
 	}
 	list := f.transfers(t)
 	if len(list) != 1 || list[0].Outcome != store.TransferMatched || list[0].IntentID == nil || *list[0].IntentID != in.ID ||
-		list[0].Value != 5_000_001 || list[0].TxID != txid || list[0].EventIndex != 0 {
+		list[0].Value != *in.GatewayAmount || list[0].TxID != txid || list[0].EventIndex != 0 {
 		t.Fatalf("transfer log: %+v", list)
 	}
 	if f.scan(t) != 0 || ledgerCount(t, f.st) != 1 || len(f.transfers(t)) != 1 {
@@ -293,9 +299,10 @@ func TestUSDTFakeTokensAndNonTransfersAreIgnored(t *testing.T) {
 func TestUSDTUnmatchedDepositsAreRecordedAndAnnounced(t *testing.T) {
 	f := chainService(t, true)
 	ctx := context.Background()
-	in := f.start(t, "m1", 10_000_000) // 10.000001 USDT
+	in := f.start(t, "m1", 10_000_000) // 10.00xxxx USDT
+	exact := *in.GatewayAmount
 	under := f.fake.Pay(storeAddr, 9_000_001)
-	over := f.fake.Pay(storeAddr, 10_000_002)
+	over := f.fake.Pay(storeAddr, exact+1)
 	f.fake.Pay(storeAddr, 7_000_000)
 	f.fake.Pay(storeAddr, 50_000) // 0.05 USDT: dust
 	if n := f.scan(t); n != 4 {
@@ -328,7 +335,7 @@ func TestUSDTUnmatchedDepositsAreRecordedAndAnnounced(t *testing.T) {
 		byTx[e.TxID] = e
 	}
 	if u := byTx[under]; len(ev) != 3 || u.Amount != 9_000_001 || u.Currency != "USDT" || u.Network != "TRC20" ||
-		u.Reason != UnmatchedNoPayment || u.To != storeAddr || u.From != tronfake.Sender || byTx[over].Amount != 10_000_002 {
+		u.Reason != UnmatchedNoPayment || u.To != storeAddr || u.From != tronfake.Sender || byTx[over].Amount != exact+1 {
 		t.Fatalf("announced: %+v", ev)
 	}
 	outcomes := map[string]int{}
@@ -339,8 +346,8 @@ func TestUSDTUnmatchedDepositsAreRecordedAndAnnounced(t *testing.T) {
 		t.Fatalf("recorded: %v", outcomes)
 	}
 
-	paid := f.fake.Pay(storeAddr, 10_000_001)
-	twice := f.fake.Pay(storeAddr, 10_000_001)
+	paid := f.fake.Pay(storeAddr, exact)
+	twice := f.fake.Pay(storeAddr, exact)
 	f.scan(t)
 	if got := f.intent(t, in.ID); got.Status != "succeeded" || ledgerCount(t, f.st) != 1 {
 		t.Fatalf("exact payment: %+v", got)
@@ -386,7 +393,7 @@ func TestUSDTLatePaymentsAndExpiry(t *testing.T) {
 	if ev := outbox(t, f.st); len(ev[events.PaymentsPaymentRejected]) != 1 || ev[events.PaymentsPaymentRejected][0].Reason != ReasonExpired {
 		t.Fatalf("events: %+v", ev)
 	}
-	f.fake.Pay(storeAddr, 3_000_001)
+	f.fake.Pay(storeAddr, *in.GatewayAmount)
 	f.scan(t)
 	if got := f.intent(t, in.ID); got.Status != "succeeded" || got.FailureReason != nil || ledgerCount(t, f.st) != 1 {
 		t.Fatalf("late payment: %+v", got)
@@ -486,7 +493,12 @@ func TestUSDTUniqueAmountsUnderConcurrency(t *testing.T) {
 		t.Fatalf("an old payment's amount was not reused: %+v %v", in, err)
 	}
 	// A price that is not a whole cent: base+1 would be one (what a manual
-	// USDT customer sends), so it is skipped.
+	// USDT customer sends), so it is skipped. Every other offset but +2 is
+	// taken: +2 is the one left.
+	f.exec(t, `INSERT INTO payments.payment_intents (id, user_id, provider, amount, currency, status, idempotency_key,
+		gateway_amount, gateway_currency, pay_address, expires_at)
+		SELECT gen_random_uuid(), $1, 'usdt_trc20_auto', 1000, 'IRT', 'succeeded', 'cent-' || g, 1_239_999 + g, 'USDT', $2, now()
+		FROM generate_series(3, $3::int) g`, uid, storeAddr, maxChainOffset)
 	if in, err := f.svc.StartChain(ctx, chainIntent("cent", 1_239_999)); err != nil || *in.GatewayAmount != 1_240_001 {
 		t.Fatalf("a whole-cent amount was handed out: %+v %v", in, err)
 	}
@@ -572,8 +584,14 @@ func TestUSDTAddressChangeRefusedWhileOpen(t *testing.T) {
 		c.Address != storeAddr2 || c.APIKeySet {
 		t.Fatalf("address change once closed: %+v %v", c, err)
 	}
-	next := f.start(t, "o4", 1_000_000)
-	if *next.PayAddress != storeAddr2 || *next.GatewayAmount != 1_000_001 {
+	// Amounts are unique per address: every offset of a price held at the
+	// old address leaves the new one free.
+	f.exec(t, `INSERT INTO payments.payment_intents (id, user_id, provider, amount, currency, status, idempotency_key,
+		gateway_amount, gateway_currency, pay_address, expires_at)
+		SELECT gen_random_uuid(), $1, 'usdt_trc20_auto', 1000, 'IRT', 'succeeded', 'o-fill-' || g, 1_100_000 + g, 'USDT', $2, now()
+		FROM generate_series(1, $3::int) g`, uid, storeAddr, maxChainOffset)
+	next := f.start(t, "o4", 1_100_000)
+	if *next.PayAddress != storeAddr2 || !uniqueAmount(*next.GatewayAmount, 1_100_000) {
 		t.Fatalf("payment at the new address: %+v", next)
 	}
 	f.fake.Pay(storeAddr, *late.GatewayAmount)
@@ -779,6 +797,9 @@ func TestUSDTTwoTransfersInOneTransaction(t *testing.T) {
 	f.fake.Add(tronfake.Transfer{TxID: tx, To: storeAddr, Value: itoa(*a.GatewayAmount), BlockTS: at})
 	if n := f.scan(t); n != 2 {
 		t.Fatalf("recorded %d", n)
+	}
+	if *a.GatewayAmount > *b.GatewayAmount { // numbered by amount: a is the smaller
+		a, b = b, a
 	}
 	ga, gb := f.intent(t, a.ID), f.intent(t, b.ID)
 	if ga.Status != "succeeded" || gb.Status != "succeeded" || *ga.ExternalID != tx || *gb.ExternalID != tx+"#1" || ledgerCount(t, f.st) != 2 {
@@ -1344,5 +1365,136 @@ func TestUSDTNotesCountCharacters(t *testing.T) {
 	}
 	if _, err := f.svc.Review(ctx, admin, m2.ID, "rejected", strings.Repeat("ب", maxReasonLen+1)); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("a reason over the limit: %v", err)
+	}
+}
+
+// Once staff are told to credit an unmatched deposit by hand, its TXID (it
+// is public) is no longer a manual proof: staff credit it first and mark it
+// handled afterwards, and a proof approved in between would credit the same
+// USDT twice. A deposit still in its hold may be claimed, as before.
+func TestUSDTAnnouncedDepositIsNotAManualProof(t *testing.T) {
+	f := chainService(t, true)
+	ctx := context.Background()
+	announced := f.fake.Pay(storeAddr, 41_000_000)
+	f.scan(t)
+	if n := f.endHolds(t); n != 1 {
+		t.Fatalf("announced %d", n)
+	}
+	m := f.manual(t, "an1")
+	for _, spelled := range []string{announced, "0x" + strings.ToUpper(announced)} {
+		if _, err := f.svc.SubmitTXID(ctx, uid, m.ID, "TRC20", spelled); !errors.Is(err, ErrTXIDAnnounced) {
+			t.Fatalf("proof %q of an announced deposit: %v", spelled, err)
+		}
+	}
+	if tr := f.transfer(t, announced); tr.Outcome != store.TransferUnmatched {
+		t.Fatalf("the refused proof took the deposit: %+v", tr)
+	}
+	// Staff mark it handled after crediting it by hand; nothing else moved.
+	if _, err := f.svc.ResolveChainTransfer(ctx, admin, announced, 0, "credited by hand"); err != nil {
+		t.Fatalf("mark handled: %v", err)
+	}
+	if n := ledgerCount(t, f.st); n != 0 {
+		t.Fatalf("ledger: %d", n)
+	}
+
+	// Announced at once (no hold): the same.
+	f.svc.SetUnmatchedHold(0)
+	quick := f.fake.Pay(storeAddr, 42_000_000)
+	f.scan(t)
+	if _, err := f.svc.SubmitTXID(ctx, uid, f.manual(t, "an2").ID, "TRC20", quick); !errors.Is(err, ErrTXIDAnnounced) {
+		t.Fatalf("proof of a deposit announced at once: %v", err)
+	}
+
+	// A rejected proof's deposit is announced when it is released: a second
+	// proof of it is refused too.
+	f.svc.SetUnmatchedHold(time.Hour)
+	held := f.fake.Pay(storeAddr, 43_000_000)
+	f.scan(t)
+	first := f.manual(t, "an3")
+	if _, err := f.svc.SubmitTXID(ctx, uid, first.ID, "TRC20", held); err != nil {
+		t.Fatalf("proof of a held deposit: %v", err)
+	}
+	if _, err := f.svc.Review(ctx, admin, first.ID, "rejected", "not ours"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.SubmitTXID(ctx, uid, f.manual(t, "an4").ID, "TRC20", held); !errors.Is(err, ErrTXIDAnnounced) {
+		t.Fatalf("proof of a released deposit: %v", err)
+	}
+}
+
+// Unique amounts are picked at random among the free offsets, not the
+// smallest: after a restore, the smallest free offset is exactly what the
+// first payment the restore erased was given.
+func TestUSDTOffsetsAreRandom(t *testing.T) {
+	f := chainService(t, true)
+	smallest := 0
+	for i := range 5 {
+		base := int64(3_000_000 + i*100_000)
+		if in := f.start(t, fmt.Sprintf("rnd%d", i), base); *in.GatewayAmount == base+1 {
+			smallest++
+		}
+	}
+	if smallest == 5 {
+		t.Fatal("every payment got the smallest offset")
+	}
+}
+
+// After a restore from a backup, the automatic payments made since the
+// backup are gone, but their customers were told their amounts. A transfer
+// that comes within the customer's window and matches a payment created
+// after the restore settles nothing: staff are told at once and check who
+// sent it. Later transfers settle as usual.
+func TestUSDTAfterARestoreAMatchIsLeftToStaff(t *testing.T) {
+	f := chainService(t, true)
+	ctx := context.Background()
+	a := f.start(t, "rs-a", 5_000_000) // customer A is told an amount
+	if at, err := f.st.RestoredAt(ctx, nil); err != nil || at != nil {
+		t.Fatalf("a restore noticed on a fresh install: %v %v", at, err)
+	}
+
+	// The restore: A's payment is gone, and every table was recreated.
+	f.exec(t, `DELETE FROM payments.gateway_events WHERE intent_id = $1`, a.ID)
+	f.exec(t, `DELETE FROM payments.payment_intents WHERE id = $1`, a.ID)
+	f.exec(t, `UPDATE payments.restore_guard SET table_oid = 1`)
+
+	// Customer B, after it, is given the same amount (forced here: offsets
+	// are random).
+	b := f.start(t, "rs-b", 5_000_000)
+	f.exec(t, `UPDATE payments.payment_intents SET gateway_amount = $1 WHERE id = $2`, *a.GatewayAmount, b.ID)
+	restoredAt, err := f.st.RestoredAt(ctx, nil)
+	if err != nil || restoredAt == nil || time.Since(*restoredAt) > time.Minute {
+		t.Fatalf("restore not noticed: %v %v", restoredAt, err)
+	}
+
+	// A sends what they were told: it does not pay B's order.
+	txA := f.fake.Pay(storeAddr, *a.GatewayAmount)
+	f.scan(t)
+	if got := f.intent(t, b.ID); got.Status != "pending" || ledgerCount(t, f.st) != 0 {
+		t.Fatalf("A's transfer paid B: %+v (ledger %d)", got, ledgerCount(t, f.st))
+	}
+	tr := f.transfer(t, txA)
+	if tr.Outcome != store.TransferUnmatched || tr.Reason == nil || *tr.Reason != UnmatchedAfterRestore || tr.AnnounceAt != nil {
+		t.Fatalf("transfer after the restore: %+v", tr)
+	}
+	if ev := unmatchedEvents(t, f.st); len(ev) != 1 || ev[0].TxID != txA || ev[0].Reason != UnmatchedAfterRestore {
+		t.Fatalf("staff not told at once: %+v", ev)
+	}
+	// It carries an automatic payment's amount: not a manual proof.
+	if _, err := f.svc.SubmitTXID(ctx, uid, f.manual(t, "rs-m").ID, "TRC20", txA); !errors.Is(err, ErrTXIDAutomatic) {
+		t.Fatalf("manual proof of a held transfer: %v", err)
+	}
+	// Noticed once: a later payment does not move it.
+	f.start(t, "rs-d", 5_500_000)
+	if again, _ := f.st.RestoredAt(ctx, nil); again == nil || !again.Equal(*restoredAt) {
+		t.Fatalf("restore noticed again: %v, was %v", again, restoredAt)
+	}
+
+	// Past the customers' windows, payments made after the restore settle.
+	f.exec(t, `UPDATE payments.restore_guard SET restored_at = now() - interval '1 hour'`)
+	c := f.start(t, "rs-c", 6_000_000)
+	f.fake.Pay(storeAddr, *c.GatewayAmount)
+	f.scan(t)
+	if got := f.intent(t, c.ID); got.Status != "succeeded" || ledgerCount(t, f.st) != 1 {
+		t.Fatalf("a payment after the hold: %+v", got)
 	}
 }

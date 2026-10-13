@@ -9,6 +9,11 @@
 #             (bot, payments, provisioner), and the backup service while it copies backups to
 #             S3-compatible storage (BOBRES_BACKUP_NETWORK=egress, set with the S3 endpoint).
 #   offline : INTERNAL, the backup service alone: its second network when it has no S3 copy.
+# Images
+#   Each BOBRES image runs by its tag plus BOBRES_IMAGE_DIGEST_<SERVICE> ("@sha256:..."), which
+#   `bobres install` sets from the digests the signed release CLI carries: a tag moved on the
+#   registry cannot change what runs. Empty (a development build, or --version of another
+#   release) = by tag.
 # Profiles
 #   backup  : the backup service. `bobres install` turns it on (COMPOSE_PROFILES=backup in .env)
 #             when the install runs images that have it and off when they do not, so an
@@ -16,9 +21,12 @@
 #             still starts.
 # Secrets: each service gets ONLY what it needs (no shared env_file), its OWN database role
 # and its OWN service token. A server accepts only its legitimate callers: core accepts the
-# bot; payments and provisioner accept only core. Core calls the backup service with a token
-# for that service only (BOBRES_TOKEN_CORE_BACKUP), so the backup container, which holds the
-# master keys, never holds core's own token.
+# bot; payments and provisioner accept only core; the bot's /internal endpoints accept core and
+# the backup service. Core presents a different token to each service it calls (payments
+# BOBRES_TOKEN_CORE, provisioner BOBRES_TOKEN_CORE_PROVISIONER, the bot BOBRES_TOKEN_CORE_BOT,
+# the backup service BOBRES_TOKEN_CORE_BACKUP), so no container holds a token another one
+# accepts as core: a compromised bot cannot change the payment gateways or delete VPN accounts,
+# and a compromised payments cannot send messages as the bot or reach provisioner.
 
 x-app: &app
   restart: unless-stopped
@@ -125,7 +133,7 @@ services:
 
   core:
     <<: *app
-    image: ghcr.io/sobhanaz/bobres-core:${BOBRES_VERSION:-latest}
+    image: ghcr.io/sobhanaz/bobres-core:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_CORE:-}
     build: { <<: *build, args: { SERVICE: core, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
@@ -133,7 +141,10 @@ services:
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
       # Optional: where staff open the dashboard, when not https://BOBRES_DOMAIN (local tests).
       BOBRES_PUBLIC_URL: ${BOBRES_PUBLIC_URL:-}
+      # What core presents to payments (its own token), to provisioner and to the bot: one each.
       BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      BOBRES_PROVISIONER_TOKEN: ${BOBRES_TOKEN_CORE_PROVISIONER:?set BOBRES_TOKEN_CORE_PROVISIONER}
+      BOBRES_BOT_INTERNAL_TOKEN: ${BOBRES_TOKEN_CORE_BOT:?set BOBRES_TOKEN_CORE_BOT}
       BOBRES_PEER_BOT_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
       BOBRES_PAYMENTS_GRPC_ADDR: payments:9090
       BOBRES_PROVISIONER_GRPC_ADDR: provisioner:9090
@@ -156,7 +167,7 @@ services:
 
   bot:
     <<: *app
-    image: ghcr.io/sobhanaz/bobres-bot:${BOBRES_VERSION:-latest}
+    image: ghcr.io/sobhanaz/bobres-bot:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_BOT:-}
     build: { <<: *build, args: { SERVICE: bot, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
@@ -164,8 +175,9 @@ services:
       BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_BOT:?set BOBRES_TOKEN_BOT}
       BOBRES_CORE_GRPC_ADDR: core:9090
       BOBRES_TELEGRAM_BOT_TOKEN: ${BOBRES_TELEGRAM_BOT_TOKEN:?set BOBRES_TELEGRAM_BOT_TOKEN}
-      # Core's token: core may fetch receipt photos from the bot (/internal/files).
-      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      # The token core presents to the bot only (receipt photos, test broadcasts, license
+      # calls under /internal): never BOBRES_TOKEN_CORE, which payments accepts as core.
+      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE_BOT:?set BOBRES_TOKEN_CORE_BOT}
       # The backup service's token: it hands each encrypted backup to the bot for the
       # owner (/internal/backups/deliver). Empty = backups are not sent to Telegram.
       BOBRES_PEER_BACKUP_TOKEN: ${BOBRES_TOKEN_BACKUP:-}
@@ -195,13 +207,14 @@ services:
 
   payments:
     <<: *app
-    image: ghcr.io/sobhanaz/bobres-payments:${BOBRES_VERSION:-latest}
+    image: ghcr.io/sobhanaz/bobres-payments:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_PAYMENTS:-}
     build: { <<: *build, args: { SERVICE: payments, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_payments:${DB_PAYMENTS_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
       BOBRES_PUBLIC_URL: https://${BOBRES_DOMAIN}
+      # Core's own token: only payments accepts it.
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
       # Encrypts the gateway settings saved from the dashboard (merchant id, proxy).
       # Optional so an install from before it still starts: without it Zarinpal runs
@@ -219,12 +232,13 @@ services:
 
   provisioner:
     <<: *app
-    image: ghcr.io/sobhanaz/bobres-provisioner:${BOBRES_VERSION:-latest}
+    image: ghcr.io/sobhanaz/bobres-provisioner:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_PROVISIONER:-}
     build: { <<: *build, args: { SERVICE: provisioner, VERSION: "${BOBRES_VERSION:-dev}" } }
     environment:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_provisioner:${DB_PROVISIONER_PASSWORD}@postgres:5432/bobres?sslmode=disable
-      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
+      # The token core presents to provisioner only.
+      BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE_PROVISIONER:?set BOBRES_TOKEN_CORE_PROVISIONER}
       BOBRES_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:?set BOBRES_PROVISIONER_MASTER_KEY}
       # Optional first panel, registered only while no server exists; servers are
       # added and changed in the dashboard (Servers).
@@ -241,7 +255,7 @@ services:
 
   backup:
     <<: *app
-    image: ghcr.io/sobhanaz/bobres-backup:${BOBRES_VERSION:-latest}
+    image: ghcr.io/sobhanaz/bobres-backup:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_BACKUP:-}
     build: { <<: *build, target: backup, args: { SERVICE: backup, VERSION: "${BOBRES_VERSION:-dev}" } }
     profiles: [backup]
     # The image is postgres:16-alpine (for pg_dump): a tmpfs over its data VOLUME keeps
@@ -257,7 +271,7 @@ services:
       BOBRES_BACKUP_TIME: ${BOBRES_BACKUP_TIME:-03:30}
       BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
       # Core lists and starts backups (System page) with the token it has for this service
-      # only: never BOBRES_TOKEN_CORE, which payments, provisioner and the bot accept.
+      # only: never a token another service accepts from core.
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE_BACKUP:-}
       # Each backup goes to the bot, which sends it to the owner. Empty token = kept here only.
       BOBRES_BOT_URL: http://bot:8080

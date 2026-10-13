@@ -13,7 +13,8 @@ work: [06-installer.md](../06-installer.md), "Backups".
   reason, or "The backup service is not installed", or "Core could not reach the backup service".
 - No new `bobres-<stamp>.bkp` in `/opt/bobres/backups`.
 - With off-server copies (`BOBRES_BACKUP_S3_ENDPOINT` in `.env`): a backup marked as not copied to the bucket, or no
-  new object in the bucket.
+  new object in the bucket, or the system alert "The latest backup was not copied to the off-site (S3) storage"
+  (`backup.offsite`).
 
 ## Checks
 

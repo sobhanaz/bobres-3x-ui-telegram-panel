@@ -68,6 +68,8 @@ func UnmatchedText(code string) string {
 		return "the payment with this amount is closed (failed, or over 48 hours old)"
 	case events.UnmatchedAmbiguous:
 		return "more than one payment has this amount"
+	case events.UnmatchedAfterRestore:
+		return "the payment with this amount was created just after a database restore: check who sent it"
 	case "dust":
 		return "under 0.1 USDT (dust)"
 	}

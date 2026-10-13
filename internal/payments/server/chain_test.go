@@ -128,7 +128,8 @@ func TestUSDTAutoRPCs(t *testing.T) {
 		Amount: &commonv1.Money{Amount: 500_000, Currency: "IRT"}, IdempotencyKey: "rpc-u1",
 		GatewayAmount: &commonv1.Money{Amount: 5_000_000, Currency: "USDT"}})
 	if err != nil || in.GetProvider() != "usdt_trc20_auto" || in.GetStatus() != "pending" || in.GetPayAddress() != tronStore ||
-		in.GetGatewayAmount().GetAmount() != 5_000_001 || in.GetGatewayAmount().GetCurrency() != "USDT" || in.GetExpiresAt() == 0 ||
+		in.GetGatewayAmount().GetAmount() <= 5_000_000 || in.GetGatewayAmount().GetAmount() > 5_009_999 ||
+		in.GetGatewayAmount().GetAmount()%10_000 == 0 || in.GetGatewayAmount().GetCurrency() != "USDT" || in.GetExpiresAt() == 0 ||
 		in.GetExternalId() != "" || in.GetPayUrl() != "" {
 		t.Fatalf("create: %v %v", in, err)
 	}
@@ -197,7 +198,7 @@ func TestUSDTAutoRPCs(t *testing.T) {
 		t.Fatalf("unknown outcome: %v", err)
 	}
 
-	txid := f.fake.Pay(tronStore, 5_000_001)
+	txid := f.fake.Pay(tronStore, in.GetGatewayAmount().GetAmount())
 	// The watcher read the address a moment ago; a check reads it again only
 	// after a gap.
 	if got, err := f.core.CheckIntent(ctx, &paymentsv1.CheckIntentRequest{IntentId: in.GetId(), UserId: uid}); err != nil || got.GetStatus() != "pending" {

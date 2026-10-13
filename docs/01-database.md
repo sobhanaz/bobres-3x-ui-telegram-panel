@@ -1,4 +1,4 @@
-# 01 - Database schema and state machines (DRAFT)
+# 01 - Database schema and state machines
 
 One Postgres per install. One schema per service; no cross-schema joins or foreign keys.
 Services reference each other by ID only (UUID v7). Migrations: goose, forward-only.
@@ -32,6 +32,8 @@ Services reference each other by ID only (UUID v7). Migrations: goose, forward-o
 | audit_log | id, actor_id, action, entity, entity_id (text: a uuid, code or key), before jsonb, after jsonb, reason, ip, source (dashboard/bot/cli/system), created_at; append-only (triggers refuse UPDATE, DELETE, TRUNCATE) |
 | assets | name (logo), content_type, data, updated_at: store files kept out of settings |
 | settings | key, value jsonb (branding, texts, feature flags, payment details and the on/off switches `payments.manual_card.enabled`, `payments.manual_crypto.enabled`, `payments.manual_zarinpal.enabled`, `payments.stars.enabled`; no secret ever, since the bot reads every setting) |
+| install / license | install: one random install id, made with the schema (a license may be bound to it); license: one row, the installed token, when and by whom, `source` (manual, activation, refresh) and `refreshed_at` (05-license.md) |
+| alert_state | key (one per system check), state (ok/pending/problem), since, last_sent_at, passing_since, detail, severity, title_key, args: the core watchdog's memory, so an alert is sent once and its fix is announced (runbooks/README.md) |
 | broadcasts / broadcast_recipients | broadcasts: segment, language, texts, button, schedule, status, counts; recipients: the audience snapshot with each one's status (pending, claimed, sent, blocked, failed, unknown, cancelled). users.bot_blocked_at marks users who blocked the bot |
 
 ## Schema `payments`
@@ -42,7 +44,10 @@ Services reference each other by ID only (UUID v7). Migrations: goose, forward-o
 | manual_receipts | id, intent_id, proof_file, submitted_at, reviewed_by, decision, reason |
 | crypto_addresses | id, network, address, derivation_ref, intent_id, seen_txid, confirmations |
 | reconciliation_runs | id, provider, period, mismatches jsonb, created_at |
-| gateway_configs | provider PK (zarinpal), enabled (offered for new payments), sandbox, merchant_enc, proxy_enc (both encrypted with the payments master key; the proxy URL can carry a password), updated_at, updated_by (core staff user). Seeded once from the environment when empty, then the source of truth; CHECK: enabled needs a merchant id |
+| gateway_configs | provider PK (zarinpal, usdt_trc20_auto), enabled (offered for new payments), sandbox, merchant_enc, proxy_enc, address_enc (the store's TRC20 address), api_key_enc (TronGrid, optional), all encrypted with the payments master key (the proxy URL can carry a password), updated_at, updated_by (core staff user). Zarinpal is seeded once from the environment when empty, then the table is the source of truth; CHECK: enabled needs a merchant id (Zarinpal) or an address (USDT) |
+| gateway_events | id, intent_id, provider, kind (create, callback, webhook, check, precheckout, confirm, scan, match), outcome, detail jsonb, created_at: what each gateway answered, for the report and the runbooks (never card numbers or tokens) |
+| chain_transfers | Every incoming USDT transfer the watcher saw, once: txid + event_index UNIQUE, network (TRC20), token, from/to address, value (micro-USDT), block_ts, intent_id, outcome (matched, unmatched, manual, resolved, ignored), reason, resolved_by/at, note, announce_at. A transfer settles at most one intent and an intent at most one transfer. `payment_intents.pay_address` keeps the address an automatic payment was told to use |
+| chain_cursors | address PK, last_ts (reads restart 2 minutes before it), scanned_at, ok_at, last_error: how far the watcher read each address and how its last read went |
 
 ## Schema `provisioner`
 | Table | Key columns |

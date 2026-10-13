@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -81,8 +82,15 @@ type Server struct {
 	tests *limiter
 	// probes limits connection tests (servers, gateways) per staff member.
 	probes *limiter
-	now    func() time.Time
+	// hashing holds a slot per password hash being computed or checked:
+	// each takes 32 MiB, so a burst of logins must not run them all at once.
+	hashing chan struct{}
+	now     func() time.Time
 }
+
+// hashSlots is how many password hashes core computes at a time (32 MiB
+// each; core's container has 512 MiB).
+const hashSlots = 2
 
 // New builds the API.
 func New(cfg Config) *Server {
@@ -90,7 +98,7 @@ func New(cfg Config) *Server {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute),
-		probes: newLimiter(10, time.Minute), now: time.Now}
+		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), now: time.Now}
 }
 
 // Register mounts the API on /api/v1/ and the dashboard on /admin/.
@@ -350,6 +358,24 @@ func sameOrigin(r *http.Request) bool {
 		return err == nil && strings.EqualFold(u.Host, r.Host)
 	}
 	return true
+}
+
+// clientKey is clientIP for rate limits: an IPv6 address counts as its /64,
+// since one host usually holds a whole /64 and could otherwise use a fresh
+// address for every request.
+func clientKey(r *http.Request) string {
+	ip := clientIP(r)
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
+	}
+	addr = addr.Unmap()
+	if addr.Is6() {
+		if p, err := addr.Prefix(64); err == nil {
+			return p.String()
+		}
+	}
+	return addr.String()
 }
 
 // clientIP is the address Caddy saw (it overwrites X-Forwarded-For; core's

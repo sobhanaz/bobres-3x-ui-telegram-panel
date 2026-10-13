@@ -2,63 +2,141 @@
 
 # BOBRES 3x-ui Telegram Panel
 
-Telegram bot and management panel for selling and managing 3x-ui (Xray) VPN subscriptions.
+Launch your own VPN store on Telegram in one command.
 
-## Planned scope
-- Telegram bot: plans, purchase flow, account and subscription status
-- 3x-ui integration: create, renew and delete clients through the 3x-ui API
-- Admin panel: users, orders, plans, servers, traffic and expiry management
-- Payments and notifications
+BOBRES sells and manages 3x-ui (Xray) VPN subscriptions: a Telegram bot for customers and resellers, a web
+dashboard for staff, and the `bobres` command on the server. It is white-label and single-tenant: each operator runs
+it on their own server, with their own domain, bot, 3x-ui panels and brand.
+
+## Status
+
+Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
+Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
+versions (built only when a customer needs one). No release is published yet. The first public release will be
+v0.1.0, after the first install on a real server ([docs/11-staging-run.md](docs/11-staging-run.md)). Still open: the
+legal review, the brand checks (domain, bot name, trademark) and license pricing.
+
+## Features
+
+**Telegram bot, for customers**
+- Persian and English, in the operator's own name, texts and links.
+- Buy a plan (traffic-limited, time-only or both), with an optional discount code. The service arrives with its
+  subscription link and a QR code.
+- My services: status, expiry and traffic used; renew, or add a traffic package, with the same link.
+- A wallet with top-ups and history, one free trial per Telegram account, and invite links that reward the inviter
+  on a friend's first paid purchase.
+- Reminders 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
+- Support conversations with text, photos and PDFs; staff replies arrive in the chat.
+- Store rules: maintenance mode, a required channel, rate limits, terms and privacy links.
+
+**Resellers, in the bot**
+- A reseller panel: buy for customers at the tier's prices, on credit up to a limit; name and find their services;
+  a statement; an invite link that earns a commission on their customers' purchases.
+
+**Staff**
+- In the bot: `/admin` (stats, find a user, adjust a balance, ban, approve receipts), `/set`, plans, trials, traffic
+  packages, discount codes, and `/dashboard` for a one-time dashboard login link.
+- Alerts in Telegram: payments to review, new tickets, failed deliveries, sales (optional) and system problems.
+
+**Web dashboard** at `https://<domain>/admin`
+- Log in with a one-time link from the bot, or with a password and an authenticator code. Roles: owner, admin,
+  support. Persian and English, dark and light.
+- Overview, users, services, plans and packages, orders and payments with the receipt review queue, the ledger with
+  CSV export, discounts and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
+  settings, 3x-ui servers, payment gateways, staff, the System page (health, updates, logs, backups, license) and
+  the audit log.
+
+**Payments**
+- The wallet; card to card, USDT (TRC20 or ERC20) and a Zarinpal payment link, each with a screenshot staff approve;
+  Zarinpal online (off until a merchant id is set); Telegram Stars; automatic USDT on TRON (TRC20), which matches an
+  exact, unique amount on the chain.
+- Each payment settles exactly once. The ledger is append-only, and amounts are whole numbers in minor units.
+
+**Operations**
+- A one-command install on Ubuntu or Debian, and the `bobres` menu and commands on the server.
+- Several 3x-ui servers, with health checks, weights, servers per plan and inbound switches.
+- Daily encrypted backups: the newest 7 kept on the server, each sent to the owner on Telegram, and optional copies
+  in S3-compatible storage. `bobres restore` puts one back.
+- `bobres update` with stable and beta channels and an automatic rollback; `bobres rollback` undoes the last update.
+- System alerts in Telegram, operator runbooks, a redacted support bundle, server hardening, `bobres config` and
+  `bobres secrets rotate`.
+
+**Security**
+- Four services, each with its own database role and service token. Only the provisioner holds the 3x-ui tokens, only
+  payments holds the gateway secrets, and core has no internet access.
+- Secrets at rest are encrypted with a master key per service. Releases are signed (Ed25519); images are signed with
+  cosign and run by the digests the signed CLI carries.
+- The dashboard has CSRF protection, authenticator codes for every password login, a strict CSP and an append-only
+  audit log.
+- Licenses are signed tokens bound to the store's domain and install. A missing license blocks nothing.
 
 ## Install
 
-On a fresh Ubuntu 22.04/24.04 or Debian 11/12/13 server, as root:
+You need:
+- A server with Ubuntu 22.04/24.04 or Debian 11/12/13 (amd64 or arm64), 1 GB of RAM (2 GB recommended), 10 GB free
+  disk, ports 80 and 443 free, and root access.
+- A domain whose A record points to the server.
+- A new Telegram bot from @BotFather, and your numeric Telegram ID.
+- A 3x-ui panel (v3.8.5 to v3.9.0 are tested) with an API token. You can also add panels later in the dashboard.
+
+As root on the server:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
 ```
 
-It installs Docker if needed, downloads the `bobres` CLI from the latest GitHub release,
-verifies its signature and checksum, and asks for your domain, Telegram ID, bot token and
-3x-ui panel (tokens are typed hidden). Afterwards run `bobres` for the management menu:
+This needs a published release; the first will be v0.1.0. It installs Docker if needed, downloads the `bobres` CLI
+from the latest GitHub release, verifies its signature and checksum, and asks for your domain, Telegram ID, bot token
+and 3x-ui panel (tokens are typed hidden). Then it offers server hardening and prints the first steps and your backup
+key. Details: [docs/06-installer.md](docs/06-installer.md).
+
+Afterwards run `bobres` for the management menu:
 
 ```text
-  BOBRES manager  bobres v0.1.0
-  /opt/bobres  ·  shop.example.com  ·  version 0.1.0
-  Store: running (7/7 services)
+   n____n   BOBRES manager  bobres v0.1.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.1.0
+   \_||_/   Store: running (8/8 services)
+  ──────────────────────────────────────────────────────────
    1. Status
    2. Live logs (Ctrl+C returns here)
    3. Start
    4. Stop
    5. Restart
+  ──────────────────────────────────────────────────────────
    6. Show settings
    7. Change the bot token
    8. Change the owner (admin) Telegram ID
-   9. Change the 3x-ui panel (URL, API token, subscription link)
-  10. Dashboard login link (if the bot is down)
-  11. Check this server
-  12. Uninstall
+   9. Change the first 3x-ui panel (used until the dashboard has a server)
+  ──────────────────────────────────────────────────────────
+  10. Back up now
+  11. Backup key
+  12. Restore a backup
+  ──────────────────────────────────────────────────────────
+  13. Update BOBRES (check for a new release)
+  14. Roll back the last update
+  ──────────────────────────────────────────────────────────
+  15. Dashboard login link (if the bot is down)
+  16. Check this server
+  17. Uninstall
+  ──────────────────────────────────────────────────────────
    0. Exit
 ```
 
-Every item is also a command: `bobres status`, `bobres logs -f`, `bobres restart`, ... (`bobres help`).
+Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`, `bobres update`, ... (`bobres help`).
 
-## Status
-Phases 1-3 are built: the sellable bot with manual payments, Phase 2 payments (Telegram Stars,
-Zarinpal, payment screenshots approved by the admin), Phase 3 retention (renewals, traffic
-packages, reminders, discount codes, referrals). Phase 4, the web dashboard at `https://<domain>/admin`,
-is built: its foundation (login with a link from the bot's /dashboard or with a password and
-authenticator code, Persian/English, dark/light, the Overview), the customers and sales pages (users,
-services, plans, orders and the receipt review queue, the ledger with CSV export, discount codes and
-referrals), store setup (branding and every bot text, settings such as maintenance mode and a
-required channel, staff, the audit log), support and broadcasts (tickets answered through the bot,
-broadcasts with a rate limit), resellers, servers and payment gateways, and the System page (health,
-license, updates, logs, backups). Phase 7 hardening is in progress: daily encrypted backups sent to the
-owner, `bobres restore`, and `bobres update` with an automatic rollback (`bobres rollback` undoes the
-last update); runbooks are in `docs/runbooks/`. Design notes are in `docs/superpowers/specs/`; the first
-real install is `docs/11-staging-run.md`.
-Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) behind Caddy,
-PostgreSQL (one schema and one role per service) and Redis. Docs index: `docs/README.md`.
+## Docs
+
+- [Docs index](docs/README.md): every document, with what it covers.
+- [Project plan](docs/PLAN.md): decisions, architecture and the status of each phase.
+- [Runbooks](docs/runbooks/README.md): what to do when something goes wrong, and the routine jobs.
+- [Brand](docs/08-brand.md): BOBRES the beaver, the assets and the rules for using them.
+- [Changelog](CHANGELOG.md).
+
+## How it is built
+
+A Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) and a `backup` service, behind Caddy, with
+PostgreSQL (one schema and one role per service) and Redis. Services call each other over gRPC and pass events
+through each service's outbox. The dashboard is Vue 3, built into the `core` binary.
 
 ## Development
 - Go 1.26 or newer (`go.mod` says `go 1.26.0`; CI and the Docker image track the latest 1.26 patch).

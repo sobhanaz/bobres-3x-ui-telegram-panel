@@ -11,6 +11,7 @@ facts that matter for the code are restated here).
 | Telegram Stars | built, on when `payments.stars_rate` is set | Telegram's rule for digital goods; no credentials needed |
 | Zarinpal | built, off until a merchant id is set | owner decision on legal/terminal risk, see below |
 | Third-party crypto | **not built** | Crypto Pay, Oxapay and NOWPayments all exclude Iran (see below) |
+| Automatic USDT (TRC20) | built in Phase 6a (#37), off until an address is set | the self-hosted chain watcher recommended below |
 
 ## One contract, one set of rules
 
@@ -117,6 +118,7 @@ facts that matter for the code are restated here).
    breaks their terms. Recommendation: skip third-party crypto and bring the self-hosted
    chain watcher (PLAN.md Phase 6: watch the operator's own TRC20/TON addresses, no third
    party) forward as the automated crypto method. Manual TXID approval stays.
+   Done: the watcher for USDT on TRON was built in Phase 6a (`usdt_trc20_auto`, PR #37).
 2. **Zarinpal risk.** A 2021 Shaparak directive (as reported by the press) told payment
    facilitators to cut merchants selling VPNs; Zarinpal's terms forbid selling anything
    contrary to law; Iran criminalised selling VPNs. Ask Zarinpal support whether they

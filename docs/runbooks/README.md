@@ -29,16 +29,20 @@ over, so a check that comes and goes sends one alert, not one every few minutes.
 checks and the System page go on). The bot cannot send alerts about itself while it is down: they arrive, with the
 "Fixed" message, once it is back.
 
-| Alert | Runbook |
-|---|---|
-| A service is down or not ready | First look (below), then the runbook of that service's problem |
-| A 3x-ui server does not answer | [3x-ui down](xui-down.md) |
-| Zarinpal payments are failing, or one has been open for over 3 hours | [Payment stuck](payment-stuck.md) |
-| The last backup failed, or no new backup for over 26 hours | [Backups not arriving](backups-not-arriving.md) |
-| The disk is almost full (under 2 GB) | [Disk full](disk-full.md) |
-| Paid orders could not be delivered in the last hour | [Provisioning backlog](provisioning-backlog.md) |
-| The bot is behind on its messages (over 10 minutes) | `bobres logs --tail 200 bot`; [Bot token revoked](bot-token-revoked.md) if Telegram refuses the token |
-| The license expires soon, is in its grace period or has expired | [License](license.md) |
+Core's log names each check by its key (`bobres logs --tail 300 core | grep 'system alert'`):
+
+| Alert | Key | Runbook |
+|---|---|---|
+| A service is down or not ready | `service.<name>` | First look (below), then the runbook of that service's problem |
+| A 3x-ui server does not answer | `server.<id>` | [3x-ui down](xui-down.md) |
+| Zarinpal payments are failing, or one has been open for over 3 hours | `gateway.zarinpal.error`, `gateway.zarinpal.open` | [Payment stuck](payment-stuck.md) |
+| Automatic USDT payments are not being checked (no read of the store's TRON address from TronGrid has worked for 5 minutes), or one has been open for over 2 hours | `gateway.usdt_auto.read`, `gateway.usdt_auto.open` | [Payment stuck](payment-stuck.md) |
+| The last backup failed, or no new backup for over 26 hours | `backup.failed`, `backup.stale` | [Backups not arriving](backups-not-arriving.md) |
+| The latest backup was not copied to the off-site (S3) storage, or its settings cannot be used | `backup.offsite` | [Backups not arriving](backups-not-arriving.md#a-backup-is-made-but-not-copied-to-s3) |
+| The disk is almost full (under 2 GB) | `backup.disk` | [Disk full](disk-full.md) |
+| Paid orders could not be delivered in the last hour | `orders.provision_failed` | [Provisioning backlog](provisioning-backlog.md) |
+| The bot is behind on its messages (over 10 minutes) | `events.bot_lag` | `bobres logs --tail 200 bot`; [Bot token revoked](bot-token-revoked.md) if Telegram refuses the token |
+| The license expires soon, is in its grace period or has expired | `license.expiry` | [License](license.md) |
 
 ## Before you start
 
@@ -92,7 +96,7 @@ If the bot is down, staff get into the dashboard with a one-time link printed on
 | redis | The bot's conversation state and rate limits | The bot cannot answer |
 | core | Users, plans, orders, wallet, delivery worker, dashboard | Nothing is sold or delivered; the dashboard is down |
 | bot | Telegram: customers, staff alerts, delivering backups | Customers get no answer; no alerts, no backups in Telegram |
-| payments | Zarinpal, Stars, manual receipts; checks open payments every 30 s | Online payments are not confirmed (they are once it is back) |
+| payments | Zarinpal, Stars, automatic USDT, manual receipts; checks open payments every 30 s | Online payments are not confirmed (they are once it is back) |
 | provisioner | The only service that talks to the 3x-ui panels | Paid orders wait; they are delivered once it is back |
 | backup | The daily encrypted backup (when the backup profile is on) | No backups |
 

@@ -48,6 +48,11 @@ const (
 	// off to 32 minutes) expires it: one still open after 3 hours is stuck,
 	// not a checkout the customer left.
 	zarinpalOpenLimit = 3 * time.Hour
+	// An automatic USDT payment is open for its 45 minutes, then until a
+	// complete read of the address that started 5 minutes after them
+	// expires it: one still open after 2 hours means the reads never get
+	// through (cut short every time), even if each one answers.
+	usdtOpenLimit     = 2 * time.Hour
 	backupMaxAge      = 26 * time.Hour // the daily backup, with slack
 	diskMinFree       = 2 << 30        // bytes
 	provisionWindow   = time.Hour      // failed deliveries counted
@@ -178,7 +183,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.backups, w.deliveries, w.feed, w.license,
+		w.services, w.servers, w.zarinpal, w.usdt, w.backups, w.deliveries, w.feed, w.license,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup
@@ -438,8 +443,48 @@ func (w *Watchdog) zarinpal(ctx context.Context, now time.Time) alertProbe {
 	return p
 }
 
+// usdt: when the owner switched automatic USDT on, the watcher reads the
+// store's address (its last read worked, or one did within 5 minutes: the
+// report's Healthy) and no automatic payment has been open for over 2
+// hours. While the reads fail, customers who paid wait and their payments
+// stay open (they expire only after a read), and no unmatched deposit is
+// seen either.
+func (w *Watchdog) usdt(ctx context.Context, now time.Time) alertProbe {
+	p := alertProbe{scope: "gateway.usdt_auto."}
+	if w.src.Gateways == nil {
+		p.covered = true
+		return p
+	}
+	configs, err := w.src.Gateways.GatewayConfigs(ctx)
+	if err != nil {
+		return p
+	}
+	enabled := false
+	for _, c := range configs {
+		enabled = enabled || (c.Provider == USDTAuto && c.Enabled)
+	}
+	if !enabled {
+		p.covered = true
+		return p
+	}
+	rep, err := w.src.Gateways.GatewayReport(ctx, USDTAuto, 0, 0)
+	if err != nil {
+		return p
+	}
+	p.covered = true
+	reads := alertCheck{key: "gateway.usdt_auto.read", problem: !rep.Healthy(now), severity: events.SeverityCritical,
+		title: "alert.usdt_failing", detail: rep.ScanError}
+	stuck := alertCheck{key: "gateway.usdt_auto.open", severity: events.SeverityCritical, title: "alert.usdt_stuck",
+		problem: rep.OldestOpenAt > 0 && now.Sub(time.Unix(rep.OldestOpenAt, 0)) > usdtOpenLimit,
+		args:    map[string]string{"count": strconv.FormatInt(rep.OpenCount, 10)}}
+	p.checks = append(p.checks, reads, stuck)
+	return p
+}
+
 // backups: when the backup service is installed, the last run worked, the
 // newest good backup is under 26 hours old, and the disk has 2 GB free.
+// With an off-site (S3) copy set up, the newest good backup was copied, and
+// the settings can be used.
 // While the service does not answer (its own check reports it down), the
 // other checks stay as they were, but no backup is made or seen either: the
 // newest one it last reported (or, after a restart of core, the time it
@@ -480,6 +525,16 @@ func (w *Watchdog) backups(ctx context.Context, now time.Time) alertProbe {
 	if sum.DiskFree > 0 {
 		p.checks = append(p.checks, alertCheck{key: "backup.disk", problem: sum.DiskFree < diskMinFree, severity: events.SeverityWarning,
 			title: "alert.disk_low", args: map[string]string{"free": strconv.FormatUint(sum.DiskFree, 10)}})
+	}
+	if sum.OffsiteConfigured || sum.OffsiteError != "" {
+		c := alertCheck{key: "backup.offsite", severity: events.SeverityWarning, title: "alert.backup_offsite"}
+		switch {
+		case sum.OffsiteError != "":
+			c.problem, c.detail = true, sum.OffsiteError
+		case sum.LastUploadError != "":
+			c.problem, c.detail = true, sum.LastUploadError
+		}
+		p.checks = append(p.checks, c)
 	}
 	return p
 }

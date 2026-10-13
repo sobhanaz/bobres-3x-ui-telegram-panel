@@ -74,7 +74,7 @@ var SettingSpecs = []SettingSpec{
 	{Key: "notify.provision_failed", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "message staff when a service could not be created on the panel"},
 	{Key: "notify.system_alerts", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
-		Help: "message staff when a service, a 3x-ui server, Zarinpal, backups, the disk, deliveries, the bot's event feed or the license has a problem, and when it is fixed"},
+		Help: "message staff when a service, a 3x-ui server, Zarinpal, automatic USDT, backups (and their off-site copies), the disk, deliveries, the bot's event feed or the license has a problem, and when it is fixed"},
 	{Key: "notify.sales", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "message staff on every paid order"},
 	{Key: "notify.recipients", Group: "notify", Kind: KindEnum, Perm: permSettings, Default: "owner",

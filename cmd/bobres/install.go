@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/deploy"
-	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
@@ -39,7 +38,7 @@ type installer struct {
 	getenv    func(string) string
 	readHide  func(prompt string) (string, error) // hidden input; nil when not a terminal
 	run       func(ctx context.Context, dir string, args ...string) ([]byte, error)
-	checkBot  func(ctx context.Context, token string) (string, error)
+	checkBot  func(ctx context.Context, token, apiRoot string) (string, error) // getMe at apiRoot ("": api.telegram.org)
 	lookupIP  func(ctx context.Context, host string) ([]net.IP, error)
 	preflight func(domain string) []Result
 	sleep     func(time.Duration)
@@ -64,13 +63,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 			cmd.Dir = dir
 			return cmd.CombinedOutput()
 		},
-		checkBot: func(ctx context.Context, token string) (string, error) {
-			me, err := tg.New(token).GetMe(ctx)
-			if err != nil {
-				return "", err
-			}
-			return me.Username, nil
-		},
+		checkBot:  botUsername,
 		preflight: func(domain string) []Result { return runDoctor(domain, false) },
 		sleep:     time.Sleep,
 	}
@@ -104,10 +97,13 @@ func installCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 
 // envOrder is the order of keys in the generated .env.
 var envOrder = []string{
-	"BOBRES_ENV", "BOBRES_LOG_LEVEL", "BOBRES_LOG_FORMAT", "BOBRES_VERSION", "BOBRES_DOMAIN",
+	"BOBRES_ENV", "BOBRES_LOG_LEVEL", "BOBRES_LOG_FORMAT", "BOBRES_VERSION",
+	"BOBRES_IMAGE_DIGEST_CORE", "BOBRES_IMAGE_DIGEST_BOT", "BOBRES_IMAGE_DIGEST_PAYMENTS",
+	"BOBRES_IMAGE_DIGEST_PROVISIONER", "BOBRES_IMAGE_DIGEST_BACKUP", "BOBRES_DOMAIN",
 	"POSTGRES_PASSWORD", "DB_CORE_PASSWORD", "DB_PAYMENTS_PASSWORD", "DB_PROVISIONER_PASSWORD", "DB_BACKUP_PASSWORD",
 	"REDIS_PASSWORD", "BOBRES_REDIS_URL",
-	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP",
+	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_CORE_PROVISIONER", "BOBRES_TOKEN_CORE_BOT",
+	"BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP", "BOBRES_TOKEN_CORE_BACKUP",
 	"BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY",
 	"BOBRES_BACKUP_KEY", "BOBRES_BACKUP_TIME", "COMPOSE_PROFILES", "BOBRES_BACKUP_URL",
 	"BOBRES_BACKUP_S3_ENDPOINT", "BOBRES_BACKUP_S3_BUCKET", "BOBRES_BACKUP_S3_REGION", "BOBRES_BACKUP_S3_PREFIX",
@@ -117,13 +113,26 @@ var envOrder = []string{
 	"BOBRES_ZARINPAL_MERCHANT_ID", "BOBRES_ZARINPAL_PROXY", "BOBRES_ZARINPAL_PUBLIC_URL", "BOBRES_ZARINPAL_HOST",
 }
 
+// serviceTokens are the internal service tokens (each a different random
+// value), which `bobres secrets rotate service-tokens` changes together. A
+// service presents its own token to core (BOBRES_TOKEN_BOT) or to the bot
+// (BOBRES_TOKEN_BACKUP); core presents a different one to each service it
+// calls: payments BOBRES_TOKEN_CORE, provisioner BOBRES_TOKEN_CORE_PROVISIONER,
+// the bot BOBRES_TOKEN_CORE_BOT and the backup service BOBRES_TOKEN_CORE_BACKUP.
+// So no container holds a token another one accepts as core.
+var serviceTokens = []string{
+	"BOBRES_TOKEN_CORE", "BOBRES_TOKEN_CORE_PROVISIONER", "BOBRES_TOKEN_CORE_BOT", "BOBRES_TOKEN_CORE_BACKUP",
+	"BOBRES_TOKEN_BOT", "BOBRES_TOKEN_BACKUP",
+}
+
 // generated secrets: created once, then kept on every re-run (changing a
 // database password would lock the services out of an existing database).
 var generated = map[string]int{ // key -> random bytes (hex-encoded)
 	"POSTGRES_PASSWORD": 24, "DB_CORE_PASSWORD": 24, "DB_PAYMENTS_PASSWORD": 24, "DB_PROVISIONER_PASSWORD": 24,
 	"DB_BACKUP_PASSWORD": 24, "REDIS_PASSWORD": 24, "BOBRES_TOKEN_CORE": 32, "BOBRES_TOKEN_BOT": 32, "BOBRES_TOKEN_BACKUP": 32,
-	// BOBRES_TOKEN_CORE_BACKUP is what core presents to the backup service: never
-	// BOBRES_TOKEN_CORE, which would let the backup container act as core.
+	// Core presents a token of its own to each service it calls (serviceTokens):
+	// one shared token would let any of them act as core toward the others.
+	"BOBRES_TOKEN_CORE_PROVISIONER": 32, "BOBRES_TOKEN_CORE_BOT": 32,
 	"BOBRES_TOKEN_CORE_BACKUP": 32, "BOBRES_CORE_MASTER_KEY": 32, "BOBRES_PROVISIONER_MASTER_KEY": 32, "BOBRES_PAYMENTS_MASTER_KEY": 32,
 	// Encrypts the backups: shown once by the run that saves it, again in the menu.
 	"BOBRES_BACKUP_KEY": 32,
@@ -260,6 +269,14 @@ func (ins *installer) install(args []string) int {
 	} else if env["BOBRES_VERSION"] == "" || !existing {
 		env["BOBRES_VERSION"] = imageTag(version.Version)
 	}
+	// This CLI's own images run by the digests its signed release carries,
+	// not by their tag, which whoever can push to the registry can move.
+	pins, err := releaseDigests(imageDigests)
+	if err != nil {
+		fmt.Fprintf(ins.errOut, "error: this bobres build's image digests are broken (%v): download the release again\n", err)
+		return 1
+	}
+	pinImages(env, pins)
 	// Follows the version both ways: a rollback to a release from before the
 	// backup service would otherwise fail to pull its image.
 	if backupImage(env["BOBRES_VERSION"]) {
@@ -298,11 +315,19 @@ func (ins *installer) install(args []string) int {
 			fmt.Fprintln(ins.errOut, "error:", err)
 			return 2
 		}
+		// The check goes where the bot goes: a local Bot API server when
+		// BOBRES_TELEGRAM_API_URL names one (a server that reaches Telegram
+		// only through it), else api.telegram.org.
+		root := telegramAPIRoot(env)
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		name, err := ins.checkBot(cctx, env["BOBRES_TELEGRAM_BOT_TOKEN"])
+		name, err := ins.checkBot(cctx, env["BOBRES_TELEGRAM_BOT_TOKEN"], root)
 		cancel()
 		if err != nil {
-			fmt.Fprintf(ins.errOut, "error: Telegram rejected the bot token or is unreachable: %v (use --offline to skip)\n", err)
+			via := ""
+			if root != "" {
+				via = " (through the Bot API server " + root + ", BOBRES_TELEGRAM_API_URL)"
+			}
+			fmt.Fprintf(ins.errOut, "error: Telegram rejected the bot token or is unreachable%s: %v (use --offline to skip)\n", via, err)
 			return 1
 		}
 		fmt.Fprintf(ins.out, "Bot token OK: @%s\n", name)
@@ -778,9 +803,14 @@ func readEnv(path string) (map[string]string, bool, error) {
 	return parseEnv(b), true, nil
 }
 
-// parseEnv reads the KEY=VALUE lines of an env file (quotes stripped).
-func parseEnv(b []byte) map[string]string {
-	env := map[string]string{}
+// envLine is one KEY=VALUE line of an env file: its value, and the comment
+// at the end of the line ("# ...", or "").
+type envLine struct{ key, value, comment string }
+
+// envLines reads the KEY=VALUE lines of an env file; blank lines and comment
+// lines are skipped.
+func envLines(b []byte) []envLine {
+	var out []envLine
 	for _, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -790,26 +820,99 @@ func parseEnv(b []byte) map[string]string {
 		if !ok {
 			continue
 		}
-		v = strings.TrimSpace(v)
-		if len(v) >= 2 && (v[0] == '\'' || v[0] == '"') && v[len(v)-1] == v[0] {
-			v = v[1 : len(v)-1]
+		v, c := splitEnvValue(v)
+		out = append(out, envLine{key: strings.TrimSpace(k), value: v, comment: c})
+	}
+	return out
+}
+
+// splitEnvValue splits what follows a key's "=" into the value and the
+// comment after it, by Compose's rules: a quoted value ends at its closing
+// quote (one after a backslash does not count), so a # inside it is kept,
+// and a # after it starts the comment; in an unquoted value, " #" starts
+// the comment (a # with no space before it is part of the value). A quoted
+// value with anything but a comment after it is read as it always was: the
+// outer quotes stripped when both are there.
+func splitEnvValue(raw string) (value, comment string) {
+	v := strings.TrimSpace(raw)
+	if v == "" || (v[0] != '\'' && v[0] != '"') {
+		if i := strings.Index(v, " #"); i >= 0 {
+			return strings.TrimSpace(v[:i]), strings.TrimSpace(v[i:])
 		}
-		env[strings.TrimSpace(k)] = v
+		return v, ""
+	}
+	q := v[0]
+	for i := 1; i < len(v); i++ {
+		if v[i] != q || v[i-1] == '\\' {
+			continue
+		}
+		if rest := strings.TrimSpace(v[i+1:]); rest == "" || rest[0] == '#' {
+			return v[1:i], rest
+		}
+		break
+	}
+	if len(v) >= 2 && v[len(v)-1] == q {
+		return v[1 : len(v)-1], ""
+	}
+	return v, ""
+}
+
+// parseEnv reads the values of an env file (quotes and comments stripped).
+func parseEnv(b []byte) map[string]string {
+	env := map[string]string{}
+	for _, l := range envLines(b) {
+		env[l.key] = l.value
 	}
 	return env
 }
 
+// envComments maps each key of an env file to the comment at the end of its
+// line, for the keys that have one.
+func envComments(b []byte) map[string]string {
+	comments := map[string]string{}
+	for _, l := range envLines(b) {
+		if l.comment != "" {
+			comments[l.key] = l.comment
+		} else {
+			delete(comments, l.key) // the last line of a key is the one that counts
+		}
+	}
+	return comments
+}
+
+// writeEnv writes env to path (root only, atomically), keeping the comments
+// at the end of the lines of the file it replaces.
+func writeEnv(path string, env map[string]string) error {
+	return writeAtomic(path, renderEnvFor(path, env), 0o600)
+}
+
+// renderEnvFor renders env with the line-end comments of the env file at
+// path (none when it cannot be read).
+func renderEnvFor(path string, env map[string]string) []byte {
+	prev, _ := os.ReadFile(path) //nolint:gosec // the install's own .env
+	return renderEnvComments(env, envComments(prev))
+}
+
 // renderEnv writes the env file; values with characters Compose would
-// interpret ($, spaces...) are single-quoted (no interpolation inside).
-func renderEnv(env map[string]string) []byte {
+// interpret ($, spaces, #...) are single-quoted (no interpolation inside).
+func renderEnv(env map[string]string) []byte { return renderEnvComments(env, nil) }
+
+// renderEnvComments is renderEnv with a comment at the end of a key's line
+// (comments: key -> "# ..."), as the operator wrote it there.
+func renderEnvComments(env, comments map[string]string) []byte {
 	var b strings.Builder
 	b.WriteString("# BOBRES environment, generated by `bobres install`. Keep it secret and backed up.\n")
 	b.WriteString("# Re-running the installer keeps these secrets. See .env.example for documentation.\n")
 	seen := map[string]bool{}
 	write := func(k string) {
-		v := env[k]
-		if !safeEnvRe.MatchString(v) {
+		v, c := env[k], comments[k]
+		// An empty value before a comment is quoted too: Compose would read
+		// "KEY= # note" as the value "# note".
+		if !safeEnvRe.MatchString(v) || (v == "" && c != "") {
 			v = "'" + v + "'"
+		}
+		if c != "" {
+			v += " " + c
 		}
 		fmt.Fprintf(&b, "%s=%s\n", k, v)
 		seen[k] = true
@@ -865,7 +968,7 @@ func writeFiles(dir string, env map[string]string) error {
 		data []byte
 		mode os.FileMode
 	}{
-		{".env", renderEnv(env), 0o600},
+		{".env", renderEnvFor(filepath.Join(dir, ".env"), env), 0o600},
 		{".env.example", deploy.EnvExample, 0o644},
 		{"docker-compose.yml", installedCompose(deploy.ComposeFile), 0o644},
 		{"Caddyfile", deploy.Caddyfile, 0o644},

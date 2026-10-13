@@ -1,4 +1,4 @@
-# 07 - Security and threat model (DRAFT)
+# 07 - Security and threat model
 
 This product moves money and holds a full-admin token to a VPN panel, so the main goal is: no theft of
 funds, no takeover of the 3x-ui panel, no leak of user identity. Each customer is single-tenant, which limits blast radius.
@@ -35,6 +35,10 @@ Since milestone 6a both are set from the dashboard, through core, without core e
   page, and a server's `detail` on the overview). Everyone else who reads the overview, support included, sees "does
   not answer".
 - `gateways.write` (Zarinpal settings, the manual methods' details and their on/off switches) is the owner's.
+- Automatic USDT (Phase 6a) works the same way: the store's TRON address, the optional TronGrid key and proxy are
+  encrypted with the payments master key and never answered back. The address cannot change while automatic payments
+  are open, so no customer pays an address nobody watches. A transaction id pays at most one payment, across the
+  automatic and the manual path.
 
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
@@ -51,8 +55,8 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 | SSRF via admin-entered URLs (3x-ui URL, webhooks) | Allow/deny lists, block metadata/loopback ranges unless explicitly allowed |
 | Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted with `BOBRES_BACKUP_KEY` (which is never sent with them), support-bundle scrubs. The System page's logs (the newest 500 warnings and errors per service, in memory) are kept after the same redaction and shown to the owner only, since they carry Telegram ids |
 | Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel. The panel URL must be https; plain http is accepted only with allow-private, and every connection is then checked to go to a private, loopback or link-local address (`xui.ErrPublicPlaintext`). This bounds the first hop only: a private next hop that NATs or proxies onward is the operator's network, and a custom HTTP client (`xui.WithHTTPClient`) is refused for plain http |
-| Supply chain | Pinned deps, govulncheck, trivy, signed images + SBOM, minimal base images, CI with least-privilege tokens |
-| Malicious update / MITM of installer | Signature verification (ed25519/cosign), HTTPS, checksums, no unsigned code paths |
+| Supply chain | Pinned deps (`go.sum`, `package-lock.json`), a govulncheck gate and a gitleaks secret scan in CI (no trivy image scan yet), release images signed with keyless cosign, with SBOM and provenance, and run by the digests built into the signed CLI (next row), minimal base images, CI with least-privilege tokens |
+| Malicious update / MITM of installer | install.sh and `bobres update` check `keys.txt` against the embedded root keys, the release key's Ed25519 signature on `checksums.txt` (version, channel, expiry) and the CLI's SHA-256 before they run it, over HTTPS. BOBRES's five images run by the digests built into that signed CLI (`BOBRES_IMAGE_DIGEST_<SERVICE>`, appended to each image's tag): the release workflow takes a digest only after checking its keyless cosign signature from that workflow and tag, so a moved tag on ghcr.io changes nothing. The servers do not run cosign. Not covered by a signature: install.sh itself (fetched over HTTPS), Docker's install script (get.docker.com), the Caddy, Postgres and Redis images (Docker Hub, by tag), and BOBRES images run by tag (a `BOBRES_VERSION` other than the CLI's own, or a development build of the CLI) |
 | License key sharing | Install binding, re-activation limits, revocation; accept residual risk |
 | Compromised host | Non-root containers, read-only FS, dropped capabilities, ufw, fail2ban, unattended upgrades |
 | Insider/staff abuse | Roles with least privilege (payment details, staff and the owner role are the owner's), mandatory reason on money and staff actions, an append-only audit log (database triggers refuse UPDATE, DELETE and TRUNCATE) that records where each change was made |
@@ -64,7 +68,7 @@ Since milestone 6a both are set from the dashboard, through core, without core e
   ciphertext for panel tokens, gateway secrets and authenticator secrets. A backup of the database is useless for
   these without the matching key, so the keys are backed up with it.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
-- TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS later; auth is one interceptor), see PLAN.md §11.
+- TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS is not built; auth is one interceptor), see PLAN.md §11.
 - Backups (the `backup` service, docs/06-installer.md): each file is encrypted with `BOBRES_BACKUP_KEY` (a random
   file key per backup, wrapped with a key derived from it by HKDF; 64 KiB AES-256-GCM chunks with counters and a
   final flag, so reordered, cut or edited files fail). The installer shows the key once and the menu shows it again
@@ -92,7 +96,8 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 
 ## Security process
 - Threat-model review each phase; dependency updates weekly; security tests for money flows (race, replay, tamper).
-- `SECURITY.md` with a disclosure contact; incident runbook (rotate secrets, revoke license/tokens, notify).
+- `SECURITY.md` with a disclosure contact (not written); incident runbooks (built: docs/runbooks/, including rotating
+  secrets).
 - Pentest or external review before selling to third parties.
 
 ## Residual risks (accepted, stated)
@@ -101,6 +106,10 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 - Legal/regulatory exposure of the VPN business is outside technical control (see 09).
 
 ## Open points
-- DECIDED: per-service tokens first, mTLS later.
-- Where the master encryption key lives to survive reinstall (backup of key = part of restore drill).
-- Whether to offer optional forced-2FA for owner accounts by default.
+- DECIDED: per-service tokens first. mTLS is not built.
+- DECIDED (milestone 6b): the master keys travel inside each encrypted backup, so a backup and `BOBRES_BACKUP_KEY`
+  restore everything on a new server. The backup key itself is shown once by the installer and again in `bobres
+  menu`; the operator keeps it off the server.
+- DECIDED: every password login needs an authenticator code, for every role. Link logins come from the bot or from
+  `bobres admin link` on the server.
+- Rotating the master keys (re-encrypting what they protect) is not built.

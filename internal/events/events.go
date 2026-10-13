@@ -67,6 +67,11 @@ const (
 	// UnmatchedAmbiguous: more than one payment has this amount; nothing is
 	// guessed.
 	UnmatchedAmbiguous = "ambiguous"
+	// UnmatchedAfterRestore: the payment with this amount was created just
+	// after the database was restored from a backup; a customer whose
+	// payment the restore erased may have been told the same amount, so
+	// staff check who sent it.
+	UnmatchedAfterRestore = "after_restore"
 )
 
 // DepositUnmatchedEvent: USDT (TRC20) reached the store's address and was
@@ -144,6 +149,11 @@ const (
 	// CreditOrderNotPayable: a manual payment for an order arrived after the
 	// order was paid another way (or cancelled); the money stays in the wallet.
 	CreditOrderNotPayable = "order_not_payable" //nolint:gosec // an event reason, not a credential
+	// CreditDiscountUsed: a payment for an order arrived after its discount
+	// code stopped allowing this use (the customer used it on another order,
+	// or its uses ran out); the money stays in the wallet and the order
+	// stays unpaid.
+	CreditDiscountUsed = "discount_used"
 	// CreditAdminAdjust: an admin added balance by hand.
 	CreditAdminAdjust = "admin_adjust"
 	// CreditReferral: a reward for an invited user's first purchase.

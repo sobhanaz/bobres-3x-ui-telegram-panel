@@ -29,6 +29,16 @@ func (s *Store) GetDiscount(ctx context.Context, q querier, code string) (*Disco
 	return d, nil
 }
 
+// LockDiscount returns a discount code and holds its row until the
+// transaction ends, so two orders paying with one code take turns.
+func (s *Store) LockDiscount(ctx context.Context, tx pgx.Tx, code string) (*Discount, error) {
+	d, err := scanDiscount(tx.QueryRow(ctx, `SELECT `+discountCols+` FROM core.discount_codes WHERE code = $1 FOR UPDATE`, code))
+	if err != nil {
+		return nil, fmt.Errorf("lock discount: %w", err)
+	}
+	return d, nil
+}
+
 // UpsertDiscount creates a code or replaces its terms; the use count stays.
 func (s *Store) UpsertDiscount(ctx context.Context, q querier, d *Discount) (*Discount, error) {
 	got, err := scanDiscount(q.QueryRow(ctx, `
@@ -75,8 +85,7 @@ func (s *Store) HasRedeemed(ctx context.Context, q querier, code, userID string)
 
 // RecordRedemption counts a code's use by a paid order, once per order and
 // per customer. It reports whether this order's use was recorded (false when
-// the customer had already used the code on another order: the price they
-// paid stands either way).
+// the customer had already used the code on another order).
 func (s *Store) RecordRedemption(ctx context.Context, q querier, code, userID, orderID string) (bool, error) {
 	tag, err := q.Exec(ctx, `INSERT INTO core.discount_redemptions (code, user_id, order_id) VALUES ($1, $2, $3)
 		ON CONFLICT DO NOTHING`, code, userID, orderID)

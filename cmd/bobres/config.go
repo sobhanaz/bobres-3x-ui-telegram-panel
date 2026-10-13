@@ -144,7 +144,8 @@ func keyHint(name string) string {
 		return `bobres menu > "Backup key" shows it; docs/runbooks/rotate-secrets.md replaces it`
 	case name == "BOBRES_BACKUP_S3_ACCESS_KEY" || name == "BOBRES_BACKUP_S3_SECRET_KEY":
 		return "bobres install --s3-endpoint <url> asks for it while it is empty; to replace it, edit .env and run bobres install --skip-checks"
-	case name == "BOBRES_VERSION":
+	case name == "BOBRES_VERSION" || strings.HasPrefix(name, "BOBRES_IMAGE_DIGEST_"):
+		// The digests follow the version: the signed release CLI sets both.
 		return "bobres update"
 	case strings.HasPrefix(name, "BOBRES_XUI_"):
 		return "servers are managed in the dashboard (Servers)"
@@ -335,7 +336,7 @@ func (o *ops) configSet(dir, name, value string, noRestart bool) int {
 		return 1
 	}
 	envPath := filepath.Join(dir, ".env")
-	if err := writeAtomic(envPath, renderEnv(next), 0o600); err != nil {
+	if err := writeEnv(envPath, next); err != nil {
 		fmt.Fprintf(o.errOut, "error: %v. Nothing was changed.\n", err)
 		return 1
 	}
