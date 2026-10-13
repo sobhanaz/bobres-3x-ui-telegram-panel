@@ -61,6 +61,13 @@ type PhotoSize struct {
 	FileSize     int    `json:"file_size,omitempty"`
 }
 
+// UserProfilePhotos is a page of a user's profile photos, the current one
+// first, each in up to 4 sizes.
+type UserProfilePhotos struct {
+	TotalCount int           `json:"total_count"`
+	Photos     [][]PhotoSize `json:"photos"`
+}
+
 // Message is a chat message.
 type Message struct {
 	MessageID int         `json:"message_id"`

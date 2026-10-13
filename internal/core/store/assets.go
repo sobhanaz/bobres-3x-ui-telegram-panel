@@ -9,7 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Asset is a store file (the logo), kept in core.assets.
+// AssetBotPhoto is the bot's Telegram profile photo, a square JPEG.
+const AssetBotPhoto = "bot_photo"
+
+// Asset is a store file (the logo, the bot photo), kept in core.assets.
 type Asset struct {
 	Name        string
 	ContentType string

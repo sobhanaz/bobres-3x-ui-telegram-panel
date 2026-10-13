@@ -215,6 +215,8 @@ export interface BrandingInfo {
   privacy_url: string
   currency: LangPair
   logo: { url: string; type: string; size: number; updated_at: number } | null
+  /** The bot's Telegram profile photo (a square JPEG); older servers leave it out. */
+  bot_photo?: { url: string; size: number; updated_at: number } | null
   defaults: { name: string; color: string; currency: LangPair }
 }
 

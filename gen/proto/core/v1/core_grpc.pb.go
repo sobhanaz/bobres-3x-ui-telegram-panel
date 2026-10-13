@@ -65,6 +65,7 @@ const (
 	CoreService_ReportBroadcastResults_FullMethodName   = "/core.v1.CoreService/ReportBroadcastResults"
 	CoreService_SetSubscriptionLabel_FullMethodName     = "/core.v1.CoreService/SetSubscriptionLabel"
 	CoreService_GetResellerInfo_FullMethodName          = "/core.v1.CoreService/GetResellerInfo"
+	CoreService_GetBotPhoto_FullMethodName              = "/core.v1.CoreService/GetBotPhoto"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -127,6 +128,9 @@ type CoreServiceClient interface {
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error)
 	GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
+	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
+	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
+	GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error)
 }
 
 type coreServiceClient struct {
@@ -598,6 +602,16 @@ func (c *coreServiceClient) GetResellerInfo(ctx context.Context, in *GetReseller
 	return out, nil
 }
 
+func (c *coreServiceClient) GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BotPhoto)
+	err := c.cc.Invoke(ctx, CoreService_GetBotPhoto_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -658,6 +672,9 @@ type CoreServiceServer interface {
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error)
 	GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error)
+	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
+	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
+	GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -805,6 +822,9 @@ func (UnimplementedCoreServiceServer) SetSubscriptionLabel(context.Context, *Set
 }
 func (UnimplementedCoreServiceServer) GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetResellerInfo not implemented")
+}
+func (UnimplementedCoreServiceServer) GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBotPhoto not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1655,6 +1675,24 @@ func _CoreService_GetResellerInfo_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_GetBotPhoto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBotPhotoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetBotPhoto(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetBotPhoto_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetBotPhoto(ctx, req.(*GetBotPhotoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1845,6 +1883,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetResellerInfo",
 			Handler:    _CoreService_GetResellerInfo_Handler,
+		},
+		{
+			MethodName: "GetBotPhoto",
+			Handler:    _CoreService_GetBotPhoto_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

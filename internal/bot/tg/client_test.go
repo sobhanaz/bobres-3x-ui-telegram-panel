@@ -510,3 +510,82 @@ func TestProfileMethods(t *testing.T) {
 		t.Fatalf("requests:\n%s\nwant:\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+// setMyProfilePhoto is multipart: the photo field names the file part
+// (attach://avatar), a JPEG named avatar.jpg; removeMyProfilePhoto takes no
+// parameters.
+func TestProfilePhotoMethods(t *testing.T) {
+	jpeg := []byte("\xff\xd8\xff\xe0 a jpeg \x00\x01")
+	type part struct {
+		name, file, ctype, body string
+	}
+	var (
+		calls []string
+		parts []part
+	)
+	c, _ := fakeAPI(t, func(method string, body []byte, r *http.Request) any {
+		ctype, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		calls = append(calls, method+" "+ctype)
+		switch ctype {
+		case "multipart/form-data":
+			mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+			for {
+				p, err := mr.NextPart()
+				if err != nil {
+					break
+				}
+				b, _ := io.ReadAll(p)
+				parts = append(parts, part{p.FormName(), p.FileName(), p.Header.Get("Content-Type"), string(b)})
+			}
+		case "application/json":
+			calls[len(calls)-1] += " " + string(body)
+		}
+		return ok(true)
+	})
+	ctx := context.Background()
+	if err := c.SetMyProfilePhoto(ctx, jpeg); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RemoveMyProfilePhoto(ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"setMyProfilePhoto multipart/form-data", "removeMyProfilePhoto application/json {}"}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests:\n%s\nwant:\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
+	}
+	wantParts := []part{
+		{name: "photo", body: `{"type":"static","photo":"attach://avatar"}`},
+		{name: "avatar", file: "avatar.jpg", ctype: "image/jpeg", body: string(jpeg)},
+	}
+	if len(parts) != len(wantParts) {
+		t.Fatalf("parts: %+v", parts)
+	}
+	for i, p := range parts {
+		if w := wantParts[i]; p.name != w.name || p.file != w.file || p.body != w.body || (w.ctype != "" && p.ctype != w.ctype) {
+			t.Errorf("part %d: %+v, want %+v", i, p, w)
+		}
+	}
+}
+
+// getUserProfilePhotos names the user and how many photos; the answer is
+// each photo in its sizes, the current one first.
+func TestGetUserProfilePhotos(t *testing.T) {
+	var got string
+	c, _ := fakeAPI(t, func(method string, body []byte, _ *http.Request) any {
+		got = method + " " + string(body)
+		return ok(map[string]any{"total_count": 2, "photos": [][]map[string]any{{
+			{"file_id": "a-s", "file_unique_id": "AQADs", "width": 160, "height": 160},
+			{"file_id": "a-m", "file_unique_id": "AQADm", "width": 640, "height": 640, "file_size": 51200},
+		}}})
+	})
+	p, err := c.GetUserProfilePhotos(context.Background(), 1000, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != `getUserProfilePhotos {"limit":1,"user_id":1000}` {
+		t.Fatalf("request: %s", got)
+	}
+	if p.TotalCount != 2 || len(p.Photos) != 1 || len(p.Photos[0]) != 2 || p.Photos[0][1] != (PhotoSize{FileID: "a-m", FileUniqueID: "AQADm", Width: 640, Height: 640, FileSize: 51200}) {
+		t.Fatalf("photos: %+v", p)
+	}
+}

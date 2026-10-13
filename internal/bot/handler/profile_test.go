@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -23,8 +25,21 @@ type fakeProfileAPI struct {
 	fail  map[string]error
 	cmds  map[string][]tg.BotCommand // "chat/lang" -> menu
 	text  map[string]string          // "description/lang", "about/lang"
+	photo string                     // the profile photo's bytes ("" none)
+	// photoID is the current photo's identity ("" none): each photo set,
+	// by the bot or in @BotFather, is a new one (photos counts them).
+	photoID string
+	photos  int
+	// me is the bot's own id: only its photos are known. reads counts the
+	// reads of its photos (not recorded as calls), which fail with
+	// fail[readPhotos].
+	me    int64
+	reads int
 	done  chan struct{}
 }
+
+// readPhotos is the fail key of getUserProfilePhotos.
+const readPhotos = "read photos"
 
 func newFakeProfileAPI() *fakeProfileAPI {
 	return &fakeProfileAPI{fail: map[string]error{}, cmds: map[string][]tg.BotCommand{}, text: map[string]string{}, done: make(chan struct{}, 64)}
@@ -86,6 +101,64 @@ func (f *fakeProfileAPI) SetMyShortDescription(_ context.Context, text, lang str
 	return nil
 }
 
+func (f *fakeProfileAPI) SetMyProfilePhoto(_ context.Context, jpeg []byte) error {
+	if err := f.record("photo " + string(jpeg)); err != nil {
+		return err
+	}
+	f.newPhoto(string(jpeg))
+	return nil
+}
+
+// RemoveMyProfilePhoto takes off the current photo, whoever set it, like
+// Telegram.
+func (f *fakeProfileAPI) RemoveMyProfilePhoto(context.Context) error {
+	if err := f.record("remove photo"); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	f.photo, f.photoID = "", ""
+	f.mu.Unlock()
+	return nil
+}
+
+// GetUserProfilePhotos gives the bot's current photo in three sizes, the
+// largest in the middle; another user has none.
+func (f *fakeProfileAPI) GetUserProfilePhotos(_ context.Context, userID int64, limit int) (*tg.UserProfilePhotos, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.fail[readPhotos]; err != nil {
+		return nil, err
+	}
+	f.reads++
+	if f.photoID == "" || userID != f.me || limit < 1 {
+		return &tg.UserProfilePhotos{Photos: [][]tg.PhotoSize{}}, nil
+	}
+	return &tg.UserProfilePhotos{TotalCount: f.photos, Photos: [][]tg.PhotoSize{{
+		{FileUniqueID: f.photoID + "-160", Width: 160, Height: 160},
+		{FileUniqueID: f.photoID, Width: 640, Height: 640},
+		{FileUniqueID: f.photoID + "-320", Width: 320, Height: 320},
+	}}}, nil
+}
+
+// newPhoto makes jpeg the current photo, a new one, and returns its
+// identity (the largest size's).
+func (f *fakeProfileAPI) newPhoto(jpeg string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.photos++
+	f.photo, f.photoID = jpeg, fmt.Sprintf("uid-%d", f.photos)
+	return f.photoID
+}
+
+// botFather sets a photo the way the owner does in @BotFather.
+func (f *fakeProfileAPI) botFather() string { return f.newPhoto("botfather") }
+
+func (f *fakeProfileAPI) readCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.reads
+}
+
 // take returns the calls made since the last take.
 func (f *fakeProfileAPI) take() []string {
 	f.mu.Lock()
@@ -119,12 +192,12 @@ func TestWantedProfile(t *testing.T) {
 		{TelegramID: 2, Language: "", Role: "support"},
 		{TelegramID: 3, Language: "fa", Role: "admin"},
 	})
-	p, on := wantedProfile(cat, set)
+	p, on := wantedProfile(cat, set, "1760000000000000000")
 	if !on {
 		t.Fatal("the profile is on by default")
 	}
-	if len(p.Langs) != 3 {
-		t.Fatalf("languages: %v", p.Langs)
+	if len(p.Langs) != 3 || p.Photo != "1760000000000000000" {
+		t.Fatalf("languages %v, photo %q", p.Langs, p.Photo)
 	}
 	def, fa, en := p.Langs[""], p.Langs["fa"], p.Langs["en"]
 	if names(fa.Commands) != "start menu paysupport" {
@@ -160,7 +233,7 @@ func TestWantedProfile(t *testing.T) {
 	if dropped := cat.SetOverrides(map[string]string{"texts.en.profile.about": "Best VPN in town"}); len(dropped) > 0 {
 		t.Fatalf("override dropped: %v", dropped)
 	}
-	p, _ = wantedProfile(cat, set)
+	p, _ = wantedProfile(cat, set, "")
 	if names(p.Langs["en"].Commands) != "start menu terms paysupport" || p.Langs["en"].About != "Best VPN in town" {
 		t.Fatalf("with a privacy link and an override: %+v", p.Langs["en"])
 	}
@@ -169,7 +242,7 @@ func TestWantedProfile(t *testing.T) {
 	}
 
 	set.Replace(map[string]string{"general.bot_profile": "false"})
-	if _, on := wantedProfile(cat, set); on {
+	if _, on := wantedProfile(cat, set, ""); on {
 		t.Fatal("general.bot_profile=false must leave the profile alone")
 	}
 }
@@ -183,7 +256,7 @@ func TestProfileSyncSetsOnlyWhatChanged(t *testing.T) {
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}
 	apply := func() {
 		t.Helper()
-		p, on := wantedProfile(cat, set)
+		p, on := wantedProfile(cat, set, "")
 		if err := s.sync(ctx, p, on); err != nil {
 			t.Fatalf("sync: %v", err)
 		}
@@ -267,7 +340,7 @@ func TestProfileSyncMemoUnreadable(t *testing.T) {
 	set := settings.New()
 	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}})
 	api, memo := newFakeProfileAPI(), &failingMemo{}
-	p, _ := wantedProfile(cat, set)
+	p, _ := wantedProfile(cat, set, "")
 	if err := (&profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}).sync(ctx, p, true); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +348,7 @@ func TestProfileSyncMemoUnreadable(t *testing.T) {
 	before := memo.v
 
 	set.SetStaff(nil) // the owner left while the bot was down
-	p, _ = wantedProfile(cat, set)
+	p, _ = wantedProfile(cat, set, "")
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}
 	memo.err = errors.New("redis: connection refused")
 	if err := s.sync(ctx, p, true); err == nil {
@@ -300,7 +373,7 @@ func TestProfileSyncFailures(t *testing.T) {
 	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}, {TelegramID: 9, Role: "admin"}})
 	api := newFakeProfileAPI()
 	s := &profileSync{api: api, log: slog.New(slog.DiscardHandler)}
-	p, _ := wantedProfile(cat, set)
+	p, _ := wantedProfile(cat, set, "")
 
 	// Telegram is down for the English part: the parts before it are kept,
 	// and the rest is tried at the next refresh.
@@ -348,7 +421,7 @@ func TestRunProfileWaitsAfterFlood(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	calls.Add(1)
-	go func() { defer calls.Done(); _ = h.RunProfile(ctx, flaky, nil) }()
+	go func() { defer calls.Done(); _ = h.RunProfile(ctx, flaky, 0, nil) }()
 	h.profileKick <- struct{}{}
 	select {
 	case <-tried:
@@ -383,7 +456,7 @@ func TestRunProfileFollowsRefreshes(t *testing.T) {
 	api := newFakeProfileAPI()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- h.RunProfile(ctx, api, nil) }()
+	go func() { done <- h.RunProfile(ctx, api, 0, nil) }()
 	h.profileKick <- struct{}{}
 	deadline := time.After(5 * time.Second)
 	for n := 0; n < 9; n++ {
@@ -396,5 +469,366 @@ func TestRunProfileFollowsRefreshes(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// fakePhotos is core's bot photo (version "" is none) and counts fetches.
+type fakePhotos struct {
+	mu      sync.Mutex
+	version string
+	jpeg    string
+	err     error
+	fetched int
+}
+
+func (f *fakePhotos) get(context.Context) (string, []byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fetched++
+	if f.err != nil {
+		return "", nil, f.err
+	}
+	return f.version, []byte(f.jpeg), nil
+}
+
+func (f *fakePhotos) set(version, jpeg string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.version, f.jpeg = version, jpeg
+}
+
+func (f *fakePhotos) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.fetched
+}
+
+// profileBotID is the bot's own id in the photo tests.
+const profileBotID = 1000
+
+// photoSync is a profile sync with core's photo, and a function that syncs
+// the profile the settings and a photo version call for.
+func photoSync(t *testing.T, set *settings.Store) (*profileSync, *fakeProfileAPI, *memMemo, *fakePhotos, func(string) error) {
+	t.Helper()
+	cat := i18n.MustLoad()
+	api, memo, core := newFakeProfileAPI(), &memMemo{}, &fakePhotos{}
+	api.me = profileBotID
+	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler), botID: profileBotID, photo: core.get}
+	return s, api, memo, core, func(version string) error {
+		p, on := wantedProfile(cat, set, version)
+		return s.sync(context.Background(), p, on)
+	}
+}
+
+func mustSync(t *testing.T, sync func(string) error, version string) {
+	t.Helper()
+	if err := sync(version); err != nil {
+		t.Fatalf("sync %q: %v", version, err)
+	}
+}
+
+// The photo comes last and is fetched only when its version changes; the
+// bot sets what core has now and takes back only a photo it set.
+func TestProfileSyncPhoto(t *testing.T) {
+	set := settings.New()
+	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}})
+	s, api, memo, core, sync := photoSync(t, set)
+
+	// No photo on the Branding page: whatever is set in @BotFather stays.
+	mustSync(t, sync, "")
+	if got := api.take(); len(got) != 10 || slices.Contains(got, "remove photo") || core.count() != 0 {
+		t.Fatalf("first sync without a photo (%d fetches): %v", core.count(), got)
+	}
+
+	core.set("v1", "jpeg-1")
+	mustSync(t, sync, "v1")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-1" || core.count() != 1 {
+		t.Fatalf("a photo (%d fetches): %s", core.count(), got)
+	}
+	mustSync(t, sync, "v1")
+	if got := api.take(); len(got) != 0 || core.count() != 1 {
+		t.Fatalf("the same version (%d fetches): %v", core.count(), got)
+	}
+	// A restart: the version the bot set is remembered, with the identity
+	// Telegram gave the photo (its largest size's).
+	s2 := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler), botID: profileBotID, photo: core.get}
+	p, _ := wantedProfile(i18n.MustLoad(), set, "v1")
+	if err := s2.sync(context.Background(), p, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := api.take(); len(got) != 0 || core.count() != 1 || !strings.Contains(memo.v, `"photo":"v1"`) ||
+		!strings.Contains(memo.v, `"photo_id":"uid-1"`) {
+		t.Fatalf("after a restart (%d fetches, memo %s): %v", core.count(), memo.v, got)
+	}
+
+	// Core could not read the photo: nothing is fetched, set or removed.
+	mustSync(t, sync, photoUnknown)
+	if got := api.take(); len(got) != 0 || core.count() != 1 {
+		t.Fatalf("unknown version (%d fetches): %v", core.count(), got)
+	}
+	// Replaced again since the settings were read: what core has now is set
+	// and remembered, so the next refresh sets nothing.
+	core.set("v3", "jpeg-3")
+	mustSync(t, sync, "v2")
+	mustSync(t, sync, "v3")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-3" || core.count() != 2 || api.photo != "jpeg-3" {
+		t.Fatalf("replaced since the read (%d fetches): %s", core.count(), got)
+	}
+
+	// Removed on the Branding page: the bot takes back the photo it set.
+	core.set("", "")
+	mustSync(t, sync, "")
+	if got := strings.Join(api.take(), " "); got != "remove photo" || strings.Contains(memo.v, `"photo`) {
+		t.Fatalf("removed (memo %s): %s", memo.v, got)
+	}
+	mustSync(t, sync, "")
+	if got := api.take(); len(got) != 0 {
+		t.Fatalf("removed, again: %v", got)
+	}
+	// Removed since the settings were read (core answers NotFound): no photo,
+	// and none of the bot's own to take back.
+	mustSync(t, sync, "v4")
+	if got := api.take(); len(got) != 0 || core.count() != 3 {
+		t.Fatalf("gone before the fetch (%d fetches): %v", core.count(), got)
+	}
+	core.set("v5", "jpeg-5")
+	mustSync(t, sync, "v5")
+	core.set("", "")
+	mustSync(t, sync, "v6")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-5 remove photo" || api.photo != "" {
+		t.Fatalf("set, then gone before the fetch: %s", got)
+	}
+
+	// Without a way to fetch it (no core) the photo is left alone.
+	s.photo = nil
+	mustSync(t, sync, "v7")
+	if got := api.take(); len(got) != 0 {
+		t.Fatalf("no fetcher: %v", got)
+	}
+}
+
+// A photo Telegram refuses for good is not tried again at every refresh:
+// after an hour, or once the photo changes. Other failures stop the sync.
+func TestProfileSyncPhotoRefused(t *testing.T) {
+	s, api, _, core, sync := photoSync(t, settings.New())
+	mustSync(t, sync, "")
+	api.take()
+
+	api.fail["photo "] = &tg.APIError{Code: 400, Description: "Bad Request: PHOTO_CROP_SIZE_SMALL"}
+	core.set("v1", "jpeg-1")
+	mustSync(t, sync, "v1") // logged, no failure: the rest of the profile is set
+	mustSync(t, sync, "v1")
+	if core.count() != 1 || len(api.take()) != 0 {
+		t.Fatalf("a refused photo was fetched again within the hour: %d fetches", core.count())
+	}
+	// An hour later it is tried again.
+	s.now = func() time.Time { return time.Now().Add(goneRetry + time.Minute) }
+	mustSync(t, sync, "v1")
+	if core.count() != 2 {
+		t.Fatalf("an hour later: %d fetches", core.count())
+	}
+	// Another photo is tried at once.
+	delete(api.fail, "photo ")
+	core.set("v2", "jpeg-2")
+	mustSync(t, sync, "v2")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-2" {
+		t.Fatalf("a new photo after a refusal: %s", got)
+	}
+
+	// A local Bot API server older than 9.4 does not know the method.
+	for _, method := range []string{"photo ", "remove photo"} {
+		api.fail[method] = &tg.APIError{Code: 404, Description: "Not Found: method not found"}
+	}
+	core.set("v3", "jpeg-3")
+	mustSync(t, sync, "v3")
+	mustSync(t, sync, "v3")
+	if core.count() != 4 || len(api.take()) != 0 {
+		t.Fatalf("method not found, tried again within the hour: %d fetches", core.count())
+	}
+	// A removal it refuses is kept the same way.
+	mustSync(t, sync, "")
+	mustSync(t, sync, "")
+	if got := api.take(); len(got) != 0 || s.applied[photoPart] != "v2" || s.refused == nil || s.refused.version != "" {
+		t.Fatalf("a refused removal: %v %+v %+v", got, s.applied, s.refused)
+	}
+	delete(api.fail, "photo ")
+	delete(api.fail, "remove photo")
+
+	// A flood wait or Telegram down is no refusal: the sync fails (RunProfile
+	// waits as Telegram asks), to be tried at the next refresh.
+	api.fail["photo "] = &tg.APIError{Code: 429, Description: "Too Many Requests: retry after 30", RetryAfter: 30}
+	core.set("v4", "jpeg-4")
+	if wait, ok := tg.IsFlood(sync("v4")); !ok || wait != 30*time.Second {
+		t.Fatalf("flood: %v %v", wait, ok)
+	}
+	api.fail["photo "] = &tg.APIError{Code: 502, Description: "Bad Gateway"}
+	if err := sync("v4"); err == nil || s.refused != nil && s.refused.version == "v4" {
+		t.Fatalf("Telegram down: %v %+v", err, s.refused)
+	}
+	delete(api.fail, "photo ")
+	// Core does not answer: the sync fails and nothing is set.
+	core.err = errors.New("core: unavailable")
+	if err := sync("v4"); err == nil || len(api.take()) != 0 {
+		t.Fatalf("core down: %v", err)
+	}
+	core.err = nil
+	mustSync(t, sync, "v4")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-4" {
+		t.Fatalf("once core answers: %s", got)
+	}
+}
+
+// general.bot_profile off leaves the photo, and keeps its keys: switching
+// back on does not upload the same photo again.
+func TestProfileClearKeepsThePhoto(t *testing.T) {
+	set := settings.New()
+	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}})
+	_, api, memo, core, sync := photoSync(t, set)
+	core.set("v1", "jpeg-1")
+	mustSync(t, sync, "v1")
+	want := "commands 0/ description  about  commands 0/en description en about en commands 0/fa description fa about fa commands 7/ photo jpeg-1"
+	if got := strings.Join(api.take(), " "); got != want {
+		t.Fatalf("first sync, the photo last:\n%s\nwant:\n%s", got, want)
+	}
+
+	set.Replace(map[string]string{"general.bot_profile": "false"})
+	mustSync(t, sync, "v1")
+	if got := strings.Join(api.take(), " "); strings.Contains(got, "photo") || !strings.Contains(got, "delete 7/") ||
+		!strings.Contains(memo.v, `"photo":"v1"`) || !strings.Contains(memo.v, `"photo_id":"uid-1"`) || api.photo != "jpeg-1" {
+		t.Fatalf("switched off (memo %s): %s", memo.v, got)
+	}
+	// While off, a new or removed photo is left alone too.
+	core.set("v2", "jpeg-2")
+	mustSync(t, sync, "v2")
+	mustSync(t, sync, "")
+	if got := api.take(); len(got) != 0 || core.count() != 1 {
+		t.Fatalf("off (%d fetches): %v", core.count(), got)
+	}
+
+	set.Replace(nil)
+	core.set("v1", "jpeg-1")
+	mustSync(t, sync, "v1")
+	if got := api.take(); len(got) != 10 || slices.Contains(got, "photo jpeg-1") || core.count() != 1 {
+		t.Fatalf("switched on again (%d fetches): %v", core.count(), got)
+	}
+	core.set("v2", "jpeg-2")
+	mustSync(t, sync, "v2")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-2" {
+		t.Fatalf("a new photo once on: %s", got)
+	}
+}
+
+// The bot takes off only the photo it set, and only while it is still the
+// current one: removeMyProfilePhoto takes off whatever photo is current,
+// such as one the owner set later in @BotFather.
+func TestProfileSyncPhotoTakesOffOnlyItsOwn(t *testing.T) {
+	set := settings.New()
+	_, api, memo, core, sync := photoSync(t, set)
+	mustSync(t, sync, "")
+	api.take()
+
+	// Replaced in @BotFather, then removed on the Branding page: the bot
+	// reads which photo is current, forgets its own and leaves the owner's.
+	core.set("v1", "jpeg-1")
+	mustSync(t, sync, "v1")
+	owners := api.botFather()
+	core.set("", "")
+	reads := api.readCount()
+	mustSync(t, sync, "")
+	if got := api.take(); !slices.Equal(got, []string{"photo jpeg-1"}) || api.photoID != owners || api.readCount() != reads+1 ||
+		strings.Contains(memo.v, `"photo`) {
+		t.Fatalf("replaced in @BotFather (memo %s, current %s): %v", memo.v, api.photoID, got)
+	}
+	mustSync(t, sync, "")
+	if got := api.take(); len(got) != 0 || api.readCount() != reads+1 {
+		t.Fatalf("forgotten, yet: %v", got)
+	}
+
+	// Replaced in @BotFather while "keep the profile up to date" is off,
+	// and removed on the Branding page: nothing changes in Telegram, then or
+	// once it is on again.
+	core.set("v2", "jpeg-2")
+	mustSync(t, sync, "v2")
+	set.Replace(map[string]string{"general.bot_profile": "false"})
+	mustSync(t, sync, "v2")
+	owners = api.botFather()
+	core.set("", "")
+	mustSync(t, sync, "")
+	set.Replace(nil)
+	mustSync(t, sync, "")
+	if got := api.take(); slices.Contains(got, "remove photo") || api.photoID != owners || strings.Contains(memo.v, `"photo`) {
+		t.Fatalf("replaced while off (memo %s, current %s): %v", memo.v, api.photoID, got)
+	}
+
+	// Removed in Telegram already (no photo at all): only forgotten.
+	core.set("v3", "jpeg-3")
+	mustSync(t, sync, "v3")
+	api.mu.Lock()
+	api.photo, api.photoID = "", ""
+	api.mu.Unlock()
+	core.set("", "")
+	mustSync(t, sync, "")
+	if got := api.take(); !slices.Equal(got, []string{"photo jpeg-3"}) || strings.Contains(memo.v, `"photo`) {
+		t.Fatalf("no photo left (memo %s): %v", memo.v, got)
+	}
+
+	// Its own photo, still the current one: taken off.
+	core.set("v4", "jpeg-4")
+	mustSync(t, sync, "v4")
+	core.set("", "")
+	mustSync(t, sync, "")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-4 remove photo" || api.photo != "" {
+		t.Fatalf("its own photo: %s", got)
+	}
+}
+
+// Nothing is removed blindly: a read of the current photo that fails stops
+// the sync, to be tried at the next refresh, and a photo Telegram did not
+// identify when it was set is never taken off.
+func TestProfileSyncPhotoNeverRemovesBlindly(t *testing.T) {
+	var logs bytes.Buffer
+	s, api, memo, core, sync := photoSync(t, settings.New())
+	s.log = slog.New(slog.NewTextHandler(&logs, nil))
+	core.set("v1", "jpeg-1")
+	mustSync(t, sync, "v1")
+	api.take()
+
+	core.set("", "")
+	api.fail[readPhotos] = &tg.APIError{Code: 502, Description: "Bad Gateway"}
+	if err := sync(""); err == nil {
+		t.Fatal("a failed read must stop the sync")
+	}
+	if got := api.take(); len(got) != 0 || api.photo != "jpeg-1" || !strings.Contains(memo.v, `"photo_id":"uid-1"`) {
+		t.Fatalf("after a failed read (memo %s): %v", memo.v, got)
+	}
+	// A flood wait is RunProfile's to wait out.
+	api.fail[readPhotos] = &tg.APIError{Code: 429, Description: "Too Many Requests: retry after 30", RetryAfter: 30}
+	if wait, ok := tg.IsFlood(sync("")); !ok || wait != 30*time.Second || len(api.take()) != 0 {
+		t.Fatalf("flood: %v %v", wait, ok)
+	}
+	delete(api.fail, readPhotos)
+	mustSync(t, sync, "")
+	if got := strings.Join(api.take(), " "); got != "remove photo" || strings.Contains(memo.v, `"photo`) {
+		t.Fatalf("once Telegram answers (memo %s): %s", memo.v, got)
+	}
+
+	// The read after an upload fails: the version is kept (the photo is not
+	// uploaded again), and that photo is never taken off.
+	api.fail[readPhotos] = errors.New("telegram: getUserProfilePhotos: connection reset by peer")
+	core.set("v2", "jpeg-2")
+	mustSync(t, sync, "v2")
+	if got := strings.Join(api.take(), " "); got != "photo jpeg-2" || !strings.Contains(memo.v, `"photo":"v2"`) ||
+		strings.Contains(memo.v, `"photo_id"`) || !strings.Contains(logs.String(), "will not take it off") {
+		t.Fatalf("no identity (memo %s): %s\n%s", memo.v, got, logs.String())
+	}
+	delete(api.fail, readPhotos)
+	mustSync(t, sync, "v2")
+	if got := api.take(); len(got) != 0 {
+		t.Fatalf("uploaded again: %v", got)
+	}
+	core.set("", "")
+	mustSync(t, sync, "")
+	if got := api.take(); len(got) != 0 || api.photo != "jpeg-2" || strings.Contains(memo.v, `"photo`) {
+		t.Fatalf("removed without its identity (memo %s): %v", memo.v, got)
 	}
 }

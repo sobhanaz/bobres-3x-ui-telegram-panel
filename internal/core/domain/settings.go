@@ -62,7 +62,7 @@ var SettingSpecs = []SettingSpec{
 	{Key: "general.timezone", Group: "general", Kind: KindTZ, Perm: permSettings,
 		Help: "time zone of the dates the bot shows, e.g. Asia/Tehran (empty = the server's BOBRES_TIMEZONE)"},
 	{Key: "general.bot_profile", Group: "general", Kind: KindBool, Perm: permSettings, Default: "true",
-		Help: "true = the bot keeps its Telegram profile (menu commands, description, short description) in Persian and English from its texts; false = the bot takes back its Persian and English ones and the staff menus, and you set them in @BotFather"},
+		Help: "true = the bot keeps its Telegram profile (menu commands, description, short description) in Persian and English from its texts, and its profile photo from the Branding page; false = the bot takes back its Persian and English texts and the staff menus (the photo stays), and you set them in @BotFather"},
 	{Key: "maintenance.enabled", Group: "maintenance", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = customers only get the maintenance message; staff and payments in progress still work"},
 	{Key: "join.channel", Group: "join", Kind: KindChannel, Perm: permSettings,

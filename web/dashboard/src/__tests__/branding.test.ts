@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { palette, updatePrimaryPalette } from '@primeuix/themes'
+import { createI18n } from 'vue-i18n'
 import {
+  botPhotoProblem,
+  botPhotoSizeOk,
+  botPhotoUploadProblem,
   brandingField,
   contrastWithWhite,
   filterTexts,
   insertAt,
   isChanged,
   isHttpsUrl,
+  isWebP,
   logoProblem,
   logoSizeOk,
   normalizeHex,
@@ -20,6 +25,7 @@ import {
 import { money, setCurrencyNames } from '../format'
 import { applyBrandColor, applyDocumentBrand } from '../theme'
 import type { TextItem } from '../types'
+import fa from '../locales/fa.json'
 
 // The palette update needs a mounted PrimeVue; here we only watch the calls.
 vi.mock('@primeuix/themes', async (importOriginal) => {
@@ -101,6 +107,39 @@ describe('branding form', () => {
     expect(logoSizeOk(512, 512)).toBe(true)
     expect(logoSizeOk(15, 512)).toBe(false)
     expect(logoSizeOk(2048, 2049)).toBe(false)
+  })
+  it('checks bot photo files before sending them', () => {
+    expect(botPhotoProblem({ type: 'image/png', size: 100_000 })).toBe('')
+    expect(botPhotoProblem({ type: 'image/jpeg', size: 512 * 1024 })).toBe('')
+    expect(botPhotoProblem({ type: 'image/webp', size: 1000 })).toBe('webp') // core cannot decode WebP
+    expect(botPhotoProblem({ type: 'image/gif', size: 1000 })).toBe('bad_type')
+    expect(botPhotoProblem({ type: '', size: 1000 })).toBe('bad_type')
+    expect(botPhotoProblem({ type: 'image/png', size: 512 * 1024 + 1 })).toBe('too_large')
+    expect(botPhotoSizeOk(160, 160)).toBe(true)
+    expect(botPhotoSizeOk(2048, 640)).toBe(true)
+    expect(botPhotoSizeOk(159, 640)).toBe(false) // Telegram refuses small profile photos
+    expect(botPhotoSizeOk(640, 2049)).toBe(false)
+  })
+  it('tells a WebP by its first bytes, not by its extension', () => {
+    const bytes = (s: string) => Uint8Array.from(s, (c) => c.charCodeAt(0))
+    expect(isWebP(bytes('RIFF\u0000\u0010\u0000\u0000WEBPVP8 '))).toBe(true)
+    expect(isWebP(bytes('RIFF\u0000\u0010\u0000\u0000WAVEfmt '))).toBe(false) // a WAV is RIFF too
+    expect(isWebP(bytes('\u0089PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR'))).toBe(false)
+    expect(isWebP(Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1))).toBe(false)
+    expect(isWebP(bytes('RIFF....WEB'))).toBe(false) // cut short
+    expect(isWebP(new Uint8Array(0))).toBe(false)
+  })
+  it('names how core refused a bot photo upload', () => {
+    const refused = (status: number, code: string, message = '') => botPhotoUploadProblem({ status, code, message })
+    expect(refused(413, 'too_large', 'the photo may be at most 512 KB')).toBe('too_large')
+    expect(refused(413, 'error')).toBe('too_large') // a proxy's 413 has no code
+    expect(refused(415, 'unsupported', 'a WebP image cannot be converted for Telegram; upload a PNG or JPEG')).toBe('webp')
+    expect(refused(415, 'unsupported', 'the photo must be a PNG or JPEG image')).toBe('bad_type')
+    expect(refused(415, 'error')).toBe('bad_type')
+    // a 400 says why in core's own words (shown as the detail of an error)
+    expect(refused(400, 'invalid', 'the photo must be 160 to 2048 pixels on each side')).toBe('')
+    expect(refused(400, 'invalid', 'could not read the image')).toBe('')
+    expect(refused(500, 'internal', 'boom')).toBe('')
   })
 })
 
@@ -261,6 +300,8 @@ describe('Branding page', () => {
   }
 
   afterEach(() => {
+    // stop this test's app: PrimeVue's confirmation bus is shared between tests
+    ;(document.getElementById('app') as (HTMLElement & { __vue_app__?: { unmount(): void } }) | null)?.__vue_app__?.unmount()
     vi.unstubAllGlobals()
     document.body.innerHTML = ''
   })
@@ -381,5 +422,206 @@ describe('Branding page', () => {
     input.dispatchEvent(new Event('change'))
     await vi.waitFor(() => expect(document.querySelector('.p-message-error')).not.toBeNull())
     expect(calls.some((c) => c.includes('/branding/logo'))).toBe(false)
+  })
+
+  // The bot photo field, in its own card. jsdom loads no images: a picked
+  // file "is" width x height.
+  const tr = createI18n({ legacy: false, locale: 'fa', messages: { fa }, missingWarn: false }).global.t
+  function imagesOf(width: number, height: number) {
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+        naturalWidth = width
+        naturalHeight = height
+        set src(_: string) {
+          setTimeout(() => this.onload?.())
+        }
+      },
+    )
+  }
+  const photoInput = 'input[type="file"][accept="image/png,image/jpeg"]'
+  const photoCard = () => (document.querySelector(photoInput) as HTMLElement).closest('.p-card') as HTMLElement
+  const photoButton = (label: string) => [...photoCard().querySelectorAll('button')].find((b) => b.textContent?.includes(label))
+  async function pickPhoto(file: File) {
+    await vi.waitFor(() => expect(document.querySelector(photoInput)).not.toBeNull())
+    const input = document.querySelector(photoInput) as HTMLInputElement
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    input.dispatchEvent(new Event('change'))
+  }
+
+  it('checks a bot photo before sending it', async () => {
+    const { calls } = await boot('/admin/branding')
+    imagesOf(100, 100)
+    await pickPhoto(new File([new Uint8Array(10)], 'photo.webp', { type: 'image/webp' }))
+    await vi.waitFor(() => expect(photoCard().textContent).toContain(tr('branding.bot_photo_webp')))
+    await pickPhoto(new File([new Uint8Array(512 * 1024 + 1)], 'big.png', { type: 'image/png' }))
+    await vi.waitFor(() => expect(photoCard().textContent).toContain(tr('branding.bot_photo_too_large')))
+    await pickPhoto(new File([new Uint8Array(10)], 'small.png', { type: 'image/png' }))
+    await vi.waitFor(() => expect(photoCard().textContent).toContain(tr('branding.bot_photo_bad_size')))
+    expect(photoCard().querySelector('img')).toBeNull()
+    expect(calls.some((c) => c.includes('/branding/bot-photo'))).toBe(false)
+    // No photo yet: the card says what stays.
+    expect(photoCard().querySelector('.p-card-title')?.textContent).toBe(tr('branding.bot_card'))
+    expect(photoCard().textContent).toContain(tr('branding.bot_photo_none'))
+  })
+
+  it('uploads the bot photo, shows the stored one and removes it', async () => {
+    const stored = { url: '/api/v1/branding/bot-photo?v=1760000000000000000', size: 48_000, updated_at: 1_760_000_000 }
+    let sent: unknown = null
+    const { calls } = await boot('/admin/branding', (url, init) => {
+      if (url !== '/api/v1/branding/bot-photo') return undefined
+      if (init?.method === 'PUT') {
+        sent = init.body
+        return json(200, { ...branding, bot_photo: stored })
+      }
+      if (init?.method === 'DELETE') return json(200, { ...branding, bot_photo: null })
+    })
+    imagesOf(800, 600)
+    const file = new File([new Uint8Array(1000)], 'logo.png', { type: 'image/png' })
+    await pickPhoto(file)
+    // A wide picture: previewed in the circle, with a word on the white bands.
+    await vi.waitFor(() => expect(photoCard().textContent).toContain(tr('branding.bot_photo_padded')))
+    expect(photoCard().querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+    photoButton(tr('branding.bot_photo_upload'))!.click()
+    await vi.waitFor(() => expect(sent).toBe(file)) // the file itself, as the body
+    // The stored photo comes from core (read with the session).
+    await vi.waitFor(() => expect(photoCard().querySelector('img')?.getAttribute('src')).toBe(stored.url))
+    expect(photoCard().textContent).toContain(tr('branding.bot_photo_current'))
+
+    // Removing asks first.
+    photoButton(tr('branding.bot_photo_remove'))!.click()
+    const accept = await vi.waitFor(() => {
+      const b = document.querySelector('.p-confirmdialog-accept-button') as HTMLButtonElement | null
+      expect(b).not.toBeNull()
+      return b!
+    })
+    expect(calls.some((c) => c.startsWith('DELETE'))).toBe(false)
+    accept.click()
+    await vi.waitFor(() => expect(calls).toContain('DELETE /api/v1/branding/bot-photo'))
+    await vi.waitFor(() => expect(photoCard().querySelector('img')).toBeNull())
+    expect(photoCard().textContent).toContain(tr('branding.bot_photo_none'))
+  })
+
+  // The same state the user sees on the keyboard: where the focus is.
+  const focusIs = (label: string) => expect(document.activeElement).toBe(photoButton(label))
+
+  it('refuses a WebP saved as .jpg by its first bytes', async () => {
+    const { calls } = await boot('/admin/branding')
+    imagesOf(800, 800)
+    // The browser says image/jpeg (the extension); the bytes say WebP.
+    const riffWebp = Uint8Array.from('RIFF\u0000\u0010\u0000\u0000WEBPVP8 ', (c) => c.charCodeAt(0))
+    await pickPhoto(new File([riffWebp], 'photo.jpg', { type: 'image/jpeg' }))
+    await vi.waitFor(() => expect(photoCard().textContent).toContain(tr('branding.bot_photo_webp')))
+    expect(photoCard().textContent).not.toContain(tr('branding.bot_photo_bad_type'))
+    expect(photoCard().querySelector('img')).toBeNull()
+    expect(photoButton(tr('branding.bot_photo_upload'))).toBeUndefined()
+    expect(calls.some((c) => c.includes('/branding/bot-photo'))).toBe(false)
+    // A real JPEG (no RIFF) goes on to the preview.
+    await pickPhoto(new File([Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1)], 'photo.jpg', { type: 'image/jpeg' }))
+    await vi.waitFor(() => expect(photoButton(tr('branding.bot_photo_upload'))).toBeDefined())
+    expect(photoCard().textContent).not.toContain(tr('branding.bot_photo_webp'))
+  })
+
+  it('says why core refused a bot photo (413, 415, 400)', async () => {
+    let refusal: Response | undefined
+    const { calls } = await boot('/admin/branding', (url, init) => (url === '/api/v1/branding/bot-photo' && init?.method === 'PUT' ? refusal : undefined))
+    imagesOf(800, 600)
+    await pickPhoto(new File([new Uint8Array(1000)], 'photo.png', { type: 'image/png' }))
+    await vi.waitFor(() => expect(photoButton(tr('branding.bot_photo_upload'))).toBeDefined())
+    const message = () => document.querySelector('.p-message-error')?.textContent ?? ''
+    async function refuse(res: Response, shown: string[]) {
+      refusal = res
+      const before = calls.filter((c) => c.startsWith('PUT')).length
+      const upload = photoButton(tr('branding.bot_photo_upload')) as HTMLButtonElement
+      await vi.waitFor(() => expect(upload.disabled).toBe(false))
+      upload.click()
+      await vi.waitFor(() => expect(calls.filter((c) => c.startsWith('PUT')).length).toBe(before + 1))
+      await vi.waitFor(() => expect(upload.disabled).toBe(false)) // done, ready for another try
+      for (const text of shown) expect(message()).toContain(text)
+    }
+    const others = (...texts: string[]) => ['bot_photo_too_large', 'bot_photo_webp', 'bot_photo_bad_type'].map((k) => tr('branding.' + k)).filter((x) => !texts.includes(x))
+
+    await refuse(json(413, { error: 'too_large', message: 'the photo may be at most 512 KB' }), [tr('branding.bot_photo_too_large')])
+    for (const other of others(tr('branding.bot_photo_too_large'))) expect(message()).not.toContain(other)
+    await refuse(json(415, { error: 'unsupported', message: 'a WebP image cannot be converted for Telegram; upload a PNG or JPEG' }), [tr('branding.bot_photo_webp')])
+    for (const other of others(tr('branding.bot_photo_webp'))) expect(message()).not.toContain(other)
+    await refuse(json(415, { error: 'unsupported', message: 'the photo must be a PNG or JPEG image' }), [tr('branding.bot_photo_bad_type')])
+    for (const other of others(tr('branding.bot_photo_bad_type'))) expect(message()).not.toContain(other)
+    // A 400 is core's own words, kept as the detail.
+    const size = 'the photo must be 160 to 2048 pixels on each side'
+    await refuse(json(400, { error: 'invalid', message: size }), [tr('error.invalid'), size])
+    for (const other of others()) expect(message()).not.toContain(other)
+    const big = 'this picture makes a JPEG larger than 3 MB; use a simpler or smaller picture'
+    await refuse(json(400, { error: 'invalid', message: big }), [tr('error.invalid'), big])
+    expect(message()).not.toContain(size)
+    // The picture stays picked through the refusals.
+    expect(photoCard().querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it('moves the focus to the next button as the photo field changes', async () => {
+    const stored = { url: '/api/v1/branding/bot-photo?v=1760000000000000000', size: 48_000, updated_at: 1_760_000_000 }
+    await boot('/admin/branding', (url, init) => {
+      if (url !== '/api/v1/branding/bot-photo') return undefined
+      if (init?.method === 'PUT') return json(200, { ...branding, bot_photo: stored })
+      if (init?.method === 'DELETE') return json(200, { ...branding, bot_photo: null })
+    })
+    imagesOf(640, 640)
+    const choose = tr('branding.bot_photo_choose')
+    const upload = tr('branding.bot_photo_upload')
+    const png = () => new File([new Uint8Array(1000)], 'photo.png', { type: 'image/png' })
+
+    // A pick: the Choose button is replaced by Upload, which gets the focus.
+    await pickPhoto(png())
+    await vi.waitFor(() => focusIs(upload))
+    // Cancelled: back to Choose.
+    photoButton(tr('app.cancel'))!.click()
+    await vi.waitFor(() => focusIs(choose))
+    // Uploaded: Choose again (the field shows the stored photo now).
+    await pickPhoto(png())
+    await vi.waitFor(() => focusIs(upload))
+    photoButton(upload)!.click()
+    await vi.waitFor(() => expect(photoCard().querySelector('img')?.getAttribute('src')).toBe(stored.url))
+    await vi.waitFor(() => focusIs(choose))
+    // Removed: the Remove button is gone, the focus is on Choose.
+    photoButton(tr('branding.bot_photo_remove'))!.click()
+    const accept = await vi.waitFor(() => {
+      const b = document.querySelector('.p-confirmdialog-accept-button') as HTMLButtonElement | null
+      expect(b).not.toBeNull()
+      return b!
+    })
+    accept.click()
+    await vi.waitFor(() => expect(photoButton(tr('branding.bot_photo_remove'))).toBeUndefined())
+    await vi.waitFor(() => focusIs(choose))
+  })
+
+  it('keeps the focus on Upload when the upload fails', async () => {
+    await boot('/admin/branding', (url, init) =>
+      url === '/api/v1/branding/bot-photo' && init?.method === 'PUT' ? json(503, { error: 'unavailable', message: 'down' }) : undefined,
+    )
+    imagesOf(640, 640)
+    await pickPhoto(new File([new Uint8Array(1000)], 'photo.png', { type: 'image/png' }))
+    await vi.waitFor(() => focusIs(tr('branding.bot_photo_upload')))
+    photoButton(tr('branding.bot_photo_upload'))!.click()
+    await vi.waitFor(() => expect(photoCard().textContent).toContain(tr('error.unavailable')))
+    await vi.waitFor(() => focusIs(tr('branding.bot_photo_upload')))
+  })
+
+  it('groups the logo and the bot photo, each named by its own label', async () => {
+    await boot('/admin/branding')
+    await vi.waitFor(() => expect(document.querySelectorAll('[role="group"][aria-labelledby]').length).toBe(2))
+    const [logo, bot] = [...document.querySelectorAll('[role="group"][aria-labelledby]')]
+    const text = (id: string | null) => (id ? (document.getElementById(id)?.textContent ?? '') : '')
+    expect(text(logo.getAttribute('aria-labelledby'))).toBe(tr('branding.logo'))
+    expect(text(bot.getAttribute('aria-labelledby'))).toBe(tr('branding.bot_photo'))
+    expect(text(logo.getAttribute('aria-describedby'))).toBe(tr('branding.logo_hint'))
+    expect(text(bot.getAttribute('aria-describedby'))).toBe(tr('branding.bot_photo_hint'))
+    // Each group holds its own field: the two have equal buttons.
+    expect(logo.querySelector('input[type="file"][accept*="webp"]')).not.toBeNull()
+    expect(bot.querySelector('input[type="file"][accept="image/png,image/jpeg"]')).not.toBeNull()
+    expect(logo.querySelector(photoInput)).toBeNull()
+    expect([...bot.querySelectorAll('button')].some((b) => b.textContent?.includes(tr('branding.bot_photo_choose')))).toBe(true)
+    expect([...logo.querySelectorAll('button')].some((b) => b.textContent?.includes(tr('branding.logo_choose')))).toBe(true)
   })
 })

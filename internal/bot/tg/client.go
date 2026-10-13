@@ -10,6 +10,7 @@ import (
 	"maps"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -383,6 +384,50 @@ func (c *Client) SetMyDescription(ctx context.Context, text, lang string) error 
 // the preview when the bot is shared.
 func (c *Client) SetMyShortDescription(ctx context.Context, text, lang string) error {
 	return c.call(ctx, "setMyShortDescription", jsonBody(withLang(map[string]any{"short_description": text}, lang)), nil)
+}
+
+// SetMyProfilePhoto sets the bot's profile photo, a JPEG (Bot API 9.4).
+// Telegram never reuses a profile photo: each call uploads the file again.
+func (c *Client) SetMyProfilePhoto(ctx context.Context, jpeg []byte) error {
+	return c.call(ctx, "setMyProfilePhoto", func() (io.Reader, string, error) { return profilePhotoForm(jpeg) }, nil)
+}
+
+// profilePhotoForm is the multipart body of setMyProfilePhoto: the photo
+// field is an InputProfilePhotoStatic naming the file part it comes in.
+func profilePhotoForm(jpeg []byte) (io.Reader, string, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	_ = w.WriteField("photo", `{"type":"static","photo":"attach://avatar"}`)
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Disposition", `form-data; name="avatar"; filename="avatar.jpg"`)
+	h.Set("Content-Type", "image/jpeg")
+	fw, err := w.CreatePart(h)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := fw.Write(jpeg); err != nil {
+		return nil, "", err
+	}
+	if err := w.Close(); err != nil {
+		return nil, "", err
+	}
+	return &buf, w.FormDataContentType(), nil
+}
+
+// RemoveMyProfilePhoto removes the bot's profile photo (Bot API 9.4),
+// whoever set it.
+func (c *Client) RemoveMyProfilePhoto(ctx context.Context) error {
+	return c.call(ctx, "removeMyProfilePhoto", jsonBody(struct{}{}), nil)
+}
+
+// GetUserProfilePhotos returns up to limit of a user's profile photos, the
+// current one first. A bot may read its own (its id from getMe).
+func (c *Client) GetUserProfilePhotos(ctx context.Context, userID int64, limit int) (*UserProfilePhotos, error) {
+	var out UserProfilePhotos
+	if err := c.call(ctx, "getUserProfilePhotos", jsonBody(map[string]any{"user_id": userID, "limit": limit}), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // IsParseError reports that Telegram refused a text's HTML markup.

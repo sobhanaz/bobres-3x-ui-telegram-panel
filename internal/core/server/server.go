@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strconv"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -439,15 +440,43 @@ func moneyList(m map[string]int64) []*commonv1.Money {
 	return out
 }
 
-// GetSettings returns flattened settings (key -> raw JSON string).
+// GetSettings returns flattened settings (key -> raw JSON string) and the
+// bot photo's version.
 func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) (*corev1.Settings, error) {
 	m, err := s.st.GetSettings(ctx, s.st.Conn())
 	if err != nil {
 		return nil, fail(err)
 	}
-	out := &corev1.Settings{Values: map[string]string{}}
+	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx)}
 	for k, v := range m {
 		out.Values[k] = string(v)
 	}
 	return out, nil
+}
+
+// botPhotoVersion is the bot photo's version (without reading the photo): ""
+// when there is none, "?" when it cannot be read now, so the bot neither
+// sets nor removes its photo on a passing failure.
+func (s *Server) botPhotoVersion(ctx context.Context) string {
+	a, err := s.st.AssetInfo(ctx, s.st.Conn(), store.AssetBotPhoto)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return ""
+	case err != nil:
+		return "?"
+	}
+	return photoVersion(a)
+}
+
+// photoVersion tells uploads apart: each one changes updated_at.
+func photoVersion(a *store.Asset) string { return strconv.FormatInt(a.UpdatedAt.UnixNano(), 10) }
+
+// GetBotPhoto returns the bot photo, a square JPEG, with its version;
+// NotFound when the store has none.
+func (s *Server) GetBotPhoto(ctx context.Context, _ *corev1.GetBotPhotoRequest) (*corev1.BotPhoto, error) {
+	a, err := s.st.GetAsset(ctx, s.st.Conn(), store.AssetBotPhoto)
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.BotPhoto{Version: photoVersion(a), Jpeg: a.Data}, nil
 }

@@ -10,6 +10,7 @@ import { errorText } from '../../errors'
 import { dateTime, num, type Lang } from '../../format'
 import { LOGO_TYPES, logoProblem, logoSizeOk } from '../../branding'
 import type { BrandingInfo } from '../../types'
+import { imageSize, readDataUrl } from './images'
 
 // The store logo: pick an image, see it, then upload it (raw body, CSRF
 // through api()). The preview is a data: URL because the dashboard's CSP
@@ -27,24 +28,6 @@ const preview = ref('')
 const busy = ref(false)
 const error = ref('')
 const detail = ref('')
-
-function readDataUrl(f: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result))
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(f)
-  })
-}
-
-function imageSize(url: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
-    img.onerror = () => reject(new Error('unreadable'))
-    img.src = url
-  })
-}
 
 async function picked(e: Event) {
   const el = e.target as HTMLInputElement

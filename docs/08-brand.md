@@ -52,7 +52,7 @@ do the rest; dark and light modes both.
 | `web/dashboard/public/apple-touch-icon.png` | The icon on navy, 180x180 PNG | The dashboard's home-screen icon on phones (the store's logo replaces it when one is uploaded) |
 | `docs/brand/bobres-mascot.webp`, same file as `web/dashboard/src/assets/brand/bobres-mascot.webp` | The master 3D render, full body, 800x800, on navy | Login page with the default look, as the still picture for reduced motion; the source for every edit |
 | `docs/brand/bobres-wave.webp`, same file as `web/dashboard/src/assets/brand/bobres-wave.webp` | Looping animated WebP of him waving, 420x420, 15 fps, about 350 KB | Login page with the default look (above the card, with a slow float); README ("Meet BOBRES") |
-| `docs/brand/bot-avatar.jpg` | Round 3D close-up portrait, 640x640 | Telegram profile photo of a bot, set with @BotFather (below) |
+| `docs/brand/bot-avatar.jpg` | Round 3D close-up portrait, 640x640 | Telegram profile photo of a bot, uploaded in the dashboard (below) |
 | `docs/brand/bot-description.jpg` | The banner cut to 640x360 | A bot's description picture, above its description in an empty chat, set with @BotFather (below) |
 | `docs/brand/bobres-banner.webp` | 1376x768 banner: the mascot and "BOBRES, Your VPN store on Telegram" | Top of the README; announcements and the vendor site |
 
@@ -109,23 +109,34 @@ bot sets in Telegram, in Persian and English (Persian also for every other langu
   privacy policy; owners and admins also get `/admin` and `/dashboard` in their own chat, support staff
   `/dashboard`;
 - its **description**, the text of an empty chat with the bot ("What can this bot do?");
-- its **short description** ("about"), on its profile page and in the preview when it is shared.
+- its **short description** ("about"), on its profile page and in the preview when it is shared;
+- its **profile photo**, uploaded in the dashboard (**Branding & texts → Store → Telegram bot**).
 
 The words are bot texts (dashboard: **Branding & texts → Bot texts → Bot profile**, keys `profile.*`), so a store
 writes its own like any other text. It only sets what changed, and remembers what it set across restarts.
 **Settings → General → Keep the bot's Telegram profile up to date** (`general.bot_profile`) turns it off for an
 operator who prefers to set them in @BotFather: the bot then takes back its Persian and English values and the
 staff menus, which would hide @BotFather's (@BotFather sets one value for every language), and leaves that value
-for every language as it is, to be edited there.
+for every language as it is, to be edited there. The photo stays as it is too.
+
+**The profile photo.** Upload a PNG or JPEG of at most 512 KB, 160 to 2048 pixels on each side (WebP cannot be
+converted). Core stores it as the square JPEG Telegram takes: a JPEG's EXIF orientation is applied (a phone's
+picture comes out upright), a picture that is not square is centred on white, and transparency becomes white.
+Telegram shows it in a circle; 640x640 looks best (`docs/brand/bot-avatar.jpg` for the BOBRES beaver). The bot
+uploads it (Bot API `setMyProfilePhoto`) only when it changes (uploading the same picture again changes
+nothing), and once Telegram refuses one for good it tries that photo again only after an hour. Right after
+setting it, the bot reads back which photo is now its current one (`getUserProfilePhotos`). Removing the photo
+in the dashboard makes the bot take off the photo it set, but only while that photo is still the current one: a
+photo set later in @BotFather stays, and so does the photo when Telegram cannot say which is current. While
+**Keep the bot's Telegram profile up to date** is off, nothing changes in Telegram, whatever is uploaded or
+removed here. A local Bot API server (`BOBRES_TELEGRAM_API_URL`) must be version 9.4 or newer for this.
 
 **What to set in @BotFather** (BOBRES leaves these alone), once, from the account that created
 the bot:
 1. **Name:** `/setname` (the store's name; `branding.name` is what the bot's messages call the store).
-2. **Profile photo:** `/setuserpic`, then send a square picture as a photo: the store's own logo (Telegram shows
-   it in a circle), or `docs/brand/bot-avatar.jpg` for the BOBRES beaver.
-3. **Description picture** (optional): `/mybots` → the bot → **Edit Bot** → **Edit Description Picture**, then
+2. **Description picture** (optional): `/mybots` → the bot → **Edit Bot** → **Edit Description Picture**, then
    send a 640x360 picture: the store's own, or `docs/brand/bot-description.jpg`.
-4. **Telegram Stars:** nothing to switch on; the bot answers `/paysupport`, which Telegram asks of bots that sell
+3. **Telegram Stars:** nothing to switch on; the bot answers `/paysupport`, which Telegram asks of bots that sell
    with Stars.
 
 Leave inline mode, groups, Mini Apps, the login widget, games and @BotFather's Payments (a third-party
@@ -135,7 +146,7 @@ and no always-on processes, while the bot is one Go service of a self-hosted sta
 provisioner, Postgres, Redis) with workers that run all the time (event feed, broadcasts, usage sync, payment
 watchers) and that holds the store's 3x-ui tokens and payment details.
 
-The `bobres install` summary suggests the profile photo among the first steps.
+The `bobres install` summary points to the profile photo upload among the first steps.
 
 ## Copy deliverables (to write in Phase 1 with the bot, fa + en)
 1. Bot: /start welcome, main menu labels, purchase flow, delivery message, connect guides, wallet, referral, trial, support, settings.

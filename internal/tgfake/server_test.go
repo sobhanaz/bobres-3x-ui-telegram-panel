@@ -271,3 +271,114 @@ func TestCutShortUploadIsRefused(t *testing.T) {
 		t.Fatalf("%d, sent %+v", resp.StatusCode, f.Sent())
 	}
 }
+
+// The calls that set the bot's own profile are answered and recorded apart
+// from the messages; a profile photo must come as Telegram wants it.
+func TestProfileCallsAreAnsweredAndRecorded(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("123:abc", tg.WithAPIRoot(srv.URL))
+	ctx := context.Background()
+	jpeg := bytes.Repeat([]byte{0xd8}, 2048)
+	for _, call := range []func() error{
+		func() error {
+			return c.SetMyCommands(ctx, []tg.BotCommand{{Command: "start", Description: "Menu"}}, 0, "en")
+		},
+		func() error { return c.DeleteMyCommands(ctx, 42, "") },
+		func() error { return c.SetMyDescription(ctx, "Buy a VPN", "en") },
+		func() error { return c.SetMyShortDescription(ctx, "VPN store", "") },
+		func() error { return c.SetMyProfilePhoto(ctx, jpeg) },
+		func() error { return c.RemoveMyProfilePhoto(ctx) },
+	} {
+		if err := call(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls := f.Profile()
+	var methods []string
+	for _, pc := range calls {
+		methods = append(methods, pc.Method)
+	}
+	if strings.Join(methods, " ") != "setMyCommands deleteMyCommands setMyDescription setMyShortDescription setMyProfilePhoto removeMyProfilePhoto" {
+		t.Fatalf("recorded: %v", methods)
+	}
+	if calls[2].Params["description"] != "Buy a VPN" || calls[2].Params["language_code"] != "en" {
+		t.Errorf("description: %+v", calls[2])
+	}
+	sum := sha256.Sum256(jpeg)
+	if p := calls[4]; p.FileName != "avatar.jpg" || p.FileSize != int64(len(jpeg)) || p.FileSHA256 != hex.EncodeToString(sum[:]) {
+		t.Errorf("photo: %+v", p)
+	}
+	if len(f.Sent()) != 0 {
+		t.Fatalf("profile calls recorded as messages: %+v", f.Sent())
+	}
+
+	// A photo that is not attached as a file is refused, like Telegram does.
+	form := "--b\r\nContent-Disposition: form-data; name=\"photo\"\r\n\r\n{\"type\":\"static\",\"photo\":\"attach://other\"}\r\n" +
+		"--b\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n\r\njpeg\r\n--b--\r\n"
+	resp, err := http.Post(srv.URL+"/bot123:abc/setMyProfilePhoto", "multipart/form-data; boundary=b", strings.NewReader(form))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest || len(f.Profile()) != len(calls) {
+		t.Fatalf("a photo naming another part: %d, %d calls", resp.StatusCode, len(f.Profile()))
+	}
+}
+
+// getUserProfilePhotos gives the bot the photo it set last, in Telegram's
+// sizes; one set in @BotFather replaces it, and removeMyProfilePhoto takes
+// off whichever is current. No other user has a photo.
+func TestProfilePhotoIsReadBack(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("123:abc", tg.WithAPIRoot(srv.URL))
+	ctx := context.Background()
+	current := func(userID int64) string {
+		t.Helper()
+		p, err := c.GetUserProfilePhotos(ctx, userID, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Photos) == 0 {
+			if p.TotalCount != 0 {
+				t.Fatalf("no photos, total %d", p.TotalCount)
+			}
+			return ""
+		}
+		sizes := p.Photos[0]
+		if p.TotalCount != 1 || len(sizes) != 3 || sizes[2].Width != 640 || sizes[0].FileUniqueID == sizes[2].FileUniqueID {
+			t.Fatalf("photos: %+v", p)
+		}
+		return sizes[2].FileUniqueID
+	}
+
+	if id := current(BotID); id != "" || f.ProfilePhoto() != "" {
+		t.Fatalf("before any photo: %q", id)
+	}
+	if err := c.SetMyProfilePhoto(ctx, []byte("jpeg")); err != nil {
+		t.Fatal(err)
+	}
+	own := current(BotID)
+	if own == "" || own != f.ProfilePhoto() || current(42) != "" {
+		t.Fatalf("set: %q, fake %q", own, f.ProfilePhoto())
+	}
+	if owners := f.SetProfilePhoto(); owners == own || current(BotID) != owners {
+		t.Fatalf("set in @BotFather: %q, was %q", owners, own)
+	}
+	if err := c.RemoveMyProfilePhoto(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if id := current(BotID); id != "" || f.ProfilePhoto() != "" {
+		t.Fatalf("removed: %q", id)
+	}
+	var methods []string
+	for _, pc := range f.Profile() {
+		methods = append(methods, pc.Method)
+	}
+	if strings.Join(methods, " ") != "setMyProfilePhoto removeMyProfilePhoto" {
+		t.Fatalf("recorded: %v", methods) // reads are not profile changes
+	}
+}

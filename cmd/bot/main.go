@@ -101,15 +101,16 @@ func setup(rt *app.Runtime) error {
 	})
 
 	// The bot's own Telegram profile (menu commands, description, short
-	// description) follows its texts, the branding and the staff; what was
-	// set is kept in Redis per bot, so a restart does not set it all again
-	// and another bot token gets the whole profile.
+	// description, profile photo) follows its texts, the branding, the staff
+	// and the photo uploaded on the Branding page (fetched from core when its
+	// version changes); what was set is kept in Redis per bot, so a restart
+	// does not set it all again and another bot token gets the whole profile.
 	// It has a client of its own: a 429 on these calls must not pause
 	// replies and broadcasts (the shared flood wait), and it waits for the
 	// next refresh instead of sleeping.
 	profileBot := tg.New(cfg.TelegramBotToken, tg.WithAPIRoot(cfg.TelegramAPIURL), tg.WithNoRetry())
 	rt.Go("profile", func(ctx context.Context) error {
-		return h.RunProfile(ctx, profileBot, state.NewMemo(rdb, fmt.Sprintf("bot:profile:%d", me.ID)))
+		return h.RunProfile(ctx, profileBot, me.ID, state.NewMemo(rdb, fmt.Sprintf("bot:profile:%d", me.ID)))
 	})
 
 	notifier := notify.New(core, bot, cat, h.Settings(), cfg.AdminTelegramID, rt.Log)

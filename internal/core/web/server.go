@@ -85,7 +85,10 @@ type Server struct {
 	// hashing holds a slot per password hash being computed or checked:
 	// each takes 32 MiB, so a burst of logins must not run them all at once.
 	hashing chan struct{}
-	now     func() time.Time
+	// photoSlot is held while a bot photo is decoded and encoded (up to
+	// about 50 MiB): one at a time.
+	photoSlot chan struct{}
+	now       func() time.Time
 }
 
 // hashSlots is how many password hashes core computes at a time (32 MiB
@@ -98,7 +101,8 @@ func New(cfg Config) *Server {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute),
-		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), now: time.Now}
+		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1),
+		now: time.Now}
 }
 
 // Register mounts the API on /api/v1/ and the dashboard on /admin/.
@@ -196,6 +200,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "PUT /api/v1/branding", PermBrandingWrite, s.putBranding)
 	s.route(api, "PUT /api/v1/branding/logo", PermBrandingWrite, s.putLogo)
 	s.route(api, "DELETE /api/v1/branding/logo", PermBrandingWrite, s.deleteLogo)
+	s.route(api, "GET /api/v1/branding/bot-photo", PermBrandingWrite, s.botPhoto)
+	s.route(api, "PUT /api/v1/branding/bot-photo", PermBrandingWrite, s.putBotPhoto)
+	s.route(api, "DELETE /api/v1/branding/bot-photo", PermBrandingWrite, s.deleteBotPhoto)
 	s.route(api, "GET /api/v1/texts", PermBrandingWrite, s.listTexts)
 	s.route(api, "POST /api/v1/texts/check", PermBrandingWrite, s.checkText)
 	s.route(api, "PUT /api/v1/texts", PermBrandingWrite, s.putText)

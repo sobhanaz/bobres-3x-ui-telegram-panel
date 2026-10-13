@@ -37,6 +37,8 @@ pull requests #13 to #41. Everything below is new in this release.
 - The bot keeps its own Telegram profile up to date, in Persian and English: menu commands (staff get theirs in
   their own chat), the description of an empty chat and the short description. The words are bot texts the store
   can change; a setting leaves them to @BotFather instead.
+- The bot's profile photo is uploaded in the dashboard (Branding & texts → Store → Telegram bot): any PNG or JPEG
+  becomes the square JPEG Telegram takes, and the bot sets it in Telegram when it changes (Bot API 9.4).
 
 ### Dashboard
 - All 17 sections at `https://<domain>/admin`, built into the `core` binary (Vue 3, PrimeVue).
@@ -52,8 +54,8 @@ pull requests #13 to #41. Everything below is new in this release.
   each reseller's services, customers, statement and orders.
 - Support inbox with saved replies and assignment; broadcasts in both languages, with an audience, a schedule, a rate
   limit, pause and resume.
-- Store setup: branding (name, logo, colours) and every bot text in both languages, settings, staff, and the audit
-  log with CSV export.
+- Store setup: branding (name, logo, colours, the bot's profile photo) and every bot text in both languages,
+  settings, staff, and the audit log with CSV export.
 - 3x-ui servers: several panels with a write-only token, weight, on/off for new services, version and health, a
   connection test, servers per plan, and an attach switch per inbound.
 - Payment gateways (owner): Zarinpal and automatic USDT settings with a connection test and a report of the last 7 and

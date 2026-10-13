@@ -1,6 +1,7 @@
 // Package tgfake is a fake Telegram Bot API for tests and the CI end-to-end
 // run: it answers the methods the bot uses, hands out injected updates
-// through getUpdates, and records everything the bot sends.
+// through getUpdates, and records everything the bot sends (and, apart, the
+// calls that set its own profile).
 //
 // Besides the Bot API paths (/bot<token>/<method>) it serves three helpers:
 // POST /_inject (an Update without update_id), GET /_sent (the recorded
@@ -15,6 +16,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,18 +45,39 @@ type Sent struct {
 	FileSHA256 string `json:"file_sha256,omitempty"`
 }
 
+// ProfileCall is a call that sets the bot's own profile (setMyCommands,
+// deleteMyCommands, setMyDescription, setMyShortDescription,
+// setMyProfilePhoto, removeMyProfilePhoto): its parameters as sent, and for
+// a photo the uploaded file's name, size and SHA-256 (hex).
+type ProfileCall struct {
+	Method     string         `json:"method"`
+	Params     map[string]any `json:"params,omitempty"`
+	FileName   string         `json:"file_name,omitempty"`
+	FileSize   int64          `json:"file_size,omitempty"`
+	FileSHA256 string         `json:"file_sha256,omitempty"`
+}
+
 // Server is the fake API state.
 type Server struct {
 	mu       sync.Mutex
 	updates  []tg.Update
 	sent     []Sent
+	profile  []ProfileCall
 	nextUpd  int64
 	nextMsg  int
 	webhook  string
 	notified chan struct{}
 	files    map[string][]byte // by file id, served by getFile and /file/
 	fails    map[int64]*Failure
+	// photo is the bot's current profile photo (nil: none), which
+	// getUserProfilePhotos returns for the bot itself; photos counts the
+	// photos set, each a new one, like Telegram's.
+	photo  []tg.PhotoSize
+	photos int
 }
+
+// BotID is the fake bot's own user id (getMe).
+const BotID = 1000
 
 // New returns an empty fake.
 func New() *Server {
@@ -148,6 +171,46 @@ func (s *Server) Sent() []Sent {
 	return append([]Sent(nil), s.sent...)
 }
 
+// Profile returns a copy of the profile calls so far.
+func (s *Server) Profile() []ProfileCall {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]ProfileCall(nil), s.profile...)
+}
+
+// ProfilePhoto returns the identity of the bot's current profile photo (the
+// file_unique_id of its largest size), "" when it has none.
+func (s *Server) ProfilePhoto() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.photo) == 0 {
+		return ""
+	}
+	return s.photo[len(s.photo)-1].FileUniqueID
+}
+
+// SetProfilePhoto gives the bot a new profile photo the way @BotFather
+// does, outside the Bot API, and returns its identity.
+func (s *Server) SetProfilePhoto() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.newPhoto()
+}
+
+// newPhoto makes a new current profile photo, in three sizes like
+// Telegram's (the largest last), and returns its identity. Call with mu
+// held.
+func (s *Server) newPhoto() string {
+	s.photos++
+	id := "fake-profile-photo-" + strconv.Itoa(s.photos)
+	s.photo = nil
+	for _, side := range []int{160, 320, 640} {
+		uid := id + "-" + strconv.Itoa(side)
+		s.photo = append(s.photo, tg.PhotoSize{FileID: uid + "-file", FileUniqueID: uid, Width: side, Height: side})
+	}
+	return s.photo[len(s.photo)-1].FileUniqueID
+}
+
 // Webhook returns the URL set by setWebhook ("" after deleteWebhook).
 func (s *Server) Webhook() string {
 	s.mu.Lock()
@@ -232,6 +295,7 @@ func (s *Server) inject(w http.ResponseWriter, r *http.Request) {
 
 // upload is a file part of a multipart request, read as it streams in.
 type upload struct {
+	field  string // the part's form name
 	name   string
 	size   int64
 	sha256 string
@@ -272,7 +336,7 @@ func params(r *http.Request) (map[string]any, *upload, error) {
 				if err != nil {
 					return nil, nil, err
 				}
-				file = &upload{name: p.FileName(), size: n, sha256: hex.EncodeToString(h.Sum(nil))}
+				file = &upload{field: p.FormName(), name: p.FileName(), size: n, sha256: hex.EncodeToString(h.Sum(nil))}
 				continue
 			}
 			v, _ := io.ReadAll(io.LimitReader(p, maxField))
@@ -328,7 +392,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(w, map[string]any{"file_id": id, "file_path": "files/" + id, "file_size": len(data)})
 	case "getMe":
-		reply(w, tg.User{ID: 1000, IsBot: true, FirstName: "Fake", Username: "fake_bot"})
+		reply(w, tg.User{ID: BotID, IsBot: true, FirstName: "Fake", Username: "fake_bot"})
 	case "deleteWebhook":
 		s.mu.Lock()
 		s.webhook = ""
@@ -406,8 +470,50 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.sent = append(s.sent, Sent{Method: parts[1], Text: str(p["text"])})
 		s.mu.Unlock()
 		reply(w, true)
+	case "setMyCommands", "deleteMyCommands", "setMyDescription", "setMyShortDescription":
+		s.recordProfile(ProfileCall{Method: parts[1], Params: p}, nil)
+		reply(w, true)
+	case "removeMyProfilePhoto": // the current photo, whoever set it
+		s.recordProfile(ProfileCall{Method: parts[1], Params: p}, func() { s.photo = nil })
+		reply(w, true)
+	case "setMyProfilePhoto":
+		// Like Telegram: the photo field is an InputProfilePhotoStatic whose
+		// file came in the part it names.
+		var photo struct{ Type, Photo string }
+		if json.Unmarshal([]byte(str(p["photo"])), &photo) != nil || photo.Type != "static" {
+			fail(w, http.StatusBadRequest, "Bad Request: can't parse photo JSON object")
+			return
+		}
+		if file == nil || photo.Photo != "attach://"+file.field {
+			fail(w, http.StatusBadRequest, "Bad Request: photo must be uploaded as a file")
+			return
+		}
+		s.recordProfile(ProfileCall{Method: parts[1], Params: p, FileName: file.name, FileSize: file.size, FileSHA256: file.sha256},
+			func() { s.newPhoto() })
+		reply(w, true)
+	case "getUserProfilePhotos":
+		// The bot's own photo, the one it set last (or SetProfilePhoto); no
+		// other user has one here.
+		s.mu.Lock()
+		out := tg.UserProfilePhotos{Photos: [][]tg.PhotoSize{}}
+		if num(p["user_id"]) == BotID && len(s.photo) > 0 {
+			out = tg.UserProfilePhotos{TotalCount: 1, Photos: [][]tg.PhotoSize{slices.Clone(s.photo)}}
+		}
+		s.mu.Unlock()
+		reply(w, out)
 	default:
 		fail(w, http.StatusNotFound, "Not Found: method "+parts[1])
+	}
+}
+
+// recordProfile records a profile call and applies what it changes (then,
+// may be nil) under the same lock.
+func (s *Server) recordProfile(c ProfileCall, then func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.profile = append(s.profile, c)
+	if then != nil {
+		then()
 	}
 }
 
