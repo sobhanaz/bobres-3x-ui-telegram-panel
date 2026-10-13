@@ -10,6 +10,7 @@ import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import BackupsTab from '../components/system/BackupsTab.vue'
 import HealthTab from '../components/system/HealthTab.vue'
+import HttpsTab from '../components/system/HttpsTab.vue'
 import LicenseTab from '../components/system/LicenseTab.vue'
 import LogsTab from '../components/system/LogsTab.vue'
 import UpdatesTab from '../components/system/UpdatesTab.vue'
@@ -17,8 +18,9 @@ import { licenseSeverity, stateOf } from '../license'
 import { useAuth } from '../stores/auth'
 
 // The system (owner and admin): every service's health and version, whether
-// a newer release is out, the backups, the license, and for the owner the
-// services' recent warnings and errors. The tab is in the address (?tab=), so the menu's license chip can
+// a newer release is out, the backups, the HTTPS certificates (the owner
+// changes them), the license, and for the owner the services' recent warnings
+// and errors. The tab is in the address (?tab=), so the menu's license chip can
 // open it; each tab loads the first time it is shown.
 const { t } = useI18n()
 const auth = useAuth()
@@ -27,7 +29,7 @@ const router = useRouter()
 
 // the logs carry Telegram ids: the owner's only (system.write)
 const canLogs = computed(() => auth.can('system.write'))
-const tabs = computed(() => (canLogs.value ? ['health', 'updates', 'backups', 'logs', 'license'] : ['health', 'updates', 'backups', 'license']))
+const tabs = computed(() => (canLogs.value ? ['health', 'updates', 'backups', 'https', 'logs', 'license'] : ['health', 'updates', 'backups', 'https', 'license']))
 const tabOf = (v: unknown) => (typeof v === 'string' && tabs.value.includes(v) ? v : 'health')
 const tab = ref(tabOf(route.query.tab))
 const seen = reactive(new Set<string>([tab.value]))
@@ -57,6 +59,7 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
       <Tab value="health" class="tab-health">{{ t('system.tab.health') }}</Tab>
       <Tab value="updates" class="tab-updates">{{ t('system.tab.updates') }}</Tab>
       <Tab value="backups" class="tab-backups">{{ t('system.tab.backups') }}</Tab>
+      <Tab value="https" class="tab-https">{{ t('system.tab.https') }}</Tab>
       <Tab v-if="canLogs" value="logs" class="tab-logs">{{ t('system.tab.logs') }}</Tab>
       <Tab value="license" class="tab-license">
         {{ t('system.tab.license') }}
@@ -72,6 +75,9 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
       </TabPanel>
       <TabPanel value="backups">
         <BackupsTab v-if="seen.has('backups')" />
+      </TabPanel>
+      <TabPanel value="https">
+        <HttpsTab v-if="seen.has('https')" />
       </TabPanel>
       <TabPanel v-if="canLogs" value="logs">
         <LogsTab v-if="seen.has('logs')" />

@@ -17,7 +17,7 @@ var files embed.FS
 
 // CSP is the dashboard's Content-Security-Policy: scripts, fonts and API calls
 // from this origin only, styles also inline (the UI library injects its theme),
-// images also as data: URIs (the authenticator QR code). deploy/Caddyfile sends
+// images also as data: URIs (the authenticator QR code). deploy/caddy/Caddyfile sends
 // the same policy (a test keeps them equal), so it holds with or without Caddy.
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 

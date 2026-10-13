@@ -6,7 +6,8 @@ Telegram and a throwaway 3x-ui container (the `docker` and `xui` jobs): install,
 wallet purchase provisioned on the panel, a backup and a restore, status, logs and uninstall. It
 does not cover card payment with receipt approval, QR codes, reinstalling over existing data,
 or a VPN app actually connecting. This run checks those, plus your network, your domain,
-Telegram itself and your panel's settings, and the parts added in Phases 4 to 7 (section 7).
+Telegram itself and your panel's settings, the parts added in Phases 4 to 7 (section 7) and the HTTPS manager
+(section 8).
 
 ## 1. What you need
 
@@ -148,7 +149,79 @@ Commands use the `dc` helper from the [runbooks README](runbooks/README.md#befor
   test it, then buy the test plan with "USDT TRC20 (automatic)" and send exactly the amount shown.
   The service arrives within a minute or two of the transfer.
 
-## 8. After it passes
+## 8. HTTPS certificates
+
+Commands use the `dc` helper from the [runbooks README](runbooks/README.md#before-you-start). Runbook:
+[HTTPS certificates](runbooks/https.md). The lab cannot test the server IP address mode (see below).
+
+- **Domain, automatic:** **System → HTTPS** shows the mode "Domain (automatic)", the domain "In use" with Let's
+  Encrypt as issuer, "Trusted by browsers: Yes", its expiry date and days left, and the applier's last result.
+  `sudo bobres ssl status` says the same. `sudo bobres doctor` has a TLS line for each address, and they pass. `dc ps`
+  shows `tls-agent` healthy, and `bobres status` lists it (the menu's header counts 9 services with backups). The
+  Overview and the System page show no HTTPS alert.
+- **Your own certificate:** make a test pair for the domain (`openssl req -x509 -newkey rsa:2048 -nodes -days 30 -keyout
+  key.pem -out cert.pem -subj /CN=<domain> -addext subjectAltName=DNS:<domain>`, in a folder you delete afterwards).
+  - Apply a key that does not match: the form says so and nothing changes.
+  - Apply the real pair: it is accepted, with a warning that it is self-signed. The domain row shows your certificate,
+    "Trusted by browsers: No", and browsers warn. The key field is empty afterwards.
+  - From the server, `sudo bobres ssl auto`: the dashboard opens with the Let's Encrypt certificate again (the
+    recovery path when a wrong certificate locks browsers out).
+  - Apply `sudo bobres ssl manual --cert cert.pem --key key.pem`, then `sudo bobres config set BOBRES_DOMAIN
+    <another domain pointing here>`: the HTTPS tab says your certificate is not in use because it does not cover the
+    domain, the alert "The store's HTTPS setting is not working as saved" arrives, and the store serves the automatic
+    certificate. Set the domain back, then `sudo bobres ssl auto`.
+- **Server IP address (a real server only):** the server needs a public IPv4 address that is not behind carrier-grade
+  NAT, with ports 80 and 443 reachable from the internet. In the HTTPS tab choose "Server IP address", press **Detect**,
+  read the warnings, apply. Wait for "The certificate is in use" (a few minutes). Check `curl -sv https://<ip>/healthz`
+  (an issuer of Let's Encrypt, `shortlived` in its name or a validity of about 6 days) and that the dashboard's
+  login links (`/dashboard` in the bot) now use `https://<ip>`. They move within a minute or two of the certificate, and
+  only when the address the bot detects is that same address: on a server whose bot leaves through another address
+  (a VPN, a NAT egress) they stay on the domain, which is the design (the runbook has `BOBRES_PUBLIC_URL`). Then choose
+  "Domain (automatic)" again.
+- **Update and roll back across the layout change.** The HTTPS manager moved Caddy's file to `caddy/Caddyfile` and added
+  `tls/`. Check it on a real update:
+  1. Start from an install of 0.1.0-rc.1, the last release candidate from before the HTTPS manager (the old layout, and
+     no `tls-agent`: it exists from 0.1.0-rc.2 on). Note `ls /opt/bobres`: a top-level `Caddyfile`, no `caddy/` or
+     `tls/`.
+  2. `sudo bobres update`. Afterwards `ls -l /opt/bobres` shows `caddy/Caddyfile` (root, 0644) and `tls/` (65532:65532,
+     0750) with `global.caddy` and `sites.caddy`; the top-level `Caddyfile` is still there, unchanged. `sudo bobres
+     status` shows every service healthy, `tls-agent` included, and the dashboard opens over HTTPS with the same
+     certificate (`dc logs caddy` shows the reload and no new issuing). `/opt/bobres/.restore-point/files/` holds the
+     old files the 0.1.0-rc.1 `bobres` listed (`.env`, `docker-compose.yml`, `Caddyfile`, `postgres-init.sh`): the old
+     layout has no `caddy/Caddyfile` to keep.
+  3. `sudo bobres rollback`. The previous version comes back: `dc ps` has no `tls-agent` (the rollback removes it with
+     `up -d --remove-orphans`), Caddy runs from the top-level `Caddyfile`, and the dashboard opens over HTTPS. `caddy/`
+     and `tls/` stay on disk and are ignored.
+  4. `sudo bobres update` once more, to see that an update works again after a rollback. This time the restore point
+     (made by the new `bobres`) holds `caddy/Caddyfile` as well.
+- **Downgrade to 0.1.0-rc.1 and back: the `tls` profile.** The compose file always defines `tls-agent`, but the rc.1
+  image has no `tls-agent` command, so the service is behind the Compose profile `tls`, which every `bobres install`
+  turns on or off from the image version. On the rc.2 install of the check above:
+  1. `sudo bobres install --version 0.1.0-rc.1 --skip-checks` (the documented downgrade, with the new `bobres`).
+     `grep COMPOSE_PROFILES /opt/bobres/.env` no longer has `tls`; `dc ps -a` has no `tls-agent` at all (the installer
+     removed the one that was running, so nothing restarts in a loop); `sudo bobres status` is healthy and lists none;
+     the run itself ended with "All services are healthy" (it did not wait for an agent).
+  2. `sudo bobres ssl status` prints "this install predates the HTTPS manager (release 0.1.0-rc.1): run `sudo bobres
+     update`" and exits 1; `dc logs core` shows no second start of core ("address in use") after it; `sudo bobres
+     doctor` has one SKIP line, "HTTPS manager not installed yet"; the menu's HTTPS item says the same instead of
+     opening its choices. A plain re-run, `sudo bobres install --skip-checks` (it keeps rc.1), changes nothing of this.
+  3. `sudo bobres update` (to rc.2 or newer): `COMPOSE_PROFILES` has `tls` again, `dc ps` shows `tls-agent` healthy, and
+     `sudo bobres ssl status` works as before.
+  4. At the very end of the lab run, after a rollback has happened once, `sudo bobres uninstall --purge` (type the
+     domain): `docker volume ls` lists no `bobres_*` volume, not even `bobres_tls_request`, `bobres_tls_result` or
+     `bobres_caddy_admin`, which the rolled-back compose file does not declare (`down --volumes` alone leaves them).
+- **Alerts (optional):** `dc stop tls-agent` and apply a change from the dashboard: after 20 seconds it answers "The
+  HTTPS applier did not answer", and nothing changes. `dc start tls-agent` brings it back. If the agent stays stopped
+  for 5 minutes with a request waiting, the "HTTPS setting is not working as saved" alert arrives, and a "Fixed"
+  message follows about 5 minutes after the agent answers again. `dc stop caddy` for 4 minutes: the alert "Caddy, which
+  serves the store's HTTPS addresses, is not answering" arrives (the dashboard is down too, so Telegram is the only
+  sign), and "Fixed" follows about 5 minutes after `dc start caddy`.
+
+In the lab (`deploy/lab`) Caddy's ports are published on the Mac's 127.0.0.1 only, so Let's Encrypt cannot reach it:
+the domain is `bobres.localhost` with Caddy's own certificate, and the IP address mode cannot be tested. The lab can
+try the form, the refusals, an own certificate and the recovery command, but not a Let's Encrypt certificate.
+
+## 9. After it passes
 
 Tag `v0.1.0` (the owner's decision: the release publishes the images and the CLI). Make the five
 `bobres-*` image packages on GHCR public first (section 2).

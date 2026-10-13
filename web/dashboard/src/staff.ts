@@ -168,6 +168,9 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
       return { name: 'servers' }
     case 'gateway':
       return { name: 'gateways' }
+    case 'tls':
+      // The HTTPS setting is a tab of the System page.
+      return { name: 'system', query: { tab: 'https' } }
   }
   return null
 }

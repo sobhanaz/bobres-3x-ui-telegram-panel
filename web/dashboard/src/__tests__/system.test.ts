@@ -171,7 +171,7 @@ describe('open problems', () => {
     // every text the bot has for a problem is here too, in both languages
     const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'backup_failed', 'backup_stale',
       'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'check',
-      'backup_offsite', 'usdt_failing', 'usdt_stuck']
+      'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down']
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(ALERT_FALLBACK).toBe('system.alerts.kind.check')
@@ -650,7 +650,12 @@ describe('system page', () => {
   const ownerPerms = [...adminPerms, 'gateways.write', 'staff.write', 'system.write', 'license.write']
   const supportPerms = ['overview.read', 'users.read', 'services.read', 'tickets.write']
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-  const text = (path: string) => (path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], fa) as string | undefined) ?? path
+  // a text that is not in the catalog fails here, instead of standing in as its own path (which a page that lacks it would show too)
+  const text = (path: string) => {
+    const s = path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], fa)
+    if (typeof s !== 'string') throw new Error(`fa.json has no text "${path}"`)
+    return s
+  }
   const fill = (s: string, params: Record<string, string>) => Object.entries(params).reduce((out, [k, v]) => out.replace('{' + k + '}', v), s)
   const nowSec = () => Math.floor(Date.now() / 1000)
 

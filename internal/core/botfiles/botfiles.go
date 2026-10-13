@@ -1,7 +1,7 @@
 // Package botfiles calls the bot's internal endpoints for the dashboard:
 // files customers sent (receipt photos), reloading settings, checking a
-// channel, the update check, the license server. Core keeps no bot token and
-// has no internet access.
+// channel, the update check, the license server, the server's public IP
+// address. Core keeps no bot token and has no internet access.
 package botfiles
 
 import (
@@ -18,6 +18,7 @@ import (
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsconf"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
@@ -258,6 +259,39 @@ func (c *Client) RecentLogs(ctx context.Context) ([]logging.Line, error) {
 		return nil, fmt.Errorf("botfiles: logs: %w", err)
 	}
 	return out.Lines, nil
+}
+
+// PublicIP asks the bot for this server's public IP address (core has no
+// internet access), within 15 seconds: the bot asks two public services in
+// turn. Core checks the answer again: only a public address is returned,
+// in canonical form.
+func (c *Client) PublicIP(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/internal/public-ip", nil)
+	if err != nil {
+		return "", fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("botfiles: public ip: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("botfiles: public ip: the bot answered %d", resp.StatusCode)
+	}
+	var out struct {
+		IP string `json:"ip"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<10)).Decode(&out); err != nil {
+		return "", fmt.Errorf("botfiles: public ip: %w", err)
+	}
+	ip, err := tlsconf.PublicIP(out.IP)
+	if err != nil {
+		return "", fmt.Errorf("botfiles: public ip: %w", err)
+	}
+	return ip, nil
 }
 
 // ActivateLicense asks the vendor's license server, through the bot, for a

@@ -4,6 +4,8 @@
 #   public  : caddy only (the only container with a route to the internet inbound)
 #   edge    : INTERNAL. caddy <-> services that receive public HTTP (core, payments).
 #             core has NO internet egress: a compromised dashboard cannot phone home.
+#             It does not control the gateway either: HTTPS changes go through the tls-agent
+#             (below), which has no network at all.
 #   backend : INTERNAL. postgres, redis and all apps.
 #   egress  : outbound internet, only for services that must call Telegram / gateways / 3x-ui
 #             (bot, payments, provisioner), and the backup service while it copies backups to
@@ -14,11 +16,20 @@
 #   `bobres install` sets from the digests the signed release CLI carries: a tag moved on the
 #   registry cannot change what runs. Empty (a development build, or --version of another
 #   release) = by tag.
+# HTTPS (the dashboard's System > HTTPS tab, `bobres ssl`)
+#   Core checks a change and hands it to the tls-agent as a request file (volume tls_request, core
+#   writes, the agent reads); the agent checks it again, writes the Caddy files in ./tls (the only
+#   service that can), makes Caddy load them through its admin socket (volume caddy_admin: only
+#   caddy and the agent mount it) and answers in a result file (volume tls_result, the agent writes,
+#   core reads). Caddy reads ./caddy (its main Caddyfile) and ./tls read-only.
 # Profiles
 #   backup  : the backup service. `bobres install` turns it on (COMPOSE_PROFILES=backup in .env)
 #             when the install runs images that have it and off when they do not, so an
 #             install pinned (or rolled back) to an older version, which has no backup image,
 #             still starts.
+#   tls     : the tls-agent, the same way (COMPOSE_PROFILES=...,tls in .env): on for images that
+#             have the `tls-agent` command (0.1.0-rc.2 on; a tag that names no release counts as
+#             having it), off for older ones (0.1.0-rc.1), where the service would restart for ever.
 # Secrets: each service gets ONLY what it needs (no shared env_file), its OWN database role
 # and its OWN service token. A server accepts only its legitimate callers: core accepts the
 # bot; payments and provisioner accept only core; the bot's /internal endpoints accept core and
@@ -58,8 +69,14 @@ x-build: &build
 
 services:
   caddy:
-    image: caddy:2-alpine
+    # Pinned by tag and by digest (the multi-arch index): 2.11.3 is the first version that issues
+    # Let's Encrypt certificates for IP addresses. A new reference is pulled by `bobres update`.
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     restart: unless-stopped
+    # Root (it binds 80/443), with group 65532, the group of the tls-agent and of the files it writes
+    # (mode 0640): Caddy reads them through the group, and the agent writes to the admin socket
+    # (mode 0220) through it. Without DAC_OVERRIDE root has no other power over those files.
+    user: "0:65532"
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -70,7 +87,13 @@ services:
       BOBRES_DOMAIN: ${BOBRES_DOMAIN:?set BOBRES_DOMAIN}
       BOBRES_ZARINPAL_HOST: ${BOBRES_ZARINPAL_HOST:-}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # A directory, not the file: a bind-mounted file keeps its old inode when the installer replaces
+      # it (an atomic rename), so an updated Caddyfile would never reach the container.
+      - ./caddy:/etc/caddy:ro
+      # The HTTPS files the tls-agent writes (imported by the Caddyfile), and a manual certificate.
+      - ./tls:/tls:ro
+      # Caddy's admin socket. Whoever can write to it controls the gateway: only the tls-agent mounts it.
+      - caddy_admin:/run/caddy
       - caddy_data:/data
       - caddy_config:/config
     mem_limit: 256m
@@ -141,6 +164,9 @@ services:
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
       # Optional: where staff open the dashboard, when not https://BOBRES_DOMAIN (local tests).
       BOBRES_PUBLIC_URL: ${BOBRES_PUBLIC_URL:-}
+      # The second domain registered with Zarinpal ("" = none): part of the HTTPS setting core
+      # hands to the tls-agent.
+      BOBRES_ZARINPAL_HOST: ${BOBRES_ZARINPAL_HOST:-}
       # What core presents to payments (its own token), to provisioner and to the bot: one each.
       BOBRES_SERVICE_TOKEN: ${BOBRES_TOKEN_CORE:?set BOBRES_TOKEN_CORE}
       BOBRES_PROVISIONER_TOKEN: ${BOBRES_TOKEN_CORE_PROVISIONER:?set BOBRES_TOKEN_CORE_PROVISIONER}
@@ -161,6 +187,11 @@ services:
       BOBRES_BACKUP_URL: ${BOBRES_BACKUP_URL:-}
       # What core presents to the backup service: its own token for that one service.
       BOBRES_BACKUP_TOKEN: ${BOBRES_TOKEN_CORE_BACKUP:-}
+    volumes:
+      # Core's request to the tls-agent (read-write), and the agent's answer (read-only). Core mounts
+      # nothing of Caddy's: neither the admin socket nor the TLS files.
+      - tls_request:/request
+      - tls_result:/tls-result:ro
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend]
@@ -253,6 +284,39 @@ services:
       postgres: { condition: service_healthy }
     networks: [backend, egress]
 
+  # Applies core's HTTPS requests to Caddy: the only writer of ./tls and the only service (besides Caddy)
+  # with the admin socket. It has no network and no secret: core's request, which may carry the private
+  # key of an own certificate, is a file in a volume only core and this service mount. It is given the
+  # install's own names (core's values) and answers `invalid` to a request for any other: a compromised
+  # core cannot make Caddy serve, or ask Let's Encrypt for, a name that is not the install's. Without
+  # BOBRES_DOMAIN it refuses every request.
+  tls-agent:
+    <<: *app
+    image: ghcr.io/sobhanaz/bobres-core:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_CORE:-}
+    build: { <<: *build, args: { SERVICE: core, VERSION: "${BOBRES_VERSION:-dev}" } }
+    profiles: [tls]
+    command: ["tls-agent"]
+    user: "65532:65532"
+    network_mode: none
+    environment:
+      <<: *common-env
+      BOBRES_DOMAIN: ${BOBRES_DOMAIN:?set BOBRES_DOMAIN}
+      BOBRES_ZARINPAL_HOST: ${BOBRES_ZARINPAL_HOST:-}
+    healthcheck:
+      # The loop touches a heartbeat file in /tmp (a tmpfs) every round.
+      test: ["CMD", "/app", "tls-agent", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 64m
+    volumes:
+      - tls_request:/request:ro
+      - tls_result:/result
+      - ./tls:/tls
+      - ./caddy:/etc/bobres/caddy:ro
+      - caddy_admin:/run/caddy
+
   backup:
     <<: *app
     image: ghcr.io/sobhanaz/bobres-backup:${BOBRES_VERSION:-latest}${BOBRES_IMAGE_DIGEST_BACKUP:-}
@@ -315,3 +379,8 @@ volumes:
   redis_data: {}
   caddy_data: {}
   caddy_config: {}
+  # Caddy's admin socket: caddy and the tls-agent only.
+  caddy_admin: {}
+  # core -> tls-agent: the HTTPS request. tls-agent -> core: the answer.
+  tls_request: {}
+  tls_result: {}

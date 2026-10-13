@@ -289,6 +289,13 @@ func (ins *installer) install(args []string) int {
 	} else {
 		disableBackups(env)
 	}
+	// The same for the tls-agent: the compose file always defines it, so an
+	// image without it (0.1.0-rc.1) must keep it out of what compose starts.
+	if tlsAgentImage(env["BOBRES_VERSION"]) {
+		addProfile(env, tlsProfile)
+	} else {
+		dropProfile(env, tlsProfile)
+	}
 	if code := ins.askS3(env, existing); code != 0 {
 		return code
 	}
@@ -344,7 +351,11 @@ func (ins *installer) install(args []string) int {
 		// and quietly from the menu too.
 		defer ins.savedBackupKeyNotice(envPath, env["BOBRES_BACKUP_KEY"])
 	}
-	if err := writeFiles(*dir, env); err != nil {
+	notes := ins.out
+	if ins.quiet {
+		notes = io.Discard
+	}
+	if err := writeFiles(*dir, env, notes, ins.errOut); err != nil {
 		fmt.Fprintf(ins.errOut, "error: %v\n", err)
 		return 1
 	}
@@ -517,10 +528,68 @@ func (ins *installer) start(ctx context.Context, dir string, env map[string]stri
 		fmt.Fprintf(ins.errOut, "error: docker compose up failed: %v\n%s\n", err, out)
 		return 1
 	}
+	ins.reloadCaddy(ctx, dir)
 	if backupEnabled(env) {
 		ins.ensureBackupRole(ctx, dir, env["DB_BACKUP_PASSWORD"])
 	}
-	return waitHealthy(ctx, ins.run, ins.sleep, dir, appServices(env), ins.out, ins.errOut)
+	if !tlsAgentImage(env["BOBRES_VERSION"]) {
+		ins.removeTLSAgent(ctx, dir)
+	}
+	return waitHealthy(ctx, ins.run, ins.sleep, dir, appServices(dir, env), ins.out, ins.errOut)
+}
+
+// removeTLSAgent removes the tls-agent container an earlier run of a newer
+// release left: with its profile off compose neither starts, updates nor
+// stops it, and it would go on running a newer image than the rest of the
+// stack (a downgrade). Best effort: the install does not depend on it.
+func (ins *installer) removeTLSAgent(ctx context.Context, dir string) {
+	if !composeDefines(dir, tlsAgentService) {
+		return
+	}
+	if out, err := ins.run(ctx, dir, composeArgs("rm", "--stop", "--force", tlsAgentService)...); err != nil {
+		fmt.Fprintf(ins.errOut, "warning: an old %s container was not removed (%v): docker rm -f bobres-%s-1\n%s\n",
+			tlsAgentService, err, tlsAgentService, strings.TrimSpace(string(out)))
+	}
+}
+
+// caddyWait is how long start waits for the gateway to run steadily.
+const caddyWait = 30 * time.Second
+
+// reloadCaddy makes Caddy read its Caddyfile again (SIGUSR1: it works with or
+// without the admin socket, and the tls-agent's loads keep the file name it
+// needs), then waits up to caddyWait for the gateway to be running and to stay
+// so for two looks in a row (a crash-looping container shows "running" now and
+// then). The Caddyfile is a directory mount, so an updated one is there, but a
+// running Caddy reads it only when told to. Both steps are best effort: a
+// failure is a warning, never a failed install or update.
+func (ins *installer) reloadCaddy(ctx context.Context, dir string) {
+	if out, err := ins.run(ctx, dir, composeArgs("kill", "-s", "SIGUSR1", "caddy")...); err != nil {
+		fmt.Fprintf(ins.errOut, "warning: Caddy was not told to read its Caddyfile again (%v): it reads it when it starts (bobres restart).\n%s\n",
+			err, strings.TrimSpace(string(out)))
+	}
+	state, steady := "", 0
+	for waited := time.Duration(0); ; waited += 2 * time.Second {
+		out, err := ins.run(ctx, dir, composeArgs("ps", "--all", "--format", "json", "caddy")...)
+		state = ""
+		if err == nil {
+			state = parseServices(out)["caddy"].State
+		}
+		if state == "running" {
+			if steady++; steady >= 2 {
+				return
+			}
+		} else {
+			steady = 0
+		}
+		if waited >= caddyWait {
+			break
+		}
+		ins.sleep(2 * time.Second)
+	}
+	if state == "" {
+		state = "no container"
+	}
+	fmt.Fprintf(ins.errOut, "warning: Caddy, the gateway, is not running steadily (state: %s). HTTPS will not work until it does: bobres logs caddy\n", state)
 }
 
 // backupRoleScript creates or updates the backup service's read-only role in
@@ -575,13 +644,7 @@ func backupImage(v string) bool {
 // enableBackups turns the backup Compose profile on, with core's address for
 // it.
 func enableBackups(env map[string]string) {
-	if !backupEnabled(env) {
-		profiles := strings.Trim(env["COMPOSE_PROFILES"], ", ")
-		if profiles != "" {
-			profiles += ","
-		}
-		env["COMPOSE_PROFILES"] = profiles + "backup"
-	}
+	addProfile(env, backupProfile)
 	if env["BOBRES_BACKUP_URL"] == "" {
 		env["BOBRES_BACKUP_URL"] = "http://backup:8080"
 	}
@@ -590,20 +653,47 @@ func enableBackups(env map[string]string) {
 // disableBackups turns the backup Compose profile off (keeping any other
 // profile) and clears core's address for it, for images without the service.
 func disableBackups(env map[string]string) {
-	var keep []string
-	for _, p := range strings.Split(env["COMPOSE_PROFILES"], ",") {
-		if p = strings.TrimSpace(p); p != "" && p != "backup" {
-			keep = append(keep, p)
-		}
-	}
-	env["COMPOSE_PROFILES"] = strings.Join(keep, ",")
+	dropProfile(env, backupProfile)
 	env["BOBRES_BACKUP_URL"] = ""
 }
 
 // backupEnabled reports whether the install runs the backup service.
-func backupEnabled(env map[string]string) bool {
+func backupEnabled(env map[string]string) bool { return hasProfile(env, backupProfile) }
+
+// The Compose profiles the installer turns on and off with the version.
+const (
+	backupProfile = "backup"
+	tlsProfile    = "tls"
+)
+
+// addProfile turns a Compose profile on in env's COMPOSE_PROFILES, after the
+// ones that are there.
+func addProfile(env map[string]string, name string) {
+	if hasProfile(env, name) {
+		return
+	}
+	profiles := strings.Trim(env["COMPOSE_PROFILES"], ", ")
+	if profiles != "" {
+		profiles += ","
+	}
+	env["COMPOSE_PROFILES"] = profiles + name
+}
+
+// dropProfile turns a Compose profile off, keeping the others.
+func dropProfile(env map[string]string, name string) {
+	var keep []string
 	for _, p := range strings.Split(env["COMPOSE_PROFILES"], ",") {
-		if strings.TrimSpace(p) == "backup" {
+		if p = strings.TrimSpace(p); p != "" && p != name {
+			keep = append(keep, p)
+		}
+	}
+	env["COMPOSE_PROFILES"] = strings.Join(keep, ",")
+}
+
+// hasProfile reports whether env's COMPOSE_PROFILES names the profile.
+func hasProfile(env map[string]string, name string) bool {
+	for _, p := range strings.Split(env["COMPOSE_PROFILES"], ",") {
+		if strings.TrimSpace(p) == name {
 			return true
 		}
 	}
@@ -676,11 +766,10 @@ Next steps (in Telegram, from the owner account %s):
 
 Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:
 it holds the keys that encrypt your panel tokens and gateway settings.
-
-Manage the store from this server at any time: run  bobres  for the menu
+%sManage the store from this server at any time: run  bobres  for the menu
 (status, logs, start/stop/restart, change the bot token, admin or panel).
 Server hardening (firewall, fail2ban, security updates, swap): sudo bobres harden; bobres doctor shows it.
-`, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir)
+`, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir, ins.httpsSummary(env, dir))
 	if backupEnabled(env) {
 		fmt.Fprintf(ins.out, "Backups: every day at %s (%s) into %s, each also sent to you on Telegram. One now: bobres backup\n",
 			env["BOBRES_BACKUP_TIME"], env["BOBRES_TIMEZONE"], filepath.Join(dir, "backups"))
@@ -695,6 +784,17 @@ Server hardening (firewall, fail2ban, security updates, swap): sudo bobres harde
 	if env["BOBRES_XUI_URL"] == "" {
 		fmt.Fprintln(ins.out, "No 3x-ui panel yet: add your servers in the dashboard (Servers) before you sell.")
 	}
+}
+
+// httpsSummary is the summary's paragraph about the certificate: the commands
+// of the HTTPS manager where this install has it, else where to get it.
+func (ins *installer) httpsSummary(env map[string]string, dir string) string {
+	if !tlsAgentOn(dir, env) {
+		return "The HTTPS certificate is automatic. The images this install runs (" + orDash(env["BOBRES_VERSION"]) +
+			") predate the HTTPS manager (sudo bobres ssl, System > HTTPS in the dashboard): sudo bobres update brings it.\n\n"
+	}
+	return "The HTTPS certificate is automatic. See it with  sudo bobres ssl status ; to use the server's IP address\n" +
+		"or your own certificate instead: sudo bobres ssl ip | manual (or the dashboard, System > HTTPS).\n\n"
 }
 
 var merchantRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -970,9 +1070,18 @@ func installedCompose(src []byte) []byte {
 	return []byte(strings.Join(out, "\n"))
 }
 
-func writeFiles(dir string, env map[string]string) error {
+// writeFiles writes the install's files. Caddy's main Caddyfile is caddy/Caddyfile
+// (compose mounts the directory); the top-level Caddyfile an install from before
+// that change has is left as it is, neither rewritten nor deleted, because the
+// compose file of that version (a rollback brings it back) mounts it. tls/ gets
+// its default snippets when it has none (prepareTLS); notes receives what the
+// operator should hear about it, warnings what a quiet run must not leave out.
+func writeFiles(dir string, env map[string]string, notes, warnings io.Writer) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	if err := prepareCaddy(dir); err != nil {
+		return err
 	}
 	files := []struct {
 		name string
@@ -982,7 +1091,7 @@ func writeFiles(dir string, env map[string]string) error {
 		{".env", renderEnvFor(filepath.Join(dir, ".env"), env), 0o600},
 		{".env.example", deploy.EnvExample, 0o644},
 		{"docker-compose.yml", installedCompose(deploy.ComposeFile), 0o644},
-		{"Caddyfile", deploy.Caddyfile, 0o644},
+		{filepath.Join(caddyDirName, "Caddyfile"), deploy.Caddyfile, 0o644},
 		{"postgres-init.sh", deploy.PostgresInit, 0o755},
 	}
 	for _, f := range files {
@@ -990,14 +1099,17 @@ func writeFiles(dir string, env map[string]string) error {
 			return err
 		}
 	}
+	if err := prepareTLS(dir, env, notes, warnings); err != nil {
+		return err
+	}
 	// The backup service (uid 65532 in its image) writes here; created now so
 	// Docker does not create it as root.
 	backups := filepath.Join(dir, "backups")
 	if err := os.MkdirAll(backups, 0o700); err != nil {
 		return fmt.Errorf("create %s: %w", backups, err)
 	}
-	if os.Geteuid() == 0 {
-		if err := os.Chown(backups, backupUID, backupUID); err != nil {
+	if asRoot.euid() == 0 {
+		if err := asRoot.chownPath(backups, backupUID, backupUID); err != nil {
 			return fmt.Errorf("chown %s: %w", backups, err)
 		}
 	}

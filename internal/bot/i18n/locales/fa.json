@@ -351,6 +351,10 @@
   "profile.cmd.paysupport": "کمک برای پرداخت",
   "profile.cmd.admin": "پنل مدیریت",
   "profile.cmd.dashboard": "ورود به داشبورد وب",
+  "alert.tls_expiring": "گواهی HTTPS برای {address} {days} روز دیگر، در {date}، منقضی می‌شود و هنوز تمدید نشده است.",
+  "alert.tls_failing": "{address} سی دقیقه است که گواهی HTTPS معتبری ارائه نمی‌دهد.",
+  "alert.tls_caddy_down": "Caddy که نشانی‌های HTTPS فروشگاه را ارائه می‌دهد پاسخ نمی‌دهد: داشبورد و صفحه‌های پرداخت در دسترس نیستند.",
+  "alert.tls_problem": "تنظیم HTTPS فروشگاه آن‌طور که ذخیره شده است کار نمی‌کند.",
   "menu.keyboard": "👇 از منوی پایین استفاده کنید.",
   "menu.placeholder": "از منو انتخاب کنید"
 }

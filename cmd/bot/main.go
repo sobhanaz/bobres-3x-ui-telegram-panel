@@ -157,6 +157,9 @@ func setup(rt *app.Runtime) error {
 		lic := runner.LicenseProxy{Server: cfg.LicenseServer, CoreToken: cfg.PeerCoreToken, Log: rt.Log}
 		rt.Mux.Handle("POST /internal/license/activate", lic.Handler(runner.LicenseActivate))
 		rt.Mux.Handle("POST /internal/license/refresh", lic.Handler(runner.LicenseRefresh))
+		// The dashboard's HTTPS page detects the server's public IP address
+		// (for ip mode) through the bot: core has no internet access.
+		rt.Mux.Handle("GET /internal/public-ip", runner.PublicIP(runner.IPLookup{}.Lookup, cfg.PeerCoreToken, rt.Log))
 	}
 
 	if cfg.PeerBackupToken != "" {

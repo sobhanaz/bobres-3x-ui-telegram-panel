@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,11 @@ type fakeDocker struct {
 	calls  [][]string
 	health []string // successive `ps` outputs
 	upErr  error
+	// caddy are the successive answers to `ps ... caddy` (the wait for the
+	// gateway), the last one repeating; running when empty.
+	caddy []string
+	// killErr is the error of `kill` (the SIGUSR1 to Caddy).
+	killErr error
 }
 
 func (f *fakeDocker) run(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -36,6 +42,17 @@ func (f *fakeDocker) run(_ context.Context, _ string, args ...string) ([]byte, e
 	switch {
 	case contains(args, "up"):
 		return []byte("started"), f.upErr
+	case contains(args, "kill"):
+		return []byte("killed"), f.killErr
+	case contains(args, "ps") && contains(args, "caddy"):
+		if len(f.caddy) == 0 {
+			return []byte(`[{"Service":"caddy","State":"running"}]`), nil
+		}
+		out := f.caddy[0]
+		if len(f.caddy) > 1 {
+			f.caddy = f.caddy[1:]
+		}
+		return []byte(out), nil
 	case contains(args, "ps"):
 		if len(f.health) == 0 {
 			return []byte(`[]`), nil
@@ -47,6 +64,21 @@ func (f *fakeDocker) run(_ context.Context, _ string, args ...string) ([]byte, e
 		return []byte(out), nil
 	}
 	return nil, nil
+}
+
+// composeVerbs are the compose subcommands of the calls (the word after
+// --env-file .env).
+func composeVerbs(calls [][]string) []string {
+	var out []string
+	for _, c := range calls {
+		i := slices.Index(c, "--env-file")
+		if i < 0 || i+2 >= len(c) {
+			out = append(out, c[0])
+			continue
+		}
+		out = append(out, c[i+2])
+	}
+	return out
 }
 
 func contains(list []string, s string) bool {
@@ -90,7 +122,7 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	dir := t.TempDir()
 	docker := &fakeDocker{health: []string{
 		`[{"Service":"core","Health":"starting"}]`,
-		`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`,
+		`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`,
 	}}
 	ins, out, errOut := testInstaller("", secrets, docker)
 	if code := ins.install(baseArgs(dir)); code != 0 {
@@ -138,9 +170,15 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	if strings.Contains(string(compose), "build:") || strings.Contains(string(compose), "x-build") {
 		t.Fatal("installed compose file still builds from source")
 	}
-	if !contains(docker.calls[0], "up") {
+	// After `up`: Caddy is told to read its Caddyfile again, its state is
+	// looked at twice, and only then does the backup role get made.
+	if got := composeVerbs(docker.calls[:5]); strings.Join(got, " ") != "up kill ps ps exec" {
 		t.Fatalf("docker calls: %v", docker.calls)
 	}
+	if kill := strings.Join(docker.calls[1], " "); !strings.HasSuffix(kill, " kill -s SIGUSR1 caddy") {
+		t.Errorf("the signal to Caddy: %s", kill)
+	}
+	assertHTTPSLayout(t, dir, "panel.example.com")
 
 	// Backups: on (this CLI's own images have the service), the key shown
 	// once, the read-only database role created in the running database.
@@ -155,7 +193,7 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 		!strings.Contains(out.String(), "bobres backup") {
 		t.Errorf("backup key not shown exactly once:\n%s", out)
 	}
-	role := docker.calls[1]
+	role := docker.calls[4]
 	if !contains(role, "exec") || !contains(role, "postgres") || !strings.Contains(strings.Join(role, " "), "svc_backup") ||
 		strings.Contains(strings.Join(role, " "), env["DB_BACKUP_PASSWORD"]) {
 		t.Errorf("backup role call: %v", role)
@@ -194,6 +232,17 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 			t.Fatalf("compose config: %v", err)
 		}
 		coreEnv := project.Services["core"].Environment
+		// The tls-agent gets the install's two names from .env, as core does: it refuses a request for
+		// any other, and answers every one invalid without the domain.
+		agentEnv := project.Services["tls-agent"].Environment
+		for _, k := range []string{"BOBRES_DOMAIN", "BOBRES_ZARINPAL_HOST"} {
+			if agentEnv[k] != env[k] || agentEnv[k] != coreEnv[k] {
+				t.Errorf("tls-agent %s = %q, .env %q, core %q", k, agentEnv[k], env[k], coreEnv[k])
+			}
+		}
+		if agentEnv["BOBRES_DOMAIN"] == "" {
+			t.Error("the installed tls-agent has no BOBRES_DOMAIN")
+		}
 		for peer, tok := range map[string]struct{ core, dotenv string }{
 			"payments":    {"BOBRES_SERVICE_TOKEN", "BOBRES_TOKEN_CORE"},
 			"provisioner": {"BOBRES_PROVISIONER_TOKEN", "BOBRES_TOKEN_CORE_PROVISIONER"},
@@ -502,7 +551,7 @@ func TestBackupsFollowTheImageVersion(t *testing.T) {
 	defer func() { version.Version = old }()
 	const older = "0.0.9" // before firstBackupRelease
 	withoutBackup := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},` +
-		`{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"}]`
+		`{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"}]`
 	withBackup := strings.TrimSuffix(withoutBackup, "]") + `,{"Service":"backup","Health":"healthy"}]`
 
 	dir := t.TempDir()
@@ -537,7 +586,7 @@ func TestBackupsFollowTheImageVersion(t *testing.T) {
 	// (another one stays), so compose up does not pull a missing image, and
 	// the stack is waited for without the backup service.
 	env["COMPOSE_PROFILES"] = "debug,backup"
-	if err := writeFiles(dir, env); err != nil {
+	if err := writeFiles(dir, env, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	docker = &fakeDocker{health: []string{withoutBackup}}
@@ -565,7 +614,7 @@ func TestBackupsFollowTheImageVersion(t *testing.T) {
 // no later run shows it, and without it the backups cannot be read.
 func TestBackupKeyShownByTheRunThatSavesIt(t *testing.T) {
 	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},` +
-		`{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
+		`{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
 
 	// The start fails (compose up): the key was saved, so it is shown now.
 	dir := t.TempDir()
@@ -597,7 +646,7 @@ func TestBackupKeyShownByTheRunThatSavesIt(t *testing.T) {
 	}
 	env, _, _ = readEnv(filepath.Join(dir, ".env"))
 	delete(env, "BOBRES_BACKUP_KEY") // as an install from before backups has it
-	if err := writeFiles(dir, env); err != nil {
+	if err := writeFiles(dir, env, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	ins, out, errOut = testInstaller("", nil, &fakeDocker{health: []string{healthy}})
@@ -673,7 +722,7 @@ func TestInstallQuietYes(t *testing.T) {
 		t.Fatalf("--yes asked instead of failing: %d %s", code, errOut)
 	}
 
-	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
+	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
 	ins, out, errOut := testInstaller("", secrets, &fakeDocker{health: []string{healthy}})
 	if code := ins.install(append(baseArgs(dir), "--quiet", "--yes", "--version", "1.2.3")); code != 0 {
 		t.Fatalf("quiet install: %d %s", code, errOut)

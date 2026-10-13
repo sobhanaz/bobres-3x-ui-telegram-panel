@@ -64,3 +64,34 @@ func TestRecentLogs(t *testing.T) {
 		t.Fatal("a bot that is down answered")
 	}
 }
+
+// The bot's answer is checked again: only a public address, in canonical
+// form.
+func TestPublicIP(t *testing.T) {
+	body, status := `{"ip":"2A01:4F8:0:0::1"}`, http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/public-ip" || r.Method != http.MethodGet || r.Header.Get("Authorization") != "Bearer tok" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+	if ip, err := New(srv.URL, "tok").PublicIP(context.Background()); err != nil || ip != "2a01:4f8::1" {
+		t.Fatalf("%q %v", ip, err)
+	}
+	for _, b := range []string{`{"ip":"10.0.0.8"}`, `{"ip":"100.64.1.1"}`, `{"ip":""}`, `not json`} {
+		body = b
+		if ip, err := New(srv.URL, "tok").PublicIP(context.Background()); err == nil {
+			t.Errorf("%s: %q", b, ip)
+		}
+	}
+	body, status = `{"error":"unavailable"}`, http.StatusBadGateway
+	if _, err := New(srv.URL, "tok").PublicIP(context.Background()); err == nil {
+		t.Error("a 502 was taken as an answer")
+	}
+	if _, err := New(srv.URL, "wrong").PublicIP(context.Background()); err == nil {
+		t.Error("a refused call was taken as an answer")
+	}
+}

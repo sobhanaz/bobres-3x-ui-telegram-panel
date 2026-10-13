@@ -36,7 +36,11 @@ type configKey struct {
 var logServices = []string{"core", "payments", "provisioner", "bot", "backup"}
 
 var configKeys = []configKey{
-	{name: "BOBRES_DOMAIN", services: []string{"caddy", "core", "payments"}, lower: true,
+	// Core and the tls-agent (which writes Caddy's HTTPS files) both read the domain and the Zarinpal host
+	// from the environment: core hands them to the agent in its request, and the agent refuses a request
+	// for any other name. Both are recreated with Caddy, or the agent would turn the next request down.
+	// installedOnly leaves the tls-agent out of an install that has none (tlsAgentOn).
+	{name: "BOBRES_DOMAIN", services: []string{"caddy", "core", "payments", "tls-agent"}, lower: true,
 		help: "the store's domain; DNS must point here (Caddy gets a certificate for it)"},
 	{name: "BOBRES_TIMEZONE", services: []string{"bot", "backup"}, help: "time zone of the bot's dates and the backup time, e.g. Asia/Tehran",
 		check: func(v string) error {
@@ -59,7 +63,7 @@ var configKeys = []configKey{
 			}
 			return nil
 		}},
-	{name: "BOBRES_ZARINPAL_PUBLIC_URL", services: []string{"caddy", "payments"}, optional: true,
+	{name: "BOBRES_ZARINPAL_PUBLIC_URL", services: []string{"caddy", "core", "payments", "tls-agent"}, optional: true,
 		help: "https://host registered with Zarinpal for the pay page (empty: https://<domain>)"},
 	{name: "BOBRES_UPDATE_CHANNEL", services: []string{"bot"}, lower: true,
 		help: "stable or beta: which releases the update check and bobres update offer", check: oneOf("stable", "beta")},
@@ -343,9 +347,10 @@ func (o *ops) configSet(dir, name, value string, noRestart bool) int {
 	fmt.Fprintf(o.out, "Saved %s=%s in %s.\n", name, value, envPath)
 	if name == "BOBRES_DOMAIN" {
 		fmt.Fprintf(o.out, "The domain %s must point to this server: Caddy gets its HTTPS certificate once it does (bobres doctor --domain %s).\n", value, value)
+		fmt.Fprintln(o.out, "A certificate of your own must cover the new domain, or HTTPS falls back to the automatic one (bobres ssl status).")
 	}
 
-	services := installedOnly(key.services, next)
+	services := installedOnly(dir, key.services, next)
 	switch {
 	case len(services) == 0:
 		fmt.Fprintln(o.out, "No service of this install reads it now (the backup service is off): nothing to restart.")
@@ -378,10 +383,10 @@ func (o *ops) configSet(dir, name, value string, noRestart bool) int {
 }
 
 // installedOnly keeps the services this install runs (backup only where its
-// profile is on), in their order.
-func installedOnly(services []string, env map[string]string) []string {
+// profile is on, the tls-agent only where tlsAgentOn), in their order.
+func installedOnly(dir string, services []string, env map[string]string) []string {
 	have := map[string]bool{}
-	for _, s := range allServices(env) {
+	for _, s := range allServices(dir, env) {
 		have[s] = true
 	}
 	var out []string

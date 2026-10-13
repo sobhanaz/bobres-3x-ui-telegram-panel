@@ -81,7 +81,7 @@ func TestRedactSecretShapes(t *testing.T) {
 	}
 }
 
-// caddyAccessLine is an entry of Caddy's access log (deploy/Caddyfile logs
+// caddyAccessLine is an entry of Caddy's access log (deploy/caddy/Caddyfile logs
 // every request as JSON), as `compose logs --timestamps` prints it: a
 // customer opening the pay page. Test addresses only (RFC 5737 and 3849).
 var caddyAccessLine = `caddy-1  | 2026-10-12T10:00:00.123456789Z {"level":"info","ts":1760263200.1234,"logger":"http.log.access.log0","msg":"handled request",` +
@@ -169,6 +169,8 @@ type bundleRunner struct {
 	calls  []string
 	failPS bool
 	down   bool // the daemon does not answer at all
+	// extraLog is added to every service's log.
+	extraLog string
 }
 
 func (f *bundleRunner) run(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -203,7 +205,7 @@ func (f *bundleRunner) run(_ context.Context, _ string, args ...string) ([]byte,
 %s-1  | Authorization: Bearer %s
 %s-1  | merchant_id=%s key=%s
 %s
-`, s, s, orderID, s, goodBotToken, s, hexKey48, s, "xui-test-panel-token", s, merchantID, b64Std, caddyAccessLine)), nil
+%s`, s, s, orderID, s, goodBotToken, s, hexKey48, s, "xui-test-panel-token", s, merchantID, b64Std, caddyAccessLine, f.extraLog)), nil
 	}
 	return nil, fmt.Errorf("unexpected docker command %q", cmd)
 }
@@ -225,6 +227,7 @@ func bundleInstall(t *testing.T) (string, map[string]string) {
 	if err := os.WriteFile(filepath.Join(dir, ".env"), renderEnv(env), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	writeInstalledCompose(t, dir)
 	bk := filepath.Join(dir, "backups")
 	if err := os.MkdirAll(bk, 0o700); err != nil {
 		t.Fatal(err)
@@ -262,7 +265,7 @@ func testBundler(f *bundleRunner) (*bundler, *bytes.Buffer, *bytes.Buffer) {
 	}
 	b := &bundler{
 		ops: o,
-		doctor: func(domain string, offline bool) []Result {
+		doctor: func(_, domain string, offline bool) []Result {
 			return []Result{{"Disk", Pass, "42.0 GB free"}, {"Port 80", Fail, "already in use"},
 				{"DNS", Pass, fmt.Sprintf("%s -> 203.0.113.5 (offline=%v)", domain, offline)}}
 		},
@@ -337,7 +340,7 @@ func TestSupportBundle(t *testing.T) {
 	}
 	files := readBundle(t, path)
 	want := []string{"README.txt", "versions.txt", "compose-ps.txt", "doctor.txt", "env-keys.txt", "system.txt", "backups.txt"}
-	for _, s := range allServices(env) {
+	for _, s := range allServices(dir, env) {
 		want = append(want, "logs/"+s+".log")
 	}
 	for _, n := range want {
@@ -498,4 +501,44 @@ func bundleTexts(files map[string]string) []string {
 		ts = append(ts, t)
 	}
 	return ts
+}
+
+// The HTTPS files of the install (tls/, an own certificate and its key) are
+// never read into the bundle, and a PEM block that reached a log is dropped
+// whole, a certificate as well as a key.
+func TestSupportBundleLeavesCertificatesAndKeysOut(t *testing.T) {
+	dir, _ := bundleInstall(t)
+	certPEM, keyPEM := pemPair(t) // made now: no key is ever committed
+	certs := filepath.Join(dir, "tls", "certs")
+	if err := os.MkdirAll(certs, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for path, text := range map[string][]byte{
+		filepath.Join(certs, "cert.pem"): certPEM, filepath.Join(certs, "key.pem"): keyPEM,
+		filepath.Join(dir, "tls", "sites.caddy"): []byte("# sites\npanel.example.com {\n\ttls /tls/certs/cert.pem /tls/certs/key.pem\n}\n"),
+	} {
+		if err := os.WriteFile(path, text, 0o640); err != nil { //nolint:gosec // the agent's mode
+			t.Fatal(err)
+		}
+	}
+	keyBody := strings.TrimSpace(strings.Join(strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1:3], ""))
+	f := &bundleRunner{extraLog: "caddy said:\n" + string(keyPEM) + "and\n" + string(certPEM) + "that is all\n"}
+	b, _, errOut := testBundler(f)
+	if code := b.supportBundleCmd([]string{"--dir", dir, "--offline"}); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	files := readBundle(t, filepath.Join(dir, "bobres-support-20261011T120000Z.tar.gz"))
+	for name, text := range files {
+		for _, leak := range []string{"BEGIN", "END PRIVATE", keyBody[:20], "tls/certs", "sites.caddy"} {
+			if strings.Contains(text, leak) {
+				t.Errorf("%s holds %q", name, leak)
+			}
+		}
+	}
+	if !strings.Contains(files["logs/caddy.log"], "that is all") {
+		t.Errorf("the text around the blocks was lost:\n%s", files["logs/caddy.log"])
+	}
+	if _, ok := files["logs/tls-agent.log"]; !ok {
+		t.Errorf("no log of the tls-agent (has %v)", bundleNames(files))
+	}
 }

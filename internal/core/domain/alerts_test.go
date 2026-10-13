@@ -1138,7 +1138,8 @@ func TestAlertTitlesExist(t *testing.T) {
 		"alert.usdt_failing": nil, "alert.usdt_stuck": {"count"}, "alert.backup_offsite": nil,
 		"alert.backup_stale": {"hours"}, "alert.disk_low": {"free"}, "alert.provision_failed": {"count"},
 		"alert.bot_lag": {"minutes"}, "alert.license_expiring": {"date", "days"}, "alert.license_grace": {"date"},
-		"alert.license_expired": nil,
+		"alert.license_expired": nil, "alert.tls_expiring": {"address", "date", "days"}, "alert.tls_failing": {"address"},
+		"alert.tls_problem": nil, "alert.tls_caddy_down": nil,
 	}
 	for key, args := range titles {
 		info, ok := cat.Info(key)

@@ -161,9 +161,81 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Update BOBRES (check for a new release)", run: m.update, group: true},
 		{label: "Roll back the last update", run: m.rollback},
 		{label: "Dashboard login link (if the bot is down)", run: func() { m.ops.adminCmd([]string{"link", "--dir", m.dir}) }, group: true},
-		{label: "Check this server", run: func() { m.doctor([]string{"--domain", env["BOBRES_DOMAIN"]}) }},
-		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }},
+		{label: "Check this server", run: func() { m.doctor([]string{"--dir", m.dir, "--domain", env["BOBRES_DOMAIN"]}) }},
+		{label: "HTTPS certificate", run: func() { m.https(env) }, group: true},
+		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }, group: true},
 	}
+}
+
+// https is the HTTPS certificate item: a short menu of its own whose choices
+// are the commands of bobres ssl. One choice runs, then the main menu is back.
+// An install that predates the HTTPS manager (tlsAgentOn says no) is told so
+// instead: none of the choices could work there.
+func (m *menu) https(env map[string]string) {
+	if msg := predatesHTTPS(m.dir, env); msg != "" {
+		fmt.Fprintf(m.errOut, "error: %s\n", msg)
+		return
+	}
+	fmt.Fprintln(m.out, "HTTPS certificate")
+	for i, label := range []string{
+		"Status",
+		"Domain (automatic certificate)",
+		"Server IP address (Let's Encrypt, 6 days, renewed automatically)",
+		"Your own certificate files",
+	} {
+		fmt.Fprintf(m.out, "  %s %s\n", m.paint("32", fmt.Sprintf("%2d.", i+1)), label)
+	}
+	fmt.Fprintf(m.out, "  %s Back\n", m.paint("32", " 0."))
+	choice, ok := m.ask("\nChoose an option [0-4]: ")
+	if !ok {
+		return
+	}
+	fmt.Fprintln(m.out)
+	switch choice {
+	case "1":
+		m.ops.sslCmd([]string{"status", "--dir", m.dir})
+	case "2":
+		m.ops.sslCmd([]string{"auto", "--dir", m.dir})
+	case "3":
+		m.httpsIP()
+	case "4":
+		m.httpsOwn()
+	case "", "0":
+	default:
+		fmt.Fprintf(m.out, "There is no option %q.\n", choice)
+	}
+}
+
+// httpsIP asks for the server's address (Enter: the detected one) and runs
+// bobres ssl ip, which asks again when the address is not the detected one.
+func (m *menu) httpsIP() {
+	fmt.Fprintln(m.out, "Let's Encrypt must reach this server on ports 80 and 443 at that address (no NAT in front of it).")
+	ip, ok := m.ask("The server's public IP address (Enter: detect it): ")
+	if !ok {
+		return
+	}
+	args := []string{"ip", "--dir", m.dir}
+	if ip != "" {
+		args = append(args, "--ip", ip)
+	}
+	m.ops.sslCmd(args)
+}
+
+// httpsOwn asks for the two files of an own certificate and runs bobres ssl
+// manual.
+func (m *menu) httpsOwn() {
+	fmt.Fprintln(m.out, "The certificate must cover the domain. If the browser rejects it, sudo bobres ssl auto switches back.")
+	cert, ok := m.ask("Certificate chain file, PEM, the server's certificate first (Enter to cancel): ")
+	if !ok || cert == "" {
+		fmt.Fprintln(m.out, "Cancelled.")
+		return
+	}
+	key, ok := m.ask("Private key file, PEM, without a passphrase (Enter to cancel): ")
+	if !ok || key == "" {
+		fmt.Fprintln(m.out, "Cancelled.")
+		return
+	}
+	m.ops.sslCmd([]string{"manual", "--cert", cert, "--key", key, "--dir", m.dir})
 }
 
 // beaver is BOBRES the mascot in plain ASCII, beside the header's lines.
@@ -196,7 +268,7 @@ func (m *menu) state(env map[string]string) string {
 		return m.paint("33", "unknown (is Docker running?)")
 	}
 	rows := parseServices(out)
-	want := allServices(env)
+	want := allServices(m.dir, env)
 	up := 0
 	for _, s := range want {
 		if r, ok := rows[s]; ok && r.State == "running" && (r.Health == "" || r.Health == "healthy") {

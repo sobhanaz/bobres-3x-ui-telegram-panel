@@ -1,8 +1,15 @@
-# BOBRES gateway. TLS certificates are issued automatically for {$BOBRES_DOMAIN}
-# (DNS A record must point at this server, ports 80/443 open).
+# BOBRES gateway. Which certificates it serves is not decided here: the tls-agent
+# writes /tls/global.caddy and /tls/sites.caddy (the install's tls/ directory), which
+# this file imports, and makes Caddy load this file again. The three modes are an
+# automatic certificate for the domain, a Let's Encrypt certificate for the server's
+# IP address, and your own certificate; change them in the dashboard (System > HTTPS)
+# or with `sudo bobres ssl`. For the domain (DNS A record pointing at this server,
+# ports 80/443 open) Caddy issues the certificate itself.
 {
-	# Keep the admin endpoint off the network.
-	admin off
+	# The admin API listens on a unix socket in a volume that only this container and
+	# the tls-agent mount, never on the network. 0220: write for root (Caddy) and for
+	# group 65532 (the tls-agent), nobody else.
+	admin unix//run/caddy/admin.sock|0220
 	servers {
 		protocols h1 h2 h3
 		# Slow-client (slowloris) protection.
@@ -13,11 +20,17 @@
 			idle        2m
 		}
 	}
+	# default_sni for an IP address, when one is served (comments only otherwise).
+	import /tls/global.caddy
 }
 
+# What every BOBRES site serves. Each site block in /tls/sites.caddy (the domain, the
+# server's IP address in ip mode, the Zarinpal domain) imports it and adds only its
+# certificate setting.
+#
 # BOBRES_ZARINPAL_HOST (optional): a second domain registered with Zarinpal for the
 # pay page and return URL, when the main domain is not reachable from Iran without a VPN.
-{$BOBRES_DOMAIN} {$BOBRES_ZARINPAL_HOST} {
+(bobres_site) {
 	encode zstd gzip
 
 	header {
@@ -41,7 +54,8 @@
 
 	# On the Zarinpal domain only the pay page and the return URL exist: no
 	# subscription links, admin or API on a domain registered with a payment
-	# gateway. (When BOBRES_ZARINPAL_HOST is empty this compares with "", which no
+	# gateway. (The Zarinpal site in /tls/sites.caddy says so too, before this
+	# snippet. When BOBRES_ZARINPAL_HOST is empty this compares with "", which no
 	# request host equals, so it never matches.)
 	@zarinpalHostOther {
 		expression `{host} == "{$BOBRES_ZARINPAL_HOST}"`
@@ -126,3 +140,8 @@
 		respond "Not found" 404
 	}
 }
+
+# One site block per served address, written by the tls-agent. A missing file stops
+# Caddy (visible in bobres status) rather than serving nothing; bobres install writes
+# a default for the first start, before the tls-agent has run.
+import /tls/sites.caddy

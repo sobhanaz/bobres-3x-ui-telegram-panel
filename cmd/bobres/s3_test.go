@@ -76,7 +76,7 @@ func TestInstallS3Flags(t *testing.T) {
 	keys := map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": goodBotToken, "BOBRES_XUI_TOKEN": "t",
 		"BOBRES_BACKUP_S3_ACCESS_KEY": testS3Access, "BOBRES_BACKUP_S3_SECRET_KEY": testS3Secret}
 	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},` +
-		`{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
+		`{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
 
 	dir := t.TempDir()
 	ins, out, errOut := testInstaller("", keys, &fakeDocker{health: []string{healthy}})

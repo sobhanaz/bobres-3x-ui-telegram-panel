@@ -94,7 +94,9 @@ since the update are undone (they stay in the backup it just made). Exit 1 when 
 already used, when its backup does not open, or when its folder could be changed by someone other than root.
 
 Only the last update has a restore point, and it works once. After a rollback, run `sudo bobres update` again once the
-problem is fixed. The rollback also puts back `/var/lib/bobres/release.version` (the "never older than what this
+problem is fixed. The HTTPS applier (`tls-agent`) exists from release 0.1.0-rc.2 on: a rollback to an older release
+removes its container, `bobres status` then lists none, and the HTTPS tab says the applier is not set up until the next
+update. Caddy's folders `caddy/` and `tls/` stay on the disk and are ignored by the older release. The rollback also puts back `/var/lib/bobres/release.version` (the "never older than what this
 server installed" floor) as it was before the update, so the update undone does not hold back the releases below it:
 after a beta you rolled back, the next stable release installs as usual.
 

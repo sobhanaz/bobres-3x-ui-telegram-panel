@@ -31,7 +31,8 @@ RUN test -n "$SERVICE" && go build -trimpath \
 # used at runtime: the binary implements `app --healthcheck` itself.
 FROM alpine:3.24 AS runtime-base
 RUN apk add --no-cache ca-certificates tzdata \
- && addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres
+ && addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres \
+ && install -d -o 65532 -g 65532 -m 0700 /request /result /tls-result
 
 # The backup service: pg_dump from the same major version as the database (pg_dump
 # must be at least the server's), plus the Go /app. It runs as the same non-root uid
@@ -51,6 +52,14 @@ COPY --from=runtime-base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-ce
 COPY --from=runtime-base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=runtime-base /etc/passwd /etc/passwd
 COPY --from=runtime-base /etc/group /etc/group
+# The mount points of the tls-agent's volumes (core writes its HTTPS request to /request and reads the
+# answer from /tls-result; the tls-agent, from this same image, reads /request and writes /result). A
+# new named volume takes the owner and mode of the image's directory at its mount point; without these
+# the volumes would belong to root and core, as 65532, could not write its request. This is a scratch
+# image: there is no shell to make them later.
+COPY --from=runtime-base --chown=65532:65532 --chmod=0700 /request /request
+COPY --from=runtime-base --chown=65532:65532 --chmod=0700 /result /result
+COPY --from=runtime-base --chown=65532:65532 --chmod=0700 /tls-result /tls-result
 COPY --from=build /out/app /app
 USER 65532:65532
 EXPOSE 8080
