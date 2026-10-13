@@ -187,7 +187,29 @@ func resolveHost(domain string) []string {
 // hardening state (bobres harden).
 func doctorResults(domain string, offline bool) []Result {
 	h := newHardener(strings.NewReader(""), io.Discard, io.Discard)
-	return append(runDoctor(domain, offline), h.report(context.Background())...)
+	rs := ownGateway(runDoctor(domain, offline), caddyRunning())
+	return append(rs, h.report(context.Background())...)
+}
+
+// ownGateway passes a busy port 80 or 443 when this server's BOBRES gateway
+// (Caddy) is running: it is the one holding them on a live install.
+func ownGateway(rs []Result, caddyUp bool) []Result {
+	if !caddyUp {
+		return rs
+	}
+	for i, r := range rs {
+		if r.Status == Fail && strings.HasPrefix(r.Name, "Port ") {
+			rs[i] = Result{r.Name, Pass, "in use by this install's gateway (Caddy)"}
+		}
+	}
+	return rs
+}
+
+// caddyRunning: the gateway container of the bobres compose project runs.
+func caddyRunning() bool {
+	out, err := exec.Command("docker", "ps", "-q", "--filter", "label=com.docker.compose.project=bobres", //nolint:gosec // fixed command
+		"--filter", "label=com.docker.compose.service=caddy", "--filter", "status=running").Output()
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
 }
 
 // runDoctor runs every check. offline skips network lookups. The installer's

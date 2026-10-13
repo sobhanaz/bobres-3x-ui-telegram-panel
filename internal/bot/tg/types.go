@@ -14,6 +14,13 @@ type User struct {
 	LanguageCode string `json:"language_code,omitempty"`
 }
 
+// BotCommand is one entry of the bot's command menu: the command without
+// its slash, and what it does.
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
 // Chat is where a message lives.
 type Chat struct {
 	ID       int64  `json:"id"`

@@ -78,6 +78,12 @@ type Handler struct {
 	// checkWait: how long an automatic USDT payment's Check button rests
 	// after finding nothing (0: never).
 	checkWait time.Duration
+
+	// profileKick wakes RunProfile after a settings refresh, once the staff
+	// list has come from core (staffKnown, under refreshMu): before that the
+	// staff menus would look like every staff member had left.
+	profileKick chan struct{}
+	staffKnown  bool
 }
 
 // New builds a Handler. limiter may be nil.
@@ -89,7 +95,8 @@ func New(core corev1.CoreServiceClient, t Telegram, st state.Store, cat *i18n.Ca
 		cfg.Location = defaultLocation()
 	}
 	return &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
-		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}, checkWait: defaultCheckWait}
+		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}, checkWait: defaultCheckWait,
+		profileKick: make(chan struct{}, 1)}
 }
 
 func defaultLocation() *time.Location {
@@ -125,7 +132,7 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
 		if !h.dropped[k] { // once, not at every refresh
-			h.log.Warn("text override ignored: it would break the messages it is used in; the default text is used", "key", k)
+			h.log.Warn("text override ignored: it would break the messages it is used in; the default text is used", "text", k)
 		}
 	}
 	h.dropped = dropped
@@ -146,6 +153,14 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 			staff = append(staff, settings.Contact{TelegramID: c.GetTelegramId(), Language: c.GetLanguage(), Role: c.GetRole()})
 		}
 		h.set.SetStaff(staff)
+		h.staffKnown = true
+	}
+	// The bot's Telegram profile follows the texts and the staff (RunProfile).
+	if h.staffKnown {
+		select {
+		case h.profileKick <- struct{}{}:
+		default:
+		}
 	}
 	return nil
 }

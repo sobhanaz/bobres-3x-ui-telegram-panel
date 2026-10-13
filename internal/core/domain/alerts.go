@@ -342,7 +342,7 @@ func sameAlert(old, next *store.AlertState) bool {
 // announce publishes an alert about a, open since since and seen so at at
 // (for a fix, when it first passed).
 func (w *Watchdog) announce(ctx context.Context, tx pgx.Tx, since, at time.Time, a *store.AlertState, state string, repeat bool) error {
-	w.log.Info("system alert", "key", a.Key, "state", state, "repeat", repeat, "detail", a.Detail)
+	w.log.Info("system alert", "alert", a.Key, "state", state, "repeat", repeat, "detail", a.Detail)
 	e := events.SystemAlertEvent{Key: a.Key, Severity: a.Severity, State: state, TitleKey: a.TitleKey, Args: a.Args,
 		Since: since.Unix(), At: at.Unix(), Repeat: repeat}
 	if state == events.AlertProblem {

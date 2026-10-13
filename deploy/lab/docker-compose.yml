@@ -1,0 +1,83 @@
+# Two "Ubuntu 24.04 servers" for developing against this project, nothing pre-installed:
+#   bot : for the BOBRES stack (Telegram bot). Docker-in-Docker ready: the inner Docker's data
+#         directories are real volumes, so the Docker the BOBRES installer installs inside works.
+#   xui : for a 3x-ui panel (its install script works as on a VPS: systemd is PID 1).
+#
+#   docker compose -f deploy/lab/docker-compose.yml up -d --build
+#   docker compose -f deploy/lab/docker-compose.yml exec bot bash      # or: exec xui bash
+#   docker compose -f deploy/lab/docker-compose.yml stop|start          # keeps everything
+#   docker compose -f deploy/lab/docker-compose.yml down -v             # wipes both servers
+#
+# See deploy/lab/README.md for the access details (SSH ports, IPs, published ports).
+name: bobres-lab
+
+x-server: &server
+  build: .
+  privileged: true            # systemd as PID 1 and Docker-in-Docker need it
+  restart: unless-stopped
+  stop_signal: SIGRTMIN+3     # systemd's "power off"
+  stop_grace_period: 30s
+  tmpfs:
+    - /run
+    - /run/lock
+    - /tmp:exec,mode=1777
+  environment:
+    TZ: ${LAB_TZ:-Asia/Tehran}
+  volumes:
+    # Your SSH public key (set LAB_SSH_PUBKEY in deploy/lab/.env to use another one).
+    - ${LAB_SSH_PUBKEY:-~/.ssh/id_ed25519.pub}:/root/.ssh/authorized_keys:ro
+
+services:
+  bot:
+    <<: *server
+    container_name: bobres-lab-bot
+    hostname: bot-server
+    ports:
+      - "127.0.0.1:2201:22"            # ssh root@127.0.0.1 -p 2201
+      - "127.0.0.1:8080:80"            # Caddy (http)
+      - "127.0.0.1:8443:443"           # Caddy (https): https://bobres.localhost:8443/admin (see README)
+      - "127.0.0.1:8443:443/udp"       # HTTP/3
+    volumes:
+      - ${LAB_SSH_PUBKEY:-~/.ssh/id_ed25519.pub}:/root/.ssh/authorized_keys:ro
+      # The inner Docker's data. Both must be real volumes: an overlay filesystem cannot be
+      # the upper layer of another overlay, and Docker 29 keeps image layers under
+      # /var/lib/containerd (containerd snapshotter), not only /var/lib/docker.
+      - bot_docker:/var/lib/docker
+      - bot_containerd:/var/lib/containerd
+      - bot_opt:/opt                   # /opt/bobres (the install directory)
+    networks:
+      lab:
+        ipv4_address: 10.10.0.10
+
+  xui:
+    <<: *server
+    container_name: bobres-lab-xui
+    hostname: xui-server
+    ports:
+      - "127.0.0.1:2202:22"            # ssh root@127.0.0.1 -p 2202
+      - "127.0.0.1:2053:2053"          # 3x-ui panel (choose port 2053 when the installer asks)
+      - "127.0.0.1:2096:2096"          # 3x-ui subscription server
+      - "127.0.0.1:10443:443"          # for an inbound on 443 (reached as localhost:10443)
+      - "127.0.0.1:10080:80"           # for an inbound on 80
+    volumes:
+      - ${LAB_SSH_PUBKEY:-~/.ssh/id_ed25519.pub}:/root/.ssh/authorized_keys:ro
+      - xui_etc:/etc/x-ui              # the panel's database
+      - xui_app:/usr/local/x-ui        # the panel and Xray binaries
+      - xui_cert:/root/cert            # certificates the panel issues
+    networks:
+      lab:
+        ipv4_address: 10.10.0.20
+
+networks:
+  lab:
+    ipam:
+      config:
+        - subnet: 10.10.0.0/24
+
+volumes:
+  bot_docker: {}
+  bot_containerd: {}
+  bot_opt: {}
+  xui_etc: {}
+  xui_app: {}
+  xui_cert: {}

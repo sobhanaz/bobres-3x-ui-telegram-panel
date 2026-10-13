@@ -223,3 +223,25 @@ func (m *Memory) Recall(_ context.Context, k string) (bool, error) {
 	exp, ok := m.flags[k]
 	return ok && time.Now().Before(exp), nil
 }
+
+// Memo is one value kept in Redis without expiry, such as what the bot last
+// set as its Telegram profile.
+type Memo struct {
+	rdb *redis.Client
+	key string
+}
+
+// NewMemo returns the Memo stored under key.
+func NewMemo(rdb *redis.Client, key string) Memo { return Memo{rdb: rdb, key: key} }
+
+// Get returns the value ("" when none is kept).
+func (m Memo) Get(ctx context.Context) (string, error) {
+	v, err := m.rdb.Get(ctx, m.key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return v, err
+}
+
+// Set replaces the value.
+func (m Memo) Set(ctx context.Context, v string) error { return m.rdb.Set(ctx, m.key, v, 0).Err() }

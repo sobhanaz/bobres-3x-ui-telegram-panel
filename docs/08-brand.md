@@ -53,6 +53,7 @@ do the rest; dark and light modes both.
 | `docs/brand/bobres-mascot.webp`, same file as `web/dashboard/src/assets/brand/bobres-mascot.webp` | The master 3D render, full body, 800x800, on navy | Login page with the default look, as the still picture for reduced motion; the source for every edit |
 | `docs/brand/bobres-wave.webp`, same file as `web/dashboard/src/assets/brand/bobres-wave.webp` | Looping animated WebP of him waving, 420x420, 15 fps, about 350 KB | Login page with the default look (above the card, with a slow float); README ("Meet BOBRES") |
 | `docs/brand/bot-avatar.jpg` | Round 3D close-up portrait, 640x640 | Telegram profile photo of a bot, set with @BotFather (below) |
+| `docs/brand/bot-description.jpg` | The banner cut to 640x360 | A bot's description picture, above its description in an empty chat, set with @BotFather (below) |
 | `docs/brand/bobres-banner.webp` | 1376x768 banner: the mascot and "BOBRES, Your VPN store on Telegram" | Top of the README; announcements and the vendor site |
 
 The dashboard copies are what the build ships: Vite hashes `src/assets` into `/admin/assets/` and copies
@@ -101,15 +102,40 @@ A new pose (holding a key, a server, a phone) is one more edit of the master ren
 his look. After changing the icon, the mascot or the wave in `docs/brand/`, copy it over its dashboard twin
 (table above) so the two stay the same.
 
-### Telegram bot profile photo
-The Bot API has no method for a bot to set its own profile photo, so neither the installer nor the dashboard
-can set it. Set it once by hand:
-1. In Telegram, open @BotFather from the account that created the bot.
-2. Send `/setuserpic` and choose the bot.
-3. Send the picture as a photo: the store's own logo (square; Telegram shows it in a circle),
-   or `docs/brand/bot-avatar.jpg` for the BOBRES beaver.
+### Telegram bot profile
+**What the bot sets itself.** At start and after every change of its texts, the branding or the staff, the
+bot sets in Telegram, in Persian and English (Persian also for every other language):
+- its **menu commands**: `/start`, `/menu`, `/paysupport`, and `/terms` when the store links its terms or
+  privacy policy; owners and admins also get `/admin` and `/dashboard` in their own chat, support staff
+  `/dashboard`;
+- its **description**, the text of an empty chat with the bot ("What can this bot do?");
+- its **short description** ("about"), on its profile page and in the preview when it is shared.
 
-The `bobres install` summary suggests it among the first steps.
+The words are bot texts (dashboard: **Branding & texts → Bot texts → Bot profile**, keys `profile.*`), so a store
+writes its own like any other text. It only sets what changed, and remembers what it set across restarts.
+**Settings → General → Keep the bot's Telegram profile up to date** (`general.bot_profile`) turns it off for an
+operator who prefers to set them in @BotFather: the bot then takes back its Persian and English values and the
+staff menus, which would hide @BotFather's (@BotFather sets one value for every language), and leaves that value
+for every language as it is, to be edited there.
+
+**What to set in @BotFather** (BOBRES leaves these alone), once, from the account that created
+the bot:
+1. **Name:** `/setname` (the store's name; `branding.name` is what the bot's messages call the store).
+2. **Profile photo:** `/setuserpic`, then send a square picture as a photo: the store's own logo (Telegram shows
+   it in a circle), or `docs/brand/bot-avatar.jpg` for the BOBRES beaver.
+3. **Description picture** (optional): `/mybots` → the bot → **Edit Bot** → **Edit Description Picture**, then
+   send a 640x360 picture: the store's own, or `docs/brand/bot-description.jpg`.
+4. **Telegram Stars:** nothing to switch on; the bot answers `/paysupport`, which Telegram asks of bots that sell
+   with Stars.
+
+Leave inline mode, groups, Mini Apps, the login widget, games and @BotFather's Payments (a third-party
+provider token) as they are: the bot does not use them. Telegram's **Serverless** hosting (@BotFather → Serverless)
+cannot run BOBRES: it runs JavaScript handlers per update in Telegram's sandbox, with a per-bot SQLite database
+and no always-on processes, while the bot is one Go service of a self-hosted stack (core, payments,
+provisioner, Postgres, Redis) with workers that run all the time (event feed, broadcasts, usage sync, payment
+watchers) and that holds the store's 3x-ui tokens and payment details.
+
+The `bobres install` summary suggests the profile photo among the first steps.
 
 ## Copy deliverables (to write in Phase 1 with the bot, fa + en)
 1. Bot: /start welcome, main menu labels, purchase flow, delivery message, connect guides, wallet, referral, trial, support, settings.

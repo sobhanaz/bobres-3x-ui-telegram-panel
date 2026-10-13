@@ -7,7 +7,7 @@ All notable changes to BOBRES are written here. The format follows
 ## [Unreleased] — first public release (v0.1.0)
 
 The first release. It sums up what BOBRES does now: Phases 0 to 7 of the plan ([docs/PLAN.md](docs/PLAN.md) §10),
-pull requests #13 to #39. Everything below is new in this release.
+pull requests #13 to #41. Everything below is new in this release.
 
 ### Bot
 - Persian and English. Customers pick a language on their first `/start` and can change it.
@@ -32,6 +32,9 @@ pull requests #13 to #39. Everything below is new in this release.
 - Staff alerts: new payments to review, new tickets, failed deliveries, every sale (optional), and system problems.
   They go to the owner, or to every owner and admin.
 - Long polling by default, so the bot needs no domain; webhook mode is optional.
+- The bot keeps its own Telegram profile up to date, in Persian and English: menu commands (staff get theirs in
+  their own chat), the description of an empty chat and the short description. The words are bot texts the store
+  can change; a setting leaves them to @BotFather instead.
 
 ### Dashboard
 - All 17 sections at `https://<domain>/admin`, built into the `core` binary (Vue 3, PrimeVue).
@@ -120,7 +123,7 @@ pull requests #13 to #39. Everything below is new in this release.
 - A missing or invalid license blocks nothing, and a license only ever gates new actions.
 
 ### Brand
-- BOBRES the beaver: the mascot is the logo. A flat icon, a 3D render, a waving animation, a banner and a bot avatar,
+- BOBRES the beaver: the mascot is the logo. A flat icon, a 3D render, a waving animation, a banner, a bot avatar and a bot description picture,
   with a navy and teal palette ([docs/08-brand.md](docs/08-brand.md)).
 - The dashboard's default look: the beaver favicon and logo, and the waving beaver on the login page (a still picture
   for reduced motion). A store's own logo replaces it.
