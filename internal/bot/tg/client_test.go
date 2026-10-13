@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 )
 
 const token = "123456:SECRET-bot-token" //gitleaks:allow test fixture
@@ -60,6 +62,71 @@ func TestSendMessageAndUpdates(t *testing.T) {
 	ups, err := c.GetUpdates(ctx, 0, 1)
 	if err != nil || len(ups) != 1 || ups[0].Message.Text != "/start" || ups[0].Sender().ID != 42 {
 		t.Fatalf("updates: %v %+v", err, ups)
+	}
+}
+
+// The bottom menu is a reply keyboard on a new HTML message: persistent,
+// resized, with its hint and its colors; an empty row is left out.
+func TestSendMenu(t *testing.T) {
+	var got struct {
+		ParseMode   string          `json:"parse_mode"`
+		ReplyMarkup json.RawMessage `json:"reply_markup"`
+	}
+	var called string
+	c, _ := fakeAPI(t, func(method string, body []byte, _ *http.Request) any {
+		called = method
+		_ = json.Unmarshal(body, &got)
+		return ok(map[string]any{"message_id": 8, "chat": map[string]any{"id": 42}})
+	})
+	m := (&Menu{IsPersistent: true, Resize: true, Placeholder: "Choose from the menu"}).
+		Row(MenuButton{Text: "🛒 Buy", Style: StyleSuccess}).Row().Row(MenuButton{Text: "🌐 Language"})
+	msg, err := c.SendMenu(context.Background(), 42, "<b>Welcome</b>", m)
+	if err != nil || msg.MessageID != 8 || called != "sendMessage" || got.ParseMode != "HTML" {
+		t.Fatalf("send: %v %+v %s %+v", err, msg, called, got)
+	}
+	want := `{"keyboard":[[{"text":"🛒 Buy","style":"success"}],[{"text":"🌐 Language"}]],` +
+		`"is_persistent":true,"resize_keyboard":true,"input_field_placeholder":"Choose from the menu"}`
+	if string(got.ReplyMarkup) != want {
+		t.Fatalf("reply_markup:\n got %s\nwant %s", got.ReplyMarkup, want)
+	}
+}
+
+// A button's color is sent only when it has one, and removing a message's
+// buttons still sends an empty inline keyboard.
+func TestButtonStyles(t *testing.T) {
+	kb := (&Keyboard{}).Row(CB("Pay", "pay").Success(), Link("Share", "https://t.me/x").Primary(), CB("Back", "back"),
+		CB("Reject", "no").Danger())
+	b, _ := json.Marshal(kb)
+	want := `{"inline_keyboard":[[{"text":"Pay","callback_data":"pay","style":"success"},` +
+		`{"text":"Share","url":"https://t.me/x","style":"primary"},{"text":"Back","callback_data":"back"},` +
+		`{"text":"Reject","callback_data":"no","style":"danger"}]]}`
+	if string(b) != want {
+		t.Fatalf("keyboard:\n got %s\nwant %s", b, want)
+	}
+	var markup json.RawMessage
+	c, _ := fakeAPI(t, func(_ string, body []byte, _ *http.Request) any {
+		var m struct {
+			ReplyMarkup json.RawMessage `json:"reply_markup"`
+		}
+		_ = json.Unmarshal(body, &m)
+		markup = m.ReplyMarkup
+		return ok(true)
+	})
+	if err := c.EditMessageReplyMarkup(context.Background(), 1, 2, nil); err != nil || string(markup) != `{"inline_keyboard":[]}` {
+		t.Fatalf("removing buttons: %v %s", err, markup)
+	}
+}
+
+// Telegram refuses the whole message for a style it does not know: the bot's
+// texts are colored only with the three it takes.
+func TestCatalogButtonStylesAreTelegrams(t *testing.T) {
+	cat := i18n.MustLoad()
+	for _, key := range cat.Keys("en") {
+		switch s := i18n.ButtonStyle(key); s {
+		case "", StylePrimary, StyleSuccess, StyleDanger:
+		default:
+			t.Errorf("%s: style %q", key, s)
+		}
 	}
 }
 

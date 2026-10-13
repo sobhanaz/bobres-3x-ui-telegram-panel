@@ -23,7 +23,12 @@ const joinCacheTTL = 10 * time.Minute
 func (h *Handler) gate(r *req) bool {
 	maintenance := h.set.Bool("maintenance.enabled", false)
 	channel := h.set.Get("join.channel")
-	if (!maintenance && channel == "") || h.exempt(r) {
+	// Staff and the configured owner (who may not have a user yet) pass both.
+	if (!maintenance && channel == "") || r.isTeam() || h.isOwnerID(r) {
+		return false
+	}
+	r.held = true // what passes below passes for what it is, unless a member
+	if h.exempt(r) {
 		return false
 	}
 	if !maintenance {
@@ -31,6 +36,7 @@ func (h *Handler) gate(r *req) bool {
 			return false // "I've joined" checks by itself
 		}
 		if h.inChannel(r.ctx, r.from.ID, channel) {
+			r.held = false
 			return false
 		}
 	}
@@ -61,9 +67,10 @@ func (h *Handler) answerGate(r *req) {
 
 // continuesTicket: a customer going on with a ticket, which the gates let
 // through (starting one they do not): the buttons to answer, close, list or
-// read tickets, a message in the ticket scene that names a ticket, or a
-// Telegram reply to a message of the bot (a staff answer, core checks). The
-// state is read only when a gate would otherwise block.
+// read tickets, a message in the ticket scene that names a ticket (Support
+// is the only bottom-menu tap that counts), or a Telegram reply to a message
+// of the bot (a staff answer, core checks). The state is read only when a
+// gate would otherwise block.
 func (h *Handler) continuesTicket(r *req) bool {
 	if r.user == nil {
 		return false
@@ -74,6 +81,9 @@ func (h *Handler) continuesTicket(r *req) bool {
 		return verb == "tk" && (sub == "r" || sub == "c" || sub == "l" || sub == "v")
 	}
 	if _, _, isCmd := command(r.msg.Text); isCmd {
+		return false
+	}
+	if data, tap := h.menuTap(r); tap && data != "support" {
 		return false
 	}
 	st, err := h.state.Get(r.ctx, r.from.ID)
@@ -89,14 +99,11 @@ func (h *Handler) continuesTicket(r *req) bool {
 	return false
 }
 
-// exempt: what both gates let through. Staff and the configured owner (who
-// may not have a user yet); /paysupport, which Telegram requires of bots
-// selling Stars; payment checks; the language picker; and a new user's
-// /start, which keeps an invite code until the language is picked.
+// exempt: the updates both gates let through: /paysupport, which Telegram
+// requires of bots selling Stars; payment checks; the language picker; and
+// a new user's /start, which keeps an invite code until the language is
+// picked.
 func (h *Handler) exempt(r *req) bool {
-	if r.isTeam() || h.isOwnerID(r) {
-		return true
-	}
 	if r.cb != nil {
 		verb, _, _ := strings.Cut(r.cb.Data, ":")
 		return verb == "chk" || verb == "lang"
@@ -115,13 +122,17 @@ func (h *Handler) isOwnerID(r *req) bool {
 }
 
 // payingNow: a message carrying the proof of a payment already under way (a
-// receipt, its bank reference or a TXID), which may still finish. The state
-// is read only when a gate would otherwise block.
+// receipt, its bank reference or a TXID), which may still finish. A tap on
+// the bottom menu is never one. The state is read only when a gate would
+// otherwise block.
 func (h *Handler) payingNow(r *req) bool {
 	if r.cb != nil || r.user == nil {
 		return false
 	}
 	if _, _, isCmd := command(r.msg.Text); isCmd {
+		return false
+	}
+	if _, tap := h.menuTap(r); tap {
 		return false
 	}
 	st, err := h.state.Get(r.ctx, r.from.ID)
@@ -154,9 +165,9 @@ func (h *Handler) sayMaintenance(r *req) {
 func (h *Handler) askToJoin(r *req, channel string) {
 	kb := &tg.Keyboard{}
 	if link := h.joinLink(channel); link != "" {
-		kb.Row(tg.Link(r.t("btn.join_channel"), link))
+		kb.Row(r.linkButton("btn.join_channel", link))
 	}
-	kb.Row(tg.CB(r.t("btn.join_check"), "jn"))
+	kb.Row(r.button("btn.join_check", "jn"))
 	r.send(r.t("join.prompt"), kb)
 }
 
@@ -182,21 +193,25 @@ func (h *Handler) onJoinCheck(r *req) {
 }
 
 // gateNewUser runs the gates for a user who just picked a language (the
-// picker itself is not gated): instead of the first home menu, the
-// maintenance message or the join prompt. It reports whether it answered.
+// picker itself is not gated): the picker becomes the welcome, without the
+// bottom menu, and the maintenance message or the join prompt comes instead
+// of the first home menu. It reports whether it answered.
 func (h *Handler) gateNewUser(r *req) bool {
 	if r.isTeam() || h.isOwnerID(r) {
 		return false
 	}
-	if h.set.Bool("maintenance.enabled", false) {
+	maintenance := h.set.Bool("maintenance.enabled", false)
+	channel := h.set.Get("join.channel")
+	if !maintenance && (channel == "" || h.inChannel(r.ctx, r.from.ID, channel)) {
+		return false
+	}
+	r.show(r.t("welcome", "brand", esc(h.brand())), nil)
+	if maintenance {
 		r.send(r.t("maintenance"), nil)
-		return true
+	} else {
+		h.askToJoin(r, channel)
 	}
-	if ch := h.set.Get("join.channel"); ch != "" && !h.inChannel(r.ctx, r.from.ID, ch) {
-		h.askToJoin(r, ch)
-		return true
-	}
-	return false
+	return true
 }
 
 // inChannel reports whether the user is a member of the channel. Members are

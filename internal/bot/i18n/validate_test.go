@@ -30,7 +30,7 @@ func TestContexts(t *testing.T) {
 		"discount.bad.expired": CtxToastHTML, "pay.stars_title": CtxInvoiceTitle,
 		"sub.qr_caption": CtxCaption, "welcome": CtxHTML,
 		"rs.forbidden": CtxToastHTML, "rs.label_removed": CtxToast, "wallet.debt": CtxButtonHTML, "btn.rs_buy": CtxButton,
-		"rs.panel": CtxHTML,
+		"rs.panel": CtxHTML, "menu.placeholder": CtxPlaceholder, "lang.changed": CtxToastHTML,
 	}
 	for k, want := range cases {
 		if got := ContextOf(k); got != want {
@@ -54,6 +54,46 @@ func TestContexts(t *testing.T) {
 	// The reseller panel's texts have their own heading in the editor.
 	if p, _ := c.Info("rs.panel"); p.Group != "rs" || !slices.Equal(p.Placeholders, []string{"balances", "commission", "customers", "discount", "earned", "tier"}) {
 		t.Fatalf("rs.panel info: %+v", p)
+	}
+}
+
+// The bottom menu's hint is one line of plain text, at most 64 characters:
+// Telegram's limit for the message field's placeholder.
+func TestPlaceholderContext(t *testing.T) {
+	c := MustLoad()
+	if info, _ := c.Info("menu.placeholder"); info.Context != CtxPlaceholder || info.Max != 64 || info.Group != "general" {
+		t.Fatalf("menu.placeholder: %+v", info)
+	}
+	for v, code := range map[string]string{
+		"<b>Choose</b>":         ProblemMarkup,
+		"Choose\nfrom the menu": ProblemControlChar,
+		strings.Repeat("x", 65): ProblemTooLong,
+	} {
+		_, probs := c.ValidateOverride("en", "menu.placeholder", v)
+		if !slices.ContainsFunc(probs, func(p Problem) bool { return p.Code == code }) {
+			t.Errorf("%q: %v, want %s", v, probs, code)
+		}
+	}
+	if _, probs := c.ValidateOverride("fa", "menu.placeholder", "یکی از دکمه\u200cها را بزنید"); len(probs) != 0 {
+		t.Fatalf("a good hint: %v", probs)
+	}
+}
+
+// Every colored button is a text of the catalog, in a color Telegram knows.
+func TestButtonStyles(t *testing.T) {
+	c := MustLoad()
+	for key, style := range buttonStyles {
+		if _, ok := c.Info(key); !ok {
+			t.Errorf("%s: no such text", key)
+		}
+		if style != "primary" && style != "success" && style != "danger" {
+			t.Errorf("%s: style %q", key, style)
+		}
+	}
+	for key, want := range map[string]string{"btn.buy": "success", "btn.wallet": "primary", "btn.cancel": "danger", "btn.home": ""} {
+		if got := ButtonStyle(key); got != want {
+			t.Errorf("%s: %q, want %q", key, got, want)
+		}
 	}
 }
 

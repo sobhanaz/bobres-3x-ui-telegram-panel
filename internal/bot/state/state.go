@@ -41,10 +41,29 @@ type Store interface {
 	// for CheckoutTTL; LoadCheckout reads it back (ok=false once gone).
 	SaveCheckout(ctx context.Context, userID int64, nonce string, c Checkout) error
 	LoadCheckout(ctx context.Context, userID int64, nonce string) (c Checkout, ok bool, err error)
+	// SaveMenu keeps the bottom menu the user was sent last for MenuTTL;
+	// LoadMenu reads it back (the zero SentMenu when none is kept) and keeps
+	// it MenuTTL longer.
+	SaveMenu(ctx context.Context, userID int64, m SentMenu) error
+	LoadMenu(ctx context.Context, userID int64) (SentMenu, error)
 }
 
 // CheckoutTTL is how long a payment menu's buttons keep working.
 const CheckoutTTL = time.Hour
+
+// MenuTTL is how long the bottom menu a user has is remembered after their
+// last update: someone back after longer gets it again.
+const MenuTTL = 30 * 24 * time.Hour
+
+func menuKey(userID int64) string { return "bot:menu:" + strconv.FormatInt(userID, 10) }
+
+// SentMenu is the bottom menu a user was sent last: a fingerprint of its
+// buttons, and the action each of its labels runs, so a tap on it is known
+// for what it is after its texts changed, or the bot restarted.
+type SentMenu struct {
+	Sig    string            `json:"sig"`
+	Labels map[string]string `json:"labels,omitempty"` // label -> action
+}
 
 // Checkout is what a payment menu sells: a plan, as a new service or for an
 // existing subscription (renew, traffic_topup), possibly with a discount code.
@@ -143,6 +162,32 @@ func (r *Redis) LoadCheckout(ctx context.Context, userID int64, nonce string) (C
 	return c, true, nil
 }
 
+// SaveMenu implements Store.
+func (r *Redis) SaveMenu(ctx context.Context, userID int64, m SentMenu) error {
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return r.rdb.Set(ctx, menuKey(userID), raw, MenuTTL).Err()
+}
+
+// LoadMenu implements Store (GETEX: the read renews the expiry). A record
+// it cannot read counts as none: the user gets the menu again.
+func (r *Redis) LoadMenu(ctx context.Context, userID int64) (SentMenu, error) {
+	raw, err := r.rdb.GetEx(ctx, menuKey(userID), MenuTTL).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return SentMenu{}, nil
+	}
+	if err != nil {
+		return SentMenu{}, err
+	}
+	var m SentMenu
+	if json.Unmarshal(raw, &m) != nil {
+		return SentMenu{}, nil
+	}
+	return m, nil
+}
+
 // Memory is an in-process Store for tests and single-instance development.
 type Memory struct {
 	mu        sync.Mutex
@@ -150,12 +195,28 @@ type Memory struct {
 	seen      map[string]time.Time
 	flags     map[string]time.Time
 	checkouts map[string]Checkout
+	menus     map[int64]SentMenu
 }
 
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
 	return &Memory{state: map[int64]State{}, seen: map[string]time.Time{}, flags: map[string]time.Time{},
-		checkouts: map[string]Checkout{}}
+		checkouts: map[string]Checkout{}, menus: map[int64]SentMenu{}}
+}
+
+// SaveMenu implements Store (no expiry in memory).
+func (m *Memory) SaveMenu(_ context.Context, userID int64, sm SentMenu) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.menus[userID] = sm
+	return nil
+}
+
+// LoadMenu implements Store.
+func (m *Memory) LoadMenu(_ context.Context, userID int64) (SentMenu, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.menus[userID], nil
 }
 
 // SaveCheckout implements Store (no expiry in memory).

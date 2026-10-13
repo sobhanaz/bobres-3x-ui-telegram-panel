@@ -65,6 +65,30 @@ func TestFakeServesTheBotClient(t *testing.T) {
 	}
 }
 
+// The bottom menu (a reply keyboard) is recorded as sent; a reader of inline
+// keyboards, like the end-to-end run, finds no buttons in it.
+func TestReplyKeyboardIsRecorded(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	m := (&tg.Menu{IsPersistent: true, Resize: true}).Row(tg.MenuButton{Text: "🛒 Buy", Style: tg.StyleSuccess})
+	if _, err := c.SendMenu(context.Background(), 7, "welcome", m); err != nil {
+		t.Fatal(err)
+	}
+	sent := f.Sent()
+	if len(sent) != 1 || sent[0].Method != "sendMessage" || sent[0].Text != "welcome" ||
+		!strings.Contains(string(sent[0].Markup), `"keyboard":[[{`) || !strings.Contains(string(sent[0].Markup), "🛒 Buy") {
+		t.Fatalf("sent: %+v %s", sent, sent[0].Markup)
+	}
+	var inline struct {
+		InlineKeyboard [][]tg.Button `json:"inline_keyboard"`
+	}
+	if err := json.Unmarshal(sent[0].Markup, &inline); err != nil || inline.InlineKeyboard != nil {
+		t.Fatalf("read as an inline keyboard: %v %+v", err, inline)
+	}
+}
+
 func TestHelperEndpointsAndAuth(t *testing.T) {
 	f := New()
 	srv := httptest.NewServer(f.Handler())

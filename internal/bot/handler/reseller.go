@@ -103,10 +103,10 @@ func pageArg(s string) int32 {
 func pager(r *req, page int32, more bool, data func(int32) string) []tg.Button {
 	var out []tg.Button
 	if page > 1 {
-		out = append(out, tg.CB(r.t("btn.prev"), data(page-1)))
+		out = append(out, r.button("btn.prev", data(page-1)))
 	}
 	if more {
-		out = append(out, tg.CB(r.t("btn.next"), data(page+1)))
+		out = append(out, r.button("btn.next", data(page+1)))
 	}
 	return out
 }
@@ -152,9 +152,9 @@ func (h *Handler) showResellerPanel(r *req) {
 			"limit", r.money(b.GetCreditLimit(), cur), "available", r.money(b.GetAvailable(), cur)))
 	}
 	kb := (&tg.Keyboard{}).
-		Row(tg.CB(r.t("btn.rs_buy"), "rs:buy"), tg.CB(r.t("btn.rs_services"), "rs:subs:1")).
-		Row(tg.CB(r.t("btn.rs_statement"), "rs:st:1"), tg.CB(r.t("btn.rs_link"), "rs:link")).
-		Row(tg.CB(r.t("btn.home"), "home"))
+		Row(r.button("btn.rs_buy", "rs:buy"), r.button("btn.rs_services", "rs:subs:1")).
+		Row(r.button("btn.rs_statement", "rs:st:1"), r.button("btn.rs_link", "rs:link")).
+		Row(r.button("btn.home", "home"))
 	r.show(r.t("rs.panel", "tier", esc(info.GetTierName()),
 		"discount", i18n.Number(r.lang, int64(info.GetDiscountPercent())),
 		"commission", i18n.Number(r.lang, int64(info.GetCommissionPercent())),
@@ -179,7 +179,7 @@ func (h *Handler) showResellerPlans(r *req) {
 		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())),
 			"rs:p:"+p.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.back"), "rs"), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
 	r.show(r.t("rs.buy_title"), kb)
 }
 
@@ -200,7 +200,7 @@ func (h *Handler) askLabel(r *req, planID string) {
 }
 
 func skipKeyboard(r *req, n string) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(r.t("btn.skip"), "rs:sk:"+n), tg.CB(r.t("btn.cancel"), "cancel"))
+	return (&tg.Keyboard{}).Row(r.button("btn.skip", "rs:sk:"+n), r.button("btn.cancel", "cancel"))
 }
 
 // cleanLabel is a service name as typed: runs of spaces and line breaks
@@ -287,8 +287,8 @@ func (h *Handler) showCustomerServices(r *req, page int32, query string) {
 	total := resp.GetPageInfo().GetTotal()
 	pages := max((total+servicesPage-1)/servicesPage, 1)
 	if total == 0 && query == "" {
-		r.show(r.t("rs.services_empty"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.rs_buy"), "rs:buy")).
-			Row(tg.CB(r.t("btn.back"), "rs"), tg.CB(r.t("btn.home"), "home")))
+		r.show(r.t("rs.services_empty"), (&tg.Keyboard{}).Row(r.button("btn.rs_buy", "rs:buy")).
+			Row(r.button("btn.back", "rs"), r.button("btn.home", "home")))
 		return
 	}
 	kb := &tg.Keyboard{}
@@ -301,11 +301,11 @@ func (h *Handler) showCustomerServices(r *req, page int32, query string) {
 		}
 		return "rs:sq:" + strconv.Itoa(int(p)) + ":" + query
 	})...)
-	search := []tg.Button{tg.CB(r.t("btn.rs_search"), "rs:find")}
+	search := []tg.Button{r.button("btn.rs_search", "rs:find")}
 	if query != "" {
-		search = append(search, tg.CB(r.t("btn.rs_all"), "rs:subs:1"))
+		search = append(search, r.button("btn.rs_all", "rs:subs:1"))
 	}
-	kb.Row(search...).Row(tg.CB(r.t("btn.back"), "rs"), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(search...).Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
 	num := func(n int64) string { return i18n.Number(r.lang, n) }
 	var text string
 	switch {
@@ -329,9 +329,9 @@ func (h *Handler) askRename(r *req, id string) {
 	r.setState(sceneResellerRename, map[string]string{"sub": s.GetId()})
 	kb := &tg.Keyboard{}
 	if s.GetLabel() != "" {
-		kb.Row(tg.CB(r.t("btn.remove_name"), "rs:rc:"+s.GetId()))
+		kb.Row(r.button("btn.remove_name", "rs:rc:"+s.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.cancel"), "cancel"))
+	kb.Row(r.button("btn.cancel", "cancel"))
 	r.show(r.labelled(s.GetLabel(), r.t("rs.rename_ask", "id", shortID(s.GetId()), "max", i18n.Number(r.lang, maxLabel))), kb)
 }
 
@@ -390,7 +390,7 @@ func (h *Handler) showStatement(r *req, page int32) {
 		more = len(next) > 0
 	}
 	kb := (&tg.Keyboard{}).Row(pager(r, page, more, func(p int32) string { return "rs:st:" + strconv.Itoa(int(p)) })...).
-		Row(tg.CB(r.t("btn.back"), "rs"), tg.CB(r.t("btn.home"), "home"))
+		Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
 	if len(entries) == 0 {
 		r.show(r.t("wallet.history_empty"), kb)
 		return
@@ -416,8 +416,8 @@ func (h *Handler) showResellerLink(r *req) {
 	}
 	link := "https://t.me/" + h.cfg.BotUsername + "?start=r_" + info.GetRefCode()
 	share := "https://t.me/share/url?url=" + url.QueryEscape(link) + "&text=" + url.QueryEscape(r.t("ref.share_text", "brand", h.brand()))
-	kb := (&tg.Keyboard{}).Row(tg.Link(r.t("btn.share"), share)).
-		Row(tg.CB(r.t("btn.back"), "rs"), tg.CB(r.t("btn.home"), "home"))
+	kb := (&tg.Keyboard{}).Row(r.linkButton("btn.share", share)).
+		Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
 	r.show(r.t("rs.link", "percent", i18n.Number(r.lang, int64(info.GetCommissionPercent())), "link", esc(link),
 		"customers", i18n.Number(r.lang, info.GetCustomers()), "earned", earned(r, info.GetCommissionEarned())), kb)
 }

@@ -104,7 +104,7 @@ func (h *Handler) showPicker(r *req, c state.Checkout, ps []*corev1.Plan, title 
 		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())),
 			"rp:"+n+":"+p.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.back"), "sub:"+c.SubscriptionID), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", "sub:"+c.SubscriptionID), r.button("btn.home", "home"))
 	r.show(title, kb)
 }
 
@@ -127,7 +127,7 @@ func (h *Handler) loadCheckout(r *req, n string) (state.Checkout, bool) {
 		return c, false
 	}
 	if !ok {
-		r.show(r.t("error.menu_expired"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home")))
+		r.show(r.t("error.menu_expired"), (&tg.Keyboard{}).Row(r.button("btn.buy", "buy"), r.button("btn.home", "home")))
 	}
 	return c, ok
 }
@@ -216,7 +216,7 @@ func (h *Handler) showReferral(r *req) {
 	}
 	link := "https://t.me/" + h.cfg.BotUsername + "?start=r_" + info.GetCode()
 	share := "https://t.me/share/url?url=" + url.QueryEscape(link) + "&text=" + url.QueryEscape(r.t("ref.share_text", "brand", h.brand()))
-	kb := (&tg.Keyboard{}).Row(tg.Link(r.t("btn.share"), share)).Row(tg.CB(r.t("btn.home"), "home"))
+	kb := (&tg.Keyboard{}).Row(r.linkButton("btn.share", share)).Row(r.button("btn.home", "home"))
 	r.show(r.t("ref.screen", "percent", i18n.Number(r.lang, int64(info.GetRewardPercent())), "link", esc(link),
 		"invited", i18n.Number(r.lang, int64(info.GetInvited())), "earned", earned(r, info.GetEarned())), kb)
 }

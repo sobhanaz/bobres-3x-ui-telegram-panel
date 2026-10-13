@@ -39,19 +39,22 @@ const (
 	// CtxBotAbout is the bot's short description (its profile page and the
 	// preview when it is shared): one line of plain text.
 	CtxBotAbout Context = "bot_about"
+	// CtxPlaceholder is the hint in the empty message field while the bottom
+	// menu is shown: one line of plain text.
+	CtxPlaceholder Context = "placeholder"
 )
 
 // html reports whether the context is sent with the HTML parse mode.
 func (c Context) html() bool { return c == CtxHTML || c == CtxCaption }
 
 // oneLine reports whether Telegram shows the text on a single line.
-func (c Context) oneLine() bool { return c == CtxCommand || c == CtxBotAbout }
+func (c Context) oneLine() bool { return c == CtxCommand || c == CtxBotAbout || c == CtxPlaceholder }
 
 // maxLen is the longest text the context takes, in UTF-16 units of the text
 // without tags. Messages and captions keep room for the inserted values.
 func (c Context) maxLen() int {
 	switch c {
-	case CtxButton, CtxButtonHTML:
+	case CtxButton, CtxButtonHTML, CtxPlaceholder:
 		return 64
 	case CtxToast, CtxToastHTML, CtxPlain, CtxInternal:
 		return 200
@@ -85,7 +88,7 @@ var contexts = map[string]Context{
 	"admin.unknown":          CtxButtonHTML,
 	"error.rate":             CtxToast,
 	"error.expired":          CtxToast,
-	"lang.changed":           CtxToast,
+	"lang.changed":           CtxToastHTML, // a popup, or a new user's language picker edited into it
 	"admin.status_done":      CtxToast,
 	"pay.check_pending":      CtxToast,
 	"pay.usdt_check_pending": CtxToast,
@@ -132,7 +135,62 @@ var contexts = map[string]Context{
 
 	"profile.description": CtxBotDescription,
 	"profile.about":       CtxBotAbout,
+	"menu.placeholder":    CtxPlaceholder,
 }
+
+// buttonStyles colors buttons by what they do, the same on every keyboard
+// (the bottom menu too), as the Bot API names the colors: green ("success")
+// pays or confirms, blue ("primary") opens a main action, red ("danger")
+// cancels or refuses. Every other button keeps the app's own look:
+// navigation, lists to choose from, links to read.
+var buttonStyles = map[string]string{
+	"btn.buy":               "success",
+	"btn.trial":             "success",
+	"btn.pay_wallet":        "success",
+	"btn.pay_credit":        "success",
+	"btn.pay_card":          "success",
+	"btn.pay_crypto":        "success",
+	"btn.pay_zarinpal_link": "success",
+	"btn.pay_zarinpal":      "success",
+	"btn.pay_stars":         "success",
+	"btn.pay_usdt_auto":     "success",
+	"btn.open_payment":      "success",
+	"btn.approve":           "success",
+	"btn.adm_unban":         "success",
+	"btn.join_check":        "success",
+
+	"btn.services":      "primary",
+	"btn.wallet":        "primary",
+	"btn.support":       "primary",
+	"btn.renew":         "primary",
+	"btn.add_traffic":   "primary",
+	"btn.topup":         "primary",
+	"btn.topup_and_buy": "primary",
+	"btn.check_payment": "primary",
+	"btn.try_again":     "primary",
+	"btn.rs_buy":        "primary",
+	"btn.adm_pending":   "primary",
+	"btn.review_now":    "primary",
+	"btn.ticket_more":   "primary",
+	"btn.ticket_reply":  "primary",
+	"btn.share":         "primary",
+	"btn.join_channel":  "primary",
+	"btn.invite":        "primary",
+	"btn.reseller":      "primary",
+
+	"btn.cancel":          "danger",
+	"btn.reject":          "danger",
+	"reason.amount":       "danger", // the preset reasons to reject a payment
+	"reason.unreadable":   "danger",
+	"reason.not_received": "danger",
+	"btn.reject_other":    "danger",
+	"btn.adm_ban":         "danger",
+	"btn.remove_name":     "danger",
+}
+
+// ButtonStyle is the Bot API style of a button labelled with the text key:
+// "success", "primary", "danger", or "" for the app's own look.
+func ButtonStyle(key string) string { return buttonStyles[key] }
 
 // contextPrefixes give whole families a context.
 var contextPrefixes = map[string]Context{

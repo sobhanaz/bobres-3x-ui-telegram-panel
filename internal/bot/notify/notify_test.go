@@ -441,3 +441,33 @@ func TestClaimedDepositAlert(t *testing.T) {
 		t.Fatalf("broken payload: %v", err)
 	}
 }
+
+// Notification buttons are colored as on the bot's own screens: the review
+// button and Support blue, the transaction link and Main menu in the app's
+// own look.
+func TestNotificationButtonColors(t *testing.T) {
+	n, tgf, set := alertNotifier(t)
+	set.Replace(map[string]string{"notify.system_alerts": "false", "notify.sales": "false"})
+	if err := handleClaim(t, n, claimedByProof); err != nil {
+		t.Fatal(err)
+	}
+	got := tgf.take()
+	if len(got) != 1 {
+		t.Fatalf("sent: %+v", got)
+	}
+	styles := map[string]string{}
+	for _, row := range got[0].kb.InlineKeyboard {
+		for _, b := range row {
+			styles[b.CallbackData+b.URL] = b.Style
+		}
+	}
+	if styles["adm:pend"] != tg.StylePrimary || styles["https://tronscan.org/#/transaction/"+depositTx] != "" {
+		t.Fatalf("styles: %v", styles)
+	}
+	if b := n.supportButton("en").InlineKeyboard[0][0]; b.Style != tg.StylePrimary {
+		t.Errorf("Support: %+v", b)
+	}
+	if b := n.home("fa").InlineKeyboard[0][0]; b.Style != "" {
+		t.Errorf("Main menu: %+v", b)
+	}
+}

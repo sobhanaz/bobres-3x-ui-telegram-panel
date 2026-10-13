@@ -111,7 +111,7 @@ func (h *Handler) showPlans(r *req) {
 	for _, p := range ps {
 		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())), "plan:"+p.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.home", "home"))
 	r.show(r.t("plans.title"), kb)
 }
 
@@ -166,13 +166,13 @@ func (h *Handler) payButtons(r *req, kb *tg.Keyboard, cur string, amount int64, 
 	}
 	var manual []tg.Button
 	if h.cardEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_card"), "pay:c:"+n))
+		manual = append(manual, r.button("btn.pay_card", "pay:c:"+n))
 	}
 	if h.cryptoEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_crypto"), "pay:x:"+n))
+		manual = append(manual, r.button("btn.pay_crypto", "pay:x:"+n))
 	}
 	if h.zarinpalLinkEnabled(cur) {
-		manual = append(manual, tg.CB(r.t("btn.pay_zarinpal_link"), "pay:l:"+n))
+		manual = append(manual, r.button("btn.pay_zarinpal_link", "pay:l:"+n))
 	}
 	rows(kb, h.gatewayButtons(r, cur, amount, "pay", "", n), 2)
 	kb.Row(manual...)
@@ -227,17 +227,17 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	var wallet *tg.Button
 	switch {
 	case !reseller:
-		b := tg.CB(r.t("btn.pay_wallet", "balance", r.money(w.GetBalance(), cur)), "pay:w:"+n)
+		b := r.button("btn.pay_wallet", "pay:w:"+n, "balance", r.money(w.GetBalance(), cur))
 		wallet = &b
 	case available >= price: // on credit, down to the limit
-		b := tg.CB(r.t("btn.pay_credit", "available", r.money(available, cur)), "pay:w:"+n)
+		b := r.button("btn.pay_credit", "pay:w:"+n, "available", r.money(available, cur))
 		wallet = &b
 	}
 	h.payButtons(r, kb, cur, price, n, wallet)
 	if !reseller && c.DiscountCode == "" && price > 0 {
-		kb.Row(tg.CB(r.t("btn.discount"), "dc:"+n))
+		kb.Row(r.button("btn.discount", "dc:"+n))
 	}
-	kb.Row(tg.CB(r.t("btn.back"), checkoutBack(c)), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", checkoutBack(c)), r.button("btn.home", "home"))
 	var text string
 	switch c.Type {
 	case "renew":
@@ -274,7 +274,7 @@ func (h *Handler) onPay(r *req, rest string) {
 			return
 		}
 		if !ok {
-			r.show(r.t("error.menu_expired"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home")))
+			r.show(r.t("error.menu_expired"), (&tg.Keyboard{}).Row(r.button("btn.buy", "buy"), r.button("btn.home", "home")))
 			return
 		}
 		c = got
@@ -327,7 +327,7 @@ func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order 
 	if err == nil {
 		kb := homeKeyboard(r)
 		if r.isReseller() {
-			kb = (&tg.Keyboard{}).Row(tg.CB(r.t("btn.reseller"), "rs"), tg.CB(r.t("btn.home"), "home"))
+			kb = (&tg.Keyboard{}).Row(r.button("btn.reseller", "rs"), r.button("btn.home", "home"))
 		}
 		r.show(r.t("pay.wallet_done"), kb)
 		return
@@ -346,17 +346,17 @@ func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order 
 	if r.isReseller() { // past the credit limit
 		kb := &tg.Keyboard{}
 		h.payButtons(r, kb, cur, amount, n, nil)
-		kb.Row(tg.CB(r.t("btn.reseller"), "rs"), tg.CB(r.t("btn.home"), "home"))
+		kb.Row(r.button("btn.reseller", "rs"), r.button("btn.home", "home"))
 		r.show(r.t("rs.no_credit", "available", r.money(w.GetBalance()+w.GetCreditLimit(), cur), "price", r.money(amount, cur)), kb)
 		return
 	}
-	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.topup_and_buy"), "wtop"))
+	kb := (&tg.Keyboard{}).Row(r.button("btn.topup_and_buy", "wtop"))
 	h.payButtons(r, kb, cur, amount, n, nil)
 	back := "plan:" + p.GetId()
 	if c.SubscriptionID != "" {
 		back = "sub:" + c.SubscriptionID
 	}
-	kb.Row(tg.CB(r.t("btn.back"), back), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", back), r.button("btn.home", "home"))
 	r.show(r.t("pay.insufficient", "balance", r.money(w.GetBalance(), cur), "price", r.money(amount, cur)), kb)
 }
 
@@ -395,7 +395,7 @@ func (h *Handler) startManual(r *req, order *corev1.Order, provider, key string,
 	})
 	kb := cancelKeyboard(r)
 	if link := intent.GetDetails()["zarinpal_link"]; provider == "manual_zarinpal" && link != "" {
-		kb = &tg.Keyboard{InlineKeyboard: append([][]tg.Button{{tg.Link(r.t("btn.open_payment"), link)}}, kb.InlineKeyboard...)}
+		kb = &tg.Keyboard{InlineKeyboard: append([][]tg.Button{{r.linkButton("btn.open_payment", link)}}, kb.InlineKeyboard...)}
 	}
 	r.show(text, kb)
 }
@@ -543,7 +543,7 @@ func (h *Handler) notifyStaff(ctx context.Context, skip int64, key string, args 
 		}
 		var kb *tg.Keyboard
 		if key == "admin.new_payment" {
-			kb = (&tg.Keyboard{}).Row(tg.CB(h.cat.T(lang, "btn.review_now"), "adm:pend"))
+			kb = (&tg.Keyboard{}).Row(h.button(lang, "btn.review_now", "adm:pend"))
 		}
 		if _, err := h.tg.SendMessage(ctx, c.TelegramID, h.cat.T(lang, key, rendered...), kb); err != nil {
 			h.log.Warn("staff notification failed", "chat", c.TelegramID, "err", err)
