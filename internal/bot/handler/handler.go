@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -27,6 +28,7 @@ import (
 // Telegram is the part of the Bot API the handler uses.
 type Telegram interface {
 	SendMessage(ctx context.Context, chatID int64, text string, kb *tg.Keyboard) (*tg.Message, error)
+	SendMenu(ctx context.Context, chatID int64, text string, m *tg.Menu) (*tg.Message, error)
 	EditMessageText(ctx context.Context, chatID int64, messageID int, text string, kb *tg.Keyboard) error
 	EditMessageReplyMarkup(ctx context.Context, chatID int64, messageID int, kb *tg.Keyboard) error
 	AnswerCallback(ctx context.Context, callbackID, text string, alert bool) error
@@ -84,6 +86,14 @@ type Handler struct {
 	// staff menus would look like every staff member had left.
 	profileKick chan struct{}
 	staffKnown  bool
+
+	// menuLabels maps the bottom menu's labels to their actions (menuAction):
+	// built from the built-in texts at start, again after each refresh,
+	// keeping the labels it had.
+	menuLabels atomic.Pointer[map[string]string]
+	// settingsLoaded: a refresh has loaded the settings and the texts, so
+	// the bottom menu is built as the store has it (refreshMenu).
+	settingsLoaded atomic.Bool
 }
 
 // New builds a Handler. limiter may be nil.
@@ -94,9 +104,11 @@ func New(core corev1.CoreServiceClient, t Telegram, st state.Store, cat *i18n.Ca
 	if cfg.Location == nil {
 		cfg.Location = defaultLocation()
 	}
-	return &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
+	h := &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
 		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}, checkWait: defaultCheckWait,
 		profileKick: make(chan struct{}, 1)}
+	h.loadMenuLabels() // a tap is known as such before settings ever load
+	return h
 }
 
 func defaultLocation() *time.Location {
@@ -136,6 +148,8 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 		}
 	}
 	h.dropped = dropped
+	h.loadMenuLabels() // the labels follow the texts
+	h.settingsLoaded.Store(true)
 	h.applyTimezone(m["general.timezone"])
 	i18n.SetCurrencyNames(map[string]string{"fa": m["branding.currency.fa"], "en": m["branding.currency.en"]})
 	// Prices and rates may have changed (e.g. payments.stars_rate): the usable
@@ -204,15 +218,39 @@ type req struct {
 	lang   string
 	toast  string // callback answer text
 	alert  bool
-	// keep: the pressed message must stay as it is (a notification), so
-	// show sends a new message instead of editing it.
+	// textTap: the update is a message (typed, or a tap on the bottom menu),
+	// so there is no callback to answer: a toast is sent as a message.
+	textTap bool
+	// keep: the pressed message must stay as it is (a notification, or a
+	// message now above a bottom menu just sent), so show sends a new message
+	// instead of editing it.
 	keep bool
 	// gated: a gate let the update through only to continue a ticket; what
 	// turns out to be anything else gets the gate's answer (answerGate).
 	gated bool
+	// held: a gate is in force for the user and let the update through only
+	// for what it is (an exempt command, a payment under way, a ticket), so
+	// it gets no bottom menu.
+	held bool
+	// menu: the bottom menu the user had when the update came, once read
+	// (sentMenu).
+	menu     state.SentMenu
+	menuErr  error
+	menuRead bool
 }
 
 func (r *req) t(key string, args ...any) string { return r.h.cat.T(r.lang, key, args...) }
+
+// sentMenu is the bottom menu the user had when the update came, as it was
+// recorded when sent. It is read once: a menu sent on the way replaces the
+// record, not the keyboard the update came from.
+func (r *req) sentMenu() (state.SentMenu, error) {
+	if !r.menuRead {
+		r.menu, r.menuErr = r.h.state.LoadMenu(r.ctx, r.from.ID)
+		r.menuRead = true
+	}
+	return r.menu, r.menuErr
+}
 
 func (r *req) money(amount int64, currency string) string {
 	return i18n.Money(r.lang, amount, currency)
@@ -359,7 +397,7 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 	if first, err := h.state.Once(ctx, "upd:"+strconv.FormatInt(u.UpdateID, 10), 24*time.Hour); err == nil && !first {
 		return // Telegram re-delivered an update we already handled
 	}
-	r := &req{ctx: ctx, h: h, from: from, cb: u.CallbackQuery, msg: u.Message}
+	r := &req{ctx: ctx, h: h, from: from, cb: u.CallbackQuery, msg: u.Message, textTap: u.CallbackQuery == nil}
 	if r.cb != nil {
 		r.msg = r.cb.Message
 	}
@@ -399,12 +437,23 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 			if r.cb != nil {
 				r.toast = r.t("error.rate")
 			}
-			return
+			return // a message over the limit stays unanswered
 		}
 	}
+	// A message has no callback to carry a toast (a tap on the bottom menu
+	// reaches the handlers that answer with one): it comes as a message.
+	// Toast texts are plain, safe to send as HTML.
+	defer func() {
+		if r.textTap && r.toast != "" {
+			r.send(r.toast, nil)
+		}
+	}()
 
 	if h.gate(r) {
 		return // maintenance, or the user has not joined the channel
+	}
+	if r.user != nil && !r.held && !sendsMenu(r) {
+		h.refreshMenu(r)
 	}
 
 	if r.cb != nil {
@@ -415,7 +464,7 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 }
 
 func (h *Handler) routeCallback(r *req, data string) {
-	verb, rest, _ := strings.Cut(data, ":")
+	verb, _, _ := strings.Cut(data, ":")
 	if verb == "jn" { // also before registering: then the language picker follows
 		h.onJoinCheck(r)
 		return
@@ -425,6 +474,13 @@ func (h *Handler) routeCallback(r *req, data string) {
 		h.askLanguage(r)
 		return
 	}
+	h.dispatch(r, data)
+}
+
+// dispatch runs the action that callback data names: a button's, or a tap on
+// the bottom menu (menuAction), so both pass the same role checks.
+func (h *Handler) dispatch(r *req, data string) {
+	verb, rest, _ := strings.Cut(data, ":")
 	switch verb {
 	case "lang":
 		h.onLanguage(r, rest)
@@ -475,7 +531,7 @@ func (h *Handler) routeCallback(r *req, data string) {
 	case "trial":
 		h.onTrial(r)
 	case "support":
-		r.keep = rest == "m" // under a notification, which must stay as it is
+		r.keep = r.keep || rest == "m" // under a notification, which must stay as it is
 		h.onSupport(r)
 	case "tk":
 		h.onTicketButton(r, rest)
@@ -516,6 +572,19 @@ func (h *Handler) routeMessage(r *req) {
 		h.askLanguage(r)
 		return
 	}
+	// A tap on the bottom menu, whatever the user was in the middle of: a
+	// label is never taken as an answer (a bank reference, a service name).
+	if data, ok := h.menuTap(r); ok {
+		// Let through only to go on with a ticket: Support, when there is
+		// an open one to show (not the prompt to start one).
+		if r.gated && (data != "support" || !h.hasOpenTicket(r)) {
+			h.answerGate(r)
+			return
+		}
+		r.clearState()
+		h.dispatch(r, data)
+		return
+	}
 	st, err := h.state.Get(r.ctx, r.from.ID)
 	if err != nil {
 		h.log.Warn("state load failed", "err", err)
@@ -537,6 +606,9 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		h.onStart(r, args)
 	case "/menu":
 		r.clearState()
+		if r.user != nil {
+			h.sendMenu(r, r.t("menu.keyboard"))
+		}
 		h.showHome(r)
 	case "/cancel":
 		r.clearState()
@@ -637,14 +709,34 @@ func displayName(u *corev1.User) string {
 	return fmt.Sprintf("id %d", u.GetTelegramId())
 }
 
+// button is a callback button labelled with key's text in lang, in the color
+// of what it does (i18n.ButtonStyle).
+func (h *Handler) button(lang, key, data string, args ...any) tg.Button {
+	b := tg.CB(h.cat.T(lang, key, args...), data)
+	b.Style = i18n.ButtonStyle(key)
+	return b
+}
+
+// button is a callback button in the user's language (Handler.button).
+func (r *req) button(key, data string, args ...any) tg.Button {
+	return r.h.button(r.lang, key, data, args...)
+}
+
+// linkButton is a URL button labelled with key's text, colored the same way.
+func (r *req) linkButton(key, url string) tg.Button {
+	b := tg.Link(r.t(key), url)
+	b.Style = i18n.ButtonStyle(key)
+	return b
+}
+
 func homeKeyboard(r *req) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(r.t("btn.home"), "home"))
+	return (&tg.Keyboard{}).Row(r.button("btn.home", "home"))
 }
 
 func cancelKeyboard(r *req) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(r.t("btn.cancel"), "cancel"))
+	return (&tg.Keyboard{}).Row(r.button("btn.cancel", "cancel"))
 }
 
 func backHome(r *req, back string) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(r.t("btn.back"), back), tg.CB(r.t("btn.home"), "home"))
+	return (&tg.Keyboard{}).Row(r.button("btn.back", back), r.button("btn.home", "home"))
 }

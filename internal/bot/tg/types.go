@@ -224,11 +224,39 @@ func (u *Update) Sender() *User {
 	}
 }
 
+// Button styles: the colors Telegram gives a button. They are the only values
+// it takes; any other fails the whole message ("Invalid button style
+// specified"). No style leaves the app's own look.
+const (
+	StylePrimary = "primary" // blue
+	StyleSuccess = "success" // green
+	StyleDanger  = "danger"  // red
+)
+
 // Button is one inline keyboard button: either callback data or a URL.
 type Button struct {
 	Text         string `json:"text"`
 	CallbackData string `json:"callback_data,omitempty"`
 	URL          string `json:"url,omitempty"`
+	Style        string `json:"style,omitempty"` // one of the styles above, or none
+}
+
+// Primary returns the button in blue.
+func (b Button) Primary() Button {
+	b.Style = StylePrimary
+	return b
+}
+
+// Success returns the button in green.
+func (b Button) Success() Button {
+	b.Style = StyleSuccess
+	return b
+}
+
+// Danger returns the button in red.
+func (b Button) Danger() Button {
+	b.Style = StyleDanger
+	return b
 }
 
 // Keyboard is an inline keyboard: rows of buttons.
@@ -249,3 +277,28 @@ func CB(text, data string) Button { return Button{Text: text, CallbackData: data
 
 // Link is a URL button.
 func Link(text, url string) Button { return Button{Text: text, URL: url} }
+
+// MenuButton is a button of the reply keyboard: a tap sends its text as a
+// message.
+type MenuButton struct {
+	Text  string `json:"text"`
+	Style string `json:"style,omitempty"` // as Button's
+}
+
+// Menu is a persistent reply keyboard (the bottom menu). Only a new message
+// can carry it: edits take inline keyboards only.
+type Menu struct {
+	Keyboard     [][]MenuButton `json:"keyboard"`
+	IsPersistent bool           `json:"is_persistent,omitempty"`
+	Resize       bool           `json:"resize_keyboard,omitempty"`
+	Placeholder  string         `json:"input_field_placeholder,omitempty"` // 1-64 characters
+}
+
+// Row appends a row of buttons and returns the menu (for chaining); an empty
+// row is skipped, as in Keyboard.
+func (m *Menu) Row(buttons ...MenuButton) *Menu {
+	if len(buttons) > 0 {
+		m.Keyboard = append(m.Keyboard, buttons)
+	}
+	return m
+}

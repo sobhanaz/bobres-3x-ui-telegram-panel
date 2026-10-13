@@ -87,7 +87,7 @@ func (h *Handler) showServices(r *req) {
 		return
 	}
 	if len(subs) == 0 {
-		r.show(r.t("subs.empty"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy")).Row(tg.CB(r.t("btn.home"), "home")))
+		r.show(r.t("subs.empty"), (&tg.Keyboard{}).Row(r.button("btn.buy", "buy")).Row(r.button("btn.home", "home")))
 		return
 	}
 	kb := &tg.Keyboard{}
@@ -97,7 +97,7 @@ func (h *Handler) showServices(r *req) {
 		}
 		kb.Row(tg.CB(h.serviceButton(r, s), "sub:"+s.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.home", "home"))
 	r.show(r.t("subs.title"), kb)
 }
 
@@ -114,8 +114,8 @@ func (h *Handler) showService(r *req, id string) {
 	if s.GetStatus() == "pending" || s.GetSubscriptionLink() == "" {
 		kb := backHome(r, "subs")
 		if r.isReseller() { // a name can be given before the service is ready
-			kb = (&tg.Keyboard{}).Row(tg.CB(r.t("btn.rename"), "rs:rn:"+id)).
-				Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
+			kb = (&tg.Keyboard{}).Row(r.button("btn.rename", "rs:rn:"+id)).
+				Row(r.button("btn.back", "subs"), r.button("btn.home", "home"))
 		}
 		r.show(r.labelled(s.GetLabel(), r.t("sub.not_ready")), kb)
 		return
@@ -123,18 +123,18 @@ func (h *Handler) showService(r *req, id string) {
 	kb := &tg.Keyboard{}
 	var extend []tg.Button
 	if renewable(s) {
-		extend = append(extend, tg.CB(r.t("btn.renew"), "rnw:"+id))
+		extend = append(extend, r.button("btn.renew", "rnw:"+id))
 	}
 	if toppable(s) && len(h.topupPlans(r)) > 0 {
-		extend = append(extend, tg.CB(r.t("btn.add_traffic"), "tup:"+id))
+		extend = append(extend, r.button("btn.add_traffic", "tup:"+id))
 	}
 	kb.Row(extend...)
 	if r.isReseller() {
-		kb.Row(tg.CB(r.t("btn.qr"), "qr:"+id), tg.CB(r.t("btn.rename"), "rs:rn:"+id))
+		kb.Row(r.button("btn.qr", "qr:"+id), r.button("btn.rename", "rs:rn:"+id))
 	} else {
-		kb.Row(tg.CB(r.t("btn.qr"), "qr:"+id))
+		kb.Row(r.button("btn.qr", "qr:"+id))
 	}
-	kb.Row(tg.CB(r.t("btn.back"), "subs"), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", "subs"), r.button("btn.home", "home"))
 	text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
 		"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
 		"link", esc(s.GetSubscriptionLink()))
@@ -166,8 +166,8 @@ func (h *Handler) showWallet(r *req) {
 		r.fail(err)
 		return
 	}
-	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.topup"), "wtop"), tg.CB(r.t("btn.history"), "whist")).
-		Row(tg.CB(r.t("btn.home"), "home"))
+	kb := (&tg.Keyboard{}).Row(r.button("btn.topup", "wtop"), r.button("btn.history", "whist")).
+		Row(r.button("btn.home", "home"))
 	text := r.t("wallet.title", "balance", r.balance(w.GetBalance(), "IRT"))
 	if r.isReseller() {
 		text += "\n" + r.t("rs.wallet_credit", "limit", r.money(w.GetCreditLimit(), "IRT"),
@@ -185,7 +185,7 @@ func (h *Handler) showTopupAmounts(r *req) {
 		}
 		kb.Row(row...)
 	}
-	kb.Row(tg.CB(r.t("btn.custom_amount"), "wcustom")).Row(tg.CB(r.t("btn.back"), "wallet"), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.custom_amount", "wcustom")).Row(r.button("btn.back", "wallet"), r.button("btn.home", "home"))
 	r.show(r.t("wallet.choose_amount"), kb)
 }
 
@@ -198,13 +198,13 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	n := nonce()
 	var methods []tg.Button
 	if h.cardEnabled("IRT") {
-		methods = append(methods, tg.CB(r.t("btn.pay_card"), fmt.Sprintf("wpay:c:%d:%s", amount, n)))
+		methods = append(methods, r.button("btn.pay_card", fmt.Sprintf("wpay:c:%d:%s", amount, n)))
 	}
 	if h.cryptoEnabled("IRT") {
-		methods = append(methods, tg.CB(r.t("btn.pay_crypto"), fmt.Sprintf("wpay:x:%d:%s", amount, n)))
+		methods = append(methods, r.button("btn.pay_crypto", fmt.Sprintf("wpay:x:%d:%s", amount, n)))
 	}
 	if h.zarinpalLinkEnabled("IRT") {
-		methods = append(methods, tg.CB(r.t("btn.pay_zarinpal_link"), fmt.Sprintf("wpay:l:%d:%s", amount, n)))
+		methods = append(methods, r.button("btn.pay_zarinpal_link", fmt.Sprintf("wpay:l:%d:%s", amount, n)))
 	}
 	gw := h.gatewayButtons(r, "IRT", amount, "wpay", fmt.Sprint(amount), n)
 	if len(methods) == 0 && len(gw) == 0 {
@@ -214,7 +214,7 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	kb := &tg.Keyboard{}
 	rows(kb, gw, 2)
 	kb.Row(methods...)
-	kb.Row(tg.CB(r.t("btn.back"), "wtop"), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", "wtop"), r.button("btn.home", "home"))
 	r.show(r.t("wallet.choose_method", "amount", r.money(amount, "IRT")), kb)
 }
 
@@ -327,10 +327,10 @@ func (h *Handler) onTrial(r *req) {
 func (h *Handler) legalButtons(r *req) []tg.Button {
 	var out []tg.Button
 	if u := h.setting("branding.terms_url"); httpsURL(u) {
-		out = append(out, tg.Link(r.t("btn.terms"), u))
+		out = append(out, r.linkButton("btn.terms", u))
 	}
 	if u := h.setting("branding.privacy_url"); httpsURL(u) {
-		out = append(out, tg.Link(r.t("btn.privacy"), u))
+		out = append(out, r.linkButton("btn.privacy", u))
 	}
 	return out
 }
@@ -342,5 +342,5 @@ func (h *Handler) onTerms(r *req) {
 		r.send(r.t("terms.none"), homeKeyboard(r))
 		return
 	}
-	r.send(r.t("terms.title"), (&tg.Keyboard{}).Row(links...).Row(tg.CB(r.t("btn.home"), "home")))
+	r.send(r.t("terms.title"), (&tg.Keyboard{}).Row(links...).Row(r.button("btn.home", "home")))
 }

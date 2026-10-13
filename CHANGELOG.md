@@ -11,6 +11,8 @@ pull requests #13 to #41. Everything below is new in this release.
 
 ### Bot
 - Persian and English. Customers pick a language on their first `/start` and can change it.
+- A bottom menu with the main actions stays under the chat, beside the inline menus. Buttons are colored by what
+  they do: green to pay or confirm, blue for the main actions, red to cancel or refuse.
 - Buy a plan: traffic-limited, time-only or both. An optional discount code, then a payment method, then the service
   arrives with its subscription link and a QR code.
 - My services: status, expiry, traffic used with a bar, the link and the QR code. Renew with any plan (days and

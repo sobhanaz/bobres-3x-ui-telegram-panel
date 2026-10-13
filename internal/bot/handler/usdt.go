@@ -50,7 +50,7 @@ func (h *Handler) showUSDT(r *req, in *corev1.PaymentIntentRef) {
 		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey("expired"))), retryKeyboard(r))
 		return
 	}
-	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.check_payment"), "chk:"+in.GetId())).Row(tg.CB(r.t("btn.home"), "home"))
+	kb := (&tg.Keyboard{}).Row(r.button("btn.check_payment", "chk:"+in.GetId())).Row(r.button("btn.home", "home"))
 	r.show(r.t("pay.usdt_auto",
 		"amount", i18n.Exact(exact.GetAmount(), "USDT"), "address", addr,
 		"price", r.money(in.GetAmount().GetAmount(), in.GetAmount().GetCurrency()),
@@ -68,7 +68,7 @@ func paidText(r *req, in *corev1.PaymentIntentRef) string {
 
 // retryKeyboard follows a payment that is over: buy again, or home.
 func retryKeyboard(r *req) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(r.t("btn.buy"), "buy"), tg.CB(r.t("btn.home"), "home"))
+	return (&tg.Keyboard{}).Row(r.button("btn.buy", "buy"), r.button("btn.home", "home"))
 }
 
 // rows lays buttons out at most n to a row (long labels stay readable on a

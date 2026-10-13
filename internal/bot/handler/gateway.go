@@ -56,11 +56,11 @@ func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, ta
 	for _, m := range h.gatewayMethods(r.ctx, currency, amount) {
 		switch m {
 		case "zarinpal":
-			out = append(out, tg.CB(r.t("btn.pay_zarinpal"), verb+":z"+suffix))
+			out = append(out, r.button("btn.pay_zarinpal", verb+":z"+suffix))
 		case "stars":
-			out = append(out, tg.CB(r.t("btn.pay_stars"), verb+":s"+suffix))
+			out = append(out, r.button("btn.pay_stars", verb+":s"+suffix))
 		case usdtAuto:
-			out = append(out, tg.CB(r.t("btn.pay_usdt_auto"), verb+":u"+suffix))
+			out = append(out, r.button("btn.pay_usdt_auto", verb+":u"+suffix))
 		}
 	}
 	return out
@@ -111,9 +111,9 @@ func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key
 			r.show(r.t("pay.not_configured"), homeKeyboard(r))
 			return
 		}
-		kb := (&tg.Keyboard{}).Row(tg.Link(r.t("btn.open_payment"), intent.GetPayUrl())).
-			Row(tg.CB(r.t("btn.check_payment"), "chk:"+intent.GetId())).
-			Row(tg.CB(r.t("btn.home"), "home"))
+		kb := (&tg.Keyboard{}).Row(r.linkButton("btn.open_payment", intent.GetPayUrl())).
+			Row(r.button("btn.check_payment", "chk:"+intent.GetId())).
+			Row(r.button("btn.home", "home"))
 		r.show(r.t("pay.zarinpal", "amount", amount), kb)
 	case "stars":
 		stars := intent.GetGatewayAmount().GetAmount()

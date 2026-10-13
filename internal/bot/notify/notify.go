@@ -153,7 +153,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if e.TrafficBytes > 0 {
 			traffic = i18n.Bytes(lang, e.TrafficBytes)
 		}
-		kb := (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.services"), "sub:"+e.SubscriptionID))
+		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.services", "sub:"+e.SubscriptionID))
 		if err := n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, n.cat.T(lang, "sub.ready",
 			"link", html.EscapeString(e.SubscriptionLink), "expires", expires, "traffic", traffic)), kb); err != nil {
 			return err
@@ -167,7 +167,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		lang := n.lang(ctx, e.TelegramID)
-		kb := (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.try_again"), "buy"), tg.CB(n.cat.T(lang, "btn.home"), "home"))
+		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.try_again", "buy"), n.button(lang, "btn.home", "home"))
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, "pay.rejected",
 			"amount", i18n.Money(lang, e.Amount, e.Currency), "reason", n.reason(lang, e.Reason)), kb)
 
@@ -200,7 +200,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		lang := n.lang(ctx, e.TelegramID)
-		kb := (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.view_service"), "sub:"+e.SubscriptionID))
+		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.view_service", "sub:"+e.SubscriptionID))
 		key := "sub.renewed"
 		if e.Type == "traffic_topup" {
 			key = "sub.topped_up"
@@ -214,11 +214,11 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		lang := n.lang(ctx, e.TelegramID)
-		row := []tg.Button{tg.CB(n.cat.T(lang, "btn.renew"), "rnw:"+e.SubscriptionID)}
+		row := []tg.Button{n.button(lang, "btn.renew", "rnw:"+e.SubscriptionID)}
 		if e.TopupAvailable && (e.Kind == events.ReminderLowTraffic || e.Kind == events.ReminderDepleted) {
-			row = append(row, tg.CB(n.cat.T(lang, "btn.add_traffic"), "tup:"+e.SubscriptionID))
+			row = append(row, n.button(lang, "btn.add_traffic", "tup:"+e.SubscriptionID))
 		}
-		kb := (&tg.Keyboard{}).Row(row...).Row(tg.CB(n.cat.T(lang, "btn.view_service"), "sub:"+e.SubscriptionID))
+		kb := (&tg.Keyboard{}).Row(row...).Row(n.button(lang, "btn.view_service", "sub:"+e.SubscriptionID))
 		var text string
 		switch e.Kind {
 		case events.ReminderExpiring:
@@ -409,9 +409,9 @@ func (n *Notifier) unmatchedDeposit(lang string, e events.DepositUnmatchedEvent)
 		"part", part, "reason", reason)
 	kb := &tg.Keyboard{}
 	if txidRe.MatchString(txid) {
-		kb.Row(tg.Link(n.cat.T(lang, "btn.tronscan"), "https://tronscan.org/#/transaction/"+txid))
+		kb.Row(n.linkButton(lang, "btn.tronscan", "https://tronscan.org/#/transaction/"+txid))
 	}
-	kb.Row(tg.CB(n.cat.T(lang, "btn.dashboard"), "dash"))
+	kb.Row(n.button(lang, "btn.dashboard", "dash"))
 	return text, kb
 }
 
@@ -433,12 +433,12 @@ func (n *Notifier) claimedDeposit(lang string, e events.DepositClaimedEvent) (st
 		"ref", html.EscapeString(paymentReference(e.IntentID)))
 	kb := &tg.Keyboard{}
 	if txidRe.MatchString(txid) {
-		kb.Row(tg.Link(n.cat.T(lang, "btn.tronscan"), "https://tronscan.org/#/transaction/"+txid))
+		kb.Row(n.linkButton(lang, "btn.tronscan", "https://tronscan.org/#/transaction/"+txid))
 	}
 	if e.Proof == "waiting" {
-		kb.Row(tg.CB(n.cat.T(lang, "btn.review_now"), "adm:pend"))
+		kb.Row(n.button(lang, "btn.review_now", "adm:pend"))
 	} else {
-		kb.Row(tg.CB(n.cat.T(lang, "btn.dashboard"), "dash"))
+		kb.Row(n.button(lang, "btn.dashboard", "dash"))
 	}
 	return text, kb
 }
@@ -504,7 +504,7 @@ func (n *Notifier) ticketAlert(ctx context.Context, messageID string, customer, 
 	return n.alertTo(ctx, to, customer, func(lang string) (string, *tg.Keyboard) {
 		var kb *tg.Keyboard
 		if u := v.GetUrl(); strings.HasPrefix(u, "https://") {
-			kb = (&tg.Keyboard{}).Row(tg.Link(n.cat.T(lang, "btn.ticket_open"), u))
+			kb = (&tg.Keyboard{}).Row(n.linkButton(lang, "btn.ticket_open", u))
 		}
 		args := []any{"user", html.EscapeString(user), "id", v.GetTicketNumber(), "text", preview}
 		if key == "admin.ticket_opened" {
@@ -560,8 +560,8 @@ func (n *Notifier) deliverReply(ctx context.Context, e events.TicketRepliedEvent
 		kb = n.supportButton(lang)
 	} else {
 		text = n.cat.T(lang, "support.reply", "id", v.GetTicketNumber(), "text", body)
-		kb = (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.ticket_reply"), "tk:r:"+v.GetTicketId()),
-			tg.CB(n.cat.T(lang, "btn.ticket_close"), "tk:c:"+v.GetTicketId()))
+		kb = (&tg.Keyboard{}).Row(n.button(lang, "btn.ticket_reply", "tk:r:"+v.GetTicketId()),
+			n.button(lang, "btn.ticket_close", "tk:c:"+v.GetTicketId()))
 	}
 	msg, err := n.tg.SendMessage(ctx, v.GetTelegramId(), text, kb)
 	if tg.IsBlocked(err) {
@@ -594,7 +594,7 @@ func (n *Notifier) deliverReply(ctx context.Context, e events.TicketRepliedEvent
 // supportButton opens the Support screen as a new message (the one it is
 // under stays as it is).
 func (n *Notifier) supportButton(lang string) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.support"), "support:m"))
+	return (&tg.Keyboard{}).Row(n.button(lang, "btn.support", "support:m"))
 }
 
 // DeadLetter is the bot's dead-letter sink (an eventbus.DeadLetterFunc): it
@@ -693,7 +693,22 @@ func (n *Notifier) labelled(lang, label, text string) string {
 }
 
 func (n *Notifier) home(lang string) *tg.Keyboard {
-	return (&tg.Keyboard{}).Row(tg.CB(n.cat.T(lang, "btn.home"), "home"))
+	return (&tg.Keyboard{}).Row(n.button(lang, "btn.home", "home"))
+}
+
+// button is a callback button labelled with key's text in lang, in the color
+// of what it does (i18n.ButtonStyle), as on the bot's own screens.
+func (n *Notifier) button(lang, key, data string) tg.Button {
+	b := tg.CB(n.cat.T(lang, key), data)
+	b.Style = i18n.ButtonStyle(key)
+	return b
+}
+
+// linkButton is a URL button labelled with key's text, colored the same way.
+func (n *Notifier) linkButton(lang, key, url string) tg.Button {
+	b := tg.Link(n.cat.T(lang, key), url)
+	b.Style = i18n.ButtonStyle(key)
+	return b
 }
 
 // gatewayReasons are the failure reasons automated gateways report.

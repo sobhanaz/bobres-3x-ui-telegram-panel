@@ -350,5 +350,7 @@
   "profile.cmd.terms": "Terms of service and privacy",
   "profile.cmd.paysupport": "Help with a payment",
   "profile.cmd.admin": "Admin panel",
-  "profile.cmd.dashboard": "Log in to the web dashboard"
+  "profile.cmd.dashboard": "Log in to the web dashboard",
+  "menu.keyboard": "👇 Use the menu below.",
+  "menu.placeholder": "Choose from the menu"
 }

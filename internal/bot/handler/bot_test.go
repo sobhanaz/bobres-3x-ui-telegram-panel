@@ -31,6 +31,7 @@ type msg struct {
 	id       int
 	text     string
 	kb       *tg.Keyboard
+	menu     *tg.Menu // the bottom menu it brought (SendMenu)
 	photo    bool
 	document bool
 	fileID   string
@@ -136,19 +137,34 @@ func (f *fakeTG) add(chat int64, m *msg) *tg.Message {
 }
 
 func (f *fakeTG) SendMessage(_ context.Context, chat int64, text string, kb *tg.Keyboard) (*tg.Message, error) {
+	if err := f.refuse(chat, text); err != nil {
+		return nil, err
+	}
+	return f.add(chat, &msg{text: text, kb: kb}), nil
+}
+
+func (f *fakeTG) SendMenu(_ context.Context, chat int64, text string, m *tg.Menu) (*tg.Message, error) {
+	if err := f.refuse(chat, text); err != nil {
+		return nil, err
+	}
+	return f.add(chat, &msg{text: text, menu: m}), nil
+}
+
+// refuse is what Telegram answers a new message to chat with, if not ok.
+func (f *fakeTG) refuse(chat int64, text string) error {
 	f.mu.Lock()
 	down, blocked := f.down[chat], f.blocked[chat]
 	f.mu.Unlock()
 	if down {
-		return nil, &tg.APIError{Code: 502, Description: "Bad Gateway"}
+		return &tg.APIError{Code: 502, Description: "Bad Gateway"}
 	}
 	if blocked {
-		return nil, &tg.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"}
+		return &tg.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"}
 	}
 	if i18n.TextLength(text) > i18n.MaxMessage { // as Telegram
-		return nil, &tg.APIError{Code: 400, Description: "Bad Request: message is too long"}
+		return &tg.APIError{Code: 400, Description: "Bad Request: message is too long"}
 	}
-	return f.add(chat, &msg{text: text, kb: kb}), nil
+	return nil
 }
 
 // setBlocked makes a user block the bot (or unblock it).

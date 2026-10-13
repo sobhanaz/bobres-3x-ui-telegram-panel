@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -70,6 +71,19 @@ func exercise(t *testing.T, s Store) {
 	if _, ok, _ := s.LoadCheckout(ctx, 2, n); ok {
 		t.Fatal("another user read the checkout")
 	}
+	if m, err := s.LoadMenu(ctx, 1); m.Sig != "" || m.Labels != nil || err != nil {
+		t.Fatalf("no menu yet: %+v %v", m, err)
+	}
+	menu := SentMenu{Sig: "3f2a9c", Labels: map[string]string{"🛒 Buy": "buy", "👛 کیف پول": "wallet"}}
+	if err := s.SaveMenu(ctx, 1, menu); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := s.LoadMenu(ctx, 1); !reflect.DeepEqual(m, menu) || err != nil {
+		t.Fatalf("menu round trip: %+v %v", m, err)
+	}
+	if m, _ := s.LoadMenu(ctx, 2); m.Sig != "" {
+		t.Fatal("another user has the menu")
+	}
 }
 
 func TestMemory(t *testing.T) { exercise(t, NewMemory()) }
@@ -84,6 +98,26 @@ func TestRedis(t *testing.T) {
 		}
 		t.Skipf("redis unavailable: %v", err)
 	}
-	t.Cleanup(func() { _ = rdb.Del(context.Background(), key(1), key(2)).Err(); _ = rdb.Close() })
+	t.Cleanup(func() {
+		_ = rdb.Del(context.Background(), key(1), key(2), menuKey(1), menuKey(2)).Err()
+		_ = rdb.Close()
+	})
+	_ = rdb.Del(ctx, menuKey(1), menuKey(2)).Err()
 	exercise(t, NewRedis(rdb))
+
+	// The menu is remembered MenuTTL after the user's last update: reading it
+	// keeps it longer.
+	bg := context.Background()
+	_ = rdb.Expire(bg, menuKey(1), time.Minute).Err()
+	if m, err := NewRedis(rdb).LoadMenu(bg, 1); m.Sig == "" || err != nil {
+		t.Fatalf("menu: %+v %v", m, err)
+	}
+	if ttl := rdb.TTL(bg, menuKey(1)).Val(); ttl < MenuTTL-time.Minute {
+		t.Fatalf("menu kept %v after a read, want %v", ttl, MenuTTL)
+	}
+	// A record it cannot read is no menu: the user is sent one again.
+	_ = rdb.Set(bg, menuKey(2), "3f2a9c", time.Minute).Err()
+	if m, err := NewRedis(rdb).LoadMenu(bg, 2); m.Sig != "" || err != nil {
+		t.Fatalf("unreadable menu: %+v %v", m, err)
+	}
 }

@@ -75,7 +75,7 @@ sudo bobres status     # or ./bobres for the downloaded binary; plain `bobres` o
 
 ## 4. Check, in this order
 
-1. Message the bot `/start`, pick a language: the main menu appears.
+1. Message the bot `/start`, pick a language: the welcome comes with the bottom menu, then the main menu.
 2. As admin: `/plan_add 10000 IRT 1 1 Test 1GB | تست ۱ گیگ` and `/trial 1 1`.
 3. From a second Telegram account: take the free trial. The service message must arrive with a
    link and QR, and the client must appear in the panel (Clients page) on every enabled inbound.

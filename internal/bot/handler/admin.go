@@ -98,7 +98,7 @@ func (h *Handler) sendDashboardLink(r *req) {
 		r.send(r.t("admin.dashboard_unavailable"), nil)
 		return
 	}
-	r.send(r.t("admin.dashboard_link"), (&tg.Keyboard{}).Row(tg.Link(r.t("btn.open_dashboard"), link.GetUrl())))
+	r.send(r.t("admin.dashboard_link"), (&tg.Keyboard{}).Row(r.linkButton("btn.open_dashboard", link.GetUrl())))
 }
 
 func (h *Handler) showAdmin(r *req) {
@@ -112,10 +112,10 @@ func (h *Handler) showAdmin(r *req) {
 		pending = i18n.Number(r.lang, st.GetPendingPayments())
 	}
 	kb := (&tg.Keyboard{}).
-		Row(tg.CB(r.t("btn.adm_pending", "n", pending), "adm:pend")).
-		Row(tg.CB(r.t("btn.adm_find"), "adm:find"), tg.CB(r.t("btn.adm_plans"), "adm:plans")).
-		Row(tg.CB(r.t("btn.adm_settings"), "adm:set"), tg.CB(r.t("btn.adm_dashboard"), "adm:web")).
-		Row(tg.CB(r.t("btn.home"), "home"))
+		Row(r.button("btn.adm_pending", "adm:pend", "n", pending)).
+		Row(r.button("btn.adm_find", "adm:find"), r.button("btn.adm_plans", "adm:plans")).
+		Row(r.button("btn.adm_settings", "adm:set"), r.button("btn.adm_dashboard", "adm:web")).
+		Row(r.button("btn.home", "home"))
 	text := r.t("admin.title",
 		"users", i18n.Number(r.lang, st.GetUsersTotal()), "today", i18n.Number(r.lang, st.GetUsersToday()),
 		"active", i18n.Number(r.lang, st.GetActiveSubscriptions()), "pending", pending,
@@ -167,7 +167,7 @@ func (h *Handler) showPending(r *req) {
 		return
 	}
 	if len(resp.GetPayments()) == 0 {
-		r.send(r.t("admin.no_pending"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.back"), "adm")))
+		r.send(r.t("admin.no_pending"), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
 		return
 	}
 	p := resp.GetPayments()[0]
@@ -192,8 +192,8 @@ func (h *Handler) showPending(r *req) {
 		"user", esc(displayName(p.GetUser())), "amount", r.money(p.GetAmount().GetAmount(), p.GetAmount().GetCurrency()),
 		"method", method, "proof", proof, "when", i18n.Date(r.lang, time.Unix(p.GetSubmittedAt(), 0)), "dup", dup)
 	kb := (&tg.Keyboard{}).
-		Row(tg.CB(r.t("btn.approve"), "adm:ok:"+p.GetIntentId()), tg.CB(r.t("btn.reject"), "adm:no:"+p.GetIntentId())).
-		Row(tg.CB(r.t("btn.back"), "adm"))
+		Row(r.button("btn.approve", "adm:ok:"+p.GetIntentId()), r.button("btn.reject", "adm:no:"+p.GetIntentId())).
+		Row(r.button("btn.back", "adm"))
 	if f := p.GetReceiptFile(); f != "" {
 		if _, err := h.tg.SendPhoto(r.ctx, r.chatID, tg.Photo{FileID: f}, text, kb); err == nil {
 			return
@@ -209,10 +209,10 @@ func (h *Handler) showPending(r *req) {
 func (h *Handler) askRejectReason(r *req, intentID string) {
 	kb := &tg.Keyboard{}
 	for i, reason := range rejectReasons {
-		kb.Row(tg.CB(r.t("reason."+reason), fmt.Sprintf("adm:nr:%d:%s", i, intentID)))
+		kb.Row(r.button("reason."+reason, fmt.Sprintf("adm:nr:%d:%s", i, intentID)))
 	}
-	kb.Row(tg.CB(r.t("btn.reject_other"), "adm:nx:"+intentID))
-	kb.Row(tg.CB(r.t("btn.back"), "adm:pend"))
+	kb.Row(r.button("btn.reject_other", "adm:nx:"+intentID))
+	kb.Row(r.button("btn.back", "adm:pend"))
 	if r.cb != nil && r.cb.Message != nil {
 		if err := h.tg.EditMessageReplyMarkup(r.ctx, r.chatID, r.cb.Message.MessageID, kb); err == nil {
 			r.toast = r.t("admin.reject_reason")
@@ -287,7 +287,7 @@ func (h *Handler) showUserCard(r *req, telegramID int64) {
 	v, err := h.core.AdminFindUser(r.ctx, &corev1.AdminFindUserRequest{ActorTelegramId: h.actor(r), Query: strconv.FormatInt(telegramID, 10)})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			r.send(r.t("admin.not_found"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.back"), "adm")))
+			r.send(r.t("admin.not_found"), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
 			return
 		}
 		r.fail(err)
@@ -301,12 +301,12 @@ func (h *Handler) showUserCard(r *req, telegramID int64) {
 	if len(wallets) == 0 {
 		wallets = append(wallets, r.money(0, "IRT"))
 	}
-	statusBtn := tg.CB(r.t("btn.adm_ban"), "adm:ban:"+u.GetId())
+	statusBtn := r.button("btn.adm_ban", "adm:ban:"+u.GetId())
 	if u.GetStatus() == "banned" {
-		statusBtn = tg.CB(r.t("btn.adm_unban"), "adm:unban:"+u.GetId())
+		statusBtn = r.button("btn.adm_unban", "adm:unban:"+u.GetId())
 	}
-	kb := (&tg.Keyboard{}).Row(tg.CB(r.t("btn.adm_adjust"), "adm:adj:"+u.GetId()), statusBtn).
-		Row(tg.CB(r.t("btn.back"), "adm"))
+	kb := (&tg.Keyboard{}).Row(r.button("btn.adm_adjust", "adm:adj:"+u.GetId()), statusBtn).
+		Row(r.button("btn.back", "adm"))
 	r.show(r.t("admin.user_card", "name", esc(displayName(u)), "tg", u.GetTelegramId(), "role", u.GetRole(),
 		"status", u.GetStatus(), "lang", u.GetLanguage(), "wallets", strings.Join(wallets, " · "),
 		"subs", i18n.Number(r.lang, v.GetSubscriptions()), "orders", i18n.Number(r.lang, v.GetOrders())), kb)
@@ -324,7 +324,7 @@ func (h *Handler) onAdminScene(r *req, st state.State) {
 		r.clearState()
 		v, err := h.core.AdminFindUser(r.ctx, &corev1.AdminFindUserRequest{ActorTelegramId: h.actor(r), Query: text})
 		if status.Code(err) == codes.NotFound || status.Code(err) == codes.InvalidArgument {
-			r.send(r.t("admin.not_found"), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.adm_find"), "adm:find"), tg.CB(r.t("btn.back"), "adm")))
+			r.send(r.t("admin.not_found"), (&tg.Keyboard{}).Row(r.button("btn.adm_find", "adm:find"), r.button("btn.back", "adm")))
 			return
 		}
 		if err != nil {
@@ -350,7 +350,7 @@ func (h *Handler) onAdminScene(r *req, st state.State) {
 			r.fail(err)
 			return
 		}
-		r.send(r.t("admin.adjust_done", "balance", r.money(w.GetBalance(), w.GetCurrency())), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.back"), "adm")))
+		r.send(r.t("admin.adjust_done", "balance", r.money(w.GetBalance(), w.GetCurrency())), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
 	case sceneAdminReason:
 		if text == "" {
 			r.send(r.t("admin.reject_custom"), cancelKeyboard(r))
@@ -380,7 +380,7 @@ func (h *Handler) showAdminPlans(r *req) {
 		}
 		kb.Row(tg.CB(mark+" "+name+" · "+r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency()), "adm:pt:"+p.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.back"), "adm"))
+	kb.Row(r.button("btn.back", "adm"))
 	r.show(r.t("admin.plans_title"), kb)
 }
 
@@ -411,7 +411,7 @@ func (h *Handler) showSettings(r *req) {
 		}
 		lines = append(lines, r.t("admin.setting_line", "key", k, "value", v))
 	}
-	r.show(r.t("admin.settings_title", "list", strings.Join(lines, "\n")), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.back"), "adm")))
+	r.show(r.t("admin.settings_title", "list", strings.Join(lines, "\n")), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
 }
 
 func (h *Handler) onAdminCommand(r *req, cmd, args string) {
@@ -612,7 +612,7 @@ func (h *Handler) savePlan(r *req, p *corev1.Plan) {
 		r.fail(err)
 		return
 	}
-	r.send(r.t("admin.plan_saved", "name", esc(planName(r, saved))), (&tg.Keyboard{}).Row(tg.CB(r.t("btn.adm_plans"), "adm:plans")))
+	r.send(r.t("admin.plan_saved", "name", esc(planName(r, saved))), (&tg.Keyboard{}).Row(r.button("btn.adm_plans", "adm:plans")))
 }
 
 // onTrialCommand: "/trial <days> <GB>" sets up the free trial plan, "/trial

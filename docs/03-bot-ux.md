@@ -6,6 +6,16 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Principles
 - One primary action per screen; max 2 taps to the common goals.
 - Inline keyboards edit the same message (no chat spam). Always a Back and a Home button.
+- A bottom menu (a persistent reply keyboard) holds the main actions: Buy, My services, Wallet, Free trial,
+  Support, then Invite friends (only when referrals are on; resellers get the Reseller panel instead) beside
+  Language; owners and admins also get Admin panel and Dashboard, support staff only Dashboard. A tap does what
+  the same inline button does. It comes with the welcome, after a language change and with `/menu`, and again
+  ahead of the next answer whenever it changed (role, language, an edited label). A tap is never taken as the
+  answer to an open question (a bank reference, a service name), and the gates treat it as any message.
+- Buttons are colored by what they do, the same on every keyboard: green pays or confirms, blue opens a main
+  action, red cancels or refuses (Telegram has these three colors). Link buttons too: the payment link is
+  green, sharing an invite link and joining the channel are blue. Navigation, lists and links to read (terms,
+  a transaction, the dashboard) keep the app's look.
 - Every error tells what happened and what to do next. No raw exceptions.
 - Language chosen on first /start, changeable in Settings.
 - Rate limit per user; ignore duplicate taps (callback idempotency).

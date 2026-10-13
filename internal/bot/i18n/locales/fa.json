@@ -350,5 +350,7 @@
   "profile.cmd.terms": "قوانین و حریم خصوصی",
   "profile.cmd.paysupport": "کمک برای پرداخت",
   "profile.cmd.admin": "پنل مدیریت",
-  "profile.cmd.dashboard": "ورود به داشبورد وب"
+  "profile.cmd.dashboard": "ورود به داشبورد وب",
+  "menu.keyboard": "👇 از منوی پایین استفاده کنید.",
+  "menu.placeholder": "از منو انتخاب کنید"
 }

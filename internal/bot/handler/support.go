@@ -59,9 +59,9 @@ func (h *Handler) onSupport(r *req) {
 		}
 		r.setState(sceneTicket, map[string]string{"tid": t.GetId()})
 		kb := (&tg.Keyboard{}).
-			Row(tg.CB(r.t("btn.ticket_more"), "tk:r:"+t.GetId()), tg.CB(r.t("btn.ticket_close"), "tk:c:"+t.GetId())).
-			Row(tg.CB(r.t("btn.ticket_history"), "tk:l")).
-			Row(tg.CB(r.t("btn.home"), "home"))
+			Row(r.button("btn.ticket_more", "tk:r:"+t.GetId()), r.button("btn.ticket_close", "tk:c:"+t.GetId())).
+			Row(r.button("btn.ticket_history", "tk:l")).
+			Row(r.button("btn.home", "home"))
 		r.show(h.threadText(r, th), kb)
 		return
 	}
@@ -85,8 +85,8 @@ func (h *Handler) showSupportPrompt(r *req, cat string) {
 		cats = append(cats, tg.CB(label, "tk:n:"+c))
 	}
 	kb := (&tg.Keyboard{}).Row(cats...).Row(h.legalButtons(r)...).
-		Row(tg.CB(r.t("btn.ticket_history"), "tk:l")).
-		Row(tg.CB(r.t("btn.cancel"), "cancel"))
+		Row(r.button("btn.ticket_history", "tk:l")).
+		Row(r.button("btn.cancel", "cancel"))
 	r.show(r.t("support.prompt", "contact", contact), kb)
 }
 
@@ -176,7 +176,7 @@ func (h *Handler) showTicketHistory(r *req) {
 			r.t("support.status."+t.GetStatus()))
 		kb.Row(tg.CB(label, "tk:v:"+t.GetId()))
 	}
-	kb.Row(tg.CB(r.t("btn.back"), "support"), tg.CB(r.t("btn.home"), "home"))
+	kb.Row(r.button("btn.back", "support"), r.button("btn.home", "home"))
 	r.show(r.t("support.history"), kb)
 }
 
