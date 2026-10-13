@@ -10,9 +10,11 @@ import _ "embed"
 //go:embed docker-compose.yml
 var ComposeFile []byte
 
-// Caddyfile is the gateway configuration.
+// Caddyfile is the gateway's main configuration, caddy/Caddyfile in an
+// install. It is static: the HTTPS files it imports (tls/global.caddy and
+// tls/sites.caddy) are rendered by internal/tlsconf.
 //
-//go:embed Caddyfile
+//go:embed caddy/Caddyfile
 var Caddyfile []byte
 
 // PostgresInit creates one role and one schema per service.

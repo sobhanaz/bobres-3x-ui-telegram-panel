@@ -210,7 +210,7 @@ func (r *rotator) rotateBotToken(ctx context.Context, dir string, env map[string
 }
 
 func (r *rotator) rotateServiceTokens(ctx context.Context, dir string, env map[string]string, yes bool) int {
-	services := appServices(env)
+	services := dataServices(dir, env)
 	if !yes && !r.confirm(fmt.Sprintf("Rotate the service tokens? %s restart together with the new ones (seconds). [y/N]: ",
 		strings.Join(services, ", "))) {
 		fmt.Fprintln(r.out, "Cancelled. Nothing was changed.")
@@ -338,7 +338,7 @@ func (r *rotator) rotate(ctx context.Context, dir string, env map[string]string,
 		return 1
 	}
 	fmt.Fprintf(r.out, "New %s saved in %s.\n", rot.what, envPath)
-	services := installedOnly(rot.services, next)
+	services := installedOnly(dir, rot.services, next)
 	switch {
 	case len(services) == 0:
 		_ = os.Remove(copyPath)

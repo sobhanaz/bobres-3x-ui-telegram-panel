@@ -58,7 +58,7 @@ func TestComposeGivesEachPeerItsOwnCoreToken(t *testing.T) {
 		}
 		seen[tok] = peer
 	}
-	all := []string{"caddy", "postgres", "redis", "core", "bot", "payments", "provisioner", "backup"}
+	all := []string{"caddy", "tls-agent", "postgres", "redis", "core", "bot", "payments", "provisioner", "backup"}
 	for peer, tok := range accepts {
 		for _, svc := range all {
 			if svc == "core" || svc == peer {

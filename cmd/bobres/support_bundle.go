@@ -40,7 +40,7 @@ const (
 // files under /proc and /etc, disk sizes) are replaceable in tests.
 type bundler struct {
 	*ops
-	doctor   func(domain string, offline bool) []Result
+	doctor   func(dir, domain string, offline bool) []Result
 	readFile func(path string) ([]byte, error)
 	// disk reports a file system's size and free space in GB (ok false when
 	// unknown).
@@ -86,7 +86,7 @@ func (b *bundler) supportBundleCmd(args []string) int {
 	c.add("versions.txt", c.versions(env))
 	c.add("compose-ps.txt", c.docker("docker compose ps", composeArgs("ps", "--all")...))
 	c.add("doctor.txt", c.doctorText(env, *offline))
-	for _, s := range allServices(env) {
+	for _, s := range allServices(*dir, env) {
 		c.add("logs/"+s+".log", c.logs(s))
 	}
 	c.add("env-keys.txt", c.envKeys(env))
@@ -173,7 +173,7 @@ func (c *collector) doctorText(env map[string]string, offline bool) string {
 	var w strings.Builder
 	w.WriteString("bobres doctor on this server. On a running install Caddy holds ports 80 and 443,\n" +
 		"so those two checks fail here: that is expected.\n\n")
-	results := c.b.doctor(env["BOBRES_DOMAIN"], offline)
+	results := c.b.doctor(c.dir, env["BOBRES_DOMAIN"], offline)
 	for _, r := range results {
 		fmt.Fprintf(&w, "%-5s %-18s %s\n", r.Status, r.Name, r.Detail)
 	}
@@ -477,6 +477,10 @@ var (
 	textPairRe = regexp.MustCompile(`\b(` + secretKeyRe + `)=(\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[^\s"'&,;]*)`)
 	// urlCredsRe is internal/logging's urlCreds: scheme://user:pass@.
 	urlCredsRe = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@:]*:?[^\s/@]*@`)
+	// A PEM block, a certificate or a key: the HTTPS files (tls/) and an own
+	// certificate's key are never read into the bundle, and a block that
+	// reached a log is dropped whole, whatever it holds.
+	pemBlockRe = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]+-----.*?-----END [A-Z0-9 ]+-----`)
 	// A Telegram bot token: the bot's id, a colon and 35 characters.
 	botTokenShapeRe = regexp.MustCompile(`\d{5,15}:[A-Za-z0-9_-]{30,64}`)
 	bearerRe        = regexp.MustCompile(`(?i)\b(bearer|basic)(\s+)[A-Za-z0-9\-._~+/]{8,}=*`)
@@ -541,6 +545,7 @@ func newRedactor(env map[string]string) *redactor {
 }
 
 func (r *redactor) text(s string) string {
+	s = pemBlockRe.ReplaceAllString(s, redacted)
 	lines := strings.Split(s, "\n")
 	for i, l := range lines {
 		lines[i] = r.line(l)

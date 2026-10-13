@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -24,7 +25,6 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/syshealth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/web"
-	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
@@ -40,6 +40,13 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "license" {
 		os.Exit(licenseCmd(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "ssl" {
+		os.Exit(sslCmd(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
+	// The tls-agent is its own compose service from this image.
+	if len(os.Args) > 1 && os.Args[1] == "tls-agent" {
+		os.Exit(tlsAgentCmd(os.Args[2:], os.Stderr))
+	}
 	os.Exit(app.Run("core", os.Args[1:], setup))
 }
 
@@ -52,8 +59,9 @@ func loginLink(args []string) int {
 		fmt.Fprintln(os.Stderr, "load core config:", err)
 		return 1
 	}
+	noAddress := "this install has no public domain (BOBRES_DOMAIN), so the dashboard has no address"
 	if cfg.PublicURL == "" {
-		fmt.Fprintln(os.Stderr, "this install has no public domain (BOBRES_DOMAIN), so the dashboard has no address")
+		fmt.Fprintln(os.Stderr, noAddress)
 		return 1
 	}
 	tg := cfg.AdminTelegramID
@@ -76,6 +84,13 @@ func loginLink(args []string) int {
 	if err := dom.EnsureOwner(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "owner role:", err)
 	}
+	// The address follows the HTTPS mode, as the bot's links do.
+	tlsMgr, _ := newTLS(cfg, dom, nil, slog.New(slog.DiscardHandler), 0)
+	origin := tlsMgr.PublicURL(ctx)
+	if origin == "" {
+		fmt.Fprintln(os.Stderr, noAddress)
+		return 1
+	}
 	token, exp, err := dom.CreateLoginLink(ctx, tg)
 	if errors.Is(err, domain.ErrForbidden) {
 		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member (the owner must have started the bot once)\n", tg)
@@ -85,7 +100,7 @@ func loginLink(args []string) int {
 		fmt.Fprintln(os.Stderr, "create link:", err)
 		return 1
 	}
-	fmt.Println(coreserver.DashboardLoginURL(cfg.PublicURL, token))
+	fmt.Println(coreserver.DashboardLoginURL(origin, token))
 	fmt.Fprintf(os.Stderr, "Works once, until %s.\n", exp.Local().Format("15:04:05"))
 	return 0
 }
@@ -110,8 +125,32 @@ func setup(rt *app.Runtime) error {
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)
 	}
+	// Core's master key seals the dashboard's authenticator secrets and the
+	// private key of the store's own HTTPS certificate.
+	secrets, err := masterKey(cfg)
+	if err != nil {
+		return fmt.Errorf("master key: %w", err)
+	}
+	if secrets == nil {
+		rt.Log.Warn("no master key: dashboard password logins and your own HTTPS certificate are off (login links from the bot still work)")
+	}
+
+	// HTTPS: core asks the tls-agent (its own service, the only one that
+	// writes Caddy's TLS files and reaches Caddy's admin socket) for the
+	// committed setting now, so Caddy, which starts after core is healthy,
+	// starts on current files. Nothing here can stop core from starting:
+	// what goes wrong shows on the System page and in the alerts.
+	tlsMgr, managed := newTLS(cfg, dom, secrets, rt.Log, 0)
+	if !managed {
+		rt.Log.Info("no tls-agent volume: the HTTPS setting is not managed here", "dir", cfg.TLSRequestDir)
+	}
+	tlsMgr.Start(rt.Ctx)
+	rt.Go("tls", tlsMgr.Run)
+
 	csrv := coreserver.New(st, dom)
-	csrv.SetPublicURL(cfg.PublicURL)
+	// Login and ticket links follow the HTTPS mode (the server's IP address
+	// once its certificate is trusted).
+	csrv.SetPublicURLFunc(tlsMgr.PublicURL)
 
 	payConn, err := grpcx.Dial(cfg.PaymentsGRPCAddr, cfg.ServiceToken)
 	if err != nil {
@@ -135,24 +174,17 @@ func setup(rt *app.Runtime) error {
 	csrv.SetProvisioner(prov)
 
 	// The dashboard (/admin) and its API (/api/v1), behind Caddy.
-	var secrets *bcrypto.Envelope
-	if cfg.MasterKey != "" {
-		if secrets, err = bcrypto.NewEnvelope([]byte(cfg.MasterKey)); err != nil {
-			return fmt.Errorf("master key: %w", err)
-		}
-	} else {
-		rt.Log.Warn("no master key: dashboard password logins are off (login links from the bot still work)")
-	}
 	var (
-		files  web.ReceiptFiles
-		bot    web.BotPeer
-		licSrv domain.LicenseServer
+		files    web.ReceiptFiles
+		bot      web.BotPeer
+		licSrv   domain.LicenseServer
+		publicIP web.PublicIPSource
 	)
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.BotInternalToken)
-		files, bot, licSrv = peer, peer, peer
+		files, bot, licSrv, publicIP = peer, peer, peer, peer
 		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
@@ -179,7 +211,7 @@ func setup(rt *app.Runtime) error {
 	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
 		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
-		LicenseServer: licSrv, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
 	// An activated license is renewed once a day through the bot (core has
 	// no internet access); a pasted or imported one is left alone.
 	if licSrv != nil {
@@ -196,10 +228,10 @@ func setup(rt *app.Runtime) error {
 	rt.Go("broadcasts", dom.NewBroadcastWorker(rt.Log).Run)
 	// System alerts: every minute the watchdog checks the services, the 3x-ui
 	// servers, Zarinpal, backups and the disk (backups is nil when the backup
-	// service is not installed), deliveries, the bot's event feed and the
-	// license; the bot tells the staff when one goes wrong and when it is
-	// fixed (system.alert.v1).
-	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups}
+	// service is not installed), deliveries, the bot's event feed, the
+	// license and the HTTPS certificates; the bot tells the staff when one
+	// goes wrong and when it is fixed (system.alert.v1).
+	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups, TLS: tlsMgr}
 	rt.Go("watchdog", dom.NewWatchdog(watch, rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core

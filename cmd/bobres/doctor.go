@@ -7,9 +7,15 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
+	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsconf"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsprobe"
 )
 
 // Status is the outcome of one doctor check.
@@ -183,12 +189,101 @@ func resolveHost(domain string) []string {
 	return ips
 }
 
-// doctorResults is what bobres doctor reports: the server checks, then the
-// hardening state (bobres harden).
-func doctorResults(domain string, offline bool) []Result {
+// doctorResults is what bobres doctor reports: the server checks, the HTTPS
+// certificate each served address gets (the install in dir), then the
+// hardening state (bobres harden). The installer's preflight (runDoctor)
+// has no TLS line: before an install there is nothing to look at.
+func doctorResults(dir, domain string, offline bool) []Result {
 	h := newHardener(strings.NewReader(""), io.Discard, io.Discard)
 	rs := ownGateway(runDoctor(domain, offline), caddyRunning())
+	rs = append(rs, hostTLSResults(context.Background(), newOps(strings.NewReader(""), io.Discard, io.Discard), dir, domain)...)
 	return append(rs, h.report(context.Background())...)
+}
+
+// hostTLSResults looks at the install in dir: the state of its gateway, and
+// when that runs, the addresses it serves (core's list, else .env's and the
+// domain given) read through this host's port 443. An install without the
+// HTTPS manager (tlsAgentOn: its images have no `ssl` command to ask) gets one
+// Skip line, and nothing is run in its containers.
+func hostTLSResults(ctx context.Context, o *ops, dir, domain string) []Result {
+	state := caddyState
+	if o.gatewayState != nil {
+		state = func() string { return o.gatewayState(ctx) }
+	}
+	now := time.Now()
+	if o.now != nil {
+		now = o.now()
+	}
+	d := tlsDoctor{state: state(), probe: o.probeLocal, now: now}
+	if d.state == "running" {
+		env, _, _ := readEnv(filepath.Join(dir, ".env")) // unreadable for a user who is not root: only the domain is known then
+		if !tlsAgentOn(dir, env) {
+			d.noManager = "HTTPS manager not installed yet (release " + orDash(env["BOBRES_VERSION"]) + "): run `sudo bobres update`"
+			return d.results(ctx)
+		}
+		d.addrs = o.servedAddresses(ctx, dir, env)
+		if domain = strings.TrimSpace(domain); domain != "" && !slices.ContainsFunc(d.addrs, func(a served) bool { return a.Role == tlsconf.RoleDomain }) {
+			d.addrs = append([]served{{domain, tlsconf.RoleDomain}}, d.addrs...)
+		}
+	}
+	return d.results(ctx)
+}
+
+// tlsDoctor is doctor's HTTPS check, with what it looks at given.
+type tlsDoctor struct {
+	// state is the gateway container's state ("running", "restarting",
+	// "exited"...; "" when there is none).
+	state string
+	// noManager, when set, says why there is no HTTPS manager to ask about the
+	// addresses (the install predates it).
+	noManager string
+	addrs     []served
+	probe     func(ctx context.Context, address string) tlsprobe.Result
+	now       time.Time
+}
+
+// results is one line per served address (the domain's is plain "TLS"), or one
+// line for the gateway: Skip when it is not running (nothing to look at), Fail
+// when it keeps restarting (a crash loop is a broken store, not a stopped one).
+func (d tlsDoctor) results(ctx context.Context) []Result {
+	switch {
+	case d.state == "restarting":
+		return []Result{{"TLS", Fail, "the gateway (Caddy) keeps restarting, so HTTPS is down: bobres logs caddy"}}
+	case d.state != "running":
+		return []Result{{"TLS", Skip, "the gateway (Caddy) is not running"}}
+	case d.noManager != "":
+		return []Result{{"TLS", Skip, d.noManager}}
+	case len(d.addrs) == 0:
+		return []Result{{"TLS", Skip, "no domain known (give --domain, or run it as root on the install)"}}
+	}
+	var rs []Result
+	for _, a := range d.addrs {
+		name := "TLS"
+		if a.Role != tlsconf.RoleDomain {
+			name += " " + a.Role
+		}
+		st, detail := tlsVerdict(d.probe(ctx, a.Host), a.Host, d.now)
+		rs = append(rs, Result{name, st, a.Host + ": " + detail})
+	}
+	return rs
+}
+
+// caddyState is the state of the install's gateway container ("" when there
+// is none, or Docker does not answer).
+func caddyState() string {
+	out, err := exec.Command("docker", "ps", "-a", "--filter", "label=com.docker.compose.project=bobres", //nolint:gosec // fixed command
+		"--filter", "label=com.docker.compose.service=caddy", "--format", "{{.State}}").Output()
+	return gatewayStateOf(out, err)
+}
+
+// gatewayStateOf reads the state out of `docker ps --format {{.State}}`: its
+// first line ("" for no container or an error).
+func gatewayStateOf(out []byte, err error) string {
+	if err != nil {
+		return ""
+	}
+	state, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	return strings.TrimSpace(state)
 }
 
 // ownGateway passes a busy port 80 or 443 when this server's BOBRES gateway

@@ -95,9 +95,51 @@ A health loop checks every enabled server each 60 s and reads the panel version 
 - `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`.
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".
+  P8 adds the HTTPS manager's `/api/v1/system/tls` (below).
+
+## HTTPS manager (P8)
+Core never writes Caddy's files or reaches its admin socket. It asks the `tls-agent` (no network) through two small
+named volumes, and the agent answers through the second one (07-security.md, "HTTPS manager"):
+
+| Volume | core | tls-agent | File |
+|---|---|---|---|
+| `tls_request` | `/request` read-write | `/request` read-only | `tls.json`: `{generation, mode, ip, domain, zarinpal_host, cert_pem, key_pem}` |
+| `tls_result` | `/tls-result` read-only | `/result` read-write | `result.json`: `{generation, ok, code, error, applied_at}` |
+
+- Both files are replaced atomically (a `.<name>.tmp` file, then a rename). The request is mode 0600 and holds the own
+  certificate's private key in clear while manual mode is on; it never goes into a log. The result is 0644 and holds no
+  secret.
+- `generation` is a new number for every request. The agent reads the request every 2 seconds, applies one whose
+  generation differs from the last it answered, and answers with the same number. It checks the request again, writes
+  Caddy's files, and forces Caddy to load its Caddyfile.
+- `code` is empty when `ok` is true, else `invalid` (refused, nothing written), `write_failed`, `caddy_refused` (`error`
+  holds Caddy's words; the previous files were put back), `caddy_unreachable` (Caddy did not answer; the files stay and
+  the agent tries the load again every round) or `agent_error`. Core waits up to 20 seconds for an answer, and commits
+  the setting only on `ok` (an automatic-mode request is also committed on `caddy_unreachable`).
+- `GET /api/v1/system/tls` (system.read) answers the saved setting, what core asks for now, the problem if the saved
+  setting is not in use, a live status of every served address (issuer, expiry, trusted, error) and the agent's last
+  result, the dashboard's public URL and the detected IP address. `PUT /api/v1/system/tls` (system.write, 10 a minute)
+  takes `{mode, ip, cert, key, confirm_ip}`; errors carry a `code` (400 `invalid`, 409 `confirm`, `state` or `refused`,
+  503 `unavailable`, which includes `busy`) that the dashboard translates. `POST /api/v1/system/tls/detect-ip` (system.write) asks the bot
+  for the public IP address. None of them ever answers a key.
+- Alerts (`system.alert.v1` keys): `tls.caddy` (`alert.tls_caddy_down`, critical: Caddy answered on none of the
+  addresses for 3 minutes), `tls.<role>.failing` (held 30 minutes) and `tls.<role>.expiring` (not held) for the domain,
+  ip and zarinpal addresses, and `tls.setting` (not held) and `tls.agent` (held 5 minutes), both with the title
+  `alert.tls_problem`. A check that is not held is raised once it is seen failing twice in a row, a minute apart. While
+  Caddy answers nowhere, the per-address checks are left as they were.
+- The agent answers `invalid` to a request for a domain or Zarinpal host other than its own `BOBRES_DOMAIN` and
+  `BOBRES_ZARINPAL_HOST` (the same values as core's, from compose), and to every request when it has no domain; core
+  shows it as `agent_failed`. The status of each address has `reachable` (Caddy answered the dial), and a core that
+  finds none reachable raises `tls.caddy`. A change that finds another one being applied answers 503 `busy` after 3
+  seconds. The bot's detection of the server's address renews every minute in ip mode and decides, with the
+  certificate, whether links use the IP address.
 
 Internal only (never routed by Caddy): the bot's `GET /internal/files/{id}` hands core the receipt
 photos customers sent (core's service token; images and PDFs, 10 MB at most).
+The bot's `GET /internal/public-ip` (core's service token) tells core this server's public IP address, because core has
+no internet access: the bot asks `https://api.ipify.org`, then `https://ifconfig.me/ip` (5 seconds each, no redirects,
+no proxy), accepts only a 200 answer of at most 64 bytes that is a public IP address, and answers `{"ip": "..."}`.
+Core's `POST /api/v1/system/tls/detect-ip` and the Detect button of the dashboard's HTTPS tab use it.
 
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.

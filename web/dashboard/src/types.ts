@@ -858,3 +858,82 @@ export interface LicenseInfo {
    * the license server since); null when none is installed */
   source?: string | null
 }
+
+/** A certificate as GET /system/tls describes it (times in unix seconds).
+ * Never a key. */
+export interface TlsCert {
+  subject: string
+  issuer: string
+  dns_names: string[]
+  ips: string[]
+  not_before: number
+  not_after: number
+}
+
+/** One address the store is served on, as it serves now. */
+export interface TlsAddress {
+  address: string
+  /** domain | ip | zarinpal */
+  role: string
+  /** the certificate it should serve: public | internal | manual */
+  expect: string
+  /** Caddy answered the dial, whatever it then served; false on every
+   * address means the gateway is down, stopped or restarting */
+  reachable: boolean
+  /** a certificate came back */
+  served: boolean
+  /** what this address should serve, and good now */
+  valid: boolean
+  name_ok: boolean
+  /** publicly trusted for the address; null when unknown */
+  trusted: boolean | null
+  /** less than min(14 days, a quarter of its life) left */
+  expiring: boolean
+  days_left: number
+  cert: TlsCert | null
+  /** why it is not good (English); '' when it is */
+  error: string
+}
+
+/** The tls-agent's state; null in the view when this install has none. */
+export interface TlsAgent {
+  generation: number
+  /** the agent answered the current request */
+  answered: boolean
+  ok: boolean
+  /** invalid | write_failed | caddy_refused | caddy_unreachable | agent_error */
+  code: string
+  error: string
+  applied_at: number | null
+}
+
+/** A code and the same in English. */
+export interface TlsNote {
+  code: string
+  message: string
+}
+
+/** GET /system/tls (system.read), and PUT's answer (which adds warnings and
+ * pending, and has no live addresses). */
+export interface TlsView {
+  state: {
+    mode: string
+    ip: string
+    cert: TlsCert | null
+    updated_at: number | null
+    domain: string
+    zarinpal_host: string
+    /** core has a master key, so a certificate of your own can be sealed */
+    manual_allowed: boolean
+  }
+  /** what core asks for: the saved setting, or auto when problem says it cannot be used; null: nothing can be served */
+  effective: { mode: string; ip: string } | null
+  problem: TlsNote | null
+  status: { checked_at: number | null; addresses: TlsAddress[]; agent: TlsAgent | null }
+  public_url: string
+  detected_ip: string | null
+  /** PUT only */
+  warnings?: TlsNote[]
+  /** PUT only: Caddy was not running; it loads the setting when it starts */
+  pending?: boolean
+}

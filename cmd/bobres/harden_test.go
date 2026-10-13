@@ -765,7 +765,7 @@ func TestHardenCmdUsage(t *testing.T) {
 // The install offers the hardening step after a good start, only where it
 // can ask: never with --yes (bobres update), --no-harden or from the menu.
 func TestInstallHardeningStep(t *testing.T) {
-	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
+	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
 	for _, c := range []struct {
 		name  string
 		extra []string

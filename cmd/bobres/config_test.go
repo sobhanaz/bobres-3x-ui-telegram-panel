@@ -32,6 +32,7 @@ func fullInstall(t *testing.T, backups bool) string {
 	if err := os.WriteFile(filepath.Join(dir, ".env"), renderEnv(env), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	writeInstalledCompose(t, dir)
 	return dir
 }
 
@@ -139,10 +140,11 @@ func TestConfigSet(t *testing.T) {
 			t.Fatalf("api url: %q", env["BOBRES_TELEGRAM_API_URL"])
 		}
 	}
-	// The domain: Caddy too, and the Zarinpal host follows.
+	// The domain: Caddy too, and the Zarinpal host follows. Core and the tls-agent both read the two
+	// names (the agent refuses a request for any other), so both are recreated.
 	f.steps = nil
 	if code := o.configCmd([]string{"set", "BOBRES_ZARINPAL_PUBLIC_URL", "https://pay.example.com", "--dir", dir}); code != 0 ||
-		strings.Join(f.steps, "|") != "up -d --no-deps caddy payments" {
+		strings.Join(f.steps, "|") != "up -d --no-deps caddy core payments tls-agent" {
 		t.Fatalf("zarinpal: %d %q", code, f.steps)
 	}
 	if env, _ := readEnvFile(t, dir); env["BOBRES_ZARINPAL_HOST"] != "pay.example.com" {
@@ -150,7 +152,8 @@ func TestConfigSet(t *testing.T) {
 	}
 	f.steps = nil
 	if code := o.configCmd([]string{"set", "BOBRES_DOMAIN", "Pay.Example.com", "--dir", dir}); code != 0 ||
-		strings.Join(f.steps, "|") != "up -d --no-deps caddy core payments" || !strings.Contains(out.String(), "must point to this server") {
+		strings.Join(f.steps, "|") != "up -d --no-deps caddy core payments tls-agent" || !strings.Contains(out.String(), "must point to this server") ||
+		!strings.Contains(out.String(), "falls back to the automatic one") {
 		t.Fatalf("domain: %d %q %s", code, f.steps, out)
 	}
 	if env, _ := readEnvFile(t, dir); env["BOBRES_DOMAIN"] != "pay.example.com" || env["BOBRES_ZARINPAL_HOST"] != "" {

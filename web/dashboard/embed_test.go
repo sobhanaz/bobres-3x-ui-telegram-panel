@@ -64,11 +64,11 @@ func TestNotBuilt(t *testing.T) {
 // Caddy sends the dashboard's CSP too; two different policies would both apply
 // and could block the app in production only.
 func TestCaddyfileSendsTheSameCSP(t *testing.T) {
-	caddy, err := os.ReadFile("../../deploy/Caddyfile")
+	caddy, err := os.ReadFile("../../deploy/caddy/Caddyfile")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(caddy), `header Content-Security-Policy "`+CSP+`"`) {
-		t.Fatalf("deploy/Caddyfile must send the dashboard CSP:\n%s", CSP)
+		t.Fatalf("deploy/caddy/Caddyfile must send the dashboard CSP:\n%s", CSP)
 	}
 }

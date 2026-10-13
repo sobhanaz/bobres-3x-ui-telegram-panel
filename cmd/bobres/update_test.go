@@ -10,12 +10,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -1080,4 +1082,208 @@ func processAlive(pid int) bool {
 	}
 	st := strings.TrimSpace(string(out))
 	return st != "" && !strings.HasPrefix(st, "Z")
+}
+
+// installsNewLayout is installs as the new installer does it: besides the
+// version it writes caddy/Caddyfile, and it leaves the top-level Caddyfile
+// (if there is one) as it was.
+func installsNewLayout(dir, ver string) func() error {
+	write := installs(dir, ver)
+	return func() error {
+		if err := write(); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "caddy"), 0o755); err != nil { //nolint:gosec // as the installer makes it
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, "caddy", "Caddyfile"), []byte("caddy of "+ver+"\n"), 0o644) //nolint:gosec // as the installer writes it
+	}
+}
+
+// filesUnder lists the regular files below root, as paths relative to it.
+func filesUnder(t *testing.T, root string) []string {
+	t.Helper()
+	var out []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			rel, rerr := filepath.Rel(root, path)
+			out, err = append(out, rel), rerr
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// The layout change: an install with Caddy's file at the top level updates to
+// one with caddy/Caddyfile and rolls back to the first. The restore point
+// holds the old layout; the rollback puts it back, leaves the new files where
+// they are (the old compose ignores them), and the top-level Caddyfile the old
+// compose mounts is there the whole time.
+func TestUpdateAndRollbackAcrossTheLayoutChange(t *testing.T) {
+	for _, migrates := range []bool{false, true} {
+		name := "no migration"
+		if migrates {
+			name = "migration"
+		}
+		t.Run(name, func(t *testing.T) {
+			ut := newUpdateTest(t, "")
+			envBefore, composeBefore, topBefore := ut.read(t, ".env"), ut.read(t, "docker-compose.yml"), ut.read(t, "Caddyfile")
+			ut.cli.do = installsNewLayout(ut.dir, "1.3.0")
+			if migrates {
+				ut.cli.do = func() error {
+					ut.db.schema, ut.db.dump = migratedSchema, "DUMP WRITTEN BY 1.3.0"
+					return installsNewLayout(ut.dir, "1.3.0")()
+				}
+			}
+			if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+				t.Fatalf("update: %d\n%s\n%s", code, ut.out, ut.errOut)
+			}
+			point := filepath.Join(ut.dir, ".restore-point", "files")
+			if got, want := strings.Join(filesUnder(t, point), " "), ".env Caddyfile docker-compose.yml postgres-init.sh"; got != want {
+				t.Fatalf("the restore point holds %q, want the old layout %q", got, want)
+			}
+			if ut.read(t, "Caddyfile") != topBefore || ut.read(t, "caddy/Caddyfile") != "caddy of 1.3.0\n" {
+				t.Fatalf("after the update: top %q, caddy/ %q", ut.read(t, "Caddyfile"), ut.read(t, "caddy/Caddyfile"))
+			}
+
+			ut.db.steps, ut.db.dump = nil, "DUMP AFTER THE UPDATE"
+			if code := ut.u.rollbackCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+				t.Fatalf("rollback: %d\n%s\n%s", code, ut.out, ut.errOut)
+			}
+			if ut.read(t, ".env") != envBefore || ut.read(t, "docker-compose.yml") != composeBefore || ut.read(t, "Caddyfile") != topBefore {
+				t.Errorf("the old install files are not back:\n.env %q\ncompose %q\nCaddyfile %q", ut.read(t, ".env"), ut.read(t, "docker-compose.yml"), ut.read(t, "Caddyfile"))
+			}
+			if ut.read(t, "caddy/Caddyfile") != "caddy of 1.3.0\n" {
+				t.Errorf("the new layout's file was removed or changed: %q", ut.read(t, "caddy/Caddyfile"))
+			}
+			if got := ut.db.steps[len(ut.db.steps)-1]; got != "up -d --remove-orphans" {
+				t.Errorf("the old stack is started without the tls-agent that is no more: steps %q", ut.db.steps)
+			}
+		})
+	}
+}
+
+// An install that already has caddy/Caddyfile and no top-level one stages
+// both directories' files and gets caddy/Caddyfile back, without a top-level
+// Caddyfile appearing.
+func TestUpdateStagesTheNewLayout(t *testing.T) {
+	ut := newUpdateTest(t, "")
+	if err := os.Remove(filepath.Join(ut.dir, "Caddyfile")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(ut.dir, "caddy"), 0o755); err != nil { //nolint:gosec // as the installer makes it
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ut.dir, "caddy", "Caddyfile"), []byte("caddy of 1.2.3\n"), 0o644); err != nil { //nolint:gosec // as the installer writes it
+		t.Fatal(err)
+	}
+	ut.cli.do = installsNewLayout(ut.dir, "1.3.0")
+	if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+		t.Fatalf("update: %d\n%s\n%s", code, ut.out, ut.errOut)
+	}
+	point := filepath.Join(ut.dir, ".restore-point", "files")
+	if got, want := strings.Join(filesUnder(t, point), " "), ".env caddy/Caddyfile docker-compose.yml postgres-init.sh"; got != want {
+		t.Fatalf("the restore point holds %q, want %q", got, want)
+	}
+	if b, _ := os.ReadFile(filepath.Join(point, "caddy", "Caddyfile")); string(b) != "caddy of 1.2.3\n" {
+		t.Errorf("the staged caddy/Caddyfile: %q", b)
+	}
+	if st, err := os.Stat(filepath.Join(point, "caddy", "Caddyfile")); err != nil || st.Mode().Perm() != 0o644 {
+		t.Errorf("the staged file's mode: %v %v", st, err)
+	}
+
+	ut.db.steps, ut.db.dump = nil, "DUMP AFTER THE UPDATE"
+	if code := ut.u.rollbackCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+		t.Fatalf("rollback: %d\n%s\n%s", code, ut.out, ut.errOut)
+	}
+	if ut.read(t, "caddy/Caddyfile") != "caddy of 1.2.3\n" {
+		t.Errorf("caddy/Caddyfile after the rollback: %q", ut.read(t, "caddy/Caddyfile"))
+	}
+	if lexists(filepath.Join(ut.dir, "Caddyfile")) {
+		t.Error("a top-level Caddyfile appeared")
+	}
+	if st, err := os.Stat(filepath.Join(ut.dir, "caddy", "Caddyfile")); err != nil || st.Mode().Perm() != 0o644 {
+		t.Errorf("the restored file's mode: %v %v", st, err)
+	}
+}
+
+// A rollback puts back every file in the restore point, whatever this bobres
+// lists in installFiles: the point may have been made by another version's
+// CLI, which listed other files.
+func TestRollbackPutsBackEveryFileOfTheRestorePoint(t *testing.T) {
+	ut := newUpdateTest(t, "")
+	ut.cli.do = ut.installsAndMigrates("1.3.0")
+	if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+		t.Fatalf("update: %d\n%s\n%s", code, ut.out, ut.errOut)
+	}
+	point := filepath.Join(ut.dir, ".restore-point", "files")
+	if err := os.MkdirAll(filepath.Join(point, "extra", "deeper"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(point, "extra", "deeper", "other.conf"), []byte("from another version\n"), 0o640); err != nil { //nolint:gosec // a fixture
+		t.Fatal(err)
+	}
+	// A link in the point is not followed.
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("OUTSIDE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustSymlink(t, outside, filepath.Join(point, "linked.conf"))
+
+	ut.db.steps, ut.db.dump = nil, "DUMP AFTER THE UPDATE"
+	if code := ut.u.rollbackCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+		t.Fatalf("rollback: %d\n%s\n%s", code, ut.out, ut.errOut)
+	}
+	if b, err := os.ReadFile(filepath.Join(ut.dir, "extra", "deeper", "other.conf")); err != nil || string(b) != "from another version\n" {
+		t.Errorf("the extra file is not back: %q %v", b, err)
+	}
+	if st, err := os.Stat(filepath.Join(ut.dir, "extra", "deeper", "other.conf")); err != nil || st.Mode().Perm() != 0o640 {
+		t.Errorf("the extra file's mode: %v %v", st, err)
+	}
+	if lexists(filepath.Join(ut.dir, "linked.conf")) {
+		t.Error("a link in the restore point was put back")
+	}
+}
+
+// copyFiles never goes through a link to make a directory, and a file it
+// copies keeps its mode.
+func TestCopyFilesMakesDirectoriesButNotThroughLinks(t *testing.T) {
+	src, dst := t.TempDir(), filepath.Join(t.TempDir(), "files")
+	mustMkdir(t, filepath.Join(src, "caddy"))
+	if err := os.WriteFile(filepath.Join(src, "caddy", "Caddyfile"), []byte("new"), 0o644); err != nil { //nolint:gosec // a fixture
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".env"), []byte("A=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFiles(src, dst, installFiles); err != nil {
+		t.Fatal(err)
+	}
+	for name, mode := range map[string]os.FileMode{".env": 0o600, "caddy/Caddyfile": 0o644} {
+		st, err := os.Stat(filepath.Join(dst, name))
+		if err != nil || st.Mode().Perm() != mode {
+			t.Errorf("%s: %v %v, want mode %v", name, st, err, mode)
+		}
+	}
+	if st, err := os.Stat(filepath.Join(dst, "caddy")); err != nil || !st.IsDir() || st.Mode().Perm() != 0o755 {
+		t.Errorf("the directory made for it: %v %v (want the source directory's mode)", st, err)
+	}
+	if lexists(filepath.Join(dst, "Caddyfile")) || lexists(filepath.Join(dst, "docker-compose.yml")) {
+		t.Error("a file the source does not have was made")
+	}
+
+	// A link where the directory should be is refused, and nothing goes through it.
+	out := t.TempDir()
+	dst2 := t.TempDir()
+	mustSymlink(t, out, filepath.Join(dst2, "caddy"))
+	if err := copyFiles(src, dst2, installFiles); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Errorf("copy through a link: %v", err)
+	}
+	if entries, _ := os.ReadDir(out); len(entries) != 0 {
+		t.Errorf("the copy went through the link: %v", entries)
+	}
 }

@@ -13,6 +13,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Backups not arriving](backups-not-arriving.md) | No daily backup in the owner's Telegram, or the System page shows a failed backup |
 | [Rotate secrets](rotate-secrets.md) | A token, password or key leaked, or you rotate them on a schedule |
 | [License](license.md) | The License tab is not "Active", or an action is refused by the license |
+| [HTTPS certificates](https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; browsers refuse the dashboard after a change |
 | [Restore a backup](restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
 | [Releases and update channels](releases.md) | Publish a stable or beta release, re-sign a quiet stable channel (signatures expire after 45 days), or move a store between stable and beta |
@@ -43,6 +44,10 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 | Paid orders could not be delivered in the last hour | `orders.provision_failed` | [Provisioning backlog](provisioning-backlog.md) |
 | The bot is behind on its messages (over 10 minutes) | `events.bot_lag` | `bobres logs --tail 200 bot`; [Bot token revoked](bot-token-revoked.md) if Telegram refuses the token |
 | The license expires soon, is in its grace period or has expired | `license.expiry` | [License](license.md) |
+| Caddy, the HTTPS gateway, has answered on none of the store's addresses for 3 minutes | `tls.caddy` | [HTTPS certificates](https.md#alerts) |
+| An HTTPS certificate is close to its end (renewal failing, or an own certificate not replaced), or an address has served no valid certificate for 30 minutes | `tls.<role>.expiring`, `tls.<role>.failing` (`<role>`: `domain`, `ip`, `zarinpal`) | [HTTPS certificates](https.md#alerts) |
+| The saved HTTPS setting is not in use | `tls.setting` | [HTTPS certificates](https.md#an-own-certificate-after-a-domain-change-or-a-new-master-key) |
+| The HTTPS applier (`tls-agent`) has not answered core for 5 minutes | `tls.agent` | [HTTPS certificates, other problems](https.md#other-problems) |
 
 ## Before you start
 
@@ -77,7 +82,7 @@ the database.
 3. The logs of the service involved, newest last:
 
    ```sh
-   bobres logs --tail 100 core          # or bot, payments, provisioner, backup, postgres, redis, caddy
+   bobres logs --tail 100 core          # or bot, payments, provisioner, backup, postgres, redis, caddy, tls-agent
    bobres logs --tail 300 payments | grep -i -E 'warn|error'
    ```
 
@@ -92,6 +97,7 @@ If the bot is down, staff get into the dashboard with a one-time link printed on
 | Service | Does | When it is down |
 |---|---|---|
 | caddy | HTTPS for the dashboard, payment callbacks and the webhook | Dashboard and Zarinpal returns unreachable |
+| tls-agent | Applies HTTPS changes to Caddy (it has no network; releases from 0.1.0-rc.2 on) | The store keeps its current certificates; changes in the HTTPS tab are refused |
 | postgres | The database (schemas core, payments, provisioner) | Everything fails its readiness check |
 | redis | The bot's conversation state and rate limits | The bot cannot answer |
 | core | Users, plans, orders, wallet, delivery worker, dashboard | Nothing is sold or delivered; the dashboard is down |

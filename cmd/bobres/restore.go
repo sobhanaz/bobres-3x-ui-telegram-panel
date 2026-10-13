@@ -518,11 +518,11 @@ func (o *ops) dumpInto(ctx context.Context, dir string, w io.Writer, key []byte,
 	return nil
 }
 
-// stopApp stops the services that use the database; postgres, redis and
-// caddy stay up.
+// stopApp stops the services that use the database; postgres, redis, caddy
+// and the tls-agent stay up.
 func (o *ops) stopApp(ctx context.Context, dir string, env map[string]string) error {
 	fmt.Fprintln(o.out, "Stopping the BOBRES services (the database stays up)...")
-	if out, err := o.run(ctx, dir, composeArgs(append([]string{"stop"}, appServices(env)...)...)...); err != nil {
+	if out, err := o.run(ctx, dir, composeArgs(append([]string{"stop"}, dataServices(dir, env)...)...)...); err != nil {
 		return fmt.Errorf("docker compose stop failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -609,7 +609,7 @@ func (o *ops) startAndWait(ctx context.Context, dir string, extra ...string) int
 		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	return waitHealthy(ctx, o.run, o.sleep, dir, appServices(env), o.out, o.errOut)
+	return waitHealthy(ctx, o.run, o.sleep, dir, appServices(dir, env), o.out, o.errOut)
 }
 
 // healthHints prints what to look at next, in the spirit of bobres doctor.

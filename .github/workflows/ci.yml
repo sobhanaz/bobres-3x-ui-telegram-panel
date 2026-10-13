@@ -149,6 +149,7 @@ jobs:
         run: |
           docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example config -q
           docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example --profile backup config -q
+          docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example --profile tls config -q
       - name: Build service images
         # Tagged the way the compose file expects released images, so the e2e
         # install below runs exactly these builds (no pull). The backup image
@@ -160,16 +161,38 @@ jobs:
             docker build -f deploy/Dockerfile ${target:+--target "$target"} --build-arg SERVICE=$s --build-arg VERSION=ci \
               -t bobres-$s:ci -t ghcr.io/sobhanaz/bobres-$s:ci .
           done
-      - name: Validate Caddyfile
-        run: |
-          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            -e BOBRES_DOMAIN=panel.example.com caddy:2-alpine \
-            caddy validate --config /etc/caddy/Caddyfile
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.x"
           check-latest: true
           cache: true
+      # Caddy's main Caddyfile is static; the HTTPS files it imports are rendered by the
+      # tls-agent. Every mode is rendered the way an install has it (tools/ci/tlsrender:
+      # caddy/, tls/, a manual pair made now) and validated by the Caddy image the compose
+      # file pins, mounted as the compose file mounts it.
+      - name: Validate the Caddyfile in every HTTPS mode
+        run: |
+          set -euo pipefail
+          image=$(sed -n 's/^    image: \(caddy:[^ ]*\)$/\1/p' deploy/docker-compose.yml)
+          test -n "$image"
+          echo "Caddy image: $image"
+          go build -o "$RUNNER_TEMP/tlsrender" ./tools/ci/tlsrender
+          # The list first: a failure inside `for x in $(...)` is not seen by `set -e`, so a
+          # tlsrender that printed nothing would validate no mode at all and pass.
+          modes=$("$RUNNER_TEMP/tlsrender" -list)
+          count=$(printf '%s\n' "$modes" | grep -c . || true)
+          if [ "$count" -lt 12 ]; then
+            echo "::error title=HTTPS modes::tlsrender -list gave $count modes, expected at least 12"
+            exit 1
+          fi
+          for mode in $modes; do
+            d="$RUNNER_TEMP/tlsrender-$mode"
+            "$RUNNER_TEMP/tlsrender" "$d" "$mode"
+            echo "::group::caddy validate: $mode"
+            docker run --rm --env-file "$d/validate.env" -v "$d/caddy:/etc/caddy:ro" -v "$d/tls:/tls:ro" "$image" \
+              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+            echo "::endgroup::"
+          done
       # The real installer against the real stack AND a real 3x-ui panel: the
       # owner sets up a plan and the trial, a customer takes the trial and buys
       # with wallet credit, all through the bot (fake Telegram on the runner),
@@ -200,6 +223,17 @@ jobs:
           /tmp/bobres install --dir "$dir" --skip-checks --offline --no-harden
           /tmp/bobres status --dir "$dir"
           /tmp/bobres logs --dir "$dir" --tail 20 core
+          # HTTPS: core asked the tls-agent for the automatic setting and the agent answered
+          # (it wrote Caddy's files and made Caddy load them through the admin socket).
+          # The runner is not root, so tls/ is world-writable here (the installer says so).
+          applied=""
+          for _ in $(seq 1 30); do
+            /tmp/bobres ssl status --dir "$dir" > /tmp/ssl-status.txt 2>&1 || true
+            cat /tmp/ssl-status.txt
+            if grep -Eq '^Applier: +request [0-9]+ applied at' /tmp/ssl-status.txt; then applied=yes; break; fi
+            sleep 2
+          done
+          test -n "$applied" || { echo "::error title=HTTPS::the tls-agent did not apply core's HTTPS request"; exit 1; }
           BOBRES_E2E_REQUIRE=1 BOBRES_E2E_TELEGRAM=http://127.0.0.1:8081 BOBRES_E2E_ADMIN_ID=4242 \
           BOBRES_E2E_SUB_BASE=https://sub.example.test/sub/ \
           XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN="$xui_token" XUI_TEST_ALLOW_PRIVATE=1 \

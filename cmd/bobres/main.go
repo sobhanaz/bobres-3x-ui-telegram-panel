@@ -6,11 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsconf"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 )
 
@@ -73,6 +76,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return hardenCmd(args[1:], stdin, out, errOut)
 	case "config":
 		return newOps(stdin, out, errOut).configCmd(args[1:])
+	case "ssl":
+		return newOps(stdin, out, errOut).sslCmd(args[1:])
 	case "secrets":
 		return newRotator(newOps(stdin, out, errOut)).secretsCmd(args[1:])
 	default:
@@ -106,9 +111,10 @@ Available now:
   update     Update to the latest release (backup first, automatic rollback); --check only looks
   rollback   Undo the last update (previous version, and the database from before it)
   config     Show or change a setting: config list | get <key> | set <key> <value>
+  ssl        The HTTPS certificate: ssl status | auto | ip | manual --cert FILE --key FILE
   secrets    Rotate a secret: secrets rotate bot-token|db-passwords|service-tokens|redis-password
   harden     Firewall (ufw), fail2ban, automatic security updates and swap, each asked first
-  doctor     Check this server (RAM, disk, ports, Docker, DNS, hardening)
+  doctor     Check this server (RAM, disk, ports, Docker, DNS, HTTPS certificate, hardening)
   support-bundle
              Write a redacted tar.gz for support into <dir> (versions, status, logs; no secrets)
   version    Print the version (--images: the image digests this release pins)
@@ -120,12 +126,16 @@ Commands that work on an install take --dir (default: $BOBRES_DIR, else /opt/bob
 func doctorCmd(args []string, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(errOut)
-	domain := fs.String("domain", "", "check that this domain points to this server")
+	dir := fs.String("dir", defaultDir(), dirUsage)
+	domain := fs.String("domain", "", "check that this domain points to this server (default: the install's BOBRES_DOMAIN)")
 	offline := fs.Bool("offline", false, "skip network checks")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	results := doctorResults(*domain, *offline)
+	if *domain == "" {
+		*domain = domainOfInstall(*dir)
+	}
+	results := doctorResults(*dir, *domain, *offline)
 	for _, r := range results {
 		fmt.Fprintf(out, "%-5s %-18s %s\n", r.Status, r.Name, r.Detail)
 	}
@@ -137,24 +147,66 @@ func doctorCmd(args []string, out, errOut io.Writer) int {
 	return 0
 }
 
-// publicIP asks a small set of services for this machine's public IPv4.
+// domainOfInstall is BOBRES_DOMAIN of the install in dir: "" when there is
+// none, or when this user cannot read its .env (it is root's).
+func domainOfInstall(dir string) string {
+	if env, ok, err := readEnv(filepath.Join(dir, ".env")); err == nil && ok {
+		return env["BOBRES_DOMAIN"]
+	}
+	return ""
+}
+
+// ipServices answer with the caller's public address as plain text.
+var ipServices = []string{"https://api.ipify.org", "https://ifconfig.me/ip"}
+
+// maxIPAnswer bounds an address service's answer: an IPv6 address is 45
+// characters at most.
+const maxIPAnswer = 64
+
+// publicIP asks a small set of services for this machine's public IP
+// address. The answer can end up in a certificate request, so only a plain 200
+// of at most maxIPAnswer bytes that reads as a public address counts (and no
+// redirect is followed); anything else is no answer, and the next service is
+// asked. "" when none answers.
 func publicIP() string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	for _, u := range []string{"https://api.ipify.org", "https://ifconfig.me/ip"} {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
+	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, u := range ipServices {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		text, ok := fetchIPText(ctx, hc, u)
+		cancel()
+		if !ok {
 			continue
 		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			continue
-		}
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
-		_ = resp.Body.Close()
-		if ip := strings.TrimSpace(string(b)); resp.StatusCode == http.StatusOK && len(ip) >= 7 && len(ip) <= 45 {
+		if ip, err := tlsconf.PublicIP(text); err == nil {
 			return ip
 		}
 	}
 	return ""
+}
+
+// fetchIPText reads the answer of one address service: the body, trimmed,
+// when the status is 200, the body is at most maxIPAnswer bytes and it is an IP
+// address (net.ParseIP).
+func fetchIPText(ctx context.Context, hc *http.Client, url string) (string, bool) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", false
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close() //nolint:errcheck // read-only
+	if resp.StatusCode != http.StatusOK {
+		return "", false
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxIPAnswer+1))
+	if err != nil || len(b) > maxIPAnswer {
+		return "", false
+	}
+	text := strings.TrimSpace(string(b))
+	if net.ParseIP(text) == nil {
+		return "", false
+	}
+	return text, true
 }

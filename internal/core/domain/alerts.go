@@ -93,6 +93,11 @@ type BackupStatus interface {
 	Status(ctx context.Context) (json.RawMessage, error)
 }
 
+// TLSWatcher reads the HTTPS status for the watchdog (TLS.Watch).
+type TLSWatcher interface {
+	Watch(ctx context.Context) (*TLSWatchReport, error)
+}
+
 // WatchdogSources are what the watchdog asks besides core's database. A nil
 // source has nothing to check: Backups is nil when the backup service is
 // not installed.
@@ -101,6 +106,7 @@ type WatchdogSources struct {
 	Servers  ServerLister
 	Gateways GatewayReporter
 	Backups  BackupStatus
+	TLS      TLSWatcher
 }
 
 // alertCheck is one check's result in a run.
@@ -111,6 +117,11 @@ type alertCheck struct {
 	title    string // the bot's text (alert.*)
 	args     map[string]string
 	detail   string
+	// hold: a problem that may last a while by design (an HTTPS
+	// certificate being issued) is announced only once it has lasted this
+	// long; until then it stays pending, as open since first seen (kept in
+	// the store, so a restart of core does not start it over).
+	hold time.Duration
 }
 
 // alertProbe is one source's checks. covered: the source answered, so a
@@ -183,7 +194,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.usdt, w.backups, w.deliveries, w.feed, w.license,
+		w.services, w.servers, w.zarinpal, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup
@@ -242,6 +253,7 @@ func (w *Watchdog) record(ctx context.Context, now time.Time, probes []alertProb
 //   - A check that fails again within 30 minutes of its fix stays pending
 //     until those 30 minutes are over, and is announced then if it still
 //     fails.
+//   - A check with a hold stays pending until it has failed that long.
 func (w *Watchdog) apply(ctx context.Context, tx pgx.Tx, now time.Time, old *store.AlertState, c alertCheck) error {
 	st := w.s.st
 	was := store.AlertOK
@@ -276,8 +288,9 @@ func (w *Watchdog) apply(ctx context.Context, tx pgx.Tx, now time.Time, old *sto
 	case was == store.AlertOK:
 		next.State, next.LastSentAt = store.AlertPending, lastSent
 		return st.PutAlertState(ctx, tx, next)
-	case was == store.AlertPending && lastSent != nil && now.Sub(*lastSent) < w.QuietAfter:
-		// Back soon after its fix: held, as open since first seen.
+	case was == store.AlertPending && (lastSent != nil && now.Sub(*lastSent) < w.QuietAfter || now.Sub(old.Since) < c.hold):
+		// Back soon after its fix, or not failing for long enough yet: held,
+		// as open since first seen.
 		next.State, next.Since, next.LastSentAt = store.AlertPending, old.Since, lastSent
 		if sameAlert(old, next) {
 			return nil
@@ -607,6 +620,75 @@ func (w *Watchdog) license(ctx context.Context, now time.Time) alertProbe {
 		c.args = map[string]string{"days": strconv.FormatInt(days, 10), "date": strconv.FormatInt(lic.Token.ExpiresAt.Unix(), 10)}
 	}
 	p.checks = append(p.checks, c)
+	return p
+}
+
+// tls: every address the store is served on serves what it should (one
+// that has served nothing valid for 30 minutes is announced: issuing a
+// certificate takes minutes), no certificate is close to its end without
+// being renewed (less than min(14 days, a quarter of its life) left), the
+// saved HTTPS setting works as saved (in use, and loaded by Caddy), and the
+// tls-agent answers core's requests (one waiting for 5 minutes is
+// announced).
+//
+// Caddy not answering at all is a different problem, announced sooner (3
+// minutes, its own critical check): the 30 minutes are for certificates
+// being issued, and without a connection there is nothing to say about
+// them. While no address can be reached, the per-address checks are left as
+// they were (the source did not answer for them) rather than raised or
+// cleared on no evidence.
+func (w *Watchdog) tls(ctx context.Context, now time.Time) alertProbe {
+	p := alertProbe{scope: "tls."}
+	if w.src.TLS == nil {
+		p.covered = true
+		return p
+	}
+	rep, err := w.src.TLS.Watch(ctx)
+	if err != nil {
+		w.log.Warn("watchdog: https", "err", err)
+		return p
+	}
+	p.covered = true
+	down, why := len(rep.Addresses) > 0, ""
+	for _, a := range rep.Addresses {
+		if a.Reachable {
+			down = false
+		} else if why == "" {
+			why = a.Error
+		}
+	}
+	if down {
+		p.covered = false
+		p.checks = append(p.checks, alertCheck{key: "tls.caddy", severity: events.SeverityCritical, title: "alert.tls_caddy_down",
+			problem: true, detail: why, hold: tlsCaddyDownAfter})
+	} else if len(rep.Addresses) > 0 {
+		p.checks = append(p.checks, alertCheck{key: "tls.caddy", severity: events.SeverityCritical, title: "alert.tls_caddy_down"})
+	}
+	for _, a := range rep.Addresses {
+		if down {
+			break
+		}
+		detail := a.Error
+		if detail == "" && !a.Served {
+			detail = "no certificate"
+		}
+		p.checks = append(p.checks, alertCheck{key: "tls." + a.Role + ".failing", severity: events.SeverityCritical,
+			title: "alert.tls_failing", args: map[string]string{"address": a.Host}, detail: detail, problem: !a.Valid,
+			hold: tlsFailAfter})
+		c := alertCheck{key: "tls." + a.Role + ".expiring", severity: events.SeverityWarning, title: "alert.tls_expiring",
+			problem: a.Expiring, args: map[string]string{"address": a.Host}}
+		if a.Cert != nil {
+			days := max(int64(math.Ceil(a.Cert.NotAfter.Sub(now).Hours()/24)), 1)
+			c.args["days"], c.args["date"] = strconv.FormatInt(days, 10), strconv.FormatInt(a.Cert.NotAfter.Unix(), 10)
+		}
+		p.checks = append(p.checks, c)
+	}
+	p.checks = append(p.checks,
+		alertCheck{key: "tls.setting", severity: events.SeverityWarning, title: "alert.tls_problem", problem: rep.Problem != "",
+			detail: rep.Problem},
+		alertCheck{key: "tls.agent", severity: events.SeverityWarning, title: "alert.tls_problem", problem: rep.AgentWaiting,
+			detail: "the HTTPS applier (tls-agent) has not answered core's request: check it runs (sudo bobres status)",
+			hold:   tlsAgentQuiet})
 	return p
 }
 

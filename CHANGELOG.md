@@ -7,7 +7,7 @@ All notable changes to BOBRES are written here. The format follows
 ## [Unreleased] — first public release (v0.1.0)
 
 The first release. It sums up what BOBRES does now: Phases 0 to 7 of the plan ([docs/PLAN.md](docs/PLAN.md) §10),
-pull requests #13 to #41. Everything below is new in this release.
+pull requests #13 to #44. Everything below is new in this release.
 
 ### Bot
 - Persian and English. Customers pick a language on their first `/start` and can change it.
@@ -62,8 +62,13 @@ pull requests #13 to #41. Everything below is new in this release.
   30 days, unmatched USDT deposits, and the manual methods and Telegram Stars with their switches and details.
 - System page: health and versions of every service with the open problems, the update check (with the channel and
   the license's coverage), the newest warnings and errors of every service (owner only), backups (list, run one,
-  off-site copies), and the license (state, entitlements and their use, paste a token, or activate with a license
-  key).
+  off-site copies), the HTTPS certificates, and the license (state, entitlements and their use, paste a token, or
+  activate with a license key).
+- HTTPS tab on the System page: everyone who sees the page sees the mode and, for each address the store is served on
+  (the domain, the server's IP address, the Zarinpal domain), the issuer, expiry with the days left, whether browsers
+  trust it, and the live error. The owner picks the mode: the domain's automatic certificate, a Let's Encrypt
+  certificate for the server's IP address (with a Detect button and the warnings), or an own certificate and private key
+  (files or paste). The page waits for the certificate to be issued and shows Caddy's own words when it refuses.
 - A "Powered by BOBRES" footer only under a valid license without white label.
 
 ### Payments
@@ -98,6 +103,19 @@ pull requests #13 to #41. Everything below is new in this release.
   backups (and their off-site copies), disk, deliveries, the bot's backlog and the license every minute, and says
   when a problem is fixed.
 - `bobres harden`: firewall, fail2ban for SSH, security updates and swap, each asked (also offered by the install).
+- HTTPS certificates in three modes: Caddy's automatic certificate for the domain (the default), a Let's Encrypt
+  certificate for the server's IP address (valid about 6 days, renewed by Caddy), and the owner's own certificate and
+  key. The dashboard's HTTPS tab and `bobres ssl status|auto|ip|manual` (also in the menu, "HTTPS certificate") change
+  it. A change is saved only once Caddy accepts it. `sudo bobres ssl auto` works without the dashboard when a wrong
+  certificate locks browsers out. In the IP address mode, dashboard links move to the IP address only while its
+  certificate is trusted and the bot sees the same public address (`BOBRES_PUBLIC_URL` overrides). `bobres doctor` has a
+  TLS line for every served address (a crash-looping Caddy is a failure), and four alerts say when Caddy is not
+  answering, a certificate is close to its end, an address serves no valid certificate, or the saved setting is not in
+  use ([runbook](docs/runbooks/https.md)).
+- The installer lays Caddy's files out as `caddy/Caddyfile` and `tls/`, makes Caddy read its config again after an
+  update, and keeps the old top-level `Caddyfile` so `bobres rollback` still works across the change. The `tls-agent`
+  service is in the releases from 0.1.0-rc.2 on: a rollback to 0.1.0-rc.1 has none.
+- `bobres config set BOBRES_DOMAIN` and `BOBRES_ZARINPAL_PUBLIC_URL` recreate Caddy, core, payments and the `tls-agent`.
 - `bobres config` for the safe settings and `bobres secrets rotate` for the bot token, database passwords, service
   tokens and the Redis password.
 - `bobres support-bundle`: a redacted archive for support, without the database, backups or secret values.
@@ -124,6 +142,11 @@ pull requests #13 to #41. Everything below is new in this release.
 - 3x-ui panels must use https; plain http is allowed only to a private address.
 - Containers run as non-root, with a read-only filesystem and no capabilities. Caddy serves HTTPS and blocks the
   internal paths.
+- The HTTPS manager keeps core away from the gateway. A `tls-agent` service with no network is the only writer of
+  Caddy's TLS files and, besides Caddy, the only user of Caddy's admin socket. It checks every request again, accepts
+  only the install's own domain and Zarinpal domain, and a change is committed only after Caddy accepts it. An own
+  certificate's private key is sealed with core's master key, and never logged, audited or answered. Caddy's image is
+  pinned by version and digest.
 - A missing or invalid license blocks nothing, and a license only ever gates new actions.
 
 ### Brand
@@ -139,7 +162,9 @@ pull requests #13 to #41. Everything below is new in this release.
 - No vendor public key is embedded yet, so every license token is refused as "unknown key" until one ships. A missing
   license blocks nothing.
 - Image signatures are not checked on the server (the release workflow checks them before it builds their digests
-  into the CLI). Caddy, Postgres and Redis come from Docker Hub by tag.
+  into the CLI). Postgres and Redis come from Docker Hub by tag, and Caddy by version and digest.
+- The server IP address mode needs a public address with ports 80 and 443 reachable from the internet (not behind
+  carrier-grade NAT). It cannot be tried in the local Docker lab. BOBRES never renews an own certificate.
 - The legal review, the brand checks and license pricing are open.
 
 [Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/commits/main

@@ -24,8 +24,9 @@ type Server struct {
 	dom  *domain.Service
 	pay  domain.PaymentsClient
 	prov Provisioner
-	// publicURL is the dashboard's origin, for login links.
-	publicURL string
+	// publicURL is the dashboard's origin now, for login links and ticket
+	// links (nil: none).
+	publicURL func(context.Context) string
 }
 
 // fromBot marks the changes a request makes as made in the bot (the only
@@ -45,20 +46,36 @@ func (s *Server) ListStaffContacts(ctx context.Context, req *corev1.ListStaffCon
 	return out, nil
 }
 
-// SetPublicURL sets the dashboard origin login links point to.
-func (s *Server) SetPublicURL(u string) { s.publicURL = u }
+// SetPublicURL sets a fixed dashboard origin for the links.
+func (s *Server) SetPublicURL(u string) {
+	s.publicURL = func(context.Context) string { return u }
+}
+
+// SetPublicURLFunc sets where the dashboard origin comes from when a link is
+// made: the HTTPS manager (domain.TLS.PublicURL), whose answer follows the
+// HTTPS mode.
+func (s *Server) SetPublicURLFunc(f func(context.Context) string) { s.publicURL = f }
+
+// dashboardURL is the dashboard's origin now ("" when there is none).
+func (s *Server) dashboardURL(ctx context.Context) string {
+	if s.publicURL == nil {
+		return ""
+	}
+	return s.publicURL(ctx)
+}
 
 // CreateDashboardLink makes a one-time dashboard login link for a staff member.
 func (s *Server) CreateDashboardLink(ctx context.Context, req *corev1.CreateDashboardLinkRequest) (*corev1.DashboardLink, error) {
 	ctx = fromBot(ctx)
-	if s.publicURL == "" {
+	origin := s.dashboardURL(ctx)
+	if origin == "" {
 		return &corev1.DashboardLink{}, nil
 	}
 	token, exp, err := s.dom.CreateLoginLink(ctx, req.GetActorTelegramId())
 	if err != nil {
 		return nil, fail(err)
 	}
-	return &corev1.DashboardLink{Url: DashboardLoginURL(s.publicURL, token), ExpiresAt: exp.Unix()}, nil
+	return &corev1.DashboardLink{Url: DashboardLoginURL(origin, token), ExpiresAt: exp.Unix()}, nil
 }
 
 // DashboardLoginURL is the link a login token is sent as. The token is in the

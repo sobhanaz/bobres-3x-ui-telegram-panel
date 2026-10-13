@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -57,8 +59,11 @@ var (
 )
 
 // installFiles are the files `bobres install` writes that an update changes
-// and a rollback puts back (.env carries BOBRES_VERSION).
-var installFiles = []string{".env", "docker-compose.yml", "Caddyfile", "postgres-init.sh"}
+// and the restore point keeps (.env carries BOBRES_VERSION). Caddyfile is the
+// top-level file of an install from before Caddy's main file moved to
+// caddy/Caddyfile; the installer no longer writes it, but leaves an existing
+// one, which that version's compose file (a rollback restores it) mounts.
+var installFiles = []string{".env", "docker-compose.yml", "Caddyfile", "caddy/Caddyfile", "postgres-init.sh"}
 
 // restorePoint is what `bobres update` leaves for `bobres rollback`.
 type restorePoint struct {
@@ -72,7 +77,8 @@ type restorePoint struct {
 	// CLIPath is for the operator: the next update replaces it.)
 	CLIPath       string `json:"cli_path"`
 	CLIBackupPath string `json:"cli_backup_path"`
-	// FilesDir holds copies of installFiles from before the update.
+	// FilesDir holds copies of installFiles from before the update (the ones
+	// the install had: a restore point of an older bobres has fewer).
 	FilesDir string `json:"files_dir"`
 	// SchemaVersions are the database's migration versions before the update
 	// (nil: not known), so a rollback restores the database only when
@@ -760,7 +766,7 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	if err != nil {
 		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("read .env: %v", err))
 	}
-	if waitHealthy(ctx, u.run, u.sleep, dir, appServices(newEnv), u.out, u.errOut) != 0 {
+	if waitHealthy(ctx, u.run, u.sleep, dir, appServices(dir, newEnv), u.out, u.errOut) != 0 {
 		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("BOBRES %s did not become healthy", t.Version))
 	}
 	// The update holds: its release is the floor now, and the restore point
@@ -851,7 +857,7 @@ func (u *updater) stageRestorePoint(ctx context.Context, dir string, env map[str
 	if floor, err := u.lastRelease(); err == nil { // else not known: a rollback leaves the floor as it is
 		rp.ReleaseFloor = &floor
 	}
-	if err := copyFiles(dir, filepath.Join(stage, restorePointFiles)); err != nil {
+	if err := copyFiles(dir, filepath.Join(stage, restorePointFiles), installFiles); err != nil {
 		return fail(fmt.Errorf("save the install files: %w", err))
 	}
 	cli, err := os.ReadFile(exe) //nolint:gosec // the running binary
@@ -986,14 +992,21 @@ func (u *updater) rollbackTo(ctx context.Context, dir string, rp *restorePoint, 
 		fmt.Fprintf(u.errOut, "error: read .env: %v\n", err)
 		return 1, false
 	}
+	// Every file the restore point holds goes back, whatever this bobres
+	// lists in installFiles: the point may come from another version's CLI.
+	names, err := restoreNames(rp.FilesDir)
+	if err != nil {
+		fmt.Fprintf(u.errOut, "error: read the restore point's files in %s: %v\n", rp.FilesDir, err)
+		return 1, false
+	}
 	if !restoreDB {
 		u.putBackCLI(rp)
-		if sameFiles(dir, rp.FilesDir) {
+		if sameFiles(dir, rp.FilesDir, names) {
 			fmt.Fprintf(u.out, "The install was not changed: the store kept running %s.\n", rp.FromVersion)
 			u.retire(dir, rp)
 			return 0, true
 		}
-		if err := copyFiles(rp.FilesDir, dir); err != nil {
+		if err := copyFiles(rp.FilesDir, dir, names); err != nil {
 			fmt.Fprintf(u.errOut, "error: put back the install files from %s: %v\n", rp.FilesDir, err)
 			return 1, false
 		}
@@ -1019,7 +1032,7 @@ func (u *updater) rollbackTo(ctx context.Context, dir string, rp *restorePoint, 
 	}
 	fmt.Fprintf(u.out, "Current data saved in %s\n", filepath.Join(dir, "backups", safety))
 	u.putBackCLI(rp)
-	if err := copyFiles(rp.FilesDir, dir); err != nil {
+	if err := copyFiles(rp.FilesDir, dir, names); err != nil {
 		fmt.Fprintf(u.errOut, "error: put back the install files from %s: %v\n", rp.FilesDir, err)
 		return 1, false
 	}
@@ -1243,24 +1256,38 @@ func writeRestorePoint(rpDir string, rp *restorePoint) error {
 	return writeAtomic(filepath.Join(rpDir, restorePointName), append(b, '\n'), 0o600)
 }
 
-// copyFiles copies installFiles from src to dst (made, root only, when
-// missing), keeping their modes. A file src does not have is skipped.
-func copyFiles(src, dst string) error {
+// copyFiles copies the named files (paths relative to src, like "caddy/Caddyfile")
+// from src to dst, which is made (root only) when missing, with their parent
+// directories (never through a link) and their modes. A file src does not have
+// is skipped.
+func copyFiles(src, dst string, names []string) error {
 	if err := os.MkdirAll(dst, 0o700); err != nil {
 		return err
 	}
-	for _, name := range installFiles {
+	for _, name := range names {
 		p := filepath.Join(src, name)
-		b, err := os.ReadFile(p) //nolint:gosec // the install's own files
+		st, err := os.Stat(p)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
 			return err
 		}
-		st, err := os.Stat(p)
+		if !st.Mode().IsRegular() {
+			return fmt.Errorf("%s is not a regular file", p)
+		}
+		b, err := os.ReadFile(p) //nolint:gosec // the install's own files
 		if err != nil {
 			return err
+		}
+		if rel := filepath.Dir(name); rel != "." {
+			mode := os.FileMode(0o700)
+			if ps, err := os.Stat(filepath.Dir(p)); err == nil {
+				mode = ps.Mode().Perm()
+			}
+			if err := mkdirBelow(dst, rel, mode); err != nil {
+				return err
+			}
 		}
 		if err := writeAtomic(filepath.Join(dst, name), b, st.Mode().Perm()); err != nil {
 			return err
@@ -1269,10 +1296,38 @@ func copyFiles(src, dst string) error {
 	return nil
 }
 
-// sameFiles reports whether a and b hold the same installFiles (one that
+// restoreNames are the files a rollback puts back from the restore point's
+// files in root: installFiles and any other regular file the point holds, so
+// a point made by another version of bobres (it lists other files) is put
+// back whole. Links and other things are left out.
+func restoreNames(root string) ([]string, error) {
+	names := slices.Clone(installFiles)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) && path == root {
+				return filepath.SkipAll
+			}
+			return err
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(names, rel) {
+			names = append(names, rel)
+		}
+		return nil
+	})
+	return names, err
+}
+
+// sameFiles reports whether a and b hold the same named files (one that
 // neither has counts as the same).
-func sameFiles(a, b string) bool {
-	for _, name := range installFiles {
+func sameFiles(a, b string, names []string) bool {
+	for _, name := range names {
 		x, err1 := os.ReadFile(filepath.Join(a, name)) //nolint:gosec // the install's own files
 		y, err2 := os.ReadFile(filepath.Join(b, name)) //nolint:gosec // the install's own files
 		switch {

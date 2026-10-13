@@ -38,6 +38,7 @@ func installDir(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	writeInstalledCompose(t, dir)
 	return dir
 }
 
@@ -52,7 +53,7 @@ func testOps(stdin string, f *fakeOps) (*ops, *bytes.Buffer, *bytes.Buffer) {
 const healthyPS = `[{"Service":"caddy","State":"running","Health":""},{"Service":"postgres","State":"running","Health":"healthy"},
 {"Service":"redis","State":"running","Health":"healthy"},{"Service":"core","State":"running","Health":"healthy"},
 {"Service":"payments","State":"running","Health":"healthy"},{"Service":"provisioner","State":"running","Health":"healthy"},
-{"Service":"bot","State":"running","Health":"healthy"}]`
+{"Service":"bot","State":"running","Health":"healthy"},{"Service":"tls-agent","State":"running","Health":"healthy"}]`
 
 func TestStatus(t *testing.T) {
 	f := &fakeOps{ps: healthyPS}
@@ -152,7 +153,7 @@ func TestUninstall(t *testing.T) {
 	if code := o.uninstallCmd([]string{"--dir", dir}); code != 0 {
 		t.Fatalf("uninstall: %d %s", code, out)
 	}
-	if args := strings.Join(f.calls[0], " "); !strings.Contains(args, "down --remove-orphans") || strings.Contains(args, "--volumes") {
+	if args := strings.Join(f.calls[0], " "); !strings.Contains(args, "--profile * down --remove-orphans") || strings.Contains(args, "--volumes") {
 		t.Fatalf("down args: %s", args)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".env")); err != nil {
@@ -184,8 +185,8 @@ func TestUninstall(t *testing.T) {
 	dir = installDir(t)
 	f = &fakeOps{}
 	o, _, _ = testOps("", f)
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge", "--yes"}); code != 0 || len(f.calls) != 1 {
-		t.Fatalf("--yes: %d calls=%v", code, f.calls)
+	if code := o.uninstallCmd([]string{"--dir", dir, "--purge", "--yes"}); code != 0 || len(f.calls) != 2 {
+		t.Fatalf("--yes: %d calls=%v (down, then the project's volumes)", code, f.calls)
 	}
 }
 

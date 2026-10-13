@@ -105,6 +105,14 @@ point at that port, add `BOBRES_PUBLIC_URL=https://bobres.localhost:8443` to `/o
 and recreate core: `docker compose --project-name bobres -f docker-compose.yml --env-file .env up -d core`
 in `/opt/bobres` (`bobres restart` keeps the old environment).
 
+**HTTPS manager.** The dashboard's HTTPS tab and `bobres ssl` work in the lab for the automatic mode (Caddy's own
+certificate for `bobres.localhost`), for an own certificate and for `bobres ssl auto`. **The lab cannot test the server
+IP address mode**, and it never gets a Let's Encrypt certificate: Caddy's ports are published on your Mac's 127.0.0.1
+only (the table above), so Let's Encrypt cannot reach ports 80 and 443 at any address, and the lab's `10.10.0.10` is a
+private address that no certificate can name (as the install's domain it would get Caddy's own certificate, like
+`bobres.localhost`). The `tls-agent` runs from the core image, so the image build below needs nothing more. Test the IP
+address mode on a real server ([docs/11-staging-run.md](../../docs/11-staging-run.md), section 8).
+
 Before a release exists, build the images inside the bot server from a checkout, the way CI
 does, and install that version with a `bobres` CLI built for linux/amd64:
 

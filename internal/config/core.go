@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 )
@@ -33,7 +34,12 @@ type Core struct {
 	AdminTelegramID int64
 	// PublicURL is where staff open the dashboard (login links point there):
 	// https://<BOBRES_DOMAIN>, or BOBRES_PUBLIC_URL for a local test setup.
+	// Core's links follow the HTTPS mode (domain.TLS.PublicURL); this is the
+	// fallback without it.
 	PublicURL string
+	// PublicURLEnv is BOBRES_PUBLIC_URL as set (checked), "" when unset:
+	// when set it is every dashboard link, whatever the HTTPS mode.
+	PublicURLEnv string
 	// BotURL is the bot's internal HTTP address (http://bot:8080): core
 	// fetches receipt photos through it for the dashboard. Empty = none.
 	BotURL string
@@ -53,6 +59,20 @@ type Core struct {
 	BackupToken string
 	// Domain is BOBRES_DOMAIN as it is (no scheme): a license is bound to it.
 	Domain string
+	// ZarinpalHost is BOBRES_ZARINPAL_HOST, the second domain the HTTPS
+	// files serve the pay page on ("" = none).
+	ZarinpalHost string
+	// TLSRequestDir and TLSResultDir are the tls-agent's volumes as core
+	// mounts them: BOBRES_TLS_REQUEST_DIR (default /request, read-write:
+	// core writes its request there) and BOBRES_TLS_RESULT_DIR (default
+	// /tls-result, read-only: the agent's answer). HTTPS changes are off
+	// when the request directory does not exist.
+	TLSRequestDir string
+	TLSResultDir  string
+	// TLSProbeAddr is where core reads the certificates Caddy serves, for
+	// the HTTPS status and alerts: BOBRES_TLS_PROBE_ADDR (default caddy:443,
+	// over the edge network).
+	TLSProbeAddr string
 }
 
 // LoadCore reads the core service configuration, failing closed on missing
@@ -95,8 +115,9 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.AdminTelegramID, err = telegramID("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
-	co.PublicURL, err = publicURL()
+	co.PublicURLEnv, err = publicURLEnv()
 	keep(err)
+	co.PublicURL = publicURL(co.PublicURLEnv)
 	co.BotURL, err = peerURL("BOBRES_BOT_URL", "", "http://bot:8080")
 	keep(err)
 	co.PaymentsURL, err = peerURL("BOBRES_PAYMENTS_URL", "http://payments:8080", "http://payments:8080")
@@ -106,6 +127,13 @@ func LoadCore() (Core, error) {
 	co.BackupURL, err = peerURL("BOBRES_BACKUP_URL", "", "http://backup:8080")
 	keep(err)
 	co.Domain = strings.TrimSpace(getenv("BOBRES_DOMAIN", ""))
+	co.ZarinpalHost = strings.TrimSpace(getenv("BOBRES_ZARINPAL_HOST", ""))
+	co.TLSRequestDir = getenv("BOBRES_TLS_REQUEST_DIR", "/request")
+	co.TLSResultDir = getenv("BOBRES_TLS_RESULT_DIR", "/tls-result")
+	co.TLSProbeAddr = getenv("BOBRES_TLS_PROBE_ADDR", "caddy:443")
+	if _, _, err := net.SplitHostPort(co.TLSProbeAddr); err != nil {
+		keep(errors.New("BOBRES_TLS_PROBE_ADDR must be host:port like caddy:443"))
+	}
 	return co, errors.Join(errs...)
 }
 
@@ -122,20 +150,30 @@ func peerURL(name, def, example string) (string, error) {
 	return v, nil
 }
 
-// publicURL is BOBRES_PUBLIC_URL when set (an http(s) origin), else
-// https://BOBRES_DOMAIN, else empty (no dashboard links).
-func publicURL() (string, error) {
-	if v := strings.TrimRight(strings.TrimSpace(getenv("BOBRES_PUBLIC_URL", "")), "/"); v != "" {
-		u, err := url.Parse(v)
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || (u.Path != "" && u.Path != "/") {
-			return "", errors.New("BOBRES_PUBLIC_URL must be an http(s) origin like https://panel.example.com")
-		}
-		return v, nil
+// publicURLEnv is BOBRES_PUBLIC_URL when set (an http(s) origin), else
+// empty.
+func publicURLEnv() (string, error) {
+	v := strings.TrimRight(strings.TrimSpace(getenv("BOBRES_PUBLIC_URL", "")), "/")
+	if v == "" {
+		return "", nil
+	}
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || (u.Path != "" && u.Path != "/") {
+		return "", errors.New("BOBRES_PUBLIC_URL must be an http(s) origin like https://panel.example.com")
+	}
+	return v, nil
+}
+
+// publicURL is BOBRES_PUBLIC_URL when set, else https://BOBRES_DOMAIN,
+// else empty (no dashboard links).
+func publicURL(env string) string {
+	if env != "" {
+		return env
 	}
 	if d := strings.TrimSpace(getenv("BOBRES_DOMAIN", "")); d != "" {
-		return "https://" + d, nil
+		return "https://" + d
 	}
-	return "", nil
+	return ""
 }
 
 // Payments is the payments service configuration.

@@ -12,12 +12,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsprobe"
 )
 
 // composeProject is the Compose project name every bobres command uses, so
@@ -60,6 +63,15 @@ type ops struct {
 	// s3c downloads a backup for `bobres restore s3://...` (nil: a plain
 	// client; the download's own timeout applies).
 	s3c *http.Client
+	// probeTLS reads what this host's port 443 serves for an address (nil:
+	// a TLS handshake with 127.0.0.1:443).
+	probeTLS func(ctx context.Context, address string) tlsprobe.Result
+	// detectIP is this server's public IP address, "" when unknown (nil:
+	// publicIP, which asks two web services).
+	detectIP func() string
+	// gatewayState is the state of the install's gateway container, "" when
+	// there is none (nil: caddyState, which asks Docker).
+	gatewayState func(ctx context.Context) string
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
@@ -87,18 +99,34 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 }
 
 // appServices are the BOBRES services the installer waits for: the backup
-// service only where its profile is on.
-func appServices(env map[string]string) []string {
+// service only where its profile is on, the tls-agent only where this install
+// has one (tlsAgentOn: a rollback to an older release must not wait for a
+// service that release does not run).
+func appServices(dir string, env map[string]string) []string {
 	s := []string{"core", "payments", "provisioner", "bot"}
+	if tlsAgentOn(dir, env) {
+		s = append(s, tlsAgentService)
+	}
 	if backupEnabled(env) {
 		s = append(s, "backup")
 	}
 	return s
 }
 
+// dataServices are the app services that use the database and hold the
+// service tokens: appServices without the tls-agent, which has neither (it
+// only writes Caddy's HTTPS files). A restore stops these, a token rotation
+// restarts them.
+func dataServices(dir string, env map[string]string) []string {
+	return slices.DeleteFunc(appServices(dir, env), func(s string) bool { return s == tlsAgentService })
+}
+
 // allServices are every container of an install, as status lists them.
-func allServices(env map[string]string) []string {
+func allServices(dir string, env map[string]string) []string {
 	s := []string{"caddy", "postgres", "redis", "core", "payments", "provisioner", "bot"}
+	if tlsAgentOn(dir, env) {
+		s = append(s, tlsAgentService)
+	}
 	if backupEnabled(env) {
 		s = append(s, "backup")
 	}
@@ -142,7 +170,7 @@ func (o *ops) statusCmd(args []string) int {
 		return 1
 	}
 	rows := parseServices(out)
-	want := allServices(env)
+	want := allServices(*dir, env)
 	fmt.Fprintln(o.out, "\nSERVICE       STATE        HEALTH")
 	problems := 0
 	seen := map[string]bool{}
@@ -286,11 +314,14 @@ func (o *ops) uninstallCmd(args []string) int {
 			return 1
 		}
 	}
-	cargs := composeArgs("down", "--remove-orphans")
+	// Every profile is on, so that a container of a service whose profile is off
+	// now (the tls-agent of a release the install went back from) goes too.
+	cargs := composeArgs("--profile", "*", "down", "--remove-orphans")
 	if *purge {
 		cargs = append(cargs, "--volumes")
 	}
-	if out, err := o.run(context.Background(), *dir, cargs...); err != nil {
+	ctx := context.Background()
+	if out, err := o.run(ctx, *dir, cargs...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose down failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
@@ -299,12 +330,52 @@ func (o *ops) uninstallCmd(args []string) int {
 			composeProject, *dir)
 		return 0
 	}
+	left, err := o.removeProjectVolumes(ctx, *dir)
+	if len(left) > 0 {
+		fmt.Fprintf(o.out, "Also removed volumes of this install that docker compose down left (this docker-compose.yml may be from an older release): %s\n",
+			strings.Join(left, ", "))
+	}
+	if err != nil {
+		fmt.Fprintf(o.errOut, "error: %v\nData of BOBRES is still on this server; %s is kept. Run `bobres uninstall --purge` again, or remove the volumes with docker volume rm.\n", err, *dir)
+		return 1
+	}
 	if err := os.RemoveAll(*dir); err != nil {
 		fmt.Fprintf(o.errOut, "error: remove %s: %v\n", *dir, err)
 		return 1
 	}
 	fmt.Fprintf(o.out, "Removed containers, volumes and %s. Nothing of BOBRES remains on this server except the images (docker image prune to drop them).\n", *dir)
 	return 0
+}
+
+// projectVolumeRe is what the name of a Docker volume looks like: it keeps a
+// warning line in a command's output from being taken for one.
+var projectVolumeRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+
+// removeProjectVolumes removes every volume that carries the label of the
+// compose project, whether or not the install's docker-compose.yml declares
+// it. `down --volumes` removes only the declared ones: after a rollback to a
+// release from before the HTTPS manager the file lacks tls_request (which
+// holds the request for the HTTPS setting, with the private key of an own
+// certificate), tls_result and caddy_admin. It returns the names it removed
+// (those `down` left), and the error that stopped it.
+func (o *ops) removeProjectVolumes(ctx context.Context, dir string) ([]string, error) {
+	out, err := o.run(ctx, dir, "volume", "ls", "--quiet", "--filter", "label=com.docker.compose.project="+composeProject)
+	if err != nil {
+		return nil, fmt.Errorf("docker volume ls failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	var names []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if line = strings.TrimSpace(line); projectVolumeRe.MatchString(line) {
+			names = append(names, line)
+		}
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	if out, err := o.run(ctx, dir, append([]string{"volume", "rm"}, names...)...); err != nil {
+		return nil, fmt.Errorf("docker volume rm %s failed: %w: %s", strings.Join(names, " "), err, strings.TrimSpace(string(out)))
+	}
+	return names, nil
 }
 
 // dirOnly parses the --dir flag of start/stop/restart/backup and checks the
@@ -339,7 +410,7 @@ func (o *ops) startCmd(args []string) int {
 		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	return waitHealthy(context.Background(), o.run, o.sleep, dir, appServices(env), o.out, o.errOut)
+	return waitHealthy(context.Background(), o.run, o.sleep, dir, appServices(dir, env), o.out, o.errOut)
 }
 
 // stopCmd stops the containers; nothing is removed.
@@ -368,7 +439,7 @@ func (o *ops) restartCmd(args []string) int {
 		fmt.Fprintf(o.errOut, "error: docker compose restart failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	return waitHealthy(context.Background(), o.run, o.sleep, dir, appServices(env), o.out, o.errOut)
+	return waitHealthy(context.Background(), o.run, o.sleep, dir, appServices(dir, env), o.out, o.errOut)
 }
 
 // backupCmd makes a backup now: the backup service's `run-now` asks the

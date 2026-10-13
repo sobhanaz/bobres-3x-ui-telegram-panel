@@ -69,6 +69,12 @@ type Config struct {
 	// LicenseServer reaches the vendor's license server through the bot, to
 	// activate a license key (nil: no bot, activation answers 503).
 	LicenseServer domain.LicenseServer
+	// TLS is the HTTPS manager (nil: the HTTPS tab answers 503).
+	TLS *domain.TLS
+	// PublicIP detects the server's public IP address through the bot (nil:
+	// no bot; detection answers 503 and an IP address needs a
+	// confirmation).
+	PublicIP PublicIPSource
 	// Dashboard serves the built app under /admin/ (nil: not mounted).
 	Dashboard http.Handler
 	Log       *slog.Logger
@@ -235,6 +241,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// Backups: the list for owner and admin, "back up now" for the owner.
 	s.route(api, "GET /api/v1/system/backups", PermSystemRead, s.systemBackups)
 	s.route(api, "POST /api/v1/system/backups/run", PermSystemWrite, s.runBackup)
+	// HTTPS: the state for owner and admin, changes and detecting the
+	// server's IP address (through the bot) by the owner.
+	s.route(api, "GET /api/v1/system/tls", PermSystemRead, s.getTLS)
+	s.route(api, "PUT /api/v1/system/tls", PermSystemWrite, s.putTLS)
+	s.route(api, "POST /api/v1/system/tls/detect-ip", PermSystemWrite, s.detectIP)
 	s.route(api, "GET /api/v1/license", PermSystemRead, s.getLicense)
 	s.route(api, "POST /api/v1/license/check", PermLicenseWrite, s.checkLicense)
 	s.route(api, "PUT /api/v1/license", PermLicenseWrite, s.putLicense)

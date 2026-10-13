@@ -40,6 +40,84 @@ Since milestone 6a both are set from the dashboard, through core, without core e
   are open, so no customer pays an address nobody watches. A transaction id pays at most one payment, across the
   automatic and the manual path.
 
+## HTTPS manager
+The dashboard's HTTPS tab and `bobres ssl` choose how the gateway gets its certificates: automatic for the domain, a
+Let's Encrypt certificate for the server's IP address, or the operator's own certificate and key
+([installer, "HTTPS certificates"](06-installer.md), [runbook](runbooks/https.md)). Core keeps two properties it has
+had since Phase 1: no internet access, and no control of the internet-facing gateway. So core never touches Caddy. A
+small service, the `tls-agent`, does.
+
+Who mounts what (a deploy test asserts exactly this):
+
+| | core | tls-agent | caddy |
+|---|---|---|---|
+| `tls_request` (`/request`): core's request, one JSON file | read-write | read-only | none |
+| `tls_result` (`/tls-result` in core, `/result` in the agent): the agent's answer | read-only | read-write | none |
+| `./tls` (`/tls`): the files Caddy loads | none | read-write | read-only |
+| `./caddy`: the main Caddyfile | none | read-only | read-only |
+| `caddy_admin` (`/run/caddy`): Caddy's admin socket | none | read-write | read-write |
+| `caddy_data`: Caddy's ACME account keys and issued certificates | none | none | read-write |
+
+- **The tls-agent** is core's image run as `/app tls-agent`: user 65532:65532, `network_mode: none` (no network at all),
+  read-only root, all capabilities dropped, `no-new-privileges`, 64 MB. It exists from release 0.1.0-rc.2 on. Every 2
+  seconds it reads core's request. It trusts nothing in it. It runs the same checks as core again (`internal/tlsconf`)
+  and renders Caddy's files itself, from fixed templates: a host name must match the installer's rule, an IP address
+  must parse (ip mode's address as a public one), and no text of the request is copied into a file as it is. For an own
+  certificate it checks the pair (readable PEM, a key that matches, not expired, covers the domain, key not encrypted).
+  It writes the certificate files before the snippets that name them, each as a temp file named `.<name>.tmp` (no import
+  matches it) and then a rename, and asks Caddy to load its main Caddyfile. It is the only writer of Caddy's TLS files
+  and, besides Caddy, the only user of the admin socket.
+- **The names are pinned.** The agent gets the install's own `BOBRES_DOMAIN` and `BOBRES_ZARINPAL_HOST` in its
+  environment (compose gives it the same values as core's; they are no secret, and it has no token and no key). It
+  answers `invalid` to a request that names another domain or another Zarinpal host, and writes nothing. Without
+  `BOBRES_DOMAIN` it refuses every request. So a compromised core cannot have Caddy serve, or ask a certificate
+  authority for, a name the install does not own. Changing the domain therefore recreates the agent with core
+  (`bobres config set`).
+- **The admin socket.** Caddy's admin endpoint used to be off. It is now a unix socket, `admin
+  unix//run/caddy/admin.sock|0220`, in the `caddy_admin` volume, with no TCP port. A unix socket gets no Host or Origin
+  check, so the file mode is the only guard: 0220 lets the owner (Caddy, running as `0:65532`) and the group 65532 (the
+  agent) connect, and nobody else. The admin API can load any configuration, so whoever reaches the socket controls the
+  gateway. That is why only the agent and Caddy mount it, and why the agent has no network and reads one small file.
+- **Only accepted states are committed.** Core treats a change as a proposal. It validates it, writes a request with the
+  next generation number, and waits up to 20 seconds for the agent's answer to that generation. On success it commits
+  the row in `core.tls_config` and writes the audit entry `system.tls.set` (the mode, the IP address, the certificate's
+  subject, issuer and dates; never the key). On any other answer, or none, it writes the committed state back as a new
+  request and returns the agent's or Caddy's own error. A mutex and a Postgres advisory lock make the dashboard and
+  `/app ssl` take turns: a change that finds another one running waits up to 3 seconds, then answers `busy`. If Caddy
+  refuses a load, the agent writes its last accepted files back and loads them again. It keeps them in memory only
+  (after its own restart, the files it finds on disk), so no extra copy of a key is written anywhere.
+- **Startup never takes the store down.** At start core asks the agent for the committed state again. If a stored own
+  certificate cannot be used any more (its key cannot be unsealed because the master key changed, it does not cover the
+  current domain, or it has expired), core asks for the automatic certificate instead, leaves the row alone, and raises
+  the alert `tls_problem` with the reason. No TLS error is ever returned from core's start. An own certificate is refused
+  when core has no master key.
+- **The private key.** Core seals it with its master key (`BOBRES_CORE_MASTER_KEY`, the envelope that also protects
+  authenticator secrets) before it stores it in `core.tls_config.key_sealed`. It is never logged, audited, answered by an
+  API (GET gives the certificate's names and dates only) or put in the support bundle, and the dashboard form clears
+  the key field after every send. While an own certificate is in use the key exists in clear in four more places: the
+  request file `tls.json` (mode 0600, in a volume only core and the agent mount), `tls/certs/key.pem` (0640, group
+  65532), the agent's memory (its last accepted files) and Caddy's memory. Switching to another mode deletes the stored pair and the file, and the next request
+  carries no key.
+- **File modes and the 65532 group.** `tls/` is owned by 65532:65532 with mode 0750, and the agent writes its files
+  0640, so group 65532 can read them. Caddy runs as `0:65532` with every capability dropped but `NET_BIND_SERVICE`, so it
+  reads them as a group member. Every BOBRES image runs as 65532, so the mode does not keep other services out. The
+  mount list above does. The mode keeps other users on the host out.
+- **Caddy's image is pinned** by version and digest
+  (`caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f`, the multi-arch index) in
+  the compose file. Caddy 2.11.3 is the oldest version that issues IP certificates, and 2.11.1 the oldest that reloads
+  on SIGUSR1. The image is not signature-checked on the server (see the supply-chain row below).
+- **Who may change it.** Everyone with `system.read` sees the status. Changing the mode and detecting the server's IP
+  address need `system.write`, which is the owner's, at most 10 changes a minute. `bobres ssl` needs root on the server.
+
+What a compromised core can do: ask for one of the three modes, for the install's own domain and Zarinpal host (the
+agent refuses any other name) and, in ip mode, for any public IP address, which makes Caddy try to get a certificate for
+it (it fails unless the address leads to this server, and counts against Let's Encrypt's limits). It can also choose an
+own certificate for the domain, which locks browsers out until the operator runs `sudo bobres ssl auto` on the server.
+What it cannot do: make the gateway answer for another host name, add or change a Caddy directive (the agent writes
+fixed templates), reach the admin socket or load a configuration of its own, read Caddy's ACME account keys or the keys
+of certificates Caddy issued, or write outside the request file. A compromised agent would control the gateway, which
+is why it has no network, no secrets of its own and a single small input.
+
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
 |---|---|
@@ -56,7 +134,10 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 | Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted with `BOBRES_BACKUP_KEY` (which is never sent with them), support-bundle scrubs. The System page's logs (the newest 500 warnings and errors per service, in memory) are kept after the same redaction and shown to the owner only, since they carry Telegram ids |
 | Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel. The panel URL must be https; plain http is accepted only with allow-private, and every connection is then checked to go to a private, loopback or link-local address (`xui.ErrPublicPlaintext`). This bounds the first hop only: a private next hop that NATs or proxies onward is the operator's network, and a custom HTTP client (`xui.WithHTTPClient`) is refused for plain http |
 | Supply chain | Pinned deps (`go.sum`, `package-lock.json`), a govulncheck gate and a gitleaks secret scan in CI (no trivy image scan yet), release images signed with keyless cosign, with SBOM and provenance, and run by the digests built into the signed CLI (next row), minimal base images, CI with least-privilege tokens |
-| Malicious update / MITM of installer | install.sh and `bobres update` check `keys.txt` against the embedded root keys, the release key's Ed25519 signature on `checksums.txt` (version, channel, expiry) and the CLI's SHA-256 before they run it, over HTTPS. BOBRES's five images run by the digests built into that signed CLI (`BOBRES_IMAGE_DIGEST_<SERVICE>`, appended to each image's tag): the release workflow takes a digest only after checking its keyless cosign signature from that workflow and tag, so a moved tag on ghcr.io changes nothing. The servers do not run cosign. Not covered by a signature: install.sh itself (fetched over HTTPS), Docker's install script (get.docker.com), the Caddy, Postgres and Redis images (Docker Hub, by tag), and BOBRES images run by tag (a `BOBRES_VERSION` other than the CLI's own, or a development build of the CLI) |
+| Malicious update / MITM of installer | install.sh and `bobres update` check `keys.txt` against the embedded root keys, the release key's Ed25519 signature on `checksums.txt` (version, channel, expiry) and the CLI's SHA-256 before they run it, over HTTPS. BOBRES's five images run by the digests built into that signed CLI (`BOBRES_IMAGE_DIGEST_<SERVICE>`, appended to each image's tag): the release workflow takes a digest only after checking its keyless cosign signature from that workflow and tag, so a moved tag on ghcr.io changes nothing. The servers do not run cosign. Not covered by a signature: install.sh itself (fetched over HTTPS), Docker's install script (get.docker.com), the Caddy image (Docker Hub; pinned by version and digest in the compose file, which stops a moved tag but is not a signature check), the Postgres and Redis images (Docker Hub, by tag), and BOBRES images run by tag (a `BOBRES_VERSION` other than the CLI's own, or a development build of the CLI) |
+| Hostile or mistaken HTTPS change (a compromised core, a staff account) | The owner only, 10 a minute, audited without the key. Core cannot reach Caddy: the tls-agent checks the request again, accepts only the install's own domain and Zarinpal host, and writes fixed templates. A change is committed only after Caddy accepts it, and `sudo bobres ssl auto` on the server undoes any of them |
+| Leak of an own certificate's private key | Sealed with core's master key in the database; never logged, audited, answered or put in the support bundle; deleted when the mode changes. It is in clear only in the request volume, `tls/certs/` and the memory of the agent and of Caddy while that mode is on |
+| The panel answers anyone who scans the server's IP address (ip mode) | Warned about in the dashboard and the runbook, and the owner confirms an address the bot did not detect. Dashboard links move to the IP address only while Caddy serves a publicly trusted certificate for it and the bot's own detection of the server's public address, at most 5 minutes old, is that same address (a recycled address keeps a valid short-lived certificate for days, so the certificate alone proves nothing). Where the two never agree (a VPN, a NAT egress, a floating IP address) links stay on the domain, and `BOBRES_PUBLIC_URL` overrides. The panel still needs a login |
 | License key sharing | Install binding, re-activation limits, revocation; accept residual risk |
 | Compromised host | Non-root containers, read-only FS, dropped capabilities, ufw, fail2ban, unattended upgrades |
 | Insider/staff abuse | Roles with least privilege (payment details, staff and the owner role are the owner's), mandatory reason on money and staff actions, an append-only audit log (database triggers refuse UPDATE, DELETE and TRUNCATE) that records where each change was made |
@@ -104,6 +185,14 @@ Since milestone 6a both are set from the dashboard, through core, without core e
 - Self-hosted code can be modified by its owner. License protects billing, not secrecy.
 - The 3x-ui API token is inherently full-admin; we can only isolate and protect it.
 - Legal/regulatory exposure of the VPN business is outside technical control (see 09).
+- In ip mode the server's IP address is published in Certificate Transparency logs, and Caddy answers any client that
+  connects to that address without a name (`default_sni`). Anyone who scans the address finds the store's login page.
+  The same `default_sni` answers on an install whose `BOBRES_DOMAIN` is an IP address, in any mode.
+- An IP address as `BOBRES_DOMAIN` in auto mode (a private or LAN address of a lab or an office) is served with
+  Caddy's own certificate authority: browsers do not trust it, so a visitor learns to click through a warning. Use a
+  domain, or ip mode with a public address, for a store with customers.
+- An own certificate is not renewed. When it ends, browsers refuse the store until the operator uploads a new one (the
+  alert `tls_expiring` gives notice).
 
 ## Open points
 - DECIDED: per-service tokens first. mTLS is not built.

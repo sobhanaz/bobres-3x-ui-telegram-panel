@@ -1032,7 +1032,8 @@
       "reseller_tier": "Reseller tier",
       "server": "3x-ui server",
       "gateway": "Payment gateway",
-      "license": "License"
+      "license": "License",
+      "tls": "HTTPS"
     },
     "group": {
       "payment": "Payments",
@@ -1055,7 +1056,8 @@
       "reseller_tier": "Reseller tiers",
       "server": "3x-ui servers",
       "gateway": "Payment gateways",
-      "license": "License"
+      "license": "License",
+      "system": "System"
     },
     "action": {
       "payment": {
@@ -1181,6 +1183,11 @@
       },
       "license": {
         "set": "License saved"
+      },
+      "system": {
+        "tls": {
+          "set": "HTTPS setting changed"
+        }
       }
     }
   },
@@ -1785,11 +1792,12 @@
     }
   },
   "system": {
-    "intro": "How every BOBRES service is doing, whether a newer release is out, the backups, and this install's license.",
+    "intro": "How every BOBRES service is doing, whether a newer release is out, the backups, the HTTPS certificates and this install's license.",
     "tab": {
       "health": "Health",
       "updates": "Updates",
       "backups": "Backups",
+      "https": "HTTPS",
       "logs": "Logs",
       "license": "License"
     },
@@ -1843,7 +1851,7 @@
         "critical": "Critical",
         "warning": "Warning"
       },
-      "note": "Core checks every minute: the services, the 3x-ui servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages and the license. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
+      "note": "Core checks every minute: the services, the 3x-ui servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages, the license and the HTTPS certificates. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
       "settings": "Alert settings",
       "kind": {
         "service_down": "The {service} service is down",
@@ -1862,6 +1870,10 @@
         "license_expiring": "The license expires in {days} days, on {date}",
         "license_grace": "The license has expired; its grace period ends on {date}",
         "license_expired": "The license has expired: new resellers, servers, staff and payment methods are refused",
+        "tls_expiring": "The HTTPS certificate of {address} expires in {days} days, on {date}, and has not been renewed",
+        "tls_failing": "{address} has not served a valid HTTPS certificate for 30 minutes",
+        "tls_caddy_down": "Caddy, which serves the store's HTTPS addresses, is not answering: the dashboard and the payment pages cannot be reached",
+        "tls_problem": "The store's HTTPS setting is not working as saved",
         "check": "The {key} check reports a problem"
       }
     },
@@ -1961,6 +1973,200 @@
       "restore_title": "How to restore",
       "restore": "Restoring is done on the server, with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
       "restore_later": "To restore, run sudo bobres restore <file> on the server (see the restore runbook)."
+    },
+    "https": {
+      "load_error": "The HTTPS state could not be read.",
+      "owner_only": "Only the owner can change HTTPS. You can see its status here.",
+      "caddy_down": {
+        "title": "HTTPS gateway (Caddy) is not reachable",
+        "detail": "Core got no answer from Caddy on any of the addresses below, so the dashboard and the payment pages may not open. Check Caddy with {status}; its log is in {logs}."
+      },
+      "status": {
+        "title": "Status",
+        "mode": "Mode",
+        "domain": "Domain",
+        "zarinpal_host": "Zarinpal domain",
+        "server_ip": "Server IP address",
+        "certificate": "Saved certificate",
+        "public_url": "Dashboard address",
+        "serving": "Serving now",
+        "applier": "HTTPS applier (tls-agent)",
+        "links_domain": "Dashboard links still use the domain. They move to the IP address once its certificate is proven and the bot sees this server's public address as that same IP address.",
+        "links_override": "BOBRES_PUBLIC_URL is set in the server's .env file, so dashboard links always use this address, whatever the HTTPS mode. They do not move to the IP address."
+      },
+      "mode": {
+        "auto": "Domain (automatic)",
+        "ip": "Server IP address (Let's Encrypt)",
+        "manual": "Your own certificate"
+      },
+      "agent": {
+        "none": "Not set up on this server. Run {command}.",
+        "idle": "Nothing has been asked of it yet.",
+        "waiting": "Waiting for the applier to answer.",
+        "ok": "The last change was applied on {time}.",
+        "failed": "The last change was not applied on {time}: {reason}"
+      },
+      "agent_code": {
+        "invalid": "The applier refused the request.",
+        "write_failed": "The files could not be written.",
+        "caddy_refused": "Caddy refused the files.",
+        "caddy_unreachable": "Caddy did not answer; it reads the files when it starts.",
+        "agent_error": "The applier cannot read Caddy's main Caddyfile."
+      },
+      "addresses": {
+        "title": "Addresses",
+        "none": "No live check yet.",
+        "issuer": "Issuer",
+        "expires": "Expires",
+        "days_left": "{n} days left",
+        "expired": "expired",
+        "trusted": "Trusted by browsers",
+        "trusted_yes": "Yes",
+        "trusted_no": "No",
+        "trusted_unknown": "Unknown",
+        "list_label": "Served addresses"
+      },
+      "role": {
+        "domain": "Domain",
+        "ip": "Server IP address",
+        "zarinpal": "Zarinpal domain"
+      },
+      "state": {
+        "ok": "In use",
+        "expiring": "Ending soon",
+        "invalid": "Not valid",
+        "none": "No certificate",
+        "unreachable": "Not reachable"
+      },
+      "expect": {
+        "internal": "Caddy's own certificate, which browsers do not trust",
+        "manual": "Your own certificate"
+      },
+      "form": {
+        "title": "Change the HTTPS mode",
+        "intro": "Choose a mode and apply it. A change is saved only once Caddy accepts it; otherwise nothing changes.",
+        "modes": "HTTPS mode",
+        "apply": "Apply",
+        "applied": "The HTTPS setting was applied.",
+        "pending": "Caddy is not running. It loads the setting when it starts.",
+        "accepted_with": "Applied, with these notes:",
+        "manual_off": "Your own certificate is off: core has no master key to seal the private key with."
+      },
+      "card": {
+        "auto": {
+          "title": "Domain, automatic",
+          "desc": "Caddy gets and renews a free certificate for your domain. This is the default."
+        },
+        "ip": {
+          "title": "Server IP address",
+          "desc": "Also serve the store on this server's public IP address, with a Let's Encrypt certificate that lasts about 6 days and is renewed automatically."
+        },
+        "manual": {
+          "title": "Your own certificate",
+          "desc": "Bring a certificate and its private key for your domain. Caddy does not renew it."
+        }
+      },
+      "ip": {
+        "label": "Server IP address",
+        "hint": "The public IPv4 or IPv6 address of this server.",
+        "detect": "Detect",
+        "detected": "Detected by the bot: {ip}",
+        "differs": "This server's public IP address looks like {detected}, not {ip}.",
+        "unknown": "This server's public IP address could not be detected.",
+        "confirm": "I confirm that {ip} is this server's public IP address"
+      },
+      "cert": {
+        "label": "Certificate chain (PEM)",
+        "hint": "The certificate for your domain first, then the intermediate certificates.",
+        "file": "Choose a file"
+      },
+      "key": {
+        "label": "Private key (PEM)",
+        "hint": "Not encrypted. It is sealed with core's master key and never shown again.",
+        "file": "Choose a file",
+        "loaded": "Key read from {file}",
+        "remove": "Remove"
+      },
+      "file_too_big": "That file is larger than 64 KiB.",
+      "file_unreadable": "That file could not be read.",
+      "warn": {
+        "ip_title": "About the server IP address",
+        "ip_links": "Dashboard links move to the IP address only once its certificate is proven and the bot detects this server's public address as that same IP address. Until then they stay on the domain. If the bot reaches the internet from another address (a VPN, a second network interface), they stay on the domain.",
+        "ip_links_override": "BOBRES_PUBLIC_URL is set in the server's .env file, so dashboard links always use that address and never move to the IP address.",
+        "ip_scan": "The panel will answer anyone who connects to the IP address, not only visitors who use the domain.",
+        "ip_ct": "Let's Encrypt publishes the IP address in public Certificate Transparency logs.",
+        "ip_ports": "Let's Encrypt must reach ports 80 and 443 of this server from the internet. It does not work behind carrier-grade NAT (CGNAT) or a firewall that blocks them.",
+        "ip_domain": "Your domain keeps its own automatic certificate, so payment returns and Telegram webhooks keep working.",
+        "manual_title": "About your own certificate",
+        "manual_lockout": "A wrong certificate can lock browsers out of the dashboard. If that happens, run {command} on the server to go back to the automatic certificate.",
+        "manual_webhooks": "Telegram webhooks, payment returns and some apps need a publicly trusted chain: add the intermediate certificates too.",
+        "manual_renew": "Caddy does not renew your own certificate. Upload a new one before it expires.",
+        "auto_title": "About the automatic mode",
+        "auto_ports": "Caddy needs ports 80 and 443 reachable from the internet, and the domain pointing at this server."
+      },
+      "wait": {
+        "title": "Waiting for the certificate…",
+        "detail": "Issuing can take a few minutes. This page reads the state every {every} seconds, for up to {max} seconds.",
+        "ready": "The certificate is in use.",
+        "timeout": "The certificate is not ready yet. Issuing can take a few minutes: check again here later.",
+        "failed": "The state could not be read while waiting."
+      },
+      "problem": {
+        "no_master_key": "Your own certificate is not in use. Core has no master key to unseal its private key, so the store serves the automatic certificate instead.",
+        "key_unreadable": "Your own certificate is not in use. Its private key cannot be unsealed with this master key (it may have changed after a restore). Upload the certificate and key again; until then the store serves the automatic certificate.",
+        "zarinpal_host_left_out": "The Zarinpal domain is not served, because BOBRES_ZARINPAL_HOST is not a host name. Correct BOBRES_ZARINPAL_PUBLIC_URL with bobres config.",
+        "agent_unavailable": "The HTTPS applier could not be given the saved setting.",
+        "manual_unused": "Your own certificate is not in use. {reason} The store serves the automatic certificate instead.",
+        "ip_unused": "The saved server IP address is not in use. {reason} The store serves the domain with the automatic certificate instead.",
+        "other": "The saved HTTPS setting is not working as saved."
+      },
+      "code": {
+        "bad_mode": "Choose one of the three modes.",
+        "no_domain": "This install has no domain (BOBRES_DOMAIN), so there is nothing to serve.",
+        "bad_domain": "The domain (BOBRES_DOMAIN) is neither a host name nor a usable IP address.",
+        "bad_zarinpal_host": "The Zarinpal domain is not a host name.",
+        "ip_required": "Enter this server's public IP address.",
+        "bad_ip": "This is not an IP address.",
+        "ip_not_public": "This is not a public IP address. Private, loopback, carrier-grade NAT and reserved addresses cannot get a certificate.",
+        "ip_domain_mismatch": "The domain is an IP address, so this mode can only use that same address.",
+        "cert_required": "Your own certificate needs a certificate and a private key.",
+        "cert_missing": "Paste or choose the certificate.",
+        "cert_not_pem": "The certificate must be PEM text that starts with BEGIN CERTIFICATE.",
+        "cert_has_key": "The certificate field holds a private key. Put the key in its own field.",
+        "cert_parse": "A certificate in the chain cannot be read.",
+        "cert_too_large": "The certificate chain is larger than 64 KiB.",
+        "chain_order": "The certificate for this key must come first in the chain, then the intermediate certificates.",
+        "chain_too_long": "The chain has more than 10 certificates.",
+        "key_missing": "Paste or choose the private key.",
+        "key_not_pem": "The key must be PEM text that holds a private key.",
+        "key_encrypted": "The private key is encrypted. Decrypt it first (openssl pkey -in key.pem -out plain.pem).",
+        "key_parse": "The private key cannot be read. RSA, ECDSA and Ed25519 keys work.",
+        "key_too_large": "The private key is larger than 64 KiB.",
+        "key_count": "The key field holds more than one private key.",
+        "key_mismatch": "The private key does not belong to this certificate.",
+        "cert_expired": "The certificate has expired.",
+        "cert_not_yet_valid": "The certificate is not valid yet. Check the server's clock.",
+        "cert_name_mismatch": "The certificate does not cover this store's domain.",
+        "ip_unconfirmed": "This server's public IP address could not be detected. Confirm that {ip} is this server's address.",
+        "ip_unconfirmed_other": "This server's public IP address looks like {detected}, not {ip}. Confirm it to use {ip} anyway.",
+        "no_master_key": "Your own certificate needs core's master key, which seals the private key. This install has none.",
+        "agent_unavailable": "The HTTPS applier is not set up on this server. Run {update}.",
+        "agent_timeout": "The HTTPS applier did not answer. Check that it runs with {status}.",
+        "agent_failed": "The HTTPS applier could not apply the change.",
+        "caddy_refused": "Caddy refused the change, so nothing was changed. Its own words are below.",
+        "caddy_unreachable": "Caddy is not running, so it cannot load the setting now. Start it with {start} and try again.",
+        "busy": "Another change is being applied. Try again in a moment.",
+        "detect_failed": "The bot could not detect this server's public IP address. Type it yourself.",
+        "rate_limited": "Too many changes. Wait a minute and try again.",
+        "not_configured": "HTTPS is not managed by this core, or the bot is not set up."
+      },
+      "warning": {
+        "expires_soon": "The certificate ends soon. Caddy does not renew your own certificate: upload a new one before it expires.",
+        "self_signed": "The certificate is self-signed. Browsers warn about it, and Telegram webhooks, payment returns and some apps need a publicly trusted chain.",
+        "chain_incomplete": "The chain has no intermediate certificates. Add them after the certificate: Telegram webhooks, payment returns and some apps need a publicly trusted chain.",
+        "untrusted": "The chain does not lead to a publicly trusted root: an intermediate certificate is missing, or a private CA issued it. Telegram webhooks, payment returns and some apps need a publicly trusted chain.",
+        "covers_zarinpal": "The certificate also covers the Zarinpal domain, so Caddy serves it there too, instead of an automatic certificate, until it expires."
+      }
     },
     "logs": {
       "service": "Service",

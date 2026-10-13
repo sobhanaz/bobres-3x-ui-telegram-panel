@@ -34,6 +34,7 @@ Services reference each other by ID only (UUID v7). Migrations: goose, forward-o
 | settings | key, value jsonb (branding, texts, feature flags, payment details and the on/off switches `payments.manual_card.enabled`, `payments.manual_crypto.enabled`, `payments.manual_zarinpal.enabled`, `payments.stars.enabled`; no secret ever, since the bot reads every setting) |
 | install / license | install: one random install id, made with the schema (a license may be bound to it); license: one row, the installed token, when and by whom, `source` (manual, activation, refresh) and `refreshed_at` (05-license.md) |
 | alert_state | key (one per system check), state (ok/pending/problem), since, last_sent_at, passing_since, detail, severity, title_key, args: the core watchdog's memory, so an alert is sent once and its fix is announced (runbooks/README.md) |
+| tls_config | One row (id smallint PRIMARY KEY, CHECK id = 1), seeded as `auto`: mode (auto/ip/manual), ip (ip mode's public address, set only in ip mode), cert_pem (manual mode's certificate chain, at most 64 KiB), key_sealed (its private key, sealed with core's master key, set together with cert_pem and only in manual mode; never stored in clear), updated_at. It holds only a state Caddy accepted: core writes it after the tls-agent says Caddy loaded the change (07-security.md, "HTTPS manager"). Leaving manual mode deletes the pair |
 | broadcasts / broadcast_recipients | broadcasts: segment, language, texts, button, schedule, status, counts; recipients: the audience snapshot with each one's status (pending, claimed, sent, blocked, failed, unknown, cancelled). users.bot_blocked_at marks users who blocked the bot |
 
 ## Schema `payments`
@@ -73,6 +74,6 @@ Subscription: `pending -> active -> expiring_soon -> expired -> deleted`; also `
 
 ## Open points
 - UUID v7 vs bigserial (UUID chosen for mergeability across installs).
-- Encryption at rest: each service has its own master key (envelope, 07-security): the provisioner's for `api_token_enc`, payments' for `merchant_enc`/`proxy_enc`, core's for dashboard authenticator secrets.
+- Encryption at rest: each service has its own master key (envelope, 07-security): the provisioner's for `api_token_enc`, payments' for `merchant_enc`/`proxy_enc`, core's for dashboard authenticator secrets and for the private key of an own HTTPS certificate (`tls_config.key_sealed`).
 - Retention: audit and ledger kept forever; provider_events pruned after N months.
 - 3x-ui is source of truth for live traffic/expiry; our `subscriptions` are a synced cache. Conflict rule: 3x-ui wins for usage, we win for entitlement/price.

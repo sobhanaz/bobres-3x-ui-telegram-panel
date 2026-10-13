@@ -99,8 +99,8 @@ func (s *Server) GetTicketMessage(ctx context.Context, req *corev1.GetTicketMess
 		HasFile: v.Message.FileID != "", Delivery: v.Message.Delivery, Closed: v.Ticket.Status == "closed",
 		Category: v.Ticket.Category, FileId: v.Message.FileID, FileType: v.Message.FileType}
 	// Telegram link buttons must be https.
-	if strings.HasPrefix(s.publicURL, "https://") {
-		out.Url = s.publicURL + "/admin/support/" + v.Ticket.ID
+	if origin := s.dashboardURL(ctx); strings.HasPrefix(origin, "https://") {
+		out.Url = origin + "/admin/support/" + v.Ticket.ID
 	}
 	return out, nil
 }

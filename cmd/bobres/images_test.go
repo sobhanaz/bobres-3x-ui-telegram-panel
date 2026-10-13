@@ -174,6 +174,8 @@ func TestComposeImagesTakeTheirDigest(t *testing.T) {
 	for _, svc := range imageServices {
 		want = append(want, imageRepo+svc+":${BOBRES_VERSION:-latest}${"+digestKey(svc)+":-}")
 	}
+	// The tls-agent runs core's image: the same line again.
+	want = append(want, imageRepo+"core:${BOBRES_VERSION:-latest}${"+digestKey("core")+":-}")
 	slices.Sort(bobres)
 	slices.Sort(want)
 	if !slices.Equal(bobres, want) {

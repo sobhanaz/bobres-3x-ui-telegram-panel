@@ -43,8 +43,8 @@ legal review, the brand checks (domain, bot name, trademark) and license pricing
   support. Persian and English, dark and light.
 - Overview, users, services, plans and packages, orders and payments with the receipt review queue, the ledger with
   CSV export, discounts and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
-  settings, 3x-ui servers, payment gateways, staff, the System page (health, updates, logs, backups, license) and
-  the audit log.
+  settings, 3x-ui servers, payment gateways, staff, the System page (health, updates, logs, backups, HTTPS
+  certificates, license) and the audit log.
 
 **Payments**
 - The wallet; card to card, USDT (TRC20 or ERC20) and a Zarinpal payment link, each with a screenshot staff approve;
@@ -58,6 +58,10 @@ legal review, the brand checks (domain, bot name, trademark) and license pricing
 - Daily encrypted backups: the newest 7 kept on the server, each sent to the owner on Telegram, and optional copies
   in S3-compatible storage. `bobres restore` puts one back.
 - `bobres update` with stable and beta channels and an automatic rollback; `bobres rollback` undoes the last update.
+- HTTPS certificates, from the dashboard's HTTPS tab or `bobres ssl`: Caddy's automatic certificate for the domain
+  (the default), a Let's Encrypt certificate for the server's IP address (about 6 days, renewed by Caddy), or your own
+  certificate and key. A change is saved only once Caddy accepts it, and `sudo bobres ssl auto` is the way back when a
+  wrong certificate locks browsers out.
 - System alerts in Telegram, operator runbooks, a redacted support bundle, server hardening, `bobres config` and
   `bobres secrets rotate`.
 
@@ -66,6 +70,8 @@ legal review, the brand checks (domain, bot name, trademark) and license pricing
   payments holds the gateway secrets, and core has no internet access.
 - Secrets at rest are encrypted with a master key per service. Releases are signed (Ed25519); images are signed with
   cosign and run by the digests the signed CLI carries.
+- Core still never controls the gateway: a small `tls-agent` with no network is the only writer of Caddy's TLS files.
+  An own certificate's private key is sealed with core's master key.
 - The dashboard has CSRF protection, authenticator codes for every password login, a strict CSP and an append-only
   audit log.
 - Licenses are signed tokens bound to the store's domain and install. A missing license blocks nothing.
@@ -95,7 +101,7 @@ Afterwards run `bobres` for the management menu:
 ```text
    n____n   BOBRES manager  bobres v0.1.0
   ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.1.0
-   \_||_/   Store: running (8/8 services)
+   \_||_/   Store: running (9/9 services)
   ──────────────────────────────────────────────────────────
    1. Status
    2. Live logs (Ctrl+C returns here)
@@ -117,7 +123,10 @@ Afterwards run `bobres` for the management menu:
   ──────────────────────────────────────────────────────────
   15. Dashboard login link (if the bot is down)
   16. Check this server
-  17. Uninstall
+  ──────────────────────────────────────────────────────────
+  17. HTTPS certificate
+  ──────────────────────────────────────────────────────────
+  18. Uninstall
   ──────────────────────────────────────────────────────────
    0. Exit
 ```
@@ -134,9 +143,10 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`
 
 ## How it is built
 
-A Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) and a `backup` service, behind Caddy, with
-PostgreSQL (one schema and one role per service) and Redis. Services call each other over gRPC and pass events
-through each service's outbox. The dashboard is Vue 3, built into the `core` binary.
+A Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) and a `backup` service, behind Caddy, which a
+small `tls-agent` (core's image, without a network) configures for HTTPS, with PostgreSQL (one schema and one role per
+service) and Redis. Services call each other over gRPC and pass events through each service's outbox. The dashboard is
+Vue 3, built into the `core` binary.
 
 ## Development
 - Go 1.26 or newer (`go.mod` says `go 1.26.0`; CI and the Docker image track the latest 1.26 patch).

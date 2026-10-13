@@ -30,7 +30,8 @@ skips it; see Backups, "Off-server copies").
 live logs, start, stop, restart, show settings (secrets masked), change the bot token, the owner's Telegram
 ID or the first 3x-ui panel, back up now, show the backup key (after a confirmation), restore a backup (the newest 15
 in `backups/` by number, or any file by path with an optional key file), update (the `--check` output, then
-`bobres update` when a newer release exists), roll back the last update, check the server, uninstall. Restore, update
+`bobres update` when a newer release exists), roll back the last update, check the server, the HTTPS certificate (a
+submenu, see HTTPS certificates), uninstall. Restore, update
 and rollback run the commands' own code, confirmation included; after an update or a rollback the menu ends, because
 the `bobres` running it was replaced (run `bobres` again). Settings changes re-run the installer with the one new
 value, so they are validated the same way (bot token and panel checked online) and only the affected
@@ -50,7 +51,8 @@ dashboard has a server.
    before milestone 6a gets its payments key then; until that re-run, compose passes an empty key (`:-`) and payments
    keeps running Zarinpal from `.env`. The Zarinpal merchant id, proxy and sandbox in `.env` only seed the gateway
    settings on the first start with the key; the public URL and `BOBRES_ZARINPAL_HOST` stay in `.env` (Caddy).
-6. **Render** `docker-compose.yml` + Caddyfile from templates; pull signed images (verify signatures).
+6. **Render** `docker-compose.yml`, `caddy/Caddyfile` and the default `tls/` files from templates; pull signed images
+   (verify signatures).
 7. **Start** infra (Postgres, Redis), run migrations, start services, wait for health.
 8. **Harden** (see Hardening below): ufw (the SSH port, 80, 443), fail2ban for SSH, unattended-upgrades (security
    only), a swap file on a small server. Each step is announced and asked; `--no-harden` skips them all, and
@@ -79,8 +81,10 @@ What the built installer does differently from this list:
   pulls exactly that content, whatever the tag points to now. The servers do not check cosign signatures
   themselves. The images run by tag when `BOBRES_VERSION` is not the CLI's own version (`--version` with another
   version, or a newer CLI from the one-liner on an install that keeps its version until `bobres update`), and with
-  a development build. Caddy, Postgres and Redis (`caddy:2-alpine`, `postgres:16-alpine`, `redis:7-alpine`) come
-  from Docker Hub by tag.
+  a development build. Postgres and Redis (`postgres:16-alpine`, `redis:7-alpine`) come from Docker Hub by tag. Caddy
+  is pinned by version and digest (`caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f`,
+  the multi-arch index digest), so an update that changes the reference pulls the new image, and a moved tag changes
+  nothing (see HTTPS certificates).
 - **Verify:** the install waits until every service is healthy and prints the first steps and the backup key. It
   sends no test message.
 - **A re-run** keeps every secret, fills only missing values and recreates what changed.
@@ -94,9 +98,10 @@ Bot API server (`BOBRES_TELEGRAM_API_URL`), it must be version 9.4 or newer. The
 (`/setname`).
 
 ## Layout on server
-`/opt/bobres/{bobres.yml, .env, docker-compose.yml, Caddyfile, data/, backups/, logs/}`, and `.restore-point/` after
+`/opt/bobres/{bobres.yml, .env, docker-compose.yml, caddy/, tls/, data/, backups/, logs/}`, and `.restore-point/` after
 an update (root only); state in named volumes. install.sh and `bobres update` record the last verified key list and
-release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`).
+release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`). `caddy/` and `tls/` are the HTTPS
+layout (see HTTPS certificates). An install made before P8 also keeps its old top-level `Caddyfile`.
 
 ## Status (2026-10-12)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
@@ -105,7 +110,8 @@ License activation), `backup` (2026-10-11, see Backups),
 `restore`, `update` and `rollback` (2026-10-12, see Restore, update and rollback), `support-bundle` (2026-10-12, see
 Support bundle), `harden` and the install's hardening step, `config list|get|set`, `secrets rotate`, the menu's
 restore/update/rollback items and the update's install time limit (2026-10-12, see Hardening, Settings and secrets),
-and off-server backup copies with `restore s3://...` (2026-10-12, P7d, see Backups).
+and off-server backup copies with `restore s3://...` (2026-10-12, P7d, see Backups), and `ssl` with the menu's
+HTTPS item and doctor's TLS line (P8, see HTTPS certificates).
 The bootstrap `install.sh` downloads the latest GitHub release, verifies it and hands over to `bobres install`.
 Operator runbooks: [runbooks/](runbooks/README.md).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
@@ -129,7 +135,8 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements, how it came) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container |
 | `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER`, set with `bobres config set`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
-| `bobres doctor` | Diagnose: OS, RAM, disk, ports, Docker, DNS, and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures) |
+| `bobres ssl [status] / auto / ip [--ip X] [--yes] / manual --cert FILE --key FILE` | The HTTPS certificate: show it, go back to the automatic one for the domain, add a Let's Encrypt certificate for the server's IP address, or use your own certificate and key. Each runs `/app ssl ...` in the core container (see HTTPS certificates) |
+| `bobres doctor [--dir D] [--domain X] [--offline]` | Diagnose: OS, RAM, disk, ports, Docker, DNS, the TLS certificate of every address the store serves (a crash-looping Caddy is a FAIL), and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures). `--dir` is the install it reads `.env` and core's address list from; `--domain` defaults to its `BOBRES_DOMAIN` |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
 | `bobres support-bundle [--offline]` | A redacted tar.gz for support in the install directory: versions, `compose ps`, the doctor's checks, the newest 300 log lines per service, the `.env` key names (never a value), disk and memory, the backups list (see Support bundle). Never the database, a backup or a secret value |
 
@@ -260,7 +267,7 @@ done (or nothing was to do), 1 when refused or failed, 2 for usage errors, and t
    what was checked, shown and confirmed, whatever is put at its path in between (a pipe, which cannot be read
    twice, is refused).
 3. It asks, unless `--yes`: the current data is replaced.
-4. It stops core, bot, payments, provisioner and backup; postgres, redis and caddy stay up. First, so that nothing is
+4. It stops core, bot, payments, provisioner and backup; postgres, redis, caddy and the tls-agent stay up. First, so that nothing is
    written after the safety backup (it would be in neither that backup nor the restored data).
 5. **Safety backup:** `pg_dump -Fc` of the current database (in the postgres container, as its superuser
    `POSTGRES_USER` over the local socket: no password anywhere) streamed into the backup format with this install's
@@ -336,8 +343,9 @@ build.
 4. Downloads `bobres_<os>_<arch>` and checks it against the verified `checksums.txt`, before anything changes.
 5. **Restore point**, built in `<dir>/.restore-point.new` (mode 0700, root's): the database's migration versions (each
    schema's highest goose `version_id`), a backup of the database (as restore step 5, while the store keeps running),
-   copies of `.env`, `docker-compose.yml`, `Caddyfile` and `postgres-init.sh` in `files/`, a copy of the running CLI
-   (`bobres`), and `restore-point.json` (`from_version`, `to_version`, `backup_file`, `created_at`, `cli_path`,
+   copies of `.env`, `docker-compose.yml`, `Caddyfile` (the old top-level one, when the install has it),
+   `caddy/Caddyfile` and `postgres-init.sh` in `files/` (only the ones that exist; the folders they sit in are made
+   too), a copy of the running CLI (`bobres`), and `restore-point.json` (`from_version`, `to_version`, `backup_file`, `created_at`, `cli_path`,
    `cli_backup_path`, `files_dir`, `schema_versions`, `release_floor` (`release.version` before the update, "" for
    none), later `used_at`). It is outside `backups/` on purpose: uid 65532
    controls that folder (it could swap in its own compose file for root to start), and operators copy `backups/` off
@@ -389,6 +397,8 @@ moves the images and `bobres restore` the data. `release.version` goes back to t
 (removed when that is ""): the update undone no longer counts as installed, so a later update may take a release
 below it (a stable patch after an undone beta). It is only lowered, and not when it is above the release rolled back
 from (install.sh installed a newer one since); a restore point without `release_floor` leaves it as it is.
+A rollback puts back every file the restore point holds, and leaves the HTTPS layout's folders (`caddy/`, `tls/`) in
+place (see HTTPS certificates).
 
 ## Support bundle
 `bobres support-bundle [--dir D] [--offline]` writes `<dir>/bobres-support-<UTC stamp>.tar.gz` (mode 0600, through
@@ -481,13 +491,13 @@ The settings it changes, and the services each one recreates:
 
 | Key | Recreates | Checked as |
 |---|---|---|
-| `BOBRES_DOMAIN` | caddy, core, payments | install's host name rule (lower-cased); a reminder that DNS must point here |
+| `BOBRES_DOMAIN` | caddy, core, payments, tls-agent | install's host name rule (lower-cased); a reminder that DNS must point here. Core hands the new domain to the tls-agent in its request, and the agent accepts only its own `BOBRES_DOMAIN`, so both are recreated |
 | `BOBRES_TIMEZONE` | bot, backup | a known time zone (the CLI embeds tzdata, as the images do) |
 | `BOBRES_ADMIN_TELEGRAM_ID` | core, bot | a positive number (core makes them the owner when it starts) |
 | `BOBRES_LOG_LEVEL` / `BOBRES_LOG_FORMAT` | core, payments, provisioner, bot, backup | debug, info, warn, error / json, text |
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
-| `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, payments | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it |
+| `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, core, payments, tls-agent | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it. The tls-agent is recreated with core for the same reason as for the domain |
 | `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel) |
 | `BOBRES_LICENSE_SERVER` | bot | an https URL without credentials, or empty (no online activation or refresh; see License activation) |
 | `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |
@@ -505,7 +515,11 @@ The settings it changes, and the services each one recreates:
   then `compose up -d --no-deps` of the services above that this install runs (backup only where its profile is on),
   and waits until they are healthy (Caddy has no health check). A stopped store stays stopped (the change applies when
   it starts); `--no-restart` only writes. When the services are not healthy it exits 1 and prints the command that
-  sets the old value back; the value itself was valid, so it is not undone on its own.
+  sets the old value back; the value itself was valid, so it is not undone on its own. The tls-agent is in the list
+  only where the install has one (see HTTPS certificates, `tlsAgentOn`): on an install that runs images from before
+  release 0.1.0-rc.2, or whose compose file is from then, the domain and the Zarinpal address recreate caddy, core and
+  payments only; a release CLI with a tag that is no release (`ci`, `0.1.0-lab.3`) recreates it, since its images have
+  it.
 - `list` shows the settings, then every other key with secrets masked (`••••`; a bot token keeps its public bot id)
   and the way it is changed.
 
@@ -535,6 +549,172 @@ The settings it changes, and the services each one recreates:
 - **Master keys are not rotated** (they encrypt the 3x-ui tokens, staff authenticators and gateway settings at rest;
   re-encryption with a new key is future work), nor the backup key (older backups open only with it): the command
   explains and points to the [rotate secrets](runbooks/rotate-secrets.md) runbook.
+
+## HTTPS certificates
+Runbook: [HTTPS certificates](runbooks/https.md). Trust boundaries: [07-security.md](07-security.md), "HTTPS manager".
+A store's addresses get their certificates in one of three modes: `auto` (Caddy's automatic certificate for
+`BOBRES_DOMAIN`, and for the Zarinpal domain when there is one; the default), `ip` (also a Let's Encrypt certificate
+for the server's public IP address) and `manual` (the operator's own certificate chain and private key for the
+domain). The mode is a setting in the database (`core.tls_config`, 01-database.md), changed from the dashboard's
+System page, HTTPS tab, or with `bobres ssl`. It is not a `.env` setting, so `bobres config` does not touch it.
+
+**Layout.** Caddy's main Caddyfile is static. It defines the site block once, as the snippet `(bobres_site)`, and
+imports two files that the tls-agent writes: `/tls/global.caddy` inside the global options and `/tls/sites.caddy` at the
+top level. Each site in `sites.caddy` imports `(bobres_site)`.
+
+```text
+/opt/bobres/
+  caddy/               root:root 0755
+    Caddyfile          root:root 0644, written by the installer from its embedded copy
+  tls/                 65532:65532 0750 (0777 on a non-root install: development and CI only)
+    global.caddy       imported in the global options (default_sni when an IP address is served)
+    sites.caddy        imported at the top level: one site for each served address
+    certs/             65532:65532 0750; cert.pem and key.pem of a manual pair, and nothing else
+  Caddyfile            the old top-level file; only on an install made before this layout
+```
+
+- **Modes and owners.** `tls/` is `65532:65532`, mode 0750. The files the tls-agent writes (`global.caddy`,
+  `sites.caddy`, `certs/cert.pem`, `certs/key.pem`) belong to 65532 and are mode 0640: group 65532 is Caddy's group, so
+  Caddy can read them and other users on the host cannot. The default `global.caddy` and `sites.caddy` the installer
+  writes are root's, mode 0644, and hold no secret; the agent replaces them with its own files the first time core
+  asks. `caddy/` and its Caddyfile are root's, and Caddy mounts them read-only.
+- **Defaults.** The installer writes the auto-mode `global.caddy` and `sites.caddy` only when they are missing, so the
+  first start works before core has ever run. It never overwrites them afterwards: the tls-agent owns them. A missing
+  `sites.caddy` stops Caddy loudly (a restart loop in `bobres status`) instead of serving nothing.
+- **Symbolic links and other entries.** The installer runs as root and `tls/` belongs to uid 65532, so it checks every
+  path under `tls/` with `lstat` before it writes, and never follows a link: it opens files with `O_NOFOLLOW`, never
+  creates a directory through a link, and changes owners by descriptor. Of what it finds where a default file goes
+  (`global.caddy`, `sites.caddy`): a regular file stays as it is (the agent's), unless root runs the install and it
+  belongs to neither root nor 65532, which is refused; a directory is refused ("is a directory"); a symbolic link,
+  a pipe, a socket or a device file is unlinked (unlinking never follows a link) and the default is created in its
+  place with `O_EXCL`, with a warning that says what was removed (on stderr, also in the quiet run `bobres update`
+  makes). The agent owns `tls/`, so a compromised one could plant such an entry to make every install and update fail,
+  and `bobres update` roll back each time, blocking security updates; replacing it keeps them going. `tls/` and
+  `caddy/` themselves must be directories, not links.
+- **The old Caddyfile.** Caddy used to mount the single file `./Caddyfile`. A single-file bind mount keeps the old
+  inode after the installer's atomic rename, so a changed Caddyfile never applied on update. Caddy now mounts the
+  directory `./caddy`. The installer no longer writes the top-level `Caddyfile`, and never deletes it: on an upgraded
+  server it stays as it was, because the compose file of an older version mounts it after `bobres rollback`. A fresh
+  install never has one.
+- **Compose.** A new service `tls-agent` (core's image, `command: ["tls-agent"]`, user 65532:65532, `network_mode:
+  none`, read-only, all capabilities dropped, 64 MB, healthcheck `/app tls-agent --healthcheck`). Its environment is
+  the log settings and the install's two names, `BOBRES_DOMAIN` and `BOBRES_ZARINPAL_HOST`, exactly as core has them
+  (compose refuses to start without the domain): the agent accepts a request only for those names. Three new named
+  volumes: `tls_request` (core writes, the agent reads), `tls_result` (the agent writes, core reads) and `caddy_admin`
+  (the socket). Caddy runs as `0:65532`, mounts `./caddy` and `./tls` read-only, and has `caddy_admin`. The full list of
+  who mounts what is in 07-security.md. The `/request`, `/result` and `/tls-result` mount points exist in the image
+  (mode 0700, owned by 65532:65532), so a new volume copies that owner on its first mount.
+- **The tls-agent exists from release 0.1.0-rc.2 on: the `tls` profile and one test.** The compose file always defines
+  the service, but an image from before rc.2 has no `tls-agent` command, so the service sits behind the Compose profile
+  `tls` (`profiles: [tls]`), turned on the way `backup` is: every `bobres install` puts `tls` in `COMPOSE_PROFILES` in
+  `.env` when the images have the agent, and takes it out (other profiles stay) when they do not. An image has it
+  unless its tag names a release from before 0.1.0-rc.2 (`0.1.0-rc.1`, `0.0.9`, a `-beta` or `-alpha` of 0.1.0); every
+  other tag has it: a later release, `latest`, an empty tag, this CLI's own release, a development build of the CLI,
+  and a tag that is no release (`ci`, `0.1.0-lab.3`), whose images are built from the source that has it
+  (`tlsAgentImage` in `cmd/bobres/tlsagent.go`). So `bobres install --version 0.1.0-rc.1` (the documented downgrade),
+  or a plain re-run over an rc.1 install, does not start an agent that would restart for ever, and removes the
+  container an earlier run left (`compose rm --stop --force tls-agent`, best effort: with the profile off compose
+  neither updates nor stops it). `bobres install --version 0.1.0-rc.2` or newer turns it on again and waits for it.
+
+  **One test decides whether an install has a working agent** (`tlsAgentOn`): the `docker-compose.yml` on disk
+  defines the service, **and** the install's images have it. The compose file is read as text (a missing file says no,
+  one the user cannot read says yes), so it needs no docker, and it is what makes a rollback safe: the restored
+  compose file of an older release has no `tls-agent` service, whatever `.env` says (`latest`, an empty version).
+  Everything that waits for the agent, lists it, recreates it or asks core about it uses it: `bobres status` and the
+  menu's count, the waits after `start`, `restart`, `install`, `update`, `restore` and a rollback, `config set` (the
+  recreate list of the domain and the Zarinpal address), `bobres ssl` and the menu's HTTPS item, doctor's TLS lines,
+  and the support bundle (its service logs). On an install where it says no, none of them mentions the agent, and
+  nothing is run in core's container for HTTPS (see `bobres ssl`).
+- **Caddy's image** is pinned: `caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f`
+  (the digest of the multi-arch index). The floors are Caddy 2.11.3, the first version that issues IP certificates, and
+  2.11.1, the first that reloads on SIGUSR1. A changed reference is "missing" to `compose up -d`, which pulls it on
+  update. CI validates every mode's files with the reference it reads from the compose file.
+- **Reloading Caddy.** After `compose up -d` in `bobres install` (and so in `bobres update`, which runs it) the
+  installer makes Caddy read its config again with `docker compose kill -s SIGUSR1 caddy`. The signal works with or
+  without the admin socket, and the tls-agent's loads keep Caddy's record of its config file, so the signal reloads the
+  right file. This is best effort: a failure is a warning, never a failed install or update. The installer then waits
+  up to 30 seconds for the caddy container to be `running` on two looks in a row (not restarting) and warns when it is
+  not. `bobres config set` does not send the signal: it recreates Caddy.
+- **Domain changes.** `bobres config set BOBRES_DOMAIN` and `BOBRES_ZARINPAL_PUBLIC_URL` recreate caddy, core, payments
+  and the tls-agent. Core writes its request to the tls-agent again when it starts, and the agent, which has the new
+  names in its own environment, renders the new domain or Zarinpal domain. A certificate of your own that does not
+  cover the new domain is left unused (HTTPS falls back to the automatic one).
+- **IP addresses.** An IPv4 address passes the installer's host name rule, so it can be `BOBRES_DOMAIN`, public or
+  private (a lab or LAN install); an IPv6 address does not pass it. In `auto` mode its site gets Caddy's own
+  certificate authority (`tls internal`): browsers do not trust it. In `ip` mode the address is the server's public one,
+  with a Let's Encrypt `shortlived` certificate, and it must be a public address (not private, not carrier-grade NAT).
+  Whenever an IP address is served, the global options get `default_sni` for it, because clients send no name to an IP
+  address. In `ip` mode dashboard links move to `https://<ip>` only while two things hold: Caddy serves a publicly
+  trusted certificate for that address, and the bot's own detection of the server's public address, at most 5 minutes
+  old (core asks the bot every minute), is that same address. A host whose bot reaches the internet from another address
+  than visitors use (a VPN, a NAT egress, a second interface, a floating IP address that moved) never satisfies the
+  second part, so its links stay on the domain; `BOBRES_PUBLIC_URL` in `.env` (core's environment; recreate core)
+  overrides the choice. Payment returns and Telegram webhooks use the domain, whatever the links do.
+
+**`bobres ssl`** (exit 0 done, 1 refused or failed, 2 usage; `--dir` as for every command). Each form runs
+`docker compose exec -T core /app ssl ...`, which uses the same code as the dashboard.
+
+| Command | Does |
+|---|---|
+| `bobres ssl` / `bobres ssl status` | The mode, the saved setting, and for each served address (domain, IP address, Zarinpal domain) the issuer, expiry and whether it is trusted, from core's live check. It also dials this host's own `127.0.0.1:443` (SNI = the domain, none for an IP address) to show what the outside sees |
+| `bobres ssl auto` | Back to the automatic certificate for the domain. This is the recovery command: it works when the dashboard does not |
+| `bobres ssl ip [--ip X] [--yes]` | Also serve the store on a public IP address with a Let's Encrypt certificate. Without `--ip` it uses the server's public IP address, detected from the host (private addresses are refused). An address that differs from the detected one needs `--yes`, or an answer to the question |
+| `bobres ssl manual --cert FILE --key FILE` | Use your own certificate chain and private key. The CLI reads the two files on the host and pipes them to core. The key must not be encrypted |
+
+- The change is saved only once Caddy has accepted it. A refusal prints Caddy's own words and changes nothing.
+  `auto` is the exception: it is saved even when Caddy is not running, so it can always bring the store back.
+- `manual` is refused when core has no master key, because the key is never stored unsealed.
+- The CLI passes the address it detected with `--detected`; without it core asks the bot, which has the internet.
+  `/app ssl status --json` prints the same JSON as `GET /api/v1/system/tls`.
+- **On an install that predates the HTTPS manager** (`tlsAgentOn` says no: it runs images from before 0.1.0-rc.2, or its
+  `docker-compose.yml` is one from then, as after a rollback) every form prints
+  `error: this install predates the HTTPS manager (release X): run `sudo bobres update``, exits 1 and runs nothing in
+  core: that image's `/app` has no `ssl` command, so `docker compose exec core /app ssl status` would start a second
+  core process (its migrations and workers) that dies on "address in use". Help and usage errors (exit 2) are
+  unchanged. The status view's host check and doctor do not ask core on such an install either.
+
+**Menu.** The item "HTTPS certificate" (17, in a group of its own, before 18 "Uninstall") opens a submenu: 1 Status, 2
+Domain (automatic), 3 Server IP (Let's Encrypt, 6 days, renewed automatically), 4 Your own certificate files, 0 Back.
+The menu's header counts the services `bobres status` lists, the tls-agent included where the install has one:
+"running (9/9 services)" on an install with backups, 8 without, and one less on an install that predates the HTTPS
+manager (7 without backups). On such an install the item prints the message above instead of the submenu.
+
+**Doctor.** `bobres doctor [--dir D] [--domain X] [--offline]` looks at the install in `--dir` (it reads `.env`, and
+core's own list of served addresses when core runs) and prints one TLS line for each address the store serves: `TLS`
+for the domain, `TLS ip` and `TLS zarinpal` for the others. It dials this host's `127.0.0.1:443` (SNI = the address,
+none for an IP address). Without `--domain` the domain is the install's `BOBRES_DOMAIN`, which only root can read.
+- PASS: a publicly trusted certificate that is not close to its end.
+- WARN: not publicly trusted (self-signed, from a private CA, or Caddy's own CA), or less than min(14 days, a quarter of
+  its life) left, which means the renewal is failing.
+- FAIL: no certificate, a certificate for other names, or an expired one. A Caddy that is crash-looping or restarting is
+  one FAIL line, because HTTPS is down.
+- SKIP: Caddy is not running, no domain is known, or the install predates the HTTPS manager: one line, "HTTPS manager
+  not installed yet (release X): run `sudo bobres update`". Nothing is asked of core and no certificate is probed then.
+
+The lines are part of the doctor's checks (and of the support bundle's `doctor.txt`), not of the installer's preflight:
+before an install there is nothing to look at.
+
+**Update and rollback across the layout change.** An update from a version with the old layout works like any other:
+- The restore point holds the files the running CLI lists, as far as they exist: `.env`, `docker-compose.yml`,
+  `Caddyfile`, `caddy/Caddyfile`, `postgres-init.sh`. Staging creates the folders they sit in. An update run by a
+  `bobres` from before the layout change (no `caddy/Caddyfile` in its list) keeps the old top-level `Caddyfile` only; one
+  run by a newer `bobres` keeps `caddy/Caddyfile` too.
+- A rollback puts back every file in the restore point, whichever files the running CLI knows about. It leaves the new
+  layout's leftovers (`caddy/`, `tls/`) in place, because the older compose file ignores them, and the old top-level
+  `Caddyfile` is there for it to mount. Going back to a version without the HTTPS manager restores the database from
+  before the update, which has no `core.tls_config`: the store is on Caddy's automatic certificate again, as it was.
+- The tls-agent exists from release 0.1.0-rc.2 on. An update from 0.1.0-rc.1 or older adds it with the new layout
+  (the new compose file, `tls` in `COMPOSE_PROFILES`). A rollback to such a release restores the older compose file and
+  `.env`, and its `up -d --remove-orphans` removes the tls-agent container, which that file does not define; the wait
+  after it, `bobres status`, `bobres ssl` and doctor see an install with no agent (`tlsAgentOn`: the restored compose
+  file lacks the service, whatever version `.env` names), so the rollback of a healthy stack exits 0, and the HTTPS tab
+  says the applier is not set up until `sudo bobres update`.
+- The first start after the update runs on the defaults the installer wrote (auto mode), as the store did before. At
+  every start core asks the tls-agent for the saved setting, so a restart, a restore or a reinstall brings `ip` or
+  `manual` back.
+
+**Support bundle.** It never includes `tls/` or any certificate or key, and a PEM block that reached a log is replaced
+whole. The mode and the IP address are not secret and may appear in the doctor's lines and the logs.
 
 ## License activation
 `BOBRES_LICENSE_SERVER` is the vendor's license server ([13-license-server.md](13-license-server.md)). The seller
@@ -574,6 +754,19 @@ asks again after 3 hours. A failed refresh changes nothing: the token simply run
 ## Uninstall
 Stops services, removes containers/units; data kept unless `--purge`; prints what remains. `--purge` deletes the
 install directory, and with it every backup in `/opt/bobres/backups`: it warns first (copy them elsewhere).
+
+- The command is `docker compose --profile '*' down --remove-orphans [--volumes]`: every profile is on, so a container
+  of a service whose profile is off now (the tls-agent of a release the install went back from) is removed too, and its
+  network and volumes with it. Without the `*` such a container stays running and `down` leaves its volume and network
+  behind ("Resource is still in use") while exiting 0.
+- `--purge` then removes **every volume that carries the label `com.docker.compose.project=bobres`**, whether or not
+  the install's compose file declares it (`docker volume ls -q --filter label=...`, then `docker volume rm`). `down
+  --volumes` removes only the volumes the file on disk declares, and after a rollback to a release from before the HTTPS
+  manager that file lacks `tls_request` (it holds `tls.json`, which carries the private key of an own certificate in
+  clear while one is being applied), `tls_result` and `caddy_admin`. The command lists the ones it had to remove itself
+  ("Also removed volumes of this install that docker compose down left ...") and says "Nothing of BOBRES remains" only
+  after all of them are gone. When a volume cannot be removed it exits 1, says data is still on the server, and keeps the
+  install directory (so the command can run again).
 
 ## Open points
 - Installer and CLI binaries: GitHub releases of this (public) repository. Images: ghcr.io, which must be

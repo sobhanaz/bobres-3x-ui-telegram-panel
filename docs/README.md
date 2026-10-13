@@ -13,8 +13,8 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [03-bot-ux.md](03-bot-ux.md) | Bot menus and flows, notifications, store rules, admin and reseller panels in the bot |
 | [04-dashboard.md](04-dashboard.md) | Web dashboard pages, roles and permissions |
 | [05-license.md](05-license.md) | Signed license token, entitlements, enforcement, online activation and daily refresh |
-| [06-installer.md](06-installer.md) | One-command installer and the `bobres` CLI: backups, restore, update and rollback, support bundle, hardening, settings and secrets |
-| [07-security.md](07-security.md) | Threat model and mitigations |
+| [06-installer.md](06-installer.md) | One-command installer and the `bobres` CLI: backups, restore, update and rollback, support bundle, hardening, settings and secrets, HTTPS certificates |
+| [07-security.md](07-security.md) | Threat model and mitigations, including the HTTPS manager's trust boundaries |
 | [08-brand.md](08-brand.md) | Brand (BOBRES the beaver: assets, rules, prompts), tone, copy deliverables |
 | [09-legal-questions.md](09-legal-questions.md) | Questions for a lawyer (not legal advice) |
 | [10-agent-workflow.md](10-agent-workflow.md) | How the work was split between AI agents and model tiers (build notes; not needed to run BOBRES) |
@@ -36,6 +36,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [Backups not arriving](runbooks/backups-not-arriving.md) | No daily backup in Telegram, or a failed backup on the System page |
 | [Rotate secrets](runbooks/rotate-secrets.md) | A token, password or key leaked, or a scheduled rotation |
 | [License](runbooks/license.md) | The License tab is not "Active", or the license refuses an action |
+| [HTTPS certificates](runbooks/https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; recovery when browsers refuse the dashboard |
 | [Restore a backup](runbooks/restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](runbooks/update-rollback.md) | Install a new release, or undo the last one |
 | [Releases and update channels](runbooks/releases.md) | Publish a stable or beta release, re-sign a quiet stable channel, move a store between channels |

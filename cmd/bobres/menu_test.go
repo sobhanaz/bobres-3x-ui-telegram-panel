@@ -3,11 +3,14 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsprobe"
 )
 
 type installCall struct {
@@ -57,12 +60,13 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	dir := installDir(t)
 	f := &fakeOps{ps: healthyPS}
 	// status, live logs, start, stop (declined, then confirmed), restart,
-	// dashboard link, server check, uninstall (declined), exit
-	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n16\n\n17\nn\n\n0\n", f)
+	// dashboard link, server check, the HTTPS menu (and back), uninstall
+	// (declined), exit
+	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n16\n\n17\n0\n\n18\nn\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	for _, want := range []string{"running (7/7 services)", "panel.example.com", "All services are running", "Cancelled.", "BOBRES is stopped", "All services are healthy"} {
+	for _, want := range []string{"running (8/8 services)", "panel.example.com", "All services are running", "Cancelled.", "BOBRES is stopped", "All services are healthy"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("menu output missing %q", want)
 		}
@@ -81,8 +85,12 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	if len(f.stream) != 2 || !contains(f.stream[0], "-f") || !contains(f.stream[0], "logs") || !contains(f.stream[1], "login-link") {
 		t.Fatalf("live logs and the dashboard link: %v", f.stream)
 	}
-	if len(*doctors) != 1 || !contains((*doctors)[0], "panel.example.com") {
+	if len(*doctors) != 1 || !contains((*doctors)[0], "panel.example.com") || !contains((*doctors)[0], dir) {
 		t.Fatalf("doctor: %v", *doctors)
+	}
+	if !strings.Contains(out.String(), "17. HTTPS certificate") || !strings.Contains(out.String(), "18. Uninstall") ||
+		!strings.Contains(out.String(), "Your own certificate files") || !strings.Contains(out.String(), "Server IP address (Let's Encrypt, 6 days") {
+		t.Errorf("the HTTPS item and its menu are missing:\n%s", out)
 	}
 }
 
@@ -93,6 +101,7 @@ func TestMenuBackups(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	writeInstalledCompose(t, dir)
 	ps := strings.TrimSuffix(healthyPS, "]") + `,{"Service":"backup","State":"running","Health":"healthy"}]`
 	f := &fakeOps{ps: ps}
 	// backup key (declined, then confirmed), back up now, settings, exit
@@ -101,7 +110,7 @@ func TestMenuBackups(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	if strings.Count(out.String(), "feedface") != 8 || !strings.Contains(out.String(), "Cancelled.") ||
-		!strings.Contains(out.String(), "running (8/8 services)") || !strings.Contains(out.String(), "daily at 03:30") {
+		!strings.Contains(out.String(), "running (9/9 services)") || !strings.Contains(out.String(), "daily at 03:30") {
 		t.Fatalf("menu: %s", out)
 	}
 	if len(f.stream) != 1 || !contains(f.stream[0], "backup") || !contains(f.stream[0], "run-now") {
@@ -196,7 +205,7 @@ func TestMenuInputEdges(t *testing.T) {
 		t.Fatalf("bad choices: %d %s", code, out)
 	}
 	m, out, _, _, _ = testMenu(dir, "0\n", &fakeOps{ps: `[{"Service":"core","State":"running","Health":"healthy"}]`})
-	if m.loop(); !strings.Contains(out.String(), "partly running (1/7") {
+	if m.loop(); !strings.Contains(out.String(), "partly running (1/8") {
 		t.Fatalf("partial: %s", out)
 	}
 }
@@ -323,5 +332,69 @@ func TestMenuUpdateAndRollback(t *testing.T) {
 	m.upd = ut.u
 	if code := m.loop(); code != 0 || !strings.Contains(ut.errOut.String(), "already used") {
 		t.Fatalf("used restore point: %d %s", code, ut.errOut)
+	}
+}
+
+// The HTTPS certificate item has a menu of its own; each choice runs the
+// command bobres ssl runs (core's `ssl` in its container).
+func TestMenuHTTPS(t *testing.T) {
+	dir := installDir(t)
+	files := t.TempDir()
+	certPEM, keyPEM := pemPair(t)
+	certFile, keyFile := filepath.Join(files, "cert.pem"), filepath.Join(files, "key.pem")
+	if err := os.WriteFile(certFile, certPEM, 0o644); err != nil { //nolint:gosec // a certificate
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeOps{ps: healthyPS}
+	in := strings.Join([]string{
+		"17", "1", "", // status
+		"17", "2", "", // domain
+		"17", "3", "", "", // the server's IP: Enter detects it
+		"17", "3", "8.8.4.4", "y", "", // another address, confirmed
+		"17", "4", certFile, keyFile, "", // own certificate
+		"17", "4", "", "", // own certificate, cancelled at the first question
+		"17", "9", "", // no such choice
+		"17", "0", "", // back
+		"0", "",
+	}, "\n")
+	m, out, errOut, _, _ := testMenu(dir, in, f)
+	var piped []pipeCall
+	m.ops.probeTLS = func(context.Context, string) tlsprobe.Result { return tlsprobe.Result{} }
+	m.ops.detectIP = func() string { return "93.184.216.34" }
+	m.ops.pipe = func(_ context.Context, _ string, stdin io.Reader, w io.Writer, args ...string) error {
+		b, _ := io.ReadAll(stdin)
+		piped = append(piped, pipeCall{args, string(b)})
+		_, _ = io.WriteString(w, "HTTPS is now manual.\n")
+		return nil
+	}
+	if code := m.loop(); code != 0 {
+		t.Fatalf("exit %d\n%s\n%s", code, out, errOut)
+	}
+	var core []string
+	for _, c := range f.stream {
+		core = append(core, coreArgs(c))
+	}
+	want := []string{
+		"exec -T core /app ssl status",
+		"exec -T core /app ssl auto",
+		"exec -T core /app ssl ip 93.184.216.34 --detected 93.184.216.34",
+		"exec -T core /app ssl ip 8.8.4.4 --detected 93.184.216.34 --yes",
+	}
+	if strings.Join(core, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("core runs\n%s\nwant\n%s", strings.Join(core, "\n"), strings.Join(want, "\n"))
+	}
+	if len(piped) != 1 || coreArgs(piped[0].args) != "exec -T core /app ssl manual" || !strings.Contains(piped[0].stdin, "PRIVATE KEY") {
+		t.Fatalf("the own certificate: %+v", piped)
+	}
+	for _, s := range []string{"Let's Encrypt must reach this server", "The certificate must cover the domain", "There is no option \"9\"", "Cancelled."} {
+		if !strings.Contains(out.String(), s) {
+			t.Errorf("menu output lacks %q", s)
+		}
+	}
+	if strings.Contains(out.String(), "PRIVATE KEY") {
+		t.Error("the key is in the menu's output")
 	}
 }
