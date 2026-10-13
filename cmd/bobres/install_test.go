@@ -651,8 +651,9 @@ func TestSummaryWithoutPanel(t *testing.T) {
 	if !strings.Contains(out.String(), "add your servers in the dashboard") {
 		t.Fatalf("summary: %s", out)
 	}
-	// the Bot API cannot set the bot's own photo: the summary says where to
-	if !strings.Contains(out.String(), "/setuserpic in @BotFather") {
+	// the bot sets its own photo from the dashboard: the summary says where to upload it
+	if !strings.Contains(out.String(), "Bot photo:          upload it in the dashboard (send /dashboard): Branding & texts > Store > Telegram bot") ||
+		strings.Contains(out.String(), "/setuserpic") {
 		t.Fatalf("summary without the bot photo hint: %s", out)
 	}
 	ins, out, _ = testInstaller("", nil, nil)

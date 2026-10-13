@@ -68,12 +68,20 @@ func (s *Server) getBranding(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "logo", err)
 		return
 	}
+	var botPhoto any
+	if a, err := s.cfg.Store.AssetInfo(ctx, s.cfg.Store.Conn(), store.AssetBotPhoto); err == nil {
+		botPhoto = map[string]any{"url": botPhotoURL(a), "size": a.Size, "updated_at": a.UpdatedAt.Unix()}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		s.fail(w, "bot photo", err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": v["branding.name"], "support": v["branding.support"], "color": v["branding.color"],
 		"terms_url": v["branding.terms_url"], "privacy_url": v["branding.privacy_url"],
-		"currency": langPair{v["branding.currency.fa"], v["branding.currency.en"]},
-		"logo":     logo,
-		"defaults": map[string]any{"name": defaultBrand, "color": defaultColor, "currency": langPair{"تومان", "Toman"}},
+		"currency":  langPair{v["branding.currency.fa"], v["branding.currency.en"]},
+		"logo":      logo,
+		"bot_photo": botPhoto,
+		"defaults":  map[string]any{"name": defaultBrand, "color": defaultColor, "currency": langPair{"تومان", "Toman"}},
 	})
 }
 
@@ -138,6 +146,7 @@ func (s *Server) putLogo(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "save logo", err)
 		return
 	}
+	s.refreshBot()
 	s.getBranding(w, r)
 }
 
@@ -147,6 +156,7 @@ func (s *Server) deleteLogo(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "remove logo", err)
 		return
 	}
+	s.refreshBot()
 	s.getBranding(w, r)
 }
 

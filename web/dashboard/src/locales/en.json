@@ -542,7 +542,7 @@
     "look": "Look",
     "color": "Brand colour",
     "color_pick": "Pick a colour",
-    "color_hint": "Buttons, links and highlights in the dashboard. Telegram has no colours, so the bot does not change. Empty: teal.",
+    "color_hint": "Buttons, links and highlights in the dashboard. Telegram allows only its own button colours, so the bot colours its buttons by meaning instead (green, blue, red). Empty: teal.",
     "color_bad": "Write the colour as #rrggbb, for example #0f766e.",
     "color_contrast": "White text on this colour is hard to read (contrast {ratio}:1; at least 4.5:1 is recommended). A darker shade reads better.",
     "color_preview": "Preview: the dashboard shows this colour until you save it or leave this page.",
@@ -563,6 +563,25 @@
     "logo_current": "Current logo",
     "logo_new": "New logo, not uploaded yet",
     "logo_meta": "{size} KB · updated {date}",
+    "bot_card": "Telegram bot",
+    "bot_photo": "Bot photo",
+    "bot_photo_hint": "Square PNG or JPEG, at least 160×160; 640×640 looks best. While “Keep the bot’s Telegram profile up to date” is on (Settings → General), the bot sets it as its Telegram profile photo, and removing it makes the bot take off the photo it set, but only while that is still its current photo. While that setting is off, nothing changes in Telegram.",
+    "bot_photo_none": "No bot photo yet. Until you upload one, the bot changes nothing and the photo set in {'@'}BotFather stays.",
+    "bot_photo_choose": "Choose an image",
+    "bot_photo_upload": "Upload",
+    "bot_photo_remove": "Remove photo",
+    "bot_photo_remove_confirm": "Remove the bot photo? The bot takes the photo it set off its Telegram profile, but only while that is still its current photo: a photo you set later in {'@'}BotFather stays. While “Keep the bot’s Telegram profile up to date” is off, nothing changes in Telegram.",
+    "bot_photo_saved": "Bot photo saved",
+    "bot_photo_removed": "Bot photo removed",
+    "bot_photo_too_large": "This image is larger than 512 KB.",
+    "bot_photo_bad_type": "Only PNG or JPEG images are accepted.",
+    "bot_photo_webp": "A WebP image cannot be used for the bot photo: save it as PNG or JPEG.",
+    "bot_photo_bad_size": "Each side of the image must be between 160 and 2048 pixels.",
+    "bot_photo_unreadable": "This file could not be read as an image.",
+    "bot_photo_current": "Current bot photo",
+    "bot_photo_new": "New photo, not uploaded yet",
+    "bot_photo_padded": "Not square: it is centred on a white square.",
+    "bot_photo_meta": "{size} KB · updated {date}",
     "legal": "Legal links",
     "legal_hint": "When set, the bot shows Terms and Privacy buttons on its support screen and answers /terms.",
     "terms_url": "Terms of service link",
@@ -788,7 +807,7 @@
         },
         "bot_profile": {
           "label": "Keep the bot’s Telegram profile up to date",
-          "help": "The bot sets its menu commands, its description (the text of an empty chat) and its short description (its profile page), in Persian and English, from its texts: edit them under Branding & texts → Bot texts → Bot profile. Turned off, it takes back its Persian and English ones and the staff menus, so what you set in {'@'}BotFather shows. The bot’s name and photo are always set in {'@'}BotFather."
+          "help": "The bot sets its menu commands, its description (the text of an empty chat) and its short description (its profile page), in Persian and English, from its texts: edit them under Branding & texts → Bot texts → Bot profile. It also sets its profile photo from Branding & texts → Store → Telegram bot. Turned off, it takes back its Persian and English texts and the staff menus, so what you set in {'@'}BotFather shows; the photo stays. The bot’s name is always set in {'@'}BotFather."
         }
       },
       "maintenance": {
@@ -1093,6 +1112,10 @@
         "logo": {
           "set": "Logo changed",
           "removed": "Logo removed"
+        },
+        "bot_photo": {
+          "set": "Bot photo changed",
+          "removed": "Bot photo removed"
         }
       },
       "staff": {

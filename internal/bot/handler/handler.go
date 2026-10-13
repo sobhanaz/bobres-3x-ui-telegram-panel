@@ -94,6 +94,10 @@ type Handler struct {
 	// settingsLoaded: a refresh has loaded the settings and the texts, so
 	// the bottom menu is built as the store has it (refreshMenu).
 	settingsLoaded atomic.Bool
+
+	// photoVersion is Settings.bot_photo_version from the last refresh, for
+	// RunProfile (nil before the first).
+	photoVersion atomic.Pointer[string]
 }
 
 // New builds a Handler. limiter may be nil.
@@ -140,6 +144,9 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 		}
 	}
 	h.set.Replace(m)
+	// The bot photo's version: RunProfile fetches the photo when it changes.
+	photo := s.GetBotPhotoVersion()
+	h.photoVersion.Store(&photo)
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true

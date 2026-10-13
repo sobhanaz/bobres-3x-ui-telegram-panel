@@ -50,6 +50,11 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
   turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments
   already started go on; Zarinpal is switched in payments (`ListGateways` lists only the offered ones).
+- core, bot photo (P8, built): `Settings.bot_photo_version` is the photo's upload time in unix nanoseconds, `""`
+  when the store has none and `"?"` when core could not read it (the bot then neither sets nor removes its photo);
+  `GetBotPhoto` returns `{version, jpeg}` (a square JPEG of at most 3 MB) or NOT_FOUND. The bot reads the version
+  with every settings refresh and fetches the photo only when it changes. An older core sends no version and
+  answers UNIMPLEMENTED; an older bot ignores the field.
 - payments: `CreateIntent`, `GetIntent`, `SubmitReceipt`, `ReviewReceipt`, `ListProviders`; HTTP webhooks per provider behind the gateway.
 - payments, gateway settings (milestone 6a, built; core's token only): `ListGatewayConfigs` (provider, enabled,
   configured, offered, sandbox, merchant_hint = last 4, proxy_set, key_missing, from_env, problem, updated_at/by;

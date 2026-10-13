@@ -70,6 +70,45 @@ export function logoSizeOk(width: number, height: number): boolean {
   return width >= 16 && height >= 16 && width <= 2048 && height <= 2048
 }
 
+// Bot photo files: what core can turn into a Telegram profile photo (a
+// square JPEG). No WebP: core has no WebP decoder.
+export const BOT_PHOTO_TYPES = ['image/png', 'image/jpeg']
+export const BOT_PHOTO_MIN_SIDE = 160
+export const BOT_PHOTO_MAX_SIDE = 2048
+
+/** botPhotoProblem says why a chosen file cannot be the bot photo, or "" when it can. */
+export function botPhotoProblem(file: { type: string; size: number }): '' | 'webp' | 'bad_type' | 'too_large' {
+  if (file.type === 'image/webp') return 'webp'
+  if (!BOT_PHOTO_TYPES.includes(file.type)) return 'bad_type'
+  if (file.size > LOGO_MAX_BYTES) return 'too_large'
+  return ''
+}
+
+/** botPhotoSizeOk checks an image's pixel size (160 to 2048 on each side). */
+export function botPhotoSizeOk(width: number, height: number): boolean {
+  const ok = (n: number) => n >= BOT_PHOTO_MIN_SIDE && n <= BOT_PHOTO_MAX_SIDE
+  return ok(width) && ok(height)
+}
+
+/** isWebP tells a WebP file by its first 12 bytes ("RIFF", a size, "WEBP"):
+ * the browser takes a file's type from its extension, so a WebP saved as
+ * ".jpg" says it is a JPEG. */
+export function isWebP(head: Uint8Array): boolean {
+  const at = (from: number, text: string) => [...text].every((c, i) => head[from + i] === c.charCodeAt(0))
+  return head.length >= 12 && at(0, 'RIFF') && at(8, 'WEBP')
+}
+
+/** botPhotoUploadProblem names how core refused a bot photo upload: too big
+ * (413), or not a type it converts (415; WebP has words of its own, and core
+ * says WebP in its message). "" for any other failure, which shows as an
+ * error with core's reason (a 400 says why: a side outside 160 to 2048, a
+ * picture it could not read, a JPEG too large for the bot). */
+export function botPhotoUploadProblem(e: { status: number; code: string; message: string }): '' | 'too_large' | 'webp' | 'bad_type' {
+  if (e.code === 'too_large' || e.status === 413) return 'too_large'
+  if (e.code === 'unsupported' || e.status === 415) return /webp/i.test(e.message) ? 'webp' : 'bad_type'
+  return ''
+}
+
 // ---------------------------------------------------------------------------
 // Bot texts
 

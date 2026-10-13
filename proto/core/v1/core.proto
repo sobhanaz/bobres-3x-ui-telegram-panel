@@ -247,6 +247,10 @@ message BroadcastState {
 
 message Settings {
   map<string, string> values = 1; // flattened key -> JSON-encoded value
+  // The bot photo's version: when it was uploaded, in unix nanoseconds; ""
+  // when the store has none, "?" when core could not read it (the bot then
+  // leaves its photo as it is). An older core never sets it.
+  string bot_photo_version = 2;
 }
 
 // --- Request/response messages ---
@@ -434,6 +438,14 @@ message CreateSupportTicketRequest {
 }
 
 message GetSettingsRequest {}
+
+message GetBotPhotoRequest {}
+
+// BotPhoto is the bot's Telegram profile photo, a square JPEG.
+message BotPhoto {
+  string version = 1; // as Settings.bot_photo_version
+  bytes jpeg = 2;
+}
 
 message UpdateBrandingRequest {
   map<string, string> values = 1;
@@ -691,6 +703,9 @@ service CoreService {
   // Resellers (milestone 5).
   rpc SetSubscriptionLabel(SetSubscriptionLabelRequest) returns (Subscription);
   rpc GetResellerInfo(GetResellerInfoRequest) returns (ResellerInfo);
+  // GetBotPhoto returns the bot photo, for the bot to set in Telegram when
+  // Settings.bot_photo_version changes; NOT_FOUND when there is none.
+  rpc GetBotPhoto(GetBotPhotoRequest) returns (BotPhoto);
 }
 
 message CanStartTrialRequest {

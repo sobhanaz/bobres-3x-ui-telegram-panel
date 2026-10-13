@@ -346,7 +346,7 @@ Changes that move money or add days take a request key, so a retried request hap
 | Method and path | Permission |
 | --- | --- |
 | `GET /api/v1/settings`, `PUT /api/v1/settings`, `POST /api/v1/settings/channel-check` | settings.write (payment details: gateways.write) |
-| `GET /api/v1/branding`, `PUT /api/v1/branding`, `PUT`/`DELETE /api/v1/branding/logo` | branding.write |
+| `GET /api/v1/branding`, `PUT /api/v1/branding`, `PUT`/`DELETE /api/v1/branding/logo`, `GET`/`PUT`/`DELETE /api/v1/branding/bot-photo` | branding.write |
 | `GET /api/v1/texts`, `POST /api/v1/texts/check`, `PUT /api/v1/texts`, `GET /api/v1/texts.json`, `POST /api/v1/texts/import` | branding.write |
 | `GET /api/v1/brand`, `GET /api/v1/brand/logo` | public |
 | `GET /api/v1/staff`, `POST /api/v1/staff`, `PUT /api/v1/staff/{id}/role`, `POST /api/v1/staff/{id}/remove` | staff.write (owner) |

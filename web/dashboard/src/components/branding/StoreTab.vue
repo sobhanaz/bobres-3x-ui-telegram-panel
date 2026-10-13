@@ -9,6 +9,7 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import LogoField from './LogoField.vue'
+import BotPhotoField from './BotPhotoField.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
 import { useAuth } from '../../stores/auth'
@@ -17,8 +18,9 @@ import { applyBrandColor } from '../../theme'
 import { DEFAULT_COLOR, HEX_RE, brandingField, contrastWithWhite, isHttpsUrl, normalizeHex } from '../../branding'
 import type { BrandingInfo } from '../../types'
 
-// The store's name, support contact, colour, logo, legal links and Toman
-// name (GET/PUT /branding). The colour previews live while it is edited.
+// The store's name, support contact, colour, logo, the bot's profile photo,
+// legal links and Toman name (GET/PUT /branding). The colour previews live
+// while it is edited.
 const props = defineProps<{ active: boolean }>()
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
@@ -195,6 +197,11 @@ async function logoChanged(b: BrandingInfo) {
   if (colorOk.value) applyBrandColor(form.value.color.trim())
 }
 
+// The bot photo changes nothing else on the page or in the header.
+function botPhotoChanged(b: BrandingInfo) {
+  if (info.value) info.value = { ...info.value, bot_photo: b.bot_photo ?? null }
+}
+
 const errorOf = (f: Field) => clientErrors.value[f] ?? ''
 </script>
 
@@ -274,10 +281,23 @@ const errorOf = (f: Field) => clientErrors.value[f] ?? ''
               </Message>
               <small v-if="previewing" class="app-muted"><i class="pi pi-eye" aria-hidden="true" /> {{ t('branding.color_preview') }}</small>
             </div>
-            <div class="app-field">
-              <span class="label">{{ t('branding.logo') }}</span>
+            <div class="app-field" role="group" :aria-labelledby="id('logo-label')" :aria-describedby="id('logo-hint')">
+              <span :id="id('logo-label')" class="label">{{ t('branding.logo') }}</span>
               <LogoField :logo="info.logo" @update="logoChanged" />
-              <small class="app-muted">{{ t('branding.logo_hint') }}</small>
+              <small :id="id('logo-hint')" class="app-muted">{{ t('branding.logo_hint') }}</small>
+            </div>
+          </div>
+        </template>
+      </Card>
+
+      <Card>
+        <template #title>{{ t('branding.bot_card') }}</template>
+        <template #content>
+          <div class="fields">
+            <div class="app-field" role="group" :aria-labelledby="id('bot-photo-label')" :aria-describedby="id('bot-photo-hint')">
+              <span :id="id('bot-photo-label')" class="label">{{ t('branding.bot_photo') }}</span>
+              <BotPhotoField :photo="info.bot_photo ?? null" @update="botPhotoChanged" />
+              <small :id="id('bot-photo-hint')" class="app-muted">{{ t('branding.bot_photo_hint') }}</small>
             </div>
           </div>
         </template>
