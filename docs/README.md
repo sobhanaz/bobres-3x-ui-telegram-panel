@@ -8,6 +8,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | Doc | Topic |
 |---|---|
 | [PLAN.md](PLAN.md) | Master plan: decisions, architecture, 3x-ui integration, DevOps, white-label model, phases and their status |
+| [ROADMAP.md](ROADMAP.md) | What comes after v0.1.0, in order: the checks a real server needs, then sales reports, the subscription page, more gateways and the Mini App store |
 | [01-database.md](01-database.md) | Postgres schemas, money rules, ledger, state machines |
 | [02-events-and-apis.md](02-events-and-apis.md) | Event catalog (Postgres outbox), gRPC APIs, payment provider + panel adapter interfaces |
 | [03-bot-ux.md](03-bot-ux.md) | Bot menus and flows, notifications, store rules, admin and reseller panels in the bot |
