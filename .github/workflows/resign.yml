@@ -1,0 +1,99 @@
+name: Re-sign the latest release
+
+# A release's signature expires 45 days after it was made (docs/runbooks/releases.md), and then
+# install.sh and `bobres update` refuse it. When no new release comes out, this re-signs the latest
+# stable release before that happens: it checks the binaries through the OLD signature, signs the same
+# files again with the release key, and replaces only the release's metadata. Binaries stay as they are.
+#
+# It runs on the 1st and the 16th of each month and re-signs only when fewer than 25 days are left, so
+# the release's date does not move more often than needed (a license's advisory updates_until note is
+# compared with it). A failed run is emailed to the repository owner by GitHub; the next run is 15 days
+# later, which is still inside the 45 days.
+on:
+  schedule:
+    - cron: "17 5 1,16 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Verify and sign, but do not upload anything"
+        type: boolean
+        default: true
+      force:
+        description: "Re-sign even when the signature is not close to expiring"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: resign
+  cancel-in-progress: false
+
+jobs:
+  resign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Re-sign the latest stable release when it is close to expiring
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_KEY_ID: ${{ vars.RELEASE_KEY_ID }}
+          # A scheduled run uploads; a manual run is a dry run unless it says otherwise.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || 'false' }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_SIGNING_KEY" || { echo "RELEASE_SIGNING_KEY secret is not set"; exit 1; }
+          test -n "$RELEASE_KEY_ID" || { echo "RELEASE_KEY_ID repo variable is not set"; exit 1; }
+
+          # `gh release view` without a tag shows the latest release, which is never a pre-release.
+          tag="$(gh release view --json tagName --jq .tagName)"
+          case "$tag" in *-*) echo "latest release $tag is a pre-release, nothing to do"; exit 0 ;; esac
+          version="${tag#v}"
+          echo "latest stable release: $tag"
+
+          work="$(mktemp -d)"
+          keyfile="$(mktemp)"
+          trap 'rm -rf "$work" "$keyfile"' EXIT
+          gh release download "$tag" --dir "$work" --pattern 'bobres_*' --pattern 'checksums.txt' --pattern 'checksums.txt.sig'
+
+          # 1. The files are trusted only through the signature they were released with. It may be
+          #    close to expiry or past it; the signature itself still checks.
+          openssl pkeyutl -verify -pubin -inkey install/release-signing.pub.pem -rawin \
+            -in "$work/checksums.txt" -sigfile "$work/checksums.txt.sig"
+          (cd "$work" && grep -v '^#' checksums.txt | sha256sum -c -)
+          channel="$(sed -n 's/^# channel //p' "$work/checksums.txt")"
+          test "$channel" = stable || { echo "release $tag is signed for channel '$channel', not stable"; exit 1; }
+
+          expires="$(sed -n 's/^# expires //p' "$work/checksums.txt")"
+          left=$(( ( $(date -u -d "$expires" +%s) - $(date -u +%s) ) / 86400 ))
+          echo "the current signature expires $expires ($left days left)"
+          if [ "$left" -ge 25 ] && [ "$FORCE" != true ]; then
+            echo "more than 24 days left, nothing to do"
+            exit 0
+          fi
+
+          # 2. Sign the same files again, for the same version and channel, and prove the new
+          #    signature verifies against the public key committed in the repository.
+          mkdir "$work/dist"
+          mv "$work"/bobres_* "$work/dist/"
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$keyfile"
+          chmod 600 "$keyfile"
+          tools/sign/sign.sh --version "$version" --channel stable --key-id "$RELEASE_KEY_ID" --key "$keyfile" "$work/dist"
+          openssl pkeyutl -verify -pubin -inkey install/release-signing.pub.pem -rawin \
+            -in "$work/dist/checksums.txt" -sigfile "$work/dist/checksums.txt.sig"
+          (cd "$work/dist" && grep -v '^#' checksums.txt | sha256sum -c -)
+          cp install/keys/keys.txt install/keys/keys.txt.sig.* "$work/dist/"
+          new="$(sed -n 's/^# expires //p' "$work/dist/checksums.txt")"
+          echo "the new signature expires $new"
+
+          # 3. Replace the release's metadata. The binaries stay as they are.
+          if [ "$DRY_RUN" = true ]; then
+            echo "dry run: nothing was uploaded"
+            exit 0
+          fi
+          gh release upload "$tag" "$work/dist/checksums.txt" "$work/dist/checksums.txt.sig" "$work"/dist/keys.txt* --clobber
+          echo "re-signed $tag: expires $new"
