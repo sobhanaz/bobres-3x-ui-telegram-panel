@@ -72,7 +72,7 @@ async function run() {
   try {
     const res = await api<{ changed: number }>('POST', '/texts/import', { lang: lang.value, texts: texts.value })
     open.value = false
-    toast.add({ severity: 'success', summary: t('texts.import_done', { n: num(res.changed, uiLang.value) }), life: 4000 })
+    toast.add({ severity: 'success', summary: t('texts.import_done', { n: num(res.changed, uiLang.value) }, res.changed), life: 4000 })
     emit('done')
   } catch (e) {
     const probs = e instanceof ApiError && Array.isArray(e.data.problems) ? (e.data.problems as TextProblem[]) : []
@@ -102,7 +102,7 @@ async function run() {
     <div class="app-form">
       <p class="file-name">
         <i class="pi pi-file" aria-hidden="true" />
-        <span>{{ texts ? t('texts.import_file', { n: num(count, uiLang), file: isolate(fileName) }) : isolate(fileName) }}</span>
+        <span>{{ texts ? t('texts.import_file', { n: num(count, uiLang), file: isolate(fileName) }, count) : isolate(fileName) }}</span>
       </p>
       <template v-if="texts">
         <div class="app-field">

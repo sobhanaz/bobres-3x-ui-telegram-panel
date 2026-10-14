@@ -16,6 +16,7 @@ import {
   absent,
   ALERT_FALLBACK,
   alertArgs,
+  alertCount,
   alertLevel,
   alertSeverity,
   alertsState,
@@ -84,10 +85,15 @@ const alerts = computed(() => openAlerts(reply.value))
 const worst = computed(() => (alerts.value ? worstLevel(alerts.value) : null))
 // Named as the bot's Telegram message names it (service names as on this
 // page), else in core's words, else by the check's key.
+// A text that counts something ("1 day", "2 days") picks its singular or plural
+// form by the raw number, which alertCount reads; the license limit's name
+// ("1 active service") follows the limit.
 function alertTitle(a: SystemAlert): string {
-  const args = alertArgs(a, lang.value, (k, v) => (k === 'service' ? label('system.service.', v) : k === 'name' ? label('license.limit_name.', v) : v))
+  const count = alertCount(a)
+  const limitName = (v: string) => (te('license.limit_name.' + v) ? t('license.limit_name.' + v, count ?? 2) : v)
+  const args = alertArgs(a, lang.value, (k, v) => (k === 'service' ? label('system.service.', v) : k === 'name' ? limitName(v) : v))
   const own = alertTextKey(a)
-  if (own && te(own) && fills(tm(own), args)) return t(own, args)
+  if (own && te(own) && fills(tm(own), args)) return count === undefined ? t(own, args) : t(own, args, count)
   return a.title?.trim() || t(ALERT_FALLBACK, args)
 }
 const alertSince = (a: SystemAlert) => {
@@ -120,7 +126,7 @@ const alertSince = (a: SystemAlert) => {
             v-if="alerts && worst"
             :severity="alertSeverity[worst]"
             :value="num(alerts.length, lang)"
-            :aria-label="t('system.alerts.count', { n: num(alerts.length, lang) })"
+            :aria-label="t('system.alerts.count', { n: num(alerts.length, lang) }, alerts.length)"
             class="alerts-count"
           />
         </span>

@@ -196,7 +196,7 @@ async function copyLink() {
         <dd>
           <template v-if="s.expires_at">
             {{ dateTime(s.expires_at, lang) }}
-            <span class="app-muted">({{ left! >= 0 ? t('service.days_left', { n: num(left!, lang) }) : t('service.days_ago', { n: num(-left!, lang) }) }})</span>
+            <span class="app-muted">({{ left! >= 0 ? t('service.days_left', { n: num(left!, lang) }, left!) : t('service.days_ago', { n: num(-left!, lang) }, -left!) }})</span>
           </template>
           <span v-else class="app-muted">{{ t('service.never') }}</span>
         </dd>

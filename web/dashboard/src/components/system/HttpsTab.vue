@@ -125,7 +125,7 @@ const saved = computed(() => {
 })
 const left = (unix: number, days?: number) => {
   const n = days ?? Math.ceil((unix * 1000 - Date.now()) / 86_400_000)
-  return n <= 0 ? t('system.https.addresses.expired') : t('system.https.addresses.days_left', { n: num(n, lang.value) })
+  return n <= 0 ? t('system.https.addresses.expired') : t('system.https.addresses.days_left', { n: num(n, lang.value) }, n)
 }
 
 const agentTag = { none: 'warn', idle: 'secondary', waiting: 'warn', ok: 'success', failed: 'danger' } as const

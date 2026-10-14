@@ -100,7 +100,7 @@ async function test() {
   try {
     const r = await api<ServerTest>('POST', '/servers/test', testBody(form.value, props.server?.id))
     if (r.ok) {
-      const text = t('server.test_ok', { version: isolate('3x-ui ' + (r.panel_version || t('app.unknown'))), n: num(r.inbounds, lang.value) })
+      const text = t('server.test_ok', { version: isolate('3x-ui ' + (r.panel_version || t('app.unknown'))), n: num(r.inbounds, lang.value) }, r.inbounds)
       result.value = r.version_untested
         ? { severity: 'warn', text: text + ' ' + t('server.version_untested'), detail: '' }
         : { severity: 'success', text, detail: '' }
@@ -174,7 +174,7 @@ async function save() {
         <small v-if="fieldErrors.base_url" class="app-ltr field-error">{{ fieldErrors.base_url }}</small>
       </label>
       <Message v-if="moved" severity="warn" :closable="false" class="moved">
-        {{ t('server.address_changed', { n: num(props.server?.clients ?? 0, lang) }) }}
+        {{ t('server.address_changed', { n: num(props.server?.clients ?? 0, lang) }, props.server?.clients ?? 0) }}
       </Message>
       <div class="app-field">
         <SecretField

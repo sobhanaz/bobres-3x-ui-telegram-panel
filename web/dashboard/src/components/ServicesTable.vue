@@ -58,7 +58,7 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
         <template v-if="s.expires_at">
           <div>{{ date(s.expires_at, lang) }}</div>
           <small class="app-muted">{{
-            left(s)! >= 0 ? t('service.days_left', { n: num(left(s)!, lang) }) : t('service.days_ago', { n: num(-left(s)!, lang) })
+            left(s)! >= 0 ? t('service.days_left', { n: num(left(s)!, lang) }, left(s)!) : t('service.days_ago', { n: num(-left(s)!, lang) }, -left(s)!)
           }}</small>
         </template>
         <span v-else class="app-muted">{{ t('service.never') }}</span>

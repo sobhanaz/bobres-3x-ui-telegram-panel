@@ -109,6 +109,24 @@ export function alertTextKey(a: Pick<SystemAlert, 'title_key'>): string {
  * bot's alert.check). */
 export const ALERT_FALLBACK = 'system.alerts.kind.check'
 
+/** The values of a problem's text that are numbers of something: alertArgs
+ * writes them in the language's digits. */
+const ALERT_NUMBERS = ['count', 'days', 'hours', 'minutes', 'limit']
+
+const wholeNumber = (raw: unknown): number => (/^-?\d+$/.test(String(raw).trim()) ? Number(raw) : NaN)
+
+/** alertCount is the number a problem's text counts (its count, days, hours,
+ * minutes or limit, the first core gives), as a raw number: the plural form
+ * of "1 day" and "2 days" follows it. undefined when the problem counts
+ * nothing. */
+export function alertCount(a: Pick<SystemAlert, 'args'>): number | undefined {
+  for (const k of ALERT_NUMBERS) {
+    const n = wholeNumber(a.args?.[k])
+    if (!Number.isNaN(n)) return n
+  }
+  return undefined
+}
+
 /** alertArgs are a problem's values for its text, as the bot writes them:
  * count, days, hours, minutes and limit as numbers, free (bytes) as a size,
  * date (unix seconds) as a day, and anything else as a name (service names
@@ -122,9 +140,9 @@ export function alertArgs(
   const out: Record<string, string> = { key: isolate(a.key) }
   for (const [k, raw] of Object.entries(a.args ?? {})) {
     const v = String(raw)
-    const n = /^-?\d+$/.test(v.trim()) ? Number(v) : NaN
+    const n = wholeNumber(v)
     if (Number.isNaN(n)) out[k] = isolate(name(k, v))
-    else if (['count', 'days', 'hours', 'minutes', 'limit'].includes(k)) out[k] = num(n, lang)
+    else if (ALERT_NUMBERS.includes(k)) out[k] = num(n, lang)
     else if (k === 'free') out[k] = bytes(n, lang)
     else if (k === 'date') out[k] = date(n, lang)
     else out[k] = isolate(name(k, v))

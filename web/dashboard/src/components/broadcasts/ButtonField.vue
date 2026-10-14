@@ -34,7 +34,7 @@ function labelError(l: Lang): string {
   if (!p || (p === 'empty' && !props.showAll)) return ''
   if (p === 'empty') return t('broadcasts.button.label_empty')
   if (p === 'chars') return t('broadcasts.button.label_chars', { chars: isolate('< > &') })
-  return t('broadcasts.button.label_long', { n: num(MAX_LABEL, viewer.value) })
+  return t('broadcasts.button.label_long', { n: num(MAX_LABEL, viewer.value) }, MAX_LABEL)
 }
 const labelServer = (l: Lang) => (labelError(l) ? '' : (props.errors['button.labels.' + l] ?? ''))
 </script>

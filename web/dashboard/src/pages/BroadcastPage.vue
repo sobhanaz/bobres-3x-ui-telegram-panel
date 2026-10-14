@@ -33,6 +33,7 @@ import {
   poller,
   progress,
   rate,
+  rateCount,
   timing,
   type BroadcastAction,
 } from '../broadcasts'
@@ -257,7 +258,7 @@ const problemCount = computed(() => counts.value.failed + counts.value.blocked +
                 <template v-else>
                   <div class="bar-line">
                     <span class="big">{{ percent(p.percent, lang) }}</span>
-                    <span class="app-muted">{{ t('broadcasts.detail.done_of', { done: num(p.done, lang), total: num(p.total, lang) }) }}</span>
+                    <span class="app-muted">{{ t('broadcasts.detail.done_of', { done: num(p.done, lang), total: num(p.total, lang) }, p.total) }}</span>
                   </div>
                   <ProgressBar :value="p.percent" :show-value="false" class="bar" :class="{ paused: item.status === 'paused' }" :aria-label="t('broadcasts.progress.label')" />
                   <dl class="counts">
@@ -268,7 +269,7 @@ const problemCount = computed(() => counts.value.failed + counts.value.blocked +
                   </dl>
                   <dl v-if="item.status === 'running'" class="app-facts speed">
                     <dt>{{ t('broadcasts.detail.rate') }}</dt>
-                    <dd>{{ t('broadcasts.detail.rate_value', { n: rate(item.rate_per_sec, lang) }) }}</dd>
+                    <dd>{{ t('broadcasts.detail.rate_value', { n: rate(item.rate_per_sec, lang) }, rateCount(item.rate_per_sec)) }}</dd>
                     <template v-if="item.eta_seconds !== null">
                       <dt>{{ t('broadcasts.detail.eta') }}</dt>
                       <dd>{{ t('broadcasts.detail.eta_value', { time: duration(item.eta_seconds, lang) }) }}</dd>

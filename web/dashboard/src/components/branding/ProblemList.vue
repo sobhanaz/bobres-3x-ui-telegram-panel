@@ -13,10 +13,13 @@ const lang = computed(() => locale.value as Lang)
 
 function message(p: TextProblem): string {
   const arg = problemArg(p)
-  const shown = p.code === 'too_long' && /^\d+$/.test(arg) ? num(Number(arg), lang.value) : isolate(arg)
+  // The limit a too_long problem names is a count ("at most 1 character"): the
+  // message is pluralized by it. Any other argument is not.
+  const limit = p.code === 'too_long' && /^\d+$/.test(arg) ? Number(arg) : null
+  const shown = limit !== null ? num(limit, lang.value) : isolate(arg)
   const key = 'texts.problem.' + p.code
   const entity = isolate(ENTITY_FOR[p.arg] ?? '&amp;')
-  return te(key) ? t(key, { arg: shown, entity }) : t('texts.problem.other', { code: p.code, arg: shown })
+  return te(key) ? t(key, { arg: shown, entity }, limit ?? 0) : t('texts.problem.other', { code: p.code, arg: shown })
 }
 </script>
 

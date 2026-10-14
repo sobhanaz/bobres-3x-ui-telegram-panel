@@ -107,7 +107,7 @@ async function save() {
     const n = openPayments(e)
     if (e instanceof ApiError && e.status === 400 && typeof e.data.field === 'string') fieldErrors.value = { [e.data.field]: e.message }
     const err = errorText(e, t)
-    error.value = n !== null ? t('gateway.open_payments', { n: num(n, lang.value) }) : err.text
+    error.value = n !== null ? t('gateway.open_payments', { n: num(n, lang.value) }, n) : err.text
     detail.value = err.detail
   } finally {
     busy.value = false
@@ -121,7 +121,7 @@ async function test() {
   try {
     const r = await api<GatewayTest>('POST', `/gateways/${props.config.provider}/test`, readOnly.value ? {} : zarinpalTestBody(form.value))
     if (r.ok) {
-      const waiting = r.unverified ? ' ' + t('gateway.test_unverified', { n: num(r.unverified, lang.value) }) : ''
+      const waiting = r.unverified ? ' ' + t('gateway.test_unverified', { n: num(r.unverified, lang.value) }, r.unverified) : ''
       result.value = { severity: 'success', text: t('gateway.test_ok') + waiting, detail: '' }
     } else {
       result.value = { severity: 'error', text: t('gateway.test_failed'), detail: r.detail }
@@ -195,7 +195,7 @@ async function test() {
             :error="merchantError"
           />
           <Message v-if="merchantBlocked" severity="warn" :closable="false" class="merchant-blocked">
-            {{ t('gateway.open_payments', { n: num(open, lang) }) }}
+            {{ t('gateway.open_payments', { n: num(open, lang) }, open) }}
           </Message>
           <SecretField
             :key="'proxy-' + generation"

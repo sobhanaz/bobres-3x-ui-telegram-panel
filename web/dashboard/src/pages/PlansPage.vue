@@ -62,7 +62,7 @@ function serversText(p: PlanItem): string {
   const ids = p.server_ids ?? []
   if (!ids.length) return t('plan.servers_any')
   // Until the servers are in, their names are not known.
-  if (!serversReady.value) return t('plan.servers_count', { n: num(ids.length, lang.value) })
+  if (!serversReady.value) return t('plan.servers_count', { n: num(ids.length, lang.value) }, ids.length)
   return serverNames(ids, servers.value)
     .map((n) => n || t('plan.server_removed'))
     .join(lang.value === 'fa' ? '، ' : ', ')
@@ -211,7 +211,7 @@ async function toggle(p: PlanItem, enabled: boolean) {
     </Column>
     <Column :header="t('plan.duration')">
       <template #body="{ data: p }">
-        <span v-if="p.duration_days">{{ t('plan.days', { n: num(p.duration_days, lang) }) }}</span>
+        <span v-if="p.duration_days">{{ t('plan.days', { n: num(p.duration_days, lang) }, p.duration_days) }}</span>
         <span v-else class="app-muted">—</span>
       </template>
     </Column>

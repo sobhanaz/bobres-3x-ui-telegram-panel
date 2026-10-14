@@ -98,7 +98,7 @@ const planName = computed(() => {
     case 'free':
       return t('license.plan.free')
     case 'trial':
-      return t('license.plan.trial', { n: num(trialDays.value, lang.value) })
+      return t('license.plan.trial', { n: num(trialDays.value, lang.value) }, trialDays.value)
     default:
       return tierName(effective.value?.tier || lic.value?.tier || '')
   }
@@ -163,7 +163,7 @@ async function copyInstall() {
         <template #content>
           <p class="plan-hint">{{ t('license.plan.hint.' + basis, planParams) }}</p>
           <p v-if="basis === 'trial' && trialEnds" class="plan-trial app-muted">
-            {{ t('license.plan.trial_ends', { date: date(trialEnds, lang), n: num(trialDays, lang) }) }}
+            {{ t('license.plan.trial_ends', { date: date(trialEnds, lang), n: num(trialDays, lang) }, trialDays) }}
           </p>
           <p v-else-if="basis === 'free' && trialEnds" class="plan-trial app-muted">{{ t('license.plan.trial_ended', { date: date(trialEnds, lang) }) }}</p>
           <p v-if="effective.contact" class="plan-contact">
@@ -205,7 +205,7 @@ async function copyInstall() {
               <dt>{{ t(renewing ? 'license.token_expires' : 'license.expires') }}</dt>
               <dd class="expires">
                 {{ date(lic.expires_at, lang) }}
-                <span v-if="left" :class="['days-left', 'app-muted', left.kind]">· {{ t('license.left.' + left.kind, { n: num(left.days, lang) }) }}</span>
+                <span v-if="left" :class="['days-left', 'app-muted', left.kind]">· {{ t('license.left.' + left.kind, { n: num(left.days, lang) }, left.days) }}</span>
               </dd>
               <template v-if="lic.grace_days > 0">
                 <dt>{{ t('license.grace_ends') }}</dt>
