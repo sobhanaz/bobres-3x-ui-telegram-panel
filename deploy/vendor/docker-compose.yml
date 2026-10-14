@@ -1,0 +1,146 @@
+# BOBRES vendor license server: the SELLER's stack (docs/13-license-server.md,
+# docs/runbooks/vendor-license-server.md). It is not a customer's install: it is not in a
+# release and its image is never pushed to a registry. Run it on its own small VPS:
+#
+#   docker compose -f deploy/vendor/docker-compose.yml --env-file deploy/vendor/.env up -d --build
+#
+# Networks
+#   public  : caddy only (ports 80 and 443; Caddy gets and renews the HTTPS certificate).
+#   edge    : INTERNAL. caddy <-> licensesrv. licensesrv believes X-Forwarded-For and
+#             X-Forwarded-Proto only from this network's addresses (its subnet is the trusted
+#             proxy list), which only Caddy and licensesrv itself are on.
+#   backend : INTERNAL. licensesrv <-> postgres. Nothing here can reach the internet, and
+#             licensesrv never calls out.
+# Secrets
+#   The signing key is a FILE on the host (LICENSE_SIGNING_KEY_FILE, outside the repository),
+#   mounted read-only into licensesrv at /run/secrets/signing_key. It is never an environment
+#   variable and never in .env. Make the file owned by uid 65532, mode 0600 (the runbook has
+#   the commands): licensesrv runs as that user and warns when others can read the file.
+#   The database passwords are in .env (chmod 600), as in a BOBRES install.
+# Backups
+#   The database holds the license list (key hashes, customers, activations, audit). Back it up
+#   (the runbook has the commands). The signing key is backed up offline, by you.
+
+name: bobres-vendor
+
+x-hardened: &hardened
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  caddy:
+    <<: *hardened
+    # The same pinned image as a customer install's gateway (tag and multi-arch digest).
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    # Root only so that it can bind 80 and 443; no capability but NET_BIND_SERVICE, so it
+    # cannot read or change other users' files.
+    read_only: true
+    tmpfs: [/tmp]
+    cap_add: [NET_BIND_SERVICE]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      LICENSE_DOMAIN: ${LICENSE_DOMAIN:?set LICENSE_DOMAIN}
+    volumes:
+      # A directory, not the file: a bind-mounted file keeps its old inode when git replaces it.
+      - ./caddy:/etc/caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      # The Caddyfile's local-only site on 127.0.0.1:8081 (not published).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 256m
+    pids_limit: 256
+    depends_on:
+      licensesrv: { condition: service_healthy }
+    networks: [public, edge]
+
+  licensesrv:
+    <<: *hardened
+    # Built here from this repository (the same Dockerfile as every service; the image has no
+    # shell). Vendor-only: do not push it.
+    image: bobres-licensesrv:${BOBRES_VERSION:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      args: { SERVICE: licensesrv, VERSION: "${BOBRES_VERSION:-dev}" }
+    command: ["serve"]
+    user: "65532:65532"
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      BOBRES_ENV: prod
+      BOBRES_LOG_LEVEL: ${BOBRES_LOG_LEVEL:-info}
+      BOBRES_LOG_FORMAT: json
+      BOBRES_DATABASE_URL: postgres://licensesrv:${DB_LICENSESRV_PASSWORD:?set DB_LICENSESRV_PASSWORD}@postgres:5432/bobres_license?sslmode=disable
+      BOBRES_LICENSESRV_SIGNING_KEY_FILE: /run/secrets/signing_key
+      # The plain-HTTP listener, on the internal edge network only: Caddy forwards to it.
+      BOBRES_HTTP_ADDR: ":8080"
+      # Caddy's network: the only addresses whose X-Forwarded-* headers are believed.
+      BOBRES_LICENSESRV_TRUSTED_PROXIES: ${LICENSE_EDGE_SUBNET:-10.213.77.0/24}
+      BOBRES_LICENSESRV_RATE_IP: ${BOBRES_LICENSESRV_RATE_IP:-120/1h}
+      BOBRES_LICENSESRV_RATE_KEY: ${BOBRES_LICENSESRV_RATE_KEY:-10/1h}
+    secrets: [signing_key]
+    healthcheck:
+      test: ["CMD", "/app", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 256m
+    pids_limit: 128
+    ulimits: { nofile: { soft: 4096, hard: 4096 } }
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [edge, backend]
+
+  postgres:
+    <<: *hardened
+    image: postgres:16-alpine
+    # The entrypoint starts as root to prepare the data directory, then runs Postgres as its own
+    # user; these are the capabilities that takes (as in a customer install).
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    environment:
+      # The admin role is used only by this container (to create the license server's own
+      # role and database, postgres-init.sh): licensesrv connects as a role that owns one
+      # database and is not a superuser.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      DB_LICENSESRV_PASSWORD: ${DB_LICENSESRV_PASSWORD:?set DB_LICENSESRV_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    mem_limit: 512m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+secrets:
+  signing_key:
+    file: ${LICENSE_SIGNING_KEY_FILE:?set LICENSE_SIGNING_KEY_FILE}
+
+networks:
+  public: {}
+  edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${LICENSE_EDGE_SUBNET:-10.213.77.0/24}
+  backend:
+    internal: true
+
+volumes:
+  pg_data: {}
+  caddy_data: {}
+  caddy_config: {}

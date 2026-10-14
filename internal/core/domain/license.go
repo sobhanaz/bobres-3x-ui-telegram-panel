@@ -111,7 +111,7 @@ func (e *LicenseError) Error() string { return "license: " + LicenseReasonText(e
 func LicenseReasonText(code string) string {
 	switch code {
 	case "unknown_key":
-		return "this build has no public key that could verify a license yet"
+		return "this build carries no vendor key, so it cannot verify a license"
 	case "malformed":
 		return "this is not a license token"
 	case "bad_signature":

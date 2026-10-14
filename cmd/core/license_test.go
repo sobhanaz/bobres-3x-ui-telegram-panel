@@ -182,7 +182,7 @@ func TestPrintLicense(t *testing.T) {
 	var b bytes.Buffer
 	invalid := &domain.LicenseStatus{State: domain.LicenseInvalid, Reason: "unknown_key", InstallID: "inst-1"}
 	printLicense(&b, effectiveOf(invalid, 40*day, now), usage, now)
-	if s := b.String(); !strings.Contains(s, "invalid: this build has no public key") || !strings.Contains(s, "inst-1") ||
+	if s := b.String(); !strings.Contains(s, "invalid: this build carries no vendor key") || !strings.Contains(s, "inst-1") ||
 		!strings.Contains(s, "Domain:         -") || !strings.Contains(s, "In effect:      free tier") ||
 		!strings.Contains(s, "Buy or renew:   "+testSellerContact) || !strings.Contains(s, "Trial ended:    2026-10-01") {
 		t.Errorf("invalid:\n%s", s)

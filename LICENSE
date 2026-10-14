@@ -1,0 +1,127 @@
+DRAFT — must be reviewed by a lawyer before the public launch.
+
+BOBRES Source-Available License, version 0.1 (draft)
+
+Copyright (c) 2026 [OWNER: full legal name of the licensor, individual or company]
+("the Owner"). All rights reserved.
+
+Contact for licenses and permissions: [OWNER: e-mail address and postal address]
+
+Words in [OWNER: ...] and [LAWYER: ...] are placeholders. The owner fills the first
+kind in; a lawyer settles the second kind.
+
+
+1. WHAT THIS IS
+
+The source code, documentation and other files in this repository ("the Software") are
+published so that anyone can read them, audit them and report problems. This is
+source-available software, not open-source software. The Owner keeps all rights that this
+license does not grant.
+
+2. WHAT YOU MAY DO WITHOUT A PAID LICENSE
+
+a. Read, study and audit the source code, and quote short parts of it to discuss or report
+   a problem.
+
+b. Install and run an official, unmodified release of the Software, for yourself or your
+   own organization, with the free tier that the Software itself applies when no license
+   key or token is installed, and with the 30-day trial that the Software gives every
+   install. The free tier and the trial have the limits written in docs/pricing.md. You
+   may run the Software like this for your own VPN store.
+
+c. Modify a copy of the Software on your own computer to evaluate it, to develop it or to
+   prepare a contribution to the Owner. The modified copy stays on your own computers: you
+   may not run it in production for customers and you may not distribute it.
+
+d. Fork the repository on GitHub, as far as GitHub's Terms of Service give you that right,
+   to propose a change back to the Owner. [LAWYER: confirm how this interacts with the
+   rest of this license.]
+
+3. WHAT NEEDS A PAID LICENSE
+
+Anything not allowed in section 2 needs a written license from the Owner. In particular,
+without a paid license you may not:
+
+a. Go beyond the free tier once the trial is over. A paid license is a license key or a
+   signed license token issued by the Owner (see section 4). The paid tiers, and what each
+   one allows, are listed in docs/pricing.md.
+
+b. Copy or redistribute the Software, in whole or in part, modified or not, in source or
+   in binary form. This includes mirrors, forks published outside GitHub, container images
+   and packages that you publish.
+
+c. Distribute a modified version of the Software, or run a modified version in production.
+
+d. Run the Software in production for anyone other than yourself or your own organization.
+   This includes hosting it for other operators, managed services, and installing and
+   running it for clients as an agency or a reseller of installs.
+
+e. Resell, sublicense, rent or lease the Software or a license key, or offer the Software
+   itself, or access to it, as your own product or service.
+
+f. White-label the Software: remove or replace the BOBRES name, mascot and "Powered by
+   BOBRES" attribution. White-labelling is a feature of a paid tier that includes it.
+
+g. Remove, hide or change a copyright or license notice in the Software.
+
+h. Disable, bypass, tamper with or work around the Software's license checks and its free
+   tier limits, or make or use a license key or token that the Owner did not issue.
+
+4. PAID LICENSES
+
+A paid license is granted by the Owner in a separate agreement (the Terms of Service for
+BOBRES operators, docs/legal/terms-of-service.md, once in force, and the order or invoice).
+It is proved by a license key or a license token that the Owner signs. Its scope, its
+limits and its length are those of its tier and of that agreement. A paid license ends when
+the agreement ends or when its payment lapses; the Software then goes back to the free
+tier, and nothing that you stored in it is deleted.
+
+5. TRADEMARKS
+
+BOBRES, the beaver mascot, the logos and the brand assets in docs/brand are the Owner's
+trademarks and artwork. This license gives you no right to use them, except to say truthfully
+that you use the Software. [LAWYER: trademark wording; a trademark search is still open.]
+
+6. CONTRIBUTIONS
+
+If you send the Owner a contribution (code, text or anything else), you give the Owner a
+perpetual, worldwide, royalty-free license to use, modify, publish and sublicense it as part
+of the Software, and you confirm that you have the right to do so. [LAWYER: contribution
+terms, and whether a separate contributor agreement is needed.]
+
+7. THIRD-PARTY COMPONENTS
+
+The Software includes and uses third-party components. They are under their own licenses,
+which apply to them and not to this license: see THIRD_PARTY_NOTICES.md. The 3x-ui panel,
+which the Software manages through its HTTP API, is a separate program under its own
+license; the Software contains none of its code.
+
+8. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NON-INFRINGEMENT. [LAWYER: check that this disclaimer is valid where the Owner and the
+licensees live.]
+
+9. LIMIT OF LIABILITY
+
+TO THE EXTENT THE LAW ALLOWS, THE OWNER IS NOT LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE, ARISING FROM THE SOFTWARE OR ITS USE.
+YOU ARE RESPONSIBLE FOR THE VPN SERVICE THAT YOU RUN WITH THE SOFTWARE, FOR ITS CUSTOMERS
+AND FOR WHAT THEY DO WITH IT. [LAWYER: wording, and the caps that apply to paid licenses.]
+
+10. ENDING
+
+Your rights under section 2 end at once if you break this license. They come back if you stop
+and the Owner agrees in writing. Sections 5 to 11 survive the end.
+
+11. LAW AND COURTS
+
+[LAWYER: governing law, venue and how disputes are settled. Do not fill this in without a
+lawyer: the right answer depends on where the Owner and the licensees are.]
+
+12. VERSIONS
+
+The Owner may publish a new version of this license. A new version applies to the releases
+of the Software published after it. Earlier releases stay under the version they were
+published with. [LAWYER: confirm.]

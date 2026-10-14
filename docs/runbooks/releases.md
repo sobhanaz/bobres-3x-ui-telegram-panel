@@ -128,11 +128,13 @@ period). A missing, invalid or ended license has none (the free tier and the tri
 gets every release without a note, as does one whose release has no `# issued` line. If core cannot be asked (it is not
 running), `bobres update` warns that the note is skipped and goes on.
 
-## Before the first release with a license key
+## Before a release: the license key
 
-Until a vendor key is embedded, no license can be installed, so every install ends on the free tier after the 30-day
-trial: the vendor key ships in the same release (`docs/launch-checklist.md`). Check that `internal/license/keys/` holds
-the vendor's `.pub` before tagging.
+A release carries the vendor's public key, `internal/license/keys/vendor-v1-2026.pub`, so licenses signed with it
+verify (fingerprint `2E02 AB14 5379 C040 2DBD 7BC2 51A3 C9D7`). The test `TestEmbeddedRingHoldsTheVendorKeys` in
+`internal/license` fails when a key changes. Check that `internal/license/keys/` still holds the vendor's `.pub` before
+tagging. The license server that issues the licenses is separate and is deployed by the owner
+(`docs/launch-checklist.md`).
 
 ## The key list expires too
 

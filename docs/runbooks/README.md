@@ -13,6 +13,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Backups not arriving](backups-not-arriving.md) | No daily backup in the owner's Telegram, or the System page shows a failed backup |
 | [Rotate secrets](rotate-secrets.md) | A token, password or key leaked, or you rotate them on a schedule |
 | [License](license.md) | The License tab is not "Active", or an action is refused by the license |
+| [Vendor license server](vendor-license-server.md) | For the **seller**, not an operator: deploy the license server, sell, renew and revoke licenses, back up and rotate the signing key |
 | [HTTPS certificates](https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; browsers refuse the dashboard after a change |
 | [Restore a backup](restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |

@@ -97,8 +97,8 @@ var (
 	ErrUnbound      = errors.New("license: token is not bound to a domain but binding is required")
 	ErrInvalid      = errors.New("license: invalid token contents")
 	ErrNotYetValid  = errors.New("license: token issued in the future")
-	// ErrUnknownKey: this build embeds no public key at all, so nothing can
-	// verify (every token is refused until the vendor adds one).
+	// ErrUnknownKey: this build embeds no public key at all (a development
+	// build: a release carries the vendor's), so nothing can verify.
 	ErrUnknownKey = errors.New("license: no public keys configured")
 )
 

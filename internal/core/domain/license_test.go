@@ -65,7 +65,9 @@ func install(t *testing.T, s *store.Store, raw string) {
 func TestLicenseStates(t *testing.T) {
 	svc, s := testService(t)
 	ctx := context.Background()
-	// No license, and no key built in: the install is in its trial.
+	// No license, and a build with no key at all (the real build carries the
+	// vendor's): the install is in its trial.
+	svc.cfg.License.Keys = license.KeyRing{}
 	st, err := svc.License(ctx)
 	if err != nil || st.State != LicenseMissing || st.Valid() || st.InstallID == "" || st.Keys != 0 {
 		t.Fatalf("missing: %+v %v", st, err)

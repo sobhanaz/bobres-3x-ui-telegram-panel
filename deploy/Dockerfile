@@ -2,6 +2,7 @@
 # The backup service has its own target (it needs pg_dump):
 #   docker build --target backup --build-arg SERVICE=backup -f deploy/Dockerfile .
 # The last stage stays the default, so builds without --target are unchanged.
+# The vendor's license server builds the same way (SERVICE=licensesrv): deploy/vendor/docker-compose.yml.
 
 # The web dashboard: static files that core embeds (web/dashboard/embed.go). Built
 # on the build machine's own platform, since the files are the same for every

@@ -2,8 +2,10 @@ package license
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -24,8 +26,9 @@ var kidRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 // ValidKeyID reports whether id can name a key file.
 func ValidKeyID(id string) bool { return kidRe.MatchString(id) }
 
-// Embedded is the key ring built into this binary. It is empty until the
-// vendor adds a key, and then every token is refused as ErrUnknownKey.
+// Embedded is the key ring built into this binary: the vendor's public keys,
+// one per keys/<kid>.pub. A token must verify with one of them. A build with
+// no key at all refuses every token as ErrUnknownKey.
 func Embedded() (KeyRing, error) {
 	sub, err := fs.Sub(keyFiles, "keys")
 	if err != nil {
@@ -89,4 +92,23 @@ func ParsePublicKey(text string) (ed25519.PublicKey, error) {
 // FormatPublicKey is the text of a key file for pub.
 func FormatPublicKey(pub ed25519.PublicKey) string {
 	return base64.StdEncoding.EncodeToString(pub) + "\n"
+}
+
+// ed25519SPKIPrefix is the DER header of an Ed25519 SubjectPublicKeyInfo: the
+// bytes `openssl pkey -pubin -outform DER` writes before the 32-byte key.
+var ed25519SPKIPrefix = []byte{0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00}
+
+// Fingerprint is a short name for a public key that a person can compare:
+// the SHA-256 of its DER encoding, the first 16 bytes, in upper-case hex
+// groups of four. It is the same line tools/sign/keygen.sh prints for the
+// release keys, so `openssl pkey -pubin -outform DER | openssl dgst -sha256`
+// gives the same bytes.
+func Fingerprint(pub ed25519.PublicKey) string {
+	sum := sha256.Sum256(append(append([]byte{}, ed25519SPKIPrefix...), pub...))
+	h := strings.ToUpper(hex.EncodeToString(sum[:16]))
+	groups := make([]string, 0, len(h)/4)
+	for i := 0; i < len(h); i += 4 {
+		groups = append(groups, h[i:i+4])
+	}
+	return strings.Join(groups, " ")
 }

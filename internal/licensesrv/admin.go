@@ -21,16 +21,22 @@ import (
 
 // KeyUsage is the `licensesrv key` help.
 const KeyUsage = `usage:
-  licensesrv key create -customer NAME -tier trial|standard|pro -entitlements FILE
-                        (-ends-at YYYY-MM-DD | -days N | -no-end) [-grace-days 14]
+  licensesrv key create -customer NAME -tier trial|standard|pro [-entitlements FILE]
+                        (-months N | -ends-at YYYY-MM-DD | -days N | -no-end) [-grace-days N]
   licensesrv key revoke ID -reason TEXT
   licensesrv key list [-status active|revoked]
   licensesrv key show ID
   licensesrv key update ID -reason TEXT [-customer NAME] [-tier T] [-entitlements FILE]
-                        [-ends-at YYYY-MM-DD | -days N | -no-end] [-grace-days N]
+                        [-extend-months N | -months N | -ends-at YYYY-MM-DD | -days N | -no-end] [-grace-days N]
 
+Without -entitlements, create takes the tier's preset (internal/license/tiers.json: what
+the binary was built with), and the trial lasts its 30 days when no end is given. update
+takes the new tier's preset when the tier changes and -entitlements is not given.
 The entitlements FILE is JSON as in docs/05-license.md ("-" reads stdin).
--ends-at YYYY-MM-DD ends the license at 00:00 UTC that day (or give RFC3339).
+-months N is N calendar months from now. update -extend-months N renews: it adds N months to the
+current end, or to now when the license has already ended (a customer who pays early loses nothing).
+-ends-at YYYY-MM-DD ends the license at 00:00 UTC
+that day (or give RFC3339).
 create prints the activation key once on stdout; only its hash is kept.
 `
 
@@ -90,35 +96,43 @@ type admin struct {
 	actor       string
 }
 
-// endFlags are the three ways to say when a license ends.
+// endFlags are the ways to say when a license ends.
 type endFlags struct {
 	endsAt string
 	days   int
+	months int
 	noEnd  bool
 }
 
 func (e *endFlags) register(fs *flag.FlagSet) {
 	fs.StringVar(&e.endsAt, "ends-at", "", "when the license ends: YYYY-MM-DD (00:00 UTC) or an RFC3339 time")
 	fs.IntVar(&e.days, "days", 0, "valid for N days from now")
+	fs.IntVar(&e.months, "months", 0, "valid for N calendar months from now (a subscription period)")
 	fs.BoolVar(&e.noEnd, "no-end", false, "the license never ends")
 }
 
 // set reports whether any was given; resolve turns them into ends_at.
-func (e *endFlags) set() bool { return e.endsAt != "" || e.days != 0 || e.noEnd }
+func (e *endFlags) set() bool { return e.endsAt != "" || e.days != 0 || e.months != 0 || e.noEnd }
 
 func (e *endFlags) resolve(now time.Time) (*time.Time, error) {
 	n := 0
-	for _, b := range []bool{e.endsAt != "", e.days != 0, e.noEnd} {
+	for _, b := range []bool{e.endsAt != "", e.days != 0, e.months != 0, e.noEnd} {
 		if b {
 			n++
 		}
 	}
 	if n != 1 {
-		return nil, errors.New("give exactly one of -ends-at, -days and -no-end")
+		return nil, errors.New("give exactly one of -months, -ends-at, -days and -no-end")
 	}
 	switch {
 	case e.noEnd:
 		return nil, nil
+	case e.months != 0:
+		if e.months < 0 || e.months > 120 {
+			return nil, errors.New("-months must be 1..120")
+		}
+		t := license.AddMonths(now.UTC().Truncate(time.Second), e.months)
+		return &t, nil
 	case e.days != 0:
 		if e.days < 0 || e.days > 36500 {
 			return nil, errors.New("-days must be 1..36500")
@@ -141,24 +155,45 @@ func (a *admin) create(ctx context.Context, args []string) error {
 	fs := a.flagSet("key create")
 	customer := fs.String("customer", "", "the customer's name")
 	tier := fs.String("tier", "", "trial, standard or pro")
-	entFile := fs.String("entitlements", "", "entitlements JSON file (\"-\": stdin)")
-	grace := fs.Int("grace-days", DefaultGraceDays, "days the install keeps working after a token expires (0..90)")
+	entFile := fs.String("entitlements", "", "entitlements JSON file (\"-\": stdin); without it, the tier's preset")
+	grace := fs.Int("grace-days", DefaultGraceDays, "days the install keeps working after a token expires (0..90; the preset's by default)")
 	var ends endFlags
 	ends.register(fs)
 	rest, err := parseInterspersed(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(rest) > 0 || *entFile == "" {
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	presets, err := license.LoadPresets()
+	if err != nil {
+		return err
+	}
+	preset, hasPreset := presets.Get(*tier)
+	if len(rest) > 0 || (*entFile == "" && !hasPreset) {
 		return errUsage
 	}
 	now := a.now().UTC()
 	l := License{Customer: strings.TrimSpace(*customer), Tier: *tier, GraceDays: *grace, CreatedAt: now, UpdatedAt: now}
+	if *entFile == "" {
+		// The tier's preset: its entitlements, its default grace, and (the
+		// trial) its fixed length when no end was given.
+		l.Entitlements = preset.Entitlements
+		if !given["grace-days"] {
+			l.GraceDays = preset.GraceDays
+		}
+		if !ends.set() && preset.Days > 0 {
+			ends.days = preset.Days
+		}
+		fmt.Fprintf(a.errOut, "Using the %s preset (internal/license/tiers.json, as this binary was built).\n", *tier)
+	}
 	if l.EndsAt, err = ends.resolve(now); err != nil {
 		return err
 	}
-	if l.Entitlements, err = a.readEntitlements(*entFile); err != nil {
-		return err
+	if *entFile != "" {
+		if l.Entitlements, err = a.readEntitlements(*entFile); err != nil {
+			return err
+		}
 	}
 	if err := checkLicense(l, now, true); err != nil {
 		return err
@@ -180,6 +215,7 @@ func (a *admin) create(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Fprintf(a.errOut, "Created %s for %s (%s, %s).\n", l.ID, l.Customer, l.Tier, endsText(l.EndsAt))
+	a.warn(l.Entitlements)
 	fmt.Fprintln(a.errOut, "The activation key is shown only now (the server keeps only its hash). Send it to the customer privately:")
 	fmt.Fprintln(a.out, key)
 	return nil
@@ -338,9 +374,10 @@ func (a *admin) update(ctx context.Context, args []string) error {
 	fs := a.flagSet("key update")
 	reason := fs.String("reason", "", "why (kept in the audit)")
 	customer := fs.String("customer", "", "the customer's name")
-	tier := fs.String("tier", "", "trial, standard or pro")
+	tier := fs.String("tier", "", "trial, standard or pro (a changed tier takes its preset's entitlements)")
 	entFile := fs.String("entitlements", "", "entitlements JSON file (\"-\": stdin)")
 	grace := fs.Int("grace-days", DefaultGraceDays, "days the install keeps working after a token expires (0..90)")
+	extend := fs.Int("extend-months", 0, "renew: add N calendar months to the current end (or to now, when it has passed)")
 	var ends endFlags
 	ends.register(fs)
 	rest, err := parseInterspersed(fs, args)
@@ -349,6 +386,13 @@ func (a *admin) update(ctx context.Context, args []string) error {
 	}
 	if len(rest) != 1 {
 		return errUsage
+	}
+	if *extend != 0 && (ends.set() || *extend < 0 || *extend > 120) {
+		return errors.New("-extend-months is 1..120 and cannot be combined with -months, -ends-at, -days or -no-end")
+	}
+	presets, err := license.LoadPresets()
+	if err != nil {
+		return err
 	}
 	given := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
@@ -383,16 +427,31 @@ func (a *admin) update(ctx context.Context, args []string) error {
 		}
 		if ent != nil {
 			after.Entitlements = *ent
+		} else if p, ok := presets.Get(*tier); ok && given["tier"] && *tier != l.Tier {
+			// A new tier takes its preset, so the label and the limits agree.
+			after.Entitlements = p.Entitlements
+			fmt.Fprintf(a.errOut, "The tier changed: using the %s preset's entitlements.\n", *tier)
 		}
 		if given["grace-days"] {
 			after.GraceDays = *grace
 		}
-		if ends.set() {
+		switch {
+		case *extend != 0:
+			if l.EndsAt == nil {
+				return fmt.Errorf("%s has no end date: give it one with -months or -ends-at", id)
+			}
+			base := l.EndsAt.UTC()
+			if base.Before(now) {
+				base = now
+			}
+			renewed := license.AddMonths(base, *extend)
+			after.EndsAt = &renewed
+		case ends.set():
 			if after.EndsAt, err = ends.resolve(now); err != nil {
 				return err
 			}
 		}
-		if err := checkLicense(after, now, ends.set()); err != nil {
+		if err := checkLicense(after, now, ends.set() || *extend != 0); err != nil {
 			return err
 		}
 		after.UpdatedAt = now
@@ -410,7 +469,17 @@ func (a *admin) update(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Fprintf(a.out, "Updated %s (%s, %s). Its install picks the change up at its next daily refresh.\n", id, after.Tier, endsText(after.EndsAt))
+	a.warn(after.Entitlements)
 	return nil
+}
+
+// warn prints, as WARNING lines on stderr, what an install will do to these
+// entitlements that the vendor may not mean (a limit of 0 is raised to the
+// free tier's). The license is made all the same.
+func (a *admin) warn(e license.Entitlements) {
+	for _, w := range e.FloorWarnings() {
+		fmt.Fprintln(a.errOut, "WARNING:", w)
+	}
 }
 
 // checkLicense checks what a token made from l would carry; newEnd also

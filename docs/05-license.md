@@ -13,11 +13,13 @@ paid premium" below). This replaces the earlier policy, under which a missing or
 
 Status (2026-10-14): verification, storage, the free tier and the trial, the dashboard's License tab, the CLI and the
 vendor's signing tool are built. Online activation with a license key and the daily refresh are built too, against the
-vendor's license server ([13-license-server.md](13-license-server.md)), which is built but not deployed yet.
-**No vendor public key is embedded yet**, so every token is refused as "unknown key" until one is added (below): until
-then every install runs on its trial, then on the free tier. Until a vendor key is embedded, no license can be installed,
-so every install ends on the free tier after the 30-day trial: the vendor key ships in the same release
-(`docs/launch-checklist.md`).
+vendor's license server ([13-license-server.md](13-license-server.md)). The server is built but must still be deployed
+by the owner (`docs/launch-checklist.md`); hand-signing with `tools/license` works without it.
+
+**The vendor's public key is embedded.** Licenses signed by the key id `vendor-v1-2026` verify, and an install accepts
+them. The key's fingerprint is `2E02 AB14 5379 C040 2DBD 7BC2 51A3 C9D7`
+(`internal/license/keys/vendor-v1-2026.pub`; `go run ./tools/license fingerprint` prints it). Only the public half is in
+the repository: the private half stays with the vendor, outside it.
 
 ## Token format
 `base64url(payload JSON) "." base64url(Ed25519 signature of those payload bytes)`, both without padding
@@ -26,7 +28,7 @@ so every install ends on the free tier after the 30-day trial: the vendor key sh
 ```json
 {
   "v": 1,
-  "kid": "v1-2026",
+  "kid": "vendor-v1-2026",
   "license_id": "lic_...",
   "customer": "cust_... or a name",
   "install_id": "the install id from the License tab (optional binding)",
@@ -50,7 +52,8 @@ so every install ends on the free tier after the 30-day trial: the vendor key sh
 - Limits: `-1` is unlimited and `0` (or a missing field) is none, so a forgotten limit never grants unlimited use. A
   license never leaves less than the free tier, though: each limit it sets or omits is raised to the free tier's
   where that is larger (see "Free core, paid premium"), so a license that forgets `max_active_services` still sells
-  25 services.
+  25 services. `tools/license sign` and `licensesrv key create|update` print a WARNING ("max_active_services is 0 or
+  missing: the install will floor it at the free tier's 25") when they make such a license, and still make it.
 - `grace_days` is 0..90; `expires_at` must be after `issued_at`; `issued_at` gets 5 minutes of clock skew.
 - Gateway names: `zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
   wallet is always allowed. Automatic USDT (`usdt_trc20_auto`, Phase 6a) also needs the `crypto_watcher` feature.
@@ -80,6 +83,10 @@ The state describes the installed token. What applies to the install is a separa
 | `active` | before `expires_at` | the license's entitlements |
 | `grace` | expired, inside `grace_days` | the license's entitlements, with a warning |
 | `expired` | past grace | the trial, if it still runs, else the free tier |
+
+`unknown_key` appears only on a build that carries no vendor key at all (a development build). A release carries
+`vendor-v1-2026`, so there a token that none of the built-in keys signed (a changed token, or one signed by a key this
+version does not carry yet after a rotation) is `bad_signature`.
 
 ## Free core, paid premium
 `Service.Effective` (`internal/core/domain/license.go`, over `license.Resolve` in `internal/license/policy.go`) is the
@@ -244,16 +251,19 @@ hidden. No bot attribution. `/api/v1/me` carries `license: {state, white_label, 
 `/api/v1/brand` carries `powered_by`.
 
 ## Vendor flow
-1. Make a signing key once, **outside the repository** (the tool refuses a path inside a git checkout and
-   never overwrites a file):
-   `go run ./tools/license keygen -kid v1-2026 -out ~/secure/bobres-license-v1-2026.key`
-   It prints the public key; save that line as `internal/license/keys/v1-2026.pub`, commit only the
-   `.pub` file and release. Keep the private key offline (mode 0600); never commit it.
-2. For a customer, write the payload JSON (as above, without `kid`, `v` and optionally `issued_at`) with
-   their domain and, after they send it, their install id.
-3. Sign: `go run ./tools/license sign -key ~/secure/bobres-license-v1-2026.key -in payload.json`. The
-   tool fills in `kid`, `v` and `issued_at`, checks the payload the way core does, verifies the result and
-   prints the token.
+1. The signing key `vendor-v1-2026` exists. Its private half is a file **outside the repository** (it is never committed,
+   copied into a checkout or put in an image); its public half is `internal/license/keys/vendor-v1-2026.pub`, built into
+   every release. To make another key (a rotation), the tool refuses a path inside a git checkout and never overwrites a
+   file: `go run ./tools/license keygen -kid vendor-v2-2028 -out ~/secure/vendor-v2-2028.key`. It prints the public key;
+   save that line as `internal/license/keys/vendor-v2-2028.pub`, commit only the `.pub` file and release. Keep the private
+   key offline (mode 0600); never commit it.
+2. For a customer, pick a tier preset (`internal/license/tiers.json`: `standard`, `pro`, `trial`), or write the payload
+   JSON (as above, without `kid`, `v` and optionally `issued_at`) with their domain and, after they send it, their
+   install id.
+3. Sign: `go run ./tools/license sign -key <the private key file> --tier standard --domain panel.customer.com --customer
+   "Acme VPN" --months 1`, or `-in payload.json` for a payload. The tool fills in `kid`, `v` and `issued_at`, checks the
+   payload the way core does, verifies the result and prints the token. It warns (and still signs) when
+   `max_active_services` is 0 or missing: the install floors it at the free tier's 25.
 4. The customer pastes it on the License tab (check, then install) or runs `bobres license import`.
 5. Rotation: ship the new `.pub` next to the old one, sign new tokens with the new key, and remove the old
    file once its tokens have expired.
