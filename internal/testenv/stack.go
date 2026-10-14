@@ -85,7 +85,7 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	}
 	reset(ctx, t, dsn)
 	gates := newGates(t, dsn, opts)
-	svcDSN := gates.dsn(t, dsn) // what the services connect with
+	svcDSN := testdb.WithPoolCap(t, gates.dsn(t, dsn)) // what the services connect with
 
 	ps, err := paystore.New(ctx, svcDSN)
 	if err != nil {

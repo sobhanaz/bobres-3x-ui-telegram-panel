@@ -1039,25 +1039,6 @@ func TestRemoveResellerCancelsOpenOrders(t *testing.T) {
 	}
 }
 
-// waitLockWaiters waits until n sessions of the test database wait for a lock.
-func waitLockWaiters(t *testing.T, s *store.Store, n int, what string) {
-	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); ; {
-		var waiting int
-		if err := s.DB().QueryRow(context.Background(), `SELECT count(*) FROM pg_stat_activity
-			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
-			t.Fatal(err)
-		}
-		if waiting >= n {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("%s never waited (%d of %d waiting)", what, waiting, n)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 type orderResult struct {
 	o   *store.Order
 	err error
@@ -1067,6 +1048,7 @@ type orderResult struct {
 // removal waits for it and then cancels it.
 func TestRemoveResellerWaitsForAnOrderInFlight(t *testing.T) {
 	svc, s := testService(t)
+	needConns(t, s, 3) // the held transaction, the order and the removal waiting for it
 	ctx := context.Background()
 	admin := staffMember(t, s, 9970, "admin")
 	plan := seedPlan(t, s, false, 1000)
@@ -1088,10 +1070,10 @@ func TestRemoveResellerWaitsForAnOrderInFlight(t *testing.T) {
 		o, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: r.ID, PlanID: plan.ID, IdempotencyKey: "in-flight"})
 		created <- orderResult{o, err}
 	}()
-	waitLockWaiters(t, s, 1, "the order")
+	waitLockWaiters(t, tx, 1, "the order")
 	removed := make(chan error, 1)
 	go func() { removed <- svc.RemoveReseller(ctx, admin, r.ID, "closing the shop") }()
-	waitLockWaiters(t, s, 2, "the removal")
+	waitLockWaiters(t, tx, 2, "the removal")
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -1111,6 +1093,7 @@ func TestRemoveResellerWaitsForAnOrderInFlight(t *testing.T) {
 // waits for the removal and is then refused: no tier-priced order after it.
 func TestOrderAfterResellerRemovedIsRefused(t *testing.T) {
 	svc, s := testService(t)
+	needConns(t, s, 3) // the held transaction, the removal and the order waiting for it
 	ctx := context.Background()
 	admin := staffMember(t, s, 9980, "admin")
 	plan := seedPlan(t, s, false, 1000)
@@ -1128,13 +1111,13 @@ func TestOrderAfterResellerRemovedIsRefused(t *testing.T) {
 	}
 	removed := make(chan error, 1)
 	go func() { removed <- svc.RemoveReseller(ctx, admin, r.ID, "closing the shop") }()
-	waitLockWaiters(t, s, 1, "the removal")
+	waitLockWaiters(t, tx, 1, "the removal")
 	created := make(chan orderResult, 1)
 	go func() {
 		o, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: r.ID, PlanID: plan.ID, IdempotencyKey: "too-late"})
 		created <- orderResult{o, err}
 	}()
-	waitLockWaiters(t, s, 2, "the order")
+	waitLockWaiters(t, tx, 2, "the order")
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}

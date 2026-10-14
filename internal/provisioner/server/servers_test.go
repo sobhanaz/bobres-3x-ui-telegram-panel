@@ -787,7 +787,7 @@ func TestUnreadableToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherStore, err := store.New(ctx, testdb.DSN(t), otherEnv)
+	otherStore, err := store.New(ctx, testdb.WithPoolCap(t, testdb.DSN(t)), otherEnv)
 	if err != nil {
 		t.Fatal(err)
 	}

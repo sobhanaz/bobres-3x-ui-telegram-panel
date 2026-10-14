@@ -80,7 +80,7 @@ func realProvisioner(t *testing.T) (*provisionerclient.Client, *xuifake.Server, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	vs, err := provstore.New(ctx, dsn, env)
+	vs, err := provstore.New(ctx, testdb.WithPoolCap(t, dsn), env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func startPayments(t *testing.T, chain *tronfake.Server) (*paymentsclient.Client
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
 		t.Fatal(err)
 	}
-	ps, err := paystore.New(ctx, dsn)
+	ps, err := paystore.New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatal(err)
 	}
