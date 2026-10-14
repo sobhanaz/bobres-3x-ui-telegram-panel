@@ -138,8 +138,9 @@ install id, so it does not count as a move if the domain stays the same.
 
 **Do I get an invoice?** [OWNER: invoices and taxes; see the Terms of Service.]
 
-**Is my customers' data sent to the seller?** No. Only the license key, the install id, the domain and the version are sent,
-and only when you switch online activation on ([legal/privacy-policy.md](legal/privacy-policy.md)).
+**Is my customers' data sent to the seller?** No. Activation sends the license key, the install id, the domain and the
+version; the daily renewal sends the installed license token and the version. Both happen only when you switch online
+activation on, and the license server sees the request's IP address ([legal/privacy-policy.md](legal/privacy-policy.md)).
 
 **Can I change tier?** Yes: tell the seller. An upgrade is on your install by its next daily renewal. [OWNER: how a change is
 charged.]

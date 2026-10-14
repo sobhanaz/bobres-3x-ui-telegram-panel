@@ -151,6 +151,7 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`
 
 - [Docs index](docs/README.md): every document, with what it covers.
 - [Project plan](docs/PLAN.md): decisions, architecture and the status of each phase.
+- [Roadmap](docs/ROADMAP.md): what comes after v0.1.0, in order.
 - [Runbooks](docs/runbooks/README.md): what to do when something goes wrong, and the routine jobs.
 - [Pricing and licenses](docs/pricing.md): the free tier, the paid tiers, and what happens when a subscription lapses.
 - [Legal drafts](docs/legal/README.md): terms, privacy, acceptable use and refunds, in English and Persian (drafts for a lawyer).
