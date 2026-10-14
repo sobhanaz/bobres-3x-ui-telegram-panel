@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BOBRES · Your VPN store on Telegram</title>
+<meta name="description" content="BOBRES runs a Telegram bot and a web dashboard that sell and manage 3x-ui VPN subscriptions on your own server. One-command install, Persian and English, free core.">
+<meta name="theme-color" content="#0f172a">
+<link rel="icon" href="../assets/brand/bobres-icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="alternate" hreflang="fa" href="../">
+<link rel="alternate" hreflang="en" href="./">
+<link rel="alternate" hreflang="x-default" href="../">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BOBRES">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="fa_IR">
+<meta property="og:title" content="BOBRES · Your VPN store on Telegram">
+<meta property="og:description" content="A Telegram bot and a web dashboard that sell and manage 3x-ui subscriptions, on your own server. One-command install.">
+<meta property="og:image" content="../assets/brand/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="BOBRES: a beaver mascot in a teal scarf, waving and holding a teal shield">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BOBRES · Your VPN store on Telegram">
+<meta name="twitter:description" content="A Telegram bot and a web dashboard that sell and manage 3x-ui subscriptions, on your own server.">
+<meta name="twitter:image" content="../assets/brand/og-image.jpg">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="preload" href="../assets/fonts/inter-latin-400.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></symbol>
+    <symbol id="i-dash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+    <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.7-4 3-9 3s-9-1.3-9-3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="BOBRES, home"><img src="../assets/brand/bobres-icon.svg" alt="" width="36" height="36">BOBRES</a>
+    <nav class="nav" aria-label="Page sections">
+      <a href="#features">Features</a>
+      <a href="#screens">Screens</a>
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      </nav>
+    <div class="head-actions">
+      <a class="lang" href="../" hreflang="fa" lang="fa" aria-label="مشاهدهٔ این صفحه به فارسی">فارسی</a>
+      <a class="cta" href="#install">Install</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- hero -->
+<section class="hero" aria-labelledby="h-hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="badge"><svg aria-hidden="true"><use href="#i-clock"/></svg>Free core · 30-day trial of the premium features</span>
+      <h1 id="h-hero">Launch your own VPN store on Telegram in one command</h1>
+      <p class="lead">BOBRES sells and manages 3x-ui subscriptions: a Telegram bot for your customers, a web dashboard for your team, and everything on your own server, with your own domain, bot and brand.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#install"><svg aria-hidden="true"><use href="#i-term"/></svg>Install in one command</a>
+        <a class="btn btn-ghost" href="#pricing">See pricing</a>
+      </div>
+
+      <div class="install" id="install">
+        <div class="cap"><span>On your server, as root:</span></div>
+        <div class="code">
+          <pre><code id="cmd"><span class="dollar">$ </span>bash &lt;(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)</code></pre>
+          <button class="btn btn-ghost copy" type="button" data-copy="cmd" data-done="Copied"><svg aria-hidden="true"><use href="#i-copy"/></svg><span class="lbl">Copy</span></button>
+        </div>
+        <p class="note">You need an Ubuntu or Debian server, a domain, a Telegram bot and a 3x-ui panel. Details in the <a href="#faq">FAQ</a>.</p>
+        <span class="sr" role="status" aria-live="polite" id="copied"></span>
+      </div>
+
+      <div class="strip">
+        <span><svg aria-hidden="true"><use href="#i-globe"/></svg>Persian and English</span>
+        <span><svg aria-hidden="true"><use href="#i-term"/></svg>One-command install</span>
+        <span><svg aria-hidden="true"><use href="#i-server"/></svg>Your server, your data</span>
+      </div>
+    </div>
+    <div class="mascot">
+      <picture>
+        <source media="(prefers-reduced-motion: reduce)" srcset="../assets/brand/bobres-mascot.webp">
+        <img src="../assets/brand/bobres-wave.webp" width="420" height="420" alt="BOBRES the beaver, the brand mascot, in a teal scarf, waving">
+      </picture>
+    </div>
+  </div>
+</section>
+
+<!-- what it does -->
+<section class="band" id="what" aria-labelledby="h-what">
+  <div class="wrap">
+    <div class="head">
+      <span class="kicker">What it does</span>
+      <h2 id="h-what">From a customer's first message to their renewal</h2>
+      <p>Three parts that work together, and all three are yours.</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-bot"/></svg></div>
+        <h3>For customers: a Telegram bot</h3>
+        <p>Persian and English, with a bottom menu and colored buttons. A customer picks a plan, pays, and gets the subscription link and a QR code in the same chat. Renewals, extra traffic, a wallet, a free trial, invites and support live in the same bot.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-dash"/></svg></div>
+        <h3>For you: a web dashboard</h3>
+        <p>With owner, admin and support roles: orders and receipts waiting for review, plans, users, discount codes, broadcasts, a support inbox, branding and every bot text. Persian and English, dark and light.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-server"/></svg></div>
+        <h3>On your server: install and upkeep</h3>
+        <p>A one-command install, daily encrypted backups, alerts in Telegram, an HTTPS manager, updates checked against the release signature that roll back on their own, and server hardening.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- features -->
+<section id="features" aria-labelledby="h-features">
+  <div class="wrap">
+    <div class="head">
+      <span class="kicker">Features</span>
+      <h2 id="h-features">What a VPN store needs</h2>
+      <p>Everything in this list is built. Nothing that is not built is listed.</p>
+    </div>
+    <div class="cards grid-4">
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-bot"/></svg></div>
+        <h3>Persian and English bot</h3>
+        <p>Buttons are colored by what they do: green to pay, blue for the main actions, red to cancel. A bottom menu stays under the chat.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-cart"/></svg></div>
+        <h3>Buy, renew, free trial</h3>
+        <p>Traffic, time or both; discount codes; renewals that keep the same subscription link; extra traffic packages; and one free trial per Telegram account.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-wallet"/></svg></div>
+        <h3>Wallet and invites</h3>
+        <p>Top-ups with a transaction history, and a reward for whoever invited a friend, paid on the friend's first purchase. Reminders before a service or its traffic runs out are automatic.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-card"/></svg></div>
+        <h3>Payment methods</h3>
+        <p>Card to card, USDT (manual, or automatic on TRON), Telegram Stars and, if you want it, Zarinpal. Each payment settles exactly once, and the wallet ledger only ever grows.</p>
+        <span class="tag">Automatic USDT: Standard and up</span>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-users"/></svg></div>
+        <h3>Resellers</h3>
+        <p>Resellers buy for their customers inside the bot: at their tier's prices, on credit up to a limit, with a statement and a commission.</p>
+        <span class="tag">Standard and up</span>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-server"/></svg></div>
+        <h3>Several 3x-ui servers</h3>
+        <p>Many panels, each health-checked every minute, with weights and servers per plan. A new service goes to a healthy server with fewer clients for its weight.</p>
+        <span class="tag">More than one server: Standard and up</span>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-dash"/></svg></div>
+        <h3>A dashboard with roles</h3>
+        <p>Owner, admin and support each see only what they may. Log in with a one-time link, or with a password and an authenticator code. The audit log only ever grows.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-edit"/></svg></div>
+        <h3>Your brand</h3>
+        <p>Change the name, logo, color, the bot's profile photo and every bot text, in both languages, from the dashboard.</p>
+        <span class="tag">Removing the BOBRES mark: Pro</span>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-db"/></svg></div>
+        <h3>Backups</h3>
+        <p>Every day, encrypted: the newest 7 on the server, each one (up to 50 MB) sent to the owner on Telegram, and optionally a copy in S3 storage. Restoring takes one command.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-bell"/></svg></div>
+        <h3>System alerts on Telegram</h3>
+        <p>When a service, a 3x-ui server, a gateway, the disk, a backup or an HTTPS certificate has a problem, you hear about it on Telegram, and again when it is fixed.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-lock"/></svg></div>
+        <h3>HTTPS manager</h3>
+        <p>An automatic certificate for your domain (the default), a Let's Encrypt certificate for the server's IP address, or your own certificate and key. From the dashboard or with <code class="ltr">bobres ssl</code>.</p>
+      </article>
+      <article class="card">
+        <div class="ic"><svg aria-hidden="true"><use href="#i-refresh"/></svg></div>
+        <h3>Install, update and roll back</h3>
+        <p>A one-command installer that verifies the signed release before it runs. <code class="ltr">bobres update</code> has stable and beta channels and rolls back by itself if the new version does not come up healthy. Server hardening is one command, <code class="ltr">bobres harden</code>.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- screenshots -->
+<section class="band" id="screens" aria-labelledby="h-screens">
+  <div class="wrap">
+    <div class="head">
+      <span class="kicker">Screens</span>
+      <h2 id="h-screens">See what it looks like</h2>
+      <p>The dashboard screenshots come from a real BOBRES install with demo data: the users, orders and receipts are made up.</p>
+    </div>
+
+    <div class="shots">
+      <figure class="shot feature">
+        <a href="../assets/shots/dash-en-overview.webp"><img src="../assets/shots/dash-en-overview.webp" width="1440" height="900" loading="lazy" decoding="async" alt="The dashboard overview: users, active services, revenue today and over 30 days, payments to review, tickets, server and gateway health, and the latest orders"></a>
+        <figcaption>Overview: revenue, services, payments and server health at a glance.</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="../assets/shots/dash-en-payments.webp"><img src="../assets/shots/dash-en-payments.webp" width="1440" height="900" loading="lazy" decoding="async" alt="The payment review queue: each receipt with its photo, customer, amount, method and reference number, and Approve and Reject buttons"></a>
+        <figcaption>The payment review queue: receipt, amount and reference, approved or rejected in one click.</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="../assets/shots/dash-en-plans.webp"><img src="../assets/shots/dash-en-plans.webp" width="1440" height="900" loading="lazy" decoding="async" alt="The plans list with duration, traffic, price, servers, units sold and an on-sale switch"></a>
+        <figcaption>Plans: traffic, duration, price, servers and the sale switch.</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="../assets/shots/dash-en-support.webp"><img src="../assets/shots/dash-en-support.webp" width="1440" height="900" loading="lazy" decoding="async" alt="The support inbox with tickets waiting for an answer, their category, status and waiting time"></a>
+        <figcaption>The support inbox: tickets waiting, their category and how long they have waited.</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="../assets/shots/dash-en-branding.webp"><img src="../assets/shots/dash-en-branding.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Branding and texts: store name, color, logo, legal links and the Telegram bot photo card with a round preview"></a>
+        <figcaption>Branding: name, color, logo and the bot's profile photo with a round preview.</figcaption>
+      </figure>
+      <figure class="shot natural">
+        <a href="../assets/shots/dash-en-https.webp"><img src="../assets/shots/dash-en-https.webp" width="1152" height="396" loading="lazy" decoding="async" alt="Choosing the HTTPS mode on the System page: automatic domain, server IP address, or your own certificate"></a>
+        <figcaption>HTTPS: three modes. A change is saved only once Caddy accepts it.</figcaption>
+      </figure>
+      <figure class="shot natural">
+        <a href="../assets/shots/dash-en-backups.webp"><img src="../assets/shots/dash-en-backups.webp" width="1152" height="412" loading="lazy" decoding="async" alt="The backups tab: the next backup, free disk space, off-site storage and the latest backup, sent to Telegram"></a>
+        <figcaption>Backups: each one is encrypted and sent to the owner on Telegram.</figcaption>
+      </figure>
+    </div>
+
+    <h3 class="sub-label">A phone layout too<small>On a small screen the menu folds into a drawer. These three pages were captured at 390 px wide.</small></h3>
+    <div class="phones three">
+      <figure class="phone"><img src="../assets/shots/dash-en-overview-m.webp" width="780" height="1688" loading="lazy" decoding="async" alt="The dashboard overview on a phone"><figcaption>Overview</figcaption></figure>
+      <figure class="phone"><img src="../assets/shots/dash-en-payments-m.webp" width="780" height="1688" loading="lazy" decoding="async" alt="The payment review queue on a phone"><figcaption>Payments</figcaption></figure>
+      <figure class="phone"><img src="../assets/shots/dash-en-plans-m.webp" width="780" height="1688" loading="lazy" decoding="async" alt="The plans list on a phone"><figcaption>Plans</figcaption></figure>
+    </div>
+
+    <h3 class="sub-label">The bot, from a customer's side<small>Illustration based on the bot's real messages: the texts and the button colors are the ones the bot sends.</small></h3>
+    <div class="phones">
+      <figure class="phone short"><img src="../assets/chat/chat-start-both.webp" width="780" height="940" loading="lazy" decoding="async" alt="Illustration: the /start command and the language picker with the two buttons, Persian and English"><figcaption>/start and the language picker</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-welcome-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: the bot's welcome with the bottom menu, its buttons green, blue and neutral"><figcaption>Welcome and the colored menu</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-plans-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: the plan list with the price on each button"><figcaption>The plan list</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-checkout-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: a plan's details and its payment methods"><figcaption>Choose how to pay</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-card-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: card-to-card payment instructions and the receipt being sent"><figcaption>Card to card, and the receipt</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-delivered-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: the service delivered with its subscription link and a QR code"><figcaption>Delivered, with link and QR</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-renew-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: a service with its usage bar and the Renew and Add traffic buttons"><figcaption>My service and renewal</figcaption></figure>
+      <figure class="phone"><img src="../assets/chat/chat-wallet-en.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Illustration: the wallet and a top-up"><figcaption>The wallet</figcaption></figure>
+    </div>
+
+    <h3 class="sub-label">A short demo<small>Under half a minute, no sound.</small></h3>
+    <div class="demo">
+      <video muted playsinline controls preload="none" poster="../assets/demo-en-poster.webp" width="1280" height="720" aria-label="A short BOBRES demo: from choosing a plan in the bot to delivery and the dashboard">
+        <source src="../assets/demo-en.mp4" type="video/mp4">
+        Your browser does not play this video.
+      </video>
+    </div>
+    <p class="demo-note">The bot illustrations and the dashboard data are samples and made up.</p>
+  </div>
+</section>
+
+<!-- how it works -->
+<section id="how" aria-labelledby="h-how">
+  <div class="wrap">
+    <div class="head">
+      <span class="kicker">How it works</span>
+      <h2 id="h-how">Three steps to your first sale</h2>
+    </div>
+    <ol class="steps">
+      <li>
+        <h3>Get ready</h3>
+        <p>You need four things:</p>
+        <ul>
+          <li>An Ubuntu or Debian server</li>
+          <li>A domain that points to it</li>
+          <li>A bot from @BotFather and your numeric Telegram ID</li>
+          <li>A 3x-ui panel with an API token</li>
+        </ul>
+      </li>
+      <li>
+        <h3>Run one command</h3>
+        <p>The installer verifies the release's signature, asks for your domain, owner ID, bot token and panel (tokens are typed hidden), generates every secret and starts the store.</p>
+      </li>
+      <li>
+        <h3>Add plans and sell</h3>
+        <p>Send <code class="ltr">/dashboard</code> to your bot and open the one-time login link. Set up your plans and payment methods, and your store is ready for customers.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- pricing -->
+<section class="band" id="pricing" aria-labelledby="h-pricing">
+  <div class="wrap">
+    <div class="head">
+      <span class="kicker">Pricing</span>
+      <h2 id="h-pricing">The core is free. Premium comes with a subscription.</h2>
+      <p>A subscription covers one install. For prices, contact us.</p>
+    </div>
+
+    <div class="trial">
+      <div class="ic"><svg aria-hidden="true"><use href="#i-clock"/></svg></div>
+      <div>
+        <h3>30-day trial</h3>
+        <p>Every new install starts with 30 days of the premium features, so you can try everything except removing the BOBRES mark before you pick a tier.</p>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="tiers">
+        <caption>Every tier includes the bot, the dashboard, backups, alerts, the HTTPS manager and updates with rollback. "Unlimited" means no cap.</caption>
+        <thead>
+          <tr>
+            <th scope="col"><span class="sr">Feature</span></th>
+            <th scope="col">Free<small>To get started</small><span class="price">No cost</span></th>
+            <th scope="col">Standard<small>For a growing store</small><span class="price">Contact us</span></th>
+            <th scope="col" class="pro">Pro<small>No caps, your own brand</small><span class="price">Contact us</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="group"><th colspan="4" scope="rowgroup">Capacity</th></tr>
+          <tr>
+            <th scope="row">3x-ui servers</th>
+            <td data-label="Free"><span><strong>1</strong></span></td>
+            <td data-label="Standard"><span>Up to <strong>3</strong></span></td>
+            <td data-label="Pro" class="pro"><span>Unlimited</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Active services</th>
+            <td data-label="Free"><span>Up to <strong>25</strong></span></td>
+            <td data-label="Standard"><span>Up to <strong>500</strong></span></td>
+            <td data-label="Pro" class="pro"><span>Unlimited</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Dashboard staff seats</th>
+            <td data-label="Free"><span><strong>2</strong></span></td>
+            <td data-label="Standard"><span><strong>5</strong></span></td>
+            <td data-label="Pro" class="pro"><span>Unlimited</span></td>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr class="group"><th colspan="4" scope="rowgroup">Selling</th></tr>
+          <tr>
+            <th scope="row">Persian and English bot, wallet, free trial, invites</th>
+            <td data-label="Free" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Standard" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Card to card, manual USDT, Telegram Stars, Zarinpal (optional)</th>
+            <td data-label="Free" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Standard" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Automatic USDT (TRC20)</th>
+            <td data-label="Free" class="no"><svg aria-hidden="true"><use href="#i-x"/></svg><span class="sr">Not included</span></td>
+            <td data-label="Standard" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Resellers</th>
+            <td data-label="Free" class="no"><svg aria-hidden="true"><use href="#i-x"/></svg><span class="sr">Not included</span></td>
+            <td data-label="Standard" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr class="group"><th colspan="4" scope="rowgroup">Brand and upkeep</th></tr>
+          <tr>
+            <th scope="row">Your name, logo, color and bot texts</th>
+            <td data-label="Free" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Standard" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+          <tr>
+            <th scope="row">White-label (no BOBRES mark)</th>
+            <td data-label="Free" class="no"><svg aria-hidden="true"><use href="#i-x"/></svg><span class="sr">Not included</span></td>
+            <td data-label="Standard" class="no"><svg aria-hidden="true"><use href="#i-x"/></svg><span class="sr">Not included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Backups, Telegram alerts, HTTPS manager, updates with rollback, hardening</th>
+            <td data-label="Free" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Standard" class="yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+            <td data-label="Pro" class="yes pro"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr">Included</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="contact">
+      <a class="btn btn-primary" href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/issues/new" rel="noopener">Prices and subscriptions: contact us</a>
+      <p>For now, the way to reach us is the issue tracker of the project's repository on GitHub. It is public: everyone can read what you write, so never paste tokens, keys or private data.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" aria-labelledby="h-faq">
+  <div class="wrap">
+    <div class="head">
+      <span class="kicker">FAQ</span>
+      <h2 id="h-faq">Plain answers</h2>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>What do I need to install it?</summary>
+        <div class="ans">
+          <ul>
+            <li>A server with Ubuntu 22.04 or 24.04, or Debian 11, 12 or 13 (amd64 or arm64), 1 GB of RAM (2 GB is better), 10 GB of free disk, ports 80 and 443 free, and root access.</li>
+            <li>A domain whose A record points to the server.</li>
+            <li>A new Telegram bot from @BotFather, and your numeric Telegram ID.</li>
+            <li>A 3x-ui panel with an API token. Versions 3.8.5 to 3.9.0 are tested, and you can add panels later in the dashboard.</li>
+          </ul>
+          <p>The installer installs Docker if it is missing.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Do I need 3x-ui? Does it work with older versions?</summary>
+        <div class="ans">
+          <p>Yes. BOBRES creates and manages users on 3x-ui panels. For now only version 3 is supported, tested on 3.8.5 and 3.9.0. There is no adapter for older versions yet; we build one only when a customer needs it.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Which payment methods are there?</summary>
+        <div class="ans">
+          <ul>
+            <li>The wallet, always on.</li>
+            <li>Card to card, USDT (TRC20 or ERC20) and a Zarinpal payment link (optional): the customer sends a receipt photo (for USDT, a transaction ID is enough) and you approve it from the review queue. A repeated reference number is flagged.</li>
+            <li>Telegram Stars, at your own rate in Toman.</li>
+            <li>Zarinpal online (optional), off until you enter a merchant ID.</li>
+            <li>Automatic USDT on TRON (TRC20): each payment gets its own exact amount and 45 minutes to pay, and an exact match settles by itself (Standard and up).</li>
+          </ul>
+        </div>
+      </details>
+      <details>
+        <summary>What does online Zarinpal need?</summary>
+        <div class="ans">
+          <p>Zarinpal online needs your own approved merchant account. We have not verified that Zarinpal accepts VPN stores, so ask Zarinpal's support before you switch it on. Card to card, USDT and Telegram Stars work without it.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Who owns the data and the customers?</summary>
+        <div class="ans">
+          <p>You do. BOBRES runs on your server, with your domain, bot and panels. Your customers, orders and wallets stay in that server's database, and backups are encrypted with a backup key.</p>
+          <p>Nothing about your customers is sent to us. Only an install that uses online license activation talks to the project's license server (which, like any server, sees the address a request comes from). At activation it sends the key, the install ID, the domain and the version. The daily refresh sends the installed license token and the version. Free installs that never activate send nothing. Releases are downloaded from GitHub. (Your bot, of course, talks to Telegram, your payment providers and your panels, as it must.)</p>
+          <p>One more request: in the HTTPS server-IP mode, the bot asks api.ipify.org (then ifconfig.me) for the server's public address. No customer data is in that request.</p>
+        </div>
+      </details>
+      <details>
+        <summary>How do updates work?</summary>
+        <div class="ans">
+          <p>With <code>sudo bobres update</code>. It verifies the release's signature, makes a backup, keeps a restore point and rolls back by itself if the new version does not come up healthy. If you change your mind later, <code>sudo bobres rollback</code> undoes the last update. There are stable and beta channels.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Licensing, in plain words</summary>
+        <div class="ans">
+          <p>The core is free: the bot, the dashboard, the manual payment methods, Stars, Zarinpal (optional), backups and HTTPS. The Free tier covers 1 server, up to 25 active services and 2 staff seats.</p>
+          <p>If you need resellers, automatic USDT, more servers and services, or no BOBRES mark, you take a subscription for each install: Standard or Pro. Every new install starts with a 30-day trial of the premium features (everything except removing the BOBRES mark). Prices: contact us.</p>
+        </div>
+      </details>
+      <details>
+        <summary>What happens when a subscription ends?</summary>
+        <div class="ans">
+          <p>Nothing is deleted. Your customers and their services keep working, and your install goes back to the Free tier. A license never stops what already exists; it only affects new actions.</p>
+        </div>
+      </details>
+      <details>
+        <summary>What security measures does it have?</summary>
+        <div class="ans">
+          <ul>
+            <li>Four separate services, each with its own database role and token; the 3x-ui tokens live only in the provisioner and the gateway secrets only in payments.</li>
+            <li>Secrets are encrypted at rest, with a separate key for each service.</li>
+            <li>Releases are signed with Ed25519, and BOBRES's own Docker images with cosign. The Postgres, Redis and Caddy images come from others and are pinned by version (Caddy also by digest).</li>
+            <li>The dashboard has CSRF tokens, authenticator codes for every password login, a strict CSP and an append-only audit log.</li>
+            <li>BOBRES's own services run as an unprivileged user, with a read-only filesystem and no extra capabilities.</li>
+          </ul>
+          <p>These are measures, not a guarantee. Review the install yourself before you open it to the public.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Can I try it before I pay?</summary>
+        <div class="ans">
+          <p>Yes. There is a free tier with the limits above, and every new install starts with a 30-day trial of the premium features, everything except removing the BOBRES mark.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="./"><img src="../assets/brand/bobres-icon.svg" alt="" width="36" height="36">BOBRES</a>
+        <p class="tagline">Your VPN store, on Telegram.</p>
+      </div>
+      <ul>
+        <li><a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel">Project repository on GitHub</a></li>
+        <li><a href="../" hreflang="fa" lang="fa">فارسی</a></li>
+        <li><a href="#main">Back to top</a></li>
+      </ul>
+    </div>
+    <p class="fine">The dashboard screenshots come from a test install with made-up data, and the bot pictures are drawn from the bot's real messages. BOBRES is an independent project, not affiliated with Telegram or 3x-ui; those names belong to their owners. Operators are responsible for local law, Telegram's terms and their payment providers' rules.</p>
+  </div>
+</footer>
+
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

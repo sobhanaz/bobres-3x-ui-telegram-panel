@@ -1,0 +1,85 @@
+name: Pages
+
+# Publishes site/ (the landing and pricing pages, Persian and English) to GitHub Pages.
+# The repository's Pages setting must be set to "GitHub Actions" once, by the owner: this file changes no setting.
+#
+# The sources in site/ use relative URLs, so they work at any address. A link preview (Telegram, X), the hreflang
+# alternates and the sitemap need absolute ones, so the build copies site/ to _site/ and writes them there, from the
+# address configure-pages reports (the origin plus the repository path, or a custom domain). site/ itself is not changed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a running one is finished, not cancelled, so the site is never half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy site/
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: pages
+        uses: actions/configure-pages@v6
+      - name: Copy site/ to _site/ and make its URLs absolute
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          cp -R site _site
+          python3 - "$BASE_URL" <<'PY'
+          import pathlib
+          import re
+          import sys
+          from urllib.parse import urljoin
+
+          base = sys.argv[1].strip().rstrip("/")
+          if not base.startswith("https://"):
+              sys.exit("base_url must be an https address, got " + repr(base))
+          site = pathlib.Path("_site")
+          root = base + "/"
+
+          def rewrite(path, url, rules):
+              # Each rule is (pattern, how many matches the markup must have): a different count fails the build.
+              text = path.read_text(encoding="utf-8")
+              for pattern, want in rules:
+                  text, n = re.subn(pattern, lambda m: m.group(1) + urljoin(url, m.group(2)) + m.group(3), text)
+                  if n != want:
+                      sys.exit("%s: %r matched %d times, expected %d" % (path, pattern, n, want))
+              path.write_text(text, encoding="utf-8")
+
+          page_rules = [
+              (r'(<meta property="og:image" content=")([^"]+)(")', 1),
+              (r'(<meta name="twitter:image" content=")([^"]+)(")', 1),
+              (r'(<link rel="alternate" hreflang="[^"]+" href=")([^"]+)(")', 3),
+          ]
+          rewrite(site / "index.html", root, page_rules)
+          rewrite(site / "en" / "index.html", root + "en/", page_rules)
+          rewrite(site / "sitemap.xml", root, [
+              (r"(<loc>)([^<]+)(</loc>)", 2),
+              (r'(<xhtml:link rel="alternate" hreflang="[^"]+" href=")([^"]+)(")', 4),
+          ])
+          with open(site / "robots.txt", "a", encoding="utf-8") as f:
+              f.write("\nSitemap: " + root + "sitemap.xml\n")
+          print("absolute URLs written for", base)
+          PY
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v5

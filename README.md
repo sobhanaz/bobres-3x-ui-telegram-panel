@@ -105,7 +105,7 @@ As root on the server:
 bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
 ```
 
-This needs a published release; the first will be v0.1.0. It installs Docker if needed, downloads the `bobres` CLI
+It needs a published release (v0.1.0 is the first). It installs Docker if needed, downloads the `bobres` CLI
 from the latest GitHub release, verifies its signature and checksum, and asks for your domain, Telegram ID, bot token
 and 3x-ui panel (tokens are typed hidden). Then it offers server hardening and prints the first steps and your backup
 key. Details: [docs/06-installer.md](docs/06-installer.md).
@@ -156,6 +156,7 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`
 - [Pricing and licenses](docs/pricing.md): the free tier, the paid tiers, and what happens when a subscription lapses.
 - [Legal drafts](docs/legal/README.md): terms, privacy, acceptable use and refunds, in English and Persian (drafts for a lawyer).
 - [Brand](docs/08-brand.md): BOBRES the beaver, the assets and the rules for using them.
+- [Launch material](docs/marketing/README.md): posts, outreach texts, a pitch, a price-list template and the claims checklist; the public site is in [`site/`](site/).
 - [Changelog](CHANGELOG.md).
 
 ## How it is built
