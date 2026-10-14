@@ -20,6 +20,7 @@ export function errorText(e: unknown, t: T): { text: string; detail: string } {
     forbidden: 'error.forbidden',
     not_found: 'error.not_found',
     unavailable: 'error.unavailable',
+    timeout: 'error.timeout',
     insufficient_funds: 'error.insufficient_funds',
     conflict: 'error.conflict',
     state: 'error.state',

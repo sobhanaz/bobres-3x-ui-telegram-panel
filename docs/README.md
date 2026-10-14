@@ -22,6 +22,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [11-staging-run.md](11-staging-run.md) | Checklist for the first install on a real server, the last step before v0.1.0 |
 | [12-load-test.md](12-load-test.md) | Load test: numbers, limits, what to watch |
 | [13-license-server.md](13-license-server.md) | The vendor's license server (`licensesrv`): license keys, activation, daily refresh, revocation; the vendor's runbook |
+| [14-reports.md](14-reports.md) | Sales reports: what each number means in terms of the ledger, orders and events, currencies, time zone, CSV files, the `reports.read` permission and limits |
 | [pricing.md](pricing.md) | The pricing model (free core, a subscription per install), the tiers side by side, what happens when a subscription lapses, FAQ |
 | [legal/](legal/README.md) | Legal drafts for a lawyer to review: Terms of Service, Privacy Policy, Acceptable Use, Refund policy and a template for an operator's own store, each in English and Persian |
 | [launch-checklist.md](launch-checklist.md) | What the owner still has to do before selling: names, trademark, lawyer, prices, the license server, the first customers |

@@ -144,15 +144,17 @@ func (s *Service) paymentReceived(ctx context.Context, tx pgx.Tx, p events.Payme
 	return s.publishOrderPaid(ctx, tx, o, u.TelegramID, source)
 }
 
-// paymentRejected tells the user (through the bot) that a reviewer rejected
-// their payment. No money moved; the order stays payable.
+// paymentRejected tells the user (through the bot) that their payment was
+// rejected by a reviewer or failed at its gateway. No money moved; the order
+// stays payable. The event carries the provider, so the sales reports can tell
+// a staff rejection from a failed gateway payment.
 func (s *Service) paymentRejected(ctx context.Context, tx pgx.Tx, p events.PaymentEvent) error {
 	u, err := s.st.GetUser(ctx, tx, p.UserID)
 	if err != nil {
 		return err
 	}
 	return s.publish(ctx, tx, events.PaymentRejected, events.PaymentRejectedEvent{
-		UserID: p.UserID, TelegramID: u.TelegramID, IntentID: p.IntentID, OrderID: p.OrderID,
+		UserID: p.UserID, TelegramID: u.TelegramID, IntentID: p.IntentID, OrderID: p.OrderID, Provider: p.Provider,
 		Amount: p.Amount, Currency: p.Currency, Reason: p.Reason,
 	})
 }

@@ -179,6 +179,9 @@ services:
       BOBRES_PROVISIONER_GRPC_ADDR: provisioner:9090
       BOBRES_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:?set BOBRES_CORE_MASTER_KEY}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
+      # The store's time zone when the general.timezone setting is empty: the sales reports'
+      # days follow it, as the bot's dates do.
+      BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}
       # Receipt photos for the dashboard come through the bot: core keeps no
       # bot token and has no internet access.
       BOBRES_BOT_URL: http://bot:8080

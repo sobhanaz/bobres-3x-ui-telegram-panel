@@ -25,14 +25,22 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
 ### 1. Sales reports and analytics (M) — first
 - **What:** revenue by day, week and month; new customers, renewals and churn; top plans; wallet top-ups; refunds and
   rejected payments; a daily summary message to the owner in Telegram; CSV export.
+- **Built (the MVP, [14-reports.md](14-reports.md)):** a read-only Reports section for staff with `reports.read` (owner
+  and admin): revenue per day, week or month per currency (never summed), paid orders, new customers, renewals, free
+  trials, wallet top-ups, refunds, payments staff rejected, failed or expired gateway payments (apart) and cancelled
+  orders, a chart per currency, top plans, how orders were paid (wallet, staff-approved, gateway), CSV files of the
+  summary and of the paid orders. The numbers equal the ledger to the last unit in a test with seeded data in several
+  time zones, in fa and en. Migration 00018 adds three indexes.
+- **Still open:** the daily summary message in Telegram (and its notification kind); Jalali-calendar weeks and months
+  (buckets are Gregorian now, the dates are shown in Jalali); churn; the gateway behind a payment (Zarinpal, Stars,
+  automatic USDT apart: the payments service has it, core does not store it); the ledger export's early-header and
+  deadline handling (the reports' exports have it).
 - **Why first:** it is the cheapest piece, needs no new service, and the owner and the first customers want numbers
   from day one. It also shows the paid tiers' value.
-- **Needs:** read-only queries over core's orders, payments and ledger; a Reports section in the dashboard; one new
-  notification kind. No migration beyond indexes.
 - **Risks:** time zones and the Jalali calendar in the numbers; money in several currencies (Toman, USDT, Stars) must
   never be added together without a stated rate.
-- **Done when:** the numbers match the ledger to the last unit in a test with seeded data, in fa and en, and the daily
-  summary arrives once.
+- **Done when:** the numbers match the ledger to the last unit in a test with seeded data, in fa and en (done), and the
+  daily summary arrives once (open).
 
 ### 2. Branded subscription page (M)
 - **What:** a page per customer service under the store's own brand: usage and days left, the subscription link and

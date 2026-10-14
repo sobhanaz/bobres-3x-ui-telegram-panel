@@ -16,7 +16,8 @@
     "rate_limited": "Too many attempts. Wait a minute.",
     "not_found": "This item no longer exists.",
     "state": "This cannot be done right now.",
-    "unavailable": "A service this needs (or the 3x-ui panel) did not answer. Try again in a minute."
+    "unavailable": "A service this needs (or the 3x-ui panel) did not answer. Try again in a minute.",
+    "timeout": "The report took too long. Choose a shorter range."
   },
   "theme": {
     "system": "Theme: system",
@@ -76,6 +77,10 @@
     "ledger": {
       "title": "Wallet & ledger",
       "desc": "Every wallet movement, with filters and CSV export."
+    },
+    "reports": {
+      "title": "Reports",
+      "desc": "Sales per day, week or month and per currency, the top plans, how orders were paid, and CSV export."
     },
     "discounts": {
       "title": "Discounts & referrals",
@@ -496,6 +501,104 @@
       "month": "Last 30 days"
     },
     "one_customer": "One customer"
+  },
+  "reports": {
+    "hint": "Sales read from the ledger and the orders, in the store's time zone. Every currency is counted on its own: amounts in different currencies are never added together.",
+    "period_label": "Period",
+    "range": {
+      "today": "Today",
+      "last_7_days": "Last 7 days",
+      "last_30_days": "Last 30 days",
+      "this_month": "This month",
+      "last_month": "Last month",
+      "custom": "Custom"
+    },
+    "from": "From",
+    "to": "To",
+    "group_label": "Group by",
+    "group": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "covers": "{from} to {to} · time zone {tz}",
+    "calendar_note": "Weeks start on Monday and months are calendar months (Gregorian), in both languages.",
+    "export_summary": "Summary CSV",
+    "export_orders": "Paid orders CSV",
+    "empty": "No sales in this period.",
+    "kpi": {
+      "revenue": "Revenue",
+      "net": "After refunds: {amount}",
+      "orders": "{n} paid order | {n} paid orders",
+      "split": "New {new} · Renewals {renew} · Traffic {traffic}",
+      "topups": "Wallet top-ups",
+      "refunds": "Refunds",
+      "rejected": "Rejected by staff",
+      "gateway_failed": "Failed or expired gateway payments",
+      "cancelled": "Cancelled orders",
+      "topups_n": "{n} top-up | {n} top-ups",
+      "refunds_n": "{n} refund | {n} refunds",
+      "rejected_n": "{n} payment | {n} payments",
+      "gateway_failed_n": "{n} payment | {n} payments",
+      "cancelled_n": "{n} order | {n} orders"
+    },
+    "customers": {
+      "title": "Customers",
+      "new": "New customers",
+      "new_hint": "People whose first paid order was in this period.",
+      "trials": "Free trials started"
+    },
+    "chart": {
+      "title": {
+        "day": "Revenue by day",
+        "week": "Revenue by week",
+        "month": "Revenue by month"
+      },
+      "peak": "{currency}: highest {amount}, in {period}",
+      "zero": "{currency}: no revenue in this period",
+      "partial": "The range cuts the lighter bars: they hold only part of their period."
+    },
+    "period": {
+      "week_of": "Week of {date}",
+      "month_of": "Month of {date}",
+      "partial": "partial"
+    },
+    "table": {
+      "title": "By period",
+      "period": "Period",
+      "revenue_in": "Revenue ({currency})",
+      "orders_in": "Orders ({currency})",
+      "new_customers": "New customers",
+      "trials": "Free trials"
+    },
+    "plans": {
+      "title": "Top plans",
+      "plan": "Plan",
+      "orders": "Paid orders",
+      "revenue": "Revenue",
+      "none": "No plan sold in this period."
+    },
+    "methods": {
+      "title": "Paid with",
+      "method": "Method",
+      "orders": "Paid orders",
+      "revenue": "Revenue",
+      "share": "Share",
+      "none": "No paid orders in this period.",
+      "hint": "A top-up is not a sale: an order paid from the wallet is listed under Wallet balance, whenever the money was topped up."
+    },
+    "method": {
+      "wallet": "Wallet balance",
+      "manual": "Approved by staff",
+      "gateway": "Payment gateway",
+      "unknown": "Unknown"
+    },
+    "method_hint": {
+      "wallet": "Paid from the customer's wallet, whatever put the money there: a top-up, a refund, a reward, a change by staff, a reseller's commission or a reseller's credit.",
+      "manual": "Card to card, crypto or a Zarinpal link, approved by staff.",
+      "gateway": "Zarinpal, Telegram Stars or automatic USDT.",
+      "unknown": "A sale with no record of how it was paid."
+    }
   },
   "discount": {
     "new": "New code",
@@ -1140,7 +1243,8 @@
       },
       "export": {
         "ledger": "Wallet history exported",
-        "audit": "Audit log exported"
+        "audit": "Audit log exported",
+        "reports": "Sales report exported"
       },
       "ticket": {
         "reply": "Ticket answered",

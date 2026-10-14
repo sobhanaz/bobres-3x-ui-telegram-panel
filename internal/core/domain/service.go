@@ -25,6 +25,10 @@ const trialOnceConstraint = "ledger_entries_trial_once_idx"
 type Config struct {
 	// OwnerTelegramID is promoted to the owner role on first contact.
 	OwnerTelegramID int64
+	// Timezone is BOBRES_TIMEZONE: the zone of the sales reports' days when the
+	// general.timezone setting is empty ("" or a name core cannot load: the
+	// report default, Asia/Tehran).
+	Timezone string
 	// Log receives what needs an operator's eye outside a request (nil: the
 	// default logger).
 	Log *slog.Logger

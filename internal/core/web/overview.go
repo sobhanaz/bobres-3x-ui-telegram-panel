@@ -53,10 +53,14 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 		"users":            map[string]int64{"total": o.UsersTotal, "new_24h": o.UsersNew24h, "new_7d": o.UsersNew7d},
 		"services":         map[string]int64{"active": o.ServicesActive, "expiring": o.ServicesExpiring, "ended": o.ServicesEnded},
 		"orders":           map[string]int64{"paid_24h": o.OrdersPaid24h, "provision_failed": o.ProvisionFailed},
-		"revenue":          map[string]any{"day": moneyList(o.Revenue24h), "month": moneyList(o.Revenue30d)},
 		"pending_payments": o.PendingPayments,
 		"panel":            map[string]any{"healthy": o.PanelHealthy, "detail": o.PanelDetail},
 		"recent_orders":    recent,
+	}
+	// Revenue is for those who may read the reports (owner and admin): support
+	// sees the rest of the overview, not what the store earns.
+	if Allowed(actor(r).Role, PermReportsRead) {
+		out["revenue"] = map[string]any{"day": moneyList(o.Revenue24h), "month": moneyList(o.Revenue30d)}
 	}
 	if s.cfg.Servers != nil {
 		servers, panel := s.overviewServers(r.Context(), Allowed(actor(r).Role, PermServersWrite))

@@ -147,6 +147,8 @@ Core's `POST /api/v1/system/tls/detect-ip` and the Detect button of the dashboar
   applies each intent exactly once) and `payment.deposit_unmatched.v1` / `deposit_claimed.v1`. Core publishes for the
   bot: `order.paid.v1`, `wallet.credited.v1`, `payment.rejected.v1`, `subscription.provisioned.v1`, `extended.v1`,
   `provision_failed.v1` and `reminder.v1`, the four `ticket.*.v1`, `system.alert.v1` and the two deposit events.
+  `payment.rejected.v1` is for a manual payment a reviewer rejected and for a gateway payment that failed or expired;
+  it carries the intent's `provider` and the `reason` (core's sales reports tell the two apart with them).
   The other rows of the catalog are not events: those steps are gRPC calls (orders, payment intents, provisioning,
   the usage sync) or happen inside core (licenses). Expiry and traffic reminders are `subscription.reminder.v1`.
 - DECIDED: bot -> core is gRPC (core's CoreService), from Phase 1 on.

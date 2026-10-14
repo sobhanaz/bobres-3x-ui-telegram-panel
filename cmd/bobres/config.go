@@ -42,7 +42,7 @@ var configKeys = []configKey{
 	// installedOnly leaves the tls-agent out of an install that has none (tlsAgentOn).
 	{name: "BOBRES_DOMAIN", services: []string{"caddy", "core", "payments", "tls-agent"}, lower: true,
 		help: "the store's domain; DNS must point here (Caddy gets a certificate for it)"},
-	{name: "BOBRES_TIMEZONE", services: []string{"bot", "backup"}, help: "time zone of the bot's dates and the backup time, e.g. Asia/Tehran",
+	{name: "BOBRES_TIMEZONE", services: []string{"core", "bot", "backup"}, help: "time zone of the bot's dates, the sales reports' days and the backup time, e.g. Asia/Tehran",
 		check: func(v string) error {
 			if _, err := time.LoadLocation(v); err != nil || v == "Local" {
 				return fmt.Errorf("unknown time zone %q (e.g. Asia/Tehran, Europe/Berlin, UTC)", v)

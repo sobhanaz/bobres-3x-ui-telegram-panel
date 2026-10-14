@@ -52,6 +52,11 @@ export function money(m: Money, lang: Lang, signed = false): string {
   return `${formatted} ${currencyName(m.currency, lang)}`
 }
 
+/** percent writes whole percent in the language ("50%", "۵۰٪"). */
+export function percent(n: number, lang: Lang): string {
+  return new Intl.NumberFormat(numberLocale(lang), { style: 'percent', maximumFractionDigits: 0 }).format(n / 100)
+}
+
 /** shortId is the part of an id the bot shows customers: its last 6 hex digits. */
 export function shortId(id: string): string {
   return id.replaceAll('-', '').slice(-6)
@@ -71,6 +76,23 @@ export function dateTime(unix: number, lang: Lang): string {
 export function date(unix: number, lang: Lang): string {
   const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(unix * 1000))
+}
+
+/** localDate writes a calendar date given as "2026-10-14" (a date in the
+ * store's time zone, not an instant): Jalali in Persian. It is formatted in
+ * UTC, so the browser's own zone can never move it to the day before or after. */
+export function localDate(ymd: string, lang: Lang, style: 'medium' | 'short' = 'medium'): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
+  const opts: Intl.DateTimeFormatOptions = style === 'short' ? { month: 'short', day: 'numeric' } : { dateStyle: 'medium' }
+  return new Intl.DateTimeFormat(locale, { ...opts, timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)))
+}
+
+/** moneyCompact writes an amount short for a chart's axis ("1.2M Toman"). */
+export function moneyCompact(m: Money, lang: Lang): string {
+  const scale = scales[m.currency] ?? 0
+  const formatted = new Intl.NumberFormat(numberLocale(lang), { notation: 'compact', maximumFractionDigits: 1 }).format(m.amount / 10 ** scale)
+  return `${formatted} ${currencyName(m.currency, lang)}`
 }
 
 /** latinDigits turns Persian and Arabic-Indic digits into 0-9 (typed codes, amounts). */

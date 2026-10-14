@@ -4,13 +4,19 @@ import fa from '../locales/fa.json'
 import en from '../locales/en.json'
 
 describe('sections', () => {
-  it('lists all 17 dashboard sections once', () => {
-    expect(sections).toHaveLength(17)
-    expect(new Set(sections.map((s) => s.key)).size).toBe(17)
+  it('lists all 18 dashboard sections once', () => {
+    expect(sections).toHaveLength(18)
+    expect(new Set(sections.map((s) => s.key)).size).toBe(18)
   })
   it('shows only what the role may open', () => {
     const support = ['overview.read', 'users.read', 'services.read', 'services.extend', 'payments.read', 'tickets.write']
     expect(visibleSections(support).map((s) => s.key)).toEqual(['overview', 'users', 'services', 'support', 'payments'])
+  })
+  it('opens Reports only to staff with reports.read (revenue is not for support)', () => {
+    const support = ['overview.read', 'users.read', 'services.read', 'services.extend', 'payments.read', 'tickets.write']
+    expect(visibleSections(support).map((s) => s.key)).not.toContain('reports')
+    expect(visibleSections([...support, 'reports.read']).map((s) => s.key)).toContain('reports')
+    expect(sections.find((s) => s.key === 'reports')?.perm).toBe('reports.read')
   })
   it('has a title and description in both languages', () => {
     for (const s of sections) {

@@ -107,6 +107,11 @@ const CASES: [string, Record<string, string>, Forms][] = [
       '2 automatic USDT payments are still open. The address cannot change until they finish, or USDT sent to the old address would not be found.',
     ],
   ],
+  ['reports.kpi.orders', {}, ['0 paid orders', '1 paid order', '2 paid orders']],
+  ['reports.kpi.topups_n', {}, ['0 top-ups', '1 top-up', '2 top-ups']],
+  ['reports.kpi.refunds_n', {}, ['0 refunds', '1 refund', '2 refunds']],
+  ['reports.kpi.rejected_n', {}, ['0 payments', '1 payment', '2 payments']],
+  ['reports.kpi.cancelled_n', {}, ['0 orders', '1 order', '2 orders']],
   ['gateway.test_unverified', {}, ['0 paid payments are waiting to be confirmed.', '1 paid payment is waiting to be confirmed.', '2 paid payments are waiting to be confirmed.']],
 ]
 
