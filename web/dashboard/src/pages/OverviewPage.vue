@@ -32,7 +32,8 @@ interface Overview {
   users: { total: number; new_24h: number; new_7d: number }
   services: { active: number; expiring: number; ended: number }
   orders: { paid_24h: number; provision_failed: number }
-  revenue: { day: Money[]; month: Money[] }
+  /** Revenue: only for staff with reports.read; absent for support. */
+  revenue?: { day: Money[]; month: Money[] }
   pending_payments: number
   panel: { healthy: boolean; detail: string }
   recent_orders: RecentOrder[]
@@ -64,6 +65,10 @@ async function load() {
 }
 onMounted(load)
 
+// The revenue cards: for those who may read the reports. Core leaves revenue
+// out for others (support), and an answer without it shows no card, not an
+// empty one.
+const showRevenue = computed(() => auth.can('reports.read') && (!data.value || !!data.value.revenue))
 // The support card: for those who answer tickets, when core reports them.
 const tickets = computed(() => (auth.can('tickets.write') ? (data.value?.tickets ?? null) : null))
 const oldestWait = computed(() => {
@@ -136,17 +141,17 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
-    <Card class="stat">
+    <Card v-if="showRevenue" class="stat revenue-day">
       <template #subtitle>{{ t('overview.revenue_day') }}</template>
       <template #content>
-        <div v-if="data" class="mid">{{ moneyLine(data.revenue.day) }}</div>
+        <div v-if="data?.revenue" class="mid">{{ moneyLine(data.revenue.day) }}</div>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
-    <Card class="stat">
+    <Card v-if="showRevenue" class="stat revenue-month">
       <template #subtitle>{{ t('overview.revenue_month') }}</template>
       <template #content>
-        <div v-if="data" class="mid">{{ moneyLine(data.revenue.month) }}</div>
+        <div v-if="data?.revenue" class="mid">{{ moneyLine(data.revenue.month) }}</div>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>

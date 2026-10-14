@@ -8,6 +8,34 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.2.0] — 2026-10-14
+
+Sales reports: the first of the features after the first release ([docs/ROADMAP.md](docs/ROADMAP.md)).
+
+### Dashboard
+- A Reports section for the owner and admins (new permission `reports.read`): sales per day, week or month for
+  today, the last 7 or 30 days, this or last month, or two dates; each currency on its own, never added together. It
+  shows revenue, orders, new customers, renewals, free trials, wallet top-ups, refunds, payments staff rejected,
+  failed or expired gateway payments (shown apart) and cancelled orders, a chart per currency, the top plans and how
+  orders were paid, in Persian (Jalali dates) and English. Every number is explained in
+  [docs/14-reports.md](docs/14-reports.md).
+- CSV files of the summary and of the paid orders for the range, opened right by Excel in Persian and safe against
+  formulas in names. A file that cannot be made says so (it never looks empty), and one that stops half way ends with a
+  line that says it is not whole.
+- Support no longer sees revenue on the Overview page: its cards are shown only to staff who may read the reports.
+
+### API
+- `GET /api/v1/reports/summary`, `/plans`, `/methods`, `/summary.csv` and `/orders.csv` (read-only, `reports.read`);
+  exports are written to the audit log with how they ended; at most two run at once (429 with `Retry-After`); a
+  report that takes too long answers 503 `timeout`. `GET /api/v1/overview` leaves `revenue` out unless the role has
+  `reports.read`. Migration 00018 adds three indexes and no table.
+- `payment.rejected.v1` events from core carry the payment's `provider`, so a rejection by staff and a failed gateway
+  payment can be told apart.
+
+### Operations
+- `BOBRES_TIMEZONE` now reaches core too (the reports' days follow it when the Settings page names no zone), so
+  `bobres config set BOBRES_TIMEZONE` recreates core as well as the bot and the backup service.
+
 ## [0.1.1] — 2026-10-14
 
 A small fix after the first release.
@@ -230,6 +258,7 @@ pull requests #13 to #48. Release candidates 0.1.0-rc.1 to rc.4 came first; rc.4
 - The legal review, the brand checks and the prices are open.
 - The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine. Fixed in 0.1.1.
 
-[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.0
 [0.1.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.0

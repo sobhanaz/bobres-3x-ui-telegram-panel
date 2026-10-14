@@ -186,6 +186,8 @@ func (s *Server) fail(w http.ResponseWriter, what string, err error) {
 		writeError(w, http.StatusConflict, "insufficient_funds", "the balance is too low for this")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		writeError(w, http.StatusConflict, "conflict", "this request clashes with an earlier one; reload and try again")
+	case errors.Is(err, domain.ErrReportTimeout):
+		writeError(w, http.StatusServiceUnavailable, "timeout", "the report took too long: choose a shorter range")
 	case backendDown(err):
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "a service this needs (or the 3x-ui panel) did not answer; try again in a minute")
 	case status.Code(unwrapAll(err)) == codes.FailedPrecondition:

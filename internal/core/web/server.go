@@ -94,7 +94,13 @@ type Server struct {
 	// photoSlot is held while a bot photo is decoded and encoded (up to
 	// about 50 MiB): one at a time.
 	photoSlot chan struct{}
-	now       func() time.Time
+	// exports holds a place for each CSV export running (maxExports).
+	exports chan struct{}
+	// exportTime and rowPause are for tests: how long an export may run (0:
+	// domain.ExportDeadline) and a pause before each row of the orders export.
+	exportTime time.Duration
+	rowPause   time.Duration
+	now        func() time.Time
 }
 
 // hashSlots is how many password hashes core computes at a time (32 MiB
@@ -107,7 +113,7 @@ func New(cfg Config) *Server {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute),
-		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1),
+		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
 		now: time.Now}
 }
 
@@ -156,6 +162,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/payments/{id}/review", PermPaymentsReview, s.reviewPayment)
 	s.route(api, "GET /api/v1/ledger", PermLedgerRead, s.listLedger)
 	s.route(api, "GET /api/v1/ledger.csv", PermLedgerRead, s.exportLedger)
+	s.route(api, "GET /api/v1/reports/summary", PermReportsRead, s.reportSummary)
+	s.route(api, "GET /api/v1/reports/summary.csv", PermReportsRead, s.exportReportSummary)
+	s.route(api, "GET /api/v1/reports/plans", PermReportsRead, s.reportPlans)
+	s.route(api, "GET /api/v1/reports/methods", PermReportsRead, s.reportMethods)
+	s.route(api, "GET /api/v1/reports/orders.csv", PermReportsRead, s.exportReportOrders)
 	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
 	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)

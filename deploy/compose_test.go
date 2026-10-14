@@ -104,6 +104,39 @@ func TestComposeGivesCoreItsSellerContact(t *testing.T) {
 	}
 }
 
+// BOBRES_TIMEZONE from .env reaches core too (it has no env_file): the sales
+// reports read their days in it when the general.timezone setting is empty.
+// Unset, compose gives the default the bot gets.
+func TestComposeGivesCoreItsTimezone(t *testing.T) {
+	load := func(env map[string]string) config.Core {
+		t.Helper()
+		for _, kv := range os.Environ() {
+			if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "BOBRES_") {
+				t.Setenv(k, "")
+			}
+		}
+		for k, v := range composeEnv(t, "core", env) {
+			t.Setenv(k, v)
+		}
+		c, err := config.LoadCore()
+		if err != nil {
+			t.Fatalf("core does not start with the compose environment: %v", err)
+		}
+		return c
+	}
+	if c := load(installEnv(map[string]string{"BOBRES_TIMEZONE": "Europe/Berlin"})); c.Timezone != "Europe/Berlin" {
+		t.Errorf("core's time zone is %q: BOBRES_TIMEZONE from .env does not reach it", c.Timezone)
+	}
+	env := installEnv(nil)
+	delete(env, "BOBRES_TIMEZONE")
+	if c := load(env); c.Timezone != "Asia/Tehran" {
+		t.Errorf("without the line, core's time zone is %q", c.Timezone)
+	}
+	if want := "BOBRES_TIMEZONE: ${BOBRES_TIMEZONE:-Asia/Tehran}"; strings.Count(string(ComposeFile), want) != 3 {
+		t.Errorf("the compose file gives %q to %d services, want core, bot and backup", want, strings.Count(string(ComposeFile), want))
+	}
+}
+
 // installEnv is an install's .env: the template's lines with test secrets in
 // place of its CHANGE_ME values (each different, as bobres install makes
 // them), then extra.

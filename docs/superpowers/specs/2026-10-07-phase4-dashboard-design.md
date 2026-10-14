@@ -229,6 +229,7 @@ are limited to 1 MB and unknown fields are rejected.
 | `GET /api/v1/payments`, `GET /api/v1/payments/pending`, `GET /api/v1/payments/{id}/receipt` | payments.read |
 | `POST /api/v1/payments/{id}/review` | payments.review |
 | `GET /api/v1/ledger`, `GET /api/v1/ledger.csv` | ledger.read |
+| `GET /api/v1/reports/summary`, `…/plans`, `…/methods`, `…/summary.csv`, `…/orders.csv` (added after v0.1.1, see 14-reports.md) | reports.read |
 | `GET /api/v1/discounts`, `POST /api/v1/discounts`, `PUT /api/v1/discounts/{code}/enabled` | discounts.write |
 | `GET /api/v1/referrals`, `PUT /api/v1/referrals` | discounts.write |
 

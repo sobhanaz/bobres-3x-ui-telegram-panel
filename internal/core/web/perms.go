@@ -16,6 +16,7 @@ const (
 	PermPaymentsRead   = "payments.read"
 	PermPaymentsReview = "payments.review"
 	PermLedgerRead     = "ledger.read"
+	PermReportsRead    = "reports.read" // sales reports and their CSV: revenue, so owner and admin only
 	PermDiscountsWrite = "discounts.write"
 	PermBrandingWrite  = "branding.write"
 	PermSettingsWrite  = "settings.write"
@@ -34,7 +35,7 @@ const (
 
 var allPerms = []string{
 	PermOverviewRead, PermUsersRead, PermUsersWrite, PermWalletAdjust, PermServicesRead, PermServicesExtend,
-	PermServicesWrite, PermPlansWrite, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermDiscountsWrite,
+	PermServicesWrite, PermPlansWrite, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermDiscountsWrite,
 	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
 	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite,
 }

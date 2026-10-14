@@ -64,6 +64,12 @@ type Core struct {
 	// "" = "ask the seller you got BOBRES from"). It is a setting, never a
 	// secret.
 	SellerContact string
+	// Timezone is BOBRES_TIMEZONE as set ("" when unset): the store's time
+	// zone when the general.timezone setting is empty. The sales reports read
+	// their days in it; compose gives the same value to the bot and the backup
+	// service. It is not checked here: a name core cannot load is skipped with
+	// a warning where it is used, and never stops core.
+	Timezone string
 	// ZarinpalHost is BOBRES_ZARINPAL_HOST, the second domain the HTTPS
 	// files serve the pay page on ("" = none).
 	ZarinpalHost string
@@ -133,6 +139,7 @@ func LoadCore() (Core, error) {
 	keep(err)
 	co.Domain = strings.TrimSpace(getenv("BOBRES_DOMAIN", ""))
 	co.SellerContact = strings.TrimSpace(getenv("BOBRES_SELLER_CONTACT", ""))
+	co.Timezone = strings.TrimSpace(getenv("BOBRES_TIMEZONE", ""))
 	co.ZarinpalHost = strings.TrimSpace(getenv("BOBRES_ZARINPAL_HOST", ""))
 	co.TLSRequestDir = getenv("BOBRES_TLS_REQUEST_DIR", "/request")
 	co.TLSResultDir = getenv("BOBRES_TLS_RESULT_DIR", "/tls-result")

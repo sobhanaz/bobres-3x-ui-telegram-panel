@@ -500,7 +500,7 @@ The settings it changes, and the services each one recreates:
 | Key | Recreates | Checked as |
 |---|---|---|
 | `BOBRES_DOMAIN` | caddy, core, payments, tls-agent | install's host name rule (lower-cased); a reminder that DNS must point here. Core hands the new domain to the tls-agent in its request, and the agent accepts only its own `BOBRES_DOMAIN`, so both are recreated |
-| `BOBRES_TIMEZONE` | bot, backup | a known time zone (the CLI embeds tzdata, as the images do) |
+| `BOBRES_TIMEZONE` | core, bot, backup | a known time zone (the CLI embeds tzdata, as the images do) |
 | `BOBRES_ADMIN_TELEGRAM_ID` | core, bot | a positive number (core makes them the owner when it starts) |
 | `BOBRES_LOG_LEVEL` / `BOBRES_LOG_FORMAT` | core, payments, provisioner, bot, backup | debug, info, warn, error / json, text |
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |

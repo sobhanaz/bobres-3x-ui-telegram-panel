@@ -180,12 +180,17 @@ type WalletCreditedEvent struct {
 	Reason     string `json:"reason"`
 }
 
-// PaymentRejectedEvent: a reviewer rejected a manual payment.
+// PaymentRejectedEvent: a payment did not go through: a reviewer rejected a
+// manual payment (Reason is what they wrote), or an automated gateway payment
+// failed or expired (Reason is one of payments' gateway reasons). Provider says
+// which kind (events from before it was added have none, and the sales reports
+// tell those by their reason).
 type PaymentRejectedEvent struct {
 	UserID     string `json:"user_id"`
 	TelegramID int64  `json:"telegram_id"`
 	IntentID   string `json:"intent_id"`
 	OrderID    string `json:"order_id,omitempty"`
+	Provider   string `json:"provider,omitempty"`
 	Amount     int64  `json:"amount"`
 	Currency   string `json:"currency"`
 	Reason     string `json:"reason,omitempty"`
