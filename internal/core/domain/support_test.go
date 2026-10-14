@@ -566,6 +566,7 @@ func TestBroadcastClaimsDoNotOverlap(t *testing.T) {
 // line for good: the report waits for the cancel and sees it.
 func TestBroadcastReleaseDuringCancel(t *testing.T) {
 	svc, s := testService(t)
+	needConns(t, s, 2) // the held transaction and the report waiting for it
 	ctx := context.Background()
 	owner := staffMember(t, s, 7321, "owner")
 	for _, tg := range []int64{7322, 7323} {
@@ -598,20 +599,7 @@ func TestBroadcastReleaseDuringCancel(t *testing.T) {
 		done <- err
 	}()
 	// Let the report reach the broadcast's lock.
-	for deadline := time.Now().Add(10 * time.Second); ; {
-		var waiting int
-		if err := s.DB().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
-			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
-			t.Fatal(err)
-		}
-		if waiting > 0 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the report never waited for the cancel")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitLockWaiters(t, tx, 1, "the report")
 	if err := s.CancelPending(ctx, tx, b.ID); err != nil {
 		t.Fatal(err)
 	}

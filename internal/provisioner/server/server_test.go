@@ -47,7 +47,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.New(ctx, dsn, env)
+	st, err := store.New(ctx, testdb.WithPoolCap(t, dsn), env)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

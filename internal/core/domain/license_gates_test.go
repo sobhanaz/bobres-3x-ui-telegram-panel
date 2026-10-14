@@ -639,11 +639,16 @@ func TestConcurrentOrdersCannotOvershootTheLimit(t *testing.T) {
 		refused   int
 		otherErrs []error
 	)
+	// The purchases queue for pool connections (a small pool is fine: the
+	// one that holds the lock needs no second connection); the bound turns a
+	// deadlock into a failure instead of a hang.
+	rctx, cancelRace := context.WithTimeout(ctx, time.Minute)
+	defer cancelRace()
 	start := make(chan struct{})
 	for i := range n {
 		wg.Go(func() {
 			<-start
-			_, err := w.svc.CreateOrder(ctx, CreateOrderParams{UserID: buyers[i].ID, PlanID: plan.ID, IdempotencyKey: fmt.Sprintf("race-%d", i)})
+			_, err := w.svc.CreateOrder(rctx, CreateOrderParams{UserID: buyers[i].ID, PlanID: plan.ID, IdempotencyKey: fmt.Sprintf("race-%d", i)})
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
@@ -674,45 +679,89 @@ func TestConcurrentOrdersCannotOvershootTheLimit(t *testing.T) {
 	// The same, with the timing fixed: a purchase has counted (24 of 25) and
 	// not inserted its order yet while eleven more arrive. They wait for it
 	// instead of counting the same 24, and are refused once its order is in.
+	//
+	// Every row the test needs is made BEFORE the transaction that holds the
+	// lock opens: from then on the test goroutine may use only that
+	// transaction. A helper that took a pool connection now would wait behind
+	// purchases that hold connections while they wait for the lock, and with a
+	// small pool nothing would ever free one.
 	w3 := newGateWorld(t)
 	w3.endTrial()
 	w3.activeServices(license.FreeMaxActiveServices - 1)
 	plan = seedPlan(t, w3.s, false, 1000)
 	first3 := seedUser(t, w3.s, 943000)
-	tx, err := w3.s.DB().Begin(ctx)
+	waiters := make([]*store.User, n-1)
+	for i := range waiters {
+		waiters[i] = seedUser(t, w3.s, int64(943001+i))
+	}
+	maxConns := int(w3.s.DB().Config().MaxConns)
+	if maxConns < 2 {
+		t.Fatalf("the pool has %d connection(s): this test needs 2 at least (the one holding the lock and one purchase waiting for it)", maxConns)
+	}
+
+	hctx, cancelHold := context.WithTimeout(ctx, time.Minute)
+	defer cancelHold()
+	tx, err := w3.s.DB().Begin(hctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
-	gate, err := w3.svc.serviceGate(ctx)
+	gate, err := w3.svc.serviceGate(hctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w3.svc.requireServiceSlot(ctx, tx, gate, "held-0"); err != nil {
+	if err := w3.svc.requireServiceSlot(hctx, tx, gate, "held-0"); err != nil {
 		t.Fatalf("the first purchase at 24 of 25: %v", err)
 	}
 	results := make(chan error, n-1)
-	for i := 1; i < n; i++ {
-		buyer := seedUser(t, w3.s, int64(943000+i))
+	for i, buyer := range waiters {
 		go func() {
-			_, err := w3.svc.CreateOrder(ctx, CreateOrderParams{UserID: buyer.ID, PlanID: plan.ID, IdempotencyKey: fmt.Sprintf("held-%d", i)})
+			_, err := w3.svc.CreateOrder(hctx, CreateOrderParams{UserID: buyer.ID, PlanID: plan.ID, IdempotencyKey: fmt.Sprintf("held-%d", i+1)})
 			results <- err
 		}()
+	}
+	// Prove they wait for the lock (and not for the timing): the server
+	// shows their lock requests as not granted. Each takes a pool connection
+	// for its transaction, so at most the pool less the held connection can
+	// wait at once; the rest queue for a connection and take their turn as
+	// those finish. The count is read through the held transaction.
+	want := min(n-1, maxConns-1)
+	var got int
+	for got < want {
+		select {
+		case err := <-results:
+			t.Fatalf("a purchase did not wait for the one that counted first: %v", err)
+		case <-hctx.Done():
+			t.Fatalf("%d of %d purchases are waiting for the lock after a minute (pool of %d)", got, want, maxConns)
+		case <-time.After(10 * time.Millisecond):
+		}
+		if err := tx.QueryRow(hctx, `SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+			AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got > want {
+		t.Fatalf("%d purchases wait for the lock with a pool of %d and one connection held", got, maxConns)
 	}
 	select {
 	case err := <-results:
 		t.Fatalf("a purchase did not wait for the one that counted first: %v", err)
-	case <-time.After(400 * time.Millisecond):
+	default:
 	}
-	if _, _, err := w3.s.CreateOrder(ctx, tx, &store.Order{UserID: first3.ID, PlanID: plan.ID, Type: "new", Status: "awaiting_payment",
+	if _, _, err := w3.s.CreateOrder(hctx, tx, &store.Order{UserID: first3.ID, PlanID: plan.ID, Type: "new", Status: "awaiting_payment",
 		Amount: 1000, Currency: "IRT", IdempotencyKey: "held-0"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := tx.Commit(hctx); err != nil {
 		t.Fatal(err)
 	}
 	for range n - 1 {
-		wantRefusal(t, "a purchase that waited", <-results, GateActiveServices)
+		select {
+		case err := <-results:
+			wantRefusal(t, "a purchase that waited", err, GateActiveServices)
+		case <-hctx.Done():
+			t.Fatal("a purchase that waited never finished after the lock was released")
+		}
 	}
 
 	// One customer cannot hold the last places by making many orders: the

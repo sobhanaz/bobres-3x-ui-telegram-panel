@@ -20,7 +20,7 @@ func testStore(t *testing.T) *Store {
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	s, err := New(ctx, dsn)
+	s, err := New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

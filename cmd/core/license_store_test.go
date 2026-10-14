@@ -25,7 +25,7 @@ func coreEnv(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	for k, v := range map[string]string{
-		"BOBRES_ENV": "prod", "BOBRES_DATABASE_URL": dsn, "BOBRES_DOMAIN": "Panel.Example.com",
+		"BOBRES_ENV": "prod", "BOBRES_DATABASE_URL": testdb.WithPoolCap(t, dsn), "BOBRES_DOMAIN": "Panel.Example.com",
 		"BOBRES_SERVICE_TOKEN": strings.Repeat("c", 40), "BOBRES_PEER_BOT_TOKEN": strings.Repeat("b", 40),
 		"BOBRES_PAYMENTS_GRPC_ADDR": "payments:9090", "BOBRES_PROVISIONER_GRPC_ADDR": "provisioner:9090",
 	} {

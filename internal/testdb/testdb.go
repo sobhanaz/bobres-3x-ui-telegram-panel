@@ -7,6 +7,11 @@
 // is unreachable, tests skip, unless BOBRES_TEST_REQUIRE_DB=1 (set in CI), in
 // which case they fail: a green CI run must mean the database tests ran.
 //
+// BOBRES_TEST_POOL_MAX_CONNS caps the connection pools the tests open (see
+// WithPoolCap). pgxpool defaults to max(4, NumCPU) connections, so a test that
+// only works with a big pool passes on a 16-core laptop and hangs on a small
+// CI runner; setting it to 4 (or 2) in CI finds those tests.
+//
 // Use it from TestMain so the database is dropped when the binary exits:
 //
 //	func TestMain(m *testing.M) { testdb.Main(m) }
@@ -19,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -55,6 +61,29 @@ func DSN(t testing.TB) string {
 		t.Skipf("testdb: postgres unavailable: %v", setupErr)
 	}
 	return dsn
+}
+
+// WithPoolCap returns dsn for a connection pool (a store's pgxpool): with
+// BOBRES_TEST_POOL_MAX_CONNS=n it carries pool_max_conns=n, otherwise it is
+// dsn unchanged. Only pgxpool understands that parameter; migrate.Up,
+// pg_dump and a plain pgx.Connect must keep getting the DSN from DSN.
+func WithPoolCap(t testing.TB, dsn string) string {
+	t.Helper()
+	v := os.Getenv("BOBRES_TEST_POOL_MAX_CONNS")
+	if v == "" {
+		return dsn
+	}
+	if n, err := strconv.Atoi(v); err != nil || n < 1 {
+		t.Fatalf("testdb: BOBRES_TEST_POOL_MAX_CONNS=%q is not a positive number", v)
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("testdb: %v", err)
+	}
+	q := u.Query()
+	q.Set("pool_max_conns", v)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // Required reports whether tests must fail rather than skip when an external
