@@ -1,9 +1,12 @@
 import { latinDigits } from './format'
 import type { LicenseInfo, LicenseLimit, LicenseToken } from './types'
 
-// The License tab: the installed license's state, what it binds to, what it
-// grants against what this install uses, and the token the owner pastes.
-// A missing or invalid license never limits anything in Phase 4.
+// The License tab: what applies on this install now (a license, its grace
+// period, the 30-day trial or the free tier), the installed license's state,
+// what it binds to, what is granted against what this install uses, and the
+// token the owner pastes. "Free core, paid premium": without a valid license
+// the free tier's limits apply to NEW servers, services, staff, resellers and
+// payment methods; nothing that exists is removed.
 
 export type LicenseState = 'missing' | 'invalid' | 'active' | 'grace' | 'expired'
 
@@ -27,12 +30,69 @@ export function isValid(s: string | undefined): boolean {
   return st === 'active' || st === 'grace' || st === 'expired'
 }
 
-/** poweredBy: "Powered by BOBRES" shows only under a valid license without
- * white label, never on an unlicensed install (core says so; read here when
- * it does not). */
+/** poweredBy: "Powered by BOBRES" shows on every install except one whose
+ * license includes white label (the free tier and the trial show it; core
+ * says so, read here when it does not). When the state is not known (no
+ * license answer yet, or core could not read it) the mark is shown: that is
+ * its default, and an error never hides it. */
 export function poweredBy(l: { state: string; white_label: boolean; powered_by?: boolean } | null | undefined): boolean {
-  if (!l) return false
-  return typeof l.powered_by === 'boolean' ? l.powered_by : isValid(l.state) && !l.white_label
+  if (!l) return true
+  return typeof l.powered_by === 'boolean' ? l.powered_by : !l.white_label
+}
+
+/** What applies on an install: a valid license, a license in its grace
+ * period, the implicit 30-day trial, or the free tier. */
+export type Basis = 'license' | 'grace' | 'trial' | 'free'
+
+/** basisOf reads what core says applies; a core that does not say is read
+ * from the license state (an active one counts, anything else is the free
+ * tier, the safe side). */
+export function basisOf(basis: string | undefined | null, state: string | undefined): Basis {
+  if (basis === 'license' || basis === 'grace' || basis === 'trial' || basis === 'free') return basis
+  const st = stateOf(state)
+  return st === 'active' ? 'license' : st === 'grace' ? 'grace' : 'free'
+}
+
+export type ChipKind = 'free' | 'trial' | 'invalid' | 'grace' | 'expired'
+
+export const chipSeverity: Record<ChipKind, 'info' | 'warn' | 'danger'> = {
+  free: 'warn',
+  trial: 'info',
+  invalid: 'danger',
+  grace: 'warn',
+  expired: 'danger',
+}
+
+/** The trial turns from "info" to "warn" with this many days or fewer left
+ * (core raises its staff alert for the same last 7 days). */
+export const TRIAL_WARN_DAYS = 7
+
+/** chipSeverityOf is a chip's colour: its kind's, except that the trial warns
+ * from its last 7 days. */
+export function chipSeverityOf(c: { kind: ChipKind; days: number }): 'info' | 'warn' | 'danger' {
+  return c.kind === 'trial' && c.days <= TRIAL_WARN_DAYS ? 'warn' : chipSeverity[c.kind]
+}
+
+/** trialSeverity is the plan tag's colour for a trial with days left. */
+export function trialSeverity(days: number): 'info' | 'warn' {
+  return days <= TRIAL_WARN_DAYS ? 'warn' : 'info'
+}
+
+/** TRIAL_DAYS is how long the implicit trial lasts when core does not say. */
+export const TRIAL_DAYS = 30
+/** chipOf is what the menu and the System tab say needs a look: a saved
+ * license that was refused, in its grace period or ended; else the trial (with
+ * its days left) or the free tier. null under a license that is fine. */
+export function chipOf(
+  l: { state: string; basis?: string; trial_days_left?: number } | null | undefined,
+): { kind: ChipKind; days: number } | null {
+  if (!l) return null
+  const state = stateOf(l.state)
+  if (state === 'invalid' || state === 'grace' || state === 'expired') return { kind: state, days: 0 }
+  const basis = basisOf(l.basis, l.state)
+  if (basis === 'trial') return { kind: 'trial', days: Math.max(0, l.trial_days_left ?? 0) }
+  if (basis === 'free') return { kind: 'free', days: 0 }
+  return null
 }
 
 /** The reasons core gives for a token it does not accept (each has a
@@ -120,8 +180,8 @@ export const limitSeverity: Record<LimitState, 'success' | 'warn' | 'danger' | '
 /** Payment methods every license allows. */
 export const ALWAYS_ALLOWED = ['wallet']
 
-/** outsideLicense are the turned-on payment methods the license does not
- * name (case does not matter, as in core). */
+/** outsideLicense are the turned-on payment methods the license (or the trial,
+ * or the free tier) does not name (case does not matter, as in core). */
 export function outsideLicense(allowed: readonly string[], enabled: readonly string[]): string[] {
   const ok = new Set([...allowed, ...ALWAYS_ALLOWED].map((g) => g.toLowerCase()))
   return enabled.filter((g) => !ok.has(g.toLowerCase()))
@@ -133,7 +193,7 @@ export type EntitlementRow =
   | { key: 'gateways'; kind: 'gateways'; allowed: string[]; outside: string[] }
   | { key: 'updates_until'; kind: 'date'; value: string }
 
-/** entitlementRows lists what a license grants, each limit with its use. */
+/** entitlementRows lists what applies now, each limit with its use. */
 export function entitlementRows(info: Pick<LicenseInfo, 'entitlements'>): EntitlementRow[] {
   const e = info.entitlements
   if (!e) return []

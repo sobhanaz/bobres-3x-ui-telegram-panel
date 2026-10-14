@@ -102,6 +102,12 @@ func fail(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrUserBanned):
 		return status.Error(codes.PermissionDenied, err.Error())
+	case domain.IsPurchaseRefusal(err):
+		// A new purchase refused by a license gate (the active-services
+		// limit, or a reseller after resellers left the entitlements): the
+		// bot's customer is told only that purchases are unavailable, never
+		// why.
+		return status.Error(codes.FailedPrecondition, domain.PurchasesPaused)
 	case errors.Is(err, domain.ErrTrialAlreadyUsed),
 		errors.Is(err, domain.ErrOrderNotPayable),
 		errors.Is(err, domain.ErrPlanUnavailable),

@@ -683,9 +683,11 @@ export interface UpdateCheck {
   /** when latest was signed (2006-01-02T15:04Z, UTC); absent when the bot
    * does not say */
   issued?: string
-  /** the installed license covers latest (its updates_until is not before
-   * the release's date); null when there is no valid license to ask or the
-   * date is not known (allowed then), absent from older cores */
+  /** ADVISORY: the installed license's update date (updates_until) is not
+   * before the release's date. false only adds a note ("this release is newer
+   * than your license's update date"): the update is offered and installed
+   * all the same (security updates are never withheld). null when no license
+   * is in force or the date is not known, absent from older cores */
   covered?: boolean | null
 }
 
@@ -791,7 +793,8 @@ export interface LicenseLimit {
   full?: boolean
 }
 
-/** What a license grants, each limit with what this install uses. */
+/** What a license (or the trial, or the free tier) grants, each limit with
+ * what this install uses. */
 export interface LicenseEntitlements {
   white_label: boolean
   resellers: boolean
@@ -828,6 +831,28 @@ export interface LicenseToken {
   license_ends_at?: number | null
 }
 
+/** What applies on this install now: a valid license, a license in its grace
+ * period, the implicit 30-day trial, or the free tier ("free core, paid
+ * premium"). */
+export interface LicenseEffective {
+  /** license | grace | trial (the implicit trial) | free */
+  basis: string
+  /** the tier to show: a license's (trial | standard | pro), "trial" for the
+   * implicit trial, "free" for the free tier */
+  tier: string
+  trial_running: boolean
+  /** when the implicit trial ends (or ended), unix seconds; null when not known */
+  trial_ends_at: number | null
+  /** whole days it has left; 0 when it is not running */
+  trial_days_left: number
+  /** how long the implicit trial lasts, in days (absent from an older core:
+   * 30) */
+  trial_days?: number
+  /** whom to ask to buy or renew a license (the owner's BOBRES_SELLER_CONTACT);
+   * '' when none is set: the page then says to ask the seller BOBRES came from */
+  contact: string
+}
+
 /** GET /license (owner and admin; never the token itself), and the answer of
  * POST /license/check and PUT /license. */
 export interface LicenseInfo {
@@ -845,6 +870,11 @@ export interface LicenseInfo {
   license: LicenseToken | null
   /** the token's binding against this install */
   binding?: { domain: string; install_id: string } | null
+  /** what applies now (GET /license and the answers that install a license;
+   * absent from a check, which only reads a token) */
+  effective?: LicenseEffective | null
+  /** what applies now with this install's use (what the checked token would
+   * grant, for a check) */
   entitlements?: LicenseEntitlements | null
   /** when it was saved, and by whom (GET /license only) */
   updated_at?: number | null

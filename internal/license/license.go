@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"time"
 )
@@ -313,6 +314,35 @@ func (e Entitlements) HasFeature(name string) bool {
 	}
 }
 
+// AtLeast raises e to at least the floor f and returns the result: each
+// numeric limit takes the larger of the two (Unlimited counts as infinite),
+// the gateway lists are united (no name twice, case aside) and a feature is
+// on when either has it. UpdatesUntil is e's. Neither e nor f is changed.
+func (e Entitlements) AtLeast(f Entitlements) Entitlements {
+	out := e
+	out.WhiteLabel = e.WhiteLabel || f.WhiteLabel
+	out.Resellers = e.Resellers || f.Resellers
+	out.CryptoWatcher = e.CryptoWatcher || f.CryptoWatcher
+	out.MaxServers = largerLimit(e.MaxServers, f.MaxServers)
+	out.MaxActiveServices = largerLimit(e.MaxActiveServices, f.MaxActiveServices)
+	out.DashboardStaffSeat = largerLimit(e.DashboardStaffSeat, f.DashboardStaffSeat)
+	out.Gateways = slices.Clone(e.Gateways)
+	for _, g := range f.Gateways {
+		if !out.HasGateway(g) {
+			out.Gateways = append(out.Gateways, g)
+		}
+	}
+	return out
+}
+
+// largerLimit is the more generous of two limits: Unlimited beats any count.
+func largerLimit(a, b int) int {
+	if a == Unlimited || b == Unlimited {
+		return Unlimited
+	}
+	return max(a, b)
+}
+
 // HasGateway reports whether a payment gateway is licensed.
 func (e Entitlements) HasGateway(name string) bool {
 	for _, g := range e.Gateways {
@@ -324,8 +354,10 @@ func (e Entitlements) HasGateway(name string) bool {
 }
 
 // UpdatesAllowed reports whether a release built on releaseDate (YYYY-MM-DD)
-// may be installed. Empty UpdatesUntil means always. Running versions are never
-// affected; this only gates installing newer builds.
+// is inside the updates the license covers. Empty UpdatesUntil means always.
+// It is ADVISORY: security updates are never withheld, so nothing refuses or
+// hides an update because this says false; it only decides whether to add
+// the note "this release is newer than your license's update date".
 func (e Entitlements) UpdatesAllowed(releaseDate string) bool {
 	if e.UpdatesUntil == "" {
 		return true

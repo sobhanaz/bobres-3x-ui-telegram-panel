@@ -110,10 +110,10 @@ export function alertTextKey(a: Pick<SystemAlert, 'title_key'>): string {
 export const ALERT_FALLBACK = 'system.alerts.kind.check'
 
 /** alertArgs are a problem's values for its text, as the bot writes them:
- * count, days, hours and minutes as numbers, free (bytes) as a size, date
- * (unix seconds) as a day, and anything else as a name (service names
- * through name), each kept whole inside a sentence. key is the check's key
- * when core does not give one. */
+ * count, days, hours, minutes and limit as numbers, free (bytes) as a size,
+ * date (unix seconds) as a day, and anything else as a name (service names
+ * and the name of a license limit through name), each kept whole inside a
+ * sentence. key is the check's key when core does not give one. */
 export function alertArgs(
   a: Pick<SystemAlert, 'key' | 'args'>,
   lang: Lang,
@@ -124,7 +124,7 @@ export function alertArgs(
     const v = String(raw)
     const n = /^-?\d+$/.test(v.trim()) ? Number(v) : NaN
     if (Number.isNaN(n)) out[k] = isolate(name(k, v))
-    else if (['count', 'days', 'hours', 'minutes'].includes(k)) out[k] = num(n, lang)
+    else if (['count', 'days', 'hours', 'minutes', 'limit'].includes(k)) out[k] = num(n, lang)
     else if (k === 'free') out[k] = bytes(n, lang)
     else if (k === 'date') out[k] = date(n, lang)
     else out[k] = isolate(name(k, v))
@@ -145,22 +145,28 @@ export function fills(message: unknown, args: Record<string, string>): boolean {
  * applying stays on the server. */
 export const UPDATE_COMMAND = 'sudo bobres update'
 
-export type UpdateState = 'newer' | 'not_covered' | 'current' | 'unknown'
+export type UpdateState = 'newer' | 'current' | 'unknown'
 
-/** updateState reads the bot's update check: a newer release, a newer one
- * the license does not cover (its updates_until is before the release's
- * date, so bobres update refuses it), up to date, or not known (the check
- * failed, has not run yet, or core is too old to say). A newer release read
- * before a later check failed still shows. Without a valid license to ask
- * (covered null or absent) a newer release is installable. */
-export function updateState(u: Pick<UpdateCheck, 'latest' | 'newer' | 'error' | 'covered'> | null | undefined): UpdateState {
+/** updateState reads the bot's update check: a newer release, up to date, or
+ * not known (the check failed, has not run yet, or core is too old to say).
+ * A newer release read before a later check failed still shows. A license's
+ * update date never hides or refuses an update (security updates are never
+ * withheld): see newerThanLicense for the note it adds. */
+export function updateState(u: Pick<UpdateCheck, 'latest' | 'newer' | 'error'> | null | undefined): UpdateState {
   if (!u || !u.latest) return 'unknown'
-  if (u.newer) return u.covered === false ? 'not_covered' : 'newer'
+  if (u.newer) return 'newer'
   return u.error ? 'unknown' : 'current'
 }
 
+/** newerThanLicense: a newer release came out after the update date of the
+ * installed license (core's advisory answer, covered false). It adds a note
+ * and nothing more: the update is offered and `bobres update` installs it. */
+export function newerThanLicense(u: Pick<UpdateCheck, 'latest' | 'newer' | 'covered'> | null | undefined): boolean {
+  return !!u && !!u.latest && u.newer === true && u.covered === false
+}
+
 /** issuedDay is the day the latest release was signed (YYYY-MM-DD, UTC),
- * the day core compares with the license's updates_until; '' when the bot
+ * the day core compares with the license's update date; '' when the bot
  * does not say. */
 export function issuedDay(u: Pick<UpdateCheck, 'issued'> | null | undefined): string {
   const m = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}Z$/.exec((u?.issued ?? '').trim())

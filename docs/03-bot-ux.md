@@ -66,6 +66,13 @@ link. Broadcasts and the payment methods' switches are on the dashboard.
   or to every owner and admin. "Payment taken but not recorded" is always sent.
 - `/terms`, and terms and privacy link buttons on the support screen, when the links are set.
 - Dates use the store's time zone; prices use the store's name for the Toman.
+- **A refused purchase (the license's limit):** when the install is at its limit of active services (the free tier's 25,
+  a license's, 05-license.md), a customer's new order, free trial or reseller purchase is refused with a popup:
+  "New purchases are temporarily unavailable. Please contact support." (`error.purchases_paused`). A customer never
+  sees a word about licensing (the same text is shown when a reseller's purchase is refused because resellers are no
+  longer included). Renewals, traffic top-ups and payments of orders already made go
+  through. The staff get one alert a day, "A new purchase was refused: this install is at its limit of ... active
+  services. Buy or renew a license to sell more." (`alert.license_limit`).
 
 ## Reseller panel
 Built (milestone 5, 2026-10-11). Resellers work only in the bot; the owner and admins make them, set their tier,

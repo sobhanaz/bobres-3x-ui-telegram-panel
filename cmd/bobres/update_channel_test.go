@@ -363,9 +363,10 @@ func licenseText(state, until string) string {
 	return s
 }
 
-// A valid license whose updates end before the release was issued: update
-// refuses it and the check flags it; anything else is allowed (no license,
-// one that does not verify here, no end, or core cannot tell).
+// A valid license whose update date (updates_until) is before the release
+// was issued gets an advisory note, never a refusal: update installs the
+// release, the check and the menu offer it. Security updates are never
+// withheld.
 func TestUpdateLicenseCoverage(t *testing.T) {
 	// The release (1.3.0) was issued on 2026-10-10.
 	withLicense := func(t *testing.T, text string, err error) *updateTest {
@@ -378,32 +379,44 @@ func TestUpdateLicenseCoverage(t *testing.T) {
 		}
 		return ut
 	}
+	const note = "Note:    this release (issued on 2026-10-10) is newer than your license's update date (2026-10-09)."
 	for name, state := range map[string]string{
 		"active":  "active",
 		"grace":   "grace (expired; everything still works: renew it)",
-		"expired": "expired (adding resellers, servers, staff or payment methods is refused: renew it)",
+		"expired": "expired (past its grace period: the trial or the free tier applies; renew it)",
 	} {
-		t.Run("refused "+name, func(t *testing.T) {
+		t.Run("noted "+name, func(t *testing.T) {
 			ut := withLicense(t, licenseText(state, "2026-10-09"), nil)
-			if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 1 ||
-				!strings.Contains(ut.errOut.String(), "release 1.3.0 is newer than your license covers: it was issued on 2026-10-10, and the license's updates end on 2026-10-09") {
-				t.Fatalf("got %d %s", code, ut.errOut)
+			ut.cli.do = installs(ut.dir, "1.3.0")
+			if code := ut.u.updateCmd([]string{"--dir", ut.dir, "--yes"}); code != 0 {
+				t.Fatalf("got %d %s %s", code, ut.out, ut.errOut)
 			}
-			ut.unchanged(t)
+			if !strings.Contains(ut.out.String(), note) || !strings.Contains(ut.out.String(), "installed all the same") {
+				t.Fatalf("no note about the update date:\n%s", ut.out)
+			}
+			if strings.Contains(ut.errOut.String(), "newer than your license covers") || len(ut.cli.calls) == 0 {
+				t.Fatalf("the update was refused: %s %q", ut.errOut, ut.cli.calls)
+			}
+			if got := ut.state("release.version"); got != "1.3.0\n" {
+				t.Fatalf("release.version %q, want 1.3.0", got)
+			}
 		})
 	}
-	t.Run("check flags it", func(t *testing.T) {
+	t.Run("check offers it with the note", func(t *testing.T) {
 		ut := withLicense(t, licenseText("active", "2026-10-09"), nil)
 		newer, code := ut.u.checkNewer(context.Background(), ut.dir, "", "")
-		if code != 0 || newer || !strings.Contains(ut.out.String(), "Newer:   yes, but not covered by your license: it was issued on 2026-10-10, and the license's updates end on 2026-10-09") {
+		if code != 0 || !newer || !strings.Contains(ut.out.String(), "Newer:   yes. Update with: sudo bobres update") ||
+			!strings.Contains(ut.out.String(), note) || strings.Contains(ut.out.String(), "not covered") {
 			t.Fatalf("got %v %d %s %s", newer, code, ut.out, ut.errOut)
 		}
-		// The menu offers no update it would refuse.
+		// The menu offers the update too: it asks, and nothing changes until
+		// the owner says yes.
+		ut.out.Reset()
 		m := opsMenu(ut.dir, "", ut.u.ops, ut.out, ut.errOut)
 		m.upd = ut.u
 		m.update()
-		if len(ut.cli.calls) != 0 || m.quit {
-			t.Fatalf("the menu updated: %q", ut.cli.calls)
+		if !strings.Contains(ut.out.String(), "Update BOBRES from 1.2.3 to 1.3.0?") || !strings.Contains(ut.out.String(), "Cancelled. Nothing was changed.") {
+			t.Fatalf("the menu did not offer the update:\n%s %s", ut.out, ut.errOut)
 		}
 		ut.unchanged(t)
 	})
@@ -414,8 +427,8 @@ func TestUpdateLicenseCoverage(t *testing.T) {
 	}{
 		"issued on the last day": {text: licenseText("active", "2026-10-10")},
 		"no end":                 {text: licenseText("active", "")},
-		"no license":             {text: licenseText("missing (unlicensed: everything works)", "")},
-		"another install's":      {text: licenseText("invalid: bound to another install (install_id); unlicensed: everything works", "2026-01-01")},
+		"no license":             {text: licenseText("missing (no license: the free tier applies when the trial is over)", "")},
+		"another install's":      {text: licenseText("invalid: bound to another install (install_id); counts as no license", "2026-01-01")},
 		"core down":              {text: "service \"core\" is not running\n", err: errors.New("exit status 1"), warn: true},
 		"an old core":            {text: "usage: license status | license import\n", warn: true},
 	}
@@ -428,6 +441,9 @@ func TestUpdateLicenseCoverage(t *testing.T) {
 			}
 			if warned := strings.Contains(ut.errOut.String(), "the license could not be read"); warned != tc.warn {
 				t.Fatalf("warning %v: %s", warned, ut.errOut)
+			}
+			if strings.Contains(ut.out.String(), "Note:") {
+				t.Fatalf("a note about the update date where the release is covered or there is no date: %s", ut.out)
 			}
 		})
 	}
@@ -460,10 +476,10 @@ func TestParseUpdatesUntil(t *testing.T) {
 		known bool
 	}{
 		"active with an end":  {licenseText("active", "2027-09-30"), "2027-09-30", true},
-		"expired with an end": {licenseText("expired (adding resellers is refused: renew it)", "2027-09-30"), "2027-09-30", true},
+		"expired with an end": {licenseText("expired (past its grace period: the trial or the free tier applies; renew it)", "2027-09-30"), "2027-09-30", true},
 		"no end":              {licenseText("grace (expired; everything still works: renew it)", ""), "", true},
-		"missing":             {licenseText("missing (unlicensed: everything works)", ""), "", true},
-		"invalid":             {"State:          invalid: signature does not verify (bad_signature); unlicensed: everything works\nUpdates until:  2020-01-01\n", "", true},
+		"missing":             {licenseText("missing (no license: the free tier applies when the trial is over)", ""), "", true},
+		"invalid":             {"State:          invalid: signature does not verify (bad_signature); counts as no license\nUpdates until:  2020-01-01\n", "", true},
 		"not that output":     {"Error response from daemon: container is restarting\n", "", false},
 		"empty":               {"", "", false},
 	} {

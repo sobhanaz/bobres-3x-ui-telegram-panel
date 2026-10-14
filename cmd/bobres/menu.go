@@ -383,7 +383,7 @@ func listBackups(dir string) []os.FileInfo {
 }
 
 // update checks for a newer release (of the install's update channel) and,
-// when there is one the license covers, runs bobres update, which asks
+// when there is one, runs bobres update, which asks
 // before it changes anything. After an update the menu ends: the bobres
 // running it was replaced.
 func (m *menu) update() {

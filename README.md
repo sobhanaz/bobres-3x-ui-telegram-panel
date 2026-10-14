@@ -65,6 +65,14 @@ legal review, the brand checks (domain, bot name, trademark) and license pricing
 - System alerts in Telegram, operator runbooks, a redacted support bundle, server hardening, `bobres config` and
   `bobres secrets rotate`.
 
+**Free core, paid premium**
+- No license is needed to run a store. An install without one has a free tier: 1 server, 25 active services, 2 staff
+  seats, the Zarinpal, Stars and manual payment methods, and security updates always. Resellers, automatic USDT,
+  more servers, services and staff, and removing "Powered by BOBRES" come with a license.
+- Every install starts with a 30-day trial that has everything but white label. When it ends, the limits stop only
+  new servers, services, resellers, staff and payment methods: existing services keep working and renewing, and a
+  customer never sees a word about licensing ([docs/05-license.md](docs/05-license.md)).
+
 **Security**
 - Four services, each with its own database role and service token. Only the provisioner holds the 3x-ui tokens, only
   payments holds the gateway secrets, and core has no internet access.
@@ -74,7 +82,9 @@ legal review, the brand checks (domain, bot name, trademark) and license pricing
   An own certificate's private key is sealed with core's master key.
 - The dashboard has CSRF protection, authenticator codes for every password login, a strict CSP and an append-only
   audit log.
-- Licenses are signed tokens bound to the store's domain and install. A missing license blocks nothing.
+- Licenses are signed tokens bound to the store's domain and install. Without one, an install runs on a free tier
+  (1 server, 25 active services, 2 staff seats) after a 30-day trial; the limits refuse only new actions, never
+  what exists.
 
 ## Install
 

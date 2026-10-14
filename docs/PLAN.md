@@ -38,9 +38,18 @@ Still open:
 - **Brand checks.** BOBRES and the beaver are chosen. The domain, the Telegram bot @username, a GitHub org and
   trademark conflicts are not checked. Do it before the public launch.
 - **Pricing.** What a license costs: one-time, subscription, per server, add-ons. The license already carries
-  entitlements, so any of these is a set of them (§8).
+  entitlements, so any of these is a set of them (§8). What is free and what is paid is decided (below); only the
+  prices are open.
 
 Decided:
+- Free core, paid premium: DECIDED (2026-10-14), replacing the owner's earlier policy under which a missing or invalid
+  license gated nothing. An install without a valid license runs on a free tier (1 server, 25 active services, 2 staff
+  seats, no resellers, no white label, no automatic USDT, the Zarinpal, Stars and manual payment methods, security
+  updates always); a license unlocks more; a 30-day implicit trial with pro-like entitlements (everything but white
+  label, 5 seats) starts at an install's first start with the policy, whether fresh or upgraded. The limits refuse
+  only new actions (a server, a service, a reseller, staff, a payment method); existing services keep working and
+  renewing, and a customer never sees licensing text. The numbers are the owner's to tune
+  (`internal/license/policy.go`). See [05-license.md](05-license.md).
 - Where the payment gateway service runs: DECIDED. `payments` is its own deployable, so it can run in another region.
   Zarinpal calls can go through a proxy whose IP is registered (`--zarinpal-proxy`), and the pay page can live on a
   second, registered domain (`BOBRES_ZARINPAL_HOST`). Zarinpal stays off until a merchant id is set. Still
@@ -205,14 +214,15 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
   Bot itself can use long polling (no domain); webhook mode is optional.
 - Brand is data, not code: bot name, logo, colors, welcome text, support contact, currency, ToS/privacy
   links, all in a `branding` config + editable from the dashboard. fa/en strings overridable per install.
-- No hardcoded "BOBRES" in user-facing text; "Powered by BOBRES" footer is a license-tier option.
+- No hardcoded "BOBRES" in user-facing text; "Powered by BOBRES" footer is a license-tier option (shown on the free
+  tier and during the trial).
 - Per-install secrets generated locally; the vendor (us) never sees customer bot tokens, keys or user data.
 - Each install has its own DB, backups, and payment gateway accounts (customer's own Zarinpal/crypto keys).
 - Built: all of the above, with two differences. The bot gives customers the 3x-ui panel's own subscription link;
   there is no branded subscription page. Long polling is the default and webhook mode is optional
   (`BOBRES_TELEGRAM_WEBHOOK_URL`). Branding, every bot text in both languages, the legal links and the currency name
-  are edited on the dashboard. "Powered by BOBRES" shows only on the dashboard, under a valid license without
-  `white_label`; never in the bot.
+  are edited on the dashboard. "Powered by BOBRES" shows only on the dashboard and its login page, on every install
+  except one whose license includes `white_label` (the free tier and the trial show it); never in the bot.
 
 ### Vendor side (what we run)
 - License server: issue keys, bind to install ID/domain, tiers (features, reseller limits, branding removal).
@@ -231,8 +241,9 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 - Support scope and SLA for customers. Still open.
 - Legal: ToS for operators, and who is responsible for the VPN service they resell (needs a lawyer). Still open.
 - Anti-piracy level: license check strictness vs offline grace period. DECIDED: tokens last 30 days at most and
-  are refreshed daily, with 0 to 90 grace days and 3 moves a year. A missing or invalid license gates nothing
-  (owner's policy); a stricter "vendor mode" is a later policy decision (13-license-server.md).
+  are refreshed daily, with 0 to 90 grace days and 3 moves a year. A missing or invalid license is not blocked: the
+  install runs on the trial, then the free tier, which refuses only new actions (decided 2026-10-14, §2); a stricter
+  "vendor mode" is a later policy decision (13-license-server.md).
 
 ## 8. Decisions from Q&A round
 - Licensing: flexible. Model it as ENTITLEMENTS (feature flags + limits + expiry) in the license key,
@@ -241,8 +252,9 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 - Delivery: signed Docker images only, closed source. Built: signed images. The repository became public on
   2026-10-05 (§1).
 - "Powered by BOBRES" footer: removable on higher tier only (entitlement `white_label`). Built.
-- Trial: time-limited trial license (entitlement with short expiry). Possible as a license with a near end date;
-  there is no self-serve trial.
+- Trial: every install has an implicit 30-day trial from its first start with the license policy (2026-10-14), with
+  everything but white label and 5 staff seats. A vendor can still issue a trial license (an entitlement with a short
+  expiry).
 - Crypto: manual TXID approval, automatic chain watcher, and third-party gateway. All behind ONE
   payment-provider interface; each is a separate provider, enabled per install. Built: manual and the TRC20 watcher;
   third-party gateways were dropped (they exclude Iran).
@@ -305,7 +317,7 @@ Each phase has a status line and what shipped, with the pull requests. "#N" is a
 6. Auto crypto watcher, older 3x-ui adapters, license server + update channel.
    **Done, except older 3x-ui adapters (2026-10-12).** #37 automatic USDT (TRC20) payments through TronGrid, with
    unmatched deposits reported to staff; #38 the vendor license server (`licensesrv`), online activation with a daily
-   refresh, and the stable/beta update channel with the license's `updates_until`. Older 3x-ui adapters are built
+   refresh, and the stable/beta update channel (the license's `updates_until` is advisory: a note, never a refusal). Older 3x-ui adapters are built
    only when a customer needs one (§9). Several servers already came with #31.
 7. Hardening: backups/restore drills, monitoring, load tests, docs, legal review.
    **Done, except the legal review (2026-10-12).** #33 `bobres restore`, `bobres update` with an automatic rollback,

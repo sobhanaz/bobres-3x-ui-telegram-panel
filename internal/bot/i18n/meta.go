@@ -98,6 +98,7 @@ var contexts = map[string]Context{
 	"error.generic":          CtxToastHTML,
 	"error.banned":           CtxToastHTML,
 	"error.unavailable":      CtxToastHTML,
+	"error.purchases_paused": CtxToastHTML,
 	"error.menu_expired":     CtxToastHTML,
 	"trial.used":             CtxToastHTML,
 	"trial.unavailable":      CtxToastHTML,

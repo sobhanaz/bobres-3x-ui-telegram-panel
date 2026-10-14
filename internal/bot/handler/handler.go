@@ -345,6 +345,11 @@ func (r *req) fail(err error) {
 	switch {
 	case st.Code() == codes.PermissionDenied && strings.Contains(msg, "banned"):
 		key = "error.banned"
+	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "new purchases are paused"):
+		// core's domain.PurchasesPaused: a new service was refused for a
+		// limit. The customer is told only that buying is unavailable (a
+		// customer never sees a word about licensing).
+		key = "error.purchases_paused"
 	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "trial already used"):
 		key = "trial.used"
 	case st.Code() == codes.FailedPrecondition && strings.Contains(msg, "trial"):

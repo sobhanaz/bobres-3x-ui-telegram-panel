@@ -268,13 +268,12 @@ func (u *updater) updateCmd(args []string) int {
 		fmt.Fprintf(u.out, "BOBRES already runs %s: nothing to update.\n", from)
 		return 0
 	}
-	// A valid license with an end to its updates covers the releases issued
-	// until then; a missing or invalid one gates nothing.
+	// A license in force may carry an end to its updates (updates_until). It
+	// is ADVISORY: the release is installed whatever it says (security
+	// updates are never withheld, and the free tier, the trial and an ended
+	// license have no such end); the note below only tells the owner.
 	if until := u.updatesUntil(ctx, *dir); !release.Covered(until, t.Issued) {
-		fmt.Fprintf(u.errOut, "error: release %s is newer than your license covers: it was issued on %s, and the license's updates end on %s. Nothing was changed.\n"+
-			"Renew the license's updates with your seller (sudo bobres license status shows the license); %s keeps working as it is.\n",
-			t.Version, release.IssuedDay(t.Issued), until, from)
-		return 1
+		fmt.Fprintln(u.out, newerThanLicenseNote(t, until))
 	}
 	if _, ok := checksum(t.sums, "bobres_"+u.platform); !ok {
 		fmt.Fprintf(u.errOut, "error: release %s has no bobres_%s (no CLI for this system). Nothing was changed.\n", t.Version, u.platform)
@@ -326,9 +325,8 @@ func (u *updater) check(ctx context.Context, dir, channel, want string) int {
 }
 
 // checkNewer is check, also saying whether the release is newer than the
-// install and this install's license covers it (so bobres update would take
-// it). The release is want's, else the newest of channel ("": the install's
-// BOBRES_UPDATE_CHANNEL, else stable).
+// install (so bobres update would take it). The release is want's, else the
+// newest of channel ("": the install's BOBRES_UPDATE_CHANNEL, else stable).
 func (u *updater) checkNewer(ctx context.Context, dir, channel, want string) (newer bool, code int) {
 	current := imageTag(u.current)
 	env, haveEnv, err := readEnv(filepath.Join(dir, ".env"))
@@ -365,15 +363,14 @@ func (u *updater) checkNewer(ctx context.Context, dir, channel, want string) (ne
 			return false, 0
 		}
 		until := ""
-		if haveEnv { // an install: its license may limit the updates
+		if haveEnv { // an install: its license may have an update date
 			until = u.updatesUntil(ctx, dir)
 		}
-		if !release.Covered(until, t.Issued) {
-			fmt.Fprintf(u.out, "Newer:   yes, but not covered by your license: it was issued on %s, and the license's updates end on %s.\n"+
-				"         bobres update will not install it; renew the license's updates with your seller.\n", release.IssuedDay(t.Issued), until)
-			return false, 0
-		}
 		fmt.Fprintln(u.out, "Newer:   yes. Update with: sudo bobres update")
+		if !release.Covered(until, t.Issued) {
+			// Advisory only: the update is offered and installed all the same.
+			fmt.Fprintln(u.out, newerThanLicenseNote(t, until))
+		}
 		return true, 0
 	case want == "" && channel == release.ChannelStable && release.Prerelease(current):
 		fmt.Fprintln(u.out, "Newer:   no, this install runs a pre-release newer than the latest stable release (beta releases: --channel beta).")
@@ -436,10 +433,20 @@ func (u *updater) resolve(ctx context.Context, channel string) (base, want strin
 	return base, want, nil
 }
 
-// updatesUntil is the end of the updates the install's license covers
-// (YYYY-MM-DD), "" when there is none: no license, one that does not verify
-// here (neither gates anything), one with no end, or core could not tell
-// (said as a warning; the update is not refused for it).
+// newerThanLicenseNote is the note printed when a release was issued after
+// the update date (updates_until) of the install's license. It informs and
+// refuses nothing: security updates are never withheld.
+func newerThanLicenseNote(t *target, until string) string {
+	return fmt.Sprintf("Note:    this release (issued on %s) is newer than your license's update date (%s).\n"+
+		"         It is installed all the same: security updates are never withheld. A renewed license brings the date forward.",
+		release.IssuedDay(t.Issued), until)
+}
+
+// updatesUntil is the update date of the install's license (YYYY-MM-DD), ""
+// when there is none: no license in force (none, one that does not verify
+// here or has ended), one with no date, or core could not tell (said as a
+// warning). It only decides whether to print the advisory note: no update is
+// ever refused for it.
 func (u *updater) updatesUntil(ctx context.Context, dir string) string {
 	if u.licenseStatus == nil {
 		return ""
@@ -447,15 +454,16 @@ func (u *updater) updatesUntil(ctx context.Context, dir string) string {
 	out, err := u.licenseStatus(ctx, dir)
 	until, known := parseUpdatesUntil(out)
 	if err != nil || !known {
-		fmt.Fprintln(u.errOut, "warning: the license could not be read (is core running? bobres status): its updates_until is not checked.")
+		fmt.Fprintln(u.errOut, "warning: the license could not be read (is core running? bobres status): the note about its update date is skipped. The update goes on.")
 		return ""
 	}
 	return until
 }
 
 // validLicenseStates are the states of a license verified for this install
-// as `license status` prints them (expired included: its updates_until still
-// says which releases it covers).
+// as `license status` prints them. Core prints an "Updates until" row only
+// for a license in force (active or in grace): the free tier, the trial and a
+// license that has ended have no end to updates.
 var validLicenseStates = map[string]bool{"active": true, "grace": true, "expired": true}
 
 // parseUpdatesUntil reads core's `license status` text: the "Updates until"

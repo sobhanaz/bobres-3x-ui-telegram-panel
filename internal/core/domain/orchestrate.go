@@ -132,6 +132,17 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 	if !s.methodEnabled(ctx, p.Provider) {
 		return nil, stateErr("this payment method is turned off")
 	}
+	// The same for a method the effective entitlements do not include (a
+	// license that ended, a trial that is over): not offered any more, and
+	// a stale menu is told what it is told for a method switched off, with no
+	// word about licensing. Payments already started are not here: they settle.
+	eff, err := s.Effective(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !eff.methodOffered(p.Provider) {
+		return nil, stateErr("this payment method is turned off")
+	}
 	amount, currency := p.Amount, p.Currency
 	description := "Wallet top-up"
 	if p.OrderID != "" {

@@ -104,6 +104,16 @@ func TestLoadCore(t *testing.T) {
 	if c, err = LoadCore(); err != nil || c.BackupURL != "http://10.0.0.5:8081" || c.Domain != "panel.example.com" {
 		t.Fatalf("backup URL and domain: %q %q %v", c.BackupURL, c.Domain, err)
 	}
+	// The seller's contact has no default (a made-up one could belong to a
+	// stranger); the owner sets it, and stray space is dropped.
+	if c.SellerContact != "" {
+		t.Errorf("a default seller contact: %q", c.SellerContact)
+	}
+	t.Setenv("BOBRES_SELLER_CONTACT", "  @test_seller ")
+	if c, err = LoadCore(); err != nil || c.SellerContact != "@test_seller" {
+		t.Fatalf("seller contact: %q %v", c.SellerContact, err)
+	}
+	t.Setenv("BOBRES_SELLER_CONTACT", "")
 	for _, name := range []string{"BOBRES_BOT_URL", "BOBRES_PAYMENTS_URL", "BOBRES_PROVISIONER_URL", "BOBRES_BACKUP_URL"} {
 		t.Setenv(name, "payments:8080")
 		if _, err := LoadCore(); err == nil || !strings.Contains(err.Error(), name) {

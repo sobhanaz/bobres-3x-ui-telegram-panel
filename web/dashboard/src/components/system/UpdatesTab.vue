@@ -10,7 +10,7 @@ import Tag from 'primevue/tag'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, isolate, type Lang } from '../../format'
-import { channelOf, issuedDay, UPDATE_COMMAND, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
+import { channelOf, issuedDay, newerThanLicense, UPDATE_COMMAND, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
 import type { SystemReply } from '../../types'
 
 // Whether a newer BOBRES release is out on the channel this install follows
@@ -49,7 +49,9 @@ const current = computed(() => updates.value?.current || reply.value?.version ||
 const latest = computed(() => updates.value?.latest || '')
 const channel = computed(() => channelOf(updates.value))
 const released = computed(() => (latest.value ? issuedDay(updates.value) : ''))
-const severity: Record<UpdateState, 'warn' | 'info' | 'success' | 'secondary'> = { newer: 'warn', not_covered: 'info', current: 'success', unknown: 'secondary' }
+const severity: Record<UpdateState, 'warn' | 'success' | 'secondary'> = { newer: 'warn', current: 'success', unknown: 'secondary' }
+// Advisory: a release newer than the license's update date is still offered.
+const newerThanLicenseNote = computed(() => newerThanLicense(updates.value))
 
 async function copyCommand() {
   try {
@@ -137,13 +139,11 @@ async function copyCommand() {
           />
         </div>
         <p class="available-note">{{ t('system.updates.backup_first') }}</p>
-      </Message>
-
-      <!-- bobres update refuses a release the license does not cover: no command -->
-      <Message v-if="state === 'not_covered'" severity="info" icon="pi pi-lock" :closable="false" class="not-covered">
-        <div class="available-title">{{ t('system.updates.not_covered', { version: isolate(latest) }) }}</div>
-        <p class="available-hint">{{ t('system.updates.not_covered_hint') }}</p>
-        <RouterLink :to="{ name: 'system', query: { tab: 'license' } }" class="license-link">{{ t('system.updates.see_license') }}</RouterLink>
+        <!-- advisory: the license's update date never refuses or hides an update -->
+        <p v-if="newerThanLicenseNote" class="license-note">
+          {{ t('system.updates.newer_than_license') }}
+          <RouterLink :to="{ name: 'system', query: { tab: 'license' } }" class="license-link">{{ t('system.updates.see_license') }}</RouterLink>
+        </p>
       </Message>
 
       <Message v-if="reason" :severity="state === 'unknown' ? 'secondary' : 'warn'" icon="pi pi-question-circle" :closable="false" class="not-checked">
@@ -198,10 +198,12 @@ async function copyCommand() {
   font-weight: 600;
 }
 .available-hint,
-.available-note {
+.available-note,
+.license-note {
   margin-block: 0.4rem;
 }
-.available-note {
+.available-note,
+.license-note {
   font-size: 0.85rem;
 }
 .command-row {

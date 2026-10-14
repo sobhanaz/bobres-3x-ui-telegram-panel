@@ -13,6 +13,7 @@ import { api } from '../../api'
 import { errorText } from '../../errors'
 import { date, dateTime, isolate, num, type Lang } from '../../format'
 import {
+  basisOf,
   bindings,
   bindingSeverity,
   entitlementRows,
@@ -24,18 +25,21 @@ import {
   renews,
   sourceKey,
   stateOf,
+  TRIAL_DAYS,
   timeLeft,
+  trialSeverity,
   warnings,
   type EntitlementRow,
 } from '../../license'
 import { useAuth } from '../../stores/auth'
 import type { LicenseInfo } from '../../types'
 
-// The license: its state (a missing or invalid one limits nothing), what it
-// binds to, what it grants against what this install uses, and for the owner
-// a way to add or replace it: activated online with the seller's key, or a
-// token pasted for an install that cannot reach the license server. Admins
-// see it read only.
+// The license: what applies now (a license, its grace period, the 30-day
+// trial or the free tier) with whom to ask for a license, the installed
+// license's state, what it binds to, what applies against what this install
+// uses, and for the owner a way to add or replace it: activated online with
+// the seller's key, or a token pasted for an install that cannot reach the
+// license server. Admins see it read only.
 const { t, te, locale } = useI18n()
 const auth = useAuth()
 const toast = useToast()
@@ -80,6 +84,39 @@ const rows = computed(() => (info.value ? entitlementRows(info.value) : []))
 const warned = computed(() => warnings(rows.value) > 0)
 const canWrite = computed(() => auth.can('license.write'))
 
+// What applies now: core's answer (an older core says nothing, and the page
+// reads the license state instead).
+const effective = computed(() => info.value?.effective ?? null)
+const basis = computed(() => basisOf(effective.value?.basis, info.value?.state))
+const trialDays = computed(() => Math.max(0, effective.value?.trial_days_left ?? 0))
+// The trial's tag warns from its last 7 days (core raises its staff alert then too).
+const planSeverity = computed(
+  () => ({ free: 'warn', trial: trialSeverity(trialDays.value), grace: 'warn', license: 'success' })[basis.value] as 'warn' | 'info' | 'success',
+)
+const planName = computed(() => {
+  switch (basis.value) {
+    case 'free':
+      return t('license.plan.free')
+    case 'trial':
+      return t('license.plan.trial', { n: num(trialDays.value, lang.value) })
+    default:
+      return tierName(effective.value?.tier || lic.value?.tier || '')
+  }
+})
+const trialEnds = computed(() => effective.value?.trial_ends_at ?? 0)
+// What the plan hint fills in: the trial's end and its length (core says it; an older core: 30 days).
+const planParams = computed(() => ({
+  date: trialEnds.value ? date(trialEnds.value, lang.value) : '',
+  days: num(effective.value?.trial_days ?? TRIAL_DAYS, lang.value),
+}))
+// "No license" says what applies from the plan card above (the same words as its hint, so it
+// never says the trial runs when it is over); an older core has no plan card, so the hint says it here.
+const stateHint = computed(() => {
+  if (state.value !== 'missing') return t('license.state_hint.' + state.value)
+  const base = t('license.state_hint.missing')
+  return effective.value ? base : base + ' ' + t('license.plan.hint.' + basis.value, planParams.value)
+})
+
 const tierName = (tier: string) => (te('license.tier.' + tier) ? t('license.tier.' + tier) : tier)
 const providerName = (p: string) => (te('payment.provider.' + p) ? t('payment.provider.' + p) : p)
 const sep = computed(() => (lang.value === 'fa' ? '، ' : ', '))
@@ -116,6 +153,27 @@ async function copyInstall() {
       <Skeleton v-for="n in 2" :key="n" height="12rem" border-radius="var(--app-radius)" />
     </div>
     <template v-else-if="info">
+      <Card v-if="effective" class="plan-card">
+        <template #title>
+          <div class="title-row">
+            <span>{{ t('license.plan.title') }}</span>
+            <Tag :severity="planSeverity" :value="planName" class="plan-name" />
+          </div>
+        </template>
+        <template #content>
+          <p class="plan-hint">{{ t('license.plan.hint.' + basis, planParams) }}</p>
+          <p v-if="basis === 'trial' && trialEnds" class="plan-trial app-muted">
+            {{ t('license.plan.trial_ends', { date: date(trialEnds, lang), n: num(trialDays, lang) }) }}
+          </p>
+          <p v-else-if="basis === 'free' && trialEnds" class="plan-trial app-muted">{{ t('license.plan.trial_ended', { date: date(trialEnds, lang) }) }}</p>
+          <p v-if="effective.contact" class="plan-contact">
+            {{ t('license.plan.contact', { contact: isolate(effective.contact) }) }}
+          </p>
+          <!-- the owner did not set a seller contact (BOBRES_SELLER_CONTACT): no made-up one -->
+          <p v-else class="plan-contact plan-contact-none">{{ t('license.plan.contact_none') }}</p>
+        </template>
+      </Card>
+
       <div class="cards">
         <Card class="state-card">
           <template #title>
@@ -125,7 +183,7 @@ async function copyInstall() {
             </div>
           </template>
           <template #content>
-            <p class="state-hint">{{ t('license.state_hint.' + state) }}</p>
+            <p class="state-hint">{{ stateHint }}</p>
             <Message v-if="state === 'invalid'" severity="error" :closable="false" class="reason">{{ t(reasonKey(info.reason)) }}</Message>
             <Message v-if="info.keys === 0" severity="info" :closable="false" class="no-keys">{{ t('license.no_keys') }}</Message>
             <dl v-if="lic" class="app-facts facts">
@@ -208,6 +266,7 @@ async function copyInstall() {
       <Card v-if="rows.length" class="entitlements">
         <template #title>{{ t('license.entitlements') }}</template>
         <template #content>
+          <p class="app-muted ent-source">{{ t('license.entitlements_from.' + basis) }}</p>
           <Message v-if="warned" severity="warn" :closable="false" class="limits-warn">{{ t('license.warnings') }}</Message>
           <div v-for="r in rows" :key="r.key" :class="['ent', 'ent-' + r.key]">
             <span class="ent-name">{{ t('license.ent.' + r.key) }}</span>
@@ -317,6 +376,16 @@ async function copyInstall() {
 }
 .limits-warn {
   margin-block-end: 0.5rem;
+}
+.plan-hint {
+  margin-block-start: 0;
+}
+.plan-trial,
+.plan-contact {
+  margin-block: 0.5rem 0;
+}
+.ent-source {
+  margin-block: 0 0.5rem;
 }
 .owner-only {
   margin: 0;

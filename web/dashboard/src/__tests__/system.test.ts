@@ -24,6 +24,7 @@ import {
   logLevel,
   logsReason,
   mismatched,
+  newerThanLicense,
   newestFirst,
   notSentReason,
   OFFSITE_KEY_COMMAND,
@@ -44,9 +45,13 @@ import {
   worstLevel,
 } from '../system'
 import {
+  basisOf,
   bindingOf,
   bindings,
   canSave,
+  chipOf,
+  chipSeverity,
+  chipSeverityOf,
   entitlementRows,
   graceEndsAt,
   isValid,
@@ -69,9 +74,11 @@ import {
   TOKEN_MAX,
   tokenOf,
   tokenProblem,
+  TRIAL_WARN_DAYS,
+  trialSeverity,
   warnings,
 } from '../license'
-import type { BackupFile, LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemAlert, SystemBackups, SystemLogs, SystemReply, UpdateCheck } from '../types'
+import type { BackupFile, LicenseEffective, LicenseEntitlements, LicenseInfo, LicenseToken, LogLine, ServiceHealth, SystemAlert, SystemBackups, SystemLogs, SystemReply, UpdateCheck } from '../types'
 
 const DAY = 86_400
 const iid = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa'
@@ -86,6 +93,10 @@ const ents = (over: Partial<LicenseEntitlements> = {}): LicenseEntitlements => (
   dashboard_staff_seats: { limit: 2, used: 2, near: true, full: true },
   gateways: { licensed: ['zarinpal', 'manual_card'], enabled: ['zarinpal', 'stars'] },
   updates_until: '2027-09-30', ...over,
+})
+// what applies now (GET /license): a license, its grace, the trial or the free tier
+const eff = (over: Partial<LicenseEffective> = {}): LicenseEffective => ({
+  basis: 'license', tier: 'standard', trial_running: false, trial_ends_at: null, trial_days_left: 0, contact: 'seller@example.test', ...over,
 })
 const token = (now: number, over: Partial<LicenseToken> = {}): LicenseToken => ({
   license_id: 'lic_7Q2', customer: 'cust_rose', tier: 'standard', kid: 'lic-2026a',
@@ -170,7 +181,7 @@ describe('open problems', () => {
     expect(alertTextKey({ title_key: 'alert.<b>' })).toBe('')
     // every text the bot has for a problem is here too, in both languages
     const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'backup_failed', 'backup_stale',
-      'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'check',
+      'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'license_limit', 'trial_ending', 'trial_ended', 'check',
       'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down']
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
@@ -189,10 +200,12 @@ describe('open problems', () => {
     }
     // numbers in the language's digits, a size, a day; names kept whole; the key when core gives none
     const day = Date.UTC(2026, 9, 21, 12) / 1000
-    const args = { count: '3', days: '9', hours: '30', minutes: '12', free: String(1.5 * 2 ** 30), date: String(day), server: 'nl-1', service: 'bot' }
-    expect(alertArgs(alert('x.y', { args }), 'fa', (k, v) => (k === 'service' ? 'ربات' : v))).toEqual({
+    const args = { count: '3', days: '9', hours: '30', minutes: '12', free: String(1.5 * 2 ** 30), date: String(day), server: 'nl-1', service: 'bot',
+      limit: '25', name: 'active_services' }
+    const named = (k: string, v: string) => (k === 'service' ? 'ربات' : k === 'name' ? fa.license.limit_name.active_services : v)
+    expect(alertArgs(alert('x.y', { args }), 'fa', named)).toEqual({
       key: '\u2068x.y\u2069', count: '۳', days: '۹', hours: '۳۰', minutes: '۱۲', free: bytes(1.5 * 2 ** 30, 'fa'), date: date(day, 'fa'),
-      server: '\u2068nl-1\u2069', service: '\u2068ربات\u2069',
+      server: '\u2068nl-1\u2069', service: '\u2068ربات\u2069', limit: '۲۵', name: '\u2068' + fa.license.limit_name.active_services + '\u2069',
     })
     expect(alertArgs(alert('x.y', { args }), 'en').count).toBe('3')
     expect(alertArgs(alert('x.y', { args: { key: 'other' } }), 'en').key).toBe('\u2068other\u2069')
@@ -251,20 +264,26 @@ describe('update check', () => {
     expect(updateDetail(null, 'unsupported')).toBe('')
     expect(UPDATE_COMMAND).toBe('sudo bobres update')
   })
-  it('flags a newer release the license does not cover', () => {
-    expect(updateState(upd({ covered: false }))).toBe('not_covered')
-    // read before a later check failed: still not covered
-    expect(updateState(upd({ covered: false, error: 'unreachable' }))).toBe('not_covered')
-    expect(updateState(upd({ covered: true }))).toBe('newer')
-    // no valid license to ask, or an older core: installable
-    expect(updateState(upd({ covered: null }))).toBe('newer')
-    expect(updateState(upd())).toBe('newer')
-    // nothing newer: nothing to cover
+  it('offers a newer release whatever the license says, with a note when it is newer than its update date', () => {
+    // the license's update date is advisory: it never hides or refuses an update
+    for (const covered of [false, true, null, undefined]) expect(updateState(upd({ covered }))).toBe('newer')
+    // read before a later check failed: still offered
+    expect(updateState(upd({ covered: false, error: 'unreachable' }))).toBe('newer')
+    // nothing newer: nothing to say
     expect(updateState(upd({ latest: '1.5.0', newer: false, covered: false }))).toBe('current')
+    // the note: only for a newer release after the update date
+    expect(newerThanLicense(upd({ covered: false }))).toBe(true)
+    expect(newerThanLicense(upd({ covered: true }))).toBe(false)
+    expect(newerThanLicense(upd({ covered: null }))).toBe(false)
+    expect(newerThanLicense(upd())).toBe(false)
+    expect(newerThanLicense(upd({ latest: '1.5.0', newer: false, covered: false }))).toBe(false)
+    expect(newerThanLicense(upd({ latest: '', covered: false }))).toBe(false)
+    expect(newerThanLicense(null)).toBe(false)
     for (const lang of [fa, en]) {
-      expect(lang.system.updates.state.not_covered).toBeTruthy()
-      expect(lang.system.updates.not_covered).toContain('{version}')
-      expect(lang.system.updates.not_covered_hint).toBeTruthy()
+      expect(lang.system.updates.newer_than_license).toBeTruthy()
+      // the old "not covered" texts are gone
+      expect((lang.system.updates.state as Record<string, string>).not_covered).toBeUndefined()
+      expect((lang.system.updates as Record<string, unknown>).not_covered).toBeUndefined()
     }
   })
   it('reads the day the latest release was signed', () => {
@@ -324,20 +343,66 @@ describe('license', () => {
     expect(['active', 'grace', 'expired'].every(isValid)).toBe(true)
     expect(['missing', 'invalid', 'odd', ''].some(isValid)).toBe(false)
   })
-  it('shows "Powered by BOBRES" only under a valid license without white label', () => {
+  it('shows "Powered by BOBRES" everywhere except under a white label license', () => {
     // core says so
     expect(poweredBy({ state: 'active', white_label: false, powered_by: false })).toBe(false)
     expect(poweredBy({ state: 'missing', white_label: false, powered_by: true })).toBe(true)
-    // read here when it does not
+    // read here when it does not: the free tier and the trial show it too
     expect(poweredBy({ state: 'active', white_label: false })).toBe(true)
     expect(poweredBy({ state: 'grace', white_label: false })).toBe(true)
     expect(poweredBy({ state: 'expired', white_label: false })).toBe(true)
+    expect(poweredBy({ state: 'missing', white_label: false })).toBe(true)
+    expect(poweredBy({ state: 'invalid', white_label: false })).toBe(true)
     expect(poweredBy({ state: 'active', white_label: true })).toBe(false)
-    // never on an install without a license of its own
-    expect(poweredBy({ state: 'missing', white_label: false })).toBe(false)
-    expect(poweredBy({ state: 'invalid', white_label: false })).toBe(false)
-    expect(poweredBy(undefined)).toBe(false)
-    expect(poweredBy(null)).toBe(false)
+    // not known (no answer, or core could not read the license): shown, as by default
+    expect(poweredBy(undefined)).toBe(true)
+    expect(poweredBy(null)).toBe(true)
+  })
+  it('reads what applies now: a license, its grace period, the trial or the free tier', () => {
+    expect(basisOf('license', 'missing')).toBe('license')
+    expect(basisOf('grace', 'grace')).toBe('grace')
+    expect(basisOf('trial', 'missing')).toBe('trial')
+    expect(basisOf('free', 'active')).toBe('free')
+    // a core that does not say: read from the state, the free tier being the safe side
+    expect(basisOf(undefined, 'active')).toBe('license')
+    expect(basisOf(undefined, 'grace')).toBe('grace')
+    for (const st of ['missing', 'invalid', 'expired', '', undefined, 'odd']) expect(basisOf(undefined, st)).toBe('free')
+    expect(basisOf('gold', 'active')).toBe('license')
+  })
+  it('chips what needs a look: the free tier, the trial with its days, or a license that is not fine', () => {
+    expect(chipOf({ state: 'missing', basis: 'free' })).toEqual({ kind: 'free', days: 0 })
+    expect(chipOf({ state: 'missing', basis: 'trial', trial_days_left: 12 })).toEqual({ kind: 'trial', days: 12 })
+    expect(chipOf({ state: 'missing', basis: 'trial' })).toEqual({ kind: 'trial', days: 0 })
+    expect(chipOf({ state: 'missing' })).toEqual({ kind: 'free', days: 0 })
+    // a saved license that is not fine says so, whatever applies meanwhile
+    expect(chipOf({ state: 'invalid', basis: 'trial', trial_days_left: 5 })).toEqual({ kind: 'invalid', days: 0 })
+    expect(chipOf({ state: 'expired', basis: 'free' })).toEqual({ kind: 'expired', days: 0 })
+    expect(chipOf({ state: 'grace', basis: 'grace' })).toEqual({ kind: 'grace', days: 0 })
+    // a license in force: nothing to say
+    expect(chipOf({ state: 'active', basis: 'license' })).toBeNull()
+    expect(chipOf({ state: 'active' })).toBeNull()
+    expect(chipOf(undefined)).toBeNull()
+    expect(chipOf(null)).toBeNull()
+    for (const kind of ['free', 'trial', 'invalid', 'grace', 'expired'] as const) {
+      expect(chipSeverity[kind]).toBeTruthy()
+      expect((en.license.chip as Record<string, string>)[kind]).toBeTruthy()
+      expect((fa.license.chip as Record<string, string>)[kind]).toBeTruthy()
+    }
+    expect(Object.keys(en.license.chip).sort()).toEqual(Object.keys(fa.license.chip).sort())
+    // the trial warns from its last 7 days (core's staff alert starts then), other chips keep their colour
+    expect(TRIAL_WARN_DAYS).toBe(7)
+    expect(chipSeverityOf({ kind: 'trial', days: 30 })).toBe('info')
+    expect(chipSeverityOf({ kind: 'trial', days: 8 })).toBe('info')
+    expect(chipSeverityOf({ kind: 'trial', days: 7 })).toBe('warn')
+    expect(chipSeverityOf({ kind: 'trial', days: 1 })).toBe('warn')
+    expect(chipSeverityOf({ kind: 'trial', days: 0 })).toBe('warn')
+    expect(chipSeverityOf({ kind: 'free', days: 0 })).toBe('warn')
+    expect(chipSeverityOf({ kind: 'expired', days: 0 })).toBe('danger')
+    expect(trialSeverity(8)).toBe('info')
+    expect(trialSeverity(7)).toBe('warn')
+    // the link's name says it is the license, with the chip's words
+    for (const lang of [fa, en]) expect(lang.license.chip.aria).toContain('{chip}')
+    expect(en.license.chip.aria).toContain('License')
   })
   it('explains every reason core gives, and others plainly', () => {
     for (const r of ['malformed', 'bad_signature', 'unknown_key', 'version', 'domain', 'install_id', 'unbound', 'invalid', 'not_yet_valid', 'expired']) {
@@ -681,21 +746,40 @@ describe('system page', () => {
     ],
     updates: { current: '1.4.0', latest: '1.5.0', newer: true, verified: false, checked_at: nowSec() - 3600, error: '' },
   })
-  // as core's licenseView answers
+  // as core's licenseView answers: no license installed, so the trial applies
+  // (12 days left) with its entitlements
   const missing = (): LicenseInfo => ({
     state: 'missing', reason: '', install_id: iid, domain: 'shop.example.com', keys: 1, license: null,
-    binding: null, entitlements: null, updated_at: null, updated_by: null,
+    binding: null, updated_at: null, updated_by: null,
+    effective: eff({ basis: 'trial', tier: 'trial', trial_running: true, trial_ends_at: nowSec() + 12 * DAY, trial_days_left: 12 }),
+    entitlements: ents({
+      resellers: true, crypto_watcher: true, updates_until: '',
+      max_servers: { limit: -1, used: 1 }, max_active_services: { limit: -1, used: 12 }, dashboard_staff_seats: { limit: 5, used: 2, near: false, full: false },
+      gateways: { licensed: ['zarinpal', 'stars', 'usdt_trc20_auto', 'manual_card', 'manual_crypto', 'manual_zarinpal'], enabled: ['zarinpal', 'manual_card'] },
+    }),
+  })
+  // the trial is over and the free tier's limits apply: one server in use,
+  // 24 of 25 services, three staff for two seats
+  const free = (): LicenseInfo => ({
+    ...missing(),
+    effective: eff({ basis: 'free', tier: 'free', trial_ends_at: nowSec() - 3 * DAY }),
+    entitlements: ents({
+      resellers: false, crypto_watcher: false, updates_until: '',
+      max_servers: { limit: 1, used: 1, near: true, full: true }, max_active_services: { limit: 25, used: 24, near: true, full: false },
+      dashboard_staff_seats: { limit: 2, used: 3, near: true, full: true },
+      gateways: { licensed: ['zarinpal', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal'], enabled: ['zarinpal', 'usdt_trc20_auto'] },
+    }),
   })
   const active = (): LicenseInfo => ({
     state: 'active', reason: '', install_id: iid, domain: 'shop.example.com', keys: 1, license: { ...token(nowSec()), grace_ends_at: nowSec() + 54 * DAY },
-    binding: { domain: 'match', install_id: 'unbound' }, entitlements: ents(), updated_at: nowSec() - DAY, updated_by: { id: 'u1', username: 'boss' },
+    binding: { domain: 'match', install_id: 'unbound' }, effective: eff(), entitlements: ents(), updated_at: nowSec() - DAY, updated_by: { id: 'u1', username: 'boss' },
   })
 
   type Answer = (url: string, init: RequestInit | undefined, body: Record<string, unknown>) => Response | Promise<Response> | undefined
   interface Boot {
     perms?: string[]
     role?: string
-    license?: { state: string; white_label: boolean; powered_by?: boolean } | null
+    license?: { state: string; white_label: boolean; powered_by?: boolean; basis?: string; tier?: string; trial_days_left?: number } | null
     loggedIn?: boolean
     brand?: Record<string, unknown>
     answer?: Answer
@@ -839,17 +923,19 @@ describe('system page', () => {
       { key: 'service.bot', severity: 'critical', title_key: 'alert.service_down', args: { service: 'bot' }, detail: 'dial tcp 172.18.0.4:8080: connect: connection refused', since: t0 - 600 },
       // a text whose value core did not give: core's words instead of a hole
       { key: 'server.s2', severity: 'warning', title_key: 'alert.server_down', args: {}, title: 'nl-1 does not answer', detail: '', since: t0 - 30 },
+      // a purchase refused at the license's limit: the limit in Persian digits, what is limited in words
+      { key: 'license.limit', severity: 'warning', title_key: 'alert.license_limit', args: { limit: '25', name: 'active_services' }, detail: '', since: t0 - 90 },
     ]
     const { calls } = await boot('/admin/system', { answer: (url) => (url === '/api/v1/system' ? json(200, { ...systemReply(), alerts }) : undefined) })
-    await vi.waitFor(() => expect(document.querySelectorAll('.alerts .alert')).toHaveLength(4))
+    await vi.waitFor(() => expect(document.querySelectorAll('.alerts .alert')).toHaveLength(5))
     // above the services
     const cards = [...document.querySelectorAll('.health > .p-card')]
     expect(cards.indexOf(document.querySelector('.alerts-card')!)).toBeLessThan(cards.indexOf(document.querySelector('.services-card')!))
     const count = document.querySelector('.alerts-count')!
-    expect(count.textContent).toBe('۴')
+    expect(count.textContent).toBe('۵')
     expect(count.classList.contains('p-tag-danger')).toBe(true)
-    expect(count.getAttribute('aria-label')).toBe(fill(text('system.alerts.count'), { n: '۴' }))
-    const [bot, backup, odd, server] = [...document.querySelectorAll('.alerts .alert')] as HTMLElement[]
+    expect(count.getAttribute('aria-label')).toBe(fill(text('system.alerts.count'), { n: '۵' }))
+    const [bot, backup, limit, odd, server] = [...document.querySelectorAll('.alerts .alert')] as HTMLElement[]
     // critical first, named as the bot names it, with the service as this page names it
     expect(bot.querySelector('.alert-severity')?.textContent).toBe(text('system.alerts.severity.critical'))
     expect(bot.querySelector('.alert-severity')?.classList.contains('p-tag-danger')).toBe(true)
@@ -866,6 +952,9 @@ describe('system page', () => {
     expect(odd.querySelector('.alert-severity')?.textContent).toBe(text('system.alerts.severity.warning'))
     expect(odd.querySelector('.alert-title')?.textContent).toBe(fill(text('system.alerts.kind.check'), { key: '\u2068mystery.check\u2069' }))
     expect(server.querySelector('.alert-title')?.textContent).toBe('nl-1 does not answer')
+    expect(limit.querySelector('.alert-title')?.textContent).toBe(
+      fill(text('system.alerts.kind.license_limit'), { limit: '۲۵', name: '\u2068' + text('license.limit_name.active_services') + '\u2069' }),
+    )
     expect(document.querySelector('.all-clear')).toBeNull()
     // where the Telegram alerts are turned on or off
     expect(document.querySelector('.alerts-note')?.textContent).toContain(text('system.alerts.note'))
@@ -929,7 +1018,7 @@ describe('system page', () => {
     // a bot that does not say which channel it follows: no channel shown
     expect(document.querySelector('.channel')).toBeNull()
     expect(document.querySelector('.channel-hint')).toBeNull()
-    expect(document.querySelector('.not-covered')).toBeNull()
+    expect(document.querySelector('.license-note')).toBeNull()
     btn('button.copy-command').click()
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('sudo bobres update'))
     // nothing is applied from the page
@@ -939,21 +1028,21 @@ describe('system page', () => {
     await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(3))
   })
 
-  it('shows the channel, and a newer release the license does not cover', async () => {
+  it('shows the channel, and a note on a release newer than the license’s update date (still offered)', async () => {
     const reply = (updates: Partial<UpdateCheck>) => (url: string) => (url === '/api/v1/system'
       ? json(200, { version: 'v1.5.0', services: [], updates: { current: '1.5.0', latest: '1.6.0-rc.2', newer: true, verified: true, checked_at: nowSec(), error: '', ...updates } })
       : undefined)
     const { calls, router } = await boot('/admin/system?tab=updates', { answer: reply({ channel: 'beta', covered: false, issued: '2027-03-01T10:04Z' }) })
-    const box = await found('.not-covered')
+    const box = await found('.update-available')
     // the day to compare with the license's "updates until"
     expect(document.querySelector('.released')?.textContent).toBe('2027-03-01')
-    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.not_covered'))
-    expect(document.querySelector('.update-state')?.classList.contains('p-tag-info')).toBe(true)
-    expect(box.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.not_covered'), { version: '⁨1.6.0-rc.2⁩' }))
-    expect(box.querySelector('.available-hint')?.textContent).toBe(text('system.updates.not_covered_hint'))
-    // bobres update would refuse it: no command to run
-    expect(document.querySelector('.update-available')).toBeNull()
-    expect(document.querySelector('.command')).toBeNull()
+    // advisory: offered like any update, with the command, and a note beside it
+    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
+    expect(document.querySelector('.update-state')?.classList.contains('p-tag-warn')).toBe(true)
+    expect(box.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.available'), { version: '⁨1.6.0-rc.2⁩' }))
+    expect(document.querySelector('.command')?.textContent).toBe('sudo bobres update')
+    expect(box.querySelector('.license-note')?.textContent).toContain(text('system.updates.newer_than_license'))
+    expect(document.querySelector('.not-covered')).toBeNull()
     // the beta channel, and what going back to stable means
     expect(document.querySelector('.channel-name')?.textContent).toBe(text('system.updates.channel_name.beta'))
     expect(document.querySelector('.channel-hint')?.textContent).toBe(text('system.updates.channel_hint'))
@@ -965,19 +1054,19 @@ describe('system page', () => {
     expect(router.currentRoute.value.query.tab).toBe('license')
     expect(calls).toContain('GET /api/v1/license')
 
-    // stable, and no valid license to ask: installable as before
+    // stable, and no license in force: installable as before, no note
     await boot('/admin/system?tab=updates', { answer: reply({ channel: 'stable', covered: null }) })
     await found('.update-available')
     expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
     expect(document.querySelector('.channel-name')?.textContent).toBe(text('system.updates.channel_name.stable'))
     expect(document.querySelector('.beta-note')).toBeNull()
-    expect(document.querySelector('.not-covered')).toBeNull()
+    expect(document.querySelector('.license-note')).toBeNull()
     // the bot did not say when it was signed
     expect(document.querySelector('.released')).toBeNull()
-    // covered by the license
+    // covered by the license: no note
     await boot('/admin/system?tab=updates', { answer: reply({ channel: 'stable', covered: true }) })
     await found('.update-available')
-    expect(document.querySelector('.not-covered')).toBeNull()
+    expect(document.querySelector('.license-note')).toBeNull()
     expect(document.querySelector('.command')?.textContent).toBe('sudo bobres update')
   })
 
@@ -1420,10 +1509,12 @@ describe('system page', () => {
   it('shows admins the license read only, with this install’s id to copy', async () => {
     const writeText = vi.fn(async () => {})
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    const { calls, router } = await boot('/admin/system', { license: { state: 'missing', white_label: false } })
+    const { calls, router } = await boot('/admin/system', {
+      license: { state: 'missing', white_label: false, powered_by: true, basis: 'trial', tier: 'trial', trial_days_left: 12 },
+    })
     await vi.waitFor(() => expect(rows()).toHaveLength(5))
-    // the tab says the license needs a look
-    expect(document.querySelector('.tab-license .tab-state')?.textContent).toBe(text('license.state.missing'))
+    // the tab says the trial is running, with its days
+    expect(document.querySelector('.tab-license .tab-state')?.textContent).toBe(fill(text('license.chip.trial'), { n: '۱۲' }))
     btn('.tab-license').click()
     await found('.license-state')
     expect(router.currentRoute.value.query.tab).toBe('license')
@@ -1432,8 +1523,18 @@ describe('system page', () => {
     expect(document.querySelector('.state-hint')?.textContent).toBe(text('license.state_hint.missing'))
     expect(document.querySelector('.install-id')?.textContent).toBe(iid)
     expect(document.querySelector('.this-domain')?.textContent).toBe('shop.example.com')
-    // nothing granted, no binding to compare
-    expect(document.querySelector('.entitlements')).toBeNull()
+    // what applies now: the trial, with its end and whom to ask for a license
+    expect(document.querySelector('.plan-name')?.textContent).toBe(fill(text('license.plan.trial'), { n: '۱۲' }))
+    expect(document.querySelector('.plan-hint')?.textContent).toBe(fill(text('license.plan.hint.trial'), { days: '۳۰' }))
+    expect(document.querySelector('.plan-trial')?.textContent).toContain(date(nowSec() + 12 * DAY, 'fa'))
+    expect(document.querySelector('.plan-contact')?.textContent).toBe(fill(text('license.plan.contact'), { contact: '\u2068seller@example.test\u2069' }))
+    // the trial's entitlements, against what is used; no license, so no binding to compare
+    expect(document.querySelector('.ent-source')?.textContent).toBe(text('license.entitlements_from.trial'))
+    expect(document.querySelector('.ent-servers .use')?.textContent).toBe(fill(text('license.unlimited_used'), { used: '۱' }))
+    expect(document.querySelector('.ent-staff_seats .use')?.textContent).toBe(fill(text('license.usage'), { used: '۲', limit: '۵' }))
+    expect(document.querySelector('.ent-resellers .feature')?.textContent).toBe(text('license.feature.on'))
+    expect(document.querySelector('.ent-white_label .feature')?.textContent).toBe(text('license.feature.off'))
+    expect(document.querySelector('.limits-warn')).toBeNull()
     expect(document.querySelector('.binding-domain')).toBeNull()
     // only the owner adds a license, online or pasted
     expect(document.querySelector('.license-import')).toBeNull()
@@ -1445,6 +1546,96 @@ describe('system page', () => {
     btn('.tab-health').click()
     await vi.waitFor(() => expect(router.currentRoute.value.query.tab).toBe('health'))
     expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(1)
+  })
+
+  it('shows the free tier: its limits against what is used, what to do about them, and who to ask', async () => {
+    await boot('/admin/system?tab=license', {
+      license: { state: 'missing', white_label: false, powered_by: true, basis: 'free', tier: 'free', trial_days_left: 0 },
+      answer: (url) => (url === '/api/v1/license' ? json(200, free()) : undefined),
+    })
+    await found('.entitlements')
+    // the tab and the menu say it
+    expect(document.querySelector('.tab-license .tab-state')?.textContent).toBe(text('license.chip.free'))
+    expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.free'))
+    expect(document.querySelector('.plan-name')?.textContent).toBe(text('license.plan.free'))
+    expect(document.querySelector('.plan-hint')?.textContent).toBe(text('license.plan.hint.free'))
+    expect(document.querySelector('.plan-trial')?.textContent).toBe(fill(text('license.plan.trial_ended'), { date: date(nowSec() - 3 * DAY, 'fa') }))
+    expect(document.querySelector('.plan-contact')?.textContent).toContain('seller@example.test')
+    expect(document.querySelector('.ent-source')?.textContent).toBe(text('license.entitlements_from.free'))
+    const ent = (key: string) => document.querySelector('.ent-' + key) as HTMLElement
+    // one server in use of one, 24 of 25 services, three staff for two seats
+    expect(ent('servers').querySelector('.use')?.textContent).toBe(fill(text('license.usage'), { used: '۱', limit: '۱' }))
+    expect(ent('servers').querySelector('.limit-state')?.textContent).toBe(text('license.limit_state.full'))
+    expect(ent('active_services').querySelector('.use')?.textContent).toBe(fill(text('license.usage'), { used: '۲۴', limit: '۲۵' }))
+    expect(ent('active_services').querySelector('.limit-state')?.textContent).toBe(text('license.limit_state.near'))
+    expect(ent('staff_seats').querySelector('.use')?.textContent).toBe(fill(text('license.usage'), { used: '۳', limit: '۲' }))
+    expect(ent('staff_seats').querySelector('.limit-state')?.textContent).toBe(text('license.limit_state.over'))
+    expect(ent('resellers').querySelector('.feature')?.textContent).toBe(text('license.feature.off'))
+    expect(ent('crypto_watcher').querySelector('.feature')?.textContent).toBe(text('license.feature.off'))
+    expect(ent('white_label').querySelector('.feature')?.textContent).toBe(text('license.feature.off'))
+    // no end to updates: security updates are never withheld
+    expect(ent('updates_until').textContent).toContain(text('license.updates_any'))
+    // automatic USDT is on although the free tier does not name it: it keeps working
+    expect(ent('gateways').querySelector('.outside')?.textContent).toContain(text('payment.provider.usdt_trc20_auto'))
+    expect(ent('gateways').querySelector('.allowed')?.textContent).toContain(text('payment.provider.zarinpal'))
+    expect(document.querySelector('.limits-warn')?.textContent).toBe(text('license.warnings'))
+    // the footer shows the attribution on the free tier
+    expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
+  })
+
+  it('warns in the trial’s last 7 days, names the license link, and has no made-up seller', async () => {
+    const trialOf = (days: number, contact = ''): LicenseInfo => ({
+      ...missing(),
+      effective: eff({ basis: 'trial', tier: 'trial', trial_running: true, trial_ends_at: nowSec() + days * DAY, trial_days_left: days, contact }),
+    })
+    const bootTrial = (days: number, contact = '') =>
+      boot('/admin/system?tab=license', {
+        license: { state: 'missing', white_label: false, powered_by: true, basis: 'trial', tier: 'trial', trial_days_left: days },
+        answer: (url) => (url === '/api/v1/license' ? json(200, trialOf(days, contact)) : undefined),
+      })
+    await bootTrial(3)
+    await found('.plan-name')
+    // a week or less: the plan tag, the menu chip and the tab all warn
+    expect(document.querySelector('.plan-name')?.classList.contains('p-tag-warn')).toBe(true)
+    expect(document.querySelector('.license-chip .p-tag')?.classList.contains('p-tag-warn')).toBe(true)
+    expect(document.querySelector('.tab-license .tab-state')?.classList.contains('p-tag-warn')).toBe(true)
+    // the chip's label is hidden on a phone: its name says it is the license
+    const chip = fill(text('license.chip.trial'), { n: '۳' })
+    expect(document.querySelector('.license-chip')?.getAttribute('aria-label')).toBe(fill(text('license.chip.aria'), { chip }))
+    expect(document.querySelector('.license-chip')?.getAttribute('aria-label')).toContain('لایسنس')
+    expect(document.querySelector('.license-chip')?.textContent).toBe(chip)
+    // no seller contact was set: the sentence that sends the owner back to whoever sold BOBRES
+    expect(document.querySelector('.plan-contact')?.textContent).toBe(text('license.plan.contact_none'))
+    // the trial's length comes from the one place that knows it
+    expect(document.querySelector('.plan-hint')?.textContent).toBe(fill(text('license.plan.hint.trial'), { days: '۳۰' }))
+    expect(text('license.plan.hint.trial')).not.toContain('۳۰')
+
+    // more than a week left: informational
+    await bootTrial(12, 'seller@example.test')
+    await found('.plan-name')
+    expect(document.querySelector('.plan-name')?.classList.contains('p-tag-info')).toBe(true)
+    expect(document.querySelector('.license-chip .p-tag')?.classList.contains('p-tag-info')).toBe(true)
+    expect(document.querySelector('.plan-contact')?.textContent).toBe(fill(text('license.plan.contact'), { contact: '\u2068seller@example.test\u2069' }))
+  })
+
+  it('says what applies from the plan, not from a hint that could be out of date', async () => {
+    // "No license" does not say the trial runs: the plan card above says what applies
+    await boot('/admin/system?tab=license', {
+      license: { state: 'missing', white_label: false, powered_by: true, basis: 'free', tier: 'free' },
+      answer: (url) => (url === '/api/v1/license' ? json(200, free()) : undefined),
+    })
+    await found('.state-hint')
+    expect(document.querySelector('.state-hint')?.textContent).toBe(text('license.state_hint.missing'))
+    for (const lang of [fa, en]) {
+      expect(lang.license.state_hint.missing).not.toMatch(/trial|آزمایشی|free|رایگان|همهٔ امکانات|everything/i)
+    }
+    // an older core has no plan card: the hint then says what applies, in the plan's words
+    await boot('/admin/system?tab=license', {
+      answer: (url) => (url === '/api/v1/license' ? json(200, { ...missing(), effective: undefined }) : undefined),
+    })
+    await found('.state-hint')
+    expect(document.querySelector('.plan-card')).toBeNull()
+    expect(document.querySelector('.state-hint')?.textContent).toBe(text('license.state_hint.missing') + ' ' + text('license.plan.hint.free'))
   })
 
   it('explains a license that was not accepted', async () => {
@@ -1470,6 +1661,12 @@ describe('system page', () => {
     await found('.entitlements')
     expect(document.querySelector('.license-state')?.textContent).toBe(text('license.state.active'))
     expect(document.querySelector('.tab-license .tab-state')).toBeNull()
+    // what applies now is the license: its tier, its hint, the seller to renew with
+    expect(document.querySelector('.plan-name')?.textContent).toBe(text('license.tier.standard'))
+    expect(document.querySelector('.plan-hint')?.textContent).toBe(text('license.plan.hint.license'))
+    expect(document.querySelector('.plan-trial')).toBeNull()
+    expect(document.querySelector('.plan-contact')?.textContent).toContain('seller@example.test')
+    expect(document.querySelector('.ent-source')?.textContent).toBe(text('license.entitlements_from.license'))
     expect(document.querySelector('.tier')?.textContent).toBe(text('license.tier.standard'))
     expect(document.querySelector('.license-id')?.textContent).toBe('lic_7Q2')
     expect(document.querySelector('.kid')?.textContent).toBe('lic-2026a')
@@ -1513,7 +1710,7 @@ describe('system page', () => {
     const bad = 'eyJ2IjoxfQ.YmFk'
     let saved = false
     const { calls } = await boot('/admin/system?tab=license', {
-      perms: ownerPerms, role: 'owner', license: { state: 'missing', white_label: false },
+      perms: ownerPerms, role: 'owner', license: { state: 'missing', white_label: false, powered_by: true, basis: 'free', tier: 'free' },
       answer: (url, init, b) => {
         if (url === '/api/v1/license/check') {
           if (b.token === bad) return json(200, { ...missing(), state: 'invalid', reason: 'bad_signature' })
@@ -1535,10 +1732,10 @@ describe('system page', () => {
     })
     const card = await found('.license-import')
     expect(card.textContent).toContain(text('license.import.add'))
-    // the menu shows the install is unlicensed, and there is no attribution
-    expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.missing'))
+    // the menu shows the install is on the free tier, with the attribution
+    expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.free'))
     expect(document.querySelector('.license-chip')?.getAttribute('href')).toBe('/admin/system?tab=license')
-    expect(document.querySelector('.powered-by')).toBeNull()
+    expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
 
     const area = card.querySelector('textarea.token-input')
     const check = () => btn('.license-import button.check')
@@ -1623,7 +1820,7 @@ describe('system page', () => {
       return { ...a, license: { ...a.license!, expires_at: t0 + 30 * DAY, license_ends_at: t0 + 300 * DAY }, updated_at: t0, refreshed_at: null, source: 'activation' }
     }
     const { calls } = await boot('/admin/system?tab=license', {
-      perms: ownerPerms, role: 'owner', license: { state: 'missing', white_label: false },
+      perms: ownerPerms, role: 'owner', license: { state: 'missing', white_label: false, powered_by: true, basis: 'trial', trial_days_left: 12 },
       answer: (url, init) => {
         if (url === '/api/v1/license/activate' && init?.method === 'POST') {
           activated = true
@@ -1810,30 +2007,50 @@ describe('system page', () => {
     expect(card.querySelector('button.save')).toBeNull()
   })
 
-  it('hides the attribution under white label, and on older cores', async () => {
-    await boot('/admin/system?tab=license', { license: { state: 'active', white_label: true } })
+  it('hides the attribution under white label only, and shows it when the license is not known', async () => {
+    await boot('/admin/system?tab=license', { license: { state: 'active', white_label: true, powered_by: false, basis: 'license' } })
     await found('.license-state')
     expect(document.querySelector('.powered-by')).toBeNull()
     expect(document.querySelector('.license-chip')).toBeNull()
     // a license in grace needs a look: the chip says so
-    await boot('/admin/', { license: { state: 'grace', white_label: false } })
+    await boot('/admin/', { license: { state: 'grace', white_label: false, basis: 'grace' } })
     await found('.license-chip')
     expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.grace'))
     expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
-    // a core without the license field: neither
+    // the trial and the free tier: a chip each (the trial with its days), and the attribution
+    await boot('/admin/', { license: { state: 'missing', white_label: false, powered_by: true, basis: 'trial', trial_days_left: 3 } })
+    await found('.license-chip')
+    expect(document.querySelector('.license-chip')?.textContent).toBe(fill(text('license.chip.trial'), { n: '۳' }))
+    expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
+    await boot('/admin/', { license: { state: 'missing', white_label: false, powered_by: true, basis: 'free' } })
+    await found('.license-chip')
+    expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.free'))
+    // a license that ended: the chip says so, not the free tier
+    await boot('/admin/', { license: { state: 'expired', white_label: false, powered_by: true, basis: 'free' } })
+    await found('.license-chip')
+    expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.expired'))
+    // a core without the license field (or one that could not read the license):
+    // no chip, and the attribution is shown, never hidden for an unknown state
     await boot('/admin/', { license: null })
     await found('.sidebar')
     expect(document.querySelector('.license-chip')).toBeNull()
-    expect(document.querySelector('.powered-by')).toBeNull()
+    expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
   })
 
-  it('shows the attribution on the login page only when core says so', async () => {
+  it('shows the attribution on the login page unless core says white label, and when /brand fails', async () => {
     await boot('/admin/login', { loggedIn: false, brand: { powered_by: true } })
     await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))
     expect(document.querySelector('.login .powered-by img')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
-    await boot('/admin/login', { loggedIn: false })
-    await found('.login')
-    await new Promise((r) => setTimeout(r, 20))
+    // white label: hidden (once /brand has answered: no flash of it before)
+    await boot('/admin/login', { loggedIn: false, brand: { powered_by: false } })
+    await found('.login .mascot') // /brand has answered (a store with no logo of its own)
+    await new Promise((r) => setTimeout(r, 30))
     expect(document.querySelector('.powered-by')).toBeNull()
+    // a /brand that does not say (an older core): shown, as by default
+    await boot('/admin/login', { loggedIn: false })
+    await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))
+    // a /brand that fails: shown too
+    await boot('/admin/login', { loggedIn: false, answer: (url) => (url === '/api/v1/brand' ? json(503, { error: 'unavailable' }) : undefined) })
+    await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))
   })
 })

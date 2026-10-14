@@ -85,7 +85,7 @@ const worst = computed(() => (alerts.value ? worstLevel(alerts.value) : null))
 // Named as the bot's Telegram message names it (service names as on this
 // page), else in core's words, else by the check's key.
 function alertTitle(a: SystemAlert): string {
-  const args = alertArgs(a, lang.value, (k, v) => (k === 'service' ? label('system.service.', v) : v))
+  const args = alertArgs(a, lang.value, (k, v) => (k === 'service' ? label('system.service.', v) : k === 'name' ? label('license.limit_name.', v) : v))
   const own = alertTextKey(a)
   if (own && te(own) && fills(tm(own), args)) return t(own, args)
   return a.title?.trim() || t(ALERT_FALLBACK, args)

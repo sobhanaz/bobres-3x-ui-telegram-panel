@@ -54,16 +54,14 @@ func licenseCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 		return 1
 	}
 	defer st.Close()
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, License: domain.LicenseConfig{Domain: cfg.Domain}})
-	var lic *domain.LicenseStatus
+	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
 	cli := store.WithSource(ctx, store.SourceCLI)
 	switch {
 	case token == "":
-		lic, err = dom.License(ctx)
 	case sub == "import --activated":
-		lic, err = dom.SetActivatedLicense(cli, nil, token, "activated with a license key from the command line")
+		_, err = dom.SetActivatedLicense(cli, nil, token, "activated with a license key from the command line")
 	default:
-		lic, err = dom.SetLicense(cli, nil, token, "imported with the command line")
+		_, err = dom.SetLicense(cli, nil, token, "imported with the command line")
 	}
 	var le *domain.LicenseError
 	switch {
@@ -74,13 +72,25 @@ func licenseCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "license:", err)
 		return 1
 	}
+	// What is in effect (a license, the trial or the free tier) and what it
+	// is used for; the servers are the provisioner's, which the CLI cannot ask.
+	eff, err := dom.Effective(ctx)
+	if err != nil {
+		fmt.Fprintln(errOut, "license:", err)
+		return 1
+	}
+	usage, err := dom.LicenseUsage(ctx, nil, nil)
+	if err != nil {
+		fmt.Fprintln(errOut, "license:", err)
+		return 1
+	}
 	if sub == "info" {
-		return writeInfo(out, errOut, lic)
+		return writeInfo(out, errOut, eff, usage)
 	}
 	if token != "" {
 		fmt.Fprintln(out, "License installed.")
 	}
-	printLicense(out, lic, time.Now())
+	printLicense(out, eff, usage, time.Now())
 	return 0
 }
 
@@ -118,6 +128,37 @@ type licenseInfo struct {
 	UpdatedAt   *int64            `json:"updated_at"`
 	RefreshedAt *int64            `json:"refreshed_at"`
 	License     *licenseInfoToken `json:"license"`
+	// Effective is what applies now: a license, its grace period, the
+	// implicit trial or the free tier.
+	Effective licenseInfoEffective `json:"effective"`
+}
+
+// licenseInfoEffective is what is in effect on this install.
+type licenseInfoEffective struct {
+	// Basis is license, grace, trial or free; Tier names it (a license's
+	// tier, trial or free).
+	Basis string `json:"basis"`
+	Tier  string `json:"tier"`
+	// TrialEndsAt is when the implicit trial ends or ended; TrialDaysLeft
+	// counts the days it still has (0 when it is not running).
+	TrialEndsAt   *int64 `json:"trial_ends_at"`
+	TrialDaysLeft int    `json:"trial_days_left"`
+	// TrialDays is how long the implicit trial lasts.
+	TrialDays    int                  `json:"trial_days"`
+	Entitlements license.Entitlements `json:"entitlements"`
+	Usage        licenseInfoUsage     `json:"usage"`
+	// Contact is whom to ask to buy or renew a license: BOBRES_SELLER_CONTACT,
+	// "" when the owner set none.
+	Contact string `json:"contact"`
+}
+
+// licenseInfoUsage is what the limits are used for. Servers is null here:
+// the provisioner knows them, and this command does not ask it.
+type licenseInfoUsage struct {
+	Servers        *int     `json:"servers"`
+	ActiveServices int      `json:"active_services"`
+	StaffSeats     int      `json:"staff_seats"`
+	Gateways       []string `json:"gateways"`
 }
 
 // licenseInfoToken is the installed token's payload (when it verified).
@@ -138,24 +179,34 @@ type licenseInfoToken struct {
 	LicenseEndsAt *int64 `json:"license_ends_at"`
 }
 
-// writeInfo prints st as licenseInfo JSON.
-func writeInfo(out, errOut io.Writer, st *domain.LicenseStatus) int {
-	unix := func(t *time.Time) *int64 {
-		if t == nil {
-			return nil
-		}
-		v := t.Unix()
-		return &v
+func unixOf(t *time.Time) *int64 {
+	if t == nil {
+		return nil
 	}
+	v := t.Unix()
+	return &v
+}
+
+// writeInfo prints eff as licenseInfo JSON.
+func writeInfo(out, errOut io.Writer, eff *domain.EffectiveLicense, usage *domain.LicenseUsage) int {
+	st := eff.License
 	info := licenseInfo{InstallID: st.InstallID, Domain: st.Domain, Version: version.Version, State: st.State,
-		Reason: st.Reason, Valid: st.Valid(), UpdatedAt: unix(st.UpdatedAt), RefreshedAt: unix(st.RefreshedAt)}
+		Reason: st.Reason, Valid: st.Valid(), UpdatedAt: unixOf(st.UpdatedAt), RefreshedAt: unixOf(st.RefreshedAt)}
 	if st.Source != "" {
 		info.Source = &st.Source
 	}
 	if t := st.Token; t != nil {
 		info.License = &licenseInfoToken{LicenseID: t.LicenseID, Customer: t.Customer, Tier: t.Tier, KeyID: t.KeyID,
 			IssuedAt: t.IssuedAt.Unix(), ExpiresAt: t.ExpiresAt.Unix(), GraceDays: t.GraceDays, GraceEndsAt: st.GraceEndsAt.Unix(),
-			Domain: t.Domain, InstallID: t.InstallID, Entitlements: t.Entitlements, LicenseEndsAt: unix(t.LicenseEndsAt)}
+			Domain: t.Domain, InstallID: t.InstallID, Entitlements: t.Entitlements, LicenseEndsAt: unixOf(st.Token.LicenseEndsAt)}
+	}
+	info.Effective = licenseInfoEffective{Basis: string(eff.Basis), Tier: eff.Tier, TrialDaysLeft: eff.TrialDaysLeft(),
+		TrialDays: license.TrialDays, Entitlements: eff.Entitlements, Contact: eff.Contact,
+		Usage: licenseInfoUsage{Servers: usage.Servers, ActiveServices: usage.ActiveServices, StaffSeats: usage.StaffSeats,
+			Gateways: usage.Gateways}}
+	if !eff.TrialEndsAt.IsZero() {
+		end := eff.TrialEndsAt.Unix()
+		info.Effective.TrialEndsAt = &end
 	}
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
@@ -186,18 +237,23 @@ func readToken(in io.Reader) (string, error) {
 	return token, nil
 }
 
-// printLicense writes the license as `license status` shows it.
-func printLicense(w io.Writer, st *domain.LicenseStatus, now time.Time) {
+// printLicense writes the license as `license status` shows it: the
+// installed token, then what is in effect (a license, its grace period, the
+// implicit trial or the free tier) with the use of each limit. The State row
+// starts with the state's name, and the Updates until row is the end of the
+// updates the license in effect covers (`bobres update` reads both).
+func printLicense(w io.Writer, eff *domain.EffectiveLicense, usage *domain.LicenseUsage, now time.Time) {
+	st := eff.License
 	state := st.State
 	switch st.State {
 	case domain.LicenseMissing:
-		state = "missing (unlicensed: everything works)"
+		state = "missing (no license: the free tier applies when the trial is over)"
 	case domain.LicenseInvalid:
-		state = fmt.Sprintf("invalid: %s (%s); unlicensed: everything works", domain.LicenseReasonText(st.Reason), st.Reason)
+		state = fmt.Sprintf("invalid: %s (%s); counts as no license", domain.LicenseReasonText(st.Reason), st.Reason)
 	case domain.LicenseGrace:
-		state = "grace (expired; everything still works: renew it)"
+		state = "grace (expired; its entitlements still hold: renew it)"
 	case domain.LicenseExpired:
-		state = "expired (adding resellers, servers, staff or payment methods is refused: renew it)"
+		state = "expired (past its grace period: the trial or the free tier applies; renew it)"
 	}
 	row := func(k, v string) { fmt.Fprintf(w, "%-15s %s\n", k+":", v) }
 	row("State", state)
@@ -216,29 +272,66 @@ func printLicense(w io.Writer, st *domain.LicenseStatus, now time.Time) {
 		}
 		row("Source", "renewed online on "+at+" (daily)")
 	}
-	t := st.Token
-	if t == nil {
-		return
+	if t := st.Token; t != nil {
+		row("License", t.LicenseID+" ("+t.Tier+")")
+		row("Customer", orNone(t.Customer))
+		row("Key", t.KeyID)
+		row("Issued", t.IssuedAt.UTC().Format(time.DateOnly))
+		row("Expires", fmt.Sprintf("%s (%s)", t.ExpiresAt.UTC().Format(time.DateOnly), daysLeft(now, t.ExpiresAt)))
+		row("Grace until", st.GraceEndsAt.UTC().Format(time.DateOnly))
+		if t.LicenseEndsAt != nil {
+			row("License ends", fmt.Sprintf("%s (%s)", t.LicenseEndsAt.UTC().Format(time.DateOnly), daysLeft(now, *t.LicenseEndsAt)))
+		}
+		row("Bound to", orNone(strings.TrimSpace(t.Domain+" "+t.InstallID)))
 	}
-	row("License", t.LicenseID+" ("+t.Tier+")")
-	row("Customer", orNone(t.Customer))
-	row("Key", t.KeyID)
-	row("Issued", t.IssuedAt.UTC().Format(time.DateOnly))
-	row("Expires", fmt.Sprintf("%s (%s)", t.ExpiresAt.UTC().Format(time.DateOnly), daysLeft(now, t.ExpiresAt)))
-	row("Grace until", st.GraceEndsAt.UTC().Format(time.DateOnly))
-	if t.LicenseEndsAt != nil {
-		row("License ends", fmt.Sprintf("%s (%s)", t.LicenseEndsAt.UTC().Format(time.DateOnly), daysLeft(now, *t.LicenseEndsAt)))
+	row("In effect", inEffect(eff))
+	if !eff.TrialEndsAt.IsZero() && eff.Basis != license.BasisLicense {
+		end := eff.TrialEndsAt.UTC().Format(time.DateOnly)
+		if eff.TrialRunning() {
+			row("Trial ends", fmt.Sprintf("%s (%s)", end, daysLeft(now, eff.TrialEndsAt)))
+		} else {
+			row("Trial ended", end)
+		}
 	}
-	row("Bound to", orNone(strings.TrimSpace(t.Domain+" "+t.InstallID)))
-	e := t.Entitlements
-	row("Servers", limit(e.MaxServers))
-	row("Services", limit(e.MaxActiveServices))
-	row("Staff seats", limit(e.DashboardStaffSeat))
+	e := eff.Entitlements
+	row("Servers", limitUse(e.MaxServers, usage.Servers))
+	active, seats := usage.ActiveServices, usage.StaffSeats
+	row("Services", limitUse(e.MaxActiveServices, &active))
+	row("Staff seats", limitUse(e.DashboardStaffSeat, &seats))
 	row("Gateways", orNone(strings.Join(e.Gateways, ", ")))
 	row("Features", orNone(strings.Join(features(e), ", ")))
+	// The end of the updates the license in effect covers: none on the free
+	// tier, in the trial and after a license has ended (security updates are
+	// never withheld).
 	if e.UpdatesUntil != "" {
 		row("Updates until", e.UpdatesUntil)
 	}
+	// Whom to ask to buy or renew, when the owner set one (BOBRES_SELLER_CONTACT).
+	if eff.Basis != license.BasisLicense && eff.Contact != "" {
+		row("Buy or renew", eff.Contact)
+	}
+}
+
+// inEffect says what applies, in words.
+func inEffect(eff *domain.EffectiveLicense) string {
+	switch eff.Basis {
+	case license.BasisLicense:
+		return "license (" + eff.Tier + ")"
+	case license.BasisGrace:
+		return "license (" + eff.Tier + ") in its grace period"
+	case license.BasisTrial:
+		return fmt.Sprintf("trial (%d days left): the free tier's limits apply when it ends", eff.TrialDaysLeft())
+	}
+	return "free tier (no license, and the trial is over)"
+}
+
+// limitUse is a limit with its use ("25 (3 in use)"); the use is left out
+// when it is not known here.
+func limitUse(limitN int, used *int) string {
+	if used == nil {
+		return limit(limitN)
+	}
+	return fmt.Sprintf("%s (%d in use)", limit(limitN), *used)
 }
 
 func orNone(s string) string {

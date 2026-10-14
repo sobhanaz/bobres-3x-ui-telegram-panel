@@ -120,7 +120,7 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(st.Close)
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, License: domain.LicenseConfig{Domain: cfg.Domain}})
+	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
 	// A new owner set with bobres menu gets the role now, not at their next /start.
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)

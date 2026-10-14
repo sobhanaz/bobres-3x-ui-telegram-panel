@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
@@ -23,8 +24,11 @@ func (b *updatesBot) CheckUpdates(context.Context) (*botfiles.UpdateCheck, error
 // The Updates tab: the channel the bot follows and the release's issue time
 // pass through, and core (never the bot) says whether the installed license
 // covers the release: its updates_until against the day the release was
-// issued. No valid license, no known release or no issue time: nothing to
-// say (covered absent), and the release is installable.
+// issued. The answer is ADVISORY (the dashboard adds a note for false and
+// still offers the update: security updates are never withheld). No license
+// in force (none, one that does not verify, one that has ended, the trial,
+// the free tier), no known release or no issue time: nothing to say (covered
+// absent).
 func TestSystemUpdatesLicense(t *testing.T) {
 	f, b, sign := licenseFixture(t)
 	ctx := context.Background()
@@ -84,6 +88,25 @@ func TestSystemUpdatesLicense(t *testing.T) {
 	covered(t, nil)
 	bot.check.Latest = "1.5.0-rc.10"
 	covered(t, false)
+
+	// A license in its grace period still covers up to its end; one that has
+	// ended (and the free tier it falls back to) puts no end on updates.
+	install(t, sign(nil))
+	setTrialStart(t, f, 31*24*time.Hour)
+	grace := sign(func(tok *license.Token) {
+		tok.IssuedAt, tok.ExpiresAt = tok.IssuedAt.Add(-30*24*time.Hour), tok.ExpiresAt.Add(-11*24*time.Hour-2*time.Minute)
+	})
+	if _, err := f.st.DB().Exec(ctx, `UPDATE core.license SET token = $1`, grace); err != nil {
+		t.Fatal(err)
+	}
+	covered(t, false)
+	ended := sign(func(tok *license.Token) {
+		tok.IssuedAt, tok.ExpiresAt = tok.IssuedAt.Add(-60*24*time.Hour), tok.ExpiresAt.Add(-30*24*time.Hour)
+	})
+	if _, err := f.st.DB().Exec(ctx, `UPDATE core.license SET token = $1`, ended); err != nil {
+		t.Fatal(err)
+	}
+	covered(t, nil)
 
 	// A license that does not verify here gates nothing.
 	other := sign(func(tok *license.Token) { tok.Domain = "other.example.com" })

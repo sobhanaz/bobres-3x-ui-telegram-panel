@@ -5,6 +5,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -63,11 +65,13 @@ func install(t *testing.T, s *store.Store, raw string) {
 func TestLicenseStates(t *testing.T) {
 	svc, s := testService(t)
 	ctx := context.Background()
-	// No license, and no key built in: everything works, nothing says
-	// "Powered by".
+	// No license, and no key built in: the install is in its trial.
 	st, err := svc.License(ctx)
-	if err != nil || st.State != LicenseMissing || st.Valid() || st.PoweredBy() || st.InstallID == "" || st.Keys != 0 {
+	if err != nil || st.State != LicenseMissing || st.Valid() || st.InstallID == "" || st.Keys != 0 {
 		t.Fatalf("missing: %+v %v", st, err)
+	}
+	if eff := effectiveOf(t, svc); eff.Basis != license.BasisTrial || !eff.PoweredBy() {
+		t.Fatalf("missing, effective: %+v", eff)
 	}
 	other, err := svc.CheckLicense(ctx, "  eyJ2IjoxfQ.c2ln ")
 	if err != nil || other.State != LicenseInvalid || other.Reason != "unknown_key" || other.Token != nil {
@@ -111,26 +115,63 @@ func TestLicenseStates(t *testing.T) {
 		t.Fatalf("after checks: %+v", st)
 	}
 
-	// Entitlements and the footer follow the state.
+	// What is in effect and the footer follow the state.
 	install(t, s, v.token(func(t *license.Token) { t.Entitlements.WhiteLabel = true }))
-	if st, _ := svc.License(ctx); st.State != LicenseActive || !st.WhiteLabel() || st.PoweredBy() || st.UpdatedAt == nil {
+	if st, _ := svc.License(ctx); st.State != LicenseActive || st.UpdatedAt == nil {
 		t.Fatalf("white label: %+v", st)
 	}
-	install(t, s, v.token(nil))
-	if st, _ := svc.License(ctx); !st.PoweredBy() || st.GraceEndsAt != now.Add(37*24*time.Hour) {
-		t.Fatalf("powered by: %+v", st)
+	if eff := effectiveOf(t, svc); eff.Basis != license.BasisLicense || !eff.WhiteLabel() || eff.PoweredBy() {
+		t.Fatalf("white label, effective: %+v", eff)
 	}
+	install(t, s, v.token(nil))
+	if st, _ := svc.License(ctx); st.GraceEndsAt != now.Add(37*24*time.Hour) {
+		t.Fatalf("grace ends: %+v", st)
+	}
+	if eff := effectiveOf(t, svc); !eff.PoweredBy() {
+		t.Fatalf("powered by: %+v", eff)
+	}
+	endTrial(t, s, now)
 	install(t, s, v.token(func(t *license.Token) {
 		t.Entitlements.WhiteLabel = true
 		t.ExpiresAt = now.Add(-30 * 24 * time.Hour)
 	}))
-	if st, _ := svc.License(ctx); st.State != LicenseExpired || st.WhiteLabel() || !st.PoweredBy() || st.Entitlements().Resellers {
-		t.Fatalf("expired grants nothing: %+v", st)
+	if st, _ := svc.License(ctx); st.State != LicenseExpired {
+		t.Fatalf("expired: %+v", st)
+	}
+	if eff := effectiveOf(t, svc); eff.Basis != license.BasisFree || eff.WhiteLabel() || !eff.PoweredBy() || eff.Entitlements.Resellers {
+		t.Fatalf("expired grants nothing: %+v", eff)
 	}
 	install(t, s, "garbage")
-	if st, _ := svc.License(ctx); st.State != LicenseInvalid || st.Reason != "malformed" || st.PoweredBy() {
+	if st, _ := svc.License(ctx); st.State != LicenseInvalid || st.Reason != "malformed" {
 		t.Fatalf("garbage: %+v", st)
 	}
+	if eff := effectiveOf(t, svc); eff.Basis != license.BasisFree || !eff.PoweredBy() {
+		t.Fatalf("garbage, effective: %+v", eff)
+	}
+}
+
+// effectiveOf is what is in effect on svc now.
+func effectiveOf(t *testing.T, svc *Service) *EffectiveLicense {
+	t.Helper()
+	eff, err := svc.Effective(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return eff
+}
+
+// setTrialStart sets when the install's implicit trial began.
+func setTrialStart(t *testing.T, s *store.Store, at time.Time) {
+	t.Helper()
+	if _, err := s.DB().Exec(context.Background(), `UPDATE core.install SET trial_started_at = $1`, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// endTrial makes the implicit trial over at now (it began 31 days before).
+func endTrial(t *testing.T, s *store.Store, now time.Time) {
+	t.Helper()
+	setTrialStart(t, s, now.Add(-31*24*time.Hour))
 }
 
 func TestSetLicense(t *testing.T) {
@@ -216,122 +257,105 @@ func TestLicenseUsage(t *testing.T) {
 	}
 }
 
-// Without a license (or with one that does not verify) nothing is gated;
-// with one, new actions beyond it are refused and what exists stays.
-func TestLicenseGates(t *testing.T) {
+// What is in effect: a valid license, a license in its grace period, the
+// implicit trial or the free tier, in that order.
+func TestEffectiveEntitlements(t *testing.T) {
 	svc, s := testService(t)
 	ctx := context.Background()
-	own := owner(t, svc)
-	tier := seedTier(t, svc, own, "Gold", 10, 5, nil)
-	now := time.Now().UTC()
-	fs := &fakeServers{}
-	fg := &fakeGateways{cfg: GatewayConfig{Provider: Zarinpal}}
-	addServer := func(name string) error {
-		_, err := svc.AddServer(ctx, own, fs, ServerInput{Name: name, BaseURL: "https://" + name + ".example.com", Token: "t-" + name, Enabled: true})
-		return err
-	}
-	tg := int64(920000)
-	addStaff := func(role string) (*store.User, error) {
-		tg++
-		u := seedUser(t, s, tg)
-		return svc.AddStaff(ctx, own, u.ID, role, "help")
-	}
-	makeReseller := func() error {
-		tg++
-		u := seedUser(t, s, tg)
-		_, err := svc.MakeReseller(ctx, own, u.ID, ResellerInput{TierID: tier.ID}, "a shop")
-		return err
-	}
-	gate := func(err error) string {
-		var lr *LicenseRefusal
-		if errors.As(err, &lr) && errors.Is(err, ErrState) {
-			return lr.Gate
-		}
-		return ""
-	}
-
-	// Unlicensed, and an invalid token: no gate at all.
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	v := licensed(t, svc, now)
-	for _, raw := range []string{"", v.token(func(t *license.Token) { t.Domain = "other.example" })} {
-		if raw != "" {
-			install(t, s, raw)
-		}
-		if err := makeReseller(); err != nil {
-			t.Fatalf("reseller (%q): %v", raw, err)
+	day := 24 * time.Hour
+	paid := license.Entitlements{MaxServers: 3, MaxActiveServices: 500, DashboardStaffSeat: 4, Gateways: []string{"stars"}}
+	withPaid := func(edit func(*license.Token)) func() string {
+		return func() string {
+			return v.token(func(t *license.Token) {
+				t.Entitlements = paid
+				if edit != nil {
+					edit(t)
+				}
+			})
 		}
 	}
+	free, trial := license.FreeEntitlements(), license.TrialEntitlements()
+	// What a license in force gives: its own, joined to the free tier's
+	// payment methods (it never leaves less than the free tier).
+	inForce := func(e license.Entitlements) license.Entitlements {
+		e.Gateways = append(slices.Clone(e.Gateways), "zarinpal", "manual_card", "manual_crypto", "manual_zarinpal")
+		return e
+	}
+	shown := inForce(paid)
+	cases := []struct {
+		name      string
+		token     func() string // nil: no license installed
+		started   time.Duration // the trial began this long before now
+		basis     license.Basis
+		tier      string
+		ents      license.Entitlements
+		daysLeft  int
+		poweredBy bool
+	}{
+		{"missing, first day of the trial", nil, time.Hour, license.BasisTrial, "trial", trial, 30, true},
+		{"missing, a fresh install", nil, 0, license.BasisTrial, "trial", trial, 30, true},
+		{"missing, 29 days in", nil, 29 * day, license.BasisTrial, "trial", trial, 1, true},
+		{"missing, the last hours of the trial", nil, 30*day - time.Hour, license.BasisTrial, "trial", trial, 1, true},
+		{"missing, the trial ended this second", nil, 30 * day, license.BasisFree, "free", free, 0, true},
+		{"missing, an old install", nil, 400 * day, license.BasisFree, "free", free, 0, true},
+		{"upgraded install, 10 days into its trial", nil, 10 * day, license.BasisTrial, "trial", trial, 20, true},
+		{"invalid (another domain), trial running", withPaid(func(t *license.Token) { t.Domain = "other.example" }), day, license.BasisTrial, "trial", trial, 29, true},
+		{"invalid (another domain), trial over", withPaid(func(t *license.Token) { t.Domain = "other.example" }), 40 * day, license.BasisFree, "free", free, 0, true},
+		{"malformed, trial over", func() string { return "garbage" }, 40 * day, license.BasisFree, "free", free, 0, true},
+		{"valid, trial running: the license wins", withPaid(nil), day, license.BasisLicense, "standard", shown, 0, true},
+		{"valid, trial over", withPaid(nil), 400 * day, license.BasisLicense, "standard", shown, 0, true},
+		{"valid with white label", withPaid(func(t *license.Token) { t.Entitlements.WhiteLabel = true }), 400 * day, license.BasisLicense, "standard",
+			inForce(license.Entitlements{WhiteLabel: true, MaxServers: 3, MaxActiveServices: 500, DashboardStaffSeat: 4, Gateways: []string{"stars"}}), 0, false},
+		{"a vendor trial license is a license", withPaid(func(t *license.Token) { t.Tier = license.TierTrial }), 400 * day, license.BasisLicense, "trial", shown, 0, true},
+		{"grace, trial over", withPaid(func(t *license.Token) { t.ExpiresAt = now.Add(-day) }), 400 * day, license.BasisGrace, "standard", shown, 0, true},
+		{"grace, trial running: the license wins", withPaid(func(t *license.Token) { t.ExpiresAt = now.Add(-day) }), day, license.BasisGrace, "standard", shown, 0, true},
+		{"a license that grants nothing is the free tier", withPaid(func(t *license.Token) { t.Entitlements = license.Entitlements{} }), 400 * day,
+			license.BasisLicense, "standard", free, 0, true},
+		{"expired, trial over", withPaid(func(t *license.Token) { t.ExpiresAt = now.Add(-30 * day); t.Entitlements.WhiteLabel = true }), 400 * day, license.BasisFree, "free", free, 0, true},
+		{"expired, trial running", withPaid(func(t *license.Token) { t.ExpiresAt = now.Add(-30 * day) }), 10 * day, license.BasisTrial, "trial", trial, 20, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.token == nil {
+				if _, err := s.DB().Exec(ctx, `DELETE FROM core.license`); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				install(t, s, c.token())
+			}
+			setTrialStart(t, s, now.Add(-c.started))
+			eff := effectiveOf(t, svc)
+			if eff.Basis != c.basis || eff.Tier != c.tier || !reflect.DeepEqual(eff.Entitlements, c.ents) ||
+				eff.TrialDaysLeft() != c.daysLeft || eff.PoweredBy() != c.poweredBy {
+				t.Fatalf("got %s/%s days %d poweredBy %v\n%+v\nwant %s/%s days %d poweredBy %v\n%+v", eff.Basis, eff.Tier, eff.TrialDaysLeft(), eff.PoweredBy(),
+					eff.Entitlements, c.basis, c.tier, c.daysLeft, c.poweredBy, c.ents)
+			}
+		})
+	}
+}
 
-	// A license with one server, one seat, no resellers, Stars only.
-	install(t, s, v.token(func(t *license.Token) {
-		t.Entitlements = license.Entitlements{MaxServers: 1, MaxActiveServices: license.Unlimited, DashboardStaffSeat: 1,
-			Gateways: []string{"Stars"}}
-	}))
-	if err := makeReseller(); gate(err) != "resellers" || !strings.Contains(err.Error(), "does not include resellers") {
-		t.Fatalf("reseller: %v", err)
+// The free tier and the trial are what the owner decided; the list of
+// payment methods a license names is the one core knows.
+func TestPolicyConstants(t *testing.T) {
+	free := license.FreeEntitlements()
+	if free.MaxServers != 1 || free.MaxActiveServices != 25 || free.DashboardStaffSeat != 2 || free.Resellers || free.WhiteLabel ||
+		free.CryptoWatcher || free.UpdatesUntil != "" ||
+		strings.Join(free.Gateways, ",") != "zarinpal,stars,manual_card,manual_crypto,manual_zarinpal" {
+		t.Errorf("free tier: %+v", free)
 	}
-	if err := addServer("de"); err != nil {
-		t.Fatalf("first server: %v", err)
+	trial := license.TrialEntitlements()
+	if license.TrialDays != 30 || trial.MaxServers != license.Unlimited || trial.MaxActiveServices != license.Unlimited || !trial.Resellers ||
+		trial.WhiteLabel || !trial.CryptoWatcher || trial.DashboardStaffSeat != 5 || trial.UpdatesUntil != "" {
+		t.Errorf("trial: %+v", trial)
 	}
-	if err := addServer("nl"); gate(err) != "max_servers" || !strings.Contains(err.Error(), "allows 1 servers") || len(fs.servers) != 1 {
-		t.Fatalf("second server: %v", err)
+	if !slices.Equal(LicenseGateways, license.AllGateways()) || !slices.Equal(trial.Gateways, LicenseGateways) {
+		t.Errorf("gateways: %v, license has %v", LicenseGateways, license.AllGateways())
 	}
-	admin, err := addStaff("admin")
-	if err != nil {
-		t.Fatalf("first seat: %v", err)
-	}
-	if _, err := addStaff("support"); gate(err) != "dashboard_staff_seats" {
-		t.Fatalf("second seat: %v", err)
-	}
-	second, err := addStaff("owner")
-	if err != nil {
-		t.Fatalf("owners take no seat: %v", err)
-	}
-	if _, err := svc.SetStaffRole(ctx, own, second.ID, "support", "less"); gate(err) != "dashboard_staff_seats" {
-		t.Fatalf("an owner stepping down takes a seat: %v", err)
-	}
-	if _, err := svc.SetStaffRole(ctx, own, admin.ID, "support", "less"); err != nil {
-		t.Fatalf("a seat changing role: %v", err)
-	}
-	if _, err := svc.SetGatewayConfig(ctx, own, fg, GatewayUpdate{Provider: Zarinpal, Enabled: true}); gate(err) != "gateways" || fg.sets != 0 {
-		t.Fatalf("zarinpal on: %v", err)
-	}
-	if _, err := svc.SetGatewayConfig(ctx, own, fg, GatewayUpdate{Provider: Zarinpal, Sandbox: true}); err != nil {
-		t.Fatalf("zarinpal staying off: %v", err)
-	}
-	// Methods on by default stay on; switching one off is always allowed,
-	// back on only when licensed.
-	if err := svc.SetSetting(ctx, own, "payments.manual_card.enabled", "false"); err != nil {
-		t.Fatalf("card off: %v", err)
-	}
-	if err := svc.SetSetting(ctx, own, "payments.manual_card.enabled", "true"); gate(err) != "gateways" {
-		t.Fatalf("card on: %v", err)
-	}
-	if _, err := svc.SetSettings(ctx, own, map[string]string{"payments.stars.enabled": "false", "payments.card_number": ""}); err != nil {
-		t.Fatalf("stars off: %v", err)
-	}
-	if err := svc.SetSetting(ctx, own, "payments.stars.enabled", ""); err != nil {
-		t.Fatalf("stars back on (licensed): %v", err)
-	}
-
-	// Expired: every gate refuses, saying so, whatever it granted.
-	install(t, s, v.token(func(t *license.Token) { t.ExpiresAt = now.Add(-30 * 24 * time.Hour) }))
-	for name, err := range map[string]error{
-		"reseller": makeReseller(),
-		"server":   addServer("fr"),
-		"stars":    svc.SetSetting(ctx, own, "payments.manual_card.enabled", "true"),
-	} {
-		if gate(err) == "" || !strings.Contains(err.Error(), "the license has expired") {
-			t.Errorf("expired %s: %v", name, err)
+	for _, g := range free.Gateways {
+		if !slices.Contains(LicenseGateways, g) {
+			t.Errorf("the free tier names %q, which no payment method is called", g)
 		}
-	}
-	// Grace keeps the entitlements.
-	install(t, s, v.token(func(t *license.Token) { t.ExpiresAt = now.Add(-24 * time.Hour) }))
-	if err := makeReseller(); err != nil {
-		t.Fatalf("grace: %v", err)
-	}
-	// Unlimited servers allow any number.
-	install(t, s, v.token(nil))
-	if err := addServer("fr"); err != nil {
-		t.Fatalf("unlimited: %v", err)
 	}
 }

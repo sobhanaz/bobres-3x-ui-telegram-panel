@@ -15,8 +15,10 @@ export interface Me {
   brand: string
   /** The store's look; older servers (and test fixtures) may leave it out. */
   branding?: { color: string; logo: string | null; currency: { fa: string; en: string } }
-  /** The license state and whether it hides "Powered by BOBRES" (M6). */
-  license?: { state: string; white_label: boolean; powered_by?: boolean }
+  /** The license state, what applies now (basis: license | grace | trial |
+   * free; tier; the trial's days left) and whether it hides "Powered by
+   * BOBRES" (M6). */
+  license?: { state: string; white_label: boolean; powered_by?: boolean; basis?: string; tier?: string; trial_days_left?: number }
 }
 
 /** The store's public look (GET /brand, no session): for the login page. */
@@ -24,7 +26,8 @@ export interface PublicBrand {
   name: string
   color: string
   logo: string | null
-  /** show "Powered by BOBRES": a valid license without white label */
+  /** show "Powered by BOBRES": always, except under a license with white
+   * label (an answer that does not say counts as true) */
   powered_by?: boolean
 }
 
@@ -32,6 +35,9 @@ export const useAuth = defineStore('auth', () => {
   const me = ref<Me | null>(null)
   const loaded = ref(false)
   const publicBrand = ref<PublicBrand | null>(null)
+  /** The public brand was asked for (it answered or failed): until then the
+   * login page does not know whether the store hides "Powered by BOBRES". */
+  const publicBrandSettled = ref(false)
 
   // Logging in or out also applies (or drops) the store's colour and Toman name.
   function set(m: Me | null) {
@@ -46,10 +52,13 @@ export const useAuth = defineStore('auth', () => {
   async function loadPublicBrand() {
     try {
       const b = await api<PublicBrand>('GET', '/brand')
-      publicBrand.value = { name: b.name || '', color: b.color || '', logo: b.logo || null, powered_by: b.powered_by === true }
+      // The mark is shown unless core says false: that is its default.
+      publicBrand.value = { name: b.name || '', color: b.color || '', logo: b.logo || null, powered_by: b.powered_by !== false }
       if (!me.value) applyBrandColor(publicBrand.value.color)
     } catch {
       /* defaults */
+    } finally {
+      publicBrandSettled.value = true
     }
   }
 
@@ -93,5 +102,5 @@ export const useAuth = defineStore('auth', () => {
   const can = (perm: string) => me.value?.permissions.includes(perm) ?? false
   const brand = computed(() => me.value?.brand ?? 'BOBRES')
 
-  return { me, loaded, publicBrand, load, refresh, set, loadPublicBrand, loginWithLink, loginWithPassword, logout, can, brand }
+  return { me, loaded, publicBrand, publicBrandSettled, load, refresh, set, loadPublicBrand, loginWithLink, loginWithPassword, logout, can, brand }
 })

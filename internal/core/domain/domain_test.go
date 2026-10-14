@@ -41,6 +41,11 @@ func testService(t *testing.T) (*Service, *store.Store) {
 		core.outbox_core_cursors, payments.outbox_payments, payments.outbox_payments_cursors, core.reseller_tiers`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	// Every test starts on the first day of the implicit trial, with no
+	// purchase refused yet.
+	if _, err := s.DB().Exec(ctx, `UPDATE core.install SET trial_started_at = now(), limit_hit_at = NULL`); err != nil {
+		t.Fatalf("reset the trial: %v", err)
+	}
 	return New(s, Config{OwnerTelegramID: ownerTG}), s
 }
 

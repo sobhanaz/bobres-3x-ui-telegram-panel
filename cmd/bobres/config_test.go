@@ -246,6 +246,19 @@ func TestConfigSetUnhealthy(t *testing.T) {
 	}
 }
 
+// The seller's contact is a setting the owner may change (core shows it on
+// the License tab and in `bobres license status`): optional, kept as typed,
+// listed in clear (a handle is no secret), and only core restarts.
+func TestConfigSellerContact(t *testing.T) {
+	k, found := settable("BOBRES_SELLER_CONTACT")
+	if !found || !k.optional || k.lower || len(k.services) != 1 || k.services[0] != "core" || k.check != nil || k.help == "" {
+		t.Fatalf("BOBRES_SELLER_CONTACT: settable %v %+v", found, k)
+	}
+	if !notSecretEnv["BOBRES_SELLER_CONTACT"] {
+		t.Error("BOBRES_SELLER_CONTACT is masked as a secret")
+	}
+}
+
 // The update channel and the license server are settings: listed in clear,
 // set with their own checks, and the bot restarts.
 func TestConfigChannelAndLicenseServer(t *testing.T) {

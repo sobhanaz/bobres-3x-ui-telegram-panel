@@ -21,9 +21,10 @@ import (
 // installs it as if pasted. Core has no internet access, so the calls go
 // through the bot, which passes them on and keeps nothing. Once a day core
 // renews an activated license the same way, with the installed token as the
-// credential. Policy is unchanged: a missing or invalid license gates
-// nothing, and a refresh that fails changes nothing (the token runs into
-// its grace and expiry as before).
+// credential. A refresh that fails changes nothing (the token runs into its
+// grace and expiry as before, and the install then falls back to the trial
+// or the free tier: license.Resolve); a missing or invalid license is the free
+// tier's business, not this file's.
 
 // LicenseServer reaches the vendor's license server through the bot
 // (botfiles.Client). Each call answers the new token.

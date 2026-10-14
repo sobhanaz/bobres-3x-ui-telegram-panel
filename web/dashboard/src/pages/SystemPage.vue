@@ -14,7 +14,8 @@ import HttpsTab from '../components/system/HttpsTab.vue'
 import LicenseTab from '../components/system/LicenseTab.vue'
 import LogsTab from '../components/system/LogsTab.vue'
 import UpdatesTab from '../components/system/UpdatesTab.vue'
-import { licenseSeverity, stateOf } from '../license'
+import { chipOf, chipSeverityOf } from '../license'
+import { num, type Lang } from '../format'
 import { useAuth } from '../stores/auth'
 
 // The system (owner and admin): every service's health and version, whether
@@ -22,7 +23,7 @@ import { useAuth } from '../stores/auth'
 // changes them), the license, and for the owner the services' recent warnings
 // and errors. The tab is in the address (?tab=), so the menu's license chip can
 // open it; each tab loads the first time it is shown.
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
@@ -44,8 +45,10 @@ watch(() => route.query.tab, (v) => {
   if (tabOf(v) !== tab.value) showTab(tabOf(v))
 })
 
-// The license tab says when the license needs a look (from /me).
-const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.state) : null))
+// The license tab says what applies now when it needs a look (from /me): the
+// free tier, the trial, or a license that is not fine.
+const licenseChip = computed(() => chipOf(auth.me?.license))
+const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) })
 </script>
 
 <template>
@@ -63,7 +66,7 @@ const licenseState = computed(() => (auth.me?.license ? stateOf(auth.me.license.
       <Tab v-if="canLogs" value="logs" class="tab-logs">{{ t('system.tab.logs') }}</Tab>
       <Tab value="license" class="tab-license">
         {{ t('system.tab.license') }}
-        <Tag v-if="licenseState && licenseState !== 'active'" :severity="licenseSeverity[licenseState]" :value="t('license.state.' + licenseState)" class="tab-state" />
+        <Tag v-if="licenseChip" :severity="chipSeverityOf(licenseChip)" :value="chipText(licenseChip)" class="tab-state" />
       </Tab>
     </TabList>
     <TabPanels>

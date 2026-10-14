@@ -17,11 +17,12 @@ Status (2026-10-12, Phase 6b): built and tested. Not deployed: the vendor has to
   the bot, which only passes the call on and never stores a token. Core verifies every answer before installing it.
   Both ways need the server's address as `BOBRES_LICENSE_SERVER` in the install's `.env`, set with
   `sudo bobres config set BOBRES_LICENSE_SERVER https://...`.
-- **It does not change the install policy.** A missing or invalid license still gates nothing on an install, and
-  a license only ever gates new actions. Revoking a license means the server stops refreshing it: the install
-  keeps its last token until that token expires and its grace ends. After that, new servers, staff, resellers and
-  payment methods are refused. Nothing is deleted, and an owner who removes the token is simply unlicensed. This
-  is a known limit for selling licenses; a stricter "vendor mode" is a later policy decision.
+- **It does not change the install policy.** An install without a valid license is not blocked: it runs on the free
+  tier, after its 30-day trial ("free core, paid premium", 05-license.md), and a license only ever gates new actions.
+  Revoking a license means the server stops refreshing it: the install keeps its last token until that token
+  expires and its grace ends. After that the trial (if it still runs) or the free tier applies, and new servers,
+  services, staff, resellers and payment methods beyond the free tier are refused. Nothing is deleted, and an owner
+  who removes the token is simply on the free tier. A stricter "vendor mode" is a later policy decision.
 
 ## The rules
 
@@ -253,7 +254,10 @@ licensesrv key create -customer "Acme VPN" -tier standard -entitlements standard
 ```
 
 - `-ends-at 2027-10-31` ends the license at 00:00 UTC on that day. `-days N` counts from now, and `-no-end` sells
-  a license with no end date (pair it with `updates_until`).
+  a license with no end date. `updates_until` only says up to which date the license was sold with updates: installs
+  add a note to a later release and install it all the same (docs/05-license.md), so it never limits the license's
+  life. The entitlements an install gets are never lower than the free tier's (a license that omits `max_active_services`
+  still sells 25 services).
 - `-grace-days` defaults to 14.
 - The key is printed once on stdout; stderr has the license id. Send the key privately, with the server's address.
   The customer runs `sudo bobres config set BOBRES_LICENSE_SERVER https://license.example.com` (it checks the URL
@@ -337,7 +341,7 @@ grace, then new actions are gated.
 
 If the online key leaks, anyone can make tokens that installs accept, until installs drop its `.pub`. Ship a
 release without that `.pub` and with a new key at once, switch the server to the new key, and tell customers to
-update. Their installs show `unknown_key` and gate nothing until the update brings the new key.
+update. Their installs show `unknown_key` and run on the trial or the free tier until the update brings the new key.
 
 ## Backups
 
@@ -348,8 +352,8 @@ update. Their installs show `unknown_key` and gate nothing until the update brin
 
 ## Known limits
 
-- Policy: a missing or invalid license gates nothing on an install (05-license.md). The server cannot force
-  anything; it only stops refreshing.
+- Policy: an install without a valid license runs on the free tier, and the limits refuse only new actions
+  (05-license.md). The server cannot force anything; it only stops refreshing.
 - Installs trust their clock. Short tokens and daily refresh narrow, but do not close, the "roll the clock back"
   gap.
 - There is one process and in-memory rate limits (above). No admin web UI: the CLI is the admin interface.

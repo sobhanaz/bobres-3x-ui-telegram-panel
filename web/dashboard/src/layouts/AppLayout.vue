@@ -14,7 +14,7 @@ import { setLang, currentLang } from '../i18n'
 import { applyDocumentBrand } from '../theme'
 import { num, type Lang } from '../format'
 import { loadCounts, pollEvery, poller, ticketCounts } from '../support'
-import { licenseSeverity, poweredBy, stateOf } from '../license'
+import { chipOf, chipSeverityOf, poweredBy } from '../license'
 
 const { t, locale } = useI18n()
 const auth = useAuth()
@@ -45,15 +45,17 @@ onBeforeUnmount(() => countsPoll.stop())
 const waiting = computed(() => (canTickets.value ? (ticketCounts.value?.waiting ?? 0) : 0))
 const badgeOf = (key: string) => (key === 'support' && waiting.value > 0 ? num(waiting.value, locale.value as Lang) : '')
 
-// A license that needs a look (none, invalid, in grace or expired), for staff
-// who see the System page; and "Powered by BOBRES" under a valid license
-// without white label (never on an unlicensed install).
+// What applies now when it needs a look, for staff who see the System page:
+// the free tier, the trial (with its days left), or a license that was
+// refused, is in its grace period or has ended. And "Powered by BOBRES" on
+// every install except one whose license includes white label.
 const licenseChip = computed(() => {
-  const l = auth.me?.license
-  if (!l || !auth.can('system.read')) return null
-  const state = stateOf(l.state)
-  return state === 'active' ? null : state
+  if (!auth.can('system.read')) return null
+  return chipOf(auth.me?.license)
 })
+const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) })
+// The label is hidden on a phone, so the link is named for what it is: the license.
+const chipAria = (c: { kind: string; days: number }) => t('license.chip.aria', { chip: chipText(c) })
 const showPoweredBy = computed(() => poweredBy(auth.me?.license))
 
 const themeIcon = computed(() => ({ system: 'pi pi-desktop', dark: 'pi pi-moon', light: 'pi pi-sun' })[ui.theme])
@@ -116,8 +118,8 @@ function toggleLang() {
       <header class="topbar">
         <Button class="menu-btn" icon="pi pi-bars" text rounded :aria-label="t('nav.menu')" @click="drawer = true" />
         <span class="spacer" />
-        <RouterLink v-if="licenseChip" :to="{ name: 'system', query: { tab: 'license' } }" class="license-chip" :aria-label="t('license.chip.' + licenseChip)">
-          <Tag :severity="licenseSeverity[licenseChip]" :value="t('license.chip.' + licenseChip)" icon="pi pi-key" />
+        <RouterLink v-if="licenseChip" :to="{ name: 'system', query: { tab: 'license' } }" class="license-chip" :aria-label="chipAria(licenseChip)">
+          <Tag :severity="chipSeverityOf(licenseChip)" :value="chipText(licenseChip)" icon="pi pi-key" />
         </RouterLink>
         <Button :label="t('lang.switch')" text size="small" @click="toggleLang" />
         <Button :icon="themeIcon" text rounded :aria-label="t('theme.' + ui.theme)" v-tooltip.bottom="t('theme.' + ui.theme)" @click="ui.cycleTheme()" />

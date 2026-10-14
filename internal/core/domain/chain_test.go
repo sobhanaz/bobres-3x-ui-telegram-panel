@@ -248,8 +248,9 @@ func TestUSDTSettingsAreAuditedWithoutTheKey(t *testing.T) {
 	}
 }
 
-// Switching automatic USDT on needs, with a license, the crypto_watcher
-// feature and the gateway; without one (or an invalid one) nothing gates.
+// Switching automatic USDT on needs the crypto_watcher feature and the
+// gateway in what is in effect: a license's, the trial's (it has both), and
+// never the free tier's.
 func TestUSDTLicenseGate(t *testing.T) {
 	svc, s := testService(t)
 	ctx := context.Background()
@@ -267,12 +268,24 @@ func TestUSDTLicenseGate(t *testing.T) {
 		return fg, err
 	}
 	if _, err := on(); err != nil {
-		t.Fatalf("unlicensed: %v", err)
+		t.Fatalf("unlicensed, in the trial: %v", err)
 	}
 	v := licensed(t, svc, time.Now().UTC())
 	install(t, s, v.token(func(t *license.Token) { t.Domain = "other.example" }))
 	if _, err := on(); err != nil {
-		t.Fatalf("an invalid license: %v", err)
+		t.Fatalf("an invalid license, in the trial: %v", err)
+	}
+	// The trial is over: the free tier has no automatic USDT, with no license
+	// or one that is not valid here.
+	endTrial(t, s, time.Now().UTC())
+	if fg, err := on(); gate(err) != "crypto_watcher" || fg.sets != 0 || !strings.Contains(err.Error(), "the free tier") {
+		t.Fatalf("an invalid license, on the free tier: %v", err)
+	}
+	if _, err := s.DB().Exec(ctx, `DELETE FROM core.license`); err != nil {
+		t.Fatal(err)
+	}
+	if fg, err := on(); gate(err) != "crypto_watcher" || fg.sets != 0 {
+		t.Fatalf("unlicensed, on the free tier: %v", err)
 	}
 
 	install(t, s, v.token(func(t *license.Token) { t.Entitlements.CryptoWatcher = false }))
@@ -300,7 +313,7 @@ func TestUSDTLicenseGate(t *testing.T) {
 		t.Entitlements.CryptoWatcher = true
 		t.ExpiresAt, t.GraceDays = time.Now().Add(-30*24*time.Hour), 1
 	}))
-	if _, err := on(); gate(err) != "crypto_watcher" || !strings.Contains(err.Error(), "expired") {
+	if _, err := on(); gate(err) != "crypto_watcher" || !strings.Contains(err.Error(), "the free tier") {
 		t.Fatalf("expired: %v", err)
 	}
 }

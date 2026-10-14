@@ -201,10 +201,13 @@ type UpdateCheck struct {
 	CheckedAt int64  `json:"checked_at"`
 	Error     string `json:"error"`
 	Detail    string `json:"detail"`
-	// Covered is core's own answer, never the bot's: whether the installed
-	// license covers Latest (its updates_until is not before the day Latest
-	// was issued); nil when there is no valid license or the day is not
-	// known.
+	// Covered is core's own answer, never the bot's, and ADVISORY: whether
+	// the installed license's update date (updates_until) is not before the
+	// day Latest was issued. false adds a note ("this release is newer than
+	// your license's update date") to the update check and hides nothing:
+	// the update is offered and installed all the same. nil when no license
+	// is in force (the free tier, the trial and an ended license have no
+	// update date) or the day is not known.
 	Covered *bool `json:"covered,omitempty"`
 }
 

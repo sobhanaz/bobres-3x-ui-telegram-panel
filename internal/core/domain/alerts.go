@@ -17,6 +17,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/syshealth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
 )
 
 // System alerts (Phase 7). Every minute core's watchdog checks what the
@@ -58,7 +59,11 @@ const (
 	provisionWindow   = time.Hour      // failed deliveries counted
 	feedMaxLag        = 10 * time.Minute
 	licenseWarnBefore = 14 * 24 * time.Hour
-	maxAlertDetail    = 300 // characters
+	// The implicit trial's end is announced for its last 7 days, and once
+	// more (for a week) when it has ended.
+	trialWarnBefore  = 7 * 24 * time.Hour
+	trialEndedNotice = 7 * 24 * time.Hour
+	maxAlertDetail   = 300 // characters
 )
 
 // BotFeedConsumer is the bot's cursor on core's event feed. The feed keeps
@@ -122,6 +127,14 @@ type alertCheck struct {
 	// long; until then it stays pending, as open since first seen (kept in
 	// the store, so a restart of core does not start it over).
 	hold time.Duration
+	// daily: a notice rather than an outage (a purchase refused at the
+	// license's limit). It is announced when it starts and then at most once
+	// every 24 hours while it lasts, with no 6-hour reminder, and its end is
+	// not announced: time passing does not fix a limit.
+	daily bool
+	// once: a notice announced only when it starts (the trial has ended),
+	// never repeated; its end is not announced either.
+	once bool
 }
 
 // alertProbe is one source's checks. covered: the source answered, so a
@@ -279,6 +292,13 @@ func (w *Watchdog) apply(ctx context.Context, tx pgx.Tx, now time.Time, old *sto
 	case !c.problem:
 		// Fixed: the message names the problem that was announced and says
 		// how long it lasted, until it first passed.
+		if c.daily || c.once {
+			// A notice that ended is closed quietly, remembering when it was
+			// last announced.
+			next.State, next.LastSentAt, next.Detail = store.AlertOK, old.LastSentAt, ""
+			next.Severity, next.TitleKey, next.Args = old.Severity, old.TitleKey, old.Args
+			return st.PutAlertState(ctx, tx, next)
+		}
 		next.State, next.LastSentAt, next.Detail = store.AlertOK, &now, ""
 		next.Severity, next.TitleKey, next.Args = old.Severity, old.TitleKey, old.Args
 		if err := st.PutAlertState(ctx, tx, next); err != nil {
@@ -308,7 +328,7 @@ func (w *Watchdog) apply(ctx context.Context, tx pgx.Tx, now time.Time, old *sto
 		// it is sent again when a repeat is due. If it had passed meanwhile,
 		// its 5 minutes start over.
 		next.State, next.Since, next.LastSentAt = store.AlertProblem, old.Since, old.LastSentAt
-		if !repeatDue(old.Since, old.LastSentAt, now) {
+		if c.once || !repeatDue(old.Since, old.LastSentAt, now, c.daily) {
 			if sameAlert(old, next) && old.PassingSince == nil {
 				return nil
 			}
@@ -327,8 +347,11 @@ func (w *Watchdog) apply(ctx context.Context, tx pgx.Tx, now time.Time, old *sto
 }
 
 // repeatDue: a problem open for 6 hours is sent again then, and every 24
-// hours after that.
-func repeatDue(since time.Time, lastSent *time.Time, now time.Time) bool {
+// hours after that. A daily notice is sent again only every 24 hours.
+func repeatDue(since time.Time, lastSent *time.Time, now time.Time, daily bool) bool {
+	if daily {
+		return lastSent != nil && now.Sub(*lastSent) >= alertRepeatEvery
+	}
 	switch {
 	case now.Sub(since) < alertRepeatAfter:
 		return false
@@ -593,34 +616,114 @@ func (w *Watchdog) feed(ctx context.Context, now time.Time) alertProbe {
 }
 
 // license: with a license that verified for this install, it is not in its
-// grace period or expired, and does not expire within 14 days. A missing or
-// invalid license is the License tab's business.
+// grace period or expired, and does not expire within 14 days (a missing or
+// invalid license is the License tab's business); on any install, a new
+// purchase was not refused for the active-services limit in the last 24
+// hours while the install is still at that limit (license.limit, one notice a
+// day); and the implicit trial's end is announced: for its last 7 days
+// (license.trial, reminded like an expiring license) and once more when it has
+// ended and the install runs on the free tier.
+//
+// Whenever something it needs could not be read the license scope is not
+// covered: a stored notice is left as it was rather than forgotten on no
+// evidence.
 func (w *Watchdog) license(ctx context.Context, now time.Time) alertProbe {
 	p := alertProbe{scope: "license."}
-	lic, err := w.s.License(ctx)
+	eff, err := w.s.Effective(ctx)
 	if err != nil {
 		w.log.Warn("watchdog: license", "err", err)
 		return p
 	}
+	lic := eff.License
 	p.covered = true
-	if !lic.Valid() || lic.Token == nil {
-		return p
+	if lic.Valid() && lic.Token != nil {
+		c := alertCheck{key: "license.expiry", severity: events.SeverityWarning}
+		switch lic.State {
+		case LicenseExpired:
+			c.problem, c.title = true, "alert.license_expired"
+		case LicenseGrace:
+			c.problem, c.title = true, "alert.license_grace"
+			c.args = map[string]string{"date": strconv.FormatInt(lic.GraceEndsAt.Unix(), 10)}
+		default:
+			left := lic.Token.ExpiresAt.Sub(now)
+			days := max(int64(math.Ceil(left.Hours()/24)), 1)
+			c.problem, c.title = left < licenseWarnBefore, "alert.license_expiring"
+			c.args = map[string]string{"days": strconv.FormatInt(days, 10), "date": strconv.FormatInt(lic.Token.ExpiresAt.Unix(), 10)}
+		}
+		p.checks = append(p.checks, c)
 	}
-	c := alertCheck{key: "license.expiry", severity: events.SeverityWarning}
-	switch lic.State {
-	case LicenseExpired:
-		c.problem, c.title = true, "alert.license_expired"
-	case LicenseGrace:
-		c.problem, c.title = true, "alert.license_grace"
-		c.args = map[string]string{"date": strconv.FormatInt(lic.GraceEndsAt.Unix(), 10)}
-	default:
-		left := lic.Token.ExpiresAt.Sub(now)
-		days := max(int64(math.Ceil(left.Hours()/24)), 1)
-		c.problem, c.title = left < licenseWarnBefore, "alert.license_expiring"
-		c.args = map[string]string{"days": strconv.FormatInt(days, 10), "date": strconv.FormatInt(lic.Token.ExpiresAt.Unix(), 10)}
+	switch c, found, err := w.limitCheck(ctx, now, eff); {
+	case err != nil:
+		// A transient error is not "no refused purchase": the open notice
+		// must not be deleted for it.
+		w.log.Warn("watchdog: refused purchases", "err", err)
+		p.covered = false
+	case found:
+		p.checks = append(p.checks, c)
 	}
-	p.checks = append(p.checks, c)
+	if c, ok := trialCheck(eff, now); ok {
+		p.checks = append(p.checks, c)
+	}
 	return p
+}
+
+// trialCheck is the notice about the implicit trial's end: ok when there is
+// something to say now. The trial running with 7 days or fewer left is
+// "ending" (an ordinary check, reminded the way an expiring license is); the
+// trial over, on a free tier no license is in the picture for, is "ended"
+// (announced once, for a week). With a license in force (or one the license
+// alerts speak of) the trial is not the owner's concern.
+func trialCheck(eff *EffectiveLicense, now time.Time) (alertCheck, bool) {
+	c := alertCheck{key: "license.trial", severity: events.SeverityWarning}
+	switch eff.Basis {
+	case license.BasisTrial:
+		left := eff.TrialEndsAt.Sub(now)
+		if left > trialWarnBefore {
+			return c, false
+		}
+		days := max(int64(math.Ceil(left.Hours()/24)), 1)
+		c.problem, c.title = true, "alert.trial_ending"
+		c.args = map[string]string{"days": strconv.FormatInt(days, 10), "date": strconv.FormatInt(eff.TrialEndsAt.Unix(), 10)}
+		return c, true
+	case license.BasisFree:
+		if eff.TrialEndsAt.IsZero() || now.Before(eff.TrialEndsAt) || now.Sub(eff.TrialEndsAt) >= trialEndedNotice {
+			return c, false
+		}
+		if eff.License.Valid() && eff.License.Token != nil {
+			return c, false // a license that ended: license.expiry says it
+		}
+		c.problem, c.title, c.once = true, "alert.trial_ended", true
+		return c, true
+	}
+	return c, false
+}
+
+// licenseLimitWindow is how long a refused purchase keeps the limit notice
+// open (it is announced at most once in this time).
+const licenseLimitWindow = 24 * time.Hour
+
+// limitCheck is the notice that a new purchase was refused for the
+// active-services limit: open while one was refused within
+// licenseLimitWindow and the install is still at the limit (a license that
+// raises it ends the notice). found is false when no purchase was ever
+// refused; err when the numbers could not be read (the caller keeps what
+// it knew: that is not "never refused").
+func (w *Watchdog) limitCheck(ctx context.Context, now time.Time, eff *EffectiveLicense) (c alertCheck, found bool, err error) {
+	hit, err := w.s.st.LimitHitAt(ctx, w.s.st.Conn())
+	if err != nil {
+		return alertCheck{}, false, err
+	}
+	if hit == nil {
+		return alertCheck{}, false, nil
+	}
+	limit := eff.Entitlements.MaxActiveServices
+	used, err := w.s.st.CountActiveServices(ctx, w.s.st.Conn())
+	if err != nil {
+		return alertCheck{}, false, err
+	}
+	return alertCheck{key: "license.limit", severity: events.SeverityWarning, title: "alert.license_limit", daily: true,
+		problem: now.Sub(*hit) < licenseLimitWindow && !license.WithinLimit(limit, used),
+		args:    map[string]string{"limit": strconv.Itoa(max(limit, 0)), "name": "active_services"}}, true, nil
 }
 
 // tls: every address the store is served on serves what it should (one
