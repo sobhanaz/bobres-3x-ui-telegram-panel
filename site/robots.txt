@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# The Pages workflow (.github/workflows/pages.yml) adds the "Sitemap:" line, with the site's absolute address, to the
+# copy it publishes. Crawlers read robots.txt only at a host's root, so under a project path (user.github.io/repo/)
+# it is ignored; it works on a custom domain.

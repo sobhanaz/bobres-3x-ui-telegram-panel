@@ -1,0 +1,10 @@
+{
+  "name": "bobres-marketing-tools",
+  "private": true,
+  "type": "module",
+  "description": "Screenshot and illustration tools for the marketing material (docs/marketing/README.md). Not part of the product.",
+  "dependencies": {
+    "puppeteer-core": "^25.13.0",
+    "sharp": "^0.35.5"
+  }
+}

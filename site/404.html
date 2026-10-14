@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>۴۰۴ · BOBRES</title>
+<script>
+// A missing page can be served from any depth, so relative links need a base: the site's root.
+// On GitHub Pages as a project site that is /<repository>/, on a custom domain it is /.
+(function () {
+  var base = '/';
+  if (/\.github\.io$/.test(location.hostname)) base = '/' + (location.pathname.split('/')[1] || '') + '/';
+  document.write('<base href="' + base + '">');
+})();
+</script>
+<link rel="icon" href="assets/brand/bobres-icon.svg" type="image/svg+xml">
+<style>
+:root { color-scheme: dark light; --bg: #0f172a; --text: #e7edf6; --muted: #a3b3c9; --accent: #5eead4; --btn: #14b8a6; --btn-ink: #04211e; }
+@media (prefers-color-scheme: light) { :root { --bg: #fbf8f1; --text: #0f172a; --muted: #475569; --accent: #0f766e; --btn: #0f766e; --btn-ink: #fff; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-block-size: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text); font: 1.1rem/1.8 "Vazirmatn", "Inter", system-ui, sans-serif; text-align: center; padding: 2rem 1rem; }
+img { inline-size: 8rem; block-size: auto; margin: 0 auto 1rem; display: block; }
+h1 { font-size: 2.4rem; margin: 0 0 .3rem; }
+p { margin: 0 0 1.2rem; color: var(--muted); }
+a.btn { display: inline-block; background: var(--btn); color: var(--btn-ink); font-weight: 700; padding: .6rem 1.5rem; border-radius: 999px; text-decoration: none; margin: .3rem; }
+a.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+a.alt { background: transparent; color: var(--text); border: 2px solid var(--muted); }
+</style>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<main>
+  <img src="assets/brand/bobres-icon.svg" alt="" width="128" height="128">
+  <h1>۴۰۴</h1>
+  <p lang="fa">این صفحه پیدا نشد. شاید آدرس عوض شده باشد.</p>
+  <p lang="en" dir="ltr">This page was not found. The address may have changed.</p>
+  <p><a class="btn" href="./">صفحهٔ اصلی</a> <a class="btn alt" href="en/" lang="en" hreflang="en">English home</a></p>
+</main>
+</body>
+</html>
