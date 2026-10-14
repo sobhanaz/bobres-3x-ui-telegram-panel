@@ -88,6 +88,14 @@ const serversTag = computed(() => {
   return { severity: 'success', text: t('overview.servers_ok') }
 })
 const serverClients = computed(() => (servers.value ?? []).reduce((n, s) => n + s.clients, 0))
+// "5 services on 2 servers": each noun follows its own number ("1 service on 1 server").
+const serverClientsText = computed(() => {
+  const serverCount = servers.value?.length ?? 0
+  return t('overview.servers_clients', {
+    services: t('overview.services_n', { n: num(serverClients.value, lang.value) }, serverClients.value),
+    servers: t('overview.servers_n', { n: num(serverCount, lang.value) }, serverCount),
+  })
+})
 const gateways = computed(() => (data.value?.gateways?.length ? data.value.gateways : null))
 // A card opens its page for those who may use it; for others it is just a card.
 function linkTo(perm: string, name: string) {
@@ -165,7 +173,7 @@ const statusSeverity = (s: string) =>
         <template #subtitle>{{ t('overview.reseller_debt') }}</template>
         <template #content>
           <div class="mid" :class="{ warn: owing.length > 0 }">{{ owing.length ? moneyLine(owing) : t('overview.reseller_no_debt') }}</div>
-          <div class="app-muted">{{ t('overview.resellers_count', { n: num(resellers.count, lang) }) }}</div>
+          <div class="app-muted">{{ t('overview.resellers_count', { n: num(resellers.count, lang) }, resellers.count) }}</div>
         </template>
       </Card>
     </RouterLink>
@@ -189,7 +197,7 @@ const statusSeverity = (s: string) =>
             <div v-if="s.detail" class="app-muted app-ltr detail">{{ s.detail }}</div>
           </div>
           <div v-if="servers.length" class="app-muted count">
-            {{ t('overview.servers_clients', { n: num(serverClients, lang), servers: num(servers.length, lang) }) }}
+            {{ serverClientsText }}
           </div>
         </template>
       </Card>

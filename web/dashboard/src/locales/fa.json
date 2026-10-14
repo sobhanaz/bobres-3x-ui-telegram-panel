@@ -169,7 +169,9 @@
     "servers_ok": "همه در حال کار",
     "servers_all_off": "هیچ سروری سرویس تازه نمی‌گیرد",
     "servers_down": "{n} از {total} پاسخ نمی‌دهد",
-    "servers_clients": "{n} سرویس روی {servers} سرور",
+    "services_n": "{n} سرویس",
+    "servers_n": "{n} سرور",
+    "servers_clients": "{services} روی {servers}",
     "gateways": "درگاه‌های پرداخت",
     "gateway_state": {
       "off": "خاموش",

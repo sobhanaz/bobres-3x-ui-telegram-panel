@@ -186,8 +186,9 @@ describe('open problems', () => {
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(ALERT_FALLBACK).toBe('system.alerts.kind.check')
-    // and with the same values as the bot's own catalogs (in a full checkout)
-    const holes = (m: string) => [...m.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort()
+    // and with the same values as the bot's own catalogs (in a full checkout); an English
+    // plural text ("{hours} hour | {hours} hours") names a value once per form
+    const holes = (m: string) => [...new Set([...m.matchAll(/\{(\w+)\}/g)].map((x) => x[1]))].sort()
     for (const [lang, page] of [['en', en], ['fa', fa]] as const) {
       const file = resolve(dirname(fileURLToPath(import.meta.url)), `../../../../internal/bot/i18n/locales/${lang}.json`)
       if (!existsSync(file)) continue

@@ -6,7 +6,14 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
-Nothing yet. What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## [0.1.1] — 2026-10-14
+
+A small fix after the first release.
+
+### Dashboard
+- English texts say "1 day" and "1 service", not "1 days" (plurals fixed in the whole dashboard, with a test that guards them).
 
 ## [0.1.0] — 2026-10-14
 
@@ -221,7 +228,8 @@ pull requests #13 to #48. Release candidates 0.1.0-rc.1 to rc.4 came first; rc.4
 - The server IP address mode needs a public address with ports 80 and 443 reachable from the internet (not behind
   carrier-grade NAT). It cannot be tried in the local Docker lab. BOBRES never renews an own certificate.
 - The legal review, the brand checks and the prices are open.
-- The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine.
+- The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine. Fixed in 0.1.1.
 
-[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.0

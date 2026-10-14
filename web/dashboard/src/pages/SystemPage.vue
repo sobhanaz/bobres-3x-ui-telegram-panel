@@ -48,7 +48,7 @@ watch(() => route.query.tab, (v) => {
 // The license tab says what applies now when it needs a look (from /me): the
 // free tier, the trial, or a license that is not fine.
 const licenseChip = computed(() => chipOf(auth.me?.license))
-const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) })
+const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) }, c.days)
 </script>
 
 <template>

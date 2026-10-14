@@ -195,8 +195,8 @@ describe('what an error or a warning says', () => {
         }
       }
     }
-    // and the same placeholders in both
-    const holes = (m: string) => [...m.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort()
+    // and the same placeholders in both (an English plural text names a placeholder once per form)
+    const holes = (m: string) => [...new Set([...m.matchAll(/\{(\w+)\}/g)].map((x) => x[1]))].sort()
     const flat = (o: object, p = ''): [string, string][] =>
       Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? flat(v, p + k + '.') : [[p + k, v as string] as [string, string]]))
     const faTexts = new Map(flat(fa.system.https))

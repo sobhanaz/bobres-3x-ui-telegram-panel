@@ -117,7 +117,7 @@ async function save() {
     const n = openPayments(e)
     if (e instanceof ApiError && e.status === 400 && typeof e.data.field === 'string') fieldErrors.value = { [e.data.field]: e.message }
     const err = errorText(e, t)
-    error.value = n !== null ? t('gateway.usdt.open_payments', { n: num(n, lang.value) }) : err.text
+    error.value = n !== null ? t('gateway.usdt.open_payments', { n: num(n, lang.value) }, n) : err.text
     detail.value = err.detail
   } finally {
     busy.value = false
@@ -190,7 +190,7 @@ async function test() {
             <small v-if="addressError" id="usdt-address-error" role="alert" class="field-error">{{ addressError }}</small>
           </div>
           <Message v-if="addressBlocked" severity="warn" :closable="false" class="address-blocked">
-            {{ t('gateway.usdt.open_payments', { n: num(open, lang) }) }}
+            {{ t('gateway.usdt.open_payments', { n: num(open, lang) }, open) }}
           </Message>
           <SecretField
             :key="'apikey-' + generation"

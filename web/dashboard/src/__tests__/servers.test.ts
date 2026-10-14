@@ -671,7 +671,9 @@ describe('servers pages', () => {
     expect(card.textContent).not.toContain('de-3')
     expect(card.textContent).not.toContain('connection refused')
     // its services still count
-    expect(card.textContent).toContain(fill(text('overview.servers_clients'), { n: '۱۹', servers: '۳' }))
+    expect(card.textContent).toContain(
+      fill(text('overview.servers_clients'), { services: fill(text('overview.services_n'), { n: '۱۹' }), servers: fill(text('overview.servers_n'), { n: '۳' }) }),
+    )
     // the single panel card gives way to the servers card
     expect(document.body.textContent).not.toContain(text('overview.panel'))
     // gateways are the owner's: shown, but not a link for an admin

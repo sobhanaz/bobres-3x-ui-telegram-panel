@@ -53,7 +53,7 @@ const licenseChip = computed(() => {
   if (!auth.can('system.read')) return null
   return chipOf(auth.me?.license)
 })
-const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) })
+const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) }, c.days)
 // The label is hidden on a phone, so the link is named for what it is: the license.
 const chipAria = (c: { kind: string; days: number }) => t('license.chip.aria', { chip: chipText(c) })
 const showPoweredBy = computed(() => poweredBy(auth.me?.license))
@@ -91,7 +91,7 @@ function toggleLang() {
             <span>{{ t('section.' + s.key + '.title') }}</span>
             <template v-if="badgeOf(s.key)">
               <Badge :value="badgeOf(s.key)" severity="warn" class="badge" aria-hidden="true" />
-              <span class="sr-only">{{ t('support.badge', { n: badgeOf(s.key) }) }}</span>
+              <span class="sr-only">{{ t('support.badge', { n: badgeOf(s.key) }, waiting) }}</span>
             </template>
           </RouterLink>
         </template>
@@ -107,7 +107,7 @@ function toggleLang() {
             <span>{{ t('section.' + s.key + '.title') }}</span>
             <template v-if="badgeOf(s.key)">
               <Badge :value="badgeOf(s.key)" severity="warn" class="badge" aria-hidden="true" />
-              <span class="sr-only">{{ t('support.badge', { n: badgeOf(s.key) }) }}</span>
+              <span class="sr-only">{{ t('support.badge', { n: badgeOf(s.key) }, waiting) }}</span>
             </template>
           </RouterLink>
         </template>

@@ -71,7 +71,8 @@ const lockNote = computed(() => (props.group === 'payments' ? t('settings.locked
 function problemText(p: Problem): string {
   const params: Record<string, string> = {}
   for (const [k, v] of Object.entries(p.params ?? {})) params[k] = num(v, lang.value)
-  return t(`settings.invalid.${p.code}`, params)
+  // too_long counts characters: its message is pluralized by the limit (the others have no plural forms).
+  return t(`settings.invalid.${p.code}`, params, p.params?.max ?? 0)
 }
 
 // A problem shows once the field (or one it depends on) was left, or on Save.

@@ -230,7 +230,7 @@ const previewKind = computed(() => (context.value.startsWith('button') ? 'button
     <template v-if="current">
       <dl class="app-facts about">
         <dt>{{ t('texts.where') }}</dt>
-        <dd>{{ contextLabel }} · {{ t('texts.limit', { n: num(current.max, lang) }) }}</dd>
+        <dd>{{ contextLabel }} · {{ t('texts.limit', { n: num(current.max, lang) }, current.max) }}</dd>
         <dt>{{ t('texts.group_label') }}</dt>
         <dd>{{ groupLabel }}</dd>
       </dl>

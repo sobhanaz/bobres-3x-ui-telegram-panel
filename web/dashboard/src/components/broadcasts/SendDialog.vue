@@ -98,6 +98,8 @@ const ways = computed(() => [
   { label: t('broadcasts.send.when_later'), value: 'later' },
 ])
 const n = computed(() => (count.value ? num(count.value.total, lang.value) : '…'))
+// what the message counts ("1 customer", "2 customers")
+const recipients = computed(() => count.value?.total ?? 0)
 const canConfirm = computed(() => !props.busy && !counting.value && !!count.value && count.value.total > 0 && !problem.value)
 
 function confirm() {
@@ -150,8 +152,8 @@ function confirm() {
           <p class="lead">
             {{
               when === 'now'
-                ? t('broadcasts.send.confirm_now', { n })
-                : t('broadcasts.send.confirm_later', { n, time: at !== null ? dateTime(at, lang) : '…' })
+                ? t('broadcasts.send.confirm_now', { n }, recipients)
+                : t('broadcasts.send.confirm_later', { n, time: at !== null ? dateTime(at, lang) : '…' }, recipients)
             }}
           </p>
           <p v-if="language === ''" class="app-muted by-lang">

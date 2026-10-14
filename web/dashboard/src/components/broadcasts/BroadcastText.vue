@@ -111,7 +111,7 @@ const markup = {
       <span v-if="checking" class="app-muted small"><i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t('texts.checking') }}</span>
       <ProblemList v-else-if="shown.length" :problems="shown" />
       <span v-else-if="!value.trim()" class="small" :class="props.error || props.flagEmpty ? 'err' : 'app-muted'">{{ t('broadcasts.text.empty') }}</span>
-      <span v-else-if="len > MAX_TEXT" class="err small">{{ t('texts.problem.too_long', { arg: num(MAX_TEXT, viewer) }) }}</span>
+      <span v-else-if="len > MAX_TEXT" class="err small">{{ t('texts.problem.too_long', { arg: num(MAX_TEXT, viewer) }, MAX_TEXT) }}</span>
       <span v-else-if="check?.ok" class="ok small"><i class="pi pi-check" aria-hidden="true" /> {{ t('texts.ok') }}</span>
       <div v-if="props.error && value.trim()" class="err small app-ltr">{{ props.error }}</div>
     </div>

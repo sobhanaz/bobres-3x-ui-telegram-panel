@@ -279,6 +279,12 @@ export function rate(n: number, lang: Lang): string {
   return new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US', { maximumFractionDigits: 1 }).format(n)
 }
 
+/** rateCount is the number rate()'s text is pluralized by: only exactly 1 as
+ * shown (one decimal) is singular, so "0.5 messages a second" is plural. */
+export function rateCount(n: number): number {
+  return Math.round(n * 10) / 10 === 1 ? 1 : 2
+}
+
 /** percent writes 0..100 as a percentage in the language's digits. */
 export function percent(n: number, lang: Lang): string {
   return new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US', { style: 'percent', maximumFractionDigits: 0 }).format(n / 100)

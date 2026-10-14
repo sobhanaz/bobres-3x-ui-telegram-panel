@@ -108,7 +108,7 @@ function saved(it: TextItem) {
 
   <div class="bar">
     <span class="app-muted count">
-      {{ t('texts.count', { n: num(filtered.length, lang), total: num(items.length, lang) }) }}
+      {{ t('texts.count', { n: num(filtered.length, lang), total: num(items.length, lang) }, items.length) }}
       <template v-if="changedCount"> · {{ t('texts.changed_count', { n: num(changedCount, lang) }) }}</template>
     </span>
     <div class="app-actions">

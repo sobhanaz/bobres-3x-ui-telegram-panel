@@ -134,7 +134,7 @@ async function refund(reason: string) {
             <bdi>{{ o.staff }}</bdi>
             <span v-if="o.extend" class="app-muted">
               ·
-              <template v-if="o.extend.days">{{ t('plan.days', { n: num(o.extend.days, lang) }) }}</template>
+              <template v-if="o.extend.days">{{ t('plan.days', { n: num(o.extend.days, lang) }, o.extend.days) }}</template>
               <template v-if="o.extend.days && o.extend.bytes"> + </template>
               <template v-if="o.extend.bytes">{{ bytes(o.extend.bytes, lang) }}</template>
             </span>
@@ -152,7 +152,7 @@ async function refund(reason: string) {
         <template v-if="o.attempts">
           <dt>{{ t('order.deliveries') }}</dt>
           <dd>
-            {{ t('order.attempts', { n: num(o.attempts, lang) }) }}
+            {{ t('order.attempts', { n: num(o.attempts, lang) }, o.attempts) }}
             <template v-if="o.status === 'provision_failed' && o.next_attempt_at">
               · {{ t('order.next_attempt', { time: dateTime(o.next_attempt_at, lang) }) }}
             </template>
