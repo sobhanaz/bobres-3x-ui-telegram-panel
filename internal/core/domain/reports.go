@@ -211,10 +211,7 @@ func nextBucket(start time.Time, group string) time.Time {
 }
 
 // ReportRange resolves a request: the zone is the request's, else the store's
-// general.timezone setting, else BOBRES_TIMEZONE, else Asia/Tehran. A setting or
-// an environment value that is no zone core can load (the setting was valid
-// when it was saved; the variable is not checked at all) is logged and skipped,
-// so one bad value never stops the reports.
+// zone (storeZone).
 func (s *Service) ReportRange(ctx context.Context, req ReportRequest, now time.Time) (*ReportRange, error) {
 	def := DefaultReportTimezone
 	if req.TZ == "" {
@@ -222,19 +219,30 @@ func (s *Service) ReportRange(ctx context.Context, req ReportRequest, now time.T
 		if err != nil {
 			return nil, err
 		}
-		for _, c := range []struct{ source, zone string }{{"general.timezone", set["general.timezone"]}, {"BOBRES_TIMEZONE", s.cfg.Timezone}} {
-			if c.zone == "" {
-				continue
-			}
-			if _, err := loadZone(c.zone); err != nil {
-				s.cfg.Log.Warn("reports: not a time zone, skipped", "source", c.source, "value", c.zone)
-				continue
-			}
-			def = c.zone
-			break
-		}
+		def = s.storeZone(set, func(source, zone string) {
+			s.cfg.Log.Warn("reports: not a time zone, skipped", "source", source, "value", zone)
+		})
 	}
 	return NewReportRange(req, def, now)
+}
+
+// storeZone is the time zone the store's days are read in: the general.timezone
+// setting (set holds the settings), else BOBRES_TIMEZONE, else Asia/Tehran. A
+// setting or an environment value that is no zone core can load (the setting was
+// valid when it was saved; the variable is not checked at all) is passed to
+// skipped and left out, so one bad value never stops the reports.
+func (s *Service) storeZone(set map[string]string, skipped func(source, zone string)) string {
+	for _, c := range []struct{ source, zone string }{{"general.timezone", set["general.timezone"]}, {"BOBRES_TIMEZONE", s.cfg.Timezone}} {
+		if c.zone == "" {
+			continue
+		}
+		if _, err := loadZone(c.zone); err != nil {
+			skipped(c.source, c.zone)
+			continue
+		}
+		return c.zone
+	}
+	return DefaultReportTimezone
 }
 
 // ReportBucket is one bucket of a sales report. Currencies holds an entry

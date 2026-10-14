@@ -63,7 +63,9 @@ link. Broadcasts and the payment methods' switches are on the dashboard.
   language choice are never blocked.
 - **Limits:** taps and messages per 10 seconds, support messages per day.
 - **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to the owner
-  or to every owner and admin. "Payment taken but not recorded" is always sent.
+  or to every owner and admin. "Payment taken but not recorded" is always sent. The **daily sales summary** (off until the
+  store turns it on, `reports.daily_summary`) goes once a day to every owner and admin, whatever `notify.recipients` says,
+  because it holds revenue (14-reports.md).
 - `/terms`, and terms and privacy link buttons on the support screen, when the links are set.
 - Dates use the store's time zone; prices use the store's name for the Toman.
 - **A refused purchase (the license's limit):** when the install is at its limit of active services (the free tier's 25,

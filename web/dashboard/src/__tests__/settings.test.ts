@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api'
+import en from '../locales/en.json'
 import fa from '../locales/fa.json'
 import {
   canonical,
@@ -8,8 +9,11 @@ import {
   describeCheck,
   effective,
   example,
+  ltr,
+  maxLength,
   normalize,
   normalizeChannel,
+  normalizeTime,
   problems,
   rebase,
   serverField,
@@ -38,6 +42,8 @@ const erc = item('payments.usdt_erc20', 'text')
 const tz = item('general.timezone', 'tz')
 const recipients = item('notify.recipients', 'enum', { default: 'owner', options: ['owner', 'staff'] })
 const sales = item('notify.sales', 'bool', { default: 'false' })
+const summaryOn = item('reports.daily_summary', 'bool', { default: 'false' })
+const summaryTime = item('reports.daily_summary_time', 'time', { default: '09:00' })
 
 const check = (i: SettingItem, raw: string, others: Record<string, string> = {}) => validate(i, normalize(i, raw), others)?.code ?? null
 
@@ -129,6 +135,64 @@ describe('numbers and choices', () => {
     expect(check(recipients, 'everyone')).toBe('option')
     expect(check(sales, 'true')).toBeNull()
     expect(check(sales, 'yes')).toBe('option')
+  })
+})
+
+describe('the daily summary settings', () => {
+  it('reads a time of day in any digits and writes it as HH:MM', () => {
+    expect(normalizeTime('9:30')).toBe('09:30')
+    expect(normalizeTime(' 09:30 ')).toBe('09:30')
+    expect(normalizeTime('۹:۳۰')).toBe('09:30')
+    expect(normalizeTime('٢١:٠٥')).toBe('21:05')
+    expect(normalizeTime('soon')).toBe('soon') // left for validate to refuse
+    expect(normalize(summaryTime, '7:05')).toBe('07:05')
+  })
+  it('accepts only a 24-hour time of day', () => {
+    for (const ok of ['00:00', '09:00', '9:00', '12:30', '23:59', '۰۹:۳۰']) expect(check(summaryTime, ok), ok).toBeNull()
+    for (const bad of ['24:00', '9', '09:60', '9:5', '09-00', '0900', '09:00:00', '12:30 pm', 'abc', '-1:00']) {
+      expect(check(summaryTime, bad), bad).toBe('time')
+    }
+    expect(check(summaryTime, '')).toBeNull() // back to the default, 09:00
+  })
+  it('is off and at 09:00 until changed, and sends only what changed', () => {
+    expect(effective(summaryOn)).toBe('false')
+    expect(effective(summaryTime)).toBe('09:00')
+    expect(changed(summaryTime, '9:00')).toBe(false)
+    expect(changed(summaryTime, '09:01')).toBe(true)
+    expect(changes([summaryOn, summaryTime], { 'reports.daily_summary': 'true', 'reports.daily_summary_time': '۹:۳۰' })).toEqual({
+      'reports.daily_summary': 'true',
+      'reports.daily_summary_time': '09:30',
+    })
+    expect(problems([summaryTime], { 'reports.daily_summary_time': '25:00' })).toEqual({ 'reports.daily_summary_time': { code: 'time' } })
+    expect(example(summaryTime)).toBe('09:00')
+  })
+  it('shows a time left to right, in a box that fits it', () => {
+    expect(ltr(summaryTime)).toBe(true)
+    expect(maxLength(summaryTime)).toBe(5)
+  })
+  it('has its texts in both languages', () => {
+    const get = (o: unknown, path: string) => path.split('.').reduce<unknown>((x, k) => (x as Record<string, unknown> | undefined)?.[k], o)
+    const keys = [
+      'settings.group.reports.title',
+      'settings.group.reports.desc',
+      'settings.field.reports.daily_summary.label',
+      'settings.field.reports.daily_summary.help',
+      'settings.field.reports.daily_summary_time.label',
+      'settings.field.reports.daily_summary_time.help',
+      'settings.invalid.time',
+      'reports.daily.on',
+      'reports.daily.off',
+      'reports.daily.link',
+    ]
+    for (const [lang, catalog] of [['en', en], ['fa', fa]] as const) {
+      for (const k of keys) {
+        const v = get(catalog, k)
+        expect(typeof v === 'string' && v.trim() !== '', `${lang} ${k}`).toBe(true)
+      }
+      // the one sentence with values names them in both languages
+      expect(get(catalog, 'reports.daily.on') as string).toContain('{time}')
+      expect(get(catalog, 'reports.daily.on') as string).toContain('{tz}')
+    }
   })
 })
 
@@ -266,13 +330,13 @@ describe('settings page', () => {
 
   async function open(
     put: (values: Record<string, string>) => Response,
-    opts: { permissions?: string[]; items?: SettingItem[]; groups?: string[] } = {},
+    opts: { permissions?: string[]; items?: SettingItem[]; groups?: string[]; cards?: number; hash?: string } = {},
   ) {
     const items = opts.items ?? start
     const listed = opts.groups ?? groups
     vi.resetModules()
     vi.spyOn(console, 'warn').mockImplementation(() => {}) // texts not merged into the catalogs yet
-    window.history.replaceState(null, '', '/admin/settings')
+    window.history.replaceState(null, '', '/admin/settings' + (opts.hash ?? ''))
     document.body.innerHTML = '<div id="app"></div>'
     // jsdom has no matchMedia; PrimeVue's Select asks it about orientation
     vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }))
@@ -295,7 +359,7 @@ describe('settings page', () => {
     await import('../main')
     const { router } = await import('../router')
     await router.isReady()
-    await vi.waitFor(() => expect(document.querySelectorAll('.settings-card')).toHaveLength(5))
+    await vi.waitFor(() => expect(document.querySelectorAll('.settings-card')).toHaveLength(opts.cards ?? 5))
     return puts
   }
   const saved = (values: Record<string, string>) =>
@@ -393,5 +457,60 @@ describe('settings page', () => {
     accept.click()
     await vi.waitFor(() => expect(puts).toEqual([{ 'maintenance.enabled': 'true' }]))
     await vi.waitFor(() => expect(document.body.textContent).toContain(text('settings.maintenance_on')))
+  })
+  // The daily sales summary: its own card, off and at 09:00 by default, the time
+  // checked and saved as HH:MM, the texts in the language of the page.
+  const summaryItems = [...start, summaryOn, summaryTime]
+  const summaryGroups = [...groups, 'reports']
+  const summarySaved = (values: Record<string, string>) =>
+    json(200, { items: summaryItems.map((i) => (i.key in values ? { ...i, value: values[i.key] } : i)), groups: summaryGroups } satisfies SettingsReply)
+
+  it('has the daily sales summary in a card of its own, off at 09:00', async () => {
+    const puts = await open(summarySaved, { items: summaryItems, groups: summaryGroups, cards: 6 })
+    const on = input('reports.daily_summary')
+    const at = input('reports.daily_summary_time')
+    expect(card('reports.daily_summary')).toBe(card('reports.daily_summary_time'))
+    expect(card('reports.daily_summary')).not.toBe(card('notify.sales'))
+    expect(card('reports.daily_summary').querySelector('.card-title')?.textContent).toBe(text('settings.group.reports.title'))
+    expect(on.checked).toBe(false)
+    expect(at.value).toBe('09:00')
+    expect(at.dir).toBe('ltr')
+    expect(at.maxLength).toBe(5)
+    for (const key of ['reports.daily_summary', 'reports.daily_summary_time']) {
+      const field = input(key).closest('.field') as HTMLElement
+      expect(field.querySelector('.label')?.textContent?.trim()).toBe(text(`settings.field.${key}.label`))
+      expect(field.querySelector('.help')?.textContent).toBe(text(`settings.field.${key}.help`))
+    }
+    expect(saveButton('reports.daily_summary').disabled).toBe(true)
+
+    // A time that is not a time of day is refused where it is typed, and not sent.
+    type('reports.daily_summary_time', '25:00')
+    await vi.waitFor(() => expect(saveButton('reports.daily_summary').disabled).toBe(false))
+    saveButton('reports.daily_summary').click()
+    await vi.waitFor(() => expect(at.closest('.field')?.textContent).toContain(text('settings.invalid.time')))
+    expect(puts).toEqual([])
+
+    // Typed in Persian digits without the leading zero, saved as HH:MM with the switch.
+    type('reports.daily_summary_time', '۹:۳۰')
+    on.click()
+    await vi.waitFor(() => expect(at.closest('.field')?.textContent).not.toContain(text('settings.invalid.time')))
+    saveButton('reports.daily_summary').click()
+    await vi.waitFor(() => expect(puts).toEqual([{ 'reports.daily_summary': 'true', 'reports.daily_summary_time': '09:30' }]))
+    await vi.waitFor(() => expect(saveButton('reports.daily_summary').disabled).toBe(true))
+    expect(input('reports.daily_summary').checked).toBe(true)
+    expect(input('reports.daily_summary_time').value).toBe('09:30')
+  })
+
+  it('brings the entry a link names into view', async () => {
+    const scrolled = vi.fn()
+    const proto = Element.prototype as { scrollIntoView?: unknown }
+    proto.scrollIntoView = scrolled // jsdom has none
+    try {
+      await open(summarySaved, { items: summaryItems, groups: summaryGroups, cards: 6, hash: '#setting-reports-daily-summary' })
+      await vi.waitFor(() => expect(scrolled).toHaveBeenCalledTimes(1))
+      expect(scrolled.mock.contexts[0]).toBe(input('reports.daily_summary'))
+    } finally {
+      delete proto.scrollIntoView
+    }
   })
 })

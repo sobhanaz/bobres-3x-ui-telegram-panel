@@ -12,6 +12,8 @@ import SelectButton from 'primevue/selectbutton'
 import Skeleton from 'primevue/skeleton'
 import BarChart from '../components/reports/BarChart.vue'
 import { api, query } from '../api'
+import { fieldId } from '../settings'
+import { useAuth } from '../stores/auth'
 import { errorText } from '../errors'
 import { isolate, localDate, money, num, percent, planName, type Lang } from '../format'
 import {
@@ -26,6 +28,7 @@ import {
   reportParams,
   share,
   validCustom,
+  type DailySummaryStatus,
   type ReportMethod,
   type ReportPlan,
   type ReportSummary,
@@ -34,6 +37,21 @@ import {
 
 const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
+const auth = useAuth()
+
+// Whether the daily sales summary is on is a hint above the report: when core
+// cannot say, the line is left out. The link to its settings is for staff who
+// may change settings.
+const daily = ref<DailySummaryStatus | null>(null)
+async function loadDaily() {
+  try {
+    daily.value = await api<DailySummaryStatus>('GET', '/reports/daily-summary')
+  } catch {
+    daily.value = null
+  }
+}
+onMounted(loadDaily)
+const dailyLink = { name: 'settings', hash: '#' + fieldId('reports.daily_summary') }
 
 const sel = reactive<Selection>({ range: 'last_30_days', group: 'day', from: '', to: '' })
 const summary = ref<ReportSummary | null>(null)
@@ -125,6 +143,10 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
     </div>
   </div>
   <p class="app-muted hint">{{ t('reports.hint') }}</p>
+  <p v-if="daily" class="app-muted hint daily-summary" :class="daily.enabled ? 'is-on' : 'is-off'">
+    {{ daily.enabled ? t('reports.daily.on', { time: isolate(daily.time), tz: isolate(daily.tz) }) : t('reports.daily.off') }}
+    <RouterLink v-if="auth.can('settings.write')" :to="dailyLink" class="daily-link">{{ t('reports.daily.link') }}</RouterLink>
+  </p>
 
   <div class="app-toolbar">
     <SelectButton
@@ -318,6 +340,9 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
 .hint {
   margin-block: 0 0.75rem;
   font-size: 0.9rem;
+}
+.daily-link {
+  margin-inline-start: 0.5rem;
 }
 .covers {
   margin-block: 0 1rem;

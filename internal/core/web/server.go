@@ -163,6 +163,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/ledger", PermLedgerRead, s.listLedger)
 	s.route(api, "GET /api/v1/ledger.csv", PermLedgerRead, s.exportLedger)
 	s.route(api, "GET /api/v1/reports/summary", PermReportsRead, s.reportSummary)
+	s.route(api, "GET /api/v1/reports/daily-summary", PermReportsRead, s.reportDailySummary)
 	s.route(api, "GET /api/v1/reports/summary.csv", PermReportsRead, s.exportReportSummary)
 	s.route(api, "GET /api/v1/reports/plans", PermReportsRead, s.reportPlans)
 	s.route(api, "GET /api/v1/reports/methods", PermReportsRead, s.reportMethods)

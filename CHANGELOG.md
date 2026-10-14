@@ -8,6 +8,35 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.2.1] — 2026-10-14
+
+The daily sales summary, the second half of the sales reports.
+
+### Bot
+- A daily sales summary for the owner and admins, once a day in Telegram: yesterday's revenue per currency (never added
+  together) with the change from the day before, paid orders, refunds, wallet top-ups, new customers and free trials, in
+  Persian (Jalali date) or English. Payments staff rejected and failed gateway payments are listed only when there were
+  some, and a day with no sales still gets a one-line message so you can see it is working. It is off until you turn it
+  on and is queued once a day even if the server restarts (the bot sends each message at least once: a bot that is killed
+  at the wrong moment can send one again). If the server was down at that time it is sent when it is back, never once for
+  each missed day, and the bot drops a summary it could not send within a day. Turned on after its time of day, it starts
+  the next day. A summary is not read before 00:02, so a purchase made just before midnight is in it; one that fails is
+  tried again after 5, 10 and 15 minutes and given up after eight tries; a recipient Telegram refuses for good does not
+  hold up the other messages; someone who stops being an owner or admin before the bot sends gets nothing; the change
+  from the day before reads "about the same" under half a percent, never "down 100%" on a day with sales, and "up more
+  than 999%" past that. If you change the store's time zone, a sale around the change can be in two summaries or in none,
+  and the log says so ([docs/14-reports.md](docs/14-reports.md#the-daily-summary-in-telegram)).
+
+### Dashboard
+- Settings has a "Sales summary" card: a switch for the daily summary and the time of day it is sent (09:00 by default,
+  in the store's time zone). The Reports page says whether the summary is on and links to those settings.
+
+### API
+- `GET /api/v1/reports/daily-summary` (`reports.read`) answers whether the daily summary is on, its time and the time
+  zone. The settings `reports.daily_summary` and `reports.daily_summary_time` are in the settings API and the bot's
+  `/set`. Core publishes `report.daily_summary.v1` to the bot, one event for each recipient. Migration 00019 adds a
+  small table, `daily_summary_claims`, that remembers which day was sent.
+
 ## [0.2.0] — 2026-10-14
 
 Sales reports: the first of the features after the first release ([docs/ROADMAP.md](docs/ROADMAP.md)).
@@ -258,7 +287,8 @@ pull requests #13 to #48. Release candidates 0.1.0-rc.1 to rc.4 came first; rc.4
 - The legal review, the brand checks and the prices are open.
 - The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine. Fixed in 0.1.1.
 
-[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.1
 [0.2.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.0
 [0.1.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.0

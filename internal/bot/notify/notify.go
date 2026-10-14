@@ -2,7 +2,8 @@
 // results, wallet credits, delivered and extended services, reminders before
 // a service ends, support staff's replies, and admin alerts (core's
 // watchdog's system alerts, USDT deposits that matched no payment and manual
-// USDT proofs that name a deposit the watcher saw among them).
+// USDT proofs that name a deposit the watcher saw among them) and the daily
+// sales summary core writes for each staff member who may read the reports.
 package notify
 
 import (
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -41,6 +43,7 @@ type Notifier struct {
 	adminTG int64
 	log     *slog.Logger
 	sent    unreported
+	now     func() time.Time // the clock (tests set it)
 }
 
 // unreported remembers staff replies that reached the customer while core
@@ -104,7 +107,7 @@ func New(core corev1.CoreServiceClient, t Telegram, cat *i18n.Catalog, set *sett
 	if set == nil {
 		set = settings.New()
 	}
-	return &Notifier{core: core, tg: t, cat: cat, set: set, adminTG: adminTelegramID, log: log}
+	return &Notifier{core: core, tg: t, cat: cat, set: set, adminTG: adminTelegramID, log: log, now: time.Now}
 }
 
 func decode(m eventbus.Message, v any) error {
@@ -261,6 +264,13 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		return n.alert(ctx, 0, func(lang string) string { return n.systemAlert(lang, e) })
 
+	case events.DailySummary:
+		var e events.DailySummaryEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.dailySummaryEvent(ctx, m, e)
+
 	case events.DepositUnmatched:
 		var e events.DepositUnmatchedEvent
 		if err := decode(m, &e); err != nil {
@@ -375,6 +385,127 @@ func (n *Notifier) systemAlert(lang string, e events.SystemAlertEvent) string {
 		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
 	}
 	return text
+}
+
+// summaryMaxAge is how long a daily summary may wait to be sent. Core queues
+// one for each day whether or not the bot is consuming, so a bot that was down
+// for days would otherwise send every missed day back to back; one that waited
+// longer than this is old news and is dropped (the newest one is the one that
+// goes out).
+const summaryMaxAge = 24 * time.Hour
+
+// dailySummaryEvent sends one staff member the summary core wrote for them.
+// Core chose the recipient (and their language) when it claimed the day. Two
+// things are checked again here, because the event can wait: it is dropped
+// when it is too old (summaryMaxAge), or when the staff list the bot knows
+// no longer has the person as an owner or admin (demoted, banned or removed
+// since the claim; support staff never hold reports.read). A list the bot does
+// not know yet decides nothing. A member who blocked the bot is skipped like for
+// any notification.
+//
+// A failure is returned for the consumer to retry, which applies events in order:
+// the retry holds up every event behind it (customers' links and payment
+// confirmations too) until it works or the event is dead-lettered after many
+// failures. So a refusal that no retry can change (Telegram says 400-something
+// about this chat or this message, say PEER_ID_INVALID, or that the bot has no
+// right to write there) is Permanent and dead-letters at once; only a failure that
+// may pass (network, 429, 5xx) is retried.
+func (n *Notifier) dailySummaryEvent(ctx context.Context, m eventbus.Message, e events.DailySummaryEvent) error {
+	if age := n.now().Sub(m.CreatedAt); !m.CreatedAt.IsZero() && age > summaryMaxAge {
+		n.log.Info("daily summary is too old; dropped", "day", e.Date, "chat", e.TelegramID, "queued_hours_ago", int(age.Hours()))
+		return nil
+	}
+	if len(n.set.Staff()) > 0 {
+		if c, ok := n.set.Contact(e.TelegramID); !ok || c.Role == "support" {
+			n.log.Info("daily summary dropped: the recipient is no longer an owner or admin", "day", e.Date, "chat", e.TelegramID)
+			return nil
+		}
+	}
+	err := n.send(ctx, e.TelegramID, n.dailySummary(i18n.Normalize(e.Language), e), nil)
+	if tg.IsRefused(err) {
+		n.log.Warn("daily summary refused by Telegram; dropped", "day", e.Date, "chat", e.TelegramID, "err", err)
+		return eventbus.Permanent(err)
+	}
+	return err
+}
+
+// dailySummary renders yesterday's sales in lang: a heading with the day (Jalali
+// in Persian), then each currency in a block of its own (amounts of different
+// currencies are never added), then the people (new customers, free trials). A
+// day with nothing to report is one line, so the staff see the job is alive.
+// Every value is a number or escaped text.
+func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string {
+	date := html.EscapeString(e.Date)
+	if d, err := time.Parse("2006-01-02", e.Date); err == nil {
+		date = i18n.CalendarDay(lang, d.Year(), d.Month(), d.Day())
+	}
+	if len(e.Currencies) == 0 && e.NewCustomers == 0 && e.Trials == 0 {
+		return n.cat.T(lang, "report.daily_none", "date", date)
+	}
+	t := func(key string, args ...any) string { return n.cat.T(lang, key, args...) }
+	num := func(v int64) string { return i18n.Number(lang, v) }
+	money := func(v int64, cur string) string { return html.EscapeString(i18n.Money(lang, v, cur)) }
+	out := []string{t("report.daily_title", "date", date)}
+	if len(e.Currencies) == 0 {
+		out = append(out, "", t("report.daily_no_sales"))
+	}
+	for _, c := range e.Currencies {
+		revenue := t("report.daily_revenue", "amount", money(c.Revenue, c.Currency))
+		if vs := n.revenueVs(lang, c); vs != "" {
+			revenue += " (" + vs + ")"
+		}
+		out = append(out, "", t("report.daily_currency", "currency", html.EscapeString(i18n.CurrencyName(lang, c.Currency))), revenue,
+			t("report.daily_orders", "n", num(c.Orders), "new", num(c.NewOrders), "renew", num(c.Renewals), "traffic", num(c.TrafficTopups)),
+			t("report.daily_refunds", "n", num(c.Refunds.Count), "amount", money(c.Refunds.Amount, c.Currency)),
+			t("report.daily_net", "amount", money(c.Net, c.Currency)),
+			t("report.daily_topups", "n", num(c.Topups.Count), "amount", money(c.Topups.Amount, c.Currency)))
+		if c.Rejected.Count > 0 {
+			out = append(out, t("report.daily_rejected", "n", num(c.Rejected.Count), "amount", money(c.Rejected.Amount, c.Currency)))
+		}
+		if c.GatewayFailed.Count > 0 {
+			out = append(out, t("report.daily_gateway_failed", "n", num(c.GatewayFailed.Count), "amount", money(c.GatewayFailed.Amount, c.Currency)))
+		}
+	}
+	out = append(out, "", t("report.daily_new_customers", "n", num(e.NewCustomers)), t("report.daily_trials", "n", num(e.Trials)))
+	if e.Zone != "" {
+		out = append(out, "", t("report.daily_zone", "zone", html.EscapeString(e.Zone)))
+	}
+	return strings.Join(out, "\n")
+}
+
+// maxVsPercent is the biggest rise shown as a number; a bigger one is "more
+// than" it (a day after almost no sales would otherwise read "up 500000000%").
+const maxVsPercent = 999
+
+// revenueVs compares a currency's revenue with the day before, in words: up or
+// down by a whole percent, the same (to the unit), about the same (under half a
+// percent either way), or "new" when the day before had none ("": no sales
+// either day). The words never say more than the amounts do: a day that had
+// sales is never "down 100%" (that is a day with none, at most 99%), and a rise
+// past maxVsPercent is "more than" it.
+func (n *Notifier) revenueVs(lang string, c events.DailySummaryCurrency) string {
+	switch {
+	case c.PrevRevenue <= 0 && c.Revenue <= 0:
+		return ""
+	case c.PrevRevenue <= 0:
+		return n.cat.T(lang, "report.daily_vs_new")
+	case c.Revenue == c.PrevRevenue:
+		return n.cat.T(lang, "report.daily_vs_same")
+	}
+	change := math.Round(float64(c.Revenue-c.PrevRevenue) * 100 / float64(c.PrevRevenue))
+	switch {
+	case change > maxVsPercent:
+		return n.cat.T(lang, "report.daily_vs_up_lots", "pct", i18n.Percent(lang, maxVsPercent))
+	case change > 0:
+		return n.cat.T(lang, "report.daily_vs_up", "pct", i18n.Percent(lang, int64(change)))
+	case change < 0:
+		down := -change
+		if c.Revenue > 0 {
+			down = min(down, 99)
+		}
+		return n.cat.T(lang, "report.daily_vs_down", "pct", i18n.Percent(lang, int64(min(down, 100))))
+	}
+	return n.cat.T(lang, "report.daily_vs_about_same")
 }
 
 // unmatchedReasons are the reasons payments gives for an unmatched deposit.
