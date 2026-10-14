@@ -57,7 +57,7 @@ func start(t *testing.T, key string, seed domain.ZarinpalSettings) *fixture {
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.New(ctx, dsn)
+	st, err := store.New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatal(err)
 	}

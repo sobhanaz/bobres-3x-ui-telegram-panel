@@ -20,7 +20,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err := migrate.Up(ctx, dsn, "core"); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	db, err := pgxpool.New(ctx, dsn)
+	db, err := pgxpool.New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatal(err)
 	}

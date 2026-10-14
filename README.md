@@ -181,7 +181,10 @@ Vue 3, built into the `core` binary.
   a server where the role may `CREATE DATABASE`; default: the local socket in `/tmp`) and
   Redis (`BOBRES_TEST_REDIS_ADDR`, default `127.0.0.1:6379`). Each test package gets its own
   throwaway database. They skip when the servers are missing, except with
-  `BOBRES_TEST_REQUIRE_DB=1` (CI), where they fail.
+  `BOBRES_TEST_REQUIRE_DB=1` (CI), where they fail. `BOBRES_TEST_POOL_MAX_CONNS=4` caps the
+  tests' connection pools (pgx gives `max(4, cores)`): run it on the packages that hold locks
+  and transactions while goroutines wait (`internal/core/domain`, `internal/core/store`) to
+  prove a test does not need a big machine; CI does.
 
 ## License
 

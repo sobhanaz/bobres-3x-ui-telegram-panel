@@ -48,7 +48,7 @@ func startChain(t *testing.T) *chainFixture {
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.New(ctx, dsn)
+	st, err := store.New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatal(err)
 	}

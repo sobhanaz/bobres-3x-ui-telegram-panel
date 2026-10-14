@@ -35,7 +35,7 @@ func newFixture(t *testing.T) *fixture {
 	if err := migrate.Up(ctx, dsn, "core"); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	st, err := store.New(ctx, dsn)
+	st, err := store.New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

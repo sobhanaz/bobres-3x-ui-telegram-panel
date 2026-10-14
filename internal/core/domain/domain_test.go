@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
@@ -29,7 +30,7 @@ func testService(t *testing.T) (*Service, *store.Store) {
 			t.Fatalf("migrate %s: %v", schema, err)
 		}
 	}
-	s, err := store.New(ctx, dsn)
+	s, err := store.New(ctx, testdb.WithPoolCap(t, dsn))
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -68,6 +69,55 @@ func seedUser(t *testing.T, s *store.Store, tg int64) *store.User {
 		t.Fatal(err)
 	}
 	return u
+}
+
+// needConns stops a test at once, saying why, when the pool is smaller than
+// the sessions the test keeps open together (BOBRES_TEST_POOL_MAX_CONNS caps
+// it): a held transaction, the goroutines waiting on it and the like. Without
+// the check such a test waits for a connection that nothing will free, until
+// the whole package times out.
+func needConns(t *testing.T, s *store.Store, n int) {
+	t.Helper()
+	if got := int(s.DB().Config().MaxConns); got < n {
+		t.Fatalf("this test keeps %d sessions open at once and the pool has %d connections: use a pool of %d or more (BOBRES_TEST_POOL_MAX_CONNS)", n, got, n)
+	}
+}
+
+// lockQuerier is what waitLockWaiters asks through: a transaction.
+type lockQuerier interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// waitLockWaiters waits until n sessions of the test database wait for a
+// lock. It asks through q, the transaction the test holds: a query on the
+// pool would need a connection of its own, which the waiting sessions can
+// have all taken (and they only let go once the test has released the lock).
+// A wait for a lock that never comes ends after 10 seconds.
+func waitLockWaiters(t *testing.T, q lockQuerier, n int, what string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for {
+		// A transaction reads pg_stat_activity once and keeps that picture
+		// until it ends, so each look starts from a fresh one.
+		if _, err := q.Exec(ctx, `SELECT pg_stat_clear_snapshot()`); err != nil {
+			t.Fatalf("%s never waited: %v", what, err)
+		}
+		var waiting int
+		if err := q.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
+			t.Fatalf("%s never waited: %v", what, err)
+		}
+		if waiting >= n {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("%s never waited (%d of %d waiting)", what, waiting, n)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }
 
 func fund(t *testing.T, s *store.Store, userID string, amount int64) {

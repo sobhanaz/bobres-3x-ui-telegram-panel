@@ -45,7 +45,7 @@ func testStore(t *testing.T) *Store {
 		if storeErr = Migrate(ctx, dsn, nil); storeErr != nil {
 			return
 		}
-		sharedSt, storeErr = OpenStore(ctx, dsn)
+		sharedSt, storeErr = OpenStore(ctx, testdb.WithPoolCap(t, dsn))
 	})
 	if storeErr != nil {
 		t.Fatal(storeErr)

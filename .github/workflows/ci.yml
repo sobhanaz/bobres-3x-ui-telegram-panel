@@ -46,7 +46,17 @@ jobs:
           go-version: "1.26.x"
           check-latest: true
           cache: true
-      - run: go test -race -count=1 -coverprofile=coverage.out ./...
+      # -timeout 20m: the default is 10 minutes, which the whole suite can
+      # outgrow; a test that hangs then fails with its own stack and name.
+      - run: go test -race -count=1 -timeout 20m -coverprofile=coverage.out ./...
+      # The packages whose tests hold a transaction or an advisory lock while
+      # goroutines wait on it, again with the connection pool capped at 4 (the
+      # least pgx ever gives, whatever the runner's cores): a test that needs
+      # more connections than that hangs here instead of only on a small machine.
+      - name: Concurrency tests with a small pool
+        env:
+          BOBRES_TEST_POOL_MAX_CONNS: "4"
+        run: go test -race -count=1 -timeout 10m ./internal/core/domain/ ./internal/core/store/
       - uses: actions/upload-artifact@v7
         with:
           name: coverage

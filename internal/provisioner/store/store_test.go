@@ -24,7 +24,7 @@ func testStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(ctx, dsn, env)
+	s, err := New(ctx, testdb.WithPoolCap(t, dsn), env)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
