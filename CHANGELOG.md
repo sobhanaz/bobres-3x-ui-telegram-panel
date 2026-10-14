@@ -4,10 +4,14 @@ All notable changes to BOBRES are written here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — first public release (v0.1.0)
+## [Unreleased]
 
-The first release. It sums up what BOBRES does now: Phases 0 to 7 of the plan ([docs/PLAN.md](docs/PLAN.md) §10),
-pull requests #13 to #44. Everything below is new in this release.
+Nothing yet. What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## [0.1.0] — 2026-10-14
+
+The first public release. It sums up what BOBRES does now: Phases 0 to 7 of the plan ([docs/PLAN.md](docs/PLAN.md) §10),
+pull requests #13 to #48. Release candidates 0.1.0-rc.1 to rc.4 came first; rc.4 is this release's code. Everything below is new in this release.
 
 ### Bot
 - Persian and English. Customers pick a language on their first `/start` and can change it.
@@ -217,5 +221,7 @@ pull requests #13 to #44. Everything below is new in this release.
 - The server IP address mode needs a public address with ports 80 and 443 reachable from the internet (not behind
   carrier-grade NAT). It cannot be tried in the local Docker lab. BOBRES never renews an own certificate.
 - The legal review, the brand checks and the prices are open.
+- The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine.
 
-[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/commits/main
+[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.0
