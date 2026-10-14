@@ -12,9 +12,11 @@ it on their own server, with their own domain, bot, 3x-ui panels and brand.
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
 Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
-versions (built only when a customer needs one). No release is published yet. The first public release will be
-v0.1.0, after the first install on a real server ([docs/11-staging-run.md](docs/11-staging-run.md)). Still open: the
-legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
+versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.2.0
+(sales reports) is the latest. They were tried in a Docker lab with two Ubuntu servers
+([docs/11-staging-run.md](docs/11-staging-run.md)); an install on a real server, with real payments and a real
+certificate, is still to do. The landing page is live at https://sobhanaz.github.io/bobres-3x-ui-telegram-panel/.
+Still open: the legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
 and a paid subscription per install ([docs/pricing.md](docs/pricing.md)). BOBRES already carries the vendor's license
 key (`vendor-v1-2026`, fingerprint `2E02 AB14 5379 C040 2DBD 7BC2 51A3 C9D7`), so licenses signed with it verify; the
 license server is built but still has to be deployed by the owner. What is left before selling is in
@@ -105,7 +107,7 @@ As root on the server:
 bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegram-panel/main/install/install.sh)
 ```
 
-It needs a published release (v0.1.0 is the first). It installs Docker if needed, downloads the `bobres` CLI
+It installs Docker if needed, downloads the `bobres` CLI
 from the latest GitHub release, verifies its signature and checksum, and asks for your domain, Telegram ID, bot token
 and 3x-ui panel (tokens are typed hidden). Then it offers server hardening and prints the first steps and your backup
 key. Details: [docs/06-installer.md](docs/06-installer.md).
