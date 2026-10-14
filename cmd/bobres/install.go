@@ -46,6 +46,23 @@ type installer struct {
 	harden func(ctx context.Context, opt hardenOptions) int
 	// quiet leaves out the first-steps summary (a settings change from the menu).
 	quiet bool
+	// runLines runs docker with each line of its output handed to onLine as it
+	// comes (the progress of `compose up`); nil: run is used and nothing is measured.
+	runLines func(ctx context.Context, dir string, onLine func(string), args ...string) ([]byte, error)
+	// prog shows the install's progress; nil outside install (it does nothing).
+	prog *progress
+	// ui is how this run's output looks (set when the run starts).
+	ui termUI
+	// logPath is the install log ("" for none); logFile is it while open.
+	logPath string
+	logFile *os.File
+	// panelProbe looks at a 3x-ui panel the way the provisioner does (nil: the
+	// panel is not checked).
+	panelProbe func(ctx context.Context, baseURL, token string, allowPrivate bool) (panelInfo, error)
+	// survive makes the run outlive a dropped SSH connection (nil: nothing).
+	survive func()
+	// botName is the bot's username once Telegram has said it.
+	botName string
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -66,13 +83,24 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		checkBot:  botUsername,
 		preflight: func(domain string) []Result { return runDoctor(domain, false) },
 		sleep:     time.Sleep,
+		runLines:  streamDocker,
+		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
+	}
+	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
+		ins.logPath = p
 	}
 	if f, ok := in.(*os.File); ok {
 		ins.readHide = hiddenInput(f, out)
 	}
 	// It asks on the installer's reader, as it is when the step runs.
 	ins.harden = func(ctx context.Context, opt hardenOptions) int {
-		return newHardener(ins.in, ins.out, ins.errOut).apply(ctx, opt)
+		h := newHardener(ins.in, ins.out, ins.errOut)
+		if opt.auto {
+			// Nothing is asked and the commands' output is the log's: the
+			// screen gets one line per step.
+			h.out, h.errOut, h.notify = ins.logOut(), ins.logOut(), ins.prog.Note
+		}
+		return h.apply(ctx, opt)
 	}
 	return ins
 }
@@ -144,7 +172,37 @@ var (
 	safeEnvRe  = regexp.MustCompile(`^[A-Za-z0-9_\-:./@,+=]*$`)
 )
 
+// install runs the installation with its banner and progress: the steps of
+// installSteps, one bar from 0 to 100 (or its share of a script's bar), a plain
+// line per step where output is not a terminal.
 func (ins *installer) install(args []string) int {
+	out, errOut := ins.out, ins.errOut
+	defer func() {
+		ins.prog.Close()
+		if ins.logFile != nil {
+			_ = ins.logFile.Close()
+		}
+		ins.prog, ins.logFile, ins.out, ins.errOut = nil, nil, out, errOut
+	}()
+	code := ins.runInstall(args)
+	if code == 0 {
+		ins.prog.Complete()
+		return code
+	}
+	failedAt := ins.prog.failedStep()
+	ins.prog.Fail(fmt.Sprintf("exit %d", code))
+	// A failure after the questions: the end of the log, and what to do.
+	if failedAt != "" && failedAt != stepWizard && failedAt != stepChecks && ins.logPath != "" {
+		if tail := tailLog(ins.logPath, 15); tail != "" {
+			fmt.Fprintf(errOut, "\nThe last lines of %s:\n%s\n", ins.logPath, tail)
+		}
+		fmt.Fprintf(errOut, "\nWhat to do: fix the cause named above, then run  sudo bobres install  again: it keeps your settings and\n"+
+			"secrets and picks up where this stopped. More: bobres doctor, bobres logs.\n")
+	}
+	return code
+}
+
+func (ins *installer) runInstall(args []string) int {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(ins.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
@@ -156,7 +214,7 @@ func (ins *installer) install(args []string) int {
 	zpMerchant := fs.String("zarinpal-merchant-id", "", "enable Zarinpal with this merchant id (36-character id from the Zarinpal panel)")
 	zpProxy := fs.String("zarinpal-proxy", "", "http(s) proxy on a server whose IP is registered in the Zarinpal panel")
 	zpPublic := fs.String("zarinpal-public-url", "", "domain registered with Zarinpal for the pay page and callback (default: https://<domain>)")
-	s3Endpoint := fs.String("s3-endpoint", "", "copy each backup to this S3-compatible storage, https://host (Arvan, MinIO, Backblaze B2, AWS); the keys are asked")
+	s3Endpoint := fs.String("s3-endpoint", "", "copy each backup to this S3-compatible storage, https://host (Arvan, MinIO, Backblaze B2, AWS); the bucket and keys are asked if not given")
 	s3Bucket := fs.String("s3-bucket", "", "the bucket for --s3-endpoint")
 	s3Region := fs.String("s3-region", "", "the bucket's region (default: us-east-1)")
 	s3Prefix := fs.String("s3-prefix", "", "a folder in the bucket for the backups (default: none)")
@@ -167,6 +225,7 @@ func (ins *installer) install(args []string) int {
 	quiet := fs.Bool("quiet", false, "leave out the first-steps summary (bobres update runs install this way)")
 	yes := fs.Bool("yes", false, "never ask: a value still missing is an error, and the hardening step is skipped (bobres update runs install this way)")
 	noHarden := fs.Bool("no-harden", false, "skip the hardening step (firewall, fail2ban, security updates, swap; bobres harden runs it later)")
+	askHarden := fs.Bool("ask-harden", false, "hardening: ask before each step instead of doing what is safe by itself")
 	sshPort := fs.Int("ssh-port", 0, "hardening: an SSH port the firewall keeps open (needed when it cannot be detected)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -182,6 +241,15 @@ func (ins *installer) install(args []string) int {
 		ins.in, ins.readHide = bufio.NewReader(strings.NewReader("")), nil
 	}
 	ctx := context.Background()
+
+	// The banner once, for a run that is not a script's (install.sh has shown
+	// its own) and not quiet; then the progress, from here on.
+	ho, ui := parseHandoff(ins.getenv(handoffEnv)), detectUI(ins.out, ins.getenv)
+	if !ins.quiet && !ho.ok && !bannerOff(ins.getenv) {
+		printBanner(ins.out, ui)
+	}
+	ins.startProgress(ui, ho)
+	ins.prog.Begin(stepWizard)
 
 	envPath := filepath.Join(*dir, ".env")
 	env, existing, err := readEnv(envPath)
@@ -199,6 +267,8 @@ func (ins *installer) install(args []string) int {
 		}
 	}
 	panelBefore := panelValues(env)
+	set("BOBRES_DOMAIN", ins.getenv("BOBRES_DOMAIN"))
+	set("BOBRES_ADMIN_TELEGRAM_ID", ins.getenv("BOBRES_ADMIN_TELEGRAM_ID"))
 	set("BOBRES_DOMAIN", *domain)
 	set("BOBRES_ADMIN_TELEGRAM_ID", *adminID)
 	set("BOBRES_XUI_URL", *xuiURL)
@@ -226,7 +296,15 @@ func (ins *installer) install(args []string) int {
 			"To change a panel the store already uses, edit it in the dashboard (Servers).")
 	}
 
-	// Ask for what is still missing (secrets without echo).
+	// Ask for what is still missing (secrets without echo): only what has no
+	// safe default. Everything else is decided here or comes from flags.
+	introduced := false
+	intro := func() {
+		if !introduced && !*yes {
+			introduced = true
+			fmt.Fprintln(ins.out, "A few questions; everything else is automatic.")
+		}
+	}
 	for _, q := range []struct{ key, prompt string }{
 		{"BOBRES_DOMAIN", "Domain of this install (e.g. panel.example.com): "},
 		{"BOBRES_ADMIN_TELEGRAM_ID", "Your numeric Telegram user id (the owner): "},
@@ -235,6 +313,7 @@ func (ins *installer) install(args []string) int {
 		if env[q.key] != "" {
 			continue
 		}
+		intro()
 		v, err := ins.ask(q.prompt, strings.HasSuffix(q.key, "_TOKEN"))
 		if err != nil {
 			fmt.Fprintf(ins.errOut, "error: %s is required (flag, environment variable, or an interactive terminal)\n", q.key)
@@ -246,18 +325,27 @@ func (ins *installer) install(args []string) int {
 	// and asked on a fresh install only; the provisioner registers it while
 	// it has no server yet.
 	if !existing && env["BOBRES_XUI_URL"] == "" {
+		intro()
 		set("BOBRES_XUI_URL", ins.askOptional("3x-ui panel URL (https://host:port/path; Enter to add servers later in the dashboard): "))
-		if env["BOBRES_XUI_URL"] != "" {
-			ins.askPanelOnThisServer(env)
-		}
+	}
+	if env["BOBRES_XUI_URL"] != "" {
+		ins.panelOnThisServer(env)
 	}
 	if env["BOBRES_XUI_URL"] != "" && env["BOBRES_XUI_TOKEN"] == "" {
-		v, err := ins.ask("3x-ui API token (panel Settings > Security): ", true)
+		intro()
+		v, err := ins.ask(panelTokenPrompt, true)
 		if err != nil {
 			fmt.Fprintln(ins.errOut, "error: BOBRES_XUI_TOKEN is required with the panel URL (environment variable, or an interactive terminal)")
 			return 2
 		}
 		set("BOBRES_XUI_TOKEN", v)
+	}
+	// A panel that is new in this run is looked at now, before anything is
+	// written: a token it refuses must not pass for an install that works.
+	if env["BOBRES_XUI_URL"] != "" && !*offline && (!existing || panelValues(env) != panelBefore) {
+		if code := ins.verifyPanel(ctx, env); code != 0 {
+			return code
+		}
 	}
 
 	defaults := map[string]string{
@@ -296,7 +384,7 @@ func (ins *installer) install(args []string) int {
 	} else {
 		dropProfile(env, tlsProfile)
 	}
-	if code := ins.askS3(env, existing); code != 0 {
+	if code := ins.askS3(env); code != 0 {
 		return code
 	}
 	env["BOBRES_BACKUP_NETWORK"] = backupNetwork(env)
@@ -316,6 +404,23 @@ func (ins *installer) install(args []string) int {
 		return 2
 	}
 
+	ins.prog.Finish() // the questions are over
+	if ins.survive != nil {
+		ins.survive()
+	}
+	if !ins.quiet && !*yes {
+		fmt.Fprintln(ins.out, "The questions are done: from here the install runs by itself, and keeps going if your SSH connection drops.")
+		if ins.logPath != "" {
+			fmt.Fprintf(ins.out, "Follow it from a new session with  tail -f %s  (next time connect with  ssh -o ServerAliveInterval=30 ... ).\n", ins.logPath)
+		} else {
+			fmt.Fprintln(ins.out, "Next time connect with  ssh -o ServerAliveInterval=30 ...  to keep the connection alive.")
+		}
+	}
+	if *skipChecks && *offline {
+		ins.prog.Skip(stepChecks, "--skip-checks and --offline")
+	} else {
+		ins.prog.Begin(stepChecks)
+	}
 	if !*skipChecks {
 		if !ins.checks(env["BOBRES_DOMAIN"], existing) {
 			fmt.Fprintln(ins.errOut, "System checks failed; fix the items above or re-run with --skip-checks.")
@@ -342,6 +447,7 @@ func (ins *installer) install(args []string) int {
 			fmt.Fprintf(ins.errOut, "error: Telegram rejected the bot token or is unreachable%s: %v (use --offline to skip)\n", via, err)
 			return 1
 		}
+		ins.botName = name
 		fmt.Fprintf(ins.out, "Bot token OK: @%s\n", name)
 	}
 
@@ -351,6 +457,7 @@ func (ins *installer) install(args []string) int {
 		// and quietly from the menu too.
 		defer ins.savedBackupKeyNotice(envPath, env["BOBRES_BACKUP_KEY"])
 	}
+	ins.prog.Begin(stepWrite)
 	notes := ins.out
 	if ins.quiet {
 		notes = io.Discard
@@ -361,20 +468,42 @@ func (ins *installer) install(args []string) int {
 	}
 	fmt.Fprintf(ins.out, "Wrote %s (.env is readable by root only).\n", *dir)
 	if *noStart {
+		for _, k := range []string{stepPull, stepStart, stepHealthy, stepHarden} {
+			ins.prog.Skip(k, "--no-start")
+		}
 		fmt.Fprintf(ins.out, "Not starting (--no-start). Start with: cd %s && docker compose up -d\n", *dir)
 		return 0
 	}
 	if code := ins.start(ctx, *dir, env); code != 0 {
 		return code
 	}
-	// Step 8: asked step by step, so never from a run that cannot ask (--yes,
-	// as bobres update runs it) or a settings change from the menu (quiet).
+	// Hardening runs by itself where it is safe (--ask-harden asks step by
+	// step instead); never from a run that cannot ask (--yes, as bobres update
+	// runs it) or a settings change from the menu (quiet).
 	if ins.harden != nil && !*noHarden && !*yes && !ins.quiet {
-		fmt.Fprintln(ins.out, "\nServer hardening (skip it with --no-harden; run it again any time with: sudo bobres harden)")
-		if ins.harden(ctx, hardenOptions{sshPort: *sshPort, dir: *dir}) != 0 {
+		if *askHarden {
+			ins.prog.setKind(stepHarden, askStep)
+		}
+		ins.prog.Begin(stepHarden)
+		if *askHarden {
+			fmt.Fprintln(ins.out, "\nServer hardening (skip it with --no-harden; run it again any time with: sudo bobres harden)")
+		}
+		if ins.harden(ctx, hardenOptions{sshPort: *sshPort, dir: *dir, auto: !*askHarden}) != 0 {
 			fmt.Fprintln(ins.errOut, "The store is installed; the hardening did not finish (see above). Run it again with: sudo bobres harden")
 		}
+	} else {
+		why := "--no-harden"
+		switch {
+		case *yes:
+			why = "--yes never asks"
+		case ins.quiet:
+			why = "a settings change"
+		case ins.harden == nil:
+			why = "not available here"
+		}
+		ins.prog.Skip(stepHarden, why)
 	}
+	ins.prog.Begin(stepSummary)
 	if !ins.quiet {
 		ins.summary(env, *dir)
 	}
@@ -382,25 +511,12 @@ func (ins *installer) install(args []string) int {
 }
 
 // askS3 completes the optional copy of each backup to S3-compatible storage.
-// A fresh install with backups asks for an endpoint (Enter skips it), then
-// its bucket, region and folder; a re-run never asks for one. Once there is
-// an endpoint, a missing bucket or key is asked (the secret key without
-// echo), as the panel's token is. It returns an exit code (0: go on).
-func (ins *installer) askS3(env map[string]string, existing bool) int {
-	if !backupEnabled(env) {
-		return 0
-	}
-	asked := false
-	if !existing && env["BOBRES_BACKUP_S3_ENDPOINT"] == "" {
-		fmt.Fprintln(ins.out, "Off-server copies of the backups (optional): each backup also goes to an S3-compatible bucket "+
-			"(Arvan, MinIO, Backblaze B2, AWS), still encrypted.")
-		v := strings.TrimRight(ins.askOptional("S3 endpoint, https://... (Enter to skip): "), "/")
-		if v == "" {
-			return 0
-		}
-		env["BOBRES_BACKUP_S3_ENDPOINT"], asked = v, true
-	}
-	if env["BOBRES_BACKUP_S3_ENDPOINT"] == "" {
+// The install never offers it (it is off by default: the final tip says how to
+// turn it on); but once flags or the environment name an endpoint, a missing
+// bucket or key is asked (the secret key without echo), as the panel's token
+// is. It returns an exit code (0: go on).
+func (ins *installer) askS3(env map[string]string) int {
+	if !backupEnabled(env) || env["BOBRES_BACKUP_S3_ENDPOINT"] == "" {
 		return 0
 	}
 	if env["BOBRES_BACKUP_S3_BUCKET"] == "" {
@@ -410,14 +526,6 @@ func (ins *installer) askS3(env map[string]string, existing bool) int {
 			return 2
 		}
 		env["BOBRES_BACKUP_S3_BUCKET"] = strings.ToLower(v)
-	}
-	if asked {
-		if v := ins.askOptional("S3 region (Enter for us-east-1): "); v != "" {
-			env["BOBRES_BACKUP_S3_REGION"] = v
-		}
-		if v := ins.askOptional("Folder in the bucket for the backups (Enter for none): "); v != "" {
-			env["BOBRES_BACKUP_S3_PREFIX"] = v
-		}
 	}
 	for _, q := range []struct {
 		key, prompt string
@@ -476,36 +584,14 @@ func (ins *installer) ask(prompt string, secret bool) (string, error) {
 	return line, nil
 }
 
-// askPanelOnThisServer helps with the usual panel on the same server: a
-// localhost URL becomes host.docker.internal (localhost inside the containers
-// is the container itself), and plain http needs the private-panel option.
-func (ins *installer) askPanelOnThisServer(env map[string]string) {
-	u, err := url.Parse(env["BOBRES_XUI_URL"])
-	if err != nil || u.Scheme != "http" || env["BOBRES_XUI_ALLOW_PRIVATE"] == "true" {
-		return
-	}
-	if loopbackHost(u.Hostname()) {
-		host := "host.docker.internal"
-		if p := u.Port(); p != "" {
-			host += ":" + p
-		}
-		u.Host = host
-		a, _ := ins.ask(fmt.Sprintf("The panel is on this server: BOBRES reaches it as %s. Use that? [Y/n]: ", u), false)
-		if a == "" || strings.EqualFold(a, "y") || strings.EqualFold(a, "yes") {
-			env["BOBRES_XUI_URL"], env["BOBRES_XUI_ALLOW_PRIVATE"] = u.String(), "true"
-		}
-		return
-	}
-	a, _ := ins.ask("Plain http is only for a panel on this server or a private network. Is it? [y/N]: ", false)
-	if strings.EqualFold(a, "y") || strings.EqualFold(a, "yes") {
-		env["BOBRES_XUI_ALLOW_PRIVATE"] = "true"
-	}
-}
-
 func (ins *installer) checks(domain string, existing bool) bool {
 	ok := true
 	for _, r := range ins.preflight(domain) {
-		fmt.Fprintf(ins.out, "%-5s %-18s %s\n", r.Status, r.Name, r.Detail)
+		if ins.ui.fancy {
+			fmt.Fprintf(ins.out, "  %s %-18s %s\n", ins.ui.mark(statusMark(r.Status)), r.Name, r.Detail)
+		} else {
+			fmt.Fprintf(ins.out, "%-5s %-18s %s\n", r.Status, r.Name, r.Detail)
+		}
 		if r.Status != Fail {
 			continue
 		}
@@ -524,10 +610,20 @@ func (ins *installer) checks(domain string, existing bool) bool {
 // start pulls and starts the stack, then waits until every service is healthy.
 func (ins *installer) start(ctx context.Context, dir string, env map[string]string) int {
 	fmt.Fprintln(ins.out, "Pulling images and starting the stack (this can take a few minutes)...")
-	if out, err := ins.run(ctx, dir, composeArgs("up", "-d")...); err != nil {
-		fmt.Fprintf(ins.errOut, "error: docker compose up failed: %v\n%s\n", err, out)
+	ins.prog.Begin(stepPull)
+	var up []byte
+	var err error
+	if ins.runLines != nil {
+		up, err = ins.runLines(ctx, dir, ins.upProgress(), composeArgs("up", "-d")...)
+	} else {
+		up, err = ins.run(ctx, dir, composeArgs("up", "-d")...)
+	}
+	fmt.Fprintf(ins.logOut(), "%s\n", strings.TrimSpace(string(up)))
+	if err != nil {
+		fmt.Fprintf(ins.errOut, "error: docker compose up failed: %v\n%s\n", err, up)
 		return 1
 	}
+	ins.prog.Begin(stepStart)
 	ins.reloadCaddy(ctx, dir)
 	if backupEnabled(env) {
 		ins.ensureBackupRole(ctx, dir, env["DB_BACKUP_PASSWORD"])
@@ -535,7 +631,11 @@ func (ins *installer) start(ctx context.Context, dir string, env map[string]stri
 	if !tlsAgentImage(env["BOBRES_VERSION"]) {
 		ins.removeTLSAgent(ctx, dir)
 	}
-	return waitHealthy(ctx, ins.run, ins.sleep, dir, appServices(dir, env), ins.out, ins.errOut)
+	ins.prog.Begin(stepHealthy)
+	return waitHealthyProgress(ctx, ins.run, ins.sleep, dir, appServices(dir, env), ins.out, ins.errOut,
+		func(healthy, total int) {
+			ins.prog.Fraction(healthy, total, fmt.Sprintf("%d/%d healthy", healthy, total))
+		})
 }
 
 // removeTLSAgent removes the tls-agent container an earlier run of a newer
@@ -752,49 +852,15 @@ func parseHealth(out []byte) map[string]string {
 	return m
 }
 
-func (ins *installer) summary(env map[string]string, dir string) {
-	fmt.Fprintf(ins.out, `
-BOBRES is running.
-
-Next steps (in Telegram, from the owner account %s):
-  1. Open your bot and send /start.
-  2. Set your card:      /set payments.card_number 6037-...  and  /set payments.card_holder Your Name
-  3. Add a plan:         /plan_add 150000 IRT 30 50 Monthly 50GB | ماهانه ۵۰ گیگ
-  4. Offer a trial:      /trial 1 1
-  5. Open the admin panel with /admin.
-  6. Bot photo:          upload it in the dashboard (send /dashboard): Branding & texts > Store > Telegram bot
-
-Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:
-it holds the keys that encrypt your panel tokens and gateway settings.
-%sManage the store from this server at any time: run  bobres  for the menu
-(status, logs, start/stop/restart, change the bot token, admin or panel).
-Server hardening (firewall, fail2ban, security updates, swap): sudo bobres harden; bobres doctor shows it.
-`, env["BOBRES_ADMIN_TELEGRAM_ID"], env["BOBRES_DOMAIN"], dir, ins.httpsSummary(env, dir))
-	if backupEnabled(env) {
-		fmt.Fprintf(ins.out, "Backups: every day at %s (%s) into %s, each also sent to you on Telegram. One now: bobres backup\n",
-			env["BOBRES_BACKUP_TIME"], env["BOBRES_TIMEZONE"], filepath.Join(dir, "backups"))
-		fmt.Fprintln(ins.out, `They are encrypted with your backup key: keep it away from this server (bobres menu > "Backup key" shows it).`)
-		if s, err := config.ParseBackupS3(env); err == nil && s.Enabled() {
-			fmt.Fprintf(ins.out, "Each backup is also copied to %s (the newest %d are kept there).\n", s.Target(), s.Keep)
-		}
-	} else {
-		fmt.Fprintf(ins.out, "Backups are off: version %s has no backup service. Upgrade with: bobres install --version %s\n",
-			env["BOBRES_VERSION"], imageTag(version.Version))
-	}
-	if env["BOBRES_XUI_URL"] == "" {
-		fmt.Fprintln(ins.out, "No 3x-ui panel yet: add your servers in the dashboard (Servers) before you sell.")
-	}
-}
-
 // httpsSummary is the summary's paragraph about the certificate: the commands
 // of the HTTPS manager where this install has it, else where to get it.
 func (ins *installer) httpsSummary(env map[string]string, dir string) string {
 	if !tlsAgentOn(dir, env) {
 		return "The HTTPS certificate is automatic. The images this install runs (" + orDash(env["BOBRES_VERSION"]) +
-			") predate the HTTPS manager (sudo bobres ssl, System > HTTPS in the dashboard): sudo bobres update brings it.\n\n"
+			") predate the HTTPS manager (sudo bobres ssl, System > HTTPS in the dashboard): sudo bobres update brings it."
 	}
-	return "The HTTPS certificate is automatic. See it with  sudo bobres ssl status ; to use the server's IP address\n" +
-		"or your own certificate instead: sudo bobres ssl ip | manual (or the dashboard, System > HTTPS).\n\n"
+	return "The HTTPS certificate is automatic (see it: sudo bobres ssl status). For the server's IP address or your own\n" +
+		"    certificate instead: sudo bobres ssl ip | manual (or the dashboard, System > HTTPS)."
 }
 
 var merchantRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)

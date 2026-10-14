@@ -57,6 +57,9 @@ type ops struct {
 	freeGB func(path string) float64
 	sleep  func(time.Duration)
 	now    func() time.Time
+	// lookupBot tells the bot's username for the install in dir (nil: asked of
+	// Telegram with the bot token in dir's .env).
+	lookupBot func(ctx context.Context, dir string) string
 	// httpc calls the vendor's license server (nil: a 30-second client;
 	// redirects are never followed).
 	httpc *http.Client
@@ -160,9 +163,11 @@ func (o *ops) statusCmd(args []string) int {
 	if !ok {
 		return 2
 	}
-	fmt.Fprintf(o.out, "Install:  %s\nVersion:  %s\nDomain:   %s\n", *dir, orDash(env["BOBRES_VERSION"]), orDash(env["BOBRES_DOMAIN"]))
+	t := detectUI(o.out, os.Getenv)
+	label := func(s string) string { return t.paint(roleTeal, fmt.Sprintf("%-9s", s)) }
+	fmt.Fprintf(o.out, "%s %s\n%s %s\n%s %s\n", label("Install:"), *dir, label("Version:"), orDash(env["BOBRES_VERSION"]), label("Domain:"), orDash(env["BOBRES_DOMAIN"]))
 	if gb := o.freeGB(*dir); gb >= 0 {
-		fmt.Fprintf(o.out, "Disk:     %.1f GB free\n", gb)
+		fmt.Fprintf(o.out, "%s %.1f GB free\n", label("Disk:"), gb)
 	}
 	out, err := o.run(context.Background(), *dir, composeArgs("ps", "--all", "--format", "json")...)
 	if err != nil {
@@ -171,14 +176,26 @@ func (o *ops) statusCmd(args []string) int {
 	}
 	rows := parseServices(out)
 	want := allServices(*dir, env)
-	fmt.Fprintln(o.out, "\nSERVICE       STATE        HEALTH")
+	fmt.Fprintln(o.out, "\n"+t.paint(roleBold, "SERVICE       STATE        HEALTH"))
 	problems := 0
 	seen := map[string]bool{}
+	// serviceRow prints one service: on a terminal with a mark in front of it.
+	serviceRow := func(name, state, health string, ok bool) {
+		if !t.fancy {
+			fmt.Fprintf(o.out, "%-13s %-12s %s\n", name, state, health)
+			return
+		}
+		kind := markOK
+		if !ok {
+			kind = markFail
+		}
+		fmt.Fprintf(o.out, "%s %-13s %-12s %s\n", t.mark(kind), name, state, health)
+	}
 	for _, name := range want {
 		r, found := rows[name]
 		seen[name] = true
 		if !found {
-			fmt.Fprintf(o.out, "%-13s %-12s %s\n", name, "missing", "-")
+			serviceRow(name, "missing", "-", false)
 			problems++
 			continue
 		}
@@ -186,8 +203,9 @@ func (o *ops) statusCmd(args []string) int {
 		if health == "" {
 			health = "-"
 		}
-		fmt.Fprintf(o.out, "%-13s %-12s %s\n", name, r.State, health)
-		if r.State != "running" || (r.Health != "" && r.Health != "healthy") {
+		good := r.State == "running" && (r.Health == "" || r.Health == "healthy")
+		serviceRow(name, r.State, health, good)
+		if !good {
 			problems++
 		}
 	}
@@ -200,13 +218,13 @@ func (o *ops) statusCmd(args []string) int {
 	sort.Strings(extra)
 	for _, name := range extra {
 		r := rows[name]
-		fmt.Fprintf(o.out, "%-13s %-12s %s\n", name, r.State, orDash(r.Health))
+		serviceRow(name, r.State, orDash(r.Health), r.State == "running")
 	}
 	if problems > 0 {
-		fmt.Fprintf(o.out, "\n%d service(s) need attention. See: bobres logs <service>\n", problems)
+		fmt.Fprintf(o.out, "\n%s\n", t.paint(roleRed, fmt.Sprintf("%d service(s) need attention. See: bobres logs <service>", problems)))
 		return 1
 	}
-	fmt.Fprintln(o.out, "\nAll services are running.")
+	fmt.Fprintf(o.out, "\n%s\n", t.paint(roleTeal, "All services are running."))
 	return 0
 }
 
@@ -466,6 +484,13 @@ func (o *ops) backupCmd(args []string) int {
 // reports healthy, for five minutes at most.
 func waitHealthy(ctx context.Context, run func(context.Context, string, ...string) ([]byte, error),
 	sleep func(time.Duration), dir string, want []string, out, errOut io.Writer) int {
+	return waitHealthyProgress(ctx, run, sleep, dir, want, out, errOut, nil)
+}
+
+// waitHealthyProgress is waitHealthy telling onProgress (when set) how many of
+// the services are healthy after each look, for a progress bar.
+func waitHealthyProgress(ctx context.Context, run func(context.Context, string, ...string) ([]byte, error),
+	sleep func(time.Duration), dir string, want []string, out, errOut io.Writer, onProgress func(healthy, total int)) int {
 	deadline := 5 * time.Minute
 	for waited := time.Duration(0); ; waited += 5 * time.Second {
 		ps, err := run(ctx, dir, composeArgs("ps", "--format", "json")...)
@@ -479,6 +504,9 @@ func waitHealthy(ctx context.Context, run func(context.Context, string, ...strin
 				pending = append(pending, s+"="+orUnknown(health[s]))
 			}
 		}
+		if onProgress != nil {
+			onProgress(len(want)-len(pending), len(want))
+		}
 		if len(pending) == 0 {
 			fmt.Fprintln(out, "All services are healthy.")
 			return 0
@@ -490,6 +518,40 @@ func waitHealthy(ctx context.Context, run func(context.Context, string, ...strin
 		}
 		sleep(5 * time.Second)
 	}
+}
+
+// coreExitNotStaff is the exit status of core's login-link for a Telegram id
+// that is not an active staff member yet (cmd/core exitNotStaff).
+const coreExitNotStaff = 3
+
+// notStaffAdvice is what to do when the login link is refused because the
+// owner has not started the bot: one sentence, with the bot's name when it is
+// known.
+func notStaffAdvice(bot string) string {
+	who := "your bot"
+	if bot != "" {
+		who = "@" + strings.TrimPrefix(bot, "@")
+	}
+	return "Open " + who + " in Telegram and send /start once, then run this again."
+}
+
+// botName is the install's bot username (@name without the @), asked of
+// Telegram with the bot token in dir's .env; "" when it cannot be told.
+func (o *ops) botName(ctx context.Context, dir string) string {
+	if o.lookupBot != nil {
+		return o.lookupBot(ctx, dir)
+	}
+	env, ok, err := readEnv(filepath.Join(dir, ".env"))
+	if err != nil || !ok || env["BOBRES_TELEGRAM_BOT_TOKEN"] == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	name, err := botUsername(ctx, env["BOBRES_TELEGRAM_BOT_TOKEN"], telegramAPIRoot(env))
+	if err != nil {
+		return ""
+	}
+	return name
 }
 
 // adminCmd: "bobres admin link [--dir D] [telegram id]" prints a one-time
@@ -515,6 +577,12 @@ func (o *ops) adminCmd(args []string) int {
 	}
 	cargs := append(composeArgs("exec", "-T", "core", "/app", "login-link"), fs.Args()...)
 	if err := o.stream(context.Background(), *dir, cargs...); err != nil {
+		var ec interface{ ExitCode() int }
+		if errors.As(err, &ec) && ec.ExitCode() == coreExitNotStaff {
+			// The owner becomes staff by starting the bot: say so, with the bot's name.
+			fmt.Fprintln(o.errOut, notStaffAdvice(o.botName(context.Background(), *dir)))
+			return 1
+		}
 		fmt.Fprintf(o.errOut, "error: %v (is core running? bobres status)\n", err)
 		return 1
 	}

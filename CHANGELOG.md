@@ -8,6 +8,45 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.3.0] — 2026-10-14
+
+The installer and the command line, made clear and professional.
+
+### Installer
+- The installer has a new look. `install.sh`, `bobres install`, `bobres update` and `bobres menu` start with the
+  BOBRES banner (the beaver, the version, the tagline, `© 2026 BOBRES, all rights reserved`, `Made by TECSO-DEV`, the
+  license summary and the links), and the install shows one progress bar from 0 to 100% that continues from `install.sh` into
+  `bobres install`: the percent is real (steps and images or services done), never goes down and reaches 100% only
+  when the install is finished. Each step ends with a line that says OK, a warning or a failure and how long it took.
+  `bobres version`, `bobres help`, `bobres status`, `bobres doctor` and the menu got the same colors and marks on a
+  terminal.
+- When the output is a pipe, a log, `NO_COLOR` or a dumb terminal (or with `--plain` or `BOBRES_PLAIN=1`) the installer
+  prints plain ASCII lines like `[ 42%] Step 6/13: Pulling images`, with no colors and no redrawing. `--no-banner`
+  or `BOBRES_NO_BANNER=1` leave the banner out. Commands whose output other programs read are unchanged.
+- New command `bobres about`: the version, commit, license and copyright, the vendor license key's fingerprint, the
+  store installed on this server and the documentation, support and security links in one place.
+- What Docker's installer, apt and `docker compose` print no longer fills the screen: it goes to
+  `/var/log/bobres-install.log`, and a failure shows the last lines and what to do. The install ends with a
+  "BOBRES is ready" card: the address, how to log in, the health of every service, the license (the 30-day trial and
+  its days left), three next steps (the first is to send /start to your bot, which makes you the owner) and the
+  links.
+- The wizard now asks only what has no safe default: the domain, your Telegram id, the bot token and, optionally, a
+  3x-ui panel. The S3 backup questions and the hardening questions are gone (S3 stays available as flags, and the
+  summary says how); a panel on the same server needs no question either. `--domain` and `--admin-id` can also come
+  from `BOBRES_DOMAIN` and `BOBRES_ADMIN_TELEGRAM_ID`.
+- The server is hardened by itself: the firewall (SSH, 80, 443), fail2ban for SSH, automatic security updates and a
+  swap file on a small server, one line each. A step that is not safe (the SSH port not found, 3x-ui or another
+  service on this server) is skipped with a warning and the command to run. `--no-harden` skips it all and
+  `--ask-harden` brings back the questions. The installer never changes `sshd_config`, SSH password login or root
+  login, and never restarts sshd.
+- The 3x-ui panel is checked while you answer, before anything is written: it must be reachable (with the reason
+  when it is not) and accept the API token (a version outside 3.8.5 to 3.9.0 is noted and used anyway). A refused token says what to do
+  ("In 3x-ui open Settings, then API tokens (Security)...") and asks again; before, the install said everything was
+  fine and the panel refused the token later.
+- The install keeps going if your SSH connection drops, and you can follow it with
+  `tail -f /var/log/bobres-install.log`. `sudo bobres admin link` before the owner has sent /start to the bot now says
+  "Open @yourbot in Telegram and send /start once, then run this again."
+
 ## [0.2.1] — 2026-10-14
 
 The daily sales summary, the second half of the sales reports.
@@ -287,7 +326,8 @@ pull requests #13 to #48. Release candidates 0.1.0-rc.1 to rc.4 came first; rc.4
 - The legal review, the brand checks and the prices are open.
 - The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine. Fixed in 0.1.1.
 
-[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.3.0
 [0.2.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.1
 [0.2.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.0
 [0.1.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.1

@@ -109,8 +109,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/sobhanaz/bobres-3x-ui-telegr
 
 It installs Docker if needed, downloads the `bobres` CLI
 from the latest GitHub release, verifies its signature and checksum, and asks for your domain, Telegram ID, bot token
-and 3x-ui panel (tokens are typed hidden). Then it offers server hardening and prints the first steps and your backup
-key. Details: [docs/06-installer.md](docs/06-installer.md).
+and 3x-ui panel (tokens are typed hidden; the panel's token is checked before anything is written). Then it hardens
+the server by itself where that is safe and ends with a "BOBRES is ready" card and your backup key. It shows the BOBRES
+banner and one progress bar from 0 to 100%, keeps going if your SSH connection drops (follow it with
+`tail -f /var/log/bobres-install.log`), and prints plain lines when the output is a pipe or a log (`--plain`,
+`--no-banner`, `bobres about`). Details: [docs/06-installer.md](docs/06-installer.md).
 
 Afterwards run `bobres` for the management menu:
 

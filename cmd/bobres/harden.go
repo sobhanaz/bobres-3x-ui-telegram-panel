@@ -38,8 +38,12 @@ const hardenUsage = "usage: bobres harden [--yes] [--ssh-port N] [--dir DIR]"
 // hardenOptions are the choices of `bobres harden` and of the install's
 // hardening step.
 type hardenOptions struct {
-	yes     bool // apply every step without asking
-	sshPort int  // --ssh-port: an SSH port to keep open (0: only the detected ones)
+	yes bool // apply every step without asking
+	// auto is the install's way: nothing is asked. A step that is safe is done,
+	// one that is not (the SSH port not detected, a public service the firewall
+	// would close, 3x-ui on this server) is skipped with the command to run.
+	auto    bool
+	sshPort int // --ssh-port: an SSH port to keep open (0: only the detected ones)
 	// dir is the install: its .env names the services on this server the
 	// containers reach through host.docker.internal ("" or no .env: none).
 	dir string
@@ -65,6 +69,26 @@ type hardener struct {
 	goos      string
 	// aptUpdated: the package lists were refreshed in this run.
 	aptUpdated bool
+	// notify, when set, is told each step's outcome (the install shows it as
+	// one line); outcome is what the step in progress has settled on.
+	notify  func(kind markKind, label, text string)
+	outcome *stepOutcome
+}
+
+// stepOutcome is how a hardening step ended, in one line.
+type stepOutcome struct {
+	kind markKind
+	text string
+}
+
+// say records the outcome of the step in progress.
+func (h *hardener) say(kind markKind, text string) { h.outcome = &stepOutcome{kind, text} }
+
+// tell passes an outcome on to notify.
+func (h *hardener) tell(kind markKind, label, text string) {
+	if h.notify != nil {
+		h.notify(kind, label, text)
+	}
 }
 
 func newHardener(in io.Reader, out, errOut io.Writer) *hardener {
@@ -77,7 +101,7 @@ func newHardener(in io.Reader, out, errOut io.Writer) *hardener {
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // fixed programs, arguments built here
 			// apt never asks, and the output is in English (ufw status is parsed).
-			cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive", "LC_ALL=C")
+			cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive", "LC_ALL=C", "NEEDRESTART_MODE=a")
 			return cmd.CombinedOutput()
 		},
 		readFile: os.ReadFile, writeFile: writeAtomic, remove: os.Remove, exists: exists,
@@ -112,13 +136,19 @@ func (h *hardener) apply(ctx context.Context, opt hardenOptions) int {
 	distro, why := h.distro()
 	if distro == "" {
 		fmt.Fprintf(h.errOut, "Hardening skipped: %s. Nothing was changed.\n", why)
+		h.tell(markWarn, "Hardening", "skipped: "+why)
 		return 1
 	}
 	if h.euid() != 0 {
 		fmt.Fprintln(h.errOut, "error: hardening changes the system: run it as root (sudo bobres harden). Nothing was changed.")
+		h.tell(markWarn, "Hardening", "skipped: it changes the system, so it needs root (sudo bobres harden)")
 		return 1
 	}
-	fmt.Fprintln(h.out, "Hardening this server. Each step says what it changes and asks first; a step already done is left as it is.")
+	if opt.auto {
+		fmt.Fprintln(h.out, "Hardening this server by itself, where it is safe; a step already done is left as it is.")
+	} else {
+		fmt.Fprintln(h.out, "Hardening this server. Each step says what it changes and asks first; a step already done is left as it is.")
+	}
 	listeners := h.listeners(ctx)
 	ssh := h.sshPorts(ctx, listeners)
 	if opt.sshPort > 0 && !containsInt(ssh, opt.sshPort) {
@@ -126,20 +156,29 @@ func (h *hardener) apply(ctx context.Context, opt hardenOptions) int {
 		sort.Ints(ssh)
 	}
 	steps := []struct {
-		title string
-		run   func() error
+		title, label string
+		run          func() error
 	}{
-		{"Firewall (ufw)", func() error { return h.firewall(ctx, opt, ssh, listeners) }},
-		{"Blocking SSH password guessing (fail2ban)", func() error { return h.fail2ban(ctx, opt, ssh) }},
-		{"Automatic security updates (unattended-upgrades)", func() error { return h.securityUpdates(ctx, opt, distro) }},
-		{"Swap", func() error { return h.swap(ctx, opt) }},
+		{"Firewall (ufw)", "Firewall (ufw)", func() error { return h.firewall(ctx, opt, ssh, listeners) }},
+		{"Blocking SSH password guessing (fail2ban)", "SSH guard (fail2ban)", func() error { return h.fail2ban(ctx, opt, ssh) }},
+		{"Automatic security updates (unattended-upgrades)", "Security updates", func() error { return h.securityUpdates(ctx, opt, distro) }},
+		{"Swap", "Swap file", func() error { return h.swap(ctx, opt) }},
 	}
 	failed := 0
 	for i, s := range steps {
 		fmt.Fprintf(h.out, "\n[%d/%d] %s\n", i+1, len(steps), s.title)
-		if err := s.run(); err != nil {
+		h.outcome = nil
+		err := s.run()
+		switch {
+		case err != nil:
 			fmt.Fprintf(h.errOut, "  error: %v\n", err)
 			failed++
+			first, _, _ := strings.Cut(err.Error(), "\n")
+			h.tell(markFail, s.label, first+"; fix it and run: sudo bobres harden")
+		case h.outcome != nil:
+			h.tell(h.outcome.kind, s.label, h.outcome.text)
+		default:
+			h.tell(markOK, s.label, "done")
 		}
 	}
 	if failed > 0 {
@@ -187,6 +226,10 @@ func (h *hardener) confirm(opt hardenOptions, question string, def bool) bool {
 	}
 	if opt.yes {
 		fmt.Fprintln(h.out, "  "+question+suffix+"yes (--yes)")
+		return true
+	}
+	if opt.auto {
+		fmt.Fprintln(h.out, "  "+question+suffix+"yes (automatic: it is safe)")
 		return true
 	}
 	fmt.Fprint(h.out, "  "+question+suffix)
@@ -586,6 +629,11 @@ func (h *hardener) explainHosts(ps []hostPort, sources []string) {
 // open to them only. On a ufw that is already on, only the missing SSH, web
 // and container rules are offered: a 3x-ui port it refuses may be on purpose.
 func (h *hardener) firewall(ctx context.Context, opt hardenOptions, ssh []int, listeners []listener) error {
+	if len(ssh) == 0 && opt.auto {
+		fmt.Fprintln(h.out, "  The SSH port could not be detected: the firewall stays off, as turning it on could cut this session.")
+		h.say(markWarn, "skipped: the SSH port was not detected, so it could cut this session. Run: sudo bobres harden --ssh-port <port>")
+		return nil
+	}
 	if len(ssh) == 0 {
 		return errors.New("the SSH port could not be detected (sshd -T, sshd_config, ss and this session say nothing), " +
 			"so the firewall stays off: turning it on could cut this connection. Run again with --ssh-port <port>")
@@ -630,6 +678,27 @@ func (h *hardener) firewall(ctx context.Context, opt hardenOptions, ssh []int, l
 		return h.firewallOn(ctx, opt, status, rules, hosts, xui)
 	}
 
+	// Turned on from off by itself only where nothing can be cut off: 3x-ui
+	// on this server, a service the containers reach on it, or any other
+	// public service means the owner looks first.
+	if opt.auto {
+		var why []string
+		if len(xui) > 0 {
+			why = append(why, "3x-ui runs on this server ("+joinListeners(xui)+")")
+		}
+		if len(hosts) > 0 {
+			why = append(why, "BOBRES reaches a service on this server (host.docker.internal)")
+		}
+		if len(others) > 0 {
+			why = append(why, "other services listen publicly ("+joinListeners(others)+")")
+		}
+		if len(why) > 0 {
+			text := strings.Join(why, "; ")
+			fmt.Fprintf(h.out, "  The firewall stays off: %s.\n", text)
+			h.say(markWarn, "skipped: "+text+". Review, then run: sudo bobres harden")
+			return nil
+		}
+	}
 	// Turned on from off: 3x-ui keeps the ports it listens on now.
 	for _, l := range xui {
 		rules = append(rules, fwRule{port: l.port, proto: l.proto, what: "3x-ui"})
@@ -677,6 +746,7 @@ func (h *hardener) firewall(ctx context.Context, opt hardenOptions, ssh []int, l
 		}
 	}
 	fmt.Fprintln(h.out, "  Firewall on.")
+	h.say(markOK, "on: SSH "+joinInts(ssh)+", HTTP, HTTPS allowed; every other incoming connection refused")
 	return nil
 }
 
@@ -707,6 +777,7 @@ func (h *hardener) firewallOn(ctx context.Context, opt hardenOptions, status str
 	}
 	if len(missing) == 0 {
 		fmt.Fprintf(h.out, "  Already on, with %s allowed.\n", describeRules(allowed))
+		h.say(markOK, "already on, with "+describeRules(allowed)+" allowed")
 	} else {
 		fmt.Fprintf(h.out, "  ufw is already on, but does not allow %s yet.\n", describeRules(missing))
 		var newHosts []hostPort
@@ -730,7 +801,11 @@ func (h *hardener) firewallOn(ctx context.Context, opt hardenOptions, status str
 		fmt.Fprintln(h.out, "  Skipped.")
 		return nil
 	}
-	return h.allow(ctx, missing)
+	if err := h.allow(ctx, missing); err != nil {
+		return err
+	}
+	h.say(markOK, "already on; added "+describeRules(missing))
+	return nil
 }
 
 func (h *hardener) allow(ctx context.Context, rules []fwRule) error {
@@ -808,6 +883,7 @@ func (h *hardener) fail2ban(ctx context.Context, opt hardenOptions, ssh []int) e
 	running, _ := h.query(ctx, "systemctl", "is-active", "fail2ban")
 	if h.installed(ctx, "fail2ban") && h.fileIs(fail2banJail, jail) && strings.TrimSpace(running) == "active" {
 		fmt.Fprintln(h.out, "  Already on (SSH jail).")
+		h.say(markOK, "already on (SSH jail)")
 		return nil
 	}
 	fmt.Fprintf(h.out, "  This installs fail2ban (if missing) and blocks for an hour an address that fails to log in over SSH\n"+
@@ -834,6 +910,7 @@ func (h *hardener) fail2ban(ctx context.Context, opt hardenOptions, ssh []int) e
 		return err
 	}
 	fmt.Fprintln(h.out, "  fail2ban on.")
+	h.say(markOK, "on: 5 failed SSH logins in 10 minutes block an address for an hour")
 	return nil
 }
 
@@ -868,6 +945,7 @@ func (h *hardener) securityUpdates(ctx context.Context, opt hardenOptions, distr
 	want := securityOnly(distro)
 	if h.installed(ctx, "unattended-upgrades") && h.fileIs(autoUpgradesConf, autoUpgrades) && h.fileIs(securityOnlyConf, want) {
 		fmt.Fprintln(h.out, "  Already on (security updates only).")
+		h.say(markOK, "already on (security updates only)")
 		return nil
 	}
 	fmt.Fprintf(h.out, "  This installs unattended-upgrades (if missing) and installs the security updates every day. Other\n"+
@@ -886,6 +964,7 @@ func (h *hardener) securityUpdates(ctx context.Context, opt hardenOptions, distr
 		}
 	}
 	fmt.Fprintln(h.out, "  Security updates on.")
+	h.say(markOK, "on: security updates every day, never a reboot")
 	return nil
 }
 
@@ -915,15 +994,19 @@ func (h *hardener) swap(ctx context.Context, opt hardenOptions) error {
 	switch {
 	case have > 0:
 		fmt.Fprintf(h.out, "  Already on (%d MB).\n", have)
+		h.say(markOK, fmt.Sprintf("already on (%d MB)", have))
 		return nil
 	case mb <= 0 || have < 0:
 		fmt.Fprintln(h.out, "  Skipped: the memory size could not be read.")
+		h.say(markWarn, "skipped: the memory size could not be read")
 		return nil
 	case mb >= swapBelowMB:
 		fmt.Fprintf(h.out, "  Not needed: %d MB of RAM.\n", mb)
+		h.say(markOK, fmt.Sprintf("not needed: %d MB of RAM", mb))
 		return nil
 	case h.exists(swapFile):
 		fmt.Fprintf(h.out, "  Skipped: %s exists but is not in use. Check it, then: sudo swapon %s\n", swapFile, swapFile)
+		h.say(markWarn, fmt.Sprintf("skipped: %s exists but is not in use. Check it, then: sudo swapon %s", swapFile, swapFile))
 		return nil
 	}
 	size := 1024
@@ -932,6 +1015,7 @@ func (h *hardener) swap(ctx context.Context, opt hardenOptions) error {
 	}
 	if free := h.freeGB("/"); free >= 0 && free < float64(size)/1024+3 {
 		fmt.Fprintf(h.out, "  Skipped: %.1f GB free on / is too little for a %d GB swap file.\n", free, size/1024)
+		h.say(markWarn, fmt.Sprintf("skipped: %.1f GB free on / is too little for a %d GB swap file", free, size/1024))
 		return nil
 	}
 	fmt.Fprintf(h.out, "  %d MB of RAM and no swap: a %d GB swap file (%s) keeps the store from being stopped when memory runs short.\n",
@@ -961,6 +1045,7 @@ func (h *hardener) swap(ctx context.Context, opt hardenOptions) error {
 	for _, line := range strings.Split(string(fstab), "\n") {
 		if f := strings.Fields(line); len(f) > 0 && f[0] == swapFile {
 			fmt.Fprintln(h.out, "  Swap on.")
+			h.say(markOK, fmt.Sprintf("%d GB swap file on (%d MB of RAM)", size/1024, mb))
 			return nil
 		}
 	}
@@ -973,6 +1058,7 @@ func (h *hardener) swap(ctx context.Context, opt hardenOptions) error {
 		return fmt.Errorf("the swap file is on, but /etc/fstab was not updated (%w): it is off after a reboot", err)
 	}
 	fmt.Fprintln(h.out, "  Swap on.")
+	h.say(markOK, fmt.Sprintf("%d GB swap file on (%d MB of RAM)", size/1024, mb))
 	return nil
 }
 
