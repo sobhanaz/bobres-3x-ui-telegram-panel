@@ -31,16 +31,21 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
   orders, a chart per currency, top plans, how orders were paid (wallet, staff-approved, gateway), CSV files of the
   summary and of the paid orders. The numbers equal the ledger to the last unit in a test with seeded data in several
   time zones, in fa and en. Migration 00018 adds three indexes.
-- **Still open:** the daily summary message in Telegram (and its notification kind); Jalali-calendar weeks and months
-  (buckets are Gregorian now, the dates are shown in Jalali); churn; the gateway behind a payment (Zarinpal, Stars,
-  automatic USDT apart: the payments service has it, core does not store it); the ledger export's early-header and
-  deadline handling (the reports' exports have it).
+- **Built (the daily summary):** an opt-in message in Telegram (`reports.daily_summary`, off by default, at
+  `reports.daily_summary_time`, 09:00 in the store's zone) with yesterday's sales per currency, the day-before
+  comparison, refunds, top-ups, new customers and trials, to every owner and admin in their own language, queued exactly once
+  a local day, with catch-up after downtime, no flood after an outage and no make-up for days before it was switched
+  on. A day with no sales sends one line. Migration 00019 adds its claim table
+  ([14-reports.md](14-reports.md#the-daily-summary-in-telegram)).
+- **Still open:** Jalali-calendar weeks and months (buckets are Gregorian now, the dates are shown in Jalali); churn;
+  the gateway behind a payment (Zarinpal, Stars, automatic USDT apart: the payments service has it, core does not
+  store it); the ledger export's early-header and deadline handling (the reports' exports have it).
 - **Why first:** it is the cheapest piece, needs no new service, and the owner and the first customers want numbers
   from day one. It also shows the paid tiers' value.
 - **Risks:** time zones and the Jalali calendar in the numbers; money in several currencies (Toman, USDT, Stars) must
   never be added together without a stated rate.
 - **Done when:** the numbers match the ledger to the last unit in a test with seeded data, in fa and en (done), and the
-  daily summary arrives once (open).
+  daily summary is queued once (done).
 
 ### 2. Branded subscription page (M)
 - **What:** a page per customer service under the store's own brand: usage and days left, the subscription link and

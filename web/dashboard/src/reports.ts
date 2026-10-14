@@ -50,6 +50,14 @@ export interface ReportSummary {
   totals: { new_customers: number; trials: number; currencies: Record<string, ReportCell> }
 }
 
+/** GET /reports/daily-summary: whether the daily sales summary in Telegram is
+ * on, at what time (HH:MM) and in which store time zone. */
+export interface DailySummaryStatus {
+  enabled: boolean
+  time: string
+  tz: string
+}
+
 export interface ReportPlan {
   plan_id: string
   name: Record<string, string>

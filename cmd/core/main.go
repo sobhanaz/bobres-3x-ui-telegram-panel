@@ -233,6 +233,10 @@ func setup(rt *app.Runtime) error {
 	// goes wrong and when it is fixed (system.alert.v1).
 	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups, TLS: tlsMgr}
 	rt.Go("watchdog", dom.NewWatchdog(watch, rt.Log).Run)
+	// The daily sales summary (off until the store turns it on): once a local
+	// day, yesterday's sales go to the staff who hold reports.read (the
+	// dashboard's permission table says who) as report.daily_summary.v1.
+	rt.Go("daily-summary", dom.NewDailySummary(mayReadReports, rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).
@@ -258,3 +262,8 @@ func setup(rt *app.Runtime) error {
 	eventsv1.RegisterEventFeedServiceServer(gs, eventbus.NewFeedServer(eventbus.NewFeed(st.DB(), "outbox_core")))
 	return rt.ServeGRPC(cfg.GRPCAddr, gs)
 }
+
+// mayReadReports says whether a staff role holds reports.read: the daily sales
+// summary goes only to those roles. The dashboard's permission table decides,
+// so a change there is a change of who is told.
+func mayReadReports(role string) bool { return web.Allowed(role, web.PermReportsRead) }

@@ -41,12 +41,21 @@ export function numericChannel(v: string): boolean {
   return channelId.test(v)
 }
 
+/** normalizeTime reads a time of day typed in any digits as HH:MM ("9:30"
+ * becomes "09:30"); anything else is returned as typed, for validate to refuse. */
+export function normalizeTime(raw: string): string {
+  const v = latinDigits(raw.trim())
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v)
+  return m ? m[1].padStart(2, '0') + ':' + m[2] : v
+}
+
 /** normalize turns a typed value into what is sent: trimmed, numbers in
- * ASCII digits, a channel as @name or -100id. */
+ * ASCII digits, a channel as @name or -100id, a time of day as HH:MM. */
 export function normalize(item: SettingItem, raw: string): string {
   const s = raw.trim()
   if (item.kind === 'int') return asciiNumber(s)
   if (item.kind === 'channel') return normalizeChannel(s)
+  if (item.kind === 'time') return normalizeTime(s)
   if (item.key === 'payments.card_number') return latinDigits(s).replace(/^ir/i, 'IR')
   return s
 }
@@ -90,6 +99,8 @@ export function validate(item: SettingItem, value: string, others: Record<string
       return item.options.includes(value) ? null : { code: 'option' }
     case 'tz':
       return value !== 'Local' && /^[A-Za-z]+(?:[/_+-][A-Za-z0-9]+)*$/.test(value) ? null : { code: 'timezone' }
+    case 'time':
+      return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? null : { code: 'time' }
     case 'int': {
       if (!/^\d{1,15}$/.test(value)) return { code: 'int' }
       const n = Number(value)
@@ -256,7 +267,7 @@ export function zoneNow(zone: string, at = new Date()): string {
 /** ltr: values that read left to right (numbers, links, ids, addresses). */
 export function ltr(item: SettingItem): boolean {
   return (
-    ['int', 'url', 'channel', 'tz', 'color'].includes(item.kind) ||
+    ['int', 'url', 'channel', 'tz', 'time', 'color'].includes(item.kind) ||
     ['payments.card_number', 'payments.usdt_trc20', 'payments.usdt_erc20'].includes(item.key)
   )
 }
@@ -271,6 +282,7 @@ export function maxLength(item: SettingItem): number {
   }
   if (byKey[item.key]) return byKey[item.key]
   if (item.kind === 'int') return 16
+  if (item.kind === 'time') return 5
   if (item.kind === 'channel') return 64
   return 1000
 }

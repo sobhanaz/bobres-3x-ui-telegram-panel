@@ -161,3 +161,34 @@ func TestJalali(t *testing.T) {
 		t.Errorf("en date %q", got)
 	}
 }
+
+// A calendar day stays the day it names whatever zone the bot shows dates in
+// (the daily summary says which store-local day it is about), and a whole
+// percent is written in the language.
+func TestCalendarDayAndPercent(t *testing.T) {
+	defer SetLocation(CurrentLocation())
+	for _, zone := range []string{"Asia/Tehran", "Pacific/Kiritimati", "Pacific/Pago_Pago", "UTC"} {
+		SetLocation(mustLoad(zone))
+		if got := CalendarDay("en", 2026, time.October, 13); got != "13 Oct 2026" {
+			t.Errorf("%s: en day %q", zone, got)
+		}
+		if got := CalendarDay("fa", 2026, time.October, 13); got != "۲۱ مهر ۱۴۰۵" {
+			t.Errorf("%s: fa day %q", zone, got)
+		}
+	}
+	for _, c := range []struct {
+		lang string
+		n    int64
+		want string
+	}{{"en", 12, "12%"}, {"fa", 12, "۱۲٪"}, {"fa", 100, "۱۰۰٪"}, {"en", 0, "0%"}, {"xx", 5, "۵٪"}} {
+		if got := Percent(c.lang, c.n); got != c.want {
+			t.Errorf("Percent(%q, %d) = %q, want %q", c.lang, c.n, got, c.want)
+		}
+	}
+	if got, want := CurrencyName("fa", "USDT"), "تتر"; got != want {
+		t.Errorf("fa USDT %q", got)
+	}
+	if got := CurrencyName("en", "XTR"); got != "XTR" {
+		t.Errorf("an unknown currency is its code: %q", got)
+	}
+}

@@ -136,6 +136,10 @@ func currencyName(lang, currency string) string {
 	return currency
 }
 
+// CurrencyName is the currency's name in the language (the store's own name
+// for the Toman, when it set one; an unknown currency is its code).
+func CurrencyName(lang, currency string) string { return currencyName(Normalize(lang), currency) }
+
 // Money formats minor units in the currency's major unit, e.g. "150,000 Toman",
 // "۱۵۰٬۰۰۰ تومان", "25.5 USDT".
 func Money(lang string, minor int64, currency string) string {
@@ -217,11 +221,25 @@ var persianMonths = [...]string{"فروردین", "اردیبهشت", "خردا�
 // Date formats a day: Jalali in Persian ("۱۱ آبان ۱۴۰۵"), "2 Nov 2026" in English.
 func Date(lang string, t time.Time) string {
 	t = t.In(CurrentLocation())
+	return CalendarDay(lang, t.Year(), t.Month(), t.Day())
+}
+
+// CalendarDay formats a calendar date as Date does, with no clock to move it
+// across a day's edge: the day a report names stays that day.
+func CalendarDay(lang string, y int, m time.Month, d int) string {
 	if Normalize(lang) == "fa" {
-		y, m, d := GregorianToJalali(t.Year(), int(t.Month()), t.Day())
-		return Digits(lang, strconv.Itoa(d)) + " " + persianMonths[m-1] + " " + Digits(lang, strconv.Itoa(y))
+		jy, jm, jd := GregorianToJalali(y, int(m), d)
+		return Digits(lang, strconv.Itoa(jd)) + " " + persianMonths[jm-1] + " " + Digits(lang, strconv.Itoa(jy))
 	}
-	return t.Format("2 Jan 2006")
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Format("2 Jan 2006")
+}
+
+// Percent formats a whole percent: "12%", "۱۲٪".
+func Percent(lang string, n int64) string {
+	if Normalize(lang) == "fa" {
+		return Digits(lang, strconv.FormatInt(n, 10)) + "٪"
+	}
+	return strconv.FormatInt(n, 10) + "%"
 }
 
 // Clock formats a time of day in the store's time zone, 24-hour: "14:05",

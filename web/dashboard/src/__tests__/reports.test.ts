@@ -202,8 +202,9 @@ describe('the Reports page', () => {
     ],
   })
   const core =
-    (over: { summary?: () => Response }): Answer =>
+    (over: { summary?: () => Response; daily?: () => Response }): Answer =>
     (url) => {
+      if (url === '/api/v1/reports/daily-summary' && over.daily) return over.daily()
       if (url.startsWith('/api/v1/reports/summary')) return over.summary ? over.summary() : json(200, summary())
       if (url.startsWith('/api/v1/reports/plans')) return json(200, plans())
       if (url.startsWith('/api/v1/reports/methods')) return json(200, methods())
@@ -402,6 +403,51 @@ describe('the Reports page', () => {
     expect(text(err)).not.toContain('Something went wrong')
     await boot('/admin/reports', ['reports.read'], core({ summary: () => json(503, { error: 'timeout', message: 'x' }) }), 'fa')
     expect(text(await found('.report-error'))).toContain('بازهٔ کوتاه‌تری انتخاب کنید')
+  })
+
+  // The line under the page's hint: is the daily summary in Telegram on, when, in which zone, and
+  // where to change it (for staff who may change settings).
+  describe('the daily summary line', () => {
+    const line = () => document.querySelector<HTMLElement>('.daily-summary')
+    const status = (over: object) => () => json(200, { enabled: true, time: '07:30', tz: 'America/New_York', ...over })
+
+    it('says it is on, when and in which zone, and links to the switch for staff who may change settings', async () => {
+      await boot('/admin/reports', ['reports.read', 'settings.write'], core({ daily: status({}) }))
+      await found('.daily-summary')
+      expect(text(line())).toBe("Daily summary in Telegram: on. Yesterday's sales go to every owner and admin at ⁨07:30⁩ (⁨America/New_York⁩). Daily summary settings")
+      expect(line()!.classList.contains('is-on')).toBe(true)
+      const link = line()!.querySelector<HTMLAnchorElement>('a.daily-link')!
+      expect(link.getAttribute('href')).toBe('/admin/settings#setting-reports-daily-summary')
+      expect(text(link)).toBe('Daily summary settings')
+      await found('.currency-card') // the report is there too
+    })
+
+    it('says it is off', async () => {
+      await boot('/admin/reports', ['reports.read', 'settings.write'], core({ daily: status({ enabled: false, time: '09:00', tz: 'Asia/Tehran' }) }))
+      await found('.daily-summary')
+      expect(text(line())).toBe("Daily summary in Telegram: off. Turn it on to get yesterday's sales in a message every day. Daily summary settings")
+      expect(line()!.classList.contains('is-off')).toBe(true)
+    })
+
+    it('has no link for staff who may not read the settings', async () => {
+      await boot('/admin/reports', ['reports.read'], core({ daily: status({}) }))
+      await found('.daily-summary')
+      expect(text(line())).toBe("Daily summary in Telegram: on. Yesterday's sales go to every owner and admin at ⁨07:30⁩ (⁨America/New_York⁩).")
+      expect(line()!.querySelector('a')).toBeNull()
+    })
+
+    it('is left out when core cannot say, and the report still shows', async () => {
+      await boot('/admin/reports', ['reports.read', 'settings.write'], core({ daily: () => json(503, { error: 'unavailable', message: 'down' }) }))
+      await found('.currency-card')
+      expect(line()).toBeNull()
+      expect(document.querySelector('.report-error')).toBeNull()
+    })
+
+    it('reads in Persian, with the time and zone kept whole', async () => {
+      await boot('/admin/reports', ['reports.read', 'settings.write'], core({ daily: status({}) }), 'fa')
+      await found('.daily-summary')
+      expect(text(line())).toBe('خلاصهٔ روزانه در تلگرام: روشن. فروش دیروز هر روز ساعت ⁨07:30⁩ (⁨America/New_York⁩) برای همهٔ مالک‌ها و مدیرها فرستاده می‌شود. تنظیمات خلاصهٔ روزانه')
+    })
   })
 
   it('has the menu entry only for staff with reports.read, and guards the route', async () => {

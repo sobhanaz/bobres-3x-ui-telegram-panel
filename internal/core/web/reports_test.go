@@ -261,7 +261,7 @@ func TestReportsNeedThePermission(t *testing.T) {
 	if admin.loginWithLink(7101) != 200 || support.loginWithLink(7102) != 200 {
 		t.Fatal("login")
 	}
-	paths := []string{"summary", "plans", "methods", "summary.csv", "orders.csv"}
+	paths := []string{"summary", "plans", "methods", "summary.csv", "orders.csv", "daily-summary"}
 	for _, p := range paths {
 		url := "/api/v1/reports/" + p + reportQuery
 		if code, _ := owner.do(http.MethodGet, url, nil); code != 200 {
