@@ -25,7 +25,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [14-reports.md](14-reports.md) | Sales reports: what each number means in terms of the ledger, orders and events, currencies, time zone, CSV files, the `reports.read` permission and limits |
 | [pricing.md](pricing.md) | The pricing model (free core, a subscription per install), the tiers side by side, what happens when a subscription lapses, FAQ |
 | [legal/](legal/README.md) | Legal drafts for a lawyer to review: Terms of Service, Privacy Policy, Acceptable Use, Refund policy and a template for an operator's own store, each in English and Persian |
-| [launch-checklist.md](launch-checklist.md) | What the owner still has to do before selling: names, trademark, lawyer, prices, the license server, the first customers |
+| [launch-checklist.md](launch-checklist.md) | What the owner still has to do before selling: names, trademark, lawyer, prices, the license server, the first customers (Persian: [launch-checklist.fa.md](launch-checklist.fa.md)) |
 | [marketing/](marketing/README.md) | Launch material: posts, outreach text, pitch, price-list template, calendar and the claims checklist; the public site is in [../site](../site) |
 | [brand/](brand/) | The brand assets: icon, mascot, waving animation, banner, bot avatar (rules in 08-brand.md) |
 
