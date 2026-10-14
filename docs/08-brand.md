@@ -66,7 +66,8 @@ The dashboard copies are what the build ships: Vite hashes `src/assets` into `/a
   an operator's store.
 - **Operators' own branding wins.** A store that uploads its logo gets it in the dashboard (sidebar, login card,
   tab and home-screen icons) and the mascot leaves the login page; the bot's name, texts and photo are the
-  operator's. "Powered by BOBRES" shows only under a valid license without `white_label` (see 05-license.md).
+  operator's. "Powered by BOBRES" shows on every install except one whose valid license includes `white_label` (the free tier, the
+  trial and a license without it show it; see 05-license.md).
 - **Clear space:** keep a margin of at least a quarter of the picture's width free on every side of the icon
   and the mascot: no text, edges or other logos inside it.
 - **Never stretch** or squash him; scale proportionally only. Do not rotate, recolour, outline, crop the icon's

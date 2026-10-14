@@ -162,6 +162,9 @@ services:
       <<: *common-env
       BOBRES_DATABASE_URL: postgres://svc_core:${DB_CORE_PASSWORD}@postgres:5432/bobres?sslmode=disable
       BOBRES_DOMAIN: ${BOBRES_DOMAIN}
+      # Optional: whom the dashboard's License tab and `bobres license status` tell the owner to ask
+      # to buy or renew a license ("" = "ask the seller you got BOBRES from").
+      BOBRES_SELLER_CONTACT: ${BOBRES_SELLER_CONTACT:-}
       # Optional: where staff open the dashboard, when not https://BOBRES_DOMAIN (local tests).
       BOBRES_PUBLIC_URL: ${BOBRES_PUBLIC_URL:-}
       # The second domain registered with Zarinpal ("" = none): part of the HTTPS setting core

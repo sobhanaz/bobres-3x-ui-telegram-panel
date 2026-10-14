@@ -15,8 +15,9 @@ sudo bobres update --check
 
 It prints this install's version, the update channel, the latest release (its signature verified) and whether it is
 newer. Exit 1 means the check failed (GitHub unreachable, or a release that does not pass the signature check: never
-install that one). "Newer: yes, but not covered by your license" means the license's updates ended before that release
-came out: `bobres update` will not install it (see the table below).
+install that one). A "Note: this release ... is newer than your license's update date" line after "Newer: yes" is
+information only: the license's update date is before that release came out, and `bobres update` installs it all the
+same (security updates are never withheld).
 
 The store follows the **stable** channel unless `/opt/bobres/.env` says `BOBRES_UPDATE_CHANNEL=beta` (pre-releases
 too). `--channel stable|beta` overrides it for one command. How to change channel, and what going back to stable
@@ -58,6 +59,8 @@ exits 1, and the restore point of the update before (if any) is the current one 
 
 ### What update refuses
 
+The `Note:` and `warning:` rows are information: the update goes on.
+
 | Message | Meaning | Fix |
 |---|---|---|
 | `the release did not pass the signature check` / `not signed` | Tampered, unsigned, revoked or expired | Do not install it. Check the system clock (`date -u`); otherwise escalate |
@@ -66,8 +69,8 @@ exits 1, and the restore point of the update before (if any) is the current one 
 | `the release's key list (seq N) is older than the one this server has seen` | An old key list, as a replay of an old release would bring | Do not install it. Escalate |
 | `GB free in ...: an update needs at least 2 GB` | Not enough room for the backup and the new images | Free some space (old `-before-restore`/`-before-rollback` backups, `docker image prune`), run again. Nothing was changed |
 | `BOBRES already runs X` | Nothing to do | - |
-| `release X is newer than your license covers: it was issued on D, and the license's updates end on U` | The license includes the releases published until its "Updates until" date (`sudo bobres license status`) | Renew the license's updates with the seller. The current version keeps working. Nothing was changed |
-| `warning: the license could not be read` | Core did not answer, so the license's update date was not checked | Nothing to fix for the update; check `bobres status` afterwards |
+| `Note: this release (issued on D) is newer than your license's update date (U)` | Information, not an error: the license was sold with updates until that date (`sudo bobres license status`), and the update goes on | Nothing to fix. Renew the license with the seller if you want its update date moved |
+| `warning: the license could not be read` | Core did not answer, so the note about the license's update date was skipped | Nothing to fix for the update; check `bobres status` afterwards |
 | `release X is a beta release and this install follows stable` | The release is a pre-release (signed for the beta channel) | Use the stable releases, or `--channel beta` if you want that pre-release |
 | `BOBRES runs the pre-release X, newer than the latest stable release` | This store took a beta, then went back to stable | Nothing to do: it updates once a stable release is newer (or use `--channel beta`) |
 | `the beta channel's releases could not be listed` | `api.github.com` did not answer (filtered, or over its 60 requests an hour) | Try again later, or use the stable channel, which needs only `github.com` |

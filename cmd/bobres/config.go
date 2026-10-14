@@ -75,6 +75,8 @@ var configKeys = []configKey{
 			}
 			return nil
 		}},
+	{name: "BOBRES_SELLER_CONTACT", services: []string{"core"}, optional: true,
+		help: "whom the License tab and `bobres license status` tell you to ask to buy or renew a license (a Telegram handle, an address; empty: \"ask the seller you got BOBRES from\")"},
 	// The S3 upload's plain settings; its keys are secrets (bobres install asks
 	// for them). install's validateEnv checks them together.
 	{name: "BOBRES_BACKUP_S3_ENDPOINT", services: []string{"backup"}, optional: true,

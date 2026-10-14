@@ -26,6 +26,24 @@ describe('error texts', () => {
     expect(errorText(new ApiError(500, 'internal', 'boom'), t)).toEqual({ text: 'error.generic', detail: '' })
     expect(errorText(new Error('x'), t)).toEqual({ text: 'error.generic', detail: '' })
   })
+  it('says which limit refused a new action, and to buy or renew a license', () => {
+    const refused = (gate: string, message: string) => new ApiError(409, 'state', message, { error: 'state', license: gate, message })
+    const words = 'the free tier allows 1 server: buy or renew a license to add servers'
+    expect(errorText(refused('max_servers', words), t)).toEqual({ text: 'license.refused.max_servers', detail: words })
+    for (const gate of ['max_servers', 'max_active_services', 'dashboard_staff_seats', 'resellers', 'gateways', 'crypto_watcher', 'other']) {
+      for (const [lang, page] of [['fa', fa], ['en', en]] as const) {
+        const text = (page.license.refused as Record<string, string>)[gate]
+        expect(text, `${lang} ${gate}`).toBeTruthy()
+      }
+    }
+    // a gate this page does not know still gets a sentence
+    expect(errorText(refused('something_new', 'x'), t)).toEqual({ text: 'license.refused.other', detail: 'x' })
+    // every sentence says to buy or renew a license, in both languages
+    for (const text of Object.values(en.license.refused)) expect(text).toContain('Buy or renew a license')
+    for (const text of Object.values(fa.license.refused)) expect(text).toContain('بخرید یا تمدید کنید')
+    // a refusal that is not about a license keeps the plain state text
+    expect(errorText(new ApiError(409, 'state', 'the server still has clients', { error: 'state' }), t)).toEqual({ text: 'error.state', detail: 'the server still has clients' })
+  })
   it('names the field core refused, as input or for this role', () => {
     expect(fieldError(new ApiError(400, 'invalid', 'a whole number', { field: 'weight' }))).toEqual({ weight: 'a whole number' })
     expect(fieldError(new ApiError(403, 'forbidden', 'owner only', { field: 'allow_private' }))).toEqual({ allow_private: 'owner only' })

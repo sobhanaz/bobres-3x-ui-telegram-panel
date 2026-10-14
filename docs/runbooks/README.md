@@ -44,6 +44,7 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 | Paid orders could not be delivered in the last hour | `orders.provision_failed` | [Provisioning backlog](provisioning-backlog.md) |
 | The bot is behind on its messages (over 10 minutes) | `events.bot_lag` | `bobres logs --tail 200 bot`; [Bot token revoked](bot-token-revoked.md) if Telegram refuses the token |
 | The license expires soon, is in its grace period or has expired | `license.expiry` | [License](license.md) |
+| A new purchase was refused: the install is at its limit of active services (one notice a day) | `license.limit` | [License](license.md) |
 | Caddy, the HTTPS gateway, has answered on none of the store's addresses for 3 minutes | `tls.caddy` | [HTTPS certificates](https.md#alerts) |
 | An HTTPS certificate is close to its end (renewal failing, or an own certificate not replaced), or an address has served no valid certificate for 30 minutes | `tls.<role>.expiring`, `tls.<role>.failing` (`<role>`: `domain`, `ip`, `zarinpal`) | [HTTPS certificates](https.md#alerts) |
 | The saved HTTPS setting is not in use | `tls.setting` | [HTTPS certificates](https.md#an-own-certificate-after-a-domain-change-or-a-new-master-key) |

@@ -3,16 +3,25 @@
 The License tab is not **Active**, a license token is refused, or the dashboard refuses an action because of the
 license. Commands run on the server as root. How licenses work: [05-license.md](../05-license.md).
 
-A missing or invalid license never stops the store: everything keeps working, unlicensed. A license only ever limits
-**new** servers, staff, resellers and payment methods, and only once it is active (or expired); nothing already set
-up is ever removed.
+A missing or invalid license never stops the store: everything keeps working. Without a valid license the install runs
+on its 30-day trial and then on the free tier (1 server, 25 active services, 2 staff seats, no resellers, no automatic
+USDT, no white label). A license never leaves less than the free tier. Until a vendor key is embedded, no license can
+be installed, so every install ends on the free tier after the 30-day trial. Those limits, and a license's, only refuse
+**new** servers, services, staff, resellers and payment methods; nothing already set up is ever removed or stopped,
+and customers keep renewing.
 
 ## Symptoms
 
-- The System page, **License** tab, shows a state other than **Active** (staff who see the page also get a chip in
-  the top bar).
-- Adding a 3x-ui server, a staff member, a reseller, or switching a payment method on is refused, naming the license
-  (the server limit, the staff seats, the resellers feature, the allowed gateways).
+- The System page, **License** tab, shows a state other than **Active**, or the free tier or the trial (staff who see
+  the page also get a chip in the top bar).
+- Adding a 3x-ui server, a staff member (an owner takes a seat like anyone else but the owner named in `.env`), a
+  reseller, or switching a payment method on is refused, naming the limit
+  and saying to buy or renew a license (the server limit, the staff seats, the resellers feature, the allowed
+  gateways, automatic USDT).
+- Customers are told "New purchases are temporarily unavailable. Please contact support.", and the staff get a
+  warning, "A new purchase was refused: this install is at its limit of ... active services": the install is at its
+  limit of active services and a new order or free trial was refused. Existing services keep working and renewing.
+  Buy or renew a license that allows more, or wait for services to end.
 - `bobres license import` answers `not installed: <reason>`.
 
 ## Checks
@@ -23,21 +32,25 @@ date -u                     # the server's clock: licenses are dated
 ```
 
 It prints the state, this install's id, the domain and, for an installed token, its license id, tier, expiry, grace
-end, binding and entitlements. The same is on the License tab, with each limit's use.
+end and binding; then what is in effect (`In effect`: license, trial or free tier; `Trial ends`) with each limit and
+its use (`Services: 25 (3 in use)`, counting the services on their way), the gateways and features, and whom to
+contact (the "Buy or renew" row, only when `BOBRES_SELLER_CONTACT` is set: `sudo bobres config set BOBRES_SELLER_CONTACT
+@handle`). The same is on the License tab. Staff get a `license.trial` alert in the last 7 days of the trial and once
+when it ends.
 
-| State | Means | Effect |
+| State | Means | What applies |
 |---|---|---|
-| missing | No token installed | Nothing is limited ("Unlicensed") |
-| invalid | The saved token does not verify here (the reason below) | Nothing is limited |
-| active | Valid until its expiry | New servers, staff, resellers and payment methods are checked against it |
-| grace | Expired, inside its grace days | As active, with a warning: renew it |
-| expired | Past the grace too | Those new actions are refused; everything set up keeps working |
+| missing | No token installed | The trial (30 days from the first start of this version), then the free tier |
+| invalid | The saved token does not verify here (the reason below) | The same: it counts as no license |
+| active | Valid until its expiry | The license's entitlements |
+| grace | Expired, inside its grace days | The license's entitlements, with a warning: renew it |
+| expired | Past the grace too | The trial if it still runs, else the free tier; everything set up keeps working |
 
 ## Fixes by reason
 
 | Reason | Meaning | Fix |
 |---|---|---|
-| `unknown_key`: "this build has no public key that could verify a license yet" | This BOBRES version knows no vendor key that signed it | Until the vendor ships its key in a release, every token is refused this way and nothing is limited. Update (`sudo bobres update`) once the vendor says the key is in |
+| `unknown_key`: "this build has no public key that could verify a license yet" | This BOBRES version knows no vendor key that signed it | Until the vendor ships its key in a release, every token is refused this way and the install runs on its trial, then the free tier. Update (`sudo bobres update`) once the vendor says the key is in |
 | `malformed`: "this is not a license token" | The token was cut or changed when copied | Get it again as a file and import the file (below) |
 | `bad_signature` | Changed, or not from the BOBRES vendor | Ask the vendor for the token again |
 | `version` | Newer format than this version understands | `sudo bobres update` |
@@ -78,11 +91,11 @@ by itself; the Source row of `bobres license status` then says "renewed online o
 | `the license server refused: ... (invalid_key)` | A typo in the key, or a key that no longer exists: ask the seller |
 | `... (reactivation_limit)` | The key moved to another install too often this year (the message has the date): ask the seller |
 | `the license server did not answer` | The address is wrong (`sudo bobres config set BOBRES_LICENSE_SERVER <the right one>`), or this server cannot reach it |
-| The renewal date in `bobres license status` stops moving | The daily refresh fails: `sudo bobres logs core \| grep "license refresh"`. Check `sudo bobres config get BOBRES_LICENSE_SERVER` and the bot's internet access. Nothing is limited before the token's expiry and grace end |
+| The renewal date in `bobres license status` stops moving | The daily refresh fails: `sudo bobres logs core \| grep "license refresh"`. Check `sudo bobres config get BOBRES_LICENSE_SERVER` and the bot's internet access. The token keeps working until its expiry and grace end |
 
 **Renew before the end.** The License tab and `bobres license status` show the days left and the grace end. In grace
-nothing changes yet; after it, new servers, staff, resellers and payment methods are refused until a new token is
-installed.
+nothing changes yet; after it, the free tier's limits (or the trial's, while it runs) apply to new servers, services,
+staff, resellers and payment methods until a new token is installed.
 
 **Moving to a new server:** restore the backup there (`bobres restore`, see [restore](restore.md)) with the same
 domain: the database carries the install id and the token, so the license keeps working. A fresh install without the

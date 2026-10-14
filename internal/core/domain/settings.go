@@ -386,10 +386,14 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
-	// Switching a payment method on is a new action a license may gate.
-	var gate *LicenseStatus
+	// Switching a payment method on is a new action the effective
+	// entitlements may refuse.
+	var gate *EffectiveLicense
 	if touchesToggle(norm) {
-		gate = s.gatingLicense(ctx)
+		var err error
+		if gate, err = s.Effective(ctx); err != nil {
+			return nil, err
+		}
 	}
 	var changes []SettingChange
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {

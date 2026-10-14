@@ -69,7 +69,12 @@ pull requests #13 to #44. Everything below is new in this release.
   trust it, and the live error. The owner picks the mode: the domain's automatic certificate, a Let's Encrypt
   certificate for the server's IP address (with a Detect button and the warnings), or an own certificate and private key
   (files or paste). The page waits for the certificate to be issued and shows Caddy's own words when it refuses.
-- A "Powered by BOBRES" footer only under a valid license without white label.
+- A "Powered by BOBRES" footer on every install except one whose license includes white label (the free tier and
+  the trial show it).
+- The License tab opens with what applies now: the free tier, the trial with its days left, or the license's tier,
+  then the entitlements with this install's use of each limit, and whom to contact to buy or renew a license. A chip
+  in the menu and on the System tab says so too. A refused action in the dashboard names the limit and says to buy or
+  renew a license.
 
 ### Payments
 - The wallet, always on.
@@ -125,6 +130,25 @@ pull requests #13 to #44. Everything below is new in this release.
 - Licenses: a signed token pasted on the dashboard or imported with `bobres license import`, or activated online with
   a license key (`bobres license activate`) and refreshed daily. The vendor's license server, `licensesrv`, is part of
   the repository ([docs/13-license-server.md](docs/13-license-server.md)).
+- Free core, paid premium ([docs/05-license.md](docs/05-license.md)). An install without a valid license runs on a free
+  tier: 1 server, 25 active services, 2 staff seats, no resellers, no automatic USDT, no white label, the Zarinpal,
+  Stars and manual payment methods, and security updates always. Every install, fresh or upgraded, first has a 30-day
+  trial (migration 00017) with unlimited servers and services, resellers, automatic USDT and 5 staff seats, but not
+  white label. The limits refuse only new actions: a server, a new service (an order, a free trial or a reseller's
+  purchase), a reseller, a staff member, a payment method. Customers' existing services keep working, renewing and
+  topping up, and staff over a limit keep their access. A customer whose purchase is refused sees only "New purchases
+  are temporarily unavailable. Please contact support."; staff get one `license_limit` alert a day, and a `trial_ending`
+  alert in the trial's last 7 days and once when it ends. `bobres license status` shows what is in effect, the trial's
+  end and the use of each limit.
+- A license never leaves less than the free tier (a limit it omits, or sets lower, is raised to the free tier's, and the
+  gateway lists are joined). The services on their way (being delivered, paid, or awaiting payment for up to 2 hours)
+  count against the limit, which is checked in the order's own transaction so orders made together cannot overshoot it.
+  Every staff member but the owner named in `.env` takes a seat, an owner too. A reseller's new purchase, and the
+  premium payment methods offered to customers, follow the effective entitlements, so a lapsed install stops offering
+  what the trial had switched on.
+- A license's `updates_until` is advisory: `bobres update`, `--check`, the menu and the dashboard note that a release is
+  newer than the license's update date and install it all the same. The seller's contact is the owner's
+  (`BOBRES_SELLER_CONTACT`); none is built in.
 
 ### Security
 - Four services, each with its own database role and service token; a service accepts only its legitimate callers.
@@ -147,7 +171,8 @@ pull requests #13 to #44. Everything below is new in this release.
   only the install's own domain and Zarinpal domain, and a change is committed only after Caddy accepts it. An own
   certificate's private key is sealed with core's master key, and never logged, audited or answered. Caddy's image is
   pinned by version and digest.
-- A missing or invalid license blocks nothing, and a license only ever gates new actions.
+- Every install runs on a 30-day trial and then on the free tier, and a license only ever gates new actions: nothing
+  that exists is removed.
 
 ### Brand
 - BOBRES the beaver: the mascot is the logo. A flat icon, a 3D render, a waving animation, a banner, a bot avatar and a bot description picture,
@@ -159,8 +184,9 @@ pull requests #13 to #44. Everything below is new in this release.
 ### Known limits
 - Not built: third-party crypto processors (they exclude Iran), TON, older 3x-ui adapters (only v3.x, tested on
   v3.8.5 and v3.9.0), a branded subscription page, re-encryption with new master keys, metrics dashboards.
-- No vendor public key is embedded yet, so every license token is refused as "unknown key" until one ships. A missing
-  license blocks nothing.
+- No vendor public key is embedded yet, so every license token is refused as "unknown key" until one ships: until then
+  no license can be installed, so every install ends on the free tier after its 30-day trial (the vendor key ships
+  in the same release).
 - Image signatures are not checked on the server (the release workflow checks them before it builds their digests
   into the CLI). Postgres and Redis come from Docker Hub by tag, and Caddy by version and digest.
 - The server IP address mode needs a public address with ports 80 and 443 reachable from the internet (not behind

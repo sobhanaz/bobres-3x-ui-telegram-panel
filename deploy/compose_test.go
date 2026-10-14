@@ -69,6 +69,41 @@ func TestComposeGivesTheBotItsSettings(t *testing.T) {
 	}
 }
 
+// BOBRES_SELLER_CONTACT from .env reaches core (it has no env_file): the
+// dashboard's License tab and `bobres license status` show it. Unset, core
+// gets an empty one (the screens then say "ask the seller you got BOBRES
+// from"). The template documents it, commented: there is no default.
+func TestComposeGivesCoreItsSellerContact(t *testing.T) {
+	load := func(env map[string]string) config.Core {
+		t.Helper()
+		for _, kv := range os.Environ() {
+			if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "BOBRES_") {
+				t.Setenv(k, "")
+			}
+		}
+		for k, v := range composeEnv(t, "core", env) {
+			t.Setenv(k, v)
+		}
+		c, err := config.LoadCore()
+		if err != nil {
+			t.Fatalf("core does not start with the compose environment: %v", err)
+		}
+		return c
+	}
+	if c := load(installEnv(map[string]string{"BOBRES_SELLER_CONTACT": "@test_seller"})); c.SellerContact != "@test_seller" {
+		t.Errorf("core's seller contact is %q: BOBRES_SELLER_CONTACT from .env does not reach it", c.SellerContact)
+	}
+	if c := load(installEnv(nil)); c.SellerContact != "" {
+		t.Errorf("without the line, core's seller contact is %q", c.SellerContact)
+	}
+	if !regexp.MustCompile(`(?m)^#BOBRES_SELLER_CONTACT=`).Match(EnvExample) {
+		t.Error(".env.example does not document BOBRES_SELLER_CONTACT")
+	}
+	if want := "BOBRES_SELLER_CONTACT: ${BOBRES_SELLER_CONTACT:-}"; !strings.Contains(string(ComposeFile), want) {
+		t.Errorf("the compose file lacks %q", want)
+	}
+}
+
 // installEnv is an install's .env: the template's lines with test secrets in
 // place of its CHANGE_ME values (each different, as bobres install makes
 // them), then extra.

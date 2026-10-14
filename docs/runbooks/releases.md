@@ -110,21 +110,29 @@ Use `--channel beta` and the pre-release's version to re-sign a beta. The key id
 that is not revoked (`RELEASE_KEY_ID` in the repository's variables).
 
 **Re-signing moves the release's date.** `sign.sh` writes the time it runs as `# issued`, and a license's
-`updates_until` is compared with that date (next section). A re-signed release looks as new as the day it was
-re-signed, so a store whose updates ended between the release and the re-sign can no longer install it. Publish the
-re-sign as early as the reminder allows, and tell the affected customers (or extend their `updates_until`) when it
-matters. `sign.sh` cannot keep the original date yet.
+a license's advisory `updates_until` note is compared with that date (next section). A re-signed release looks as new
+as the day it was re-signed, so a store whose license's update date fell between the release and the re-sign sees the
+note on it. It is only a note: the release is installed all the same. `sign.sh` cannot keep the original date yet.
 
 ## Licenses and release dates (`updates_until`)
 
-A license may carry `updates_until` (YYYY-MM-DD): the releases issued up to that day are covered. `bobres update`
-refuses a release issued later ("release X is newer than your license covers"), its `--check` and the menu say "Newer:
-yes, but not covered by your license", and the dashboard's Updates tab shows "Not covered by your license". The
-release's day is the `# issued` line of its signed `checksums.txt`, in UTC.
+A license may carry `updates_until` (YYYY-MM-DD), the end of the updates it was sold with. It is **advisory**: security
+updates are never withheld, so no release is ever refused or hidden for it. For a release issued after that day,
+`bobres update` prints "Note: this release (issued on D) is newer than your license's update date (U). It is installed
+all the same", `--check` prints the same note after "Newer: yes. Update with: sudo bobres update", the menu offers the
+update, and the dashboard's Updates tab shows the update with its command and a line saying the release is newer than the
+license's update date. The release's day is the `# issued` line of its signed `checksums.txt`, in UTC.
 
-Only a license that verifies for this install counts (active, in grace or expired). A missing or invalid license
-gates nothing, as everywhere else: such a store can install any release. A release without an `# issued` line is
-covered. If core cannot be asked (it is not running), `bobres update` warns and does not refuse.
+Only a license in force for this install has a date to compare (it verifies here, and is active or in its grace
+period). A missing, invalid or ended license has none (the free tier and the trial have no `updates_until`): such a store
+gets every release without a note, as does one whose release has no `# issued` line. If core cannot be asked (it is not
+running), `bobres update` warns that the note is skipped and goes on.
+
+## Before the first release with a license key
+
+Until a vendor key is embedded, no license can be installed, so every install ends on the free tier after the 30-day
+trial: the vendor key ships in the same release (`docs/launch-checklist.md`). Check that `internal/license/keys/` holds
+the vendor's `.pub` before tagging.
 
 ## The key list expires too
 

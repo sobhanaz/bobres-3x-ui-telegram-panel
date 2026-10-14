@@ -31,6 +31,10 @@ const logo = computed(() => auth.publicBrand?.logo || icon)
 // (white label) never shows him, and he waits for /brand to answer so a
 // store's logo is never preceded by a flash of the mascot.
 const mascot = computed(() => auth.publicBrand !== null && !auth.publicBrand.logo)
+// "Powered by BOBRES" is the default: shown once /brand has answered unless it
+// says no, and shown too when /brand fails (an error never hides it). It waits
+// for the answer so a white-label store never sees a flash of it.
+const showPoweredBy = computed(() => auth.publicBrandSettled && auth.publicBrand?.powered_by !== false)
 onMounted(() => {
   if (auth.publicBrand && !auth.me) applyBrandColor(auth.publicBrand.color)
   void auth.loadPublicBrand()
@@ -149,7 +153,7 @@ async function submit() {
         </template>
       </Card>
     </div>
-    <footer v-if="auth.publicBrand?.powered_by" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
+    <footer v-if="showPoweredBy" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
   </div>
 </template>
 

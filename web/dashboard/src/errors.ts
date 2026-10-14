@@ -2,10 +2,19 @@ import { ApiError } from './api'
 
 type T = (key: string, params?: Record<string, unknown>) => string
 
+/** The limits and features a refusal can name (409 with `license`: the gate). */
+const LICENSE_GATES = ['max_servers', 'max_active_services', 'dashboard_staff_seats', 'resellers', 'gateways', 'crypto_watcher']
+
 /** errorText is what a failed request shows: a sentence in the staff
- * member's language, and the server's own reason when it says more. */
+ * member's language, and the server's own reason when it says more. A new
+ * action refused by what applies on this install (the license, the trial or
+ * the free tier) says which limit, and to buy or renew a license; core's
+ * words (with the number) follow as the detail. */
 export function errorText(e: unknown, t: T): { text: string; detail: string } {
   if (!(e instanceof ApiError)) return { text: t('error.generic'), detail: '' }
+  if (e.code === 'state' && typeof e.data.license === 'string') {
+    return { text: t('license.refused.' + (LICENSE_GATES.includes(e.data.license) ? e.data.license : 'other')), detail: e.message }
+  }
   const known: Record<string, string> = {
     network: 'error.network',
     forbidden: 'error.forbidden',

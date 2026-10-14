@@ -449,8 +449,24 @@ func TestRepeatDue(t *testing.T) {
 		{"a day after the reminder", at(6 * time.Hour), 30 * time.Hour, true},
 		{"a day after a late reminder", at(8 * time.Hour), 31 * time.Hour, false},
 	} {
-		if got := repeatDue(since, c.lastSent, since.Add(c.now)); got != c.want {
+		if got := repeatDue(since, c.lastSent, since.Add(c.now), false); got != c.want {
 			t.Errorf("%s: %v", c.name, got)
+		}
+	}
+	// A daily notice has no 6-hour reminder: only a day after it was sent.
+	for _, c := range []struct {
+		name     string
+		lastSent *time.Time
+		now      time.Duration
+		want     bool
+	}{
+		{"six hours", at(time.Minute), 6 * time.Hour, false},
+		{"23 hours later", at(time.Minute), 24 * time.Hour, false},
+		{"a day later", at(time.Minute), 24*time.Hour + time.Minute, true},
+		{"never sent", nil, 48 * time.Hour, false},
+	} {
+		if got := repeatDue(since, c.lastSent, since.Add(c.now), true); got != c.want {
+			t.Errorf("daily %s: %v", c.name, got)
 		}
 	}
 }
@@ -1080,6 +1096,42 @@ func TestLicenseCheck(t *testing.T) {
 	}
 }
 
+// The limit notice: absent until a purchase was refused, open for 24 hours
+// after one while the install is still at the limit, and it never says
+// "fixed" (the daily flag).
+func TestLimitCheck(t *testing.T) {
+	a := newAlertWorld(t, WatchdogSources{})
+	v := licensed(t, a.svc, a.now)
+	a.svc.cfg.License.Now = func() time.Time { return a.now }
+	// The trial ended long ago: its own notice is not what this test is about.
+	setTrialStart(t, a.st, a.now.Add(-90*24*time.Hour))
+	w := &gateWorld{t: t, svc: a.svc, s: a.st, now: a.now, tg: 980000, v: v}
+	w.activeServices(license.FreeMaxActiveServices)
+	if p := probeOf(a, a.w.license); !p.covered || len(p.checks) != 0 {
+		t.Fatalf("no refused purchase: %+v", p)
+	}
+	if err := a.st.NoteLimitHit(context.Background(), a.st.Conn(), a.now.Add(-23*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	c := checkOf(t, probeOf(a, a.w.license), "license.limit")
+	if !c.problem || !c.daily || c.title != "alert.license_limit" || c.severity != events.SeverityWarning ||
+		c.args["limit"] != "25" || c.args["name"] != "active_services" {
+		t.Fatalf("a refused purchase: %+v", c)
+	}
+	a.after(2 * time.Hour)
+	if c = checkOf(t, probeOf(a, a.w.license), "license.limit"); c.problem {
+		t.Fatalf("a day later: %+v", c)
+	}
+	// Refused again, but a license lifted the limit: no problem.
+	if err := a.st.NoteLimitHit(context.Background(), a.st.Conn(), a.now); err != nil {
+		t.Fatal(err)
+	}
+	install(t, a.st, v.token(func(tok *license.Token) { tok.Entitlements.MaxActiveServices = 500 }))
+	if c = checkOf(t, probeOf(a, a.w.license), "license.limit"); c.problem {
+		t.Fatalf("under a license that allows more: %+v", c)
+	}
+}
+
 // The System page lists the announced problems only, critical first, then
 // the oldest, each with its text in English.
 func TestOpenAlerts(t *testing.T) {
@@ -1138,7 +1190,7 @@ func TestAlertTitlesExist(t *testing.T) {
 		"alert.usdt_failing": nil, "alert.usdt_stuck": {"count"}, "alert.backup_offsite": nil,
 		"alert.backup_stale": {"hours"}, "alert.disk_low": {"free"}, "alert.provision_failed": {"count"},
 		"alert.bot_lag": {"minutes"}, "alert.license_expiring": {"date", "days"}, "alert.license_grace": {"date"},
-		"alert.license_expired": nil, "alert.tls_expiring": {"address", "date", "days"}, "alert.tls_failing": {"address"},
+		"alert.license_expired": nil, "alert.license_limit": {"limit", "name"}, "alert.trial_ending": {"date", "days"}, "alert.trial_ended": nil, "alert.tls_expiring": {"address", "date", "days"}, "alert.tls_failing": {"address"},
 		"alert.tls_problem": nil, "alert.tls_caddy_down": nil,
 	}
 	for key, args := range titles {

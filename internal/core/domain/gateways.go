@@ -149,9 +149,17 @@ func (s *Service) usdtCharge(ctx context.Context, amount int64, currency string)
 
 // PaymentMethods lists the automated methods usable for a price (amount in
 // currency; 0 = any typical price): offered by payments, switched on and
-// priced (rates set) here, and within the method's limits.
+// priced (rates set) here, within the method's limits, and in what the
+// effective entitlements include (automatic USDT needs crypto_watcher, any
+// gateway must be in the gateways list). A license that ended, or a trial
+// that is over, so stops the OFFER of a premium method without a word to the
+// customer: payments already started settle, and nothing is switched off.
 func (s *Service) PaymentMethods(ctx context.Context, pay PaymentsClient, currency string, amount int64) ([]string, error) {
 	gws, err := pay.ListGateways(ctx)
+	if err != nil {
+		return nil, err
+	}
+	eff, err := s.Effective(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +169,7 @@ func (s *Service) PaymentMethods(ctx context.Context, pay PaymentsClient, curren
 	}
 	var out []string
 	for _, g := range gws {
-		if !s.methodEnabled(ctx, g) {
+		if !s.methodEnabled(ctx, g) || !eff.methodOffered(g) {
 			continue
 		}
 		if _, _, err := s.gatewayCharge(ctx, g, probe, currency); err == nil {

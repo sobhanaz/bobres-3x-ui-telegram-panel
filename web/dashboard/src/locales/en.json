@@ -1869,7 +1869,10 @@
         "bot_lag": "The bot is {minutes} minutes behind on its messages (deliveries, receipts, alerts)",
         "license_expiring": "The license expires in {days} days, on {date}",
         "license_grace": "The license has expired; its grace period ends on {date}",
-        "license_expired": "The license has expired: new resellers, servers, staff and payment methods are refused",
+        "license_expired": "The license has expired: this install is on the free tier now (or the trial, while it lasts), and new servers, services, resellers, staff and payment methods beyond it are refused",
+        "license_limit": "A new purchase was refused: this install is at its limit of {limit} {name}. Buy or renew a license to sell more",
+        "trial_ending": "The free trial ends in {days} days, on {date}. After that, new servers, services, resellers, staff and payment methods beyond the free tier are refused (what exists keeps working). Buy a license to keep the premium features",
+        "trial_ended": "The free trial has ended: this install is on the free tier now. New servers, services, resellers, staff and payment methods beyond its limits are refused; everything that exists keeps working. Buy a license to unlock more",
         "tls_expiring": "The HTTPS certificate of {address} expires in {days} days, on {date}, and has not been renewed",
         "tls_failing": "{address} has not served a valid HTTPS certificate for 30 minutes",
         "tls_caddy_down": "Caddy, which serves the store's HTTPS addresses, is not answering: the dashboard and the payment pages cannot be reached",
@@ -1892,14 +1895,12 @@
       "checked_at": "Last checked {time}",
       "state": {
         "newer": "Update available",
-        "not_covered": "Not covered by your license",
         "current": "Up to date",
         "unknown": "Not known"
       },
       "up_to_date": "This install runs the latest release.",
       "available": "Version {version} is available.",
-      "not_covered": "Version {version} is out, but your license does not cover it.",
-      "not_covered_hint": "Your license includes the releases published until its “Updates until” date, and this one came out later, so bobres update will not install it. Renew the license's updates with the seller to get it; this version keeps working as it is.",
+      "newer_than_license": "This release is newer than your license's update date. It is installed all the same: security updates are never withheld.",
       "see_license": "See the license",
       "how": "To install it, run this on the server (as root):",
       "copy_command": "Copy the update command",
@@ -2183,10 +2184,12 @@
   },
   "license": {
     "chip": {
-      "missing": "Unlicensed",
+      "free": "Free tier",
+      "trial": "Trial: {n} days left",
       "invalid": "License invalid",
       "grace": "License in grace",
-      "expired": "License expired"
+      "expired": "License expired",
+      "aria": "License: {chip}"
     },
     "state": {
       "missing": "No license",
@@ -2196,11 +2199,38 @@
       "expired": "Expired"
     },
     "state_hint": {
-      "missing": "This install has no license. Nothing is limited: every feature keeps working.",
-      "invalid": "The saved license was not accepted, so this install counts as unlicensed. Nothing is limited.",
-      "active": "The license is valid. Its limits apply only to new servers, staff, resellers and payment methods; nothing already set up is removed.",
-      "grace": "The license has expired and is in its grace period: everything still works. Renew it before the grace ends.",
-      "expired": "The license and its grace period have ended. What is already set up keeps working, but new servers, staff, resellers and payment methods are refused until it is renewed."
+      "missing": "No license is installed.",
+      "invalid": "The saved license was not accepted, so it counts as no license: the trial or the free tier applies.",
+      "active": "The license is valid. Its limits apply only to new servers, services, staff, resellers and payment methods; nothing already set up is removed.",
+      "grace": "The license has expired and is in its grace period: everything it grants still applies. Renew it before the grace ends.",
+      "expired": "The license and its grace period have ended, so it grants nothing: the trial or the free tier applies. What is already set up keeps working, but new servers, services, staff, resellers and payment methods beyond that are refused until a license is renewed."
+    },
+    "plan": {
+      "title": "Current plan",
+      "free": "Free tier",
+      "trial": "Trial: {n} days left",
+      "hint": {
+        "free": "This install is on the free tier. Its limits (listed below) apply only to new servers, services, staff, resellers and payment methods: everything already set up keeps working, and customers keep renewing and topping up. Security updates are never withheld.",
+        "trial": "This install is in its {days}-day trial, with every feature except white label. When it ends, the free tier's limits apply to new actions only: nothing is removed or switched off.",
+        "license": "A license is in force. Its limits (listed below) apply only to new servers, services, staff, resellers and payment methods; nothing already set up is removed.",
+        "grace": "The license has expired and is in its grace period: its limits and features still apply. Renew it before the grace ends."
+      },
+      "trial_ends": "The trial ends on {date} ({n} days left).",
+      "trial_ended": "The trial ended on {date}.",
+      "contact": "To buy or renew a license, contact the seller: {contact}",
+      "contact_none": "To buy or renew a license, ask the seller you got BOBRES from."
+    },
+    "limit_name": {
+      "active_services": "active services"
+    },
+    "refused": {
+      "max_servers": "This install has reached its server limit. Buy or renew a license to add more servers.",
+      "max_active_services": "This install has reached its limit of active services. Buy or renew a license to sell more.",
+      "dashboard_staff_seats": "All of this install's staff seats are taken. Buy or renew a license to add more staff.",
+      "resellers": "Resellers are not included here. Buy or renew a license that includes them.",
+      "gateways": "This payment method is not included here. Buy or renew a license that includes it.",
+      "crypto_watcher": "Automatic USDT payments are not included here. Buy or renew a license that includes them.",
+      "other": "This is not included here. Buy or renew a license."
     },
     "reason": {
       "malformed": "The token is damaged or incomplete.",
@@ -2253,11 +2283,17 @@
     "domain": "Domain",
     "domain_none": "Not set",
     "copy_install_id": "Copy the install id",
-    "entitlements": "What it grants",
+    "entitlements": "What applies now",
+    "entitlements_from": {
+      "free": "These are the free tier's limits, with what this install uses now.",
+      "trial": "These are the trial's limits, with what this install uses now.",
+      "license": "These are the license's entitlements, with what this install uses now.",
+      "grace": "These are the license's entitlements (it is in its grace period), with what this install uses now."
+    },
     "ent": {
       "servers": "3x-ui servers",
       "active_services": "Active services",
-      "staff_seats": "Staff seats (the owner is not counted)",
+      "staff_seats": "Staff seats (the store owner is not counted)",
       "gateways": "Payment methods",
       "resellers": "Resellers",
       "white_label": "White label (no “Powered by BOBRES”)",
@@ -2279,7 +2315,7 @@
       "off": "Not included"
     },
     "gateways_none": "None besides the wallet",
-    "gateways_outside": "On but not in the license: {list}. They keep working, but cannot be turned on again once turned off.",
+    "gateways_outside": "On but not included: {list}. They keep working, but cannot be turned on again once turned off.",
     "wallet_always": "The wallet is always allowed.",
     "updates_any": "No limit",
     "warnings": "Some limits are reached or nearly reached. Existing ones keep working; new ones beyond the limit are refused.",

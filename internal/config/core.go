@@ -59,6 +59,11 @@ type Core struct {
 	BackupToken string
 	// Domain is BOBRES_DOMAIN as it is (no scheme): a license is bound to it.
 	Domain string
+	// SellerContact is BOBRES_SELLER_CONTACT: whom the owner is told to ask to
+	// buy or renew a license (a Telegram handle, an address, a few words;
+	// "" = "ask the seller you got BOBRES from"). It is a setting, never a
+	// secret.
+	SellerContact string
 	// ZarinpalHost is BOBRES_ZARINPAL_HOST, the second domain the HTTPS
 	// files serve the pay page on ("" = none).
 	ZarinpalHost string
@@ -127,6 +132,7 @@ func LoadCore() (Core, error) {
 	co.BackupURL, err = peerURL("BOBRES_BACKUP_URL", "", "http://backup:8080")
 	keep(err)
 	co.Domain = strings.TrimSpace(getenv("BOBRES_DOMAIN", ""))
+	co.SellerContact = strings.TrimSpace(getenv("BOBRES_SELLER_CONTACT", ""))
 	co.ZarinpalHost = strings.TrimSpace(getenv("BOBRES_ZARINPAL_HOST", ""))
 	co.TLSRequestDir = getenv("BOBRES_TLS_REQUEST_DIR", "/request")
 	co.TLSResultDir = getenv("BOBRES_TLS_RESULT_DIR", "/tls-result")

@@ -71,7 +71,8 @@ What the built installer does differently from this list:
   backups, optional S3 settings. Payment methods, the default language and the brand name are set later on the
   dashboard (Zarinpal can also come from flags).
 - **The license** is a separate step: `bobres license activate` or the dashboard's License tab (License activation,
-  below). An install without one runs with nothing gated.
+  below). An install without one runs on its 30-day trial, then on the free tier (05-license.md, "Free core, paid
+  premium"): it is never blocked, and the free tier's limits refuse only new actions.
 - **Images:** BOBRES's own five (core, bot, payments, provisioner, backup) run by digest, not by tag. The release
   workflow reads each image's digest from ghcr.io (anonymously, as a store pulls it), checks that the digest carries
   the keyless cosign signature of that workflow for that tag, and builds the digests into the CLI
@@ -126,7 +127,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres status` | Services (state and health), version, domain, free disk; exit 1 when a service is not healthy |
 | `bobres logs [service] [-f]` | Tail logs |
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
-| `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists, and whether the license covers it |
+| `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists (with a note when it is newer than the license's update date: the update is never refused for it) |
 | `bobres rollback [--yes]` | Undo the last update with its restore point: the previous CLI, install files and version, and the database from before the update |
 | `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
 | `bobres restore <file \| s3://bucket/key> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. A backup in S3-compatible storage is downloaded into `backups/` first, with the install's S3 settings (see Off-server copies) |
@@ -312,21 +313,27 @@ on its pre-release (`bobres update` says so and exits 0) until a stable release 
 rolled back does not hold anything back: `release.version` (the floor) is written only once an update holds, and
 `bobres rollback` puts back the one from before the update. Runbook: [releases](runbooks/releases.md).
 
-**License coverage (`updates_until`).** The signed header's `# issued` (`release.ParseHeader`) is the release's day
-(UTC). When the install's license verifies for it (active, grace or expired) and carries `updates_until`, a release
-issued after that day is not covered (`release.Covered`): `bobres update` refuses it, and `--check` and the menu say
-"Newer: yes, but not covered by your license" (the menu then offers no update). The CLI reads the license with
-`compose exec -T core /app license status` (its "State" and "Updates until" rows, which every core with a license
-command prints); when core cannot be asked it warns and does not refuse. A missing or invalid license, a license
-without `updates_until` or a release without `# issued` gates nothing. The dashboard's System page gets the same
-answer from core (`updates.covered`: core compares the bot's `issued` with its own license; absent when there is no
-valid license or no date).
+**License update date (`updates_until`), advisory.** The signed header's `# issued` (`release.ParseHeader`) is the release's
+day (UTC). When the install's license is in force (verified for it, and active or in its grace period) and carries
+`updates_until`, a release issued after that day is not covered (`release.Covered`). That only adds a note, and
+**never refuses, hides or withholds an update**: security updates are never withheld, and the free tier, the trial and an
+ended license get every release, so a license that stops at a date must not get less than no license. `bobres update`
+prints "Note: this release (issued on D) is newer than your license's update date (U). It is installed all the same" and
+goes on; `--check` says "Newer: yes. Update with: sudo bobres update" followed by the same note, and the menu offers the
+update (it asks before it changes anything, as always). The CLI reads the license with `compose exec -T core /app
+license status` (its "State" and "Updates until" rows, which every core with a license command prints, the latter only
+for a license in force); when core cannot be asked it warns that the note is skipped and the update goes on. A
+missing, invalid or ended license (the free tier and the trial have no `updates_until`), a license without
+`updates_until` or a release without `# issued` has no note. The dashboard's System page gets the same answer from core
+(`updates.covered`: core compares the bot's `issued` with its own license; absent when there is no valid license or no
+date, `false` for a release after the date): the Updates tab shows the update with the command as for any release, plus
+an informational line and a link to the License tab for `covered: false`.
 
 **`bobres update --check [--version X] [--channel C]`** fetches `checksums.txt`, its signature, `keys.txt` and
 `keys.txt.sig.N` of the channel's newest release (or of `releases/download/vX`, `release.DownloadURL`), verifies them
 as install.sh does (the embedded roots, `internal/release`, and the key list's `seq` against `keys.seq`, below) and
-prints the current version, the channel, the release's version and whether it is newer (and covered by the license;
-a release older than `release.version` is "Newer: yes, but older than release X, which this server installed
+prints the current version, the channel, the release's version and whether it is newer (with the advisory note when it is
+newer than the license's update date; a release older than `release.version` is "Newer: yes, but older than release X, which this server installed
 before", which `bobres update` refuses, so the menu does not offer it). It needs no install and works on a development
 build.
 
@@ -335,7 +342,8 @@ build.
    release; a key list whose `seq` is lower than `$BOBRES_STATE_DIR/keys.seq` (default `/var/lib/bobres`: an older
    list, still signed and unexpired, may name a release key revoked since); a release older than
    `release.version` there or than the install (going back is `rollback`); files under `vX` signed for another
-   version; on stable, a release signed for beta; and a release the license does not cover (above). The same version
+   version; and on stable, a release signed for beta. A release newer than the license's update date is not refused
+   (above). The same version
    is nothing to do.
 2. Checks for 2 GB free in the install directory and in `/var/lib/docker` (the backup and the new images). The
    install's own checks (10 GB, RAM, ports, the Telegram API) are for a new server and are skipped in step 7.
@@ -500,6 +508,7 @@ The settings it changes, and the services each one recreates:
 | `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, core, payments, tls-agent | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it. The tls-agent is recreated with core for the same reason as for the domain |
 | `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel) |
 | `BOBRES_LICENSE_SERVER` | bot | an https URL without credentials, or empty (no online activation or refresh; see License activation) |
+| `BOBRES_SELLER_CONTACT` | core | any text, or empty (a Telegram handle or an address the License tab and `bobres license status` show for buying or renewing a license; empty: they say "ask the seller you got BOBRES from") |
 | `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |
 | `BOBRES_BACKUP_S3_BUCKET` / `_REGION` / `_PREFIX` | backup | a bucket name (lower-cased) / a region name / letters, digits, `. _ - /` (`config.ParseBackupS3`) |
 | `BOBRES_BACKUP_S3_KEEP` | backup | 1 to 1000, or empty (30) |
@@ -777,6 +786,6 @@ install directory, and with it every backup in `/opt/bobres/backups`: it warns f
   (The stable/beta update channel is built: see Restore, update and rollback.)
 - Release signatures expire 45 days after signing: a stable channel with no release for that long must be re-signed,
   or install.sh and `bobres update` refuse it ([releases runbook](runbooks/releases.md)). Re-signing moves the
-  release's `# issued` day, which `updates_until` is compared with; `tools/sign/sign.sh` has no option to keep it.
+  release's `# issued` day, which the license's advisory `updates_until` note is compared with; `tools/sign/sign.sh` has no option to keep it.
 - Non-Docker (systemd binaries) mode: not planned for v1.
 - Installing 3x-ui itself for customers who do not have one yet (an optional helper; not built).

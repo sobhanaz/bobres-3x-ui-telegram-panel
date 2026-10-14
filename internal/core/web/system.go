@@ -13,6 +13,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/backupclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/syshealth"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
@@ -83,24 +84,27 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// licenseCovers says whether the installed license covers the release the
-// bot found (bobres update refuses one it does not): a license verified for
-// this install, expired included, covers releases issued up to its
-// updates_until. nil when there is none to ask (missing or invalid gates
-// nothing), no release is known, or the bot does not say when it was issued.
+// licenseCovers says whether the license in effect covers the release the
+// bot found: a license that is active or in its grace period covers releases
+// issued up to its updates_until. It is ADVISORY: false only makes the
+// dashboard add the note "this release is newer than your license's update
+// date"; the update is still offered, and `bobres update` installs it
+// (security updates are never withheld). nil when there is nothing to say:
+// the free tier, the trial and a license that has ended have no update date,
+// no release is known, or the bot does not say when it was issued.
 func (s *Server) licenseCovers(ctx context.Context, u *botfiles.UpdateCheck) *bool {
 	if u.Latest == "" || release.IssuedDay(u.Issued) == "" {
 		return nil
 	}
-	lic, err := s.cfg.Domain.License(ctx)
+	eff, err := s.cfg.Domain.Effective(ctx)
 	if err != nil {
 		s.cfg.Log.Warn("system: license for the update check", "err", err)
 		return nil
 	}
-	if !lic.Valid() || lic.Token == nil {
+	if eff.Basis != license.BasisLicense && eff.Basis != license.BasisGrace {
 		return nil
 	}
-	covered := release.Covered(lic.Token.Entitlements.UpdatesUntil, u.Issued)
+	covered := release.Covered(eff.Entitlements.UpdatesUntil, u.Issued)
 	return &covered
 }
 

@@ -154,6 +154,19 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	if err != nil {
 		return nil, err
 	}
+	// A new service (a customer's or a reseller's) must fit what the
+	// effective entitlements allow (a reseller's needs the resellers feature,
+	// every one a place among the active services, checked below in the
+	// order's own transaction); a renewal or a top-up is never refused for it.
+	var gate *slotGate
+	if p.Type == OrderNew {
+		if gate, err = s.serviceGate(ctx); err != nil {
+			return nil, err
+		}
+		if err := s.requireReseller(ctx, gate, u, p.IdempotencyKey); err != nil {
+			return nil, err
+		}
+	}
 	price, err := s.priceFor(ctx, u, plan)
 	if err != nil {
 		return nil, err
@@ -183,6 +196,15 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	}
 	var out *store.Order
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		// The place among the active services is counted and taken in this
+		// transaction, under the lock that makes concurrent purchases take
+		// turns (before any other lock, so the order of locks is the same
+		// everywhere).
+		if gate != nil {
+			if err := s.requireServiceSlot(ctx, tx, gate, p.IdempotencyKey); err != nil {
+				return err
+			}
+		}
 		// A reseller's price holds only while they are one: holding their row
 		// makes a removal wait for this order (and then cancel it), and a
 		// removal that came first leaves no row.
@@ -208,6 +230,9 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 		return nil
 	})
 	if err != nil {
+		if gate != nil {
+			s.noteRefusedPurchase(ctx, err, gate.eff.Now)
+		}
 		return nil, err
 	}
 	if free {
@@ -337,8 +362,16 @@ func (s *Service) StartTrial(ctx context.Context, userID, planID, idempotencyKey
 	if !ok {
 		return nil, ErrTrialAlreadyUsed
 	}
+	// A free trial is a new service too.
+	gate, err := s.serviceGate(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out *store.Order
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.requireServiceSlot(ctx, tx, gate, idempotencyKey); err != nil {
+			return err
+		}
 		o, _, err := s.st.CreateOrder(ctx, tx, &store.Order{
 			UserID: userID, PlanID: planID, Type: "new", Status: "paid",
 			Amount: 0, Currency: plan.Currency, IdempotencyKey: idempotencyKey,
@@ -361,6 +394,7 @@ func (s *Service) StartTrial(ctx context.Context, userID, planID, idempotencyKey
 		return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidTrial)
 	})
 	if err != nil {
+		s.noteRefusedPurchase(ctx, err, gate.eff.Now)
 		return nil, err
 	}
 	s.kickProvisioning()
