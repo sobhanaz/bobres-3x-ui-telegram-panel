@@ -119,10 +119,15 @@ type updater struct {
 	// licenseStatus is what core's `license status` prints for the install
 	// in dir (nil: the license is not asked).
 	licenseStatus func(ctx context.Context, dir string) ([]byte, error)
+	// prog shows the update's progress; nil outside updateCmd (it does nothing).
+	prog *progress
+	// childEnv is added to the environment of the install runCLI starts: the
+	// share of the progress bar it covers.
+	childEnv []string
 }
 
 func newUpdater(o *ops) *updater {
-	return &updater{
+	u := &updater{
 		ops: o, current: version.Version,
 		latestURL: release.DefaultBaseURL, apiURL: release.APIURL, versionURL: release.DownloadURL,
 		hc:    &http.Client{}, // fetch sets each download's time limit
@@ -134,9 +139,6 @@ func newUpdater(o *ops) *updater {
 				return "", err
 			}
 			return filepath.EvalSymlinks(p)
-		},
-		runCLI: func(ctx context.Context, exe string, args ...string) error {
-			return runInGroup(ctx, o.out, o.errOut, exe, args...)
 		},
 		installTimeout: installLimit,
 		interrupts: func() (<-chan os.Signal, func()) {
@@ -150,6 +152,12 @@ func newUpdater(o *ops) *updater {
 			return o.run(ctx, dir, composeArgs("exec", "-T", "core", "/app", "license", "status")...)
 		},
 	}
+	// The install is another process: it gets the real output (a terminal
+	// stays one for it), not the progress writer.
+	u.runCLI = func(ctx context.Context, exe string, args ...string) error {
+		return runInGroupEnv(ctx, rawWriter(o.out), rawWriter(o.errOut), u.childEnv, exe, args...)
+	}
+	return u
 }
 
 // runInGroup runs a program in a process group of its own, its output going
@@ -158,8 +166,16 @@ func newUpdater(o *ops) *updater {
 // included, which could otherwise go on recreating containers after a
 // rollback.
 func runInGroup(ctx context.Context, out, errOut io.Writer, exe string, args ...string) error {
+	return runInGroupEnv(ctx, out, errOut, nil, exe, args...)
+}
+
+// runInGroupEnv is runInGroup with env added to the program's environment.
+func runInGroupEnv(ctx context.Context, out, errOut io.Writer, env []string, exe string, args ...string) error {
 	cmd := exec.CommandContext(ctx, exe, args...) //nolint:gosec // our own binary, arguments built here
 	cmd.Stdout, cmd.Stderr = out, errOut
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	// A killed group can leave the output pipe open in a stray process.
@@ -187,6 +203,20 @@ const updateUsage = "usage: bobres update [--check] [--version X] [--channel sta
 // --version's. Exit 0 when done (or nothing to do), 1 when refused or
 // failed, 2 for usage errors.
 func (u *updater) updateCmd(args []string) int {
+	out, errOut := u.out, u.errOut
+	defer func() {
+		u.prog.Close()
+		u.prog, u.out, u.errOut = nil, out, errOut
+	}()
+	code := u.updateSteps(args)
+	if code != 0 {
+		u.prog.Fail(fmt.Sprintf("exit %d", code))
+	}
+	u.prog.Abort() // a no-op when the update finished: nothing was done
+	return code
+}
+
+func (u *updater) updateSteps(args []string) int {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(u.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
@@ -234,6 +264,12 @@ func (u *updater) updateCmd(args []string) int {
 	}
 	from := u.installed(env)
 
+	ui := detectUI(u.out, os.Getenv)
+	if !bannerOff(os.Getenv) {
+		printBanner(u.out, ui)
+	}
+	u.startProgress(ui)
+	u.prog.Begin(stepUpVerify)
 	fmt.Fprintln(u.out, "Checking the release signature...")
 	t, err := u.find(ctx, channel, want)
 	if err != nil {
@@ -245,6 +281,7 @@ func (u *updater) updateCmd(args []string) int {
 	if want == "" && channel == release.ChannelStable && release.Prerelease(from) && release.Compare(t.Version, from) < 0 {
 		fmt.Fprintf(u.out, "BOBRES runs the pre-release %s, newer than the latest stable release (%s): it stays on it until a stable release is newer.\n"+
 			"To update on the beta channel instead: sudo bobres update --channel beta\n", from, t.Version)
+		u.prog.Abort()
 		return 0
 	}
 	// As install.sh: never below a release this server installed before
@@ -265,6 +302,7 @@ func (u *updater) updateCmd(args []string) int {
 			"To return to the version before the last update: bobres rollback\n", t.Version, from)
 		return 1
 	case c == 0:
+		u.prog.Abort()
 		fmt.Fprintf(u.out, "BOBRES already runs %s: nothing to update.\n", from)
 		return 0
 	}
@@ -294,11 +332,14 @@ func (u *updater) updateCmd(args []string) int {
 		fmt.Fprintf(u.errOut, "error: cannot find the bobres binary: %v. Nothing was changed.\n", err)
 		return 1
 	}
+	u.prog.Finish() // a question is next: nothing is drawn over it
 	if !*yes && !u.confirm(fmt.Sprintf("Update BOBRES from %s to %s? A backup is taken first, and the update rolls back\n"+
 		"on its own if the store does not come back healthy. [y/N]: ", from, t.Version)) {
+		u.prog.Abort()
 		fmt.Fprintln(u.out, "Cancelled. Nothing was changed.")
 		return 1
 	}
+	u.prog.Begin(stepUpDownload)
 	fmt.Fprintf(u.out, "Downloading bobres %s...\n", t.Version)
 	bin, err := u.downloadCLI(ctx, t)
 	if err != nil {
@@ -735,6 +776,7 @@ func (u *updater) downloadCLI(ctx context.Context, t *target) ([]byte, error) {
 // yes: restore point (staged), CLI swap, restore point in place, install,
 // health; a rollback when the install or the health check fails.
 func (u *updater) apply(ctx context.Context, dir string, env map[string]string, from string, t *target, exe string, bin []byte) int {
+	u.prog.Begin(stepUpBackup)
 	rp, err := u.stageRestorePoint(ctx, dir, env, from, t.Version, exe)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v. Nothing was changed.\n", err)
@@ -767,14 +809,22 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	// GB free, RAM, ports), and its online checks (the bot token with
 	// Telegram, a plain-http panel's address) are of values this store
 	// already runs with: an update does not depend on Telegram answering.
-	if err := u.install(ctx, exe, dir, t.Version); err != nil {
+	u.prog.Begin(stepUpInstall)
+	u.childEnv = u.prog.handoffEnv(stepUpInstall)
+	err = u.install(ctx, exe, dir, t.Version)
+	u.childEnv = nil
+	if err != nil {
 		return u.autoRollback(ctx, dir, rp, err.Error())
 	}
 	newEnv, _, err := readEnv(filepath.Join(dir, ".env"))
 	if err != nil {
 		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("read .env: %v", err))
 	}
-	if waitHealthy(ctx, u.run, u.sleep, dir, appServices(dir, newEnv), u.out, u.errOut) != 0 {
+	u.prog.Begin(stepUpWait)
+	if waitHealthyProgress(ctx, u.run, u.sleep, dir, appServices(dir, newEnv), u.out, u.errOut,
+		func(healthy, total int) {
+			u.prog.Fraction(healthy, total, fmt.Sprintf("%d/%d healthy", healthy, total))
+		}) != 0 {
 		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("BOBRES %s did not become healthy", t.Version))
 	}
 	// The update holds: its release is the floor now, and the restore point
@@ -787,6 +837,7 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	}
 	fmt.Fprintf(u.out, "\nBOBRES is updated to %s.\nIf something is wrong with it: sudo bobres rollback   (back to %s, with the database as of %s)\n",
 		t.Version, from, rp.CreatedAt.Format("2006-01-02 15:04 MST"))
+	u.prog.Complete()
 	return 0
 }
 
@@ -964,6 +1015,7 @@ func (u *updater) migrated(ctx context.Context, dir string, rp *restorePoint) bo
 // stays as it is, with every order the old version took while the new images
 // were pulled. It always exits 1.
 func (u *updater) autoRollback(ctx context.Context, dir string, rp *restorePoint, why string) int {
+	u.prog.Fail("rolling back")
 	fmt.Fprintf(u.errOut, "\nerror: %s. Rolling back to %s...\n", why, rp.FromVersion)
 	restoreDB := u.migrated(ctx, dir, rp)
 	code, settled := u.rollbackTo(ctx, dir, rp, restoreDB, "made by bobres update before it rolled back the update to "+rp.ToVersion)

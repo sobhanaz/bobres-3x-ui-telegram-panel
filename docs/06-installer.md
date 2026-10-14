@@ -15,15 +15,27 @@ downloads the signed `bobres` CLI binary from the latest GitHub release of this 
 (`BOBRES_BASE_URL` overrides the location), verifies it (Ed25519), then hands over to `bobres install`. A release
 signed for the beta channel (a pre-release) is refused unless `BOBRES_UPDATE_CHANNEL=beta` is set for install.sh,
 even when GitHub serves it as the latest release.
-The wizard asks for what is missing; for a panel on the same server typed as `http://127.0.0.1:<port>/...`
-it offers `http://host.docker.internal:<port>/...` (what the containers can reach).
+The wizard asks only what has no safe default: the domain (unless `--domain` or `BOBRES_DOMAIN`), the owner's
+Telegram id (`--admin-id` or `BOBRES_ADMIN_TELEGRAM_ID`), the bot token (hidden) and the optional first 3x-ui panel
+with its API token (hidden). Everything else is automatic. A panel on the same server typed as
+`http://127.0.0.1:<port>/...` is rewritten, without a question, to `http://host.docker.internal:<port>/...` (what the
+containers can reach), and a plain-http panel on a private address is taken as a private panel. See "What you see
+while it installs" below for the banner, the progress bar and the log.
 
 The 3x-ui panel is optional (milestone 6a): a fresh install still asks for one (Enter skips it), a re-run
-never asks, and a URL needs its token (and a token its URL). The provisioner registers that panel only while
+never asks, and a URL needs its token (and a token its URL). A panel that is new in a run is **checked before
+anything is written**, with the client and calls the provisioner uses (the inbound listing, which needs the token, and
+the version): reachable (the reason is said when it is not: the name does not resolve, nothing listens on the port, no
+answer in time, the certificate is not trusted, plain http where https is expected, a wrong web base path), a
+and the API token accepted (a version outside v3.8.5 to v3.9.0 is noted, not refused: the provisioner and the dashboard only warn about it). A refused token prints "In 3x-ui open Settings, then API
+tokens (Security), create a token and paste it here." and is asked again, three more times at most; Enter skips the
+panel (add the server later in the dashboard); with `--yes` or no terminal it is an error, never a silent accept, and
+nothing has been written. The check runs from this server, while the provisioner runs in a container and reaches a
+panel on this server as `host.docker.internal`: the check goes to `127.0.0.1` there and says so. `--offline` skips it. The provisioner registers that panel only while
 it has no server; after that servers are added and changed in the dashboard (Servers), and `.env` edits of
 `BOBRES_XUI_*` change nothing. Without a panel the summary says to add a server in the dashboard before selling.
-After the panel, a fresh install with backups also offers off-server copies of them in S3-compatible storage (Enter
-skips it; see Backups, "Off-server copies").
+Off-server copies of the backups in S3-compatible storage are not offered by the wizard (they are off by default):
+the summary ends with the one-line way to turn them on (see Backups, "Off-server copies").
 
 ## Management menu
 `bobres` without a command, on a terminal, opens a numbered menu in the spirit of the x-ui script: status,
@@ -55,8 +67,8 @@ dashboard has a server.
    (verify signatures).
 7. **Start** infra (Postgres, Redis), run migrations, start services, wait for health.
 8. **Harden** (see Hardening below): ufw (the SSH port, 80, 443), fail2ban for SSH, unattended-upgrades (security
-   only), a swap file on a small server. Each step is announced and asked; `--no-harden` skips them all, and
-   `bobres harden` runs them later. The services already run as non-root users in their containers, so there is no
+   only), a swap file on a small server. They run by themselves where that is safe, one line each; `--no-harden`
+   skips them all, `--ask-harden` asks before each step, and `bobres harden` runs them later. The services already run as non-root users in their containers, so there is no
    separate system user.
 9. **Verify:** hit /readyz, send test message to admin ("BOBRES is live"), print summary with URLs and first-login link.
 10. **Idempotent:** re-running detects an existing install and offers repair/upgrade instead of overwriting.
@@ -67,8 +79,9 @@ What the built installer does differently from this list:
   license-server check.
 - **The wizard** asks for the domain, the owner's Telegram ID, the bot token (checked with getMe, on every run without
   `--offline`, the menu's changes included: through the Bot API server in `BOBRES_TELEGRAM_API_URL` when it is set,
-  with `host.docker.internal` read as 127.0.0.1, else api.telegram.org), an optional first 3x-ui panel and, with
-  backups, optional S3 settings. Payment methods, the default language and the brand name are set later on the
+  with `host.docker.internal` read as 127.0.0.1, else api.telegram.org) and an optional first 3x-ui panel (checked,
+  see above). The S3 settings and the hardening are not asked (flags, and the dashboard or `bobres harden` later).
+  Payment methods, the default language and the brand name are set later on the
   dashboard (Zarinpal can also come from flags).
 - **The license** is a separate step: `bobres license activate` or the dashboard's License tab (License activation,
   below). An install without one runs on its 30-day trial, then on the free tier (05-license.md, "Free core, paid
@@ -89,6 +102,48 @@ What the built installer does differently from this list:
 - **Verify:** the install waits until every service is healthy and prints the first steps and the backup key. It
   sends no test message.
 - **A re-run** keeps every secret, fills only missing values and recreates what changed.
+
+## What you see while it installs
+- **The banner.** install.sh, `bobres install`, `bobres update` and `bobres menu` start with the BOBRES banner: the
+  beaver, the wordmark, the version (and commit and build date when known), the tagline *Your VPN store on Telegram*,
+  `© 2026 BOBRES, all rights reserved`, `Made by TECSO-DEV`, the license summary, and the site, docs, issues and
+  security links.
+  It is drawn in the project's palette (navy, teal, brown, cream) with truecolor or 256-color escapes where the
+  terminal has them, else the 8 basic colors, else none. `bobres version`, `--version` and `bobres help` show a
+  one-line form on a terminal; `bobres about` shows the banner and everything else in one place. Machine-read
+  commands (`config get`, `admin link`, `secrets`, `support-bundle`, `license status`, `doctor`) never get a banner.
+- **One progress bar.** The install is a list of steps with weights (install.sh: checking the system, Docker, the
+  download, the signature and checksum, the hand-over; `bobres install`: your settings, the checks, the files, the
+  images, the stack, the health of the services, hardening, the summary). The bar,
+  `[██████████░░░░░░░░░░]  42%  Step 6/13: Pulling images  ⠹ 0:38`, is the weights of the finished steps plus the
+  measured part of the running one (images pulled, services healthy). It never goes down, shows 100% only when the
+  install finished, and a failed step leaves it where it was with a line that says which step. install.sh hands its
+  share to `bobres install` (the internal variable `BOBRES_PROGRESS=percent:share:steps done:steps in all`), so it is
+  one bar from 0 to 100; run alone, `bobres install` shows 0 to 100, and `bobres update` its own five steps, with the
+  install it starts inside the fourth. The bar is hidden while a question waits for input.
+- **Marks and the summary.** Each step ends with a line: a check, a warning sign or a cross (`OK`, `WARN`, `FAIL`
+  anywhere that is not a terminal), its name and the time it took. The install ends with the *BOBRES is ready* card:
+  the domain and https address, the bot, how to log in (send `/start` to the bot first, then `/dashboard` or
+  `sudo bobres admin link`), a table of the services, the license (the 30-day trial and its days left), the install
+  directory and log, three next steps, the links and the copyright line.
+- **The log.** What programs print (Docker's installer, apt, `docker compose`, the hardening commands) goes to
+  `/var/log/bobres-install.log` (mode 600, never a secret), not to the screen. A failure shows the last 15 lines
+  and what to do. `BOBRES_INSTALL_LOG` moves it.
+- **If the SSH connection drops.** Once the questions are answered the install ignores the hang-up and keeps going
+  (install.sh does from the start); follow it from a new session with `tail -f /var/log/bobres-install.log`, and
+  run `sudo bobres install` again if it was stopped (it keeps the settings and secrets). Connect with
+  `ssh -o ServerAliveInterval=30 ...` to keep the connection alive.
+- **Plain mode.** When stdout is not a terminal (a pipe, `curl | sudo bash`, CI, `ssh` without a tty), `NO_COLOR` is
+  set, `TERM` is `dumb` or unset, the terminal is under 60 columns, `--plain` is given or `BOBRES_PLAIN=1`: no escape
+  sequences, no carriage returns, no spinner, and ASCII only (the banner is also ASCII when the locale is not
+  UTF-8: `LC_ALL`, `LC_CTYPE`, `LANG`). Progress is one line per change, easy to grep:
+  `[ 42%] Step 6/13: Pulling images`, `[ 55%] Step 6/13: OK Pulling images (38s)`, `... SKIP Installing Docker
+  (already installed)`, `... FAIL Pulling images (exit 1)`, `[100%] Done in 2m14s`. In plain mode the banner is shown
+  once for install logs.
+- **Switches.** `--no-banner` or `BOBRES_NO_BANNER=1` leave the banner out; `--plain` or `BOBRES_PLAIN=1` force plain
+  mode (every command takes the two flags; install.sh passes them on). `BOBRES_FORCE_TTY=1` makes output look like a
+  terminal (tests only). The cursor is hidden only while a spinner runs and is shown again on every way out,
+  Ctrl-C and errors included.
 
 ## Bot profile photo
 The bot sets its own menu commands, description, short description and profile photo (08-brand.md, "Telegram
@@ -133,6 +188,7 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres restore <file \| s3://bucket/key> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. A backup in S3-compatible storage is downloaded into `backups/` first, with the install's S3 settings (see Off-server copies) |
 | `bobres config list / get <key> / set <key> <value>` | Show the settings (secrets masked) or change one of the safe ones: validated as install does, `.env` written in one rename (0600), only the services that read it recreated (see Settings and secrets) |
 | `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. Master keys and the backup key are not rotated |
+| `bobres about [--dir D]` | The banner and everything in one place: version, commit, build date, license summary and copyright, the vendor license key's id and fingerprint (derived from the key built into this bobres), the store installed here, the links (site, docs, issues, security reports), a pointer to `THIRD_PARTY_NOTICES.md` and `LICENSE`, and the note that the license text is a draft |
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements, how it came) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container |
 | `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER`, set with `bobres config set`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
@@ -168,8 +224,8 @@ S3 API, AWS S3):
 - **Settings** (`.env`, passed to the backup service only): `BOBRES_BACKUP_S3_ENDPOINT` (https only, no path),
   `_BUCKET`, `_REGION` (signs the requests; empty: `us-east-1`), `_PREFIX` (a folder in the bucket; empty: none),
   `_ACCESS_KEY`, `_SECRET_KEY`, and `_KEEP` (how many backups the bucket keeps; default 30). Empty endpoint = off.
-  A fresh `bobres install` asks for the endpoint after the panel (Enter skips it), then the bucket, region, folder and
-  the two keys (the secret key without echo); a re-run never asks. Flags: `--s3-endpoint`, `--s3-bucket`,
+  `bobres install` never offers it (the summary prints the one-line command); with an endpoint from a flag, a bucket
+  or key that is missing is asked (the secret key without echo), and a re-run never asks. Flags: `--s3-endpoint`, `--s3-bucket`,
   `--s3-region`, `--s3-prefix`; the keys come from `BOBRES_BACKUP_S3_ACCESS_KEY` / `_SECRET_KEY` in the environment
   or are asked when missing (never flags: `ps` and the shell history keep command lines), and `--yes` without them
   is an error. The plain settings are `bobres config` settings (below); to replace a key, edit `.env` and run
@@ -440,9 +496,17 @@ addresses (Docker's networks) stay; a candidate must parse as an address and sta
 opened when, so the operator reads the bundle before sending it.
 
 ## Hardening
-`bobres install` runs it after the store is healthy and before the summary (step 8), only when it can ask: never with
-`--yes` (the way `bobres update` runs install), never for a settings change from the menu, never with `--no-start`;
-`--no-harden` skips it. `bobres harden [--yes] [--ssh-port N] [--dir DIR]` runs the same step on its own (`--dir`: the
+`bobres install` runs it after the store is healthy and before the summary (step 8), **by itself**: no question, one
+line per step on the screen (the commands and their output go to the install log). Never with `--yes` (the way
+`bobres update` runs install), never for a settings change from the menu, never with `--no-start`; `--no-harden`
+skips it, and `--ask-harden` brings back the questions below, step by step. Run by the install it does what is safe
+and skips the rest with a warning and the command to run: the firewall stays off when the SSH port is not detected,
+when 3x-ui runs on this server, when BOBRES reaches a service on this server (`host.docker.internal`) or when another
+program listens publicly (`sudo bobres harden` then shows it and asks); a ufw that is already on only gets the
+missing rules; fail2ban, the security updates and the swap file are done when needed.
+**The hardening and the installer never change `sshd_config`, SSH password login or root login, and never restart
+or stop sshd** (they only read the SSH port); `TestHardeningNeverTouchesSSHSettings` and
+`TestInstallerSourceNeverChangesSSHSettings` fail if any code does. `bobres harden [--yes] [--ssh-port N] [--dir DIR]` runs the same step on its own (`--dir`: the
 install whose `.env` it reads, default `$BOBRES_DIR`, else `/opt/bobres`; exit 0 when every step is
 done, declined or not needed; 1 when one failed or was refused; 2 for usage errors). Debian and Ubuntu only (`ID` in
 `/etc/os-release`), as root; anything else is refused before a command runs. Each step first reads the system and

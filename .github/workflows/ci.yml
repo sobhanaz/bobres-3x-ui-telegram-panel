@@ -148,6 +148,7 @@ jobs:
       - run: shellcheck --severity=warning install/install.sh tools/sign/*.sh tools/ci/*.sh tests/*.sh deploy/postgres-init.sh deploy/vendor/postgres-init.sh
       - run: bash tests/sign_test.sh
       - run: bash tests/install_verify_test.sh
+      - run: bash tests/install_ui_test.sh
 
   docker:
     name: Docker images + compose + e2e install

@@ -50,6 +50,10 @@ func main() {
 	os.Exit(app.Run("core", os.Args[1:], setup))
 }
 
+// exitNotStaff is login-link's exit status for a Telegram id that is not an
+// active staff member (yet).
+const exitNotStaff = 3
+
 // loginLink prints a one-time dashboard login link for the owner, or for the
 // staff member with the given Telegram id: the way in when the bot is down.
 // `bobres admin link` runs it inside the core container.
@@ -93,8 +97,10 @@ func loginLink(args []string) int {
 	}
 	token, exp, err := dom.CreateLoginLink(ctx, tg)
 	if errors.Is(err, domain.ErrForbidden) {
-		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member (the owner must have started the bot once)\n", tg)
-		return 1
+		// Exit 3 is what bobres admin link turns into "open the bot and send /start"
+		// (it knows the bot's name; core does not).
+		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member yet: the owner becomes staff by sending /start to the bot once\n", tg)
+		return exitNotStaff
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create link:", err)
