@@ -197,6 +197,10 @@ on the free tier. Copying or redistributing the code, hosting it for others, res
 license from the owner. The tiers and prices are in [docs/pricing.md](docs/pricing.md). The licenses of the components BOBRES
 uses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+## Credits
+
+© 2026 BOBRES, all rights reserved. Made by TECSO-DEV.
+
 ## Meet BOBRES
 
 <img src="docs/brand/bobres-wave.webp" alt="BOBRES the beaver waving" width="160">
