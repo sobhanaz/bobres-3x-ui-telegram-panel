@@ -2235,7 +2235,7 @@
     "reason": {
       "malformed": "The token is damaged or incomplete.",
       "bad_signature": "Its signature does not match: the token was changed, or it is not from the BOBRES vendor.",
-      "unknown_key": "It was signed with a key this version does not know.",
+      "unknown_key": "This build carries no vendor key, so it cannot check a license.",
       "version": "Its format is newer than this version understands: update BOBRES.",
       "domain": "It is for another domain than this install's.",
       "install_id": "It is for another install.",
@@ -2365,7 +2365,7 @@
       }
     },
     "powered_by": "Powered by BOBRES",
-    "no_keys": "This version ships without a vendor key, so no license can be checked yet.",
+    "no_keys": "This build carries no vendor key (only a development build lacks one), so no license can be checked.",
     "updated_by": "Saved {time} by {name}",
     "source": {
       "manual": "a token added by hand",

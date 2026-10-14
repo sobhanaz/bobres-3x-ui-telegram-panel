@@ -5,10 +5,10 @@ license. Commands run on the server as root. How licenses work: [05-license.md](
 
 A missing or invalid license never stops the store: everything keeps working. Without a valid license the install runs
 on its 30-day trial and then on the free tier (1 server, 25 active services, 2 staff seats, no resellers, no automatic
-USDT, no white label). A license never leaves less than the free tier. Until a vendor key is embedded, no license can
-be installed, so every install ends on the free tier after the 30-day trial. Those limits, and a license's, only refuse
-**new** servers, services, staff, resellers and payment methods; nothing already set up is ever removed or stopped,
-and customers keep renewing.
+USDT, no white label). A license never leaves less than the free tier. Licenses signed by the vendor's key
+`vendor-v1-2026` (fingerprint `2E02 AB14 5379 C040 2DBD 7BC2 51A3 C9D7`) verify on every release. Those limits, and a
+license's, only refuse **new** servers, services, staff, resellers and payment methods; nothing already set up is ever
+removed or stopped, and customers keep renewing.
 
 ## Symptoms
 
@@ -50,9 +50,9 @@ when it ends.
 
 | Reason | Meaning | Fix |
 |---|---|---|
-| `unknown_key`: "this build has no public key that could verify a license yet" | This BOBRES version knows no vendor key that signed it | Until the vendor ships its key in a release, every token is refused this way and the install runs on its trial, then the free tier. Update (`sudo bobres update`) once the vendor says the key is in |
+| `unknown_key`: "this build carries no vendor key, so it cannot verify a license" | This build carries no vendor key at all: only a development build does | Install an official release (`sudo bobres update`) |
 | `malformed`: "this is not a license token" | The token was cut or changed when copied | Get it again as a file and import the file (below) |
-| `bad_signature` | Changed, or not from the BOBRES vendor | Ask the vendor for the token again |
+| `bad_signature` | Changed, not from the BOBRES vendor, or signed with a key this version does not carry yet (after the vendor rotates its key) | Get the token again from the vendor and import it as a file. If the vendor says it changed its key, `sudo bobres update` first |
 | `version` | Newer format than this version understands | `sudo bobres update` |
 | `domain`: "the license is for another domain" | `BOBRES_DOMAIN` is not the domain the token names (the store moved domains) | Ask the vendor for a token for the current domain |
 | `install_id`: "the license is for another install" | The token names another install id: this install was set up again without restoring its database | Send the vendor the install id from `bobres license status`; or restore the old database (`bobres restore`), which brings the old id back |
@@ -103,8 +103,8 @@ restore has a new install id.
 
 ## Escalate when
 
-- A token the vendor just issued for this domain and install id is refused (`bad_signature`, `unknown_key` on a
-  version the vendor says knows the key).
+- A token the vendor just issued for this domain and install id is refused (`bad_signature` on a version the vendor says
+  knows the key).
 - The License tab and `bobres license status` disagree.
 
 Send: the output of `sudo bobres license status` (it holds the install id and license id, not the token) and the

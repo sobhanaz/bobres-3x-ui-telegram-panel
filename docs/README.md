@@ -21,6 +21,9 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [11-staging-run.md](11-staging-run.md) | Checklist for the first install on a real server, the last step before v0.1.0 |
 | [12-load-test.md](12-load-test.md) | Load test: numbers, limits, what to watch |
 | [13-license-server.md](13-license-server.md) | The vendor's license server (`licensesrv`): license keys, activation, daily refresh, revocation; the vendor's runbook |
+| [pricing.md](pricing.md) | The pricing model (free core, a subscription per install), the tiers side by side, what happens when a subscription lapses, FAQ |
+| [legal/](legal/README.md) | Legal drafts for a lawyer to review: Terms of Service, Privacy Policy, Acceptable Use, Refund policy and a template for an operator's own store, each in English and Persian |
+| [launch-checklist.md](launch-checklist.md) | What the owner still has to do before selling: names, trademark, lawyer, prices, the license server, the first customers |
 | [brand/](brand/) | The brand assets: icon, mascot, waving animation, banner, bot avatar (rules in 08-brand.md) |
 
 ## Runbooks (for operators)
@@ -36,6 +39,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [Backups not arriving](runbooks/backups-not-arriving.md) | No daily backup in Telegram, or a failed backup on the System page |
 | [Rotate secrets](runbooks/rotate-secrets.md) | A token, password or key leaked, or a scheduled rotation |
 | [License](runbooks/license.md) | The License tab is not "Active", or the license refuses an action |
+| [Vendor license server](runbooks/vendor-license-server.md) | For the seller: deploy the license server, sell, renew and revoke licenses, back up and rotate the signing key |
 | [HTTPS certificates](runbooks/https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; recovery when browsers refuse the dashboard |
 | [Restore a backup](runbooks/restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](runbooks/update-rollback.md) | Install a new release, or undo the last one |
@@ -54,4 +58,5 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 The docs describe what is built as of 2026-10-12. Open points are listed at the end of each file.
 Known unverified items: Zarinpal's server-location rules, BOBRES trademark and domain availability, 3x-ui versions
 outside v3.8.5 to v3.9.0. Before v0.1.0: the first install on a real server (11-staging-run.md), and a native
-speaker's review of the Persian texts (08-brand.md).
+speaker's review of the Persian texts (08-brand.md). Before selling: the owner's steps in
+[launch-checklist.md](launch-checklist.md), including a lawyer's review of the [LICENSE](../LICENSE) and of the legal drafts.

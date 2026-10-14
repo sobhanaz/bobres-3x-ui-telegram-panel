@@ -135,7 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: shellcheck --severity=warning install/install.sh tools/sign/*.sh tools/ci/*.sh tests/*.sh deploy/postgres-init.sh
+      - run: shellcheck --severity=warning install/install.sh tools/sign/*.sh tools/ci/*.sh tests/*.sh deploy/postgres-init.sh deploy/vendor/postgres-init.sh
       - run: bash tests/sign_test.sh
       - run: bash tests/install_verify_test.sh
 
@@ -150,6 +150,16 @@ jobs:
           docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example config -q
           docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example --profile backup config -q
           docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example --profile tls config -q
+      # The seller's license server stack (deploy/vendor): the compose file, and its Caddyfile
+      # validated by the Caddy image the file pins.
+      - name: Validate the vendor license server stack
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/vendor/docker-compose.yml --env-file deploy/vendor/.env.example config -q
+          image=$(sed -n 's/^    image: \(caddy:[^ ]*\)$/\1/p' deploy/vendor/docker-compose.yml)
+          test -n "$image"
+          docker run --rm -e LICENSE_DOMAIN=license.example.com -v "$PWD/deploy/vendor/caddy:/etc/caddy:ro" "$image" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Build service images
         # Tagged the way the compose file expects released images, so the e2e
         # install below runs exactly these builds (no pull). The backup image

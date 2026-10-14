@@ -4,8 +4,9 @@ Product: Telegram bot + web dashboard for selling and managing 3x-ui (Xray) subs
 Brand name: BOBRES, with BOBRES the beaver as the mascot (08-brand.md). Trademark, domain and handle checks are
 still open (§2).
 Status: Phases 0 to 7 are built (§10). Next: the first install on a real server (11-staging-run.md), then the first
-public release, v0.1.0 ([CHANGELOG.md](../CHANGELOG.md)). Still open: the legal review, the brand checks and
-license pricing (§2).
+public release, v0.1.0 ([CHANGELOG.md](../CHANGELOG.md)). Still open: the legal review, the brand checks and the
+prices (§2). How BOBRES is sold is decided: a free core and a subscription per install ([pricing.md](pricing.md)); what the
+owner must still do before selling is in [launch-checklist.md](launch-checklist.md).
 
 ## 1. Decisions so far
 Each item is the decision as it was taken, then what was built.
@@ -25,21 +26,23 @@ Each item is the decision as it was taken, then what was built.
   checks must be designed from the start. Built: the one-command installer, `bobres update` with an automatic
   rollback, signed licenses and the vendor's license server (13-license-server.md).
 - Source: planned private, under a proprietary license. The GitHub repository has been public since 2026-10-05
-  (the installer downloads from its releases). It has no LICENSE file yet: that is part of the legal review (§2).
+  (the installer downloads from its releases). Since 2026-10-14 it carries a draft [LICENSE](../LICENSE): source-available,
+  all rights reserved. A lawyer has not reviewed it (§2).
 - Commits/pushes are made only under the owner's own GitHub account (no tool attribution).
 
 ## 2. Open decisions
 Three points are still open. The others are decided; each keeps its question with the answer.
 
 Still open:
-- **Legal review.** No lawyer has reviewed anything yet (09-legal-questions.md): terms for operators, who answers for
-  the VPN service an operator resells, the payment providers' rules on VPN sales, and the source license (the
-  repository is public without a LICENSE file).
+- **Legal review.** No lawyer has reviewed anything yet (09-legal-questions.md). Drafts exist since 2026-10-14: the
+  [LICENSE](../LICENSE), [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and the operator documents in
+  [legal/](legal/README.md) (Terms of Service, Privacy Policy, Acceptable Use, Refund policy, a template for an operator's
+  own store), in English and Persian. The lawyer settles who answers for the VPN service an operator resells, the payment
+  providers' rules on VPN sales, the refund and tax rules, and the wording of the source license.
 - **Brand checks.** BOBRES and the beaver are chosen. The domain, the Telegram bot @username, a GitHub org and
-  trademark conflicts are not checked. Do it before the public launch.
-- **Pricing.** What a license costs: one-time, subscription, per server, add-ons. The license already carries
-  entitlements, so any of these is a set of them (§8). What is free and what is paid is decided (below); only the
-  prices are open.
+  trademark conflicts are not checked. Do it before the public launch ([launch-checklist.md](launch-checklist.md)).
+- **Prices.** The numbers are the owner's: monthly and yearly, per tier, in one currency. They are placeholders ("SET ME")
+  in `internal/license/tiers.json` and in [pricing.md](pricing.md) until the owner sets them. The model is decided (below).
 
 Decided:
 - Free core, paid premium: DECIDED (2026-10-14), replacing the owner's earlier policy under which a missing or invalid
@@ -50,6 +53,14 @@ Decided:
   only new actions (a server, a service, a reseller, staff, a payment method); existing services keep working and
   renewing, and a customer never sees licensing text. The numbers are the owner's to tune
   (`internal/license/policy.go`). See [05-license.md](05-license.md).
+- Pricing model: DECIDED (2026-10-14). **A subscription per install**, monthly or yearly, on top of the free core above.
+  The owner sells to other operators and runs their own store on BOBRES too. The license token lasts 30 days at most, the
+  bot renews it every day through the vendor's license server, and it lapses when unpaid: after the grace period the
+  install falls back to the free tier, and nothing is deleted. The tiers (Standard, Pro) are in
+  `internal/license/tiers.json`, explained in [pricing.md](pricing.md).
+- Source license: DECIDED in principle (2026-10-14). **Source-available, all rights reserved**: the code may be read;
+  copying, redistributing, hosting for others, reselling and white-labelling need a paid license. The text in
+  [LICENSE](../LICENSE) is a draft that a lawyer must review (above).
 - Where the payment gateway service runs: DECIDED. `payments` is its own deployable, so it can run in another region.
   Zarinpal calls can go through a proxy whose IP is registered (`--zarinpal-proxy`), and the pay page can live on a
   second, registered domain (`BOBRES_ZARINPAL_HOST`). Zarinpal stays off until a merchant id is set. Still
@@ -189,7 +200,8 @@ The plan as written, with what was built under each heading ("Built").
 - Built: `bobres update` verifies the signed release (checksums, key list, channel and license coverage), backs up,
   keeps a restore point, swaps in the new CLI, installs the new version and rolls back on its own. Images are pulled
   by tag: their cosign signatures are not checked on the server. The license server and online activation are built
-  (13-license-server.md), but not deployed, and no vendor public key is embedded yet. Telemetry: none. Only
+  (13-license-server.md). The vendor key `vendor-v1-2026` exists and its public key is built into BOBRES; the server
+  is not deployed yet (a deployment kit is in `deploy/vendor/`, the owner's step). Telemetry: none. Only
   activation and the daily license refresh call the vendor, and only when `BOBRES_LICENSE_SERVER` is set. Each
   panel's version is read and flagged outside the tested range.
 
@@ -229,17 +241,18 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 - Release channel: signed images + update manifest; customers pull with `bobres update`.
 - Customer docs site, changelog, support channel.
 - Optional opt-in telemetry (version, health only, never user data).
-- Built: the license server (13-license-server.md; not deployed yet). The release channel is this repository's GitHub
+- Built: the license server (13-license-server.md) with its deployment kit (`deploy/vendor/`) and runbook
+  (runbooks/vendor-license-server.md); not deployed yet, the owner's step. The release channel is this repository's GitHub
   releases (signed CLI, checksums and key list; stable and beta). The docs live in `docs/` and the changelog in
   CHANGELOG.md; no docs site or support channel yet. No telemetry.
 
 ### Open questions
-- Pricing/licensing: one-time, subscription, per-server? Source stays closed; images are signed.
-  Still open (§2). The repository is public now.
+- Pricing/licensing: DECIDED (2026-10-14), a subscription per install; the prices are still the owner's (§2). The source is
+  public (since 2026-10-05) and source-available under a draft license.
 - Do customers get shell access to source? (Assumed no: binary images only.) The source is readable on GitHub
-  since 2026-10-05; what customers may do with it is for the license text (legal review).
-- Support scope and SLA for customers. Still open.
-- Legal: ToS for operators, and who is responsible for the VPN service they resell (needs a lawyer). Still open.
+  since 2026-10-05; what customers may do with it is for the license text (a draft; legal review open).
+- Support scope and SLA for customers. Still open (placeholders in pricing.md).
+- Legal: ToS for operators, and who is responsible for the VPN service they resell (drafts in legal/; needs a lawyer). Still open.
 - Anti-piracy level: license check strictness vs offline grace period. DECIDED: tokens last 30 days at most and
   are refreshed daily, with 0 to 90 grace days and 3 moves a year. A missing or invalid license is not blocked: the
   install runs on the trial, then the free tier, which refuses only new actions (decided 2026-10-14, §2); a stricter
@@ -248,7 +261,8 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 ## 8. Decisions from Q&A round
 - Licensing: flexible. Model it as ENTITLEMENTS (feature flags + limits + expiry) in the license key,
   so one-time / subscription / per-server / add-ons are just different entitlement sets. Pricing decided later.
-  Built (05-license.md). Pricing is still open.
+  Built (05-license.md). The model is decided (2026-10-14): a subscription per install, as entitlement sets (the tiers
+  in `internal/license/tiers.json`). The prices are still open (§2).
 - Delivery: signed Docker images only, closed source. Built: signed images. The repository became public on
   2026-10-05 (§1).
 - "Powered by BOBRES" footer: removable on higher tier only (entitlement `white_label`). Built.

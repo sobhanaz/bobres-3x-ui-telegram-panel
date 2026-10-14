@@ -238,7 +238,7 @@ func (e *env) newLicense(extra ...string) (*License, string) {
 
 func hasEnd(args []string) bool {
 	for _, a := range args {
-		if a == "-days" || a == "-ends-at" || a == "-no-end" {
+		if a == "-days" || a == "-months" || a == "-ends-at" || a == "-no-end" {
 			return true
 		}
 	}

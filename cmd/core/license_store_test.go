@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
@@ -31,7 +35,7 @@ func coreEnv(t *testing.T) {
 
 // license info answers this install's id and domain from the store, as
 // `bobres license activate` reads them; an activated import is checked like
-// any other (this build trusts no key yet, so it is refused).
+// any other (a token signed by a key this build does not carry is refused).
 func TestLicenseInfoAndImportWithTheStore(t *testing.T) {
 	coreEnv(t)
 	var out, errOut bytes.Buffer
@@ -50,9 +54,18 @@ func TestLicenseInfoAndImportWithTheStore(t *testing.T) {
 	}
 	out.Reset()
 	errOut.Reset()
-	code := licenseCmd([]string{"import", "--activated"}, strings.NewReader("eyJ2IjoxfQ.c2ln\n"), &out, &errOut)
-	if code != 1 || !strings.Contains(errOut.String(), "not installed:") || !strings.Contains(errOut.String(), "(unknown_key)") &&
-		!strings.Contains(errOut.String(), "(bad_signature)") {
+	// A well-formed token signed by a key this build does not carry.
+	_, stranger, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := license.Sign(stranger, license.Token{KeyID: "other", LicenseID: "lic_1", Domain: "panel.example.com",
+		Tier: license.TierStandard, IssuedAt: time.Now().Add(-time.Hour), ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := licenseCmd([]string{"import", "--activated"}, strings.NewReader(raw+"\n"), &out, &errOut)
+	if code != 1 || !strings.Contains(errOut.String(), "not installed:") || !strings.Contains(errOut.String(), "(bad_signature)") {
 		t.Fatalf("import: %d %q %q", code, out.String(), errOut.String())
 	}
 }

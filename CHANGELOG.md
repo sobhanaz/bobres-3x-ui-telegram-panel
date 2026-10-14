@@ -174,6 +174,32 @@ pull requests #13 to #44. Everything below is new in this release.
 - Every install runs on a 30-day trial and then on the free tier, and a license only ever gates new actions: nothing
   that exists is removed.
 
+### Selling BOBRES (the vendor side)
+- The business model is decided: a free core and a paid subscription per install, monthly or yearly
+  ([docs/pricing.md](docs/pricing.md)). The prices are the owner's: placeholders ("SET ME") in
+  `internal/license/tiers.json` until they are set.
+- The vendor's license-signing key `vendor-v1-2026` (fingerprint `2E02 AB14 5379 C040 2DBD 7BC2 51A3 C9D7`) exists and
+  its public key is built into BOBRES, so installs accept the tokens it signs. Its private half stays outside the
+  repository. Key rotation by `kid` works, and a test pins the keys that are built in.
+- Tier presets in one file, `internal/license/tiers.json`: `standard`, `pro` and a 30-day `trial`, with their
+  entitlements and placeholder prices. `go run ./tools/license sign --tier standard --domain ... --customer ... --months 1`
+  signs a license of a tier, and `licensesrv key create -customer ... -tier standard -months 1` issues one on the
+  server. `licensesrv key update ... -extend-months 1` renews a subscription. `go run ./tools/license tiers`,
+  `entitlements` and `fingerprint` list the tiers, print a tier's entitlements and a key's fingerprint. Every preset
+  names every gateway and grants at least the free tier, and the `trial` preset is the implicit trial's entitlements
+  (5 staff seats); tests pin both.
+- The vendor tools warn, and still make the license, when `max_active_services` is 0 or missing (`tools/license sign`,
+  `licensesrv key create` and `key update`): an install floors it at the free tier's 25.
+- A deployment kit for the license server, `deploy/vendor/`: the server, Postgres and Caddy (HTTPS), hardened like a
+  BOBRES install (non-root, read-only, no capabilities, internal networks), with the signing key as a mounted file outside
+  the repository. The seller's runbook is [docs/runbooks/vendor-license-server.md](docs/runbooks/vendor-license-server.md):
+  deploy, the manual sales flow, issue, renew, revoke, monitoring, backups, key rotation and a leaked key.
+- A draft source license, [LICENSE](LICENSE): source-available, all rights reserved (a lawyer must review it), and
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what ships, with a test that fails when it is out of date.
+- Legal drafts for operators in [docs/legal](docs/legal/README.md), each in English and Persian: Terms of Service,
+  Privacy Policy, Acceptable Use, a Refund policy for licenses, and a template for an operator's own store.
+- [docs/launch-checklist.md](docs/launch-checklist.md): what the owner still has to do before selling.
+
 ### Brand
 - BOBRES the beaver: the mascot is the logo. A flat icon, a 3D render, a waving animation, a banner, a bot avatar and a bot description picture,
   with a navy and teal palette ([docs/08-brand.md](docs/08-brand.md)).
@@ -184,13 +210,12 @@ pull requests #13 to #44. Everything below is new in this release.
 ### Known limits
 - Not built: third-party crypto processors (they exclude Iran), TON, older 3x-ui adapters (only v3.x, tested on
   v3.8.5 and v3.9.0), a branded subscription page, re-encryption with new master keys, metrics dashboards.
-- No vendor public key is embedded yet, so every license token is refused as "unknown key" until one ships: until then
-  no license can be installed, so every install ends on the free tier after its 30-day trial (the vendor key ships
-  in the same release).
+- The license server is built and has a deployment kit, but it is not deployed: that is the owner's step
+  ([docs/launch-checklist.md](docs/launch-checklist.md)).
 - Image signatures are not checked on the server (the release workflow checks them before it builds their digests
   into the CLI). Postgres and Redis come from Docker Hub by tag, and Caddy by version and digest.
 - The server IP address mode needs a public address with ports 80 and 443 reachable from the internet (not behind
   carrier-grade NAT). It cannot be tried in the local Docker lab. BOBRES never renews an own certificate.
-- The legal review, the brand checks and license pricing are open.
+- The legal review, the brand checks and the prices are open.
 
 [Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/commits/main

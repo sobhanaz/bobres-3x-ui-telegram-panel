@@ -1645,7 +1645,7 @@ describe('system page', () => {
     await found('.license-state')
     expect(document.querySelector('.license-state')?.textContent).toBe(text('license.state.invalid'))
     expect(document.querySelector('.reason')?.textContent).toBe(text('license.reason.unknown_key'))
-    // this build has no vendor key yet: said plainly
+    // a build without a vendor key (a development build): said plainly
     expect(document.querySelector('.no-keys')?.textContent).toBe(text('license.no_keys'))
     // saved by a staff member without a username: their id
     expect(document.querySelector('.updated')?.textContent).toContain('\u2068u1\u2069')

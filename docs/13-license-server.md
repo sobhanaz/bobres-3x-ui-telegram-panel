@@ -5,8 +5,12 @@ key into a signed license token for one install, refreshes that token every day,
 another install, and stops refreshing revoked licenses. This page is the vendor's runbook. How installs check
 tokens: [05-license.md](05-license.md).
 
-Status (2026-10-12, Phase 6b): built and tested. Not deployed: the vendor has to make the online key, ship its
-`.pub` in a release and run the server (below).
+Status (2026-10-14): built and tested. The vendor key `vendor-v1-2026` (fingerprint `2E02 AB14 5379 C040 2DBD 7BC2 51A3
+C9D7`) exists and its `.pub` is built into BOBRES, so installs verify what it signs. The
+deployment kit is `deploy/vendor/` and the day-to-day runbook is
+[runbooks/vendor-license-server.md](runbooks/vendor-license-server.md): start there to deploy the server and to sell
+licenses. This page keeps the rules, the API and the details. Not deployed yet: that is the owner's step
+([launch-checklist.md](launch-checklist.md)). What a license costs: [pricing.md](pricing.md).
 
 ## What it is, and what it is not
 
@@ -98,24 +102,24 @@ An install should keep its current token on any refusal, so it decays through gr
 The examples use the host name `license.example.com`, the system user `licensesrv`, and the directory
 `/etc/bobres-licensesrv`.
 
-### 1. The online signing key
+### 1. The signing key
 
-The server signs with its own online key, separate from the offline key `tools/license` uses for hand-made tokens.
-Make it outside any repository. The tool refuses a path inside a git checkout and never overwrites a file:
+The vendor has one signing key, `vendor-v1-2026`. It signs the tokens the server issues and the ones made by hand with
+`tools/license`; its public half is `internal/license/keys/vendor-v1-2026.pub`, built into every BOBRES release. (You could
+keep a second key for the server, apart from the one used by hand, if you want to be able to retire one without the other:
+make it the same way and add its `.pub` next to the first.) A key is made outside any repository. The tool refuses a path
+inside a git checkout and never overwrites a file:
 
 ```sh
-sudo install -d -m 700 -o licensesrv -g licensesrv /etc/bobres-licensesrv
-go run ./tools/license keygen -kid srv-2026 -out /tmp/srv-2026.key     # prints the public key line
-sudo install -m 600 -o licensesrv -g licensesrv /tmp/srv-2026.key /etc/bobres-licensesrv/srv-2026.key && rm /tmp/srv-2026.key
+go run ./tools/license keygen -kid vendor-v2-2028 -out ~/bobres-vendor-keys/vendor-v2-2028.key   # prints the public key line
 ```
 
-- Save the printed line as `internal/license/keys/srv-2026.pub`. Then update `TestEmbeddedRingIsEmptyForNow`
-  (`internal/license/keys_test.go`) and the status line of docs/05-license.md, commit **only the `.pub`**, and ship
-  a release.
-- Until installs run a release with that `.pub`, they refuse the server's tokens as `unknown_key`, and nothing is
-  gated. The server logs a warning at start while its own build lacks the key.
+- Save the printed line as `internal/license/keys/<kid>.pub`, add the key to `vendorKeys` in
+  `internal/license/keys_test.go`, commit **only the `.pub`**, and ship a release.
+- Until installs run a release with that `.pub`, they refuse the server's tokens as `bad_signature`, so they run on the
+  trial or the free tier (nothing is deleted). The server logs a warning at start while its own build lacks the key.
 - It refuses to start if the build carries a different key under the same kid.
-- Keep an offline copy of the private key, for example on an encrypted USB stick. Never commit it, and never put it
+- Keep two offline copies of the private key, for example on an encrypted USB stick. Never commit it, and never put it
   in a container image.
 - The server refuses a key file inside a git checkout and warns when other users can read it (`chmod 600`).
 
@@ -139,10 +143,10 @@ go build -trimpath -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-
 sudo install -m 755 licensesrv /usr/local/bin/licensesrv
 ```
 
-To run it in Docker instead, build a vendor-only image with
-`docker build --build-arg SERVICE=licensesrv -f deploy/Dockerfile -t licensesrv:vendor .`. Run it with the command
-`serve`, `BOBRES_HTTP_ADDR=:8080`, the key mounted read-only and the healthcheck `["/app", "--healthcheck"]`. Never
-push that image to the public registry.
+To run it in Docker instead (the recommended way), use the kit in `deploy/vendor/`: a compose file with the server,
+Postgres and Caddy (HTTPS), hardened like a BOBRES install, with the key mounted read-only from a file outside the
+repository. It builds the image from `deploy/Dockerfile` with `SERVICE=licensesrv`. Never push that image to the public
+registry. The steps are in [runbooks/vendor-license-server.md](runbooks/vendor-license-server.md).
 
 ### 4. Environment
 
@@ -151,7 +155,7 @@ own file next to it (same owner and mode):
 
 ```sh
 BOBRES_DATABASE_URL_FILE=/etc/bobres-licensesrv/database-url    # postgres://licensesrv:...@127.0.0.1/bobres_license
-BOBRES_LICENSESRV_SIGNING_KEY_FILE=/etc/bobres-licensesrv/srv-2026.key
+BOBRES_LICENSESRV_SIGNING_KEY_FILE=/etc/bobres-licensesrv/vendor-v1-2026.key
 BOBRES_HTTP_ADDR=127.0.0.1:8080
 BOBRES_LOG_FORMAT=json
 ```
@@ -240,8 +244,20 @@ The audit names who ran each command (`cli:<user>`: the user behind `sudo`, else
 
 ### Sell a license
 
-Write the entitlements: the same JSON as in docs/05-license.md. It is read strictly, so a misspelt field fails. A
-limit of `-1` means unlimited, and a missing limit means none.
+The tiers (`standard`, `pro`, `trial`) are presets, in `internal/license/tiers.json` (docs/pricing.md). A license of a tier
+takes its entitlements and its default grace; the trial lasts 30 days if no end is given:
+
+```sh
+licensesrv key create -customer "Acme VPN" -tier standard -months 1
+licensesrv key create -customer "Acme VPN" -tier pro -months 12
+licensesrv key create -customer "Maybe Co" -tier trial
+```
+
+For a custom deal, write the entitlements yourself: the same JSON as in docs/05-license.md. It is read strictly, so a
+misspelt field fails. A limit of `-1` means unlimited, and a missing limit means none, but an install never lets a license sit below the
+free tier: a missing `max_active_services` still sells 25 services, and `licensesrv key create` and `key update` print a
+WARNING ("max_active_services is 0 or missing: the install will floor it at the free tier's 25") and carry on.
+`go run ./tools/license entitlements pro` prints a preset's JSON as a starting point.
 
 ```json
 {"white_label": false, "max_servers": 2, "max_active_services": 500, "resellers": true,
@@ -253,12 +269,13 @@ limit of `-1` means unlimited, and a missing limit means none.
 licensesrv key create -customer "Acme VPN" -tier standard -entitlements standard.json -days 365
 ```
 
-- `-ends-at 2027-10-31` ends the license at 00:00 UTC on that day. `-days N` counts from now, and `-no-end` sells
-  a license with no end date. `updates_until` only says up to which date the license was sold with updates: installs
-  add a note to a later release and install it all the same (docs/05-license.md), so it never limits the license's
-  life. The entitlements an install gets are never lower than the free tier's (a license that omits `max_active_services`
-  still sells 25 services).
-- `-grace-days` defaults to 14.
+- `-months N` is N calendar months from now (a subscription period). `-ends-at 2027-10-31` ends the license at 00:00 UTC on
+  that day. `-days N` counts from now, and `-no-end` sells a license with no end date. `updates_until` only says up to
+  which date the license was sold with updates: installs add a note to a later release and install it all the same
+  (docs/05-license.md), so it never limits the license's life. The entitlements an install gets are never lower than
+  the free tier's: a license that omits `max_active_services` still sells 25 services (the server warns when a license
+  sets it to 0 or leaves it out).
+- `-grace-days` defaults to the tier's (14 for Standard and Pro, 0 for the trial).
 - The key is printed once on stdout; stderr has the license id. Send the key privately, with the server's address.
   The customer runs `sudo bobres config set BOBRES_LICENSE_SERVER https://license.example.com` (it checks the URL
   and recreates the bot). Then they either use "Activate with a license key" on the License tab, or run
@@ -279,11 +296,13 @@ licensesrv key create -customer "Acme VPN" -tier standard -entitlements standard
 ### Renew, upgrade, rename
 
 ```sh
-licensesrv key update lic_… -days 365 -reason "renewed 2027"
-licensesrv key update lic_… -tier pro -entitlements pro.json -reason "upgrade to pro"
+licensesrv key update lic_… -extend-months 1 -reason "paid 2026-11-14"
+licensesrv key update lic_… -tier pro -reason "upgrade to pro"
+licensesrv key update lic_… -tier pro -entitlements pro.json -reason "custom upgrade"
 ```
 
-Only the flags given change. The audit keeps the license before and after, with the reason. The install picks up
+`-extend-months N` renews: it adds N months to the current end, or to today when the license has already ended. A new tier
+takes that tier's preset unless `-entitlements` is given. Only the flags given change. The audit keeps the license before and after, with the reason. The install picks up
 the change at its next daily refresh. A license that has already ended can be renewed the same way: once the
 customer's install refreshes, or they activate again, it works again.
 
@@ -294,7 +313,8 @@ licensesrv key revoke lic_… -reason "chargeback"
 ```
 
 From then on, activation and refresh answer `revoked`. The install keeps its last token for at most 30 days plus
-grace, then new actions are gated.
+grace, then the trial (if it still runs) or the free tier applies: new actions beyond the free tier are refused and
+nothing is deleted.
 
 ### Support cases
 
@@ -331,23 +351,26 @@ grace, then new actions are gated.
 - **Concurrency.** An activation locks its license row, so two installs activating one key at the same moment are
   handled one after the other, and a partial unique index allows only one active activation per license.
 
-## Rotating the online key
+## Rotating the signing key
 
-1. Make `srv-2027` (step 1). Ship its `.pub` in a release next to `srv-2026.pub`.
+1. Make `vendor-v2-2028` (step 1). Ship its `.pub` in a release next to `vendor-v1-2026.pub`.
 2. Once installs have that release, point `BOBRES_LICENSESRV_SIGNING_KEY_FILE` at the new key and restart the
-   server. Tokens signed with `srv-2026` still refresh, because the server checks refresh tokens against every key
+   server. Tokens signed with `vendor-v1-2026` still refresh, because the server checks refresh tokens against every key
    in its build.
-3. Remove `srv-2026.pub` in a later release, once every token it signed has expired (30 days plus grace).
+3. Remove `vendor-v1-2026.pub` in a later release, once every token it signed has expired (30 days plus grace).
 
-If the online key leaks, anyone can make tokens that installs accept, until installs drop its `.pub`. Ship a
-release without that `.pub` and with a new key at once, switch the server to the new key, and tell customers to
-update. Their installs show `unknown_key` and run on the trial or the free tier until the update brings the new key.
+If the key leaks, anyone can make tokens that installs accept, until installs drop its `.pub`. Ship a release without
+that `.pub` and with a new key at once, switch the server to the new key, and tell customers to update and activate again.
+Until they update, their installs still accept the leaked key. After the update their installs show the license as
+invalid (`bad_signature`) and run on the trial or the free tier until they activate again; nothing is deleted and
+existing services keep working. The step-by-step is in
+[runbooks/vendor-license-server.md](runbooks/vendor-license-server.md), section 7.
 
 ## Backups
 
 - **The database.** Back it up daily (`pg_dump -Fc bobres_license`) and keep a copy off the server. Without it,
   every key stops working: only hashes were kept, so keys cannot be rebuilt.
-- **The online key.** Keep an offline copy. If it is lost, rotate (above). Installs keep their tokens until they
+- **The signing key.** Keep two offline copies. If every copy is lost, rotate (above). Installs keep their tokens until they
   expire.
 
 ## Known limits

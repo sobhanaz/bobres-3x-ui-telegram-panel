@@ -14,7 +14,11 @@ Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.m
 Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
 versions (built only when a customer needs one). No release is published yet. The first public release will be
 v0.1.0, after the first install on a real server ([docs/11-staging-run.md](docs/11-staging-run.md)). Still open: the
-legal review, the brand checks (domain, bot name, trademark) and license pricing.
+legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
+and a paid subscription per install ([docs/pricing.md](docs/pricing.md)). BOBRES already carries the vendor's license
+key (`vendor-v1-2026`, fingerprint `2E02 AB14 5379 C040 2DBD 7BC2 51A3 C9D7`), so licenses signed with it verify; the
+license server is built but still has to be deployed by the owner. What is left before selling is in
+[docs/launch-checklist.md](docs/launch-checklist.md).
 
 ## Features
 
@@ -148,6 +152,8 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`
 - [Docs index](docs/README.md): every document, with what it covers.
 - [Project plan](docs/PLAN.md): decisions, architecture and the status of each phase.
 - [Runbooks](docs/runbooks/README.md): what to do when something goes wrong, and the routine jobs.
+- [Pricing and licenses](docs/pricing.md): the free tier, the paid tiers, and what happens when a subscription lapses.
+- [Legal drafts](docs/legal/README.md): terms, privacy, acceptable use and refunds, in English and Persian (drafts for a lawyer).
 - [Brand](docs/08-brand.md): BOBRES the beaver, the assets and the rules for using them.
 - [Changelog](CHANGELOG.md).
 
@@ -175,6 +181,14 @@ Vue 3, built into the `core` binary.
   Redis (`BOBRES_TEST_REDIS_ADDR`, default `127.0.0.1:6379`). Each test package gets its own
   throwaway database. They skip when the servers are missing, except with
   `BOBRES_TEST_REQUIRE_DB=1` (CI), where they fail.
+
+## License
+
+BOBRES is **source-available, all rights reserved**: the [LICENSE](LICENSE) (a draft, to be reviewed by a lawyer before the
+public launch) lets anyone read and audit the code. Without a paid license you may run an official release for your own store
+on the free tier. Copying or redistributing the code, hosting it for others, reselling it and white-labelling it need a paid
+license from the owner. The tiers and prices are in [docs/pricing.md](docs/pricing.md). The licenses of the components BOBRES
+uses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Meet BOBRES
 

@@ -1,0 +1,56 @@
+# BOBRES vendor license server: HTTPS in front of licensesrv. Caddy issues and renews the
+# certificate for LICENSE_DOMAIN by itself (its DNS A record must point at this server, and
+# ports 80 and 443 must be open). Only /v1/ reaches the server; everything else is a 404.
+{
+	# No admin API: this Caddy is configured by this file alone.
+	admin off
+	servers {
+		protocols h1 h2 h3
+		# Slow-client (slowloris) protection.
+		timeouts {
+			read_body   30s
+			read_header 10s
+			write       60s
+			idle        2m
+		}
+	}
+}
+
+{$LICENSE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+
+	# The two endpoints installs call. A request body is a license key or a token: a few
+	# hundred bytes. licensesrv reads the client address and the scheme from the
+	# X-Forwarded-For and X-Forwarded-Proto headers that reverse_proxy sets here (it
+	# replaces whatever the client sent, because the client is not a trusted proxy).
+	handle /v1/* {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy licensesrv:8080
+	}
+
+	# /healthz and /readyz stay inside; nothing else is served.
+	handle {
+		respond "Not found" 404
+	}
+}
+
+# The container's health check only (listens on the container's own loopback; not published).
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond "ok" 200
+}
