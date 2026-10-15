@@ -41,6 +41,14 @@ const (
 
 var reportGroups = []string{GroupDay, GroupWeek, GroupMonth}
 
+// Report calendars: how weeks and months are cut. Gregorian weeks start on
+// Monday and months on the 1st; Jalali (Persian) weeks start on Saturday and
+// months on Jalali day 1. Day buckets are the same in both.
+const (
+	CalendarGregorian = "gregorian"
+	CalendarJalali    = "jalali"
+)
+
 // Named ranges, read in the report's time zone.
 const (
 	RangeToday      = "today"
@@ -56,36 +64,53 @@ const dateLayout = "2006-01-02"
 
 // ReportRequest is what a caller asks for. Either Range (a named stretch) or
 // From and To (local dates, both included, "2006-01-02"); neither means the
-// last 30 days. Group is day (the default), week or month; TZ an IANA name
-// (empty: the store's general.timezone, else Asia/Tehran).
+// last 30 days. Group is day (the default), week or month; Calendar
+// gregorian (the default) or jalali; TZ an IANA name (empty: the store's
+// general.timezone, else Asia/Tehran).
 type ReportRequest struct {
 	Range    string
 	From, To string
 	Group    string
+	Calendar string
 	TZ       string
 }
 
-// ReportSpan is one bucket of a report: the local date it starts on (a
-// Monday for a week, the 1st for a month), and whether the range cuts it, so
-// it holds only part of its days.
+// ReportSpan is one bucket of a report: the local (Gregorian) date it starts
+// on (a Monday, or in the Jalali calendar a Saturday, for a week; the 1st, or
+// Jalali day 1, for a month), and whether the range cuts it, so it holds only
+// part of its days.
 type ReportSpan struct {
 	Start   string
 	Partial bool
 }
 
 // ReportRange is a validated request: the dates it covers, the zone they are
-// read in and the buckets, oldest first. Weeks start on Monday (ISO) and
-// months on the 1st, in both languages.
+// read in and the buckets, oldest first. In the Gregorian calendar weeks start
+// on Monday (ISO) and months on the 1st; in the Jalali one weeks start on
+// Saturday and months on Jalali day 1.
 type ReportRange struct {
 	From, To string
 	Group    string
+	Calendar string
 	TZ       string
 	Buckets  []ReportSpan
 }
 
-// Query is the range as the store reads it.
+// folds is true when the store's buckets are not the report's: the store cuts
+// weeks and months the Gregorian way only, so a Jalali week or month is read as
+// days and added up by SalesReport.
+func (r *ReportRange) folds() bool {
+	return r.Calendar == CalendarJalali && r.Group != GroupDay
+}
+
+// Query is the range as the store reads it (a Jalali week or month is asked
+// for as days: at most ReportMaxDays rows).
 func (r *ReportRange) Query() store.ReportQuery {
-	return store.ReportQuery{From: r.From, To: r.To, TZ: r.TZ, Group: r.Group}
+	group := r.Group
+	if r.folds() {
+		group = GroupDay
+	}
+	return store.ReportQuery{From: r.From, To: r.To, TZ: r.TZ, Group: group}
 }
 
 // NewReportRange validates a request. defaultTZ is the zone used when the
@@ -97,6 +122,13 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 	}
 	if !contains(reportGroups, group) {
 		return nil, invalid("group must be day, week or month")
+	}
+	calendar := req.Calendar
+	if calendar == "" {
+		calendar = CalendarGregorian
+	}
+	if calendar != CalendarGregorian && calendar != CalendarJalali {
+		return nil, invalid("calendar must be gregorian or jalali")
 	}
 	tz := req.TZ
 	if tz == "" {
@@ -112,7 +144,7 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 	case req.Range != "" && (req.From != "" || req.To != ""):
 		return nil, invalid("name a range or give from and to, not both")
 	case req.Range != "":
-		if from, to, err = namedRange(req.Range, today); err != nil {
+		if from, to, err = namedRange(req.Range, today, calendar); err != nil {
 			return nil, err
 		}
 	case req.From == "" && req.To == "":
@@ -133,12 +165,12 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 	if days := int(to.Sub(from).Hours()/24) + 1; days > ReportMaxDays {
 		return nil, invalid("a report covers at most %d days (this one covers %d)", ReportMaxDays, days)
 	}
-	rng := &ReportRange{From: from.Format(dateLayout), To: to.Format(dateLayout), Group: group, TZ: loc.String()}
-	for start := bucketStart(from, group); !start.After(to); start = nextBucket(start, group) {
+	rng := &ReportRange{From: from.Format(dateLayout), To: to.Format(dateLayout), Group: group, Calendar: calendar, TZ: loc.String()}
+	for start := bucketStart(from, group, calendar); !start.After(to); start = nextBucket(start, group, calendar) {
 		if len(rng.Buckets) == ReportMaxBuckets {
 			return nil, invalid("a report has at most %d buckets", ReportMaxBuckets)
 		}
-		last := nextBucket(start, group).AddDate(0, 0, -1)
+		last := nextBucket(start, group, calendar).AddDate(0, 0, -1)
 		rng.Buckets = append(rng.Buckets, ReportSpan{Start: start.Format(dateLayout), Partial: start.Before(from) || last.After(to)})
 	}
 	return rng, nil
@@ -172,8 +204,8 @@ func parseDate(name, s string) (time.Time, error) {
 	return d, nil
 }
 
-func namedRange(name string, today time.Time) (from, to time.Time, err error) {
-	monthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
+func namedRange(name string, today time.Time, calendar string) (from, to time.Time, err error) {
+	monthStart := bucketStart(today, GroupMonth, calendar)
 	switch name {
 	case RangeToday:
 		return today, today, nil
@@ -184,27 +216,39 @@ func namedRange(name string, today time.Time) (from, to time.Time, err error) {
 	case RangeThisMonth:
 		return monthStart, today, nil
 	case RangeLastMonth:
-		return monthStart.AddDate(0, -1, 0), monthStart.AddDate(0, 0, -1), nil
+		last := monthStart.AddDate(0, 0, -1)
+		return bucketStart(last, GroupMonth, calendar), last, nil
 	}
 	return from, to, invalid("range must be one of %v", reportRanges)
 }
 
 // bucketStart is the first day of the bucket a date falls in.
-func bucketStart(d time.Time, group string) time.Time {
+func bucketStart(d time.Time, group, calendar string) time.Time {
+	jalali := calendar == CalendarJalali
 	switch group {
 	case GroupWeek:
+		if jalali {
+			return d.AddDate(0, 0, -int((d.Weekday()+1)%7)) // Saturday
+		}
 		return d.AddDate(0, 0, -int((d.Weekday()+6)%7)) // Monday
 	case GroupMonth:
+		if jalali {
+			return jalaliMonthStart(d)
+		}
 		return time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
 	}
 	return d
 }
 
-func nextBucket(start time.Time, group string) time.Time {
+// nextBucket is the first day of the bucket after the one starting on start.
+func nextBucket(start time.Time, group, calendar string) time.Time {
 	switch group {
 	case GroupWeek:
 		return start.AddDate(0, 0, 7)
 	case GroupMonth:
+		if calendar == CalendarJalali {
+			return nextJalaliMonth(start)
+		}
 		return start.AddDate(0, 1, 0)
 	}
 	return start.AddDate(0, 0, 1)
@@ -274,6 +318,11 @@ func (s *Service) SalesReport(ctx context.Context, rng *ReportRange) (*SalesRepo
 	if err != nil {
 		return nil, reportError(err)
 	}
+	if rng.folds() {
+		if data, err = foldDays(rng, data); err != nil {
+			return nil, err
+		}
+	}
 	seen := map[string]bool{}
 	for _, cells := range data.Cells {
 		for cur := range cells {
@@ -326,6 +375,46 @@ func (s *Service) SalesReport(ctx context.Context, rng *ReportRange) (*SalesRepo
 		return nil, fmt.Errorf("sales report: %d numbers fell outside the report's buckets", stray)
 	}
 	return rep, nil
+}
+
+// foldDays turns the store's day rows into the buckets of a Jalali week or
+// month: a day's cells are added into its bucket's, and its people counts too
+// (every counted person is counted on one day only, so the sums are the
+// bucket's). A day outside the range is an error, as a stray bucket is.
+func foldDays(rng *ReportRange, data *store.SalesData) (*store.SalesData, error) {
+	out := &store.SalesData{Cells: map[string]map[string]*store.ReportCell{}, NewCustomers: map[string]int64{}, Trials: map[string]int64{}}
+	bucketOf := func(day string) (string, error) {
+		d, err := time.Parse(dateLayout, day)
+		if err != nil || day < rng.From || day > rng.To {
+			return "", fmt.Errorf("sales report: a number fell on %q, outside %s to %s", day, rng.From, rng.To)
+		}
+		return bucketStart(d, rng.Group, rng.Calendar).Format(dateLayout), nil
+	}
+	for day, cells := range data.Cells {
+		start, err := bucketOf(day)
+		if err != nil {
+			return nil, err
+		}
+		if out.Cells[start] == nil {
+			out.Cells[start] = map[string]*store.ReportCell{}
+		}
+		for cur, c := range cells {
+			if out.Cells[start][cur] == nil {
+				out.Cells[start][cur] = &store.ReportCell{}
+			}
+			addCell(out.Cells[start][cur], c)
+		}
+	}
+	for _, p := range []struct{ in, out map[string]int64 }{{data.NewCustomers, out.NewCustomers}, {data.Trials, out.Trials}} {
+		for day, n := range p.in {
+			start, err := bucketOf(day)
+			if err != nil {
+				return nil, err
+			}
+			p.out[start] += n
+		}
+	}
+	return out, nil
 }
 
 // addCell adds b into a (both in one currency).

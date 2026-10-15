@@ -31,16 +31,18 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
   orders, a chart per currency, top plans, how orders were paid (wallet, staff-approved, gateway), CSV files of the
   summary and of the paid orders. The numbers equal the ledger to the last unit in a test with seeded data in several
   time zones, in fa and en. Migration 00018 adds three indexes.
-- **Still open:** the daily summary message in Telegram (and its notification kind); Jalali-calendar weeks and months
-  (buckets are Gregorian now, the dates are shown in Jalali); churn; the gateway behind a payment (Zarinpal, Stars,
-  automatic USDT apart: the payments service has it, core does not store it); the ledger export's early-header and
-  deadline handling (the reports' exports have it).
+- **Built since:** the daily summary message in Telegram (`notify.daily_summary`, [14-reports.md](14-reports.md)).
+- **Built since:** which provider paid each order (Zarinpal, Stars, automatic USDT, card, crypto; recorded on
+  `order.paid.v1`, older orders show "provider not recorded"); the ledger and audit CSV files now follow the reports'
+  export rules (late header, deadline, "export incomplete" note, shared slots, audit with outcome).
+- **Built since:** Jalali weeks and months (`calendar=jalali`).
+- **Still open:** churn.
 - **Why first:** it is the cheapest piece, needs no new service, and the owner and the first customers want numbers
   from day one. It also shows the paid tiers' value.
 - **Risks:** time zones and the Jalali calendar in the numbers; money in several currencies (Toman, USDT, Stars) must
   never be added together without a stated rate.
 - **Done when:** the numbers match the ledger to the last unit in a test with seeded data, in fa and en (done), and the
-  daily summary arrives once (open).
+  daily summary arrives once (done).
 
 ### 2. Branded subscription page (M)
 - **What:** a page per customer service under the store's own brand: usage and days left, the subscription link and

@@ -18,8 +18,11 @@ import (
 // last_30_days|this_month|last_month, or ?from=2026-10-01&to=2026-10-14 (local
 // dates, both included); none means the last 30 days. ?tz= is an IANA zone
 // (default: the store's general.timezone setting, else BOBRES_TIMEZONE, else
-// Asia/Tehran) and ?group=day|week|month sizes the summary's buckets (weeks
-// start on Monday).
+// Asia/Tehran), ?group=day|week|month sizes the summary's buckets and
+// ?calendar=gregorian|jalali (default gregorian) says how weeks and months are
+// cut: Gregorian weeks start on Monday and months on the 1st, Jalali weeks on
+// Saturday and months on Jalali day 1 (a bucket's date is always its Gregorian
+// start date).
 // Amounts are integers in each currency's minor unit; currencies are never
 // added together.
 
@@ -47,7 +50,7 @@ func (s *Server) reportRange(w http.ResponseWriter, r *http.Request) (*domain.Re
 	stretch(w, s.exportWindow()+reportGrace)
 	q := r.URL.Query()
 	rng, err := s.cfg.Domain.ReportRange(r.Context(), domain.ReportRequest{
-		Range: q.Get("range"), From: q.Get("from"), To: q.Get("to"), Group: q.Get("group"), TZ: q.Get("tz"),
+		Range: q.Get("range"), From: q.Get("from"), To: q.Get("to"), Group: q.Get("group"), Calendar: q.Get("calendar"), TZ: q.Get("tz"),
 	}, s.now())
 	if err != nil {
 		s.fail(w, "report range", err)
@@ -117,7 +120,7 @@ func (s *Server) reportSummary(w http.ResponseWriter, r *http.Request) {
 		buckets = append(buckets, bucketOf(&rep.Buckets[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"from": rng.From, "to": rng.To, "group": rng.Group, "tz": rng.TZ,
+		"from": rng.From, "to": rng.To, "group": rng.Group, "calendar": rng.Calendar, "tz": rng.TZ,
 		"currencies": rep.Currencies, "buckets": buckets, "totals": bucketOf(&rep.Totals),
 	})
 }
@@ -160,13 +163,14 @@ func (s *Server) reportMethods(w http.ResponseWriter, r *http.Request) {
 	}
 	type method struct {
 		Method   string `json:"method"`
+		Provider string `json:"provider"` // "" for wallet, unknown, and events from before it was recorded
 		Currency string `json:"currency"`
 		Orders   int64  `json:"orders"`
 		Revenue  int64  `json:"revenue"`
 	}
 	methods := make([]method, 0, len(rows))
 	for _, m := range rows {
-		methods = append(methods, method{m.Method, m.Currency, m.Orders, m.Revenue})
+		methods = append(methods, method{m.Method, m.Provider, m.Currency, m.Orders, m.Revenue})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"from": rng.From, "to": rng.To, "tz": rng.TZ, "methods": methods})
 }
@@ -263,7 +267,7 @@ func exportReason(err error, window time.Duration) string {
 // sent). It is written even when the client has gone.
 func (s *Server) auditExport(r *http.Request, kind string, rng *domain.ReportRange, outcome string, rows int) {
 	s.audit(context.WithoutCancel(r.Context()), actor(r), "export.reports", map[string]any{
-		"kind": kind, "from": rng.From, "to": rng.To, "group": rng.Group, "tz": rng.TZ, "outcome": outcome, "rows": rows,
+		"kind": kind, "from": rng.From, "to": rng.To, "group": rng.Group, "calendar": rng.Calendar, "tz": rng.TZ, "outcome": outcome, "rows": rows,
 	})
 }
 
@@ -287,7 +291,11 @@ func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "sales report", err)
 		return
 	}
-	f := &csvFile{w: w, name: "reports-summary-" + rng.From + "-to-" + rng.To + "-by-" + rng.Group + ".csv"}
+	name := "reports-summary-" + rng.From + "-to-" + rng.To + "-by-" + rng.Group
+	if rng.Calendar == domain.CalendarJalali {
+		name += "-jalali"
+	}
+	f := &csvFile{w: w, name: name + ".csv"}
 	_ = f.write("period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders",
 		"renewals", "traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount",
 		"gateway_failed_count", "gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials")
@@ -328,7 +336,7 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 	defer release()
 	f := &csvFile{w: w, name: "reports-orders-" + rng.From + "-to-" + rng.To + ".csv"}
 	header := []string{"paid_at_utc", "paid_at_local", "order_id", "type", "telegram_id", "username", "plan_fa", "plan_en",
-		"amount", "currency", "paid_with", "refunded_amount"}
+		"amount", "currency", "paid_with", "refunded_amount", "provider"}
 	ctx, cancel := context.WithTimeout(r.Context(), s.exportWindow())
 	defer cancel()
 	more, err := s.cfg.Domain.EachPaidOrder(ctx, rng, maxCSVRows, func(o store.PaidOrderRow) error {
@@ -346,7 +354,8 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 		}
 		return f.data(o.PaidAt.UTC().Format("2006-01-02T15:04:05Z"), o.PaidLocal, o.OrderID, o.Type,
 			strconv.FormatInt(o.TelegramID, 10), reportText(o.Username), reportText(o.PlanName["fa"]), reportText(o.PlanName["en"]),
-			decimal(o.Amount, o.Currency), reportText(o.Currency), reportText(o.Method), decimal(o.Refunded, o.Currency))
+			decimal(o.Amount, o.Currency), reportText(o.Currency), reportText(o.Method), decimal(o.Refunded, o.Currency),
+			reportText(o.Provider))
 	})
 	switch {
 	case err != nil && !f.started:

@@ -210,7 +210,7 @@ func TestWalletOrderPaysOnceAndAnnouncesIt(t *testing.T) {
 	}
 	var e events.OrderPaidEvent
 	_ = json.Unmarshal(evs[0], &e)
-	if e.OrderID != o.ID || e.TelegramID != 1002 || e.Source != events.PaidByWallet {
+	if e.OrderID != o.ID || e.TelegramID != 1002 || e.Source != events.PaidByWallet || e.Provider != "" {
 		t.Errorf("bad event: %+v", e)
 	}
 }

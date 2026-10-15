@@ -28,7 +28,7 @@ func TestManualPaymentPaysTheOrderOnce(t *testing.T) {
 	o, _ := svc.CreateOrder(ctx, CreateOrderParams{UserID: u.ID, PlanID: p.ID, IdempotencyKey: "c-ord-1"})
 
 	m := payEvent(t, "e1", events.PaymentsPaymentSucceeded, events.PaymentEvent{
-		IntentID: "00000000-0000-7000-8000-0000000000f1", OrderID: o.ID, UserID: u.ID, Amount: 700, Currency: "IRT",
+		IntentID: "00000000-0000-7000-8000-0000000000f1", OrderID: o.ID, UserID: u.ID, Provider: "manual_card", Amount: 700, Currency: "IRT",
 	})
 	for i := 0; i < 2; i++ { // the second delivery is a no-op (inbox)
 		if err := svc.HandlePaymentEvent(ctx, m); err != nil {
@@ -43,8 +43,14 @@ func TestManualPaymentPaysTheOrderOnce(t *testing.T) {
 	if bal, sum, rows := ledger(t, s, u.ID); bal != 0 || sum != 0 || rows != 2 {
 		t.Fatalf("balance=%d ledger=%d rows=%d, want 0/0/2", bal, sum, rows)
 	}
-	if n := len(outboxEvents(t, s, events.OrderPaid)); n != 1 {
-		t.Fatalf("order.paid events = %d", n)
+	evs := outboxEvents(t, s, events.OrderPaid)
+	if len(evs) != 1 {
+		t.Fatalf("order.paid events = %d", len(evs))
+	}
+	var e events.OrderPaidEvent
+	_ = json.Unmarshal(evs[0], &e)
+	if e.Source != events.PaidManually || e.Provider != "manual_card" {
+		t.Errorf("bad event: %+v", e)
 	}
 }
 

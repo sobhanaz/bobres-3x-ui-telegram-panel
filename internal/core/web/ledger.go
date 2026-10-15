@@ -1,7 +1,7 @@
 package web
 
 import (
-	"encoding/csv"
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,42 +82,38 @@ func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
 
 // exportLedger: GET /api/v1/ledger.csv with the same filters, newest first,
 // at most maxCSVRows rows. UTF-8 with a byte-order mark, so spreadsheet
-// programs show Persian names.
+// programs show Persian names. It is an export like the reports' (streamCSV):
+// it shares their places (two at a time), their deadline and their rules for a
+// failure. Text cells go through reportText: a name that is, or after spaces
+// becomes, a spreadsheet formula is quoted.
 func (s *Server) exportLedger(w http.ResponseWriter, r *http.Request) {
 	f, ok := ledgerFilter(r)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid", "bad filter")
 		return
 	}
-	h := w.Header()
-	h.Set("Content-Type", "text/csv; charset=utf-8")
-	h.Set("Content-Disposition", `attachment; filename="ledger-`+s.now().UTC().Format("20060102-1504")+`.csv"`)
-	s.audit(r.Context(), actor(r), "export.ledger", r.URL.Query())
-	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
-	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id", "entry_id"})
-	more, err := s.cfg.Store.EachLedger(r.Context(), s.cfg.Store.Conn(), f, maxCSVRows, func(e store.LedgerRow) error {
-		ref := ""
-		if e.RefID != nil {
-			ref = *e.RefID
-		}
-		refType := ""
-		if e.RefType != nil {
-			refType = *e.RefType
-		}
-		return cw.Write([]string{
-			e.CreatedAt.UTC().Format(time.RFC3339), strconv.FormatInt(e.TelegramID, 10), csvText(e.Username),
-			e.Kind, decimal(e.Amount, e.Currency), e.Currency, decimal(e.BalanceAfter, e.Currency), csvText(refType), ref, e.ID,
-		})
+	s.streamCSV(w, r, csvExport{
+		name:   "ledger-" + s.now().UTC().Format("20060102-1504") + ".csv",
+		action: "export.ledger",
+		query:  r.URL.Query(),
+		header: []string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id", "entry_id"},
+		each: func(ctx context.Context, row func(cells ...string) error) (bool, error) {
+			return s.cfg.Store.EachLedger(ctx, f, maxCSVRows, func(e store.LedgerRow) error {
+				ref, refType := "", ""
+				if e.RefID != nil {
+					ref = *e.RefID
+				}
+				if e.RefType != nil {
+					refType = *e.RefType
+				}
+				return row(
+					e.CreatedAt.UTC().Format(time.RFC3339), strconv.FormatInt(e.TelegramID, 10), reportText(e.Username),
+					reportText(e.Kind), decimal(e.Amount, e.Currency), reportText(e.Currency), decimal(e.BalanceAfter, e.Currency),
+					reportText(refType), reportText(ref), e.ID)
+			})
+		},
+		moreNote: moreEntriesNote(maxCSVRows),
 	})
-	if err != nil {
-		// The header is out: the file ends short, and the log says why.
-		s.cfg.Log.Error("dashboard api: export ledger", "err", err)
-	}
-	if more {
-		_ = cw.Write([]string{"# more entries match: narrow the filter (at most " + strconv.Itoa(maxCSVRows) + " rows per file)"})
-	}
-	cw.Flush()
 }
 
 // decimal writes minor units as a plain decimal ("-12.500000" USDT).

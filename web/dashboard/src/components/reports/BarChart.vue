@@ -2,20 +2,20 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { localDate, money, moneyCompact, type Lang } from '../../format'
-import { periodLabel, type Bar, type Group } from '../../reports'
+import { periodLabel, type Bar, type Calendar, type Group } from '../../reports'
 
 // One currency's revenue per period as plain bars, scaled to that currency
 // alone (a chart never mixes two currencies on one axis). Bars are laid out
 // in the reading direction, so the oldest period is at the start in both
 // languages. The figures are also in the table below the charts; the chart
 // itself is one image with a text summary.
-const props = defineProps<{ bars: Bar[]; currency: string; group: Group; title: string }>()
+const props = defineProps<{ bars: Bar[]; currency: string; group: Group; calendar: Calendar; title: string }>()
 const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 
 const peak = computed(() => props.bars.reduce((a, b) => (b.value > a.value ? b : a), props.bars[0] ?? { date: '', value: 0, pct: 0, partial: false }))
 const name = computed(() => (te('currency.' + props.currency) ? t('currency.' + props.currency) : props.currency))
-const label = (b: Bar) => periodLabel(b.date, props.group, lang.value, t)
+const label = (b: Bar) => periodLabel(b.date, props.group, lang.value, t, props.calendar)
 const summary = computed(() =>
   peak.value.value > 0
     ? t('reports.chart.peak', { currency: name.value, amount: money({ amount: peak.value.value, currency: props.currency }, lang.value), period: label(peak.value) })

@@ -16,7 +16,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | order.created.v1 | core | payments | Order awaiting payment |
 | payment.succeeded.v1 | payments | core | Money confirmed |
 | payment.failed.v1 / payment.expired.v1 | payments | core, notifier | Payment did not complete |
-| order.paid.v1 | core | provisioner | Provision the service |
+| order.paid.v1 | core | provisioner, notifier, sales reports | Provision the service. `{order_id, user_id, telegram_id, plan_id, amount, currency, source, provider}`: `source` is wallet, manual, gateway, trial or free; `provider` (optional, additive) is the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, ...), absent for wallet, trial and free orders and for events from before it was recorded |
 | subscription.provision_requested.v1 | core | provisioner | Create/renew/reset command |
 | subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links |
 | subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention |
@@ -29,6 +29,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | payment.deposit_unmatched.v1 / deposit_claimed.v1 | payments, then core | notifier(staff alerts) | Phase 6a. USDT reached the store's TRON address but matched no automatic payment (`reason`: no_payment, already_paid, closed, ambiguous), so staff credit it by hand; or a manual USDT proof carries a transaction the watcher had seen, so staff check it before approving. Core passes both on to the bot |
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`; the notice `license.limit` is sent at most every 24 h, has no 6-hour reminder and no `resolved`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes, limit are numbers, free is bytes, date is unix seconds, the rest names; name of `license.limit` is the limited thing, `active_services`), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
+| sales.daily_summary.v1 | core (daily-summary worker) | notifier(staff alerts) | Yesterday's sales, once a day after `notify.daily_summary_hour` when `notify.daily_summary` is on ([14-reports.md](14-reports.md)). `{date (the local day), tz, new_customers, trials, currencies: [{currency, revenue, net, orders, new_orders, renewals, refunds (count), refund_amount, topups (count), topup_amount}]}`, money in minor units, one entry per currency, never added together; an empty day has no currencies. Sent to `notify.recipients` (never support staff) |
 
 ## Purchase saga (happy path)
 bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pays -> `payment.succeeded`
@@ -146,7 +147,7 @@ Core's `POST /api/v1/system/tls/detect-ip` and the Detect button of the dashboar
 - Implemented (2026-10-12): payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and
   applies each intent exactly once) and `payment.deposit_unmatched.v1` / `deposit_claimed.v1`. Core publishes for the
   bot: `order.paid.v1`, `wallet.credited.v1`, `payment.rejected.v1`, `subscription.provisioned.v1`, `extended.v1`,
-  `provision_failed.v1` and `reminder.v1`, the four `ticket.*.v1`, `system.alert.v1` and the two deposit events.
+  `provision_failed.v1` and `reminder.v1`, the four `ticket.*.v1`, `system.alert.v1`, `sales.daily_summary.v1` and the two deposit events.
   `payment.rejected.v1` is for a manual payment a reviewer rejected and for a gateway payment that failed or expired;
   it carries the intent's `provider` and the `reason` (core's sales reports tell the two apart with them).
   The other rows of the catalog are not events: those steps are gRPC calls (orders, payment intents, provisioning,

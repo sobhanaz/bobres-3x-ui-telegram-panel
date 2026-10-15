@@ -43,6 +43,8 @@ export interface ReportSummary {
   from: string
   to: string
   group: Group
+  /** which calendar the weeks and months follow; a bucket's date is Gregorian either way */
+  calendar: Calendar
   tz: string
   /** every currency with any number in the range, sorted */
   currencies: string[]
@@ -61,20 +63,31 @@ export interface ReportPlan {
 export interface ReportMethod {
   /** wallet, manual, gateway, or unknown */
   method: string
+  /** who took the payment (zarinpal, stars, usdt_trc20_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
+  provider: string
   currency: string
   orders: number
   revenue: number
 }
 
 export type Group = 'day' | 'week' | 'month'
+/** gregorian: weeks start on Monday, months are calendar months. jalali: weeks start on Saturday, months are Jalali months. */
+export type Calendar = 'gregorian' | 'jalali'
 export type Range = 'today' | 'last_7_days' | 'last_30_days' | 'this_month' | 'last_month' | 'custom'
 
 export const groups: Group[] = ['day', 'week', 'month']
+export const calendars: Calendar[] = ['gregorian', 'jalali']
+
+/** defaultCalendar is the calendar a person reads: Jalali in Persian. */
+export function defaultCalendar(lang: Lang): Calendar {
+  return lang === 'fa' ? 'jalali' : 'gregorian'
+}
 export const ranges: Range[] = ['today', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'custom']
 
 export interface Selection {
   range: Range
   group: Group
+  calendar: Calendar
   /** custom range: dates "2026-10-14", both included */
   from: string
   to: string
@@ -91,14 +104,21 @@ export function validCustom(from: string, to: string): boolean {
 }
 
 /** reportParams are the query values a selection makes: a named range goes
- * as it is (core reads it in the store's zone), a custom one as dates. */
+ * as it is (core reads it in the store's zone), a custom one as dates. The
+ * calendar is sent only when it is Jalali: Gregorian is what core assumes. */
 export function reportParams(sel: Selection): Record<string, string> {
-  return sel.range === 'custom' ? { from: sel.from, to: sel.to, group: sel.group } : { range: sel.range, group: sel.group }
+  const p: Record<string, string> =
+    sel.range === 'custom' ? { from: sel.from, to: sel.to, group: sel.group } : { range: sel.range, group: sel.group }
+  if (sel.calendar === 'jalali') p.calendar = 'jalali'
+  return p
 }
 
-/** exportParams pin the range core resolved, so a file holds what the page shows. */
-export function exportParams(s: Pick<ReportSummary, 'from' | 'to' | 'group' | 'tz'>): Record<string, string> {
-  return { from: s.from, to: s.to, group: s.group, tz: s.tz }
+/** exportParams pin the range core resolved, so a file holds what the page
+ * shows (the calendar too, when it is Jalali). */
+export function exportParams(s: Pick<ReportSummary, 'from' | 'to' | 'group' | 'tz'> & { calendar?: Calendar }): Record<string, string> {
+  const p: Record<string, string> = { from: s.from, to: s.to, group: s.group, tz: s.tz }
+  if (s.calendar === 'jalali') p.calendar = 'jalali'
+  return p
 }
 
 /** Currencies in the order the page shows them: core's, then any another list names. */
@@ -140,10 +160,22 @@ export function hasData(s: ReportSummary): boolean {
   return s.currencies.length > 0 || s.totals.new_customers > 0 || s.totals.trials > 0
 }
 
+/** jalaliMonth writes the Jalali month a date ("2026-10-23") starts, as
+ * "Aban 1405" or "آبان ۱۴۰۵": the month's name and its year, nothing else. */
+export function jalaliMonth(date: string, lang: Lang): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const parts = new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-US-u-ca-persian', { month: 'long', year: 'numeric', timeZone: 'UTC' }).formatToParts(
+    new Date(Date.UTC(y, m - 1, d)),
+  )
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${pick('month')} ${pick('year')}`
+}
+
 /** periodLabel names a period by the date it starts on: a day by its date, a
  * week as "Week of 12 Oct", a month as "Month of 1 Oct" (Jalali dates in
- * Persian; the periods themselves are Gregorian weeks and months). */
-export function periodLabel(date: string, group: Group, lang: Lang, t: T): string {
+ * Persian). A Jalali month is named by its Jalali month and year. */
+export function periodLabel(date: string, group: Group, lang: Lang, t: T, calendar: Calendar = 'gregorian'): string {
+  if (group === 'month' && calendar === 'jalali') return jalaliMonth(date, lang)
   const d = localDate(date, lang)
   return group === 'day' ? d : t('reports.period.' + group + '_of', { date: d })
 }

@@ -522,7 +522,15 @@
       "month": "Month"
     },
     "covers": "{from} to {to} · time zone {tz}",
-    "calendar_note": "Weeks start on Monday and months are calendar months (Gregorian), in both languages.",
+    "calendar_label": "Calendar",
+    "calendar": {
+      "gregorian": "Gregorian",
+      "jalali": "Jalali"
+    },
+    "calendar_note": {
+      "gregorian": "Weeks start on Monday and months are Gregorian calendar months.",
+      "jalali": "Weeks start on Saturday and months are Jalali (Persian calendar) months. A period is named by its first day."
+    },
     "export_summary": "Summary CSV",
     "export_orders": "Paid orders CSV",
     "empty": "No sales in this period.",
@@ -592,6 +600,10 @@
       "manual": "Approved by staff",
       "gateway": "Payment gateway",
       "unknown": "Unknown"
+    },
+    "provider_unrecorded": {
+      "gateway": "Gateway (provider not recorded)",
+      "manual": "Staff-approved (provider not recorded)"
     },
     "method_hint": {
       "wallet": "Paid from the customer's wallet, whatever put the money there: a top-up, a refund, a reward, a change by staff, a reseller's commission or a reseller's credit.",
@@ -951,6 +963,14 @@
         "sales": {
           "label": "Every sale",
           "help": "A message for every paid order, with the customer, plan and amount."
+        },
+        "daily_summary": {
+          "label": "Daily sales summary",
+          "help": "Once a day, a message with yesterday’s sales: revenue for each currency, orders, new customers, refunds and wallet top-ups. It follows the Recipients setting and the same numbers as the Reports page."
+        },
+        "daily_summary_hour": {
+          "label": "Hour of the daily summary",
+          "help": "The summary of the day before is sent after this hour (0 to 23) in the store’s time zone. If BOBRES was stopped at that hour, it is sent when it starts again."
         },
         "recipients": {
           "label": "Recipients",

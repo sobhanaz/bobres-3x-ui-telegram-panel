@@ -25,6 +25,9 @@ const (
 	TicketClosed          = "ticket.closed.v1"
 	// SystemAlert: core's watchdog found a problem, or one was fixed.
 	SystemAlert = "system.alert.v1"
+	// SalesDailySummary: yesterday's sales for the owner (DailySummaryEvent),
+	// sent once a day when notify.daily_summary is on.
+	SalesDailySummary = "sales.daily_summary.v1"
 	// DepositUnmatched: USDT reached the store's TRON address but matched no
 	// automatic payment (DepositUnmatchedEvent); staff credit it by hand.
 	DepositUnmatched = "payment.deposit_unmatched.v1"
@@ -141,6 +144,10 @@ type OrderPaidEvent struct {
 	Amount     int64  `json:"amount"`
 	Currency   string `json:"currency"`
 	Source     string `json:"source"`
+	// Provider is who took the money for a payment (zarinpal, stars,
+	// usdt_auto, manual_card, ...); empty for wallet, trial and free orders,
+	// and for events published before it was recorded.
+	Provider string `json:"provider,omitempty"`
 }
 
 // Reasons on wallet.credited.v1.
@@ -323,4 +330,33 @@ type SystemAlertEvent struct {
 	// lasted).
 	At     int64 `json:"at"`
 	Repeat bool  `json:"repeat,omitempty"`
+}
+
+// DailySummaryEvent is one finished day of sales, read in the store's time
+// zone as the Reports page reads it (docs/14-reports.md). Money stays in its
+// own currency: Currencies has one entry for each currency with any number
+// that day, sorted by code, and the entries are never added together.
+// NewCustomers and Trials count people, so they have no currency. An empty
+// day is still sent (Currencies is empty, and so are the two counts).
+type DailySummaryEvent struct {
+	Date         string                 `json:"date"` // the local day, "2006-01-02"
+	TZ           string                 `json:"tz"`   // the zone the day was read in
+	NewCustomers int64                  `json:"new_customers"`
+	Trials       int64                  `json:"trials"`
+	Currencies   []DailySummaryCurrency `json:"currencies,omitempty"`
+}
+
+// DailySummaryCurrency is one currency's numbers of a day, in minor units.
+// Revenue is what customers paid for orders, Net is Revenue less refunds.
+type DailySummaryCurrency struct {
+	Currency     string `json:"currency"`
+	Revenue      int64  `json:"revenue"`
+	Net          int64  `json:"net"`
+	Orders       int64  `json:"orders"`
+	NewOrders    int64  `json:"new_orders"`
+	Renewals     int64  `json:"renewals"`
+	Refunds      int64  `json:"refunds"` // how many
+	RefundAmount int64  `json:"refund_amount"`
+	Topups       int64  `json:"topups"` // how many
+	TopupAmount  int64  `json:"topup_amount"`
 }

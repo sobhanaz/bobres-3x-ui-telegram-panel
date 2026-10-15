@@ -1,7 +1,7 @@
 package web
 
 import (
-	"encoding/csv"
+	"context"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -111,40 +111,38 @@ func (s *Server) auditActions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-// exportAudit: GET /api/v1/audit.csv with the same filters, newest first.
+// exportAudit: GET /api/v1/audit.csv with the same filters, newest first, at
+// most maxAuditCSVRows rows. Like exportLedger it is an export of the reports'
+// kind (streamCSV). Its own entry (export.audit) is written when it ends, so
+// the file does not list it (the next export does).
 func (s *Server) exportAudit(w http.ResponseWriter, r *http.Request) {
 	f, ok := auditFilter(r)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid", "bad filter")
 		return
 	}
-	h := w.Header()
-	h.Set("Content-Type", "text/csv; charset=utf-8")
-	h.Set("Content-Disposition", `attachment; filename="audit-`+s.now().UTC().Format("20060102-1504")+`.csv"`)
-	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
-	cw := csv.NewWriter(w)
-	s.audit(r.Context(), actor(r), "export.audit", r.URL.Query())
-	_ = cw.Write([]string{"time_utc", "actor_telegram_id", "actor_username", "actor_role", "action", "entity", "entity_id",
-		"reason", "ip", "source", "before", "after", "entry_id"})
-	more, err := s.cfg.Store.EachAudit(r.Context(), s.cfg.Store.Conn(), f, maxAuditCSVRows, func(a store.AuditRow) error {
-		entity := ""
-		if a.EntityID != nil {
-			entity = *a.EntityID
-		}
-		tg := ""
-		if a.ActorTelegramID != 0 {
-			tg = strconv.FormatInt(a.ActorTelegramID, 10)
-		}
-		return cw.Write([]string{
-			a.CreatedAt.UTC().Format(time.RFC3339), tg, csvText(a.ActorUsername), a.ActorRole, a.Action, a.Entity, csvText(entity),
-			csvText(a.Reason), a.IP, a.Source, csvText(string(a.Before)), csvText(string(a.After)), a.ID,
-		})
+	s.streamCSV(w, r, csvExport{
+		name:   "audit-" + s.now().UTC().Format("20060102-1504") + ".csv",
+		action: "export.audit",
+		query:  r.URL.Query(),
+		header: []string{"time_utc", "actor_telegram_id", "actor_username", "actor_role", "action", "entity", "entity_id",
+			"reason", "ip", "source", "before", "after", "entry_id"},
+		each: func(ctx context.Context, row func(cells ...string) error) (bool, error) {
+			return s.cfg.Store.EachAudit(ctx, f, maxAuditCSVRows, func(a store.AuditRow) error {
+				entity := ""
+				if a.EntityID != nil {
+					entity = *a.EntityID
+				}
+				tg := ""
+				if a.ActorTelegramID != 0 {
+					tg = strconv.FormatInt(a.ActorTelegramID, 10)
+				}
+				return row(
+					a.CreatedAt.UTC().Format(time.RFC3339), tg, reportText(a.ActorUsername), reportText(a.ActorRole), reportText(a.Action),
+					reportText(a.Entity), reportText(entity), reportText(a.Reason), reportText(a.IP), reportText(a.Source),
+					reportText(string(a.Before)), reportText(string(a.After)), a.ID)
+			})
+		},
+		moreNote: moreEntriesNote(maxAuditCSVRows),
 	})
-	if err != nil {
-		s.cfg.Log.Error("dashboard api: export audit", "err", err)
-	}
-	if more {
-		_ = cw.Write([]string{"# more entries match: narrow the filter (at most " + strconv.Itoa(maxAuditCSVRows) + " rows per file)"})
-	}
-	cw.Flush()
 }

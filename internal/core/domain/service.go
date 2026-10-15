@@ -229,7 +229,7 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 		}
 		out = o
 		if free && inserted {
-			return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidFree)
+			return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidFree, "")
 		}
 		return nil
 	})
@@ -246,14 +246,15 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 }
 
 // publishOrderPaid announces a paid order, in the transaction that marks it
-// paid, after the effects of paying (discount use, referral reward).
-func (s *Service) publishOrderPaid(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source string) error {
+// paid, after the effects of paying (discount use, referral reward). provider
+// is who took the money for a payment, "" for wallet, trial and free orders.
+func (s *Service) publishOrderPaid(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source, provider string) error {
 	if err := s.orderPaidEffects(ctx, tx, o, source); err != nil {
 		return err
 	}
 	return s.publish(ctx, tx, events.OrderPaid, events.OrderPaidEvent{
 		OrderID: o.ID, UserID: o.UserID, TelegramID: telegramID, PlanID: o.PlanID,
-		Amount: o.Amount, Currency: o.Currency, Source: source,
+		Amount: o.Amount, Currency: o.Currency, Source: source, Provider: provider,
 	})
 }
 
@@ -310,7 +311,7 @@ func (s *Service) PayOrderWithWallet(ctx context.Context, orderID, userID string
 		}
 		o.Status = "paid"
 		out = o
-		return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidByWallet)
+		return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidByWallet, "")
 	})
 	if err != nil {
 		return nil, err
@@ -395,7 +396,7 @@ func (s *Service) StartTrial(ctx context.Context, userID, planID, idempotencyKey
 			return err
 		}
 		out = o
-		return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidTrial)
+		return s.publishOrderPaid(ctx, tx, o, u.TelegramID, events.PaidTrial, "")
 	})
 	if err != nil {
 		s.noteRefusedPurchase(ctx, err, gate.eff.Now)

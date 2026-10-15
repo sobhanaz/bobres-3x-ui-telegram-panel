@@ -261,6 +261,14 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		return n.alert(ctx, 0, func(lang string) string { return n.systemAlert(lang, e) })
 
+	case events.SalesDailySummary:
+		var e events.DailySummaryEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		// Core only publishes it when notify.daily_summary is on.
+		return n.alert(ctx, 0, func(lang string) string { return n.dailySummary(lang, e) })
+
 	case events.DepositUnmatched:
 		var e events.DepositUnmatchedEvent
 		if err := decode(m, &e); err != nil {
@@ -636,6 +644,41 @@ func (n *Notifier) saleAlert(ctx context.Context, e events.OrderPaidEvent) error
 		return n.cat.T(lang, "admin.new_sale", "user", html.EscapeString(buyer),
 			"plan", html.EscapeString(planName(names, lang, e.PlanID)), "amount", i18n.Money(lang, e.Amount, e.Currency))
 	})
+}
+
+// dailySummary renders a day's sales in lang: a heading with the date, a
+// block for each currency that had money moving (never added together), and
+// the people counted that day.
+func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string {
+	day := e.Date
+	if d, err := time.Parse("2006-01-02", e.Date); err == nil {
+		day = i18n.Date(lang, time.Date(d.Year(), d.Month(), d.Day(), 12, 0, 0, 0, i18n.CurrentLocation()))
+	}
+	var b strings.Builder
+	b.WriteString(n.cat.T(lang, "admin.daily_summary.title", "date", day))
+	shown := 0
+	for _, c := range e.Currencies {
+		if c.Revenue == 0 && c.Orders == 0 && c.RefundAmount == 0 && c.Topups == 0 {
+			continue
+		}
+		shown++
+		b.WriteString("\n\n" + n.cat.T(lang, "admin.daily_summary.revenue", "amount", i18n.Money(lang, c.Revenue, c.Currency),
+			"orders", i18n.Number(lang, c.Orders), "new", i18n.Number(lang, c.NewOrders), "renewals", i18n.Number(lang, c.Renewals)))
+		if c.Refunds > 0 {
+			b.WriteString("\n" + n.cat.T(lang, "admin.daily_summary.refunds", "count", i18n.Number(lang, c.Refunds),
+				"amount", i18n.Money(lang, c.RefundAmount, c.Currency), "net", i18n.Money(lang, c.Net, c.Currency)))
+		}
+		if c.Topups > 0 {
+			b.WriteString("\n" + n.cat.T(lang, "admin.daily_summary.topups", "count", i18n.Number(lang, c.Topups),
+				"amount", i18n.Money(lang, c.TopupAmount, c.Currency)))
+		}
+	}
+	if shown == 0 {
+		b.WriteString("\n\n" + n.cat.T(lang, "admin.daily_summary.none"))
+	}
+	b.WriteString("\n\n" + n.cat.T(lang, "admin.daily_summary.people",
+		"customers", i18n.Number(lang, e.NewCustomers), "trials", i18n.Number(lang, e.Trials)))
+	return b.String()
 }
 
 // planName is a plan's name in lang, else in another language, else its id.

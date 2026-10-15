@@ -3,7 +3,9 @@ import { localDate, money, moneyCompact, percent } from '../format'
 import {
   bars,
   currenciesOf,
+  defaultCalendar,
   exportParams,
+  jalaliMonth,
   hasData,
   periodLabel,
   reportParams,
@@ -46,8 +48,8 @@ describe('report dates and numbers', () => {
   })
 
   it('asks for a named range as it is and a custom one as dates, always with the group', () => {
-    expect(reportParams({ range: 'last_7_days', group: 'week', from: '2026-01-01', to: '2026-01-02' })).toEqual({ range: 'last_7_days', group: 'week' })
-    expect(reportParams({ range: 'custom', group: 'day', from: '2026-10-01', to: '2026-10-14' })).toEqual({ from: '2026-10-01', to: '2026-10-14', group: 'day' })
+    expect(reportParams({ range: 'last_7_days', group: 'week', calendar: 'gregorian', from: '2026-01-01', to: '2026-01-02' })).toEqual({ range: 'last_7_days', group: 'week' })
+    expect(reportParams({ range: 'custom', group: 'day', calendar: 'gregorian', from: '2026-10-01', to: '2026-10-14' })).toEqual({ from: '2026-10-01', to: '2026-10-14', group: 'day' })
   })
 
   it('pins the dates and zone core resolved for the CSV links', () => {
@@ -78,7 +80,7 @@ describe('report dates and numbers', () => {
       date, partial, new_customers: 0, trials: 0, currencies: { IRT: cell(irt), USDT: cell(usdt) },
     })
     const s = {
-      from: '2026-10-01', to: '2026-10-03', group: 'day', tz: 'Asia/Tehran', currencies: ['IRT', 'USDT'],
+      from: '2026-10-01', to: '2026-10-03', group: 'day', calendar: 'gregorian', tz: 'Asia/Tehran', currencies: ['IRT', 'USDT'],
       buckets: [bucket('2026-10-01', 100, 0), bucket('2026-10-02', 0, 5_000_000), bucket('2026-10-03', 50, 0, true)],
       totals: { new_customers: 0, trials: 0, currencies: { IRT: cell(150), USDT: cell(5_000_000) } },
     } as ReportSummary
@@ -98,6 +100,58 @@ describe('report dates and numbers', () => {
     expect(share(1, 3)).toBe(33)
     expect(share(2, 3)).toBe(67)
     expect(share(5, 0)).toBe(0)
+  })
+
+  it('sends the calendar only when it is Jalali, and pins it for the CSV links', () => {
+    const sel = { range: 'last_30_days', group: 'month', from: '', to: '' } as const
+    expect(reportParams({ ...sel, calendar: 'jalali' })).toEqual({ range: 'last_30_days', group: 'month', calendar: 'jalali' })
+    expect(reportParams({ ...sel, calendar: 'gregorian' })).toEqual({ range: 'last_30_days', group: 'month' })
+    expect(reportParams({ range: 'custom', group: 'week', calendar: 'jalali', from: '2026-10-01', to: '2026-10-14' })).toEqual({
+      from: '2026-10-01', to: '2026-10-14', group: 'week', calendar: 'jalali',
+    })
+    const pin = { from: '2026-10-01', to: '2026-10-14', group: 'month', tz: 'Asia/Tehran' } as const
+    expect(exportParams({ ...pin, calendar: 'jalali' })).toEqual({ ...pin, calendar: 'jalali' })
+    expect(exportParams({ ...pin, calendar: 'gregorian' })).toEqual(pin)
+  })
+
+  it('reads Persian in the Jalali calendar and English in the Gregorian one, by default', () => {
+    expect(defaultCalendar('fa')).toBe('jalali')
+    expect(defaultCalendar('en')).toBe('gregorian')
+  })
+
+  it('names a Jalali month by its name and year, and a Gregorian one as before', () => {
+    const t = (key: string, p?: Record<string, unknown>) => key + ':' + (p?.date ?? '')
+    expect(periodLabel('2026-10-23', 'month', 'en', t, 'jalali')).toBe('Aban 1405')
+    expect(periodLabel('2026-10-23', 'month', 'fa', t, 'jalali')).toBe('آبان ۱۴۰۵')
+    expect(periodLabel('2026-03-21', 'month', 'en', t, 'jalali')).toBe('Farvardin 1405')
+    // weeks and days keep their wording in either calendar
+    expect(periodLabel('2026-10-17', 'week', 'en', t, 'jalali')).toBe('reports.period.week_of:17 Oct 2026')
+    expect(periodLabel('2026-10-17', 'day', 'en', t, 'jalali')).toBe('17 Oct 2026')
+    expect(periodLabel('2026-10-01', 'month', 'en', t, 'gregorian')).toBe('reports.period.month_of:1 Oct 2026')
+  })
+
+  it('agrees with the Jalali calendar on the first day of each month (the same anchors as core)', () => {
+    // 1 Farvardin 1399..1479 start on these days: the Nowruz anchors core tests against
+    const nowruz: Record<number, string> = {
+      1399: '2020-03-20', 1403: '2024-03-20', 1404: '2025-03-21', 1405: '2026-03-21', 1408: '2029-03-20', 1412: '2033-03-20', 1416: '2037-03-20', 1420: '2041-03-20', 1479: '2100-03-21',
+    }
+    const parts = (date: string) => {
+      const [y, m, d] = date.split('-').map(Number)
+      const f = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'UTC' }).formatToParts(new Date(Date.UTC(y, m - 1, d)))
+      return Object.fromEntries(f.filter((p) => p.type !== 'literal' && p.type !== 'era').map((p) => [p.type, Number(p.value)]))
+    }
+    for (const [year, date] of Object.entries(nowruz)) {
+      expect(parts(date), date).toMatchObject({ year: Number(year), month: 1, day: 1 })
+      // the day before is the last of the year before, so a Jalali month never starts one day off
+      const prev = new Date(Date.parse(date) - 86_400_000).toISOString().slice(0, 10)
+      expect(parts(prev), prev).toMatchObject({ year: Number(year) - 1, month: 12 })
+      // and the label of a bucket that starts there is Farvardin of that year
+      expect(jalaliMonth(date, 'en')).toBe('Farvardin ' + year)
+    }
+    // every Jalali month of 1405 starts a bucket named after it
+    const mehr = parts('2026-09-23')
+    expect(mehr).toMatchObject({ year: 1405, month: 7, day: 1 })
+    expect(jalaliMonth('2026-09-23', 'fa')).toBe('مهر ۱۴۰۵')
   })
 
   it('names a period by its first day', () => {
@@ -170,7 +224,7 @@ describe('the Reports page', () => {
     revenue: 0, refunds: flow(), net: 0, orders: 0, new_orders: 0, renewals: 0, traffic_topups: 0, topups: flow(), rejected: flow(), gateway_failed: flow(), cancelled: flow(), ...c,
   })
   const summary = (): ReportSummary => ({
-    from: '2026-10-15', to: '2026-10-17', group: 'day', tz: 'Asia/Tehran', currencies: ['IRT', 'USDT'],
+    from: '2026-10-15', to: '2026-10-17', group: 'day', calendar: 'gregorian', tz: 'Asia/Tehran', currencies: ['IRT', 'USDT'],
     buckets: [
       { date: '2026-10-15', partial: false, new_customers: 1, trials: 0, currencies: { IRT: cell({ revenue: 100_000, net: 100_000, orders: 1, new_orders: 1 }), USDT: cell({}) } },
       { date: '2026-10-16', partial: false, new_customers: 0, trials: 1, currencies: { IRT: cell({}), USDT: cell({ revenue: 2_500_000, net: 2_500_000, orders: 1, renewals: 1 }) } },
@@ -195,10 +249,11 @@ describe('the Reports page', () => {
   })
   const methods = (): { methods: ReportMethod[] } => ({
     methods: [
-      { method: 'wallet', currency: 'IRT', orders: 2, revenue: 250_000 },
-      { method: 'manual', currency: 'IRT', orders: 1, revenue: 100_000 },
-      { method: 'gateway', currency: 'USDT', orders: 1, revenue: 2_500_000 },
-      { method: 'unknown', currency: 'USDT', orders: 1, revenue: 500_000 },
+      { method: 'wallet', provider: '', currency: 'IRT', orders: 2, revenue: 250_000 },
+      { method: 'manual', provider: 'manual_card', currency: 'IRT', orders: 1, revenue: 100_000 },
+      { method: 'gateway', provider: 'usdt_trc20_auto', currency: 'USDT', orders: 1, revenue: 2_500_000 },
+      { method: 'gateway', provider: '', currency: 'USDT', orders: 1, revenue: 400_000 },
+      { method: 'unknown', provider: '', currency: 'USDT', orders: 1, revenue: 100_000 },
     ],
   })
   const core =
@@ -260,6 +315,8 @@ describe('the Reports page', () => {
     const irtMethods = text(document.querySelector('.methods-card [data-currency="IRT"]'))
     expect(irtMethods).toContain('Wallet balance')
     expect(irtMethods).toContain('Approved by staff')
+    expect(irtMethods).toContain('Card to card') // the provider that took the payment
+    expect(irtMethods).not.toContain('not recorded') // wallet has no provider to record
     expect(irtMethods).toContain('71%') // 250,000 of 350,000
     expect(irtMethods).not.toContain('Payment gateway')
     // a sale with no record of how it was paid is listed, as Unknown, with its share
@@ -267,7 +324,12 @@ describe('the Reports page', () => {
     expect(usdtMethods).toContain('Payment gateway')
     expect(usdtMethods).toContain('Unknown')
     expect(usdtMethods).toContain('A sale with no record of how it was paid.')
-    expect(usdtMethods).toContain('17%') // 500,000 of 3,000,000
+    // one gateway row names its provider, another (an old event) says it was not recorded
+    expect(usdtMethods).toContain('USDT TRC20 (automatic)')
+    expect(usdtMethods).toContain('Gateway (provider not recorded)')
+    expect(document.querySelectorAll('.methods-card [data-currency="USDT"] tbody tr')).toHaveLength(3)
+    expect(usdtMethods).toContain('3%') // 100,000 of 3,000,000
+    expect(usdtMethods).toContain('13%') // 400,000
     expect(usdtMethods).toContain('83%')
     // the covered days, in the store's zone
     expect(text(document.querySelector('.covers'))).toBe('15 Oct 2026 to 17 Oct 2026 · time zone ⁨Asia/Tehran⁩')
@@ -376,9 +438,29 @@ describe('the Reports page', () => {
     expect(text(document.querySelector('.covers'))).toContain('۱۴۰۵') // 15 Oct 2026 is 23 Mehr 1405
     expect(text(document.querySelector('.covers'))).toContain('مهر')
     expect(text(document.querySelector('.methods-card [data-currency="IRT"]'))).toContain('۷۱٪')
+    expect(text(document.querySelector('.methods-card [data-currency="IRT"]'))).toContain('کارت به کارت')
+    expect(text(document.querySelector('.methods-card [data-currency="USDT"]'))).toContain('درگاه (ثبت نشده)')
     expect(text(document.querySelector('.export-orders'))).toBe('خروجی CSV سفارش‌های پرداخت‌شده')
     // no text of the page is left as a missing key
     expect(document.body.textContent).not.toMatch(/reports\.[a-z_.]+/)
+  })
+
+  it('asks for Jalali weeks and months in Persian by default, and when the calendar is switched in English', async () => {
+    const fa = await boot('/admin/reports', ['reports.read'], core({ summary: () => json(200, { ...summary(), calendar: 'jalali' }) }), 'fa')
+    await found('.currency-card')
+    expect(fa.fetchMock.mock.calls.map((c) => String(c[0]))).toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali')
+    expect(text(document.querySelector('.charts-card .small:last-child'))).toContain('از شنبه شروع')
+    // the CSV links name the calendar core answered with
+    const u = new URL(document.querySelector<HTMLAnchorElement>('.export-summary')!.getAttribute('href')!, 'https://x.example')
+    expect(u.searchParams.get('calendar')).toBe('jalali')
+    const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}))
+    await found('.currency-card')
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).not.toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali')
+    expect(text(document.querySelector('.charts-card .small:last-child'))).toContain('start on Monday')
+    const jalali = [...document.querySelectorAll<HTMLElement>('.calendar [role="button"], .calendar button')].find((e) => text(e) === 'Jalali')
+    expect(jalali).toBeDefined()
+    jalali!.click()
+    await vi.waitFor(() => expect(fetchMock.mock.calls.map((c) => String(c[0]))).toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali'))
   })
 
   it('draws a long daily range as a dense chart that shrinks to its card (no gaps between hairline bars)', async () => {

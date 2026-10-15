@@ -233,6 +233,9 @@ func setup(rt *app.Runtime) error {
 	// goes wrong and when it is fixed (system.alert.v1).
 	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups, TLS: tlsMgr}
 	rt.Go("watchdog", dom.NewWatchdog(watch, rt.Log).Run)
+	// Yesterday's sales go to the staff once a day when notify.daily_summary
+	// is on (sales.daily_summary.v1).
+	rt.Go("daily-summary", dom.NewDailySummaryWorker(rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).

@@ -364,32 +364,43 @@ func (s *Store) ListLedgerAll(ctx context.Context, q querier, f LedgerFilter, p 
 }
 
 // EachLedger calls fn for every matching entry, newest first, up to max
-// entries; it reports whether more matched than max.
-func (s *Store) EachLedger(ctx context.Context, q querier, f LedgerFilter, max int, fn func(LedgerRow) error) (bool, error) {
-	rows, err := q.Query(ctx, `
-		SELECT `+ledgerColsL+`, u.telegram_id, COALESCE(u.username, '')
-		FROM core.ledger_entries l JOIN core.users u ON u.id = l.user_id`+ledgerWhere+`
-		ORDER BY l.created_at DESC, l.id DESC
-		LIMIT $6`, f.UserID, f.Kind, f.Currency, f.From, f.To, max+1)
-	if err != nil {
-		return false, fmt.Errorf("each ledger: %w", err)
-	}
-	defer rows.Close()
-	n := 0
-	for rows.Next() {
-		if n == max {
-			return true, nil
-		}
-		r, err := scanLedgerRow(rows)
+// entries; it reports whether more matched than max. It reads in a read-only
+// transaction whose statement PostgreSQL cancels after ExportTimeout (the
+// same limits as the reports' exports), and a statement that ran out of time
+// comes back as ErrReportTimeout. The rows are streamed, one at a time.
+func (s *Store) EachLedger(ctx context.Context, f LedgerFilter, max int, fn func(LedgerRow) error) (bool, error) {
+	more := false
+	err := s.readOnly(ctx, ExportTimeout, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT `+ledgerColsL+`, u.telegram_id, COALESCE(u.username, '')
+			FROM core.ledger_entries l JOIN core.users u ON u.id = l.user_id`+ledgerWhere+`
+			ORDER BY l.created_at DESC, l.id DESC
+			LIMIT $6`, f.UserID, f.Kind, f.Currency, f.From, f.To, max+1)
 		if err != nil {
-			return false, err
+			return reportErr("each ledger", err)
 		}
-		if err := fn(r); err != nil {
-			return false, err
+		defer rows.Close()
+		n := 0
+		for rows.Next() {
+			if n == max {
+				more = true
+				return nil
+			}
+			r, err := scanLedgerRow(rows)
+			if err != nil {
+				return err
+			}
+			if err := fn(r); err != nil {
+				return err
+			}
+			n++
 		}
-		n++
-	}
-	return false, rows.Err()
+		if err := rows.Err(); err != nil {
+			return reportErr("each ledger", err)
+		}
+		return nil
+	})
+	return more, err
 }
 
 // ReferrerRow is one inviter in the top-inviters list.

@@ -8,6 +8,32 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Bot
+- A daily sales summary for the owner (or every owner and admin, by Recipients): once a day, after an hour you choose,
+  yesterday's revenue per currency, orders (new and renewals), refunds, wallet top-ups, new customers and free trials,
+  in Persian or English. Off by default; switch it on with `notify.daily_summary` and set the hour with
+  `notify.daily_summary_hour` (Settings, Notifications). It is sent exactly once per day, also across restarts.
+
+### Dashboard
+- Reports: which provider paid each order. The Paid-with table splits gateway and staff-approved sales by provider
+  (Zarinpal, Stars, automatic USDT, card to card, crypto). Orders paid before this change show "provider not recorded"
+  and still add up to revenue.
+- `ledger.csv` and `audit.csv` exports are as careful as the reports files: no header-only file when the query fails,
+  an `# export incomplete: <reason>` line when it dies half-way, a 60 s limit, at most two exports at once, and an
+  audit entry with the outcome and row count. Text cells are quoted against spreadsheet formulas more strictly.
+
+- Reports: Jalali weeks and months. `calendar=gregorian|jalali` on the report endpoints (default gregorian; anything
+  else is a 400). Jalali weeks start on Saturday and months on Jalali day 1; a bucket's date stays its Gregorian start
+  day. The Reports page has a Calendar switch (Jalali by default in Persian), names Jalali months by month and year,
+  and carries the calendar into the CSV links. The summary CSV is named `...-jalali.csv` for Jalali, and the
+  `export.reports` audit entry records the calendar.
+
+### API
+- New event `sales.daily_summary.v1` and two settings, `notify.daily_summary` and `notify.daily_summary_hour`; no
+  migration.
+- `order.paid.v1` has an optional `provider`; `/reports/methods` rows have a `provider` field; `orders.csv` has a new
+  last column `provider`.
+
 ## [0.2.0] — 2026-10-14
 
 Sales reports: the first of the features after the first release ([docs/ROADMAP.md](docs/ROADMAP.md)).

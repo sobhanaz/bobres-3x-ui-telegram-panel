@@ -51,6 +51,22 @@ func TestReportRangeBucketsAndEdges(t *testing.T) {
 		{"last month", ReportRequest{Range: "last_month", Group: "month"}, "2026-09-01", "2026-09-30", []string{"2026-09-01"}},
 		{"nothing asked: the last 30 days", ReportRequest{}, "2026-09-15", "2026-10-14", nil},
 		{"leap day", ReportRequest{From: "2028-02-28", To: "2028-03-01"}, "2028-02-28", "2028-03-01", []string{"2028-02-28", "2028-02-29", "2028-03-01"}},
+		// Jalali: 14 Oct 2026 is 22 Mehr 1405 (Wednesday); Mehr starts on 23 Sep and Aban on 23 Oct.
+		{"jalali days are the same", ReportRequest{From: "2026-10-12", To: "2026-10-14", Calendar: "jalali"}, "2026-10-12", "2026-10-14", []string{"2026-10-12", "2026-10-13", "2026-10-14"}},
+		{"jalali weeks start on Saturday and the ends are partial", ReportRequest{From: "2026-10-07", To: "2026-10-20", Group: "week", Calendar: "jalali"}, "2026-10-07", "2026-10-20",
+			[]string{"2026-10-03*", "2026-10-10", "2026-10-17*"}},
+		{"a whole jalali week is not partial", ReportRequest{From: "2026-10-03", To: "2026-10-16", Group: "week", Calendar: "jalali"}, "2026-10-03", "2026-10-16", []string{"2026-10-03", "2026-10-10"}},
+		{"a Friday ends the week before it", ReportRequest{From: "2026-10-16", To: "2026-10-16", Group: "week", Calendar: "jalali"}, "2026-10-16", "2026-10-16", []string{"2026-10-10*"}},
+		{"jalali months", ReportRequest{From: "2026-09-15", To: "2026-11-02", Group: "month", Calendar: "jalali"}, "2026-09-15", "2026-11-02", []string{"2026-08-23*", "2026-09-23", "2026-10-23*"}},
+		{"whole jalali months", ReportRequest{From: "2026-09-23", To: "2026-11-21", Group: "month", Calendar: "jalali"}, "2026-09-23", "2026-11-21", []string{"2026-09-23", "2026-10-23"}},
+		{"a jalali month cut on its last day", ReportRequest{From: "2026-09-23", To: "2026-10-21", Group: "month", Calendar: "jalali"}, "2026-09-23", "2026-10-21", []string{"2026-09-23*"}},
+		{"a 29 day Esfand (1405) is whole", ReportRequest{From: "2027-02-20", To: "2027-03-20", Group: "month", Calendar: "jalali"}, "2027-02-20", "2027-03-20", []string{"2027-02-20"}},
+		{"a 30 day Esfand (1403) is whole", ReportRequest{From: "2025-02-19", To: "2025-03-20", Group: "month", Calendar: "jalali"}, "2025-02-19", "2025-03-20", []string{"2025-02-19"}},
+		{"the 30th of Esfand 1403 and Nowruz", ReportRequest{From: "2025-03-20", To: "2025-03-21", Group: "month", Calendar: "jalali"}, "2025-03-20", "2025-03-21", []string{"2025-02-19*", "2025-03-21*"}},
+		{"jalali this month", ReportRequest{Range: "this_month", Group: "month", Calendar: "jalali"}, "2026-09-23", "2026-10-14", []string{"2026-09-23*"}},
+		{"jalali last month", ReportRequest{Range: "last_month", Group: "month", Calendar: "jalali"}, "2026-08-23", "2026-09-22", []string{"2026-08-23"}},
+		{"jalali this month by day", ReportRequest{Range: "this_month", Calendar: "jalali"}, "2026-09-23", "2026-10-14", nil},
+		{"gregorian is the default and is named", ReportRequest{Range: "last_month", Group: "month", Calendar: "gregorian"}, "2026-09-01", "2026-09-30", []string{"2026-09-01"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			r, err := NewReportRange(c.req, "Asia/Tehran", now)
@@ -66,7 +82,69 @@ func TestReportRangeBucketsAndEdges(t *testing.T) {
 			if c.req.Group == "" && r.Group != "day" {
 				t.Errorf("group %q", r.Group)
 			}
+			if want := map[string]string{"": "gregorian"}[c.req.Calendar]; want != "" && r.Calendar != want {
+				t.Errorf("calendar %q, want %q", r.Calendar, want)
+			} else if want == "" && r.Calendar != c.req.Calendar {
+				t.Errorf("calendar %q, want %q", r.Calendar, c.req.Calendar)
+			}
 		})
+	}
+}
+
+// Day 1 of a Jalali month at the turn of the Jalali year, and the named ranges at
+// the start and end of a month: "this month" follows the calendar.
+func TestReportRangeNamedMonthsFollowTheCalendar(t *testing.T) {
+	for _, c := range []struct {
+		now, calendar, thisFrom, lastFrom, lastTo string
+	}{
+		{"2026-10-23", "jalali", "2026-10-23", "2026-09-23", "2026-10-22"}, // 1 Aban
+		{"2026-10-22", "jalali", "2026-09-23", "2026-08-23", "2026-09-22"}, // 30 Mehr
+		{"2026-03-21", "jalali", "2026-03-21", "2026-02-20", "2026-03-20"}, // 1 Farvardin 1405, after a 29 day Esfand
+		{"2024-03-20", "jalali", "2024-03-20", "2024-02-20", "2024-03-19"}, // 1 Farvardin 1403
+		{"2025-03-21", "jalali", "2025-03-21", "2025-02-19", "2025-03-20"}, // 1 Farvardin 1404, after the 30 day Esfand 1403
+		{"2026-10-23", "gregorian", "2026-10-01", "2026-09-01", "2026-09-30"},
+		{"2026-10-23", "", "2026-10-01", "2026-09-01", "2026-09-30"},
+	} {
+		now := day(c.now).Add(12 * time.Hour)
+		this, err := NewReportRange(ReportRequest{Range: "this_month", Calendar: c.calendar}, "UTC", now)
+		if err != nil || this.From != c.thisFrom || this.To != c.now {
+			t.Errorf("%s %s this_month: %+v %v, want %s to %s", c.calendar, c.now, this, err, c.thisFrom, c.now)
+		}
+		last, err := NewReportRange(ReportRequest{Range: "last_month", Calendar: c.calendar}, "UTC", now)
+		if err != nil || last.From != c.lastFrom || last.To != c.lastTo {
+			t.Errorf("%s %s last_month: %+v %v, want %s to %s", c.calendar, c.now, last, err, c.lastFrom, c.lastTo)
+		}
+	}
+}
+
+func TestReportRangeRejectsAnUnknownCalendar(t *testing.T) {
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	for _, cal := range []string{"julian", "Jalali", "persian", "jalali "} {
+		_, err := NewReportRange(ReportRequest{Calendar: cal}, "UTC", now)
+		if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "calendar must be gregorian or jalali") {
+			t.Errorf("calendar %q: %v", cal, err)
+		}
+	}
+}
+
+// A Jalali week or month is asked of the store as days: it cuts Gregorian
+// weeks and months only.
+func TestReportRangeQueryAsksForDaysOfAJalaliBucket(t *testing.T) {
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	for _, c := range []struct{ group, calendar, want string }{
+		{"week", "jalali", "day"}, {"month", "jalali", "day"}, {"day", "jalali", "day"},
+		{"week", "gregorian", "week"}, {"month", "", "month"},
+	} {
+		r, err := NewReportRange(ReportRequest{Group: c.group, Calendar: c.calendar}, "UTC", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := r.Query().Group; got != c.want {
+			t.Errorf("%s %s: store group %q, want %q", c.group, c.calendar, got, c.want)
+		}
+		if r.Group != c.group && c.group != "" {
+			t.Errorf("the range's own group changed to %q", r.Group)
+		}
 	}
 }
 

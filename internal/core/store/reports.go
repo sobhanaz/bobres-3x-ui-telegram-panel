@@ -326,13 +326,18 @@ type MethodRow struct {
 	// Method is how the order was paid: "wallet" (the balance), "manual"
 	// (a payment staff approved), "gateway" (Zarinpal, Stars or automatic
 	// USDT confirmed it), or "unknown" (a purchase with no matching event).
-	Method   string
+	Method string
+	// Provider is who took the money (zarinpal, stars, usdt_auto,
+	// manual_card, ...). Empty for wallet and unknown rows, and for orders
+	// paid before the event carried it.
+	Provider string
 	Currency string
 	Orders   int64
 	Revenue  int64
 }
 
-// SalesByMethod splits the range's revenue by how the orders were paid. Each
+// SalesByMethod splits the range's revenue by how the orders were paid, and
+// by which provider took the payment when the event says so. Each
 // paid order publishes order.paid.v1 in the transaction of its purchase, so
 // the events carry the same orders and amounts as the ledger; a purchase
 // without its event is listed as "unknown", so the rows always add up to the
@@ -355,12 +360,12 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 			return reportErr("report methods: totals", err)
 		}
 		if err := each(ctx, tx, `
-			SELECT COALESCE(o.payload->>'source', ''), o.payload->>'currency', count(*), COALESCE(sum((o.payload->>'amount')::bigint), 0)::bigint
+			SELECT COALESCE(o.payload->>'source', ''), COALESCE(o.payload->>'provider', ''), o.payload->>'currency', count(*), COALESCE(sum((o.payload->>'amount')::bigint), 0)::bigint
 			FROM core.outbox_core o
 			WHERE o.topic = 'order.paid.v1' AND (o.payload->>'amount')::bigint > 0 AND `+rangeOf("o.created_at")+`
-			GROUP BY 1, 2`, args, func(r pgx.Rows) error {
+			GROUP BY 1, 2, 3`, args, func(r pgx.Rows) error {
 			var m MethodRow
-			if err := r.Scan(&m.Method, &m.Currency, &m.Orders, &m.Revenue); err != nil {
+			if err := r.Scan(&m.Method, &m.Provider, &m.Currency, &m.Orders, &m.Revenue); err != nil {
 				return err
 			}
 			out = append(out, m)
@@ -392,7 +397,10 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 		if a.Revenue != b.Revenue {
 			return a.Revenue > b.Revenue
 		}
-		return a.Method < b.Method
+		if a.Method != b.Method {
+			return a.Method < b.Method
+		}
+		return a.Provider < b.Provider
 	})
 	return out, nil
 }
@@ -449,6 +457,7 @@ type PaidOrderRow struct {
 	Currency   string
 	Amount     int64
 	Method     string // wallet, manual, gateway; "" when unknown
+	Provider   string // who took the payment; "" for wallet and for orders paid before it was recorded
 	Refunded   int64  // what was refunded (0: nothing)
 }
 
@@ -462,12 +471,12 @@ func paidOrdersSQL() string {
 	return `
 	SELECT e.created_at, to_char(e.created_at AT TIME ZONE $3::text, 'YYYY-MM-DD HH24:MI:SS'), e.ref_id::text, o.type,
 		u.telegram_id, COALESCE(u.username, ''), p.name_i18n, e.currency, -e.amount, COALESCE(ev.method, ''),
-		COALESCE(o.refund_amount, 0)
+		COALESCE(o.refund_amount, 0), COALESCE(ev.provider, '')
 	FROM core.ledger_entries e
 	JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
 	JOIN core.users u ON u.id = e.user_id
 	JOIN core.plans p ON p.id = o.plan_id
-	LEFT JOIN LATERAL (SELECT x.payload->>'source' AS method FROM core.outbox_core x
+	LEFT JOIN LATERAL (SELECT x.payload->>'source' AS method, x.payload->>'provider' AS provider FROM core.outbox_core x
 		WHERE x.topic = 'order.paid.v1' AND x.payload->>'order_id' = e.ref_id::text LIMIT 1) ev ON true
 	WHERE e.kind = 'purchase' AND ` + rangeOf("e.created_at") + `
 	ORDER BY e.created_at, e.id
@@ -493,7 +502,7 @@ func (s *Store) EachPaidOrder(ctx context.Context, q ReportQuery, max int, fn fu
 			}
 			var r PaidOrderRow
 			if err := rows.Scan(&r.PaidAt, &r.PaidLocal, &r.OrderID, &r.Type, &r.TelegramID, &r.Username, &r.PlanName,
-				&r.Currency, &r.Amount, &r.Method, &r.Refunded); err != nil {
+				&r.Currency, &r.Amount, &r.Method, &r.Refunded, &r.Provider); err != nil {
 				return err
 			}
 			if err := fn(r); err != nil {
