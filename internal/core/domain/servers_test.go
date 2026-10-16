@@ -785,3 +785,31 @@ func TestPlanServersReachProvisioning(t *testing.T) {
 		t.Fatalf("candidates of an any-server plan: %v", fp.candidates)
 	}
 }
+
+func TestNormalizeServerKind(t *testing.T) {
+	base := ServerInput{Name: "x", BaseURL: "https://a.example", Weight: 50}
+	got, err := normalizeServer(withToken(base, "", "t"), true)
+	if err != nil || got.Kind != KindXUI {
+		t.Fatalf("default kind = %q, %v", got.Kind, err)
+	}
+	if _, err := normalizeServer(withToken(base, "nope", "t"), true); err == nil {
+		t.Error("unknown kind accepted")
+	}
+	for _, tok := range []string{"", "nocolon", ":pw", "admin:"} {
+		if _, err := normalizeServer(withToken(base, KindMarzban, tok), true); err == nil {
+			t.Errorf("marzban token %q accepted", tok)
+		}
+	}
+	if _, err := normalizeServer(withToken(base, KindMarzban, "admin:s3cret:pw"), true); err != nil {
+		t.Errorf("marzban login refused: %v", err)
+	}
+	// Editing without a new token is fine.
+	if _, err := normalizeServer(withToken(base, KindMarzban, ""), false); err != nil {
+		t.Errorf("marzban edit without token: %v", err)
+	}
+}
+
+func withToken(in ServerInput, kind, token string) ServerInput {
+	in.Kind, in.Token = kind, token
+	return in
+}

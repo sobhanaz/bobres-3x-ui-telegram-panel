@@ -116,7 +116,7 @@ func (c *Client) Delete(ctx context.Context, subscriptionID string) error {
 
 func serverOf(p *provisionerv1.XUIServer) *domain.Server {
 	return &domain.Server{
-		ID: p.GetId(), Name: p.GetName(), BaseURL: p.GetBaseUrl(), SubBaseURL: p.GetSubBaseUrl(),
+		ID: p.GetId(), Kind: p.GetKind(), Name: p.GetName(), BaseURL: p.GetBaseUrl(), SubBaseURL: p.GetSubBaseUrl(),
 		Enabled: p.GetEnabled(), AllowPrivate: p.GetAllowPrivate(), Weight: p.GetWeight(), Managed: p.GetManaged(),
 		HasToken: p.GetHasToken(), Clients: p.GetClients(), PanelVersion: p.GetPanelVersion(),
 		VersionUntested: p.GetVersionUntested(), Healthy: p.GetHealthy(), HealthError: p.GetHealthError(),
@@ -143,7 +143,7 @@ func (c *Client) ListServers(ctx context.Context) (*domain.ServerList, error) {
 func (c *Client) AddServer(ctx context.Context, in domain.ServerInput) (*domain.Server, error) {
 	s, err := c.rpc.AddServer(ctx, &provisionerv1.AddServerRequest{
 		Name: in.Name, BaseUrl: in.BaseURL, ApiToken: in.Token, SubBaseUrl: in.SubBaseURL,
-		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled,
+		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled, Kind: in.Kind,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.AddServer: %w", err)
@@ -174,7 +174,7 @@ func (c *Client) DeleteServer(ctx context.Context, id string) error {
 // TestServer implements domain.ServerAdmin.
 func (c *Client) TestServer(ctx context.Context, p domain.ServerProbe) (*domain.ServerTest, error) {
 	r, err := c.rpc.TestServer(ctx, &provisionerv1.TestServerRequest{
-		Id: p.ID, BaseUrl: p.BaseURL, ApiToken: p.Token, AllowPrivate: p.AllowPrivate,
+		Id: p.ID, BaseUrl: p.BaseURL, ApiToken: p.Token, AllowPrivate: p.AllowPrivate, Kind: p.Kind,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.TestServer: %w", err)

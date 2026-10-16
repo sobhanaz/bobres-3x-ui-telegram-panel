@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/url"
@@ -36,6 +37,7 @@ type ServerAdmin interface {
 // only says one is stored.
 type Server struct {
 	ID, Name, BaseURL, SubBaseURL string
+	Kind                          string // KindXUI | KindMarzban
 	Enabled, AllowPrivate         bool
 	Weight                        int32
 	Managed                       string // env | dashboard
@@ -69,6 +71,9 @@ func (l *ServerList) Find(id string) (*Server, error) {
 // write-only: empty keeps the stored one (the provisioner sends it only to
 // the host it was entered for).
 type ServerInput struct {
+	// Kind is the panel software, fixed when the server is added; empty is
+	// 3x-ui. For Marzban, Token is "username:password" of an admin.
+	Kind                             string
 	Name, BaseURL, SubBaseURL, Token string
 	Weight                           int32
 	Enabled, AllowPrivate, SkipCheck bool
@@ -77,8 +82,8 @@ type ServerInput struct {
 // ServerProbe is a connection to try without saving: a saved server (ID),
 // optionally at a new address or with a new token, or candidate settings.
 type ServerProbe struct {
-	ID, BaseURL, Token string
-	AllowPrivate       bool
+	ID, Kind, BaseURL, Token string
+	AllowPrivate             bool
 }
 
 // ServerTest is the result of a connection test.
@@ -97,6 +102,12 @@ type Inbound struct {
 	Enabled       bool // the panel's own switch
 	Attach        bool // new clients join it (BOBRES's switch)
 }
+
+// Panel kinds.
+const (
+	KindXUI     = "xui"
+	KindMarzban = "marzban"
+)
 
 // Server limits (the provisioner checks them again).
 const (
@@ -121,6 +132,13 @@ func normalizeServer(in ServerInput, adding bool) (ServerInput, error) {
 	in.BaseURL = strings.TrimSpace(in.BaseURL)
 	in.SubBaseURL = strings.TrimSpace(in.SubBaseURL)
 	in.Token = strings.TrimSpace(in.Token)
+	switch in.Kind {
+	case "":
+		in.Kind = KindXUI
+	case KindXUI, KindMarzban:
+	default:
+		return in, &FieldError{"kind", "3x-ui or Marzban"}
+	}
 	if in.Name == "" || utf8.RuneCountInString(in.Name) > maxServerName || hasControl(in.Name) {
 		return in, &FieldError{"name", fmt.Sprintf("a name of 1 to %d characters on one line", maxServerName)}
 	}
@@ -136,8 +154,12 @@ func normalizeServer(in ServerInput, adding bool) (ServerInput, error) {
 	switch {
 	case hasSpace(in.Token) || len(in.Token) > maxTokenLen:
 		return in, &FieldError{"token", "the API token is one word without spaces"}
+	case adding && in.Token == "" && in.Kind == KindMarzban:
+		return in, &FieldError{"token", "the admin's username and password are required, as username:password"}
 	case adding && in.Token == "":
 		return in, &FieldError{"token", "the panel's API token is required (3x-ui: Settings > Security)"}
+	case in.Kind == KindMarzban && in.Token != "" && !validMarzbanLogin(in.Token):
+		return in, &FieldError{"token", "the admin's username and password as username:password"}
 	}
 	if adding && in.Weight == 0 {
 		in.Weight = defaultWeight
@@ -161,6 +183,12 @@ func checkPanelURL(raw string, allowPrivate bool) error {
 		return &FieldError{"base_url", "plain http only for a panel on this server or a private network (allow private addresses)"}
 	}
 	return nil
+}
+
+// validMarzbanLogin: "username:password", both parts non-empty.
+func validMarzbanLogin(t string) bool {
+	user, pass, ok := strings.Cut(t, ":")
+	return ok && user != "" && pass != ""
 }
 
 func hasSpace(s string) bool { return strings.IndexFunc(s, unicode.IsSpace) >= 0 || hasControl(s) }
@@ -188,7 +216,7 @@ func privateNeedsOwner(actor *store.User, allowPrivate bool, baseURL, token stri
 // "changed" for a token that was sent (never the token).
 func serverAudit(sv *Server, tokenSent bool) map[string]any {
 	out := map[string]any{
-		"name": sv.Name, "base_url": sv.BaseURL, "sub_base_url": sv.SubBaseURL, "enabled": sv.Enabled,
+		"kind": sv.Kind, "name": sv.Name, "base_url": sv.BaseURL, "sub_base_url": sv.SubBaseURL, "enabled": sv.Enabled,
 		"allow_private": sv.AllowPrivate, "weight": sv.Weight,
 	}
 	if tokenSent {
@@ -246,6 +274,10 @@ func (s *Service) UpdateServer(ctx context.Context, actor *store.User, sa Server
 	before, err := list.Find(id)
 	if err != nil {
 		return nil, err
+	}
+	in.Kind = cmp.Or(before.Kind, KindXUI) // fixed when the server was added
+	if in.Kind == KindMarzban && in.Token != "" && !validMarzbanLogin(in.Token) {
+		return nil, &FieldError{"token", "the admin's username and password as username:password"}
 	}
 	if privateNeedsOwner(actor, in.AllowPrivate, in.BaseURL, in.Token, before) {
 		return nil, ErrPrivateOwnerOnly
@@ -346,6 +378,13 @@ func (s *Service) TestServer(ctx context.Context, actor *store.User, sa ServerAd
 	if hasSpace(p.Token) || len(p.Token) > maxTokenLen {
 		return nil, &FieldError{"token", "the API token is one word without spaces"}
 	}
+	switch p.Kind {
+	case "":
+		p.Kind = KindXUI
+	case KindXUI, KindMarzban:
+	default:
+		return nil, &FieldError{"kind", "3x-ui or Marzban"}
+	}
 	var stored *Server
 	if p.ID != "" {
 		list, err := sa.ListServers(ctx)
@@ -355,12 +394,15 @@ func (s *Service) TestServer(ctx context.Context, actor *store.User, sa ServerAd
 		if stored, err = list.Find(p.ID); err != nil {
 			return nil, err
 		}
-		p.ID = stored.ID
-		if p.BaseURL == "" { // the stored connection, as it is
+		p.ID, p.Kind = stored.ID, stored.Kind // a saved server's kind is fixed
+		if p.BaseURL == "" {                  // the stored connection, as it is
 			p.BaseURL, p.AllowPrivate = stored.BaseURL, stored.AllowPrivate
 		}
 	} else if p.Token == "" {
-		return nil, &FieldError{"token", "the panel's API token is required (3x-ui: Settings > Security)"}
+		return nil, &FieldError{"token", "the panel's API token (3x-ui) or admin username:password (Marzban) is required"}
+	}
+	if p.Kind == KindMarzban && p.Token != "" && !validMarzbanLogin(p.Token) {
+		return nil, &FieldError{"token", "the admin's username and password as username:password"}
 	}
 	if err := checkPanelURL(p.BaseURL, p.AllowPrivate); err != nil {
 		return nil, err
