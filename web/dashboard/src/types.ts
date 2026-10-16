@@ -420,6 +420,8 @@ export interface BroadcastRecipientItem {
  * back: has_token only says one is stored. */
 export interface ServerItem {
   id: string
+  /** the panel software: xui | marzban; absent from older cores (xui) */
+  kind?: string
   name: string
   base_url: string
   /** where subscription links point; '' = the panel's own links */

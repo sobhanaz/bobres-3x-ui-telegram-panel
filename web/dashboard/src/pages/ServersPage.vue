@@ -110,7 +110,8 @@ function remove(s: ServerItem) {
       <template #body="{ data: s }">
         <bdi class="server-name">{{ s.name }}</bdi>
         <div class="app-muted small app-ltr url">{{ s.base_url }}</div>
-        <div v-if="!s.has_token || s.allow_private" class="tags">
+        <div class="tags">
+          <Tag :value="t('server.kind_' + (s.kind === 'marzban' ? 'marzban' : 'xui'))" severity="secondary" class="kind" />
           <Tag v-if="!s.has_token" :value="t('server.no_token')" severity="danger" />
           <Tag v-if="s.allow_private" :value="t('server.private')" severity="warn" />
         </div>

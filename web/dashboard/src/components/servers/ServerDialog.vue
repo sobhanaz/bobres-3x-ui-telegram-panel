@@ -5,6 +5,7 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Checkbox from 'primevue/checkbox'
+import Select from 'primevue/select'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import SecretField from '../SecretField.vue'
@@ -13,7 +14,7 @@ import { errorText, fieldError } from '../../errors'
 import { isolate, num, type Lang } from '../../format'
 import { useAuth } from '../../stores/auth'
 import {
-  addressChanged, blankServer, canTest, needsToken, panelURLProblem, privateNeedsOwner, SERVER_NAME_MAX, serverBody, serverFormOf, serverProblems,
+  addressChanged, blankServer, PANEL_KINDS, canTest, needsToken, panelURLProblem, privateNeedsOwner, SERVER_NAME_MAX, serverBody, serverFormOf, serverProblems,
   subURLProblem, testBody, WEIGHT_MAX, WEIGHT_MIN,
 } from '../../servers'
 import type { ServerItem, ServerTest } from '../../types'
@@ -27,6 +28,9 @@ const emit = defineEmits<{ saved: [item: ServerItem | undefined] }>()
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const auth = useAuth()
+const kindOptions = computed(() => PANEL_KINDS.map((k) => ({ value: k, label: t('server.kind_' + k) })))
+const marzban = computed(() => form.value.kind === 'marzban')
+const panelName = computed(() => t('server.kind_' + form.value.kind))
 
 const form = ref(blankServer())
 // A new key for the token field each time the dialog opens: it starts as "set".
@@ -79,7 +83,9 @@ const urlProblem = computed(() => {
   return p ? t('server.invalid.' + p) : ''
 })
 const subProblem = computed(() => (subURLProblem(form.value.subURL) ? t('server.invalid.sub_url') : ''))
-const tokenProblem = computed(() => (problems.value.includes('token') && form.value.token.trim() ? t('server.invalid.token') : ''))
+const tokenProblem = computed(() =>
+  problems.value.includes('token') && form.value.token.trim() ? t(marzban.value ? 'server.invalid.login' : 'server.invalid.token') : '',
+)
 const weightProblem = computed(() => (problems.value.includes('weight') && form.value.weight.trim() ? t('server.invalid.weight', { min: num(WEIGHT_MIN, lang.value), max: num(WEIGHT_MAX, lang.value) }) : ''))
 const moved = computed(() => addressChanged(form.value, props.server) && (props.server?.clients ?? 0) > 0)
 // A stored token goes only to the host it was entered for: a new host or
@@ -100,7 +106,7 @@ async function test() {
   try {
     const r = await api<ServerTest>('POST', '/servers/test', testBody(form.value, props.server?.id))
     if (r.ok) {
-      const text = t('server.test_ok', { version: isolate('3x-ui ' + (r.panel_version || t('app.unknown'))), n: num(r.inbounds, lang.value) }, r.inbounds)
+      const text = t('server.test_ok', { version: isolate(panelName.value + ' ' + (r.panel_version || t('app.unknown'))), n: num(r.inbounds, lang.value) }, r.inbounds)
       result.value = r.version_untested
         ? { severity: 'warn', text: text + ' ' + t('server.version_untested'), detail: '' }
         : { severity: 'success', text, detail: '' }
@@ -151,6 +157,11 @@ async function save() {
   >
     <form class="app-form" novalidate @submit.prevent="save">
       <label>
+        <span>{{ t('server.kind') }}</span>
+        <Select v-model="form.kind" :options="kindOptions" option-label="label" option-value="value" :disabled="!!props.server" aria-describedby="server-kind-help" class="kind" />
+        <small id="server-kind-help" class="app-muted">{{ props.server ? t('server.kind_fixed') : t('server.kind_help') }}</small>
+      </label>
+      <label>
         <span>{{ t('server.name') }}</span>
         <InputText v-model="form.name" :maxlength="SERVER_NAME_MAX" dir="auto" autocomplete="off" :invalid="issue('name')" class="name" />
         <small v-if="fieldErrors.name" class="app-ltr field-error">{{ fieldErrors.name }}</small>
@@ -181,10 +192,10 @@ async function save() {
           :key="generation"
           id="server-token"
           v-model="form.token"
-          :label="t('server.token')"
+          :label="marzban ? t('server.login') : t('server.token')"
           :set="!!props.server?.has_token"
           :force="tokenAgain"
-          :help="tokenAgain ? t('server.token_again') : t('server.token_help')"
+          :help="tokenAgain ? t('server.token_again') : marzban ? t('server.login_help') : t('server.token_help')"
           :error="tokenProblem || fieldErrors.token || ''"
         />
       </div>

@@ -30,7 +30,19 @@ export const healthSeverity: Record<Health, 'success' | 'danger' | 'secondary' |
 }
 
 /** The add and edit form, as staff type it. */
+export type PanelKind = 'xui' | 'marzban'
+export const PANEL_KINDS: PanelKind[] = ['xui', 'marzban']
+
+/** A Marzban server is logged in with an admin's "username:password". */
+export function marzbanLoginOK(token: string): boolean {
+  const i = token.indexOf(':')
+  return i > 0 && i < token.length - 1
+}
+
+/** The add and edit form, as staff type it. */
 export interface ServerForm {
+  /** the panel software; fixed once the server is saved */
+  kind: PanelKind
   name: string
   baseURL: string
   subURL: string
@@ -44,13 +56,14 @@ export interface ServerForm {
 }
 
 export function blankServer(): ServerForm {
-  return { name: '', baseURL: '', subURL: '', token: '', weight: String(WEIGHT_DEFAULT), enabled: true, allowPrivate: false, skipCheck: false }
+  return { kind: 'xui', name: '', baseURL: '', subURL: '', token: '', weight: String(WEIGHT_DEFAULT), enabled: true, allowPrivate: false, skipCheck: false }
 }
 
 /** serverFormOf reads a server into the editor; the token stays empty
  * (it is never sent back). */
 export function serverFormOf(s: ServerItem): ServerForm {
   return {
+    kind: s.kind === 'marzban' ? 'marzban' : 'xui',
     name: s.name,
     baseURL: s.base_url,
     subURL: s.sub_base_url ?? '',
@@ -120,7 +133,8 @@ export function serverProblems(f: ServerForm, editing: Pick<ServerItem, 'has_tok
   if (!name || [...name].length > SERVER_NAME_MAX) out.push('name')
   if (panelURLProblem(f.baseURL, f.allowPrivate)) out.push('base_url')
   if (subURLProblem(f.subURL)) out.push('sub_base_url')
-  if (/\s/.test(f.token.trim()) || (!f.token.trim() && needsToken(f, editing))) out.push('token')
+  const tok = f.token.trim()
+  if (/\s/.test(tok) || (!tok && needsToken(f, editing)) || (f.kind === 'marzban' && tok && !marzbanLoginOK(tok))) out.push('token')
   if (weightOf(f.weight) === null) out.push('weight')
   return out
 }
@@ -129,6 +143,7 @@ export function serverProblems(f: ServerForm, editing: Pick<ServerItem, 'has_tok
  * token keeps the stored one. */
 export function serverBody(f: ServerForm) {
   return {
+    kind: f.kind,
     name: f.name.trim(),
     base_url: f.baseURL.trim(),
     sub_base_url: f.subURL.trim(),
@@ -143,7 +158,7 @@ export function serverBody(f: ServerForm) {
 /** testBody is what POST /servers/test takes: the typed connection, and
  * for a saved server its id, so an empty token means the stored one. */
 export function testBody(f: ServerForm, id = '') {
-  return { ...(id ? { id } : {}), base_url: f.baseURL.trim(), token: f.token.trim(), allow_private: f.allowPrivate }
+  return { ...(id ? { id } : {}), kind: f.kind, base_url: f.baseURL.trim(), token: f.token.trim(), allow_private: f.allowPrivate }
 }
 
 /** canTest: enough is typed to try the connection. */

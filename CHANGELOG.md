@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Marzban support
+- A server is now 3x-ui or Marzban. Pick the panel software when adding a server (it is fixed afterwards); for Marzban
+  enter an admin's `username:password` where 3x-ui takes an API token. It is stored encrypted in the provisioner like
+  a token and never shown again. Existing servers are 3x-ui. Migration provisioner 00004 adds the `kind` column; going
+  back down removes Marzban servers and their clients.
+- The Marzban adapter creates, renews, resets, disables and deletes users and reads their usage through Marzban's API.
+  Subscription links are the panel's own `subscription_url` (the "Subscription address" field only replaces its
+  prefix). A Marzban username is the client email, so it must fit Marzban's username rule.
+- Tested against a fake modelled on Marzban's source. A CI job against the real Marzban image is not in yet, so try a
+  Marzban server with a test plan before selling on it.
+- The dashboard says "panel servers" where it said "3x-ui servers".
+
 ### Dashboard
 - Reports: which provider paid each order. The Paid-with table splits gateway and staff-approved sales by provider
   (Zarinpal, Stars, automatic USDT, card to card, crypto). Orders paid before this change show "provider not recorded"

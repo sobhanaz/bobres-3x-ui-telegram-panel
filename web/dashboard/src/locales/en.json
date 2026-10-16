@@ -16,7 +16,7 @@
     "rate_limited": "Too many attempts. Wait a minute.",
     "not_found": "This item no longer exists.",
     "state": "This cannot be done right now.",
-    "unavailable": "A service this needs (or the 3x-ui panel) did not answer. Try again in a minute.",
+    "unavailable": "A service this needs (or the panel) did not answer. Try again in a minute.",
     "timeout": "The report took too long. Choose a shorter range."
   },
   "theme": {
@@ -56,7 +56,7 @@
     },
     "services": {
       "title": "Services",
-      "desc": "Every subscription with its usage; extend, reset traffic, disable, delete or resync from 3x-ui."
+      "desc": "Every subscription with its usage; extend, reset traffic, disable, delete or resync from the panel."
     },
     "support": {
       "title": "Support",
@@ -99,7 +99,7 @@
       "desc": "Maintenance mode, required channel, notifications, limits, support and time zone."
     },
     "servers": {
-      "title": "3x-ui servers",
+      "title": "Panel servers",
       "desc": "Your panels, their health and inbounds, and which plans use which server."
     },
     "gateways": {
@@ -172,7 +172,7 @@
     "reseller_debt": "Reseller debt",
     "reseller_no_debt": "Nobody owes",
     "resellers_count": "{n} reseller | {n} resellers",
-    "servers": "3x-ui servers",
+    "servers": "Panel servers",
     "servers_none": "No server yet",
     "servers_ok": "All working",
     "servers_all_off": "No server takes new services",
@@ -383,7 +383,7 @@
     "enable": "Turn on",
     "enable_intro": "The customer can connect again; its end date and traffic still apply.",
     "delete": "Delete",
-    "delete_intro": "Removes the account from the 3x-ui panel for good: the link stops working. The service and its orders stay in the records.",
+    "delete_intro": "Removes the account from the panel for good: the link stops working. The service and its orders stay in the records.",
     "done_extend": "Extension added: it is applied in a few seconds",
     "done_reset": "Traffic reset",
     "done_disable": "Service turned off",
@@ -997,11 +997,11 @@
         },
         "provision_failed": {
           "label": "Service could not be created",
-          "help": "When a paid service could not be created on the 3x-ui panel and needs a look."
+          "help": "When a paid service could not be created on the panel and needs a look."
         },
         "system_alerts": {
           "label": "System problems",
-          "help": "When a service, a 3x-ui server, Zarinpal, the backups, the disk, paid orders, the bot's messages or the license has a problem, once a day while it lasts, and when it is fixed. Open problems always show on the System page."
+          "help": "When a service, a panel server, Zarinpal, the backups, the disk, paid orders, the bot's messages or the license has a problem, once a day while it lasts, and when it is fixed. Open problems always show on the System page."
         },
         "sales": {
           "label": "Every sale",
@@ -1218,7 +1218,7 @@
       "broadcast": "Broadcast",
       "reseller": "Reseller",
       "reseller_tier": "Reseller tier",
-      "server": "3x-ui server",
+      "server": "Panel server",
       "gateway": "Payment gateway",
       "license": "License",
       "tls": "HTTPS"
@@ -1242,7 +1242,7 @@
       "broadcast": "Broadcasts",
       "reseller": "Resellers",
       "reseller_tier": "Reseller tiers",
-      "server": "3x-ui servers",
+      "server": "Panel servers",
       "gateway": "Payment gateways",
       "license": "License",
       "system": "System"
@@ -1781,13 +1781,20 @@
     "hide": "Hide what you typed"
   },
   "server": {
-    "intro": "The 3x-ui panels services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
+    "intro": "The panels (3x-ui or Marzban) services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
     "add": "Add server",
     "edit": "Edit server",
-    "none": "No servers yet. Add your 3x-ui panel to start selling.",
+    "none": "No servers yet. Add your 3x-ui or Marzban panel to start selling.",
     "name": "Name",
     "base_url": "Panel address",
     "base_url_help": "The panel's full address with its port and secret path, as you open it in a browser, for example https://panel.example.com:2053/path",
+    "kind": "Panel software",
+    "kind_xui": "3x-ui",
+    "kind_marzban": "Marzban",
+    "kind_help": "Which panel this server is. It cannot be changed after it is added.",
+    "kind_fixed": "Fixed when the server was added: the services on it live in that panel.",
+    "login": "Admin username and password",
+    "login_help": "Marzban: an admin's login written as username:password (a Marzban username has no colon). Use a dedicated admin. It is stored encrypted in the provisioner service and never shown again. Subscription links come from the panel itself.",
     "token": "API token",
     "token_help": "Create it in the 3x-ui panel under Settings, API tokens. It is stored encrypted in the provisioner service and never shown again.",
     "sub_url": "Subscription address (optional)",
@@ -1848,6 +1855,7 @@
       "credentials": "Put the token in its own field, not a user name or password in the address.",
       "sub_url": "A full address that starts with https:// or http://",
       "token": "A token has no spaces.",
+      "login": "Write it as username:password, with no spaces.",
       "weight": "A whole number from {min} to {max}."
     },
     "token_again": "The panel's address moved to another host or port: enter the token again. A stored token is only sent to the address it was entered for.",
@@ -2045,7 +2053,7 @@
     "check_fail": "{name}: failed",
     "mismatch": "Another version",
     "version_mismatch": "Core runs version {version}, but these services run another one: {list}. Mixed versions can misbehave: restart them, or run bobres install again on the server, so all run the same release.",
-    "servers": "3x-ui servers",
+    "servers": "Panel servers",
     "servers_manage": "Manage servers",
     "gateways": "Payment methods",
     "gateways_none": "No payment method is turned on.",
@@ -2062,12 +2070,12 @@
         "critical": "Critical",
         "warning": "Warning"
       },
-      "note": "Core checks every minute: the services, the 3x-ui servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages, the license and the HTTPS certificates. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
+      "note": "Core checks every minute: the services, the panel servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages, the license and the HTTPS certificates. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
       "settings": "Alert settings",
       "kind": {
         "service_down": "The {service} service is down",
         "service_not_ready": "The {service} service is running but not ready (a database, Redis or gRPC check fails)",
-        "server_down": "The 3x-ui server {server} does not answer",
+        "server_down": "The panel server {server} does not answer",
         "zarinpal_failing": "Zarinpal payments are failing",
         "zarinpal_stuck": "{count} Zarinpal payment is still open; it started over 3 hours ago | {count} Zarinpal payments are still open; the oldest started over 3 hours ago",
         "idpay_failing": "IDPay payments are failing",
@@ -2506,7 +2514,7 @@
       "grace": "These are the license's entitlements (it is in its grace period), with what this install uses now."
     },
     "ent": {
-      "servers": "3x-ui servers",
+      "servers": "Panel servers",
       "active_services": "Active services",
       "staff_seats": "Staff seats (the store owner is not counted)",
       "gateways": "Payment methods",

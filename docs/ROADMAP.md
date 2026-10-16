@@ -120,7 +120,7 @@ and keeps that lead. In order:
 
 1. **v0.3.0, the installer and CLI makeover** (in review): a banner, an honest progress bar, quiet third-party output, automatic hardening that never touches SSH, a live check of the 3x-ui token while it is typed, and an install that survives an SSH drop.
 2. **v0.4.0, trust and first login:** the owner's requests above (status screen, login at once with a password, `bobres check`, the default logo, the footer credit), and the bot's owner panel by buttons with every field explained (the largest piece, so it may ship as v0.4.x in steps: settings first, then plans and discounts, then the rest).
-3. **v0.5.0, more panels:** a Marzban adapter first (the panel most Iranian operators use), then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
+3. **v0.5.0, more panels:** the Marzban adapter is built (a server has a kind, 3x-ui or Marzban; tested against a Marzban fake modelled on its source, not yet against a real Marzban: a CI job with the real image is next), then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
 4. **v0.6.0, more Iranian gateways** (item 3 above): IDPay, NextPay, Aqayepardakht, each off until its merchant id is set.
 5. **v0.7.0, growth tools:** cashback, gift codes, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish).
 6. **v0.8.0, the branded subscription page** (item 2 above) and per-server capacity limits.
