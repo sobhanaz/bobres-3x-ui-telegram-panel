@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/marzban"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/adapter"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
@@ -32,7 +33,8 @@ func serverProto(in *store.ServerInfo) *provisionerv1.XUIServer {
 	p := &provisionerv1.XUIServer{
 		Id: in.ID, Name: in.Name, BaseUrl: in.BaseURL, PanelVersion: in.PanelVersion, Enabled: in.Enabled,
 		SubBaseUrl: in.SubBaseURL, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: in.Managed,
-		HasToken: in.HasToken, Clients: in.Clients, VersionUntested: adapter.Untested(in.PanelVersion),
+		HasToken: in.HasToken, Clients: in.Clients, Kind: in.Kind,
+		VersionUntested: in.Kind != store.KindMarzban && adapter.Untested(in.PanelVersion),
 	}
 	if in.CheckedAt != nil {
 		p.CheckedAt = in.CheckedAt.Unix()
@@ -67,7 +69,7 @@ func (s *Server) ListServers(ctx context.Context, _ *provisionerv1.ListServersRe
 	return out, nil
 }
 
-// AddServer registers a new 3x-ui panel (token encrypted at rest). The
+// AddServer registers a new panel, 3x-ui or Marzban (token encrypted at rest). The
 // connection is tested first unless skip_check. It is saved switched on
 // unless the request says enabled=false (unset is on, for older callers).
 func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequest) (*provisionerv1.XUIServer, error) {
@@ -79,6 +81,7 @@ func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequ
 	sv, err := s.addServer(ctx, &store.Server{
 		Name: req.GetName(), BaseURL: req.GetBaseUrl(), Token: req.GetApiToken(), Enabled: enabled,
 		SubBaseURL: req.GetSubBaseUrl(), AllowPrivate: req.GetAllowPrivate(), Weight: weight, Managed: store.ManagedDashboard,
+		Kind: req.GetKind(),
 	}, !req.GetSkipCheck())
 	if err != nil {
 		return nil, err
@@ -87,16 +90,19 @@ func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequ
 }
 
 func (s *Server) addServer(ctx context.Context, sv *store.Server, test bool) (*store.Server, error) {
+	if sv.Kind == "" {
+		sv.Kind = store.KindXUI
+	}
 	sv.Name, sv.BaseURL, sv.SubBaseURL = strings.TrimSpace(sv.Name), strings.TrimSpace(sv.BaseURL), strings.TrimSpace(sv.SubBaseURL)
 	if err := validateSettings(sv.Name, sv.Weight); err != nil {
 		return nil, err
 	}
-	if err := s.validateServer(sv.BaseURL, sv.Token, sv.SubBaseURL, sv.AllowPrivate); err != nil {
+	if err := s.validateServer(sv.Kind, sv.BaseURL, sv.Token, sv.SubBaseURL, sv.AllowPrivate); err != nil {
 		return nil, err
 	}
 	var version string
 	if test {
-		v, err := s.testConnection(ctx, sv.BaseURL, sv.Token, sv.AllowPrivate)
+		v, err := s.testConnection(ctx, sv.Kind, sv.BaseURL, sv.Token, sv.AllowPrivate)
 		if err != nil {
 			return nil, err
 		}
@@ -128,11 +134,14 @@ func validateSettings(name string, weight int32) error {
 
 // validateServer refuses what the panel client would refuse later (plain http
 // without allow-private, credentials in the URL...) and a malformed sub URL.
-func (s *Server) validateServer(baseURL, token, subBaseURL string, allowPrivate bool) error {
+func (s *Server) validateServer(kind, baseURL, token, subBaseURL string, allowPrivate bool) error {
+	if !store.ValidKind(kind) {
+		return status.Error(codes.InvalidArgument, "unknown panel kind")
+	}
 	if baseURL == "" || token == "" {
 		return status.Error(codes.InvalidArgument, "name, base_url and api_token required")
 	}
-	if _, err := xui.New(baseURL, token, s.clientOptions(allowPrivate)...); err != nil {
+	if _, err := newAdapter(kind, baseURL, token, s.clientOptions(allowPrivate)...); err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	if subBaseURL != "" {
@@ -162,7 +171,7 @@ func (s *Server) storedToken(ctx context.Context, cur *store.ServerInfo, baseURL
 	sv, err := s.st.GetServer(ctx, cur.ID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return "", status.Error(codes.NotFound, "3x-ui server not found")
+		return "", status.Error(codes.NotFound, "server not found")
 	case errors.Is(err, store.ErrTokenUnreadable):
 		return "", status.Error(codes.FailedPrecondition, "the stored API token cannot be read: enter it again")
 	case err != nil:
@@ -175,12 +184,12 @@ func (s *Server) storedToken(ctx context.Context, cur *store.ServerInfo, baseURL
 func (s *Server) lookupInfo(ctx context.Context, id string) (*store.ServerInfo, error) {
 	cid, ok := canonicalID(id)
 	if !ok {
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	}
 	in, err := s.st.ServerInfo(ctx, cid)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	case err != nil:
 		return nil, status.Error(codes.Internal, "server lookup failed")
 	}
@@ -198,7 +207,7 @@ func (s *Server) UpdateServer(ctx context.Context, req *provisionerv1.UpdateServ
 	sv := &store.Server{
 		ID: cur.ID, Name: strings.TrimSpace(req.GetName()), BaseURL: strings.TrimSpace(req.GetBaseUrl()),
 		Token: req.GetApiToken(), Enabled: req.GetEnabled(), SubBaseURL: strings.TrimSpace(req.GetSubBaseUrl()),
-		AllowPrivate: req.GetAllowPrivate(), Weight: req.GetWeight(),
+		AllowPrivate: req.GetAllowPrivate(), Weight: req.GetWeight(), Kind: cur.Kind,
 	}
 	if err := validateSettings(sv.Name, sv.Weight); err != nil {
 		return nil, err
@@ -212,20 +221,20 @@ func (s *Server) UpdateServer(ctx context.Context, req *provisionerv1.UpdateServ
 			return nil, err
 		}
 	}
-	if err := s.validateServer(sv.BaseURL, sv.Token, sv.SubBaseURL, sv.AllowPrivate); err != nil {
+	if err := s.validateServer(sv.Kind, sv.BaseURL, sv.Token, sv.SubBaseURL, sv.AllowPrivate); err != nil {
 		return nil, err
 	}
 	connChanged := newToken || sv.BaseURL != cur.BaseURL || sv.AllowPrivate != cur.AllowPrivate
 	tested := connChanged && !req.GetSkipCheck()
 	var version string
 	if tested {
-		if version, err = s.testConnection(ctx, sv.BaseURL, sv.Token, sv.AllowPrivate); err != nil {
+		if version, err = s.testConnection(ctx, sv.Kind, sv.BaseURL, sv.Token, sv.AllowPrivate); err != nil {
 			return nil, err
 		}
 	}
 	switch err := s.st.UpdateServer(ctx, sv, connChanged); {
 	case errors.Is(err, store.ErrNotFound):
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	case errors.Is(err, store.ErrNameTaken):
 		return nil, status.Error(codes.AlreadyExists, "another server already has this name")
 	case err != nil:
@@ -249,12 +258,12 @@ func (s *Server) forget(id string) {
 func (s *Server) DeleteServer(ctx context.Context, req *provisionerv1.DeleteServerRequest) (*emptypb.Empty, error) {
 	id, ok := canonicalID(req.GetId())
 	if !ok {
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	}
 	n, err := s.st.DeleteServer(ctx, id)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	case errors.Is(err, store.ErrServerInUse) && n > 0:
 		return nil, status.Error(codes.FailedPrecondition, fmt.Sprintf("the server still has %d clients: delete or move them first", n))
 	case errors.Is(err, store.ErrServerInUse):
@@ -271,11 +280,16 @@ func (s *Server) DeleteServer(ctx context.Context, req *provisionerv1.DeleteServ
 // with the reason, not an error.
 func (s *Server) TestServer(ctx context.Context, req *provisionerv1.TestServerRequest) (*provisionerv1.TestServerResponse, error) {
 	baseURL, token, allowPrivate := strings.TrimSpace(req.GetBaseUrl()), req.GetApiToken(), req.GetAllowPrivate()
+	kind := req.GetKind()
+	if kind == "" {
+		kind = store.KindXUI
+	}
 	if req.GetId() != "" {
 		cur, err := s.lookupInfo(ctx, req.GetId())
 		if err != nil {
 			return nil, err
 		}
+		kind = cur.Kind // a saved server's kind does not change
 		if baseURL == "" {
 			baseURL, allowPrivate = cur.BaseURL, cur.AllowPrivate
 		}
@@ -285,10 +299,10 @@ func (s *Server) TestServer(ctx context.Context, req *provisionerv1.TestServerRe
 			}
 		}
 	}
-	if err := s.validateServer(baseURL, token, "", allowPrivate); err != nil {
+	if err := s.validateServer(kind, baseURL, token, "", allowPrivate); err != nil {
 		return nil, err
 	}
-	n, version, err := s.probe(ctx, baseURL, token, allowPrivate)
+	n, version, err := s.probe(ctx, kind, baseURL, token, allowPrivate)
 	if err != nil {
 		return &provisionerv1.TestServerResponse{Detail: panelDetail(err)}, nil
 	}
@@ -297,8 +311,8 @@ func (s *Server) TestServer(ctx context.Context, req *provisionerv1.TestServerRe
 
 // testConnection is the check before a server is saved: FailedPrecondition
 // with the reason when the panel cannot be used.
-func (s *Server) testConnection(ctx context.Context, baseURL, token string, allowPrivate bool) (string, error) {
-	_, version, err := s.probe(ctx, baseURL, token, allowPrivate)
+func (s *Server) testConnection(ctx context.Context, kind, baseURL, token string, allowPrivate bool) (string, error) {
+	_, version, err := s.probe(ctx, kind, baseURL, token, allowPrivate)
 	if err != nil {
 		return "", status.Error(codes.FailedPrecondition, "connection test failed: "+panelDetail(err))
 	}
@@ -307,8 +321,8 @@ func (s *Server) testConnection(ctx context.Context, baseURL, token string, allo
 
 // probe connects with these settings (a client of its own, not the cached
 // one) and reports the inbound count and the panel version.
-func (s *Server) probe(ctx context.Context, baseURL, token string, allowPrivate bool) (int, string, error) {
-	a, err := adapter.NewXUIv3(baseURL, token, s.clientOptions(allowPrivate)...)
+func (s *Server) probe(ctx context.Context, kind, baseURL, token string, allowPrivate bool) (int, string, error) {
+	a, err := newAdapter(kind, baseURL, token, s.clientOptions(allowPrivate)...)
 	if err != nil {
 		return 0, "", err
 	}
@@ -334,6 +348,7 @@ const maxDetailLen = 300
 func panelDetail(err error) string {
 	var (
 		ae     *xui.APIError
+		me     *marzban.APIError
 		detail string
 	)
 	switch {
@@ -341,6 +356,10 @@ func panelDetail(err error) string {
 		detail = err.Error()
 	case xui.IsUnauthorized(err):
 		detail = "the panel refused the API token"
+	case marzban.IsUnauthorized(err):
+		detail = "the panel refused the admin username or password"
+	case errors.As(err, &me):
+		detail = me.Error()
 	case errors.Is(err, context.DeadlineExceeded):
 		detail = "the panel did not answer in time"
 	case errors.As(err, &ae):
@@ -357,7 +376,7 @@ func panelDetail(err error) string {
 // recordHealth stores a check result; a failure to store is only logged.
 func (s *Server) recordHealth(ctx context.Context, id string, version time.Time, ok bool, panelVersion, detail string) {
 	if err := s.st.RecordHealth(ctx, id, version, ok, panelVersion, detail); err != nil && ctx.Err() == nil {
-		s.log.Warn("recording a 3x-ui health check failed", "err", err)
+		s.log.Warn("recording a panel health check failed", "err", err)
 	}
 }
 
@@ -395,14 +414,14 @@ func (s *Server) ListInbounds(ctx context.Context, req *provisionerv1.ListInboun
 func (s *Server) SetInboundAttach(ctx context.Context, req *provisionerv1.SetInboundAttachRequest) (*emptypb.Empty, error) {
 	id, ok := canonicalID(req.GetServerId())
 	if !ok {
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	}
 	if req.GetInboundId() <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "inbound_id required")
 	}
 	switch err := s.st.SetInboundAttach(ctx, id, int(req.GetInboundId()), req.GetAttach()); {
 	case errors.Is(err, store.ErrNotFound):
-		return nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, status.Error(codes.NotFound, "server not found")
 	case err != nil:
 		return nil, status.Error(codes.Internal, "inbound setting failed")
 	}
@@ -466,7 +485,7 @@ func (s *Server) HealthCheck(ctx context.Context, req *provisionerv1.HealthCheck
 	}
 	ver, err := a.HealthCheck(ctx)
 	if err != nil {
-		s.log.Warn("3x-ui health check failed", "err", err)
+		s.log.Warn("panel health check failed", "err", err)
 		s.recordHealth(ctx, sv.ID, sv.UpdatedAt, false, "", panelDetail(err))
 		detail := "panel unreachable"
 		if policyRefusal(err) {

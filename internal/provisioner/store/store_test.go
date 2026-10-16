@@ -370,3 +370,25 @@ func TestInboundAttach(t *testing.T) {
 		t.Fatalf("unknown server: %v", err)
 	}
 }
+
+func TestServerKind(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	x := addServer(t, s, "kind-x", 0)
+	m, err := s.AddServer(ctx, &Server{Name: "kind-m", BaseURL: "https://m.test", Token: "admin:pw", Enabled: true, Kind: KindMarzban}) //gitleaks:allow test fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddServer(ctx, &Server{Name: "kind-bad", BaseURL: "https://b.test", Token: "t", Kind: "nope"}); err == nil { //gitleaks:allow test fixture
+		t.Error("unknown kind stored")
+	}
+	for id, want := range map[string]string{x.ID: KindXUI, m.ID: KindMarzban} {
+		got, err := s.GetServer(ctx, id)
+		if err != nil || got.Kind != want {
+			t.Errorf("server %s kind = %q, %v; want %q", id, got.Kind, err, want)
+		}
+	}
+	if got, _ := s.GetServer(ctx, m.ID); got.Token != "admin:pw" { //gitleaks:allow test fixture
+		t.Errorf("marzban login did not round-trip: %q", got.Token)
+	}
+}

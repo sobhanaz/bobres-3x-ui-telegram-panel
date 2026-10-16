@@ -39,6 +39,15 @@ const (
 	ManagedDashboard = "dashboard" // added or edited in the dashboard
 )
 
+// What a server row is a panel of. A server's kind is fixed when it is added.
+const (
+	KindXUI     = "xui"
+	KindMarzban = "marzban"
+)
+
+// ValidKind reports whether k names a supported panel.
+func ValidKind(k string) bool { return k == KindXUI || k == KindMarzban }
+
 // DefaultWeight is a server's share of new clients unless set.
 const DefaultWeight = 100
 
@@ -50,9 +59,13 @@ type Store struct {
 
 // Server mirrors provisioner.xui_servers. Token is plaintext only in memory.
 type Server struct {
-	ID           string
-	Name         string
-	BaseURL      string
+	ID      string
+	Name    string
+	BaseURL string
+	// Kind is KindXUI or KindMarzban (empty reads as KindXUI).
+	Kind string
+	// Token is the 3x-ui API token; for a Marzban panel it is
+	// "username:password" of an admin.
 	Token        string
 	PanelVersion string
 	Enabled      bool
@@ -142,11 +155,17 @@ func (s *Store) AddServer(ctx context.Context, sv *Server) (*Server, error) {
 	if sv.Managed == "" {
 		sv.Managed = ManagedEnv
 	}
+	if sv.Kind == "" {
+		sv.Kind = KindXUI
+	}
+	if !ValidKind(sv.Kind) {
+		return nil, fmt.Errorf("add server: unknown kind %q", sv.Kind)
+	}
 	sv.ID = buuid.MustV7().String()
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, enabled, sub_base_url, allow_private, weight, managed)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8, $9) RETURNING updated_at`,
-		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate, sv.Weight, sv.Managed).Scan(&sv.UpdatedAt)
+		INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, enabled, sub_base_url, allow_private, weight, managed, kind)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8, $9, $10) RETURNING updated_at`,
+		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate, sv.Weight, sv.Managed, sv.Kind).Scan(&sv.UpdatedAt)
 	if pgCode(err, "23505", "xui_servers_name_key") {
 		return nil, ErrNameTaken
 	}
@@ -166,7 +185,7 @@ func (s *Store) CountServers(ctx context.Context) (int, error) {
 }
 
 const serverCols = `s.id, s.name, s.base_url, s.api_token_enc, s.panel_version, s.enabled, s.sub_base_url, s.allow_private,
-	s.weight, s.managed, s.last_health_ok, s.last_error, s.last_checked_at, s.updated_at`
+	s.weight, s.managed, s.last_health_ok, s.last_error, s.last_checked_at, s.updated_at, s.kind`
 
 // scanServerRow reads serverCols (then extra) without decrypting the token.
 func scanServerRow(row pgx.Row, extra ...any) (*Server, []byte, error) {
@@ -176,7 +195,7 @@ func scanServerRow(row pgx.Row, extra ...any) (*Server, []byte, error) {
 		ver, sub *string
 	)
 	dest := append([]any{&sv.ID, &sv.Name, &sv.BaseURL, &enc, &ver, &sv.Enabled, &sub, &sv.AllowPrivate,
-		&sv.Weight, &sv.Managed, &sv.HealthOK, &sv.HealthError, &sv.CheckedAt, &sv.UpdatedAt}, extra...)
+		&sv.Weight, &sv.Managed, &sv.HealthOK, &sv.HealthError, &sv.CheckedAt, &sv.UpdatedAt, &sv.Kind}, extra...)
 	err := row.Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound

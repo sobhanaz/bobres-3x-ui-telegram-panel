@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/marzban"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/adapter"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
@@ -62,7 +64,7 @@ func (s *Server) SetLogger(l *slog.Logger) {
 // allow-private) are configuration errors the operator must see verbatim;
 // everything else is reported as unavailable with the operation's name.
 func (s *Server) panelError(op string, err error) error {
-	s.log.Warn("3x-ui call failed", "op", op, "err", err)
+	s.log.Warn("panel call failed", "op", op, "err", err)
 	if policyRefusal(err) {
 		return status.Error(codes.FailedPrecondition, err.Error())
 	}
@@ -84,13 +86,25 @@ func (s *Server) clientOptions(allowPrivate bool) []xui.Option {
 	return opts
 }
 
+// newAdapter builds the adapter of a panel kind. token is the 3x-ui API token,
+// or "username:password" of a Marzban admin.
+func newAdapter(kind, baseURL, token string, opts ...xui.Option) (adapter.PanelAdapter, error) {
+	switch kind {
+	case store.KindMarzban:
+		return adapter.NewMarzban(baseURL, token, opts...)
+	case store.KindXUI, "":
+		return adapter.NewXUIv3(baseURL, token, opts...)
+	}
+	return nil, fmt.Errorf("unknown panel kind %q", kind)
+}
+
 func (s *Server) adapterFor(sv *store.Server) (adapter.PanelAdapter, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if c, ok := s.adapters[sv.ID]; ok && c.version.Equal(sv.UpdatedAt) {
 		return c.a, nil
 	}
-	a, err := adapter.NewXUIv3(sv.BaseURL, sv.Token, s.clientOptions(sv.AllowPrivate)...)
+	a, err := newAdapter(sv.Kind, sv.BaseURL, sv.Token, s.clientOptions(sv.AllowPrivate)...)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, "panel configuration is invalid")
 	}
@@ -117,7 +131,7 @@ func (s *Server) server(ctx context.Context, id string) (*store.Server, adapter.
 	if id != "" {
 		cid, ok := canonicalID(id)
 		if !ok {
-			return nil, nil, status.Error(codes.NotFound, "3x-ui server not found")
+			return nil, nil, status.Error(codes.NotFound, "server not found")
 		}
 		sv, err = s.st.GetServer(ctx, cid)
 	} else {
@@ -125,9 +139,9 @@ func (s *Server) server(ctx context.Context, id string) (*store.Server, adapter.
 	}
 	switch {
 	case errors.Is(err, store.ErrNotFound) && id != "":
-		return nil, nil, status.Error(codes.NotFound, "3x-ui server not found")
+		return nil, nil, status.Error(codes.NotFound, "server not found")
 	case errors.Is(err, store.ErrNotFound):
-		return nil, nil, s.noServer(ctx, "no enabled 3x-ui server")
+		return nil, nil, s.noServer(ctx, "no enabled panel server")
 	case err != nil:
 		return nil, nil, status.Error(codes.Internal, "server lookup failed")
 	}
@@ -142,7 +156,7 @@ func (s *Server) server(ctx context.Context, id string) (*store.Server, adapter.
 // or (msg) none qualifies.
 func (s *Server) noServer(ctx context.Context, msg string) error {
 	if n, err := s.st.CountServers(ctx); err == nil && n == 0 {
-		return status.Error(codes.FailedPrecondition, "no 3x-ui server: add one in the dashboard (Servers)")
+		return status.Error(codes.FailedPrecondition, "no panel server: add one in the dashboard (Servers)")
 	}
 	return status.Error(codes.FailedPrecondition, msg)
 }
@@ -234,13 +248,16 @@ func chosenInbounds(sel []*provisionerv1.InboundSelection, serverID string) []in
 }
 
 // noSuchClient reports the panel's answer to a lookup of a client it does
-// not have: "record not found" inside a successful HTTP response, which is
+// not have. Marzban answers HTTP 404. 3x-ui: "record not found" inside a successful HTTP response, which is
 // how 3x-ui reports business errors (the xui client says "client ... not
 // found" for an empty record). Anything else says nothing about the client:
 // unreachable, a server error, a refused token, a page that is not the
 // panel's, or another refusal inside HTTP 200, such as "database is locked"
 // from a busy panel.
 func noSuchClient(err error) bool {
+	if marzban.IsNotFound(err) {
+		return true
+	}
 	var ae *xui.APIError
 	if !errors.As(err, &ae) || ae.Status != http.StatusOK {
 		return false
@@ -254,7 +271,8 @@ func noSuchClient(err error) bool {
 // and finish after a lookup that follows it.
 func answered(err error) bool {
 	var ae *xui.APIError
-	return errors.As(err, &ae)
+	var me *marzban.APIError
+	return errors.As(err, &ae) || errors.As(err, &me)
 }
 
 // CreateClient provisions a subscription on a panel. It is safe to retry: an
@@ -317,6 +335,9 @@ func (s *Server) reserve(ctx context.Context, req *provisionerv1.CreateClientReq
 	if err != nil {
 		return nil, false, err
 	}
+	if sv.Kind == store.KindMarzban && marzban.ValidateUsername(req.GetEmail()) != nil {
+		return nil, false, status.Error(codes.InvalidArgument, "the email is not a valid Marzban username (3-32 of a-z, 0-9, - _ @ .)")
+	}
 	subID := s.st.SubIDFor(req.GetSubscriptionId())
 	cm, fresh, err := s.st.ReserveClient(ctx, &store.ClientMap{
 		SubscriptionID: req.GetSubscriptionId(), ServerID: sv.ID, Email: req.GetEmail(), XUISubID: &subID,
@@ -342,7 +363,7 @@ func (s *Server) pick(ctx context.Context, serverID string, candidates []string)
 			return nil, err
 		}
 		if !sv.Enabled {
-			return nil, status.Error(codes.FailedPrecondition, "the 3x-ui server is disabled: it takes no new clients")
+			return nil, status.Error(codes.FailedPrecondition, "the server is disabled: it takes no new clients")
 		}
 		return sv, nil
 	}
@@ -356,9 +377,9 @@ func (s *Server) pick(ctx context.Context, serverID string, candidates []string)
 	sv, err := s.st.PickServer(ctx, ids)
 	switch {
 	case errors.Is(err, store.ErrNotFound) && len(ids) > 0:
-		return nil, s.noServer(ctx, "none of the candidate 3x-ui servers is enabled and healthy")
+		return nil, s.noServer(ctx, "none of the candidate servers is enabled and healthy")
 	case errors.Is(err, store.ErrNotFound):
-		return nil, s.noServer(ctx, "no enabled and healthy 3x-ui server")
+		return nil, s.noServer(ctx, "no enabled and healthy server")
 	case err != nil:
 		return nil, status.Error(codes.Internal, "server lookup failed")
 	}
@@ -402,7 +423,7 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 			// The create may still land: the retry comes back here and adopts it.
 			return nil, s.panelError("panel create", err)
 		case lookupErr != nil:
-			s.log.Warn("3x-ui create failed", "err", err)
+			s.log.Warn("panel create failed", "err", err)
 			return nil, s.panelError("panel create", lookupErr)
 		case existing != subID:
 			s.release(ctx, cm) // the email is someone else's there, so none of ours is
@@ -581,16 +602,28 @@ func (s *Server) GetLinks(ctx context.Context, req *provisionerv1.GetLinksReques
 		return nil, status.Error(codes.NotFound, "client not provisioned")
 	}
 	var configs []string
-	if cm.XUISubID != nil && *cm.XUISubID != "" {
+	linker, ownsSub := a.(adapter.SubscriptionLinker)
+	if !ownsSub && cm.XUISubID != nil && *cm.XUISubID != "" {
 		configs, _ = a.SubLinks(ctx, *cm.XUISubID)
 	}
 	if len(configs) == 0 {
 		configs, _ = a.Links(ctx, cm.Email)
 	}
 	link := ""
-	if sv.SubBaseURL != "" && cm.XUISubID != nil {
+	switch {
+	case ownsSub:
+		// The panel owns the subscription token: ask it, and let the
+		// server's base URL replace only the prefix.
+		l, lerr := linker.SubscriptionLink(ctx, cm.Email, sv.SubBaseURL)
+		if lerr == nil {
+			link = l
+		} else {
+			err = lerr
+		}
+	case sv.SubBaseURL != "" && cm.XUISubID != nil:
 		link = strings.TrimRight(sv.SubBaseURL, "/") + "/" + *cm.XUISubID
-	} else if len(configs) > 0 {
+	}
+	if link == "" && len(configs) > 0 {
 		link = configs[0]
 	}
 	if link == "" {

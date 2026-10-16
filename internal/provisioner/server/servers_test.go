@@ -164,7 +164,7 @@ func TestNoServerAtAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.create(t, 1)
-	if status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "no 3x-ui server") {
+	if status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "no panel server") {
 		t.Fatalf("no server: %v", err)
 	}
 	if _, err := f.client.ListInbounds(context.Background(), &provisionerv1.ListInboundsRequest{}); status.Code(err) != codes.FailedPrecondition {

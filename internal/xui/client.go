@@ -210,6 +210,24 @@ func AllowPrivateAddresses() Option { return func(o *settings) { o.allowPrivate 
 // loopback, private and link-local addresses are refused. Both checks run at dial
 // time, after DNS resolution, so DNS rebinding cannot bypass them.
 func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
+	hc, err := HardenedHTTPClient(baseURL, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if apiToken == "" {
+		return nil, errors.New("xui: API token is required")
+	}
+	return &Client{
+		base: strings.TrimRight(baseURL, "/"), token: apiToken, hc: hc,
+		locks: map[string]*emailLock{},
+	}, nil
+}
+
+// HardenedHTTPClient is the HTTP client every panel client uses: the URL rules
+// and the address policy of New, with no ambient proxy, bounded timeouts and
+// no redirects. Other panel kinds (Marzban) build theirs here so one policy
+// guards every credential the provisioner holds.
+func HardenedHTTPClient(baseURL string, opts ...Option) (*http.Client, error) {
 	var o settings
 	for _, f := range opts {
 		f(&o)
@@ -224,9 +242,6 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 	}
 	if u.User != nil {
 		return nil, errors.New("xui: credentials in the panel URL are not allowed")
-	}
-	if apiToken == "" {
-		return nil, errors.New("xui: API token is required")
 	}
 	hc := o.hc
 	if hc == nil {
@@ -254,10 +269,7 @@ func New(baseURL, apiToken string, opts ...Option) (*Client, error) {
 	// Go would replay POST bodies and the Authorization header on 307/308.
 	cp := *hc
 	cp.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{
-		base: strings.TrimRight(baseURL, "/"), token: apiToken, hc: &cp,
-		locks: map[string]*emailLock{},
-	}, nil
+	return &cp, nil
 }
 
 // blockPrivate runs on every outgoing connection after DNS resolution.

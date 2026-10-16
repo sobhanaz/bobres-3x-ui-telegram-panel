@@ -70,6 +70,8 @@ message XUIServer {
   int64 checked_at = 14; // unix seconds
   // panel_version is outside the tested range (ListServersResponse).
   bool version_untested = 15;
+  // "xui" (3x-ui) or "marzban"; empty reads as "xui".
+  string kind = 16;
 }
 
 message CreateClientRequest {
@@ -163,6 +165,9 @@ message AddServerRequest {
   // for callers from before it existed; false saves it switched off, so it
   // is never briefly on.
   optional bool enabled = 8;
+  // "xui" (default) or "marzban". Fixed once the server is added. For
+  // "marzban", api_token is "username:password" of a Marzban admin.
+  string kind = 9;
 }
 
 message ListServersRequest {}
@@ -204,6 +209,9 @@ message TestServerRequest {
   string base_url = 2;
   string api_token = 3;
   bool allow_private = 4;
+  // For candidate settings (no id): "xui" (default) or "marzban". With an id
+  // the server's own kind is used.
+  string kind = 5;
 }
 
 message TestServerResponse {

@@ -373,8 +373,10 @@ type XUIServer struct {
 	CheckedAt   int64  `protobuf:"varint,14,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"` // unix seconds
 	// panel_version is outside the tested range (ListServersResponse).
 	VersionUntested bool `protobuf:"varint,15,opt,name=version_untested,json=versionUntested,proto3" json:"version_untested,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// "xui" (3x-ui) or "marzban"; empty reads as "xui".
+	Kind          string `protobuf:"bytes,16,opt,name=kind,proto3" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *XUIServer) Reset() {
@@ -510,6 +512,13 @@ func (x *XUIServer) GetVersionUntested() bool {
 		return x.VersionUntested
 	}
 	return false
+}
+
+func (x *XUIServer) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
 }
 
 type CreateClientRequest struct {
@@ -1127,7 +1136,10 @@ type AddServerRequest struct {
 	// Whether the server takes new clients from the start. Unset means on, as
 	// for callers from before it existed; false saves it switched off, so it
 	// is never briefly on.
-	Enabled       *bool `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
+	Enabled *bool `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
+	// "xui" (default) or "marzban". Fixed once the server is added. For
+	// "marzban", api_token is "username:password" of a Marzban admin.
+	Kind          string `protobuf:"bytes,9,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1216,6 +1228,13 @@ func (x *AddServerRequest) GetEnabled() bool {
 		return *x.Enabled
 	}
 	return false
+}
+
+func (x *AddServerRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
 }
 
 type ListServersRequest struct {
@@ -1477,11 +1496,14 @@ func (x *DeleteServerRequest) GetId() string {
 // tries a new address (allow_private from this request) and an api_token a
 // new token; the rules of UpdateServerRequest.api_token apply.
 type TestServerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	BaseUrl       string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
-	ApiToken      string                 `protobuf:"bytes,3,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
-	AllowPrivate  bool                   `protobuf:"varint,4,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Id           string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	BaseUrl      string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	ApiToken     string                 `protobuf:"bytes,3,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
+	AllowPrivate bool                   `protobuf:"varint,4,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	// For candidate settings (no id): "xui" (default) or "marzban". With an id
+	// the server's own kind is used.
+	Kind          string `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1542,6 +1564,13 @@ func (x *TestServerRequest) GetAllowPrivate() bool {
 		return x.AllowPrivate
 	}
 	return false
+}
+
+func (x *TestServerRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
 }
 
 type TestServerResponse struct {
@@ -1961,7 +1990,7 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x16\n" +
 	"\x06attach\x18\x04 \x01(\bR\x06attach\x12\x1a\n" +
 	"\bprotocol\x18\x05 \x01(\tR\bprotocol\x12\x12\n" +
-	"\x04port\x18\x06 \x01(\x05R\x04port\"\xc0\x03\n" +
+	"\x04port\x18\x06 \x01(\x05R\x04port\"\xd4\x03\n" +
 	"\tXUIServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
@@ -1980,7 +2009,8 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\fhealth_error\x18\r \x01(\tR\vhealthError\x12\x1d\n" +
 	"\n" +
 	"checked_at\x18\x0e \x01(\x03R\tcheckedAt\x12)\n" +
-	"\x10version_untested\x18\x0f \x01(\bR\x0fversionUntested\"\xab\x02\n" +
+	"\x10version_untested\x18\x0f \x01(\bR\x0fversionUntested\x12\x12\n" +
+	"\x04kind\x18\x10 \x01(\tR\x04kind\"\xab\x02\n" +
 	"\x13CreateClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
 	"\tserver_id\x18\x02 \x01(\tR\bserverId\x12\x14\n" +
@@ -2016,7 +2046,7 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13ListInboundsRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"K\n" +
 	"\x14ListInboundsResponse\x123\n" +
-	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\x87\x02\n" +
+	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\x9b\x02\n" +
 	"\x10AddServerRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
@@ -2027,7 +2057,8 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x06weight\x18\x06 \x01(\x05R\x06weight\x12\x1d\n" +
 	"\n" +
 	"skip_check\x18\a \x01(\bR\tskipCheck\x12\x1d\n" +
-	"\aenabled\x18\b \x01(\bH\x00R\aenabled\x88\x01\x01B\n" +
+	"\aenabled\x18\b \x01(\bH\x00R\aenabled\x88\x01\x01\x12\x12\n" +
+	"\x04kind\x18\t \x01(\tR\x04kindB\n" +
 	"\n" +
 	"\b_enabled\"\x14\n" +
 	"\x12ListServersRequest\"\xa6\x01\n" +
@@ -2048,12 +2079,13 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\n" +
 	"skip_check\x18\t \x01(\bR\tskipCheck\"%\n" +
 	"\x13DeleteServerRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x80\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x94\x01\n" +
 	"\x11TestServerRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
 	"\tapi_token\x18\x03 \x01(\tR\bapiToken\x12#\n" +
-	"\rallow_private\x18\x04 \x01(\bR\fallowPrivate\"}\n" +
+	"\rallow_private\x18\x04 \x01(\bR\fallowPrivate\x12\x12\n" +
+	"\x04kind\x18\x05 \x01(\tR\x04kind\"}\n" +
 	"\x12TestServerResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12#\n" +
 	"\rpanel_version\x18\x02 \x01(\tR\fpanelVersion\x12\x1a\n" +
