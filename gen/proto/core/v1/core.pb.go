@@ -2272,8 +2272,12 @@ type Settings struct {
 	// when the store has none, "?" when core could not read it (the bot then
 	// leaves its photo as it is). An older core never sets it.
 	BotPhotoVersion string `protobuf:"bytes,2,opt,name=bot_photo_version,json=botPhotoVersion,proto3" json:"bot_photo_version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// True when the license includes white label: the bot then leaves the
+	// vendor credit out of its about text. False when it is not, and for an
+	// older core that never sets it, so a missing answer shows the credit.
+	WhiteLabel    bool `protobuf:"varint,3,opt,name=white_label,json=whiteLabel,proto3" json:"white_label,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Settings) Reset() {
@@ -2318,6 +2322,13 @@ func (x *Settings) GetBotPhotoVersion() string {
 		return x.BotPhotoVersion
 	}
 	return ""
+}
+
+func (x *Settings) GetWhiteLabel() bool {
+	if x != nil {
+		return x.WhiteLabel
+	}
+	return false
 }
 
 type UpsertUserRequest struct {
@@ -7455,10 +7466,12 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\vhalt_reason\x18\x03 \x01(\tR\n" +
 	"haltReason\"(\n" +
 	"\x0eBroadcastState\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\"\xa8\x01\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"\xc9\x01\n" +
 	"\bSettings\x125\n" +
 	"\x06values\x18\x01 \x03(\v2\x1d.core.v1.Settings.ValuesEntryR\x06values\x12*\n" +
-	"\x11bot_photo_version\x18\x02 \x01(\tR\x0fbotPhotoVersion\x1a9\n" +
+	"\x11bot_photo_version\x18\x02 \x01(\tR\x0fbotPhotoVersion\x12\x1f\n" +
+	"\vwhite_label\x18\x03 \x01(\bR\n" +
+	"whiteLabel\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb2\x01\n" +

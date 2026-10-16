@@ -267,6 +267,10 @@ message Settings {
   // when the store has none, "?" when core could not read it (the bot then
   // leaves its photo as it is). An older core never sets it.
   string bot_photo_version = 2;
+  // True when the license includes white label: the bot then leaves the
+  // vendor credit out of its about text. False when it is not, and for an
+  // older core that never sets it, so a missing answer shows the credit.
+  bool white_label = 3;
 }
 
 // --- Request/response messages ---

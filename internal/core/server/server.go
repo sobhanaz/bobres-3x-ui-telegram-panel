@@ -493,11 +493,18 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	if err != nil {
 		return nil, fail(err)
 	}
-	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx)}
+	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx)}
 	for k, v := range m {
 		out.Values[k] = string(v)
 	}
 	return out, nil
+}
+
+// whiteLabel: the license includes white label. When the license cannot be
+// read it is false, so an error never hides the vendor credit.
+func (s *Server) whiteLabel(ctx context.Context) bool {
+	eff, err := s.dom.Effective(ctx)
+	return err == nil && eff.WhiteLabel()
 }
 
 // botPhotoVersion is the bot photo's version (without reading the photo): ""

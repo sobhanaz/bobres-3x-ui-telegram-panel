@@ -2580,6 +2580,7 @@
       }
     },
     "powered_by": "Powered by BOBRES",
+    "made_by": "Made by TECSO-DEV",
     "no_keys": "This build carries no vendor key (only a development build lacks one), so no license can be checked.",
     "updated_by": "Saved {time} by {name}",
     "source": {

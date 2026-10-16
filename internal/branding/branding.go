@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Lang is a supported UI language.
@@ -23,6 +24,11 @@ const (
 
 // ProductName is the vendor product name shown only without white_label.
 const ProductName = "BOBRES"
+
+// MadeBy is the vendor credit, shown next to "Powered by BOBRES" (the
+// dashboard's footer and login page, the bot's about text) and hidden by the
+// same white_label entitlement.
+const MadeBy = "Made by TECSO-DEV"
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
@@ -102,3 +108,20 @@ func PoweredBy(whiteLabel bool) string {
 	}
 	return "Powered by " + ProductName
 }
+
+// AboutWithCredit appends the vendor credit on its own line to the bot's
+// about text, unless white-label is licensed. Telegram refuses an about text
+// over 120 characters, so a text with no room left is returned as it is.
+func AboutWithCredit(about string, whiteLabel bool) string {
+	if whiteLabel {
+		return about
+	}
+	out := about + "\n" + MadeBy
+	if about == "" || utf8.RuneCountInString(out) > aboutMax {
+		return about
+	}
+	return out
+}
+
+// aboutMax is Telegram's limit for a bot's short description.
+const aboutMax = 120

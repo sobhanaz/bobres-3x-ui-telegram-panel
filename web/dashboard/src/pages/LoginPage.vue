@@ -156,7 +156,10 @@ async function submit() {
         </template>
       </Card>
     </div>
-    <footer v-if="showPoweredBy" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
+    <footer v-if="showPoweredBy" class="attribution app-muted">
+      <div class="powered-by"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</div>
+      <div class="made-by">{{ t('license.made_by') }}</div>
+    </footer>
   </div>
 </template>
 
@@ -254,12 +257,18 @@ h3 {
   font-size: 0.85rem;
   margin-block-end: 0;
 }
+.attribution {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  padding-block-start: 0.75rem;
+}
 .powered-by {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
-  padding-block-start: 0.75rem;
 }
 .powered-by img {
   flex: none;

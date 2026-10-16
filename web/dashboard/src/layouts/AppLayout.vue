@@ -136,7 +136,10 @@ function toggleLang() {
       <main class="content">
         <RouterView />
       </main>
-      <footer v-if="showPoweredBy" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
+      <footer v-if="showPoweredBy" class="attribution app-muted">
+        <div class="powered-by"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</div>
+        <div class="made-by">{{ t('license.made_by') }}</div>
+      </footer>
     </div>
   </div>
 </template>
@@ -264,14 +267,20 @@ nav {
   margin-inline-end: 0.25rem;
   text-decoration: none;
 }
-.powered-by {
+.attribution {
   margin-block-start: auto;
   padding: 0.75rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+}
+.powered-by {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
 }
 .powered-by img {
   flex: none;

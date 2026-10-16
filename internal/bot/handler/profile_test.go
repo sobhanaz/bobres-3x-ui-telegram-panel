@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
@@ -192,7 +193,7 @@ func TestWantedProfile(t *testing.T) {
 		{TelegramID: 2, Language: "", Role: "support"},
 		{TelegramID: 3, Language: "fa", Role: "admin"},
 	})
-	p, on := wantedProfile(cat, set, "1760000000000000000")
+	p, on := wantedProfile(cat, set, "1760000000000000000", true)
 	if !on {
 		t.Fatal("the profile is on by default")
 	}
@@ -233,7 +234,7 @@ func TestWantedProfile(t *testing.T) {
 	if dropped := cat.SetOverrides(map[string]string{"texts.en.profile.about": "Best VPN in town"}); len(dropped) > 0 {
 		t.Fatalf("override dropped: %v", dropped)
 	}
-	p, _ = wantedProfile(cat, set, "")
+	p, _ = wantedProfile(cat, set, "", true)
 	if names(p.Langs["en"].Commands) != "start menu terms paysupport" || p.Langs["en"].About != "Best VPN in town" {
 		t.Fatalf("with a privacy link and an override: %+v", p.Langs["en"])
 	}
@@ -242,7 +243,7 @@ func TestWantedProfile(t *testing.T) {
 	}
 
 	set.Replace(map[string]string{"general.bot_profile": "false"})
-	if _, on := wantedProfile(cat, set, ""); on {
+	if _, on := wantedProfile(cat, set, "", true); on {
 		t.Fatal("general.bot_profile=false must leave the profile alone")
 	}
 }
@@ -256,7 +257,7 @@ func TestProfileSyncSetsOnlyWhatChanged(t *testing.T) {
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}
 	apply := func() {
 		t.Helper()
-		p, on := wantedProfile(cat, set, "")
+		p, on := wantedProfile(cat, set, "", true)
 		if err := s.sync(ctx, p, on); err != nil {
 			t.Fatalf("sync: %v", err)
 		}
@@ -340,7 +341,7 @@ func TestProfileSyncMemoUnreadable(t *testing.T) {
 	set := settings.New()
 	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}})
 	api, memo := newFakeProfileAPI(), &failingMemo{}
-	p, _ := wantedProfile(cat, set, "")
+	p, _ := wantedProfile(cat, set, "", true)
 	if err := (&profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}).sync(ctx, p, true); err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +349,7 @@ func TestProfileSyncMemoUnreadable(t *testing.T) {
 	before := memo.v
 
 	set.SetStaff(nil) // the owner left while the bot was down
-	p, _ = wantedProfile(cat, set, "")
+	p, _ = wantedProfile(cat, set, "", true)
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}
 	memo.err = errors.New("redis: connection refused")
 	if err := s.sync(ctx, p, true); err == nil {
@@ -373,7 +374,7 @@ func TestProfileSyncFailures(t *testing.T) {
 	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}, {TelegramID: 9, Role: "admin"}})
 	api := newFakeProfileAPI()
 	s := &profileSync{api: api, log: slog.New(slog.DiscardHandler)}
-	p, _ := wantedProfile(cat, set, "")
+	p, _ := wantedProfile(cat, set, "", true)
 
 	// Telegram is down for the English part: the parts before it are kept,
 	// and the rest is tried at the next refresh.
@@ -515,7 +516,7 @@ func photoSync(t *testing.T, set *settings.Store) (*profileSync, *fakeProfileAPI
 	api.me = profileBotID
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler), botID: profileBotID, photo: core.get}
 	return s, api, memo, core, func(version string) error {
-		p, on := wantedProfile(cat, set, version)
+		p, on := wantedProfile(cat, set, version, true)
 		return s.sync(context.Background(), p, on)
 	}
 }
@@ -552,7 +553,7 @@ func TestProfileSyncPhoto(t *testing.T) {
 	// A restart: the version the bot set is remembered, with the identity
 	// Telegram gave the photo (its largest size's).
 	s2 := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler), botID: profileBotID, photo: core.get}
-	p, _ := wantedProfile(i18n.MustLoad(), set, "v1")
+	p, _ := wantedProfile(i18n.MustLoad(), set, "v1", true)
 	if err := s2.sync(context.Background(), p, true); err != nil {
 		t.Fatal(err)
 	}
@@ -830,5 +831,22 @@ func TestProfileSyncPhotoNeverRemovesBlindly(t *testing.T) {
 	mustSync(t, sync, "")
 	if got := api.take(); len(got) != 0 || api.photo != "jpeg-2" || strings.Contains(memo.v, `"photo`) {
 		t.Fatalf("removed without its identity (memo %s): %v", memo.v, got)
+	}
+}
+
+// The vendor credit is in every language's about text, and gone under a
+// white label license.
+func TestWantedProfileVendorCredit(t *testing.T) {
+	cat, set := i18n.MustLoad(), settings.New()
+	for _, white := range []bool{false, true} {
+		p, _ := wantedProfile(cat, set, "", white)
+		for code, l := range p.Langs {
+			if got := strings.Contains(l.About, "Made by TECSO-DEV"); got == white {
+				t.Fatalf("white label %v, language %q: about %q", white, code, l.About)
+			}
+			if n := utf8.RuneCountInString(l.About); n > 120 {
+				t.Fatalf("language %q: about is %d characters, Telegram takes 120", code, n)
+			}
+		}
 	}
 }

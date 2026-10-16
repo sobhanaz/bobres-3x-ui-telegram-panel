@@ -93,3 +93,16 @@ func TestBotPhotoOverGRPC(t *testing.T) {
 		t.Fatalf("version after the removal: %q", v)
 	}
 }
+
+// Settings say whether the license includes white label, for the bot's about
+// text; without a license (a fresh install) the vendor credit shows.
+func TestSettingsWhiteLabelIsOffWithoutALicense(t *testing.T) {
+	f := newFixture(t)
+	s, err := f.client(t, botToken).GetSettings(context.Background(), &corev1.GetSettingsRequest{})
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if s.GetWhiteLabel() {
+		t.Fatal("white label without a license")
+	}
+}
