@@ -8,12 +8,6 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-### Bot
-- A daily sales summary for the owner (or every owner and admin, by Recipients): once a day, after an hour you choose,
-  yesterday's revenue per currency, orders (new and renewals), refunds, wallet top-ups, new customers and free trials,
-  in Persian or English. Off by default; switch it on with `notify.daily_summary` and set the hour with
-  `notify.daily_summary_hour` (Settings, Notifications). It is sent exactly once per day, also across restarts.
-
 ### Dashboard
 - Reports: which provider paid each order. The Paid-with table splits gateway and staff-approved sales by provider
   (Zarinpal, Stars, automatic USDT, card to card, crypto). Orders paid before this change show "provider not recorded"
@@ -32,12 +26,12 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   risk (ended, still inside the grace period), per day, week or month in both calendars. Trials, unlimited services
   and pending renewals are not counted. In the summary CSV the people rows gain `churned_services`,
   `churned_customers` and `at_risk_services` as the last three columns. The API gains `churn_grace_days` (0 to 90,
-  default 7). Migration core 00019 adds an index on `subscriptions.expires_at`.
+  default 7). Migration core 00020 adds an index on `subscriptions.expires_at`.
 - Branded subscription page: each service has a page at `/sub/<token>` under the store's own brand: usage and days
   left, the subscription link and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box (the link
   schemes are not yet verified on real devices), and a Renew button that opens the bot. Server-rendered with no
   JavaScript, in Persian and English, no personal data, an unguessable 128-bit address that can be regenerated from
-  the dashboard. New settings `branding.sub_page.enabled` and `branding.bot_username`. Migration core 00020.
+  the dashboard. New settings `branding.sub_page.enabled` and `branding.bot_username`. Migration core 00021.
 - IDPay and NextPay, two more Iranian card gateways built like Zarinpal: an API key in Payment gateways (write-only,
   encrypted; IDPay has a sandbox outside prod), callbacks at `/webhooks/idpay` and `/webhooks/nextpay` that are never
   trusted (every payment is settled by the gateway's verify call, with an amount check; a repeated callback changes
@@ -66,7 +60,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - A plan can name which inbounds of each 3x-ui server its customers are attached to. With no choice, nothing changes:
   the client goes on every inbound that has "attach" on. An explicit choice wins over the attach switch; if a chosen
   inbound is gone from the panel the purchase ends as `provision_failed` with a clear reason and the usual alert. The
-  plan editor lists the inbounds of each chosen server and flags one that disappeared. Core migration 00022
+  plan editor lists the inbounds of each chosen server and flags one that disappeared. Core migration 00023
   (`core.plan_inbounds`); `Plan` and `AdminUpsertPlan` carry the selection, and the provisioner's `CreateClient` takes
   it.
 
@@ -87,10 +81,76 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### API
 - `SubscriptionLinks` has `page_url` (field 4); the bot's "service ready" message uses it for an Open page button.
-- New event `sales.daily_summary.v1` and two settings, `notify.daily_summary` and `notify.daily_summary_hour`; no
-  migration.
 - `order.paid.v1` has an optional `provider`; `/reports/methods` rows have a `provider` field; `orders.csv` has a new
   last column `provider`.
+
+## [0.3.0] — 2026-10-14
+
+The installer and the command line, made clear and professional.
+
+### Installer
+- The installer has a new look. `install.sh`, `bobres install`, `bobres update` and `bobres menu` start with the
+  BOBRES banner (the beaver, the version, the tagline, `© 2026 BOBRES, all rights reserved`, `Made by TECSO-DEV`, the
+  license summary and the links), and the install shows one progress bar from 0 to 100% that continues from `install.sh` into
+  `bobres install`: the percent is real (steps and images or services done), never goes down and reaches 100% only
+  when the install is finished. Each step ends with a line that says OK, a warning or a failure and how long it took.
+  `bobres version`, `bobres help`, `bobres status`, `bobres doctor` and the menu got the same colors and marks on a
+  terminal.
+- When the output is a pipe, a log, `NO_COLOR` or a dumb terminal (or with `--plain` or `BOBRES_PLAIN=1`) the installer
+  prints plain ASCII lines like `[ 42%] Step 6/13: Pulling images`, with no colors and no redrawing. `--no-banner`
+  or `BOBRES_NO_BANNER=1` leave the banner out. Commands whose output other programs read are unchanged.
+- New command `bobres about`: the version, commit, license and copyright, the vendor license key's fingerprint, the
+  store installed on this server and the documentation, support and security links in one place.
+- What Docker's installer, apt and `docker compose` print no longer fills the screen: it goes to
+  `/var/log/bobres-install.log`, and a failure shows the last lines and what to do. The install ends with a
+  "BOBRES is ready" card: the address, how to log in, the health of every service, the license (the 30-day trial and
+  its days left), three next steps (the first is to send /start to your bot, which makes you the owner) and the
+  links.
+- The wizard now asks only what has no safe default: the domain, your Telegram id, the bot token and, optionally, a
+  3x-ui panel. The S3 backup questions and the hardening questions are gone (S3 stays available as flags, and the
+  summary says how); a panel on the same server needs no question either. `--domain` and `--admin-id` can also come
+  from `BOBRES_DOMAIN` and `BOBRES_ADMIN_TELEGRAM_ID`.
+- The server is hardened by itself: the firewall (SSH, 80, 443), fail2ban for SSH, automatic security updates and a
+  swap file on a small server, one line each. A step that is not safe (the SSH port not found, 3x-ui or another
+  service on this server) is skipped with a warning and the command to run. `--no-harden` skips it all and
+  `--ask-harden` brings back the questions. The installer never changes `sshd_config`, SSH password login or root
+  login, and never restarts sshd.
+- The 3x-ui panel is checked while you answer, before anything is written: it must be reachable (with the reason
+  when it is not) and accept the API token (a version outside 3.8.5 to 3.9.0 is noted and used anyway). A refused token says what to do
+  ("In 3x-ui open Settings, then API tokens (Security)...") and asks again; before, the install said everything was
+  fine and the panel refused the token later.
+- The install keeps going if your SSH connection drops, and you can follow it with
+  `tail -f /var/log/bobres-install.log`. `sudo bobres admin link` before the owner has sent /start to the bot now says
+  "Open @yourbot in Telegram and send /start once, then run this again."
+
+## [0.2.1] — 2026-10-14
+
+The daily sales summary, the second half of the sales reports.
+
+### Bot
+- A daily sales summary for the owner and admins, once a day in Telegram: yesterday's revenue per currency (never added
+  together) with the change from the day before, paid orders, refunds, wallet top-ups, new customers and free trials, in
+  Persian (Jalali date) or English. Payments staff rejected and failed gateway payments are listed only when there were
+  some, and a day with no sales still gets a one-line message so you can see it is working. It is off until you turn it
+  on and is queued once a day even if the server restarts (the bot sends each message at least once: a bot that is killed
+  at the wrong moment can send one again). If the server was down at that time it is sent when it is back, never once for
+  each missed day, and the bot drops a summary it could not send within a day. Turned on after its time of day, it starts
+  the next day. A summary is not read before 00:02, so a purchase made just before midnight is in it; one that fails is
+  tried again after 5, 10 and 15 minutes and given up after eight tries; a recipient Telegram refuses for good does not
+  hold up the other messages; someone who stops being an owner or admin before the bot sends gets nothing; the change
+  from the day before reads "about the same" under half a percent, never "down 100%" on a day with sales, and "up more
+  than 999%" past that. If you change the store's time zone, a sale around the change can be in two summaries or in none,
+  and the log says so ([docs/14-reports.md](docs/14-reports.md#the-daily-summary-in-telegram)).
+
+### Dashboard
+- Settings has a "Sales summary" card: a switch for the daily summary and the time of day it is sent (09:00 by default,
+  in the store's time zone). The Reports page says whether the summary is on and links to those settings.
+
+### API
+- `GET /api/v1/reports/daily-summary` (`reports.read`) answers whether the daily summary is on, its time and the time
+  zone. The settings `reports.daily_summary` and `reports.daily_summary_time` are in the settings API and the bot's
+  `/set`. Core publishes `report.daily_summary.v1` to the bot, one event for each recipient. Migration 00019 adds a
+  small table, `daily_summary_claims`, that remembers which day was sent.
 
 ## [0.2.0] — 2026-10-14
 
@@ -342,7 +402,9 @@ pull requests #13 to #48. Release candidates 0.1.0-rc.1 to rc.4 came first; rc.4
 - The legal review, the brand checks and the prices are open.
 - The English dashboard texts do not handle plurals yet ("1 days", "1 services on 1 servers"). The Persian ones are fine. Fixed in 0.1.1.
 
-[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.3.0
+[0.2.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.1
 [0.2.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.2.0
 [0.1.1]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.1.0

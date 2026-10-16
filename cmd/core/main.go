@@ -57,6 +57,10 @@ func main() {
 	os.Exit(app.Run("core", os.Args[1:], setup))
 }
 
+// exitNotStaff is login-link's exit status for a Telegram id that is not an
+// active staff member (yet).
+const exitNotStaff = 3
+
 // loginLink prints a one-time dashboard login link for the owner, or for the
 // staff member with the given Telegram id: the way in when the bot is down.
 // `bobres admin link` runs it inside the core container.
@@ -100,8 +104,10 @@ func loginLink(args []string) int {
 	}
 	token, exp, err := dom.CreateLoginLink(ctx, tg)
 	if errors.Is(err, domain.ErrForbidden) {
-		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member (the owner must have started the bot once; to skip the bot, run: bobres admin password)\n", tg)
-		return 1
+		// Exit 3 is what bobres admin link turns into "open the bot and send /start"
+		// (it knows the bot's name; core does not).
+		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member yet: the owner becomes staff by sending /start to the bot once (or run: bobres admin password)\n", tg)
+		return exitNotStaff
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create link:", err)
@@ -248,9 +254,10 @@ func setup(rt *app.Runtime) error {
 	// goes wrong and when it is fixed (system.alert.v1).
 	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups, TLS: tlsMgr}
 	rt.Go("watchdog", dom.NewWatchdog(watch, rt.Log).Run)
-	// Yesterday's sales go to the staff once a day when notify.daily_summary
-	// is on (sales.daily_summary.v1).
-	rt.Go("daily-summary", dom.NewDailySummaryWorker(rt.Log).Run)
+	// The daily sales summary (off until the store turns it on): once a local
+	// day, yesterday's sales go to the staff who hold reports.read (the
+	// dashboard's permission table says who) as report.daily_summary.v1.
+	rt.Go("daily-summary", dom.NewDailySummary(mayReadReports, rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).
@@ -276,3 +283,8 @@ func setup(rt *app.Runtime) error {
 	eventsv1.RegisterEventFeedServiceServer(gs, eventbus.NewFeedServer(eventbus.NewFeed(st.DB(), "outbox_core")))
 	return rt.ServeGRPC(cfg.GRPCAddr, gs)
 }
+
+// mayReadReports says whether a staff role holds reports.read: the daily sales
+// summary goes only to those roles. The dashboard's permission table decides,
+// so a change there is a change of who is told.
+func mayReadReports(role string) bool { return web.Allowed(role, web.PermReportsRead) }

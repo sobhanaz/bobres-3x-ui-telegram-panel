@@ -254,7 +254,7 @@ func groupOf(key string) string {
 		return "sub"
 	case "plans":
 		return "plan"
-	case "backup", "alert": // sent to staff only, beside the admin alerts
+	case "backup", "alert", "report": // sent to staff only, beside the admin alerts
 		return "admin"
 	}
 	return first

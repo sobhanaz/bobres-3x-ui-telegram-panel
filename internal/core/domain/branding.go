@@ -69,8 +69,8 @@ func (s *Service) RemoveBotPhoto(ctx context.Context, actor *store.User) error {
 }
 
 // botPhotoDefaultMark records that the default bot photo was offered once.
-// Like dailySummaryMark it is internal state with no SettingSpec, so the
-// dashboard never lists or edits it.
+// It is internal state with no SettingSpec, so the dashboard never lists or
+// edits it.
 const botPhotoDefaultMark = "state.bot_photo.default_applied"
 
 // EnsureDefaultBotPhoto gives a new store the BOBRES logo as the bot's

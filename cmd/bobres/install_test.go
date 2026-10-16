@@ -389,32 +389,29 @@ func TestInteractivePrompts(t *testing.T) {
 }
 
 // A panel on the same server, typed as the owner knows it (localhost), is
-// rewritten to the address the containers can reach.
+// rewritten to the address the containers can reach, and a plain-http panel on
+// a private address is a private panel: neither is asked about.
 func TestInteractivePanelOnThisServer(t *testing.T) {
 	for _, c := range []struct {
-		typed, answer, wantURL, wantPrivate string
+		typed, wantURL, wantPrivate string
 	}{
-		{"http://127.0.0.1:2053/abc", "", "http://host.docker.internal:2053/abc", "true"},
-		{"http://localhost:2053/abc", "n", "", ""}, // declined: refused by validation, nothing written
-		{"http://10.0.0.5:2053/abc", "y", "http://10.0.0.5:2053/abc", "true"},
-		{"https://xui.example.com/abc", "", "https://xui.example.com/abc", "false"}, // not asked
+		{"http://127.0.0.1:2053/abc", "http://host.docker.internal:2053/abc", "true"},
+		{"http://localhost:2053/abc", "http://host.docker.internal:2053/abc", "true"},
+		{"http://10.0.0.5:2053/abc", "http://10.0.0.5:2053/abc", "true"},
+		{"https://xui.example.com/abc", "https://xui.example.com/abc", "false"},
+		{"http://xui.example.com/abc", "", ""}, // a public name over plain http: refused before writing
 	} {
 		dir := t.TempDir()
-		answers := "panel.example.com\n4242\n" + goodBotToken + "\n" + c.typed + "\n"
-		if !strings.HasPrefix(c.typed, "https") {
-			answers += c.answer + "\n"
-		}
-		answers += "paneltoken\n"
-		ins, out, errOut := testInstaller(answers, nil, nil)
+		ins, out, errOut := testInstaller("panel.example.com\n4242\n"+goodBotToken+"\n"+c.typed+"\npaneltoken\n", nil, nil)
 		code := ins.install([]string{"--dir", dir, "--no-start"})
 		env, written, _ := readEnv(filepath.Join(dir, ".env"))
 		if c.wantURL == "" {
 			if code == 0 || written {
-				t.Fatalf("%s declined must be refused before writing: %d %s", c.typed, code, errOut)
+				t.Fatalf("%s must be refused before writing: %d %s", c.typed, code, errOut)
 			}
 			continue
 		}
-		if code != 0 || env["BOBRES_XUI_URL"] != c.wantURL || env["BOBRES_XUI_ALLOW_PRIVATE"] != c.wantPrivate {
+		if code != 0 || env["BOBRES_XUI_URL"] != c.wantURL || env["BOBRES_XUI_ALLOW_PRIVATE"] != c.wantPrivate || strings.Contains(out.String(), "[Y/n]") {
 			t.Fatalf("%s: %d url=%q private=%q\n%s%s", c.typed, code, env["BOBRES_XUI_URL"], env["BOBRES_XUI_ALLOW_PRIVATE"], out, errOut)
 		}
 	}
@@ -581,7 +578,7 @@ func TestBackupsFollowTheImageVersion(t *testing.T) {
 		t.Fatalf("pinned old version: profiles %q\n%s", env["COMPOSE_PROFILES"], out)
 	}
 	for _, c := range docker.calls {
-		if contains(c, "exec") && !contains(c, "admin-password") {
+		if contains(c, "exec") && !contains(c, "license") && !contains(c, "admin-password") { // the summary reads the license
 			t.Fatalf("backup role created without the backup service: %v", c)
 		}
 	}
@@ -716,7 +713,7 @@ func TestSummaryWithoutPanel(t *testing.T) {
 		t.Fatalf("summary: %s", out)
 	}
 	// the bot sets its own photo from the dashboard: the summary says where to upload it
-	if !strings.Contains(out.String(), "Bot photo:          the BOBRES logo is set; to use your own, upload it in the dashboard: Branding & texts > Store > Telegram bot") ||
+	if !strings.Contains(out.String(), "The bot photo is the BOBRES logo; to use your own, upload it in the dashboard: Branding & texts > Store > Telegram bot") ||
 		strings.Contains(out.String(), "/setuserpic") {
 		t.Fatalf("summary without the bot photo hint: %s", out)
 	}
@@ -932,6 +929,15 @@ func TestEnvRewriteKeepsComments(t *testing.T) {
 	}
 }
 
+func anyCall(calls [][]string, word string) bool {
+	for _, c := range calls {
+		if contains(c, word) {
+			return true
+		}
+	}
+	return false
+}
+
 // A fresh install issues the owner's dashboard login once the stack is up and
 // prints it in the summary, so no Telegram step is needed; the password goes
 // to the terminal only.
@@ -952,9 +958,12 @@ func TestFreshInstallIssuesTheOwnerLogin(t *testing.T) {
 	if strings.Count(out.String(), "Kq7mWz3NpR9xTv2H") != 1 || strings.Contains(errOut.String(), "Kq7mWz3NpR9xTv2H") {
 		t.Errorf("the password must appear once, on stdout only:\n%s\n%s", out, errOut)
 	}
-	last := docker.calls[len(docker.calls)-1]
-	if !strings.HasSuffix(strings.Join(last, " "), "exec -T core /app admin-password") {
-		t.Errorf("last call: %v", last)
+	issued := false
+	for _, c := range docker.calls {
+		issued = issued || strings.HasSuffix(strings.Join(c, " "), "exec -T core /app admin-password")
+	}
+	if !issued {
+		t.Errorf("no admin-password call: %v", docker.calls)
 	}
 	// Not in any file the install wrote.
 	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { //nolint:errcheck // a test scan
@@ -995,7 +1004,7 @@ func TestFreshInstallIssuesTheOwnerLogin(t *testing.T) {
 	docker = &fakeDocker{health: []string{healthy}}
 	ins, out, _ = testInstaller("", secrets, docker)
 	ins.quiet = true
-	if code := ins.install(baseArgs(t.TempDir())); code != 0 || contains(docker.calls[len(docker.calls)-1], "admin-password") ||
+	if code := ins.install(baseArgs(t.TempDir())); code != 0 || anyCall(docker.calls, "admin-password") ||
 		strings.Contains(out.String(), "Password:") {
 		t.Fatalf("quiet run: %d\n%s", code, out)
 	}

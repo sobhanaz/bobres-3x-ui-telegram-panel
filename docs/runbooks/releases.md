@@ -82,7 +82,16 @@ bytes, so an old release cannot be replayed to a server forever. The flip side: 
 
 Running stores are not affected: nothing is checked at run time.
 
-A quiet stable channel therefore needs a re-sign before day 45: either publish a patch release (the normal way, if
+**Automatic re-sign.** `.github/workflows/resign.yml` does the re-sign by itself. It runs on the 1st and the 16th of each
+month, takes the latest stable release, checks its files through the old signature, and, when fewer than 25 days are
+left, signs them again with the release key (the `RELEASE_SIGNING_KEY` secret and the `RELEASE_KEY_ID` variable) and replaces
+only `checksums.txt`, its signature and `keys.txt*` on the release. A failed run is emailed to the repository owner by
+GitHub, and the next run comes 15 days later, still inside the 45 days. To rehearse it: Actions, "Re-sign the latest
+release", Run workflow (it is a dry run by default: it verifies and signs but uploads nothing; tick "force" to rehearse
+while the signature is fresh). GitHub disables scheduled workflows in a repository with no activity for 60 days: any
+push or release counts, so check the Actions tab after a long quiet period.
+
+The manual way below stays as the fallback (a failed run, a revoked key). A quiet stable channel needs a re-sign before day 45: either publish a patch release (the normal way, if
 there is anything to ship), or re-sign the current one. To re-sign, on the machine that holds the release key
 (`~/.bobres-secrets/release/`), from a checkout of the repository:
 

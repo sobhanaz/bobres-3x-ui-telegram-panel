@@ -21,7 +21,7 @@ code, one button per VPN app, and a "Renew" button that opens the bot.
 ## The address
 
 `page_token` is 32 lowercase hex characters (128 bits from the system random generator), unique per service, stored
-in `core.subscriptions.page_token` (migration core 00020; services that existed get one at the upgrade). It is not
+in `core.subscriptions.page_token` (migration core 00021; services that existed get one at the upgrade). It is not
 derived from anything else, so knowing a service id, a client e-mail or a panel sub id tells nobody the page address.
 
 The page answers the **same 404** (same body and headers) for a token that is malformed, unknown, pending or deleted,

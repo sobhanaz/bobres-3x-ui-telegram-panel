@@ -42,7 +42,7 @@ func TestReportsIndexesMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := upTo(ctx, dsn, "core", 18); err != nil { // not Up: later migrations add indexes of their own
+	if err := upTo(ctx, dsn, "core", 18); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
 	if def := indexDef("outbox_core_reports_idx"); !strings.Contains(def, "(topic, created_at)") || !strings.Contains(def, "order.paid.v1") ||

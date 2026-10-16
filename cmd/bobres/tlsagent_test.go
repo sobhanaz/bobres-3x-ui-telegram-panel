@@ -325,7 +325,7 @@ func TestInstallTurnsTheTLSProfileWithTheVersion(t *testing.T) {
 	if code := ins.install(append(baseArgs(dir), "--version", "0.1.0-rc.2")); code != 0 {
 		t.Fatalf("rc.2: %d %s", code, errOut)
 	}
-	if !strings.Contains(out.String(), "See it with  sudo bobres ssl status") {
+	if !strings.Contains(out.String(), "sudo bobres ssl status") {
 		t.Errorf("rc.2: the summary does not point to bobres ssl:\n%s", out)
 	}
 	env, _, _ := readEnv(filepath.Join(dir, ".env"))

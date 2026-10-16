@@ -1,8 +1,10 @@
 # 14 - Sales reports
 
-The Reports section of the dashboard (`/admin/reports`) and the API behind it. The page and the API are read-only: they write
-no table and send no message (the optional [daily summary](#the-daily-summary-in-telegram) is a separate worker). They answer "what did the store sell, in which currency, to whom and how was it paid" for any range
-of days, from data core already keeps: the ledger, the orders and core's own event log (`outbox_core`).
+The Reports section of the dashboard (`/admin/reports`) and the API behind it. It is read-only: it writes no table and
+sends no message. It answers "what did the store sell, in which currency, to whom and how was it paid" for any range
+of days, from data core already keeps: the ledger, the orders and core's own event log (`outbox_core`). The one thing
+beside it that does send a message and write a row is [the daily summary in Telegram](#the-daily-summary-in-telegram),
+which is off until the store turns it on.
 
 - Who: staff with the `reports.read` permission. Owner and admin have it; support has not, and a reseller is not staff
   at all. The menu hides the page without it, and every report and CSV endpoint answers 403. Support does not see
@@ -103,39 +105,105 @@ All of these read `core.ledger_entries` (append-only), `core.orders` and `core.o
 
 ## The daily summary in Telegram
 
-Once a day core can message the staff with yesterday's numbers, the same ones the Reports page shows for that day.
+Once a local day the bot messages yesterday's sales to the staff who may read the reports. It is **off until the
+store turns it on**, on the Settings page (card "Sales summary") or with `/set` in the bot:
 
-- **Switch and hour.** `notify.daily_summary` (Settings, group Notifications; off by default) and
-  `notify.daily_summary_hour` (0 to 23, default 9). The day is the store's day, in `general.timezone` (else
-  `BOBRES_TIMEZONE`, else Asia/Tehran), the same zone the reports use.
-- **When.** A core worker checks every minute. After the hour it publishes `sales.daily_summary.v1` for the day before.
-  The date of the last day published is kept in `core.settings` under `state.daily_summary.last` (internal state, not a
-  setting the dashboard shows) and is written in the same transaction as the event, under an advisory lock, so a day
-  goes out exactly once, also after a restart or with two cores running. If core was down at the hour, the summary goes
-  out when it is back; days missed are not made up, only the last finished day is sent. Turning the switch on in the
-  afternoon sends yesterday's summary at once.
-- **Content.** The date (Jalali in Persian), then one block per currency that had revenue, orders, refunds or wallet
-  top-ups: revenue, orders (new and renewals), refunds with the net, and top-ups. Currencies are never added together.
-  Then the new customers and free trials of the day. A day with no paid orders is still sent ("No paid orders.").
-- **To whom.** The staff alert recipients (`notify.recipients`: the owner, or every owner and admin; never support
-  staff, who do not hold `reports.read`), each in their language.
+| Setting | Default | Meaning |
+|---|---|---|
+| `reports.daily_summary` | `false` | `true` turns the summary on |
+| `reports.daily_summary_time` | `09:00` | `HH:MM`, 24-hour, in the store's time zone (typed as `9:30` or in Persian digits it is stored as `09:30`; anything else is refused) |
 
-## Ledger and audit CSV files
+The Reports page says under its hint whether the summary is on, at what time and in which zone, and links to the
+switch for staff who may change settings (`GET /api/v1/reports/daily-summary`, `reports.read`: `{enabled, time, tz}`).
 
-`ledger.csv` and `audit.csv` use the same export path as the reports files (`internal/core/web/csvexport.go`):
-
-- Nothing is sent until the first data row exists. A failure before that (for example it runs out of time) is an error
-  answer (503 "the export took too long: narrow the filter or choose a shorter range"), never a header-only file. If
-  nothing matches, the file has its header alone.
-- A failure after rows went out ends the file with `# export incomplete: <reason>`.
-- An export may run for at most the export window (60 s by default); each database statement is read-only and capped
-  at the same limit.
-- Ledger, audit and report exports share two slots; a third request while two run gets 429 with `Retry-After: 5`.
-- Each export writes its audit entry (`export.ledger`, `export.audit`) when it ends, with the filters, plus `outcome`
-  (`complete`, `incomplete`, `failed`) and `rows`. An export refused with 429 is not recorded. So `audit.csv` does
-  not list its own export; the next one does.
-- Text cells that could run as a formula are quoted with a leading `'`, also text that starts with spaces and then
-  `=`, `+`, `-` or `@`. Both files still stop at 100,000 rows and add the "more entries match" note.
+- **What it says.** One local day, **yesterday**, from the same function as the Reports page (`SalesReport`, over
+  yesterday and the day before, no SQL of its own). Per currency, in a block of its own (amounts of different
+  currencies are never added): revenue and, next to it, the change from the day before in whole percent (up, down,
+  "the same" when the two amounts are equal, "about the same" when they differ by under half a percent, or "new" when
+  the day before had no sales in that currency; nothing when neither had). The words never say more than the amounts: a
+  day that had sales is at most "down 99%" ("down 100%" is a day with none), and a rise past 999% is "up more than
+  999%", so a day after almost nothing does not read "up 500000000%". Then paid orders (new,
+  renewals, traffic packages), refunds (count and amount), net after refunds, wallet top-ups and, **only when there are
+  some**, payments staff rejected and failed or expired gateway payments. Then the people (new customers, free trials)
+  and the time zone the day was read in. A currency that did nothing that day (not even a refund, a top-up or a
+  failed payment) is left out. A day with nothing at all to report (no sale, refund, top-up, rejected or failed
+  payment, new customer or trial) is **one line**, "No sales on 13 Oct 2026.", so the owner sees the job is alive. The
+  message is in each person's own language, Persian digits and the Jalali date in Persian, and money as the bot shows it
+  everywhere. It holds no names, customers, plans, order or payment ids.
+- **Who.** Active staff who hold `reports.read` (owner and admin, as the dashboard's permission table says: core is
+  given that table, it does not copy it) and have a Telegram account, each in their own language. Support staff,
+  customers, banned staff and anyone demoted or removed **before the day is claimed** get nothing: the list is read in
+  the claim's own transaction. The bot checks again before it sends, because an event can wait (the bot or its consumer
+  down, a retry): when it knows the staff list and the person is no longer on it, or is on it as support staff, the
+  event is dropped and logged, so someone demoted, banned or removed after the claim does not get the revenue figures
+  when delivery resumes (the bot does not have the permission table: it knows only that support staff never hold
+  `reports.read`; a staff member added in the last minutes, before the bot refreshed its list, misses that day's
+  message). A staff list the bot does not know yet decides nothing. It does not follow `notify.recipients`, which is for
+  alerts. With nobody to tell, nothing is claimed, so whoever becomes an admin later the same day still gets it.
+- **When.** Core's worker looks at the clock once a minute, in the store's time zone (the same chain as the reports:
+  `general.timezone`, else `BOBRES_TIMEZONE`, else Asia/Tehran; a value that is no zone is logged once and skipped).
+  It sends yesterday's summary when all three hold: the summary is on and was switched on **at or before the time
+  of day it is due**; the local clock has reached that time; and yesterday has no claim yet. The time is never read as
+  earlier than **00:02**, whatever the store chose (00:00 is read at 00:02): a purchase that began just before midnight
+  and commits a moment after it is dated the old day, and reading at 00:00 would leave it out of a summary the claim then
+  makes final. The Reports page keeps showing the time the store chose.
+- **Queued exactly once.** The claim is a row in `core.daily_summary_claims` (migration 00019: `day` primary key, `zone`,
+  `recipients`, `claimed_at`; `Down` drops it), keyed by the local date the summary is **about**, written in the
+  **same transaction** as the outbox events. A crash before the commit leaves neither (it is sent a minute later), one
+  after leaves both; a restart finds the claim; two workers at once or two core processes cannot both win
+  (`INSERT ... ON CONFLICT DO NOTHING`; the loser of a claim still open waits for it and gets it if it rolls back).
+  That is the **queueing**; delivery is **at least once**, as for every event (see Delivery).
+- **Catch-up.** Core down at the due time: the summary goes out as soon as it is back, the same local day, once. Core
+  down for a day or more: only **yesterday's** summary is sent when it is back, never one for each day it missed.
+  Switching the summary on after its time of day has passed does not make up for anything: the first summary is the next
+  day's (it is for the day it was switched on); switched on before that time it goes out today. Turning it off and on
+  again after the time works the same way, and saving the settings page again with the same values does not count as
+  switching it on. The bot adds its own limit (see Delivery): a summary it could not send within a day of its being
+  queued is dropped. Changing the time to a later one waits for it; to one that has already
+  passed it sends once, now, if today's was not sent yet; once sent, no change of the time sends it again.
+- **Daylight saving and clocks.** The comparison is of the local wall clock, so a time that does not exist on the day
+  clocks go forward (02:30 when they go from 02:00 to 03:00) is reached when they land on 03:00, and one that happens
+  twice (01:30 when they go back) is reached the first time and not again. The days that have 23 or 25 hours are
+  summed as whole local days, by the same date test as the reports. A clock set back never repeats a summary (the
+  claim); set back across midnight to a day whose summary was never sent, it sends that one, once. A clock set forward
+  sends the day it lands on, once. A **change of the store's time zone** moves the day edges and the local date, and the claim
+  is by local date, so around the change the summaries are not a clean cut: a sale can be in two summaries (Tehran sent
+  the 13th, the store moves to Auckland, whose 14th starts 9½ hours before Tehran's 13th ended) or in none (Auckland sent
+  the 14th, the store moves to Los Angeles before its 15th: the 14th is claimed, so Los Angeles's 14th is not sent, and a
+  sale between the end of Auckland's 14th and the start of Los Angeles's 15th is in no summary). No date is sent twice.
+  The worker logs a warning, with both zones, when it queues the first summary read in a zone other than the last
+  summary's; the Reports page has every day in the current zone to settle a figure.
+- **Failures.** A summary that cannot be made (the report hits its statement timeout on a big ledger, the database
+  is down, a time zone the database does not know) is not made again every minute until midnight: after a failed attempt
+  the worker waits 5 minutes, then 10, then 15 between attempts, and gives up on that day after 8 attempts (about an
+  hour and a half; one line at error level says so, and each failed attempt is a warning with its attempt number and
+  the wait).
+  The next day is a fresh start (yesterday's summary goes at the usual time), and so is a restart of core.
+- **Delivery.** Core publishes one `report.daily_summary.v1` event for each recipient (see
+  [02-events-and-apis.md](02-events-and-apis.md)); the bot turns it into the message. Delivery is **at least once**:
+  the bot applies a batch of up to 100 events and acknowledges it once, so a bot killed (SIGKILL, out of memory) after it
+  sent the summary and before the acknowledgement sends the same message again when it restarts, as for every notifier
+  event. The bot does not remember event ids, so it cannot tell. A recipient who blocked the bot is skipped (and marked,
+  as for any notification). The events of a feed are applied **in order** and a failing one is retried before the ones
+  behind it, so a failing recipient does hold up everything behind it (customers' subscription links and payment
+  confirmations too) until it is sent or dead-lettered. Therefore a refusal no retry can change (Telegram answers a
+  4xx about this chat or message other than a blocked bot, a flood limit, a refused token or a reply that is not
+  Telegram's: say `PEER_ID_INVALID` or "have no rights to send a message") is marked permanent and **dead-lettered at
+  once**, and only a failure that may pass (the network, a flood limit, a server error) is retried, with the consumer's
+  back-off, until its 20th failure dead-letters it. A summary the bot is asked to send more than a day after core queued
+  it is dropped and logged (a bot that was down for days sends the newest summary, not every day it missed, back to
+  back). The events are written once per day: there is no retry of the day itself.
+- **Tests.** `internal/core/domain/daily_summary_test.go` runs the worker with a fake clock (off by default, once a
+  day, restart, outage, a changed time, switching on after the time, saving the settings again, the two minutes after
+  midnight, a failing report and its back-off, time zones (and a change of zone, both ways), daylight saving days in
+  America/New_York, the figures against a model kept in Go values in two currencies, a quiet day, who is told, the
+  claim and the events in one transaction, two workers); `internal/core/store/daily_summary_test.go` the claim
+  (concurrent claimers, a claimer waiting for an open one, whatever the pool size) and the last zone;
+  `internal/migrate/core_daily_summary_test.go` the migration up, down and up;
+  `internal/bot/notify/daily_summary_test.go` the messages in both languages, the comparison's words, the delivery
+  with a recipient who blocked the bot, which failures are permanent (and, with a real consumer, that a refused
+  summary does not hold up the events behind it), a recipient who is no longer staff and a summary that waited too
+  long; `cmd/core/daily_summary_test.go` that the role test core is given is the dashboard's permission table.
 
 ## API
 
@@ -144,6 +212,7 @@ All under `/api/v1/reports`, `GET`, session cookie, permission `reports.read`. Q
 
 | Endpoint | Answer |
 |---|---|
+| `/daily-summary` | `{enabled, time, tz}`: whether the daily summary in Telegram is on, its time (`HH:MM`) and the store's zone (ignores the range) |
 | `/summary` | `{from, to, group, calendar, tz, churn_grace_days, currencies, buckets, totals}`. A bucket is `{date, partial, new_customers, trials, churned_services, churned_customers, at_risk, currencies}`; `currencies` maps each currency to `{revenue, refunds: {count, amount}, net, orders, new_orders, renewals, traffic_topups, topups: {count, amount}, rejected: {count, amount}, gateway_failed: {count, amount}, cancelled: {count, amount}}` (`rejected` is by staff, `gateway_failed` is the gateway line). `totals` has the same shape, summed bucket by bucket within each currency. |
 | `/plans` | `{from, to, tz, plans: [{plan_id, name: {fa, en}, currency, orders, revenue}]}` |
 | `/methods` | `{from, to, tz, methods: [{method, provider, currency, orders, revenue}]}`; `provider` is always there, empty for wallet, unknown and orders paid before it was recorded |
@@ -181,7 +250,10 @@ outcome: `complete`, `incomplete` (the file ended short) or `failed` (nothing wa
 
 ## Indexes
 
-Migration `00019_churn_index.sql` adds `subscriptions_expires_idx` (`expires_at` of the services that have an expiry and are not pending or deleted), which the churn queries read by range; `Down` drops it. A test fails if the planner stops using it.
+Migration `00019_daily_summary.sql` adds the summary's claim table and no index of its own; the reports are not touched
+by it.
+
+Migration `00020_churn_index.sql` adds `subscriptions_expires_idx` (`expires_at` of the services that have an expiry and are not pending or deleted), which the churn queries read by range; `Down` drops it. A test fails if the planner stops using it.
 
 Migration `00018_reports_indexes.sql` adds three partial indexes and nothing else: `outbox_core_reports_idx`
 (`topic, created_at` for the two event topics the reports read), `outbox_core_order_paid_idx` (the order id of each

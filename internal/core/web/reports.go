@@ -132,6 +132,18 @@ func (s *Server) reportSummary(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// reportDailySummary: GET /api/v1/reports/daily-summary, whether the daily sales
+// summary in Telegram is on, at what time (HH:MM) and in which time zone. The
+// Reports page says so and, for staff who may change settings, links to them.
+func (s *Server) reportDailySummary(w http.ResponseWriter, r *http.Request) {
+	st, err := s.cfg.Domain.DailySummaryStatus(r.Context())
+	if err != nil {
+		s.fail(w, "daily summary status", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": st.Enabled, "time": st.Time, "tz": st.Zone})
+}
+
 // reportPlans: GET /api/v1/reports/plans, the best-selling plans per currency.
 func (s *Server) reportPlans(w http.ResponseWriter, r *http.Request) {
 	rng, ok := s.reportRange(w, r)

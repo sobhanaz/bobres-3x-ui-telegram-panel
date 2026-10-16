@@ -25,9 +25,9 @@ const (
 	TicketClosed          = "ticket.closed.v1"
 	// SystemAlert: core's watchdog found a problem, or one was fixed.
 	SystemAlert = "system.alert.v1"
-	// SalesDailySummary: yesterday's sales for the owner (DailySummaryEvent),
-	// sent once a day when notify.daily_summary is on.
-	SalesDailySummary = "sales.daily_summary.v1"
+	// DailySummary: yesterday's sales for one staff member who may read the
+	// reports (DailySummaryEvent).
+	DailySummary = "report.daily_summary.v1"
 	// DepositUnmatched: USDT reached the store's TRON address but matched no
 	// automatic payment (DepositUnmatchedEvent); staff credit it by hand.
 	DepositUnmatched = "payment.deposit_unmatched.v1"
@@ -332,31 +332,53 @@ type SystemAlertEvent struct {
 	Repeat bool  `json:"repeat,omitempty"`
 }
 
-// DailySummaryEvent is one finished day of sales, read in the store's time
-// zone as the Reports page reads it (docs/14-reports.md). Money stays in its
-// own currency: Currencies has one entry for each currency with any number
-// that day, sorted by code, and the entries are never added together.
-// NewCustomers and Trials count people, so they have no currency. An empty
-// day is still sent (Currencies is empty, and so are the two counts).
+// DailySummaryFlow is how many things happened and the money they carried
+// (amount in the currency's smallest unit).
+type DailySummaryFlow struct {
+	Count  int64 `json:"count"`
+	Amount int64 `json:"amount"`
+}
+
+// DailySummaryCurrency is one currency's day. Amounts are integers in the
+// currency's smallest unit (Toman 0 decimals, USDT 6) and are never added
+// across currencies: each currency has its own entry.
+type DailySummaryCurrency struct {
+	Currency string `json:"currency"`
+	Revenue  int64  `json:"revenue"`
+	// PrevRevenue is the same currency's revenue the day before (0: none), for
+	// the comparison line.
+	PrevRevenue   int64            `json:"prev_revenue"`
+	Orders        int64            `json:"orders"` // paid orders; the three below split them
+	NewOrders     int64            `json:"new_orders"`
+	Renewals      int64            `json:"renewals"`
+	TrafficTopups int64            `json:"traffic_topups"`
+	Refunds       DailySummaryFlow `json:"refunds"`
+	Net           int64            `json:"net"` // revenue less refunds
+	Topups        DailySummaryFlow `json:"topups"`
+	// Rejected is payments staff rejected; GatewayFailed payments an automated
+	// gateway failed or let expire. The bot shows them only when they are not 0.
+	Rejected      DailySummaryFlow `json:"rejected"`
+	GatewayFailed DailySummaryFlow `json:"gateway_failed"`
+}
+
+// DailySummaryEvent: yesterday's sales (one store-local day) for one staff
+// member who holds reports.read and has a Telegram account. Core writes one
+// event for each such member in the same transaction that claims the day, so a
+// message that fails or is refused for one of them never holds up the others,
+// and a member who lost the permission before the claim gets none. The bot
+// sends it as it is: the figures are the sales report's for that day, with no
+// names, no customers and no order or payment ids.
+//
+// Currencies lists only those with something to report that day (none: a day
+// without sales, which the bot says in one line, unless people did something).
 type DailySummaryEvent struct {
-	Date         string                 `json:"date"` // the local day, "2006-01-02"
-	TZ           string                 `json:"tz"`   // the zone the day was read in
+	TelegramID int64  `json:"telegram_id"`
+	Language   string `json:"language"` // fa or en: the member's own
+	Date       string `json:"date"`     // the day summed up, "2026-10-13"
+	Zone       string `json:"zone"`     // the time zone Date was read in (IANA name)
+	// NewCustomers (whose first paid order was that day) and Trials (free
+	// trials started) count people, so they have no currency.
 	NewCustomers int64                  `json:"new_customers"`
 	Trials       int64                  `json:"trials"`
 	Currencies   []DailySummaryCurrency `json:"currencies,omitempty"`
-}
-
-// DailySummaryCurrency is one currency's numbers of a day, in minor units.
-// Revenue is what customers paid for orders, Net is Revenue less refunds.
-type DailySummaryCurrency struct {
-	Currency     string `json:"currency"`
-	Revenue      int64  `json:"revenue"`
-	Net          int64  `json:"net"`
-	Orders       int64  `json:"orders"`
-	NewOrders    int64  `json:"new_orders"`
-	Renewals     int64  `json:"renewals"`
-	Refunds      int64  `json:"refunds"` // how many
-	RefundAmount int64  `json:"refund_amount"`
-	Topups       int64  `json:"topups"` // how many
-	TopupAmount  int64  `json:"topup_amount"`
 }

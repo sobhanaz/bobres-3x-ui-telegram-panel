@@ -7,15 +7,15 @@ import (
 	"testing"
 )
 
-// 00020 on a store from before: every existing service gets its own page
+// 00021 on a store from before: every existing service gets its own page
 // token, no two alike; new rows get one by default; the format and
 // uniqueness are enforced; Down drops it and Up comes back.
 func TestSubPageMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 19); err != nil {
-		t.Fatalf("up to 19: %v", err)
+	if err := upTo(ctx, dsn, "core", 20); err != nil {
+		t.Fatalf("up to 20: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestSubPageMigration(t *testing.T) {
 		t.Error("a null token was accepted")
 	}
 
-	if err := downTo(ctx, dsn, "core", 19); err != nil {
+	if err := downTo(ctx, dsn, "core", 20); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var has bool

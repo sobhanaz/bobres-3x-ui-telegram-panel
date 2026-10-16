@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 )
@@ -42,6 +43,14 @@ func (o *ops) adminCmd(args []string) int {
 	}
 	cargs := append(composeArgs("exec", "-T", "core", "/app", "login-link"), fs.Args()...)
 	if err := o.stream(context.Background(), *dir, cargs...); err != nil {
+		var ec interface{ ExitCode() int }
+		if errors.As(err, &ec) && ec.ExitCode() == coreExitNotStaff {
+			// The owner becomes staff by starting the bot: say so, with the
+			// bot's name, and name the way that needs no Telegram.
+			fmt.Fprintln(o.errOut, notStaffAdvice(o.botName(context.Background(), *dir)))
+			fmt.Fprintln(o.errOut, "No Telegram at all? Use: bobres admin password")
+			return 1
+		}
 		fmt.Fprintf(o.errOut, "error: %v (is core running? bobres status)\n"+
 			"No Telegram, or the owner never started the bot? Use: bobres admin password\n", err)
 		return 1

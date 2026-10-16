@@ -26,10 +26,16 @@ func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 var stdout io.Writer = os.Stdout
 
 func run(args []string, out, errOut io.Writer) int {
+	// --plain and --no-banner are the same for every command.
+	args, uiOpts = stripUIFlags(args)
 	if len(args) == 0 && interactive(stdin, stdout) {
 		return menuCmd(nil, stdin, out, errOut)
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+		if line := compactBanner(out); line != "" {
+			fmt.Fprintln(out, line)
+			fmt.Fprintln(out)
+		}
 		usage(out)
 		return 0
 	}
@@ -38,8 +44,14 @@ func run(args []string, out, errOut io.Writer) int {
 		if len(args) > 1 && args[1] == "--images" {
 			return versionImages(out, errOut)
 		}
+		if line := compactBanner(out); line != "" {
+			fmt.Fprintln(out, line)
+			return 0
+		}
 		fmt.Fprintln(out, "bobres", version.Version)
 		return 0
+	case "about":
+		return aboutCmd(args[1:], out, errOut)
 	case "menu":
 		return menuCmd(args[1:], stdin, out, errOut)
 	case "doctor":
@@ -89,8 +101,22 @@ func run(args []string, out, errOut io.Writer) int {
 	}
 }
 
+// compactBanner is the one-line banner (the version and the copyright) for a
+// person at a terminal; "" when output goes anywhere else or the banner is off,
+// where the version and the help text keep their plain form.
+func compactBanner(out io.Writer) string {
+	t := detectUI(out, os.Getenv)
+	if !t.tty || bannerOff(os.Getenv) {
+		return ""
+	}
+	return compactLine(t, currentBuild())
+}
+
 func usage(w io.Writer) {
-	fmt.Fprint(w, `bobres - install and operate your BOBRES store
+	fmt.Fprint(w, paintUsage(detectUI(w, os.Getenv), usageText))
+}
+
+const usageText = `bobres - install and operate your BOBRES store
 
 Usage: bobres [command] [flags]
 
@@ -98,7 +124,7 @@ Run bobres without a command in a terminal to open the management menu.
 
 Available now:
   menu       The management menu (status, logs, start/stop, change settings...)
-  install    Set up BOBRES on this server (asks for what it needs; see install -h)
+  install    Set up BOBRES on this server (asks only what has no safe default; see install -h)
   status     Show the services, version and disk (exit 1 if something is down); --json for scripts
   logs       Show service logs: bobres logs [-f] [--tail N] [service...]
   start      Start the store and wait until it is healthy
@@ -123,10 +149,13 @@ Available now:
   support-bundle
              Write a redacted tar.gz for support into <dir> (versions, status, logs; no secrets)
   version    Print the version (--images: the image digests this release pins)
+  about      The version, license, copyright, vendor license key fingerprint and links
+
+Every command takes --plain (no colors, no redrawing; the same as BOBRES_PLAIN=1, NO_COLOR or
+a pipe) and --no-banner (BOBRES_NO_BANNER=1).
 
 Commands that work on an install take --dir (default: $BOBRES_DIR, else /opt/bobres).
-`)
-}
+`
 
 func doctorCmd(args []string, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
@@ -141,11 +170,25 @@ func doctorCmd(args []string, out, errOut io.Writer) int {
 		*domain = domainOfInstall(*dir)
 	}
 	results := doctorResults(*dir, *domain, *offline)
+	t := detectUI(out, os.Getenv)
 	for _, r := range results {
+		if t.fancy {
+			fmt.Fprintf(out, "  %s %-18s %s\n", t.mark(statusMark(r.Status)), r.Name, r.Detail)
+			continue
+		}
 		fmt.Fprintf(out, "%-5s %-18s %s\n", r.Status, r.Name, r.Detail)
 	}
 	pass, warn, fail, failed := Summarize(results)
-	fmt.Fprintf(out, "\n%d passed, %d warnings, %d failed\n", pass, warn, fail)
+	sum := fmt.Sprintf("%d passed, %d warnings, %d failed", pass, warn, fail)
+	switch {
+	case failed:
+		sum = t.paint(roleRed, sum)
+	case warn > 0:
+		sum = t.paint(roleBrown, sum)
+	default:
+		sum = t.paint(roleTeal, sum)
+	}
+	fmt.Fprintf(out, "\n%s\n", sum)
 	if failed {
 		return 1
 	}

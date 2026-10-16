@@ -22,7 +22,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [11-staging-run.md](11-staging-run.md) | Checklist for the first install on a real server, the last step before v0.1.0 |
 | [12-load-test.md](12-load-test.md) | Load test: numbers, limits, what to watch |
 | [13-license-server.md](13-license-server.md) | The vendor's license server (`licensesrv`): license keys, activation, daily refresh, revocation; the vendor's runbook |
-| [14-reports.md](14-reports.md) | Sales reports: what each number means in terms of the ledger, orders and events, currencies, time zone, CSV files, the `reports.read` permission and limits |
+| [14-reports.md](14-reports.md) | Sales reports: what each number means in terms of the ledger, orders and events, currencies, time zone, CSV files, the daily summary in Telegram, the `reports.read` permission and limits |
 | [15-subscription-page.md](15-subscription-page.md) | The branded subscription page `/sub/<token>`: what it shows and never shows, the page token, regenerating it, settings, limits, headers, and the app deep links that are not yet verified on devices |
 | [IDPay and NextPay](16-idpay-nextpay.md) | The two more Iranian gateways: how they work, setup, and what the owner must check by hand |
 | [17-mini-app.md](17-mini-app.md) | The Telegram Mini App store (`/app/`): setup with BotFather, how the bot verifies Telegram's init data for core, the `/api/mini/v1` calls, what it does not do, security and the checks that need a real Telegram |

@@ -39,6 +39,7 @@ type menu struct {
 	// upd runs update and rollback.
 	upd   *updater
 	color bool
+	ui    termUI
 	// quit ends the menu after an item: bobres itself was replaced.
 	quit bool
 }
@@ -77,8 +78,12 @@ func menuCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 		defer signal.Stop(c)
 		fn()
 	}
-	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		m.color = true
+	// The banner once, when a person is at the terminal; the menu's own header
+	// below it is drawn again for each choice.
+	ui := detectUI(out, os.Getenv)
+	m.color, m.ui = ui.fancy, ui
+	if ui.tty && !bannerOff(os.Getenv) {
+		printBanner(out, ui)
 	}
 	return m.loop()
 }
@@ -141,6 +146,7 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		return []menuItem{
 			{label: "Install BOBRES", run: func() { m.install(d, nil, false) }},
 			{label: "Check this server", run: func() { m.doctor(nil) }},
+			{label: "About BOBRES (version, license, links)", run: m.about, group: true},
 		}
 	}
 	return []menuItem{
@@ -166,8 +172,13 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Check everything (server, settings, services, bot, backups, license)", run: func() { m.ops.checkCmd(d) }},
 		{label: "HTTPS certificate", run: func() { m.https(env) }, group: true},
 		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }, group: true},
+		{label: "About BOBRES (version, license, links)", run: m.about, group: true},
 	}
 }
+
+// about is the About item: the information of bobres about (the menu has shown
+// the banner already).
+func (m *menu) about() { printAbout(m.out, m.dir, false) }
 
 // https is the HTTPS certificate item: a short menu of its own whose choices
 // are the commands of bobres ssl. One choice runs, then the main menu is back.
@@ -523,12 +534,17 @@ func (m *menu) confirm(prompt string) bool {
 
 func (m *menu) rule() { fmt.Fprintln(m.out, "  "+strings.Repeat("─", 58)) }
 
-// paint wraps s in an ANSI style when the output is a terminal.
+// paint wraps s in an ANSI style when the output is a terminal that takes color.
 func (m *menu) paint(code, s string) string {
 	if !m.color {
 		return s
 	}
-	return "\033[" + code + "m" + s + "\033[0m"
+	// The menu's few styles are the palette's: green is teal, yellow is brown.
+	r, ok := map[string]role{"32": roleTeal, "1": roleBold, "31": roleRed, "33": roleBrown}[code]
+	if !ok || m.ui.color == colorNone {
+		return "\033[" + code + "m" + s + "\033[0m"
+	}
+	return m.ui.paint(r, s)
 }
 
 // mask shows enough of a secret to recognise it: a bot token keeps its public

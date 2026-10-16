@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-// 00021 adds staff_credentials.must_change (false for every existing login)
+// 00022 adds staff_credentials.must_change (false for every existing login)
 // and the restricted session method 'password_initial'. Down ends restricted
 // sessions and removes both.
 func TestCredentialsInitialMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 20); err != nil {
-		t.Fatalf("up to 20: %v", err)
+	if err := upTo(ctx, dsn, "core", 21); err != nil {
+		t.Fatalf("up to 21: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -37,7 +37,7 @@ func TestCredentialsInitialMigration(t *testing.T) {
 		return err
 	}
 	if err := session("\\x01", "password_initial"); err == nil {
-		t.Fatal("a restricted session was accepted before 00021")
+		t.Fatal("a restricted session was accepted before 00022")
 	}
 
 	if err := Up(ctx, dsn, "core"); err != nil {
@@ -56,7 +56,7 @@ func TestCredentialsInitialMigration(t *testing.T) {
 		t.Fatal("an unknown session method was accepted")
 	}
 
-	if err := downTo(ctx, dsn, "core", 20); err != nil {
+	if err := downTo(ctx, dsn, "core", 21); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var n int

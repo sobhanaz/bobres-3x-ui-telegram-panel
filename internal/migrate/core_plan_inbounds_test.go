@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-// 00022 on a store from before: plans get no inbound choice (the default:
+// 00023 on a store from before: plans get no inbound choice (the default:
 // every attachable inbound). A plan's inbounds go with the plan, each once
 // per server, and must be positive; Down drops the table and Up comes back.
 func TestPlanInboundsMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 20); err != nil {
-		t.Fatalf("up to 20: %v", err)
+	if err := upTo(ctx, dsn, "core", 21); err != nil {
+		t.Fatalf("up to 21: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -64,7 +64,7 @@ func TestPlanInboundsMigration(t *testing.T) {
 		t.Fatalf("inbounds of a deleted plan: %d %v", n, err)
 	}
 
-	if err := downTo(ctx, dsn, "core", 21); err != nil {
+	if err := downTo(ctx, dsn, "core", 22); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var hasTable bool

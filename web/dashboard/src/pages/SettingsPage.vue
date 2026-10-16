@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
@@ -16,6 +17,7 @@ import type { SettingItem, SettingsReply } from '../types'
 // The payment details live on the Payment gateways page (owner only).
 const { t } = useI18n()
 const auth = useAuth()
+const route = useRoute()
 
 const reply = ref<SettingsReply | null>(null)
 const loading = ref(true)
@@ -30,8 +32,18 @@ async function load() {
   } finally {
     loading.value = false
   }
+  await showEntry()
 }
 onMounted(load)
+
+// A link may name one entry (the Reports page links to the daily summary's
+// switch): once the cards are drawn it is brought into view.
+async function showEntry() {
+  const id = route.hash.slice(1)
+  if (!id) return
+  await nextTick()
+  document.getElementById(id)?.scrollIntoView?.({ block: 'center' })
+}
 
 const byGroup = computed(() => {
   const out: Record<string, SettingItem[]> = {}

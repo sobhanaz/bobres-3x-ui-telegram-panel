@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"regexp"
 	"slices"
@@ -26,6 +27,7 @@ const (
 	KindBool    = "bool"
 	KindEnum    = "enum"
 	KindTZ      = "tz"
+	KindTime    = "time" // a time of day, HH:MM
 	KindURL     = "url"
 	KindChannel = "channel"
 	KindColor   = "color"
@@ -85,12 +87,12 @@ var SettingSpecs = []SettingSpec{
 		Help: "message staff when a service, a 3x-ui server, Zarinpal, automatic USDT, backups (and their off-site copies), the disk, deliveries, the bot's event feed or the license has a problem, and when it is fixed"},
 	{Key: "notify.sales", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "message staff on every paid order"},
-	{Key: "notify.daily_summary", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "false",
-		Help: "message staff once a day with yesterday's sales (revenue per currency, orders, new customers, refunds)"},
-	{Key: "notify.daily_summary_hour", Group: "notify", Kind: KindInt, Perm: permSettings, Default: "9", Min: 0, Max: 23,
-		Help: "the hour of the day (0 to 23, in the store's time zone) after which the daily summary is sent"},
 	{Key: "notify.recipients", Group: "notify", Kind: KindEnum, Perm: permSettings, Default: "owner",
 		Options: []string{"owner", "staff"}, Help: "owner = the server's admin Telegram account; staff = every owner and admin (and support staff for ticket alerts)"},
+	{Key: SettingDailySummary, Group: "reports", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = every day at the time below, the bot messages yesterday's sales (revenue per currency, paid orders, refunds, top-ups, new customers, free trials) to every owner and admin; off by default"},
+	{Key: SettingDailySummaryTime, Group: "reports", Kind: KindTime, Perm: permSettings, Default: DefaultDailySummaryTime,
+		Help: "time of day (HH:MM, 24-hour) in the store's time zone at which the daily sales summary is sent"},
 	{Key: "support.autoclose_days", Group: "support", Kind: KindInt, Perm: permSettings, Default: "7", Min: 0, Max: 90,
 		Help: "close a ticket this many days after staff answered, when the customer does not write back (0 = never)"},
 	{Key: "limits.bot_per_10s", Group: "limits", Kind: KindInt, Perm: permSettings, Default: "20", Min: 5, Max: 200,
@@ -330,6 +332,12 @@ func NormalizeSetting(key, value string) (string, error) {
 		if _, err := time.LoadLocation(value); err != nil {
 			return bad("unknown time zone; use a name such as Asia/Tehran or Europe/Berlin")
 		}
+	case KindTime:
+		t, ok := clockTime(latinDigits(value))
+		if !ok {
+			return bad("a time of day as HH:MM, 24-hour, for example 09:00")
+		}
+		value = t
 	case KindURL:
 		u, err := url.Parse(value)
 		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
@@ -349,6 +357,26 @@ func NormalizeSetting(key, value string) (string, error) {
 		value = strings.ToLower(value)
 	}
 	return value, nil
+}
+
+var clockRe = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):([0-5][0-9])$`)
+
+// clockMinutes reads a time of day typed as H:MM or HH:MM (24-hour) as the
+// minutes since midnight.
+func clockMinutes(s string) (int, bool) {
+	m := clockRe.FindStringSubmatch(s)
+	if m == nil {
+		return 0, false
+	}
+	h, _ := strconv.Atoi(m[1])
+	mm, _ := strconv.Atoi(m[2])
+	return h*60 + mm, true
+}
+
+// clockTime writes a time of day as HH:MM.
+func clockTime(s string) (string, bool) {
+	n, ok := clockMinutes(s)
+	return fmt.Sprintf("%02d:%02d", n/60, n%60), ok
 }
 
 // checkTogether checks settings that depend on each other, given the

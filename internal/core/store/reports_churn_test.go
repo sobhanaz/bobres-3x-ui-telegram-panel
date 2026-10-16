@@ -235,7 +235,7 @@ func TestChurnCountsAPersonOnceAtTheirLastExpiry(t *testing.T) {
 	}
 }
 
-// Churn is read through the index of migration 00019.
+// Churn is read through the index of migration 00020.
 func TestChurnUsesTheExpiryIndex(t *testing.T) {
 	c := newSeed(t)
 	// SET on a pool is per connection: run the plan in one transaction.

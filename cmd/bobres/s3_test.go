@@ -19,16 +19,17 @@ var (
 	testS3Secret = strings.Repeat("s", 40)
 )
 
-// A fresh install asks for the optional S3 upload after the panel: Enter
-// skips it; an endpoint brings the bucket, region, folder and keys (the
-// secret key without echo), and the backup service gets the internet.
+// The install never offers the optional S3 upload (the summary says how to
+// turn it on); with an endpoint from a flag, the bucket and keys that are
+// missing are asked (the secret key without echo), and the backup service gets
+// the internet.
 func TestInstallAsksForS3(t *testing.T) {
 	head := "panel.example.com\n4242\n" + goodBotToken + "\n\n" // the panel skipped
 
 	dir := t.TempDir()
-	ins, out, errOut := testInstaller(head+"https://s3.ir-thr-at1.arvanstorage.ir/\nShop-Backups\nir-thr-at1\nshop/daily\n"+
-		testS3Access+"\n"+testS3Secret+"\n", nil, nil)
-	if code := ins.install([]string{"--dir", dir, "--no-start"}); code != 0 {
+	ins, out, errOut := testInstaller(head+"Shop-Backups\n"+testS3Access+"\n"+testS3Secret+"\n", nil, nil)
+	if code := ins.install([]string{"--dir", dir, "--no-start", "--s3-endpoint", "https://s3.ir-thr-at1.arvanstorage.ir/",
+		"--s3-region", "ir-thr-at1", "--s3-prefix", "shop/daily"}); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	env, _, _ := readEnv(filepath.Join(dir, ".env"))
@@ -41,7 +42,7 @@ func TestInstallAsksForS3(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, env[k], want)
 		}
 	}
-	if !strings.Contains(out.String(), "S3 endpoint, https://... (Enter to skip)") || strings.Contains(out.String(), testS3Secret) {
+	if !strings.Contains(out.String(), "S3 bucket name:") || strings.Contains(out.String(), testS3Secret) {
 		t.Fatalf("prompts:\n%s", out)
 	}
 
@@ -51,20 +52,21 @@ func TestInstallAsksForS3(t *testing.T) {
 		t.Fatalf("re-run: %d %s", code, errOut)
 	}
 	again, _, _ := readEnv(filepath.Join(dir, ".env"))
-	if strings.Contains(out.String(), "S3 endpoint") || again["BOBRES_BACKUP_S3_ENDPOINT"] != env["BOBRES_BACKUP_S3_ENDPOINT"] ||
+	if strings.Contains(out.String(), "S3 ") || again["BOBRES_BACKUP_S3_ENDPOINT"] != env["BOBRES_BACKUP_S3_ENDPOINT"] ||
 		again["BOBRES_BACKUP_S3_SECRET_KEY"] != testS3Secret {
 		t.Fatalf("re-run asked or lost the settings:\n%s", out)
 	}
 
-	// Enter skips it: no upload, no internet for the backup service.
+	// Without a flag it is never offered: no upload, no internet for the backup
+	// service, and nothing asked beyond the three answers (and the panel Enter).
 	dir = t.TempDir()
-	ins, _, errOut = testInstaller(head+"\n", nil, nil)
+	ins, out, errOut = testInstaller(head, nil, nil)
 	if code := ins.install([]string{"--dir", dir, "--no-start"}); code != 0 {
 		t.Fatalf("skip: %d %s", code, errOut)
 	}
 	env, _, _ = readEnv(filepath.Join(dir, ".env"))
-	if env["BOBRES_BACKUP_S3_ENDPOINT"] != "" || env["BOBRES_BACKUP_NETWORK"] != "" {
-		t.Fatalf("skipped: %q %q", env["BOBRES_BACKUP_S3_ENDPOINT"], env["BOBRES_BACKUP_NETWORK"])
+	if env["BOBRES_BACKUP_S3_ENDPOINT"] != "" || env["BOBRES_BACKUP_NETWORK"] != "" || strings.Contains(out.String(), "S3 endpoint") {
+		t.Fatalf("skipped: %q %q\n%s", env["BOBRES_BACKUP_S3_ENDPOINT"], env["BOBRES_BACKUP_NETWORK"], out)
 	}
 }
 

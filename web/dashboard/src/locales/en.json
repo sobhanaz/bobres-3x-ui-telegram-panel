@@ -643,6 +643,11 @@
       "manual": "Card to card, crypto or a Zarinpal link, approved by staff.",
       "gateway": "Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT.",
       "unknown": "A sale with no record of how it was paid."
+    },
+    "daily": {
+      "on": "Daily summary in Telegram: on. Yesterday's sales go to every owner and admin at {time} ({tz}).",
+      "off": "Daily summary in Telegram: off. Turn it on to get yesterday's sales in a message every day.",
+      "link": "Daily summary settings"
     }
   },
   "discount": {
@@ -907,7 +912,8 @@
       "too_long_text": "This text is too long.",
       "one_line": "One line only, without control characters.",
       "option": "Choose one of the options.",
-      "timezone": "This time zone is not recognised."
+      "timezone": "This time zone is not recognised.",
+      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59)."
     },
     "option": {
       "notify": {
@@ -947,6 +953,10 @@
       "support": {
         "title": "Support",
         "desc": "How support tickets are handled."
+      },
+      "reports": {
+        "title": "Sales summary",
+        "desc": "A message in Telegram with yesterday's sales, once a day."
       }
     },
     "field": {
@@ -996,14 +1006,6 @@
         "sales": {
           "label": "Every sale",
           "help": "A message for every paid order, with the customer, plan and amount."
-        },
-        "daily_summary": {
-          "label": "Daily sales summary",
-          "help": "Once a day, a message with yesterday’s sales: revenue for each currency, orders, new customers, refunds and wallet top-ups. It follows the Recipients setting and the same numbers as the Reports page."
-        },
-        "daily_summary_hour": {
-          "label": "Hour of the daily summary",
-          "help": "The summary of the day before is sent after this hour (0 to 23) in the store’s time zone. If BOBRES was stopped at that hour, it is sent when it starts again."
         },
         "recipients": {
           "label": "Recipients",
@@ -1100,6 +1102,16 @@
         "enabled": {
           "label": "Telegram Mini App store",
           "help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing and wallet top-up. Off by default; turn it on, then set the Mini App URL in {'@'}BotFather. Turned off, /app/ and its API answer “not found”."
+        }
+      },
+      "reports": {
+        "daily_summary": {
+          "label": "Daily sales summary in Telegram",
+          "help": "Every day at the time below, the bot messages yesterday's sales to every owner and admin: revenue per currency (never added together), paid orders, refunds, wallet top-ups, new customers and free trials. A day with no sales still gets a short message, so you can see it is working. Off until you turn it on; turned on after its time of day, it starts the next day."
+        },
+        "daily_summary_time": {
+          "label": "Time it is sent",
+          "help": "Time of day, 24-hour (for example 09:00), in the store's time zone: the time zone of the General card, else BOBRES_TIMEZONE, else Tehran. If the server was down at that time, the summary is sent as soon as it is back, the same day; days that were missed are not made up."
         }
       }
     },
