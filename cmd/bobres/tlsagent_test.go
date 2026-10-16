@@ -593,7 +593,7 @@ func TestMenuHTTPSItemOnAnInstallBeforeTheHTTPSManager(t *testing.T) {
 	setVersion(t, dir, "latest")
 	f := &fakeOps{ps: psWithout(t, healthyPS, "tls-agent")}
 	// the HTTPS item, Enter to come back, exit
-	m, out, errOut, _, _ := testMenu(dir, "17\n\n0\n", f)
+	m, out, errOut, _, _ := testMenu(dir, "19\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}

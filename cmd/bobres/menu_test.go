@@ -62,7 +62,7 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	// status, live logs, start, stop (declined, then confirmed), restart,
 	// dashboard link, server check, the HTTPS menu (and back), uninstall
 	// (declined), exit
-	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n16\n\n17\n0\n\n18\nn\n\n0\n", f)
+	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n17\n\n19\n0\n\n20\nn\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -88,7 +88,7 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	if len(*doctors) != 1 || !contains((*doctors)[0], "panel.example.com") || !contains((*doctors)[0], dir) {
 		t.Fatalf("doctor: %v", *doctors)
 	}
-	if !strings.Contains(out.String(), "17. HTTPS certificate") || !strings.Contains(out.String(), "18. Uninstall") ||
+	if !strings.Contains(out.String(), "19. HTTPS certificate") || !strings.Contains(out.String(), "20. Uninstall") ||
 		!strings.Contains(out.String(), "Your own certificate files") || !strings.Contains(out.String(), "Server IP address (Let's Encrypt, 6 days") {
 		t.Errorf("the HTTPS item and its menu are missing:\n%s", out)
 	}
@@ -350,14 +350,14 @@ func TestMenuHTTPS(t *testing.T) {
 	}
 	f := &fakeOps{ps: healthyPS}
 	in := strings.Join([]string{
-		"17", "1", "", // status
-		"17", "2", "", // domain
-		"17", "3", "", "", // the server's IP: Enter detects it
-		"17", "3", "8.8.4.4", "y", "", // another address, confirmed
-		"17", "4", certFile, keyFile, "", // own certificate
-		"17", "4", "", "", // own certificate, cancelled at the first question
-		"17", "9", "", // no such choice
-		"17", "0", "", // back
+		"19", "1", "", // status
+		"19", "2", "", // domain
+		"19", "3", "", "", // the server's IP: Enter detects it
+		"19", "3", "8.8.4.4", "y", "", // another address, confirmed
+		"19", "4", certFile, keyFile, "", // own certificate
+		"19", "4", "", "", // own certificate, cancelled at the first question
+		"19", "9", "", // no such choice
+		"19", "0", "", // back
 		"0", "",
 	}, "\n")
 	m, out, errOut, _, _ := testMenu(dir, in, f)

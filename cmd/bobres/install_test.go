@@ -35,11 +35,23 @@ type fakeDocker struct {
 	caddy []string
 	// killErr is the error of `kill` (the SIGUSR1 to Caddy).
 	killErr error
+	// adminPW is what `exec core /app admin-password` prints (a sample
+	// login when empty); adminPWErr makes it fail.
+	adminPW    string
+	adminPWErr error
 }
 
 func (f *fakeDocker) run(_ context.Context, _ string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, args)
 	switch {
+	case contains(args, "admin-password"):
+		if f.adminPWErr != nil {
+			return []byte("Error: core is not running"), f.adminPWErr
+		}
+		if f.adminPW != "" {
+			return []byte(f.adminPW), nil
+		}
+		return []byte(sampleLogin), nil
 	case contains(args, "up"):
 		return []byte("started"), f.upErr
 	case contains(args, "kill"):
@@ -65,6 +77,9 @@ func (f *fakeDocker) run(_ context.Context, _ string, args ...string) ([]byte, e
 	}
 	return nil, nil
 }
+
+// sampleLogin is the output of core's admin-password.
+const sampleLogin = "Username: owner\nPassword: Kq7mWz3NpR9xTv2H\nShown once, never stored in the clear: at the first login you must choose a new password and set up two-factor authentication.\n"
 
 // composeVerbs are the compose subcommands of the calls (the word after
 // --env-file .env).
@@ -566,7 +581,7 @@ func TestBackupsFollowTheImageVersion(t *testing.T) {
 		t.Fatalf("pinned old version: profiles %q\n%s", env["COMPOSE_PROFILES"], out)
 	}
 	for _, c := range docker.calls {
-		if contains(c, "exec") {
+		if contains(c, "exec") && !contains(c, "admin-password") {
 			t.Fatalf("backup role created without the backup service: %v", c)
 		}
 	}
@@ -701,7 +716,7 @@ func TestSummaryWithoutPanel(t *testing.T) {
 		t.Fatalf("summary: %s", out)
 	}
 	// the bot sets its own photo from the dashboard: the summary says where to upload it
-	if !strings.Contains(out.String(), "Bot photo:          upload it in the dashboard (send /dashboard): Branding & texts > Store > Telegram bot") ||
+	if !strings.Contains(out.String(), "Bot photo:          the BOBRES logo is set; to use your own, upload it in the dashboard: Branding & texts > Store > Telegram bot") ||
 		strings.Contains(out.String(), "/setuserpic") {
 		t.Fatalf("summary without the bot photo hint: %s", out)
 	}
@@ -914,5 +929,74 @@ func TestEnvRewriteKeepsComments(t *testing.T) {
 	out := string(renderEnvComments(env, map[string]string{"BOBRES_XUI_SUB_URL": "# later"}))
 	if !strings.Contains(out, "\nBOBRES_XUI_SUB_URL='' # later\n") || parseEnv([]byte(out))["BOBRES_XUI_SUB_URL"] != "" {
 		t.Fatalf("empty value with a comment:\n%s", out)
+	}
+}
+
+// A fresh install issues the owner's dashboard login once the stack is up and
+// prints it in the summary, so no Telegram step is needed; the password goes
+// to the terminal only.
+func TestFreshInstallIssuesTheOwnerLogin(t *testing.T) {
+	dir := t.TempDir()
+	healthy := `[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`
+	docker := &fakeDocker{health: []string{healthy}}
+	ins, out, errOut := testInstaller("", secrets, docker)
+	if code := ins.install(baseArgs(dir)); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	for _, want := range []string{"https://panel.example.com/admin", "Username:  owner", "Password:  Kq7mWz3NpR9xTv2H",
+		"you must change it", "two-factor", "/start", "bobres admin password"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("summary misses %q:\n%s", want, out)
+		}
+	}
+	if strings.Count(out.String(), "Kq7mWz3NpR9xTv2H") != 1 || strings.Contains(errOut.String(), "Kq7mWz3NpR9xTv2H") {
+		t.Errorf("the password must appear once, on stdout only:\n%s\n%s", out, errOut)
+	}
+	last := docker.calls[len(docker.calls)-1]
+	if !strings.HasSuffix(strings.Join(last, " "), "exec -T core /app admin-password") {
+		t.Errorf("last call: %v", last)
+	}
+	// Not in any file the install wrote.
+	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { //nolint:errcheck // a test scan
+		if err == nil && !d.IsDir() {
+			if b, _ := os.ReadFile(path); strings.Contains(string(b), "Kq7mWz3NpR9xTv2H") {
+				t.Errorf("the password is in %s", path)
+			}
+		}
+		return nil
+	})
+
+	// core unreachable: the install still succeeds and points to the command.
+	ins, out, errOut = testInstaller("", secrets, &fakeDocker{health: []string{healthy}, adminPWErr: errors.New("exit status 1")})
+	if code := ins.install(baseArgs(t.TempDir())); code != 0 {
+		t.Fatalf("with core unreachable: %d %s", code, errOut)
+	}
+	if strings.Contains(out.String(), "Password:  ") || !strings.Contains(out.String(), "bobres admin password") ||
+		!strings.Contains(errOut.String(), "was not created") {
+		t.Fatalf("degraded summary:\n%s\n%s", out, errOut)
+	}
+
+	// A re-run of an existing install never resets the owner's login.
+	docker = &fakeDocker{health: []string{healthy}}
+	ins, out, errOut = testInstaller("", nil, docker)
+	if code := ins.install([]string{"--dir", dir}); code != 0 {
+		t.Fatalf("re-run: %d %s", code, errOut)
+	}
+	for _, c := range docker.calls {
+		if contains(c, "admin-password") {
+			t.Fatalf("a re-run issued a password: %v", c)
+		}
+	}
+	if strings.Contains(out.String(), "Password:  ") {
+		t.Fatalf("a re-run showed a password:\n%s", out)
+	}
+
+	// A quiet run (a settings change from the menu) shows no summary and issues nothing.
+	docker = &fakeDocker{health: []string{healthy}}
+	ins, out, _ = testInstaller("", secrets, docker)
+	ins.quiet = true
+	if code := ins.install(baseArgs(t.TempDir())); code != 0 || contains(docker.calls[len(docker.calls)-1], "admin-password") ||
+		strings.Contains(out.String(), "Password:") {
+		t.Fatalf("quiet run: %d\n%s", code, out)
 	}
 }

@@ -26,12 +26,22 @@ After the panel, a fresh install with backups also offers off-server copies of t
 skips it; see Backups, "Off-server copies").
 
 ## Management menu
+**Header: the status dashboard.** Beside the beaver the header shows, one line each, the store (`running (9/9
+services)`, `partly running (7/9 services) - down: bot, payments`, `stopped` or `unknown (is Docker running?)`), the
+license in effect (`pro license, 212 days left`, `trial, 9 days left`, a license in its grace period or expired, `free
+tier`), HTTPS (the mode, and how many days the certificate this server serves for the domain has left; core's own
+count when this host cannot reach port 443), the newest backup (`newest 5 hours ago (12.3 MB)`, yellow past 48
+hours) and the dashboard address. The same facts are `bobres status --json`. The probes run side by side, each with
+a 3-second limit, so the menu opens in about three seconds at worst; whatever does not answer shows `unknown`
+instead of hanging the menu. Yellow is a warning (a license or certificate within 7 days of its end, an old backup),
+red is a problem.
+
 `bobres` without a command, on a terminal, opens a numbered menu in the spirit of the x-ui script: status,
 live logs, start, stop, restart, show settings (secrets masked), change the bot token, the owner's Telegram
 ID or the first 3x-ui panel, back up now, show the backup key (after a confirmation), restore a backup (the newest 15
 in `backups/` by number, or any file by path with an optional key file), update (the `--check` output, then
-`bobres update` when a newer release exists), roll back the last update, check the server, the HTTPS certificate (a
-submenu, see HTTPS certificates), uninstall. Restore, update
+`bobres update` when a newer release exists), roll back the last update, check the server (`bobres doctor`), check
+everything (`bobres check`), the HTTPS certificate (a submenu, see HTTPS certificates), uninstall. Restore, update
 and rollback run the commands' own code, confirmation included; after an update or a rollback the menu ends, because
 the `bobres` running it was replaced (run `bobres` again). Settings changes re-run the installer with the one new
 value, so they are validated the same way (bot token and panel checked online) and only the affected
@@ -68,7 +78,8 @@ What the built installer does differently from this list:
 - **The wizard** asks for the domain, the owner's Telegram ID, the bot token (checked with getMe, on every run without
   `--offline`, the menu's changes included: through the Bot API server in `BOBRES_TELEGRAM_API_URL` when it is set,
   with `host.docker.internal` read as 127.0.0.1, else api.telegram.org), an optional first 3x-ui panel and, with
-  backups, optional S3 settings. Payment methods, the default language and the brand name are set later on the
+  backups, optional S3 settings. The first panel is named after its host (`panel.example.com`; `default` only when
+  that is not a usable name), and can be renamed on the dashboard's Servers page. Payment methods, the default language and the brand name are set later on the
   dashboard (Zarinpal can also come from flags).
 - **The license** is a separate step: `bobres license activate` or the dashboard's License tab (License activation,
   below). An install without one runs on its 30-day trial, then on the free tier (05-license.md, "Free core, paid
@@ -124,7 +135,8 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 |---|---|
 | `bobres` / `bobres menu` | Management menu (terminal only) |
 | `bobres install / uninstall` | Set up / remove (uninstall keeps data unless `--purge`) |
-| `bobres status` | Services (state and health), version, domain, free disk; exit 1 when a service is not healthy |
+| `bobres status [--json]` | Services (state and health), version, domain, free disk; exit 1 when a service is not healthy. `--json` prints the menu header's dashboard as one object instead: `installed`, `dir`, `domain`, `version`, `dashboard_url`, `services` (`state`: `running`, `partly running`, `stopped`, `unknown`; `up`, `total`, `down`), `license` (`known`, `basis`, `tier`, `state`, `days_left`), `https` (`mode`, `cert_days_left`), `backup` (`enabled`, `newest`, `age_hours`, `size_bytes`) and `disk_free_gb`; a value that could not be read is `null`/`known: false`. Same exit codes |
+| `bobres check [--dir D] [--json]` | Every check of the install in one list, a line per check, `PASS`/`WARN`/`FAIL`/`SKIP`; exit 1 when one FAILs (see Check). `--json` prints `{results:[{name,status,detail}], pass, warn, fail}` |
 | `bobres logs [service] [-f]` | Tail logs |
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
 | `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists (with a note when it is newer than the license's update date: the update is never refused for it) |
@@ -138,8 +150,37 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER`, set with `bobres config set`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
 | `bobres ssl [status] / auto / ip [--ip X] [--yes] / manual --cert FILE --key FILE` | The HTTPS certificate: show it, go back to the automatic one for the domain, add a Let's Encrypt certificate for the server's IP address, or use your own certificate and key. Each runs `/app ssl ...` in the core container (see HTTPS certificates) |
 | `bobres doctor [--dir D] [--domain X] [--offline]` | Diagnose: OS, RAM, disk, ports, Docker, DNS, the TLS certificate of every address the store serves (a crash-looping Caddy is a FAIL), and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures). `--dir` is the install it reads `.env` and core's address list from; `--domain` defaults to its `BOBRES_DOMAIN` |
-| `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator |
+| `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator. It needs the account to exist (the owner started the bot once); with no Telegram, use `admin password` |
+| `bobres admin password [--dir D]` | Reset the owner's dashboard password: runs `/app admin-password` in the core container, prints the login `owner` and a new random password once, and says it must be changed at first login. Creates the owner's account when the owner never sent `/start`. Running it again resets the login and ends the owner's sessions (the menu has it as "Reset admin password") |
 | `bobres support-bundle [--offline]` | A redacted tar.gz for support in the install directory: versions, `compose ps`, the doctor's checks, the newest 300 log lines per service, the `.env` key names (never a value), disk and memory, the backups list (see Support bundle). Never the database, a backup or a secret value |
+
+## Check
+
+`bobres check [--dir D] [--json]` is `bobres doctor` for an install that is already running: doctor asks whether a
+server is fit to install on, check asks whether this install is healthy. The menu has it as "Check everything". It
+changes nothing and takes up to a minute when the network is slow (every probe has a limit). The host's side
+runs in `bobres`; core's side runs `/app check --json` in the core container (`docker compose exec -T core /app
+check --json`), which prints one JSON array of `{name, status, detail}` and exits 1 when a check failed (the host
+reads the array either way).
+
+| Check | PASS | What to do otherwise |
+|---|---|---|
+| Config | `.env` has every generated secret (the installer's lengths), the domain, the bot token's shape, a numeric owner id and the Redis address | FAIL names the missing or malformed keys (never a value): `sudo bobres install` fills in missing secrets, `bobres config list` shows what is set |
+| Config permissions | `.env` is readable by its owner only | WARN: `chmod 600 .env` |
+| Services | Every service this install runs is running and healthy | FAIL names the ones that are not: `bobres status`, `bobres logs <service>` |
+| Disk | At least the free space doctor asks for | FAIL: free some space before a backup or an update fills the disk |
+| Database, Redis | Core is connected (checked from inside core) | FAIL: `bobres logs postgres`, `bobres logs redis` |
+| License | A license with at least 14 days left, or a trial with at least 7 | WARN: renew or buy (`bobres license`); FAIL while a license is in its grace period; free tier: WARN |
+| 3x-ui servers | Every enabled server passed its last health check | FAIL lists each down server with the provisioner's last error; WARN when none is added yet or the provisioner did not answer (`bobres logs provisioner`) |
+| Watchdog | No open alert | WARN lists them (dashboard: Alerts) |
+| HTTPS (one line per address) | The certificate this server serves on port 443 is valid and covers the address | As in doctor and `bobres ssl status` |
+| Backup | The newest backup is under 48 hours old | WARN when older (`bobres logs backup`, `bobres backup`); FAIL when there is none: back up and keep the backup key |
+| Release signature | The release this server runs was signed with an expiry more than 14 days away | WARN/FAIL: publish or re-sign a newer release; updates and reinstalls are refused after the signed expiry. SKIP when the release manifest was not kept in the state directory (`/var/lib/bobres/checksums.txt`) |
+| Bot token | Telegram accepts the token (`getMe`; shows `@username`, through the self-hosted Bot API server when `BOBRES_TELEGRAM_API_URL` is set) | FAIL: `sudo bobres secrets rotate bot-token` |
+| Bot updates | Long polling or a webhook (only its host is shown) with no recent delivery error and under 100 waiting updates | WARN: is the bot running? `bobres logs bot` |
+
+The bot token never appears in the output, not even in an error message: it is scrubbed from everything printed.
+Nothing the check prints is a secret value.
 
 ## Backups
 The `backup` service (image `bobres-backup`, a `postgres:16-alpine` target in `deploy/Dockerfile`, so its pg_dump
@@ -682,7 +723,7 @@ top level. Each site in `sites.caddy` imports `(bobres_site)`.
   core process (its migrations and workers) that dies on "address in use". Help and usage errors (exit 2) are
   unchanged. The status view's host check and doctor do not ask core on such an install either.
 
-**Menu.** The item "HTTPS certificate" (17, in a group of its own, before 18 "Uninstall") opens a submenu: 1 Status, 2
+**Menu.** The item "HTTPS certificate" (19, in a group of its own, before 20 "Uninstall") opens a submenu: 1 Status, 2
 Domain (automatic), 3 Server IP (Let's Encrypt, 6 days, renewed automatically), 4 Your own certificate files, 0 Back.
 The menu's header counts the services `bobres status` lists, the tls-agent included where the install has one:
 "running (9/9 services)" on an install with backups, 8 without, and one less on an install that predates the HTTPS
@@ -776,6 +817,28 @@ install directory, and with it every backup in `/opt/bobres/backups`: it warns f
   ("Also removed volumes of this install that docker compose down left ...") and says "Nothing of BOBRES remains" only
   after all of them are gone. When a volume cannot be removed it exits 1, says data is still on the server, and keeps the
   install directory (so the command can run again).
+
+## Owner login without Telegram
+The owner can open the dashboard without the bot and without `/start` (the bot may be blocked, or the owner may not
+have an account on it yet). Core's `admin-password` command (`/app admin-password`, run by `bobres admin password`
+and by the installer) does this for the configured owner (`BOBRES_ADMIN_TELEGRAM_ID`):
+
+- It creates the owner's account when it is missing and makes it the owner, picks the login `owner` (`owner-2`,
+  ... when another staff member has it) and sets a random 16-character initial password, kept as an argon2id hash
+  with `must_change = true` and no authenticator. It needs `BOBRES_CORE_MASTER_KEY` (the authenticator secret is
+  encrypted with it) and the owner id, and says so when either is missing.
+- The password is printed once, on stdout of the terminal that ran it. It is not logged, not kept in `.env` or the
+  state files, and not in the audit entry (`dashboard.password.reset_cli`, source cli).
+- A fresh install runs it once the stack is healthy and prints the address `https://<domain>/admin`, the username and
+  the password in its summary, with the `/start` link as an alternative. A re-run of an existing install, a quiet run
+  (a settings change from the menu, `bobres update`) and `--no-start` never issue one. When core cannot be reached
+  the install still succeeds and the summary points to `bobres admin password`.
+- The first login with it is restricted (one hour, only the account page): the dashboard shows a forced screen to
+  choose a new password (not the initial one) and scan the authenticator QR code, and a router guard keeps every other
+  page closed until the first code is confirmed. See `07-security.md` for the rules.
+- Running the command again is the way back after a lost phone or password, from any server shell: it replaces the
+  password and the authenticator, ends the owner's sessions and lifts a lock. `bobres admin link` remains the quick
+  way in when the owner already has an account and the bot works.
 
 ## Open points
 - Installer and CLI binaries: GitHub releases of this (public) repository. Images: ghcr.io, which must be

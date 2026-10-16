@@ -46,6 +46,10 @@ type installer struct {
 	harden func(ctx context.Context, opt hardenOptions) int
 	// quiet leaves out the first-steps summary (a settings change from the menu).
 	quiet bool
+	// login is the owner's initial dashboard login, issued by a fresh install
+	// after the stack is up; only summary reads it and it is never written
+	// anywhere (not the log, not .env, not the state files).
+	login *ownerLogin
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -376,9 +380,41 @@ func (ins *installer) install(args []string) int {
 		}
 	}
 	if !ins.quiet {
+		if !existing {
+			ins.login = ins.issueOwnerLogin(ctx, *dir, env)
+		}
 		ins.summary(env, *dir)
 	}
 	return 0
+}
+
+// ownerLogin is the owner's one-time dashboard login (see core's
+// admin-password): the password is shown once, in the summary.
+type ownerLogin struct{ username, password string }
+
+var ownerLoginRe = regexp.MustCompile(`(?m)^Username: (\S+)\r?\n^Password: (\S+)\r?$`)
+
+// issueOwnerLogin asks core (up and healthy by now) for the owner's initial
+// dashboard password, so a fresh install needs no Telegram step to sign in.
+// It returns nil, and says why, when it cannot: the install is still fine and
+// `bobres admin password` does the same later. The output is parsed here and
+// printed by summary alone: it is never logged.
+func (ins *installer) issueOwnerLogin(ctx context.Context, dir string, env map[string]string) *ownerLogin {
+	if env["BOBRES_ADMIN_TELEGRAM_ID"] == "" {
+		return nil
+	}
+	out, err := ins.run(ctx, dir, composeArgs("exec", "-T", "core", "/app", "admin-password")...)
+	if err != nil {
+		fmt.Fprintf(ins.errOut, "warning: the initial dashboard password was not created (%v): run  bobres admin password  once core is up.\n%s\n",
+			err, strings.TrimSpace(string(out)))
+		return nil
+	}
+	m := ownerLoginRe.FindStringSubmatch(string(out))
+	if m == nil {
+		fmt.Fprintln(ins.errOut, "warning: core did not return a dashboard password: run  bobres admin password  to create one.")
+		return nil
+	}
+	return &ownerLogin{username: m[1], password: m[2]}
 }
 
 // askS3 completes the optional copy of each backup to S3-compatible storage.
@@ -753,16 +789,28 @@ func parseHealth(out []byte) map[string]string {
 }
 
 func (ins *installer) summary(env map[string]string, dir string) {
+	fmt.Fprint(ins.out, "\nBOBRES is running.\n")
+	if l := ins.login; l != nil {
+		fmt.Fprintf(ins.out, `
+Sign in to the dashboard (no Telegram needed):
+  Address:   https://%s/admin
+  Username:  %s
+  Password:  %s
+This password is shown once and is not stored anywhere in the clear: you must change it
+at your first login, where you also set up two-factor authentication. Lost it before then?
+Run  bobres admin password  for a new one. (Or send /start to your bot, then /dashboard, for a login link.)
+`, env["BOBRES_DOMAIN"], l.username, l.password)
+	} else if env["BOBRES_ADMIN_TELEGRAM_ID"] != "" {
+		fmt.Fprintf(ins.out, "\nNo Telegram, or want a password login? Run  bobres admin password  and sign in at https://%s/admin\n", env["BOBRES_DOMAIN"])
+	}
 	fmt.Fprintf(ins.out, `
-BOBRES is running.
-
 Next steps (in Telegram, from the owner account %s):
   1. Open your bot and send /start.
   2. Set your card:      /set payments.card_number 6037-...  and  /set payments.card_holder Your Name
   3. Add a plan:         /plan_add 150000 IRT 30 50 Monthly 50GB | ماهانه ۵۰ گیگ
   4. Offer a trial:      /trial 1 1
   5. Open the admin panel with /admin.
-  6. Bot photo:          upload it in the dashboard (send /dashboard): Branding & texts > Store > Telegram bot
+  6. Bot photo:          the BOBRES logo is set; to use your own, upload it in the dashboard: Branding & texts > Store > Telegram bot
 
 Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:
 it holds the keys that encrypt your panel tokens and gateway settings.

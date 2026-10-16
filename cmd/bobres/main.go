@@ -44,6 +44,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return menuCmd(args[1:], stdin, out, errOut)
 	case "doctor":
 		return doctorCmd(args[1:], out, errOut)
+	case "check":
+		return newOps(stdin, out, errOut).checkCmd(args[1:])
 	case "install":
 		return installCmd(args[1:], stdin, out, errOut)
 	case "status":
@@ -97,13 +99,14 @@ Run bobres without a command in a terminal to open the management menu.
 Available now:
   menu       The management menu (status, logs, start/stop, change settings...)
   install    Set up BOBRES on this server (asks for what it needs; see install -h)
-  status     Show the services, version and disk (exit 1 if something is down)
+  status     Show the services, version and disk (exit 1 if something is down); --json for scripts
   logs       Show service logs: bobres logs [-f] [--tail N] [service...]
   start      Start the store and wait until it is healthy
   stop       Stop the store (nothing is deleted)
   restart    Restart the store and wait until it is healthy
   uninstall  Remove the containers (data kept unless --purge)
   admin link Print a one-time dashboard login link (for when the bot is down)
+  admin password  Reset the owner's dashboard password and show it once (no Telegram needed)
   license    Show the license (license status), install one (license import < token.txt)
              or activate a license key with the vendor's license server (license activate)
   backup     Back up the database now (encrypted; kept in <dir>/backups and sent to the owner)
@@ -115,6 +118,8 @@ Available now:
   secrets    Rotate a secret: secrets rotate bot-token|db-passwords|service-tokens|redis-password
   harden     Firewall (ufw), fail2ban, automatic security updates and swap, each asked first
   doctor     Check this server (RAM, disk, ports, Docker, DNS, HTTPS certificate, hardening)
+  check      Check the whole install (settings, services, disk, backups, bot token, release
+             signature, license, servers): PASS/WARN/FAIL lines, exit 1 on a FAIL; --json
   support-bundle
              Write a redacted tar.gz for support into <dir> (versions, status, logs; no secrets)
   version    Print the version (--images: the image digests this release pins)

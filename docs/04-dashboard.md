@@ -1,7 +1,7 @@
 # 04 - Dashboard pages and roles
 
 Stack: Vue 3 + Vite + TypeScript (embedded in `core` via embed.FS), JSON API on `core`, behind the gateway. See PLAN.md §12. Branded per install (logo, colors, name).
-Sessions: secure cookie, CSRF. Login with a one-time link from the bot (or `bobres admin link`), or with a password that always needs a TOTP code.
+Sessions: secure cookie, CSRF. Login with a one-time link from the bot (or `bobres admin link`), or with a password that always needs a TOTP code. The owner can also sign in with no Telegram at all: the installer (or `bobres admin password`) issues a random initial password for the login `owner`; it opens a restricted session where only My account works (a forced screen to choose a new password and turn on 2FA, with no menu), and the rest of the dashboard follows once the first code is confirmed (see 06-installer.md, Owner login without Telegram).
 Decisions, milestones and status: `superpowers/specs/2026-10-07-phase4-dashboard-design.md`. All 17 pages below are
 built (Phase 4, 2026-10-12), and page 18, Reports, was added after v0.1.1; the few parts that are not built are marked.
 
@@ -20,7 +20,7 @@ Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban)
 1. **Overview:** revenue (only in the answer for staff with `reports.read`: support does not get it), new users, active services, expiring soon, failed provisions, gateway health (on, off, details missing, failing), panel health per server (switched-off servers are not counted).
 2. **Users:** search/filter, profile (services, orders, wallet, tickets), ban, adjust balance, impersonate-view (read-only; not built).
 3. **Services:** all subscriptions, status, usage, extend, reset traffic, delete, resync from 3x-ui, and the address of the service's branded page with a Regenerate button (`services.write`, with a reason; [15-subscription-page.md](15-subscription-page.md)).
-4. **Plans:** CRUD, trial flag, ordering, enable/disable, the servers a plan's new services may use (empty = any) (reseller tier prices are set on the Resellers page).
+4. **Plans:** CRUD, trial flag, ordering, enable/disable, the servers a plan's new services may use (empty = any) and, per server, the inbounds they join (empty = every attachable inbound; a choice wins over the Servers page's attach switch, only inbounds that are on in the panel are used, and a warning shows when a chosen inbound is gone from the panel) (reseller tier prices are set on the Resellers page).
 5. **Orders and payments:** list, states, retry provisioning, refund, manual receipt review queue.
 6. **Wallet and ledger:** read-only ledger explorer, exports (CSV).
 7. **Discounts and referrals:** codes, limits, usage, referral rules.

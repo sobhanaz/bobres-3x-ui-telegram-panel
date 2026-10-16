@@ -2,7 +2,10 @@ package domain
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -104,4 +107,104 @@ func (s *Service) DashboardOverview(ctx context.Context, pay PaymentsClient, pro
 		}
 	}
 	return out, nil
+}
+
+// InitialPasswordLen is the length of a generated initial password.
+const InitialPasswordLen = 16
+
+// initialPasswordAlphabet leaves out the characters that read alike (0 O o 1
+// l I), so a password copied by eye from a terminal is typed right.
+const initialPasswordAlphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+// NewInitialPassword makes a random initial password from crypto/rand (about
+// 93 bits).
+func NewInitialPassword() (string, error) {
+	max := big.NewInt(int64(len(initialPasswordAlphabet)))
+	b := make([]byte, InitialPasswordLen)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, max) // uniform: no modulo bias
+		if err != nil {
+			return "", fmt.Errorf("initial password: %w", err)
+		}
+		b[i] = initialPasswordAlphabet[n.Int64()]
+	}
+	return string(b), nil
+}
+
+// InitialLogin is a staff member's way into the dashboard issued from the
+// server's command line.
+type InitialLogin struct {
+	Username string
+	Password string // shown once, never stored in the clear
+}
+
+// IssueInitialPassword gives the configured owner a way into the dashboard
+// without ever having sent /start to the bot: the account is created if it
+// is missing, made the owner, and given a new random password (the owner's
+// username is kept when they have a password login, else "owner"). The
+// login is marked must_change: with it the owner opens only a restricted
+// session, which asks for a new password and an authenticator app. Running
+// it again resets the login (the password, the authenticator app, a lock)
+// and ends every session of the owner. The password is returned once; the
+// audit entry (dashboard.password.reset_cli, no actor) never holds it.
+func (s *Service) IssueInitialPassword(ctx context.Context) (*InitialLogin, error) {
+	if !s.OwnerConfigured() {
+		return nil, invalid("BOBRES_ADMIN_TELEGRAM_ID is not set: no owner to give a password to")
+	}
+	u, err := s.UpsertUser(ctx, UpsertUserParams{TelegramID: s.cfg.OwnerTelegramID})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.StaffUser(ctx, u.ID); err != nil {
+		return nil, fmt.Errorf("the owner (Telegram id %d) is not an active staff member (a reseller must be removed as a reseller first): %w",
+			s.cfg.OwnerTelegramID, err)
+	}
+	password, err := NewInitialPassword()
+	if err != nil {
+		return nil, err
+	}
+	hash, err := webauth.HashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	var out InitialLogin
+	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		var name string
+		// "owner" may be another member's username: then owner-<n>.
+		for i := 0; ; i++ {
+			candidate := "owner"
+			if i > 0 {
+				candidate = fmt.Sprintf("owner-%d", i+1)
+			}
+			// A savepoint: a taken username must not poison the transaction.
+			sp, err := tx.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			name, err = s.st.SetInitialCredentials(ctx, sp, u.ID, candidate, hash)
+			if errors.Is(err, store.ErrUsernameTaken) && i < 20 {
+				_ = sp.Rollback(ctx)
+				continue
+			}
+			if err != nil {
+				_ = sp.Rollback(ctx)
+				return err
+			}
+			if err := sp.Commit(ctx); err != nil {
+				return err
+			}
+			break
+		}
+		revoked, err := s.st.RevokeUserSessions(ctx, tx, u.ID, 0)
+		if err != nil {
+			return err
+		}
+		out = InitialLogin{Username: name, Password: password}
+		return s.auditChange(ctx, tx, nil, "dashboard.password.reset_cli", "dashboard", u.ID, nil,
+			map[string]any{"username": name, "must_change": true, "sessions_ended": revoked}, "")
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

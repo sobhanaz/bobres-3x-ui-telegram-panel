@@ -29,7 +29,10 @@ watchEffect(() => applyDocumentBrand(t('branding.doc_title', { brand: auth.brand
 const drawer = ref(false)
 watch(() => route.fullPath, () => (drawer.value = false))
 
+// With the initial password still to be changed there is no menu: only My account works.
+const restricted = computed(() => !!auth.me?.must_change)
 const nav = computed(() => {
+  if (restricted.value) return []
   const list = visibleSections(auth.me?.permissions ?? [])
   return groups
     .map((g) => ({ group: g, items: list.filter((s) => s.group === g) }))
@@ -38,7 +41,7 @@ const nav = computed(() => {
 
 // Tickets waiting for staff, on the Support item: refreshed every minute for
 // those who answer tickets (and right away by the support pages).
-const canTickets = computed(() => auth.can('tickets.write'))
+const canTickets = computed(() => auth.can('tickets.write') && !restricted.value)
 const countsPoll = poller(loadCounts, () => pollEvery.counts)
 watch(canTickets, (v) => (v ? countsPoll.start() : countsPoll.stop()), { immediate: true })
 onBeforeUnmount(() => countsPoll.stop())
@@ -50,7 +53,7 @@ const badgeOf = (key: string) => (key === 'support' && waiting.value > 0 ? num(w
 // refused, is in its grace period or has ended. And "Powered by BOBRES" on
 // every install except one whose license includes white label.
 const licenseChip = computed(() => {
-  if (!auth.can('system.read')) return null
+  if (!auth.can('system.read') || restricted.value) return null
   return chipOf(auth.me?.license)
 })
 const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.kind, { n: num(c.days, locale.value as Lang) }, c.days)

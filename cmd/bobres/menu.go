@@ -161,7 +161,9 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Update BOBRES (check for a new release)", run: m.update, group: true},
 		{label: "Roll back the last update", run: m.rollback},
 		{label: "Dashboard login link (if the bot is down)", run: func() { m.ops.adminCmd([]string{"link", "--dir", m.dir}) }, group: true},
+		{label: "Reset admin password (sign in without Telegram)", run: func() { m.ops.adminCmd([]string{"password", "--dir", m.dir}) }},
 		{label: "Check this server", run: func() { m.doctor([]string{"--dir", m.dir, "--domain", env["BOBRES_DOMAIN"]}) }},
+		{label: "Check everything (server, settings, services, bot, backups, license)", run: func() { m.ops.checkCmd(d) }},
 		{label: "HTTPS certificate", run: func() { m.https(env) }, group: true},
 		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }, group: true},
 	}
@@ -241,48 +243,30 @@ func (m *menu) httpsOwn() {
 // beaver is BOBRES the mascot in plain ASCII, beside the header's lines.
 var beaver = [...]string{" n____n ", "( o  o )", ` \_||_/ `}
 
+// header is the menu's title and, beside the beaver, the status dashboard of
+// the install (collectStatus: every probe has a timeout and shows "unknown"
+// rather than hang).
 func (m *menu) header(env map[string]string, installed bool) {
 	lines := []string{m.paint("1", "BOBRES manager") + "  bobres " + version.Version}
 	if installed {
-		lines = append(lines,
-			fmt.Sprintf("%s  ·  %s  ·  version %s", m.dir, orDash(env["BOBRES_DOMAIN"]), orDash(env["BOBRES_VERSION"])),
-			"Store: "+m.state(env))
+		info := m.ops.collectStatus(context.Background(), m.dir, env)
+		lines = append(lines, fmt.Sprintf("%s  ·  %s  ·  version %s", m.dir, orDash(env["BOBRES_DOMAIN"]), orDash(env["BOBRES_VERSION"])))
+		lines = append(lines, statusLines(info, m.paint)...)
 	} else {
 		lines = append(lines, fmt.Sprintf("No install in %s yet.", m.dir))
 	}
 	fmt.Fprintln(m.out)
-	for i, art := range beaver {
-		text := ""
+	for i := 0; i < max(len(beaver), len(lines)); i++ {
+		art, text := strings.Repeat(" ", len(beaver[0])), ""
+		if i < len(beaver) {
+			art = beaver[i]
+		}
 		if i < len(lines) {
 			text = lines[i]
 		}
 		fmt.Fprintln(m.out, strings.TrimRight("  "+art+"  "+text, " "))
 	}
 	m.rule()
-}
-
-// state summarises the containers in one line.
-func (m *menu) state(env map[string]string) string {
-	out, err := m.ops.run(context.Background(), m.dir, composeArgs("ps", "--all", "--format", "json")...)
-	if err != nil {
-		return m.paint("33", "unknown (is Docker running?)")
-	}
-	rows := parseServices(out)
-	want := allServices(m.dir, env)
-	up := 0
-	for _, s := range want {
-		if r, ok := rows[s]; ok && r.State == "running" && (r.Health == "" || r.Health == "healthy") {
-			up++
-		}
-	}
-	switch {
-	case up == len(want):
-		return m.paint("32", fmt.Sprintf("running (%d/%d services)", up, len(want)))
-	case up == 0:
-		return m.paint("31", "stopped")
-	default:
-		return m.paint("33", fmt.Sprintf("partly running (%d/%d services; see Status)", up, len(want)))
-	}
 }
 
 func (m *menu) stop() {
