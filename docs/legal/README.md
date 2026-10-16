@@ -19,6 +19,9 @@ The source license is the top-level [LICENSE](../../LICENSE) (a draft too), and 
 [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). The questions to take to the lawyer are in
 [09-legal-questions.md](../09-legal-questions.md). What a license costs and allows is in [pricing.md](../pricing.md).
 
+The four public texts (not the operator template) are also built as draft web pages in `site/legal/`, with a draft banner and `noindex`:
+after you change a draft, run `go run ./tools/sitelegal` (a test fails if the pages are out of date).
+
 Before the launch: fill in every `[OWNER: ...]`, have the lawyer settle every `[LAWYER: ...]`, publish the final
 texts on the vendor's website, and link the Terms and the Privacy Policy from the place where operators get a license
 ([launch-checklist.md](../launch-checklist.md)).
