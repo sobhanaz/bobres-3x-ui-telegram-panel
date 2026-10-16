@@ -83,6 +83,20 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - `SubscriptionLinks` has `page_url` (field 4); the bot's "service ready" message uses it for an Open page button.
 - `order.paid.v1` has an optional `provider`; `/reports/methods` rows have a `provider` field; `orders.csv` has a new
   last column `provider`.
+- `Settings.white_label` (core proto, field 3): the bot learns from core whether a white-label license is active.
+
+### Security and release
+- Postgres and Redis are pinned by digest in the compose files, and the backup image's Postgres base in the
+  Dockerfile too (Caddy already was), so a moved tag changes nothing. `deploy/images_pinned_test.go` keeps them pinned.
+  The digests change only by hand, with a version bump.
+- The site shows the vendor license key's fingerprint (`vendor-v1-2026`, checked against `bobres about`).
+- The four legal drafts are built as draft pages in `site/legal/` (`go run ./tools/sitelegal`), marked as drafts,
+  `noindex`, not in the sitemap and not linked yet. They wait for the lawyer's review.
+
+### Branding
+- "Made by TECSO-DEV" is in the dashboard footer and login page and at the end of the bot's about text. A white-label
+  license hides it, along with "Powered by BOBRES"; the credit is dropped from the bot's text when the text would pass
+  120 characters.
 
 ## [0.3.0] — 2026-10-14
 
