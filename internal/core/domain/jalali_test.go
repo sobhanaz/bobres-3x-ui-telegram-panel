@@ -243,6 +243,17 @@ func TestSalesReportFoldsDaysIntoJalaliBuckets(t *testing.T) {
 	x.ledger(x.user(6), "IRT", 900, "topup", "intent", buuid.MustV7().String(), at("2026-10-03T04:00:00Z"))
 	x.ledger(x.user(7), "IRT", 0, "trial_grant", "order", x.order(7, "IRT", "new", "paid", 0, at("2026-10-24T01:00:00Z")), at("2026-10-24T01:00:00Z"))
 	x.order(8, "IRT", "new", "cancelled", 650, at("2026-11-05T12:00:00Z"))
+	// Churn: the services' expiries sit around the same midnights (the report is read as of 1 Dec 2026, so
+	// the grace of 7 days ends on 24 Nov). Four have churned; user 5's ended inside the grace period.
+	for n, exp := range map[int]string{
+		1: "2026-09-22T20:29:59Z", // Tehran 22 Sep 23:59:59: Shahrivar
+		2: "2026-09-22T20:30:00Z", // Mehr 1
+		3: "2026-10-16T20:30:00Z", // Saturday 17 Oct in Tehran
+		4: "2026-10-22T20:30:00Z", // Aban 1
+		5: "2026-11-28T10:00:00Z", // at risk
+	} {
+		x.exec(`UPDATE core.subscriptions SET expires_at = $2, status = 'expired' WHERE id = $1`, x.subs[n], at(exp))
+	}
 	x.exec(`INSERT INTO core.outbox_core (topic, payload, event_id, created_at) VALUES ('payment.rejected.v1', $1::text::jsonb, $2, $3)`,
 		`{"user_id":"`+x.user(9)+`","provider":"manual_card","amount":777,"currency":"IRT","reason":"blurry"}`, buuid.MustV7().String(), at("2026-11-08T08:00:00Z"))
 
@@ -289,6 +300,9 @@ func TestSalesReportFoldsDaysIntoJalaliBuckets(t *testing.T) {
 					cells     map[string]*store.ReportCell
 					customers int64
 					trials    int64
+					churned   int64
+					people    int64
+					risk      int64
 				}
 				want := map[string]*sum{}
 				for _, b := range days.Buckets {
@@ -298,6 +312,9 @@ func TestSalesReportFoldsDaysIntoJalaliBuckets(t *testing.T) {
 					}
 					want[k].customers += b.NewCustomers
 					want[k].trials += b.Trials
+					want[k].churned += b.ChurnedServices
+					want[k].people += b.ChurnedCustomers
+					want[k].risk += b.AtRisk
 					for cur, c := range b.Currencies {
 						if want[k].cells[cur] == nil {
 							want[k].cells[cur] = &store.ReportCell{}
@@ -314,6 +331,10 @@ func TestSalesReportFoldsDaysIntoJalaliBuckets(t *testing.T) {
 					}
 					if b.NewCustomers != w.customers || b.Trials != w.trials {
 						t.Errorf("%s: customers %d trials %d, want %d and %d", b.Date, b.NewCustomers, b.Trials, w.customers, w.trials)
+					}
+					if b.ChurnedServices != w.churned || b.ChurnedCustomers != w.people || b.AtRisk != w.risk {
+						t.Errorf("%s: churn %d services %d customers %d at risk, want %d, %d and %d", b.Date,
+							b.ChurnedServices, b.ChurnedCustomers, b.AtRisk, w.churned, w.people, w.risk)
 					}
 					for cur, c := range b.Currencies {
 						if w.cells[cur] == nil {
@@ -336,6 +357,14 @@ func TestSalesReportFoldsDaysIntoJalaliBuckets(t *testing.T) {
 				if !reflect.DeepEqual(jal.Currencies, greg.Currencies) || jal.Totals.NewCustomers != greg.Totals.NewCustomers || jal.Totals.Trials != greg.Totals.Trials {
 					t.Errorf("totals: %v %d %d, Gregorian %v %d %d", jal.Currencies, jal.Totals.NewCustomers, jal.Totals.Trials,
 						greg.Currencies, greg.Totals.NewCustomers, greg.Totals.Trials)
+				}
+				if jal.Totals.ChurnedServices != greg.Totals.ChurnedServices || jal.Totals.ChurnedCustomers != greg.Totals.ChurnedCustomers ||
+					jal.Totals.AtRisk != greg.Totals.AtRisk {
+					t.Errorf("churn totals %+v, Gregorian %+v", jal.Totals, greg.Totals)
+				}
+				if jal.Totals.ChurnedServices != 4 || jal.Totals.ChurnedCustomers != 4 || jal.Totals.AtRisk != 1 {
+					t.Errorf("the seeded churn is not all there: %d services %d customers %d at risk", jal.Totals.ChurnedServices,
+						jal.Totals.ChurnedCustomers, jal.Totals.AtRisk)
 				}
 				for cur, c := range greg.Totals.Currencies {
 					if *jal.Totals.Currencies[cur] != *c {
@@ -393,6 +422,9 @@ func TestFoldDaysRefusesADayOutsideTheRange(t *testing.T) {
 		{"cells after", store.SalesData{Cells: map[string]map[string]*store.ReportCell{"2026-10-31": cell()}}},
 		{"customers after", store.SalesData{NewCustomers: map[string]int64{"2026-11-01": 1}}},
 		{"trials before", store.SalesData{Trials: map[string]int64{"2026-10-01": 1}}},
+		{"churned services after", store.SalesData{ChurnedServices: map[string]int64{"2026-11-01": 1}}},
+		{"churned customers before", store.SalesData{ChurnedCustomers: map[string]int64{"2026-10-01": 1}}},
+		{"at risk after", store.SalesData{AtRisk: map[string]int64{"2026-10-31": 1}}},
 		{"not a date", store.SalesData{Trials: map[string]int64{"x": 1}}},
 	} {
 		if _, err := foldDays(rng, &c.data); err == nil {
@@ -400,9 +432,14 @@ func TestFoldDaysRefusesADayOutsideTheRange(t *testing.T) {
 		}
 	}
 	got, err := foldDays(rng, &store.SalesData{
-		Cells:        map[string]map[string]*store.ReportCell{"2026-10-23": cell(), "2026-10-30": cell()},
-		NewCustomers: map[string]int64{"2026-10-23": 2, "2026-10-25": 3},
+		Cells:           map[string]map[string]*store.ReportCell{"2026-10-23": cell(), "2026-10-30": cell()},
+		NewCustomers:    map[string]int64{"2026-10-23": 2, "2026-10-25": 3},
+		ChurnedServices: map[string]int64{"2026-10-23": 1, "2026-10-30": 4}, ChurnedCustomers: map[string]int64{"2026-10-24": 2},
+		AtRisk: map[string]int64{"2026-10-26": 7},
 	})
+	if err != nil || got.ChurnedServices["2026-10-23"] != 5 || got.ChurnedCustomers["2026-10-23"] != 2 || got.AtRisk["2026-10-23"] != 7 {
+		t.Errorf("fold churn: %+v %v", got, err)
+	}
 	if err != nil || got.Cells["2026-10-23"]["IRT"].Revenue != 2 || got.NewCustomers["2026-10-23"] != 5 || len(got.Cells) != 1 {
 		t.Errorf("fold: %+v %v", got, err)
 	}

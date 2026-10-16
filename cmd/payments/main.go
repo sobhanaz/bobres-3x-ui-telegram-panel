@@ -17,6 +17,8 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/idpay"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/nextpay"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/trongrid"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	paymentserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
@@ -63,6 +65,29 @@ func setup(rt *app.Runtime) error {
 				return nil, err
 			}
 			return g, nil
+		},
+		// IDPay and NextPay: one API key each, like Zarinpal's merchant id.
+		Keyed: map[string]domain.KeyedOptions{
+			"idpay": {
+				Seed: domain.KeySettings{APIKey: cfg.IDPayAPIKey, Sandbox: cfg.IDPaySandbox, Proxy: cfg.IDPayProxy},
+				Build: func(k domain.KeySettings) (gateway.Gateway, error) {
+					g, err := idpay.New(idpay.Config{APIKey: k.APIKey, Sandbox: k.Sandbox, Proxy: k.Proxy})
+					if err != nil {
+						return nil, err
+					}
+					return g, nil
+				},
+			},
+			"nextpay": {
+				Seed: domain.KeySettings{APIKey: cfg.NextPayAPIKey, Proxy: cfg.NextPayProxy},
+				Build: func(k domain.KeySettings) (gateway.Gateway, error) {
+					g, err := nextpay.New(nextpay.Config{APIKey: k.APIKey, Sandbox: k.Sandbox, Proxy: k.Proxy})
+					if err != nil {
+						return nil, err
+					}
+					return g, nil
+				},
+			},
 		},
 		// Automatic USDT reads the store's address on TronGrid, through the
 		// optional proxy set with it.

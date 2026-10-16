@@ -7,14 +7,16 @@ import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
 import SettingsCard from '../components/settings/SettingsCard.vue'
 import ZarinpalCard from '../components/gateways/ZarinpalCard.vue'
+import KeyedGatewayCard from '../components/gateways/KeyedGatewayCard.vue'
 import UsdtAutoCard from '../components/gateways/UsdtAutoCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
-import { methodCards, stateSeverity, usdtAuto } from '../gateways'
+import { isKeyedProvider, methodCards, stateSeverity, usdtAuto } from '../gateways'
 import type { GatewaysReply } from '../types'
 
 // How customers pay (owner only): Zarinpal, whose merchant id and proxy stay
-// encrypted in the payments service, automatic USDT (TRC20), whose address,
+// encrypted in the payments service, IDPay and NextPay (an API key and a proxy,
+// kept the same way), automatic USDT (TRC20), whose address,
 // TronGrid key and proxy are kept there too, then a card per manual method and
 // Telegram Stars, whose switches and details are bot settings (each card
 // saves on its own through the settings endpoint).
@@ -37,6 +39,7 @@ async function load() {
 onMounted(load)
 
 const zarinpal = computed(() => reply.value?.providers.find((p) => p.provider === 'zarinpal') ?? null)
+const keyed = computed(() => (reply.value?.providers ?? []).filter((p) => isKeyedProvider(p.provider)))
 const usdt = computed(() => reply.value?.providers.find((p) => p.provider === usdtAuto) ?? null)
 const keyMissing = computed(() => (reply.value?.providers ?? []).some((p) => p.key_missing))
 const cards = computed(() => methodCards(reply.value?.settings ?? []))
@@ -65,6 +68,7 @@ const text = (key: string) => (te(key) ? t(key) : '')
   </div>
   <div v-else-if="reply" class="cards">
     <ZarinpalCard v-if="zarinpal" :config="zarinpal" class="wide" @saved="load" />
+    <KeyedGatewayCard v-for="k in keyed" :key="k.provider" :config="k" class="wide" @saved="load" />
     <UsdtAutoCard v-if="usdt" :config="usdt" class="wide" @saved="load" />
     <SettingsCard
       v-for="c in cards"

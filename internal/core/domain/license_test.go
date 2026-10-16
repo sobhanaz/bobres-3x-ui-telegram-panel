@@ -282,7 +282,7 @@ func TestEffectiveEntitlements(t *testing.T) {
 	// What a license in force gives: its own, joined to the free tier's
 	// payment methods (it never leaves less than the free tier).
 	inForce := func(e license.Entitlements) license.Entitlements {
-		e.Gateways = append(slices.Clone(e.Gateways), "zarinpal", "manual_card", "manual_crypto", "manual_zarinpal")
+		e.Gateways = append(slices.Clone(e.Gateways), "zarinpal", "idpay", "nextpay", "manual_card", "manual_crypto", "manual_zarinpal")
 		return e
 	}
 	shown := inForce(paid)
@@ -344,7 +344,7 @@ func TestPolicyConstants(t *testing.T) {
 	free := license.FreeEntitlements()
 	if free.MaxServers != 1 || free.MaxActiveServices != 25 || free.DashboardStaffSeat != 2 || free.Resellers || free.WhiteLabel ||
 		free.CryptoWatcher || free.UpdatesUntil != "" ||
-		strings.Join(free.Gateways, ",") != "zarinpal,stars,manual_card,manual_crypto,manual_zarinpal" {
+		strings.Join(free.Gateways, ",") != "zarinpal,idpay,nextpay,stars,manual_card,manual_crypto,manual_zarinpal" {
 		t.Errorf("free tier: %+v", free)
 	}
 	trial := license.TrialEntitlements()

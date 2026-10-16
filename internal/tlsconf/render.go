@@ -90,7 +90,7 @@ func Render(st State) (Files, error) {
 	if st.ZarinpalHost != "" {
 		site(&s, "The Zarinpal domain: only the pay page and the return URL.", st.ZarinpalHost, []string{
 			"@bobres_not_zarinpal {",
-			"\tnot path /pay/* /webhooks/zarinpal",
+			"\tnot path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay",
 			"}",
 			"handle @bobres_not_zarinpal {",
 			"\trespond \"Not found\" 404",

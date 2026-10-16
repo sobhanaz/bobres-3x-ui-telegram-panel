@@ -106,7 +106,7 @@ func TestRenderEveryCombination(t *testing.T) {
 			}
 			if st.ZarinpalHost != "" {
 				block := siteBlock(t, f.Sites, st.ZarinpalHost)
-				if !strings.Contains(block, "not path /pay/* /webhooks/zarinpal") || strings.Contains(block, "tls ") {
+				if !strings.Contains(block, "not path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay") || strings.Contains(block, "tls ") {
 					t.Fatalf("the Zarinpal site:\n%s", block)
 				}
 			} else if strings.Contains(f.Sites, "zarinpal") {
@@ -149,7 +149,7 @@ func TestRenderText(t *testing.T) {
 				"\n# The server's IP address: a Let's Encrypt short-lived certificate (160 hours), renewed by Caddy.\n" +
 				"[2001:db8::20] {\n\ttls {\n\t\tissuer acme {\n\t\t\tprofile shortlived\n\t\t}\n\t}\n\timport bobres_site\n}\n" +
 				"\n# The Zarinpal domain: only the pay page and the return URL.\n" +
-				"pay.example.net {\n\t@bobres_not_zarinpal {\n\t\tnot path /pay/* /webhooks/zarinpal\n\t}\n" +
+				"pay.example.net {\n\t@bobres_not_zarinpal {\n\t\tnot path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay\n\t}\n" +
 				"\thandle @bobres_not_zarinpal {\n\t\trespond \"Not found\" 404\n\t}\n\timport bobres_site\n}\n"},
 		{"ip on the domain's own address", State{Mode: ModeIP, Domain: "203.0.113.10", IP: "203.0.113.10"},
 			header + "# Mode: ip\ndefault_sni 203.0.113.10\n",
@@ -170,7 +170,7 @@ func TestRenderText(t *testing.T) {
 			header + "# Mode: auto\n\n# An IP address: Caddy's own CA signs its certificate (browsers do not trust it).\n" +
 				"192.168.1.10 {\n\ttls internal\n\timport bobres_site\n}\n" +
 				"\n# The Zarinpal domain: only the pay page and the return URL.\n" +
-				"pay.example.net {\n\t@bobres_not_zarinpal {\n\t\tnot path /pay/* /webhooks/zarinpal\n\t}\n" +
+				"pay.example.net {\n\t@bobres_not_zarinpal {\n\t\tnot path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay\n\t}\n" +
 				"\thandle @bobres_not_zarinpal {\n\t\trespond \"Not found\" 404\n\t}\n\timport bobres_site\n}\n"},
 		{"manual on a private IPv6 domain", State{Mode: ModeManual, Domain: "FD00:0::5", HasCert: true},
 			header + "# Mode: manual\ndefault_sni fd00::5\n",

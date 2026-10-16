@@ -7,6 +7,11 @@
 //   - GET /webhooks/zarinpal: Zarinpal sends the customer's browser back here.
 //     Nothing in the query is trusted: the payment is always verified with
 //     Zarinpal before the result page is shown.
+//   - GET|POST /webhooks/idpay and /webhooks/nextpay: the same for IDPay (which
+//     returns the customer by a form POST or a GET, as set in its panel) and
+//     NextPay. The callback only names the payment; the paid state, the amount
+//     and the order always come from the gateway's verify API. These routes
+//     cap the body and are rate limited.
 package web
 
 import (
@@ -15,6 +20,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -22,6 +28,8 @@ import (
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/idpay"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/nextpay"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
 )
 
@@ -38,6 +46,41 @@ type Handler struct {
 
 	mu   sync.Mutex
 	last map[string]time.Time // intent id -> last return-page check
+
+	lim limiter // all API-key gateway callbacks together
+}
+
+// maxCallbackBody caps what a gateway's callback may send (a few form fields).
+const maxCallbackBody = 8 << 10
+
+// limiter is a small token bucket: callbacks are unauthenticated, so a flood
+// of them must not turn into a flood of verify calls or database lookups.
+type limiter struct {
+	mu     sync.Mutex
+	tokens float64
+	at     time.Time
+}
+
+const (
+	callbackRate  = 20.0 // per second
+	callbackBurst = 40.0
+)
+
+func (l *limiter) allow() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	if l.at.IsZero() {
+		l.tokens = callbackBurst
+	} else {
+		l.tokens = min(callbackBurst, l.tokens+now.Sub(l.at).Seconds()*callbackRate)
+	}
+	l.at = now
+	if l.tokens < 1 {
+		return false
+	}
+	l.tokens--
+	return true
 }
 
 // returnGap: a refreshed or re-opened return page asks the gateway at most
@@ -56,6 +99,10 @@ func New(svc *domain.Service, st *store.Store, log *slog.Logger) *Handler {
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /pay/{id}", h.payPage)
 	mux.HandleFunc("GET /webhooks/zarinpal", h.zarinpalReturn)
+	mux.HandleFunc("GET /webhooks/idpay", h.idpayReturn)
+	mux.HandleFunc("POST /webhooks/idpay", h.idpayReturn)
+	mux.HandleFunc("GET /webhooks/nextpay", h.nextpayReturn)
+	mux.HandleFunc("POST /webhooks/nextpay", h.nextpayReturn)
 }
 
 func headers(w http.ResponseWriter) {
@@ -104,7 +151,90 @@ func (h *Handler) zarinpalReturn(w http.ResponseWriter, r *http.Request) {
 		h.render(w, http.StatusServiceUnavailable, page{Kind: "error"})
 		return
 	}
-	statusOK := r.URL.Query().Get("Status") == "OK"
+	h.finishReturn(w, r, in, r.URL.Query().Get("Status") == "OK", "zarinpal")
+}
+
+// idpayReturn: IDPay sends the customer back by POST (a form) or GET (a query),
+// as set in its panel. Only the payment id is used, and only to find our
+// payment: status and everything else in it can be forged.
+func (h *Handler) idpayReturn(w http.ResponseWriter, r *http.Request) {
+	headers(w)
+	form, ok := h.callbackForm(w, r)
+	if !ok {
+		return
+	}
+	id := form.Get("id")
+	if !idpay.ValidID(id) {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return
+	}
+	in, ok := h.byExternal(w, r, "idpay", id)
+	if !ok {
+		return
+	}
+	if o := form.Get("order_id"); o != "" && o != in.ID {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return
+	}
+	// 10: the payer paid and the payment waits for our verify.
+	h.finishReturn(w, r, in, form.Get("status") == "10", "idpay")
+}
+
+// nextpayReturn: NextPay sends the customer back with the payment's trans_id.
+// Whether it was paid is the verify call's answer alone.
+func (h *Handler) nextpayReturn(w http.ResponseWriter, r *http.Request) {
+	headers(w)
+	form, ok := h.callbackForm(w, r)
+	if !ok {
+		return
+	}
+	id := form.Get("trans_id")
+	if !nextpay.ValidID(id) {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return
+	}
+	in, ok := h.byExternal(w, r, "nextpay", id)
+	if !ok {
+		return
+	}
+	if o := form.Get("order_id"); o != "" && o != in.ID {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return
+	}
+	h.finishReturn(w, r, in, true, "nextpay")
+}
+
+// callbackForm rate limits a callback, caps its body and reads its fields.
+func (h *Handler) callbackForm(w http.ResponseWriter, r *http.Request) (url.Values, bool) {
+	if !h.lim.allow() {
+		w.Header().Set("Retry-After", "5")
+		h.render(w, http.StatusTooManyRequests, page{Kind: "error"})
+		return nil, false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxCallbackBody)
+	if err := r.ParseForm(); err != nil {
+		h.render(w, http.StatusBadRequest, page{Kind: "missing"})
+		return nil, false
+	}
+	return r.Form, true
+}
+
+func (h *Handler) byExternal(w http.ResponseWriter, r *http.Request, provider, id string) (*store.Intent, bool) {
+	in, err := h.st.IntentByExternalID(r.Context(), provider, id)
+	if errors.Is(err, store.ErrNotFound) {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return nil, false
+	}
+	if err != nil {
+		h.log.Warn(provider+" return: lookup", "err", err)
+		h.render(w, http.StatusServiceUnavailable, page{Kind: "error"})
+		return nil, false
+	}
+	return in, true
+}
+
+// finishReturn verifies the payment with its gateway and shows the result.
+func (h *Handler) finishReturn(w http.ResponseWriter, r *http.Request, in *store.Intent, statusOK bool, provider string) {
 	if in.Status != "succeeded" && h.mayCheck(in.ID) {
 		// Not tied to the browser: a closed tab must not cut a verify short, and
 		// 20 s stays under the server's write timeout. The service throttles
@@ -113,7 +243,7 @@ func (h *Handler) zarinpalReturn(w http.ResponseWriter, r *http.Request) {
 		checked, err := h.svc.CheckAfterReturn(ctx, in.ID)
 		cancel()
 		if err != nil {
-			h.log.Warn("zarinpal return: check", "intent", in.ID, "err", err)
+			h.log.Warn(provider+" return: check", "intent", in.ID, "err", err)
 		} else {
 			in = checked
 		}

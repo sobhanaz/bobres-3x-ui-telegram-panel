@@ -88,6 +88,9 @@ message Subscription {
   int64 last_synced_at = 11;
   string subscription_link = 12; // set once provisioned
   string label = 13; // the name a reseller gave it ("" = none)
+  // The branded page for this service (public base URL + /sub/<token>); "" when
+  // the page is switched off or the public URL is not set.
+  string page_url = 14;
 }
 
 message Ticket {

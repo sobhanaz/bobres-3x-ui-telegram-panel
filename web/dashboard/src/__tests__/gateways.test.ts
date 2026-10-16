@@ -13,6 +13,14 @@ import {
   depositKey,
   depositNoteMax,
   healthState,
+  isKeyedProvider,
+  keyedBlockedByOpen,
+  keyedBody,
+  keyedDirty,
+  keyedFormOf,
+  keyedHasSandbox,
+  keyedProblems,
+  keyedTestBody,
   merchantValid,
   methodCards,
   methods,
@@ -95,6 +103,69 @@ const payments = (over: Record<string, string> = {}): SettingItem[] =>
     toggle('payments.manual_zarinpal.enabled', 'false'),
     toggle('payments.stars.enabled'),
   ].map((i) => (i.key in over ? { ...i, value: over[i.key] } : i))
+
+describe('idpay and nextpay form', () => {
+  const idpay = (over: Partial<GatewayConfig> = {}) => config({ provider: 'idpay', merchant_hint: '', ...over })
+  const nextpay = (over: Partial<GatewayConfig> = {}) => config({ provider: 'nextpay', merchant_hint: '', ...over })
+  it('knows the keyed providers and that only IDPay has a sandbox', () => {
+    expect(isKeyedProvider('idpay')).toBe(true)
+    expect(isKeyedProvider('nextpay')).toBe(true)
+    expect(isKeyedProvider('zarinpal')).toBe(false)
+    expect(isKeyedProvider('usdt_trc20_auto')).toBe(false)
+    expect(keyedHasSandbox('idpay')).toBe(true)
+    expect(keyedHasSandbox('nextpay')).toBe(false)
+  })
+  it('starts from the stored switches and empty secrets; NextPay never shows a sandbox', () => {
+    expect(keyedFormOf(idpay({ enabled: true, sandbox: true }))).toEqual({ enabled: true, sandbox: true, apiKey: '', proxy: '', clearProxy: false })
+    expect(keyedFormOf(nextpay({ sandbox: true })).sandbox).toBe(false)
+  })
+  it('checks the form as core will', () => {
+    const c = idpay()
+    const f = keyedFormOf(c)
+    expect(keyedProblems(f, c)).toEqual([])
+    expect(keyedProblems({ ...f, apiKey: 'abc', proxy: 'ftp://x' }, c)).toEqual(['api_key', 'proxy'])
+    const blank = idpay({ configured: false })
+    expect(keyedProblems({ ...f, enabled: true }, blank)).toEqual(['enabled'])
+    expect(keyedProblems({ ...f, enabled: true, apiKey: merchant }, blank)).toEqual([])
+    expect(keyedProblems({ ...f, sandbox: true }, idpay({ sandbox_allowed: false }))).toEqual(['sandbox'])
+  })
+  it('knows when something would change', () => {
+    const c = idpay()
+    const f = keyedFormOf(c)
+    expect(keyedDirty(f, c)).toBe(false)
+    expect(keyedDirty({ ...f, enabled: true }, c)).toBe(true)
+    expect(keyedDirty({ ...f, apiKey: ' ' }, c)).toBe(false)
+    expect(keyedDirty({ ...f, apiKey: merchant }, c)).toBe(true)
+    expect(keyedDirty({ ...f, clearProxy: true }, c)).toBe(true)
+  })
+  it('builds the bodies: the key normalized, no sandbox for NextPay, "" keeps a secret', () => {
+    const f = keyedFormOf(idpay())
+    expect(keyedBody(f, 'idpay')).toEqual({ enabled: false, sandbox: false, api_key: '', proxy: '', clear_proxy: false })
+    expect(keyedBody({ ...f, sandbox: true, apiKey: ' ' + merchant.toUpperCase() + ' ', proxy: ' http://p.example.com:3128 ' }, 'idpay')).toEqual({
+      enabled: false, sandbox: true, api_key: merchant, proxy: 'http://p.example.com:3128', clear_proxy: false,
+    })
+    expect(keyedBody({ ...f, sandbox: true }, 'nextpay').sandbox).toBe(false)
+    expect(keyedBody({ ...f, proxy: 'http://p.example.com:3128', clearProxy: true }, 'nextpay')).toMatchObject({ proxy: '', clear_proxy: true })
+    expect(keyedTestBody({ ...f, enabled: true, apiKey: merchant }, 'idpay')).toEqual({ sandbox: false, api_key: merchant, proxy: '', clear_proxy: false })
+  })
+  it('refuses a new key or sandbox while payments are open', () => {
+    const c = idpay()
+    const f = keyedFormOf(c)
+    expect(keyedBlockedByOpen(f, c)).toBe(false)
+    expect(keyedBlockedByOpen({ ...f, apiKey: merchant }, c)).toBe(true)
+    expect(keyedBlockedByOpen({ ...f, sandbox: true }, c)).toBe(true)
+    expect(keyedBlockedByOpen({ ...f, apiKey: merchant }, idpay({ health: { ...c.health!, open: 0 } }))).toBe(false)
+    expect(keyedBlockedByOpen({ ...f, apiKey: merchant }, idpay({ configured: false }))).toBe(false)
+  })
+  it('names both gateways in both languages', () => {
+    for (const lang of [en, fa]) {
+      for (const p of ['idpay', 'nextpay']) {
+        expect(lang.payment.provider[p as 'idpay'], p).toBeTruthy()
+        expect((lang.gateway as Record<string, unknown>)[p + '_desc'], p).toBeTruthy()
+      }
+    }
+  })
+})
 
 describe('zarinpal form', () => {
   it('reads a merchant id as payments does', () => {
@@ -643,6 +714,41 @@ describe('gateways page', () => {
     ;(zp().querySelector('.report button.refresh') as HTMLButtonElement).click()
     await vi.waitFor(() => expect(zp().querySelector('.check-errors')).toBeNull())
     expect(zp().querySelector('.week-succeeded')?.textContent).toBe('۵')
+  })
+
+  it('shows IDPay and NextPay with a write-only API key; NextPay has no sandbox', async () => {
+    let idpay = config({ provider: 'idpay', merchant_hint: '', configured: false })
+    const nextpay = config({ provider: 'nextpay', merchant_hint: '', configured: true, sandbox_allowed: true })
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [config(), idpay, nextpay], settings: payments() }), (url, init, b) => {
+      if (url === '/api/v1/gateways/idpay' && init?.method === 'PUT') {
+        idpay = { ...idpay, enabled: b.enabled as boolean, configured: true }
+        return json(200, { item: idpay })
+      }
+    })
+    await found('.keyed-idpay')
+    const card = (p: string) => document.querySelector('.keyed-' + p) as HTMLElement
+    expect(card('idpay').querySelector('.card-title')?.textContent).toBe(text('payment.provider.idpay'))
+    expect(card('nextpay').querySelector('.card-title')?.textContent).toBe(text('payment.provider.nextpay'))
+    // only IDPay has a sandbox
+    expect(document.getElementById('idpay-sandbox')).not.toBeNull()
+    expect(document.getElementById('nextpay-sandbox')).toBeNull()
+    // the stored key is only "set"; a new one is typed into a password field
+    expect(field('nextpay-api-key').querySelector('.state')?.textContent).toBe(text('secret.set'))
+    expect(document.querySelector('#nextpay-api-key')).toBeNull()
+    const input = await found<HTMLInputElement>('#idpay-api-key')
+    expect(input.type).toBe('password')
+    type(input, 'abc')
+    await vi.waitFor(() => expect(field('idpay-api-key').textContent).toContain(text('gateway.keyed.invalid.api_key')))
+    const saveIdpay = () => card('idpay').querySelector('button.save') as HTMLButtonElement
+    expect(saveIdpay().disabled).toBe(true)
+    type(input, ' ' + merchant.toUpperCase() + ' ')
+    ;(document.getElementById('idpay-enabled') as HTMLInputElement).click()
+    await vi.waitFor(() => expect(saveIdpay().disabled).toBe(false))
+    saveIdpay().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/idpay')).toEqual([{ enabled: true, sandbox: false, api_key: merchant, proxy: '', clear_proxy: false }]))
+    // the typed key is gone from the page at once
+    await vi.waitFor(() => expect(document.querySelector('#idpay-api-key')).toBeNull())
+    expect(document.body.innerHTML.toLowerCase()).not.toContain(merchant)
   })
 
   it('replaces the merchant id, refused while payments are open', async () => {
@@ -1219,10 +1325,12 @@ describe('servers and gateways texts', () => {
       ...['url', 'https', 'credentials'].map((s) => 'server.invalid.' + s),
       ...['ok', 'error', 'idle'].map((s) => 'gateway.health.' + s),
       ...['unreadable', 'sandbox_refused', 'public_url', 'invalid'].map((s) => 'gateway.problem.' + s),
+      ...['unreadable', 'sandbox_refused', 'public_url', 'invalid'].map((s) => 'gateway.keyed.problem.' + s),
+      ...['idpay', 'nextpay'].map((p) => 'gateway.' + p + '_desc'),
       ...['unreadable', 'invalid'].map((s) => 'gateway.usdt.problem.' + s),
       ...['format', 'checksum', 'required'].map((s) => 'gateway.usdt.invalid.address_' + s),
       ...unmatchedReasons.map((r) => 'gateway.usdt.reason.' + r),
-      ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', 'usdt_trc20_auto', 'stars', 'wallet'].map((p) => 'payment.provider.' + p),
+      ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'stars', 'wallet'].map((p) => 'payment.provider.' + p),
       ...['on', 'off', 'incomplete'].map((s) => 'gateway.method_state.' + s),
       ...methods.flatMap((m) => ['gateway.method.' + m.key + '.title', 'gateway.method.' + m.key + '.desc', `settings.field.${m.toggle}.label`, `settings.field.${m.toggle}.help`]),
       ...['off', 'ok', 'incomplete', 'down'].map((s) => 'overview.gateway_state.' + s),

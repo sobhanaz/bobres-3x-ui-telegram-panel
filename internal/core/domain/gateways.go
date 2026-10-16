@@ -12,7 +12,11 @@ import (
 // starts; the payments service then holds the customer to that amount.
 const (
 	Zarinpal = "zarinpal"
-	Stars    = "stars"
+	// IDPay and NextPay are Iranian gateways built like Zarinpal: switched on
+	// in payments with an API key, charged in Rial (Toman x 10).
+	IDPay   = "idpay"
+	NextPay = "nextpay"
+	Stars   = "stars"
 	// USDTAuto is automatic USDT on TRON (TRC20): the customer sends an exact
 	// amount to the store's address and payments' watcher finds it on chain.
 	// It is switched on in payments (the Gateways page), like Zarinpal.
@@ -53,6 +57,15 @@ const (
 	zarinpalMaxToman = 100_000_000
 )
 
+// IDPay's and NextPay's per-payment limits in Toman (their Rial limits are
+// 1,000 to 500,000,000 and 10,000 to 1,000,000,000: the gateway packages).
+const (
+	idpayMinToman   = 100
+	idpayMaxToman   = 50_000_000
+	nextpayMinToman = 1_000
+	nextpayMaxToman = 100_000_000
+)
+
 // Automatic USDT's per-payment limits, in micro-USDT (scale 6). Payments
 // adds 1 to 999 micro-USDT to what core asks, so that every open payment has
 // its own exact amount.
@@ -68,7 +81,7 @@ const (
 )
 
 func isGateway(provider string) bool {
-	return provider == Zarinpal || provider == Stars || provider == USDTAuto
+	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Stars || provider == USDTAuto
 }
 
 func ceilDiv(a, b int64) int64 { return (a + b - 1) / b }
@@ -99,6 +112,22 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 		}
 		if amount < zarinpalMinToman || amount > zarinpalMaxToman {
 			return 0, "", invalid("Zarinpal takes 1,000 to 100,000,000 Toman per payment")
+		}
+		return amount * 10, "IRR", nil
+	case IDPay:
+		if currency != "IRT" {
+			return 0, "", invalid("IDPay takes Toman prices only")
+		}
+		if amount < idpayMinToman || amount > idpayMaxToman {
+			return 0, "", invalid("IDPay takes 100 to 50,000,000 Toman per payment")
+		}
+		return amount * 10, "IRR", nil
+	case NextPay:
+		if currency != "IRT" {
+			return 0, "", invalid("NextPay takes Toman prices only")
+		}
+		if amount < nextpayMinToman || amount > nextpayMaxToman {
+			return 0, "", invalid("NextPay takes 1,000 to 100,000,000 Toman per payment")
 		}
 		return amount * 10, "IRR", nil
 	case Stars:

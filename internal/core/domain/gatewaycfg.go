@@ -211,10 +211,37 @@ func sameAudit(a, b map[string]any) bool {
 	return true
 }
 
+// checkKeyedFields: IDPay and NextPay have an API key (the 36-character id
+// from the gateway's panel) and nothing else of their own; NextPay has no
+// sandbox. The key comes back normalised.
+func checkKeyedFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
+	title := "IDPay"
+	if provider == NextPay {
+		title = "NextPay"
+	}
+	apiKey = normalizeMerchant(pasteJunk.Replace(apiKey))
+	switch {
+	case merchant != "":
+		return "", "", &FieldError{"merchant_id", title + " has no merchant id: it has an API key"}
+	case normalizeTronAddress(address) != "":
+		return "", "", &FieldError{"address", "only automatic USDT has an address"}
+	case sandbox && provider == NextPay:
+		return "", "", &FieldError{"sandbox", "NextPay has no sandbox"}
+	case apiKey != "" && clearKey:
+		return "", "", &FieldError{"api_key", "set an API key or clear it, not both"}
+	case apiKey != "" && !merchantRe.MatchString(apiKey):
+		return "", "", &FieldError{"api_key", "the 36-character API key from the " + title + " panel"}
+	}
+	return "", apiKey, nil
+}
+
 // checkProviderFields checks the fields only one provider has: automatic
 // USDT's address and API key (normalised), Zarinpal's merchant id and
 // sandbox.
 func checkProviderFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
+	if provider == IDPay || provider == NextPay {
+		return checkKeyedFields(provider, address, apiKey, clearKey, merchant, sandbox)
+	}
 	if provider != USDTAuto {
 		switch {
 		case normalizeTronAddress(address) != "":

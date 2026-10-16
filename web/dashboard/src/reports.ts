@@ -36,6 +36,12 @@ export interface ReportBucket {
   partial: boolean
   new_customers: number
   trials: number
+  /** services whose final expiry is in this period and that stayed ended past the grace period */
+  churned_services: number
+  /** people whose last service ended in this period, with no other service running */
+  churned_customers: number
+  /** services that ended in this period but are still inside the grace period: they may yet renew */
+  at_risk: number
   currencies: Record<string, ReportCell>
 }
 
@@ -46,10 +52,12 @@ export interface ReportSummary {
   /** which calendar the weeks and months follow; a bucket's date is Gregorian either way */
   calendar: Calendar
   tz: string
+  /** how many days after its end a service counts as churned */
+  churn_grace_days: number
   /** every currency with any number in the range, sorted */
   currencies: string[]
   buckets: ReportBucket[]
-  totals: { new_customers: number; trials: number; currencies: Record<string, ReportCell> }
+  totals: Omit<ReportBucket, 'date' | 'partial'>
 }
 
 export interface ReportPlan {
@@ -63,7 +71,7 @@ export interface ReportPlan {
 export interface ReportMethod {
   /** wallet, manual, gateway, or unknown */
   method: string
-  /** who took the payment (zarinpal, stars, usdt_trc20_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
+  /** who took the payment (zarinpal, idpay, nextpay, stars, usdt_trc20_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
   provider: string
   currency: string
   orders: number
@@ -157,7 +165,8 @@ export function share(part: number, total: number): number {
 
 /** hasData says whether a report holds anything to show. */
 export function hasData(s: ReportSummary): boolean {
-  return s.currencies.length > 0 || s.totals.new_customers > 0 || s.totals.trials > 0
+  const t = s.totals
+  return s.currencies.length > 0 || t.new_customers > 0 || t.trials > 0 || t.churned_services > 0 || t.at_risk > 0
 }
 
 /** jalaliMonth writes the Jalali month a date ("2026-10-23") starts, as

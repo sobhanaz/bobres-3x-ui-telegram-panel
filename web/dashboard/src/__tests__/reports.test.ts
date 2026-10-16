@@ -20,6 +20,8 @@ import {
 
 // The numbers: dates the store's zone names stay on their day, amounts keep
 // their unit, a chart is scaled to one currency, and a request names a range.
+const churn0 = { churned_services: 0, churned_customers: 0, at_risk: 0 }
+
 describe('report dates and numbers', () => {
   it('writes a store-local date as the same day in both calendars', () => {
     // 14 Oct 2026 is 22 Mehr 1405; the browser's own zone cannot move it
@@ -77,20 +79,23 @@ describe('report dates and numbers', () => {
       topups: { count: 0, amount: 0 }, rejected: { count: 0, amount: 0 }, gateway_failed: { count: 0, amount: 0 }, cancelled: { count: 0, amount: 0 },
     })
     const bucket = (date: string, irt: number, usdt: number, partial = false): ReportBucket => ({
-      date, partial, new_customers: 0, trials: 0, currencies: { IRT: cell(irt), USDT: cell(usdt) },
+      date, partial, new_customers: 0, trials: 0, ...churn0, currencies: { IRT: cell(irt), USDT: cell(usdt) },
     })
     const s = {
-      from: '2026-10-01', to: '2026-10-03', group: 'day', calendar: 'gregorian', tz: 'Asia/Tehran', currencies: ['IRT', 'USDT'],
+      from: '2026-10-01', to: '2026-10-03', group: 'day', calendar: 'gregorian', tz: 'Asia/Tehran', churn_grace_days: 7, currencies: ['IRT', 'USDT'],
       buckets: [bucket('2026-10-01', 100, 0), bucket('2026-10-02', 0, 5_000_000), bucket('2026-10-03', 50, 0, true)],
-      totals: { new_customers: 0, trials: 0, currencies: { IRT: cell(150), USDT: cell(5_000_000) } },
+      totals: { new_customers: 0, trials: 0, ...churn0, currencies: { IRT: cell(150), USDT: cell(5_000_000) } },
     } as ReportSummary
     expect(bars(s, 'IRT').map((b) => b.pct)).toEqual([100, 0, 50])
     expect(bars(s, 'USDT').map((b) => b.pct)).toEqual([0, 100, 0]) // 5,000,000 micro-USDT never lifts the Toman bars
     expect(bars(s, 'IRT')[2].partial).toBe(true)
     expect(bars(s, 'EUR').map((b) => b.pct)).toEqual([0, 0, 0]) // no revenue: a flat chart, not NaN
     expect(hasData(s)).toBe(true)
-    expect(hasData({ ...s, currencies: [], totals: { new_customers: 0, trials: 0, currencies: {} } })).toBe(false)
-    expect(hasData({ ...s, currencies: [], totals: { new_customers: 2, trials: 0, currencies: {} } })).toBe(true)
+    expect(hasData({ ...s, currencies: [], totals: { new_customers: 0, trials: 0, ...churn0, currencies: {} } })).toBe(false)
+    expect(hasData({ ...s, currencies: [], totals: { new_customers: 2, trials: 0, ...churn0, currencies: {} } })).toBe(true)
+    // a period that only lost services still has something to show
+    expect(hasData({ ...s, currencies: [], totals: { new_customers: 0, trials: 0, ...churn0, churned_services: 1, currencies: {} } })).toBe(true)
+    expect(hasData({ ...s, currencies: [], totals: { new_customers: 0, trials: 0, ...churn0, at_risk: 3, currencies: {} } })).toBe(true)
     // a currency only a table names is still listed, once
     const plans = [{ currency: 'XTR' }, { currency: 'IRT' }] as ReportPlan[]
     expect(currenciesOf(s, plans, [{ currency: 'XTR' }] as ReportMethod[])).toEqual(['IRT', 'USDT', 'XTR'])
@@ -224,17 +229,17 @@ describe('the Reports page', () => {
     revenue: 0, refunds: flow(), net: 0, orders: 0, new_orders: 0, renewals: 0, traffic_topups: 0, topups: flow(), rejected: flow(), gateway_failed: flow(), cancelled: flow(), ...c,
   })
   const summary = (): ReportSummary => ({
-    from: '2026-10-15', to: '2026-10-17', group: 'day', calendar: 'gregorian', tz: 'Asia/Tehran', currencies: ['IRT', 'USDT'],
+    from: '2026-10-15', to: '2026-10-17', group: 'day', calendar: 'gregorian', tz: 'Asia/Tehran', churn_grace_days: 7, currencies: ['IRT', 'USDT'],
     buckets: [
-      { date: '2026-10-15', partial: false, new_customers: 1, trials: 0, currencies: { IRT: cell({ revenue: 100_000, net: 100_000, orders: 1, new_orders: 1 }), USDT: cell({}) } },
-      { date: '2026-10-16', partial: false, new_customers: 0, trials: 1, currencies: { IRT: cell({}), USDT: cell({ revenue: 2_500_000, net: 2_500_000, orders: 1, renewals: 1 }) } },
+      { date: '2026-10-15', partial: false, new_customers: 1, trials: 0, churned_services: 2, churned_customers: 1, at_risk: 0, currencies: { IRT: cell({ revenue: 100_000, net: 100_000, orders: 1, new_orders: 1 }), USDT: cell({}) } },
+      { date: '2026-10-16', partial: false, new_customers: 0, trials: 1, churned_services: 0, churned_customers: 0, at_risk: 1, currencies: { IRT: cell({}), USDT: cell({ revenue: 2_500_000, net: 2_500_000, orders: 1, renewals: 1 }) } },
       {
-        date: '2026-10-17', partial: false, new_customers: 1, trials: 0,
+        date: '2026-10-17', partial: false, new_customers: 1, trials: 0, churned_services: 1, churned_customers: 1, at_risk: 2,
         currencies: { IRT: cell({ revenue: 250_000, refunds: flow(1, 50_000), net: 200_000, orders: 2, new_orders: 1, traffic_topups: 1, topups: flow(1, 70_000), rejected: flow(1, 90_000), gateway_failed: flow(3, 40_000), cancelled: flow(2, 300_000) }), USDT: cell({}) },
       },
     ],
     totals: {
-      new_customers: 2, trials: 1,
+      new_customers: 2, trials: 1, churned_services: 3, churned_customers: 2, at_risk: 3,
       currencies: {
         IRT: cell({ revenue: 350_000, refunds: flow(1, 50_000), net: 300_000, orders: 3, new_orders: 2, traffic_topups: 1, topups: flow(1, 70_000), rejected: flow(1, 90_000), gateway_failed: flow(3, 40_000), cancelled: flow(2, 300_000) }),
         USDT: cell({ revenue: 2_500_000, net: 2_500_000, orders: 1, renewals: 1 }),
@@ -300,6 +305,17 @@ describe('the Reports page', () => {
     // the customers card counts people, once
     expect(text(document.querySelector('.customers-card'))).toContain('2')
     expect(text(document.querySelector('.customers-card'))).toContain('Free trials started: 1')
+    // the churn card: services lost, people lost, and the ones still inside the grace period
+    const churn = text(document.querySelector('.churn-card'))
+    expect(text(document.querySelector('.churned-services'))).toBe('3')
+    expect(churn).toContain('Services lost')
+    expect(churn).toContain('not renewed within 7 days')
+    expect(churn).toContain('Customers lost: 2')
+    expect(churn).toContain('Ended, still inside the grace period: 3')
+    const headers = [...document.querySelectorAll('.period-table th')].map((h) => text(h))
+    expect(headers.slice(-2)).toEqual(['Services lost', 'At risk'])
+    const firstRow = [...document.querySelectorAll('.period-table tbody tr:first-child td')].map((c) => text(c))
+    expect(firstRow.slice(-2)).toEqual(['2', '0'])
     // one chart per currency, a bar per period
     const charts = [...document.querySelectorAll<HTMLElement>('.chart')]
     expect(charts.map((c) => c.dataset.currency)).toEqual(['IRT', 'USDT'])
@@ -360,8 +376,8 @@ describe('the Reports page', () => {
 
   it('says so when nothing was sold, with no cards or charts', async () => {
     const empty: ReportSummary = {
-      ...summary(), currencies: [], buckets: summary().buckets.map((b) => ({ ...b, new_customers: 0, trials: 0, currencies: {} })),
-      totals: { new_customers: 0, trials: 0, currencies: {} },
+      ...summary(), currencies: [], buckets: summary().buckets.map((b) => ({ ...b, new_customers: 0, trials: 0, ...churn0, currencies: {} })),
+      totals: { new_customers: 0, trials: 0, ...churn0, currencies: {} },
     }
     await boot('/admin/reports', ['reports.read'], core({ summary: () => json(200, empty) }))
     await found('.empty')

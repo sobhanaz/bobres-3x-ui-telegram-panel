@@ -112,6 +112,15 @@ const CASES: [string, Record<string, string>, Forms][] = [
   ['reports.kpi.refunds_n', {}, ['0 refunds', '1 refund', '2 refunds']],
   ['reports.kpi.rejected_n', {}, ['0 payments', '1 payment', '2 payments']],
   ['reports.kpi.cancelled_n', {}, ['0 orders', '1 order', '2 orders']],
+  [
+    'reports.churn.hint',
+    {},
+    [
+      'Services that ended in this period and were not renewed within 0 days',
+      'Services that ended in this period and were not renewed within 1 day',
+      'Services that ended in this period and were not renewed within 2 days',
+    ],
+  ],
   ['gateway.test_unverified', {}, ['0 paid payments are waiting to be confirmed.', '1 paid payment is waiting to be confirmed.', '2 paid payments are waiting to be confirmed.']],
 ]
 

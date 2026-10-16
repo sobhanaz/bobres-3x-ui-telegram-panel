@@ -416,7 +416,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	// 4 days: one people row and one row per currency (IRT, USDT) each.
-	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 21 {
+	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 24 {
 		t.Fatalf("%d rows: %v", len(rows), rows)
 	}
 	col := map[string]int{}
@@ -425,16 +425,18 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	byKey := map[string][]string{}
 	for _, r := range rows[1:] {
-		if len(r) != 21 {
+		if len(r) != 24 {
 			t.Fatalf("a row has %d cells: %v", len(r), r)
 		}
 		byKey[r[0]+"|"+r[2]] = r
 	}
 	// People rows have no currency and no money; currency rows have money and no people.
-	if p := byKey["2026-10-31|"]; p == nil || p[col["new_customers"]] != "1" || p[col["free_trials"]] != "0" || p[col["revenue"]] != "" {
+	if p := byKey["2026-10-31|"]; p == nil || p[col["new_customers"]] != "1" || p[col["free_trials"]] != "0" || p[col["revenue"]] != "" ||
+		p[col["churned_services"]] != "0" || p[col["churned_customers"]] != "0" || p[col["at_risk_services"]] != "0" {
 		t.Errorf("people row: %v", p)
 	}
-	if c := byKey["2026-10-31|IRT"]; c == nil || c[col["revenue"]] != "100000" || c[col["new_customers"]] != "" || c[col["paid_orders"]] != "1" {
+	if c := byKey["2026-10-31|IRT"]; c == nil || c[col["revenue"]] != "100000" || c[col["new_customers"]] != "" || c[col["paid_orders"]] != "1" ||
+		c[col["churned_services"]] != "" || c[col["at_risk_services"]] != "" {
 		t.Errorf("IRT row: %v", c)
 	}
 	if c := byKey["2026-11-02|USDT"]; c == nil || c[col["revenue"]] != "2.500000" || c[col["paid_orders"]] != "1" {
@@ -824,5 +826,62 @@ func TestReportsJalaliCSVNameAndAudit(t *testing.T) {
 	}
 	if cal, _ := last(); cal != "jalali" {
 		t.Errorf("orders audit calendar %q", cal)
+	}
+}
+
+// Churn is in the summary JSON (per bucket, in the totals, with the grace period
+// in force) and in the CSV's last three columns, on the people rows.
+func TestReportsChurn(t *testing.T) {
+	f, b, ids := reportFixture(t)
+	f.api.now = func() time.Time { return time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC) }
+	// Ali's service ended on 1 Nov (Tehran), Sara's on 15 Nov: 19 and 5 days before now.
+	for _, c := range []struct{ order, expires string }{{ids["o1"], "2026-11-01T10:00:00Z"}, {ids["o2"], "2026-11-15T10:00:00Z"}} {
+		var user string
+		if err := f.st.DB().QueryRow(context.Background(), `SELECT user_id FROM core.orders WHERE id = $1`, c.order).Scan(&user); err != nil {
+			t.Fatal(err)
+		}
+		when, _ := time.Parse(time.RFC3339, c.expires)
+		if _, err := f.st.DB().Exec(context.Background(), `INSERT INTO core.subscriptions (id, user_id, order_id, server_id, client_email, status, expires_at)
+			VALUES ($1, $2, $3, $4, $5, 'expired', $6)`, buuid.MustV7().String(), user, c.order, buuid.MustV7().String(), "c-"+c.order, when); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, out := b.do(http.MethodGet, "/api/v1/reports/summary?from=2026-10-31&to=2026-11-30&group=month&tz=Asia/Tehran", nil)
+	if code != 200 || num(out["churn_grace_days"]) != 7 {
+		t.Fatalf("summary: %d %v", code, out)
+	}
+	totals, _ := out["totals"].(map[string]any)
+	if num(totals["churned_services"]) != 1 || num(totals["churned_customers"]) != 1 || num(totals["at_risk"]) != 1 {
+		t.Errorf("totals %v", totals)
+	}
+	// A longer grace period: nobody has churned yet but Ali, whose service ended 19 days ago.
+	_, out = b.do(http.MethodGet, "/api/v1/reports/summary?from=2026-10-31&to=2026-11-30&group=month&tz=Asia/Tehran&churn_grace_days=30", nil)
+	totals, _ = out["totals"].(map[string]any)
+	if num(out["churn_grace_days"]) != 30 || num(totals["churned_services"]) != 0 || num(totals["at_risk"]) != 2 {
+		t.Errorf("grace 30: %v", out)
+	}
+	if code, out = b.do(http.MethodGet, "/api/v1/reports/summary?churn_grace_days=-1", nil); code != 400 {
+		t.Errorf("a negative grace period: %d %v", code, out)
+	}
+	code, _, body := b.get("/api/v1/reports/summary.csv?from=2026-10-31&to=2026-11-30&group=month&tz=Asia/Tehran")
+	if code != 200 {
+		t.Fatalf("csv: %d", code)
+	}
+	rows := parseCSV(t, body)
+	col := map[string]int{}
+	for i, name := range rows[0] {
+		col[name] = i
+	}
+	if col["churned_services"] != 21 || col["churned_customers"] != 22 || col["at_risk_services"] != 23 {
+		t.Fatalf("the churn columns are not the last three: %v", col)
+	}
+	var people []string
+	for _, r := range rows[1:] {
+		if r[2] == "" {
+			people = r
+		}
+	}
+	if people == nil || people[col["churned_services"]] != "1" || people[col["churned_customers"]] != "1" || people[col["at_risk_services"]] != "1" {
+		t.Errorf("people row: %v", people)
 	}
 }

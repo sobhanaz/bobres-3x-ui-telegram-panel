@@ -48,7 +48,7 @@ const live = computed(() => !!s.value && s.value.status !== 'deleted' && s.value
 const left = computed(() => (s.value?.expires_at ? daysLeft(s.value.expires_at) : null))
 
 // One dialog at a time; each action knows its request.
-type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete'
+type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete' | 'page_regenerate'
 const action = ref<Action | null>(null)
 const open = computed({ get: () => action.value !== null, set: (v) => !v && (action.value = null) })
 const busy = ref(false)
@@ -89,6 +89,8 @@ const dialog = computed(() => {
       return { title: t('service.enable'), message: t('service.enable_intro'), confirm: t('service.enable'), danger: false }
     case 'delete':
       return { title: t('service.delete'), message: t('service.delete_intro'), confirm: t('service.delete'), danger: true }
+    case 'page_regenerate':
+      return { title: t('service.page_regenerate'), message: t('service.page_regenerate_intro'), confirm: t('service.page_regenerate'), danger: true }
   }
   return { title: '', message: '', confirm: '', danger: false }
 })
@@ -111,6 +113,9 @@ async function confirm(reason: string) {
         break
       case 'delete':
         res = await api('POST', `/services/${id.value}/delete`, { reason })
+        break
+      case 'page_regenerate':
+        res = await api('POST', `/services/${id.value}/page-token/regenerate`, { reason })
         break
       default:
         return
@@ -150,6 +155,16 @@ async function copyLink() {
     toast.add({ severity: 'info', summary: t('common.copied'), life: 2000 })
   } catch {
     /* clipboard blocked: the link is selectable */
+  }
+}
+
+async function copyPage() {
+  if (!s.value?.page_url) return
+  try {
+    await navigator.clipboard.writeText(s.value.page_url)
+    toast.add({ severity: 'info', summary: t('common.copied'), life: 2000 })
+  } catch {
+    /* clipboard blocked: the address is selectable */
   }
 }
 </script>
@@ -209,6 +224,23 @@ async function copyLink() {
             <Button icon="pi pi-copy" text rounded size="small" :aria-label="t('common.copy')" @click="copyLink" />
           </template>
           <span v-else class="app-muted">—</span>
+        </dd>
+        <dt>{{ t('service.page') }}</dt>
+        <dd>
+          <template v-if="s.page_url">
+            <a class="app-ltr app-mono link" :href="s.page_url" target="_blank" rel="noopener noreferrer">{{ s.page_url }}</a>
+            <Button icon="pi pi-copy" text rounded size="small" :aria-label="t('common.copy')" @click="copyPage" />
+            <Button
+              v-if="live && auth.can('services.write')"
+              :label="t('service.page_regenerate')"
+              icon="pi pi-refresh"
+              text
+              size="small"
+              @click="start('page_regenerate')"
+            />
+            <small class="app-muted hint">{{ t('service.page_hint') }}</small>
+          </template>
+          <span v-else class="app-muted">{{ t('service.page_off') }}</span>
         </dd>
         <dt>{{ t('service.panel_email') }}</dt>
         <dd><span class="app-ltr app-mono">{{ s.client_email }}</span></dd>
@@ -277,6 +309,9 @@ async function copyLink() {
 }
 .link {
   word-break: break-all;
+}
+.hint {
+  display: block;
 }
 .app-page-title {
   display: flex;

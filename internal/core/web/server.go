@@ -84,6 +84,8 @@ type Config struct {
 type Server struct {
 	cfg     Config
 	limiter *limiter
+	// subPages limits the public service page per client address.
+	subPages *limiter
 	// tests limits broadcast test sends per staff member.
 	tests *limiter
 	// probes limits connection tests (servers, gateways) per staff member.
@@ -112,7 +114,7 @@ func New(cfg Config) *Server {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute),
+	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), subPages: newLimiter(subPageRate, time.Minute), tests: newLimiter(5, time.Minute),
 		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
 		now: time.Now}
 }
@@ -147,6 +149,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/services/{id}/reset-traffic", PermServicesWrite, s.resetService)
 	s.route(api, "POST /api/v1/services/{id}/enabled", PermServicesWrite, s.setServiceEnabled)
 	s.route(api, "POST /api/v1/services/{id}/delete", PermServicesWrite, s.deleteService)
+	s.route(api, "POST /api/v1/services/{id}/page-token/regenerate", PermServicesWrite, s.regeneratePage)
 
 	// Sales.
 	s.route(api, "GET /api/v1/plans", PermPlansWrite, s.listPlans)
@@ -279,6 +282,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
 	mux.Handle("/api/v1/", apiHeaders(api))
+	// The branded service page: public, the token in the address is the
+	// credential. Every other path under /sub/ gets the same generic 404.
+	mux.HandleFunc("GET /sub/{token}", s.subPage)
+	mux.HandleFunc("/sub/", s.pageNotFound)
 	if s.cfg.Dashboard != nil {
 		mux.Handle("/admin/", s.cfg.Dashboard)
 		mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {

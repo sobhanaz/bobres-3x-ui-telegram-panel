@@ -107,6 +107,9 @@ type Subscription struct {
 	SubLink      string
 	Label        *string // the name a reseller gave it
 	CreatedAt    time.Time
+	// PageToken is the secret in the branded page's URL (/sub/<token>); it
+	// grants the same power as SubLink and is rotated by RegeneratePageToken.
+	PageToken string
 	// When each reminder went out in the current period (nil = not yet).
 	NotifiedExpiringAt   *time.Time
 	NotifiedLowTrafficAt *time.Time

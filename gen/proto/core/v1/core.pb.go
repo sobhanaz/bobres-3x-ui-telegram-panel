@@ -669,8 +669,11 @@ type Subscription struct {
 	LastSyncedAt      int64                  `protobuf:"varint,11,opt,name=last_synced_at,json=lastSyncedAt,proto3" json:"last_synced_at,omitempty"`
 	SubscriptionLink  string                 `protobuf:"bytes,12,opt,name=subscription_link,json=subscriptionLink,proto3" json:"subscription_link,omitempty"` // set once provisioned
 	Label             string                 `protobuf:"bytes,13,opt,name=label,proto3" json:"label,omitempty"`                                               // the name a reseller gave it ("" = none)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// The branded page for this service (public base URL + /sub/<token>); "" when
+	// the page is switched off or the public URL is not set.
+	PageUrl       string `protobuf:"bytes,14,opt,name=page_url,json=pageUrl,proto3" json:"page_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Subscription) Reset() {
@@ -790,6 +793,13 @@ func (x *Subscription) GetSubscriptionLink() string {
 func (x *Subscription) GetLabel() string {
 	if x != nil {
 		return x.Label
+	}
+	return ""
+}
+
+func (x *Subscription) GetPageUrl() string {
+	if x != nil {
+		return x.PageUrl
 	}
 	return ""
 }
@@ -6000,7 +6010,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\rbalance_after\x18\t \x01(\x03R\fbalanceAfter\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\n" +
-	" \x01(\x03R\tcreatedAt\"\xa7\x03\n" +
+	" \x01(\x03R\tcreatedAt\"\xc2\x03\n" +
 	"\fSubscription\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
@@ -6016,7 +6026,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	" \x01(\x03R\x10trafficUsedBytes\x12$\n" +
 	"\x0elast_synced_at\x18\v \x01(\x03R\flastSyncedAt\x12+\n" +
 	"\x11subscription_link\x18\f \x01(\tR\x10subscriptionLink\x12\x14\n" +
-	"\x05label\x18\r \x01(\tR\x05label\"\xec\x01\n" +
+	"\x05label\x18\r \x01(\tR\x05label\x12\x19\n" +
+	"\bpage_url\x18\x0e \x01(\tR\apageUrl\"\xec\x01\n" +
 	"\x06Ticket\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +

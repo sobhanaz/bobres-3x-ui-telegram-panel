@@ -389,13 +389,30 @@ func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscrip
 		}
 		out.PageInfo = &commonv1.PageInfo{Page: page, PageSize: size, Total: total}
 	}
+	page := s.pageLinks(ctx)
 	for i := range subs {
-		out.Subscriptions = append(out.Subscriptions, subscriptionToProto(&subs[i]))
+		out.Subscriptions = append(out.Subscriptions, subscriptionToProto(&subs[i], page))
 	}
 	return out, nil
 }
 
-func subscriptionToProto(sc *store.Subscription) *corev1.Subscription {
+// pageLinks makes the page URL of a service: empty while the page is
+// switched off or the store has no public URL (the settings are read once for
+// all the services of a reply).
+func (s *Server) pageLinks(ctx context.Context) func(token string) string {
+	none := func(string) string { return "" }
+	base := s.dashboardURL(ctx)
+	if base == "" {
+		return none
+	}
+	set, err := s.dom.SubPage(ctx)
+	if err != nil || !set.Enabled {
+		return none
+	}
+	return func(token string) string { return domain.SubPageURL(base, token) }
+}
+
+func subscriptionToProto(sc *store.Subscription, page func(token string) string) *corev1.Subscription {
 	sp := &corev1.Subscription{
 		Id:               sc.ID,
 		UserId:           sc.UserID,
@@ -405,6 +422,9 @@ func subscriptionToProto(sc *store.Subscription) *corev1.Subscription {
 		Status:           sc.Status,
 		TrafficUsedBytes: sc.TrafficUsed,
 		SubscriptionLink: sc.SubLink,
+	}
+	if page != nil && sc.Status != "pending" && sc.Status != "deleted" {
+		sp.PageUrl = page(sc.PageToken)
 	}
 	if sc.SubID != nil {
 		sp.SubId = *sc.SubID
@@ -430,7 +450,7 @@ func (s *Server) SetSubscriptionLabel(ctx context.Context, req *corev1.SetSubscr
 	if err != nil {
 		return nil, fail(err)
 	}
-	return subscriptionToProto(sub), nil
+	return subscriptionToProto(sub, s.pageLinks(ctx)), nil
 }
 
 // GetResellerInfo is a reseller's panel: terms, balances and earnings.

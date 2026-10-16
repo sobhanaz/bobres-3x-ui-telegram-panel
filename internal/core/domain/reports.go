@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
@@ -25,6 +26,10 @@ const (
 	// (only the bot and the backup service get it), so the setting is how a
 	// store with another zone makes reports follow it.
 	DefaultReportTimezone = "Asia/Tehran"
+	// DefaultChurnGraceDays is how many days a service may stay expired before
+	// the report counts it as churned; a request may ask for 0 to MaxChurnGraceDays.
+	DefaultChurnGraceDays = 7
+	MaxChurnGraceDays     = 90
 	// ReportTopPlans is how many plans a currency's top list holds.
 	ReportTopPlans = 20
 	// reportFirstYear and reportLastYear bound the dates a report accepts.
@@ -73,6 +78,9 @@ type ReportRequest struct {
 	Group    string
 	Calendar string
 	TZ       string
+	// ChurnGraceDays is the churn grace period in days, as text ("" for the
+	// default of DefaultChurnGraceDays; "0" counts a service as churned as soon as it ends).
+	ChurnGraceDays string
 }
 
 // ReportSpan is one bucket of a report: the local (Gregorian) date it starts
@@ -94,6 +102,10 @@ type ReportRange struct {
 	Calendar string
 	TZ       string
 	Buckets  []ReportSpan
+	// ChurnGraceDays and AsOf define churn: a service that ended more than
+	// ChurnGraceDays before AsOf (the moment the request was made) has churned.
+	ChurnGraceDays int
+	AsOf           time.Time
 }
 
 // folds is true when the store's buckets are not the report's: the store cuts
@@ -110,7 +122,7 @@ func (r *ReportRange) Query() store.ReportQuery {
 	if r.folds() {
 		group = GroupDay
 	}
-	return store.ReportQuery{From: r.From, To: r.To, TZ: r.TZ, Group: group}
+	return store.ReportQuery{From: r.From, To: r.To, TZ: r.TZ, Group: group, ChurnAsOf: r.AsOf, ChurnGraceDays: r.ChurnGraceDays}
 }
 
 // NewReportRange validates a request. defaultTZ is the zone used when the
@@ -129,6 +141,14 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 	}
 	if calendar != CalendarGregorian && calendar != CalendarJalali {
 		return nil, invalid("calendar must be gregorian or jalali")
+	}
+	grace := DefaultChurnGraceDays
+	if req.ChurnGraceDays != "" {
+		n, err := strconv.Atoi(req.ChurnGraceDays)
+		if err != nil || n < 0 || n > MaxChurnGraceDays {
+			return nil, invalid("churn_grace_days must be a number of days from 0 to %d", MaxChurnGraceDays)
+		}
+		grace = n
 	}
 	tz := req.TZ
 	if tz == "" {
@@ -165,7 +185,7 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 	if days := int(to.Sub(from).Hours()/24) + 1; days > ReportMaxDays {
 		return nil, invalid("a report covers at most %d days (this one covers %d)", ReportMaxDays, days)
 	}
-	rng := &ReportRange{From: from.Format(dateLayout), To: to.Format(dateLayout), Group: group, Calendar: calendar, TZ: loc.String()}
+	rng := &ReportRange{From: from.Format(dateLayout), To: to.Format(dateLayout), Group: group, Calendar: calendar, TZ: loc.String(), ChurnGraceDays: grace, AsOf: now}
 	for start := bucketStart(from, group, calendar); !start.After(to); start = nextBucket(start, group, calendar) {
 		if len(rng.Buckets) == ReportMaxBuckets {
 			return nil, invalid("a report has at most %d buckets", ReportMaxBuckets)
@@ -290,7 +310,14 @@ type ReportBucket struct {
 	// NewCustomers and Trials count people, so they have no currency.
 	NewCustomers int64
 	Trials       int64
-	Currencies   map[string]*store.ReportCell
+	// Churn, by the bucket the service's expiry (the customer's last expiry)
+	// falls in; no currency (docs/14-reports.md): services that ended and
+	// stayed ended past the grace period, people whose last service did, and
+	// services that ended inside the grace period and may still renew.
+	ChurnedServices  int64
+	ChurnedCustomers int64
+	AtRisk           int64
+	Currencies       map[string]*store.ReportCell
 }
 
 // SalesReport is a range's numbers per bucket and in total.
@@ -339,7 +366,8 @@ func (s *Service) SalesReport(ctx context.Context, rng *ReportRange) (*SalesRepo
 	}
 	for _, span := range rng.Buckets {
 		b := ReportBucket{Date: span.Start, Partial: span.Partial, NewCustomers: data.NewCustomers[span.Start],
-			Trials: data.Trials[span.Start], Currencies: map[string]*store.ReportCell{}}
+			Trials: data.Trials[span.Start], ChurnedServices: data.ChurnedServices[span.Start],
+			ChurnedCustomers: data.ChurnedCustomers[span.Start], AtRisk: data.AtRisk[span.Start], Currencies: map[string]*store.ReportCell{}}
 		for _, cur := range rep.Currencies {
 			c := &store.ReportCell{}
 			if got := data.Cells[span.Start][cur]; got != nil {
@@ -350,6 +378,9 @@ func (s *Service) SalesReport(ctx context.Context, rng *ReportRange) (*SalesRepo
 		}
 		rep.Totals.NewCustomers += b.NewCustomers
 		rep.Totals.Trials += b.Trials
+		rep.Totals.ChurnedServices += b.ChurnedServices
+		rep.Totals.ChurnedCustomers += b.ChurnedCustomers
+		rep.Totals.AtRisk += b.AtRisk
 		rep.Buckets = append(rep.Buckets, b)
 	}
 	// Every row the store found must have landed in a bucket: the buckets
@@ -364,7 +395,7 @@ func (s *Service) SalesReport(ctx context.Context, rng *ReportRange) (*SalesRepo
 			stray += len(cells)
 		}
 	}
-	for _, people := range []map[string]int64{data.NewCustomers, data.Trials} {
+	for _, people := range []map[string]int64{data.NewCustomers, data.Trials, data.ChurnedServices, data.ChurnedCustomers, data.AtRisk} {
 		for b := range people {
 			if !starts[b] {
 				stray++
@@ -380,9 +411,10 @@ func (s *Service) SalesReport(ctx context.Context, rng *ReportRange) (*SalesRepo
 // foldDays turns the store's day rows into the buckets of a Jalali week or
 // month: a day's cells are added into its bucket's, and its people counts too
 // (every counted person is counted on one day only, so the sums are the
-// bucket's). A day outside the range is an error, as a stray bucket is.
+// bucket's; a churned customer is counted on the day of their last expiry
+// only). A day outside the range is an error, as a stray bucket is.
 func foldDays(rng *ReportRange, data *store.SalesData) (*store.SalesData, error) {
-	out := &store.SalesData{Cells: map[string]map[string]*store.ReportCell{}, NewCustomers: map[string]int64{}, Trials: map[string]int64{}}
+	out := store.NewSalesData()
 	bucketOf := func(day string) (string, error) {
 		d, err := time.Parse(dateLayout, day)
 		if err != nil || day < rng.From || day > rng.To {
@@ -405,7 +437,8 @@ func foldDays(rng *ReportRange, data *store.SalesData) (*store.SalesData, error)
 			addCell(out.Cells[start][cur], c)
 		}
 	}
-	for _, p := range []struct{ in, out map[string]int64 }{{data.NewCustomers, out.NewCustomers}, {data.Trials, out.Trials}} {
+	for _, p := range []struct{ in, out map[string]int64 }{{data.NewCustomers, out.NewCustomers}, {data.Trials, out.Trials},
+		{data.ChurnedServices, out.ChurnedServices}, {data.ChurnedCustomers, out.ChurnedCustomers}, {data.AtRisk, out.AtRisk}} {
 		for day, n := range p.in {
 			start, err := bucketOf(day)
 			if err != nil {

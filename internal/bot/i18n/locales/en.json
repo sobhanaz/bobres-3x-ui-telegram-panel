@@ -158,6 +158,8 @@
   "admin.new_payment": "💳 New payment to review from {user}: <b>{amount}</b>.",
   "btn.review_now": "Review now",
   "btn.pay_zarinpal": "💳 Pay online (Zarinpal)",
+  "btn.pay_idpay": "💳 Pay online (IDPay)",
+  "btn.pay_nextpay": "💳 Pay online (NextPay)",
   "btn.pay_stars": "⭐ Pay with Telegram Stars",
   "btn.open_payment": "Open the payment page",
   "btn.check_payment": "I paid, check",
@@ -338,6 +340,10 @@
   "alert.server_down": "The 3x-ui server {server} does not answer.",
   "alert.zarinpal_failing": "Zarinpal payments are failing.",
   "alert.zarinpal_stuck": "{count} Zarinpal payments are still open; the oldest started over 3 hours ago.",
+  "alert.idpay_failing": "IDPay payments are failing.",
+  "alert.idpay_stuck": "{count} IDPay payments are still open; the oldest started over 3 hours ago.",
+  "alert.nextpay_failing": "NextPay payments are failing.",
+  "alert.nextpay_stuck": "{count} NextPay payments are still open; the oldest started over 3 hours ago.",
   "alert.usdt_failing": "Automatic USDT payments are not being checked: the store cannot read its TRON address from TronGrid.",
   "alert.usdt_stuck": "{count} automatic USDT payments are still open; the oldest started over 2 hours ago.",
   "alert.backup_failed": "The last backup failed.",
@@ -366,5 +372,10 @@
   "alert.tls_caddy_down": "Caddy, which serves the store's HTTPS addresses, is not answering: the dashboard and the payment pages cannot be reached.",
   "alert.tls_problem": "The store's HTTPS setting is not working as saved.",
   "menu.keyboard": "👇 Use the menu below.",
-  "menu.placeholder": "Choose from the menu"
+  "menu.placeholder": "Choose from the menu",
+  "btn.open_page": "🌐 Open page",
+  "subpage.guide.v2rayng": "Android: install v2rayNG, tap the button above, and confirm the import. Then pick the new profile and tap the connect button.",
+  "subpage.guide.hiddify": "Android, iOS, Windows and macOS: install Hiddify, tap the button above, and confirm. Then press the big connect button.",
+  "subpage.guide.streisand": "iPhone and iPad: install Streisand, tap the button above, and allow the import. Then turn the connection on.",
+  "subpage.guide.v2box": "iPhone and iPad: install V2Box, tap the button above, and add the subscription. Then pick a server and connect."
 }

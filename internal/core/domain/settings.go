@@ -63,6 +63,10 @@ var SettingSpecs = []SettingSpec{
 		Help: "time zone of the dates the bot shows, e.g. Asia/Tehran (empty = the server's BOBRES_TIMEZONE)"},
 	{Key: "general.bot_profile", Group: "general", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the bot keeps its Telegram profile (menu commands, description, short description) in Persian and English from its texts, and its profile photo from the Branding page; false = the bot takes back its Persian and English texts and the staff menus (the photo stays), and you set them in @BotFather"},
+	{Key: "branding.sub_page.enabled", Group: "general", Kind: KindBool, Perm: permBranding, Default: "true",
+		Help: "true = every service has a branded page at /sub/<token> (its link, QR code and app guides); false = those pages answer 404 (the links in the bot and dashboard are hidden too)"},
+	{Key: "branding.bot_username", Group: "general", Kind: KindText, Perm: permBranding, MaxLen: 33,
+		Help: "the bot's @username: the renew button of the subscription page opens https://t.me/<username> (empty = no renew button)"},
 	{Key: "maintenance.enabled", Group: "maintenance", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = customers only get the maintenance message; staff and payments in progress still work"},
 	{Key: "join.channel", Group: "join", Kind: KindChannel, Perm: permSettings,
@@ -213,9 +217,11 @@ func (e *TextError) Unwrap() error { return ErrInvalid }
 var (
 	channelRe = regexp.MustCompile(`^(@[A-Za-z][A-Za-z0-9_]{4,31}|-100[0-9]{5,15})$`)
 	colorRe   = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-	trc20Re   = regexp.MustCompile(`^T[1-9A-HJ-NP-Za-km-z]{33}$`)
-	erc20Re   = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
-	cardRe    = regexp.MustCompile(`^([0-9]{16}|IR[0-9]{24})$`)
+	// botUsernameRe is a Telegram username (5-32 characters).
+	botUsernameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{4,31}$`)
+	trc20Re       = regexp.MustCompile(`^T[1-9A-HJ-NP-Za-km-z]{33}$`)
+	erc20Re       = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+	cardRe        = regexp.MustCompile(`^([0-9]{16}|IR[0-9]{24})$`)
 )
 
 // latinDigits turns Persian and Arabic digits into ASCII ones.
@@ -275,6 +281,11 @@ func NormalizeSetting(key, value string) (string, error) {
 			// It goes into every price, also inside HTML messages and buttons.
 			if strings.ContainsAny(value, "<>&") {
 				return bad("may not contain <, > or &")
+			}
+		case "branding.bot_username":
+			value = strings.TrimPrefix(value, "@")
+			if !botUsernameRe.MatchString(value) {
+				return bad("a Telegram username: 5 to 32 letters, digits or underscores, starting with a letter (e.g. @my_vpn_bot)")
 			}
 		case "payments.card_number":
 			value = latinDigits(value)

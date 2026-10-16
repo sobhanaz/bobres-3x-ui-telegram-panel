@@ -263,6 +263,13 @@ services:
       BOBRES_ZARINPAL_SANDBOX: ${BOBRES_ZARINPAL_SANDBOX:-false}
       BOBRES_ZARINPAL_PROXY: ${BOBRES_ZARINPAL_PROXY:-}
       BOBRES_ZARINPAL_PUBLIC_URL: ${BOBRES_ZARINPAL_PUBLIC_URL:-}
+      # IDPay and NextPay (each off unless its API key is set; seeds only, like Zarinpal's).
+      # Their return URLs are on the same public URL as Zarinpal's.
+      BOBRES_IDPAY_API_KEY: ${BOBRES_IDPAY_API_KEY:-}
+      BOBRES_IDPAY_SANDBOX: ${BOBRES_IDPAY_SANDBOX:-false}
+      BOBRES_IDPAY_PROXY: ${BOBRES_IDPAY_PROXY:-}
+      BOBRES_NEXTPAY_API_KEY: ${BOBRES_NEXTPAY_API_KEY:-}
+      BOBRES_NEXTPAY_PROXY: ${BOBRES_NEXTPAY_PROXY:-}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend, egress]

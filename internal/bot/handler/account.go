@@ -134,6 +134,11 @@ func (h *Handler) showService(r *req, id string) {
 	} else {
 		kb.Row(r.button("btn.qr", "qr:"+id))
 	}
+	// The branded page (the core fills page_url while the page is on): a URL
+	// button, in the customer's language.
+	if u := s.GetPageUrl(); u != "" {
+		kb.Row(tg.Link(r.t("btn.open_page"), pageLink(u, r.lang)))
+	}
 	kb.Row(r.button("btn.back", "subs"), r.button("btn.home", "home"))
 	text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
 		"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
@@ -218,7 +223,7 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	r.show(r.t("wallet.choose_method", "amount", r.money(amount, "IRT")), kb)
 }
 
-// onTopupPay handles "wpay:<c|x|l|z|s|u>:<amount>:<nonce>".
+// onTopupPay handles "wpay:<c|x|l|z|i|n|s|u>:<amount>:<nonce>".
 func (h *Handler) onTopupPay(r *req, rest string) {
 	parts := strings.Split(rest, ":")
 	if len(parts) != 3 {
@@ -230,14 +235,14 @@ func (h *Handler) onTopupPay(r *req, rest string) {
 		h.showTopupAmounts(r)
 		return
 	}
-	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "l": "manual_zarinpal", "z": "zarinpal", "s": "stars",
+	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "l": "manual_zarinpal", "z": "zarinpal", "i": "idpay", "n": "nextpay", "s": "stars",
 		"u": usdtAuto}[parts[0]]
 	if provider == "" {
 		h.showWallet(r)
 		return
 	}
 	key := fmt.Sprintf("top:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
-	if provider == "zarinpal" || provider == "stars" || provider == usdtAuto {
+	if provider == "zarinpal" || provider == "idpay" || provider == "nextpay" || provider == "stars" || provider == usdtAuto {
 		h.startGateway(r, nil, provider, r.t("pay.topup_title"), key, amount)
 		return
 	}
@@ -343,4 +348,12 @@ func (h *Handler) onTerms(r *req) {
 		return
 	}
 	r.send(r.t("terms.title"), (&tg.Keyboard{}).Row(links...).Row(r.button("btn.home", "home")))
+}
+
+// pageLink adds the customer's language to a service page address.
+func pageLink(u, lang string) string {
+	if strings.Contains(u, "?") {
+		return u
+	}
+	return u + "?l=" + lang
 }

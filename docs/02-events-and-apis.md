@@ -78,7 +78,8 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
 Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
 Built: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
-superpowers/specs/2026-10-04-phase2-payments-design.md); manual-zarinpal (the owner's Zarinpal
+superpowers/specs/2026-10-04-phase2-payments-design.md); idpay, nextpay (see
+[16-idpay-nextpay.md](16-idpay-nextpay.md)); manual-zarinpal (the owner's Zarinpal
 payment link, paid outside the bot); the crypto watcher, `usdt_trc20_auto` (Phase 6a: an exact, unique USDT amount to
 the store's TRON address, found through TronGrid every 30 s). Every manual method takes a screenshot that an admin
 approves. crypto-thirdparty is not built: the candidate processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)
@@ -92,7 +93,7 @@ A health loop checks every enabled server each 60 s and reads the panel version 
 
 ## Public HTTP surface (via gateway)
 - `/webhooks/<provider>` (signature verified, replay-protected)
-- `/sub/<token>` subscription info page (branded)
+- `/sub/<token>` subscription info page (branded; server-rendered, no script, one fixed 404 for anything unknown; see 15-subscription-page.md). `POST /api/v1/services/{id}/page-token/regenerate` (services.write) gives a service a new address
 - `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`.
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".

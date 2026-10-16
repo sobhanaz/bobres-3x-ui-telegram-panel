@@ -49,6 +49,8 @@ export interface ServiceItem {
   status: string
   client_email: string
   sub_link: string
+  /** the branded page's address (detail endpoints only; empty while it is off) */
+  page_url?: string
   expires_at: number | null
   traffic_total: number | null
   traffic_used: number
@@ -495,12 +497,12 @@ export interface GatewayConfig {
   sandbox_allowed?: boolean
   /** the merchant id's last 4 characters, '' when none */
   merchant_hint: string
-  /** a proxy is stored (Zarinpal's, or automatic USDT's for TronGrid) */
+  /** a proxy is stored (Zarinpal, IDPay or NextPay: for the gateway calls; automatic USDT: for TronGrid) */
   proxy_set: boolean
   /** usdt_trc20_auto: the TRON (TRC20) address that receives USDT, '' when
    * none (public: customers see it) */
   address?: string
-  /** usdt_trc20_auto: a TronGrid API key is stored */
+  /** usdt_trc20_auto, idpay, nextpay: an API key is stored (the key is never sent back) */
   key_set?: boolean
   /** payments has no master key: the settings come from .env, read only */
   key_missing: boolean

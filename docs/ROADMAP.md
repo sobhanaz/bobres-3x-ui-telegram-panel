@@ -36,7 +36,8 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
   `order.paid.v1`, older orders show "provider not recorded"); the ledger and audit CSV files now follow the reports'
   export rules (late header, deadline, "export incomplete" note, shared slots, audit with outcome).
 - **Built since:** Jalali weeks and months (`calendar=jalali`).
-- **Still open:** churn.
+- **Built since:** churn (final-expiry with a 7-day grace, customers lost, services at risk; migration 00019). Still
+  open: a churn rate from a stored history, churn in the daily summary, revenue by customer.
 - **Why first:** it is the cheapest piece, needs no new service, and the owner and the first customers want numbers
   from day one. It also shows the paid tiers' value.
 - **Risks:** time zones and the Jalali calendar in the numbers; money in several currencies (Toman, USDT, Stars) must
@@ -54,8 +55,10 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
 - **Risks:** the link must not leak the 3x-ui subscription id more than the customer already has it; the page must work
   without JavaScript on poor connections.
 - **Done when:** a customer opens it from the bot on a phone, in both languages, and imports the config into an app.
+- **Status: built** ([15-subscription-page.md](15-subscription-page.md), migration 00020). Open: check the app deep
+  links on real devices, and add the page link to the "service ready" message.
 
-### 3. More Iranian payment gateways (M)
+### 3. More Iranian payment gateways (M) — built, see [16-idpay-nextpay.md](16-idpay-nextpay.md)
 - **What:** automatic card gateways beyond Zarinpal (for example IDPay and NextPay), behind the same gateway interface,
   with the same review, callback and refund flow.
 - **Why:** more ways to pay raises conversion; some customers cannot use Zarinpal.

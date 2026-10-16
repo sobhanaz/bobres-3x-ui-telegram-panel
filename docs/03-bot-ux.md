@@ -40,7 +40,7 @@ the chain. A different amount is an unmatched deposit: staff are told and credit
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> admin approve/reject buttons in admin chat -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
-**Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew.
+**Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
 Built (2026-10-10): one open conversation per customer, numbered; text, photos and PDFs; staff replies arrive in the
 chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; past tickets can be read.

@@ -222,6 +222,16 @@ const providerLabel = (r: ReportMethod) => {
             <div class="line trials">{{ t('reports.customers.trials') }}: {{ num(summary.totals.trials, lang) }}</div>
           </template>
         </Card>
+        <Card class="stat churn-card">
+          <template #subtitle>{{ t('reports.churn.title') }}</template>
+          <template #content>
+            <div class="big churned-services">{{ num(summary.totals.churned_services, lang) }}</div>
+            <div class="app-muted">{{ t('reports.churn.services') }}</div>
+            <div class="app-muted small">{{ t('reports.churn.hint', { n: num(summary.churn_grace_days, lang) }, summary.churn_grace_days) }}</div>
+            <div class="line churned-customers">{{ t('reports.churn.customers') }}: {{ num(summary.totals.churned_customers, lang) }}</div>
+            <div class="line at-risk">{{ t('reports.churn.at_risk') }}: {{ num(summary.totals.at_risk, lang) }}</div>
+          </template>
+        </Card>
       </div>
 
       <Card v-if="currencies.length" class="block charts-card">
@@ -265,6 +275,12 @@ const providerLabel = (r: ReportMethod) => {
             </Column>
             <Column :header="t('reports.table.trials')">
               <template #body="{ data: b }">{{ num(b.trials, lang) }}</template>
+            </Column>
+            <Column :header="t('reports.table.churned')">
+              <template #body="{ data: b }">{{ num(b.churned_services, lang) }}</template>
+            </Column>
+            <Column :header="t('reports.table.at_risk')">
+              <template #body="{ data: b }">{{ num(b.at_risk, lang) }}</template>
             </Column>
           </DataTable>
         </template>

@@ -51,6 +51,7 @@ func (s *Server) reportRange(w http.ResponseWriter, r *http.Request) (*domain.Re
 	q := r.URL.Query()
 	rng, err := s.cfg.Domain.ReportRange(r.Context(), domain.ReportRequest{
 		Range: q.Get("range"), From: q.Get("from"), To: q.Get("to"), Group: q.Get("group"), Calendar: q.Get("calendar"), TZ: q.Get("tz"),
+		ChurnGraceDays: q.Get("churn_grace_days"),
 	}, s.now())
 	if err != nil {
 		s.fail(w, "report range", err)
@@ -88,15 +89,21 @@ func cellOf(c *store.ReportCell) cellJSON {
 }
 
 type bucketJSON struct {
-	Date         string              `json:"date"` // local start date, "2026-10-14"
-	Partial      bool                `json:"partial"`
-	NewCustomers int64               `json:"new_customers"`
-	Trials       int64               `json:"trials"`
-	Currencies   map[string]cellJSON `json:"currencies"`
+	Date         string `json:"date"` // local start date, "2026-10-14"
+	Partial      bool   `json:"partial"`
+	NewCustomers int64  `json:"new_customers"`
+	Trials       int64  `json:"trials"`
+	// Churn (no currency): services that ended and stayed ended past the grace
+	// period, people whose last service did, and services still inside the grace.
+	ChurnedServices  int64               `json:"churned_services"`
+	ChurnedCustomers int64               `json:"churned_customers"`
+	AtRisk           int64               `json:"at_risk"`
+	Currencies       map[string]cellJSON `json:"currencies"`
 }
 
 func bucketOf(b *domain.ReportBucket) bucketJSON {
 	out := bucketJSON{Date: b.Date, Partial: b.Partial, NewCustomers: b.NewCustomers, Trials: b.Trials,
+		ChurnedServices: b.ChurnedServices, ChurnedCustomers: b.ChurnedCustomers, AtRisk: b.AtRisk,
 		Currencies: make(map[string]cellJSON, len(b.Currencies))}
 	for cur, c := range b.Currencies {
 		out.Currencies[cur] = cellOf(c)
@@ -121,7 +128,7 @@ func (s *Server) reportSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"from": rng.From, "to": rng.To, "group": rng.Group, "calendar": rng.Calendar, "tz": rng.TZ,
-		"currencies": rep.Currencies, "buckets": buckets, "totals": bucketOf(&rep.Totals),
+		"churn_grace_days": rng.ChurnGraceDays, "currencies": rep.Currencies, "buckets": buckets, "totals": bucketOf(&rep.Totals),
 	})
 }
 
@@ -298,22 +305,25 @@ func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 	f := &csvFile{w: w, name: name + ".csv"}
 	_ = f.write("period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders",
 		"renewals", "traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount",
-		"gateway_failed_count", "gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials")
-	cols := 21
+		"gateway_failed_count", "gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials",
+		"churned_services", "churned_customers", "at_risk_services")
+	cols := 24
 	n := func(v int64) string { return strconv.FormatInt(v, 10) }
 	for i := range rep.Buckets {
 		b := &rep.Buckets[i]
 		partial := strconv.FormatBool(b.Partial)
 		// People counts: no currency, no money columns.
 		row := make([]string, cols)
-		row[0], row[1], row[cols-2], row[cols-1] = b.Date, partial, n(b.NewCustomers), n(b.Trials)
+		row[0], row[1] = b.Date, partial
+		row[cols-5], row[cols-4] = n(b.NewCustomers), n(b.Trials)
+		row[cols-3], row[cols-2], row[cols-1] = n(b.ChurnedServices), n(b.ChurnedCustomers), n(b.AtRisk)
 		_ = f.data(row...)
 		for _, cur := range rep.Currencies {
 			c := b.Currencies[cur]
 			_ = f.data(b.Date, partial, reportText(cur), decimal(c.Revenue, cur), decimal(c.Refunds.Amount, cur), decimal(domain.Net(c), cur),
 				n(c.Orders), n(c.NewOrders), n(c.Renewals), n(c.TrafficTopups), n(c.Topups.Count), decimal(c.Topups.Amount, cur),
 				n(c.Refunds.Count), n(c.Rejected.Count), decimal(c.Rejected.Amount, cur), n(c.GatewayFailed.Count), decimal(c.GatewayFailed.Amount, cur),
-				n(c.Cancelled.Count), decimal(c.Cancelled.Amount, cur), "", "")
+				n(c.Cancelled.Count), decimal(c.Cancelled.Amount, cur), "", "", "", "", "")
 		}
 	}
 	f.flush()

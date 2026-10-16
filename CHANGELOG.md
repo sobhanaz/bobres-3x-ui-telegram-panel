@@ -28,6 +28,23 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   and carries the calendar into the CSV links. The summary CSV is named `...-jalali.csv` for Jalali, and the
   `export.reports` audit entry records the calendar.
 
+- Reports now show churn: services lost (ended more than 7 days ago and not renewed), customers lost, and services at
+  risk (ended, still inside the grace period), per day, week or month in both calendars. Trials, unlimited services
+  and pending renewals are not counted. In the summary CSV the people rows gain `churned_services`,
+  `churned_customers` and `at_risk_services` as the last three columns. The API gains `churn_grace_days` (0 to 90,
+  default 7). Migration core 00019 adds an index on `subscriptions.expires_at`.
+- Branded subscription page: each service has a page at `/sub/<token>` under the store's own brand: usage and days
+  left, the subscription link and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box (the link
+  schemes are not yet verified on real devices), and a Renew button that opens the bot. Server-rendered with no
+  JavaScript, in Persian and English, no personal data, an unguessable 128-bit address that can be regenerated from
+  the dashboard. New settings `branding.sub_page.enabled` and `branding.bot_username`. Migration core 00020.
+- IDPay and NextPay, two more Iranian card gateways built like Zarinpal: an API key in Payment gateways (write-only,
+  encrypted; IDPay has a sandbox outside prod), callbacks at `/webhooks/idpay` and `/webhooks/nextpay` that are never
+  trusted (every payment is settled by the gateway's verify call, with an amount check; a repeated callback changes
+  nothing), watchdog alerts, licence gateway names `idpay` and `nextpay`, bot buttons and en/fa texts. Off until
+  credentials are set. Implemented to the public documentation and tested only against fakes; see
+  `docs/16-idpay-nextpay.md`. Payments migration 00008.
+
 ### API
 - New event `sales.daily_summary.v1` and two settings, `notify.daily_summary` and `notify.daily_summary_hour`; no
   migration.

@@ -1,5 +1,6 @@
 // Helpers for the Payment gateways page: the Zarinpal form (write-only
-// merchant id and proxy), the automatic USDT form (address, write-only
+// merchant id and proxy), the IDPay and NextPay forms (write-only API key and
+// proxy), the automatic USDT form (address, write-only
 // TronGrid key and proxy) and its unmatched deposits, the cards of the manual methods and Stars (their settings),
 // and the payments report; and the overview's gateways card.
 // Core and payments check everything again. Pure functions (no API, no Vue).
@@ -89,6 +90,79 @@ export function blockedByOpen(f: ZarinpalForm, c: GatewayConfig): boolean {
 export function openPayments(e: unknown): number | null {
   if (!(e instanceof ApiError) || e.status !== 409) return null
   return typeof e.data.open === 'number' ? e.data.open : null
+}
+
+// ---- IDPay and NextPay: built like Zarinpal, but the credential is one
+// write-only API key (a 36-character id from the gateway's panel) instead of a
+// merchant id. IDPay has a sandbox; NextPay has none.
+
+export const keyedProviders = ['idpay', 'nextpay'] as const
+export type KeyedProvider = (typeof keyedProviders)[number]
+
+export function isKeyedProvider(p: string): p is KeyedProvider {
+  return (keyedProviders as readonly string[]).includes(p)
+}
+
+/** keyedHasSandbox: only IDPay has a test system. */
+export function keyedHasSandbox(p: string): boolean {
+  return p === 'idpay'
+}
+
+/** The IDPay / NextPay card, as staff edit it. */
+export interface KeyedForm {
+  enabled: boolean
+  sandbox: boolean
+  /** a new API key; '' keeps the stored one */
+  apiKey: string
+  /** a new proxy; '' keeps the stored one */
+  proxy: string
+  clearProxy: boolean
+}
+
+export function keyedFormOf(c: GatewayConfig): KeyedForm {
+  return { enabled: c.enabled, sandbox: keyedHasSandbox(c.provider) && c.sandbox, apiKey: '', proxy: '', clearProxy: false }
+}
+
+/** keyedProblems lists the fields that are not right yet, by the names core
+ * uses. Turning it on needs an API key. */
+export function keyedProblems(f: KeyedForm, c: GatewayConfig): string[] {
+  const out: string[] = []
+  if (f.apiKey.trim() && !merchantValid(f.apiKey)) out.push('api_key')
+  if (f.proxy.trim() && !proxyValid(f.proxy)) out.push('proxy')
+  if (f.enabled && !c.configured && !f.apiKey.trim()) out.push('enabled')
+  if (f.sandbox && !c.sandbox && c.sandbox_allowed === false) out.push('sandbox')
+  return out
+}
+
+/** keyedDirty: the form would change something. */
+export function keyedDirty(f: KeyedForm, c: GatewayConfig): boolean {
+  return f.enabled !== c.enabled || f.sandbox !== (keyedHasSandbox(c.provider) && c.sandbox) || !!f.apiKey.trim() || !!f.proxy.trim() || f.clearProxy
+}
+
+/** keyedBody is what PUT /gateways/{idpay|nextpay} takes: '' keeps a secret. */
+export function keyedBody(f: KeyedForm, provider: string) {
+  const key = f.apiKey.trim() ? normalizeMerchant(f.apiKey) : ''
+  return {
+    enabled: f.enabled,
+    sandbox: keyedHasSandbox(provider) && f.sandbox,
+    api_key: key,
+    proxy: f.clearProxy ? '' : f.proxy.trim(),
+    clear_proxy: f.clearProxy,
+  }
+}
+
+/** keyedTestBody is what POST /gateways/{idpay|nextpay}/test takes: the typed
+ * values, and '' for the stored ones. */
+export function keyedTestBody(f: KeyedForm, provider: string) {
+  const { sandbox, api_key, proxy, clear_proxy } = keyedBody(f, provider)
+  return { sandbox, api_key, proxy, clear_proxy }
+}
+
+/** keyedBlockedByOpen: the form changes the API key or the sandbox while
+ * payments are open, which payments refuses (they could not be verified). */
+export function keyedBlockedByOpen(f: KeyedForm, c: GatewayConfig): boolean {
+  const open = c.health?.open ?? 0
+  return c.configured && open > 0 && (!!f.apiKey.trim() || f.sandbox !== (keyedHasSandbox(c.provider) && c.sandbox))
 }
 
 // ---- Automatic USDT (TRC20): the watcher finds exact amounts sent to the

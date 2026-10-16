@@ -27,7 +27,7 @@ type PaymentIntent struct {
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	OrderId     string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-ups
 	UserId      string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | stars | usdt_trc20_auto
+	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | stars | usdt_trc20_auto
 	Amount      *v1.Money              `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
 	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`                              // pending|confirming|succeeded|failed|expired
 	ProviderRef string                 `protobuf:"bytes,7,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"` // gateways: bank reference or transaction hash
@@ -193,7 +193,7 @@ type CreateIntentRequest struct {
 	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	// Automated gateways (zarinpal, stars, usdt_trc20_auto): the amount to
+	// Automated gateways (zarinpal, idpay, nextpay, stars, usdt_trc20_auto): the amount to
 	// charge at the gateway, computed by core from its rates. Not used by manual
 	// providers. usdt_trc20_auto: USDT (scale 6), at most 1,000,000 USDT;
 	// payments adds 1 to 9,999 micro-USDT so the amount is unique (never a
@@ -1303,7 +1303,7 @@ func (x *ListPendingReceiptsResponse) GetReceipts() []*PendingReceipt {
 // the merchant id, the API key and the proxy are set, never their values.
 type GatewayConfig struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
-	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | usdt_trc20_auto
+	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | idpay | nextpay | usdt_trc20_auto
 	Enabled  bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`  // switched on by the owner
 	// It has credentials: payments already open keep being checked, even when
 	// switched off.
@@ -1550,7 +1550,7 @@ type SetGatewayConfigRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Provider   string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
 	Enabled    bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Sandbox    bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`                        // zarinpal only
+	Sandbox    bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`                        // zarinpal and idpay only
 	MerchantId string                 `protobuf:"bytes,4,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"` // zarinpal only
 	Proxy      string                 `protobuf:"bytes,5,opt,name=proxy,proto3" json:"proxy,omitempty"`                             // http(s)://[user:password@]host:port
 	ClearProxy bool                   `protobuf:"varint,6,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
@@ -1885,7 +1885,7 @@ func (x *TestGatewayResponse) GetLatencyMs() int64 {
 // (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
 type GatewayReportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | idpay | nextpay | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
 	From          int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
 	To            int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
 	unknownFields protoimpl.UnknownFields

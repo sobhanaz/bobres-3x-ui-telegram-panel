@@ -128,6 +128,10 @@ func (s *Server) addServer(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &b) {
 		return
 	}
+	if s.subBaseCollides(r, b.SubBaseURL) {
+		writeFieldError(w, "sub_base_url", "this is BOBRES's own address: its /sub/ path shows the customers' subscription pages, so the panel's links cannot be served there; use the panel's own address and port")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), serverTimeout)
 	defer cancel()
 	sv, err := s.cfg.Domain.AddServer(ctx, actor(r), sa, b.input())
@@ -150,6 +154,10 @@ func (s *Server) updateServer(w http.ResponseWriter, r *http.Request) {
 	}
 	var b serverBody
 	if !readJSON(w, r, &b) {
+		return
+	}
+	if s.subBaseCollides(r, b.SubBaseURL) {
+		writeFieldError(w, "sub_base_url", "this is BOBRES's own address: its /sub/ path shows the customers' subscription pages, so the panel's links cannot be served there; use the panel's own address and port")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), serverTimeout)
