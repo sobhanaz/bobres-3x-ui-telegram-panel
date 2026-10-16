@@ -106,7 +106,9 @@ What the built installer does differently from this list:
   pulls exactly that content, whatever the tag points to now. The servers do not check cosign signatures
   themselves. The images run by tag when `BOBRES_VERSION` is not the CLI's own version (`--version` with another
   version, or a newer CLI from the one-liner on an install that keeps its version until `bobres update`), and with
-  a development build. Postgres and Redis (`postgres:16-alpine`, `redis:7-alpine`) come from Docker Hub by tag. Caddy
+  a development build. Postgres and Redis (`postgres:16-alpine`, `redis:7-alpine`) are pinned by digest like Caddy (the multi-arch index
+  digest in `deploy/docker-compose.yml`; the backup image's `postgres` base in `deploy/Dockerfile` has the same one), so
+  Docker checks what it pulls against it; `deploy/images_pinned_test.go` fails if one loses its digest. Caddy
   is pinned by version and digest (`caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f`,
   the multi-arch index digest), so an update that changes the reference pulls the new image, and a moved tag changes
   nothing (see HTTPS certificates).
