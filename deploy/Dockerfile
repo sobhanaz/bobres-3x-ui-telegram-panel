@@ -14,6 +14,14 @@ RUN npm ci --no-audit --no-fund
 COPY web/dashboard/ ./
 RUN npm run build
 
+# The Telegram Mini App store, built the same way (web/miniapp/embed.go).
+FROM --platform=$BUILDPLATFORM node:24-alpine AS miniapp
+WORKDIR /web
+COPY web/miniapp/package.json web/miniapp/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/miniapp/ ./
+RUN npm run build
+
 FROM golang:1.26-alpine AS build
 ARG SERVICE
 ARG VERSION=dev
@@ -23,6 +31,7 @@ COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 COPY --from=dashboard /web/dist/app ./web/dashboard/dist/app
+COPY --from=miniapp /web/dist/app ./web/miniapp/dist/app
 RUN test -n "$SERVICE" && go build -trimpath \
     -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${VERSION}" \
     -o /out/app ./cmd/${SERVICE}

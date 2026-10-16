@@ -229,6 +229,9 @@ func planToProto(p *store.Plan) *corev1.Plan {
 	if p.TrafficBytes != nil {
 		pp.TrafficBytes = *p.TrafficBytes
 	}
+	for _, sel := range p.Inbounds {
+		pp.Inbounds = append(pp.Inbounds, &corev1.InboundSelection{ServerId: sel.ServerID, InboundIds: sel.InboundIDs})
+	}
 	return pp
 }
 

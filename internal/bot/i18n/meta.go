@@ -166,6 +166,8 @@ var buttonStyles = map[string]string{
 	"btn.open_payment":      "success",
 	"btn.approve":           "success",
 	"btn.adm_unban":         "success",
+	"btn.adm_confirm":       "success",
+	"btn.adm_enable":        "success",
 	"btn.join_check":        "success",
 
 	"btn.services":      "primary",
@@ -220,7 +222,6 @@ var markupArgs = map[string][]string{
 	"admin.pending_item":   {"proof", "dup", "method"},
 	"admin.title":          {"panel"},
 	"admin.servers_down":   {"names"},
-	"admin.settings_title": {"list"},
 	"admin.discount_saved": {"line"},
 	"support.prompt":       {"contact"},
 	"support.thread":       {"messages"},

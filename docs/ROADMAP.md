@@ -69,7 +69,9 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
 - **Done when:** a sandbox payment settles, a failed and an abandoned payment are handled, and the payment is verified
   with the provider, never trusted from the callback alone.
 
-### 4. Telegram Mini App store (L)
+### 4. Telegram Mini App store (L) — built, see [17-mini-app.md](17-mini-app.md)
+- **Status: built.** Left to do: a check with a real Telegram (sign-in, payments, theme, Persian layout). Not built: Stars
+  and card-to-card payments, trials, referrals and support inside the app.
 - **What:** the store as a Telegram web app: browse plans, buy with the wallet or a gateway, see and renew services,
   open the subscription page, all in one screen instead of chat buttons.
 - **Why last:** the largest piece, and it needs an HTTPS domain; the bot already sells everything it would. It pays
@@ -81,6 +83,12 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
   need the public domain and a trusted certificate (not the lab's).
 - **Done when:** a customer buys and renews from the Mini App on iOS and Android, and the bot flow still works
   unchanged.
+
+## Also built in this batch
+
+- A status screen on `bobres`, `bobres check`, `bobres admin password` with an initial password and owner login
+  without /start, a per-plan inbound choice, the first panel named by its host, the admin menu in the bot by buttons,
+  and the BOBRES logo as the default bot photo. See the changelog; the open checks are launch-checklist steps 33 to 37.
 
 ## Later, not yet ordered
 

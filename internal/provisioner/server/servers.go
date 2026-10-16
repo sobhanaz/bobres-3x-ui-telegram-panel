@@ -409,10 +409,31 @@ func (s *Server) SetInboundAttach(ctx context.Context, req *provisionerv1.SetInb
 	return &emptypb.Empty{}, nil
 }
 
-// EnsureDefaultServer registers the installer-provided panel as "default"
-// when no panel is registered yet. It never touches an existing row: after
-// the first start, panels are managed in the dashboard. It reports whether
-// it added one; the panel is not contacted (it may still be starting).
+// defaultServerName names the first panel when its URL gives no usable host.
+const defaultServerName = "default"
+
+// seedName is the name the installer-provided panel gets: the host of its
+// URL, lowercased, without port, path or IPv6 brackets ("panel.example.com",
+// "203.0.113.7", "2001:db8::1"). A URL without a usable host, or a host too
+// long for a server name, gives "default" (the name installs before this one
+// kept).
+func seedName(baseURL string) string {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return defaultServerName
+	}
+	h := strings.ToLower(u.Hostname())
+	if h == "" || utf8.RuneCountInString(h) > maxNameLen {
+		return defaultServerName
+	}
+	return h
+}
+
+// EnsureDefaultServer registers the installer-provided panel when no panel is
+// registered yet, named after its host (seedName). It never touches an
+// existing row: after the first start, panels are managed in the dashboard
+// (an install seeded before keeps its name "default"). It reports whether it
+// added one; the panel is not contacted (it may still be starting).
 func (s *Server) EnsureDefaultServer(ctx context.Context, baseURL, token, subBaseURL string, allowPrivate bool) (bool, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		return false, nil
@@ -425,7 +446,7 @@ func (s *Server) EnsureDefaultServer(ctx context.Context, baseURL, token, subBas
 		return false, nil
 	}
 	_, err = s.addServer(ctx, &store.Server{
-		Name: "default", BaseURL: baseURL, Token: token, Enabled: true, SubBaseURL: subBaseURL,
+		Name: seedName(baseURL), BaseURL: baseURL, Token: token, Enabled: true, SubBaseURL: subBaseURL,
 		AllowPrivate: allowPrivate, Weight: store.DefaultWeight, Managed: store.ManagedEnv,
 	}, false)
 	switch {

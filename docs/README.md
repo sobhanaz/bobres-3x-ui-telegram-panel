@@ -25,6 +25,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [14-reports.md](14-reports.md) | Sales reports: what each number means in terms of the ledger, orders and events, currencies, time zone, CSV files, the `reports.read` permission and limits |
 | [15-subscription-page.md](15-subscription-page.md) | The branded subscription page `/sub/<token>`: what it shows and never shows, the page token, regenerating it, settings, limits, headers, and the app deep links that are not yet verified on devices |
 | [IDPay and NextPay](16-idpay-nextpay.md) | The two more Iranian gateways: how they work, setup, and what the owner must check by hand |
+| [17-mini-app.md](17-mini-app.md) | The Telegram Mini App store (`/app/`): setup with BotFather, how the bot verifies Telegram's init data for core, the `/api/mini/v1` calls, what it does not do, security and the checks that need a real Telegram |
 | [pricing.md](pricing.md) | The pricing model (free core, a subscription per install), the tiers side by side, what happens when a subscription lapses, FAQ |
 | [legal/](legal/README.md) | Legal drafts for a lawyer to review: Terms of Service, Privacy Policy, Acceptable Use, Refund policy and a template for an operator's own store, each in English and Persian |
 | [launch-checklist.md](launch-checklist.md) | What the owner still has to do before selling: names, trademark, lawyer, prices, the license server, the first customers (Persian: [launch-checklist.fa.md](launch-checklist.fa.md)) |

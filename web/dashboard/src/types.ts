@@ -145,6 +145,15 @@ export interface PlanItem {
   /** the 3x-ui servers its new services may go to; empty = any (M6).
    * Older cores leave it out. */
   server_ids?: string[]
+  /** the panel inbounds a new service gets, per server; a server without an
+   * entry gets every attachable inbound (the default). Older cores leave it out. */
+  inbounds?: PlanInbound[]
+}
+
+/** A plan's choice of inbounds on one server (panel inbound ids). */
+export interface PlanInbound {
+  server_id: string
+  inbound_ids: number[]
 }
 
 export interface DiscountItem {
@@ -268,7 +277,7 @@ export interface StaffItem {
 
 export interface SessionItem {
   id: string
-  method: 'link' | 'password'
+  method: 'link' | 'password' | 'password_initial'
   ip: string
   user_agent: string
   created_at: number

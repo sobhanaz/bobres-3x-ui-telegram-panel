@@ -665,7 +665,7 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onTicket(r, st)
 	case sceneDiscount:
 		h.onDiscountCode(r, st)
-	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason:
+	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:
 		h.onAdminScene(r, st)
 	case sceneResellerLabel, sceneResellerFind, sceneResellerRename:
 		h.onResellerScene(r, st)

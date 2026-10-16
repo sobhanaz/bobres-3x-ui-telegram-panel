@@ -27,6 +27,15 @@ Done already (2026-10-14), so you do not repeat it:
   [SECURITY.md](../SECURITY.md) points to it, and the `main` branch is protected (a pull request and a green CI are
   needed). The roadmap is in [ROADMAP.md](ROADMAP.md).
 
+## Blockers at a glance
+
+Nothing in the code stops a sale; these things do, and they are the owner's. Some are decided in the repository and
+left on purpose until you decide: the `SET ME` prices in `internal/license/tiers.json` (step 7), the empty seller
+contact (step 8), the `[LAWYER: ...]` and `[OWNER: ...]` placeholders (steps 5 and 6), the license server that is not
+deployed (step 10), the backups of the vendor private key (step 1), the release-signature deadline **2026-11-28**
+(step 24), and everything that has only been tried with fakes and the Docker lab (steps 30 to 37). Run `bobres check`
+on a store to see the install-side half of this list.
+
 ## A. Before you charge anyone
 
 | # | Step | State | Who | How |
@@ -78,3 +87,8 @@ Done already (2026-10-14), so you do not repeat it:
 | 30 | **Install once on a real public server** with a real 3x-ui panel | Open | Owner | The Docker lab cannot show these: a VPN app connecting through a service the bot sold, the QR code, real Let's Encrypt issuance for the domain and for the server IP address (needs ports 80 and 443 reachable from the internet), `bobres update` and `bobres rollback` on real data ([ROADMAP.md](ROADMAP.md), the v0.1.x table) |
 | 31 | **Try real payments**, one purchase per method | Open | Owner | A Zarinpal merchant id, Telegram Stars, card to card and automatic USDT: buy once with each, check the receipt flow and that the service is delivered ([ROADMAP.md](ROADMAP.md)) |
 | 32 | **Look at the colored buttons and the bottom menu in the real Telegram app** (iOS, Android, Desktop) | Open | Owner | The lab cannot show them ([03-bot-ux.md](03-bot-ux.md)); the chat pictures on the site come from a renderer, not from Telegram |
+| 33 | **Try IDPay and NextPay** with real merchant accounts | Open | Owner | Built to the public documents and tested only with fakes ([16-idpay-nextpay.md](16-idpay-nextpay.md)). Put in the key, pay once, abandon one payment, refund one; each gateway stays off until its key is set |
+| 34 | **Open the Telegram Mini App on a phone and on Desktop** | Open | Owner | Turn on `miniapp.enabled`, set the web app URL in @BotFather ([17-mini-app.md](17-mini-app.md)); check sign-in, a wallet purchase, a gateway payment, a renewal, Persian layout and the Back button. Never run against a real Telegram yet |
+| 35 | **Walk through the owner menu in the bot** (`/admin`) | Open | Owner | Every wizard (plans, discounts, trial, top-ups, settings, servers, staff, broadcast) was tested with fakes only ([03-bot-ux.md](03-bot-ux.md)). Run each once on a test store, and read the explanations in Persian |
+| 36 | **Log in with the initial password and read the status screen** | Open | Owner | On a fresh install: `bobres install` prints the one-time password for `owner`; log in, set a new password and 2FA. Then `bobres` (status screen) and `bobres check` must agree with what you see ([06-installer.md](06-installer.md)). `bobres check` shows SKIP for the release-signature check until `install.sh` copies `checksums.txt` into the state directory |
+| 37 | **Check the subscription page links on real phones** | Open | Owner | The app deep links on the page ([15-subscription-page.md](15-subscription-page.md)) were not tried on iOS and Android |

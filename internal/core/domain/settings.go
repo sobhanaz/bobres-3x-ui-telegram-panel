@@ -67,6 +67,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = every service has a branded page at /sub/<token> (its link, QR code and app guides); false = those pages answer 404 (the links in the bot and dashboard are hidden too)"},
 	{Key: "branding.bot_username", Group: "general", Kind: KindText, Perm: permBranding, MaxLen: 33,
 		Help: "the bot's @username: the renew button of the subscription page opens https://t.me/<username> (empty = no renew button)"},
+	{Key: "miniapp.enabled", Group: "general", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = the Telegram Mini App store is open at /app/ (plans, buying, renewing and wallet top-up inside Telegram; set it up in @BotFather, see docs/17-mini-app.md); false = /app/ and its API answer 404"},
 	{Key: "maintenance.enabled", Group: "maintenance", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = customers only get the maintenance message; staff and payments in progress still work"},
 	{Key: "join.channel", Group: "join", Kind: KindChannel, Perm: permSettings,

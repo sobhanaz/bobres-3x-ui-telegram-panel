@@ -84,6 +84,21 @@ message CreateClientRequest {
   // enabled server. The healthy, enabled one with the least clients/weight is
   // picked, and a retry stays on it.
   repeated string candidate_server_ids = 6;
+  // The inbounds a plan chose, per server. When the picked server has an entry,
+  // the client is attached to exactly those inbounds that are enabled in the
+  // panel (whether or not they are detached with SetInboundAttach: an explicit
+  // choice wins over that default); none of them being enabled there is a
+  // FailedPrecondition. A server without an entry gets every enabled, attached
+  // inbound, as before. Only a fresh reservation reads it: a retry attaches
+  // the same way again.
+  repeated InboundSelection inbounds = 7;
+}
+
+// InboundSelection names the panel inbounds (their ids in that panel) a
+// client of one server is attached to.
+message InboundSelection {
+  string server_id = 1;
+  repeated int32 inbound_ids = 2;
 }
 
 message RenewClientRequest {

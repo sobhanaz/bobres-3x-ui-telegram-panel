@@ -280,7 +280,8 @@ func (s *Service) UpdateServer(ctx context.Context, actor *store.User, sa Server
 // DeleteServer removes a server. It is refused while a plan names it (its
 // paid orders could never be delivered, and taking the server out of the
 // plan's list could widen it to any server), and the provisioner refuses
-// while services are on it.
+// while services are on it. A plan's inbound choice on it needs no care: it
+// goes with the server.
 func (s *Service) DeleteServer(ctx context.Context, actor *store.User, sa ServerAdmin, id string) error {
 	list, err := sa.ListServers(ctx)
 	if err != nil {
@@ -300,7 +301,17 @@ func (s *Service) DeleteServer(ctx context.Context, actor *store.User, sa Server
 	if err := sa.DeleteServer(ctx, before.ID); err != nil {
 		return err
 	}
-	return s.auditChange(ctx, nil, actor, "server.delete", "server", before.ID, serverAudit(before, false), nil, "")
+	// A plan that names no server may still have chosen inbounds on this one:
+	// the choice is for a server that is gone, so it goes (plan_inbounds has
+	// no foreign key to the provisioner's servers).
+	reason := ""
+	switch n, err := s.st.DeletePlanInboundsOfServer(ctx, s.st.Conn(), before.ID); {
+	case err != nil:
+		s.cfg.Log.Warn("dropping the plans' inbound choice for a deleted server failed", "server_id", before.ID, "err", err)
+	case n > 0:
+		reason = fmt.Sprintf("the inbound choice of %d plans for this server was dropped", n)
+	}
+	return s.auditChange(ctx, nil, actor, "server.delete", "server", before.ID, serverAudit(before, false), nil, reason)
 }
 
 // plansNaming lists, quoted, the names of the plans (on sale or not) that

@@ -45,6 +45,45 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   credentials are set. Implemented to the public documentation and tested only against fakes; see
   `docs/16-idpay-nextpay.md`. Payments migration 00008.
 
+### Owner and operator tools
+- `bobres` (no arguments) opens on a status screen: services up or down by name, version, licence tier and days left,
+  HTTPS certificate days left, newest backup, dashboard address. `bobres status --json` prints the same facts.
+- `bobres check [--dir D] [--json]` runs config, services, disk, database, Redis, licence, 3x-ui servers, watchdog
+  alerts, HTTPS, backup age, release-signature expiry, bot token and webhook checks, and exits 1 on a failure. It is
+  also the menu item "Check everything". The core side is `core check --json`. The release-signature check shows SKIP
+  until `install.sh` copies `checksums.txt` into the state directory.
+- Owner sign-in without Telegram. `bobres admin password` (and a fresh `bobres install`) issues a random 16-character
+  initial password for the login `owner`, shown once and stored only as a hash. It opens a restricted one-hour session
+  where the dashboard shows only My account: choose a new password and set up two-factor authentication, then the rest
+  unlocks. Running it again resets the login after a lost phone or password, ends the owner's sessions and lifts a
+  lock. It also creates the owner's account when the owner never sent /start. Audited as
+  `dashboard.password.reset_cli` and `dashboard.password.initial_changed`, never with the password.
+- The first 3x-ui panel a new install adds is named after its host (for example `panel.example.com`) instead of
+  `default`. Existing installs keep `default`.
+
+### Plans
+- A plan can name which inbounds of each 3x-ui server its customers are attached to. With no choice, nothing changes:
+  the client goes on every inbound that has "attach" on. An explicit choice wins over the attach switch; if a chosen
+  inbound is gone from the panel the purchase ends as `provision_failed` with a clear reason and the usual alert. The
+  plan editor lists the inbounds of each chosen server and flags one that disappeared. Core migration 00022
+  (`core.plan_inbounds`); `Plan` and `AdminUpsertPlan` carry the selection, and the provisioner's `CreateClient` takes
+  it.
+
+### Bot
+- A complete button-driven admin menu. `/admin` now reaches plans (add, edit, archive), the trial, top-up packs,
+  discounts, every setting (an editor by kind, explained, with range and default), notifications, broadcast, today's
+  numbers, 3x-ui servers (switch, weight) and, for the owner, payment details and staff. Every input step explains what
+  is wanted and has Back and Cancel. The old commands still work; `/set` with no arguments opens the settings screen.
+  Eight new admin RPCs back it. Tested with fakes only.
+- The BOBRES logo is the bot's default photo, applied once at first start. A photo you set, or remove, later is kept.
+
+### Mini App
+- A Telegram Mini App store at `/app/`: plans and discount codes, buying by wallet, Zarinpal, IDPay, NextPay or
+  automatic USDT, my services with renew and extra traffic, wallet balance, history and top-up. Persian and English,
+  right to left, Telegram theme. Off by default (`miniapp.enabled`). The bot checks Telegram's `initData` for core
+  (`POST /internal/miniapp/verify`), so core never holds the bot token. Stars, card to card and trials stay in the bot.
+  `make miniapp`, a CI job, `docs/17-mini-app.md`. Not checked against a real Telegram yet.
+
 ### API
 - New event `sales.daily_summary.v1` and two settings, `notify.daily_summary` and `notify.daily_summary_hour`; no
   migration.

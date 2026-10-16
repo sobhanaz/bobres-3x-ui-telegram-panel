@@ -126,7 +126,7 @@
   "login": {
     "title": "Log in",
     "subtitle": "Staff dashboard of {brand}",
-    "link_title": "With the bot (easiest)",
+    "link_title": "With the bot",
     "link_hint": "In the Telegram bot, send /dashboard (or tap Dashboard in /admin). You get a link that logs you in once, within 2 minutes.",
     "link_working": "Logging you in…",
     "link_invalid": "This login link was used already or has expired. Ask the bot for a new one.",
@@ -139,7 +139,10 @@
     "locked": "Too many failed logins. Wait 15 minutes, or use a link from the bot.",
     "rate_limited": "Too many attempts. Wait a minute.",
     "not_configured": "Password logins are off on this install. Use a link from the bot.",
-    "no_password_yet": "A password login is added from My account after logging in with the bot."
+    "no_password_yet": "After your first login, add or change your password in My account.",
+    "code_optional": "Authenticator code (if you have set one up)",
+    "code_hint": "Leave it empty when you sign in with the initial password from the installer or from bobres admin password.",
+    "initial_hint": "No Telegram? Sign in with the initial password the installer showed, or get a new one on the server with: bobres admin password. You will choose your own password and set up two-factor authentication right after."
   },
   "overview": {
     "users": "Users",
@@ -262,7 +265,8 @@
     "device_unknown": "Unknown device",
     "method": {
       "link": "Bot link",
-      "password": "Password"
+      "password": "Password",
+      "password_initial": "Initial password"
     },
     "started": "Logged in {time}",
     "last_seen": "Last active {time}",
@@ -271,7 +275,12 @@
     "revoked": "That device was logged out.",
     "revoke_others": "Log out other devices",
     "revoke_others_confirm": "Log out every device except this one?",
-    "revoked_others": "Devices logged out: {n}"
+    "revoked_others": "Devices logged out: {n}",
+    "session_initial": "Initial password, until {time}",
+    "forced_title": "Choose your own password",
+    "forced_intro": "You signed in with the initial password. Before you continue, choose a new password and turn on two-factor authentication. Nothing else in the dashboard opens until then.",
+    "forced_steps": "Pick a username and a new password (different from the initial one), then scan the code with an authenticator app (Google Authenticator, Authy, Microsoft Authenticator…) and enter the 6-digit code it shows.",
+    "password_reused": "Choose a different password: this is the initial one."
   },
   "common": {
     "all": "All",
@@ -424,7 +433,14 @@
     "server_removed": "Removed server",
     "server_removed_id": "Removed server ({id})",
     "server_off": "{name} (off)",
-    "servers_count": "{n} server | {n} servers"
+    "servers_count": "{n} server | {n} servers",
+    "inbounds": "Inbounds",
+    "inbounds_all": "Every attachable inbound",
+    "inbounds_help": "Pick which inbounds of each server a new service of this plan joins. Nothing picked means every inbound that is on in the panel and not skipped on the Servers page. A pick wins over the skip switch, and only inbounds that are on in the panel are used.",
+    "inbounds_error": "The inbounds could not be loaded:",
+    "inbound_off": "{name} (off in the panel)",
+    "inbound_gone_id": "Inbound #{id} (gone from the panel)",
+    "inbounds_gone": "Gone from the panel or turned off: inbound {ids}. Gone ones are skipped; if none is left, orders for this plan on this server fail until you change the choice."
   },
   "payment": {
     "queue": "Review queue",
@@ -1078,6 +1094,12 @@
         "bot_username": {
           "label": "Bot username",
           "help": "The bot’s {'@'}username (without the {'@'}), for the “Renew” button on the subscription page, which opens the bot. Empty: the page has no renew button."
+        }
+      },
+      "miniapp": {
+        "enabled": {
+          "label": "Telegram Mini App store",
+          "help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing and wallet top-up. Off by default; turn it on, then set the Mini App URL in {'@'}BotFather. Turned off, /app/ and its API answer “not found”."
         }
       }
     },

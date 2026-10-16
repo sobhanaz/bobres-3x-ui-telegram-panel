@@ -473,7 +473,7 @@ func TestOverviewResellerDebt(t *testing.T) {
 // labelProv delivers any order (the worker's provisioner for these tests).
 type labelProv struct{ fakeProv }
 
-func (p *labelProv) CreateClient(_ context.Context, id, _ string, _, _ int64, _ []string) (domain.ProvisionedClient, error) {
+func (p *labelProv) CreateClient(_ context.Context, id, _ string, _, _ int64, _ []string, _ []store.PlanInbound) (domain.ProvisionedClient, error) {
 	return domain.ProvisionedClient{ServerID: "00000000-0000-7000-8000-00000000c0de", XUISubID: "sub-" + id[:8]}, nil
 }
 

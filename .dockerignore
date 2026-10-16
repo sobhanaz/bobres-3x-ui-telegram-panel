@@ -10,3 +10,5 @@ coverage.out
 # node_modules must not leak stale files into it.
 web/dashboard/node_modules
 web/dashboard/dist/app
+web/miniapp/node_modules
+web/miniapp/dist/app

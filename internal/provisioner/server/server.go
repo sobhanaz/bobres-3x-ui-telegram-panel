@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -170,14 +171,36 @@ func (s *Server) subscription(ctx context.Context, subscriptionID string) (*stor
 	return cm, sv, a, nil
 }
 
-// attachableInbounds lists the inbounds a new client of the server gets:
-// enabled in the panel and not detached in BOBRES.
-func (s *Server) attachableInbounds(ctx context.Context, serverID string, a adapter.PanelAdapter) ([]int, error) {
+// attachableInbounds lists the inbounds a new client of the server gets. By
+// default: enabled in the panel and not detached in BOBRES. When the plan
+// chose inbounds on this server (chosen non-empty), exactly those that are
+// enabled in the panel: an explicit choice wins over the detach switch (which
+// only sets the default for plans that choose nothing). A choice of which none
+// is enabled any more is a FailedPrecondition naming the server, not a
+// silent fallback to the default: the plan would hand out other inbounds than
+// the ones its owner picked.
+func (s *Server) attachableInbounds(ctx context.Context, sv *store.Server, a adapter.PanelAdapter, chosen []int32) ([]int, error) {
 	ins, err := a.Inbounds(ctx)
 	if err != nil {
 		return nil, s.panelError("panel inbounds", err)
 	}
-	attach, err := s.st.InboundAttach(ctx, serverID)
+	if len(chosen) > 0 {
+		out := make([]int, 0, len(chosen))
+		for _, in := range ins {
+			if in.Enabled && slices.Contains(chosen, int32(in.ID)) { //nolint:gosec // panel ids are small
+				out = append(out, in.ID)
+			}
+		}
+		if len(out) == 0 {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"the inbound chosen for this plan no longer exists or is not enabled on server %q: edit the plan's inbounds", sv.Name)
+		}
+		if len(out) < len(chosen) {
+			s.log.Warn("some of the inbounds chosen for a plan are gone from the panel", "server", sv.Name, "chosen", chosen, "attached", out)
+		}
+		return out, nil
+	}
+	attach, err := s.st.InboundAttach(ctx, sv.ID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "inbound settings lookup failed")
 	}
@@ -191,6 +214,23 @@ func (s *Server) attachableInbounds(ctx context.Context, serverID string, a adap
 		return nil, status.Error(codes.FailedPrecondition, "the panel has no enabled inbound to attach clients to")
 	}
 	return out, nil
+}
+
+// chosenInbounds is the request's inbound choice for a server (nil: none),
+// each id once.
+func chosenInbounds(sel []*provisionerv1.InboundSelection, serverID string) []int32 {
+	var out []int32
+	for _, in := range sel {
+		if id, ok := canonicalID(in.GetServerId()); !ok || id != serverID {
+			continue
+		}
+		for _, n := range in.GetInboundIds() {
+			if !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 // noSuchClient reports the panel's answer to a lookup of a client it does
@@ -229,6 +269,13 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 	}
 	if req.GetDurationDays() < 0 || req.GetTrafficBytes() < 0 || req.GetDurationDays() > 36500 {
 		return nil, status.Error(codes.InvalidArgument, "duration_days and traffic_bytes out of range")
+	}
+	for _, sel := range req.GetInbounds() {
+		for _, id := range sel.GetInboundIds() {
+			if id <= 0 {
+				return nil, status.Error(codes.InvalidArgument, "an inbound id is a positive number")
+			}
+		}
 	}
 	fresh := false
 	cm, err := s.st.GetClientMap(ctx, req.GetSubscriptionId())
@@ -325,14 +372,14 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 	email, subID := cm.Email, s.st.SubIDFor(cm.SubscriptionID)
 	// The reservation's server even when disabled since: an earlier attempt
 	// may have created the client there.
-	_, a, err := s.server(ctx, cm.ServerID)
+	sv, a, err := s.server(ctx, cm.ServerID)
 	if err != nil {
 		if fresh {
 			s.release(ctx, cm)
 		}
 		return nil, err
 	}
-	inboundIDs, err := s.attachableInbounds(ctx, cm.ServerID, a)
+	inboundIDs, err := s.attachableInbounds(ctx, sv, a, chosenInbounds(req.GetInbounds(), sv.ID))
 	if err != nil {
 		if fresh {
 			s.release(ctx, cm)

@@ -41,19 +41,41 @@ the chain. A different amount is an unmatched deposit: staff are told and credit
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> admin approve/reject buttons in admin chat -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
+**Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, opened from the bot's menu button (setting `miniapp.enabled`, off by default). It pays by the wallet, Zarinpal, IDPay, NextPay or automatic USDT; Stars, manual payments, trials, referrals and support stay in the bot ([17-mini-app.md](17-mini-app.md)).
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
 Built (2026-10-10): one open conversation per customer, numbered; text, photos and PDFs; staff replies arrive in the
 chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; past tickets can be read.
 **Referral:** personal link, count, reward rules, balance credited on first paid order of the referred.
 
-## Admin in bot (quick actions, full power is in dashboard)
-Stats snapshot, find user, add balance, ban/unban, approve receipts, broadcast (queued), toggle gateway, panel health.
-Built: `/admin` for owners and admins (it says when maintenance mode is on): stats (users, active services, payments
-to review, failed deliveries, the servers' health), the payments to review with approve and reject, find a user
-(adjust a balance, ban or unban), plans and the trial, and settings. `/set key value` (it shows why core refused a
-value; payment details are the owner's). `/plan_add`, `/trial`, `/topup_add`, `/discount_add`, `/discounts`,
-`/discount_off`. `/dashboard` plus a menu button send any staff member, support included, a one-time dashboard login
-link. Broadcasts and the payment methods' switches are on the dashboard.
+## Admin in bot (every task is a button; the dashboard stays the full tool)
+`/admin` is the front door for owners and admins (it says when maintenance mode is on). Nobody has to remember a
+command: the old ones still work, and each usage text ends with "open /admin and use the buttons".
+
+**Menu:** payments to review (count) | today and find a user | plans and discounts | notifications and broadcast |
+settings and servers | owner only: payment methods and staff | dashboard link | home.
+- **Today:** orders, revenue and refunds per currency for today and the last 7 days, new users, the servers' health.
+- **Plans:** list, one plan's card (price, volume, days, devices, on or off, edit each field, archive), add, the trial
+  (set or switch off) and the top-up packs (add, switch off).
+- **Discounts:** list, add, switch off.
+- **Settings:** groups, then every setting the role may change, shown with what it does and its current value.
+  The editor depends on the kind: on and off and the choices are buttons, a number or text is typed, `-` clears it.
+  Core still validates every value and its reason is shown (`Not accepted: ...`). Payment details, staff and the
+  licence are the owner's, like the dashboard permissions (gateways, staff, licence, system).
+- **Servers** (owner and admin, as on the dashboard): health, switch on or off, weight. The address and token are never
+  shown or asked here.
+- **Staff** (owner only): list, add by Telegram id (the person must have started the bot) with a role, remove.
+- **Broadcast:** segment, text in Persian and in English, a preview with the audience size, then send.
+
+**Input steps** (plan, top-up, trial, discount, setting, server weight, staff, broadcast) share one engine: each step
+says "Step n of m", what is wanted, the allowed range and an example; a refused answer is explained above the same
+prompt; Back and Cancel are on every step; a last screen shows everything to check before it is saved. Cancel leaves
+nothing behind. Callbacks are `adm:<verb>:<arg>`, at most 64 bytes (tested).
+
+**Roles:** the bot hides what a role may not do and answers politely when a button is tapped by hand; core enforces
+the role on every call, so a crafted callback cannot do more than the dashboard allows.
+
+`/set` with no arguments opens the settings screen. `/dashboard` and a menu button send any staff member, support
+included, a one-time dashboard login link.
 
 ## Store rules the bot applies (dashboard Settings, 2026-10-10)
 - **Maintenance mode:** customers get the maintenance text (a popup for taps, the message at most once a minute).

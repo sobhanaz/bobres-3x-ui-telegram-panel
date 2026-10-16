@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -73,12 +72,82 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 		h.setStatus(r, arg, "banned")
 	case "unban":
 		h.setStatus(r, arg, "active")
+	case "today":
+		h.showToday(r)
 	case "plans":
 		h.showAdminPlans(r)
+	case "pl":
+		h.showPlanCard(r, arg)
 	case "pt":
 		h.togglePlan(r, arg)
+	case "pn":
+		h.startWizard(r, "plan", nil)
+	case "pe":
+		field, id, _ := strings.Cut(arg, ":")
+		h.startPlanEdit(r, field, id)
+	case "tup":
+		h.showAdminTopups(r)
+	case "tn":
+		h.startWizard(r, "topup", nil)
+	case "trial":
+		h.showTrial(r)
+	case "tw":
+		h.startWizard(r, "trial", nil)
+	case "toff":
+		if err := h.trialOff(r); err != nil {
+			r.fail(err)
+			return
+		}
+		h.showTrial(r)
+	case "disc":
+		h.showDiscountMenu(r)
+	case "dn":
+		h.startWizard(r, "disc", nil)
+	case "dt":
+		h.toggleDiscount(r, arg)
+	case "bc":
+		h.startWizard(r, "bc", nil)
+	case "pays":
+		h.showGroup(r, "payments")
+	case "notif":
+		h.showGroup(r, "notify")
 	case "set":
 		h.showSettings(r)
+	case "sg":
+		h.showGroup(r, arg)
+	case "sk":
+		h.showKey(r, arg)
+	case "st":
+		h.toggleSetting(r, arg)
+	case "sv":
+		key, val, _ := strings.Cut(arg, ":")
+		h.saveSetting(r, key, val)
+	case "sr":
+		h.saveSetting(r, arg, "")
+	case "se":
+		h.startSettingEdit(r, arg)
+	case "srv":
+		h.showServers(r)
+	case "sx":
+		h.showServerCard(r, arg)
+	case "sy":
+		h.toggleServer(r, arg)
+	case "sm":
+		h.startServerWeight(r, arg)
+	case "stf":
+		h.showStaff(r)
+	case "sa":
+		h.startStaffAdd(r)
+	case "sd":
+		h.startStaffRemove(r, arg)
+	case "w":
+		h.wizButton(r, arg)
+	case "wok":
+		h.wizConfirm(r)
+	case "wb":
+		h.wizBack(r)
+	case "wx":
+		h.wizCancel(r)
 	case "web":
 		h.sendDashboardLink(r)
 	default:
@@ -113,9 +182,14 @@ func (h *Handler) showAdmin(r *req) {
 	}
 	kb := (&tg.Keyboard{}).
 		Row(r.button("btn.adm_pending", "adm:pend", "n", pending)).
-		Row(r.button("btn.adm_find", "adm:find"), r.button("btn.adm_plans", "adm:plans")).
-		Row(r.button("btn.adm_settings", "adm:set"), r.button("btn.adm_dashboard", "adm:web")).
-		Row(r.button("btn.home", "home"))
+		Row(r.button("btn.adm_today", "adm:today"), r.button("btn.adm_find", "adm:find")).
+		Row(r.button("btn.adm_plans", "adm:plans"), r.button("btn.adm_discounts", "adm:disc")).
+		Row(r.button("btn.adm_notify", "adm:notif"), r.button("btn.adm_broadcast", "adm:bc")).
+		Row(r.button("btn.adm_settings", "adm:set"), r.button("btn.adm_servers", "adm:srv"))
+	if r.isOwner() { // the payment details and the staff are the owner's (gateways.write, staff.write)
+		kb.Row(r.button("btn.adm_payments", "adm:pays"), r.button("btn.adm_staff", "adm:stf"))
+	}
+	kb.Row(r.button("btn.adm_dashboard", "adm:web")).Row(r.button("btn.home", "home"))
 	text := r.t("admin.title",
 		"users", i18n.Number(r.lang, st.GetUsersTotal()), "today", i18n.Number(r.lang, st.GetUsersToday()),
 		"active", i18n.Number(r.lang, st.GetActiveSubscriptions()), "pending", pending,
@@ -320,6 +394,8 @@ func (h *Handler) onAdminScene(r *req, st state.State) {
 	}
 	text := strings.TrimSpace(r.msg.Text)
 	switch st.Scene {
+	case sceneAdminInput:
+		h.wizText(r, text)
 	case sceneAdminFind:
 		r.clearState()
 		v, err := h.core.AdminFindUser(r.ctx, &corev1.AdminFindUserRequest{ActorTelegramId: h.actor(r), Query: text})
@@ -362,58 +438,6 @@ func (h *Handler) onAdminScene(r *req, st state.State) {
 	}
 }
 
-func (h *Handler) showAdminPlans(r *req) {
-	ps, err := h.plans(r, true)
-	if err != nil {
-		r.fail(err)
-		return
-	}
-	kb := &tg.Keyboard{}
-	for _, p := range ps {
-		mark := r.t("admin.plan_off")
-		if p.GetEnabled() {
-			mark = r.t("admin.plan_on")
-		}
-		name := planName(r, p)
-		if p.GetIsTrial() {
-			name = "🎁 " + name
-		}
-		kb.Row(tg.CB(mark+" "+name+" · "+r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency()), "adm:pt:"+p.GetId()))
-	}
-	kb.Row(r.button("btn.back", "adm"))
-	r.show(r.t("admin.plans_title"), kb)
-}
-
-func (h *Handler) togglePlan(r *req, id string) {
-	p, err := h.findPlan(r, id, true)
-	if err != nil {
-		r.fail(err)
-		return
-	}
-	p.Enabled = !p.GetEnabled()
-	if _, err := h.core.AdminUpsertPlan(r.ctx, &corev1.AdminUpsertPlanRequest{ActorTelegramId: h.actor(r), Plan: p}); err != nil {
-		r.fail(err)
-		return
-	}
-	h.showAdminPlans(r)
-}
-
-func (h *Handler) showSettings(r *req) {
-	if err := h.RefreshSettings(r.ctx); err != nil {
-		r.fail(err)
-		return
-	}
-	lines := make([]string, 0, len(settingKeys))
-	for _, k := range settingKeys {
-		v := esc(h.setting(k))
-		if v == "" {
-			v = r.t("admin.setting_unset")
-		}
-		lines = append(lines, r.t("admin.setting_line", "key", k, "value", v))
-	}
-	r.show(r.t("admin.settings_title", "list", strings.Join(lines, "\n")), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
-}
-
 func (h *Handler) onAdminCommand(r *req, cmd, args string) {
 	if !r.isStaff() {
 		r.send(r.t("admin.forbidden"), homeKeyboard(r))
@@ -424,31 +448,7 @@ func (h *Handler) onAdminCommand(r *req, cmd, args string) {
 	case "/admin":
 		h.showAdmin(r)
 	case "/set":
-		key, value, _ := strings.Cut(args, " ")
-		if key == "" {
-			r.send(r.t("admin.setting_usage"), nil)
-			return
-		}
-		if _, err := h.core.AdminSetSetting(r.ctx, &corev1.AdminSetSettingRequest{
-			ActorTelegramId: h.actor(r), Key: key, Value: strings.TrimSpace(value),
-		}); err != nil {
-			if status.Code(err) == codes.InvalidArgument {
-				// Core's reason (a bad value, an unknown key, owner only); the
-				// key list helps with a mistyped key.
-				reason := status.Convert(err).Message()
-				reason = strings.TrimPrefix(reason, "domain: invalid argument: ") // core's error kind
-				msg := r.t("admin.setting_usage") + "\n" + esc(reason)
-				if !slices.Contains(settingKeys, key) && !strings.HasPrefix(key, "texts.") {
-					msg += "\n\n" + strings.Join(settingKeys, "\n")
-				}
-				r.send(msg, nil)
-				return
-			}
-			r.fail(err)
-			return
-		}
-		_ = h.RefreshSettings(r.ctx)
-		r.send(r.t("admin.setting_saved", "key", esc(key)), nil)
+		h.onSetCommand(r, args)
 	case "/plan_add":
 		p, ok := parsePlan(args)
 		if !ok {
@@ -472,266 +472,4 @@ func (h *Handler) onAdminCommand(r *req, cmd, args string) {
 	case "/discounts":
 		h.showDiscounts(r)
 	}
-}
-
-// parseTopup reads "<price> <IRT|USDT> <GB> <English name> | <Persian name>":
-// a traffic package sold from a subscription's page.
-func parseTopup(args string) (*corev1.Plan, bool) {
-	price, rest, _ := strings.Cut(strings.TrimSpace(args), " ")
-	cur, rest, _ := strings.Cut(strings.TrimSpace(rest), " ")
-	gbTok, rest, _ := strings.Cut(strings.TrimSpace(rest), " ")
-	p, ok := parsePlan(price + " " + cur + " 0 " + gbTok + " " + rest)
-	if !ok || p.GetTrafficBytes() <= 0 {
-		return nil, false
-	}
-	p.IsTopup, p.Kind, p.DurationDays = true, "traffic", 0
-	return p, true
-}
-
-// onDiscountAdd: "/discount_add <CODE> <20%|50000 IRT> [max uses] [days valid]".
-func (h *Handler) onDiscountAdd(r *req, args string) {
-	f := strings.Fields(args)
-	if len(f) < 2 {
-		r.send(r.t("admin.discount_usage"), nil)
-		return
-	}
-	d := &corev1.Discount{Code: strings.ToUpper(f[0]), Enabled: true}
-	rest := f[2:]
-	if pct, isPct := strings.CutSuffix(f[1], "%"); isPct {
-		n, ok := i18n.ParseNumber(pct)
-		if !ok || n < 1 || n > 100 {
-			r.send(r.t("admin.discount_usage"), nil)
-			return
-		}
-		d.Percent = int32(n) //nolint:gosec // 1..100
-	} else {
-		if len(f) < 3 {
-			r.send(r.t("admin.discount_usage"), nil)
-			return
-		}
-		cur := strings.ToUpper(f[2])
-		amount, ok := parseMinor(f[1], cur)
-		if !ok || amount <= 0 {
-			r.send(r.t("admin.discount_usage"), nil)
-			return
-		}
-		d.Amount = &commonv1.Money{Amount: amount, Currency: cur}
-		rest = f[3:]
-	}
-	for i, tok := range rest {
-		n, ok := i18n.ParseNumber(tok)
-		if !ok || n <= 0 || i > 1 {
-			r.send(r.t("admin.discount_usage"), nil)
-			return
-		}
-		if i == 0 {
-			d.MaxUses = int32(min(n, 1_000_000)) //nolint:gosec // bounded
-		} else {
-			d.ExpiresAt = time.Now().Add(time.Duration(min(n, 3650)) * 24 * time.Hour).Unix()
-		}
-	}
-	h.saveDiscount(r, d)
-}
-
-func (h *Handler) saveDiscount(r *req, d *corev1.Discount) {
-	saved, err := h.core.AdminUpsertDiscount(r.ctx, &corev1.AdminUpsertDiscountRequest{ActorTelegramId: h.actor(r), Discount: d})
-	if err != nil {
-		if status.Code(err) == codes.InvalidArgument {
-			r.send(esc(status.Convert(err).Message())+"\n"+r.t("admin.discount_usage"), nil)
-			return
-		}
-		r.fail(err)
-		return
-	}
-	r.send(r.t("admin.discount_saved", "line", h.discountLine(r, saved)), nil)
-}
-
-// onDiscountOff: "/discount_off <CODE>" stops a code (its history stays).
-func (h *Handler) onDiscountOff(r *req, code string) {
-	list, err := h.core.AdminListDiscounts(r.ctx, &corev1.AdminListDiscountsRequest{ActorTelegramId: h.actor(r)})
-	if err != nil {
-		r.fail(err)
-		return
-	}
-	for _, d := range list.GetDiscounts() {
-		if strings.EqualFold(d.GetCode(), code) && code != "" {
-			d.Enabled = false
-			h.saveDiscount(r, d)
-			return
-		}
-	}
-	r.send(r.t("admin.discount_unknown", "code", esc(code)), nil)
-}
-
-func (h *Handler) showDiscounts(r *req) {
-	list, err := h.core.AdminListDiscounts(r.ctx, &corev1.AdminListDiscountsRequest{ActorTelegramId: h.actor(r)})
-	if err != nil {
-		r.fail(err)
-		return
-	}
-	if len(list.GetDiscounts()) == 0 {
-		r.send(r.t("admin.discounts_empty")+"\n"+r.t("admin.discount_usage"), nil)
-		return
-	}
-	lines := []string{r.t("admin.discounts_title")}
-	for _, d := range list.GetDiscounts() {
-		lines = append(lines, h.discountLine(r, d))
-	}
-	r.send(strings.Join(lines, "\n"), nil)
-}
-
-// discountLine shows a code's terms: "SPRING20 · 20% · 3/100 used · until … · off".
-func (h *Handler) discountLine(r *req, d *corev1.Discount) string {
-	parts := []string{"<code>" + esc(d.GetCode()) + "</code>"}
-	if d.GetPercent() > 0 {
-		parts = append(parts, i18n.Number(r.lang, int64(d.GetPercent()))+"%")
-	} else {
-		parts = append(parts, r.money(d.GetAmount().GetAmount(), d.GetAmount().GetCurrency()))
-	}
-	used := i18n.Number(r.lang, int64(d.GetUsed()))
-	if d.GetMaxUses() > 0 {
-		used += "/" + i18n.Number(r.lang, int64(d.GetMaxUses()))
-	}
-	parts = append(parts, r.t("admin.discount_used", "n", used))
-	if d.GetExpiresAt() > 0 {
-		parts = append(parts, r.t("admin.discount_until", "date", i18n.Date(r.lang, time.Unix(d.GetExpiresAt(), 0))))
-	}
-	if !d.GetEnabled() {
-		parts = append(parts, r.t("admin.discount_off"))
-	}
-	return strings.Join(parts, " · ")
-}
-
-func (h *Handler) savePlan(r *req, p *corev1.Plan) {
-	saved, err := h.core.AdminUpsertPlan(r.ctx, &corev1.AdminUpsertPlanRequest{ActorTelegramId: h.actor(r), Plan: p})
-	if err != nil {
-		if status.Code(err) == codes.InvalidArgument {
-			r.send(esc(status.Convert(err).Message())+"\n"+r.t("admin.plan_usage"), nil)
-			return
-		}
-		r.fail(err)
-		return
-	}
-	r.send(r.t("admin.plan_saved", "name", esc(planName(r, saved))), (&tg.Keyboard{}).Row(r.button("btn.adm_plans", "adm:plans")))
-}
-
-// onTrialCommand: "/trial <days> <GB>" sets up the free trial plan, "/trial
-// off" disables it.
-func (h *Handler) onTrialCommand(r *req, args string) {
-	ps, err := h.plans(r, true)
-	if err != nil {
-		r.fail(err)
-		return
-	}
-	var trial *corev1.Plan
-	for _, p := range ps {
-		if p.GetIsTrial() {
-			trial = p
-			break
-		}
-	}
-	if strings.EqualFold(strings.TrimSpace(args), "off") {
-		if trial == nil || !trial.GetEnabled() {
-			r.send(r.t("admin.trial_off"), nil)
-			return
-		}
-		trial.Enabled = false
-		if _, err := h.core.AdminUpsertPlan(r.ctx, &corev1.AdminUpsertPlanRequest{ActorTelegramId: h.actor(r), Plan: trial}); err != nil {
-			r.fail(err)
-			return
-		}
-		r.send(r.t("admin.trial_off"), nil)
-		return
-	}
-	f := strings.Fields(args)
-	if len(f) != 2 {
-		r.send(r.t("admin.trial_usage"), nil)
-		return
-	}
-	days, ok1 := i18n.ParseNumber(f[0])
-	gb, ok2 := i18n.ParseNumber(f[1])
-	if !ok1 || !ok2 || days < 0 || gb < 0 || (days == 0 && gb == 0) || days > 365 || gb > 1000 {
-		r.send(r.t("admin.trial_usage"), nil)
-		return
-	}
-	if trial == nil {
-		trial = &corev1.Plan{NameI18N: map[string]string{"en": "Free trial", "fa": "تست رایگان"}, IsTrial: true}
-	}
-	trial.DurationDays, trial.TrafficBytes = int32(days), gb<<30 //nolint:gosec // bounded above
-	trial.Kind, trial.Enabled = planKind(days, gb), true
-	trial.Price = &commonv1.Money{Amount: 0, Currency: "IRT"}
-	h.savePlan(r, trial)
-}
-
-func planKind(days, gb int64) string {
-	switch {
-	case days > 0 && gb > 0:
-		return "both"
-	case days > 0:
-		return "time"
-	default:
-		return "traffic"
-	}
-}
-
-// parsePlan reads "<price> <IRT|USDT> <days> <GB> <English name> | <Persian name>".
-func parsePlan(args string) (*corev1.Plan, bool) {
-	var tok [4]string
-	rest := strings.TrimSpace(args)
-	for i := range tok {
-		idx := strings.IndexAny(rest, " \t")
-		if idx < 0 {
-			return nil, false
-		}
-		tok[i], rest = rest[:idx], strings.TrimSpace(rest[idx:])
-	}
-	currency := strings.ToUpper(tok[1])
-	price, ok := parseMinor(tok[0], currency)
-	days, okD := i18n.ParseNumber(tok[2])
-	gb, okG := i18n.ParseNumber(tok[3])
-	if !ok || !okD || !okG || days < 0 || gb < 0 || (days == 0 && gb == 0) || days > 3650 || gb > 100_000 || rest == "" {
-		return nil, false
-	}
-	en, fa, _ := strings.Cut(rest, "|")
-	names := map[string]string{}
-	if v := strings.TrimSpace(en); v != "" {
-		names["en"] = v
-	}
-	if v := strings.TrimSpace(fa); v != "" {
-		names["fa"] = v
-	}
-	return &corev1.Plan{
-		NameI18N: names, Kind: planKind(days, gb), Enabled: true,
-		DurationDays: int32(days), TrafficBytes: gb << 30, //nolint:gosec // bounded above
-		Price: &commonv1.Money{Amount: price, Currency: currency},
-	}, true
-}
-
-// parseMinor reads a price in major units ("150000", "2.5") into minor units.
-func parseMinor(s, currency string) (int64, bool) {
-	scale := map[string]int{"IRT": 0, "USDT": 6}
-	sc, known := scale[currency]
-	if !known {
-		return 0, false
-	}
-	s = strings.NewReplacer("٫", ".", "/", ".").Replace(s)
-	whole, frac, hasFrac := strings.Cut(s, ".")
-	w, ok := i18n.ParseNumber(whole)
-	if !ok || w < 0 {
-		return 0, false
-	}
-	for i := 0; i < sc; i++ {
-		w *= 10
-	}
-	if !hasFrac || frac == "" {
-		return w, true
-	}
-	if len(frac) > sc {
-		return 0, false
-	}
-	f, ok := i18n.ParseNumber(frac + strings.Repeat("0", sc-len(frac)))
-	if !ok {
-		return 0, false
-	}
-	return w + f, true
 }

@@ -115,6 +115,24 @@
 		}
 	}
 
+	# Telegram Mini App store: the same strict CSP core sends (web/miniapp/embed.go;
+	# a test keeps them equal), except that Telegram's script may load and
+	# Telegram's web clients may frame the page, so the site-wide
+	# X-Frame-Options is dropped here (frame-ancestors in the CSP replaces it).
+	handle /app* {
+		header Content-Security-Policy "default-src 'self'; script-src 'self' https://telegram.org; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors https://*.telegram.org; base-uri 'none'; form-action 'self'"
+		header ?Cache-Control "no-store"
+		header -X-Frame-Options
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy core:8080 {
+			health_uri /healthz
+			health_interval 15s
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
 	# JSON API and public subscription pages.
 	@core path /api/* /sub/*
 	handle @core {

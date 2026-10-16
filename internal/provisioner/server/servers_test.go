@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -376,6 +377,95 @@ func TestInboundAttach(t *testing.T) {
 	}
 	if _, err := f.client.SetInboundAttach(ctx, &provisionerv1.SetInboundAttachRequest{ServerId: f.server.ID}); status.Code(err) != codes.InvalidArgument {
 		t.Errorf("inbound 0: %v", err)
+	}
+}
+
+// A plan's inbound choice decides the inbounds of a new client on a server:
+// exactly those, even over a detached one; a choice for another server is
+// not this one's; a choice that is partly gone attaches what is left; one
+// that is wholly gone is refused and keeps nothing; no choice is the default.
+func TestCreateClientInboundChoice(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	other := "00000000-0000-7000-8000-00000000ffff"
+	create := func(i int, sel ...*provisionerv1.InboundSelection) (*provisionerv1.Client, error) {
+		t.Helper()
+		return f.client.CreateClient(ctx, &provisionerv1.CreateClientRequest{
+			SubscriptionId: subID(i), Email: fmt.Sprintf("c%d-new", i), DurationDays: 30, Inbounds: sel,
+		})
+	}
+	ids := func(cl *provisionerv1.Client) []int32 {
+		got := append([]int32(nil), cl.GetInboundIds()...)
+		slices.Sort(got)
+		return got
+	}
+
+	// The fake panel has 1 and 2 enabled, 3 not. Detach 2, then choose it
+	// (with 1, twice): the choice wins over the switch.
+	if _, err := f.client.SetInboundAttach(ctx, &provisionerv1.SetInboundAttachRequest{ServerId: f.server.ID, InboundId: 2, Attach: false}); err != nil {
+		t.Fatal(err)
+	}
+	cl, err := create(1, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{2, 1, 2}})
+	if err != nil || !slices.Equal(ids(cl), []int32{1, 2}) {
+		t.Fatalf("chosen 1,2: %v %+v", err, cl)
+	}
+	if cm, err := f.st.GetClientMap(ctx, subID(1)); err != nil || len(cm.InboundIDs) != 2 {
+		t.Fatalf("reservation: %v %+v", err, cm)
+	}
+	// 3 is disabled in the panel: left out (2 stays).
+	cl, err = create(9, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{3, 2}})
+	if err != nil || !slices.Equal(ids(cl), []int32{2}) {
+		t.Fatalf("chosen 2,3 (3 disabled): %v %+v", err, cl)
+	}
+	// The server id may be written in capitals.
+	cl, err = create(2, &provisionerv1.InboundSelection{ServerId: strings.ToUpper(f.server.ID), InboundIds: []int32{1}})
+	if err != nil || !slices.Equal(ids(cl), []int32{1}) {
+		t.Fatalf("chosen 1: %v %+v", err, cl)
+	}
+	// A choice made for another server says nothing here: the default, 2 detached.
+	cl, err = create(3, &provisionerv1.InboundSelection{ServerId: other, InboundIds: []int32{2}})
+	if err != nil || !slices.Equal(ids(cl), []int32{1}) {
+		t.Fatalf("another server's choice: %v %+v", err, cl)
+	}
+	// No choice at all: the same default.
+	cl, err = create(4)
+	if err != nil || !slices.Equal(ids(cl), []int32{1}) {
+		t.Fatalf("no choice: %v %+v", err, cl)
+	}
+	// Partly gone: 1 and an inbound the panel does not have; 1 is attached.
+	cl, err = create(5, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{1, 99}})
+	if err != nil || !slices.Equal(ids(cl), []int32{1}) {
+		t.Fatalf("partly gone: %v %+v", err, cl)
+	}
+	// Wholly gone: refused, with the server named, and nothing is reserved;
+	// there is no fall back to the default.
+	_, err = create(6, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{98, 99}})
+	if status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "edit the plan's inbounds") {
+		t.Fatalf("wholly gone: %v", err)
+	}
+	if _, err := f.st.GetClientMap(ctx, subID(6)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("reservation kept: %v", err)
+	}
+	// Disabled in the panel counts as gone.
+	f.fake.SetInboundsEnabled(false)
+	if _, err := create(7, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{1}}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("chosen inbound disabled: %v", err)
+	}
+	if _, err := f.st.GetClientMap(ctx, subID(7)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("reservation kept: %v", err)
+	}
+	f.fake.SetInboundsEnabled(true)
+	if _, err := create(7, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{1}}); err != nil {
+		t.Fatalf("enabled again: %v", err)
+	}
+	// An id that is not positive is a malformed request.
+	for _, bad := range []int32{0, -1} {
+		if _, err := create(8, &provisionerv1.InboundSelection{ServerId: f.server.ID, InboundIds: []int32{1, bad}}); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("inbound %d: %v", bad, err)
+		}
+	}
+	if _, err := f.st.GetClientMap(ctx, subID(8)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("reservation kept: %v", err)
 	}
 }
 

@@ -21,6 +21,9 @@ type planJSON struct {
 	Sales        int64             `json:"sales"`
 	// ServerIDs are the 3x-ui servers its new services go to ([] = any).
 	ServerIDs []string `json:"server_ids"`
+	// Inbounds is its choice of panel inbounds per server ([] = every
+	// attachable inbound of whichever server it goes to).
+	Inbounds []store.PlanInbound `json:"inbounds"`
 }
 
 func planOf(p *store.Plan, sales int64) planJSON {
@@ -28,9 +31,16 @@ func planOf(p *store.Plan, sales int64) planJSON {
 	if ids == nil {
 		ids = []string{}
 	}
+	inbounds := make([]store.PlanInbound, 0, len(p.Inbounds))
+	for _, in := range p.Inbounds {
+		if in.InboundIDs == nil {
+			in.InboundIDs = []int32{}
+		}
+		inbounds = append(inbounds, in)
+	}
 	return planJSON{ID: p.ID, Name: p.NameI18n, Kind: p.Kind, DurationDays: p.DurationDays, TrafficBytes: p.TrafficBytes,
 		Price: money{p.Price, p.Currency}, Enabled: p.Enabled, IsTrial: p.IsTrial, IsTopup: p.IsTopup, Sort: p.Sort, Sales: sales,
-		ServerIDs: ids}
+		ServerIDs: ids, Inbounds: inbounds}
 }
 
 // listPlans: GET /api/v1/plans, every plan (also turned off) with its sales.
@@ -67,6 +77,8 @@ type planBody struct {
 	Sort         int32             `json:"sort"`
 	// ServerIDs: absent keeps the plan's servers (a new plan: any server).
 	ServerIDs *[]string `json:"server_ids"`
+	// Inbounds: absent keeps the plan's choice (a new plan: none); [] clears it.
+	Inbounds *[]store.PlanInbound `json:"inbounds"`
 }
 
 func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
@@ -101,6 +113,9 @@ func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
 	}
 	if b.ServerIDs != nil {
 		p.ServerIDs = append([]string{}, *b.ServerIDs...)
+	}
+	if b.Inbounds != nil {
+		p.Inbounds = append([]store.PlanInbound{}, *b.Inbounds...)
 	}
 	return p, true
 }

@@ -31,11 +31,18 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/web/dashboard"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/web/miniapp"
 )
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "login-link" {
 		os.Exit(loginLink(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "admin-password" {
+		os.Exit(adminPasswordCmd(os.Args[2:], os.Stdout, os.Stderr))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "check" {
+		os.Exit(checkCmd(os.Args[2:], os.Stdout, os.Stderr))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "license" {
 		os.Exit(licenseCmd(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
@@ -93,7 +100,7 @@ func loginLink(args []string) int {
 	}
 	token, exp, err := dom.CreateLoginLink(ctx, tg)
 	if errors.Is(err, domain.ErrForbidden) {
-		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member (the owner must have started the bot once)\n", tg)
+		fmt.Fprintf(os.Stderr, "Telegram id %d is not an active staff member (the owner must have started the bot once; to skip the bot, run: bobres admin password)\n", tg)
 		return 1
 	}
 	if err != nil {
@@ -124,6 +131,13 @@ func setup(rt *app.Runtime) error {
 	// A new owner set with bobres menu gets the role now, not at their next /start.
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)
+	}
+	// A new store gets the BOBRES logo as the bot's profile photo, once; the
+	// dashboard's photo (or its removal) is never overridden afterwards.
+	if applied, err := dom.EnsureDefaultBotPhoto(rt.Ctx); err != nil {
+		rt.Log.Warn("default bot photo", "err", err)
+	} else if applied {
+		rt.Log.Info("default bot photo set (replace it in the dashboard: Branding)")
 	}
 	// Core's master key seals the dashboard's authenticator secrets and the
 	// private key of the store's own HTTPS certificate.
@@ -179,12 +193,13 @@ func setup(rt *app.Runtime) error {
 		bot      web.BotPeer
 		licSrv   domain.LicenseServer
 		publicIP web.PublicIPSource
+		miniAuth web.MiniAppVerifier
 	)
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.BotInternalToken)
-		files, bot, licSrv, publicIP = peer, peer, peer, peer
+		files, bot, licSrv, publicIP, miniAuth = peer, peer, peer, peer, peer
 		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
@@ -211,7 +226,7 @@ func setup(rt *app.Runtime) error {
 	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
 		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
-		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), Log: rt.Log}).Register(rt.Mux)
+		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), MiniApp: miniapp.Handler(), MiniAppVerify: miniAuth, Log: rt.Log}).Register(rt.Mux)
 	// An activated license is renewed once a day through the bot (core has
 	// no internet access); a pasted or imported one is left alone.
 	if licSrv != nil {

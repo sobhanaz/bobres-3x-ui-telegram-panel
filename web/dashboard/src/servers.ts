@@ -4,7 +4,7 @@
 // the provisioner check everything again; this only spares a round trip.
 // Pure functions (no API, no Vue).
 import { asciiNumber } from './format'
-import type { InboundItem, OverviewServer, ServerItem } from './types'
+import type { InboundItem, OverviewServer, PlanInbound, ServerItem } from './types'
 
 /** Limits core checks again. */
 export const SERVER_NAME_MAX = 64
@@ -217,4 +217,53 @@ export function serverNames(ids: readonly string[], servers: readonly ServerItem
  * services on this server would fail. */
 export function noInbound(list: readonly InboundItem[]): boolean {
   return !list.some((i) => i.enabled && i.attach)
+}
+
+/** A plan's inbound choice as the editor holds it: server id -> inbound ids
+ * (a server without an entry, or with none, gets the default). */
+export type InboundChoice = Record<string, number[]>
+
+/** choiceOf reads the plan's inbounds into the editor's form. */
+export function choiceOf(list: readonly PlanInbound[] | undefined): InboundChoice {
+  const out: InboundChoice = {}
+  for (const c of list ?? []) {
+    if (c.inbound_ids?.length) out[c.server_id] = [...c.inbound_ids]
+  }
+  return out
+}
+
+/** inboundsBody is the list a save sends: the servers the plan can go to (all
+ * of them while it names none) that have a choice. Choices for servers the
+ * plan no longer names are dropped, as core refuses them. */
+export function inboundsBody(choice: InboundChoice, planServers: readonly string[]): PlanInbound[] {
+  return Object.entries(choice)
+    .filter(([id, ids]) => ids.length > 0 && (!planServers.length || planServers.includes(id)))
+    .map(([server_id, ids]) => ({ server_id, inbound_ids: [...ids].sort((a, b) => a - b) }))
+    .sort((a, b) => a.server_id.localeCompare(b.server_id))
+}
+
+/** A choice in the plan editor's inbound list. */
+export interface InboundOption {
+  value: number
+  label: string
+  /** turned off in the panel: it is not given to new services */
+  off: boolean
+  /** the plan names it, but the panel no longer has it */
+  gone: boolean
+}
+
+/** inboundOptions lists a server's inbounds to choose from, plus any the plan
+ * still names that the panel no longer has (so staff can take them out). */
+export function inboundOptions(list: readonly InboundItem[], chosen: readonly number[] = []): InboundOption[] {
+  const out: InboundOption[] = list.map((i) => ({ value: i.id, label: i.tag || '#' + i.id, off: !i.enabled, gone: false }))
+  for (const id of chosen) {
+    if (!list.some((i) => i.id === id)) out.push({ value: id, label: '#' + id, off: true, gone: true })
+  }
+  return out
+}
+
+/** goneInbounds: the chosen inbounds of a server that its panel does not have
+ * or has turned off (a service would get fewer, or none). */
+export function goneInbounds(list: readonly InboundItem[], chosen: readonly number[]): number[] {
+  return chosen.filter((id) => !list.some((i) => i.id === id && i.enabled))
 }

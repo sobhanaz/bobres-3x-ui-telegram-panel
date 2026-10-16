@@ -358,7 +358,9 @@ func (s *Service) AdminUpsertPlan(ctx context.Context, actorTelegramID int64, p 
 }
 
 // UpsertPlan is AdminUpsertPlan for an actor the caller has checked. A nil
-// p.ServerIDs keeps the plan's servers (the bot never sends them).
+// p.ServerIDs keeps the plan's servers (the bot never sends them); a nil
+// p.Inbounds keeps its inbound choice (an older client does not send it; an
+// empty list clears it, so every attachable inbound is used again).
 func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Plan) (*store.Plan, error) {
 	if err := validatePlan(p); err != nil {
 		return nil, err
@@ -368,6 +370,11 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 		return nil, err
 	}
 	p.ServerIDs = ids
+	inbounds, err := planInbounds(p.Inbounds)
+	if err != nil {
+		return nil, err
+	}
+	p.Inbounds = inbounds
 	var (
 		before any // nil for a new plan
 		oldCur string
@@ -381,8 +388,28 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 		if p.ServerIDs == nil {
 			p.ServerIDs = old.ServerIDs
 		}
-	} else if p.ServerIDs == nil {
-		p.ServerIDs = []string{}
+		if p.Inbounds == nil {
+			// Kept, as the servers are (the saved plan and its audit entry
+			// show it). The choice kept must stay inside the servers now
+			// named: a server taken out of the plan takes its inbounds along.
+			p.Inbounds = old.Inbounds
+			if len(p.ServerIDs) > 0 {
+				p.Inbounds = inboundsOnServers(old.Inbounds, p.ServerIDs)
+			}
+			if p.Inbounds == nil {
+				p.Inbounds = []store.PlanInbound{}
+			}
+		}
+	} else {
+		if p.ServerIDs == nil {
+			p.ServerIDs = []string{}
+		}
+		if p.Inbounds == nil {
+			p.Inbounds = []store.PlanInbound{}
+		}
+	}
+	if err := checkInboundServers(p.Inbounds, p.ServerIDs); err != nil {
+		return nil, err
 	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
@@ -434,6 +461,77 @@ func planServerIDs(ids []string) ([]string, error) {
 	}
 	slices.Sort(out)
 	return out, nil
+}
+
+// Bounds of a plan's inbound choice: servers with a choice, inbounds per server.
+const (
+	maxPlanInboundServers = maxPlanServers
+	maxPlanInbounds       = 64
+)
+
+// planInbounds checks a plan's inbound choice: server ids as the provisioner
+// gives them, positive panel inbound ids, each once, sorted by server and
+// inbound (nil stays nil: keep the stored choice). A server with no inbound
+// listed has no choice (the default), so it is dropped.
+func planInbounds(in []store.PlanInbound) ([]store.PlanInbound, error) {
+	if in == nil {
+		return nil, nil
+	}
+	if len(in) > maxPlanInboundServers {
+		return nil, &FieldError{"inbounds", fmt.Sprintf("at most %d servers", maxPlanInboundServers)}
+	}
+	byServer := map[string][]int32{}
+	for _, sel := range in {
+		u, err := buuid.Parse(strings.TrimSpace(sel.ServerID))
+		if err != nil {
+			return nil, &FieldError{"inbounds", "not a server id"}
+		}
+		sid := u.String()
+		for _, id := range sel.InboundIDs {
+			if id <= 0 {
+				return nil, &FieldError{"inbounds", "an inbound id is a positive number"}
+			}
+			if !slices.Contains(byServer[sid], id) {
+				byServer[sid] = append(byServer[sid], id)
+			}
+		}
+		if len(byServer[sid]) > maxPlanInbounds {
+			return nil, &FieldError{"inbounds", fmt.Sprintf("at most %d inbounds per server", maxPlanInbounds)}
+		}
+	}
+	out := make([]store.PlanInbound, 0, len(byServer))
+	for sid, ids := range byServer {
+		slices.Sort(ids)
+		out = append(out, store.PlanInbound{ServerID: sid, InboundIDs: ids})
+	}
+	slices.SortFunc(out, func(a, b store.PlanInbound) int { return strings.Compare(a.ServerID, b.ServerID) })
+	return out, nil
+}
+
+// checkInboundServers refuses a choice on a server the plan does not send
+// services to. A plan that names no server uses any, so any server may have
+// a choice.
+func checkInboundServers(in []store.PlanInbound, servers []string) error {
+	if len(servers) == 0 {
+		return nil
+	}
+	for _, sel := range in {
+		if !slices.Contains(servers, sel.ServerID) {
+			return &FieldError{"inbounds", "an inbound is chosen on a server the plan does not use"}
+		}
+	}
+	return nil
+}
+
+// inboundsOnServers keeps the choices on the given servers (never nil).
+func inboundsOnServers(in []store.PlanInbound, servers []string) []store.PlanInbound {
+	out := make([]store.PlanInbound, 0, len(in))
+	for _, sel := range in {
+		if slices.Contains(servers, sel.ServerID) {
+			out = append(out, sel)
+		}
+	}
+	return out
 }
 
 // planName is a plan's English name, else any of its names, else fallback.

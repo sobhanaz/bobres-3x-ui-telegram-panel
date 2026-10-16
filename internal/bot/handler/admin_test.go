@@ -58,7 +58,7 @@ func TestAdminScreenShowsServerHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner.text("/admin")
-	if got := owner.last().text; !strings.Contains(got, "Servers: 0/1 healthy ❌ Not answering: <b>default</b>") {
+	if got := owner.last().text; !strings.Contains(got, "Servers: 0/1 healthy ❌ Not answering: <b>") {
 		t.Fatalf("admin screen with the panel down: %q", got)
 	}
 

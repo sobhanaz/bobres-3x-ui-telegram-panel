@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import DataTable from 'primevue/datatable'
@@ -16,9 +16,9 @@ import Message from 'primevue/message'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { asciiNumber, bytes, currencies, decimalOf, gbOf, money, num, validAmount, type Lang } from '../format'
-import { noUsableServer, serverNames, serverOptions } from '../servers'
+import { choiceOf, goneInbounds, inboundOptions, inboundsBody, noUsableServer, serverNames, serverOptions, type InboundChoice } from '../servers'
 import { useAuth } from '../stores/auth'
-import type { PlanItem, ServerItem } from '../types'
+import type { InboundItem, PlanItem, ServerItem } from '../types'
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
@@ -86,9 +86,13 @@ interface Form {
   server_ids: string[]
   /** the plan came with its servers (core knows them): they go back on save */
   has_servers: boolean
+  /** server id -> the inbounds new services get there; none = every attachable one */
+  inbounds: InboundChoice
+  /** the plan came with its inbound choice: it goes back on save */
+  has_inbounds: boolean
 }
 const blank = (): Form => ({ id: '', name_fa: '', name_en: '', kind: 'both', days: '30', gb: '', price: '', currency: 'IRT',
-  enabled: true, is_trial: false, is_topup: false, sort: '0', server_ids: [], has_servers: false })
+  enabled: true, is_trial: false, is_topup: false, sort: '0', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
 const form = ref<Form>(blank())
 const editing = ref(false)
 const busy = ref(false)
@@ -106,6 +110,7 @@ function edit(p?: PlanItem) {
       days: p.duration_days ? String(p.duration_days) : '', gb: p.traffic_bytes ? gbOf(p.traffic_bytes) : '',
       price: decimalOf(p.price), currency: p.price.currency, enabled: p.enabled, is_trial: p.is_trial,
       is_topup: p.is_topup, sort: String(p.sort), server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
+      inbounds: choiceOf(p.inbounds), has_inbounds: Array.isArray(p.inbounds),
     }
   }
   if (canServers.value && serversError.value) void loadServers()
@@ -123,6 +128,55 @@ const serverChoices = computed(() =>
   })),
 )
 const noUsable = computed(() => showServers.value && noUsableServer(servers.value, form.value.server_ids))
+
+// The inbound choice: per server the plan can go to (the ones it names, else
+// all), read from the panels when the editor is open. A server with nothing
+// chosen gets every attachable inbound (what BOBRES does by default).
+interface Inbounds {
+  items: InboundItem[]
+  error: string
+  loading: boolean
+}
+const panelInbounds = ref<Record<string, Inbounds>>({})
+async function loadInbounds(id: string) {
+  const known = panelInbounds.value[id]
+  if (known && (known.loading || !known.error)) return
+  panelInbounds.value[id] = { items: [], error: '', loading: true }
+  try {
+    const r = await api<{ items: InboundItem[] }>('GET', `/servers/${id}/inbounds`)
+    panelInbounds.value[id] = { items: r.items ?? [], error: '', loading: false }
+  } catch (e) {
+    panelInbounds.value[id] = { items: [], error: errorText(e, t).text, loading: false }
+  }
+}
+const showInbounds = computed(() => showServers.value && (form.value.id ? form.value.has_inbounds : true))
+const inboundServers = computed(() => {
+  const named = form.value.server_ids
+  return servers.value.filter((s) => (named.length ? named.includes(s.id) : true))
+})
+watch(
+  () => [editing.value, showInbounds.value, inboundServers.value.map((s) => s.id).join(',')] as const,
+  ([open, show]) => {
+    if (!open || !show) return
+    for (const s of inboundServers.value) void loadInbounds(s.id)
+  },
+)
+function inboundChoices(id: string) {
+  const p = panelInbounds.value[id]
+  return inboundOptions(p?.items ?? [], form.value.inbounds[id] ?? []).map((o) => ({
+    value: o.value,
+    label: o.gone ? t('plan.inbound_gone_id', { id: o.value }) : o.off ? t('plan.inbound_off', { name: o.label }) : o.label,
+  }))
+}
+function setChoice(id: string, ids: number[]) {
+  form.value.inbounds = { ...form.value.inbounds, [id]: ids }
+}
+function goneOf(id: string): number[] {
+  const p = panelInbounds.value[id]
+  // Until the panel answered, nothing is known to be gone.
+  if (!p || p.loading || p.error) return []
+  return goneInbounds(p.items, form.value.inbounds[id] ?? [])
+}
 
 const kinds = computed(() => [
   { label: t('plan.kind.time'), value: 'time' },
@@ -159,6 +213,7 @@ async function save() {
     is_topup: f.is_topup,
     sort: Number(asciiNumber(f.sort)) || 0,
     ...(sendServers.value ? { server_ids: f.server_ids } : {}),
+    ...(showInbounds.value ? { inbounds: inboundsBody(f.inbounds, f.server_ids) } : {}),
   }
   try {
     await api(f.id ? 'PUT' : 'POST', f.id ? `/plans/${f.id}` : '/plans', body)
@@ -309,6 +364,34 @@ async function toggle(p: PlanItem, enabled: boolean) {
       <Message v-else-if="canServers && serversError" severity="warn" :closable="false" class="servers-error">
         {{ t('plan.servers_error') }} {{ serversError }}
       </Message>
+      <div v-if="showInbounds && inboundServers.length" class="app-field inbounds">
+        <span id="plan-inbounds-label">{{ t('plan.inbounds') }}</span>
+        <small id="plan-inbounds-help" class="app-muted">{{ t('plan.inbounds_help') }}</small>
+        <div v-for="sv in inboundServers" :key="sv.id" class="inbound-row" :data-server="sv.id">
+          <span :id="'plan-inbounds-' + sv.id" class="inbound-server"><bdi>{{ sv.name }}</bdi></span>
+          <MultiSelect
+            :model-value="form.inbounds[sv.id] ?? []"
+            :options="inboundChoices(sv.id)"
+            option-label="label"
+            option-value="value"
+            display="chip"
+            :loading="panelInbounds[sv.id]?.loading"
+            :placeholder="t('plan.inbounds_all')"
+            :show-toggle-all="false"
+            :aria-labelledby="'plan-inbounds-label plan-inbounds-' + sv.id"
+            aria-describedby="plan-inbounds-help"
+            class="inbound-select"
+            fluid
+            @update:model-value="(v: number[]) => setChoice(sv.id, v)"
+          />
+          <Message v-if="panelInbounds[sv.id]?.error" severity="warn" :closable="false" class="inbound-error">
+            {{ t('plan.inbounds_error') }} {{ panelInbounds[sv.id]?.error }}
+          </Message>
+          <Message v-else-if="goneOf(sv.id).length" severity="warn" :closable="false" class="inbound-gone">
+            {{ t('plan.inbounds_gone', { ids: goneOf(sv.id).map((n) => '#' + n).join(', ') }) }}
+          </Message>
+        </div>
+      </div>
       <label v-if="!form.is_topup" class="app-check">
         <Checkbox v-model="form.is_trial" binary @update:model-value="(v: boolean) => v && (form.price = '0')" />
         <span>{{ t('plan.trial_hint') }}</span>
@@ -337,6 +420,14 @@ async function toggle(p: PlanItem, enabled: boolean) {
   display: flex;
   gap: 0.35rem;
   margin-block-start: 0.2rem;
+}
+.inbound-row {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-start: 0.5rem;
+}
+.inbound-server {
+  font-size: 0.9rem;
 }
 .buttons {
   display: flex;

@@ -9,6 +9,7 @@ import (
 
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
 
 // Client wraps the generated stub.
@@ -20,15 +21,27 @@ type Client struct {
 func New(rpc provisionerv1.ProvisionerServiceClient) *Client { return &Client{rpc: rpc} }
 
 // CreateClient implements domain.Provisioner.
-func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string) (domain.ProvisionedClient, error) {
+func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound) (domain.ProvisionedClient, error) {
 	cl, err := c.rpc.CreateClient(ctx, &provisionerv1.CreateClientRequest{
 		SubscriptionId: subscriptionID, Email: email, DurationDays: durationDays, TrafficBytes: trafficBytes,
-		CandidateServerIds: candidates,
+		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds),
 	})
 	if err != nil {
 		return domain.ProvisionedClient{}, fmt.Errorf("provisioner.CreateClient: %w", err)
 	}
 	return domain.ProvisionedClient{ServerID: cl.GetServerId(), XUISubID: cl.GetXuiSubId(), ExpiresAt: cl.GetExpiresAt()}, nil
+}
+
+// inboundSelections maps a plan's inbound choice to the request's.
+func inboundSelections(in []store.PlanInbound) []*provisionerv1.InboundSelection {
+	var out []*provisionerv1.InboundSelection
+	for _, sel := range in {
+		if len(sel.InboundIDs) == 0 {
+			continue
+		}
+		out = append(out, &provisionerv1.InboundSelection{ServerId: sel.ServerID, InboundIds: append([]int32(nil), sel.InboundIDs...)})
+	}
+	return out
 }
 
 // GetLinks implements domain.Provisioner.
