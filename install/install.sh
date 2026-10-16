@@ -345,6 +345,8 @@ EOF
   install -d -m 0755 "$STATE_DIR"
   printf '%s\n' "$KEYS_SEQ" > "$STATE_DIR/keys.seq"
   printf '%s\n' "$RELEASE_VERSION" > "$STATE_DIR/release.version"
+  # The verified manifest, so that `bobres check` can say when its signature expires.
+  install -m 0644 "${WORK}/checksums.txt" "$STATE_DIR/checksums.txt"
   info "Installed ${INSTALL_DIR}/${BIN_NAME} ($("${INSTALL_DIR}/${BIN_NAME}" version </dev/null))"
 
   info "Starting ${BOLD}bobres install${RESET}"

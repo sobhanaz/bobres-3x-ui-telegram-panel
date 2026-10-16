@@ -356,6 +356,10 @@ func TestUpdate(t *testing.T) {
 	if ut.state("keys.seq") != "3\n" || ut.state("release.version") != "1.3.0\n" {
 		t.Fatalf("state: %q %q", ut.state("keys.seq"), ut.state("release.version"))
 	}
+	// The verified manifest is kept for bobres check (its expiry).
+	if got := ut.state("checksums.txt"); !strings.Contains(got, "# version 1.3.0") {
+		t.Fatalf("checksums.txt not recorded: %q", got)
+	}
 	if !strings.Contains(ut.out.String(), "BOBRES is updated to 1.3.0") || !strings.Contains(ut.out.String(), "sudo bobres rollback") {
 		t.Fatalf("output:\n%s", ut.out)
 	}
@@ -373,6 +377,32 @@ func TestUpdateKeepsHigherState(t *testing.T) {
 	}
 	if ut.state("keys.seq") != "7\n" || ut.state("release.version") != "1.3.0\n" {
 		t.Fatalf("state: %q %q", ut.state("keys.seq"), ut.state("release.version"))
+	}
+}
+
+// The same version signed again is recorded too: its signature lasts longer.
+func TestUpdateRecordsResignedManifest(t *testing.T) {
+	ut := newUpdateTest(t, "")
+	ut.setState(t, "release.version", "1.3.0\n")
+	ut.setState(t, "checksums.txt", "# version 1.3.0\n# expires 2000-01-01T00:00Z\n")
+	tg := &target{}
+	tg.Version = "1.3.0"
+	tg.sums = []byte("# version 1.3.0\n# expires 2099-01-01T00:00Z\n")
+	if err := ut.u.recordRelease(tg); err != nil {
+		t.Fatal(err)
+	}
+	if got := ut.state("checksums.txt"); !strings.Contains(got, "2099") {
+		t.Fatalf("not re-recorded: %q", got)
+	}
+	// An older release never replaces a newer record.
+	old := &target{}
+	old.Version = "1.2.0"
+	old.sums = []byte("# version 1.2.0\n")
+	if err := ut.u.recordRelease(old); err != nil {
+		t.Fatal(err)
+	}
+	if got := ut.state("checksums.txt"); !strings.Contains(got, "1.3.0") || ut.state("release.version") != "1.3.0\n" {
+		t.Fatalf("downgraded: %q", got)
 	}
 }
 
