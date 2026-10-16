@@ -4880,8 +4880,10 @@ type SubscriptionLinks struct {
 	SubscriptionLink string                 `protobuf:"bytes,1,opt,name=subscription_link,json=subscriptionLink,proto3" json:"subscription_link,omitempty"`
 	QrPng            []byte                 `protobuf:"bytes,2,opt,name=qr_png,json=qrPng,proto3" json:"qr_png,omitempty"`
 	ConfigLinks      []string               `protobuf:"bytes,3,rep,name=config_links,json=configLinks,proto3" json:"config_links,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// The branded page of the service, "" while the page is off or the store has no public address.
+	PageUrl       string `protobuf:"bytes,4,opt,name=page_url,json=pageUrl,proto3" json:"page_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SubscriptionLinks) Reset() {
@@ -4933,6 +4935,13 @@ func (x *SubscriptionLinks) GetConfigLinks() []string {
 		return x.ConfigLinks
 	}
 	return nil
+}
+
+func (x *SubscriptionLinks) GetPageUrl() string {
+	if x != nil {
+		return x.PageUrl
+	}
+	return ""
 }
 
 type AdminGetStatsRequest struct {
@@ -7638,11 +7647,12 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x04txid\x18\x06 \x01(\tR\x04txid\"_\n" +
 	"\x1bGetSubscriptionLinksRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12'\n" +
-	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\"z\n" +
+	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\"\x95\x01\n" +
 	"\x11SubscriptionLinks\x12+\n" +
 	"\x11subscription_link\x18\x01 \x01(\tR\x10subscriptionLink\x12\x15\n" +
 	"\x06qr_png\x18\x02 \x01(\fR\x05qrPng\x12!\n" +
-	"\fconfig_links\x18\x03 \x03(\tR\vconfigLinks\"B\n" +
+	"\fconfig_links\x18\x03 \x03(\tR\vconfigLinks\x12\x19\n" +
+	"\bpage_url\x18\x04 \x01(\tR\apageUrl\"B\n" +
 	"\x14AdminGetStatsRequest\x12*\n" +
 	"\x11actor_telegram_id\x18\x01 \x01(\x03R\x0factorTelegramId\"\xe9\x03\n" +
 	"\n" +

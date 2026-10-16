@@ -546,6 +546,8 @@ message SubscriptionLinks {
   string subscription_link = 1;
   bytes qr_png = 2;
   repeated string config_links = 3;
+  // The branded page of the service, "" while the page is off or the store has no public address.
+  string page_url = 4;
 }
 
 // --- Admin RPCs: actor_telegram_id must belong to an active admin or owner.

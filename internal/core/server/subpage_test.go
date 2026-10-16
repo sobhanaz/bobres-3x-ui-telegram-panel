@@ -6,8 +6,69 @@ import (
 	"testing"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
+
+// linksProv answers a service's links and nothing else.
+type linksProv struct{ Provisioner }
+
+func (linksProv) GetLinks(context.Context, string) (domain.Links, error) {
+	return domain.Links{SubscriptionLink: "https://sub.example.com/x", QRPNG: []byte("png")}, nil
+}
+
+// GetSubscriptionLinks carries the page address too, for the "service ready"
+// message: only with a public URL, and never for someone else's service.
+func TestSubscriptionLinksHavePageURL(t *testing.T) {
+	for _, withURL := range []bool{true, false} {
+		f := newFixtureWith(t, func(s *Server) {
+			s.SetProvisioner(linksProv{})
+			if withURL {
+				s.SetPublicURL("https://shop.example.com")
+			}
+		})
+		c := f.client(t, botToken)
+		ctx := context.Background()
+		plan := &store.Plan{NameI18n: map[string]string{"en": "Month"}, Kind: "time", Price: 1000, Currency: "IRT", Enabled: true}
+		if err := f.st.UpsertPlan(ctx, f.st.Conn(), plan); err != nil {
+			t.Fatal(err)
+		}
+		u, err := f.st.UpsertUser(ctx, f.st.Conn(), 7310, "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := f.st.UpsertUser(ctx, f.st.Conn(), 7311, "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		o, _, err := f.st.CreateOrder(ctx, f.st.Conn(), &store.Order{UserID: u.ID, PlanID: plan.ID, Type: "new", Status: "active",
+			Amount: 1, Currency: "IRT", IdempotencyKey: "pl-1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub, err := f.st.CreateSubscription(ctx, f.st.Conn(), &store.Subscription{UserID: u.ID, OrderID: o.ID, ClientEmail: "pl-1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.st.DB().Exec(ctx, `UPDATE core.subscriptions SET status = 'active' WHERE id = $1`, sub.ID); err != nil {
+			t.Fatal(err)
+		}
+		l, err := c.GetSubscriptionLinks(ctx, &corev1.GetSubscriptionLinksRequest{UserId: u.ID, SubscriptionId: sub.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := ""
+		if withURL {
+			want = "https://shop.example.com/sub/" + sub.PageToken
+		}
+		if l.GetPageUrl() != want || l.GetSubscriptionLink() == "" {
+			t.Errorf("withURL=%v: page %q, want %q", withURL, l.GetPageUrl(), want)
+		}
+		if _, err := c.GetSubscriptionLinks(ctx, &corev1.GetSubscriptionLinksRequest{UserId: other.ID, SubscriptionId: sub.ID}); err == nil {
+			t.Error("someone else's service gave links")
+		}
+	}
+}
 
 // page_url is the page address of a service: only while the store has a
 // public URL, the page is on, and the service is neither pending nor deleted.

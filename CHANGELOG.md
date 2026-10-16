@@ -50,8 +50,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   HTTPS certificate days left, newest backup, dashboard address. `bobres status --json` prints the same facts.
 - `bobres check [--dir D] [--json]` runs config, services, disk, database, Redis, licence, 3x-ui servers, watchdog
   alerts, HTTPS, backup age, release-signature expiry, bot token and webhook checks, and exits 1 on a failure. It is
-  also the menu item "Check everything". The core side is `core check --json`. The release-signature check shows SKIP
-  until `install.sh` copies `checksums.txt` into the state directory.
+  also the menu item "Check everything". The core side is `core check --json`. `install.sh` and `bobres update` now
+  keep the verified `checksums.txt` in the state directory (a same-version re-signed release too), which the
+  release-signature check reads; a server installed before this change shows SKIP until its next update.
 - Owner sign-in without Telegram. `bobres admin password` (and a fresh `bobres install`) issues a random 16-character
   initial password for the login `owner`, shown once and stored only as a hash. It opens a restricted one-hour session
   where the dashboard shows only My account: choose a new password and set up two-factor authentication, then the rest
@@ -85,6 +86,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   `make miniapp`, a CI job, `docs/17-mini-app.md`. Not checked against a real Telegram yet.
 
 ### API
+- `SubscriptionLinks` has `page_url` (field 4); the bot's "service ready" message uses it for an Open page button.
 - New event `sales.daily_summary.v1` and two settings, `notify.daily_summary` and `notify.daily_summary_hour`; no
   migration.
 - `order.paid.v1` has an optional `provider`; `/reports/methods` rows have a `provider` field; `orders.csv` has a new

@@ -170,7 +170,13 @@ func (s *Server) GetSubscriptionLinks(ctx context.Context, req *corev1.GetSubscr
 	if err != nil {
 		return nil, fail(err)
 	}
-	return &corev1.SubscriptionLinks{SubscriptionLink: l.SubscriptionLink, QrPng: l.QRPNG, ConfigLinks: l.ConfigLinks}, nil
+	out := &corev1.SubscriptionLinks{SubscriptionLink: l.SubscriptionLink, QrPng: l.QRPNG, ConfigLinks: l.ConfigLinks}
+	// The page link is a convenience: the owner was checked above, and a
+	// failed lookup only leaves it out.
+	if sub, err := s.st.GetSubscription(ctx, s.st.Conn(), req.GetSubscriptionId()); err == nil && sub.Status != "deleted" {
+		out.PageUrl = s.pageLinks(ctx)(sub.PageToken)
+	}
+	return out, nil
 }
 
 // StartTrial runs the once-per-user free trial flow.

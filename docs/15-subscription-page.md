@@ -40,7 +40,8 @@ changed. The bot shows an "Open page" button on the service page and sends the n
 - The bot's service page: an "🌐 Open page" URL button, with `?l=<language>`. Core fills `page_url` in the gRPC
   `Subscription` (field 14) while the store has a public URL (the HTTPS manager's) and the page is on, and not for
   pending or deleted services.
-- Not sent in the "service ready" notification yet.
+- The "service ready" message has an Open page button too, with the page address from `GetSubscriptionLinks`
+  (`page_url`, field 4). If core cannot say, the message goes out without the button.
 
 ## Settings (Branding)
 

@@ -56,7 +56,7 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
   without JavaScript on poor connections.
 - **Done when:** a customer opens it from the bot on a phone, in both languages, and imports the config into an app.
 - **Status: built** ([15-subscription-page.md](15-subscription-page.md), migration 00020). Open: check the app deep
-  links on real devices, and add the page link to the "service ready" message.
+  links on real devices.
 
 ### 3. More Iranian payment gateways (M) — built, see [16-idpay-nextpay.md](16-idpay-nextpay.md)
 - **What:** automatic card gateways beyond Zarinpal (for example IDPay and NextPay), behind the same gateway interface,
