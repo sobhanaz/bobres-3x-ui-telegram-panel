@@ -7,7 +7,7 @@ GOLANGCI_LINT_VERSION := v2.14.0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=$(VERSION)
 
-.PHONY: all build test lint vuln tidy fmt clean proto proto-lint dashboard dashboard-test $(SERVICES)
+.PHONY: all build test lint vuln tidy fmt clean proto proto-lint dashboard dashboard-test miniapp miniapp-test $(SERVICES)
 all: fmt lint test build
 
 proto:
@@ -24,6 +24,14 @@ dashboard:
 
 dashboard-test:
 	cd web/dashboard && npm run typecheck && npm test
+
+# The Telegram Mini App store (needs Node.js): core embeds what
+# web/miniapp/dist/app holds, or shows a "not built" notice at /app.
+miniapp:
+	cd web/miniapp && npm ci --no-audit --no-fund && npm run build
+
+miniapp-test:
+	cd web/miniapp && npm run typecheck && npm test
 
 build:
 	@mkdir -p bin
@@ -47,4 +55,4 @@ tidy:
 	go mod tidy
 
 clean:
-	rm -rf bin web/dashboard/dist/app
+	rm -rf bin web/dashboard/dist/app web/miniapp/dist/app

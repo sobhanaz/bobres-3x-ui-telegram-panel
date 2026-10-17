@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import Card from 'primevue/card'
@@ -20,6 +21,7 @@ import type { SessionItem } from '../types'
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const auth = useAuth()
+const router = useRouter()
 const toast = useToast()
 const confirm = useConfirm()
 
@@ -34,6 +36,17 @@ const error = ref('')
 const changing = ref(false)
 
 const me = computed(() => auth.me)
+const sessionText = computed(() => {
+  const s = me.value?.session
+  if (!s) return ''
+  const time = dateTime(s.expires_at, lang.value)
+  if (s.method === 'link') return t('account.session_link', { time })
+  if (s.method === 'password_initial') return t('account.session_initial', { time })
+  return t('account.session_password', { time })
+})
+// Signed in with the initial password (bobres admin password, the installer):
+// this page is all there is until a new password and an authenticator are set.
+const forced = ref(!!auth.me?.must_change)
 
 // Replacing or removing a confirmed password needs the authenticator's
 // current code, unless this session is a fresh login link. The server says
@@ -51,6 +64,7 @@ function failText(e: unknown): string {
       return t('account.code_required')
     }
     if (e.code === 'username_taken') return t('account.username_taken')
+    if (e.code === 'password_reused') return t('account.password_reused')
     if (e.code === 'code_wrong') return t('account.code_wrong')
     if (e.code === 'locked') return t('login.locked')
     if (e.code === 'invalid') return e.message
@@ -105,6 +119,12 @@ async function confirmCode() {
     needCode.value = false
     code.value = ''
     toast.add({ severity: 'success', summary: t('account.enabled'), life: 5000 })
+    if (forced.value) {
+      // The restriction is lifted: on to the dashboard.
+      forced.value = false
+      await router.replace({ name: 'overview' })
+      return
+    }
     // Turning the password on logs the other devices out.
     void loadSessions()
   } catch (e) {
@@ -159,7 +179,14 @@ async function loadSessions() {
     sessionsLoading.value = false
   }
 }
-onMounted(loadSessions)
+onMounted(() => {
+  if (!forced.value) void loadSessions()
+})
+
+async function logout() {
+  await auth.logout()
+  await router.push({ name: 'login' })
+}
 
 async function revoke(s: SessionItem) {
   revoking.value = s.id
@@ -210,14 +237,15 @@ function revokeOthers() {
           <dt>{{ t('account.role') }}</dt>
           <dd>{{ t('role.' + me.user.role) }}</dd>
           <dt>{{ t('account.session') }}</dt>
-          <dd>{{ t(me.session.method === 'link' ? 'account.session_link' : 'account.session_password', { time: dateTime(me.session.expires_at, lang) }) }}</dd>
+          <dd>{{ sessionText }}</dd>
         </dl>
       </template>
     </Card>
 
     <Card>
-      <template #title>{{ t('account.password_title') }}</template>
+      <template #title>{{ forced ? t('account.forced_title') : t('account.password_title') }}</template>
       <template #content>
+        <Message v-if="forced" severity="warn" :closable="false" class="msg">{{ t('account.forced_intro') }}</Message>
         <Message v-if="error" severity="error" :closable="false" class="msg">{{ error }}</Message>
         <template v-if="!me.password_available">
           <p class="app-muted">{{ t('account.password_unavailable') }}</p>
@@ -241,7 +269,10 @@ function revokeOthers() {
           </div>
         </template>
         <template v-else>
-          <template v-if="!changing">
+          <template v-if="forced">
+            <p>{{ t('account.forced_steps') }}</p>
+          </template>
+          <template v-else-if="!changing">
             <p class="app-muted">{{ t('account.password_off') }}</p>
             <p>{{ t('account.password_intro') }}</p>
           </template>
@@ -264,7 +295,8 @@ function revokeOthers() {
               <small class="app-muted">{{ t('account.code_hint') }}</small>
             </label>
             <div class="buttons">
-              <Button v-if="changing" type="button" :label="t('app.cancel')" severity="secondary" outlined @click="cancelChange" />
+              <Button v-if="forced" type="button" :label="t('nav.logout')" icon="pi pi-sign-out" severity="secondary" outlined @click="logout" />
+              <Button v-else-if="changing" type="button" :label="t('app.cancel')" severity="secondary" outlined @click="cancelChange" />
               <Button type="submit" :label="t('account.start')" :loading="busy" :disabled="!username || password.length < 10 || (askCode && !codeOK)" />
             </div>
           </form>
@@ -272,7 +304,7 @@ function revokeOthers() {
       </template>
     </Card>
 
-    <Card class="wide">
+    <Card v-if="!forced" class="wide">
       <template #title>
         <div class="card-head">
           <span>{{ t('account.sessions_title') }}</span>

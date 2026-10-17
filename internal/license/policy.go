@@ -22,6 +22,8 @@ import (
 // feature.
 const (
 	GatewayZarinpal       = "zarinpal"
+	GatewayIDPay          = "idpay"
+	GatewayNextPay        = "nextpay"
 	GatewayStars          = "stars"
 	GatewayUSDTAuto       = "usdt_trc20_auto"
 	GatewayManualCard     = "manual_card"
@@ -32,7 +34,7 @@ const (
 // AllGateways are the payment methods a license can name (the wallet is
 // always allowed). The trial allows every one of them.
 func AllGateways() []string {
-	return []string{GatewayZarinpal, GatewayStars, GatewayUSDTAuto, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal}
+	return []string{GatewayZarinpal, GatewayIDPay, GatewayNextPay, GatewayStars, GatewayUSDTAuto, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal}
 }
 
 // The free tier. These constants are the OWNER'S to tune: change a number
@@ -61,7 +63,7 @@ func FreeEntitlements() Entitlements {
 		MaxServers:         FreeMaxServers,
 		MaxActiveServices:  FreeMaxActiveServices,
 		Resellers:          false,
-		Gateways:           []string{GatewayZarinpal, GatewayStars, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal},
+		Gateways:           []string{GatewayZarinpal, GatewayIDPay, GatewayNextPay, GatewayStars, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal},
 		CryptoWatcher:      false,
 		DashboardStaffSeat: FreeStaffSeats,
 	}

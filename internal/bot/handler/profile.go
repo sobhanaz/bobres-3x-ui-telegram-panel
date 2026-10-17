@@ -17,6 +17,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/branding"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -68,9 +69,10 @@ const photoUnknown = "?"
 var customerCommands = []string{"start", "menu", "terms", "paysupport"}
 
 // wantedProfile is the profile the current texts, branding, staff and bot
-// photo (its version) call for; false when general.bot_profile is off (the
+// photo (its version) call for, with the vendor credit in the about text
+// unless the license is white label; false when general.bot_profile is off (the
 // operator sets the profile in @BotFather).
-func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string) (profile, bool) {
+func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string, whiteLabel bool) (profile, bool) {
 	if !set.Bool("general.bot_profile", true) {
 		return profile{}, false
 	}
@@ -88,7 +90,7 @@ func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string) (profil
 	p := profile{Langs: map[string]profileLang{}, Staff: map[int64][]tg.BotCommand{}, Photo: photo}
 	for _, code := range append([]string{""}, i18n.Languages...) {
 		lang := i18n.Normalize(code) // "" is the first language
-		p.Langs[code] = profileLang{Commands: menu(lang), Description: cat.T(lang, "profile.description"), About: cat.T(lang, "profile.about")}
+		p.Langs[code] = profileLang{Commands: menu(lang), Description: cat.T(lang, "profile.description"), About: branding.AboutWithCredit(cat.T(lang, "profile.about"), whiteLabel)}
 	}
 	for _, c := range set.Staff() {
 		switch lang := i18n.Normalize(c.Language); c.Role {
@@ -475,7 +477,7 @@ func (h *Handler) RunProfile(ctx context.Context, api ProfileAPI, botID int64, m
 		if time.Now().Before(notBefore) {
 			continue
 		}
-		want, on := wantedProfile(h.cat, h.set, h.botPhotoVersion())
+		want, on := wantedProfile(h.cat, h.set, h.botPhotoVersion(), h.whiteLabel.Load())
 		err := s.sync(ctx, want, on)
 		if err == nil || ctx.Err() != nil {
 			continue

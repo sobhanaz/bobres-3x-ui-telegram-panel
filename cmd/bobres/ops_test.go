@@ -7,11 +7,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 type fakeOps struct {
+	mu     sync.Mutex // the status screen runs its checks in parallel
 	calls  [][]string
 	ps     string
 	psErr  error
@@ -19,7 +21,9 @@ type fakeOps struct {
 }
 
 func (f *fakeOps) run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	f.mu.Lock()
 	f.calls = append(f.calls, args)
+	f.mu.Unlock()
 	if contains(args, "ps") {
 		return []byte(f.ps), f.psErr
 	}
@@ -27,7 +31,9 @@ func (f *fakeOps) run(_ context.Context, _ string, args ...string) ([]byte, erro
 }
 
 func (f *fakeOps) streamf(_ context.Context, _ string, args ...string) error {
+	f.mu.Lock()
 	f.stream = append(f.stream, args)
+	f.mu.Unlock()
 	return nil
 }
 

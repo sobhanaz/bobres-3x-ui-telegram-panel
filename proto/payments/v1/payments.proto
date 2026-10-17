@@ -10,7 +10,7 @@ message PaymentIntent {
   string id = 1;
   string order_id = 2; // empty for wallet top-ups
   string user_id = 3;
-  string provider = 4; // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | stars | usdt_trc20_auto
+  string provider = 4; // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | stars | usdt_trc20_auto
   common.v1.Money amount = 5;
   string status = 6; // pending|confirming|succeeded|failed|expired
   string provider_ref = 7; // gateways: bank reference or transaction hash
@@ -38,7 +38,7 @@ message CreateIntentRequest {
   string provider = 3;
   common.v1.Money amount = 4;
   string idempotency_key = 5;
-  // Automated gateways (zarinpal, stars, usdt_trc20_auto): the amount to
+  // Automated gateways (zarinpal, idpay, nextpay, stars, usdt_trc20_auto): the amount to
   // charge at the gateway, computed by core from its rates. Not used by manual
   // providers. usdt_trc20_auto: USDT (scale 6), at most 1,000,000 USDT;
   // payments adds 1 to 9,999 micro-USDT so the amount is unique (never a
@@ -180,7 +180,7 @@ message ListPendingReceiptsResponse {
 // GatewayConfig is an automated gateway's settings as staff see them: whether
 // the merchant id, the API key and the proxy are set, never their values.
 message GatewayConfig {
-  string provider = 1; // zarinpal | usdt_trc20_auto
+  string provider = 1; // zarinpal | idpay | nextpay | usdt_trc20_auto
   bool enabled = 2; // switched on by the owner
   // It has credentials: payments already open keep being checked, even when
   // switched off.
@@ -222,7 +222,7 @@ message ListGatewayConfigsResponse {
 message SetGatewayConfigRequest {
   string provider = 1;
   bool enabled = 2;
-  bool sandbox = 3; // zarinpal only
+  bool sandbox = 3; // zarinpal and idpay only
   string merchant_id = 4; // zarinpal only
   string proxy = 5; // http(s)://[user:password@]host:port
   bool clear_proxy = 6;
@@ -264,7 +264,7 @@ message TestGatewayResponse {
 // GatewayReportRequest: one payment method's payments created in [from, to)
 // (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
 message GatewayReportRequest {
-  string provider = 1; // zarinpal | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
+  string provider = 1; // zarinpal | idpay | nextpay | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
   int64 from = 2;
   int64 to = 3;
 }

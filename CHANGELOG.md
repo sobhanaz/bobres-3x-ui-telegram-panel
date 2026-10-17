@@ -8,6 +8,110 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.4.0] — 2026-10-17
+
+### Marzban support
+- A server is now 3x-ui or Marzban. Pick the panel software when adding a server (it is fixed afterwards); for Marzban
+  enter an admin's `username:password` where 3x-ui takes an API token. It is stored encrypted in the provisioner like
+  a token and never shown again. Existing servers are 3x-ui. Migration provisioner 00004 adds the `kind` column; going
+  back down removes Marzban servers and their clients.
+- The Marzban adapter creates, renews, resets, disables and deletes users and reads their usage through Marzban's API.
+  Subscription links are the panel's own `subscription_url` (the "Subscription address" field only replaces its
+  prefix). A Marzban username is the client email, so it must fit Marzban's username rule.
+- Tested against a fake modelled on Marzban's source. A CI job against the real Marzban image is not in yet, so try a
+  Marzban server with a test plan before selling on it.
+- The dashboard says "panel servers" where it said "3x-ui servers".
+
+### Dashboard
+- Reports: which provider paid each order. The Paid-with table splits gateway and staff-approved sales by provider
+  (Zarinpal, Stars, automatic USDT, card to card, crypto). Orders paid before this change show "provider not recorded"
+  and still add up to revenue.
+- `ledger.csv` and `audit.csv` exports are as careful as the reports files: no header-only file when the query fails,
+  an `# export incomplete: <reason>` line when it dies half-way, a 60 s limit, at most two exports at once, and an
+  audit entry with the outcome and row count. Text cells are quoted against spreadsheet formulas more strictly.
+
+- Reports: Jalali weeks and months. `calendar=gregorian|jalali` on the report endpoints (default gregorian; anything
+  else is a 400). Jalali weeks start on Saturday and months on Jalali day 1; a bucket's date stays its Gregorian start
+  day. The Reports page has a Calendar switch (Jalali by default in Persian), names Jalali months by month and year,
+  and carries the calendar into the CSV links. The summary CSV is named `...-jalali.csv` for Jalali, and the
+  `export.reports` audit entry records the calendar.
+
+- Reports now show churn: services lost (ended more than 7 days ago and not renewed), customers lost, and services at
+  risk (ended, still inside the grace period), per day, week or month in both calendars. Trials, unlimited services
+  and pending renewals are not counted. In the summary CSV the people rows gain `churned_services`,
+  `churned_customers` and `at_risk_services` as the last three columns. The API gains `churn_grace_days` (0 to 90,
+  default 7). Migration core 00020 adds an index on `subscriptions.expires_at`.
+- Branded subscription page: each service has a page at `/sub/<token>` under the store's own brand: usage and days
+  left, the subscription link and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box (the link
+  schemes are not yet verified on real devices), and a Renew button that opens the bot. Server-rendered with no
+  JavaScript, in Persian and English, no personal data, an unguessable 128-bit address that can be regenerated from
+  the dashboard. New settings `branding.sub_page.enabled` and `branding.bot_username`. Migration core 00021.
+- IDPay and NextPay, two more Iranian card gateways built like Zarinpal: an API key in Payment gateways (write-only,
+  encrypted; IDPay has a sandbox outside prod), callbacks at `/webhooks/idpay` and `/webhooks/nextpay` that are never
+  trusted (every payment is settled by the gateway's verify call, with an amount check; a repeated callback changes
+  nothing), watchdog alerts, licence gateway names `idpay` and `nextpay`, bot buttons and en/fa texts. Off until
+  credentials are set. Implemented to the public documentation and tested only against fakes; see
+  `docs/16-idpay-nextpay.md`. Payments migration 00008.
+
+### Owner and operator tools
+- `bobres` (no arguments) opens on a status screen: services up or down by name, version, licence tier and days left,
+  HTTPS certificate days left, newest backup, dashboard address. `bobres status --json` prints the same facts.
+- `bobres check [--dir D] [--json]` runs config, services, disk, database, Redis, licence, 3x-ui servers, watchdog
+  alerts, HTTPS, backup age, release-signature expiry, bot token and webhook checks, and exits 1 on a failure. It is
+  also the menu item "Check everything". The core side is `core check --json`. `install.sh` and `bobres update` now
+  keep the verified `checksums.txt` in the state directory (a same-version re-signed release too), which the
+  release-signature check reads; a server installed before this change shows SKIP until its next update.
+- Owner sign-in without Telegram. `bobres admin password` (and a fresh `bobres install`) issues a random 16-character
+  initial password for the login `owner`, shown once and stored only as a hash. It opens a restricted one-hour session
+  where the dashboard shows only My account: choose a new password and set up two-factor authentication, then the rest
+  unlocks. Running it again resets the login after a lost phone or password, ends the owner's sessions and lifts a
+  lock. It also creates the owner's account when the owner never sent /start. Audited as
+  `dashboard.password.reset_cli` and `dashboard.password.initial_changed`, never with the password.
+- The first 3x-ui panel a new install adds is named after its host (for example `panel.example.com`) instead of
+  `default`. Existing installs keep `default`.
+
+### Plans
+- A plan can name which inbounds of each 3x-ui server its customers are attached to. With no choice, nothing changes:
+  the client goes on every inbound that has "attach" on. An explicit choice wins over the attach switch; if a chosen
+  inbound is gone from the panel the purchase ends as `provision_failed` with a clear reason and the usual alert. The
+  plan editor lists the inbounds of each chosen server and flags one that disappeared. Core migration 00023
+  (`core.plan_inbounds`); `Plan` and `AdminUpsertPlan` carry the selection, and the provisioner's `CreateClient` takes
+  it.
+
+### Bot
+- A complete button-driven admin menu. `/admin` now reaches plans (add, edit, archive), the trial, top-up packs,
+  discounts, every setting (an editor by kind, explained, with range and default), notifications, broadcast, today's
+  numbers, 3x-ui servers (switch, weight) and, for the owner, payment details and staff. Every input step explains what
+  is wanted and has Back and Cancel. The old commands still work; `/set` with no arguments opens the settings screen.
+  Eight new admin RPCs back it. Tested with fakes only.
+- The BOBRES logo is the bot's default photo, applied once at first start. A photo you set, or remove, later is kept.
+
+### Mini App
+- A Telegram Mini App store at `/app/`: plans and discount codes, buying by wallet, Zarinpal, IDPay, NextPay or
+  automatic USDT, my services with renew and extra traffic, wallet balance, history and top-up. Persian and English,
+  right to left, Telegram theme. Off by default (`miniapp.enabled`). The bot checks Telegram's `initData` for core
+  (`POST /internal/miniapp/verify`), so core never holds the bot token. Stars, card to card and trials stay in the bot.
+  `make miniapp`, a CI job, `docs/17-mini-app.md`. Not checked against a real Telegram yet.
+
+### API
+- `SubscriptionLinks` has `page_url` (field 4); the bot's "service ready" message uses it for an Open page button.
+- `order.paid.v1` has an optional `provider`; `/reports/methods` rows have a `provider` field; `orders.csv` has a new
+  last column `provider`.
+- `Settings.white_label` (core proto, field 3): the bot learns from core whether a white-label license is active.
+
+### Security and release
+- Postgres and Redis are pinned by digest in the compose files, and the backup image's Postgres base in the
+  Dockerfile too (Caddy already was), so a moved tag changes nothing. `deploy/images_pinned_test.go` keeps them pinned.
+  The digests change only by hand, with a version bump.
+- The site shows the vendor license key's fingerprint (`vendor-v1-2026`, checked against `bobres about`).
+- The four legal drafts are built as draft pages in `site/legal/` (`go run ./tools/sitelegal`), marked as drafts,
+  `noindex`, not in the sitemap and not linked yet. They wait for the lawyer's review.
+
+### Branding
+- "Made by TECSO-DEV" is in the dashboard footer and login page and at the end of the bot's about text. A white-label
+  license hides it, along with "Powered by BOBRES"; the credit is dropped from the bot's text when the text would pass
+  120 characters.
+
 ## [0.3.0] — 2026-10-14
 
 The installer and the command line, made clear and professional.

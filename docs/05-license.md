@@ -40,7 +40,7 @@ the repository: the private half stays with the vendor, outside it.
     "max_servers": 1,
     "max_active_services": 500,
     "resellers": true,
-    "gateways": ["zarinpal", "stars", "manual_card", "manual_crypto", "manual_zarinpal"],
+    "gateways": ["zarinpal", "idpay", "nextpay", "stars", "manual_card", "manual_crypto", "manual_zarinpal"],
     "crypto_watcher": false,
     "dashboard_staff_seats": 3,
     "updates_until": "2027-09-30"
@@ -55,7 +55,7 @@ the repository: the private half stays with the vendor, outside it.
   25 services. `tools/license sign` and `licensesrv key create|update` print a WARNING ("max_active_services is 0 or
   missing: the install will floor it at the free tier's 25") when they make such a license, and still make it.
 - `grace_days` is 0..90; `expires_at` must be after `issued_at`; `issued_at` gets 5 minutes of clock skew.
-- Gateway names: `zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
+- Gateway names: `zarinpal`, `idpay`, `nextpay`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
   wallet is always allowed. Automatic USDT (`usdt_trc20_auto`, Phase 6a) also needs the `crypto_watcher` feature.
 - `updates_until` (YYYY-MM-DD) is the end of the updates the license was sold with, and it is **advisory**. The
   release's day is the `# issued` line of its signed `checksums.txt` (UTC). `bobres update`, its `--check`, the menu,
@@ -120,7 +120,7 @@ was set back, a restore), so it never has more than 30 days left, and core write
 | `white_label` | no: "Powered by BOBRES" is shown |
 | `crypto_watcher` | no: no automatic USDT |
 | `dashboard_staff_seats` | 2 (the owner the server names, `BOBRES_ADMIN_TELEGRAM_ID`, takes none; every other staff member takes one, an owner too) |
-| `gateways` | `zarinpal`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`; the wallet is always allowed |
+| `gateways` | `zarinpal`, `idpay`, `nextpay`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`; the wallet is always allowed |
 | `updates_until` | none: security updates are never withheld |
 
 ### The trial
@@ -183,7 +183,7 @@ servers". The dashboard shows a sentence per gate in its language, with core's w
 - `dashboard_staff_seats`: adding an admin, a support member or another owner beyond the seats. Every staff member but
   the owner the server names takes a seat (an owner too: promoting the two seat holders to owner leaves the count at
   two), and changing role between the three takes or frees none. Nobody is removed over a limit;
-- `gateways`: switching a payment method on (Zarinpal or automatic USDT in Payment gateways, or a manual
+- `gateways`: switching a payment method on (Zarinpal, IDPay, NextPay or automatic USDT in Payment gateways, or a manual
   method's or Stars' switch from off to on) that the effective entitlements do not name;
 - `crypto_watcher`: switching automatic USDT on without the `crypto_watcher` feature.
 

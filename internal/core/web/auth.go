@@ -21,6 +21,14 @@ import (
 // lockFor is how long five failed password logins in a row lock an account.
 const lockFor = 15 * time.Minute
 
+// methodInitial is the session method of a first login with an initial
+// password: restricted to choosing a new password and an authenticator app
+// (see Server.session). restrictedTTL is how long such a session lives.
+const (
+	methodInitial = "password_initial"
+	restrictedTTL = time.Hour
+)
+
 var usernameRe = regexp.MustCompile(`^[a-z0-9_.-]{3,32}$`)
 
 // dummyHash is checked when the username is unknown, so a wrong username
@@ -110,7 +118,7 @@ func (s *Server) loginWithPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "password logins are off on this install (no master key)")
 		return
 	}
-	const wrong = "wrong username, password or code"
+	const wrong = "wrong username, password or code" // loginFailed says the same
 	ctx, conn := r.Context(), s.cfg.Store.Conn()
 	// Taken before the lookup, so a busy answer does not tell whether the
 	// username exists.
@@ -138,18 +146,28 @@ func (s *Server) loginWithPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	passOK := webauth.CheckPassword(creds.PasswordHash, in.Password)
 	release()
+	// An initial password (bobres install, bobres admin password) is the one
+	// way in without an authenticator code, and only while no authenticator
+	// app is set up: the session it opens is restricted to choosing a new
+	// password and enrolling one. A wrong password counts as any other.
+	if creds.MustChange && creds.TOTPConfirmedAt == nil {
+		if !passOK {
+			s.loginFailed(w, r, creds.UserID)
+			return
+		}
+		if err := s.cfg.Store.RecordLoginSuccess(ctx, conn, creds.UserID, creds.TOTPLastStep); err != nil {
+			s.internal(w, "record login", err)
+			return
+		}
+		s.startSession(w, r, creds.UserID, methodInitial)
+		return
+	}
 	step, codeOK := int64(0), false
 	if secret, err := s.cfg.Secrets.Decrypt(creds.TOTPSecretEnc); err == nil && creds.TOTPConfirmedAt != nil {
 		step, codeOK = webauth.CheckTOTP(string(secret), in.Code, s.now(), creds.TOTPLastStep)
 	}
 	if !passOK || !codeOK {
-		locked, err := s.cfg.Store.RecordLoginFailure(ctx, conn, creds.UserID, lockFor)
-		if err != nil {
-			s.cfg.Log.Warn("record login failure", "err", err)
-		}
-		// Not the member's doing: the entry names the account, with no actor.
-		s.writeAudit(ctx, nil, "dashboard.login_failed", creds.UserID, map[string]any{"method": "password", "locked": locked})
-		writeError(w, http.StatusUnauthorized, "login_failed", wrong)
+		s.loginFailed(w, r, creds.UserID)
 		return
 	}
 	if err := s.cfg.Store.RecordLoginSuccess(ctx, conn, creds.UserID, step); err != nil {
@@ -157,6 +175,19 @@ func (s *Server) loginWithPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startSession(w, r, creds.UserID, "password")
+}
+
+// loginFailed counts a failed password login (five in a row lock it), audits
+// it and answers; the text never says which part was wrong.
+func (s *Server) loginFailed(w http.ResponseWriter, r *http.Request, userID string) {
+	ctx := r.Context()
+	locked, err := s.cfg.Store.RecordLoginFailure(ctx, s.cfg.Store.Conn(), userID, lockFor)
+	if err != nil {
+		s.cfg.Log.Warn("record login failure", "err", err)
+	}
+	// Not the member's doing: the entry names the account, with no actor.
+	s.writeAudit(ctx, nil, "dashboard.login_failed", userID, map[string]any{"method": "password", "locked": locked})
+	writeError(w, http.StatusUnauthorized, "login_failed", "wrong username, password or code")
 }
 
 // startSession opens a session for an active staff member.
@@ -178,14 +209,18 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID, me
 		return
 	}
 	now := s.now()
+	ttl := SessionTTL
+	if method == methodInitial {
+		ttl = restrictedTTL
+	}
 	sess := &store.WebSession{IDHash: hash, UserID: user.ID, CSRFToken: csrf, Method: method,
-		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 256), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionTTL)}
+		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 256), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(ttl)}
 	if err := s.cfg.Store.CreateSession(ctx, s.cfg.Store.Conn(), sess); err != nil {
 		s.internal(w, "create session", err)
 		return
 	}
 	s.audit(ctx, user, "dashboard.login", map[string]string{"method": method, "ip": sess.IP})
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", MaxAge: int(SessionTTL.Seconds()),
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", MaxAge: int(ttl.Seconds()),
 		Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	s.writeMe(w, r.WithContext(context.WithValue(ctx, staffKey{}, &staff{user: user, session: sess, idHash: hash})))
 }
@@ -217,16 +252,25 @@ func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 		logo = u
 	}
 	password := map[string]any{"enabled": false, "reauth": false}
-	if c, err := s.cfg.Store.CredentialsFor(r.Context(), s.cfg.Store.Conn(), u.ID); err == nil && c.TOTPConfirmedAt != nil {
-		password = map[string]any{"enabled": true, "username": c.Username, "reauth": s.needsReauth(st, c)}
+	if c, err := s.cfg.Store.CredentialsFor(r.Context(), s.cfg.Store.Conn(), u.ID); err == nil {
+		if c.TOTPConfirmedAt != nil {
+			password = map[string]any{"enabled": true, "username": c.Username, "reauth": s.needsReauth(st, c)}
+		} else if c.MustChange {
+			// An initial password waiting for its replacement: the login
+			// name is not a secret, and the page proposes it again.
+			password = map[string]any{"enabled": false, "reauth": false, "username": c.Username, "initial": true}
+		}
 	}
 	out := map[string]any{
 		"user": map[string]any{"id": u.ID, "telegram_id": u.TelegramID, "username": u.Username,
 			"role": u.Role, "language": u.Language},
-		"permissions":        Permissions(u.Role),
-		"csrf":               st.session.CSRFToken,
-		"session":            map[string]any{"method": st.session.Method, "expires_at": st.session.ExpiresAt.Unix()},
-		"password":           password,
+		"permissions": Permissions(u.Role),
+		"csrf":        st.session.CSRFToken,
+		"session":     map[string]any{"method": st.session.Method, "expires_at": st.session.ExpiresAt.Unix()},
+		"password":    password,
+		// A restricted session: the dashboard shows only the screen that
+		// sets the new password and the authenticator app.
+		"must_change":        st.session.Method == methodInitial,
 		"password_available": s.cfg.Secrets != nil,
 		"brand":              brandName(settings),
 		"branding": map[string]any{"color": settings["branding.color"], "logo": logo,
@@ -265,9 +309,18 @@ func (s *Server) startPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid", err.Error())
 		return
 	}
+	st := staffFrom(r.Context())
 	release, ok := s.hashSlot(r.Context(), true)
 	if !ok {
 		busy(w)
+		return
+	}
+	// The initial password is a bearer secret shown on a terminal: the new
+	// one must differ from it.
+	if cur, err := s.cfg.Store.CredentialsFor(r.Context(), s.cfg.Store.Conn(), st.user.ID); err == nil &&
+		cur.MustChange && webauth.CheckPassword(cur.PasswordHash, in.Password) {
+		release()
+		writeError(w, http.StatusBadRequest, "password_reused", "choose a password different from the initial one")
 		return
 	}
 	hash, err := webauth.HashPassword(in.Password)
@@ -286,7 +339,6 @@ func (s *Server) startPassword(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, "encrypt secret", err)
 		return
 	}
-	st := staffFrom(r.Context())
 	err = s.cfg.Store.SetPendingCredentials(r.Context(), s.cfg.Store.Conn(), st.user.ID, username, hash, enc)
 	if errors.Is(err, store.ErrUsernameTaken) {
 		writeError(w, http.StatusConflict, "username_taken", "another staff member uses this username")
@@ -333,6 +385,10 @@ func (s *Server) confirmPassword(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, "load credentials", err)
 		return
 	}
+	if len(creds.TOTPSecretEnc) == 0 { // an initial password, no new one chosen yet
+		writeError(w, http.StatusBadRequest, "invalid", "set a password first")
+		return
+	}
 	secret, err := s.cfg.Secrets.Decrypt(creds.TOTPSecretEnc)
 	if err != nil {
 		s.internal(w, "decrypt secret", err)
@@ -348,6 +404,19 @@ func (s *Server) confirmPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.revokeOtherSessions(ctx, st)
+	if st.session.Method == methodInitial {
+		// Now a full session (it lives the full time from here).
+		if _, err := s.cfg.Store.UpgradeSession(ctx, conn, st.idHash, s.now().Add(SessionTTL)); err != nil {
+			s.internal(w, "upgrade session", err)
+			return
+		}
+		st.session.Method, st.session.ExpiresAt = "password", s.now().Add(SessionTTL)
+		if c, err := r.Cookie(cookieName); err == nil { // the cookie lived an hour only
+			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: c.Value, Path: "/", MaxAge: int(SessionTTL.Seconds()),
+				Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+		}
+		s.audit(ctx, st.user, "dashboard.password.initial_changed", map[string]string{"username": creds.Username})
+	}
 	s.audit(ctx, st.user, "dashboard.password.set", map[string]string{"username": creds.Username})
 	s.writeMe(w, r)
 }

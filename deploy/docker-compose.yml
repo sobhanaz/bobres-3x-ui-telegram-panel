@@ -107,7 +107,7 @@ services:
       options: { max-size: "10m", max-file: "5" }
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     restart: unless-stopped
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
@@ -135,7 +135,7 @@ services:
     networks: [backend]
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     restart: unless-stopped
     user: redis   # volume is owned by redis; running non-root needs no extra capabilities
     cap_drop: [ALL]
@@ -263,6 +263,13 @@ services:
       BOBRES_ZARINPAL_SANDBOX: ${BOBRES_ZARINPAL_SANDBOX:-false}
       BOBRES_ZARINPAL_PROXY: ${BOBRES_ZARINPAL_PROXY:-}
       BOBRES_ZARINPAL_PUBLIC_URL: ${BOBRES_ZARINPAL_PUBLIC_URL:-}
+      # IDPay and NextPay (each off unless its API key is set; seeds only, like Zarinpal's).
+      # Their return URLs are on the same public URL as Zarinpal's.
+      BOBRES_IDPAY_API_KEY: ${BOBRES_IDPAY_API_KEY:-}
+      BOBRES_IDPAY_SANDBOX: ${BOBRES_IDPAY_SANDBOX:-false}
+      BOBRES_IDPAY_PROXY: ${BOBRES_IDPAY_PROXY:-}
+      BOBRES_NEXTPAY_API_KEY: ${BOBRES_NEXTPAY_API_KEY:-}
+      BOBRES_NEXTPAY_PROXY: ${BOBRES_NEXTPAY_PROXY:-}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend, egress]

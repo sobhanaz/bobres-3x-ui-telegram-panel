@@ -8,9 +8,14 @@ export interface Me {
   user: { id: string; telegram_id: number; username: string; role: string; language: string }
   permissions: string[]
   csrf: string
-  session: { method: 'link' | 'password'; expires_at: number }
-  /** reauth: replacing or removing the password needs the current code. */
-  password: { enabled: boolean; username?: string; reauth?: boolean }
+  session: { method: 'link' | 'password' | 'password_initial'; expires_at: number }
+  /** The session came from the initial password (bobres admin password, the
+   * installer): until a new password and an authenticator are set, only the
+   * account page works. Older servers leave it out. */
+  must_change?: boolean
+  /** reauth: replacing or removing the password needs the current code.
+   * initial: the login is the initial one, still to be changed. */
+  password: { enabled: boolean; username?: string; reauth?: boolean; initial?: boolean }
   password_available: boolean
   brand: string
   /** The store's look; older servers (and test fixtures) may leave it out. */

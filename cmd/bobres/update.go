@@ -659,9 +659,9 @@ func (u *updater) recordKeysSeq(t *target) error {
 	return writeAtomic(filepath.Join(u.stateDir, "keys.seq"), []byte(strconv.Itoa(max(seq, t.KeysSeq))+"\n"), 0o644)
 }
 
-// recordRelease writes the release as install.sh does (release.version,
-// never lowered: the floor later releases are checked against), once the
-// update holds. An update that rolled back leaves it as it was, so a tried
+// recordRelease writes the release as install.sh does (release.version and
+// checksums.txt; the version is never lowered: it is the floor later releases
+// are checked against), once the update holds. An update that rolled back leaves it as it was, so a tried
 // beta does not become the floor that refuses the stable releases below it.
 func (u *updater) recordRelease(t *target) error {
 	if u.stateDir == "" {
@@ -671,11 +671,23 @@ func (u *updater) recordRelease(t *target) error {
 	if err != nil {
 		return err
 	}
-	if ver != "" && release.Compare(t.Version, ver) <= 0 {
+	newer := ver == "" || release.Compare(t.Version, ver) > 0
+	if !newer && release.Compare(t.Version, ver) < 0 {
 		return nil
 	}
 	if err := os.MkdirAll(u.stateDir, 0o755); err != nil { //nolint:gosec // as install.sh makes it
 		return err
+	}
+	// The verified manifest is kept so that bobres check can say when its
+	// signature expires. The same version signed again is kept too: it lasts
+	// longer.
+	if len(t.sums) > 0 {
+		if err := writeAtomic(filepath.Join(u.stateDir, "checksums.txt"), t.sums, 0o644); err != nil {
+			return err
+		}
+	}
+	if !newer {
+		return nil
 	}
 	return writeAtomic(filepath.Join(u.stateDir, "release.version"), []byte(t.Version+"\n"), 0o644)
 }

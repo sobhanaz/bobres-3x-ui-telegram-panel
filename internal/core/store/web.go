@@ -14,7 +14,7 @@ type WebSession struct {
 	IDHash     []byte
 	UserID     string
 	CSRFToken  string
-	Method     string // link | password
+	Method     string // link | password | password_initial (restricted: only a new password and 2FA)
 	IP         string
 	UserAgent  string
 	CreatedAt  time.Time
@@ -59,6 +59,18 @@ func (s *Store) TouchSession(ctx context.Context, q querier, idHash []byte) erro
 		return fmt.Errorf("touch session: %w", err)
 	}
 	return nil
+}
+
+// UpgradeSession turns a restricted session (a first login with the initial
+// password) into a full password session, living until expiresAt. It says
+// whether a restricted session was there.
+func (s *Store) UpgradeSession(ctx context.Context, q querier, idHash []byte, expiresAt time.Time) (bool, error) {
+	tag, err := q.Exec(ctx, `UPDATE core.web_sessions SET method = 'password', expires_at = $2
+		WHERE id_hash = $1 AND method = 'password_initial' AND revoked_at IS NULL`, idHash, expiresAt)
+	if err != nil {
+		return false, fmt.Errorf("upgrade session: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // RevokeSession ends one session (logout).
@@ -134,14 +146,18 @@ type StaffCredentials struct {
 	TOTPLastStep    int64
 	FailedAttempts  int
 	LockedUntil     *time.Time
+	// MustChange: the password is an initial one (bobres install, bobres admin
+	// password); it opens only a restricted session until a new password and
+	// an authenticator app are set.
+	MustChange bool
 }
 
-const credentialCols = `user_id, username, password_hash, totp_secret_enc, totp_confirmed_at, totp_last_step, failed_attempts, locked_until` //nolint:gosec // G101: column names, not a credential
+const credentialCols = `user_id, username, password_hash, totp_secret_enc, totp_confirmed_at, totp_last_step, failed_attempts, locked_until, must_change` //nolint:gosec // G101: column names, not a credential
 
 func scanCredentials(row pgx.Row) (*StaffCredentials, error) {
 	var c StaffCredentials
 	err := row.Scan(&c.UserID, &c.Username, &c.PasswordHash, &c.TOTPSecretEnc, &c.TOTPConfirmedAt,
-		&c.TOTPLastStep, &c.FailedAttempts, &c.LockedUntil)
+		&c.TOTPLastStep, &c.FailedAttempts, &c.LockedUntil, &c.MustChange)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -188,9 +204,35 @@ func (s *Store) SetPendingCredentials(ctx context.Context, q querier, userID, us
 	return nil
 }
 
-// ConfirmCredentials activates a password login after its first code.
+// SetInitialCredentials sets (or resets) a user's password login to an
+// initial password: no authenticator app yet, must_change on, failures and
+// lock cleared. An existing login keeps its username; a new one gets the
+// username given. It returns the username.
+func (s *Store) SetInitialCredentials(ctx context.Context, q querier, userID, username, passwordHash string) (string, error) {
+	var name string
+	// totp_secret_enc is NOT NULL: an empty value says "no secret yet", and
+	// no code is ever accepted against it (totp_confirmed_at stays NULL).
+	err := q.QueryRow(ctx, `
+		INSERT INTO core.staff_credentials (user_id, username, password_hash, totp_secret_enc, must_change)
+		VALUES ($1, $2, $3, '\x', true)
+		ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, totp_secret_enc = '\x',
+			totp_confirmed_at = NULL, totp_last_step = 0, failed_attempts = 0, locked_until = NULL,
+			must_change = true, updated_at = now()
+		RETURNING username`, userID, username, passwordHash).Scan(&name)
+	if isUniqueViolation(err) {
+		return "", ErrUsernameTaken
+	}
+	if err != nil {
+		return "", fmt.Errorf("set initial credentials: %w", err)
+	}
+	return name, nil
+}
+
+// ConfirmCredentials activates a password login after its first code (an
+// initial password is no longer initial then).
 func (s *Store) ConfirmCredentials(ctx context.Context, q querier, userID string, step int64) error {
-	tag, err := q.Exec(ctx, `UPDATE core.staff_credentials SET totp_confirmed_at = now(), totp_last_step = $2, updated_at = now()
+	tag, err := q.Exec(ctx, `UPDATE core.staff_credentials SET totp_confirmed_at = now(), totp_last_step = $2,
+		must_change = false, updated_at = now()
 		WHERE user_id = $1`, userID, step)
 	if err != nil {
 		return fmt.Errorf("confirm credentials: %w", err)

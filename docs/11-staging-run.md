@@ -113,6 +113,8 @@ services already sold on that server.
   your main domain) must be the one registered with Zarinpal and reachable from Iran
   without a VPN. Buy with "Pay online", turn the VPN off, pay, and check that you come back
   to a "Payment received" page and the service arrives in the bot.
+- **IDPay and NextPay:** optional; set the API key in Payment gateways and follow the checklist in
+  [16-idpay-nextpay.md](16-idpay-nextpay.md) (they were tested only against fakes).
 
 ## 6. Phase 3 retention
 

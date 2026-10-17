@@ -33,6 +33,17 @@ func (ins *installer) summary(env map[string]string, dir string) {
 		row("Bot", "@"+ins.botName)
 	}
 	row("Dashboard", "send /dashboard to your bot, or run:  sudo bobres admin link")
+	if l := ins.login; l != nil {
+		// The owner's initial login, issued once after the stack came up. It is
+		// printed here only: not logged, not in .env, not in any state file.
+		title("Sign in to the dashboard (no Telegram needed)")
+		fmt.Fprintf(ins.out, "  Address:   https://%s/admin\n  Username:  %s\n  Password:  %s\n", env["BOBRES_DOMAIN"], l.username, l.password)
+		fmt.Fprintln(ins.out, "  This password is shown once and is not stored anywhere in the clear: you must change it\n"+
+			"  at your first login, where you also set up two-factor authentication. Lost it before then?\n"+
+			"  Run  bobres admin password  for a new one.")
+	} else if env["BOBRES_ADMIN_TELEGRAM_ID"] != "" {
+		fmt.Fprintln(ins.out, "\n  No Telegram, or want a password login? Run  bobres admin password  and sign in at https://"+env["BOBRES_DOMAIN"]+"/admin")
+	}
 	row("License", ins.licenseLine(dir))
 	row("Install dir", fmt.Sprintf("%s  (version %s)", dir, orDash(env["BOBRES_VERSION"])))
 	if ins.logPath != "" {
@@ -56,7 +67,7 @@ func (ins *installer) summary(env map[string]string, dir string) {
 	fmt.Fprintln(ins.out, "  2. Open the dashboard: send /dashboard to the bot, or run  sudo bobres admin link.")
 	fmt.Fprintln(ins.out, "  3. Set up the store in the bot: /set payments.card_number 6037-...  /set payments.card_holder Your Name\n"+
 		"     /plan_add 150000 IRT 30 50 Monthly 50GB   /trial 1 1   then /admin.")
-	fmt.Fprintln(ins.out, "     The bot photo is uploaded in the dashboard: Branding & texts > Store > Telegram bot")
+	fmt.Fprintln(ins.out, "     The bot photo is the BOBRES logo; to use your own, upload it in the dashboard: Branding & texts > Store > Telegram bot")
 
 	title("Good to know")
 	fmt.Fprintf(ins.out, "  - Your domain https://%s must point to this server for HTTPS. Keep %s/.env backed up:\n"+

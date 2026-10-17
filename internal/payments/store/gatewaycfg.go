@@ -19,7 +19,7 @@ type GatewayConfig struct {
 	MerchantEnc []byte // nil = no merchant id
 	ProxyEnc    []byte // nil = no proxy
 	AddressEnc  []byte // usdt_trc20_auto: the store's TRC20 address; nil = none
-	APIKeyEnc   []byte // usdt_trc20_auto: the TronGrid API key; nil = none
+	APIKeyEnc   []byte // usdt_trc20_auto: the TronGrid API key; idpay, nextpay: the gateway API key; nil = none
 	UpdatedAt   time.Time
 	UpdatedBy   *string // the staff user; nil for the environment seed
 }
@@ -49,9 +49,9 @@ func (s *Store) GetGatewayConfig(ctx context.Context, tx pgx.Tx, provider string
 // has settings already (they win from then on). It reports whether it wrote.
 func (s *Store) SeedGatewayConfig(ctx context.Context, c *GatewayConfig) (bool, error) {
 	tag, err := s.db.Exec(ctx, `
-		INSERT INTO payments.gateway_configs (provider, enabled, sandbox, merchant_enc, proxy_enc)
-		VALUES ($1, $2, $3, $4, $5) ON CONFLICT (provider) DO NOTHING`,
-		c.Provider, c.Enabled, c.Sandbox, c.MerchantEnc, c.ProxyEnc)
+		INSERT INTO payments.gateway_configs (provider, enabled, sandbox, merchant_enc, proxy_enc, api_key_enc)
+		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (provider) DO NOTHING`,
+		c.Provider, c.Enabled, c.Sandbox, c.MerchantEnc, c.ProxyEnc, c.APIKeyEnc)
 	if err != nil {
 		return false, fmt.Errorf("seed gateway config: %w", err)
 	}

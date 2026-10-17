@@ -28,7 +28,7 @@ func TestContexts(t *testing.T) {
 	cases := map[string]Context{
 		"btn.buy": CtxButton, "sub.status.active": CtxButtonHTML, "error.rate": CtxToast,
 		"discount.bad.expired": CtxToastHTML, "pay.stars_title": CtxInvoiceTitle,
-		"sub.qr_caption": CtxCaption, "welcome": CtxHTML,
+		"sub.qr_caption": CtxCaption, "welcome": CtxHTML, "subpage.guide.hiddify": CtxPlain, "btn.open_page": CtxButton,
 		"rs.forbidden": CtxToastHTML, "rs.label_removed": CtxToast, "wallet.debt": CtxButtonHTML, "btn.rs_buy": CtxButton,
 		"rs.panel": CtxHTML, "menu.placeholder": CtxPlaceholder, "lang.changed": CtxToastHTML,
 	}

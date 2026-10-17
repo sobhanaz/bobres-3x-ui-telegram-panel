@@ -203,8 +203,14 @@ type Payments struct {
 	// ZarinpalPublicURL is the domain registered with Zarinpal, serving the pay
 	// page and the callback; it must be reachable from Iran without a VPN.
 	ZarinpalPublicURL string
+	// IDPay and NextPay (API-key gateways, like Zarinpal off until the key is
+	// set). They return the customer to the same public URL; the callback
+	// domain must also be the one registered in the gateway's panel. NextPay
+	// has no sandbox.
+	IDPayAPIKey, IDPayProxy, NextPayAPIKey, NextPayProxy string
+	IDPaySandbox                                         bool
 	// MasterKey encrypts the gateway settings stored in the database (the
-	// merchant id and the proxy URL). Optional: without it the Zarinpal* values
+	// merchant id, the API keys and the proxy URLs). Optional: without it the Zarinpal* values
 	// above are used as they are and cannot be changed from the dashboard. With
 	// it they only seed the database once, when it has no settings yet.
 	MasterKey string
@@ -233,7 +239,16 @@ func LoadPayments() (Payments, error) {
 	}
 	p.ZarinpalProxy = getenv("BOBRES_ZARINPAL_PROXY", "")
 	p.ZarinpalPublicURL = strings.TrimRight(getenv("BOBRES_ZARINPAL_PUBLIC_URL", getenv("BOBRES_PUBLIC_URL", "")), "/")
-	if p.ZarinpalMerchantID != "" {
+	p.IDPayAPIKey = strings.TrimSpace(getenv("BOBRES_IDPAY_API_KEY", ""))
+	p.IDPayProxy = getenv("BOBRES_IDPAY_PROXY", "")
+	p.IDPaySandbox = getenv("BOBRES_IDPAY_SANDBOX", "") == "true"
+	if p.IDPaySandbox && c.Env == "prod" {
+		// In the sandbox any payment "succeeds": customers would get service for free.
+		errs = append(errs, errors.New("BOBRES_IDPAY_SANDBOX is refused when BOBRES_ENV=prod"))
+	}
+	p.NextPayAPIKey = strings.TrimSpace(getenv("BOBRES_NEXTPAY_API_KEY", ""))
+	p.NextPayProxy = getenv("BOBRES_NEXTPAY_PROXY", "")
+	if p.ZarinpalMerchantID != "" || p.IDPayAPIKey != "" || p.NextPayAPIKey != "" {
 		if err := CheckZarinpalPublicURL(p.ZarinpalPublicURL, c.Env); err != nil {
 			errs = append(errs, err)
 		}

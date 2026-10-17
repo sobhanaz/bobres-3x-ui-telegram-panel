@@ -4,8 +4,12 @@ import {
   addressChanged,
   blankServer,
   canTest,
+  choiceOf,
+  goneInbounds,
   healthOf,
   hostOf,
+  inboundOptions,
+  inboundsBody,
   needsToken,
   noInbound,
   noUsableServer,
@@ -132,7 +136,7 @@ describe('server form', () => {
     expect(f.token).toBe('')
     expect(f).toMatchObject({ name: 'de-1', baseURL: 'https://panel.example.com:2053/secret', weight: '100', enabled: true, allowPrivate: false, skipCheck: false })
     expect(serverBody(f)).toEqual({
-      name: 'de-1', base_url: 'https://panel.example.com:2053/secret', sub_base_url: 'https://sub.example.com/sub/', token: '',
+      kind: 'xui', name: 'de-1', base_url: 'https://panel.example.com:2053/secret', sub_base_url: 'https://sub.example.com/sub/', token: '',
       weight: 100, enabled: true, allow_private: false, skip_check: false,
     })
     expect(serverBody({ ...f, name: ' de-1 ', token: ' new ', weight: '۵۰', skipCheck: true })).toMatchObject({ name: 'de-1', token: 'new', weight: 50, skip_check: true })
@@ -149,10 +153,21 @@ describe('server form', () => {
     expect(needsToken({ baseURL: s.base_url }, { ...s, has_token: false })).toBe(true)
     expect(needsToken({ baseURL: s.base_url }, null)).toBe(true)
   })
+  it('takes a Marzban login as username:password, and keeps a saved server’s kind', () => {
+    const m = { ...blankServer(), kind: 'marzban' as const, name: 'mz', baseURL: 'https://m.example.com', token: 'admin:pw' }
+    expect(serverProblems(m, null)).toEqual([])
+    for (const bad of ['admin', ':pw', 'admin:', 'ad min:pw']) expect(serverProblems({ ...m, token: bad }, null)).toEqual(['token'])
+    expect(serverProblems({ ...m, token: '' }, { has_token: true, base_url: 'https://m.example.com' })).toEqual([])
+    expect(serverBody(m)).toMatchObject({ kind: 'marzban', token: 'admin:pw' })
+    expect(testBody(m)).toMatchObject({ kind: 'marzban' })
+    expect(serverFormOf({ ...server({ id: sid1 }), kind: 'marzban' }).kind).toBe('marzban')
+    expect(serverFormOf(server({ id: sid1 })).kind).toBe('xui')
+  })
+
   it('tests the typed connection, or a saved server’s with its stored token', () => {
     const f = { ...blankServer(), baseURL: ' https://p.example.com/x ', token: ' tok ', allowPrivate: true }
-    expect(testBody(f)).toEqual({ base_url: 'https://p.example.com/x', token: 'tok', allow_private: true })
-    expect(testBody({ ...f, token: '' }, sid1)).toEqual({ id: sid1, base_url: 'https://p.example.com/x', token: '', allow_private: true })
+    expect(testBody(f)).toEqual({ kind: 'xui', base_url: 'https://p.example.com/x', token: 'tok', allow_private: true })
+    expect(testBody({ ...f, token: '' }, sid1)).toEqual({ id: sid1, kind: 'xui', base_url: 'https://p.example.com/x', token: '', allow_private: true })
     expect(canTest(f, null)).toBe(true)
     expect(canTest({ ...f, token: '' }, null)).toBe(false)
     expect(canTest({ ...f, token: '' }, { has_token: true, base_url: 'https://p.example.com/old' })).toBe(true)
@@ -204,6 +219,31 @@ describe('plan servers', () => {
     expect(noInbound([ib(1, true, true), ib(2, false, false)])).toBe(false)
     expect(noInbound([ib(1, true, false), ib(2, false, true)])).toBe(true)
     expect(noInbound([])).toBe(true)
+  })
+})
+
+describe('plan inbound choice', () => {
+  const ib = (id: number, enabled = true, tag = ''): InboundItem => ({ id, tag, enabled, attach: true })
+  it('reads the plan into the form and back, per server, sorted', () => {
+    expect(choiceOf(undefined)).toEqual({})
+    expect(choiceOf([{ server_id: sid1, inbound_ids: [3, 1] }, { server_id: sid2, inbound_ids: [] }])).toEqual({ [sid1]: [3, 1] })
+    expect(inboundsBody({ [sid2]: [2], [sid1]: [3, 1], [sid3]: [] }, [])).toEqual([
+      { server_id: sid1, inbound_ids: [1, 3] },
+      { server_id: sid2, inbound_ids: [2] },
+    ])
+  })
+  it('drops the choice of a server the plan no longer names', () => {
+    expect(inboundsBody({ [sid1]: [1], [sid2]: [2] }, [sid2])).toEqual([{ server_id: sid2, inbound_ids: [2] }])
+  })
+  it('lists the panel inbounds, those off and the ones gone', () => {
+    expect(inboundOptions([ib(1, true, 'a'), ib(2, false), ib(3, true, 'c')], [2, 9])).toEqual([
+      { value: 1, label: 'a', off: false, gone: false },
+      { value: 2, label: '#2', off: true, gone: false },
+      { value: 3, label: 'c', off: false, gone: false },
+      { value: 9, label: '#9', off: true, gone: true },
+    ])
+    expect(goneInbounds([ib(1), ib(2, false)], [1, 2, 9])).toEqual([2, 9])
+    expect(goneInbounds([], [])).toEqual([])
   })
 })
 
@@ -349,7 +389,7 @@ describe('servers pages', () => {
     await vi.waitFor(() => expect(test().disabled).toBe(false))
     test().click()
     await vi.waitFor(() => expect(d.querySelector('.test-result')?.textContent).toContain(fill(text('server.test_ok'), { version: '\u20683x-ui v3.9.0\u2069', n: '۳' })))
-    expect(sent(calls, 'POST', '/servers/test')).toEqual([{ base_url: 'http://10.0.0.5:2053/x', token, allow_private: true }])
+    expect(sent(calls, 'POST', '/servers/test')).toEqual([{ kind: 'xui', base_url: 'http://10.0.0.5:2053/x', token, allow_private: true }])
     ;(d.querySelector('#server-skip-check') as HTMLInputElement).click()
     await vi.waitFor(() => expect(save().disabled).toBe(false))
     save().click()
@@ -359,7 +399,7 @@ describe('servers pages', () => {
     save().click()
     await vi.waitFor(() => expect(sent(calls, 'POST', '/servers')).toHaveLength(2))
     expect(sent(calls, 'POST', '/servers')[1]).toEqual({
-      name: 'de-4', base_url: 'http://10.0.0.5:2053/x', sub_base_url: '', token, weight: 200, enabled: true, allow_private: true, skip_check: true,
+      kind: 'xui', name: 'de-4', base_url: 'http://10.0.0.5:2053/x', sub_base_url: '', token, weight: 200, enabled: true, allow_private: true, skip_check: true,
     })
     await vi.waitFor(() => expect(document.querySelector('.server-dialog')).toBeNull())
     await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/servers')).toHaveLength(2))
@@ -398,7 +438,7 @@ describe('servers pages', () => {
     button(d, 'button.save').click()
     await vi.waitFor(() => expect(sent(calls, 'PUT', `/servers/${sid1}`)).toHaveLength(1))
     expect(sent(calls, 'PUT', `/servers/${sid1}`)[0]).toEqual({
-      name: 'de-1', base_url: 'https://panel.example.com:2053/secret/', sub_base_url: 'https://sub.example.com/sub/', token: '',
+      kind: 'xui', name: 'de-1', base_url: 'https://panel.example.com:2053/secret/', sub_base_url: 'https://sub.example.com/sub/', token: '',
       weight: 50, enabled: true, allow_private: false, skip_check: false,
     })
     await vi.waitFor(() => expect(document.querySelector('.server-dialog')).toBeNull())
@@ -433,7 +473,7 @@ describe('servers pages', () => {
     button(d, 'button.test').click()
     await vi.waitFor(() => expect(d.querySelector('.test-result')?.textContent).toContain(text('server.test_failed')))
     expect(d.querySelector('.test-result')?.textContent).toContain('unauthorized: bad token')
-    expect(sent(calls, 'POST', '/servers/test')).toEqual([{ id: sid1, base_url: 'https://panel.example.com:2053/secret', token: 'new-token', allow_private: false }])
+    expect(sent(calls, 'POST', '/servers/test')).toEqual([{ id: sid1, kind: 'xui', base_url: 'https://panel.example.com:2053/secret', token: 'new-token', allow_private: false }])
     button(d, 'button.save').click()
     await vi.waitFor(() => expect(sent(calls, 'PUT', `/servers/${sid1}`)).toHaveLength(3))
     expect(sent(calls, 'PUT', `/servers/${sid1}`)[2].token).toBe('new-token')
@@ -638,6 +678,59 @@ describe('servers pages', () => {
     ;(d2.querySelector('button[type=submit]') as HTMLButtonElement).click()
     await vi.waitFor(() => expect(sent(calls, 'POST', '/plans')).toHaveLength(1))
     expect(sent(calls, 'POST', '/plans')[0].server_ids).toEqual([])
+  })
+
+  it('lets a plan choose its inbounds per server, warns about gone ones, and sends the choice back', async () => {
+    const p2 = plan('p2', { server_ids: [sid1] })
+    delete p2.inbounds
+    const plans = [plan('p1', { server_ids: [sid1], inbounds: [{ server_id: sid1, inbound_ids: [2, 7] }] }), p2]
+    const { calls } = await boot('/admin/plans', adminPerms, (url, init) => {
+      const get = (init?.method ?? 'GET') === 'GET'
+      if (get && url === '/api/v1/plans') return json(200, { items: plans })
+      if (get && url === `/api/v1/servers/${sid1}/inbounds`) {
+        return json(200, { items: [
+          { id: 1, tag: 'inbound-443', enabled: true, attach: true },
+          { id: 2, tag: 'inbound-8443', enabled: true, attach: false },
+          { id: 3, tag: 'inbound-9000', enabled: false, attach: true },
+        ] })
+      }
+      if (url.startsWith('/api/v1/plans') && !get) return json(200, { plan: plans[0] })
+    })
+    const body = await found('.p-datatable-tbody')
+    await vi.waitFor(() => expect(body.querySelectorAll('tr')).toHaveLength(2))
+    ;(body.querySelector('tr button[aria-label="' + text('common.edit') + '"]') as HTMLButtonElement).click()
+    const d = await found('.p-dialog')
+    const row = await found<HTMLElement>('.p-dialog .inbound-row')
+    expect(row.dataset.server).toBe(sid1)
+    // the chosen inbound shows by its tag, the one the panel lost by its number, with a warning
+    await vi.waitFor(() => expect(row.textContent).toContain('inbound-8443'))
+    expect(row.textContent).toContain(fill(text('plan.inbound_gone_id'), { id: '7' }))
+    await vi.waitFor(() => expect(row.querySelector('.inbound-gone')).not.toBeNull())
+    row.querySelector<HTMLElement>('.inbound-select')!.click()
+    const option = async (label: string) =>
+      vi.waitFor(() => {
+        const el = [...document.querySelectorAll('.p-multiselect-option')].find((o) => o.textContent?.trim() === label) as HTMLElement | undefined
+        expect(el, label).toBeDefined()
+        return el!
+      })
+    ;(await option('inbound-443')).click()
+    ;(await option(fill(text('plan.inbound_gone_id'), { id: '7' }))).click()
+    await vi.waitFor(() => expect(row.querySelector('.inbound-gone')).toBeNull())
+    // an inbound that is off in the panel is marked, not hidden
+    await option(fill(text('plan.inbound_off'), { name: 'inbound-9000' }))
+    ;(d.querySelector('button[type=submit]') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/plans/p1')).toHaveLength(1))
+    expect(sent(calls, 'PUT', '/plans/p1')[0]).toMatchObject({ server_ids: [sid1], inbounds: [{ server_id: sid1, inbound_ids: [1, 2] }] })
+    await vi.waitFor(() => expect(document.querySelector('.p-dialog')).toBeNull())
+
+    // a plan that came without the choice (an older core) is saved without it too
+    await vi.waitFor(() => expect(body.querySelectorAll('tr')).toHaveLength(2))
+    ;(body.querySelectorAll('tr')[1].querySelector('button[aria-label="' + text('common.edit') + '"]') as HTMLButtonElement).click()
+    const d2 = await found('.p-dialog')
+    await vi.waitFor(() => expect(d2.querySelector('.inbound-row')).toBeNull())
+    ;(d2.querySelector('button[type=submit]') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/plans/p2')).toHaveLength(1))
+    expect(sent(calls, 'PUT', '/plans/p2')[0]).not.toHaveProperty('inbounds')
   })
 
   it('shows each server on the overview', async () => {

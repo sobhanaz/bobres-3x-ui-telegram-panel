@@ -46,6 +46,10 @@ type installer struct {
 	harden func(ctx context.Context, opt hardenOptions) int
 	// quiet leaves out the first-steps summary (a settings change from the menu).
 	quiet bool
+	// login is the owner's initial dashboard login, issued by a fresh install
+	// after the stack is up; only summary reads it and it is never written
+	// anywhere (not the log, not .env, not the state files).
+	login *ownerLogin
 	// runLines runs docker with each line of its output handed to onLine as it
 	// comes (the progress of `compose up`); nil: run is used and nothing is measured.
 	runLines func(ctx context.Context, dir string, onLine func(string), args ...string) ([]byte, error)
@@ -505,9 +509,41 @@ func (ins *installer) runInstall(args []string) int {
 	}
 	ins.prog.Begin(stepSummary)
 	if !ins.quiet {
+		if !existing {
+			ins.login = ins.issueOwnerLogin(ctx, *dir, env)
+		}
 		ins.summary(env, *dir)
 	}
 	return 0
+}
+
+// ownerLogin is the owner's one-time dashboard login (see core's
+// admin-password): the password is shown once, in the summary.
+type ownerLogin struct{ username, password string }
+
+var ownerLoginRe = regexp.MustCompile(`(?m)^Username: (\S+)\r?\n^Password: (\S+)\r?$`)
+
+// issueOwnerLogin asks core (up and healthy by now) for the owner's initial
+// dashboard password, so a fresh install needs no Telegram step to sign in.
+// It returns nil, and says why, when it cannot: the install is still fine and
+// `bobres admin password` does the same later. The output is parsed here and
+// printed by summary alone: it is never logged.
+func (ins *installer) issueOwnerLogin(ctx context.Context, dir string, env map[string]string) *ownerLogin {
+	if env["BOBRES_ADMIN_TELEGRAM_ID"] == "" {
+		return nil
+	}
+	out, err := ins.run(ctx, dir, composeArgs("exec", "-T", "core", "/app", "admin-password")...)
+	if err != nil {
+		fmt.Fprintf(ins.errOut, "warning: the initial dashboard password was not created (%v): run  bobres admin password  once core is up.\n%s\n",
+			err, strings.TrimSpace(string(out)))
+		return nil
+	}
+	m := ownerLoginRe.FindStringSubmatch(string(out))
+	if m == nil {
+		fmt.Fprintln(ins.errOut, "warning: core did not return a dashboard password: run  bobres admin password  to create one.")
+		return nil
+	}
+	return &ownerLogin{username: m[1], password: m[2]}
 }
 
 // askS3 completes the optional copy of each backup to S3-compatible storage.

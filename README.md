@@ -12,8 +12,8 @@ it on their own server, with their own domain, bot, 3x-ui panels and brand.
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
 Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
-versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.2.0
-(sales reports) is the latest. They were tried in a Docker lab with two Ubuntu servers
+versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.4.0
+(Marzban support, reports and dashboard) is the latest. They were tried in a Docker lab with two Ubuntu servers
 ([docs/11-staging-run.md](docs/11-staging-run.md)); an install on a real server, with real payments and a real
 certificate, is still to do. The landing page is live at https://sobhanaz.github.io/bobres-3x-ui-telegram-panel/.
 Still open: the legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
@@ -118,8 +118,8 @@ banner and one progress bar from 0 to 100%, keeps going if your SSH connection d
 Afterwards run `bobres` for the management menu:
 
 ```text
-   n____n   BOBRES manager  bobres v0.1.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.1.0
+   n____n   BOBRES manager  bobres v0.4.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.4.0
    \_||_/   Store: running (9/9 services)
   ──────────────────────────────────────────────────────────
    1. Status
@@ -156,7 +156,7 @@ Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`
 
 - [Docs index](docs/README.md): every document, with what it covers.
 - [Project plan](docs/PLAN.md): decisions, architecture and the status of each phase.
-- [Roadmap](docs/ROADMAP.md): what comes after v0.1.0, in order.
+- [Roadmap](docs/ROADMAP.md): what comes next, in order.
 - [Runbooks](docs/runbooks/README.md): what to do when something goes wrong, and the routine jobs.
 - [Pricing and licenses](docs/pricing.md): the free tier, the paid tiers, and what happens when a subscription lapses.
 - [Legal drafts](docs/legal/README.md): terms, privacy, acceptable use and refunds, in English and Persian (drafts for a lawyer).

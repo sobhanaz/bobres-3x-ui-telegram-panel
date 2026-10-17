@@ -19,7 +19,9 @@ import { isolate, localDate, money, num, percent, planName, type Lang } from '..
 import {
   bars,
   byCurrency,
+  calendars,
   currenciesOf,
+  defaultCalendar,
   exportParams,
   groups,
   hasData,
@@ -53,7 +55,7 @@ async function loadDaily() {
 onMounted(loadDaily)
 const dailyLink = { name: 'settings', hash: '#' + fieldId('reports.daily_summary') }
 
-const sel = reactive<Selection>({ range: 'last_30_days', group: 'day', from: '', to: '' })
+const sel = reactive<Selection>({ range: 'last_30_days', group: 'day', calendar: defaultCalendar(lang.value), from: '', to: '' })
 const summary = ref<ReportSummary | null>(null)
 const plans = ref<ReportPlan[]>([])
 const methods = ref<ReportMethod[]>([])
@@ -91,7 +93,7 @@ async function load() {
   }
 }
 onMounted(load)
-watch(() => [sel.range, sel.group, sel.from, sel.to], load)
+watch(() => [sel.range, sel.group, sel.calendar, sel.from, sel.to], load)
 
 // Picking "custom" starts from the dates on screen.
 watch(
@@ -106,12 +108,13 @@ watch(
 
 const rangeOptions = computed(() => ranges.map((r) => ({ label: t('reports.range.' + r), value: r })))
 const groupOptions = computed(() => groups.map((g) => ({ label: t('reports.group.' + g), value: g })))
+const calendarOptions = computed(() => calendars.map((c) => ({ label: t('reports.calendar.' + c), value: c })))
 const customInvalid = computed(() => sel.range === 'custom' && !validCustom(sel.from, sel.to))
 
 const currencies = computed(() => (summary.value ? currenciesOf(summary.value, plans.value, methods.value) : []))
 const currencyName = (c: string) => (te('currency.' + c) ? t('currency.' + c) : c)
 const m = (amount: number, currency: string) => money({ amount, currency }, lang.value)
-const label = (date: string) => (summary.value ? periodLabel(date, summary.value.group, lang.value, t) : date)
+const label = (date: string) => (summary.value ? periodLabel(date, summary.value.group, lang.value, t, summary.value.calendar) : date)
 
 const covers = computed(() =>
   summary.value
@@ -126,6 +129,12 @@ const totals = (cur: string) => summary.value?.totals.currencies[cur]
 const flows = ['topups', 'refunds', 'rejected', 'gateway_failed', 'cancelled'] as const
 const showShare = (rows: ReportMethod[], row: ReportMethod) => share(row.revenue, rows.reduce((n, r) => n + r.revenue, 0))
 const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.method.' + k) : k)
+// Who took the payment; for a gateway or staff-approved order whose event
+// predates the provider, a note that it was not recorded.
+const providerLabel = (r: ReportMethod) => {
+  if (r.provider) return te('payment.provider.' + r.provider) ? t('payment.provider.' + r.provider) : r.provider
+  return te('reports.provider_unrecorded.' + r.method) ? t('reports.provider_unrecorded.' + r.method) : ''
+}
 </script>
 
 <template>
@@ -175,6 +184,15 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
       option-value="value"
       :aria-label="t('reports.group_label')"
       class="group"
+    />
+    <SelectButton
+      v-model="sel.calendar"
+      :options="calendarOptions"
+      option-label="label"
+      option-value="value"
+      :allow-empty="false"
+      :aria-label="t('reports.calendar_label')"
+      class="calendar"
     />
     <Button v-if="loading" text loading :aria-label="t('app.loading')" />
   </div>
@@ -226,6 +244,16 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
             <div class="line trials">{{ t('reports.customers.trials') }}: {{ num(summary.totals.trials, lang) }}</div>
           </template>
         </Card>
+        <Card class="stat churn-card">
+          <template #subtitle>{{ t('reports.churn.title') }}</template>
+          <template #content>
+            <div class="big churned-services">{{ num(summary.totals.churned_services, lang) }}</div>
+            <div class="app-muted">{{ t('reports.churn.services') }}</div>
+            <div class="app-muted small">{{ t('reports.churn.hint', { n: num(summary.churn_grace_days, lang) }, summary.churn_grace_days) }}</div>
+            <div class="line churned-customers">{{ t('reports.churn.customers') }}: {{ num(summary.totals.churned_customers, lang) }}</div>
+            <div class="line at-risk">{{ t('reports.churn.at_risk') }}: {{ num(summary.totals.at_risk, lang) }}</div>
+          </template>
+        </Card>
       </div>
 
       <Card v-if="currencies.length" class="block charts-card">
@@ -237,11 +265,12 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
               :bars="bars(summary, cur)"
               :currency="cur"
               :group="summary.group"
+              :calendar="summary.calendar"
               :title="t('reports.chart.title.' + summary.group)"
             />
           </div>
           <p v-if="summary.buckets.some((b) => b.partial)" class="app-muted small">{{ t('reports.chart.partial') }}</p>
-          <p class="app-muted small">{{ t('reports.calendar_note') }}</p>
+          <p class="app-muted small">{{ t('reports.calendar_note.' + summary.calendar) }}</p>
         </template>
       </Card>
 
@@ -268,6 +297,12 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
             </Column>
             <Column :header="t('reports.table.trials')">
               <template #body="{ data: b }">{{ num(b.trials, lang) }}</template>
+            </Column>
+            <Column :header="t('reports.table.churned')">
+              <template #body="{ data: b }">{{ num(b.churned_services, lang) }}</template>
+            </Column>
+            <Column :header="t('reports.table.at_risk')">
+              <template #body="{ data: b }">{{ num(b.at_risk, lang) }}</template>
             </Column>
           </DataTable>
         </template>
@@ -301,10 +336,11 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
             <p v-if="!methods.length" class="app-muted">{{ t('reports.methods.none') }}</p>
             <section v-for="cur in currencies" v-show="byCurrency(methods, cur).length" :key="cur" class="per-currency" :data-currency="cur">
               <h3 class="currency-title">{{ currencyName(cur) }}</h3>
-              <DataTable :value="byCurrency(methods, cur)" data-key="method" size="small" scrollable>
+              <DataTable :value="byCurrency(methods, cur)" size="small" scrollable>
                 <Column :header="t('reports.methods.method')">
                   <template #body="{ data: r }">
                     <div>{{ methodLabel(r.method) }}</div>
+                    <div v-if="providerLabel(r)" class="provider">{{ providerLabel(r) }}</div>
                     <div v-if="te('reports.method_hint.' + r.method)" class="app-muted small">{{ t('reports.method_hint.' + r.method) }}</div>
                   </template>
                 </Column>
@@ -370,6 +406,10 @@ const methodLabel = (k: string) => (te('reports.method.' + k) ? t('reports.metho
 }
 .small {
   font-size: 0.85rem;
+}
+.provider {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 .flows {
   display: grid;

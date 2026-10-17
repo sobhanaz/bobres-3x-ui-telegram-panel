@@ -68,10 +68,13 @@ router.beforeEach(async (to, from) => {
   if (to.meta.public) {
     // A login link always goes through the login page, even when logged in,
     // and a failed one stays there to show why.
-    if (auth.me && to.name === 'login' && from.name !== 'login' && !to.hash.startsWith('#t=')) return { name: 'overview' }
+    if (auth.me && to.name === 'login' && from.name !== 'login' && !to.hash.startsWith('#t=')) return { name: auth.me.must_change ? 'account' : 'overview' }
     return true
   }
   if (!auth.me) return { name: 'login' }
+  // Signed in with the initial password: nothing but choosing a new password
+  // and an authenticator until that is done (core refuses the rest too).
+  if (auth.me.must_change && to.name !== 'account') return { name: 'account' }
   const perm = to.meta.perm as string | undefined
   if (perm && !auth.can(perm)) return { name: 'overview' }
   return true

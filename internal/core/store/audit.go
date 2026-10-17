@@ -129,32 +129,42 @@ func (s *Store) ListAudit(ctx context.Context, q querier, f AuditFilter, p Page)
 }
 
 // EachAudit calls fn for every matching entry, newest first, up to max
-// entries; it reports whether more matched than max.
-func (s *Store) EachAudit(ctx context.Context, q querier, f AuditFilter, max int, fn func(AuditRow) error) (bool, error) {
-	rows, err := q.Query(ctx, `
-		SELECT `+auditCols+`
-		FROM core.audit_log a LEFT JOIN core.users u ON u.id = a.actor_id`+auditWhere+`
-		ORDER BY a.created_at DESC, a.id DESC
-		LIMIT $7`, f.ActorID, f.Action, f.Entity, f.EntityID, f.From, f.To, max+1)
-	if err != nil {
-		return false, fmt.Errorf("each audit: %w", err)
-	}
-	defer rows.Close()
-	n := 0
-	for rows.Next() {
-		if n == max {
-			return true, nil
-		}
-		r, err := scanAudit(rows)
+// entries; it reports whether more matched than max. Like EachLedger it reads
+// in a read-only transaction with a statement timeout (ExportTimeout), and a
+// statement that ran out of time comes back as ErrReportTimeout.
+func (s *Store) EachAudit(ctx context.Context, f AuditFilter, max int, fn func(AuditRow) error) (bool, error) {
+	more := false
+	err := s.readOnly(ctx, ExportTimeout, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT `+auditCols+`
+			FROM core.audit_log a LEFT JOIN core.users u ON u.id = a.actor_id`+auditWhere+`
+			ORDER BY a.created_at DESC, a.id DESC
+			LIMIT $7`, f.ActorID, f.Action, f.Entity, f.EntityID, f.From, f.To, max+1)
 		if err != nil {
-			return false, err
+			return reportErr("each audit", err)
 		}
-		if err := fn(r); err != nil {
-			return false, err
+		defer rows.Close()
+		n := 0
+		for rows.Next() {
+			if n == max {
+				more = true
+				return nil
+			}
+			r, err := scanAudit(rows)
+			if err != nil {
+				return err
+			}
+			if err := fn(r); err != nil {
+				return err
+			}
+			n++
 		}
-		n++
-	}
-	return false, rows.Err()
+		if err := rows.Err(); err != nil {
+			return reportErr("each audit", err)
+		}
+		return nil
+	})
+	return more, err
 }
 
 // AuditActions lists the actions recorded so far with how often (the

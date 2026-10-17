@@ -132,6 +132,15 @@ photo set later in @BotFather stays, and so does the photo when Telegram cannot 
 **Keep the bot's Telegram profile up to date** is off, nothing changes in Telegram, whatever is uploaded or
 removed here. A local Bot API server (`BOBRES_TELEGRAM_API_URL`) must be version 9.4 or newer for this.
 
+**The default photo.** Until you set your own, the bot's photo is the BOBRES logo (`docs/brand/bot-avatar.jpg`,
+embedded in core as `internal/branding/assets/bot-avatar.jpg`). Core stores it once, at its first start after
+the database is migrated, and only when no bot photo exists yet: a photo you uploaded before is never touched. To
+replace it, upload yours in the dashboard (**Branding & texts → Store → Telegram bot**); to have none, remove the
+photo there. Core remembers that it offered the default (the internal marker `state.bot_photo.default_applied`,
+which is not a setting and is not shown in the dashboard), so a photo you replaced or removed does not come back
+at a restart or an update. With **Keep the bot's Telegram profile up to date** off, the default is stored but
+never sent to Telegram.
+
 **What to set in @BotFather** (BOBRES leaves these alone), once, from the account that created
 the bot:
 1. **Name:** `/setname` (the store's name; `branding.name` is what the bot's messages call the store).

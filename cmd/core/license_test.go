@@ -203,7 +203,7 @@ func TestPrintLicense(t *testing.T) {
 	b.Reset()
 	printLicense(&b, effectiveOf(missing, 40*day, now), usage, now)
 	for _, want := range []string{"In effect:      free tier", "Servers:        1\n", "Services:       25 (3 in use)", "Staff seats:    2 (2 in use)",
-		"Features:       -", "Gateways:       zarinpal, stars, manual_card, manual_crypto, manual_zarinpal"} {
+		"Features:       -", "Gateways:       zarinpal, idpay, nextpay, stars, manual_card, manual_crypto, manual_zarinpal"} {
 		if !strings.Contains(b.String(), want) {
 			t.Errorf("free: missing %q in:\n%s", want, b.String())
 		}

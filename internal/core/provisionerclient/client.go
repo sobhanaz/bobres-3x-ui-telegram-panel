@@ -9,6 +9,7 @@ import (
 
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
 
 // Client wraps the generated stub.
@@ -20,15 +21,27 @@ type Client struct {
 func New(rpc provisionerv1.ProvisionerServiceClient) *Client { return &Client{rpc: rpc} }
 
 // CreateClient implements domain.Provisioner.
-func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string) (domain.ProvisionedClient, error) {
+func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound) (domain.ProvisionedClient, error) {
 	cl, err := c.rpc.CreateClient(ctx, &provisionerv1.CreateClientRequest{
 		SubscriptionId: subscriptionID, Email: email, DurationDays: durationDays, TrafficBytes: trafficBytes,
-		CandidateServerIds: candidates,
+		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds),
 	})
 	if err != nil {
 		return domain.ProvisionedClient{}, fmt.Errorf("provisioner.CreateClient: %w", err)
 	}
 	return domain.ProvisionedClient{ServerID: cl.GetServerId(), XUISubID: cl.GetXuiSubId(), ExpiresAt: cl.GetExpiresAt()}, nil
+}
+
+// inboundSelections maps a plan's inbound choice to the request's.
+func inboundSelections(in []store.PlanInbound) []*provisionerv1.InboundSelection {
+	var out []*provisionerv1.InboundSelection
+	for _, sel := range in {
+		if len(sel.InboundIDs) == 0 {
+			continue
+		}
+		out = append(out, &provisionerv1.InboundSelection{ServerId: sel.ServerID, InboundIds: append([]int32(nil), sel.InboundIDs...)})
+	}
+	return out
 }
 
 // GetLinks implements domain.Provisioner.
@@ -103,7 +116,7 @@ func (c *Client) Delete(ctx context.Context, subscriptionID string) error {
 
 func serverOf(p *provisionerv1.XUIServer) *domain.Server {
 	return &domain.Server{
-		ID: p.GetId(), Name: p.GetName(), BaseURL: p.GetBaseUrl(), SubBaseURL: p.GetSubBaseUrl(),
+		ID: p.GetId(), Kind: p.GetKind(), Name: p.GetName(), BaseURL: p.GetBaseUrl(), SubBaseURL: p.GetSubBaseUrl(),
 		Enabled: p.GetEnabled(), AllowPrivate: p.GetAllowPrivate(), Weight: p.GetWeight(), Managed: p.GetManaged(),
 		HasToken: p.GetHasToken(), Clients: p.GetClients(), PanelVersion: p.GetPanelVersion(),
 		VersionUntested: p.GetVersionUntested(), Healthy: p.GetHealthy(), HealthError: p.GetHealthError(),
@@ -130,7 +143,7 @@ func (c *Client) ListServers(ctx context.Context) (*domain.ServerList, error) {
 func (c *Client) AddServer(ctx context.Context, in domain.ServerInput) (*domain.Server, error) {
 	s, err := c.rpc.AddServer(ctx, &provisionerv1.AddServerRequest{
 		Name: in.Name, BaseUrl: in.BaseURL, ApiToken: in.Token, SubBaseUrl: in.SubBaseURL,
-		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled,
+		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled, Kind: in.Kind,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.AddServer: %w", err)
@@ -161,7 +174,7 @@ func (c *Client) DeleteServer(ctx context.Context, id string) error {
 // TestServer implements domain.ServerAdmin.
 func (c *Client) TestServer(ctx context.Context, p domain.ServerProbe) (*domain.ServerTest, error) {
 	r, err := c.rpc.TestServer(ctx, &provisionerv1.TestServerRequest{
-		Id: p.ID, BaseUrl: p.BaseURL, ApiToken: p.Token, AllowPrivate: p.AllowPrivate,
+		Id: p.ID, BaseUrl: p.BaseURL, ApiToken: p.Token, AllowPrivate: p.AllowPrivate, Kind: p.Kind,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.TestServer: %w", err)

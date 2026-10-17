@@ -66,6 +66,14 @@ const (
 	CoreService_SetSubscriptionLabel_FullMethodName     = "/core.v1.CoreService/SetSubscriptionLabel"
 	CoreService_GetResellerInfo_FullMethodName          = "/core.v1.CoreService/GetResellerInfo"
 	CoreService_GetBotPhoto_FullMethodName              = "/core.v1.CoreService/GetBotPhoto"
+	CoreService_AdminTodayStats_FullMethodName          = "/core.v1.CoreService/AdminTodayStats"
+	CoreService_AdminListSettingSpecs_FullMethodName    = "/core.v1.CoreService/AdminListSettingSpecs"
+	CoreService_AdminListServers_FullMethodName         = "/core.v1.CoreService/AdminListServers"
+	CoreService_AdminSetServer_FullMethodName           = "/core.v1.CoreService/AdminSetServer"
+	CoreService_AdminListStaff_FullMethodName           = "/core.v1.CoreService/AdminListStaff"
+	CoreService_AdminAddStaff_FullMethodName            = "/core.v1.CoreService/AdminAddStaff"
+	CoreService_AdminRemoveStaff_FullMethodName         = "/core.v1.CoreService/AdminRemoveStaff"
+	CoreService_AdminBroadcast_FullMethodName           = "/core.v1.CoreService/AdminBroadcast"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -131,6 +139,16 @@ type CoreServiceClient interface {
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error)
+	// The bot's button-driven admin menu (WP-D). Every call is the actor's own:
+	// core checks the role again and audits each change like the dashboard does.
+	AdminTodayStats(ctx context.Context, in *AdminTodayStatsRequest, opts ...grpc.CallOption) (*AdminTodayStatsResponse, error)
+	AdminListSettingSpecs(ctx context.Context, in *AdminListSettingSpecsRequest, opts ...grpc.CallOption) (*AdminListSettingSpecsResponse, error)
+	AdminListServers(ctx context.Context, in *AdminListServersRequest, opts ...grpc.CallOption) (*AdminListServersResponse, error)
+	AdminSetServer(ctx context.Context, in *AdminSetServerRequest, opts ...grpc.CallOption) (*AdminServer, error)
+	AdminListStaff(ctx context.Context, in *AdminListStaffRequest, opts ...grpc.CallOption) (*AdminListStaffResponse, error)
+	AdminAddStaff(ctx context.Context, in *AdminAddStaffRequest, opts ...grpc.CallOption) (*AdminStaffMember, error)
+	AdminRemoveStaff(ctx context.Context, in *AdminRemoveStaffRequest, opts ...grpc.CallOption) (*AdminRemoveStaffResponse, error)
+	AdminBroadcast(ctx context.Context, in *AdminBroadcastRequest, opts ...grpc.CallOption) (*AdminBroadcastResponse, error)
 }
 
 type coreServiceClient struct {
@@ -612,6 +630,86 @@ func (c *coreServiceClient) GetBotPhoto(ctx context.Context, in *GetBotPhotoRequ
 	return out, nil
 }
 
+func (c *coreServiceClient) AdminTodayStats(ctx context.Context, in *AdminTodayStatsRequest, opts ...grpc.CallOption) (*AdminTodayStatsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminTodayStatsResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminTodayStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminListSettingSpecs(ctx context.Context, in *AdminListSettingSpecsRequest, opts ...grpc.CallOption) (*AdminListSettingSpecsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListSettingSpecsResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListSettingSpecs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminListServers(ctx context.Context, in *AdminListServersRequest, opts ...grpc.CallOption) (*AdminListServersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListServersResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListServers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminSetServer(ctx context.Context, in *AdminSetServerRequest, opts ...grpc.CallOption) (*AdminServer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminServer)
+	err := c.cc.Invoke(ctx, CoreService_AdminSetServer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminListStaff(ctx context.Context, in *AdminListStaffRequest, opts ...grpc.CallOption) (*AdminListStaffResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListStaffResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListStaff_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminAddStaff(ctx context.Context, in *AdminAddStaffRequest, opts ...grpc.CallOption) (*AdminStaffMember, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminStaffMember)
+	err := c.cc.Invoke(ctx, CoreService_AdminAddStaff_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminRemoveStaff(ctx context.Context, in *AdminRemoveStaffRequest, opts ...grpc.CallOption) (*AdminRemoveStaffResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminRemoveStaffResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminRemoveStaff_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminBroadcast(ctx context.Context, in *AdminBroadcastRequest, opts ...grpc.CallOption) (*AdminBroadcastResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminBroadcastResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminBroadcast_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -675,6 +773,16 @@ type CoreServiceServer interface {
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error)
+	// The bot's button-driven admin menu (WP-D). Every call is the actor's own:
+	// core checks the role again and audits each change like the dashboard does.
+	AdminTodayStats(context.Context, *AdminTodayStatsRequest) (*AdminTodayStatsResponse, error)
+	AdminListSettingSpecs(context.Context, *AdminListSettingSpecsRequest) (*AdminListSettingSpecsResponse, error)
+	AdminListServers(context.Context, *AdminListServersRequest) (*AdminListServersResponse, error)
+	AdminSetServer(context.Context, *AdminSetServerRequest) (*AdminServer, error)
+	AdminListStaff(context.Context, *AdminListStaffRequest) (*AdminListStaffResponse, error)
+	AdminAddStaff(context.Context, *AdminAddStaffRequest) (*AdminStaffMember, error)
+	AdminRemoveStaff(context.Context, *AdminRemoveStaffRequest) (*AdminRemoveStaffResponse, error)
+	AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -825,6 +933,30 @@ func (UnimplementedCoreServiceServer) GetResellerInfo(context.Context, *GetResel
 }
 func (UnimplementedCoreServiceServer) GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBotPhoto not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminTodayStats(context.Context, *AdminTodayStatsRequest) (*AdminTodayStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminTodayStats not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListSettingSpecs(context.Context, *AdminListSettingSpecsRequest) (*AdminListSettingSpecsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListSettingSpecs not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListServers(context.Context, *AdminListServersRequest) (*AdminListServersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListServers not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminSetServer(context.Context, *AdminSetServerRequest) (*AdminServer, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminSetServer not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListStaff(context.Context, *AdminListStaffRequest) (*AdminListStaffResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListStaff not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminAddStaff(context.Context, *AdminAddStaffRequest) (*AdminStaffMember, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminAddStaff not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminRemoveStaff(context.Context, *AdminRemoveStaffRequest) (*AdminRemoveStaffResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminRemoveStaff not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminBroadcast not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1693,6 +1825,150 @@ func _CoreService_GetBotPhoto_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_AdminTodayStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminTodayStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminTodayStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminTodayStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminTodayStats(ctx, req.(*AdminTodayStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminListSettingSpecs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListSettingSpecsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListSettingSpecs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListSettingSpecs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListSettingSpecs(ctx, req.(*AdminListSettingSpecsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminListServers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListServersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListServers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListServers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListServers(ctx, req.(*AdminListServersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminSetServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminSetServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminSetServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminSetServer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminSetServer(ctx, req.(*AdminSetServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminListStaff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListStaffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListStaff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListStaff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListStaff(ctx, req.(*AdminListStaffRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminAddStaff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminAddStaffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminAddStaff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminAddStaff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminAddStaff(ctx, req.(*AdminAddStaffRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminRemoveStaff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminRemoveStaffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminRemoveStaff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminRemoveStaff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminRemoveStaff(ctx, req.(*AdminRemoveStaffRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminBroadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminBroadcastRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminBroadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminBroadcast_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminBroadcast(ctx, req.(*AdminBroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1887,6 +2163,38 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBotPhoto",
 			Handler:    _CoreService_GetBotPhoto_Handler,
+		},
+		{
+			MethodName: "AdminTodayStats",
+			Handler:    _CoreService_AdminTodayStats_Handler,
+		},
+		{
+			MethodName: "AdminListSettingSpecs",
+			Handler:    _CoreService_AdminListSettingSpecs_Handler,
+		},
+		{
+			MethodName: "AdminListServers",
+			Handler:    _CoreService_AdminListServers_Handler,
+		},
+		{
+			MethodName: "AdminSetServer",
+			Handler:    _CoreService_AdminSetServer_Handler,
+		},
+		{
+			MethodName: "AdminListStaff",
+			Handler:    _CoreService_AdminListStaff_Handler,
+		},
+		{
+			MethodName: "AdminAddStaff",
+			Handler:    _CoreService_AdminAddStaff_Handler,
+		},
+		{
+			MethodName: "AdminRemoveStaff",
+			Handler:    _CoreService_AdminRemoveStaff_Handler,
+		},
+		{
+			MethodName: "AdminBroadcast",
+			Handler:    _CoreService_AdminBroadcast_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

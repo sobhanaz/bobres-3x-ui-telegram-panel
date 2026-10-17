@@ -16,7 +16,7 @@
     "rate_limited": "Too many attempts. Wait a minute.",
     "not_found": "This item no longer exists.",
     "state": "This cannot be done right now.",
-    "unavailable": "A service this needs (or the 3x-ui panel) did not answer. Try again in a minute.",
+    "unavailable": "A service this needs (or the panel) did not answer. Try again in a minute.",
     "timeout": "The report took too long. Choose a shorter range."
   },
   "theme": {
@@ -56,7 +56,7 @@
     },
     "services": {
       "title": "Services",
-      "desc": "Every subscription with its usage; extend, reset traffic, disable, delete or resync from 3x-ui."
+      "desc": "Every subscription with its usage; extend, reset traffic, disable, delete or resync from the panel."
     },
     "support": {
       "title": "Support",
@@ -99,12 +99,12 @@
       "desc": "Maintenance mode, required channel, notifications, limits, support and time zone."
     },
     "servers": {
-      "title": "3x-ui servers",
+      "title": "Panel servers",
       "desc": "Your panels, their health and inbounds, and which plans use which server."
     },
     "gateways": {
       "title": "Payment gateways",
-      "desc": "Turn payment methods on or off with their details, keep Zarinpal's keys encrypted, test it and see its payments."
+      "desc": "Turn payment methods on or off with their details, keep the gateways' keys encrypted, test them and see its payments."
     },
     "staff": {
       "title": "Staff",
@@ -126,7 +126,7 @@
   "login": {
     "title": "Log in",
     "subtitle": "Staff dashboard of {brand}",
-    "link_title": "With the bot (easiest)",
+    "link_title": "With the bot",
     "link_hint": "In the Telegram bot, send /dashboard (or tap Dashboard in /admin). You get a link that logs you in once, within 2 minutes.",
     "link_working": "Logging you in…",
     "link_invalid": "This login link was used already or has expired. Ask the bot for a new one.",
@@ -139,7 +139,10 @@
     "locked": "Too many failed logins. Wait 15 minutes, or use a link from the bot.",
     "rate_limited": "Too many attempts. Wait a minute.",
     "not_configured": "Password logins are off on this install. Use a link from the bot.",
-    "no_password_yet": "A password login is added from My account after logging in with the bot."
+    "no_password_yet": "After your first login, add or change your password in My account.",
+    "code_optional": "Authenticator code (if you have set one up)",
+    "code_hint": "Leave it empty when you sign in with the initial password from the installer or from bobres admin password.",
+    "initial_hint": "No Telegram? Sign in with the initial password the installer showed, or get a new one on the server with: bobres admin password. You will choose your own password and set up two-factor authentication right after."
   },
   "overview": {
     "users": "Users",
@@ -169,7 +172,7 @@
     "reseller_debt": "Reseller debt",
     "reseller_no_debt": "Nobody owes",
     "resellers_count": "{n} reseller | {n} resellers",
-    "servers": "3x-ui servers",
+    "servers": "Panel servers",
     "servers_none": "No server yet",
     "servers_ok": "All working",
     "servers_all_off": "No server takes new services",
@@ -262,7 +265,8 @@
     "device_unknown": "Unknown device",
     "method": {
       "link": "Bot link",
-      "password": "Password"
+      "password": "Password",
+      "password_initial": "Initial password"
     },
     "started": "Logged in {time}",
     "last_seen": "Last active {time}",
@@ -271,7 +275,12 @@
     "revoked": "That device was logged out.",
     "revoke_others": "Log out other devices",
     "revoke_others_confirm": "Log out every device except this one?",
-    "revoked_others": "Devices logged out: {n}"
+    "revoked_others": "Devices logged out: {n}",
+    "session_initial": "Initial password, until {time}",
+    "forced_title": "Choose your own password",
+    "forced_intro": "You signed in with the initial password. Before you continue, choose a new password and turn on two-factor authentication. Nothing else in the dashboard opens until then.",
+    "forced_steps": "Pick a username and a new password (different from the initial one), then scan the code with an authenticator app (Google Authenticator, Authy, Microsoft Authenticator…) and enter the 6-digit code it shows.",
+    "password_reused": "Choose a different password: this is the initial one."
   },
   "common": {
     "all": "All",
@@ -374,12 +383,18 @@
     "enable": "Turn on",
     "enable_intro": "The customer can connect again; its end date and traffic still apply.",
     "delete": "Delete",
-    "delete_intro": "Removes the account from the 3x-ui panel for good: the link stops working. The service and its orders stay in the records.",
+    "delete_intro": "Removes the account from the panel for good: the link stops working. The service and its orders stay in the records.",
     "done_extend": "Extension added: it is applied in a few seconds",
     "done_reset": "Traffic reset",
     "done_disable": "Service turned off",
     "done_enable": "Service turned on",
-    "done_delete": "Service deleted"
+    "done_delete": "Service deleted",
+    "page": "Subscription page",
+    "page_off": "Not available: the page is switched off, the service is not ready, or it was deleted.",
+    "page_hint": "The customer’s own page with the link, a QR code and app guides. Anyone with this address can use the service, like the link above.",
+    "page_regenerate": "New page link",
+    "page_regenerate_intro": "Gives the page a new address; the old one stops working at once. The subscription link itself does not change.",
+    "done_page_regenerate": "Page link replaced: the old address no longer works"
   },
   "plan": {
     "intro": "Plans are what customers buy in the bot. Traffic packages add traffic to a running service; the free trial is a plan marked as a trial.",
@@ -418,7 +433,14 @@
     "server_removed": "Removed server",
     "server_removed_id": "Removed server ({id})",
     "server_off": "{name} (off)",
-    "servers_count": "{n} server | {n} servers"
+    "servers_count": "{n} server | {n} servers",
+    "inbounds": "Inbounds",
+    "inbounds_all": "Every attachable inbound",
+    "inbounds_help": "Pick which inbounds of each server a new service of this plan joins. Nothing picked means every inbound that is on in the panel and not skipped on the Servers page. A pick wins over the skip switch, and only inbounds that are on in the panel are used.",
+    "inbounds_error": "The inbounds could not be loaded:",
+    "inbound_off": "{name} (off in the panel)",
+    "inbound_gone_id": "Inbound #{id} (gone from the panel)",
+    "inbounds_gone": "Gone from the panel or turned off: inbound {ids}. Gone ones are skipped; if none is left, orders for this plan on this server fail until you change the choice."
   },
   "payment": {
     "queue": "Review queue",
@@ -433,6 +455,8 @@
       "manual_crypto": "Crypto (USDT)",
       "manual_zarinpal": "Zarinpal link",
       "zarinpal": "Zarinpal",
+      "idpay": "IDPay",
+      "nextpay": "NextPay",
       "usdt_trc20_auto": "USDT TRC20 (automatic)",
       "stars": "Telegram Stars",
       "wallet": "Wallet"
@@ -522,7 +546,15 @@
       "month": "Month"
     },
     "covers": "{from} to {to} · time zone {tz}",
-    "calendar_note": "Weeks start on Monday and months are calendar months (Gregorian), in both languages.",
+    "calendar_label": "Calendar",
+    "calendar": {
+      "gregorian": "Gregorian",
+      "jalali": "Jalali"
+    },
+    "calendar_note": {
+      "gregorian": "Weeks start on Monday and months are Gregorian calendar months.",
+      "jalali": "Weeks start on Saturday and months are Jalali (Persian calendar) months. A period is named by its first day."
+    },
     "export_summary": "Summary CSV",
     "export_orders": "Paid orders CSV",
     "empty": "No sales in this period.",
@@ -548,6 +580,13 @@
       "new_hint": "People whose first paid order was in this period.",
       "trials": "Free trials started"
     },
+    "churn": {
+      "title": "Churn",
+      "services": "Services lost",
+      "hint": "Services that ended in this period and were not renewed within {n} day | Services that ended in this period and were not renewed within {n} days",
+      "customers": "Customers lost",
+      "at_risk": "Ended, still inside the grace period"
+    },
     "chart": {
       "title": {
         "day": "Revenue by day",
@@ -569,7 +608,9 @@
       "revenue_in": "Revenue ({currency})",
       "orders_in": "Orders ({currency})",
       "new_customers": "New customers",
-      "trials": "Free trials"
+      "trials": "Free trials",
+      "churned": "Services lost",
+      "at_risk": "At risk"
     },
     "plans": {
       "title": "Top plans",
@@ -593,10 +634,14 @@
       "gateway": "Payment gateway",
       "unknown": "Unknown"
     },
+    "provider_unrecorded": {
+      "gateway": "Gateway (provider not recorded)",
+      "manual": "Staff-approved (provider not recorded)"
+    },
     "method_hint": {
       "wallet": "Paid from the customer's wallet, whatever put the money there: a top-up, a refund, a reward, a change by staff, a reseller's commission or a reseller's credit.",
       "manual": "Card to card, crypto or a Zarinpal link, approved by staff.",
-      "gateway": "Zarinpal, Telegram Stars or automatic USDT.",
+      "gateway": "Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT.",
       "unknown": "A sale with no record of how it was paid."
     },
     "daily": {
@@ -952,11 +997,11 @@
         },
         "provision_failed": {
           "label": "Service could not be created",
-          "help": "When a paid service could not be created on the 3x-ui panel and needs a look."
+          "help": "When a paid service could not be created on the panel and needs a look."
         },
         "system_alerts": {
           "label": "System problems",
-          "help": "When a service, a 3x-ui server, Zarinpal, the backups, the disk, paid orders, the bot's messages or the license has a problem, once a day while it lasts, and when it is fixed. Open problems always show on the System page."
+          "help": "When a service, a panel server, Zarinpal, the backups, the disk, paid orders, the bot's messages or the license has a problem, once a day while it lasts, and when it is fixed. Open problems always show on the System page."
         },
         "sales": {
           "label": "Every sale",
@@ -1039,6 +1084,24 @@
         "autoclose_days": {
           "label": "Close answered tickets after (days)",
           "help": "A ticket whose customer has not written back this many days after a staff reply is closed, without a message. 0 turns this off."
+        }
+      },
+      "branding": {
+        "sub_page": {
+          "enabled": {
+            "label": "Subscription page",
+            "help": "Every service gets its own page at /sub/<secret> with its link, QR code and app guides. Turned off, those addresses answer “not found” and the bot and dashboard stop showing them."
+          }
+        },
+        "bot_username": {
+          "label": "Bot username",
+          "help": "The bot’s {'@'}username (without the {'@'}), for the “Renew” button on the subscription page, which opens the bot. Empty: the page has no renew button."
+        }
+      },
+      "miniapp": {
+        "enabled": {
+          "label": "Telegram Mini App store",
+          "help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing and wallet top-up. Off by default; turn it on, then set the Mini App URL in {'@'}BotFather. Turned off, /app/ and its API answer “not found”."
         }
       },
       "reports": {
@@ -1155,7 +1218,7 @@
       "broadcast": "Broadcast",
       "reseller": "Reseller",
       "reseller_tier": "Reseller tier",
-      "server": "3x-ui server",
+      "server": "Panel server",
       "gateway": "Payment gateway",
       "license": "License",
       "tls": "HTTPS"
@@ -1179,7 +1242,7 @@
       "broadcast": "Broadcasts",
       "reseller": "Resellers",
       "reseller_tier": "Reseller tiers",
-      "server": "3x-ui servers",
+      "server": "Panel servers",
       "gateway": "Payment gateways",
       "license": "License",
       "system": "System"
@@ -1718,13 +1781,20 @@
     "hide": "Hide what you typed"
   },
   "server": {
-    "intro": "The 3x-ui panels services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
+    "intro": "The panels (3x-ui or Marzban) services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
     "add": "Add server",
     "edit": "Edit server",
-    "none": "No servers yet. Add your 3x-ui panel to start selling.",
+    "none": "No servers yet. Add your 3x-ui or Marzban panel to start selling.",
     "name": "Name",
     "base_url": "Panel address",
     "base_url_help": "The panel's full address with its port and secret path, as you open it in a browser, for example https://panel.example.com:2053/path",
+    "kind": "Panel software",
+    "kind_xui": "3x-ui",
+    "kind_marzban": "Marzban",
+    "kind_help": "Which panel this server is. It cannot be changed after it is added.",
+    "kind_fixed": "Fixed when the server was added: the services on it live in that panel.",
+    "login": "Admin username and password",
+    "login_help": "Marzban: an admin's login written as username:password (a Marzban username has no colon). Use a dedicated admin. It is stored encrypted in the provisioner service and never shown again. Subscription links come from the panel itself.",
     "token": "API token",
     "token_help": "Create it in the 3x-ui panel under Settings, API tokens. It is stored encrypted in the provisioner service and never shown again.",
     "sub_url": "Subscription address (optional)",
@@ -1785,16 +1855,39 @@
       "credentials": "Put the token in its own field, not a user name or password in the address.",
       "sub_url": "A full address that starts with https:// or http://",
       "token": "A token has no spaces.",
+      "login": "Write it as username:password, with no spaces.",
       "weight": "A whole number from {min} to {max}."
     },
     "token_again": "The panel's address moved to another host or port: enter the token again. A stored token is only sent to the address it was entered for.",
     "version_range": "BOBRES is tested with panel versions {min} to {max}; this version may still work."
   },
   "gateway": {
-    "intro": "How customers pay. Zarinpal's merchant id and proxy, and the TronGrid key of automatic USDT, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
-    "key_missing_banner": "The payments service has no encryption key yet, so Zarinpal's settings still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
+    "intro": "How customers pay. The merchant id or API key and the proxy of Zarinpal, IDPay and NextPay, and the TronGrid key of automatic USDT, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
+    "key_missing_banner": "The payments service has no encryption key yet, so the settings of Zarinpal, IDPay and NextPay still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
     "key_missing": "Read only: add the payments key (run bobres install again) to change these here.",
     "zarinpal_desc": "Online card payments through your Zarinpal merchant account; payments are confirmed automatically.",
+    "idpay_desc": "Online card payments through your IDPay account; payments are confirmed automatically.",
+    "nextpay_desc": "Online card payments through your NextPay account; payments are confirmed automatically.",
+    "keyed": {
+      "enabled": "Offer {name}",
+      "sandbox_help": "Payments go to {name}'s test system and no real money moves. Never leave it on for customers.",
+      "api_key": "API key",
+      "api_key_help": "The 36-character API key from your {name} panel. It is stored encrypted and never shown again. Register this store's payment address (the same one as Zarinpal's) in the {name} panel as the callback domain.",
+      "proxy_help": "{name} only answers calls from registered IP addresses. If this server's IP is not registered, send the calls through a proxy that is. The proxy must be http or https and may include a user name and password.",
+      "open_payments": "{n} {name} payment is still open. The API key and the sandbox cannot change until it finishes, or that payment could not be confirmed. | {n} {name} payments are still open. The API key and the sandbox cannot change until they finish, or those payments could not be confirmed.",
+      "invalid": {
+        "api_key": "The API key has 36 characters: letters a to f and digits, in five groups separated by dashes.",
+        "needs_key": "Enter the API key before turning {name} on."
+      },
+      "test_ok": "{name} answered: the API key and the route to it work.",
+      "test_failed": "{name} could not be reached or refused these details.",
+      "problem": {
+        "unreadable": "The stored settings cannot be read (the payments key changed or is missing). Enter the API key again.",
+        "sandbox_refused": "The sandbox is refused on a production install: turn it off.",
+        "public_url": "The public payment address is not right (it must be https with a domain), so {name} is not offered. Fix BOBRES_ZARINPAL_PUBLIC_URL in the .env file.",
+        "invalid": "These settings were refused, so {name} is not offered. Check the API key and the proxy."
+      }
+    },
     "state": {
       "on": "Offered",
       "off": "Off",
@@ -1960,7 +2053,7 @@
     "check_fail": "{name}: failed",
     "mismatch": "Another version",
     "version_mismatch": "Core runs version {version}, but these services run another one: {list}. Mixed versions can misbehave: restart them, or run bobres install again on the server, so all run the same release.",
-    "servers": "3x-ui servers",
+    "servers": "Panel servers",
     "servers_manage": "Manage servers",
     "gateways": "Payment methods",
     "gateways_none": "No payment method is turned on.",
@@ -1977,14 +2070,18 @@
         "critical": "Critical",
         "warning": "Warning"
       },
-      "note": "Core checks every minute: the services, the 3x-ui servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages, the license and the HTTPS certificates. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
+      "note": "Core checks every minute: the services, the panel servers, Zarinpal, the backups and disk space, paid orders that could not be delivered, the bot's messages, the license and the HTTPS certificates. The bot tells the staff alert recipients on Telegram when a problem starts, once a day while it lasts, and when it is fixed.",
       "settings": "Alert settings",
       "kind": {
         "service_down": "The {service} service is down",
         "service_not_ready": "The {service} service is running but not ready (a database, Redis or gRPC check fails)",
-        "server_down": "The 3x-ui server {server} does not answer",
+        "server_down": "The panel server {server} does not answer",
         "zarinpal_failing": "Zarinpal payments are failing",
         "zarinpal_stuck": "{count} Zarinpal payment is still open; it started over 3 hours ago | {count} Zarinpal payments are still open; the oldest started over 3 hours ago",
+        "idpay_failing": "IDPay payments are failing",
+        "idpay_stuck": "{count} IDPay payment is still open; it started over 3 hours ago | {count} IDPay payments are still open; the oldest started over 3 hours ago",
+        "nextpay_failing": "NextPay payments are failing",
+        "nextpay_stuck": "{count} NextPay payment is still open; it started over 3 hours ago | {count} NextPay payments are still open; the oldest started over 3 hours ago",
         "backup_offsite": "The latest backup was not copied to the off-site (S3) storage",
         "usdt_failing": "Automatic USDT payments are not being checked: the store cannot read its TRON address from TronGrid",
         "usdt_stuck": "{count} automatic USDT payment is still open; it started over 2 hours ago | {count} automatic USDT payments are still open; the oldest started over 2 hours ago",
@@ -2417,7 +2514,7 @@
       "grace": "These are the license's entitlements (it is in its grace period), with what this install uses now."
     },
     "ent": {
-      "servers": "3x-ui servers",
+      "servers": "Panel servers",
       "active_services": "Active services",
       "staff_seats": "Staff seats (the store owner is not counted)",
       "gateways": "Payment methods",
@@ -2491,6 +2588,7 @@
       }
     },
     "powered_by": "Powered by BOBRES",
+    "made_by": "Made by TECSO-DEV",
     "no_keys": "This build carries no vendor key (only a development build lacks one), so no license can be checked.",
     "updated_by": "Saved {time} by {name}",
     "source": {

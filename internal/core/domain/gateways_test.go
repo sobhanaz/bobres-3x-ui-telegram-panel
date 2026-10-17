@@ -28,6 +28,10 @@ func TestGatewayCharge(t *testing.T) {
 		unit               string
 	}{
 		{Zarinpal, "IRT", 150_000, 1_500_000, "IRR"},
+		{IDPay, "IRT", 100, 1_000, "IRR"},
+		{IDPay, "IRT", 50_000_000, 500_000_000, "IRR"},
+		{NextPay, "IRT", 1_000, 10_000, "IRR"},
+		{NextPay, "IRT", 100_000_000, 1_000_000_000, "IRR"},
 		{Stars, "IRT", 150_000, 100, "XTR"},
 		{Stars, "IRT", 150_001, 101, "XTR"}, // rounded up: never undercharge
 	}
@@ -38,10 +42,19 @@ func TestGatewayCharge(t *testing.T) {
 		}
 	}
 	for _, bad := range []struct{ provider, currency string }{
-		{Zarinpal, "USDT"}, {Stars, "USDT"}, {"paypal", "IRT"},
+		{Zarinpal, "USDT"}, {Stars, "USDT"}, {"paypal", "IRT"}, {IDPay, "USDT"}, {NextPay, "USDT"},
 	} {
 		if _, _, err := svc.gatewayCharge(ctx, bad.provider, 1000, bad.currency); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s/%s accepted: %v", bad.provider, bad.currency, err)
+		}
+	}
+	// Outside each gateway's own per-payment limits.
+	for _, out := range []struct {
+		provider string
+		amount   int64
+	}{{IDPay, 99}, {IDPay, 50_000_001}, {NextPay, 999}, {NextPay, 100_000_001}} {
+		if _, _, err := svc.gatewayCharge(ctx, out.provider, out.amount, "IRT"); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s %d Toman accepted: %v", out.provider, out.amount, err)
 		}
 	}
 	setSetting(t, s, "payments.stars_rate", "")

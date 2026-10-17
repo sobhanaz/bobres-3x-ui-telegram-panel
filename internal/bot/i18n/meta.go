@@ -131,6 +131,12 @@ var contexts = map[string]Context{
 	// A backup file's caption is sent without a parse mode.
 	"backup.caption": CtxPlain,
 
+	// The subscription page's app guides (/sub/<token>) are plain text.
+	"subpage.guide.v2rayng":   CtxPlain,
+	"subpage.guide.hiddify":   CtxPlain,
+	"subpage.guide.streisand": CtxPlain,
+	"subpage.guide.v2box":     CtxPlain,
+
 	"sub.qr_caption":     CtxCaption,
 	"admin.pending_item": CtxCaption,
 
@@ -153,11 +159,15 @@ var buttonStyles = map[string]string{
 	"btn.pay_crypto":        "success",
 	"btn.pay_zarinpal_link": "success",
 	"btn.pay_zarinpal":      "success",
+	"btn.pay_idpay":         "success",
+	"btn.pay_nextpay":       "success",
 	"btn.pay_stars":         "success",
 	"btn.pay_usdt_auto":     "success",
 	"btn.open_payment":      "success",
 	"btn.approve":           "success",
 	"btn.adm_unban":         "success",
+	"btn.adm_confirm":       "success",
+	"btn.adm_enable":        "success",
 	"btn.join_check":        "success",
 
 	"btn.services":      "primary",
@@ -212,7 +222,6 @@ var markupArgs = map[string][]string{
 	"admin.pending_item":   {"proof", "dup", "method"},
 	"admin.title":          {"panel"},
 	"admin.servers_down":   {"names"},
-	"admin.settings_title": {"list"},
 	"admin.discount_saved": {"line"},
 	"support.prompt":       {"contact"},
 	"support.thread":       {"messages"},

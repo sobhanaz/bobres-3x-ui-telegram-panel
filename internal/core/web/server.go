@@ -77,13 +77,20 @@ type Config struct {
 	PublicIP PublicIPSource
 	// Dashboard serves the built app under /admin/ (nil: not mounted).
 	Dashboard http.Handler
-	Log       *slog.Logger
+	// MiniApp serves the Telegram Mini App store under /app/ (nil: not
+	// mounted) and MiniAppVerify checks the init data it signs in with, by
+	// asking the bot (nil: no bot; signing in answers 503).
+	MiniApp       http.Handler
+	MiniAppVerify MiniAppVerifier
+	Log           *slog.Logger
 }
 
 // Server is the dashboard API.
 type Server struct {
 	cfg     Config
 	limiter *limiter
+	// subPages limits the public service page per client address.
+	subPages *limiter
 	// tests limits broadcast test sends per staff member.
 	tests *limiter
 	// probes limits connection tests (servers, gateways) per staff member.
@@ -101,6 +108,8 @@ type Server struct {
 	exportTime time.Duration
 	rowPause   time.Duration
 	now        func() time.Time
+	// mini holds the Mini App's sessions and rate limits.
+	mini *miniState
 }
 
 // hashSlots is how many password hashes core computes at a time (32 MiB
@@ -112,9 +121,9 @@ func New(cfg Config) *Server {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), tests: newLimiter(5, time.Minute),
+	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), subPages: newLimiter(subPageRate, time.Minute), tests: newLimiter(5, time.Minute),
 		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
-		now: time.Now}
+		now: time.Now, mini: newMiniState()}
 }
 
 // Register mounts the API on /api/v1/ and the dashboard on /admin/.
@@ -122,10 +131,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 	api := http.NewServeMux()
 	api.HandleFunc("POST /api/v1/auth/link", s.loginWithLink)
 	api.HandleFunc("POST /api/v1/auth/login", s.loginWithPassword)
-	api.HandleFunc("POST /api/v1/auth/logout", s.session(s.logout))
-	api.HandleFunc("GET /api/v1/me", s.session(s.me))
-	api.HandleFunc("POST /api/v1/me/password", s.session(s.startPassword))
-	api.HandleFunc("POST /api/v1/me/password/confirm", s.session(s.confirmPassword))
+	api.HandleFunc("POST /api/v1/auth/logout", s.restrictedSession(s.logout))
+	api.HandleFunc("GET /api/v1/me", s.restrictedSession(s.me))
+	api.HandleFunc("POST /api/v1/me/password", s.restrictedSession(s.startPassword))
+	api.HandleFunc("POST /api/v1/me/password/confirm", s.restrictedSession(s.confirmPassword))
 	api.HandleFunc("DELETE /api/v1/me/password", s.session(s.removePassword))
 	api.HandleFunc("GET /api/v1/me/sessions", s.session(s.mySessions))
 	api.HandleFunc("POST /api/v1/me/sessions/revoke-others", s.session(s.revokeMyOtherSessions))
@@ -147,6 +156,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/services/{id}/reset-traffic", PermServicesWrite, s.resetService)
 	s.route(api, "POST /api/v1/services/{id}/enabled", PermServicesWrite, s.setServiceEnabled)
 	s.route(api, "POST /api/v1/services/{id}/delete", PermServicesWrite, s.deleteService)
+	s.route(api, "POST /api/v1/services/{id}/page-token/regenerate", PermServicesWrite, s.regeneratePage)
 
 	// Sales.
 	s.route(api, "GET /api/v1/plans", PermPlansWrite, s.listPlans)
@@ -280,6 +290,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
 	mux.Handle("/api/v1/", apiHeaders(api))
+	// The branded service page: public, the token in the address is the
+	// credential. Every other path under /sub/ gets the same generic 404.
+	mux.HandleFunc("GET /sub/{token}", s.subPage)
+	mux.HandleFunc("/sub/", s.pageNotFound)
+	s.registerMiniApp(mux)
 	if s.cfg.Dashboard != nil {
 		mux.Handle("/admin/", s.cfg.Dashboard)
 		mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +332,20 @@ func staffFrom(ctx context.Context) *staff { s, _ := ctx.Value(staffKey{}).(*sta
 
 // session requires a live session of an active staff member; requests that
 // change something must also carry the session's CSRF token.
-func (s *Server) session(next http.HandlerFunc) http.HandlerFunc {
+//
+// A restricted session (the first login with an initial password, method
+// password_initial) is refused here with 403 must_change_password: only the
+// handlers wrapped in restrictedSession answer it.
+func (s *Server) session(next http.HandlerFunc) http.HandlerFunc { return s.sessionFor(false, next) }
+
+// restrictedSession is session for the few endpoints a restricted session
+// may use: who am I, choosing the new password and authenticator app, and
+// logging out.
+func (s *Server) restrictedSession(next http.HandlerFunc) http.HandlerFunc {
+	return s.sessionFor(true, next)
+}
+
+func (s *Server) sessionFor(allowRestricted bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(cookieName)
 		if err != nil || c.Value == "" {
@@ -340,6 +368,10 @@ func (s *Server) session(next http.HandlerFunc) http.HandlerFunc {
 			_ = s.cfg.Store.RevokeSession(r.Context(), s.cfg.Store.Conn(), hash)
 			clearCookie(w)
 			writeError(w, http.StatusUnauthorized, "unauthorized", "this account may no longer use the dashboard")
+			return
+		}
+		if sess.Method == methodInitial && !allowRestricted {
+			writeError(w, http.StatusForbidden, "must_change_password", "set a new password and turn on two-factor authentication first")
 			return
 		}
 		if !safeMethod(r.Method) {

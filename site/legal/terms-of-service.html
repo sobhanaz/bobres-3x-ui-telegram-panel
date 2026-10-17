@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Terms of Service · BOBRES</title>
+<link rel="icon" href="../assets/brand/bobres-icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/legal.css">
+</head>
+<body>
+<main class="legal">
+<p class="draft-banner" role="note">DRAFT. A lawyer has not reviewed this text, and it is not legal advice. The “[OWNER: …]” and “[LAWYER: …]” parts are blanks, not final wording.</p>
+<h1>Terms of Service for BOBRES operators</h1>
+<blockquote><p><strong>DRAFT. A lawyer must review this text before it is used.</strong> It is not legal advice and it does not state the law of any country. <code>[OWNER: ...]</code> is for the owner to fill in. <code>[LAWYER: ...]</code> needs a lawyer.</p></blockquote>
+<p>Version: draft 0.1, [OWNER: date]. Between <strong>[OWNER: legal name of the vendor]</strong> (&#34;the Vendor&#34;) and the person or company that installs or uses BOBRES (&#34;the Operator&#34;).</p>
+<h2>1. What these terms cover</h2>
+<p>BOBRES is software for running a VPN store on Telegram: a bot, a web dashboard and the <code>bobres</code> command. The Operator installs it on the Operator&#39;s own server. These terms cover the Operator&#39;s use of the software and of the Vendor&#39;s license service. The source code is under the <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/LICENSE">LICENSE</a>; where these terms and the LICENSE differ for a paid license, these terms apply.</p>
+<p>By installing BOBRES, installing a license key or token, or paying for a license, the Operator accepts these terms. [LAWYER: how acceptance works for a free download, and whether the Operator must click or sign something.]</p>
+<p>This text is written in English and in Persian (<a href="terms-of-service.fa.html">terms-of-service.fa.md</a>). [LAWYER: which version prevails if they differ.]</p>
+<h2>2. The software and the free tier</h2>
+<ul>
+<li>Without a license, an install runs on the <strong>free tier</strong>: 1 server, 25 active services, 2 staff seats (the owner the install names takes none), the Zarinpal, Stars and manual payment methods, no resellers, no white label and no automatic USDT. The free tier has no time limit and no limit on updates. &#34;Powered by BOBRES&#34; is shown on every install unless a valid license includes white label. The numbers are in <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/pricing.md">pricing.md</a>. The Vendor may change the free tier for future releases; a change never takes a service away from customers who are already set up.</li>
+<li>Every install also has an implicit <strong>trial of 30 days</strong>, counted from the first start of a version that has this policy. During it the install has every premium feature except white label. The trial is kept once on the install and is not tied to a person. Restoring a backup made before this policy, or rolling back to an older version and then updating, starts it again, and the Vendor accepts that.</li>
+<li>The free tier is free of charge for the Operator&#39;s own store. It is not a license to host BOBRES for others, to resell it or to white-label it (see the LICENSE, sections 2 and 3).</li>
+</ul>
+<h2>3. Paid licenses</h2>
+<ul>
+<li><strong>A subscription per install.</strong> A paid license covers one install, bound to its domain and install id. It is monthly or yearly. The tiers (Standard and Pro) and what they allow are in <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/pricing.md">pricing.md</a>. The price is the one shown when the Operator orders. [OWNER: say where prices are published.]</li>
+<li><strong>The license key</strong> is secret. The Operator keeps it private and does not share it. The key moves to another install or domain up to 3 times in 365 days; more needs the Vendor&#39;s help.</li>
+<li><strong>How it stays active.</strong> The Operator&#39;s install asks the Vendor&#39;s license server for a short-lived token (30 days at most) and renews it every day. The Vendor does not charge anyone automatically. [OWNER: say how the Operator pays and renews: the Vendor&#39;s own channel.]</li>
+<li><strong>Payment, taxes and invoices.</strong> [LAWYER: taxes on software licenses, invoicing, withholding, and which payment channels are allowed for the Vendor and the Operator.]</li>
+<li><strong>When payment lapses.</strong> The Vendor stops renewing the license. The Operator keeps what the license gave until its end date plus its grace period (14 days by default), then the install falls to the free tier (or to the trial, if that still runs). Nothing the Operator stored is deleted. Customers&#39; existing services keep working, renewing and topping up. What is new and beyond the free tier is refused: new purchases once 25 services are active (customers are told that new purchases are temporarily unavailable, and the staff get an alert), a second server, resellers, automatic USDT and more staff seats. Details: <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/pricing.md">pricing.md</a>.</li>
+</ul>
+<h2>4. Updates and support</h2>
+<ul>
+<li><strong>Updates.</strong> Releases are published as signed files. Every install can install them with <code>bobres update</code>: the free tier, the trial, a paid license and a lapsed one. A license does not buy updates, and the Vendor does not withhold any, security fixes included.</li>
+<li><strong>Support.</strong> The scope and the response times per tier are: [OWNER: support scope and response times per tier]. Support covers BOBRES. It does not cover the Operator&#39;s server, 3x-ui, payment gateways, the Operator&#39;s customers or the VPN service itself.</li>
+</ul>
+<h2>5. The Operator&#39;s responsibilities</h2>
+<ul>
+<li>The Operator runs the store and the VPN service, sets the prices, serves the customers and answers to them.</li>
+<li>The Operator is responsible for obeying the laws that apply to the Operator and to the store: the VPN service, selling it, taking payments, taxes and customers&#39; data. [LAWYER: laws that apply to the Operator; none are stated here.]</li>
+<li>The Operator follows the <a href="acceptable-use.html">Acceptable Use Policy</a>, and the rules of Telegram, the payment gateways and the 3x-ui panel they use.</li>
+<li>The Operator keeps the server, its backups and the backup key safe. The Vendor cannot read or restore the Operator&#39;s data.</li>
+<li>The Operator is the controller of the customers&#39; data (<a href="privacy-policy.html">Privacy Policy</a>) and publishes the terms and privacy notice its customers need (<a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/legal/operator-store-template.md">operator-store-template.md</a> is a starting point).</li>
+</ul>
+<h2>6. What the Vendor receives</h2>
+<p>Only an install with <code>BOBRES_LICENSE_SERVER</code> set talks to the Vendor. The Vendor then receives the license key, the install id, the domain, the BOBRES version and the IP address of the request, and later the installed token. The Vendor receives no customer data, no payment data, no bot token and no keys. The <a href="privacy-policy.html">Privacy Policy</a> has the detail.</p>
+<h2>7. Ownership</h2>
+<p>The Vendor owns BOBRES, its name, the beaver mascot and the brand assets. The Operator owns the Operator&#39;s own data, brand, bot, domain and customer relationships. The Operator may use the BOBRES name only as the LICENSE allows. An Operator who sends feedback lets the Vendor use it freely.</p>
+<h2>8. No warranty</h2>
+<p>BOBRES is provided &#34;as is&#34;. The Vendor does not promise that it is free of errors, that the license service is always up, or that BOBRES fits the Operator&#39;s purpose. [LAWYER: wording that is valid where the Vendor and the Operator are.]</p>
+<h2>9. Limit of liability</h2>
+<p>To the extent the law allows, the Vendor is not liable for lost sales, lost data, downtime, the Operator&#39;s customers&#39; claims, or what the Operator&#39;s customers do. Where a liability cannot be excluded, it is limited to the fees the Operator paid in the 12 months before the claim. [LAWYER: the cap, and the cases in which it cannot apply.]</p>
+<h2>10. Indemnity</h2>
+<p>The Operator answers to the Vendor for claims that come from the Operator&#39;s store or the VPN service the Operator sells, to the extent the law allows. [LAWYER: wording, or whether to include it at all.]</p>
+<h2>11. Ending</h2>
+<ul>
+<li>The Operator can stop at any time: stop paying, or tell the Vendor (<a href="refund-policy.html">refund-policy.md</a>). The install goes back to the free tier at the end of the paid period and its grace.</li>
+<li>The Vendor can revoke a license for a serious breach of these terms or of the Acceptable Use Policy, or for a chargeback or a payment reversed. A revoked license is not renewed; the install keeps its last token until it expires and its grace ends, then runs on the free tier. [LAWYER: notice and the right to answer before a revocation.]</li>
+<li>Sections 5, 7, 8, 9 and 10 survive the end.</li>
+</ul>
+<h2>12. Changes</h2>
+<p>The Vendor may change these terms for the future. It publishes the new version at [OWNER: address] and, for paid licenses, tells the Operator [OWNER: how, and how long before]. An Operator who does not accept a change can stop at the end of the paid period.</p>
+<h2>13. Law and courts</h2>
+<p>[LAWYER: governing law, venue and how disputes are settled. Do not fill this in without a lawyer: the right answer depends on where the Vendor and the Operator are.]</p>
+<h2>14. Contact</h2>
+<p>[OWNER: e-mail address, Telegram contact and postal address of the Vendor.]</p>
+<p class="legal-nav"><a href="./">All legal drafts</a> · <a href="terms-of-service.fa.html" hreflang="fa">فارسی</a></p>
+</main>
+</body>
+</html>

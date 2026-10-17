@@ -103,7 +103,7 @@ services:
 
   postgres:
     <<: *hardened
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     # The entrypoint starts as root to prepare the data directory, then runs Postgres as its own
     # user; these are the capabilities that takes (as in a customer install).
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]

@@ -46,6 +46,9 @@ func (e *OpenIntentsError) Error() string {
 	if e.Provider == USDTAuto {
 		return fmt.Sprintf("%d open %s payments: the address cannot change until they close", e.Count, e.Provider)
 	}
+	if isKeyed(e.Provider) {
+		return fmt.Sprintf("%d open %s payments: the API key and the sandbox cannot change until they close", e.Count, e.Provider)
+	}
 	return fmt.Sprintf("%d open %s payments: the merchant id and the sandbox cannot change until they close", e.Count, e.Provider)
 }
 
@@ -105,6 +108,9 @@ type GatewayOptions struct {
 	// BuildChain makes the TronGrid client of the automatic USDT watcher and
 	// validates its settings (tests point it at a fake). Nil = no watcher.
 	BuildChain func(ChainSettings) (gateway.ChainSource, error)
+	// Keyed wires the API-key gateways by provider name (idpay, nextpay); a
+	// provider without Build is not wired.
+	Keyed map[string]KeyedOptions
 }
 
 // gatewaySet is one snapshot of the automated gateways. It is never changed
@@ -116,7 +122,9 @@ type gatewaySet struct {
 	// offered: gateways taking new payments.
 	offered map[string]bool
 	zp      zarinpalState
-	opts    *GatewayOptions
+	// keyed: the API-key gateways' settings (idpay, nextpay).
+	keyed map[string]keyedState
+	opts  *GatewayOptions
 }
 
 // zarinpalState is what the service knows about Zarinpal's settings.
@@ -165,6 +173,13 @@ func (s *Service) ConfigureGateways(ctx context.Context, o GatewayOptions) error
 			return err
 		}
 	}
+	for _, name := range wiredKeyed(&o) {
+		if o.Envelope != nil && normalizeKeyed(o.Keyed[name].Seed).APIKey != "" {
+			if err := s.seedKeyed(ctx, &o, name); err != nil {
+				return err
+			}
+		}
+	}
 	set, err := s.loadGateways(ctx, &o)
 	if err != nil {
 		return err
@@ -173,6 +188,21 @@ func (s *Service) ConfigureGateways(ctx context.Context, o GatewayOptions) error
 	if zp.fromEnv && zp.problem != "" {
 		// config refuses these already; never run on them.
 		return fmt.Errorf("zarinpal settings from the environment: %s", problemText(zp.problem))
+	}
+	for _, name := range wiredKeyed(&o) {
+		ks, err := s.loadKeyed(ctx, &o, name)
+		if err != nil {
+			return err
+		}
+		set.applyKeyed(&o, name, ks)
+		if ks.fromEnv && ks.problem != "" {
+			return fmt.Errorf("%s settings from the environment: %s", name, problemText(ks.problem))
+		}
+		s.log.Info(keyedTitle(name)+" settings", "configured", set.configured[name] != nil,
+			"offered", set.offered[name], "from_env", ks.fromEnv, "settings", ks.settings)
+		if ks.problem != "" {
+			s.log.Warn(keyedTitle(name)+" settings cannot be used", "problem", ks.problem, "why", problemText(ks.problem))
+		}
 	}
 	s.gws.Store(set)
 	s.log.Info("Zarinpal settings", "configured", set.configured[providerZarinpal] != nil,
@@ -346,9 +376,9 @@ func problemText(p string) string {
 	case ProblemUnreadable:
 		return "the stored settings need the payments master key they were saved with (BOBRES_PAYMENTS_MASTER_KEY)"
 	case ProblemSandboxRefused:
-		return "the Zarinpal sandbox is refused when BOBRES_ENV=prod"
+		return "the gateway sandbox is refused when BOBRES_ENV=prod"
 	case ProblemPublicURL:
-		return "BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be https://host[:port]"
+		return "BOBRES_ZARINPAL_PUBLIC_URL (or BOBRES_PUBLIC_URL) must be https://host[:port]: the gateway sends the customer back there"
 	case ProblemInvalid:
 		return "the stored settings are refused by the gateway's client"
 	}
@@ -372,9 +402,16 @@ func (set *gatewaySet) view() GatewayConfig {
 }
 
 // GatewayConfigs lists the automated gateways' settings (staff view):
-// Zarinpal, then automatic USDT.
+// Zarinpal, automatic USDT, then the API-key gateways that are wired.
 func (s *Service) GatewayConfigs() []GatewayConfig {
-	return []GatewayConfig{s.gws.Load().view(), s.chain.Load().view()}
+	set := s.gws.Load()
+	out := []GatewayConfig{set.view(), s.chain.Load().view()}
+	if set.opts != nil {
+		for _, name := range wiredKeyed(set.opts) {
+			out = append(out, set.keyedView(name))
+		}
+	}
+	return out
 }
 
 // GatewayUpdate changes a gateway's settings. Enabled and Sandbox are the new
@@ -400,6 +437,9 @@ type GatewayUpdate struct {
 func (s *Service) SetGatewayConfig(ctx context.Context, u GatewayUpdate) (GatewayConfig, error) {
 	if u.Provider == USDTAuto {
 		return s.setChainConfig(ctx, u)
+	}
+	if isKeyed(u.Provider) {
+		return s.setKeyedConfig(ctx, u)
 	}
 	if u.Provider != providerZarinpal {
 		return GatewayConfig{}, invalid("unknown gateway %q", u.Provider)
@@ -494,6 +534,7 @@ func (s *Service) SetGatewayConfig(ctx context.Context, u GatewayUpdate) (Gatewa
 		zp.updatedBy = *saved.UpdatedBy
 	}
 	set := newGatewaySet(o, zp)
+	set.carryKeyed(cur)
 	s.gws.Store(set)
 	if prev := cur.configured[providerZarinpal]; prev != nil && prev != set.configured[providerZarinpal] {
 		closeIdle(prev) // checks still running on it keep their connection
@@ -542,6 +583,9 @@ func (s *Service) TestGateway(ctx context.Context, providerName string, cand *Ga
 	if providerName == USDTAuto {
 		return s.testChain(ctx, cand)
 	}
+	if isKeyed(providerName) {
+		return s.testKeyed(ctx, providerName, cand)
+	}
 	if providerName != providerZarinpal {
 		return GatewayTest{}, invalid("unknown gateway %q", providerName)
 	}
@@ -585,6 +629,11 @@ func (s *Service) TestGateway(ctx context.Context, providerName string, cand *Ga
 	if g == nil {
 		return GatewayTest{}, precondition("Zarinpal has no usable merchant id to test")
 	}
+	return s.runGatewayTest(ctx, providerName, g)
+}
+
+// runGatewayTest runs a gateway's read-only credentials test.
+func (s *Service) runGatewayTest(ctx context.Context, providerName string, g gateway.Gateway) (GatewayTest, error) {
 	t, ok := g.(gateway.Tester)
 	if !ok {
 		return GatewayTest{}, precondition("%s cannot be tested", providerName)
@@ -604,7 +653,7 @@ func (s *Service) TestGateway(ctx context.Context, providerName string, cand *Ga
 }
 
 // reportProviders are the providers a report can be asked for.
-var reportProviders = []string{providerZarinpal, Stars, USDTAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
+var reportProviders = []string{providerZarinpal, providerIDPay, providerNextPay, Stars, USDTAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
 
 // maxReportSpan bounds a report's period.
 const maxReportSpan = 366 * 24 * time.Hour

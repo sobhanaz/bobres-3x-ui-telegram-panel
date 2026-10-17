@@ -79,7 +79,7 @@ async function consumeLink(hash: string) {
   linking.value = true
   try {
     await auth.loginWithLink(m[1])
-    await router.replace({ name: 'overview' })
+    await router.replace({ name: auth.me?.must_change ? 'account' : 'overview' })
   } catch (e) {
     error.value = messageFor(e)
     await router.replace({ name: 'login' })
@@ -94,7 +94,8 @@ async function submit() {
   busy.value = true
   try {
     await auth.loginWithPassword(username.value.trim(), password.value, latinDigits(code.value))
-    await router.replace({ name: 'overview' })
+    // The initial password only opens the page where a new one is chosen.
+    await router.replace({ name: auth.me?.must_change ? 'account' : 'overview' })
   } catch (e) {
     error.value = messageFor(e)
     code.value = ''
@@ -128,11 +129,6 @@ async function submit() {
           <Message v-if="linking" severity="info" :closable="false">{{ t('login.link_working') }}</Message>
           <Message v-if="error" severity="error" :closable="false" class="msg">{{ error }}</Message>
 
-          <h3>{{ t('login.link_title') }}</h3>
-          <p class="app-muted">{{ t('login.link_hint') }}</p>
-
-          <Divider />
-
           <h3>{{ t('login.password_title') }}</h3>
           <form class="form" @submit.prevent="submit">
             <label>
@@ -144,16 +140,26 @@ async function submit() {
               <Password v-model="password" :feedback="false" toggle-mask input-class="w-full" autocomplete="current-password" required fluid />
             </label>
             <div class="code">
-              <span>{{ t('login.code') }}</span>
+              <span>{{ t('login.code_optional') }}</span>
               <InputOtp v-model="code" :length="6" integer-only dir="ltr" />
+              <small class="app-muted">{{ t('login.code_hint') }}</small>
             </div>
-            <Button type="submit" :label="t('login.submit')" :loading="busy" :disabled="!username || !password || code.length !== 6" />
+            <Button type="submit" :label="t('login.submit')" :loading="busy" :disabled="!username || !password || (code.length > 0 && code.length !== 6)" />
           </form>
+          <p class="app-muted small">{{ t('login.initial_hint') }}</p>
+
+          <Divider />
+
+          <h3>{{ t('login.link_title') }}</h3>
+          <p class="app-muted">{{ t('login.link_hint') }}</p>
           <p class="app-muted small">{{ t('login.no_password_yet') }}</p>
         </template>
       </Card>
     </div>
-    <footer v-if="showPoweredBy" class="powered-by app-muted"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</footer>
+    <footer v-if="showPoweredBy" class="attribution app-muted">
+      <div class="powered-by"><img :src="icon" alt="" width="16" height="16" />{{ t('license.powered_by') }}</div>
+      <div class="made-by">{{ t('license.made_by') }}</div>
+    </footer>
   </div>
 </template>
 
@@ -251,12 +257,18 @@ h3 {
   font-size: 0.85rem;
   margin-block-end: 0;
 }
+.attribution {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  padding-block-start: 0.75rem;
+}
 .powered-by {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
-  padding-block-start: 0.75rem;
 }
 .powered-by img {
   flex: none;

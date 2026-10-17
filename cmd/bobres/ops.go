@@ -83,6 +83,8 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 		run: func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
 			cmd.Dir = dir
+			// A container that hangs must not hold the call past its context.
+			cmd.WaitDelay = 2 * time.Second
 			return cmd.CombinedOutput()
 		},
 		stream: func(ctx context.Context, dir string, args ...string) error {
@@ -156,12 +158,16 @@ func (o *ops) statusCmd(args []string) int {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
+	asJSON := fs.Bool("json", false, "print the dashboard (services, license, HTTPS, backup) as JSON")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	env, ok := o.requireInstall(*dir)
 	if !ok {
 		return 2
+	}
+	if *asJSON {
+		return o.statusJSON(*dir, env)
 	}
 	t := detectUI(o.out, os.Getenv)
 	label := func(s string) string { return t.paint(roleTeal, fmt.Sprintf("%-9s", s)) }
@@ -552,41 +558,6 @@ func (o *ops) botName(ctx context.Context, dir string) string {
 		return ""
 	}
 	return name
-}
-
-// adminCmd: "bobres admin link [--dir D] [telegram id]" prints a one-time
-// dashboard login link for the owner (or that staff member): the way into
-// the dashboard when the bot is down. It works once, within 2 minutes.
-func (o *ops) adminCmd(args []string) int {
-	if len(args) == 0 || args[0] != "link" {
-		fmt.Fprintln(o.errOut, "usage: bobres admin link [--dir D] [telegram id]")
-		return 2
-	}
-	fs := flag.NewFlagSet("admin link", flag.ContinueOnError)
-	fs.SetOutput(o.errOut)
-	dir := fs.String("dir", defaultDir(), dirUsage)
-	if err := fs.Parse(args[1:]); err != nil {
-		return 2
-	}
-	if fs.NArg() > 1 {
-		fmt.Fprintln(o.errOut, "usage: bobres admin link [--dir D] [telegram id]")
-		return 2
-	}
-	if _, ok := o.requireInstall(*dir); !ok {
-		return 2
-	}
-	cargs := append(composeArgs("exec", "-T", "core", "/app", "login-link"), fs.Args()...)
-	if err := o.stream(context.Background(), *dir, cargs...); err != nil {
-		var ec interface{ ExitCode() int }
-		if errors.As(err, &ec) && ec.ExitCode() == coreExitNotStaff {
-			// The owner becomes staff by starting the bot: say so, with the bot's name.
-			fmt.Fprintln(o.errOut, notStaffAdvice(o.botName(context.Background(), *dir)))
-			return 1
-		}
-		fmt.Fprintf(o.errOut, "error: %v (is core running? bobres status)\n", err)
-		return 1
-	}
-	return 0
 }
 
 const licenseCmdUsage = "usage: bobres license status|import [--dir D]  (import reads the token on stdin)\n" +

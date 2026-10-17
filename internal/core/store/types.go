@@ -35,6 +35,18 @@ type Plan struct {
 	// (plan_servers; empty = any). Reads fill it; UpsertPlan leaves the
 	// stored list alone when it is nil.
 	ServerIDs []string
+	// Inbounds are the panel inbounds its new services are attached to, per
+	// server (plan_inbounds; a server without an entry: the provisioner's
+	// default, every attachable inbound). Reads fill it, sorted by server
+	// and inbound; UpsertPlan leaves the stored selection alone when it is
+	// nil, and an empty non-nil list clears it.
+	Inbounds []PlanInbound
+}
+
+// PlanInbound is a plan's choice of inbounds on one server.
+type PlanInbound struct {
+	ServerID   string  `json:"server_id"`
+	InboundIDs []int32 `json:"inbound_ids"`
 }
 
 // Order mirrors core.orders. Amount is what the customer pays, after
@@ -107,6 +119,9 @@ type Subscription struct {
 	SubLink      string
 	Label        *string // the name a reseller gave it
 	CreatedAt    time.Time
+	// PageToken is the secret in the branded page's URL (/sub/<token>); it
+	// grants the same power as SubLink and is rotated by RegeneratePageToken.
+	PageToken string
 	// When each reminder went out in the current period (nil = not yet).
 	NotifiedExpiringAt   *time.Time
 	NotifiedLowTrafficAt *time.Time

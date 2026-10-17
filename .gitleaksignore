@@ -22,3 +22,26 @@ ad45aa90d1a297982b92151bf8bff512b7bff4aa:internal/core/web/usdt_test.go:generic-
 1bf2a0d0ec8efec00bca3a6857acadb4a24d8913:internal/core/domain/licenseserver_test.go:generic-api-key:51
 1bf2a0d0ec8efec00bca3a6857acadb4a24d8913:internal/core/web/license_activate_test.go:generic-api-key:34
 aeceda30b313154145d33b5729789acf2d4f8619:web/dashboard/src/__tests__/system.test.ts:generic-api-key:1416
+
+# False positives: fake gateway keys for the IDPay and NextPay test servers, the one-time admin
+# password in the installer and dashboard tests, the alphabet the generated password draws from, and
+# a made-up gateway key in the Mini App tests. None is a real secret; these pin the commits' findings.
+10c29a9cb1fa843950b47bf1a22925d0fcb09d2c:internal/core/web/miniapp_test.go:generic-api-key:317
+10c29a9cb1fa843950b47bf1a22925d0fcb09d2c:internal/core/web/miniapp_test.go:generic-api-key:332
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/domain/keygateway_test.go:generic-api-key:20
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/domain/keygateway_test.go:generic-api-key:21
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/domain/keygateway_test.go:generic-api-key:22
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/domain/keygateway_test.go:generic-api-key:23
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/gateway/idpay/idpay_test.go:generic-api-key:17
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/gateway/nextpay/nextpay_test.go:generic-api-key:17
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/web/keyed_test.go:generic-api-key:50
+1a8d38fab8fdd56c474bca8cbe72976409e0017a:internal/payments/web/keyed_test.go:generic-api-key:54
+cd2b76a004815210000219395fffd3b4fb6837d5:cmd/bobres/install_test.go:generic-api-key:82
+cd2b76a004815210000219395fffd3b4fb6837d5:cmd/bobres/install_test.go:generic-api-key:946
+cd2b76a004815210000219395fffd3b4fb6837d5:internal/core/domain/dashboard.go:generic-api-key:117
+cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-login.test.ts:generic-api-key:106
+# The same fake gateway keys, on lines that gained a //nolint:gosec comment.
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/gateway/idpay/idpay_test.go:generic-api-key:17
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/gateway/nextpay/nextpay_test.go:generic-api-key:17
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/web/keyed_test.go:generic-api-key:50
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/web/keyed_test.go:generic-api-key:54

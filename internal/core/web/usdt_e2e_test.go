@@ -207,7 +207,7 @@ func TestUSDTEndToEnd(t *testing.T) {
 	}
 	paid := coreOutbox(t, f, mark, events.OrderPaid)
 	var op events.OrderPaidEvent
-	if len(paid) != 1 || json.Unmarshal(paid[0], &op) != nil || op.Source != events.PaidByGateway || op.Amount != 150_000 || op.Currency != "IRT" {
+	if len(paid) != 1 || json.Unmarshal(paid[0], &op) != nil || op.Source != events.PaidByGateway || op.Provider != domain.USDTAuto || op.Amount != 150_000 || op.Currency != "IRT" {
 		t.Fatalf("order paid: %s", paid)
 	}
 	var credits, sum int64

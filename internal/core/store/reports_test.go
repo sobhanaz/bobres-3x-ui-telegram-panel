@@ -640,7 +640,7 @@ func TestEachPaidOrderStreamsInOrder(t *testing.T) {
 	}
 	for i, p := range want {
 		g := got[i]
-		if g.OrderID != p.order || g.Amount != p.amt || g.Currency != p.cur || g.Type != p.typ || g.Method != p.src || !g.PaidAt.Equal(p.at) || g.Refunded != p.refunded {
+		if g.OrderID != p.order || g.Amount != p.amt || g.Currency != p.cur || g.Type != p.typ || g.Method != p.src || g.Provider != "" || !g.PaidAt.Equal(p.at) || g.Refunded != p.refunded {
 			t.Errorf("row %d: %+v, want %+v", i, g, p)
 		}
 	}
@@ -797,7 +797,9 @@ func TestOrdersExportFindsHowOrdersWerePaidThroughAnIndex(t *testing.T) {
 			timestamptz '2026-10-01' + n * interval '2 minutes'
 		FROM generate_series(1,$1::int) n`, n)
 	x.exec(`INSERT INTO core.outbox_core (topic, payload, event_id, created_at)
-		SELECT 'order.paid.v1', jsonb_build_object('order_id', md5('o'||n)::uuid::text, 'amount', 1000, 'currency', 'IRT', 'source', 'wallet'),
+		SELECT 'order.paid.v1', CASE WHEN n % 2 = 0
+			THEN jsonb_build_object('order_id', md5('o'||n)::uuid::text, 'amount', 1000, 'currency', 'IRT', 'source', 'gateway', 'provider', 'zarinpal')
+			ELSE jsonb_build_object('order_id', md5('o'||n)::uuid::text, 'amount', 1000, 'currency', 'IRT', 'source', 'wallet') END,
 			md5('e'||n)::uuid, timestamptz '2026-10-01' + n * interval '2 minutes'
 		FROM generate_series(1,$1::int) n`, n)
 	x.exec(`INSERT INTO core.outbox_core (topic, payload, event_id, created_at)
@@ -825,16 +827,19 @@ func TestOrdersExportFindsHowOrdersWerePaidThroughAnIndex(t *testing.T) {
 
 	start := time.Now()
 	got := 0
-	wallet := 0
+	wallet, zarinpal := 0, 0
 	more, err := x.s.EachPaidOrder(x.ctx, ReportQuery{From: "2026-09-01", To: "2026-12-31", TZ: "Asia/Tehran"}, 100000, func(o PaidOrderRow) error {
 		got++
-		if o.Method == "wallet" {
+		switch {
+		case o.Method == "wallet" && o.Provider == "":
 			wallet++
+		case o.Method == "gateway" && o.Provider == "zarinpal":
+			zarinpal++
 		}
 		return nil
 	})
-	if err != nil || more || got != n || wallet != n {
-		t.Fatalf("export: %d rows (%d wallet), more %v, %v", got, wallet, more, err)
+	if err != nil || more || got != n || wallet != n/2 || zarinpal != n/2 {
+		t.Fatalf("export: %d rows (%d wallet, %d zarinpal), more %v, %v", got, wallet, zarinpal, more, err)
 	}
 	if took := time.Since(start); took > 10*time.Second { // about half a second here: the old plan needed minutes at ten times the rows
 		t.Errorf("%d orders took %s", n, took)

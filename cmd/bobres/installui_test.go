@@ -581,7 +581,7 @@ func TestAdminLinkBeforeTheOwnerStartedTheBot(t *testing.T) {
 	o.lookupBot = func(context.Context, string) string { return "shop_bot" }
 	o.stream = func(context.Context, string, ...string) error { return exitErr{coreExitNotStaff} }
 	if code := o.adminCmd([]string{"link", "--dir", installDir(t)}); code != 1 || out.Len() != 0 ||
-		errOut.String() != "Open @shop_bot in Telegram and send /start once, then run this again.\n" {
+		errOut.String() != "Open @shop_bot in Telegram and send /start once, then run this again.\nNo Telegram at all? Use: bobres admin password\n" {
 		t.Fatalf("exit %d out %q err %q", code, out, errOut)
 	}
 	// the bot's name unknown (Telegram unreachable): still one sentence
@@ -589,7 +589,7 @@ func TestAdminLinkBeforeTheOwnerStartedTheBot(t *testing.T) {
 	o.lookupBot = func(context.Context, string) string { return "" }
 	o.stream = func(context.Context, string, ...string) error { return exitErr{coreExitNotStaff} }
 	if code := o.adminCmd([]string{"link", "--dir", installDir(t)}); code != 1 ||
-		errOut.String() != "Open your bot in Telegram and send /start once, then run this again.\n" {
+		errOut.String() != "Open your bot in Telegram and send /start once, then run this again.\nNo Telegram at all? Use: bobres admin password\n" {
 		t.Fatalf("no name: %d %q", code, errOut)
 	}
 	// any other failure keeps its own message

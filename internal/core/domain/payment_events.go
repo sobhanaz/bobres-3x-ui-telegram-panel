@@ -141,7 +141,7 @@ func (s *Service) paymentReceived(ctx context.Context, tx pgx.Tx, p events.Payme
 	if isGateway(p.Provider) {
 		source = events.PaidByGateway
 	}
-	return s.publishOrderPaid(ctx, tx, o, u.TelegramID, source)
+	return s.publishOrderPaid(ctx, tx, o, u.TelegramID, source, p.Provider)
 }
 
 // paymentRejected tells the user (through the bot) that their payment was

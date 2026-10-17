@@ -49,6 +49,8 @@ export interface ServiceItem {
   status: string
   client_email: string
   sub_link: string
+  /** the branded page's address (detail endpoints only; empty while it is off) */
+  page_url?: string
   expires_at: number | null
   traffic_total: number | null
   traffic_used: number
@@ -143,6 +145,15 @@ export interface PlanItem {
   /** the 3x-ui servers its new services may go to; empty = any (M6).
    * Older cores leave it out. */
   server_ids?: string[]
+  /** the panel inbounds a new service gets, per server; a server without an
+   * entry gets every attachable inbound (the default). Older cores leave it out. */
+  inbounds?: PlanInbound[]
+}
+
+/** A plan's choice of inbounds on one server (panel inbound ids). */
+export interface PlanInbound {
+  server_id: string
+  inbound_ids: number[]
 }
 
 export interface DiscountItem {
@@ -266,7 +277,7 @@ export interface StaffItem {
 
 export interface SessionItem {
   id: string
-  method: 'link' | 'password'
+  method: 'link' | 'password' | 'password_initial'
   ip: string
   user_agent: string
   created_at: number
@@ -409,6 +420,8 @@ export interface BroadcastRecipientItem {
  * back: has_token only says one is stored. */
 export interface ServerItem {
   id: string
+  /** the panel software: xui | marzban; absent from older cores (xui) */
+  kind?: string
   name: string
   base_url: string
   /** where subscription links point; '' = the panel's own links */
@@ -495,12 +508,12 @@ export interface GatewayConfig {
   sandbox_allowed?: boolean
   /** the merchant id's last 4 characters, '' when none */
   merchant_hint: string
-  /** a proxy is stored (Zarinpal's, or automatic USDT's for TronGrid) */
+  /** a proxy is stored (Zarinpal, IDPay or NextPay: for the gateway calls; automatic USDT: for TronGrid) */
   proxy_set: boolean
   /** usdt_trc20_auto: the TRON (TRC20) address that receives USDT, '' when
    * none (public: customers see it) */
   address?: string
-  /** usdt_trc20_auto: a TronGrid API key is stored */
+  /** usdt_trc20_auto, idpay, nextpay: an API key is stored (the key is never sent back) */
   key_set?: boolean
   /** payments has no master key: the settings come from .env, read only */
   key_missing: boolean

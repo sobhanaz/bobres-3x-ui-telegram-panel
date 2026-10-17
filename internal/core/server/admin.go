@@ -123,6 +123,14 @@ func (s *Server) AdminUpsertPlan(ctx context.Context, req *corev1.AdminUpsertPla
 	if b := in.GetTrafficBytes(); b > 0 {
 		p.TrafficBytes = &b
 	}
+	// An empty inbound choice keeps the stored one (a nil list), as the
+	// plan's servers are kept: the bot never clears it.
+	if len(in.GetInbounds()) > 0 {
+		p.Inbounds = make([]store.PlanInbound, 0, len(in.GetInbounds()))
+		for _, sel := range in.GetInbounds() {
+			p.Inbounds = append(p.Inbounds, store.PlanInbound{ServerID: sel.GetServerId(), InboundIDs: sel.GetInboundIds()})
+		}
+	}
 	got, err := s.dom.AdminUpsertPlan(ctx, req.GetActorTelegramId(), p)
 	if err != nil {
 		return nil, fail(err)

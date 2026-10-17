@@ -38,7 +38,7 @@ func TestDailySummaryMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Up(ctx, dsn, "core"); err != nil {
+	if err := upTo(ctx, dsn, "core", 19); err != nil { // not Up: later migrations add tables of their own
 		t.Fatalf("Up: %v", err)
 	}
 	if n, has := tables(); !has || n != before+1 {

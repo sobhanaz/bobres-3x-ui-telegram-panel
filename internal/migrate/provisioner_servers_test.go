@@ -119,3 +119,61 @@ func TestServersMigration(t *testing.T) {
 		t.Fatalf("Up again: %v", err)
 	}
 }
+
+// 00004: existing servers are 3x-ui, a Marzban server can be added, an
+// unknown kind is refused, and Down removes the Marzban servers with their
+// clients (the old code cannot serve them).
+func TestServerKindMigration(t *testing.T) {
+	dsn := testDSN(t)
+	dropSchemas(t, dsn)
+	ctx := context.Background()
+	if err := upTo(ctx, dsn, "provisioner", 3); err != nil {
+		t.Fatalf("up to 3: %v", err)
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close() //nolint:errcheck // test helper
+	exec := func(q string, args ...any) error {
+		_, err := db.ExecContext(ctx, q, args...)
+		return err
+	}
+	const (
+		xs = "00000000-0000-7000-8000-000000000401"
+		ms = "00000000-0000-7000-8000-000000000402"
+	)
+	if err := exec(`INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc) VALUES ($1, 'old', 'https://a.test', '\x01')`, xs); err != nil {
+		t.Fatal(err)
+	}
+	if err := Up(ctx, dsn, "provisioner"); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	var kind string
+	if err := db.QueryRowContext(ctx, `SELECT kind FROM provisioner.xui_servers WHERE id = $1`, xs).Scan(&kind); err != nil || kind != "xui" {
+		t.Fatalf("existing server kind = %q, %v", kind, err)
+	}
+	if err := exec(`INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, kind) VALUES ($1, 'marz', 'https://b.test', '\x01', 'marzban')`, ms); err != nil {
+		t.Fatalf("marzban server: %v", err)
+	}
+	if err := exec(`INSERT INTO provisioner.xui_servers (name, base_url, api_token_enc, kind) VALUES ('bad', 'https://c.test', '\x01', 'nope')`); err == nil {
+		t.Error("unknown kind accepted")
+	}
+	if err := exec(`INSERT INTO provisioner.client_map (subscription_id, server_id, email, inbound_ids)
+		VALUES ('00000000-0000-7000-8000-000000000411', $1, 'u1-a', '{1}')`, ms); err != nil {
+		t.Fatal(err)
+	}
+	if err := downTo(ctx, dsn, "provisioner", 3); err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	var servers, clients int
+	if err := db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM provisioner.xui_servers), (SELECT count(*) FROM provisioner.client_map)`).Scan(&servers, &clients); err != nil {
+		t.Fatal(err)
+	}
+	if servers != 1 || clients != 0 {
+		t.Fatalf("after Down: %d servers, %d clients", servers, clients)
+	}
+	if err := Up(ctx, dsn, "provisioner"); err != nil {
+		t.Fatalf("Up again: %v", err)
+	}
+}

@@ -18,8 +18,10 @@ import (
 type Provisioner interface {
 	// CreateClient is idempotent per subscriptionID: a retry stays on the
 	// server the first attempt picked. candidates are the servers it may go
-	// to (a plan's servers; empty = any enabled server).
-	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string) (ProvisionedClient, error)
+	// to (a plan's servers; empty = any enabled server). inbounds are the
+	// plan's choice of panel inbounds per server (empty = the provisioner's
+	// default for the server it picks).
+	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound) (ProvisionedClient, error)
 	GetLinks(ctx context.Context, subscriptionID string) (Links, error)
 	Health(ctx context.Context) (healthy bool, detail string, err error)
 	// SetLimits sets absolute limits (unix seconds, bytes; 0 = unlimited) and
@@ -200,7 +202,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return true, w.extend(ctx, job)
 	}
 	days, traffic := planLimits(job.plan)
-	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs)
+	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs, job.plan.Inbounds)
 	var links Links
 	if err == nil {
 		links, err = w.prov.GetLinks(ctx, job.sub.ID)

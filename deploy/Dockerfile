@@ -14,6 +14,14 @@ RUN npm ci --no-audit --no-fund
 COPY web/dashboard/ ./
 RUN npm run build
 
+# The Telegram Mini App store, built the same way (web/miniapp/embed.go).
+FROM --platform=$BUILDPLATFORM node:24-alpine AS miniapp
+WORKDIR /web
+COPY web/miniapp/package.json web/miniapp/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/miniapp/ ./
+RUN npm run build
+
 FROM golang:1.26-alpine AS build
 ARG SERVICE
 ARG VERSION=dev
@@ -23,6 +31,7 @@ COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 COPY --from=dashboard /web/dist/app ./web/dashboard/dist/app
+COPY --from=miniapp /web/dist/app ./web/miniapp/dist/app
 RUN test -n "$SERVICE" && go build -trimpath \
     -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${VERSION}" \
     -o /out/app ./cmd/${SERVICE}
@@ -38,7 +47,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 # The backup service: pg_dump from the same major version as the database (pg_dump
 # must be at least the server's), plus the Go /app. It runs as the same non-root uid
 # as the other images; the installer gives that uid the host's backups directory.
-FROM postgres:16-alpine AS backup
+FROM postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea AS backup
 RUN addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres \
  && mkdir -p /backups && chown 65532:65532 /backups && chmod 700 /backups
 COPY --from=build /out/app /app

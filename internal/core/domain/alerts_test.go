@@ -679,6 +679,56 @@ func TestZarinpalChecks(t *testing.T) {
 	}
 }
 
+// keyedReporter answers for IDPay and NextPay only: the one named in on is
+// switched on, with the report given.
+type keyedReporter struct {
+	on     string
+	report GatewayReport
+}
+
+func (k *keyedReporter) GatewayConfigs(context.Context) ([]GatewayConfig, error) {
+	return []GatewayConfig{{Provider: IDPay, Enabled: k.on == IDPay}, {Provider: NextPay, Enabled: k.on == NextPay}}, nil
+}
+
+func (k *keyedReporter) GatewayReport(_ context.Context, provider string, _, _ int64) (*GatewayReport, error) {
+	if provider != k.on {
+		return nil, fmt.Errorf("asked for %s", provider)
+	}
+	r := k.report
+	return &r, nil
+}
+
+// IDPay and NextPay are watched like Zarinpal, under their own names.
+func TestKeyedGatewayChecks(t *testing.T) {
+	for _, provider := range []string{IDPay, NextPay} {
+		k := &keyedReporter{}
+		a := newAlertWorld(t, WatchdogSources{Gateways: k})
+		probe := a.w.idpay
+		if provider == NextPay {
+			probe = a.w.nextpay
+		}
+		now := a.now.Unix()
+		// Off: covered, and the report is not asked for.
+		if p := probeOf(a, probe); !p.covered || len(p.checks) != 0 {
+			t.Fatalf("%s off: %+v", provider, p)
+		}
+		k.on = provider
+		k.report = GatewayReport{LastError: &GatewayEvent{At: now - 60, Detail: "verify: -49"}, OpenCount: 2, OldestOpenAt: now - 181*60}
+		p := probeOf(a, probe)
+		if f := checkOf(t, p, "gateway."+provider+".error"); !f.problem || f.title != "alert."+provider+"_failing" || f.detail != "verify: -49" {
+			t.Fatalf("%s failing: %+v", provider, f)
+		}
+		if c := checkOf(t, p, "gateway."+provider+".open"); !c.problem || c.title != "alert."+provider+"_stuck" || c.args["count"] != "2" {
+			t.Fatalf("%s stuck: %+v", provider, c)
+		}
+		k.report = GatewayReport{}
+		p = probeOf(a, probe)
+		if checkOf(t, p, "gateway."+provider+".error").problem || checkOf(t, p, "gateway."+provider+".open").problem {
+			t.Fatalf("%s quiet: %+v", provider, p)
+		}
+	}
+}
+
 // Automatic USDT: while it is switched on, the watcher must read the
 // store's address (a failing read is forgiven for 5 minutes), and no
 // automatic payment may stay open for over 2 hours.
@@ -1186,8 +1236,10 @@ func TestAlertTitlesExist(t *testing.T) {
 	cat := Texts()
 	titles := map[string][]string{
 		"alert.service_down": {"service"}, "alert.service_not_ready": {"service"}, "alert.server_down": {"server"},
-		"alert.zarinpal_failing": nil, "alert.zarinpal_stuck": {"count"}, "alert.backup_failed": nil,
-		"alert.usdt_failing": nil, "alert.usdt_stuck": {"count"}, "alert.backup_offsite": nil,
+		"alert.zarinpal_failing": nil, "alert.zarinpal_stuck": {"count"},
+		"alert.idpay_failing": nil, "alert.idpay_stuck": {"count"}, "alert.nextpay_failing": nil, "alert.nextpay_stuck": {"count"},
+		"alert.backup_failed": nil,
+		"alert.usdt_failing":  nil, "alert.usdt_stuck": {"count"}, "alert.backup_offsite": nil,
 		"alert.backup_stale": {"hours"}, "alert.disk_low": {"free"}, "alert.provision_failed": {"count"},
 		"alert.bot_lag": {"minutes"}, "alert.license_expiring": {"date", "days"}, "alert.license_grace": {"date"},
 		"alert.license_expired": nil, "alert.license_limit": {"limit", "name"}, "alert.trial_ending": {"date", "days"}, "alert.trial_ended": nil, "alert.tls_expiring": {"address", "date", "days"}, "alert.tls_failing": {"address"},

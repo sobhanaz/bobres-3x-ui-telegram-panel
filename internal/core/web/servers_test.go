@@ -508,6 +508,59 @@ func TestPlanServerIDs(t *testing.T) {
 	}
 }
 
+// Plans carry their inbound choice: set on create, kept when an edit leaves
+// it out, cleared with [], checked, listed as [] when there is none.
+func TestPlanInboundsJSON(t *testing.T) {
+	f, b, _ := serversFixture(t)
+	const a, c = "00000000-0000-7000-8000-0000000000a1", "00000000-0000-7000-8000-0000000000c3"
+	plan := map[string]any{"name": map[string]string{"en": "Monthly"}, "kind": "both", "duration_days": 30, "traffic_gb": "50",
+		"price": "150000", "currency": "IRT", "enabled": true, "is_trial": false, "is_topup": false, "sort": 0,
+		"inbounds": []map[string]any{{"server_id": strings.ToUpper(c), "inbound_ids": []int{3, 1, 3}}, {"server_id": a, "inbound_ids": []int{2}}}}
+	code, out := b.do(http.MethodPost, "/api/v1/plans", plan)
+	saved, _ := out["plan"].(map[string]any)
+	want := `[{"inbound_ids":[2],"server_id":"` + a + `"},{"inbound_ids":[1,3],"server_id":"` + c + `"}]`
+	if code != 200 || asJSON(saved["inbounds"]) != want {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	id := saved["id"].(string)
+	delete(plan, "inbounds")
+	plan["price"] = "160000"
+	if code, out := b.do(http.MethodPut, "/api/v1/plans/"+id, plan); code != 200 || asJSON(out["plan"].(map[string]any)["inbounds"]) != want {
+		t.Fatalf("edit without inbounds keeps them: %d %v", code, out)
+	}
+	code, out = b.do(http.MethodGet, "/api/v1/plans", nil)
+	var listed map[string]any
+	for _, it := range items(out) {
+		if it["id"] == id {
+			listed = it
+		}
+	}
+	if code != 200 || asJSON(listed["inbounds"]) != want {
+		t.Fatalf("list: %d %v", code, listed)
+	}
+	for name, in := range map[string][]map[string]any{
+		"bad server":  {{"server_id": "default", "inbound_ids": []int{1}}},
+		"inbound 0":   {{"server_id": a, "inbound_ids": []int{0}}},
+		"unlisted id": {{"server_id": a, "inbound_ids": []int{-5}}},
+	} {
+		plan["inbounds"] = in
+		if code, out := b.do(http.MethodPut, "/api/v1/plans/"+id, plan); code != 400 || out["field"] != "inbounds" {
+			t.Errorf("%s: %d %v", name, code, out)
+		}
+	}
+	plan["inbounds"] = []map[string]any{}
+	if code, out := b.do(http.MethodPut, "/api/v1/plans/"+id, plan); code != 200 || asJSON(out["plan"].(map[string]any)["inbounds"]) != `[]` {
+		t.Fatalf("cleared: %d %v", code, out)
+	}
+	other := f.plan("Other", 30, 1<<30, 1000)
+	_, out = b.do(http.MethodGet, "/api/v1/plans", nil)
+	for _, it := range items(out) {
+		if it["id"] == other.ID && asJSON(it["inbounds"]) != `[]` {
+			t.Fatalf("plan without a choice: %v", it)
+		}
+	}
+}
+
 // The overview lists the servers with their health and sums them up in
 // panel; without an answer from the provisioner it says so. Why a panel
 // failed (its address) is for those who manage servers only.

@@ -207,7 +207,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls,
+		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup
@@ -445,7 +445,23 @@ func (w *Watchdog) servers(ctx context.Context, _ time.Time) alertProbe {
 // error since the last paid one, or that error is over an hour old) and no
 // payment has been open for over 3 hours.
 func (w *Watchdog) zarinpal(ctx context.Context, now time.Time) alertProbe {
-	p := alertProbe{scope: "gateway.zarinpal."}
+	return w.gatewayProbe(ctx, now, Zarinpal)
+}
+
+// idpay and nextpay: the same two checks for the gateways built like Zarinpal
+// (alert.idpay_failing, alert.idpay_stuck and so on).
+func (w *Watchdog) idpay(ctx context.Context, now time.Time) alertProbe {
+	return w.gatewayProbe(ctx, now, IDPay)
+}
+
+func (w *Watchdog) nextpay(ctx context.Context, now time.Time) alertProbe {
+	return w.gatewayProbe(ctx, now, NextPay)
+}
+
+// gatewayProbe: the two checks of an automated Rial gateway (provider is
+// Zarinpal, IDPay or NextPay); nothing while the owner has it switched off.
+func (w *Watchdog) gatewayProbe(ctx context.Context, now time.Time, provider string) alertProbe {
+	p := alertProbe{scope: "gateway." + provider + "."}
 	if w.src.Gateways == nil {
 		p.covered = true
 		return p
@@ -456,23 +472,23 @@ func (w *Watchdog) zarinpal(ctx context.Context, now time.Time) alertProbe {
 	}
 	enabled := false
 	for _, c := range configs {
-		enabled = enabled || (c.Provider == Zarinpal && c.Enabled)
+		enabled = enabled || (c.Provider == provider && c.Enabled)
 	}
 	if !enabled {
 		p.covered = true
 		return p
 	}
-	rep, err := w.src.Gateways.GatewayReport(ctx, Zarinpal, 0, 0)
+	rep, err := w.src.Gateways.GatewayReport(ctx, provider, 0, 0)
 	if err != nil {
 		return p
 	}
 	p.covered = true
-	failing := alertCheck{key: "gateway.zarinpal.error", problem: !rep.Healthy(now), severity: events.SeverityCritical,
-		title: "alert.zarinpal_failing"}
+	failing := alertCheck{key: "gateway." + provider + ".error", problem: !rep.Healthy(now), severity: events.SeverityCritical,
+		title: "alert." + provider + "_failing"}
 	if rep.LastError != nil {
 		failing.detail = rep.LastError.Detail
 	}
-	stuck := alertCheck{key: "gateway.zarinpal.open", severity: events.SeverityCritical, title: "alert.zarinpal_stuck",
+	stuck := alertCheck{key: "gateway." + provider + ".open", severity: events.SeverityCritical, title: "alert." + provider + "_stuck",
 		problem: rep.OldestOpenAt > 0 && now.Sub(time.Unix(rep.OldestOpenAt, 0)) > zarinpalOpenLimit,
 		args:    map[string]string{"count": strconv.FormatInt(rep.OpenCount, 10)}}
 	p.checks = append(p.checks, failing, stuck)

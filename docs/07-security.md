@@ -129,6 +129,8 @@ is why it has no network, no secrets of its own and a single small input.
 | Trial / referral abuse | One per Telegram ID, velocity limits, delayed referral reward until first paid order |
 | Bot flooding / DoS | Per-user and global rate limits, callback de-dup, queue for broadcasts |
 | Dashboard brute force | Rate limit, lockout, 2FA, secure cookies, CSRF tokens, short sessions |
+| Subscription page address guessed or scraped | 128-bit random `page_token` unrelated to any other id; the same 404 for unknown, malformed, pending, deleted or page-off; 30 requests/min per address; `no-store`, `noindex`, no referrer; no e-mail, label or Telegram data on the page; an operator can regenerate the address (audited, tokens not logged) |
+| Mini App store: forged or replayed Telegram identity, another customer's order, request flooding | Telegram's `initData` is checked by the bot (only it holds the token: HMAC-SHA256, at most 1 hour old) and core never sees the token; core hands out a random session token kept as a hash, 6 hours at most, in the page's memory only; every call is bound to the session's own user and another customer's order or service is a 404; the app's sign-in is 20 a minute per address and its calls 120 a minute per customer; the page runs under a CSP that allows only itself and telegram.org and may be framed only by Telegram; off by default, and off means 404 ([17-mini-app.md](17-mini-app.md)) |
 | SQL injection / XSS | Parameterized queries (pgx), Vue template escaping, CSP headers, input validation |
 | SSRF via admin-entered URLs (3x-ui URL, webhooks) | Allow/deny lists, block metadata/loopback ranges unless explicitly allowed |
 | Secret leakage in logs/backups | Redaction middleware, secrets never logged, backups encrypted with `BOBRES_BACKUP_KEY` (which is never sent with them), support-bundle scrubs. The System page's logs (the newest 500 warnings and errors per service, in memory) are kept after the same redaction and shown to the owner only, since they carry Telegram ids |
@@ -200,5 +202,18 @@ is why it has no network, no secrets of its own and a single small input.
   restore everything on a new server. The backup key itself is shown once by the installer and again in `bobres
   menu`; the operator keeps it off the server.
 - DECIDED: every password login needs an authenticator code, for every role. Link logins come from the bot or from
-  `bobres admin link` on the server.
+  `bobres admin link` on the server. The one exception is the initial password (below): it needs no code, because
+  no authenticator exists yet, and it opens a restricted session that can only choose a new password and set up 2FA.
+- DECIDED (WP-B): the owner's initial dashboard password. `bobres admin password` (and a fresh install) runs core's
+  `admin-password`: 16 characters from an unambiguous alphabet (crypto/rand), stored as an argon2id hash with
+  `must_change = true` and no authenticator; shown once on the terminal and never written to a log, a state file,
+  `.env` or the audit entry (which says only that it was reset from the CLI). It works only while `must_change` is
+  set and no authenticator is confirmed; wrong tries count and lock like any password login (5 failures, 15 minutes,
+  the same answer text). The session is `password_initial`: it lasts 1 hour, cannot be refreshed, and core answers
+  403 `must_change_password` on every route except `GET /me`, logout and the two password endpoints. The initial
+  password cannot be reused as the new one (400 `password_reused`). Confirming the first code clears `must_change`,
+  upgrades the session to a normal one and logs the other devices out. Running the command again resets the login
+  (new password, authenticator removed, every session ended, the lock lifted); a loss of the phone is handled the
+  same way. A link login is always a full session. The command needs shell access to the server (docker), which
+  is already the trust boundary of `bobres admin link`.
 - Rotating the master keys (re-encrypting what they protect) is not built.

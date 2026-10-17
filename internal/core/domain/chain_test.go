@@ -136,7 +136,7 @@ func TestUSDTPaymentMethodsAndIntent(t *testing.T) {
 	}
 	paid := outboxEvents(t, s, events.OrderPaid)
 	var e events.OrderPaidEvent
-	if len(paid) != 1 || json.Unmarshal(paid[0], &e) != nil || e.Source != events.PaidByGateway || e.Amount != 150_001 {
+	if len(paid) != 1 || json.Unmarshal(paid[0], &e) != nil || e.Source != events.PaidByGateway || e.Provider != USDTAuto || e.Amount != 150_001 {
 		t.Fatalf("order paid: %s", paid)
 	}
 	if bal, sum, rows := ledger(t, s, u.ID); bal != 0 || sum != 0 || rows != 2 {

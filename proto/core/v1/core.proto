@@ -35,6 +35,19 @@ message Plan {
   // The store price. price is what the user ListPlans was asked for pays (a
   // reseller's tier price); without a user both are the store price.
   common.v1.Money list_price = 11;
+  // The inbounds the plan attaches new services to, per 3x-ui server (a server
+  // without an entry: every inbound the provisioner attaches by default).
+  // AdminUpsertPlan keeps the stored selection when this is empty, like the
+  // servers of a plan (which this message does not carry); the dashboard's
+  // plan editor is where a selection is cleared.
+  repeated InboundSelection inbounds = 12;
+}
+
+// InboundSelection names the inbounds (their ids in that panel) of one 3x-ui
+// server.
+message InboundSelection {
+  string server_id = 1;
+  repeated int32 inbound_ids = 2;
 }
 
 message Order {
@@ -88,6 +101,9 @@ message Subscription {
   int64 last_synced_at = 11;
   string subscription_link = 12; // set once provisioned
   string label = 13; // the name a reseller gave it ("" = none)
+  // The branded page for this service (public base URL + /sub/<token>); "" when
+  // the page is switched off or the public URL is not set.
+  string page_url = 14;
 }
 
 message Ticket {
@@ -251,6 +267,10 @@ message Settings {
   // when the store has none, "?" when core could not read it (the bot then
   // leaves its photo as it is). An older core never sets it.
   string bot_photo_version = 2;
+  // True when the license includes white label: the bot then leaves the
+  // vendor credit out of its about text. False when it is not, and for an
+  // older core that never sets it, so a missing answer shows the credit.
+  bool white_label = 3;
 }
 
 // --- Request/response messages ---
@@ -530,6 +550,8 @@ message SubscriptionLinks {
   string subscription_link = 1;
   bytes qr_png = 2;
   repeated string config_links = 3;
+  // The branded page of the service, "" while the page is off or the store has no public address.
+  string page_url = 4;
 }
 
 // --- Admin RPCs: actor_telegram_id must belong to an active admin or owner.
@@ -706,6 +728,16 @@ service CoreService {
   // GetBotPhoto returns the bot photo, for the bot to set in Telegram when
   // Settings.bot_photo_version changes; NOT_FOUND when there is none.
   rpc GetBotPhoto(GetBotPhotoRequest) returns (BotPhoto);
+  // The bot's button-driven admin menu (WP-D). Every call is the actor's own:
+  // core checks the role again and audits each change like the dashboard does.
+  rpc AdminTodayStats(AdminTodayStatsRequest) returns (AdminTodayStatsResponse);
+  rpc AdminListSettingSpecs(AdminListSettingSpecsRequest) returns (AdminListSettingSpecsResponse);
+  rpc AdminListServers(AdminListServersRequest) returns (AdminListServersResponse);
+  rpc AdminSetServer(AdminSetServerRequest) returns (AdminServer);
+  rpc AdminListStaff(AdminListStaffRequest) returns (AdminListStaffResponse);
+  rpc AdminAddStaff(AdminAddStaffRequest) returns (AdminStaffMember);
+  rpc AdminRemoveStaff(AdminRemoveStaffRequest) returns (AdminRemoveStaffResponse);
+  rpc AdminBroadcast(AdminBroadcastRequest) returns (AdminBroadcastResponse);
 }
 
 message CanStartTrialRequest {
@@ -714,4 +746,138 @@ message CanStartTrialRequest {
 
 message CanStartTrialResponse {
   bool eligible = 1;
+}
+
+// ---- The bot's admin menu (WP-D) ----
+
+message AdminTodayStatsRequest {
+  int64 actor_telegram_id = 1;
+}
+
+// AdminDayLine is one currency of a day. Money of different currencies is
+// never added together.
+message AdminDayLine {
+  string currency = 1;
+  int64 revenue = 2; // what customers paid for orders, minor units
+  int64 orders = 3;
+  int64 refunds = 4; // refunded amount, minor units
+}
+
+message AdminDay {
+  string date = 1; // the store's local date, YYYY-MM-DD
+  repeated AdminDayLine lines = 2; // sorted by currency
+  int64 new_customers = 3;
+}
+
+message AdminTodayStatsResponse {
+  string tz = 1;
+  AdminDay today = 2;
+  AdminDay yesterday = 3;
+}
+
+message AdminListSettingSpecsRequest {
+  int64 actor_telegram_id = 1;
+}
+
+// AdminSettingSpec is one setting as the caller may see it, with its current
+// value. Settings the caller may not change are left out.
+message AdminSettingSpec {
+  string key = 1;
+  string group = 2;
+  string kind = 3; // text | int | bool | enum | tz | url | channel | color
+  string default_value = 4;
+  int64 min = 5;
+  int64 max = 6;
+  repeated string options = 7;
+  int32 max_len = 8;
+  string help = 9; // English, from core; the bot prefers its own translation
+  string value = 10; // "" when unset
+}
+
+message AdminListSettingSpecsResponse {
+  repeated AdminSettingSpec specs = 1;
+}
+
+message AdminListServersRequest {
+  int64 actor_telegram_id = 1;
+}
+
+message AdminServer {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+  int32 weight = 4;
+  bool health_known = 5; // a health check has run
+  bool healthy = 6;
+  string health_error = 7;
+  int64 clients = 8;
+  string managed = 9; // env | dashboard
+}
+
+message AdminListServersResponse {
+  repeated AdminServer servers = 1;
+}
+
+// AdminSetServerRequest switches a server on or off and sets its weight.
+// Nothing else changes and the panel is never contacted. Owner only.
+message AdminSetServerRequest {
+  int64 actor_telegram_id = 1;
+  string server_id = 2;
+  bool enabled = 3;
+  int32 weight = 4; // 0 keeps the current weight
+}
+
+message AdminListStaffRequest {
+  int64 actor_telegram_id = 1;
+}
+
+message AdminStaffMember {
+  string user_id = 1;
+  int64 telegram_id = 2;
+  string username = 3;
+  string role = 4; // support | admin | owner
+  string status = 5;
+  bool configured_owner = 6; // named by the server's settings, never changed here
+}
+
+message AdminListStaffResponse {
+  repeated AdminStaffMember staff = 1;
+}
+
+// AdminAddStaffRequest gives a role to someone who has started the bot, or,
+// when the person already is staff, changes their role. Owner only.
+message AdminAddStaffRequest {
+  int64 actor_telegram_id = 1;
+  int64 target_telegram_id = 2;
+  string role = 3;
+  string reason = 4;
+}
+
+message AdminRemoveStaffRequest {
+  int64 actor_telegram_id = 1;
+  int64 target_telegram_id = 2;
+  string reason = 3;
+}
+
+message AdminRemoveStaffResponse {}
+
+// AdminBroadcastRequest checks a broadcast (send = false: its audience and the
+// normalised texts, nothing saved) or sends it now (send = true).
+message AdminBroadcastRequest {
+  int64 actor_telegram_id = 1;
+  string segment = 2; // all | active | expired | never_bought
+  string language = 3; // "" (everyone) | fa | en
+  map<string, string> texts = 4; // by language
+  string button_url = 5;
+  map<string, string> button_labels = 6; // by language
+  bool send = 7;
+}
+
+message AdminBroadcastResponse {
+  int64 audience = 1;
+  int64 audience_fa = 2;
+  int64 audience_en = 3;
+  map<string, string> texts = 4; // normalised
+  map<string, string> button_labels = 5;
+  string broadcast_id = 6; // set once sent
 }

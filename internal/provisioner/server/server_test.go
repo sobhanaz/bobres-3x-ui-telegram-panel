@@ -302,7 +302,7 @@ func TestEnsureDefaultServerSeedsOnlyWhenEmpty(t *testing.T) {
 	if added, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || !added {
 		t.Fatalf("first start: added=%v err=%v", added, err)
 	}
-	sv, err := f.st.ServerByName(ctx, "default")
+	sv, err := f.st.ServerByName(ctx, "panel.example.com") // named after its host
 	if err != nil || sv.Managed != store.ManagedEnv || sv.Weight != store.DefaultWeight || sv.HealthOK != nil {
 		t.Fatalf("seeded: %+v %v", sv, err)
 	}
@@ -310,7 +310,7 @@ func TestEnsureDefaultServerSeedsOnlyWhenEmpty(t *testing.T) {
 	if added, err := strict.EnsureDefaultServer(ctx, "https://panel2.example.com/p", "tok2", "https://panel2.example.com:2096/sub/", true); err != nil || added {
 		t.Fatalf("restart with another panel: added=%v err=%v", added, err)
 	}
-	if got, _ := f.st.ServerByName(ctx, "default"); got.BaseURL != "https://panel.example.com" || got.Token != "tok" || got.SubBaseURL != "" || got.AllowPrivate {
+	if got, _ := f.st.ServerByName(ctx, "panel.example.com"); got.BaseURL != "https://panel.example.com" || got.Token != "tok" || got.SubBaseURL != "" || got.AllowPrivate {
 		t.Fatalf("the environment overwrote the row: %+v", got)
 	}
 	// A dashboard edit stays.
@@ -331,6 +331,56 @@ func TestEnsureDefaultServerSeedsOnlyWhenEmpty(t *testing.T) {
 	}
 	if added, err := strict.EnsureDefaultServer(ctx, "https://panel.example.com", "tok", "", false); err != nil || !added {
 		t.Fatalf("empty again: added=%v err=%v", added, err)
+	}
+}
+
+// The first panel is named after the host of its URL; a URL with no usable
+// host keeps the old name "default".
+func TestSeedName(t *testing.T) {
+	for _, tc := range []struct{ url, want string }{
+		{"https://panel.example.com", "panel.example.com"},
+		{"https://Panel.Example.COM", "panel.example.com"},
+		{"http://203.0.113.7:2053", "203.0.113.7"},
+		{"https://203.0.113.7:2053/secretpath/", "203.0.113.7"},
+		{"https://[2001:db8::1]:2053/x", "2001:db8::1"},
+		{"https://[2001:DB8::1]", "2001:db8::1"},
+		{"  https://panel.example.com:8443/p/?a=b#c ", "panel.example.com"},
+		{"https://user@panel.example.com", "panel.example.com"},
+		{"", "default"},
+		{"::::", "default"},
+		{"not a url", "default"},
+		{"panel.example.com", "default"},
+		{"https:///path", "default"},
+		{"https://" + strings.Repeat("a", 64) + ".com", "default"}, // 68 characters
+		{"https://" + strings.Repeat("a", 60) + ".com", strings.Repeat("a", 60) + ".com"},
+	} {
+		if got := seedName(tc.url); got != tc.want {
+			t.Errorf("seedName(%q) = %q, want %q", tc.url, got, tc.want)
+		}
+	}
+}
+
+// A first panel whose host is taken by a panel seeded meanwhile is not an
+// error: another instance won.
+func TestEnsureDefaultServerNameCollision(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if _, err := f.st.DB().Exec(ctx, "TRUNCATE provisioner.client_map, provisioner.xui_servers CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	strict := New(f.st)
+	// The count check passes while the row is added by "another instance".
+	if _, err := f.st.AddServer(ctx, &store.Server{Name: "panel.example.com", BaseURL: "https://x.example.com", Token: "t", Enabled: true, Weight: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := func() error {
+		_, err := strict.addServer(ctx, &store.Server{
+			Name: seedName("https://panel.example.com"), BaseURL: "https://panel.example.com", Token: "t", Enabled: true,
+			Weight: store.DefaultWeight, Managed: store.ManagedEnv,
+		}, false)
+		return err
+	}(); status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("a taken name: %v", err)
 	}
 }
 

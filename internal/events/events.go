@@ -144,6 +144,10 @@ type OrderPaidEvent struct {
 	Amount     int64  `json:"amount"`
 	Currency   string `json:"currency"`
 	Source     string `json:"source"`
+	// Provider is who took the money for a payment (zarinpal, stars,
+	// usdt_auto, manual_card, ...); empty for wallet, trial and free orders,
+	// and for events published before it was recorded.
+	Provider string `json:"provider,omitempty"`
 }
 
 // Reasons on wallet.credited.v1.

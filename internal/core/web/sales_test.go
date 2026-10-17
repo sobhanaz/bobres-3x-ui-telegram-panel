@@ -95,7 +95,7 @@ func (p *fakeProv) record(op string) error {
 	p.ops = append(p.ops, op)
 	return nil
 }
-func (p *fakeProv) CreateClient(context.Context, string, string, int64, int64, []string) (domain.ProvisionedClient, error) {
+func (p *fakeProv) CreateClient(context.Context, string, string, int64, int64, []string, []store.PlanInbound) (domain.ProvisionedClient, error) {
 	return domain.ProvisionedClient{}, errNotUsed
 }
 func (p *fakeProv) GetLinks(context.Context, string) (domain.Links, error) {

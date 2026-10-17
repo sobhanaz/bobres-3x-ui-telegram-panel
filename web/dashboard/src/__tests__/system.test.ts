@@ -180,7 +180,7 @@ describe('open problems', () => {
     expect(alertTextKey({})).toBe('')
     expect(alertTextKey({ title_key: 'alert.<b>' })).toBe('')
     // every text the bot has for a problem is here too, in both languages
-    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'backup_failed', 'backup_stale',
+    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'idpay_failing', 'idpay_stuck', 'nextpay_failing', 'nextpay_stuck', 'backup_failed', 'backup_stale',
       'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'license_limit', 'trial_ending', 'trial_ended', 'check',
       'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down']
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
@@ -2012,12 +2012,15 @@ describe('system page', () => {
     await boot('/admin/system?tab=license', { license: { state: 'active', white_label: true, powered_by: false, basis: 'license' } })
     await found('.license-state')
     expect(document.querySelector('.powered-by')).toBeNull()
+    expect(document.querySelector('.made-by')).toBeNull()
     expect(document.querySelector('.license-chip')).toBeNull()
     // a license in grace needs a look: the chip says so
     await boot('/admin/', { license: { state: 'grace', white_label: false, basis: 'grace' } })
     await found('.license-chip')
     expect(document.querySelector('.license-chip')?.textContent).toBe(text('license.chip.grace'))
     expect(document.querySelector('.powered-by')?.textContent).toBe(text('license.powered_by'))
+    // the vendor credit goes with it
+    expect(document.querySelector('.attribution .made-by')?.textContent).toBe('Made by TECSO-DEV')
     // the trial and the free tier: a chip each (the trial with its days), and the attribution
     await boot('/admin/', { license: { state: 'missing', white_label: false, powered_by: true, basis: 'trial', trial_days_left: 3 } })
     await found('.license-chip')
@@ -2042,11 +2045,13 @@ describe('system page', () => {
     await boot('/admin/login', { loggedIn: false, brand: { powered_by: true } })
     await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))
     expect(document.querySelector('.login .powered-by img')?.getAttribute('src')).toBe(import.meta.env.BASE_URL + 'favicon.svg')
+    expect(document.querySelector('.login .made-by')?.textContent).toBe('Made by TECSO-DEV')
     // white label: hidden (once /brand has answered: no flash of it before)
     await boot('/admin/login', { loggedIn: false, brand: { powered_by: false } })
     await found('.login .mascot') // /brand has answered (a store with no logo of its own)
     await new Promise((r) => setTimeout(r, 30))
     expect(document.querySelector('.powered-by')).toBeNull()
+    expect(document.querySelector('.made-by')).toBeNull()
     // a /brand that does not say (an older core): shown, as by default
     await boot('/admin/login', { loggedIn: false })
     await vi.waitFor(() => expect(document.querySelector('.login .powered-by')?.textContent).toBe(text('license.powered_by')))

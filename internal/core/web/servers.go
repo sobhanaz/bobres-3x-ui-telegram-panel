@@ -24,6 +24,7 @@ const serverTimeout = 30 * time.Second
 
 type serverJSON struct {
 	ID              string    `json:"id"`
+	Kind            string    `json:"kind"`
 	Name            string    `json:"name"`
 	BaseURL         string    `json:"base_url"`
 	SubBaseURL      string    `json:"sub_base_url"`
@@ -42,7 +43,7 @@ type serverJSON struct {
 }
 
 func serverOf(sv *domain.Server, plans []planRef) serverJSON {
-	out := serverJSON{ID: sv.ID, Name: sv.Name, BaseURL: sv.BaseURL, SubBaseURL: sv.SubBaseURL, Enabled: sv.Enabled,
+	out := serverJSON{ID: sv.ID, Kind: sv.Kind, Name: sv.Name, BaseURL: sv.BaseURL, SubBaseURL: sv.SubBaseURL, Enabled: sv.Enabled,
 		AllowPrivate: sv.AllowPrivate, Weight: sv.Weight, Managed: sv.Managed, PanelVersion: sv.PanelVersion,
 		VersionUntested: sv.VersionUntested, Healthy: sv.Healthy, HealthError: sv.HealthError, Clients: sv.Clients,
 		HasToken: sv.HasToken, Plans: plans}
@@ -103,6 +104,7 @@ func (s *Server) listServers(w http.ResponseWriter, r *http.Request) {
 // serverBody is a server as the dashboard edits it; token "" keeps the
 // stored one.
 type serverBody struct {
+	Kind         string `json:"kind"`
 	Name         string `json:"name"`
 	BaseURL      string `json:"base_url"`
 	SubBaseURL   string `json:"sub_base_url"`
@@ -114,7 +116,7 @@ type serverBody struct {
 }
 
 func (b *serverBody) input() domain.ServerInput {
-	return domain.ServerInput{Name: b.Name, BaseURL: b.BaseURL, SubBaseURL: b.SubBaseURL, Token: b.Token,
+	return domain.ServerInput{Kind: b.Kind, Name: b.Name, BaseURL: b.BaseURL, SubBaseURL: b.SubBaseURL, Token: b.Token,
 		Weight: b.Weight, Enabled: b.Enabled, AllowPrivate: b.AllowPrivate, SkipCheck: b.SkipCheck}
 }
 
@@ -126,6 +128,10 @@ func (s *Server) addServer(w http.ResponseWriter, r *http.Request) {
 	}
 	var b serverBody
 	if !readJSON(w, r, &b) {
+		return
+	}
+	if s.subBaseCollides(r, b.SubBaseURL) {
+		writeFieldError(w, "sub_base_url", "this is BOBRES's own address: its /sub/ path shows the customers' subscription pages, so the panel's links cannot be served there; use the panel's own address and port")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), serverTimeout)
@@ -150,6 +156,10 @@ func (s *Server) updateServer(w http.ResponseWriter, r *http.Request) {
 	}
 	var b serverBody
 	if !readJSON(w, r, &b) {
+		return
+	}
+	if s.subBaseCollides(r, b.SubBaseURL) {
+		writeFieldError(w, "sub_base_url", "this is BOBRES's own address: its /sub/ path shows the customers' subscription pages, so the panel's links cannot be served there; use the panel's own address and port")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), serverTimeout)
@@ -190,6 +200,7 @@ func (s *Server) testServer(w http.ResponseWriter, r *http.Request) {
 	}
 	var b struct {
 		ID           string `json:"id"`
+		Kind         string `json:"kind"`
 		BaseURL      string `json:"base_url"`
 		Token        string `json:"token"`
 		AllowPrivate bool   `json:"allow_private"`
@@ -208,7 +219,7 @@ func (s *Server) testServer(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), serverTimeout)
 	defer cancel()
 	res, err := s.cfg.Domain.TestServer(ctx, actor(r), sa,
-		domain.ServerProbe{ID: b.ID, BaseURL: b.BaseURL, Token: b.Token, AllowPrivate: b.AllowPrivate})
+		domain.ServerProbe{ID: b.ID, Kind: b.Kind, BaseURL: b.BaseURL, Token: b.Token, AllowPrivate: b.AllowPrivate})
 	if err != nil {
 		s.serverFail(w, "test server", err)
 		return

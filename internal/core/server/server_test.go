@@ -28,7 +28,10 @@ type fixture struct {
 	addr string
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t *testing.T) *fixture { return newFixtureWith(t, nil) }
+
+// newFixtureWith is newFixture with a hook to set the server up (a public URL).
+func newFixtureWith(t *testing.T, setup func(*Server)) *fixture {
 	t.Helper()
 	dsn := testdb.DSN(t)
 	ctx := context.Background()
@@ -47,7 +50,11 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	New(st, domain.New(st, domain.Config{})).Register(gs)
+	srv := New(st, domain.New(st, domain.Config{}))
+	if setup != nil {
+		setup(srv)
+	}
+	srv.Register(gs)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

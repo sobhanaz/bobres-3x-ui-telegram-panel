@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,12 @@ func (r *reportSeed) plan(fa, en, cur string) string {
 
 // paid writes a new, delivered, paid order: its row, purchase entry and event.
 func (r *reportSeed) paid(user, plan, cur string, amt int64, at, source string) string {
+	return r.paidWith(user, plan, cur, amt, at, source, "")
+}
+
+// paidWith is paid for an order whose event names the provider that took the
+// payment ("" writes an event from before the provider was recorded).
+func (r *reportSeed) paidWith(user, plan, cur string, amt int64, at, source, provider string) string {
 	r.t.Helper()
 	when, err := time.Parse(time.RFC3339, at)
 	if err != nil {
@@ -67,7 +74,11 @@ func (r *reportSeed) paid(user, plan, cur string, amt int64, at, source string) 
 		VALUES ($1, $2, $3, 'new', 'active', $4, $5, $6, $7, $7)`, id, user, plan, amt, cur, "k-"+id, when)
 	r.exec(`INSERT INTO core.ledger_entries (id, user_id, currency, amount, kind, ref_type, ref_id, idempotency_key, balance_after, created_at)
 		VALUES ($1, $2, $3, $4, 'purchase', 'order', $5, $6, 0, $7)`, buuid.MustV7().String(), user, cur, -amt, id, "purchase:"+id, when)
-	payload, _ := json.Marshal(map[string]any{"order_id": id, "user_id": user, "plan_id": plan, "amount": amt, "currency": cur, "source": source})
+	ev := map[string]any{"order_id": id, "user_id": user, "plan_id": plan, "amount": amt, "currency": cur, "source": source}
+	if provider != "" {
+		ev["provider"] = provider
+	}
+	payload, _ := json.Marshal(ev)
 	r.exec(`INSERT INTO core.outbox_core (topic, payload, event_id, created_at) VALUES ('order.paid.v1', $1::text::jsonb, $2, $3)`,
 		string(payload), buuid.MustV7().String(), when)
 	return id
@@ -107,9 +118,9 @@ func reportFixture(t *testing.T) (*fixture, *browser, map[string]string) {
 	odd := r.plan("@ویژه", "=SUM(1,2)", "IRT")
 	usdt := r.plan("تتر", "Pro USDT", "USDT")
 	ids["basic"], ids["odd"], ids["usdt"] = basic, odd, usdt
-	ids["o1"] = r.paid(ali, basic, "IRT", 100_000, "2026-10-31T20:29:00Z", "manual")
+	ids["o1"] = r.paidWith(ali, basic, "IRT", 100_000, "2026-10-31T20:29:00Z", "manual", "manual_card")
 	ids["o2"] = r.paid(sara, odd, "IRT", 250_000, "2026-10-31T20:31:00Z", "wallet")
-	ids["o3"] = r.paid(ali, usdt, "USDT", 2_500_000, "2026-11-02T10:00:00Z", "gateway")
+	ids["o3"] = r.paidWith(ali, usdt, "USDT", 2_500_000, "2026-11-02T10:00:00Z", "gateway", "usdt_trc20_auto")
 	r.topup(sara, "IRT", 500_000, "2026-11-01T09:00:00Z")
 	r.refund(ali, ids["o1"], "IRT", 100_000, "2026-11-03T09:00:00Z") // a day with no sales: net is negative
 	r.exec(`INSERT INTO core.outbox_core (topic, payload, event_id, created_at) VALUES ('payment.rejected.v1',
@@ -180,7 +191,7 @@ func TestReportsSummaryJSON(t *testing.T) {
 }
 
 func TestReportsPlansAndMethodsJSON(t *testing.T) {
-	_, b, ids := reportFixture(t)
+	f, b, ids := reportFixture(t)
 	code, out := b.do(http.MethodGet, "/api/v1/reports/plans"+reportQuery, nil)
 	plans, _ := out["plans"].([]any)
 	if code != 200 || len(plans) != 3 {
@@ -199,10 +210,30 @@ func TestReportsPlansAndMethodsJSON(t *testing.T) {
 	got := map[string]float64{}
 	for _, m := range methods {
 		mm := m.(map[string]any)
-		got[mm["currency"].(string)+" "+mm["method"].(string)] = num(mm["revenue"])
+		prov, ok := mm["provider"].(string) // always present, "" when none
+		if !ok {
+			t.Errorf("a method row without a provider field: %v", mm)
+		}
+		got[mm["currency"].(string)+" "+mm["method"].(string)+" "+prov] = num(mm["revenue"])
 	}
-	if code != 200 || len(got) != 3 || got["IRT manual"] != 100_000 || got["IRT wallet"] != 250_000 || got["USDT gateway"] != 2_500_000 {
+	if code != 200 || len(got) != 3 || got["IRT manual manual_card"] != 100_000 || got["IRT wallet "] != 250_000 ||
+		got["USDT gateway usdt_trc20_auto"] != 2_500_000 {
 		t.Errorf("methods: %d %v", code, got)
+	}
+
+	// Events from before the provider was recorded give the same rows, with an empty provider.
+	if _, err := f.st.DB().Exec(context.Background(), `UPDATE core.outbox_core SET payload = payload - 'provider' WHERE topic = 'order.paid.v1'`); err != nil {
+		t.Fatal(err)
+	}
+	_, out = b.do(http.MethodGet, "/api/v1/reports/methods"+reportQuery, nil)
+	got = map[string]float64{}
+	methods, _ = out["methods"].([]any)
+	for _, m := range methods {
+		mm := m.(map[string]any)
+		got[mm["currency"].(string)+" "+mm["method"].(string)+" "+mm["provider"].(string)] = num(mm["revenue"])
+	}
+	if len(got) != 3 || got["IRT manual "] != 100_000 || got["IRT wallet "] != 250_000 || got["USDT gateway "] != 2_500_000 {
+		t.Errorf("methods without providers: %v", got)
 	}
 }
 
@@ -335,19 +366,19 @@ func TestReportsOrdersCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	if len(rows) != 4 || strings.Join(rows[0], ",") !=
-		"paid_at_utc,paid_at_local,order_id,type,telegram_id,username,plan_fa,plan_en,amount,currency,paid_with,refunded_amount" {
+		"paid_at_utc,paid_at_local,order_id,type,telegram_id,username,plan_fa,plan_en,amount,currency,paid_with,refunded_amount,provider" {
 		t.Fatalf("rows: %v", rows)
 	}
 	// Oldest first, local times either side of midnight, money as plain decimals.
 	r1, r2, r3 := rows[1], rows[2], rows[3]
 	if r1[0] != "2026-10-31T20:29:00Z" || r1[1] != "2026-10-31 23:59:00" || r1[2] != ids["o1"] || r1[8] != "100000" || r1[9] != "IRT" ||
-		r1[10] != "manual" || r1[11] != "100000" {
+		r1[10] != "manual" || r1[11] != "100000" || r1[12] != "manual_card" {
 		t.Errorf("first order: %v", r1)
 	}
-	if r2[1] != "2026-11-01 00:01:00" || r2[10] != "wallet" || r2[11] != "0" {
+	if r2[1] != "2026-11-01 00:01:00" || r2[10] != "wallet" || r2[11] != "0" || r2[12] != "" {
 		t.Errorf("second order: %v", r2)
 	}
-	if r3[8] != "2.500000" || r3[9] != "USDT" || r3[10] != "gateway" {
+	if r3[8] != "2.500000" || r3[9] != "USDT" || r3[10] != "gateway" || r3[12] != "usdt_trc20_auto" {
 		t.Errorf("third order: %v", r3)
 	}
 	// Persian text survives; a cell that could run as a formula gets a quote in front.
@@ -385,7 +416,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	// 4 days: one people row and one row per currency (IRT, USDT) each.
-	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 21 {
+	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 24 {
 		t.Fatalf("%d rows: %v", len(rows), rows)
 	}
 	col := map[string]int{}
@@ -394,16 +425,18 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	byKey := map[string][]string{}
 	for _, r := range rows[1:] {
-		if len(r) != 21 {
+		if len(r) != 24 {
 			t.Fatalf("a row has %d cells: %v", len(r), r)
 		}
 		byKey[r[0]+"|"+r[2]] = r
 	}
 	// People rows have no currency and no money; currency rows have money and no people.
-	if p := byKey["2026-10-31|"]; p == nil || p[col["new_customers"]] != "1" || p[col["free_trials"]] != "0" || p[col["revenue"]] != "" {
+	if p := byKey["2026-10-31|"]; p == nil || p[col["new_customers"]] != "1" || p[col["free_trials"]] != "0" || p[col["revenue"]] != "" ||
+		p[col["churned_services"]] != "0" || p[col["churned_customers"]] != "0" || p[col["at_risk_services"]] != "0" {
 		t.Errorf("people row: %v", p)
 	}
-	if c := byKey["2026-10-31|IRT"]; c == nil || c[col["revenue"]] != "100000" || c[col["new_customers"]] != "" || c[col["paid_orders"]] != "1" {
+	if c := byKey["2026-10-31|IRT"]; c == nil || c[col["revenue"]] != "100000" || c[col["new_customers"]] != "" || c[col["paid_orders"]] != "1" ||
+		c[col["churned_services"]] != "" || c[col["at_risk_services"]] != "" {
 		t.Errorf("IRT row: %v", c)
 	}
 	if c := byKey["2026-11-02|USDT"]; c == nil || c[col["revenue"]] != "2.500000" || c[col["paid_orders"]] != "1" {
@@ -676,5 +709,179 @@ func TestReportsMethodsListAnUnknownSale(t *testing.T) {
 	}
 	if got["IRT unknown"] != 250_000 || got["IRT manual"] != 100_000 || irt != 350_000 || got["IRT wallet"] != 0 {
 		t.Errorf("methods: %v", got)
+	}
+}
+
+// ?calendar=jalali cuts weeks on Saturday and months on Jalali day 1; a bucket's
+// date stays its Gregorian start date, and day buckets do not change.
+func TestReportsJalaliCalendar(t *testing.T) {
+	f, b, _ := reportFixture(t)
+	// 31 Oct 2026 is a Saturday and 9 Aban 1405; 1 Aban is 23 Oct, 1 Azar 22 Nov.
+	get := func(q string) map[string]any {
+		t.Helper()
+		code, out := b.do(http.MethodGet, "/api/v1/reports/summary?tz=Asia/Tehran&"+q, nil)
+		if code != 200 {
+			t.Fatalf("%s: %d %v", q, code, out)
+		}
+		return out
+	}
+	// The default is Gregorian, and the answer says which calendar it used.
+	if out := get("from=2026-10-31&to=2026-11-03&group=month"); out["calendar"] != "gregorian" {
+		t.Errorf("default calendar %v", out["calendar"])
+	}
+	out := get("from=2026-10-31&to=2026-11-03&group=month&calendar=jalali")
+	buckets := out["buckets"].([]any)
+	if out["calendar"] != "jalali" || out["group"] != "month" || len(buckets) != 1 {
+		t.Fatalf("month: %v", out)
+	}
+	m := buckets[0].(map[string]any)
+	irt, usd := m["currencies"].(map[string]any)["IRT"].(map[string]any), m["currencies"].(map[string]any)["USDT"].(map[string]any)
+	if m["date"] != "2026-10-23" || m["partial"] != true || num(irt["revenue"]) != 350_000 || num(irt["net"]) != 250_000 ||
+		num(irt["topups"].(map[string]any)["amount"]) != 500_000 || num(usd["revenue"]) != 2_500_000 || num(m["new_customers"]) != 2 {
+		t.Errorf("Aban: %v", m)
+	}
+	// A whole Jalali month is not partial; the same month in the Gregorian calendar is cut in two.
+	out = get("from=2026-10-23&to=2026-11-21&group=month&calendar=jalali")
+	if bs := out["buckets"].([]any); len(bs) != 1 || bs[0].(map[string]any)["partial"] != false || bs[0].(map[string]any)["date"] != "2026-10-23" {
+		t.Errorf("whole Aban: %v", out["buckets"])
+	}
+	if bs := get("from=2026-10-23&to=2026-11-21&group=month")["buckets"].([]any); len(bs) != 2 {
+		t.Errorf("Gregorian: %v", bs)
+	}
+	// Weeks start on Saturday (the 31st is one; the Monday of its week is the 26th).
+	weeks := get("from=2026-10-30&to=2026-11-03&group=week&calendar=jalali")["buckets"].([]any)
+	if len(weeks) != 2 || weeks[0].(map[string]any)["date"] != "2026-10-24" || weeks[1].(map[string]any)["date"] != "2026-10-31" ||
+		weeks[0].(map[string]any)["partial"] != true || weeks[1].(map[string]any)["partial"] != true {
+		t.Errorf("weeks: %v", weeks)
+	}
+	w1 := weeks[1].(map[string]any)["currencies"].(map[string]any)["IRT"].(map[string]any)
+	w0 := weeks[0].(map[string]any)["currencies"].(map[string]any)["IRT"].(map[string]any)
+	if num(w1["revenue"]) != 350_000 || num(w1["refunds"].(map[string]any)["amount"]) != 100_000 || num(w0["revenue"]) != 0 {
+		t.Errorf("the week of 31 Oct: %v, the week before: %v", w1, w0)
+	}
+	// Days are the same in both calendars.
+	jd, gd := get("from=2026-10-31&to=2026-11-03&group=day&calendar=jalali"), get("from=2026-10-31&to=2026-11-03&group=day")
+	if !reflect.DeepEqual(jd["buckets"], gd["buckets"]) || !reflect.DeepEqual(jd["totals"], gd["totals"]) {
+		t.Errorf("day buckets differ:\n%v\n%v", jd["buckets"], gd["buckets"])
+	}
+	// Named months follow the calendar: now is 2 Nov 2026 (11 Aban).
+	f.api.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
+	if out = get("range=this_month&group=month&calendar=jalali"); out["from"] != "2026-10-23" || out["to"] != "2026-11-02" {
+		t.Errorf("this month: %v %v", out["from"], out["to"])
+	}
+	if out = get("range=last_month&group=month&calendar=jalali"); out["from"] != "2026-09-23" || out["to"] != "2026-10-22" {
+		t.Errorf("last month: %v %v", out["from"], out["to"])
+	}
+	// An unknown calendar is a 400 everywhere, with the reason.
+	for _, path := range []string{"summary", "plans", "methods", "summary.csv", "orders.csv"} {
+		code, out := b.do(http.MethodGet, "/api/v1/reports/"+path+"?from=2026-10-01&to=2026-11-01&calendar=julian", nil)
+		if code != 400 || out["error"] != "invalid" || !strings.Contains(out["message"].(string), "calendar must be gregorian or jalali") {
+			t.Errorf("%s: %d %v", path, code, out)
+		}
+	}
+}
+
+func TestReportsJalaliCSVNameAndAudit(t *testing.T) {
+	f, b, _ := reportFixture(t)
+	disposition := func(path string) string {
+		t.Helper()
+		code, h, body := b.get(path)
+		if code != 200 {
+			t.Fatalf("%s: %d %s", path, code, body)
+		}
+		return h.Get("Content-Disposition")
+	}
+	last := func() (calendar, group string) {
+		t.Helper()
+		if err := f.st.DB().QueryRow(context.Background(), `SELECT after->>'calendar', after->>'group' FROM core.audit_log WHERE action = 'export.reports' ORDER BY created_at DESC LIMIT 1`).Scan(&calendar, &group); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	q := "?from=2026-10-31&to=2026-11-03&tz=Asia/Tehran"
+	if got := disposition("/api/v1/reports/summary.csv" + q + "&group=month&calendar=jalali"); got != `attachment; filename="reports-summary-2026-10-31-to-2026-11-03-by-month-jalali.csv"` {
+		t.Errorf("Jalali name: %s", got)
+	}
+	if cal, group := last(); cal != "jalali" || group != "month" {
+		t.Errorf("audit calendar %q group %q", cal, group)
+	}
+	// Gregorian (named or not) keeps the old name.
+	for _, extra := range []string{"&group=month", "&group=month&calendar=gregorian"} {
+		if got := disposition("/api/v1/reports/summary.csv" + q + extra); got != `attachment; filename="reports-summary-2026-10-31-to-2026-11-03-by-month.csv"` {
+			t.Errorf("Gregorian name: %s", got)
+		}
+		if cal, _ := last(); cal != "gregorian" {
+			t.Errorf("audit calendar %q", cal)
+		}
+	}
+	// The file holds the Jalali bucket: one people row and one row per currency.
+	_, _, body := b.get("/api/v1/reports/summary.csv" + q + "&group=week&calendar=jalali")
+	rows := parseCSV(t, body)
+	if len(rows) != 1+1*3 || rows[1][0] != "2026-10-31" || rows[1][1] != "true" {
+		t.Errorf("Jalali weeks CSV: %v", rows)
+	}
+	// The orders file has no buckets: its name is unchanged, and its audit entry names the calendar.
+	if got := disposition("/api/v1/reports/orders.csv" + q + "&calendar=jalali"); got != `attachment; filename="reports-orders-2026-10-31-to-2026-11-03.csv"` {
+		t.Errorf("orders name: %s", got)
+	}
+	if cal, _ := last(); cal != "jalali" {
+		t.Errorf("orders audit calendar %q", cal)
+	}
+}
+
+// Churn is in the summary JSON (per bucket, in the totals, with the grace period
+// in force) and in the CSV's last three columns, on the people rows.
+func TestReportsChurn(t *testing.T) {
+	f, b, ids := reportFixture(t)
+	f.api.now = func() time.Time { return time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC) }
+	// Ali's service ended on 1 Nov (Tehran), Sara's on 15 Nov: 19 and 5 days before now.
+	for _, c := range []struct{ order, expires string }{{ids["o1"], "2026-11-01T10:00:00Z"}, {ids["o2"], "2026-11-15T10:00:00Z"}} {
+		var user string
+		if err := f.st.DB().QueryRow(context.Background(), `SELECT user_id FROM core.orders WHERE id = $1`, c.order).Scan(&user); err != nil {
+			t.Fatal(err)
+		}
+		when, _ := time.Parse(time.RFC3339, c.expires)
+		if _, err := f.st.DB().Exec(context.Background(), `INSERT INTO core.subscriptions (id, user_id, order_id, server_id, client_email, status, expires_at)
+			VALUES ($1, $2, $3, $4, $5, 'expired', $6)`, buuid.MustV7().String(), user, c.order, buuid.MustV7().String(), "c-"+c.order, when); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, out := b.do(http.MethodGet, "/api/v1/reports/summary?from=2026-10-31&to=2026-11-30&group=month&tz=Asia/Tehran", nil)
+	if code != 200 || num(out["churn_grace_days"]) != 7 {
+		t.Fatalf("summary: %d %v", code, out)
+	}
+	totals, _ := out["totals"].(map[string]any)
+	if num(totals["churned_services"]) != 1 || num(totals["churned_customers"]) != 1 || num(totals["at_risk"]) != 1 {
+		t.Errorf("totals %v", totals)
+	}
+	// A longer grace period: nobody has churned yet but Ali, whose service ended 19 days ago.
+	_, out = b.do(http.MethodGet, "/api/v1/reports/summary?from=2026-10-31&to=2026-11-30&group=month&tz=Asia/Tehran&churn_grace_days=30", nil)
+	totals, _ = out["totals"].(map[string]any)
+	if num(out["churn_grace_days"]) != 30 || num(totals["churned_services"]) != 0 || num(totals["at_risk"]) != 2 {
+		t.Errorf("grace 30: %v", out)
+	}
+	if code, out = b.do(http.MethodGet, "/api/v1/reports/summary?churn_grace_days=-1", nil); code != 400 {
+		t.Errorf("a negative grace period: %d %v", code, out)
+	}
+	code, _, body := b.get("/api/v1/reports/summary.csv?from=2026-10-31&to=2026-11-30&group=month&tz=Asia/Tehran")
+	if code != 200 {
+		t.Fatalf("csv: %d", code)
+	}
+	rows := parseCSV(t, body)
+	col := map[string]int{}
+	for i, name := range rows[0] {
+		col[name] = i
+	}
+	if col["churned_services"] != 21 || col["churned_customers"] != 22 || col["at_risk_services"] != 23 {
+		t.Fatalf("the churn columns are not the last three: %v", col)
+	}
+	var people []string
+	for _, r := range rows[1:] {
+		if r[2] == "" {
+			people = r
+		}
+	}
+	if people == nil || people[col["churned_services"]] != "1" || people[col["churned_customers"]] != "1" || people[col["at_risk_services"]] != "1" {
+		t.Errorf("people row: %v", people)
 	}
 }

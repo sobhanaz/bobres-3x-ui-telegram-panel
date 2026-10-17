@@ -52,14 +52,15 @@
 		format json
 	}
 
-	# On the Zarinpal domain only the pay page and the return URL exist: no
+	# On the Zarinpal domain only the pay page and the gateways' return URLs
+	# (Zarinpal, IDPay, NextPay: the domain registered with each) exist: no
 	# subscription links, admin or API on a domain registered with a payment
 	# gateway. (The Zarinpal site in /tls/sites.caddy says so too, before this
 	# snippet. When BOBRES_ZARINPAL_HOST is empty this compares with "", which no
 	# request host equals, so it never matches.)
 	@zarinpalHostOther {
 		expression `{host} == "{$BOBRES_ZARINPAL_HOST}"`
-		not path /pay/* /webhooks/zarinpal
+		not path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay
 	}
 	handle @zarinpalHostOther {
 		respond "Not found" 404
@@ -106,6 +107,24 @@
 		header ?Cache-Control "no-store"
 		request_body {
 			max_size 10MB
+		}
+		reverse_proxy core:8080 {
+			health_uri /healthz
+			health_interval 15s
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	# Telegram Mini App store: the same strict CSP core sends (web/miniapp/embed.go;
+	# a test keeps them equal), except that Telegram's script may load and
+	# Telegram's web clients may frame the page, so the site-wide
+	# X-Frame-Options is dropped here (frame-ancestors in the CSP replaces it).
+	handle /app* {
+		header Content-Security-Policy "default-src 'self'; script-src 'self' https://telegram.org; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors https://*.telegram.org; base-uri 'none'; form-action 'self'"
+		header ?Cache-Control "no-store"
+		header -X-Frame-Options
+		request_body {
+			max_size 1MB
 		}
 		reverse_proxy core:8080 {
 			health_uri /healthz

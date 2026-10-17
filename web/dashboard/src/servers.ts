@@ -4,7 +4,7 @@
 // the provisioner check everything again; this only spares a round trip.
 // Pure functions (no API, no Vue).
 import { asciiNumber } from './format'
-import type { InboundItem, OverviewServer, ServerItem } from './types'
+import type { InboundItem, OverviewServer, PlanInbound, ServerItem } from './types'
 
 /** Limits core checks again. */
 export const SERVER_NAME_MAX = 64
@@ -30,7 +30,19 @@ export const healthSeverity: Record<Health, 'success' | 'danger' | 'secondary' |
 }
 
 /** The add and edit form, as staff type it. */
+export type PanelKind = 'xui' | 'marzban'
+export const PANEL_KINDS: PanelKind[] = ['xui', 'marzban']
+
+/** A Marzban server is logged in with an admin's "username:password". */
+export function marzbanLoginOK(token: string): boolean {
+  const i = token.indexOf(':')
+  return i > 0 && i < token.length - 1
+}
+
+/** The add and edit form, as staff type it. */
 export interface ServerForm {
+  /** the panel software; fixed once the server is saved */
+  kind: PanelKind
   name: string
   baseURL: string
   subURL: string
@@ -44,13 +56,14 @@ export interface ServerForm {
 }
 
 export function blankServer(): ServerForm {
-  return { name: '', baseURL: '', subURL: '', token: '', weight: String(WEIGHT_DEFAULT), enabled: true, allowPrivate: false, skipCheck: false }
+  return { kind: 'xui', name: '', baseURL: '', subURL: '', token: '', weight: String(WEIGHT_DEFAULT), enabled: true, allowPrivate: false, skipCheck: false }
 }
 
 /** serverFormOf reads a server into the editor; the token stays empty
  * (it is never sent back). */
 export function serverFormOf(s: ServerItem): ServerForm {
   return {
+    kind: s.kind === 'marzban' ? 'marzban' : 'xui',
     name: s.name,
     baseURL: s.base_url,
     subURL: s.sub_base_url ?? '',
@@ -120,7 +133,8 @@ export function serverProblems(f: ServerForm, editing: Pick<ServerItem, 'has_tok
   if (!name || [...name].length > SERVER_NAME_MAX) out.push('name')
   if (panelURLProblem(f.baseURL, f.allowPrivate)) out.push('base_url')
   if (subURLProblem(f.subURL)) out.push('sub_base_url')
-  if (/\s/.test(f.token.trim()) || (!f.token.trim() && needsToken(f, editing))) out.push('token')
+  const tok = f.token.trim()
+  if (/\s/.test(tok) || (!tok && needsToken(f, editing)) || (f.kind === 'marzban' && tok && !marzbanLoginOK(tok))) out.push('token')
   if (weightOf(f.weight) === null) out.push('weight')
   return out
 }
@@ -129,6 +143,7 @@ export function serverProblems(f: ServerForm, editing: Pick<ServerItem, 'has_tok
  * token keeps the stored one. */
 export function serverBody(f: ServerForm) {
   return {
+    kind: f.kind,
     name: f.name.trim(),
     base_url: f.baseURL.trim(),
     sub_base_url: f.subURL.trim(),
@@ -143,7 +158,7 @@ export function serverBody(f: ServerForm) {
 /** testBody is what POST /servers/test takes: the typed connection, and
  * for a saved server its id, so an empty token means the stored one. */
 export function testBody(f: ServerForm, id = '') {
-  return { ...(id ? { id } : {}), base_url: f.baseURL.trim(), token: f.token.trim(), allow_private: f.allowPrivate }
+  return { ...(id ? { id } : {}), kind: f.kind, base_url: f.baseURL.trim(), token: f.token.trim(), allow_private: f.allowPrivate }
 }
 
 /** canTest: enough is typed to try the connection. */
@@ -217,4 +232,53 @@ export function serverNames(ids: readonly string[], servers: readonly ServerItem
  * services on this server would fail. */
 export function noInbound(list: readonly InboundItem[]): boolean {
   return !list.some((i) => i.enabled && i.attach)
+}
+
+/** A plan's inbound choice as the editor holds it: server id -> inbound ids
+ * (a server without an entry, or with none, gets the default). */
+export type InboundChoice = Record<string, number[]>
+
+/** choiceOf reads the plan's inbounds into the editor's form. */
+export function choiceOf(list: readonly PlanInbound[] | undefined): InboundChoice {
+  const out: InboundChoice = {}
+  for (const c of list ?? []) {
+    if (c.inbound_ids?.length) out[c.server_id] = [...c.inbound_ids]
+  }
+  return out
+}
+
+/** inboundsBody is the list a save sends: the servers the plan can go to (all
+ * of them while it names none) that have a choice. Choices for servers the
+ * plan no longer names are dropped, as core refuses them. */
+export function inboundsBody(choice: InboundChoice, planServers: readonly string[]): PlanInbound[] {
+  return Object.entries(choice)
+    .filter(([id, ids]) => ids.length > 0 && (!planServers.length || planServers.includes(id)))
+    .map(([server_id, ids]) => ({ server_id, inbound_ids: [...ids].sort((a, b) => a - b) }))
+    .sort((a, b) => a.server_id.localeCompare(b.server_id))
+}
+
+/** A choice in the plan editor's inbound list. */
+export interface InboundOption {
+  value: number
+  label: string
+  /** turned off in the panel: it is not given to new services */
+  off: boolean
+  /** the plan names it, but the panel no longer has it */
+  gone: boolean
+}
+
+/** inboundOptions lists a server's inbounds to choose from, plus any the plan
+ * still names that the panel no longer has (so staff can take them out). */
+export function inboundOptions(list: readonly InboundItem[], chosen: readonly number[] = []): InboundOption[] {
+  const out: InboundOption[] = list.map((i) => ({ value: i.id, label: i.tag || '#' + i.id, off: !i.enabled, gone: false }))
+  for (const id of chosen) {
+    if (!list.some((i) => i.id === id)) out.push({ value: id, label: '#' + id, off: true, gone: true })
+  }
+  return out
+}
+
+/** goneInbounds: the chosen inbounds of a server that its panel does not have
+ * or has turned off (a service would get fewer, or none). */
+export function goneInbounds(list: readonly InboundItem[], chosen: readonly number[]): number[] {
+  return chosen.filter((id) => !list.some((i) => i.id === id && i.enabled))
 }

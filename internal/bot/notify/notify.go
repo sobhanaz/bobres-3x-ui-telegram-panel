@@ -156,12 +156,21 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if e.TrafficBytes > 0 {
 			traffic = i18n.Bytes(lang, e.TrafficBytes)
 		}
+		// The links come first: the page address goes under the message and
+		// the QR code follows it. Without them the message still goes out.
+		links, lerr := n.core.GetSubscriptionLinks(ctx, &corev1.GetSubscriptionLinksRequest{UserId: e.UserID, SubscriptionId: e.SubscriptionID})
+		if lerr != nil {
+			n.log.Warn("links for a new subscription unavailable", "subscription", e.SubscriptionID, "err", lerr)
+		}
 		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.services", "sub:"+e.SubscriptionID))
+		if u := links.GetPageUrl(); u != "" {
+			kb.Row(tg.Link(n.cat.T(lang, "btn.open_page"), pageLink(u, lang)))
+		}
 		if err := n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, n.cat.T(lang, "sub.ready",
 			"link", html.EscapeString(e.SubscriptionLink), "expires", expires, "traffic", traffic)), kb); err != nil {
 			return err
 		}
-		n.sendQR(ctx, lang, e)
+		n.sendQR(ctx, lang, e, links)
 		return nil
 
 	case events.PaymentRejected:
@@ -895,15 +904,23 @@ func (n *Notifier) markBlocked(ctx context.Context, chatID int64) {
 
 // sendQR follows the ready message with the QR code; failures are logged
 // only, since the link already went out.
-func (n *Notifier) sendQR(ctx context.Context, lang string, e events.SubscriptionProvisionedEvent) {
-	links, err := n.core.GetSubscriptionLinks(ctx, &corev1.GetSubscriptionLinksRequest{UserId: e.UserID, SubscriptionId: e.SubscriptionID})
-	if err != nil || len(links.GetQrPng()) == 0 {
-		n.log.Warn("QR for a new subscription unavailable", "subscription", e.SubscriptionID, "err", err)
+func (n *Notifier) sendQR(ctx context.Context, lang string, e events.SubscriptionProvisionedEvent, links *corev1.SubscriptionLinks) {
+	if len(links.GetQrPng()) == 0 {
+		n.log.Warn("QR for a new subscription unavailable", "subscription", e.SubscriptionID)
 		return
 	}
 	if _, err := n.tg.SendPhoto(ctx, e.TelegramID, tg.Photo{Data: links.GetQrPng(), Name: "subscription.png"}, n.cat.T(lang, "sub.qr_caption"), nil); err != nil && !tg.IsBlocked(err) {
 		n.log.Warn("send QR failed", "err", err)
 	}
+}
+
+// pageLink adds the customer's language to a page address, as the bot's
+// service screen does.
+func pageLink(u, lang string) string {
+	if strings.Contains(u, "?") {
+		return u
+	}
+	return u + "?l=" + lang
 }
 
 func truncate(s string, n int) string {

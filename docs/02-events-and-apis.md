@@ -16,7 +16,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | order.created.v1 | core | payments | Order awaiting payment |
 | payment.succeeded.v1 | payments | core | Money confirmed |
 | payment.failed.v1 / payment.expired.v1 | payments | core, notifier | Payment did not complete |
-| order.paid.v1 | core | provisioner | Provision the service |
+| order.paid.v1 | core | provisioner, notifier, sales reports | Provision the service. `{order_id, user_id, telegram_id, plan_id, amount, currency, source, provider}`: `source` is wallet, manual, gateway, trial or free; `provider` (optional, additive) is the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, ...), absent for wallet, trial and free orders and for events from before it was recorded |
 | subscription.provision_requested.v1 | core | provisioner | Create/renew/reset command |
 | subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links |
 | subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention |
@@ -30,6 +30,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | report.daily_summary.v1 | core (daily summary worker) | notifier(staff) | Yesterday's sales (one store-local day) for **one** staff member who holds `reports.read` and has a Telegram account; core writes one event per such member, in the transaction that claims the day (`core.daily_summary_claims`), so each recipient's blocking, refusal or failure is their own (a blocked bot is skipped; a refusal no retry changes, a 4xx other than a blocked bot, a flood limit or a refused token, is dead-lettered at once; any other failure is retried, and since a feed is applied in order the events behind it wait for it until it is sent or dead-lettered), and a member who lost the permission before the claim gets none (the bot also drops the event when it knows the person is no longer an owner or admin, and when it is sent more than a day after it was queued). Queued exactly once, delivered at least once. Only when the store turned `reports.daily_summary` on. `{telegram_id, language (fa\|en, the member's own), date ("2026-10-13"), zone (IANA), new_customers, trials, currencies: [{currency, revenue, prev_revenue (the day before, for the comparison), orders, new_orders, renewals, traffic_topups, refunds: {count, amount}, net, topups: {count, amount}, rejected: {count, amount} (by staff), gateway_failed: {count, amount}}]}`. Amounts are integers in the currency's smallest unit and are never added across currencies; `currencies` lists only those with something to report (none: a quiet day, which the bot says in one line). No names, customers, plans or order ids ([14-reports.md](14-reports.md#the-daily-summary-in-telegram)) |
 | system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`; the notice `license.limit` is sent at most every 24 h, has no 6-hour reminder and no `resolved`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes, limit are numbers, free is bytes, date is unix seconds, the rest names; name of `license.limit` is the limited thing, `active_services`), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
+| sales.daily_summary.v1 | core (daily-summary worker) | notifier(staff alerts) | Yesterday's sales, once a day after `notify.daily_summary_hour` when `notify.daily_summary` is on ([14-reports.md](14-reports.md)). `{date (the local day), tz, new_customers, trials, currencies: [{currency, revenue, net, orders, new_orders, renewals, refunds (count), refund_amount, topups (count), topup_amount}]}`, money in minor units, one entry per currency, never added together; an empty day has no currencies. Sent to `notify.recipients` (never support staff) |
 
 ## Purchase saga (happy path)
 bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pays -> `payment.succeeded`
@@ -78,7 +79,8 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.
 Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
 Built: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
-superpowers/specs/2026-10-04-phase2-payments-design.md); manual-zarinpal (the owner's Zarinpal
+superpowers/specs/2026-10-04-phase2-payments-design.md); idpay, nextpay (see
+[16-idpay-nextpay.md](16-idpay-nextpay.md)); manual-zarinpal (the owner's Zarinpal
 payment link, paid outside the bot); the crypto watcher, `usdt_trc20_auto` (Phase 6a: an exact, unique USDT amount to
 the store's TRON address, found through TronGrid every 30 s). Every manual method takes a screenshot that an admin
 approves. crypto-thirdparty is not built: the candidate processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)
@@ -92,7 +94,7 @@ A health loop checks every enabled server each 60 s and reads the panel version 
 
 ## Public HTTP surface (via gateway)
 - `/webhooks/<provider>` (signature verified, replay-protected)
-- `/sub/<token>` subscription info page (branded)
+- `/sub/<token>` subscription info page (branded; server-rendered, no script, one fixed 404 for anything unknown; see 15-subscription-page.md). `POST /api/v1/services/{id}/page-token/regenerate` (services.write) gives a service a new address
 - `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`.
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".

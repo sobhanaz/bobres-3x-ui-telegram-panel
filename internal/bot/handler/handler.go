@@ -98,6 +98,9 @@ type Handler struct {
 	// photoVersion is Settings.bot_photo_version from the last refresh, for
 	// RunProfile (nil before the first).
 	photoVersion atomic.Pointer[string]
+	// whiteLabel is Settings.white_label from the last refresh (false until
+	// then: the credit shows unless core says otherwise).
+	whiteLabel atomic.Bool
 }
 
 // New builds a Handler. limiter may be nil.
@@ -147,6 +150,7 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	// The bot photo's version: RunProfile fetches the photo when it changes.
 	photo := s.GetBotPhotoVersion()
 	h.photoVersion.Store(&photo)
+	h.whiteLabel.Store(s.GetWhiteLabel())
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
@@ -665,7 +669,7 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onTicket(r, st)
 	case sceneDiscount:
 		h.onDiscountCode(r, st)
-	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason:
+	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:
 		h.onAdminScene(r, st)
 	case sceneResellerLabel, sceneResellerFind, sceneResellerRename:
 		h.onResellerScene(r, st)

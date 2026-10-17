@@ -25,6 +25,9 @@ type serviceJSON struct {
 	LastSyncedAt *int64     `json:"last_synced_at"`
 	CreatedAt    int64      `json:"created_at"`
 	Label        *string    `json:"label"` // the name a reseller gave it
+	// PageURL is the branded page's address (the one service endpoints only;
+	// "" while the page is off or the service is not ready).
+	PageURL string `json:"page_url,omitempty"`
 }
 
 func serviceOf(r *store.SubscriptionRow) serviceJSON {
@@ -90,7 +93,9 @@ func (s *Server) getService(w http.ResponseWriter, r *http.Request) {
 	for i := range orders {
 		items = append(items, orderOf(&orders[i]))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"service": serviceOf(row), "orders": items})
+	svc := serviceOf(row)
+	svc.PageURL = s.pageURL(r, &row.Subscription)
+	writeJSON(w, http.StatusOK, map[string]any{"service": svc, "orders": items})
 }
 
 // serviceResult answers a service operation with the service as it is now.
@@ -100,7 +105,9 @@ func (s *Server) serviceResult(w http.ResponseWriter, r *http.Request, id string
 		s.fail(w, "reload service", err)
 		return
 	}
-	out := map[string]any{"service": serviceOf(row)}
+	svc := serviceOf(row)
+	svc.PageURL = s.pageURL(r, &row.Subscription)
+	out := map[string]any{"service": svc}
 	for k, v := range extra {
 		out[k] = v
 	}

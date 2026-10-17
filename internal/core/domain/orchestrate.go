@@ -76,7 +76,7 @@ type PaymentProof struct {
 type CreatePaymentIntentParams struct {
 	UserID         string
 	OrderID        string // empty for a wallet top-up
-	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | stars | usdt_trc20_auto
+	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | stars | usdt_trc20_auto
 	Amount         int64  // top-ups only; an order's amount comes from the order
 	Currency       string
 	IdempotencyKey string

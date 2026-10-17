@@ -32,7 +32,7 @@ func TestProfilePhotoFromCore(t *testing.T) {
 		if err := w.h.RefreshSettings(ctx); err != nil {
 			t.Fatal(err)
 		}
-		p, on := wantedProfile(w.h.cat, w.h.set, w.h.botPhotoVersion())
+		p, on := wantedProfile(w.h.cat, w.h.set, w.h.botPhotoVersion(), true)
 		if err := s.sync(ctx, p, on); err != nil {
 			t.Fatalf("sync: %v", err)
 		}
@@ -86,7 +86,7 @@ func TestProfilePhotoThroughTheBotAPI(t *testing.T) {
 	set := settings.New()
 	sync := func(version string) {
 		t.Helper()
-		p, on := wantedProfile(i18n.MustLoad(), set, version)
+		p, on := wantedProfile(i18n.MustLoad(), set, version, true)
 		if err := s.sync(ctx, p, on); err != nil {
 			t.Fatalf("sync %q: %v", version, err)
 		}

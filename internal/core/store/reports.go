@@ -38,7 +38,7 @@ var ErrReportTimeout = errors.New("store: the report took too long")
 //   - a reviewer rejected a manual payment (provider in ManualProviders; the
 //     reason is whatever staff typed, so it can say anything, "expired"
 //     included): "rejected by staff";
-//   - an automated gateway intent failed or ran out (Zarinpal, Telegram Stars,
+//   - an automated gateway intent failed or ran out (Zarinpal, IDPay, NextPay, Telegram Stars,
 //     automatic USDT; the reason is one of GatewayFailureReasons): "failed or
 //     expired gateway payments".
 //
@@ -47,7 +47,7 @@ var ErrReportTimeout = errors.New("store: the report took too long")
 // anything else is a staff-typed reason. A provider that is not manual is a
 // gateway, so a new gateway lands on the gateway line, never on the staff one.
 // Both lists name what payments emits today (internal/payments/domain/
-// gateway.go, stars.go and gateway/zarinpal); a test reads those sources, so
+// gateway.go, stars.go and gateway/*); a test reads those sources, so
 // a new reason or a new manual provider fails it until it is added here on
 // purpose.
 var (
@@ -65,6 +65,11 @@ type ReportQuery struct {
 	From, To string
 	TZ       string
 	Group    string
+	// ChurnAsOf is "now" for the churn numbers (zero: the current time) and
+	// ChurnGraceDays how many days a service may stay expired before it counts as
+	// churned (docs/14-reports.md). Both are parameters so a test can fix them.
+	ChurnAsOf      time.Time
+	ChurnGraceDays int
 }
 
 // The range ($1 From, $2 To, $3 zone), written once so every query agrees on
@@ -124,6 +129,20 @@ type SalesData struct {
 	// started in it. They count people, so they have no currency.
 	NewCustomers map[string]int64
 	Trials       map[string]int64
+	// Churn, by the local date bucket the service's (or, for ChurnedCustomers,
+	// the customer's last) expiry falls in: services that ended and stayed
+	// ended past the grace period, the people whose last service did, and
+	// services that ended inside the grace period (not churn yet). No
+	// currency.
+	ChurnedServices  map[string]int64
+	ChurnedCustomers map[string]int64
+	AtRisk           map[string]int64
+}
+
+// NewSalesData is an empty SalesData.
+func NewSalesData() *SalesData {
+	return &SalesData{Cells: map[string]map[string]*ReportCell{}, NewCustomers: map[string]int64{}, Trials: map[string]int64{},
+		ChurnedServices: map[string]int64{}, ChurnedCustomers: map[string]int64{}, AtRisk: map[string]int64{}}
 }
 
 func (d *SalesData) cell(bucket, currency string) *ReportCell {
@@ -173,7 +192,7 @@ func reportErr(what string, err error) error {
 
 // SalesSummary reads the report's numbers per bucket and currency.
 func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, error) {
-	d := &SalesData{Cells: map[string]map[string]*ReportCell{}, NewCustomers: map[string]int64{}, Trials: map[string]int64{}}
+	d := NewSalesData()
 	args := []any{q.From, q.To, q.TZ, q.Group}
 	err := s.readOnly(ctx, ReportTimeout, func(tx pgx.Tx) error {
 		// Revenue and paid orders: one purchase entry per paid order, dated
@@ -298,12 +317,98 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 			func(c *ReportCell) *ReportFlow { return &c.Cancelled }); err != nil {
 			return reportErr("report cancelled", err)
 		}
-		return nil
+		return s.churn(ctx, tx, q, d)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return d, nil
+}
+
+// churnServiceSQL and churnCustomerSQL read churn (docs/14-reports.md). $1-$4
+// are the range as everywhere. The service query takes $5 = now and $6 = the end
+// of the grace period (now less the grace): an ended service whose expiry is at
+// or before $6 is churn, one after it is only at risk. The customer query takes
+// $5 = the end of the grace period.
+//
+// A service has ended when its current expiry is in the past, it is not a
+// trial, it is not pending, disabled or deleted, and no paid renewal waits to
+// be applied to it (a renewal order that is paid, provisioning or failed to
+// provision but has not moved expires_at yet).
+const churnEnded = `s.expires_at IS NOT NULL AND s.status NOT IN ('pending', 'disabled', 'deleted') AND NOT p.is_trial
+	AND NOT EXISTS (SELECT 1 FROM core.orders r WHERE r.subscription_id = s.id AND r.type = 'renew'
+		AND r.status IN ('paid', 'provisioning', 'provision_failed'))`
+
+func churnServiceSQL() string {
+	return `
+	SELECT ` + bucketOf("s.expires_at") + `, count(*) FILTER (WHERE s.expires_at <= $6::timestamptz),
+		count(*) FILTER (WHERE s.expires_at > $6::timestamptz)
+	FROM core.subscriptions s
+	JOIN core.orders o ON o.id = s.order_id
+	JOIN core.plans p ON p.id = o.plan_id
+	WHERE ` + churnEnded + ` AND s.expires_at <= $5::timestamptz AND ` + rangeOf("s.expires_at") + `
+	GROUP BY 1`
+}
+
+// A customer has churned when the last expiry of their non-trial services is
+// past the grace period, and they have no other live service: none without an
+// expiry (unlimited) and none with a renewal waiting. The people to look at
+// are found by the range on the index; their whole set of services is then
+// read, so the later expiry of another service is seen.
+func churnCustomerSQL() string {
+	return `
+	SELECT ` + bucketOf("m.last_exp") + `, count(*) FROM (
+		SELECT s.user_id, max(s.expires_at) AS last_exp,
+			bool_or(s.expires_at IS NULL OR EXISTS (SELECT 1 FROM core.orders r WHERE r.subscription_id = s.id AND r.type = 'renew'
+				AND r.status IN ('paid', 'provisioning', 'provision_failed'))) AS open
+		FROM core.subscriptions s
+		JOIN core.orders o ON o.id = s.order_id
+		JOIN core.plans p ON p.id = o.plan_id
+		WHERE s.status NOT IN ('pending', 'disabled', 'deleted') AND NOT p.is_trial
+			AND s.user_id IN (SELECT c.user_id FROM core.subscriptions c WHERE c.expires_at IS NOT NULL
+				AND c.status NOT IN ('pending', 'disabled', 'deleted') AND c.expires_at <= $5::timestamptz AND ` + rangeOf("c.expires_at") + `)
+		GROUP BY s.user_id) m
+	WHERE NOT m.open AND m.last_exp <= $5::timestamptz AND ` + rangeOf("m.last_exp") + `
+	GROUP BY 1`
+}
+
+// churn adds the churn numbers into d.
+func (s *Store) churn(ctx context.Context, tx pgx.Tx, q ReportQuery, d *SalesData) error {
+	asOf := q.ChurnAsOf
+	if asOf.IsZero() {
+		asOf = time.Now()
+	}
+	// The grace is a number of 24-hour days, so it never depends on a zone.
+	args := []any{q.From, q.To, q.TZ, q.Group, asOf, asOf.Add(-time.Duration(q.ChurnGraceDays) * 24 * time.Hour)}
+	if err := each(ctx, tx, churnServiceSQL(), args, func(r pgx.Rows) error {
+		var b string
+		var churned, risk int64
+		if err := r.Scan(&b, &churned, &risk); err != nil {
+			return err
+		}
+		if churned > 0 {
+			d.ChurnedServices[b] = churned
+		}
+		if risk > 0 {
+			d.AtRisk[b] = risk
+		}
+		return nil
+	}); err != nil {
+		return reportErr("report churned services", err)
+	}
+	// The customer query has no use for now: its $5 is the end of the grace period.
+	if err := each(ctx, tx, churnCustomerSQL(), []any{args[0], args[1], args[2], args[3], args[5]}, func(r pgx.Rows) error {
+		var b string
+		var n int64
+		if err := r.Scan(&b, &n); err != nil {
+			return err
+		}
+		d.ChurnedCustomers[b] = n
+		return nil
+	}); err != nil {
+		return reportErr("report churned customers", err)
+	}
+	return nil
 }
 
 // each runs a query and calls fn for every row.
@@ -326,13 +431,18 @@ type MethodRow struct {
 	// Method is how the order was paid: "wallet" (the balance), "manual"
 	// (a payment staff approved), "gateway" (Zarinpal, Stars or automatic
 	// USDT confirmed it), or "unknown" (a purchase with no matching event).
-	Method   string
+	Method string
+	// Provider is who took the money (zarinpal, idpay, nextpay, stars, usdt_auto,
+	// manual_card, ...). Empty for wallet and unknown rows, and for orders
+	// paid before the event carried it.
+	Provider string
 	Currency string
 	Orders   int64
 	Revenue  int64
 }
 
-// SalesByMethod splits the range's revenue by how the orders were paid. Each
+// SalesByMethod splits the range's revenue by how the orders were paid, and
+// by which provider took the payment when the event says so. Each
 // paid order publishes order.paid.v1 in the transaction of its purchase, so
 // the events carry the same orders and amounts as the ledger; a purchase
 // without its event is listed as "unknown", so the rows always add up to the
@@ -355,12 +465,12 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 			return reportErr("report methods: totals", err)
 		}
 		if err := each(ctx, tx, `
-			SELECT COALESCE(o.payload->>'source', ''), o.payload->>'currency', count(*), COALESCE(sum((o.payload->>'amount')::bigint), 0)::bigint
+			SELECT COALESCE(o.payload->>'source', ''), COALESCE(o.payload->>'provider', ''), o.payload->>'currency', count(*), COALESCE(sum((o.payload->>'amount')::bigint), 0)::bigint
 			FROM core.outbox_core o
 			WHERE o.topic = 'order.paid.v1' AND (o.payload->>'amount')::bigint > 0 AND `+rangeOf("o.created_at")+`
-			GROUP BY 1, 2`, args, func(r pgx.Rows) error {
+			GROUP BY 1, 2, 3`, args, func(r pgx.Rows) error {
 			var m MethodRow
-			if err := r.Scan(&m.Method, &m.Currency, &m.Orders, &m.Revenue); err != nil {
+			if err := r.Scan(&m.Method, &m.Provider, &m.Currency, &m.Orders, &m.Revenue); err != nil {
 				return err
 			}
 			out = append(out, m)
@@ -392,7 +502,10 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 		if a.Revenue != b.Revenue {
 			return a.Revenue > b.Revenue
 		}
-		return a.Method < b.Method
+		if a.Method != b.Method {
+			return a.Method < b.Method
+		}
+		return a.Provider < b.Provider
 	})
 	return out, nil
 }
@@ -449,6 +562,7 @@ type PaidOrderRow struct {
 	Currency   string
 	Amount     int64
 	Method     string // wallet, manual, gateway; "" when unknown
+	Provider   string // who took the payment; "" for wallet and for orders paid before it was recorded
 	Refunded   int64  // what was refunded (0: nothing)
 }
 
@@ -462,12 +576,12 @@ func paidOrdersSQL() string {
 	return `
 	SELECT e.created_at, to_char(e.created_at AT TIME ZONE $3::text, 'YYYY-MM-DD HH24:MI:SS'), e.ref_id::text, o.type,
 		u.telegram_id, COALESCE(u.username, ''), p.name_i18n, e.currency, -e.amount, COALESCE(ev.method, ''),
-		COALESCE(o.refund_amount, 0)
+		COALESCE(o.refund_amount, 0), COALESCE(ev.provider, '')
 	FROM core.ledger_entries e
 	JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
 	JOIN core.users u ON u.id = e.user_id
 	JOIN core.plans p ON p.id = o.plan_id
-	LEFT JOIN LATERAL (SELECT x.payload->>'source' AS method FROM core.outbox_core x
+	LEFT JOIN LATERAL (SELECT x.payload->>'source' AS method, x.payload->>'provider' AS provider FROM core.outbox_core x
 		WHERE x.topic = 'order.paid.v1' AND x.payload->>'order_id' = e.ref_id::text LIMIT 1) ev ON true
 	WHERE e.kind = 'purchase' AND ` + rangeOf("e.created_at") + `
 	ORDER BY e.created_at, e.id
@@ -493,7 +607,7 @@ func (s *Store) EachPaidOrder(ctx context.Context, q ReportQuery, max int, fn fu
 			}
 			var r PaidOrderRow
 			if err := rows.Scan(&r.PaidAt, &r.PaidLocal, &r.OrderID, &r.Type, &r.TelegramID, &r.Username, &r.PlanName,
-				&r.Currency, &r.Amount, &r.Method, &r.Refunded); err != nil {
+				&r.Currency, &r.Amount, &r.Method, &r.Refunded, &r.Provider); err != nil {
 				return err
 			}
 			if err := fn(r); err != nil {

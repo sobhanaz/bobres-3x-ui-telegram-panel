@@ -24,7 +24,7 @@ which is off until the store turns it on.
 Amounts are integers in the currency's minor unit (Toman 0 decimals, USDT 6, Stars 0) from the query to the answer.
 **Amounts of different currencies are never added**: every sum is grouped by currency, every answer holds a map keyed
 by currency, and the dashboard shows each currency in its own card, chart and table. Only counts of people (new
-customers, free trials) and counts of events have no currency. The dashboard formats amounts; the API never rounds.
+customers, free trials, churn) and counts of events have no currency. The dashboard formats amounts; the API never rounds.
 
 ## Time
 
@@ -38,8 +38,16 @@ days, and the same instants fall on other days in another zone. Daylight saving 
 so even a day whose clocks show 00:xx twice (America/Havana on 1 November 2026) belongs whole to one bucket; the
 instant bounds next to that test are a day wider on each side and only serve the index.
 
-- `group=day|week|month`. Weeks are ISO weeks (they start on **Monday**) and months are calendar (Gregorian) months,
-  in both languages. A bucket is named by the local date it starts on (`"2026-10-12"`).
+- `group=day|week|month` and `calendar=gregorian|jalali` (default `gregorian`; anything else is a 400 "calendar must
+  be gregorian or jalali"). Gregorian: weeks are ISO weeks (they start on **Monday**) and months are calendar months.
+  Jalali: weeks start on **Saturday** and months are Jalali months (1 Farvardin, 1 Ordibehesht, ...; the leap years
+  follow the 33-year rule `core` and the Persian calendar share, checked against `Intl` for 1399 to 1479). A day
+  bucket is the same in both calendars. A bucket is named by the Gregorian local date it starts on (`"2026-10-12"`),
+  whatever the calendar; the page writes it in Jalali in Persian. `this_month` and `last_month` follow the calendar
+  (a Jalali month for `jalali`). The store is not changed by this: for a Jalali week or month core reads the days and
+  sums them into buckets (`foldDays`), so a bucket is exactly the sum of its days, the totals equal the Gregorian
+  ones for the same range, and a range that cuts a week or month marks it `partial` as before. The page sends
+  `calendar` only when it is Jalali, and defaults to Jalali in Persian and Gregorian in English.
 - The range is two local dates, both included (`from=2026-10-01&to=2026-10-14`), or a named range read in the store's
   zone: `range=today|last_7_days|last_30_days|this_month|last_month` (the default is the last 30 days). A named range
   and `from`/`to` together are refused.
@@ -69,24 +77,31 @@ All of these read `core.ledger_entries` (append-only), `core.orders` and `core.o
 | **Refunds** (count, amount) | Ledger entries with `kind = 'refund'` (`refund:<order id>`), dated when staff refunded. A refund credits the order's whole amount to the wallet. **Net** is revenue less refunds in the same currency, before payouts: reseller commissions and referral rewards are not subtracted. |
 | **New customers** | Users whose **first** purchase entry (any currency, whole history, ties broken by entry id) falls in the bucket. A customer whose first order was refunded still counts; one who only had a trial or a free order does not. People, so no currency. |
 | **Free trials started** | Ledger entries with `kind = 'trial_grant'` (one per user, ever). |
+| **Services lost (churn)** | A service **churned** in a bucket when its **current** `expires_at`, as a local date in the report's zone, is in the bucket, and it ended more than the **grace period** (7 days by default, `churn_grace_days` from 0 to 90) before the moment the report is read. Only the service's final expiry counts, so a service that was renewed is in the bucket of its last end, never of an earlier one. Not counted: services that are `pending`, `disabled` or `deleted`, services with no expiry (unlimited), services of a **trial** plan (`plans.is_trial`, so a trial that lapses is no loss) and services with a **paid renewal waiting** (a `renew` order that is `paid`, `provisioning` or `provision_failed` and has not moved `expires_at` yet). People, so no currency. The grace is counted in 24-hour days, so it does not depend on the zone. |
+| **Customers lost** | A person whose **last** expiry over their non-trial, live services is in the bucket and past the grace period, and who has **no other live service**: a service with no expiry, or one with a renewal waiting, keeps them. A person with three expired services is counted once, in the bucket of the last. |
+| **At risk** | Services that ended in the bucket but are still inside the grace period: they are not churn yet and may renew. Same exclusions as services lost. When the grace period passes they move into services lost. |
 | **Wallet top-ups** (count, amount, per currency) | Money that **stayed in the wallet** from payments. A payment is credited to the wallet as a `topup` entry (`pay-in:<intent id>`) and, when it was for an order, the order's price is taken from it in the same transaction, so the entries carry the same time. What a `topup` entry has left after the purchases of the same user and currency at its instant is the top-up: all of it for a payment with no order or one that arrived for an order already paid another way or cancelled, none for an exact payment, the surplus for a payment larger than the order's price. An entry with nothing left is not counted. A top-up is money in, not a sale: the order it later pays shows up as revenue, paid with the wallet. Admin adjustments, referral rewards, reseller commissions and settlements are other ledger kinds and are not in the reports. |
 | **Rejected by staff** (count, amount) | Events `payment.rejected.v1` in core's outbox for a **manual** payment (card to card, crypto proof, Zarinpal link) a reviewer rejected. The amount is the payment's. Nothing moved. |
-| **Failed or expired gateway payments** (count, amount) | The same event for an **automated gateway** payment (Zarinpal, Telegram Stars, automatic USDT) that failed, did not match, or ran out of time. Payments publishes `payment.rejected.v1` for both kinds; core passes it on with the intent's `provider` and the `reason`. The provider decides: a manual provider means staff (whatever words the reviewer typed, "expired" included), any other provider a gateway, so a new gateway lands here, never on the staff line. An event from before core passed the provider on has none, and is told by its reason: a gateway reason (`gateway_failed`, `amount_mismatch`, `expired`, `not_found`, `reversed`, `payer_mismatch`) means a gateway, any other text means staff. The two lists are in one place, `ManualProviders` and `GatewayFailureReasons` in `internal/core/store/reports.go`, and a test reads payments' sources, so a new reason or a new manual provider fails it until someone decides where it goes. |
+| **Failed or expired gateway payments** (count, amount) | The same event for an **automated gateway** payment (Zarinpal, IDPay, NextPay, Telegram Stars, automatic USDT) that failed, did not match, or ran out of time. Payments publishes `payment.rejected.v1` for both kinds; core passes it on with the intent's `provider` and the `reason`. The provider decides: a manual provider means staff (whatever words the reviewer typed, "expired" included), any other provider a gateway, so a new gateway lands here, never on the staff line. An event from before core passed the provider on has none, and is told by its reason: a gateway reason (`gateway_failed`, `amount_mismatch`, `expired`, `not_found`, `reversed`, `payer_mismatch`) means a gateway, any other text means staff. The two lists are in one place, `ManualProviders` and `GatewayFailureReasons` in `internal/core/store/reports.go`, and a test reads payments' sources, so a new reason or a new manual provider fails it until someone decides where it goes. |
 | **Cancelled orders** (count, amount) | Orders with `status IN ('cancelled', 'expired')` and `refunded_at IS NULL`, dated by `updated_at` (nothing changes an order after that); the amount is what the order would have cost. Today only cancellation exists (a reseller's removal cancels their open orders); nothing sets `expired`. An order refunded before delivery is also `cancelled` but was paid: it counts as a refund, not here. |
-| **Paid with** (per currency) | Events `order.paid.v1` in core's outbox with `amount > 0`, grouped by their `source`: **wallet** (the customer's balance, including a reseller's credit), **manual** (a payment staff approved: card to card, crypto, Zarinpal link) and **gateway** (Zarinpal, Telegram Stars or automatic USDT confirmed it). Each paid order publishes its event in the transaction of its purchase; a purchase with no event would be listed as **unknown**, so the rows always add up to revenue. |
+| **Paid with** (per currency) | Events `order.paid.v1` in core's outbox with `amount > 0`, grouped by their `source`: **wallet** (the customer's balance, including a reseller's credit), **manual** (a payment staff approved: card to card, crypto, Zarinpal link) and **gateway** (Zarinpal, Telegram Stars or automatic USDT confirmed it). Each paid order publishes its event in the transaction of its purchase; a purchase with no event would be listed as **unknown**, so the rows always add up to revenue. A gateway or manual row is split again by the event's `provider`, the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`), so Zarinpal, Stars and automatic USDT are separate rows (and card to card, crypto and Zarinpal link). Wallet, trial and free orders have no provider. Events from before the provider was recorded have none either: they stay in one row of their method with an empty provider, shown as "Gateway (provider not recorded)" or "Staff-approved (provider not recorded)", and the rows still add up to revenue. |
 | **Top plans** (per currency) | The purchase entries joined to their order and plan: paid orders and revenue per plan, best revenue first, at most 20 plans per currency. A plan sold in two currencies appears under each. |
 
 ## What the reports do not say (yet)
 
-- **Which gateway.** The sources above are wallet, manual and gateway. Telling Zarinpal from Stars from automatic USDT
-  needs the payments service, whose `payment_intents` (schema `payments`) core cannot read, and which core does not store
-  per order. A later change can record the provider on the order, or ask payments for a per-provider report
-  (`GatewayReport` exists, per gateway and for the owner only).
+- **Which provider, for payments made before it was recorded.** `order.paid.v1` carries the `provider` from now on.
+  Orders paid before that have none, and core cannot read payments' `payment_intents` (schema `payments`) to fill it in,
+  so they stay in their method's "provider not recorded" row; no history is rewritten. (`GatewayReport` exists in
+  payments, per gateway and for the owner only.)
 - **Expired payment intents of manual payments, and intents that were never paid.** They live in the payments schema.
   What core knows is the failed and rejected payments above and the cancelled orders.
-- **Churn, and revenue by customer.** Not built.
-- **Jalali months and weeks.** Buckets are Gregorian in both languages; the dates are shown in the Jalali calendar in
-  Persian. Jalali buckets are a follow-up.
+- **Churn is a state read now, not a history.** The numbers use each service's current expiry and the moment the report
+  is read ("as of now"). A customer who comes back after the grace period (a new purchase, or a renewal of the old
+  service) leaves the bucket they were counted in, so a past period's churn can shrink later. Nothing records when a
+  service was last seen churned. There is no churn **rate** (churned over active at the start of the period): the
+  active-at-start count would have to be rebuilt from expiries that were later moved, and the result would not be
+  reproducible. Divide the numbers yourself if you need an approximate rate.
+- **Revenue by customer.** Not built.
 
 ## The daily summary in Telegram
 
@@ -193,15 +208,15 @@ switch for staff who may change settings (`GET /api/v1/reports/daily-summary`, `
 ## API
 
 All under `/api/v1/reports`, `GET`, session cookie, permission `reports.read`. Query: `range` or `from` + `to`,
-`group` (summary only), `tz`.
+`group` (summary only), `churn_grace_days` (summary and its CSV: 0 to 90, 7 when missing; anything else is a 400), `calendar` (`gregorian` or `jalali`; summary, and the CSV files as the summary's), `tz`.
 
 | Endpoint | Answer |
 |---|---|
 | `/daily-summary` | `{enabled, time, tz}`: whether the daily summary in Telegram is on, its time (`HH:MM`) and the store's zone (ignores the range) |
-| `/summary` | `{from, to, group, tz, currencies, buckets, totals}`. A bucket is `{date, partial, new_customers, trials, currencies}`; `currencies` maps each currency to `{revenue, refunds: {count, amount}, net, orders, new_orders, renewals, traffic_topups, topups: {count, amount}, rejected: {count, amount}, gateway_failed: {count, amount}, cancelled: {count, amount}}` (`rejected` is by staff, `gateway_failed` is the gateway line). `totals` has the same shape, summed bucket by bucket within each currency. |
+| `/summary` | `{from, to, group, calendar, tz, churn_grace_days, currencies, buckets, totals}`. A bucket is `{date, partial, new_customers, trials, churned_services, churned_customers, at_risk, currencies}`; `currencies` maps each currency to `{revenue, refunds: {count, amount}, net, orders, new_orders, renewals, traffic_topups, topups: {count, amount}, rejected: {count, amount}, gateway_failed: {count, amount}, cancelled: {count, amount}}` (`rejected` is by staff, `gateway_failed` is the gateway line). `totals` has the same shape, summed bucket by bucket within each currency. |
 | `/plans` | `{from, to, tz, plans: [{plan_id, name: {fa, en}, currency, orders, revenue}]}` |
-| `/methods` | `{from, to, tz, methods: [{method, currency, orders, revenue}]}` |
-| `/summary.csv` | The summary as a file. |
+| `/methods` | `{from, to, tz, methods: [{method, provider, currency, orders, revenue}]}`; `provider` is always there, empty for wallet, unknown and orders paid before it was recorded |
+| `/summary.csv` | The summary as a file (`...-jalali.csv` when `calendar=jalali`). |
 | `/orders.csv` | Every order paid in the range, as a file. |
 
 ### CSV files
@@ -211,13 +226,12 @@ Persian right), rows streamed from the database one at a time. Amounts are plain
 unit (`2.500000` USDT), times in UTC (and local time where it says so), and any text a customer or staff chose
 (username, plan names) gets a single quote in front when it starts with `=`, `+`, `-`, `@`, a tab or a carriage
 return, or with spaces or line breaks and then one of the first four, so a spreadsheet cannot run it as a formula.
-Numbers are numbers: a negative net stays `-100000`. (`ledger.csv` keeps its own, simpler rule and its own
-streaming.)
+Numbers are numbers: a negative net stays `-100000`. (`ledger.csv` and `audit.csv` follow the same rules, see below.)
 
 Nothing is sent until the file has its first row. A failure before that (the range holds too much to read in time, the
 database is down) is an error answer (503 with `timeout` or `unavailable`), never a 200 with only a header that looks
 like "no orders". A failure after rows went out ends the file with a line `# export incomplete: <reason>`. Every export
-is written to the audit log as `export.reports` when it ends, with its kind, range, group, zone, number of rows and
+is written to the audit log as `export.reports` when it ends, with its kind, range, group, calendar, zone, number of rows and
 outcome: `complete`, `incomplete` (the file ended short) or `failed` (nothing was sent).
 
 - `summary.csv`: one row per bucket and currency (`period_start`, `partial_period`, `currency`, `revenue`,
@@ -225,15 +239,23 @@ outcome: `complete`, `incomplete` (the file ended short) or `failed` (nothing wa
   `refund_count`, `rejected_count`, `rejected_amount` (by staff), `gateway_failed_count`, `gateway_failed_amount`,
   `cancelled_count`, `cancelled_amount`), and one row per bucket with an **empty currency** that holds `new_customers`
   and `free_trials` (the counts of people), so no column adds up two currencies or counts a person twice. There is no
-  totals row, for the same reason.
+  totals row, for the same reason. The people row also holds the churn counts in the last three columns,
+  `churned_services`, `churned_customers` and `at_risk_services` (empty on the currency rows). New columns are only
+  ever added at the end, so earlier columns keep their positions.
 - `orders.csv`: `paid_at_utc`, `paid_at_local`, `order_id`, `type`, `telegram_id`, `username`, `plan_fa`, `plan_en`,
-  `amount`, `currency`, `paid_with` (wallet, manual, gateway, or empty), `refunded_amount`; oldest first; at most
+  `amount`, `currency`, `paid_with` (wallet, manual, gateway, or empty), `refunded_amount`, `provider` (the provider that
+  took the payment, empty for wallet, trial and free orders and for orders paid before it was recorded; always the last
+  column, so earlier columns keep their positions); oldest first; at most
   100,000 rows, then a note line asks for a shorter range.
 
 ## Indexes
 
 Migration `00019_daily_summary.sql` adds the summary's claim table and no index of its own; the reports are not touched
-by it. Migration `00018_reports_indexes.sql` adds three partial indexes and nothing else: `outbox_core_reports_idx`
+by it.
+
+Migration `00020_churn_index.sql` adds `subscriptions_expires_idx` (`expires_at` of the services that have an expiry and are not pending or deleted), which the churn queries read by range; `Down` drops it. A test fails if the planner stops using it.
+
+Migration `00018_reports_indexes.sql` adds three partial indexes and nothing else: `outbox_core_reports_idx`
 (`topic, created_at` for the two event topics the reports read), `outbox_core_order_paid_idx` (the order id of each
 `order.paid.v1` event: the orders export looks up how each order was paid, one probe per order) and
 `orders_unpaid_end_idx` (`updated_at` of cancelled and expired orders). The ledger queries use the indexes of

@@ -55,3 +55,9 @@ worktrees/
 /web/dashboard/dist/*
 !/web/dashboard/dist/README.txt
 /web/dashboard/node_modules/
+
+# The Mini App store's build output and modules, the same way.
+!/web/miniapp/dist/
+/web/miniapp/dist/*
+!/web/miniapp/dist/README.txt
+/web/miniapp/node_modules/

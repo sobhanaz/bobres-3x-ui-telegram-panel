@@ -13,12 +13,12 @@ import (
 
 const subscriptionCols = `id, user_id, order_id, COALESCE(server_id::text, ''), client_email, sub_id, status,
 	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at,
-	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label`
+	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token`
 
 func subscriptionDest(sc *Subscription) []any {
 	return []any{&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
 		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
-		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label}
+		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken}
 }
 
 func scanSubscription(row pgx.Row) (*Subscription, error) {
@@ -33,17 +33,18 @@ func scanSubscription(row pgx.Row) (*Subscription, error) {
 // CreateSubscription inserts a subscription row (pending until provisioned).
 func (s *Store) CreateSubscription(ctx context.Context, q querier, sub *Subscription) (*Subscription, error) {
 	sub.ID = buuid.MustV7().String()
+	sub.PageToken = NewPageToken()
 	if sub.Status == "" {
 		sub.Status = "pending"
 	}
 	got, err := scanSubscription(q.QueryRow(ctx, `
 		INSERT INTO core.subscriptions
 			(id, user_id, order_id, server_id, client_email, sub_id, status,
-			 expires_at, traffic_total_bytes, traffic_used_bytes, label)
-		VALUES ($1, $2, $3, NULLIF($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11)
+			 expires_at, traffic_total_bytes, traffic_used_bytes, label, page_token)
+		VALUES ($1, $2, $3, NULLIF($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING `+subscriptionCols,
 		sub.ID, sub.UserID, sub.OrderID, sub.ServerID, sub.ClientEmail,
-		sub.SubID, sub.Status, sub.ExpiresAt, sub.TrafficTotal, sub.TrafficUsed, sub.Label))
+		sub.SubID, sub.Status, sub.ExpiresAt, sub.TrafficTotal, sub.TrafficUsed, sub.Label, sub.PageToken))
 	if err != nil {
 		return nil, fmt.Errorf("create subscription: %w", err)
 	}

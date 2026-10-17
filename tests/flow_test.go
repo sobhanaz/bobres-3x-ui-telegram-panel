@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -140,10 +141,22 @@ func TestPurchaseLoop(t *testing.T) {
 		t.Fatal(err)
 	}
 	topics := map[string]int{}
+	paidWith := map[string]int{} // "<source>/<provider>" of every order.paid.v1
 	for _, e := range evs.GetEvents() {
 		topics[e.GetTopic()]++
+		if e.GetTopic() == "order.paid.v1" {
+			var op struct{ Source, Provider string }
+			if err := json.Unmarshal(e.GetPayload(), &op); err != nil {
+				t.Fatal(err)
+			}
+			paidWith[op.Source+"/"+op.Provider]++
+		}
 	}
 	if topics["subscription.provisioned.v1"] != 3 || topics["order.paid.v1"] != 3 || topics["wallet.credited.v1"] != 1 {
 		t.Fatalf("core feed: %v", topics)
+	}
+	// Only the card payment has a provider; the trial and the wallet purchase have none.
+	if paidWith["manual/manual_card"] != 1 || paidWith["trial/"] != 1 || paidWith["wallet/"] != 1 || len(paidWith) != 3 {
+		t.Fatalf("order.paid.v1 by source/provider: %v", paidWith)
 	}
 }
