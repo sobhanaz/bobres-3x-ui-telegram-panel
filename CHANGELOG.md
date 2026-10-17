@@ -8,6 +8,8 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.4.0] — 2026-10-17
+
 ### Marzban support
 - A server is now 3x-ui or Marzban. Pick the panel software when adding a server (it is fixed afterwards); for Marzban
   enter an admin's `username:password` where 3x-ui takes an API token. It is stored encrypted in the provisioner like
