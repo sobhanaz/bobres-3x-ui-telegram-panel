@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,10 +29,13 @@ type scripted struct {
 	ps, license, ssl string
 	psErr, coreErr   error
 	calls            [][]string
+	mu               sync.Mutex // the status screen runs its checks in parallel
 }
 
 func (s *scripted) run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	s.mu.Lock()
 	s.calls = append(s.calls, args)
+	s.mu.Unlock()
 	switch {
 	case contains(args, "ps"):
 		return []byte(s.ps), s.psErr
