@@ -40,3 +40,8 @@ cd2b76a004815210000219395fffd3b4fb6837d5:cmd/bobres/install_test.go:generic-api-
 cd2b76a004815210000219395fffd3b4fb6837d5:cmd/bobres/install_test.go:generic-api-key:946
 cd2b76a004815210000219395fffd3b4fb6837d5:internal/core/domain/dashboard.go:generic-api-key:117
 cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-login.test.ts:generic-api-key:106
+# The same fake gateway keys, on lines that gained a //nolint:gosec comment.
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/gateway/idpay/idpay_test.go:generic-api-key:17
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/gateway/nextpay/nextpay_test.go:generic-api-key:17
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/web/keyed_test.go:generic-api-key:50
+8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/web/keyed_test.go:generic-api-key:54
