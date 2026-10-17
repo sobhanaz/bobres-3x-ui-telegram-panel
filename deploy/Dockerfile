@@ -7,7 +7,7 @@
 # The web dashboard: static files that core embeds (web/dashboard/embed.go). Built
 # on the build machine's own platform, since the files are the same for every
 # target: a multi-arch release does not run npm under emulation.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS dashboard
+FROM --platform=$BUILDPLATFORM node:25-alpine AS dashboard
 WORKDIR /web
 COPY web/dashboard/package.json web/dashboard/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -15,7 +15,7 @@ COPY web/dashboard/ ./
 RUN npm run build
 
 # The Telegram Mini App store, built the same way (web/miniapp/embed.go).
-FROM --platform=$BUILDPLATFORM node:24-alpine AS miniapp
+FROM --platform=$BUILDPLATFORM node:25-alpine AS miniapp
 WORKDIR /web
 COPY web/miniapp/package.json web/miniapp/package-lock.json ./
 RUN npm ci --no-audit --no-fund
