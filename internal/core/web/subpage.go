@@ -66,11 +66,11 @@ var pageTexts = map[string]pageText{
 			"depleted": "Traffic used up", "disabled": "Disabled"},
 	},
 	"fa": {
-		Title: "سرویس شما", Expires: "پایان", DaysLeftLabel: "زمان باقی‌مانده", Traffic: "ترافیک",
+		Title: "سرویس شما", Expires: "پایان", DaysLeftLabel: "زمان باقی\u200cمانده", Traffic: "ترافیک",
 		Renew: "تمدید یا افزایش حجم", LinkTitle: "لینک اشتراک",
-		LinkHint: "این لینک را در برنامه VPN خود وارد کنید یا کد QR را اسکن کنید. آن را محرمانه نگه دارید: هر کسی با این لینک می‌تواند از سرویس شما استفاده کند.",
+		LinkHint: "این لینک را در برنامه VPN خود وارد کنید یا کد QR را اسکن کنید. آن را محرمانه نگه دارید: هر کسی با این لینک می\u200cتواند از سرویس شما استفاده کند.",
 		QRAlt:    "کد QR لینک اشتراک", AppsTitle: "افزودن به برنامه", AddTo: "افزودن به",
-		AppsHint: "اگر دکمه‌ای کاری نکرد، ابتدا برنامه را نصب کنید یا لینک بالا را کپی کرده و در برنامه دستی اضافه کنید.",
+		AppsHint: "اگر دکمه\u200cای کاری نکرد، ابتدا برنامه را نصب کنید یا لینک بالا را کپی کرده و در برنامه دستی اضافه کنید.",
 		Support:  "پشتیبانی", Terms: "قوانین", Privacy: "حریم خصوصی", Unlimited: "نامحدود", NoExpiry: "بدون انقضا",
 		UsedOf: "{used} از {total} مصرف شده", UsedOnly: "{used} مصرف شده", DayOne: "{n} روز", DayMany: "{n} روز",
 		Status: map[string]string{"active": "فعال", "expiring_soon": "رو به پایان", "expired": "منقضی شده",
@@ -271,7 +271,7 @@ func (s *Server) pageData(r *http.Request, settings map[string]string, conf doma
 	if err != nil {
 		return nil, err
 	}
-	d.QR = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png))
+	d.QR = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)) //nolint:gosec // a data: URL of a PNG this code just made
 
 	cat := domain.Texts()
 	guide := func(key string) string {
@@ -286,10 +286,10 @@ func (s *Server) pageData(r *http.Request, settings map[string]string, conf doma
 	// The schemes are the ones the apps document; they are not verified on
 	// real devices (docs/15-subscription-page.md).
 	d.Apps = []pageApp{
-		{"v2rayNG", template.URL("v2rayng://install-config?url=" + enc), guide("subpage.guide.v2rayng")},
-		{"Hiddify", template.URL("hiddify://import/" + sub.SubLink), guide("subpage.guide.hiddify")},
-		{"Streisand", template.URL("streisand://import/" + sub.SubLink), guide("subpage.guide.streisand")},
-		{"V2Box", template.URL("v2box://install-sub?url=" + enc), guide("subpage.guide.v2box")},
+		{"v2rayNG", template.URL("v2rayng://install-config?url=" + enc), guide("subpage.guide.v2rayng")},   //nolint:gosec // fixed scheme, the link is query-escaped
+		{"Hiddify", template.URL("hiddify://import/" + sub.SubLink), guide("subpage.guide.hiddify")},       //nolint:gosec // fixed scheme prefix, so never a javascript: URL
+		{"Streisand", template.URL("streisand://import/" + sub.SubLink), guide("subpage.guide.streisand")}, //nolint:gosec // fixed scheme prefix, so never a javascript: URL
+		{"V2Box", template.URL("v2box://install-sub?url=" + enc), guide("subpage.guide.v2box")},            //nolint:gosec // fixed scheme, the link is query-escaped
 	}
 	return d, nil
 }

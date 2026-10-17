@@ -14,7 +14,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/idpay"
 )
 
-const apiKey = "6a7f99eb-7c20-4412-a972-6dfb7cd253a4"
+const apiKey = "6a7f99eb-7c20-4412-a972-6dfb7cd253a4" //nolint:gosec // a fake key for the test server
 
 func newGW(t *testing.T, sandbox bool) (*idpay.Gateway, *idpayfake.Server) {
 	t.Helper()

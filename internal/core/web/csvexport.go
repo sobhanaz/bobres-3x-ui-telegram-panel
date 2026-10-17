@@ -45,7 +45,7 @@ func exportAuditDetail(q url.Values, outcome string, rows int) map[string]any {
 // the deadline of the whole export) from a failure, as the reports' do.
 func exportTimeoutErr(err error) error {
 	if errors.Is(err, store.ErrReportTimeout) || errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("%w: %v", domain.ErrReportTimeout, err)
+		return fmt.Errorf("%w: %w", domain.ErrReportTimeout, err)
 	}
 	return err
 }

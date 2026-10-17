@@ -155,7 +155,7 @@ func TestWriteChecks(t *testing.T) {
 }
 
 func TestScrubURL(t *testing.T) {
-	for in, want := range map[string]string{
+	for in, want := range map[string]string{ //nolint:gosec // fake credentials in URLs the test scrubs
 		"dial redis://:pw@redis:6379/0: refused": "dial redis://redis:6379/0: refused",
 		"postgres://u:p@h/db failed":             "postgres://h/db failed",
 		"no url here":                            "no url here",

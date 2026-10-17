@@ -14,7 +14,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/nextpay"
 )
 
-const apiKey = "b11ee9c3-d23d-414e-8b6e-f2370baac97b"
+const apiKey = "b11ee9c3-d23d-414e-8b6e-f2370baac97b" //nolint:gosec // a fake key for the test server
 
 func newGW(t *testing.T) (*nextpay.Gateway, *nextpayfake.Server) {
 	t.Helper()

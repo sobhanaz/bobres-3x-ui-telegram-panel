@@ -47,11 +47,11 @@ func newKeyedFixture(t *testing.T) *keyedFixture {
 	f := &keyedFixture{st: st, idp: idpayfake.New(), np: nextpayfake.New()}
 	t.Cleanup(f.idp.Close)
 	t.Cleanup(f.np.Close)
-	ip, err := idpay.New(idpay.Config{APIKey: "6a7f99eb-7c20-4412-a972-6dfb7cd253a4", BaseURL: f.idp.URL})
+	ip, err := idpay.New(idpay.Config{APIKey: "6a7f99eb-7c20-4412-a972-6dfb7cd253a4", BaseURL: f.idp.URL}) //nolint:gosec // a fake key for the test server
 	if err != nil {
 		t.Fatal(err)
 	}
-	np, err := nextpay.New(nextpay.Config{APIKey: "d1c2b3a4-5e6f-4789-8abc-0d1e2f3a4b5c", BaseURL: f.np.URL})
+	np, err := nextpay.New(nextpay.Config{APIKey: "d1c2b3a4-5e6f-4789-8abc-0d1e2f3a4b5c", BaseURL: f.np.URL}) //nolint:gosec // a fake key for the test server
 	if err != nil {
 		t.Fatal(err)
 	}

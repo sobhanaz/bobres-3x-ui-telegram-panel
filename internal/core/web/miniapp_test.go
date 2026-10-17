@@ -30,7 +30,9 @@ func (v fakeVerifier) VerifyMiniApp(_ context.Context, initData string) (*botfil
 		return nil, fmt.Errorf("%w: signature", botfiles.ErrMiniAppAuth)
 	}
 	var id int64
-	fmt.Sscan(parts[1], &id)
+	if _, err := fmt.Sscan(parts[1], &id); err != nil {
+		return nil, fmt.Errorf("%w: id", botfiles.ErrMiniAppAuth)
+	}
 	u := &botfiles.MiniAppUser{ID: id}
 	if len(parts) > 2 {
 		u.Username = parts[2]
@@ -496,5 +498,5 @@ func mustReq(method, path string) *http.Request { return httptest.NewRequest(met
 // first characters of a time-ordered id, which clash within 16 milliseconds.
 func (m *miniFix) orderSub(u *store.User, p *store.Plan, status, subStatus string, expires time.Time, traffic int64) (*store.Order, *store.Subscription) {
 	time.Sleep(20 * time.Millisecond)
-	return m.fixture.order(u, p, status, subStatus, expires, traffic)
+	return m.order(u, p, status, subStatus, expires, traffic)
 }

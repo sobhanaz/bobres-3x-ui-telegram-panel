@@ -175,8 +175,9 @@ func (g *Gateway) Check(ctx context.Context, id string, c gateway.Charge) (gatew
 	if data.Code == nil { // no code is not code 0
 		return gateway.Result{}, errors.New("nextpay: unexpected verify response")
 	}
-	switch code := int(*data.Code); {
-	case code == 0:
+	code := int(*data.Code)
+	switch code {
+	case 0:
 		if data.OrderID != c.IntentID {
 			return gateway.Result{State: gateway.Failed, Reason: "not_found"}, nil
 		}
@@ -191,14 +192,14 @@ func (g *Gateway) Check(ctx context.Context, id string, c gateway.Charge) (gatew
 			return gateway.Result{}, errors.New("nextpay: verify answer without an amount")
 		}
 		return gateway.Result{State: gateway.Paid, Amount: amount, Currency: "IRR", Reference: gateway.Sanitize(data.Ref)}, nil
-	case code == -1 || code == -3: // waiting to be paid, or for the bank
+	case -1, -3: // waiting to be paid, or for the bank
 		return gateway.Result{State: gateway.Pending}, nil
-	case code == -2 || code == -4: // rejected by the payer or the bank, cancelled
+	case -2, -4: // rejected by the payer or the bank, cancelled
 		if c.Returned || c.ExpiresAt.IsZero() || !time.Now().Before(c.ExpiresAt) {
 			return gateway.Result{State: gateway.Failed, Reason: "gateway_failed"}, nil
 		}
 		return gateway.Result{State: gateway.Pending}, nil
-	case code == -34 || code == -37 || code == -38: // no such token
+	case -34, -37, -38: // no such token
 		return gateway.Result{State: gateway.Failed, Reason: "not_found"}, nil
 	default:
 		// Configuration (-33, -35, -39, -40), a payment already verified or

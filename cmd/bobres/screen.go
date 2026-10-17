@@ -145,10 +145,10 @@ func servicesOf(rows map[string]serviceRow, want []string) serviceStatus {
 			st.Down = append(st.Down, s)
 		}
 	}
-	switch {
-	case st.Up == st.Total:
+	switch st.Up {
+	case st.Total:
 		st.State = svcRunning
-	case st.Up == 0:
+	case 0:
 		st.State = svcStopped
 	default:
 		st.State = svcPartly

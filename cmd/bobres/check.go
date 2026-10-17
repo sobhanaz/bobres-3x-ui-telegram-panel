@@ -100,7 +100,7 @@ func (c *checker) run(args []string) int {
 			Fail    int    `json:"fail"`
 		}{Results: []line{}, Pass: pass, Warn: warn, Fail: fail}
 		for _, r := range results {
-			doc.Results = append(doc.Results, line{r.Name, r.Status, r.Detail})
+			doc.Results = append(doc.Results, line(r))
 		}
 		b, _ := json.MarshalIndent(doc, "", "  ")
 		fmt.Fprintln(o.out, string(b))
@@ -179,13 +179,10 @@ func checkEnv(env map[string]string) Result {
 	case !botTokenRe.MatchString(t):
 		bad = append(bad, "BOBRES_TELEGRAM_BOT_TOKEN (not shaped like a @BotFather token)")
 	}
-	switch id := env["BOBRES_ADMIN_TELEGRAM_ID"]; {
-	case id == "":
+	if id := env["BOBRES_ADMIN_TELEGRAM_ID"]; id == "" {
 		missing = append(missing, "BOBRES_ADMIN_TELEGRAM_ID")
-	default:
-		if n, err := strconv.ParseInt(id, 10, 64); err != nil || n <= 0 {
-			bad = append(bad, "BOBRES_ADMIN_TELEGRAM_ID (not a positive number)")
-		}
+	} else if n, err := strconv.ParseInt(id, 10, 64); err != nil || n <= 0 {
+		bad = append(bad, "BOBRES_ADMIN_TELEGRAM_ID (not a positive number)")
 	}
 	if len(missing)+len(bad) == 0 {
 		return Result{"Config", Pass, ".env has every required setting"}
@@ -421,7 +418,7 @@ func parseCoreResults(out []byte, runErr error) []Result {
 				default:
 					r.Status = Warn
 				}
-				rs = append(rs, Result{r.Name, r.Status, r.Detail})
+				rs = append(rs, Result(r))
 			}
 			return rs
 		}

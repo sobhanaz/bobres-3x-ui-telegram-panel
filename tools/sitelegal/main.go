@@ -66,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 	for name, data := range files {
-		if err := os.WriteFile(filepath.Join(*out, name), data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(*out, name), data, 0o644); err != nil { //nolint:gosec // static site pages, meant to be world-readable
 			fmt.Fprintln(os.Stderr, "sitelegal:", err)
 			os.Exit(1)
 		}
@@ -117,7 +117,7 @@ const head = `<!DOCTYPE html>
 
 func banner(fa bool) string {
 	if fa {
-		return "پیش‌نویس. این متن هنوز بازبینی حقوقی نشده است و مشورت حقوقی نیست. عبارت‌های «[OWNER: …]» و «[LAWYER: …]» جای خالی‌اند، نه متن نهایی."
+		return "پیش\u200cنویس. این متن هنوز بازبینی حقوقی نشده است و مشورت حقوقی نیست. عبارت\u200cهای «[OWNER: …]» و «[LAWYER: …]» جای خالی\u200cاند، نه متن نهایی."
 	}
 	return "DRAFT. A lawyer has not reviewed this text, and it is not legal advice. The “[OWNER: …]” and “[LAWYER: …]” parts are blanks, not final wording."
 }
@@ -134,7 +134,7 @@ func pageHTML(title, body string, fa bool, slug string) string {
 	other, otherName, back := slug+".fa.html", "فارسی", "All legal drafts"
 	idx := "./"
 	if fa {
-		other, otherName, back = slug+".html", "English", "همهٔ پیش‌نویس‌های حقوقی"
+		other, otherName, back = slug+".html", "English", "همهٔ پیش\u200cنویس\u200cهای حقوقی"
 		idx = "index.fa.html"
 	}
 	var b strings.Builder
@@ -149,7 +149,7 @@ func indexHTML(fa bool) string {
 	l, dir := lang(fa)
 	title, intro, other, otherName := "Legal drafts", "Drafts of the texts BOBRES operators and the vendor agree to. A lawyer must review each before the public launch.", "index.fa.html", "فارسی"
 	if fa {
-		title, intro, other, otherName = "پیش‌نویس‌های حقوقی", "پیش‌نویس متن‌هایی که اپراتورهای BOBRES و فروشنده می‌پذیرند. هر کدام باید پیش از انتشار عمومی از وکیل بازبینی بگیرد.", "./", "English"
+		title, intro, other, otherName = "پیش\u200cنویس\u200cهای حقوقی", "پیش\u200cنویس متن\u200cهایی که اپراتورهای BOBRES و فروشنده می\u200cپذیرند. هر کدام باید پیش از انتشار عمومی از وکیل بازبینی بگیرد.", "./", "English"
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, head, l, dir, html.EscapeString(title), html.EscapeString(banner(fa)))

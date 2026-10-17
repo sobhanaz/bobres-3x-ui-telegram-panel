@@ -968,7 +968,7 @@ func TestFreshInstallIssuesTheOwnerLogin(t *testing.T) {
 	// Not in any file the install wrote.
 	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { //nolint:errcheck // a test scan
 		if err == nil && !d.IsDir() {
-			if b, _ := os.ReadFile(path); strings.Contains(string(b), "Kq7mWz3NpR9xTv2H") {
+			if b, _ := os.ReadFile(path); strings.Contains(string(b), "Kq7mWz3NpR9xTv2H") { //nolint:gosec // a test scan, in a temp dir
 				t.Errorf("the password is in %s", path)
 			}
 		}

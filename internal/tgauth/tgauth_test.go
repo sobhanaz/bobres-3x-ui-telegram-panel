@@ -1,6 +1,7 @@
 package tgauth
 
 import (
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestValidateKnownVector(t *testing.T) {
 	if err != nil || d.User.ID != 4242 {
 		t.Fatalf("%v %+v", err, d)
 	}
-	if _, err := Validate(strings.Replace(initData, "AAH", "AAI", 1), token, time.Hour, now); err != ErrSignature {
+	if _, err := Validate(strings.Replace(initData, "AAH", "AAI", 1), token, time.Hour, now); !errors.Is(err, ErrSignature) {
 		t.Fatalf("a changed field must fail the signature check: %v", err)
 	}
 }
@@ -59,7 +60,7 @@ func TestValidateRefuses(t *testing.T) {
 		"no user id":      {Sign(token, User{}, now, nil), token, ErrMalformed},
 	}
 	for name, c := range cases {
-		if _, err := Validate(c.data, c.token, time.Hour, now); err != c.want {
+		if _, err := Validate(c.data, c.token, time.Hour, now); !errors.Is(err, c.want) {
 			t.Errorf("%s: got %v, want %v", name, err, c.want)
 		}
 	}
