@@ -47,7 +47,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 # The backup service: pg_dump from the same major version as the database (pg_dump
 # must be at least the server's), plus the Go /app. It runs as the same non-root uid
 # as the other images; the installer gives that uid the host's backups directory.
-FROM postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea AS backup
+FROM postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873 AS backup
 RUN addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres \
  && mkdir -p /backups && chown 65532:65532 /backups && chmod 700 /backups
 COPY --from=build /out/app /app
