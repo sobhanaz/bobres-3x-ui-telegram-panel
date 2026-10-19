@@ -181,7 +181,8 @@ func installSh(t *testing.T) string {
 
 // The words and links of the banner are one thing in Go and one in install.sh.
 func TestInstallShBrandMatchesGo(t *testing.T) {
-	out := bashOut(t, `BOBRES_INSTALL_SOURCE_ONLY=1; . `+installSh(t)+`; printf '%s\n' "$BRAND_COPYRIGHT" "$BRAND_MADE_BY" "$BRAND_TAGLINE" "$BRAND_LICENSE" "$BRAND_SITE" "$BRAND_REPO" "$BRAND_ISSUES" "$BRAND_SECURITY"`)
+	out := bashOut(t, `BOBRES_INSTALL_SOURCE_ONLY=1; . "$INSTALL_SH"; printf '%s\n' "$BRAND_COPYRIGHT" "$BRAND_MADE_BY" "$BRAND_TAGLINE" "$BRAND_LICENSE" "$BRAND_SITE" "$BRAND_REPO" "$BRAND_ISSUES" "$BRAND_SECURITY"`,
+		"INSTALL_SH="+installSh(t))
 	want := []string{brandCopyright, brandMadeBy, brandTagline, brandLicense, brandSite, brandRepo, brandIssues, brandSecurity}
 	got := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(got) != len(want) {
@@ -199,7 +200,8 @@ func TestInstallShBrandMatchesGo(t *testing.T) {
 
 // The step count the script assumes for `bobres install`, and the weights, add up.
 func TestInstallShStepsMatchGo(t *testing.T) {
-	out := bashOut(t, `BOBRES_INSTALL_SOURCE_ONLY=1; . `+installSh(t)+`; w=0; for x in "${STEP_WEIGHTS[@]}"; do w=$((w + x)); done; echo "$CLI_STEPS ${#STEP_KEYS[@]} ${#STEP_NAMES[@]} ${#STEP_WEIGHTS[@]} $w"`)
+	out := bashOut(t, `BOBRES_INSTALL_SOURCE_ONLY=1; . "$INSTALL_SH"; w=0; for x in "${STEP_WEIGHTS[@]}"; do w=$((w + x)); done; echo "$CLI_STEPS ${#STEP_KEYS[@]} ${#STEP_NAMES[@]} ${#STEP_WEIGHTS[@]} $w"`,
+		"INSTALL_SH="+installSh(t))
 	var cli, keys, names, weights, sum int
 	if _, err := fmt.Sscan(out, &cli, &keys, &names, &weights, &sum); err != nil {
 		t.Fatalf("%q: %v", out, err)
@@ -223,8 +225,8 @@ func TestInstallShStepsMatchGo(t *testing.T) {
 
 // The art and the lines of install.sh's banner are the CLI's (the version line aside).
 func TestInstallShBannerMatchesGo(t *testing.T) {
-	out := bashOut(t, `BOBRES_INSTALL_SOURCE_ONLY=1; . `+installSh(t)+`; ui_init; ui_banner "`+bannerBuild.line()+`"`,
-		"BOBRES_FORCE_TTY=", "TERM=xterm", "COLUMNS=100", "LC_ALL=C")
+	out := bashOut(t, `BOBRES_INSTALL_SOURCE_ONLY=1; . "$INSTALL_SH"; ui_init; ui_banner "`+bannerBuild.line()+`"`,
+		"INSTALL_SH="+installSh(t), "BOBRES_FORCE_TTY=", "TERM=xterm", "COLUMNS=100", "LC_ALL=C")
 	sh := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	goLines := bannerLines(termUI{width: 100}, bannerBuild)
 	if len(sh) != len(goLines) {

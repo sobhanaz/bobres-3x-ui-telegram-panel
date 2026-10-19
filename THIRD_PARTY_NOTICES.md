@@ -19,21 +19,21 @@ Every module with a package linked into one of the release binaries (`bobres`, `
 | github.com/jackc/pgpassfile | v1.0.0 | MIT | Copyright (c) 2019 Jack Christensen |
 | github.com/jackc/pgservicefile | v0.0.0-20240606120523-5a60cdf6a761 | MIT | Copyright (c) 2020 Jack Christensen |
 | github.com/jackc/pgx/v5 | v5.11.0 | MIT | Copyright (c) 2013-2021 Jack Christensen |
-| github.com/jackc/puddle/v2 | v2.2.2 | MIT | Copyright (c) 2018 Jack Christensen |
+| github.com/jackc/puddle/v2 | v2.2.3 | MIT | Copyright (c) 2018 Jack Christensen |
 | github.com/mfridman/interpolate | v0.0.2 | MIT | Copyright (c) 2014-2017 Buildkite Pty Ltd; Copyright (c) 2023 Michael Fridman |
-| github.com/pressly/goose/v3 | v3.28.0 | MIT | Original work Copyright (c) 2012 Liam Staskawicz; Modified work Copyright (c) 2016 Vojtech Vitek; Modified work Copyright (c) 2021 Michael Fridman, Vojtech Vitek |
-| github.com/redis/go-redis/v9 | v9.22.0 | BSD-2-Clause | Copyright (c) 2013 The github.com/redis/go-redis Authors |
-| github.com/sethvargo/go-retry | v0.4.0 | Apache-2.0 | (none stated in the module) |
+| github.com/pressly/goose/v3 | v3.29.0 | MIT | Original work Copyright (c) 2012 Liam Staskawicz; Modified work Copyright (c) 2016 Vojtech Vitek; Modified work Copyright (c) 2021 Michael Fridman, Vojtech Vitek |
+| github.com/redis/go-redis/v9 | v9.23.0 | BSD-2-Clause | Copyright (c) 2013 The github.com/redis/go-redis Authors |
+| github.com/sethvargo/go-retry | v0.5.0 | Apache-2.0 | (none stated in the module) |
 | github.com/skip2/go-qrcode | v0.0.0-20200617195104-da1b6568686e | MIT | Copyright (c) 2014 Tom Harwood |
-| go.uber.org/atomic | v1.11.0 | MIT | Copyright (c) 2016 Uber Technologies, Inc |
+| go.uber.org/atomic | v1.12.0 | MIT | Copyright (c) 2016 Uber Technologies, Inc |
 | go.uber.org/multierr | v1.11.0 | MIT | Copyright (c) 2017-2021 Uber Technologies, Inc |
-| golang.org/x/crypto | v0.57.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
-| golang.org/x/net | v0.60.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
-| golang.org/x/sync | v0.23.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
-| golang.org/x/sys | v0.48.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
-| golang.org/x/term | v0.46.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
-| golang.org/x/text | v0.42.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
-| google.golang.org/genproto/googleapis/rpc | v0.0.0-20260831171406-18b4a7587f8a | Apache-2.0 | Copyright 2026 Google LLC |
+| golang.org/x/crypto | v0.58.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
+| golang.org/x/net | v0.61.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
+| golang.org/x/sync | v0.24.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
+| golang.org/x/sys | v0.49.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
+| golang.org/x/term | v0.47.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause | Copyright 2009 The Go Authors |
+| google.golang.org/genproto/googleapis/rpc | v0.0.0-20261005182115-fad411399dd8 | Apache-2.0 | Copyright 2026 Google LLC |
 | google.golang.org/grpc | v1.84.0 | Apache-2.0 | Copyright 2014 gRPC authors |
 | google.golang.org/protobuf | v1.36.12 | BSD-3-Clause | Copyright (c) 2018 The Go Authors. All rights reserved |
 
