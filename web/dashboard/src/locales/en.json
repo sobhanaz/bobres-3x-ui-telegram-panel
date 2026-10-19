@@ -1119,14 +1119,14 @@
   },
   "staff": {
     "intro": "People who can use this dashboard. Every change logs that person out and is kept in the audit log with your reason.",
-    "no_owner": "No store owner is set in the server settings, so any owner can give or take the owner role. Set one with the bobres menu on the server.",
+    "no_owner": "No store owner is set in the server settings, so any owner can give or take the owner role. Add one on the server: bobres admin owners add.",
     "add": "Add staff",
     "none": "No staff yet.",
     "member": "Staff member",
     "role": "Role",
     "you": "You",
     "store_owner": "Store owner",
-    "owner_note": "Set in the server settings (bobres menu); it cannot be changed here.",
+    "owner_note": "Named in the server settings (bobres admin owners); it cannot be changed here.",
     "login_col": "Login",
     "login": {
       "off": "Bot link only",

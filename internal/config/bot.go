@@ -17,8 +17,10 @@ type Bot struct {
 	// WebhookSecret is then required and checked on every delivery.
 	WebhookURL    string
 	WebhookSecret string
-	// AdminTelegramID receives operational alerts (provisioning failures).
-	AdminTelegramID int64
+	// AdminTelegramIDs are the root admins (BOBRES_ADMIN_TELEGRAM_ID): they
+	// receive operational alerts (payments to review, provisioning failures)
+	// and the backups. The first one is the primary.
+	AdminTelegramIDs []int64
 	// TelegramAPIURL replaces https://api.telegram.org (a local Bot API server,
 	// or the fake used by the CI end-to-end run). Empty = Telegram.
 	TelegramAPIURL string
@@ -64,7 +66,7 @@ func LoadBot() (Bot, error) {
 		b.WebhookSecret, err = requireToken("BOBRES_TELEGRAM_WEBHOOK_SECRET", c.Env)
 		keep(err)
 	}
-	b.AdminTelegramID, err = telegramID("BOBRES_ADMIN_TELEGRAM_ID")
+	b.AdminTelegramIDs, err = telegramIDs("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
 	b.PeerCoreToken, err = optionalToken("BOBRES_PEER_CORE_TOKEN", c.Env)
 	keep(err)

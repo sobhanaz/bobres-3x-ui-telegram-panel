@@ -146,7 +146,7 @@ func TestMaintenanceMode(t *testing.T) {
 	// reaches the customer (notifications are never gated).
 	sup.text("/menu")
 	sup.lastHas("Main menu")
-	owner.press("adm:pend")
+	owner.press("adm:pi:")
 	owner.press("adm:ok:")
 	u.eventuallySees("Payment confirmed")
 

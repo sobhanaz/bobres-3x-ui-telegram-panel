@@ -48,7 +48,8 @@ const (
 	// working, renewing and topping up over the limit.
 	FreeMaxActiveServices = 25
 	// FreeStaffSeats: staff members: admins, support and owners, except the
-	// owner the server names (BOBRES_ADMIN_TELEGRAM_ID), who takes none.
+	// main owner the server names (the first id in BOBRES_ADMIN_TELEGRAM_ID),
+	// who takes none.
 	FreeStaffSeats = 2
 )
 

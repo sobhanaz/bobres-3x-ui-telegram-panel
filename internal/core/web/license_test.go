@@ -32,7 +32,7 @@ func licenseFixture(t *testing.T) (*fixture, *browser, func(func(*license.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.dom = domain.New(f.st, domain.Config{OwnerTelegramID: ownerTG,
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG},
 		License: domain.LicenseConfig{Keys: license.KeyRing{"k1": pub}, Domain: "panel.example.com", SellerContact: testSellerContact}})
 	f.api.cfg.Domain = f.dom
 	f.api.cfg.Servers = &fakeServers{}
@@ -234,7 +234,7 @@ func TestLicenseContactIsTheOwners(t *testing.T) {
 	if _, out := b.do(http.MethodGet, "/api/v1/license", nil); obj(out["effective"])["contact"] != testSellerContact {
 		t.Fatalf("the owner's contact: %v", out["effective"])
 	}
-	f.dom = domain.New(f.st, domain.Config{OwnerTelegramID: ownerTG, License: domain.LicenseConfig{Domain: "panel.example.com"}})
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, License: domain.LicenseConfig{Domain: "panel.example.com"}})
 	f.api.cfg.Domain = f.dom
 	if _, out := b.do(http.MethodGet, "/api/v1/license", nil); obj(out["effective"])["contact"] != "" {
 		t.Fatalf("a contact nobody set: %v", out["effective"])

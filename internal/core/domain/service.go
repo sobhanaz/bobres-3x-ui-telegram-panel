@@ -23,8 +23,13 @@ const trialOnceConstraint = "ledger_entries_trial_once_idx"
 
 // Config tunes the domain.
 type Config struct {
-	// OwnerTelegramID is promoted to the owner role on first contact.
-	OwnerTelegramID int64
+	// OwnerTelegramIDs are the root admins: the store owners the server's
+	// settings name (BOBRES_ADMIN_TELEGRAM_ID). Each is promoted to the owner
+	// role on first contact and when core starts, and none can be changed
+	// from the dashboard or the bot. The first is the main owner: the only
+	// one who takes no staff seat, and the one `bobres admin password`
+	// serves by default. Ids that are not positive, and repeats, are dropped.
+	OwnerTelegramIDs []int64
 	// Timezone is BOBRES_TIMEZONE: the zone of the sales reports' days when the
 	// general.timezone setting is empty ("" or a name core cannot load: the
 	// report default, Asia/Tehran).
@@ -54,6 +59,7 @@ func New(st *store.Store, cfg Config) *Service {
 	if cfg.Log == nil {
 		cfg.Log = slog.Default()
 	}
+	cfg.OwnerTelegramIDs = cleanOwnerIDs(cfg.OwnerTelegramIDs)
 	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1),
 		bkick: make(chan struct{}, 1), lkick: make(chan struct{}, 1)}
 }

@@ -49,7 +49,8 @@ var configKeys = []configKey{
 			}
 			return nil
 		}},
-	{name: "BOBRES_ADMIN_TELEGRAM_ID", services: []string{"core", "bot"}, help: "the owner's numeric Telegram id (core makes them the owner when it starts)"},
+	{name: "BOBRES_ADMIN_TELEGRAM_ID", services: []string{"core", "bot"}, check: checkAdminIDs,
+		help: "the owners' numeric Telegram ids, separated by commas, the main owner first (core makes each of them an owner when it starts; bobres admin owners adds and removes one)"},
 	{name: "BOBRES_LOG_LEVEL", services: logServices, lower: true, help: "debug, info, warn or error",
 		check: oneOf("debug", "info", "warn", "error")},
 	{name: "BOBRES_LOG_FORMAT", services: logServices, lower: true, help: "json or text", check: oneOf("json", "text")},
@@ -95,6 +96,19 @@ var configKeys = []configKey{
 var derivedKeys = map[string]string{
 	"BOBRES_ZARINPAL_HOST":  "BOBRES_ZARINPAL_PUBLIC_URL",
 	"BOBRES_BACKUP_NETWORK": "BOBRES_BACKUP_S3_ENDPOINT",
+}
+
+// checkAdminIDs checks BOBRES_ADMIN_TELEGRAM_ID: one Telegram id or several
+// separated by commas, at least one.
+func checkAdminIDs(v string) error {
+	ids, err := config.ParseTelegramIDs(v)
+	if err != nil {
+		return fmt.Errorf("the owners are positive numbers separated by commas (ask @userinfobot): %w", err)
+	}
+	if len(ids) == 0 {
+		return errors.New("name at least one owner")
+	}
+	return nil
 }
 
 func oneOf(allowed ...string) func(string) error {

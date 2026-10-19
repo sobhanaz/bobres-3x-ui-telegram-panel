@@ -367,7 +367,7 @@ func TestUSDTTXIDUsedTwiceIsRefusedAtReview(t *testing.T) {
 
 	w.scan() // the exact amount pays the automatic payment
 	u.eventuallySees("Payment confirmed")
-	owner.press("adm:pend")
+	owner.press("adm:pi:")
 	owner.sees(txid)
 	owner.press("adm:ok:")
 	owner.toast("already paid another payment")

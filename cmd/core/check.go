@@ -77,7 +77,7 @@ func checkCmd(args []string, out, errOut io.Writer) int {
 		return writeChecks(out, asJSON, []checkResult{{"Database", checkFail, "cannot connect: " + oneLine(err.Error())}})
 	}
 	defer st.Close()
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, Timezone: cfg.Timezone,
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, Timezone: cfg.Timezone,
 		License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
 	c := &coreChecker{
 		pingDB:    func(c context.Context) error { return st.DB().Ping(c) },

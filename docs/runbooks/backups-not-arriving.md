@@ -58,7 +58,7 @@ The file stays in `/opt/bobres/backups` either way. The Backups tab (and the sid
 | Reason | Meaning | Fix |
 |---|---|---|
 | Over Telegram's 50 MB limit (`too_big`) | The Bot API sends files up to 50 MB; the owner gets a message instead | Copy backups off the server yourself (`scp root@server:/opt/bobres/backups/bobres-<stamp>.bkp .`), or run a local Bot API server (`BOBRES_TELEGRAM_API_URL`), which allows 2000 MB |
-| The bot has no owner set (`no_owner`) | `BOBRES_ADMIN_TELEGRAM_ID` is empty | `sudo bobres` > "Change the owner (admin) Telegram ID" |
+| The bot has no owner set (`no_owner`) | `BOBRES_ADMIN_TELEGRAM_ID` is empty | `sudo bobres` > "Owners", or `sudo bobres admin owners add <telegram id>` |
 | The owner has blocked the bot (`blocked`) | The owner blocked the bot, or never pressed /start | Open the bot from the owner's account, unblock it, send /start |
 | The bot was busy sending another backup (`busy`) | Two backups at once | Nothing; the next one goes. Or `sudo bobres backup` |
 | Telegram refused it (`telegram_error`) | Telegram answered with an error (shown) | A token problem: [bot token revoked](bot-token-revoked.md). Otherwise the error says what |

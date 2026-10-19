@@ -49,6 +49,8 @@ var backupNameRe = regexp.MustCompile(`^bobres-(\d{8}T\d{6}Z)\.bkp$`)
 type DocumentSender interface {
 	MessageSender
 	SendDocumentUpload(ctx context.Context, chatID int64, name string, r io.Reader, size int64, caption string) (*tg.Message, error)
+	// SendDocument re-sends a file Telegram already has, by its file id.
+	SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error)
 }
 
 // Delivery configures Deliver.
@@ -56,22 +58,24 @@ type Delivery struct {
 	Bot DocumentSender
 	// Token is the backup service's token (BOBRES_PEER_BACKUP_TOKEN).
 	Token string
-	// Owner is the configured owner's Telegram id, the only recipient
-	// (0: nobody, every backup is refused).
-	Owner int64
+	// Owners are the configured owners' Telegram ids, the only recipients,
+	// the main owner first (none: nobody, every backup is refused). The file
+	// is uploaded once, to the first; the others get the same file from
+	// Telegram's servers by its file id.
+	Owners []int64
 	// Limit is the largest file uploaded (UploadLimit).
 	Limit int64
 	Texts *i18n.Catalog
-	// Lang is the owner's language (nil: the first language).
-	Lang func(ctx context.Context) string
+	// Lang is an owner's language (nil: the first language).
+	Lang func(ctx context.Context, owner int64) string
 	Log  *slog.Logger
 }
 
-// Deliver sends an encrypted backup to the owner's Telegram, for the backup
+// Deliver sends an encrypted backup to the owners' Telegram, for the backup
 // service, at POST /internal/backups/deliver. The body is the file itself,
 // named by X-Backup-Name (bobres-<UTC stamp>.bkp), with a Content-Length.
 // Only the backup service may call it (its token); it takes no chat id: the
-// file goes to the configured owner and nobody else.
+// file goes to the configured owners and nobody else.
 //
 // The body is streamed to Telegram as it arrives (Content-Length gives the
 // upload its exact size), never held in memory or on disk: the bot's /tmp
@@ -80,9 +84,11 @@ type Delivery struct {
 // deadlines extended for it. A body that ends early fails the upload (the
 // size no longer matches) and is answered 400. The answer is
 // {"sent":true,"message_id"} or {"sent":false,"reason","error"}.
-// A file over Limit is not uploaded: the owner gets a text saying it is kept
+// A file over Limit is not uploaded: each owner gets a text saying it is kept
 // on the server, and the reason is "too_big". With no owner configured the
-// answer is 409 with the reason "no_owner".
+// answer is 409 with the reason "no_owner". The answer is about the main
+// owner, the one the file is uploaded to; the other owners get it from
+// Telegram afterwards, and one that cannot be reached is only logged.
 func Deliver(d Delivery) http.Handler {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
@@ -124,25 +130,38 @@ func Deliver(d Delivery) http.Handler {
 			}
 			answer(status, v)
 		}
-		if d.Owner == 0 {
+		if len(d.Owners) == 0 {
 			notSent(http.StatusConflict, ReasonNoOwner, nil)
 			return
 		}
-		lang := i18n.Languages[0]
-		if d.Lang != nil {
-			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-			lang = d.Lang(ctx)
-			cancel()
-		}
-		if size > d.Limit {
-			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-			defer cancel()
-			_, err := d.Bot.SendMessage(ctx, d.Owner, d.Texts.T(lang, "backup.too_big", "name", name,
-				"size", i18n.FileSize(lang, size), "limit", i18n.FileSize(lang, d.Limit)), nil)
-			if err != nil {
-				d.Log.Warn("backup too large for Telegram; the warning was not sent either", "name", name, "err", err)
+		langOf := func(owner int64) string {
+			if d.Lang == nil {
+				return i18n.Languages[0]
 			}
-			notSent(http.StatusOK, ReasonTooBig, err)
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			return d.Lang(ctx, owner)
+		}
+		lang := langOf(d.Owners[0])
+		if size > d.Limit {
+			var first error
+			for i, owner := range d.Owners {
+				ol := lang
+				if i > 0 {
+					ol = langOf(owner)
+				}
+				ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+				_, err := d.Bot.SendMessage(ctx, owner, d.Texts.T(ol, "backup.too_big", "name", name,
+					"size", i18n.FileSize(ol, size), "limit", i18n.FileSize(ol, d.Limit)), nil)
+				cancel()
+				if err != nil {
+					d.Log.Warn("backup too large for Telegram; the warning was not sent either", "name", name, "err", err)
+					if i == 0 {
+						first = err
+					}
+				}
+			}
+			notSent(http.StatusOK, ReasonTooBig, first)
 			return
 		}
 		select {
@@ -163,7 +182,7 @@ func Deliver(d Delivery) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), tg.UploadTimeout)
 		defer cancel()
 		caption := d.Texts.T(lang, "backup.caption", "name", name, "size", i18n.FileSize(lang, size))
-		m, err := d.Bot.SendDocumentUpload(ctx, d.Owner, name, src, size, caption)
+		m, err := d.Bot.SendDocumentUpload(ctx, d.Owners[0], name, src, size, caption)
 		if src.short(size) {
 			// The upload could not be complete: the size it announced was wrong.
 			d.Log.Warn("backup body ended before Content-Length", "name", name, "size", size, "read", src.n, "err", src.err)
@@ -180,8 +199,33 @@ func Deliver(d Delivery) http.Handler {
 			return
 		}
 		d.Log.Info("backup sent to the owner", "name", name, "size", size)
+		d.copyToOtherOwners(r.Context(), m, name, size, langOf)
 		answer(http.StatusOK, map[string]any{"sent": true, "message_id": m.MessageID})
 	})
+}
+
+// copyToOtherOwners sends the uploaded backup m to the owners after the main
+// one, by its Telegram file id (no second upload). Failing to reach one is
+// logged and changes nothing: the backup is safe on the server and with the
+// main owner.
+func (d Delivery) copyToOtherOwners(ctx context.Context, m *tg.Message, name string, size int64, langOf func(int64) string) {
+	if len(d.Owners) < 2 {
+		return
+	}
+	if m == nil || m.Document == nil || m.Document.FileID == "" {
+		d.Log.Warn("backup not copied to the other owners: Telegram gave no file id", "name", name)
+		return
+	}
+	for _, owner := range d.Owners[1:] {
+		ol := langOf(owner)
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		_, err := d.Bot.SendDocument(cctx, owner, m.Document.FileID,
+			d.Texts.T(ol, "backup.caption", "name", name, "size", i18n.FileSize(ol, size)), nil)
+		cancel()
+		if err != nil {
+			d.Log.Warn("backup not sent to another owner", "name", name, "err", err)
+		}
+	}
 }
 
 // validStamp reports whether s is a real time in FileName's layout.

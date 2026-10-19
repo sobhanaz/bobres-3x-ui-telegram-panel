@@ -706,7 +706,7 @@ func TestAuditTrail(t *testing.T) {
 		t.Fatal("audit entries deleted")
 	}
 	// A customer who becomes the configured owner gets the role at start-up.
-	f.dom = domain.New(f.st, domain.Config{OwnerTelegramID: 8901})
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{8901}})
 	c := f.customer(8901, "newowner")
 	if err := f.dom.EnsureOwner(store.WithSource(ctx, store.SourceSystem)); err != nil {
 		t.Fatal(err)

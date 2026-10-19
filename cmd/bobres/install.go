@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -211,7 +210,7 @@ func (ins *installer) runInstall(args []string) int {
 	fs.SetOutput(ins.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
 	domain := fs.String("domain", "", "public domain of this install (DNS must point here)")
-	adminID := fs.String("admin-id", "", "Telegram user id of the owner")
+	adminID := fs.String("admin-id", "", "Telegram user id of the owner; several owners: their ids separated by commas, the main owner first")
 	xuiURL := fs.String("xui-url", "", "first 3x-ui panel URL (https; plain http only with --xui-allow-private), including any web base path; optional: servers can be added in the dashboard")
 	xuiSub := fs.String("xui-sub-url", "", "public prefix of the panel's subscription links, e.g. https://sub.example.com:2096/sub/")
 	allowPrivate := fs.Bool("xui-allow-private", false, "the panel is on this host or a private network")
@@ -311,7 +310,7 @@ func (ins *installer) runInstall(args []string) int {
 	}
 	for _, q := range []struct{ key, prompt string }{
 		{"BOBRES_DOMAIN", "Domain of this install (e.g. panel.example.com): "},
-		{"BOBRES_ADMIN_TELEGRAM_ID", "Your numeric Telegram user id (the owner): "},
+		{"BOBRES_ADMIN_TELEGRAM_ID", "Your numeric Telegram user id (the owner; several owners: separate the ids with commas): "},
 		{"BOBRES_TELEGRAM_BOT_TOKEN", "Telegram bot token from @BotFather: "},
 	} {
 		if env[q.key] != "" {
@@ -946,8 +945,8 @@ func validateEnv(env map[string]string) []error {
 	if !domainRe.MatchString(env["BOBRES_DOMAIN"]) {
 		errs = append(errs, fmt.Errorf("domain %q is not a valid host name", env["BOBRES_DOMAIN"]))
 	}
-	if id, err := strconv.ParseInt(env["BOBRES_ADMIN_TELEGRAM_ID"], 10, 64); err != nil || id <= 0 {
-		errs = append(errs, errors.New("admin Telegram id must be a positive number (ask @userinfobot)"))
+	if err := checkAdminIDs(env["BOBRES_ADMIN_TELEGRAM_ID"]); err != nil {
+		errs = append(errs, fmt.Errorf("admin Telegram id: %w", err))
 	}
 	if !botTokenRe.MatchString(env["BOBRES_TELEGRAM_BOT_TOKEN"]) {
 		errs = append(errs, errors.New("the bot token does not look like a @BotFather token (123456:ABC...)"))

@@ -159,7 +159,7 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Restart", run: func() { m.ops.restartCmd(d) }},
 		{label: "Show settings", run: func() { m.showSettings(env) }, group: true},
 		{label: "Change the bot token", run: m.changeBotToken},
-		{label: "Change the owner (admin) Telegram ID", run: m.changeAdmin},
+		{label: "Owners (Telegram IDs of the store owners)", run: func() { m.changeAdmin(env) }},
 		{label: "Change the first 3x-ui panel (used until the dashboard has a server)", run: func() { m.changePanel(env) }},
 		{label: "Back up now", run: func() { m.ops.backupCmd(d) }, group: true},
 		{label: "Backup key", run: func() { m.backupKey(env) }},
@@ -413,7 +413,7 @@ func (m *menu) showSettings(env map[string]string) {
 		{"Install directory", m.dir},
 		{"Version", env["BOBRES_VERSION"]},
 		{"Domain", env["BOBRES_DOMAIN"]},
-		{"Owner Telegram ID", env["BOBRES_ADMIN_TELEGRAM_ID"]},
+		{"Owner Telegram ID(s)", strings.ReplaceAll(env["BOBRES_ADMIN_TELEGRAM_ID"], ",", ", ")},
 		{"Bot token", mask(env["BOBRES_TELEGRAM_BOT_TOKEN"])},
 		{"First 3x-ui panel", env["BOBRES_XUI_URL"]},
 		{"3x-ui API token", mask(env["BOBRES_XUI_TOKEN"])},
@@ -443,17 +443,21 @@ func (m *menu) changeBotToken() {
 	m.apply(nil, map[string]string{"BOBRES_TELEGRAM_BOT_TOKEN": tok})
 }
 
-func (m *menu) changeAdmin() {
-	id, ok := m.ask("New owner Telegram user id, numbers only (ask @userinfobot; Enter to cancel): ")
-	if !ok || id == "" {
+// changeAdmin replaces the list of owners. The main owner is the first one
+// listed; bobres admin owners adds or removes a single one.
+func (m *menu) changeAdmin(env map[string]string) {
+	fmt.Fprintf(m.out, "Owners now: %s (the first is the main owner; the others take a staff seat each).\n",
+		orDash(strings.ReplaceAll(env["BOBRES_ADMIN_TELEGRAM_ID"], ",", ", ")))
+	ids, ok := m.ask("Telegram user ids of the owners, numbers only, separated by commas (ask @userinfobot; Enter to cancel): ")
+	if !ok || ids == "" {
 		fmt.Fprintln(m.out, "Cancelled.")
 		return
 	}
-	if n, err := strconv.ParseInt(id, 10, 64); err != nil || n <= 0 {
-		fmt.Fprintln(m.errOut, "error: the Telegram id is a positive number. Nothing changed.")
+	if err := checkAdminIDs(ids); err != nil {
+		fmt.Fprintf(m.errOut, "error: %v. Nothing changed.\n", err)
 		return
 	}
-	m.apply([]string{"--admin-id", id}, nil)
+	m.apply([]string{"--admin-id", ids}, nil)
 }
 
 func (m *menu) changePanel(env map[string]string) {

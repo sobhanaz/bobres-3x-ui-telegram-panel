@@ -16,7 +16,8 @@ downloads the signed `bobres` CLI binary from the latest GitHub release of this 
 signed for the beta channel (a pre-release) is refused unless `BOBRES_UPDATE_CHANNEL=beta` is set for install.sh,
 even when GitHub serves it as the latest release.
 The wizard asks only what has no safe default: the domain (unless `--domain` or `BOBRES_DOMAIN`), the owner's
-Telegram id (`--admin-id` or `BOBRES_ADMIN_TELEGRAM_ID`), the bot token (hidden) and the optional first 3x-ui panel
+Telegram id (`--admin-id` or `BOBRES_ADMIN_TELEGRAM_ID`; several owners: their ids separated by commas, the first is the
+main owner), the bot token (hidden) and the optional first 3x-ui panel
 with its API token (hidden). Everything else is automatic. A panel on the same server typed as
 `http://127.0.0.1:<port>/...` is rewritten, without a question, to `http://host.docker.internal:<port>/...` (what the
 containers can reach), and a plain-http panel on a private address is taken as a private panel. See "What you see
@@ -185,7 +186,7 @@ The bootstrap `install.sh` downloads the latest GitHub release, verifies it and 
 Operator runbooks: [runbooks/](runbooks/README.md).
 `admin add/reset-2fa` was dropped (2026-10-10): `admin link` already gets anyone on the staff in without
 a password or code, the owner manages staff on the dashboard's Staff page, and the owner themselves is
-changed with `bobres menu` ("Change the owner Telegram ID"), which core applies when it starts.
+changed with `bobres menu` ("Owners") or `bobres admin owners`, which core applies when it starts.
 
 ## CLI commands
 | Command | Purpose |
@@ -209,7 +210,8 @@ changed with `bobres menu` ("Change the owner Telegram ID"), which core applies 
 | `bobres ssl [status] / auto / ip [--ip X] [--yes] / manual --cert FILE --key FILE` | The HTTPS certificate: show it, go back to the automatic one for the domain, add a Let's Encrypt certificate for the server's IP address, or use your own certificate and key. Each runs `/app ssl ...` in the core container (see HTTPS certificates) |
 | `bobres doctor [--dir D] [--domain X] [--offline]` | Diagnose: OS, RAM, disk, ports, Docker, DNS, the TLS certificate of every address the store serves (a crash-looping Caddy is a FAIL), and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures). `--dir` is the install it reads `.env` and core's address list from; `--domain` defaults to its `BOBRES_DOMAIN` |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator. It needs the account to exist (the owner started the bot once); with no Telegram, use `admin password` |
-| `bobres admin password [--dir D]` | Reset the owner's dashboard password: runs `/app admin-password` in the core container, prints the login `owner` and a new random password once, and says it must be changed at first login. Creates the owner's account when the owner never sent `/start`. Running it again resets the login and ends the owner's sessions (the menu has it as "Reset admin password") |
+| `bobres admin owners list\|add\|remove [--dir D] [--no-restart] [telegram id]` | The store's owners (root admins), named in `BOBRES_ADMIN_TELEGRAM_ID`: list them, add one, remove one (the setting is validated like `bobres config set`, written to `.env`, and only core and the bot are recreated). Only the server can do this: the dashboard and the bot cannot make or unmake a root admin. The first is the main owner, who takes no staff seat; every other owner takes one. Removing an id never locks anyone out by itself: an account that already signed in keeps the owner role until it is demoted in the dashboard, and the command says so |
+| `bobres admin password [--dir D] [--id N]` | Reset the owner's dashboard password (the main owner's, or the owner with Telegram id N): runs `/app admin-password` in the core container, prints the login `owner` and a new random password once, and says it must be changed at first login. Creates the owner's account when the owner never sent `/start`. Running it again resets the login and ends the owner's sessions (the menu has it as "Reset admin password") |
 | `bobres support-bundle [--offline]` | A redacted tar.gz for support in the install directory: versions, `compose ps`, the doctor's checks, the newest 300 log lines per service, the `.env` key names (never a value), disk and memory, the backups list (see Support bundle). Never the database, a backup or a secret value |
 
 ## Check
@@ -608,7 +610,7 @@ The settings it changes, and the services each one recreates:
 |---|---|---|
 | `BOBRES_DOMAIN` | caddy, core, payments, tls-agent | install's host name rule (lower-cased); a reminder that DNS must point here. Core hands the new domain to the tls-agent in its request, and the agent accepts only its own `BOBRES_DOMAIN`, so both are recreated |
 | `BOBRES_TIMEZONE` | core, bot, backup | a known time zone (the CLI embeds tzdata, as the images do) |
-| `BOBRES_ADMIN_TELEGRAM_ID` | core, bot | a positive number (core makes them the owner when it starts) |
+| `BOBRES_ADMIN_TELEGRAM_ID` | core, bot | one positive number, or several separated by commas (at most 10, none twice; core makes each of them an owner when it starts) |
 | `BOBRES_LOG_LEVEL` / `BOBRES_LOG_FORMAT` | core, payments, provisioner, bot, backup | debug, info, warn, error / json, text |
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
@@ -887,7 +889,7 @@ install directory, and with it every backup in `/opt/bobres/backups`: it warns f
 ## Owner login without Telegram
 The owner can open the dashboard without the bot and without `/start` (the bot may be blocked, or the owner may not
 have an account on it yet). Core's `admin-password` command (`/app admin-password`, run by `bobres admin password`
-and by the installer) does this for the configured owner (`BOBRES_ADMIN_TELEGRAM_ID`):
+and by the installer) does this for the main owner (the first id in `BOBRES_ADMIN_TELEGRAM_ID`), or for the owner `--id N` names:
 
 - It creates the owner's account when it is missing and makes it the owner, picks the login `owner` (`owner-2`,
   ... when another staff member has it) and sets a random 16-character initial password, kept as an argon2id hash

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +43,9 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 	case "":
 		h.showAdmin(r)
 	case "pend":
-		h.showPending(r)
+		h.showPending(r, arg)
+	case "pi":
+		h.showPaymentCard(r, arg)
 	case "ok":
 		h.review(r, arg, "approved", "")
 	case "no":
@@ -51,7 +54,7 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 		i, id, _ := strings.Cut(arg, ":")
 		n, err := strconv.Atoi(i)
 		if err != nil || n < 0 || n >= len(rejectReasons) {
-			h.showPending(r)
+			h.showPending(r, "")
 			return
 		}
 		h.review(r, id, "rejected", "preset:"+rejectReasons[n])
@@ -232,19 +235,132 @@ func serversLine(r *req, st *corev1.AdminStats) string {
 		"names", strings.Join(names, " · "))
 }
 
-// showPending sends the oldest payment awaiting review as a new message (a
-// receipt photo when there is one), with approve/reject buttons.
-func (h *Handler) showPending(r *req) {
-	resp, err := h.core.AdminListPendingPayments(r.ctx, &corev1.AdminListPendingPaymentsRequest{ActorTelegramId: h.actor(r), Limit: 1})
+const (
+	// pendingPage is how many waiting payments one screen lists.
+	pendingPage = 8
+	// pendingFetch is the most waiting payments the list loads, oldest first.
+	pendingFetch = 100
+)
+
+// showPending lists the payments waiting for review, oldest first, a page of
+// them at a time: each is a button that opens its card. Every owner and admin
+// sees the same list, and a payment one of them decides leaves it for all.
+// arg is the page (from 0): "" is the first page, sent as a new message so
+// the alert or menu it was opened from stays; the other pages replace the
+// list in place.
+func (h *Handler) showPending(r *req, arg string) {
+	resp, err := h.core.AdminListPendingPayments(r.ctx, &corev1.AdminListPendingPaymentsRequest{ActorTelegramId: h.actor(r), Limit: pendingFetch})
 	if err != nil {
 		r.fail(err)
 		return
 	}
-	if len(resp.GetPayments()) == 0 {
-		r.send(r.t("admin.no_pending"), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
+	reply := r.show
+	if arg == "" {
+		reply = r.send
+	}
+	list := resp.GetPayments()
+	if len(list) == 0 {
+		reply(r.t("admin.no_pending"), (&tg.Keyboard{}).Row(r.button("btn.back", "adm")))
 		return
 	}
-	p := resp.GetPayments()[0]
+	pages := (len(list) + pendingPage - 1) / pendingPage
+	page, _ := strconv.Atoi(arg)
+	page = min(max(page, 0), pages-1)
+	kb := &tg.Keyboard{}
+	for _, p := range list[page*pendingPage : min(len(list), (page+1)*pendingPage)] {
+		kb.Row(tg.CB(pendingLabel(r, p), "adm:pi:"+p.GetIntentId()))
+	}
+	paging := ""
+	if pages > 1 {
+		var nav []tg.Button
+		if page > 0 {
+			nav = append(nav, r.button("btn.prev", "adm:pend:"+strconv.Itoa(page-1)))
+		}
+		if page < pages-1 {
+			nav = append(nav, r.button("btn.next", "adm:pend:"+strconv.Itoa(page+1)))
+		}
+		kb.Row(nav...)
+		paging = r.t("admin.pending_page", "page", i18n.Number(r.lang, int64(page+1)), "pages", i18n.Number(r.lang, int64(pages)))
+	}
+	kb.Row(r.button("btn.back", "adm"))
+	n := i18n.Number(r.lang, int64(len(list)))
+	if len(list) >= pendingFetch {
+		n += "+"
+	}
+	reply(r.t("admin.pending_list", "n", n, "paging", paging), kb)
+}
+
+// pendingLabel is a waiting payment's button: who paid, how much, and when
+// (the time today, else the day), with a warning when it may be a duplicate.
+func pendingLabel(r *req, p *corev1.PendingPayment) string {
+	name := displayName(p.GetUser())
+	if rs := []rune(name); len(rs) > 18 {
+		name = string(rs[:17]) + "…"
+	}
+	loc := i18n.CurrentLocation()
+	at := time.Unix(p.GetSubmittedAt(), 0).In(loc)
+	stamp := i18n.Date(r.lang, at)
+	if y1, d1 := at.Year(), at.YearDay(); y1 == time.Now().In(loc).Year() && d1 == time.Now().In(loc).YearDay() {
+		stamp = i18n.Clock(r.lang, at)
+	}
+	label := name + " · " + r.money(p.GetAmount().GetAmount(), p.GetAmount().GetCurrency()) + " · " + stamp
+	if p.GetPossibleDuplicate() {
+		label = "⚠️ " + label
+	}
+	return label
+}
+
+// showPaymentCard opens one payment as a new message: while it waits, its
+// proof (a receipt photo when there is one) with approve and reject buttons;
+// once someone has decided, who decided and when, so an owner who taps an old
+// alert sees what became of it.
+func (h *Handler) showPaymentCard(r *req, intentID string) {
+	toList := (&tg.Keyboard{}).Row(r.button("btn.back", "adm:pend"))
+	v, err := h.core.AdminGetPayment(r.ctx, &corev1.AdminGetPaymentRequest{ActorTelegramId: h.actor(r), IntentId: intentID})
+	if status.Code(err) == codes.NotFound {
+		r.send(r.t("admin.payment_missing"), toList)
+		return
+	}
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	p := v.GetPayment()
+	if v.GetDecision() == "" && v.GetStatus() == "confirming" {
+		kb := (&tg.Keyboard{}).
+			Row(r.button("btn.approve", "adm:ok:"+p.GetIntentId()), r.button("btn.reject", "adm:no:"+p.GetIntentId())).
+			Row(r.button("btn.back", "adm:pend"))
+		h.sendPaymentCard(r, p, kb)
+		return
+	}
+	user, amount := esc(displayName(p.GetUser())), r.money(p.GetAmount().GetAmount(), p.GetAmount().GetCurrency())
+	who := r.t("admin.unknown")
+	if rv := v.GetReviewer(); rv != nil {
+		who = esc(displayName(rv))
+	}
+	when := ""
+	if v.GetReviewedAt() > 0 {
+		when = i18n.DateTime(r.lang, time.Unix(v.GetReviewedAt(), 0))
+	}
+	switch v.GetDecision() {
+	case "approved":
+		r.send(r.t("admin.payment_approved", "user", user, "amount", amount, "who", who, "when", when), toList)
+	case "rejected":
+		reason := r.t("reason.none")
+		if name, ok := strings.CutPrefix(v.GetReason(), "preset:"); ok && slices.Contains(rejectReasons, name) {
+			reason = r.t("reason." + name)
+		} else if v.GetReason() != "" && !ok {
+			reason = esc(v.GetReason())
+		}
+		r.send(r.t("admin.payment_rejected", "user", user, "amount", amount, "who", who, "when", when, "reason", reason), toList)
+	default:
+		r.send(r.t("admin.payment_closed", "user", user, "amount", amount, "status", esc(v.GetStatus())), toList)
+	}
+}
+
+// sendPaymentCard sends a waiting payment as a new message (a receipt photo
+// when there is one) with kb under it.
+func (h *Handler) sendPaymentCard(r *req, p *corev1.PendingPayment, kb *tg.Keyboard) {
 	method, proof := r.t("admin.method_card"), r.t("admin.proof_card", "ref", esc(p.GetReferenceNumber()))
 	switch {
 	case p.GetProvider() == "manual_crypto" && p.GetTxid() != "":
@@ -265,9 +381,6 @@ func (h *Handler) showPending(r *req) {
 	text := r.t("admin.pending_item",
 		"user", esc(displayName(p.GetUser())), "amount", r.money(p.GetAmount().GetAmount(), p.GetAmount().GetCurrency()),
 		"method", method, "proof", proof, "when", i18n.Date(r.lang, time.Unix(p.GetSubmittedAt(), 0)), "dup", dup)
-	kb := (&tg.Keyboard{}).
-		Row(r.button("btn.approve", "adm:ok:"+p.GetIntentId()), r.button("btn.reject", "adm:no:"+p.GetIntentId())).
-		Row(r.button("btn.back", "adm"))
 	if f := p.GetReceiptFile(); f != "" {
 		if _, err := h.tg.SendPhoto(r.ctx, r.chatID, tg.Photo{FileID: f}, text, kb); err == nil {
 			return
@@ -286,7 +399,7 @@ func (h *Handler) askRejectReason(r *req, intentID string) {
 		kb.Row(r.button("reason."+reason, fmt.Sprintf("adm:nr:%d:%s", i, intentID)))
 	}
 	kb.Row(r.button("btn.reject_other", "adm:nx:"+intentID))
-	kb.Row(r.button("btn.back", "adm:pend"))
+	kb.Row(r.button("btn.back", "adm:pi:"+intentID))
 	if r.cb != nil && r.cb.Message != nil {
 		if err := h.tg.EditMessageReplyMarkup(r.ctx, r.chatID, r.cb.Message.MessageID, kb); err == nil {
 			r.toast = r.t("admin.reject_reason")
@@ -297,7 +410,7 @@ func (h *Handler) askRejectReason(r *req, intentID string) {
 }
 
 // review applies a decision, removes the buttons from the reviewed item and
-// shows the next one.
+// shows the list of what still waits.
 func (h *Handler) review(r *req, intentID, decision, reason string) {
 	h.reviewItem(r, intentID, decision, reason, itemMessage(r))
 }
@@ -342,7 +455,7 @@ func (h *Handler) reviewItem(r *req, intentID, decision, reason string, msgID in
 	} else {
 		r.send(done, nil)
 	}
-	h.showPending(r)
+	h.showPending(r, "")
 }
 
 func (h *Handler) setStatus(r *req, userID, st string) {

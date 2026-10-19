@@ -179,10 +179,10 @@ func checkEnv(env map[string]string) Result {
 	case !botTokenRe.MatchString(t):
 		bad = append(bad, "BOBRES_TELEGRAM_BOT_TOKEN (not shaped like a @BotFather token)")
 	}
-	if id := env["BOBRES_ADMIN_TELEGRAM_ID"]; id == "" {
+	if id := env["BOBRES_ADMIN_TELEGRAM_ID"]; strings.TrimSpace(id) == "" {
 		missing = append(missing, "BOBRES_ADMIN_TELEGRAM_ID")
-	} else if n, err := strconv.ParseInt(id, 10, 64); err != nil || n <= 0 {
-		bad = append(bad, "BOBRES_ADMIN_TELEGRAM_ID (not a positive number)")
+	} else if err := checkAdminIDs(id); err != nil {
+		bad = append(bad, "BOBRES_ADMIN_TELEGRAM_ID (not positive numbers separated by commas)")
 	}
 	if len(missing)+len(bad) == 0 {
 		return Result{"Config", Pass, ".env has every required setting"}

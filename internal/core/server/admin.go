@@ -7,6 +7,7 @@ import (
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
 
@@ -47,16 +48,42 @@ func (s *Server) AdminListPendingPayments(ctx context.Context, req *corev1.Admin
 	}
 	out := &corev1.AdminListPendingPaymentsResponse{}
 	for _, v := range views {
-		p := &corev1.PendingPayment{
-			IntentId: v.IntentID, OrderId: v.OrderID, Provider: v.Provider,
-			Amount:      &commonv1.Money{Amount: v.Amount, Currency: v.Currency},
-			ReceiptFile: v.ReceiptFile, ReferenceNumber: v.ReferenceNumber, Network: v.Network, Txid: v.TXID,
-			SubmittedAt: v.SubmittedAt.Unix(), PossibleDuplicate: v.PossibleDuplicate,
-		}
-		if v.User != nil {
-			p.User = userToProto(v.User)
-		}
-		out.Payments = append(out.Payments, p)
+		out.Payments = append(out.Payments, pendingToProto(v))
+	}
+	return out, nil
+}
+
+// pendingToProto is a waiting (or decided) manual payment with its payer.
+func pendingToProto(v domain.PendingView) *corev1.PendingPayment {
+	p := &corev1.PendingPayment{
+		IntentId: v.IntentID, OrderId: v.OrderID, Provider: v.Provider,
+		Amount:      &commonv1.Money{Amount: v.Amount, Currency: v.Currency},
+		ReceiptFile: v.ReceiptFile, ReferenceNumber: v.ReferenceNumber, Network: v.Network, Txid: v.TXID,
+		SubmittedAt: v.SubmittedAt.Unix(), PossibleDuplicate: v.PossibleDuplicate,
+	}
+	if v.User != nil {
+		p.User = userToProto(v.User)
+	}
+	return p
+}
+
+// AdminGetPayment shows one manual payment: waiting, or how it was decided.
+func (s *Server) AdminGetPayment(ctx context.Context, req *corev1.AdminGetPaymentRequest) (*corev1.AdminPaymentView, error) {
+	if err := s.needPayments(); err != nil {
+		return nil, err
+	}
+	v, err := s.dom.AdminGetPayment(ctx, req.GetActorTelegramId(), s.pay, req.GetIntentId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.AdminPaymentView{
+		Payment: pendingToProto(v.PendingView), Status: v.Status, Decision: v.Decision, Reason: v.Reason,
+	}
+	if v.Reviewer != nil {
+		out.Reviewer = userToProto(v.Reviewer)
+	}
+	if !v.ReviewedAt.IsZero() {
+		out.ReviewedAt = v.ReviewedAt.Unix()
 	}
 	return out, nil
 }

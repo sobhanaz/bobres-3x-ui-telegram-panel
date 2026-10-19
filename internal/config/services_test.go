@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,7 +31,7 @@ func TestLoadBot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBot: %v", err)
 	}
-	if c.TelegramBotToken != "123:abc" || c.CoreGRPCAddr != "core:9090" || c.AdminTelegramID != 4242 {
+	if c.TelegramBotToken != "123:abc" || c.CoreGRPCAddr != "core:9090" || len(c.AdminTelegramIDs) != 1 || c.AdminTelegramIDs[0] != 4242 {
 		t.Errorf("bad bot config: %+v", c)
 	}
 	t.Setenv("BOBRES_TELEGRAM_WEBHOOK_URL", "https://panel.example.com/tg")
@@ -64,16 +65,51 @@ func TestLoadBot(t *testing.T) {
 	}
 }
 
-func TestAdminTelegramIDIsStrict(t *testing.T) {
-	for _, bad := range []string{"123abc", "0", "-5", "12 34", "CHANGE_ME_numeric_telegram_id"} {
+func TestAdminTelegramIDsAreStrict(t *testing.T) {
+	for _, bad := range []string{"123abc", "0", "-5", "12 34", "CHANGE_ME_numeric_telegram_id", "1,,2", "1,2,", ",1", "1;2",
+		"7,7", "1,2,3,4,5,6,7,8,9,10,11"} {
 		t.Setenv("BOBRES_ADMIN_TELEGRAM_ID", bad)
-		if _, err := telegramID("BOBRES_ADMIN_TELEGRAM_ID"); err == nil {
-			t.Errorf("%q accepted", bad)
+		if ids, err := telegramIDs("BOBRES_ADMIN_TELEGRAM_ID"); err == nil {
+			t.Errorf("%q accepted: %v", bad, ids)
 		}
 	}
 	t.Setenv("BOBRES_ADMIN_TELEGRAM_ID", "")
-	if id, err := telegramID("BOBRES_ADMIN_TELEGRAM_ID"); err != nil || id != 0 {
-		t.Errorf("unset id: %d %v", id, err)
+	if ids, err := telegramIDs("BOBRES_ADMIN_TELEGRAM_ID"); err != nil || len(ids) != 0 {
+		t.Errorf("unset id: %v %v", ids, err)
+	}
+}
+
+func TestAdminTelegramIDsList(t *testing.T) {
+	for raw, want := range map[string][]int64{
+		"4242":                 {4242},
+		" 4242 ":               {4242},
+		"111,222,333":          {111, 222, 333},
+		"111, 222 ,333":        {111, 222, 333},
+		"1,2,3,4,5,6,7,8,9,10": {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		"9007199254740993,5":   {9007199254740993, 5},
+		"":                     nil,
+		"   ":                  nil,
+	} {
+		got, err := ParseTelegramIDs(raw)
+		if err != nil || !slices.Equal(got, want) {
+			t.Errorf("ParseTelegramIDs(%q) = %v, %v; want %v", raw, got, err, want)
+		}
+	}
+}
+
+func TestLoadCoreAndBotKeepTheOrderOfTheAdmins(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("BOBRES_SERVICE_TOKEN", botTok)
+	t.Setenv("BOBRES_CORE_GRPC_ADDR", "core:9090")
+	t.Setenv("BOBRES_TELEGRAM_BOT_TOKEN", "123:abc")
+	t.Setenv("BOBRES_ADMIN_TELEGRAM_ID", "30,10,20")
+	c, err := LoadBot()
+	if err != nil || !slices.Equal(c.AdminTelegramIDs, []int64{30, 10, 20}) {
+		t.Fatalf("bot admins: %v %v", c.AdminTelegramIDs, err)
+	}
+	t.Setenv("BOBRES_ADMIN_TELEGRAM_ID", "30,x")
+	if _, err := LoadBot(); err == nil || !strings.Contains(err.Error(), "BOBRES_ADMIN_TELEGRAM_ID") {
+		t.Fatalf("a bad list was accepted: %v", err)
 	}
 }
 

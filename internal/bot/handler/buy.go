@@ -506,7 +506,7 @@ func (h *Handler) submitProof(r *req, st state.State, in *corev1.SubmitPaymentPr
 	}
 	r.send(r.t("pay.submitted"), homeKeyboard(r))
 	amount, _ := i18n.ParseNumber(st.Get("amount"))
-	h.notifyAdmin(r, "admin.new_payment", "user", esc(displayName(r.user)),
+	h.notifyStaffAbout(r.ctx, r.from.ID, "admin.new_payment", in.GetIntentId(), "user", esc(displayName(r.user)),
 		"amount", func(lang string) string { return i18n.Money(lang, amount, st.Get("currency")) })
 }
 
@@ -517,21 +517,22 @@ var alertToggles = map[string]string{
 	"admin.new_payment": "notify.new_payment",
 }
 
-// notifyAdmin alerts the staff about something the user did (not the user
-// themselves, when they are staff).
-func (h *Handler) notifyAdmin(r *req, key string, args ...any) {
-	h.notifyStaff(r.ctx, r.from.ID, key, args...)
-}
-
 // notifyStaff messages everyone who gets staff alerts (notify.recipients),
 // each in their language, except the Telegram user skip (0: nobody), unless
 // the alert is switched off. An argument value may be a func(lang) string,
 // rendered in each recipient's language.
 func (h *Handler) notifyStaff(ctx context.Context, skip int64, key string, args ...any) {
+	h.notifyStaffAbout(ctx, skip, key, "", args...)
+}
+
+// notifyStaffAbout is notifyStaff for an alert about one payment (reviewIntent,
+// "" when it is about none): its Review button opens that payment's card, not
+// the list, so whoever taps it sees the payment the alert is about.
+func (h *Handler) notifyStaffAbout(ctx context.Context, skip int64, key, reviewIntent string, args ...any) {
 	if toggle, ok := alertToggles[key]; ok && !h.set.Bool(toggle, true) {
 		return
 	}
-	for _, c := range h.set.Recipients(h.cfg.AdminTelegramID) {
+	for _, c := range h.set.Recipients(h.cfg.AdminTelegramIDs) {
 		if c.TelegramID == skip {
 			continue
 		}
@@ -547,7 +548,11 @@ func (h *Handler) notifyStaff(ctx context.Context, skip int64, key string, args 
 		}
 		var kb *tg.Keyboard
 		if key == "admin.new_payment" {
-			kb = (&tg.Keyboard{}).Row(h.button(lang, "btn.review_now", "adm:pend"))
+			data := "adm:pend"
+			if reviewIntent != "" {
+				data = "adm:pi:" + reviewIntent
+			}
+			kb = (&tg.Keyboard{}).Row(h.button(lang, "btn.review_now", data))
 		}
 		if _, err := h.tg.SendMessage(ctx, c.TelegramID, h.cat.T(lang, key, rendered...), kb); err != nil {
 			h.log.Warn("staff notification failed", "chat", c.TelegramID, "err", err)

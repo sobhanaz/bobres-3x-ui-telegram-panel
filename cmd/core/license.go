@@ -54,7 +54,7 @@ func licenseCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 		return 1
 	}
 	defer st.Close()
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
 	cli := store.WithSource(ctx, store.SourceCLI)
 	switch {
 	case token == "":

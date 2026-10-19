@@ -45,9 +45,11 @@ license server is built but still has to be deployed by the owner. What is left 
   a statement; an invite link that earns a commission on their customers' purchases.
 
 **Staff**
-- In the bot: `/admin` (stats, find a user, adjust a balance, ban, approve receipts), `/set`, plans, trials, traffic
-  packages, discount codes, and `/dashboard` for a one-time dashboard login link.
+- In the bot: `/admin` (stats, find a user, adjust a balance, ban, a list of the payments to review with their receipts),
+  `/set`, plans, trials, traffic packages, discount codes, and `/dashboard` for a one-time dashboard login link.
 - Alerts in Telegram: payments to review, new tickets, failed deliveries, sales (optional) and system problems.
+- Several owners (root admins), named on the server with `bobres admin owners`: all of them get the alerts and the daily
+  backup and see the same list of payments to review; the first decision on a payment counts.
 
 **Web dashboard** at `https://<domain>/admin`
 - Log in with a one-time link from the bot, or with a password and an authenticator code. Roles: owner, admin,
@@ -139,7 +141,7 @@ Afterwards run `bobres` for the management menu:
   ──────────────────────────────────────────────────────────
    6. Show settings
    7. Change the bot token
-   8. Change the owner (admin) Telegram ID
+   8. Owners (Telegram IDs of the store owners)
    9. Change the first 3x-ui panel (used until the dashboard has a server)
   ──────────────────────────────────────────────────────────
   10. Back up now

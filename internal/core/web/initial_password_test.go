@@ -16,7 +16,7 @@ const newPassword = "a brand new passphrase"
 // password` does: the owner never started the bot.
 func (f *fixture) issue() (username, password string) {
 	f.t.Helper()
-	in, err := f.dom.IssueInitialPassword(context.Background())
+	in, err := f.dom.IssueInitialPassword(context.Background(), 0)
 	if err != nil {
 		f.t.Fatal(err)
 	}

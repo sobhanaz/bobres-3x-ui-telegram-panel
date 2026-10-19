@@ -608,6 +608,22 @@ message AdminListPendingPaymentsResponse {
   repeated PendingPayment payments = 1;
 }
 
+message AdminGetPaymentRequest {
+  int64 actor_telegram_id = 1; // must belong to an admin or an owner
+  string intent_id = 2;
+}
+
+// AdminPaymentView is one manual payment as staff see it: the proof and the
+// payer, and how it ended once someone has decided.
+message AdminPaymentView {
+  PendingPayment payment = 1;
+  string status = 2; // confirming while it waits for a decision, then succeeded or failed
+  string decision = 3; // empty while nobody has decided, else approved | rejected
+  string reason = 4; // why it was rejected: "preset:<name>" or the reviewer's words
+  User reviewer = 5; // who decided; unset while pending (or when they are gone)
+  int64 reviewed_at = 6; // unix seconds; 0 while pending
+}
+
 message AdminFindUserRequest {
   int64 actor_telegram_id = 1;
   string query = 2; // Telegram id or @username
@@ -699,6 +715,10 @@ service CoreService {
   rpc GetSubscriptionLinks(GetSubscriptionLinksRequest) returns (SubscriptionLinks);
   rpc AdminGetStats(AdminGetStatsRequest) returns (AdminStats);
   rpc AdminListPendingPayments(AdminListPendingPaymentsRequest) returns (AdminListPendingPaymentsResponse);
+  // AdminGetPayment shows one manual payment: pending, or how it was decided
+  // and by whom (staff alerts open a payment that another owner may have
+  // decided already).
+  rpc AdminGetPayment(AdminGetPaymentRequest) returns (AdminPaymentView);
   rpc AdminFindUser(AdminFindUserRequest) returns (AdminUserView);
   rpc AdminAdjustBalance(AdminAdjustBalanceRequest) returns (Wallet);
   rpc AdminSetUserStatus(AdminSetUserStatusRequest) returns (User);

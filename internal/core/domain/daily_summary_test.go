@@ -44,7 +44,7 @@ type summaryWorld struct {
 func newSummaryWorld(t *testing.T, zone, env string) *summaryWorld {
 	t.Helper()
 	_, s := testService(t)
-	svc := New(s, Config{OwnerTelegramID: ownerTG, Timezone: env})
+	svc := New(s, Config{OwnerTelegramIDs: []int64{ownerTG}, Timezone: env})
 	ctx := context.Background()
 	if err := testdb.Truncate(ctx, s.DB(), `core.daily_summary_claims`); err != nil {
 		t.Fatal(err)

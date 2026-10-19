@@ -89,7 +89,7 @@ func TestStaffAlertsFollowTheSettings(t *testing.T) {
 
 	// Provisioning failures: on by default, can be switched off; the customer
 	// is told either way.
-	n := notify.New(w.stack.Core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+	n := notify.New(w.stack.Core, w.tg, w.h.cat, w.h.Settings(), []int64{ownerID}, nil)
 	failed := func() {
 		t.Helper()
 		payload, _ := json.Marshal(events.ProvisionFailedEvent{OrderID: "order-1", TelegramID: 842, Attempts: 5, Error: "panel <down>"})
@@ -315,7 +315,7 @@ func TestSaleAlertAfterTheCustomer(t *testing.T) {
 	owner.text("/set notify.sales true")
 	owner.sees("Saved")
 	u := w.customer(851, "paid")
-	n := notify.New(w.stack.Core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+	n := notify.New(w.stack.Core, w.tg, w.h.cat, w.h.Settings(), []int64{ownerID}, nil)
 	paid := func() error {
 		payload, _ := json.Marshal(events.OrderPaidEvent{OrderID: "order-9", TelegramID: 851, PlanID: "plan-x",
 			Amount: 150_000, Currency: "IRT", Source: events.PaidManually})

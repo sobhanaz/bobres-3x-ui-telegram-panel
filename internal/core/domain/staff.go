@@ -15,17 +15,42 @@ import (
 // StaffRoles are the roles the owner can give, least powerful first.
 var StaffRoles = []string{"support", "admin", "owner"}
 
-// IsConfiguredOwner reports whether u is the owner named in the server's
-// configuration (BOBRES_ADMIN_TELEGRAM_ID): the root of trust, changed only
-// there (bobres menu), never from the dashboard.
-func (s *Service) IsConfiguredOwner(u *store.User) bool {
-	return s.cfg.OwnerTelegramID != 0 && u.TelegramID == s.cfg.OwnerTelegramID
+// cleanOwnerIDs drops the ids that are not positive and the repeats, keeping
+// the order (the first is the main owner).
+func cleanOwnerIDs(ids []int64) []int64 {
+	var out []int64
+	for _, id := range ids {
+		if id > 0 && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
-// OwnerConfigured reports whether the server names its owner.
-func (s *Service) OwnerConfigured() bool { return s.cfg.OwnerTelegramID != 0 }
+// OwnerIDs lists the Telegram ids of the root admins, the main owner first.
+func (s *Service) OwnerIDs() []int64 { return slices.Clone(s.cfg.OwnerTelegramIDs) }
 
-// CanGrantOwner: giving or taking the owner role is the configured owner's
+// PrimaryOwnerID is the main owner's Telegram id: the first root admin (0:
+// the server names none).
+func (s *Service) PrimaryOwnerID() int64 {
+	if len(s.cfg.OwnerTelegramIDs) == 0 {
+		return 0
+	}
+	return s.cfg.OwnerTelegramIDs[0]
+}
+
+// IsConfiguredOwner reports whether u is one of the owners named in the
+// server's configuration (BOBRES_ADMIN_TELEGRAM_ID, one id or several): the
+// root of trust, changed only there (bobres admin owners, bobres menu), never
+// from the dashboard or the bot.
+func (s *Service) IsConfiguredOwner(u *store.User) bool {
+	return u != nil && slices.Contains(s.cfg.OwnerTelegramIDs, u.TelegramID)
+}
+
+// OwnerConfigured reports whether the server names an owner.
+func (s *Service) OwnerConfigured() bool { return len(s.cfg.OwnerTelegramIDs) > 0 }
+
+// CanGrantOwner: giving or taking the owner role is a configured owner's
 // decision (any owner's on an install that names none).
 func (s *Service) CanGrantOwner(actor *store.User) bool {
 	return actor.Role == "owner" && actor.Status == "active" && (!s.OwnerConfigured() || s.IsConfiguredOwner(actor))
@@ -69,7 +94,7 @@ func (s *Service) staffTarget(ctx context.Context, actor *store.User, id string)
 		return nil, stateErr("you cannot change your own staff account here; use My account")
 	}
 	if s.IsConfiguredOwner(t) {
-		return nil, stateErr("the store owner is set in the server settings (bobres menu), not here")
+		return nil, stateErr("a store owner is set in the server settings (bobres admin owners), not here")
 	}
 	return t, nil
 }
@@ -98,8 +123,9 @@ func (s *Service) AddStaff(ctx context.Context, actor *store.User, userID, role,
 	case role == "owner" && !s.CanGrantOwner(actor):
 		return nil, stateErr("only the store owner can add another owner")
 	}
-	// Every staff member but the owner the server names takes a seat, an
-	// owner too (or two seat holders promoted to owner would empty them).
+	// Every staff member but the main owner the server names (the first of
+	// its owners) takes a seat, an owner too (or two seat holders promoted to
+	// owner would empty them).
 	if err := s.requireStaffSeat(ctx); err != nil {
 		return nil, err
 	}
@@ -341,24 +367,26 @@ func (s *Service) UnlockStaff(ctx context.Context, actor *store.User, id string)
 	})
 }
 
-// EnsureOwner gives the configured owner the owner role if they have an
-// account without it: at start-up, so changing the owner in the server
+// EnsureOwner gives every configured owner the owner role if they have an
+// account without it: at start-up, so changing the owners in the server
 // settings takes effect without waiting for their next visit to the bot.
 func (s *Service) EnsureOwner(ctx context.Context) error {
-	if !s.OwnerConfigured() {
-		return nil
+	for _, id := range s.cfg.OwnerTelegramIDs {
+		u, err := s.st.GetUserByTelegramID(ctx, s.st.Conn(), id)
+		if errors.Is(err, store.ErrNotFound) {
+			continue // they have not started the bot yet
+		}
+		if err != nil {
+			return err
+		}
+		if err := s.promoteOwner(ctx, u); err != nil {
+			return err
+		}
 	}
-	u, err := s.st.GetUserByTelegramID(ctx, s.st.Conn(), s.cfg.OwnerTelegramID)
-	if errors.Is(err, store.ErrNotFound) {
-		return nil // they have not started the bot yet
-	}
-	if err != nil {
-		return err
-	}
-	return s.promoteOwner(ctx, u)
+	return nil
 }
 
-// promoteOwner makes the configured owner an active owner, audited as the
+// promoteOwner makes a configured owner an active owner, audited as the
 // system acting on the configuration. A reseller is left as they are (their
 // debt and customers would be orphaned): staff remove them as a reseller
 // first, and they become the owner on their next visit.

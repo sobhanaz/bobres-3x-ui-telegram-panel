@@ -43,6 +43,7 @@ const (
 	CoreService_GetSubscriptionLinks_FullMethodName     = "/core.v1.CoreService/GetSubscriptionLinks"
 	CoreService_AdminGetStats_FullMethodName            = "/core.v1.CoreService/AdminGetStats"
 	CoreService_AdminListPendingPayments_FullMethodName = "/core.v1.CoreService/AdminListPendingPayments"
+	CoreService_AdminGetPayment_FullMethodName          = "/core.v1.CoreService/AdminGetPayment"
 	CoreService_AdminFindUser_FullMethodName            = "/core.v1.CoreService/AdminFindUser"
 	CoreService_AdminAdjustBalance_FullMethodName       = "/core.v1.CoreService/AdminAdjustBalance"
 	CoreService_AdminSetUserStatus_FullMethodName       = "/core.v1.CoreService/AdminSetUserStatus"
@@ -110,6 +111,10 @@ type CoreServiceClient interface {
 	GetSubscriptionLinks(ctx context.Context, in *GetSubscriptionLinksRequest, opts ...grpc.CallOption) (*SubscriptionLinks, error)
 	AdminGetStats(ctx context.Context, in *AdminGetStatsRequest, opts ...grpc.CallOption) (*AdminStats, error)
 	AdminListPendingPayments(ctx context.Context, in *AdminListPendingPaymentsRequest, opts ...grpc.CallOption) (*AdminListPendingPaymentsResponse, error)
+	// AdminGetPayment shows one manual payment: pending, or how it was decided
+	// and by whom (staff alerts open a payment that another owner may have
+	// decided already).
+	AdminGetPayment(ctx context.Context, in *AdminGetPaymentRequest, opts ...grpc.CallOption) (*AdminPaymentView, error)
 	AdminFindUser(ctx context.Context, in *AdminFindUserRequest, opts ...grpc.CallOption) (*AdminUserView, error)
 	AdminAdjustBalance(ctx context.Context, in *AdminAdjustBalanceRequest, opts ...grpc.CallOption) (*Wallet, error)
 	AdminSetUserStatus(ctx context.Context, in *AdminSetUserStatusRequest, opts ...grpc.CallOption) (*User, error)
@@ -394,6 +399,16 @@ func (c *coreServiceClient) AdminListPendingPayments(ctx context.Context, in *Ad
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AdminListPendingPaymentsResponse)
 	err := c.cc.Invoke(ctx, CoreService_AdminListPendingPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminGetPayment(ctx context.Context, in *AdminGetPaymentRequest, opts ...grpc.CallOption) (*AdminPaymentView, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminPaymentView)
+	err := c.cc.Invoke(ctx, CoreService_AdminGetPayment_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -744,6 +759,10 @@ type CoreServiceServer interface {
 	GetSubscriptionLinks(context.Context, *GetSubscriptionLinksRequest) (*SubscriptionLinks, error)
 	AdminGetStats(context.Context, *AdminGetStatsRequest) (*AdminStats, error)
 	AdminListPendingPayments(context.Context, *AdminListPendingPaymentsRequest) (*AdminListPendingPaymentsResponse, error)
+	// AdminGetPayment shows one manual payment: pending, or how it was decided
+	// and by whom (staff alerts open a payment that another owner may have
+	// decided already).
+	AdminGetPayment(context.Context, *AdminGetPaymentRequest) (*AdminPaymentView, error)
 	AdminFindUser(context.Context, *AdminFindUserRequest) (*AdminUserView, error)
 	AdminAdjustBalance(context.Context, *AdminAdjustBalanceRequest) (*Wallet, error)
 	AdminSetUserStatus(context.Context, *AdminSetUserStatusRequest) (*User, error)
@@ -864,6 +883,9 @@ func (UnimplementedCoreServiceServer) AdminGetStats(context.Context, *AdminGetSt
 }
 func (UnimplementedCoreServiceServer) AdminListPendingPayments(context.Context, *AdminListPendingPaymentsRequest) (*AdminListPendingPaymentsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminListPendingPayments not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminGetPayment(context.Context, *AdminGetPaymentRequest) (*AdminPaymentView, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminGetPayment not implemented")
 }
 func (UnimplementedCoreServiceServer) AdminFindUser(context.Context, *AdminFindUserRequest) (*AdminUserView, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminFindUser not implemented")
@@ -1407,6 +1429,24 @@ func _CoreService_AdminListPendingPayments_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).AdminListPendingPayments(ctx, req.(*AdminListPendingPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminGetPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminGetPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminGetPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminGetPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminGetPayment(ctx, req.(*AdminGetPaymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2071,6 +2111,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminListPendingPayments",
 			Handler:    _CoreService_AdminListPendingPayments_Handler,
+		},
+		{
+			MethodName: "AdminGetPayment",
+			Handler:    _CoreService_AdminGetPayment_Handler,
 		},
 		{
 			MethodName: "AdminFindUser",

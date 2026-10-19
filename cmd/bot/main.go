@@ -81,7 +81,7 @@ func setup(rt *app.Runtime) error {
 
 	cat := i18n.MustLoad()
 	h := handler.New(core, bot, state.NewRedis(rdb), cat, ratelimit.New(rdb, ""),
-		handler.Config{AdminTelegramID: cfg.AdminTelegramID, BotName: me.FirstName, BotUsername: me.Username, Location: loc}, rt.Log)
+		handler.Config{AdminTelegramIDs: cfg.AdminTelegramIDs, BotName: me.FirstName, BotUsername: me.Username, Location: loc}, rt.Log)
 	if err := h.RefreshSettings(rt.Ctx); err != nil {
 		rt.Log.Warn("settings not loaded yet (core unreachable?); retrying in the background", "err", err)
 	}
@@ -113,7 +113,7 @@ func setup(rt *app.Runtime) error {
 		return h.RunProfile(ctx, profileBot, me.ID, state.NewMemo(rdb, fmt.Sprintf("bot:profile:%d", me.ID)))
 	})
 
-	notifier := notify.New(core, bot, cat, h.Settings(), cfg.AdminTelegramID, rt.Log)
+	notifier := notify.New(core, bot, cat, h.Settings(), cfg.AdminTelegramIDs, rt.Log)
 	notifications, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Name:       "core-events",
 		Source:     eventbus.NewGRPCSource(eventsv1.NewEventFeedServiceClient(conn)),
@@ -167,11 +167,11 @@ func setup(rt *app.Runtime) error {
 
 	if cfg.PeerBackupToken != "" {
 		// The backup service hands each encrypted backup to the bot, which
-		// sends it to the owner only (never a chat the caller names).
+		// sends it to the owners only (never a chat the caller names).
 		rt.Mux.Handle("POST /internal/backups/deliver", runner.Deliver(runner.Delivery{
-			Bot: bot, Token: cfg.PeerBackupToken, Owner: cfg.AdminTelegramID,
+			Bot: bot, Token: cfg.PeerBackupToken, Owners: cfg.AdminTelegramIDs,
 			Limit: runner.UploadLimit(cfg.TelegramAPIURL != ""), Texts: cat,
-			Lang: func(ctx context.Context) string { return ownerLang(ctx, core, h, cfg.AdminTelegramID) },
+			Lang: func(ctx context.Context, owner int64) string { return ownerLang(ctx, core, h, owner) },
 			Log:  rt.Log,
 		}))
 	}

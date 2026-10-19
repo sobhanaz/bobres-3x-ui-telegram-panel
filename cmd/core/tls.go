@@ -234,7 +234,7 @@ func sslCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 		return 1
 	}
 	defer st.Close()
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID})
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs})
 	tlsMgr, _ := newTLS(cfg, dom, secrets, slog.New(slog.DiscardHandler), 30*time.Second)
 	if a.sub != "status" {
 		c := domain.TLSChange{Mode: tlsconf.Mode(a.sub), IP: a.ip, CertPEM: certPEM, KeyPEM: keyPEM, DetectedIP: a.detected, ConfirmIP: a.yes}

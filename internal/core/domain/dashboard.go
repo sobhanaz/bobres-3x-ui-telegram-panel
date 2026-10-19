@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -138,26 +139,34 @@ type InitialLogin struct {
 	Password string // shown once, never stored in the clear
 }
 
-// IssueInitialPassword gives the configured owner a way into the dashboard
+// IssueInitialPassword gives a configured owner a way into the dashboard
 // without ever having sent /start to the bot: the account is created if it
 // is missing, made the owner, and given a new random password (the owner's
 // username is kept when they have a password login, else "owner"). The
+// owner is the Telegram id asked for, which must be one of the server's
+// owners, or the main owner when it is 0. The
 // login is marked must_change: with it the owner opens only a restricted
 // session, which asks for a new password and an authenticator app. Running
 // it again resets the login (the password, the authenticator app, a lock)
 // and ends every session of the owner. The password is returned once; the
 // audit entry (dashboard.password.reset_cli, no actor) never holds it.
-func (s *Service) IssueInitialPassword(ctx context.Context) (*InitialLogin, error) {
+func (s *Service) IssueInitialPassword(ctx context.Context, telegramID int64) (*InitialLogin, error) {
 	if !s.OwnerConfigured() {
 		return nil, invalid("BOBRES_ADMIN_TELEGRAM_ID is not set: no owner to give a password to")
 	}
-	u, err := s.UpsertUser(ctx, UpsertUserParams{TelegramID: s.cfg.OwnerTelegramID})
+	if telegramID == 0 {
+		telegramID = s.PrimaryOwnerID()
+	}
+	if !slices.Contains(s.cfg.OwnerTelegramIDs, telegramID) {
+		return nil, invalid("Telegram id %d is not one of the owners named in the server settings (BOBRES_ADMIN_TELEGRAM_ID); see: bobres admin owners list", telegramID)
+	}
+	u, err := s.UpsertUser(ctx, UpsertUserParams{TelegramID: telegramID})
 	if err != nil {
 		return nil, err
 	}
 	if _, err := s.StaffUser(ctx, u.ID); err != nil {
 		return nil, fmt.Errorf("the owner (Telegram id %d) is not an active staff member (a reseller must be removed as a reseller first): %w",
-			s.cfg.OwnerTelegramID, err)
+			telegramID, err)
 	}
 	password, err := NewInitialPassword()
 	if err != nil {

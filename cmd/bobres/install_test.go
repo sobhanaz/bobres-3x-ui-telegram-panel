@@ -419,13 +419,17 @@ func TestInteractivePanelOnThisServer(t *testing.T) {
 
 func TestInstallRejectsBadInput(t *testing.T) {
 	cases := map[string][]string{
-		"bad domain":   {"--domain", "not a domain"},
-		"bad admin id": {"--admin-id", "12ab"},
-		"http panel":   {"--xui-url", "http://xui.example.com"},
-		"loopback":     {"--xui-url", "http://127.0.0.1:2053", "--xui-allow-private"},
-		"bad merchant": {"--zarinpal-merchant-id", "12345"},
-		"http zp url":  {"--zarinpal-merchant-id", "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b", "--zarinpal-public-url", "http://pay.example.ir"},
-		"localhost":    {"--xui-url", "https://localhost:2053"},
+		"bad domain":            {"--domain", "not a domain"},
+		"bad admin id":          {"--admin-id", "12ab"},
+		"admin id with a space": {"--admin-id", "12 34"},
+		"admin id twice":        {"--admin-id", "12,12"},
+		"admin id empty entry":  {"--admin-id", "12,,13"},
+		"eleven admin ids":      {"--admin-id", "1,2,3,4,5,6,7,8,9,10,11"},
+		"http panel":            {"--xui-url", "http://xui.example.com"},
+		"loopback":              {"--xui-url", "http://127.0.0.1:2053", "--xui-allow-private"},
+		"bad merchant":          {"--zarinpal-merchant-id", "12345"},
+		"http zp url":           {"--zarinpal-merchant-id", "0b7e2f3a-1c9d-4e5f-8a6b-7c8d9e0f1a2b", "--zarinpal-public-url", "http://pay.example.ir"},
+		"localhost":             {"--xui-url", "https://localhost:2053"},
 	}
 	for name, override := range cases {
 		dir := t.TempDir()
@@ -1007,5 +1011,29 @@ func TestFreshInstallIssuesTheOwnerLogin(t *testing.T) {
 	if code := ins.install(baseArgs(t.TempDir())); code != 0 || anyCall(docker.calls, "admin-password") ||
 		strings.Contains(out.String(), "Password:") {
 		t.Fatalf("quiet run: %d\n%s", code, out)
+	}
+}
+
+// Several owners: the ids are kept as typed (trimmed), in order, and an install
+// with them comes up like any other.
+func TestInstallWithSeveralOwners(t *testing.T) {
+	dir := t.TempDir()
+	ins, _, errOut := testInstaller("", secrets, nil)
+	args := append(baseArgs(dir), "--no-start", "--admin-id", "4242, 4243,4244")
+	if code := ins.install(args); code != 0 {
+		t.Fatalf("install: %d %s", code, errOut)
+	}
+	env, _, _ := readEnv(filepath.Join(dir, ".env"))
+	if env["BOBRES_ADMIN_TELEGRAM_ID"] != "4242, 4243,4244" {
+		t.Fatalf("owners in .env: %q", env["BOBRES_ADMIN_TELEGRAM_ID"])
+	}
+	if errs := validateEnv(env); len(errs) != 0 {
+		t.Fatalf("an install with several owners is valid: %v", errs)
+	}
+	for _, bad := range []string{"", "  ", "4242,", "4242,4242", "4242 4243", "x"} {
+		env["BOBRES_ADMIN_TELEGRAM_ID"] = bad
+		if errs := validateEnv(env); len(errs) == 0 || !strings.Contains(errs[0].Error(), "admin Telegram id") {
+			t.Errorf("%q passed validation: %v", bad, errs)
+		}
 	}
 }

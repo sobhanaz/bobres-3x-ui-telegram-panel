@@ -84,7 +84,7 @@ func alertNotifier(t *testing.T) (*Notifier, *fakeTG, *settings.Store) {
 	}
 	set := settings.New()
 	tgf := &fakeTG{}
-	n := New(&fakeCore{langs: map[int64]string{ownerTG: "fa", adminTG: "en", supportTG: "en"}}, tgf, cat, set, ownerTG, nil)
+	n := New(&fakeCore{langs: map[int64]string{ownerTG: "fa", adminTG: "en", supportTG: "en"}}, tgf, cat, set, []int64{ownerTG}, nil)
 	return n, tgf, set
 }
 

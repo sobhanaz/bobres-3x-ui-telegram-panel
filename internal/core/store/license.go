@@ -136,10 +136,11 @@ func (s *Store) RefreshLicense(ctx context.Context, q querier, old, token string
 }
 
 // CountStaffSeats counts the staff a license's dashboard seats cover: every
-// admin, support member and owner except the one the server names
-// (ownerTelegramID, BOBRES_ADMIN_TELEGRAM_ID; 0 when it names none, which
-// leaves no one out). Another owner is a seat like any other, or promoting
-// the two seat holders to owner would empty the seats.
+// admin, support member and owner except the main owner the server names
+// (ownerTelegramID, the first of BOBRES_ADMIN_TELEGRAM_ID; 0 when it names
+// none, which leaves no one out). Another owner, a second root admin
+// included, is a seat like any other, or promoting the two seat holders to
+// owner would empty the seats.
 func (s *Store) CountStaffSeats(ctx context.Context, q querier, ownerTelegramID int64) (int, error) {
 	var n int
 	if err := q.QueryRow(ctx, `SELECT count(*) FROM core.users

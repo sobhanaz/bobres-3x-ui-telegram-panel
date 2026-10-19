@@ -80,18 +80,18 @@ func (s *Store) Staff() []Contact {
 // Recipients lists who gets staff alerts about payments, sales and failed
 // deliveries: with notify.recipients = staff, every active owner and admin
 // core listed at the last refresh (never support); otherwise (or while that
-// list is empty) the configured admin, adminTG (0: nobody).
-func (s *Store) Recipients(adminTG int64) []Contact {
-	return s.recipients(adminTG, false)
+// list is empty) every configured owner, adminIDs (none: nobody), in order.
+func (s *Store) Recipients(adminIDs []int64) []Contact {
+	return s.recipients(adminIDs, false)
 }
 
 // TicketRecipients lists who gets support ticket alerts: as Recipients, but
 // with notify.recipients = staff support staff too.
-func (s *Store) TicketRecipients(adminTG int64) []Contact {
-	return s.recipients(adminTG, true)
+func (s *Store) TicketRecipients(adminIDs []int64) []Contact {
+	return s.recipients(adminIDs, true)
 }
 
-func (s *Store) recipients(adminTG int64, support bool) []Contact {
+func (s *Store) recipients(adminIDs []int64, support bool) []Contact {
 	staff := s.Staff()
 	if s.Get("notify.recipients") == "staff" {
 		var out []Contact
@@ -104,15 +104,21 @@ func (s *Store) recipients(adminTG int64, support bool) []Contact {
 			return out
 		}
 	}
-	if adminTG == 0 {
-		return nil
-	}
-	for _, c := range staff {
-		if c.TelegramID == adminTG {
-			return []Contact{c}
+	var out []Contact
+	for _, id := range adminIDs {
+		if id == 0 {
+			continue
 		}
+		c := Contact{TelegramID: id}
+		for _, sc := range staff {
+			if sc.TelegramID == id {
+				c = sc
+				break
+			}
+		}
+		out = append(out, c)
 	}
-	return []Contact{{TelegramID: adminTG}}
+	return out
 }
 
 // Contact is the cached staff member with this Telegram id (ok=false: not

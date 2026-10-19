@@ -41,7 +41,7 @@ func TestCheckEnv(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	for _, want := range []string{"missing: ", "BOBRES_CORE_MASTER_KEY", "BOBRES_REDIS_URL", "BOBRES_TOKEN_BOT (not the 64 hex", "BOBRES_DOMAIN (not a domain name)",
-		"BOBRES_TELEGRAM_BOT_TOKEN (not shaped", "BOBRES_ADMIN_TELEGRAM_ID (not a positive number)"} {
+		"BOBRES_TELEGRAM_BOT_TOKEN (not shaped", "BOBRES_ADMIN_TELEGRAM_ID (not positive numbers separated by commas)"} {
 		if !strings.Contains(r.Detail, want) {
 			t.Errorf("detail lacks %q: %s", want, r.Detail)
 		}

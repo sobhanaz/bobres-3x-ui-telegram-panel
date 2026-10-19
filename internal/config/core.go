@@ -30,8 +30,10 @@ type Core struct {
 	// MasterKey encrypts secrets core stores at rest (dashboard TOTP secrets).
 	// Optional until the dashboard needs it; 32+ characters when set.
 	MasterKey string
-	// AdminTelegramID becomes the owner on first contact with the bot.
-	AdminTelegramID int64
+	// AdminTelegramIDs are the root admins (BOBRES_ADMIN_TELEGRAM_ID, one id or
+	// several separated by commas): each becomes an owner on first contact
+	// with the bot or when core starts. The first one is the primary.
+	AdminTelegramIDs []int64
 	// PublicURL is where staff open the dashboard (login links point there):
 	// https://<BOBRES_DOMAIN>, or BOBRES_PUBLIC_URL for a local test setup.
 	// Core's links follow the HTTPS mode (domain.TLS.PublicURL); this is the
@@ -124,7 +126,7 @@ func LoadCore() (Core, error) {
 	keep(requireNonEmpty("BOBRES_PROVISIONER_GRPC_ADDR", co.ProvisionerGRPCAddr))
 	co.MasterKey, err = optionalMasterKey()
 	keep(err)
-	co.AdminTelegramID, err = telegramID("BOBRES_ADMIN_TELEGRAM_ID")
+	co.AdminTelegramIDs, err = telegramIDs("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
 	co.PublicURLEnv, err = publicURLEnv()
 	keep(err)

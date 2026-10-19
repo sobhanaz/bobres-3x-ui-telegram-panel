@@ -125,6 +125,7 @@ func TestMenuChangesSettingsThroughTheInstaller(t *testing.T) {
 		"7", goodBotToken, "",
 		"8", "abc", "",
 		"8", "4243", "",
+		"8", "4243,4244", "",
 		"9", "http://host.docker.internal:2053/p", "", "https://sub.example.com:2096/sub/", "y", "",
 		"9", "", "", "", "", // all kept: nothing to do
 		"0", "",
@@ -134,7 +135,7 @@ func TestMenuChangesSettingsThroughTheInstaller(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	got := *installs
-	if len(got) != 3 {
+	if len(got) != 4 {
 		t.Fatalf("installer runs: %+v\n%s\n%s", got, out, errOut)
 	}
 	for _, c := range got {
@@ -148,7 +149,10 @@ func TestMenuChangesSettingsThroughTheInstaller(t *testing.T) {
 	if !contains(got[1].args, "--admin-id") || !contains(got[1].args, "4243") {
 		t.Fatalf("admin change: %+v", got[1])
 	}
-	if p := got[2]; !contains(p.args, "http://host.docker.internal:2053/p") || !contains(p.args, "--xui-allow-private") ||
+	if !contains(got[2].args, "--admin-id") || !contains(got[2].args, "4243,4244") {
+		t.Fatalf("owners change: %+v", got[2])
+	}
+	if p := got[3]; !contains(p.args, "http://host.docker.internal:2053/p") || !contains(p.args, "--xui-allow-private") ||
 		!contains(p.args, "https://sub.example.com:2096/sub/") || p.env != nil {
 		t.Fatalf("panel change (token kept): %+v", p)
 	}

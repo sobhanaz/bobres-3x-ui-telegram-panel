@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -118,7 +119,7 @@ func (h *Handler) exempt(r *req) bool {
 }
 
 func (h *Handler) isOwnerID(r *req) bool {
-	return h.cfg.AdminTelegramID != 0 && r.from.ID == h.cfg.AdminTelegramID
+	return r.from.ID != 0 && slices.Contains(h.cfg.AdminTelegramIDs, r.from.ID)
 }
 
 // payingNow: a message carrying the proof of a payment already under way (a

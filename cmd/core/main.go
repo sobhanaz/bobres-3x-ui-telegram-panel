@@ -75,7 +75,10 @@ func loginLink(args []string) int {
 		fmt.Fprintln(os.Stderr, noAddress)
 		return 1
 	}
-	tg := cfg.AdminTelegramID
+	var tg int64 // no argument: the main owner, the first of the server's owners
+	if len(cfg.AdminTelegramIDs) > 0 {
+		tg = cfg.AdminTelegramIDs[0]
+	}
 	if len(args) > 0 {
 		if tg, err = strconv.ParseInt(args[0], 10, 64); err != nil || tg <= 0 {
 			fmt.Fprintln(os.Stderr, "usage: login-link [telegram id]")
@@ -90,7 +93,7 @@ func loginLink(args []string) int {
 		return 1
 	}
 	defer st.Close()
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID})
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs})
 	ctx = store.WithSource(ctx, store.SourceCLI)
 	if err := dom.EnsureOwner(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "owner role:", err)
@@ -133,7 +136,7 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(st.Close)
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID, Timezone: cfg.Timezone, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, Timezone: cfg.Timezone, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
 	// A new owner set with bobres menu gets the role now, not at their next /start.
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)

@@ -63,7 +63,10 @@ func (ins *installer) summary(env map[string]string, dir string) {
 	}
 	title("Next steps")
 	fmt.Fprintf(ins.out, "  1. Open %s in Telegram and send /start from the owner's account (id %s):\n"+
-		"     that makes you the owner. Until then the dashboard link below is refused.\n", bot, orDash(env["BOBRES_ADMIN_TELEGRAM_ID"]))
+		"     that makes you the owner. Until then the dashboard link below is refused.\n", bot, orDash(strings.ReplaceAll(env["BOBRES_ADMIN_TELEGRAM_ID"], ",", ", ")))
+	if strings.Contains(env["BOBRES_ADMIN_TELEGRAM_ID"], ",") {
+		fmt.Fprintln(ins.out, "     Every owner listed does the same from their own account (bobres admin owners list).")
+	}
 	fmt.Fprintln(ins.out, "  2. Open the dashboard: send /dashboard to the bot, or run  sudo bobres admin link.")
 	fmt.Fprintln(ins.out, "  3. Set up the store in the bot: /set payments.card_number 6037-...  /set payments.card_holder Your Name\n"+
 		"     /plan_add 150000 IRT 30 50 Monthly 50GB   /trial 1 1   then /admin.")

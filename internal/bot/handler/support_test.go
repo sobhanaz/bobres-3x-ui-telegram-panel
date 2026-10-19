@@ -23,7 +23,7 @@ import (
 // --- what the dashboard does, through core's domain over the test store ---
 
 func (w *world) dom() *coredomain.Service {
-	return coredomain.New(w.stack.Store, coredomain.Config{OwnerTelegramID: ownerID})
+	return coredomain.New(w.stack.Store, coredomain.Config{OwnerTelegramIDs: []int64{ownerID}})
 }
 
 func (w *world) storeUser(telegramID int64) *corestore.User {
@@ -464,7 +464,7 @@ func TestReplySentButNotReported(t *testing.T) {
 	w.drain()
 
 	core := &lossyCore{CoreServiceClient: w.stack.Core, fail: 1}
-	n := notify.New(core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+	n := notify.New(core, w.tg, w.h.cat, w.h.Settings(), []int64{ownerID}, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{Source: eventbus.NewGRPCSource(w.stack.Feed),
 		Handle: n.Handle, DeadLetter: n.DeadLetter})
 	if err != nil {
@@ -638,7 +638,7 @@ func TestTicketAlertButtonAndAssignee(t *testing.T) {
 	tk := w.openTicket(881)
 
 	core := &publicCore{CoreServiceClient: w.stack.Core, base: "https://panel.example.com"}
-	n := notify.New(core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+	n := notify.New(core, w.tg, w.h.cat, w.h.Settings(), []int64{ownerID}, nil)
 	payload, _ := json.Marshal(events.TicketOpenedEvent{TicketID: tk.ID, Number: tk.Number,
 		MessageID: w.ticketMessages(tk.ID)[0].ID, TelegramID: 881, Category: "other"})
 	if err := n.Handle(context.Background(), eventbus.Message{Topic: events.TicketOpened, Payload: payload}); err != nil {
