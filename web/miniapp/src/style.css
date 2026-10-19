@@ -44,8 +44,12 @@ p { margin: 0; }
 .bar span { display: block; height: 100%; background: var(--accent); }
 .total { display: flex; justify-content: space-between; }
 .gate { text-align: center; padding-top: 30vh; }
-.tabs { position: fixed; inset-inline: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); padding-bottom: env(safe-area-inset-bottom); }
+.tabs { position: fixed; inset-inline: 0; bottom: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--card); padding-bottom: env(safe-area-inset-bottom); }
 .tabs button { min-height: var(--tabs-h); border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
 .tabs button[aria-current='page'] { color: var(--accent); font-weight: 600; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .bar span { transition: width 0.3s; } }
+button.card { width: 100%; border: 0; text-align: start; font: inherit; color: inherit; cursor: pointer; }
+.block { display: block; }
+.chev { color: var(--muted); }
+[dir='rtl'] .chev { display: inline-block; transform: scaleX(-1); }

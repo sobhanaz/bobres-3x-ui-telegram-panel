@@ -3,7 +3,7 @@ import { api, ApiError, resetSession, signIn } from '../api'
 import { errorKey, gateFor } from '../errors'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-const ME = { user: { id: 'u', username: '', language: 'fa' }, wallets: [], brand: {}, maintenance: false, top_up: {}, token: 'tok1', expires_in: 3600 }
+const ME = { user: { id: 'u', username: '', language: 'fa' }, wallets: [], brand: {}, maintenance: false, top_up: {}, features: {}, token: 'tok1', expires_in: 3600 }
 
 beforeEach(() => {
   resetSession()

@@ -7,6 +7,8 @@ const fa = {
   'tab.store': 'فروشگاه',
   'tab.services': 'سرویس‌های من',
   'tab.wallet': 'کیف پول',
+  'tab.more': 'بیشتر',
+  'more.title': 'بیشتر',
   'common.back': 'بازگشت',
   'common.retry': 'تلاش دوباره',
   'common.loading': 'در حال بارگذاری…',
@@ -118,6 +120,8 @@ const en: Record<keyof typeof fa, string> = {
   'tab.store': 'Store',
   'tab.services': 'My services',
   'tab.wallet': 'Wallet',
+  'tab.more': 'More',
+  'more.title': 'More',
   'common.back': 'Back',
   'common.retry': 'Try again',
   'common.loading': 'Loading…',
@@ -225,8 +229,23 @@ const en: Record<keyof typeof fa, string> = {
   'err.unknown': 'Something went wrong. Try again.',
 }
 
-export type Key = keyof typeof fa
-export const messages: Record<Lang, Record<Key, string>> = { fa, en }
+/** SectionMessages are a section's own texts (src/sections/<name>/messages.ts, its default export). */
+export interface SectionMessages {
+  fa: Record<string, string>
+  en: Record<string, string>
+}
+
+/** Key is a text's name: the shop's are known to the compiler, a section's are plain strings (a test checks every one is in both languages). */
+export type Key = keyof typeof fa | (string & {})
+
+// `en` is declared as Record<keyof typeof fa, string>: the compiler checks that every text of the shop is in both languages.
+export const messages: Record<Lang, Record<string, string>> = { fa: { ...fa }, en: { ...en } }
+
+// The sections add theirs, so a new section touches no shared file.
+for (const t of Object.values(import.meta.glob<SectionMessages>('./sections/*/messages.ts', { eager: true, import: 'default' }))) {
+  Object.assign(messages.fa, t.fa)
+  Object.assign(messages.en, t.en)
+}
 
 export const lang = ref<Lang>('fa')
 export const dir = computed(() => (lang.value === 'fa' ? 'rtl' : 'ltr'))

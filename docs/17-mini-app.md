@@ -103,6 +103,17 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 - Stars and manual (card, receipt) payments.
 - Push messages (the bot sends those).
 
+## Adding a section (for developers)
+
+Beyond the shop, the app has sections listed in its **More** tab. A section touches no shared file:
+
+- **Core:** a file `internal/core/web/miniapp_<name>.go` whose `init` calls `registerMiniFeature(miniFeature{routes, me})`.
+  `routes` adds the section's calls under `/api/mini/v1/` (behind `s.miniSession`, so every call is the signed-in
+  customer's own); `me` adds the section's flags to `features` in the sign-in and `/me` answers.
+- **App:** a folder `web/miniapp/src/sections/<name>/` with `index.ts` (calls `registerSection({ id, title, visible,
+  component })`, where `visible` reads `me.features`) and `messages.ts` (default export `{ fa, en }`, the texts in both
+  languages). `sections/index.ts` loads every folder; a test fails if a text a view asks for is missing in either language.
+
 ## Check by hand with a real Telegram (nothing here can prove it)
 
 1. The init data signature with the real bot token: open the app from the menu button on a phone and a desktop client;

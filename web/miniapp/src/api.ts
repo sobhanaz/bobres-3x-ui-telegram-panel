@@ -15,12 +15,16 @@ export class ApiError extends Error {
 }
 
 export interface Wallet { currency: string; balance: number; scale: number }
+/** Features are what the sections of the app say about this customer (core's miniFeature.me); a section reads its own keys. */
+export type Features = Record<string, boolean | number | string | undefined>
+
 export interface Me {
   user: { id: string; username: string; language: string }
   wallets: Wallet[]
   brand: { name: string; color: string; support: string; support_url: string; bot_url: string }
   maintenance: boolean
   top_up: { currency: string; min: number; max: number }
+  features: Features
 }
 export interface Plan {
   id: string
