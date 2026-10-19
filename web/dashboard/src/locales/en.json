@@ -1101,7 +1101,7 @@
       "miniapp": {
         "enabled": {
           "label": "Telegram Mini App store",
-          "help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing and wallet top-up. Off by default; turn it on, then set the Mini App URL in {'@'}BotFather. Turned off, /app/ and its API answer “not found”."
+          "help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing, wallet top-up, the free trial, invites and support. On by default: the bot opens it from a Store button and Telegram's menu button, which need the store's public HTTPS address, so there is nothing to set in {'@'}BotFather. Turned off, /app/ and its API answer “not found” and the buttons go."
         }
       },
       "reports": {

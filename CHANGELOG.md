@@ -8,6 +8,20 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Telegram Mini App
+- The Mini App store is **on by default**, for every store: `miniapp.enabled` used to be off until set, and is now on
+  unless the owner switches it off, so a store that never touched it has the app after `bobres update`. The bot opens
+  it from a **Store** button at the top of its bottom menu and from Telegram's own menu button, and sets both itself:
+  there is nothing to configure in @BotFather. They appear only when the store has a public HTTPS address (not an IP
+  address, `localhost` or a private name, where Telegram could not open the page) and go again when the app is
+  switched off (the bot only takes back a menu button it set itself).
+- New in the app: the **free trial** (the bot's trial: one per account, whichever door it was taken through),
+  **invite friends** (the customer's own link, how many joined and bought, what it earned) and **support** (write to
+  staff, follow the conversation, close it; the same inbox and the same daily limit as the bot, counted together).
+  They are sections of the More tab and plug in by themselves ([17-mini-app.md](docs/17-mini-app.md)).
+- Core passes the app's address to the bot with its settings (`miniapp_url`, an additive field of `Settings`); a bot
+  older than core simply shows no button.
+
 ## [0.5.0] — 2026-10-20
 
 Several owners, a list of the payments waiting for review, and Marzban tested against a real panel.

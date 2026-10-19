@@ -37,8 +37,9 @@ license server is built but still has to be deployed by the owner. What is left 
 - A page for each service at `/sub/<token>`, under the store's own brand: usage and days left, the subscription link
   and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box, and a Renew button. The import links are not
   yet verified on real devices.
-- A Telegram Mini App store at `/app/` (off until `miniapp.enabled` is set): plans, buying, services, renewals and the
-  wallet. Stars, card to card and trials stay in the bot; it is not yet checked against a real Telegram.
+- A Telegram Mini App store at `/app/`, on for every store: the bot opens it from a Store button and Telegram's menu
+  button. Plans, buying, services, renewals, the wallet, the free trial, invites and support. Stars and card to card
+  stay in the bot for now; it is not yet checked against a real Telegram.
 
 **Resellers, in the bot**
 - A reseller panel: buy for customers at the tier's prices, on credit up to a limit; name and find their services;

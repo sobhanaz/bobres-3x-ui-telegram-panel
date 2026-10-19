@@ -81,7 +81,7 @@ onMounted(boot)
       <button class="btn secondary" type="button" @click="choosing = null">{{ tr('common.back') }}</button>
     </main>
     <main v-else-if="section" class="screen">
-      <component :is="section.component" @close="section = null" />
+      <component :is="section.component" @close="section = null" @services="inServices" />
       <button class="btn secondary" type="button" @click="section = null">{{ tr('common.back') }}</button>
     </main>
     <main v-else class="screen">

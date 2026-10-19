@@ -33,7 +33,7 @@ func publicHost(h string) bool {
 	}
 	if ip, err := netip.ParseAddr(h); err == nil {
 		ip = ip.Unmap()
-		return !(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() || cgnat.Contains(ip))
+		return !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() && !ip.IsUnspecified() && !ip.IsMulticast() && !cgnat.Contains(ip)
 	}
 	if !strings.Contains(h, ".") || strings.HasPrefix(h, ".") || strings.HasSuffix(h, ".") {
 		return false // a single label, or malformed

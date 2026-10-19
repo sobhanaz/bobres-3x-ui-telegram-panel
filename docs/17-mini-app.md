@@ -1,21 +1,26 @@
 # Telegram Mini App store
 
 A web store that opens inside Telegram: browse plans, buy with the wallet or an online gateway, see and renew your
-services, top up the wallet. It is the same store as the bot (same plans, prices, discount codes, wallet and
-orders), in a nicer screen. The bot stays the way to do everything else (trial, referrals, support, manual card and
-Stars payments).
+services, top up the wallet, take the free trial, invite friends and write to support. It is the same store as the bot
+(same plans, prices, discount codes, wallet, orders and support inbox), in a nicer screen. Manual card and Stars
+payments and the reseller panel are still done in the bot (see "Not built").
 
-It is **off by default**. Turn it on with the setting `miniapp.enabled` (Settings, General), then point the bot's menu
-button at the app (below).
+It is **on by default**, for every store, with nothing to set up in @BotFather: the bot opens it from a **Store** button
+at the top of its bottom menu and from Telegram's own **menu button** next to the message box. Switch it off with the
+setting `miniapp.enabled` (Settings, General) and both buttons go within a minute and `/app/` answers 404.
 
 ## Set up
 
-1. Core must have a public HTTPS address (the store's domain). The app lives at `https://<domain>/app/`.
-2. In the dashboard, Settings, General: **Mini App store** on. Off, `/app/` and every `/api/mini/v1/` call answer 404.
-3. In Telegram, talk to @BotFather: `/mybots`, your bot, **Bot Settings**, **Menu Button**, **Configure menu button**,
-   send `https://<domain>/app/`, and a button title (for example "Store"). Customers then see the button next to the
-   message box. A Web App button on a keyboard or an inline button with the same URL works too.
-4. Open the bot on a phone, tap the button, and check it signs in (the checklist at the end of this page).
+1. The store needs a public HTTPS address (the dashboard's domain): the app lives at `https://<domain>/app/`. Nothing
+   else is required. With an IP address, `localhost`, a private or `.local` name or plain http, Telegram could not open
+   the page, so the bot adds no button (the app itself is still served).
+2. Core tells the bot that address with its settings, and the bot (which reloads them every minute and at once on a
+   change in the dashboard) sets the menu button, titled "Store" / "فروشگاه", and puts a Store button first in its
+   bottom menu. The menu button is set for all chats, once (and again when the address or the title changes),
+   replacing a button set by hand in @BotFather before; Telegram's default button is given back when the app is
+   switched off or the address is lost, but only if the bot had set the button. A Web App button on another keyboard or
+   an inline button with the same URL works too.
+3. Open the bot on a phone, tap Store, and check it signs in (the checklist at the end of this page).
 
 The bot's username (Branding, `branding.bot_username`) is used for the "Open the bot" button the app shows where it
 cannot finish something itself.
@@ -60,9 +65,26 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /orders/{id}` | Order status (poll it until delivered) |
 | `POST /topup` `{amount, method, key}` | Wallet top-up, 10,000 to 50,000,000 Toman, same bounds as the bot |
 | `POST /payments/{id}/check` | Ask the gateway whether a payment landed ("I have paid") |
+| `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
+| `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
+| `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing |
 
 The app offers **Zarinpal, IDPay, NextPay and automatic USDT**. Telegram Stars and manual card or receipt payments
-are refused with a 400 here and are done in the bot. Trials start in the bot too.
+are refused with a 400 here and are done in the bot.
+
+### Account sections
+
+These three are sections of the More tab (see "Adding a section"); each says in `features` whether this customer sees it.
+
+- **Free trial** (`features.trial`): shown while the store has an enabled trial plan and the customer has never ordered a
+  trial. It is the bot's trial: the same domain call and the same request key (`trial:<telegram id>`), so a trial taken
+  in either place is used in both, and a second tap or a second device gets 409 `trial_used`.
+- **Invite friends** (`features.invite`): the link is `https://t.me/<bot>?start=r_<code>`, as in the bot. A reseller has
+  a commission link of their own in their panel and is not offered this one.
+- **Support** (`features.support`): the bot's support, with the same rules. One conversation is open at a time, a message
+  joins it or starts one, staff answers still arrive in the bot and show in the thread, and a customer's message needs
+  text (photos and files are sent from the bot and show as an attachment line). `limits.tickets_per_day` is counted from
+  the database, so it covers the bot and the app together; over it, the answer is 429 `daily_limit`.
 
 The calls use the same domain functions as the bot (orders, wallet, discount codes, payments), so every rule is the
 same: price and discount are decided on the server, a wallet cannot go below zero, an order is the customer's own or
@@ -99,8 +121,9 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 
 ## Not built
 
-- Trials, referrals, support tickets and the reseller panel (still in the bot).
+- The reseller panel (still in the bot).
 - Stars and manual (card, receipt) payments.
+- Photos and files in support (sent from the bot).
 - Push messages (the bot sends those).
 
 ## Adding a section (for developers)
@@ -118,7 +141,8 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
 
 1. The init data signature with the real bot token: open the app from the menu button on a phone and a desktop client;
    it must show the plans, not "open from Telegram".
-2. The BotFather menu button and Web App URL from the steps above, with `miniapp.enabled` on and off.
+2. The Store button in the bot's bottom menu and Telegram's menu button, a minute after an update or a change of
+   `miniapp.enabled`: both appear on, both go off, and a store with only an IP address gets neither.
 3. The CSP and framing in Telegram's web clients (web.telegram.org) and the mobile apps; nothing blocked in the console.
 4. Theme colours, dark and light, safe-area (notch) and Telegram's Back button inside a purchase.
 5. A payment page opening from the app (Zarinpal, IDPay, NextPay) and coming back; the automatic USDT address, exact

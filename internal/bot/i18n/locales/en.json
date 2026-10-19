@@ -546,7 +546,7 @@
   "setting.branding.bot_username.label": "Bot username",
   "setting.branding.bot_username.help": "The bot’s @username (without the @), for the “Renew” button on the subscription page, which opens the bot. Empty: the page has no renew button.",
   "setting.miniapp.enabled.label": "Telegram Mini App store",
-  "setting.miniapp.enabled.help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing and wallet top-up. Off by default; turn it on, then set the Mini App URL in @BotFather. Turned off, /app/ and its API answer “not found”.",
+  "setting.miniapp.enabled.help": "Opens the store as a Mini App inside Telegram at /app/: plans, buying with the wallet or a payment gateway, services, renewing, wallet top-up, the free trial, invites and support. On by default: the bot opens it from a Store button and Telegram's menu button, which need the store's public HTTPS address, so there is nothing to set in @BotFather. Turned off, /app/ and its API answer “not found” and the buttons go.",
   "setting.maintenance.enabled.label": "Maintenance mode",
   "setting.maintenance.enabled.help": "While on, customers only see the maintenance message. Staff can still use the bot and payments in progress finish. Change the message under Branding &amp; texts.",
   "setting.join.channel.label": "Channel",
