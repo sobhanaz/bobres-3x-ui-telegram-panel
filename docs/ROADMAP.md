@@ -5,11 +5,12 @@ what it needs and when it is done. Sizes: S is a day or two of work, M about a w
 owner's picks (2026-10-14) and the effort: the cheaper pieces that help selling come first.
 
 Nothing here is promised for a date. Released so far ([CHANGELOG.md](../CHANGELOG.md)): v0.1.0 (2026-10-14, the first
-public release), v0.1.1, v0.2.0 (sales reports), v0.2.1 (the daily summary), v0.3.0 (the installer and the command line)
-and v0.4.0 (2026-10-17: Marzban panels, the subscription page, the Mini App, IDPay and NextPay, churn and Jalali reports,
-and the owner's tools).
+public release), v0.1.1, v0.2.0 (sales reports), v0.2.1 (the daily summary), v0.3.0 (the installer and the command line),
+v0.4.0 (2026-10-17: Marzban panels, the subscription page, the Mini App, IDPay and NextPay, churn and Jalali reports,
+and the owner's tools) and v0.5.0 (2026-10-20: several owners, a list of the payments to review, Marzban tested against
+a real panel).
 
-## Where things stand (after v0.4.0)
+## Where things stand (after v0.5.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
 Undo, noted in the list). What is still open:
