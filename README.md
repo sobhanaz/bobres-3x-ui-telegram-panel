@@ -70,7 +70,7 @@ license server is built but still has to be deployed by the owner. What is left 
 
 **Operations**
 - A one-command install on Ubuntu or Debian, and the `bobres` menu and commands on the server.
-- Several panel servers, each 3x-ui or Marzban (Marzban is tested against a fake only), with health checks, weights,
+- Several panel servers, each 3x-ui or Marzban (Marzban 0.8.4 is tested against the real panel in CI), with health checks, weights,
   servers per plan and inbound choices.
 - Daily encrypted backups: the newest 7 kept on the server, each sent to the owner on Telegram, and optional copies
   in S3-compatible storage. `bobres restore` puts one back.

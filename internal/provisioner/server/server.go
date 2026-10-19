@@ -336,7 +336,8 @@ func (s *Server) reserve(ctx context.Context, req *provisionerv1.CreateClientReq
 		return nil, false, err
 	}
 	if sv.Kind == store.KindMarzban && marzban.ValidateUsername(req.GetEmail()) != nil {
-		return nil, false, status.Error(codes.InvalidArgument, "the email is not a valid Marzban username (3-32 of a-z, 0-9, - _ @ .)")
+		return nil, false, status.Error(codes.InvalidArgument,
+			"the email is not a valid Marzban username (3 to 32 of a-z, 0-9, - _ @ ., and at least 3 letters, digits or underscores before the first - . or @)")
 	}
 	subID := s.st.SubIDFor(req.GetSubscriptionId())
 	cm, fresh, err := s.st.ReserveClient(ctx, &store.ClientMap{

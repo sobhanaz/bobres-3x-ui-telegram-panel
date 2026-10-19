@@ -142,7 +142,7 @@ The plan as written, with what was built under each heading ("Built").
   65532, read-only root filesystem, every capability dropped. CI: race tests against Postgres and Redis,
   golangci-lint, govulncheck (with a reviewed allowlist, now empty), the dashboard (vue-tsc, vitest, npm audit),
   shellcheck and signing tests, image builds with an end-to-end install and a restore drill against a real 3x-ui
-  panel, a 3x-ui integration matrix and gitleaks. The release is `release.yml` on a tag, not goreleaser: it verifies,
+  panel, a 3x-ui integration matrix, a Marzban integration job against the real panel and gitleaks. The release is `release.yml` on a tag, not goreleaser: it verifies,
   builds amd64 and arm64 images signed with cosign (keyless) with an SBOM, builds the CLI for Linux and macOS, and
   signs `checksums.txt` with Ed25519. Not built: a trivy image scan. The changelog is CHANGELOG.md.
 
