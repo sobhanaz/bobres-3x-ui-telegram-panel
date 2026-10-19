@@ -205,6 +205,33 @@ func TestMarzbanExpiredClientRecoversOnSetLimits(t *testing.T) {
 	}
 }
 
+// The panel's review job (every 10 s there) marks a client expired once its
+// time has passed, and a renewal brings it back.
+func TestMarzbanClientExpiresWithTheClock(t *testing.T) {
+	a, fake := marzbanAdapter(t)
+	ctx := context.Background()
+	start := time.Now()
+	fake.SetClock(func() time.Time { return start })
+	email := "u13-clock0001"
+	if err := a.CreateClient(ctx, email, "s", start.Add(time.Hour).UnixMilli(), 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	fake.SetClock(func() time.Time { return start.Add(2 * time.Hour) })
+	if st, _ := a.Status(ctx, email); !st.Enabled {
+		t.Fatal("expired before the review job ran")
+	}
+	fake.Review()
+	if st, _ := a.Status(ctx, email); st.Enabled {
+		t.Fatalf("still enabled after its time: %+v", st)
+	}
+	if err := a.SetLimits(ctx, email, start.Add(48*time.Hour).UnixMilli(), 0); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := a.Status(ctx, email); !st.Enabled {
+		t.Fatalf("not active after a renewal: %+v", st)
+	}
+}
+
 func TestMarzbanUnknownInboundAndStrangerSubID(t *testing.T) {
 	a, fake := marzbanAdapter(t)
 	ctx := context.Background()
