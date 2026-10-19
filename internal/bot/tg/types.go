@@ -286,10 +286,23 @@ func CB(text, data string) Button { return Button{Text: text, CallbackData: data
 func Link(text, url string) Button { return Button{Text: text, URL: url} }
 
 // MenuButton is a button of the reply keyboard: a tap sends its text as a
-// message.
+// message, or, with WebApp set, opens that Mini App and sends nothing.
 type MenuButton struct {
-	Text  string `json:"text"`
-	Style string `json:"style,omitempty"` // as Button's
+	Text   string      `json:"text"`
+	Style  string      `json:"style,omitempty"` // as Button's
+	WebApp *WebAppInfo `json:"web_app,omitempty"`
+}
+
+// WebAppInfo is a Mini App: the HTTPS address Telegram opens.
+type WebAppInfo struct {
+	URL string `json:"url"`
+}
+
+// MenuButtonWebApp is the menu button next to the message box when it opens
+// a Mini App (setChatMenuButton).
+type MenuButtonWebApp struct {
+	Text string
+	URL  string
 }
 
 // Menu is a persistent reply keyboard (the bottom menu). Only a new message

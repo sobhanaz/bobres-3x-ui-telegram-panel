@@ -99,6 +99,10 @@ type Handler struct {
 	// photoVersion is Settings.bot_photo_version from the last refresh, for
 	// RunProfile (nil before the first).
 	photoVersion atomic.Pointer[string]
+	// miniApp is Settings.miniapp_url from the last refresh: where the Mini
+	// App opens from ("" until the first refresh, when it is off, or when the
+	// store has no public HTTPS address).
+	miniApp atomic.Pointer[string]
 	// whiteLabel is Settings.white_label from the last refresh (false until
 	// then: the credit shows unless core says otherwise).
 	whiteLabel atomic.Bool
@@ -151,6 +155,8 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	// The bot photo's version: RunProfile fetches the photo when it changes.
 	photo := s.GetBotPhotoVersion()
 	h.photoVersion.Store(&photo)
+	miniApp := s.GetMiniappUrl()
+	h.miniApp.Store(&miniApp)
 	h.whiteLabel.Store(s.GetWhiteLabel())
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {

@@ -470,7 +470,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.sent = append(s.sent, Sent{Method: parts[1], Text: str(p["text"])})
 		s.mu.Unlock()
 		reply(w, true)
-	case "setMyCommands", "deleteMyCommands", "setMyDescription", "setMyShortDescription":
+	case "setMyCommands", "deleteMyCommands", "setMyDescription", "setMyShortDescription", "setChatMenuButton":
 		s.recordProfile(ProfileCall{Method: parts[1], Params: p}, nil)
 		reply(w, true)
 	case "removeMyProfilePhoto": // the current photo, whoever set it

@@ -672,3 +672,53 @@ func TestButtonColors(t *testing.T) {
 	colors("reasons", item, map[string]string{"adm:nr:0:": tg.StyleDanger, "adm:nr:1:": tg.StyleDanger,
 		"adm:nr:2:": tg.StyleDanger, "adm:nx:": tg.StyleDanger, "adm:pi:": ""})
 }
+
+// With the Mini App on and a public address, the bottom menu opens with a
+// Store button that opens the app (a tap sends no text, so it has no label
+// to route); the rest of the menu is unchanged, and the button goes when the
+// app does. The menu refreshes by itself when it changes.
+func TestBottomMenuHasTheStoreButtonWhileTheMiniAppIsOn(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	cat := w.h.cat
+	u := w.customer(2101, "store_en")
+	u.hasMenu("en", menuRows([]string{"btn.language"})...)
+
+	const app = "https://shop.example.com/app/"
+	w.h.miniApp.Store(&[]string{app}[0])
+	u.text("/menu")
+	got := u.lastMenu()
+	store := got.Keyboard[0]
+	if len(store) != 1 || store[0].Text != cat.T("en", "btn.store") || store[0].Style != tg.StylePrimary ||
+		store[0].WebApp == nil || store[0].WebApp.URL != app {
+		t.Fatalf("the Store button: %+v", got.Keyboard[0])
+	}
+	rest := *got
+	rest.Keyboard = got.Keyboard[1:]
+	u.w.t.Helper()
+	want := &tg.Menu{IsPersistent: true, Resize: true, Placeholder: cat.T("en", "menu.placeholder")}
+	for _, keys := range menuRows([]string{"btn.language"}) {
+		var row []tg.MenuButton
+		for _, k := range keys {
+			row = append(row, tg.MenuButton{Text: cat.T("en", k), Style: menuStyles[k]})
+		}
+		want.Row(row...)
+	}
+	if !reflect.DeepEqual(&rest, want) {
+		t.Fatalf("the rest of the menu\n got %+v\nwant %+v", &rest, want)
+	}
+	// In Persian too, from the Persian text.
+	fa := w.person(2102, "store_fa")
+	fa.text("/start")
+	fa.press("lang:fa")
+	if m := fa.lastMenu(); m.Keyboard[0][0].Text != cat.T("fa", "btn.store") || m.Keyboard[0][0].WebApp == nil {
+		t.Fatalf("Persian: %+v", m.Keyboard[0])
+	}
+
+	// The app goes: the menu is sent again without the button, by itself.
+	w.h.miniApp.Store(&[]string{""}[0])
+	u.text("hello")
+	if m := u.lastMenu(); m.Keyboard[0][0].WebApp != nil {
+		t.Fatalf("after the app went: %+v", m.Keyboard[0])
+	}
+}

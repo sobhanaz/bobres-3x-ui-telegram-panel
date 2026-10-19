@@ -133,8 +133,12 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		}
 		return tg.MenuButton{Text: text, Style: i18n.ButtonStyle(key)}
 	}
-	m = (&tg.Menu{IsPersistent: true, Resize: true, Placeholder: r.t("menu.placeholder")}).
-		Row(item("btn.buy")).
+	m = &tg.Menu{IsPersistent: true, Resize: true, Placeholder: r.t("menu.placeholder")}
+	if url := h.miniAppURL(); url != "" {
+		// The Store opens the Mini App: a tap sends no text, so it needs no label.
+		m.Row(tg.MenuButton{Text: r.t("btn.store"), Style: i18n.ButtonStyle("btn.store"), WebApp: &tg.WebAppInfo{URL: url}})
+	}
+	m.Row(item("btn.buy")).
 		Row(item("btn.services"), item("btn.wallet")).
 		Row(item("btn.trial"), item("btn.support"))
 	var more []tg.MenuButton

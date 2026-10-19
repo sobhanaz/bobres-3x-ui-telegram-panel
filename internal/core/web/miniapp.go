@@ -23,7 +23,7 @@ import (
 // init data Telegram gives the Mini App (the bot checks its signature: only
 // the bot holds the bot token) and gets a bearer token; every call then acts
 // on that customer's own account, through the same domain functions the bot
-// uses. It is off until miniapp.enabled is set.
+// uses. It is on unless the owner sets miniapp.enabled to false.
 
 // MiniAppVerifier checks a Mini App's init data (botfiles.Client asks the bot).
 type MiniAppVerifier interface {
@@ -108,10 +108,10 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	}
 }
 
-// miniOn reads the switch (settings are unset until the owner turns it on).
+// miniOn reads the switch: on unless the owner turned it off (domain.MiniAppOn).
 func (s *Server) miniOn(ctx context.Context) (settings map[string]string, on bool, err error) {
 	settings, err = s.cfg.Domain.Settings(ctx)
-	return settings, err == nil && settings["miniapp.enabled"] == "true", err
+	return settings, err == nil && domain.MiniAppOn(settings), err
 }
 
 // miniStatic serves the app, or the same answer as for any unknown address
