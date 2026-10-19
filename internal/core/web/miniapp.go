@@ -91,6 +91,11 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay-wallet", s.miniSession(false, s.miniPayWallet))
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay", s.miniSession(false, s.miniPayOrder))
 	api.HandleFunc("POST /api/mini/v1/topup", s.miniSession(false, s.miniTopup))
+	for _, f := range miniFeatures { // the sections beyond the shop (miniapp_features.go)
+		if f.routes != nil {
+			f.routes(s, api)
+		}
+	}
 	api.HandleFunc("/api/mini/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
@@ -350,12 +355,17 @@ func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any,
 		bot = "https://t.me/" + b
 	}
 	support, supportURL := supportContact(settings["branding.support"])
+	features, err := s.miniFeatureFlags(ctx, u)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"user":        map[string]any{"id": u.ID, "username": u.Username, "language": u.Language},
 		"wallets":     wallets,
 		"brand":       map[string]any{"name": brandName(settings), "color": color, "support": support, "support_url": supportURL, "bot_url": bot},
 		"maintenance": settings["maintenance.enabled"] == "true" && !domain.IsStaffRole(u.Role) && !s.cfg.Domain.IsConfiguredOwner(u),
 		"top_up":      map[string]any{"currency": "IRT", "min": miniMinTopup, "max": miniMaxTopup},
+		"features":    features,
 	}, nil
 }
 
