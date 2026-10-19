@@ -143,7 +143,7 @@ func (o *ops) ownersCmd(args []string) int {
 		return code
 	}
 	if pos[0] == "add" {
-		fmt.Fprintf(o.out, "\nTelegram id %d is an owner now. They open the bot and send /start once, or you run:  bobres admin password --id %d\n"+
+		fmt.Fprintf(o.out, "\nTelegram id %d is named as an owner. They open the bot and send /start once, or you run:  bobres admin password --id %d\n"+
 			"Only the main owner (%d) takes no staff seat: this one takes a seat like any other staff member.\n", id, id, firstID(next))
 		return 0
 	}

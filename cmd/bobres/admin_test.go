@@ -115,7 +115,7 @@ func TestAdminOwnersAddAndRemove(t *testing.T) {
 	if strings.Join(f.steps, "|") != "up -d --no-deps core bot" {
 		t.Fatalf("compose: %q", f.steps)
 	}
-	for _, want := range []string{"Telegram id 4243 is an owner now", "bobres admin password --id 4243", "Only the main owner (4242) takes no staff seat"} {
+	for _, want := range []string{"Telegram id 4243 is named as an owner", "bobres admin password --id 4243", "Only the main owner (4242) takes no staff seat"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("add output lacks %q:\n%s", want, out)
 		}
