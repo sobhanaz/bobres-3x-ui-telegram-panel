@@ -1,10 +1,11 @@
-# Project Plan (living document; Phases 0-7 built, updated 2026-10-12)
+# Project Plan (living document; Phases 0-7 built, updated 2026-10-19)
 
 Product: Telegram bot + web dashboard for selling and managing 3x-ui (Xray) subscriptions.
 Brand name: BOBRES, with BOBRES the beaver as the mascot (08-brand.md). Trademark, domain and handle checks are
 still open (§2).
-Status: Phases 0 to 7 are built (§10). Next: the first install on a real server (11-staging-run.md), then the first
-public release, v0.1.0 ([CHANGELOG.md](../CHANGELOG.md)). Still open: the legal review, the brand checks and the
+Status: Phases 0 to 7 are built (§10) and shipped as v0.1.0 (2026-10-14) to v0.4.0 (2026-10-17)
+([CHANGELOG.md](../CHANGELOG.md)); what came after them is in [ROADMAP.md](ROADMAP.md). Next: the checks only a real
+server gives (11-staging-run.md, the roadmap's first table). Still open: the legal review, the brand checks and the
 prices (§2). How BOBRES is sold is decided: a free core and a subscription per install ([pricing.md](pricing.md)); what the
 owner must still do before selling is in [launch-checklist.md](launch-checklist.md).
 

@@ -8,6 +8,16 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Maintenance
+- Go dependencies: `golang.org/x/term` 0.47.0, `github.com/redis/go-redis/v9` 9.23.0, `golang.org/x/crypto` 0.58.0 and
+  `github.com/pressly/goose/v3` 3.29.0, with their indirect modules (`x/net`, `x/sync`, `x/sys`, `x/text`, `puddle`,
+  `go-retry`, `go.uber.org/atomic`, `genproto/rpc`). The licence texts of all of them are unchanged;
+  `THIRD_PARTY_NOTICES.md` lists the new versions. These replace the four open Dependabot pull requests for Go modules,
+  whose CI failed on the notices check.
+- The three tests that run `install.sh` through bash (`TestInstallSh*`) pass the script's path as an environment
+  variable, so they also pass in a checkout whose path has spaces in it.
+- README, `docs/ROADMAP.md` and `docs/PLAN.md` say what v0.4.0 contains and what is still open.
+
 ## [0.4.0] — 2026-10-17
 
 ### Marzban support

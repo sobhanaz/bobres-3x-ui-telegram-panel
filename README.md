@@ -34,6 +34,11 @@ license server is built but still has to be deployed by the owner. What is left 
 - Reminders 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - Support conversations with text, photos and PDFs; staff replies arrive in the chat.
 - Store rules: maintenance mode, a required channel, rate limits, terms and privacy links.
+- A page for each service at `/sub/<token>`, under the store's own brand: usage and days left, the subscription link
+  and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box, and a Renew button. The import links are not
+  yet verified on real devices.
+- A Telegram Mini App store at `/app/` (off until `miniapp.enabled` is set): plans, buying, services, renewals and the
+  wallet. Stars, card to card and trials stay in the bot; it is not yet checked against a real Telegram.
 
 **Resellers, in the bot**
 - A reseller panel: buy for customers at the tier's prices, on credit up to a limit; name and find their services;
@@ -49,18 +54,22 @@ license server is built but still has to be deployed by the owner. What is left 
   support. Persian and English, dark and light.
 - Overview, users, services, plans and packages, orders and payments with the receipt review queue, the ledger with
   CSV export, discounts and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
-  settings, 3x-ui servers, payment gateways, staff, the System page (health, updates, logs, backups, HTTPS
+  settings, panel servers, payment gateways, staff, the System page (health, updates, logs, backups, HTTPS
   certificates, license) and the audit log.
+- Reports: revenue per currency by day, week or month (Gregorian or Jalali), orders, new customers, renewals, churn,
+  top plans and which provider paid, with CSV files and an optional daily summary in Telegram.
 
 **Payments**
 - The wallet; card to card, USDT (TRC20 or ERC20) and a Zarinpal payment link, each with a screenshot staff approve;
   Zarinpal online (off until a merchant id is set); Telegram Stars; automatic USDT on TRON (TRC20), which matches an
-  exact, unique amount on the chain.
+  exact, unique amount on the chain; IDPay and NextPay, two more Iranian card gateways (off until credentials are set,
+  tested against fakes only).
 - Each payment settles exactly once. The ledger is append-only, and amounts are whole numbers in minor units.
 
 **Operations**
 - A one-command install on Ubuntu or Debian, and the `bobres` menu and commands on the server.
-- Several 3x-ui servers, with health checks, weights, servers per plan and inbound switches.
+- Several panel servers, each 3x-ui or Marzban (Marzban is tested against a fake only), with health checks, weights,
+  servers per plan and inbound choices.
 - Daily encrypted backups: the newest 7 kept on the server, each sent to the owner on Telegram, and optional copies
   in S3-compatible storage. `bobres restore` puts one back.
 - `bobres update` with stable and beta channels and an automatic rollback; `bobres rollback` undoes the last update.
