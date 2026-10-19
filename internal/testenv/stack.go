@@ -66,6 +66,12 @@ type Stack struct {
 	// Gates switch Postgres, the provisioner and core off and on, and lose
 	// the panel's replies (nil unless started WithGates).
 	Gates *Gates
+	// Domain is core's business layer and Prov its client of the provisioner,
+	// which is also the server registry (domain.ServerAdmin): what the
+	// dashboard's handlers call, for tests that act as staff (register a
+	// panel, edit a plan, turn a service off, delete it).
+	Domain *coredomain.Service
+	Prov   *provisionerclient.Client
 }
 
 // ZarinpalMerchant is the merchant id the stack's Zarinpal gateway uses.
@@ -169,7 +175,7 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 		Store:    cs,
 		Zarinpal: zp, PaySite: paySite, Payments: paySvc,
 		Usage: dom.NewUsageWorker(provClient, nil),
-		Gates: gates,
+		Gates: gates, Domain: dom, Prov: provClient,
 	}
 }
 

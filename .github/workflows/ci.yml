@@ -382,6 +382,98 @@ jobs:
         if: failure()
         run: docker logs --tail 200 xui || true
 
+  # Our Marzban client, adapter and purchase loop against a REAL Marzban panel:
+  # the gozargah/marzban image, pinned by tag AND digest (a re-pushed tag must not
+  # change what CI tests). Marzban listens on loopback only unless it has TLS
+  # files, so the container uses the runner's network. tools/marzbandev makes the
+  # database admin and the inbounds the tests need. To test another release,
+  # change MARZBAN_VERSION and MARZBAN_DIGEST together (the digest is the one of
+  # the tag's manifest list: docker buildx imagetools inspect <image>:<tag>). This
+  # job is the check for drift of the fake in internal/marzbanfake. It is not a
+  # required check (.github/rulesets/protect-main.json lists the required ones).
+  marzban:
+    name: Marzban integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The purchase loop (tests/) runs core and the provisioner in-process on a
+    # real database, as the test job does.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MARZBAN_VERSION: v0.8.4
+      MARZBAN_DIGEST: sha256:8e422c21997e5d2e3fa231eeff73c0a19193c20fc02fa4958e9368abb9623b8d
+      BOBRES_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      BOBRES_TEST_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+          cache: true
+      # SUDO_USERNAME and SUDO_PASSWORD are Marzban's own way to have a first
+      # admin; the passwords are made here and masked, nothing is kept in the repo.
+      # Tokens last one minute (the default is a day), so the tests see a real
+      # expiry and the client's sign-in again. The panel's usage and review jobs
+      # run every 2 seconds instead of 10, so the traffic tests do not wait long.
+      - name: Start a real Marzban panel
+        run: |
+          set -euo pipefail
+          boot=$(openssl rand -hex 16)
+          echo "::add-mask::$boot"
+          echo "MARZBAN_BOOTSTRAP_PASSWORD=$boot" >> "$GITHUB_ENV"
+          docker run -d --name marzban --network host -e SUDO_USERNAME=bootstrap -e SUDO_PASSWORD="$boot" \
+            -e JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1 -e JOB_RECORD_USER_USAGES_INTERVAL=2 -e JOB_REVIEW_USERS_INTERVAL=2 \
+            "gozargah/marzban:${MARZBAN_VERSION}@${MARZBAN_DIGEST}"
+      # Creates a database sudo admin (what `marzban cli admin create --sudo`
+      # makes), adds the VLESS, VMess and Trojan inbounds next to the default
+      # Shadowsocks one and opens the Xray routing to private addresses (the
+      # traffic tests send requests to the panel itself), all through the
+      # panel's own API; prints the panel's version.
+      - name: Make the admin and the inbounds
+        run: |
+          set -euo pipefail
+          admin=$(openssl rand -hex 16)
+          echo "::add-mask::$admin"
+          echo "MARZBAN_ADMIN_PASSWORD=$admin" >> "$GITHUB_ENV"
+          version=$(go run ./tools/marzbandev -url http://127.0.0.1:8000 \
+            -bootstrap-user bootstrap -bootstrap-pass "$MARZBAN_BOOTSTRAP_PASSWORD" -user bobres-ci -pass "$admin")
+          echo "Marzban $version is up"
+          test "$version" = "$MARZBAN_VERSION"
+      - name: Client, adapter, dashboard and purchase loop against the panel
+        env:
+          MARZBAN_TEST_REQUIRE: "1"
+          MARZBAN_TEST_URL: http://127.0.0.1:8000
+          MARZBAN_TEST_ALLOW_PRIVATE: "1"
+          MARZBAN_TEST_VERSION: ${{ env.MARZBAN_VERSION }}
+          MARZBAN_TEST_SHORT_TOKENS: "1"
+          # Real traffic: through the Shadowsocks inbound to the panel's own address.
+          MARZBAN_TEST_SS_ADDR: 127.0.0.1:1080
+          MARZBAN_TEST_SS_TARGET: 127.0.0.1:8000
+          MARZBAN_TEST_USER: bobres-ci
+          MARZBAN_TEST_ENV_USER: bootstrap
+        run: |
+          set -euo pipefail
+          export MARZBAN_TEST_PASSWORD="$MARZBAN_ADMIN_PASSWORD" MARZBAN_TEST_ENV_PASSWORD="$MARZBAN_BOOTSTRAP_PASSWORD"
+          go test -tags integration -count=1 -v -run Integration ./internal/marzban/
+          go test -tags integration -count=1 -v -run IntegrationMarzban ./internal/provisioner/adapter/
+          go test -tags integration -count=1 -v -run MarzbanReal ./tests/
+          go test -tags integration -count=1 -v -run MarzbanServerEndToEnd ./internal/core/web/
+          # Again with the panel's SUDO_USERNAME account as the registered admin:
+          # its users have no owner, which Marzban cannot delete without an error.
+          MARZBAN_TEST_USER=bootstrap MARZBAN_TEST_PASSWORD="$MARZBAN_BOOTSTRAP_PASSWORD" MARZBAN_TEST_OWNERLESS=1 \
+            go test -tags integration -count=1 -v -run MarzbanReal ./tests/
+      - name: Panel logs on failure
+        if: failure()
+        run: docker logs --tail 200 marzban || true
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest

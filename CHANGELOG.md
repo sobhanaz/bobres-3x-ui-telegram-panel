@@ -41,6 +41,46 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   variable, so they also pass in a checkout whose path has spaces in it.
 - README, `docs/ROADMAP.md` and `docs/PLAN.md` say what v0.4.0 contains and what is still open.
 
+### Marzban
+- Marzban is now tested against a real panel, not only a fake. CI has a job, "Marzban integration", that starts the
+  `gozargah/marzban:v0.8.4` image (pinned by tag and digest) and runs against it: the client, the adapter, the
+  dashboard's server pages and a whole purchase through core and the provisioner (add the server, buy, renew, top up,
+  switch off and on, reset the traffic, delete). It sends real traffic through the panel's Shadowsocks inbound, so
+  usage counting, a quota being enforced and a switched-off client being kept out are seen on the real Xray core, and it
+  lets the panel's login token really expire. The job is not a required check. `tools/marzbandev` prepares a fresh
+  panel, and `tools/marzbandev/local.sh up|test|down` runs the same panel and tests on a Mac or Linux machine with Docker.
+- The version tested is **Marzban 0.8.4** (2025-01-09, Xray core 24.12.31), the newest stable release. The 1.0 line is
+  still beta and does not work: v1.0.0-beta-3 lists its inbounds as an array, refuses the `SUDO_USERNAME` account
+  outside debug mode, and has a full-screen admin tool. The server test now says that BOBRES works with Marzban 0.8
+  instead of "not a Marzban panel".
+- Where the real panel differed from the fake the adapter was written against, and what changed:
+  - A client created without an `inbounds` object got no inbound, so no links at all; the adapter and the fake took
+    it that the panel would attach them all. Every new client now names its inbounds, also on a plan that attaches
+    all of them.
+  - The username rule is stricter than the check was: at least three letters, digits or underscores before the first
+    `-`, `.` or `@`. `u10-...` is fine; `u7-...` (a Telegram id of one digit; real ones have more) is refused by the
+    panel. It is now refused before anything is reserved, with the rule in the message.
+  - Putting a client that has never connected back on hold, after staff switched it off, failed with HTTP 422: the
+    panel wants the hold duration in the same request. It is sent.
+  - Resetting the traffic of a disabled client switched it on again (a slip in the panel's code), and turned an on-hold
+    one into an active client with no expiry. The status is put back after the reset.
+  - Deleting a client made through the panel's `SUDO_USERNAME` account (it has no owner admin) failed with HTTP 500
+    after its row was gone, and the deleted account kept working in the running Xray core until the panel restarted.
+    The adapter now switches such a client off first and counts that 500 as a deletion. Register an admin made with
+    `marzban cli admin create` instead (it does not need to be a sudo admin).
+  - A refusal sent as `{"detail": {"field": "message"}}` (HTTP 422) showed as "Unprocessable Entity"; it now names the
+    field and the reason. The dashboard's address (`.../dashboard/`) entered as the panel's address gets a hint
+    instead of "Method Not Allowed".
+  - The fake in `internal/marzbanfake` now answers as the panel does in all of this, and in the smaller things: the
+    hold duration is `null` for a client that is not on hold, the subscription link is `/sub/<token>` with a token made
+    afresh on every read (all of them valid) and that route serves the share links, a missing and a bad login token get
+    two different 401 texts, and a protocol the panel does not serve is a 400 that names the enum member.
+- Good to know when adding a Marzban server (checked on 0.8.4): enter the panel's own address, not the dashboard's.
+  Marzban listens on the server's loopback only unless it has its own TLS certificate and key (`UVICORN_SSL_CERTFILE`,
+  `UVICORN_SSL_KEYFILE`), so BOBRES's containers cannot reach it until you put a reverse proxy in front or give it a
+  certificate; BOBRES trusts the usual certificate authorities only, so a self-signed certificate is refused.
+  Subscription links are the panel's own `/sub/<token>` ones, behind the "Subscription address" if you set it.
+
 ## [0.4.0] — 2026-10-17
 
 ### Marzban support
@@ -52,7 +92,8 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   Subscription links are the panel's own `subscription_url` (the "Subscription address" field only replaces its
   prefix). A Marzban username is the client email, so it must fit Marzban's username rule.
 - Tested against a fake modelled on Marzban's source. A CI job against the real Marzban image is not in yet, so try a
-  Marzban server with a test plan before selling on it.
+  Marzban server with a test plan before selling on it. (Since then it has been tested against a real panel: see
+  Unreleased, Marzban.)
 - The dashboard says "panel servers" where it said "3x-ui servers".
 
 ### Dashboard
