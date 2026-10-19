@@ -34,7 +34,12 @@ const subNotePrefix = "bobres-sub:"
 // (BOBRES in milliseconds), starts the clock on first use through the
 // "on_hold" status (3x-ui: a negative expiry), has no numeric inbound ids
 // (they are derived from protocol and tag, see Inbounds), and owns the
-// subscription token (SubscriptionLinker).
+// subscription token (SubscriptionLinker). Checked against a real v0.8.4 panel
+// (CI job "Marzban integration"): that panel needs the inbound tags named on
+// every new user, wants the hold duration repeated when a client is put back
+// on hold, turns a disabled or on-hold client on when its traffic is reset,
+// and fails to delete a user that has no owner admin; the methods below say
+// how each is met.
 type Marzban struct {
 	c    *marzban.Client
 	base string
@@ -136,26 +141,33 @@ func (a *Marzban) CreateClient(ctx context.Context, email, subID string, expiryM
 	if err != nil {
 		return err
 	}
-	proxies := map[string]any{}
-	inbounds := map[string][]string{}
-	if len(inboundIDs) == 0 {
-		// All of them: every protocol the panel serves, no tag filter.
-		for _, in := range t {
-			proxies[in.protocol] = map[string]any{}
-		}
-	} else {
-		byID := map[int]mzInbound{}
+	picked := t // no choice means all of them
+	if len(inboundIDs) > 0 {
+		byID := make(map[int]mzInbound, len(t))
 		for _, in := range t {
 			byID[in.id] = in
 		}
+		picked = make([]mzInbound, 0, len(inboundIDs))
+		seen := make(map[int]bool, len(inboundIDs))
 		for _, id := range inboundIDs {
 			in, ok := byID[id]
 			if !ok {
 				return fmt.Errorf("marzban: inbound %d does not exist", id)
 			}
-			proxies[in.protocol] = map[string]any{}
-			inbounds[in.protocol] = append(inbounds[in.protocol], in.tag)
+			if !seen[id] {
+				seen[id] = true
+				picked = append(picked, in)
+			}
 		}
+	}
+	// Every inbound is named by its tag, also when the plan means all of them:
+	// v0.8.4 gives a user whose request has no "inbounds" object no inbound at
+	// all (no links), not every one.
+	proxies := map[string]any{}
+	inbounds := map[string][]string{}
+	for _, in := range picked {
+		proxies[in.protocol] = map[string]any{}
+		inbounds[in.protocol] = append(inbounds[in.protocol], in.tag)
 	}
 	if len(proxies) == 0 {
 		return errors.New("marzban: the panel has no inbounds")
@@ -163,12 +175,10 @@ func (a *Marzban) CreateClient(ctx context.Context, email, subID string, expiryM
 	body := map[string]any{
 		"username":                  email,
 		"proxies":                   proxies,
+		"inbounds":                  inbounds,
 		"data_limit":                trafficBytes,
 		"data_limit_reset_strategy": "no_reset",
 		"note":                      subNotePrefix + subID,
-	}
-	if len(inbounds) > 0 {
-		body["inbounds"] = inbounds
 	}
 	for k, v := range expiryFields(expiryMs) {
 		body[k] = v
@@ -222,12 +232,15 @@ func (a *Marzban) SetEnabled(ctx context.Context, email string, enabled bool) er
 		return err
 	}
 	// A client that never connected keeps waiting for its first use rather
-	// than becoming an unlimited active one.
-	st := marzban.StatusActive
+	// than becoming an unlimited active one. The panel refuses "on_hold"
+	// (HTTP 422) unless the same request carries the duration, even when it
+	// already holds it.
 	if u.ExpireSeconds() == 0 && u.HoldSeconds() > 0 && u.UsedTraffic == 0 {
-		st = marzban.StatusOnHold
+		return a.c.ModifyUser(ctx, email, map[string]any{
+			"status": marzban.StatusOnHold, "on_hold_expire_duration": u.HoldSeconds(),
+		})
 	}
-	return a.c.ModifyUser(ctx, email, map[string]any{"status": st})
+	return a.c.ModifyUser(ctx, email, map[string]any{"status": marzban.StatusActive})
 }
 
 func (a *Marzban) Status(ctx context.Context, email string) (ClientStatus, error) {
@@ -245,10 +258,52 @@ func (a *Marzban) Status(ctx context.Context, email string) (ClientStatus, error
 	}, nil
 }
 
-func (a *Marzban) Delete(ctx context.Context, email string) error { return a.c.DeleteUser(ctx, email) }
+// Delete removes the user. One without an owner admin (made through the
+// panel's SUDO_USERNAME environment account) is disabled first: v0.8 deletes
+// such a row and then fails with HTTP 500 before it tells the running core, so
+// the deleted account would keep working until the core restarts, while
+// disabling does reach the core. A 500 after which the user is gone counts as
+// deleted.
+func (a *Marzban) Delete(ctx context.Context, email string) error {
+	u, err := a.c.GetUser(ctx, email)
+	if err != nil {
+		return err
+	}
+	ownerless := !u.HasOwner()
+	if ownerless {
+		_ = a.c.ModifyUser(ctx, email, map[string]any{"status": marzban.StatusDisabled}) // best effort
+	}
+	err = a.c.DeleteUser(ctx, email)
+	if err != nil && ownerless && marzban.IsServerError(err) {
+		if _, lookup := a.c.GetUser(ctx, email); marzban.IsNotFound(lookup) {
+			return nil
+		}
+	}
+	return err
+}
 
+// ResetTraffic zeroes the counter and keeps the client's status. The panel's
+// reset activates every user that is not expired, so a disabled client would
+// come back on, and an on-hold one would turn into an active client with no
+// expiry; the status is put back after the reset. A client over its quota
+// does become active again: its counter is zero.
 func (a *Marzban) ResetTraffic(ctx context.Context, email string) error {
-	return a.c.ResetUsage(ctx, email)
+	u, err := a.c.GetUser(ctx, email)
+	if err != nil {
+		return err
+	}
+	if err := a.c.ResetUsage(ctx, email); err != nil {
+		return err
+	}
+	switch {
+	case u.Status == marzban.StatusDisabled:
+		return a.c.ModifyUser(ctx, email, map[string]any{"status": marzban.StatusDisabled})
+	case u.Status == marzban.StatusOnHold && u.HoldSeconds() > 0:
+		return a.c.ModifyUser(ctx, email, map[string]any{
+			"status": marzban.StatusOnHold, "on_hold_expire_duration": u.HoldSeconds(),
+		})
+	}
+	return nil
 }
 
 func (a *Marzban) Usage(ctx context.Context, email string) (int64, error) {
