@@ -199,7 +199,7 @@ func TestDrillCoreRestartsDuringBroadcast(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dom := coredomain.New(s.Store, coredomain.Config{OwnerTelegramID: ownerTG})
+	dom := coredomain.New(s.Store, coredomain.Config{OwnerTelegramIDs: []int64{ownerTG}})
 	b, err := dom.CreateBroadcast(ctx, owner, coredomain.BroadcastInput{Segment: "all",
 		Texts: map[string]string{"fa": "خبر تازه", "en": "Fresh news"}})
 	if err != nil {
@@ -246,7 +246,7 @@ func TestDrillCoreRestartsDuringBroadcast(t *testing.T) {
 	}
 	mustExec(t, s, `UPDATE core.broadcast_recipients SET claimed_at = claimed_at - make_interval(secs => $2)
 		WHERE broadcast_id = $1 AND status = 'claimed'`, b.ID, (coredomain.BroadcastLease + time.Minute).Seconds())
-	restarted := coredomain.New(s.Store, coredomain.Config{OwnerTelegramID: ownerTG})
+	restarted := coredomain.New(s.Store, coredomain.Config{OwnerTelegramIDs: []int64{ownerTG}})
 	if err := restarted.NewBroadcastWorker(nil).Step(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +572,7 @@ func paymentsFeedDone(t *testing.T, s *testenv.Stack) bool {
 // builds it, sending with phone.
 func notifier(t *testing.T, s *testenv.Stack, phone *telegram) *eventbus.Consumer {
 	t.Helper()
-	n := notify.New(s.Core, phone, i18n.MustLoad(), nil, ownerTG, nil)
+	n := notify.New(s.Core, phone, i18n.MustLoad(), nil, []int64{ownerTG}, nil)
 	c, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Name:       "core-events",
 		Source:     eventbus.NewGRPCSource(s.Feed),

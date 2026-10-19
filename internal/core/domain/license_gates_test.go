@@ -205,7 +205,7 @@ func TestLicenseGates(t *testing.T) {
 			}
 		}
 		_, err = w.addStaff("support")
-		wantRefusal(t, "fourth seat", err, "dashboard_staff_seats", "the license allows 3 staff seats (the store owner takes none)", buy)
+		wantRefusal(t, "fourth seat", err, "dashboard_staff_seats", "the license allows 3 staff seats (the main owner takes none)", buy)
 		_, err = w.addStaff("owner")
 		wantRefusal(t, "an owner takes a seat too", err, "dashboard_staff_seats")
 		// A role change between admin, support and owner takes no seat and

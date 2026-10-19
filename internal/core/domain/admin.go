@@ -164,13 +164,90 @@ func (s *Service) AdminListPendingPayments(ctx context.Context, actorTelegramID 
 	}
 	out := make([]PendingView, 0, len(pending))
 	for _, p := range pending {
-		v := PendingView{PendingPayment: p}
-		if u, err := s.st.GetUser(ctx, s.st.Conn(), p.UserID); err == nil {
-			v.User = u
-		}
-		out = append(out, v)
+		out = append(out, s.pendingView(ctx, p))
 	}
 	return out, nil
+}
+
+// pendingLookupLimit is how many of the oldest waiting payments
+// AdminGetPayment searches for the one it is asked about (the review queue's
+// own ceiling).
+const pendingLookupLimit = 200
+
+// PaymentReviewView is one manual payment as staff see it: the payer and the
+// proof, and, once someone has decided, what they decided and when.
+type PaymentReviewView struct {
+	PendingView
+	// Status is the payment's own status: confirming while it waits for a
+	// decision, then succeeded (approved) or failed (rejected).
+	Status string
+	// Decision is "" while nobody has decided, else approved or rejected.
+	Decision string
+	// Reason is the rejection reason as it was stored ("preset:<name>" or
+	// the reviewer's own words).
+	Reason string
+	// Reviewer is who decided (nil while pending, or when the account is gone).
+	Reviewer   *store.User
+	ReviewedAt time.Time
+}
+
+// AdminGetPayment shows one manual payment to the staff: still waiting, with
+// the signs that it may be a duplicate, or already decided, by whom and when.
+// A staff alert opens it, and another owner may have decided it first.
+func (s *Service) AdminGetPayment(ctx context.Context, actorTelegramID int64, pay PaymentsClient, intentID string) (*PaymentReviewView, error) {
+	if _, err := s.requireStaff(ctx, actorTelegramID); err != nil {
+		return nil, err
+	}
+	intentID = strings.TrimSpace(intentID)
+	if intentID == "" {
+		return nil, invalid("a payment is required")
+	}
+	// Waiting: the review queue knows it, and whether it may be a duplicate.
+	pending, err := pay.ListPending(ctx, pendingLookupLimit)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range pending {
+		if p.IntentID == intentID {
+			return &PaymentReviewView{PendingView: s.pendingView(ctx, p), Status: "confirming"}, nil
+		}
+	}
+	// Otherwise the history has it: decided, or not a manual payment at all.
+	recs, _, err := pay.ListPayments(ctx, PaymentFilter{IntentID: intentID}, 1, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(recs) == 0 || recs[0].Proof == nil {
+		return nil, store.ErrNotFound
+	}
+	rec, proof := recs[0], recs[0].Proof
+	v := &PaymentReviewView{
+		PendingView: s.pendingView(ctx, PendingPayment{
+			IntentID: rec.IntentID, OrderID: rec.OrderID, UserID: rec.UserID, Provider: rec.Provider,
+			Amount: rec.Amount, Currency: rec.Currency,
+			ReceiptFile: proof.ReceiptFile, ReferenceNumber: proof.ReferenceNumber, Network: proof.Network, TXID: proof.TXID,
+			SubmittedAt: proof.SubmittedAt,
+		}),
+		Status: rec.Status, Decision: proof.Decision, Reason: proof.Reason,
+	}
+	if proof.ReviewedAt != nil {
+		v.ReviewedAt = *proof.ReviewedAt
+	}
+	if proof.ReviewedBy != "" {
+		if u, err := s.st.GetUser(ctx, s.st.Conn(), proof.ReviewedBy); err == nil {
+			v.Reviewer = u
+		}
+	}
+	return v, nil
+}
+
+// pendingView adds the payer to a payment.
+func (s *Service) pendingView(ctx context.Context, p PendingPayment) PendingView {
+	v := PendingView{PendingPayment: p}
+	if u, err := s.st.GetUser(ctx, s.st.Conn(), p.UserID); err == nil {
+		v.User = u
+	}
+	return v
 }
 
 // AdminReviewPayment approves or rejects a manual payment as the actor.

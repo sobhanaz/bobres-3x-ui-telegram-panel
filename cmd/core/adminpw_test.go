@@ -132,3 +132,47 @@ func TestAdminPasswordRefusals(t *testing.T) {
 		t.Fatalf("no owner: %d %q %s", code, out, errOut)
 	}
 }
+
+// A server may name several owners: with no --id the main owner (the first)
+// gets the password, with --id another listed owner does, and an id the
+// server does not list is refused without creating anyone.
+func TestAdminPasswordForAChosenOwner(t *testing.T) {
+	st := adminEnv(t)
+	t.Setenv("BOBRES_ADMIN_TELEGRAM_ID", "4242, 4243")
+	ctx := context.Background()
+
+	code, out, errOut := runAdminPassword("--id", "4243")
+	m := passwordLine.FindStringSubmatch(out)
+	if code != 0 || m == nil || errOut != "" {
+		t.Fatalf("--id 4243: %d\nstdout: %s\nstderr: %s", code, out, errOut)
+	}
+	second, err := st.GetUserByTelegramID(ctx, st.DB(), 4243)
+	if err != nil || second.Role != "owner" {
+		t.Fatalf("the second owner's account: %+v %v", second, err)
+	}
+	creds, err := st.CredentialsFor(ctx, st.DB(), second.ID)
+	if err != nil || !creds.MustChange || !webauth.CheckPassword(creds.PasswordHash, m[1]) {
+		t.Fatalf("the second owner's login: %+v %v", creds, err)
+	}
+	if _, err := st.GetUserByTelegramID(ctx, st.DB(), 4242); err == nil {
+		t.Fatal("the main owner was given an account by a command about the second")
+	}
+
+	code, out, errOut = runAdminPassword()
+	if code != 0 || passwordLine.FindStringSubmatch(out) == nil {
+		t.Fatalf("default: %d %s %s", code, out, errOut)
+	}
+	if first, err := st.GetUserByTelegramID(ctx, st.DB(), 4242); err != nil || first.Role != "owner" {
+		t.Fatalf("with no --id the main owner is served: %+v %v", first, err)
+	}
+
+	for _, bad := range []string{"777", "-1", "abc"} {
+		code, out, errOut = runAdminPassword("--id", bad)
+		if code == 0 || out != "" {
+			t.Errorf("--id %s: %d %q %s", bad, code, out, errOut)
+		}
+	}
+	if _, err := st.GetUserByTelegramID(ctx, st.DB(), 777); err == nil {
+		t.Fatal("an id the server does not list got an account")
+	}
+}

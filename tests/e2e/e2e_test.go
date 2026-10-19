@@ -372,7 +372,7 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	carol.photo("e2e-card-receipt", "REF-778899")
 	carol.sees("Received. We will review your payment")
 	owner.sees("New payment to review")
-	owner.press("adm:pend")
+	owner.press("adm:pi:") // the alert's button opens that payment's card
 	owner.sees("REF-778899")
 	owner.press("adm:ok:")
 

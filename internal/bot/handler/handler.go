@@ -47,9 +47,10 @@ type Limiter interface {
 
 // Config tunes the handler.
 type Config struct {
-	// AdminTelegramID gets new-payment and support notifications (unless
+	// AdminTelegramIDs are the root admins (the owners the server's settings
+	// name): they get the new-payment and support notifications (unless
 	// notify.recipients sends them to every owner and admin).
-	AdminTelegramID int64
+	AdminTelegramIDs []int64
 	// BotName is the brand shown until branding.name is set (from getMe).
 	BotName string
 	// BotUsername (from getMe) builds invite links: t.me/<username>?start=r_<code>.

@@ -32,7 +32,7 @@ func TestSystemAlertsReachStaff(t *testing.T) {
 	owner.text("/set notify.recipients staff")
 
 	health := &stubHealth{status: syshealth.StatusDown}
-	dom := coredomain.New(w.stack.Store, coredomain.Config{OwnerTelegramID: ownerID})
+	dom := coredomain.New(w.stack.Store, coredomain.Config{OwnerTelegramIDs: []int64{ownerID}})
 	watch := dom.NewWatchdog(coredomain.WatchdogSources{Health: health}, nil)
 	// The watchdog runs on the real clock here: a problem is fixed the second
 	// time it passes, and may be announced again right after its fix.

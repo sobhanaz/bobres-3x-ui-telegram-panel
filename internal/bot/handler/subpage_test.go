@@ -161,7 +161,7 @@ func TestServiceReadyMessageHasThePageButton(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t)
 			c.core.CoreServiceClient = w.stack.Core
-			n := notify.New(c.core, w.tg, w.h.cat, w.h.Settings(), ownerID, nil)
+			n := notify.New(c.core, w.tg, w.h.cat, w.h.Settings(), []int64{ownerID}, nil)
 			if err := n.Handle(context.Background(), provisioned(t)); err != nil {
 				t.Fatal(err)
 			}

@@ -355,7 +355,7 @@ func (s *Service) LicenseUsage(ctx context.Context, sa ServerAdmin, ga GatewayAd
 	if u.ActiveServices, err = s.st.CountActiveServices(ctx, s.st.Conn()); err != nil {
 		return nil, err
 	}
-	if u.StaffSeats, err = s.st.CountStaffSeats(ctx, s.st.Conn(), s.cfg.OwnerTelegramID); err != nil {
+	if u.StaffSeats, err = s.st.CountStaffSeats(ctx, s.st.Conn(), s.PrimaryOwnerID()); err != nil {
 		return nil, err
 	}
 	if sa != nil {
@@ -525,14 +525,14 @@ func (s *Service) requireStaffSeat(ctx context.Context) error {
 	if limit == license.Unlimited {
 		return nil
 	}
-	n, err := s.st.CountStaffSeats(ctx, s.st.Conn(), s.cfg.OwnerTelegramID)
+	n, err := s.st.CountStaffSeats(ctx, s.st.Conn(), s.PrimaryOwnerID())
 	if err != nil {
 		return err
 	}
 	if license.WithinLimit(limit, n) {
 		return nil
 	}
-	return eff.refuse("dashboard_staff_seats", "allows "+plural(max(limit, 0), "staff seat")+" (the store owner takes none)")
+	return eff.refuse("dashboard_staff_seats", "allows "+plural(max(limit, 0), "staff seat")+" (the main owner takes none)")
 }
 
 // slotGate is what a purchase of a new service is checked against: the

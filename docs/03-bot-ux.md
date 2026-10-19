@@ -38,7 +38,7 @@ TRON address, the deadline (45 minutes) and a Check button. The payment settles 
 the chain. A different amount is an unmatched deposit: staff are told and credit it by hand.
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
-**Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> admin approve/reject buttons in admin chat -> result to user.
+**Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> every owner gets an alert whose Review button opens that payment (a staff member's card: the receipt and approve/reject) -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
 **Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, opened from the bot's menu button (setting `miniapp.enabled`, off by default). It pays by the wallet, Zarinpal, IDPay, NextPay or automatic USDT; Stars, manual payments, trials, referrals and support stay in the bot ([17-mini-app.md](17-mini-app.md)).
@@ -53,6 +53,11 @@ command: the old ones still work, and each usage text ends with "open /admin and
 
 **Menu:** payments to review (count) | today and find a user | plans and discounts | notifications and broadcast |
 settings and servers | owner only: payment methods and staff | dashboard link | home.
+- **Payments to review:** a list, oldest first, eight to a page: each payment is a button (who paid, how much, when; a
+  warning sign when the bank reference was seen before) that opens its card with the receipt or TXID and Approve / Reject.
+  Every owner and admin sees the same list and the same alerts; a payment one of them decides leaves everyone's list, and
+  an alert tapped later says who decided it and when ("Already approved by @name"). A payment is settled once, whoever
+  taps first (core's review is atomic). The dashboard's receipt queue is the same queue.
 - **Today:** orders, revenue and refunds per currency for today and the last 7 days, new users, the servers' health.
 - **Plans:** list, one plan's card (price, volume, days, devices, on or off, edit each field, archive), add, the trial
   (set or switch off) and the top-up packs (add, switch off).
@@ -84,8 +89,8 @@ included, a one-time dashboard login link.
   are remembered for 10 minutes; if Telegram cannot answer, users are let in. Staff and a newcomer's `/start` and
   language choice are never blocked.
 - **Limits:** taps and messages per 10 seconds, support messages per day.
-- **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to the owner
-  or to every owner and admin. "Payment taken but not recorded" is always sent. The **daily sales summary** (off until the
+- **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to every owner the
+  server names (`BOBRES_ADMIN_TELEGRAM_ID` lists one or several), or to every owner and admin. "Payment taken but not recorded" is always sent. The **daily sales summary** (off until the
   store turns it on, `reports.daily_summary`) goes once a day to every owner and admin, whatever `notify.recipients` says,
   because it holds revenue (14-reports.md).
 - `/terms`, and terms and privacy link buttons on the support screen, when the links are set.

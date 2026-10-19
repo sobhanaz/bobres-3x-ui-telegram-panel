@@ -8,6 +8,29 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Owners and payment review
+- Several owners (root admins). `BOBRES_ADMIN_TELEGRAM_ID` takes one Telegram id or several separated by commas (at
+  most 10, none twice, no space inside an id: `12 34` is refused, not read as two people); a single id works exactly as
+  before. Each is made an owner when core starts or when they first send /start, none can be edited, demoted or removed
+  from the dashboard or the bot, and each can give the owner role to others. They are named only on the server, so a
+  hijacked Telegram or dashboard account cannot make a permanent owner.
+- `bobres admin owners list|add|remove [telegram id]` changes the list (validated like `bobres config set`, only core
+  and the bot are recreated). `bobres menu` item 8 is now "Owners", `bobres install --admin-id 111,222` takes a list, and
+  `bobres admin password --id N` gives the initial dashboard password to the owner N instead of the main one.
+  Removing an id never demotes the account by itself (a typo must not lock the owner out); the command says so.
+- The main owner (the first id) is the only one who takes no staff seat; the other owners take one each, as a second
+  owner always did ([05-license.md](docs/05-license.md)).
+- Every owner gets the payment, ticket and system alerts (until `notify.recipients = staff` widens them to every owner and
+  admin) and the daily Telegram backup: it is uploaded once, to the main owner, and the others get it from Telegram by
+  file id (an owner who cannot be reached is only logged).
+- Payments to review, in the bot: "Review payments (N)" is a list, oldest first, eight to a page, each payment a button
+  (who paid, how much, when, a warning sign for a possible duplicate) that opens its card with the receipt and Approve /
+  Reject. The alert's Review button opens that very payment (it used to open the oldest). Every owner and admin sees
+  the same list; a payment one of them decides leaves everyone's list, and an alert tapped later says who decided it and
+  when. After a decision the list comes back.
+- API: core's `AdminGetPayment` (new RPC, the proto stays compatible) shows one manual payment with who decided it and
+  when; `ListStaffContacts`, the review calls and the dashboard are unchanged.
+
 ### Maintenance
 - Go dependencies: `golang.org/x/term` 0.47.0, `github.com/redis/go-redis/v9` 9.23.0, `golang.org/x/crypto` 0.58.0 and
   `github.com/pressly/goose/v3` 3.29.0, with their indirect modules (`x/net`, `x/sync`, `x/sys`, `x/text`, `puddle`,

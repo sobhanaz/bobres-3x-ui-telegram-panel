@@ -40,6 +40,19 @@ Since milestone 6a both are set from the dashboard, through core, without core e
   are open, so no customer pays an address nobody watches. A transaction id pays at most one payment, across the
   automatic and the manual path.
 
+## Root admins
+The store owners named in `BOBRES_ADMIN_TELEGRAM_ID` (one Telegram id, or several separated by commas, at most 10) are
+the root of trust:
+- They are made and unmade only on the server: the installer, `bobres menu` and `bobres admin owners`. The dashboard and
+  the bot cannot create, edit, demote or remove one, and an owner who is not named there cannot give the owner role, so
+  a hijacked Telegram or dashboard account never becomes a permanent owner.
+- Each is made an owner by core when it starts or on their first contact with the bot, audited as
+  `staff.owner_bootstrap` with the source "server settings".
+- Removing an id from the setting does not demote the account: a typo must never lock the owner out. The command says so,
+  and the dashboard's Staff page demotes or removes the account.
+- Every root admin gets the payment alerts and the Telegram backups, and may review payments; a payment settles once,
+  whoever decides first. Only the first (the main owner) takes no staff seat ([05-license.md](05-license.md)).
+
 ## HTTPS manager
 The dashboard's HTTPS tab and `bobres ssl` choose how the gateway gets its certificates: automatic for the domain, a
 Let's Encrypt certificate for the server's IP address, or the operator's own certificate and key
@@ -169,7 +182,8 @@ is why it has no network, no secrets of its own and a single small input.
   (`BOBRES_TOKEN_CORE_BACKUP`), never its own service token: the container holds the master keys, and core's token
   would let code running in it act as core towards payments, provisioner and the bot (whose broadcast test sends any
   text to any chat). The service hands files only to the bot, with its own token (`BOBRES_TOKEN_BACKUP`), which sends
-  them to the configured owner and to no chat the caller names.
+  them to the configured owners and to no chat the caller names: the file is uploaded once, to the main owner, and the
+  others get it from Telegram's servers by its file id.
 - Key rotation procedures documented and scripted (`bobres secrets rotate`).
 
 ## Privacy

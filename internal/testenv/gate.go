@@ -21,7 +21,15 @@ import (
 type Option func(*options)
 
 type options struct {
-	gates bool
+	gates       bool
+	extraOwners []int64
+}
+
+// WithOwners names more owners than the one Start is given: the server's
+// settings list them after it, so each is a root admin (BOBRES_ADMIN_TELEGRAM_ID
+// with several ids).
+func WithOwners(ids ...int64) Option {
+	return func(o *options) { o.extraOwners = append(o.extraOwners, ids...) }
 }
 
 // WithGates puts a Gate in front of Postgres, the provisioner and core, so a

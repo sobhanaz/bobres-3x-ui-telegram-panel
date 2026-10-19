@@ -119,7 +119,7 @@ was set back, a restore), so it never has more than 30 days left, and core write
 | `resellers` | no |
 | `white_label` | no: "Powered by BOBRES" is shown |
 | `crypto_watcher` | no: no automatic USDT |
-| `dashboard_staff_seats` | 2 (the owner the server names, `BOBRES_ADMIN_TELEGRAM_ID`, takes none; every other staff member takes one, an owner too) |
+| `dashboard_staff_seats` | 2 (the main owner, the first id in `BOBRES_ADMIN_TELEGRAM_ID`, takes none; every other staff member takes one, an owner too, a second owner named in the same setting included) |
 | `gateways` | `zarinpal`, `idpay`, `nextpay`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`; the wallet is always allowed |
 | `updates_until` | none: security updates are never withheld |
 

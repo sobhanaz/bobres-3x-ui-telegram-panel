@@ -31,7 +31,7 @@ Prices are shown per install. "SET ME" is a placeholder for the owner's number.
 | **Length** | no limit | while paid | while paid | 30 days |
 | 3x-ui servers | 1 | 3 | unlimited | unlimited |
 | Active services | 25 | 500 | unlimited | unlimited |
-| Dashboard staff seats (the configured owner takes none) | 2 | 5 | unlimited | 5 |
+| Dashboard staff seats (the main owner takes none) | 2 | 5 | unlimited | 5 |
 | Resellers | no | yes | yes | yes |
 | Automatic USDT (TRON watcher) | no | yes | yes | yes |
 | Other payment methods (wallet, card to card, manual USDT, Zarinpal, Stars) | yes | yes | yes | yes |
@@ -45,8 +45,9 @@ How to read it:
   too (paid or being delivered, and unpaid ones made in the last 2 hours), so many orders made together cannot overshoot
   the limit.
 - **Staff seats** are the admins, the support members and the owners on the dashboard. **Every staff member takes a seat
-  except the one owner the install names** (`BOBRES_ADMIN_TELEGRAM_ID` in its settings): a second owner takes a seat like
-  anyone else. Nobody is removed when a limit is lowered; staff who are already over keep their access.
+  except the main owner the install names** (the first id in `BOBRES_ADMIN_TELEGRAM_ID` in its settings): a second owner
+  takes a seat like anyone else, whether they were added in the dashboard or named in that same setting
+  (`bobres admin owners add`). Nobody is removed when a limit is lowered; staff who are already over keep their access.
 - **Payment methods.** The wallet is always on. The free tier also has Zarinpal, Telegram Stars, card to card, manual USDT
   and manual Zarinpal. Automatic USDT needs a paid tier (or the trial). Standard and Pro name every method.
 - **"Powered by BOBRES"** is shown on the dashboard's footer and login page on every install, **unless a valid license

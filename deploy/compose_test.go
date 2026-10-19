@@ -41,10 +41,10 @@ func TestComposeGivesTheBotItsSettings(t *testing.T) {
 	if c.LicenseServer != "https://license.example.com" {
 		t.Errorf("the bot's license server is %q: BOBRES_LICENSE_SERVER from .env does not reach it", c.LicenseServer)
 	}
-	if c.UpdateChannel != "beta" || c.TelegramAPIURL != "http://host.docker.internal:8081" || c.AdminTelegramID != 4242 ||
+	if c.UpdateChannel != "beta" || c.TelegramAPIURL != "http://host.docker.internal:8081" || len(c.AdminTelegramIDs) != 1 || c.AdminTelegramIDs[0] != 4242 ||
 		c.PeerCoreToken != testCoreBotTok || c.PeerBackupToken != testBackupTok {
 		t.Errorf("the bot's settings from .env: channel %q, API %q, owner %d, peer tokens set %v %v", c.UpdateChannel,
-			c.TelegramAPIURL, c.AdminTelegramID, c.PeerCoreToken == testCoreBotTok, c.PeerBackupToken == testBackupTok)
+			c.TelegramAPIURL, c.AdminTelegramIDs, c.PeerCoreToken == testCoreBotTok, c.PeerBackupToken == testBackupTok)
 	}
 
 	unset := installEnv(nil)

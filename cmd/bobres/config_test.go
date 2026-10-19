@@ -159,7 +159,7 @@ func TestConfigSet(t *testing.T) {
 	if env, _ := readEnvFile(t, dir); env["BOBRES_DOMAIN"] != "pay.example.com" || env["BOBRES_ZARINPAL_HOST"] != "" {
 		t.Fatalf("domain %q, zarinpal host %q", env["BOBRES_DOMAIN"], env["BOBRES_ZARINPAL_HOST"])
 	}
-	for _, c := range [][2]string{{"BOBRES_TIMEZONE", "Europe/Berlin"}, {"BOBRES_BACKUP_TIME", "4:05"}, {"BOBRES_ADMIN_TELEGRAM_ID", "777"}, {"BOBRES_LOG_FORMAT", "text"}} {
+	for _, c := range [][2]string{{"BOBRES_TIMEZONE", "Europe/Berlin"}, {"BOBRES_BACKUP_TIME", "4:05"}, {"BOBRES_ADMIN_TELEGRAM_ID", "777"}, {"BOBRES_ADMIN_TELEGRAM_ID", "777, 778,779"}, {"BOBRES_LOG_FORMAT", "text"}} {
 		if code := o.configCmd([]string{"set", c[0], c[1], "--dir", dir}); code != 0 {
 			t.Errorf("set %s %s: %d %s", c[0], c[1], code, errOut)
 		}
@@ -181,6 +181,10 @@ func TestConfigSetRefusals(t *testing.T) {
 		{"BOBRES_DOMAIN", "not a domain", "is not a valid host name"},
 		{"BOBRES_DOMAIN", "", "cannot be empty"},
 		{"BOBRES_ADMIN_TELEGRAM_ID", "0", "positive number"},
+		{"BOBRES_ADMIN_TELEGRAM_ID", "4242,abc", "positive number"},
+		{"BOBRES_ADMIN_TELEGRAM_ID", "4242,4242", "listed twice"},
+		{"BOBRES_ADMIN_TELEGRAM_ID", "4242 4243", "positive number"},
+		{"BOBRES_ADMIN_TELEGRAM_ID", "1,2,3,4,5,6,7,8,9,10,11", "at most 10"},
 		{"BOBRES_TELEGRAM_API_URL", "ftp://x", "http(s) URL"},
 		{"BOBRES_TELEGRAM_API_URL", "https://user:pw@x", "without credentials"},
 		{"BOBRES_ZARINPAL_PUBLIC_URL", "http://pay.example.com", "Zarinpal public URL must be https"},

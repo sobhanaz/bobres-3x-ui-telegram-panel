@@ -47,7 +47,7 @@ func testService(t *testing.T) (*Service, *store.Store) {
 	if _, err := s.DB().Exec(ctx, `UPDATE core.install SET trial_started_at = now(), limit_hit_at = NULL`); err != nil {
 		t.Fatalf("reset the trial: %v", err)
 	}
-	return New(s, Config{OwnerTelegramID: ownerTG}), s
+	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}}), s
 }
 
 func seedPlan(t *testing.T, s *store.Store, trial bool, price int64) *store.Plan {

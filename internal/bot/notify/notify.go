@@ -36,14 +36,14 @@ type Telegram interface {
 
 // Notifier handles core feed events.
 type Notifier struct {
-	core    corev1.CoreServiceClient
-	tg      Telegram
-	cat     *i18n.Catalog
-	set     *settings.Store
-	adminTG int64
-	log     *slog.Logger
-	sent    unreported
-	now     func() time.Time // the clock (tests set it)
+	core     corev1.CoreServiceClient
+	tg       Telegram
+	cat      *i18n.Catalog
+	set      *settings.Store
+	adminIDs []int64
+	log      *slog.Logger
+	sent     unreported
+	now      func() time.Time // the clock (tests set it)
 }
 
 // unreported remembers staff replies that reached the customer while core
@@ -98,16 +98,16 @@ func (u *unreported) drop(id string) {
 
 // New builds a Notifier. set holds the settings the handler keeps up to date
 // (the notify.* switches and who gets staff alerts; nil: the defaults).
-// Staff alerts go to adminTelegramID (0: nobody) unless notify.recipients
-// sends them to every owner and admin.
-func New(core corev1.CoreServiceClient, t Telegram, cat *i18n.Catalog, set *settings.Store, adminTelegramID int64, log *slog.Logger) *Notifier {
+// Staff alerts go to every one of adminTelegramIDs (none: nobody) unless
+// notify.recipients sends them to every owner and admin.
+func New(core corev1.CoreServiceClient, t Telegram, cat *i18n.Catalog, set *settings.Store, adminTelegramIDs []int64, log *slog.Logger) *Notifier {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	if set == nil {
 		set = settings.New()
 	}
-	return &Notifier{core: core, tg: t, cat: cat, set: set, adminTG: adminTelegramID, log: log, now: time.Now}
+	return &Notifier{core: core, tg: t, cat: cat, set: set, adminIDs: adminTelegramIDs, log: log, now: time.Now}
 }
 
 func decode(m eventbus.Message, v any) error {
@@ -286,7 +286,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		// Always sent: money arrived and nobody was credited.
-		return n.alertTo(ctx, n.set.Recipients(n.adminTG), 0, func(lang string) (string, *tg.Keyboard) {
+		return n.alertTo(ctx, n.set.Recipients(n.adminIDs), 0, func(lang string) (string, *tg.Keyboard) {
 			return n.unmatchedDeposit(lang, e)
 		})
 
@@ -296,7 +296,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		// Always sent: a public transaction id may be sent as anyone's proof.
-		return n.alertTo(ctx, n.set.Recipients(n.adminTG), 0, func(lang string) (string, *tg.Keyboard) {
+		return n.alertTo(ctx, n.set.Recipients(n.adminIDs), 0, func(lang string) (string, *tg.Keyboard) {
 			return n.claimedDeposit(lang, e)
 		})
 
@@ -338,7 +338,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 // nobody). It fails only when nobody got it, so a retry does not repeat it
 // to those who did.
 func (n *Notifier) alert(ctx context.Context, skip int64, text func(lang string) string) error {
-	return n.alertTo(ctx, n.set.Recipients(n.adminTG), skip, func(lang string) (string, *tg.Keyboard) {
+	return n.alertTo(ctx, n.set.Recipients(n.adminIDs), skip, func(lang string) (string, *tg.Keyboard) {
 		return text(lang), nil
 	})
 }
@@ -633,7 +633,7 @@ func (n *Notifier) ticketAlert(ctx context.Context, messageID string, customer, 
 	if v.GetHasFile() {
 		preview = strings.TrimSpace("📎 " + preview)
 	}
-	to := n.set.TicketRecipients(n.adminTG)
+	to := n.set.TicketRecipients(n.adminIDs)
 	if assignee != 0 {
 		c, ok := n.set.Contact(assignee)
 		if !ok {

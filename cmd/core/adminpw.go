@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"time"
@@ -17,7 +18,8 @@ const (
 	adminPasswordPassPrefix = "Password: "
 )
 
-// adminPasswordCmd gives the owner (BOBRES_ADMIN_TELEGRAM_ID) a way into the
+// adminPasswordCmd gives an owner (BOBRES_ADMIN_TELEGRAM_ID lists them; the
+// first unless --id names another) a way into the
 // dashboard that needs neither the bot nor a /start: it creates the owner's
 // account when it is missing, and sets a random initial password for the
 // login "owner" (the owner's own username when they have one). It prints the
@@ -26,8 +28,11 @@ const (
 // again resets the login and ends the owner's sessions. `bobres admin
 // password` and `bobres install` run it inside the core container.
 func adminPasswordCmd(args []string, out, errOut io.Writer) int {
-	if len(args) > 0 {
-		fmt.Fprintln(errOut, "usage: admin-password")
+	fs := flag.NewFlagSet("admin-password", flag.ContinueOnError)
+	fs.SetOutput(errOut)
+	id := fs.Int64("id", 0, "Telegram id of the owner (default: the main owner, the first one in BOBRES_ADMIN_TELEGRAM_ID)")
+	if err := fs.Parse(args); err != nil || fs.NArg() > 0 || *id < 0 {
+		fmt.Fprintln(errOut, "usage: admin-password [--id <telegram id>]")
 		return 2
 	}
 	cfg, err := config.LoadCore()
@@ -35,8 +40,8 @@ func adminPasswordCmd(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "load core config:", err)
 		return 1
 	}
-	if cfg.AdminTelegramID == 0 {
-		fmt.Fprintln(errOut, "BOBRES_ADMIN_TELEGRAM_ID is not set: there is no owner to give a password to (bobres menu > Change the owner)")
+	if len(cfg.AdminTelegramIDs) == 0 {
+		fmt.Fprintln(errOut, "BOBRES_ADMIN_TELEGRAM_ID is not set: there is no owner to give a password to (bobres menu > Owners)")
 		return 1
 	}
 	if cfg.MasterKey == "" {
@@ -51,8 +56,8 @@ func adminPasswordCmd(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	defer st.Close()
-	dom := domain.New(st, domain.Config{OwnerTelegramID: cfg.AdminTelegramID})
-	login, err := dom.IssueInitialPassword(store.WithSource(ctx, store.SourceCLI))
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs})
+	login, err := dom.IssueInitialPassword(store.WithSource(ctx, store.SourceCLI), *id)
 	if err != nil {
 		fmt.Fprintln(errOut, "error: set the initial password:", err)
 		return 1

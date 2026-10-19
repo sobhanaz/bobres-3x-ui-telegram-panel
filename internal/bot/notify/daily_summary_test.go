@@ -256,7 +256,7 @@ func (b *blockedCore) SetUserBotBlocked(_ context.Context, in *corev1.SetUserBot
 func TestDailySummaryReachesEveryRecipientWhoCanBeReached(t *testing.T) {
 	base, tgf, set := alertNotifier(t)
 	core := &blockedCore{fakeCore: &fakeCore{}}
-	n := New(core, tgf, base.cat, set, ownerTG, nil)
+	n := New(core, tgf, base.cat, set, []int64{ownerTG}, nil)
 	tgf.fail = map[int64]error{
 		adminTG:   &tg.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"},
 		supportTG: errors.New("network is down"),
@@ -320,7 +320,7 @@ func summaryAt(t *testing.T, n *Notifier, e events.DailySummaryEvent, createdAt 
 // Telegram's) is an ordinary error and is retried.
 func TestDailySummaryRefusalsArePermanentAndTransientFailuresAreNot(t *testing.T) {
 	base, tgf, set := alertNotifier(t)
-	n := New(&blockedCore{fakeCore: &fakeCore{}}, tgf, base.cat, set, ownerTG, nil)
+	n := New(&blockedCore{fakeCore: &fakeCore{}}, tgf, base.cat, set, []int64{ownerTG}, nil)
 	for _, c := range []struct {
 		err       error
 		permanent bool

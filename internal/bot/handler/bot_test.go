@@ -286,13 +286,17 @@ type person struct {
 
 const ownerID = 9000
 
-func newWorld(t *testing.T) *world {
+func newWorld(t *testing.T) *world { return newWorldOwners(t, ownerID) }
+
+// newWorldOwners is newWorld for a server that names several owners (root
+// admins) in its settings, the first the main one.
+func newWorldOwners(t *testing.T, owners ...int64) *world {
 	t.Helper()
-	stack := testenv.Start(t, ownerID)
+	stack := testenv.Start(t, owners[0], testenv.WithOwners(owners[1:]...))
 	ftg := newFakeTG()
 	cat := i18n.MustLoad()
-	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramID: ownerID, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
-	n := notify.New(stack.Core, ftg, cat, h.Settings(), ownerID, nil)
+	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramIDs: owners, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
+	n := notify.New(stack.Core, ftg, cat, h.Settings(), owners, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(stack.Feed),
 		Handle:     n.Handle,
@@ -536,7 +540,7 @@ func TestCardPurchaseReviewedByAdminAndDelivered(t *testing.T) {
 	buyer.sees("Received")
 
 	owner.sees("New payment to review from @buyer")
-	owner.press("adm:pend")
+	owner.press("adm:pi:") // the alert's button opens that very payment
 	item := owner.last()
 	if !item.photo || item.fileID != "receipt-file-1" || !strings.Contains(item.text, "998877") {
 		t.Fatalf("review item: %+v", item)
@@ -629,7 +633,7 @@ func TestRejectionReasonInTheUsersLanguage(t *testing.T) {
 	u.photo("receipt-2", "123456")
 	u.sees("دریافت شد")
 
-	owner.press("adm:pend")
+	owner.press("adm:pi:")
 	owner.press("adm:no:")
 	owner.press("adm:nr:0:") // amount mismatch
 	owner.toast("Rejected")
@@ -877,7 +881,7 @@ func TestScreenshotForZarinpalLinkAndCrypto(t *testing.T) {
 	u.document("zl-receipt-file", "image/jpeg", "TRK-55")
 	u.sees("Received")
 	owner.sees("New payment to review")
-	owner.press("adm:pend")
+	owner.press("adm:pi:")
 	owner.sees("Zarinpal link")
 	if m := w.tg.last(owner.id); !m.document || m.fileID != "zl-receipt-file" {
 		t.Fatalf("the admin must get the screenshot file itself: %+v", m)
@@ -892,7 +896,7 @@ func TestScreenshotForZarinpalLinkAndCrypto(t *testing.T) {
 	u.press("pay:x:")
 	u.photo("usdt-transfer-shot", "")
 	u.sees("Received")
-	owner.press("adm:pend")
+	owner.press("adm:pi:")
 	owner.sees("Screenshot attached")
 	if m := w.tg.last(owner.id); !m.photo || m.fileID != "usdt-transfer-shot" {
 		t.Fatalf("the admin must get the screenshot: %+v", m)

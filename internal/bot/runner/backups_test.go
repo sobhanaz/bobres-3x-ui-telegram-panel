@@ -36,12 +36,23 @@ type deliverEnv struct {
 
 func newDeliverEnv(t *testing.T, owner, limit int64, lang string) *deliverEnv {
 	t.Helper()
+	var owners []int64
+	if owner != 0 {
+		owners = []int64{owner}
+	}
+	return newDeliverEnvOwners(t, owners, limit, func(int64) string { return lang })
+}
+
+// newDeliverEnvOwners is newDeliverEnv for several owners, the first the
+// main one, each in the language langOf gives.
+func newDeliverEnvOwners(t *testing.T, owners []int64, limit int64, langOf func(int64) string) *deliverEnv {
+	t.Helper()
 	fake := tgfake.New()
 	api := httptest.NewServer(fake.Handler())
 	t.Cleanup(api.Close)
 	h := Deliver(Delivery{
-		Bot: tg.New("123:abc", tg.WithAPIRoot(api.URL)), Token: backupTok, Owner: owner, Limit: limit,
-		Texts: i18n.MustLoad(), Lang: func(context.Context) string { return lang },
+		Bot: tg.New("123:abc", tg.WithAPIRoot(api.URL)), Token: backupTok, Owners: owners, Limit: limit,
+		Texts: i18n.MustLoad(), Lang: func(_ context.Context, owner int64) string { return langOf(owner) },
 	})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
@@ -89,7 +100,7 @@ func TestDeliverOnlyForTheBackupService(t *testing.T) {
 		}
 	}
 	// A handler built without a token refuses everyone, even an empty bearer.
-	h := Deliver(Delivery{Owner: backupOwner, Limit: CloudUploadLimit})
+	h := Deliver(Delivery{Owners: []int64{backupOwner}, Limit: CloudUploadLimit})
 	if code, _ := call(t, h, http.MethodPost, "/internal/backups/deliver", ""); code != http.StatusUnauthorized {
 		t.Errorf("no token configured: %d", code)
 	}
@@ -112,7 +123,7 @@ func TestDeliverRefusesBadNamesAndSizes(t *testing.T) {
 	if code, _ := e.post(t, backupTok, backupName, "", nil); code != http.StatusBadRequest {
 		t.Errorf("empty body: %d", code)
 	}
-	h := Deliver(Delivery{Token: backupTok, Owner: backupOwner, Limit: CloudUploadLimit})
+	h := Deliver(Delivery{Token: backupTok, Owners: []int64{backupOwner}, Limit: CloudUploadLimit})
 	for size, want := range map[int64]int{-1: http.StatusLengthRequired, MaxBackup + 1: http.StatusRequestEntityTooLarge} {
 		req := httptest.NewRequest(http.MethodPost, "/internal/backups/deliver", strings.NewReader("x"))
 		req.Header.Set("Authorization", "Bearer "+backupTok)
@@ -217,6 +228,10 @@ func (s *streamSender) SendMessage(context.Context, int64, string, *tg.Keyboard)
 	return &tg.Message{MessageID: 1}, nil
 }
 
+func (s *streamSender) SendDocument(context.Context, int64, string, string, *tg.Keyboard) (*tg.Message, error) {
+	return &tg.Message{MessageID: 2}, nil
+}
+
 func (s *streamSender) SendDocumentUpload(_ context.Context, _ int64, _ string, r io.Reader, size int64, _ string) (*tg.Message, error) {
 	head := make([]byte, s.first)
 	if _, err := io.ReadFull(r, head); err != nil {
@@ -246,7 +261,7 @@ func TestDeliverStreamsTheBody(t *testing.T) {
 	data := randomBackup(t, 256<<10)
 	half := len(data) / 2
 	bot := &streamSender{first: half, started: make(chan struct{})}
-	h := Deliver(Delivery{Bot: bot, Token: backupTok, Owner: backupOwner, Limit: LocalUploadLimit, Texts: i18n.MustLoad()})
+	h := Deliver(Delivery{Bot: bot, Token: backupTok, Owners: []int64{backupOwner}, Limit: LocalUploadLimit, Texts: i18n.MustLoad()})
 	pr, pw := io.Pipe()
 	go func() {
 		_, _ = pw.Write(data[:half])
@@ -276,7 +291,7 @@ func TestDeliverRefusesAShortBody(t *testing.T) {
 	fake := tgfake.New()
 	api := httptest.NewServer(fake.Handler())
 	t.Cleanup(api.Close)
-	h := Deliver(Delivery{Bot: tg.New("123:abc", tg.WithAPIRoot(api.URL)), Token: backupTok, Owner: backupOwner,
+	h := Deliver(Delivery{Bot: tg.New("123:abc", tg.WithAPIRoot(api.URL)), Token: backupTok, Owners: []int64{backupOwner},
 		Limit: CloudUploadLimit, Texts: i18n.MustLoad()})
 
 	data := randomBackup(t, 64<<10)
@@ -298,5 +313,71 @@ func TestDeliverRefusesAShortBody(t *testing.T) {
 	}
 	if sent := fake.Sent(); len(sent) != 0 {
 		t.Fatalf("sent: %+v", sent)
+	}
+}
+
+// Every owner gets the backup, the main one by the upload and the others by
+// Telegram's file id, each caption in that owner's language.
+func TestDeliverCopiesTheBackupToEveryOwner(t *testing.T) {
+	const second, third = int64(5151), int64(6262)
+	langs := map[int64]string{backupOwner: "fa", second: "en", third: "fa"}
+	e := newDeliverEnvOwners(t, []int64{backupOwner, second, third}, CloudUploadLimit, func(o int64) string { return langs[o] })
+	data := randomBackup(t, 1<<20+5)
+	code, out := e.post(t, backupTok, backupName, "", data)
+	if code != http.StatusOK || out["sent"] != true || out["message_id"] == nil {
+		t.Fatalf("%d %v", code, out)
+	}
+	sent := e.fake.Sent()
+	if len(sent) != 3 {
+		t.Fatalf("sent: %+v", sent)
+	}
+	sum := sha256.Sum256(data)
+	if sent[0].Method != "sendDocument" || sent[0].ChatID != backupOwner || sent[0].FileSize != int64(len(data)) ||
+		sent[0].FileSHA256 != hex.EncodeToString(sum[:]) {
+		t.Errorf("the upload goes to the main owner: %+v", sent[0])
+	}
+	for i, want := range []struct {
+		chat int64
+		word string
+	}{{second, "backup"}, {third, "پشتیبان"}} {
+		got := sent[i+1]
+		if got.Method != "sendDocument" || got.ChatID != want.chat || got.FileName != "" ||
+			!strings.Contains(got.Text, backupName) || !strings.Contains(strings.ToLower(got.Text), want.word) {
+			t.Errorf("copy %d: %+v", i, got)
+		}
+	}
+}
+
+// An owner who cannot be reached does not fail the delivery, and the owners
+// after them still get the file.
+func TestDeliverCopyFailureIsOnlyLogged(t *testing.T) {
+	const second, third = int64(5151), int64(6262)
+	e := newDeliverEnvOwners(t, []int64{backupOwner, second, third}, CloudUploadLimit, func(int64) string { return "en" })
+	e.fake.FailChat(second, tgfake.Blocked())
+	code, out := e.post(t, backupTok, backupName, "", randomBackup(t, 4096))
+	if code != http.StatusOK || out["sent"] != true {
+		t.Fatalf("%d %v", code, out)
+	}
+	var chats []int64
+	for _, s := range e.fake.Sent() {
+		chats = append(chats, s.ChatID)
+	}
+	if len(chats) != 2 || chats[0] != backupOwner || chats[1] != third {
+		t.Fatalf("delivered to %v", chats)
+	}
+}
+
+// A file too big for Telegram is kept on the server, and every owner is told.
+func TestDeliverTooBigWarnsEveryOwner(t *testing.T) {
+	const second = int64(5151)
+	e := newDeliverEnvOwners(t, []int64{backupOwner, second}, 1<<10, func(int64) string { return "en" })
+	code, out := e.post(t, backupTok, backupName, "", randomBackup(t, 2<<10))
+	if code != http.StatusOK || out["sent"] != false || out["reason"] != ReasonTooBig {
+		t.Fatalf("%d %v", code, out)
+	}
+	sent := e.fake.Sent()
+	if len(sent) != 2 || sent[0].ChatID != backupOwner || sent[1].ChatID != second ||
+		!strings.Contains(sent[1].Text, "kept on the server") {
+		t.Fatalf("warnings: %+v", sent)
 	}
 }

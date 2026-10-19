@@ -665,10 +665,10 @@ func TestButtonColors(t *testing.T) {
 	colors("card details", u.shown(), map[string]string{"cancel": tg.StyleDanger})
 	u.photo("receipt-colors", "REF-5")
 
-	owner.press("adm:pend")
+	owner.press("adm:pi:")
 	item := owner.last()
-	colors("review", item, map[string]string{"adm:ok:": tg.StyleSuccess, "adm:no:": tg.StyleDanger, "adm": ""})
+	colors("review", item, map[string]string{"adm:ok:": tg.StyleSuccess, "adm:no:": tg.StyleDanger, "adm:pend": ""})
 	owner.press("adm:no:")
 	colors("reasons", item, map[string]string{"adm:nr:0:": tg.StyleDanger, "adm:nr:1:": tg.StyleDanger,
-		"adm:nr:2:": tg.StyleDanger, "adm:nx:": tg.StyleDanger, "adm:pend": ""})
+		"adm:nr:2:": tg.StyleDanger, "adm:nx:": tg.StyleDanger, "adm:pi:": ""})
 }

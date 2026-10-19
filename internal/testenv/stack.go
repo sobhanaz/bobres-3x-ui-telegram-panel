@@ -135,7 +135,11 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 		t.Fatal(err)
 	}
 	t.Cleanup(cs.Close)
-	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramID: ownerTelegramID})
+	var o options
+	for _, f := range opts {
+		f(&o)
+	}
+	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...)})
 	payConn := Dial(t, payAddr, CoreToken)
 	provClient := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(Dial(t, provAddr, CoreToken)))
 	csrv := coreserver.New(cs, dom)
