@@ -2,6 +2,7 @@ package marzban
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,6 +154,35 @@ func TestUserOwner(t *testing.T) {
 	}
 	if u, err := c.GetUser(ctx, "ownerless-user"); err != nil || u.HasOwner() {
 		t.Fatalf("ownerless user: %+v %v", u, err)
+	}
+}
+
+// A user printed in a log or a failed test shows no credentials.
+func TestUserStringHidesCredentials(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/admin/token" {
+			_, _ = w.Write([]byte(`{"access_token":"t","token_type":"bearer"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"username":"abc-def","status":"active","expire":1795024136,"data_limit":1073741824,
+			"proxies":{"shadowsocks":{"password":"SECRET-PASSWORD","method":"chacha20-ietf-poly1305"}},
+			"links":["ss://SECRET-LINK@host:1080"],"subscription_url":"/sub/SECRET-TOKEN","admin":{"username":"ops"}}`))
+	})
+	u, err := c.GetUser(context.Background(), "abc-def")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, shown := range []string{fmt.Sprintf("%v", u), fmt.Sprintf("%+v", u), u.String()} {
+		if strings.Contains(shown, "SECRET") || !strings.Contains(shown, "abc-def") || !strings.Contains(shown, "links=1") {
+			t.Errorf("printed as %q", shown)
+		}
+	}
+	if len(u.Proxies["shadowsocks"]) == 0 {
+		t.Error("the credentials are not kept for the tests that connect with them")
+	}
+	var none *User
+	if none.String() != "<nil>" {
+		t.Errorf("nil user printed as %q", none.String())
 	}
 }
 

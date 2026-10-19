@@ -16,10 +16,9 @@ package tests
 //	go test -tags integration -run MarzbanReal ./tests/
 //
 // What it does not cover: the Telegram side (the bot is a thin client of the
-// same core calls, and tests/e2e drives it against a 3x-ui panel), the
-// dashboard's HTTP layer (internal/core/web has its own tests over a real
-// provisioner), and traffic: a Marzban user that has used data needs a real
-// Xray client, which the Go test cannot run.
+// same core calls, and tests/e2e drives it against a 3x-ui panel). The
+// dashboard's HTTP layer is covered by internal/core/web's real-panel test, and
+// traffic (usage, quota, a client kept out) by the adapter's.
 
 import (
 	"context"
@@ -205,12 +204,12 @@ func TestMarzbanRealPanelPurchaseLoop(t *testing.T) {
 	// panel's protocol and tag).
 	var pick *domain.Inbound
 	for i := range inbounds {
-		if len(inbounds) == 1 || inbounds[i].Protocol != inbounds[0].Protocol {
+		if inbounds[i].Protocol != inbounds[0].Protocol {
 			pick = &inbounds[i]
 			break
 		}
 	}
-	if pick != nil && len(inbounds) > 1 {
+	if pick != nil { // the panel serves at least two protocols
 		single, err := s.Domain.UpsertPlan(ctx, owner, &store.Plan{
 			NameI18n: map[string]string{"en": "One inbound"}, Kind: "both", DurationDays: &days, TrafficBytes: &gb10,
 			Price: 10000, Currency: "IRT", Enabled: true, ServerIDs: []string{sv.ID},
@@ -301,14 +300,14 @@ func TestMarzbanRealPanelPurchaseLoop(t *testing.T) {
 	} else {
 		_ = resp.Body.Close()
 	}
-	// The provisioner may not be asked twice to fail.
+	// Deleting a deleted service again is fine.
 	if err := s.Domain.DeleteSubscription(ctx, owner, s.Prov, sub.GetId(), "e2e again"); err != nil {
 		t.Fatalf("a second delete: %v", err)
 	}
 }
 
 // A Telegram id with one digit makes a username the panel refuses; the order
-// fails on the reservation, with nothing created on the panel.
+// fails on the reservation (provision_failed) and is never delivered.
 func TestMarzbanRealPanelRefusedUsername(t *testing.T) {
 	baseURL, user, pass := realMarzbanEnv(t)
 	allowPrivate := os.Getenv("MARZBAN_TEST_ALLOW_PRIVATE") == "1"

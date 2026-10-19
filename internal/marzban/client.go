@@ -362,6 +362,17 @@ func (u *User) HoldSeconds() int64 {
 	return *u.OnHoldExpireDuration
 }
 
+// String describes the user without its credentials (Proxies, share links,
+// subscription address), so a user that is printed in a log or a failed test
+// does not show them.
+func (u *User) String() string {
+	if u == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("{%s %s expire=%d limit=%d used=%d hold=%d owner=%t links=%d}", u.Username, u.Status,
+		u.ExpireSeconds(), u.DataLimitBytes(), u.UsedTraffic, u.HoldSeconds(), u.HasOwner(), len(u.Links))
+}
+
 // HasOwner reports whether an admin owns the user. A user created through the
 // environment sudo account has none, and v0.8.x then answers HTTP 500 to its
 // deletion: after removing the row, before dropping the account from the
