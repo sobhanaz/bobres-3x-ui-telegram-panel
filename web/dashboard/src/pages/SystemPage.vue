@@ -13,6 +13,7 @@ import HealthTab from '../components/system/HealthTab.vue'
 import HttpsTab from '../components/system/HttpsTab.vue'
 import LicenseTab from '../components/system/LicenseTab.vue'
 import LogsTab from '../components/system/LogsTab.vue'
+import MonitoringTab from '../components/system/MonitoringTab.vue'
 import UpdatesTab from '../components/system/UpdatesTab.vue'
 import { chipOf, chipSeverityOf } from '../license'
 import { num, type Lang } from '../format'
@@ -28,9 +29,18 @@ const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
 
-// the logs carry Telegram ids: the owner's only (system.write)
+// the logs carry Telegram ids: the owner's only (system.write); Monitoring is read only (monitor.read: owner and admin)
 const canLogs = computed(() => auth.can('system.write'))
-const tabs = computed(() => (canLogs.value ? ['health', 'updates', 'backups', 'https', 'logs', 'license'] : ['health', 'updates', 'backups', 'https', 'license']))
+const canMonitor = computed(() => auth.can('monitor.read'))
+const tabs = computed(() => [
+  'health',
+  ...(canMonitor.value ? ['monitoring'] : []),
+  'updates',
+  'backups',
+  'https',
+  ...(canLogs.value ? ['logs'] : []),
+  'license',
+])
 const tabOf = (v: unknown) => (typeof v === 'string' && tabs.value.includes(v) ? v : 'health')
 const tab = ref(tabOf(route.query.tab))
 const seen = reactive(new Set<string>([tab.value]))
@@ -60,6 +70,7 @@ const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.ki
   <Tabs :value="tab" class="system-tabs" @update:value="showTab">
     <TabList>
       <Tab value="health" class="tab-health">{{ t('system.tab.health') }}</Tab>
+      <Tab v-if="canMonitor" value="monitoring" class="tab-monitoring">{{ t('system.tab.monitoring') }}</Tab>
       <Tab value="updates" class="tab-updates">{{ t('system.tab.updates') }}</Tab>
       <Tab value="backups" class="tab-backups">{{ t('system.tab.backups') }}</Tab>
       <Tab value="https" class="tab-https">{{ t('system.tab.https') }}</Tab>
@@ -72,6 +83,9 @@ const chipText = (c: { kind: string; days: number }) => t('license.chip.' + c.ki
     <TabPanels>
       <TabPanel value="health">
         <HealthTab v-if="seen.has('health')" />
+      </TabPanel>
+      <TabPanel v-if="canMonitor" value="monitoring">
+        <MonitoringTab v-if="seen.has('monitoring')" :active="tab === 'monitoring'" />
       </TabPanel>
       <TabPanel value="updates">
         <UpdatesTab v-if="seen.has('updates')" />

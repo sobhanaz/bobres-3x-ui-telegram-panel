@@ -547,7 +547,8 @@
     "other": "Other",
     "rotate": "Rotate",
     "tilt": "Tilt",
-    "reset_view": "Reset view"
+    "reset_view": "Reset view",
+    "no_data": "No data"
   },
   "reports": {
     "hint": "Sales read from the ledger and the orders, in the store's time zone. Every currency is counted on its own: amounts in different currencies are never added together.",
@@ -2481,6 +2482,7 @@
     "intro": "How every BOBRES service is doing, whether a newer release is out, the backups, the HTTPS certificates and this install's license.",
     "tab": {
       "health": "Health",
+      "monitoring": "Monitoring",
       "updates": "Updates",
       "backups": "Backups",
       "https": "HTTPS",
@@ -2990,6 +2992,318 @@
         "not_configured": "Core has no address for {service}, so its logs can't be read.",
         "other": "The logs of {service} could not be read:"
       }
+    }
+  },
+  "monitor": {
+    "state": {
+      "ok": "Working",
+      "warn": "Needs a look",
+      "down": "Down",
+      "unknown": "Not known"
+    },
+    "overall": {
+      "ok": "Everything is working",
+      "degraded": "Working, but something needs a look",
+      "down": "Something important is down",
+      "unknown": "The overall status is not known"
+    },
+    "overall_note": {
+      "ok": "Core checked {n} part and it is working. | Core checked {n} parts and all are working.",
+      "unknown": "Core did not give an overall status.",
+      "alert": "An alert is open. See the alerts and logs below."
+    },
+    "reasons": "What needs a look",
+    "open_alerts": "{n} alert is open. | {n} alerts are open.",
+    "see_alerts": "See alerts",
+    "see_host": "See the server",
+    "no_host_note": "The server's own figures (CPU, memory, disks, Docker) are missing because the host collector is not reporting.",
+    "section": {
+      "status": "Overview",
+      "store": "Bot and store",
+      "host": "Server",
+      "docker": "Docker",
+      "kubernetes": "Kubernetes",
+      "services": "Services",
+      "cicd": "CI/CD",
+      "deployments": "Deployments",
+      "events": "Alerts and logs"
+    },
+    "jump": "Sections of the Monitoring tab",
+    "kind": {
+      "service": "Services",
+      "datastore": "Data stores",
+      "host": "Server",
+      "job": "Jobs",
+      "panel": "Panel servers",
+      "gateway": "Payment methods"
+    },
+    "component": {
+      "core": "Core",
+      "bot": "Telegram bot",
+      "payments": "Payments",
+      "provisioner": "Provisioner",
+      "backup": "Backup service",
+      "postgres": "Database (Postgres)",
+      "redis": "Redis",
+      "caddy": "Web gateway (Caddy)",
+      "tls-agent": "HTTPS agent",
+      "host": "The server",
+      "collector": "Host collector",
+      "backups": "Latest backup",
+      "ci": "CI of the main branch"
+    },
+    "store_heading": "The store in numbers",
+    "counter": {
+      "open_alerts": "Open alerts",
+      "errors_1h": "Errors, last hour",
+      "orders_pending": "Orders waiting",
+      "payments_pending": "Payments to review",
+      "provision_queue": "Paid, not delivered",
+      "outbox_backlog": "Event backlog",
+      "tickets_open": "Open tickets",
+      "services_active": "Active services",
+      "customers_total": "Customers"
+    },
+    "unknown_value": "Not known",
+    "yes": "Yes",
+    "no": "No",
+    "range_label": "Time range",
+    "range": {
+      "1h": "1 hour",
+      "6h": "6 hours",
+      "24h": "24 hours",
+      "7d": "7 days",
+      "30d": "30 days"
+    },
+    "auto": "Refresh automatically",
+    "updated": "Updated {time}",
+    "not_configured": "This build of core was started without the monitor, so there is nothing to show here.",
+    "load_error": "The monitoring data could not be read.",
+    "showing_old": "Showing what was read at {time}.",
+    "series_error": "The history for the charts could not be read just now. The figures above are current.",
+    "chart": {
+      "summary": "{title}, {series}: now {last}, highest {peak} in the last {range}",
+      "empty": "Nothing was sampled in this period yet.",
+      "time": "Time",
+      "no_history": "No history has been recorded yet. Core records the figures every 30 seconds."
+    },
+    "collector": {
+      "not_installed": "The host collector is not installed or is switched off",
+      "quiet": "The host collector has not reported for {age}",
+      "unusable": "The host collector's file cannot be used ({error})",
+      "no_host": "The host collector's last snapshot has no figures for the server",
+      "body": "Without it this page cannot show the server's CPU, memory, disks, Docker containers or the host's journal. Everything core can ask itself is still shown below, and the charts keep their history with a gap where nothing was recorded.",
+      "enable": "Turn it on, on the server (as root):",
+      "status": "To see what it is doing:",
+      "copy": "Copy the command"
+    },
+    "host": {
+      "cpu": "CPU",
+      "cores": "{n} core | {n} cores",
+      "load": "Load",
+      "load_1": "Load, 1 minute",
+      "load_note": "1, 5 and 15 minutes",
+      "load_chart": "Average over 1 minute; compare with the number of cores",
+      "memory": "Memory",
+      "swap": "Swap",
+      "no_swap": "No swap",
+      "network": "Network",
+      "rx": "Received",
+      "tx": "Sent",
+      "uptime": "Up for",
+      "disks": "Disks",
+      "no_disks": "No disk was reported.",
+      "role": {
+        "install": "BOBRES",
+        "docker": "Docker"
+      },
+      "disk_of": "Disk {mount}",
+      "disk_use": "Used: {used} of {total}. Free: {free}.",
+      "about": "About the server",
+      "hostname": "Host name",
+      "os": "System",
+      "kernel": "Kernel",
+      "docker": "Docker engine",
+      "docker_down": "The Docker engine does not answer.",
+      "clock": "Clock is synchronised"
+    },
+    "docker": {
+      "containers": "Containers",
+      "needs_collector": "The containers come from the host collector, which is not reporting.",
+      "none": "The Docker engine lists no containers.",
+      "col_container": "Container",
+      "col_version": "Image version",
+      "col_state": "State",
+      "col_health": "Health check",
+      "col_restarts": "Restarts",
+      "col_up": "Running for",
+      "col_cpu": "CPU",
+      "col_memory": "Memory",
+      "col_network": "Traffic since start",
+      "state": {
+        "running": "Running",
+        "restarting": "Restarting",
+        "paused": "Paused",
+        "created": "Created",
+        "removing": "Being removed",
+        "exited": "Stopped",
+        "dead": "Dead",
+        "unknown": "Not known"
+      },
+      "health": {
+        "none": "No check",
+        "starting": "Starting",
+        "healthy": "Healthy",
+        "unhealthy": "Unhealthy"
+      },
+      "oom": "Killed for lack of memory",
+      "exit": "Exit code {code}",
+      "disk": "What Docker keeps on the disk",
+      "disk_images": "Images",
+      "disk_reclaimable": "Images that can be freed",
+      "disk_containers": "Containers",
+      "disk_volumes": "Volumes",
+      "disk_build_cache": "Build cache",
+      "disk_at": "Measured {time}; Docker is asked every 15 minutes.",
+      "cpu_chart": "CPU by container",
+      "cpu_note": "Share of one core, so more than 100% is possible",
+      "mem_chart": "Memory by container",
+      "capped": "The charts show the first {n} service; the table lists them all. | The charts show the first {n} services; the table lists them all."
+    },
+    "kube": {
+      "none": "No Kubernetes cluster was found on this server. BOBRES does not need one.",
+      "nodes": "Nodes",
+      "no_nodes": "No node was reported.",
+      "pods": "{n} pod | {n} pods",
+      "no_pods": "No pod was reported.",
+      "col_name": "Name",
+      "col_ready": "Ready",
+      "col_roles": "Roles",
+      "col_version": "Version",
+      "col_namespace": "Namespace",
+      "col_phase": "Phase",
+      "col_restarts": "Restarts",
+      "col_node": "Node",
+      "ready": "Ready",
+      "not_ready": "Not ready",
+      "truncated": "More pods exist than are listed here."
+    },
+    "services": {
+      "bobres": "BOBRES services and data stores",
+      "col_service": "Service",
+      "col_state": "State",
+      "col_version": "Version",
+      "col_up": "Running for",
+      "col_detail": "What core measured",
+      "latency": "Response time",
+      "latency_note": "How long each service takes to answer core",
+      "units": "Systemd units the collector watches",
+      "units_need_collector": "The units come from the host collector, which is not reporting.",
+      "units_none": "systemd reported none of the watched units.",
+      "col_unit": "Unit",
+      "col_enabled": "At boot",
+      "col_restarts": "Restarts",
+      "col_since": "Since",
+      "unit": {
+        "monitor_timer": "Wakes the host collector every 30 seconds",
+        "monitor_service": "Takes one snapshot of the server",
+        "updater_path": "Waits for an update asked for on the dashboard",
+        "updater_service": "Runs the update",
+        "docker": "The container engine"
+      }
+    },
+    "ci": {
+      "main_failing": "The latest CI run on the main branch failed.",
+      "problem": {
+        "not_checked": "The bot has not looked at GitHub yet.",
+        "unreachable": "GitHub could not be reached from the server.",
+        "rate_limited": "GitHub's hourly limit for this server is used up. It comes back {time}.",
+        "invalid": "GitHub's answer could not be used.",
+        "other": "GitHub's state could not be read."
+      },
+      "older": "What is shown was read {time}.",
+      "latest_release": "Latest release",
+      "prerelease": "Pre-release",
+      "published": "Published {time}",
+      "runs": "Latest runs on main",
+      "release_runs": "Latest release runs",
+      "no_runs": "No run was read yet.",
+      "col_workflow": "Workflow",
+      "col_result": "Result",
+      "col_branch": "Branch or tag",
+      "col_event": "Event",
+      "col_commit": "Commit",
+      "col_when": "When",
+      "run": {
+        "success": "Passed",
+        "failure": "Failed",
+        "running": "Running",
+        "cancelled": "Stopped",
+        "other": "Not known"
+      },
+      "checked": "Read from GitHub {time}; looked at again every 5 minutes."
+    },
+    "deployments": {
+      "none": "No update has been recorded on this install yet.",
+      "col_when": "Started",
+      "took": "took {time}",
+      "col_version": "Version",
+      "channel": "Channel: {channel}",
+      "col_outcome": "Outcome",
+      "outcome": {
+        "running": "Running",
+        "done": "Done",
+        "failed": "Failed",
+        "rolled_back": "Rolled back",
+        "not_started": "Never started",
+        "unknown": "Not known"
+      },
+      "col_source": "Asked for",
+      "source": {
+        "dashboard": "On the dashboard",
+        "cli": "On the server"
+      }
+    },
+    "events": {
+      "level": {
+        "warn": "Warnings and errors",
+        "error": "Errors only"
+      },
+      "level_label": "Which events to list",
+      "level_tag": {
+        "warn": "Warning",
+        "error": "Error"
+      },
+      "state": {
+        "open": "Open",
+        "closed": "Fixed since",
+        "resolved": "Fixed"
+      },
+      "load_error": "The events could not be read just now.",
+      "owner_only": "The lines the services logged carry Telegram ids, so only the owner sees them. You see the alerts and the server's journal.",
+      "unreachable": "Could not read the log of: {list}.",
+      "none": "No warnings or errors.",
+      "list_label": "Warnings and errors, newest first",
+      "truncated": "More events matched than are listed."
+    },
+    "source": {
+      "alert": "Alert",
+      "core": "Core",
+      "bot": "Telegram bot",
+      "payments": "Payments",
+      "provisioner": "Provisioner",
+      "host_docker": "Server: Docker",
+      "host_bobres": "Server: BOBRES",
+      "host_caddy": "Server: Caddy"
+    },
+    "store": {
+      "updates": "Updates the bot handles",
+      "updates_series": "Updates per minute",
+      "errors": "Errors logged per minute",
+      "queues": "Queues",
+      "core": "Core",
+      "goroutines": "Tasks running",
+      "db_conns": "Database connections in use"
     }
   },
   "license": {

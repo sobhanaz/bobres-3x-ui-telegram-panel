@@ -6,12 +6,14 @@ import ChartTooltip from './ChartTooltip.vue'
 import { areaPath, linear, nearestPoint, niceTicks, pointX, stackBounds, textWidth, tickIndexes, type XY } from './scale'
 import { seriesColor } from './palette'
 import { byMouse, keyStep, stepIndex, uid, useChartWidth, useRtl } from './useChart'
-import type { ChartSeries, ChartTableData, LegendItem, TooltipData, ValueFormat } from './types'
+import type { ChartTableData, GapSeries, LegendItem, TooltipData, ValueFormat } from './types'
 
 // Lines and areas over an ordered axis (time, usually): one or several series,
 // optionally stacked. The pointer or the arrow keys pick a point and one
 // tooltip lists every series at it. A point flagged `partial` (a period the
 // range only partly covers) is joined to its neighbour by a dashed segment.
+// A value of null is a gap (nothing was measured): the line breaks there, a
+// point between two gaps is a dot, and the tooltip and the table say "no data".
 // See README.md for the props.
 const props = withDefaults(
   defineProps<{
@@ -21,7 +23,7 @@ const props = withDefaults(
     categories: string[]
     /** the short name of each point for the axis (default: the categories) */
     ticks?: string[]
-    series: ChartSeries[]
+    series: GapSeries[]
     format: ValueFormat
     /** the short form for the vertical axis ("1.2M"); default: format */
     axisFormat?: ValueFormat
@@ -63,9 +65,11 @@ const toggle = (key: string) => {
 }
 const shown = computed(() => props.series.filter((s) => !hidden.value.has(s.key)))
 const n = computed(() => props.categories.length)
-const colorOf = (s: ChartSeries) => seriesColor(s.slot, props.series.indexOf(s))
+const colorOf = (s: GapSeries) => seriesColor(s.slot, props.series.indexOf(s))
+/** a value that was measured (null, or anything that is not a number, is a gap) */
+const known = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v)
 
-const stack = computed(() => (props.stacked ? stackBounds(shown.value.map((s) => s.values)) : null))
+const stack = computed(() => (props.stacked ? stackBounds(shown.value.map((s) => s.values.map((v) => (known(v) ? v : 0)))) : null))
 const axisFmt = computed(() => props.axisFormat ?? props.format)
 const scale = computed(() => {
   let lo = Infinity
@@ -75,6 +79,7 @@ const scale = computed(() => {
     for (const u of stack.value.upper) for (const v of u) hi = Math.max(hi, v)
   } else {
     for (const s of shown.value) for (const v of s.values) {
+      if (!known(v)) continue
       lo = Math.min(lo, v)
       hi = Math.max(hi, v)
     }
@@ -99,32 +104,53 @@ const X = (i: number) => {
 }
 
 interface Line {
-  s: ChartSeries
+  s: GapSeries
   color: string
   runs: { d: string; dashed: boolean }[]
   area: string
-  pts: XY[]
+  /** the point of each category, null where the series has a gap */
+  pts: (XY | null)[]
+  /** where a dot is drawn: every point, or only the last one and those that stand alone between gaps */
+  dots: XY[]
 }
 const lines = computed<Line[]>(() =>
   shown.value.map((s, k) => {
-    const upper = stack.value ? stack.value.upper[k] : s.values
-    const pts = upper.map((v, i) => ({ x: X(i), y: y.value(v) }))
+    const upper: (number | null)[] = stack.value ? stack.value.upper[k] : s.values
+    const pts: (XY | null)[] = upper.map((v, i) => (known(v) ? { x: X(i), y: y.value(v) } : null))
     const runs: Line['runs'] = []
     for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i]
+      const b = pts[i + 1]
+      if (!a || !b) continue // a gap: the line breaks
       const dashed = !!(props.partial?.[i] || props.partial?.[i + 1])
       const last = runs[runs.length - 1]
-      if (last && last.dashed === dashed) last.d += `L${pts[i + 1].x.toFixed(2)},${pts[i + 1].y.toFixed(2)}`
-      else runs.push({ dashed, d: `M${pts[i].x.toFixed(2)},${pts[i].y.toFixed(2)}L${pts[i + 1].x.toFixed(2)},${pts[i + 1].y.toFixed(2)}` })
+      // continue the previous run only when it ends at this point (the segment before was not a gap)
+      if (last && last.dashed === dashed && pts[i - 1]) last.d += `L${b.x.toFixed(2)},${b.y.toFixed(2)}`
+      else runs.push({ dashed, d: `M${a.x.toFixed(2)},${a.y.toFixed(2)}L${b.x.toFixed(2)},${b.y.toFixed(2)}` })
     }
     let area = ''
     if (stack.value) {
+      const flat = pts as XY[]
       const lower = stack.value.lower[k].map((v, i) => ({ x: X(i), y: y.value(v) }))
-      area = areaPath(pts, lower)
+      area = areaPath(flat, lower)
     } else if (s.area) {
       const zero = Math.min(yBase.value, Math.max(M.value.top, y.value(0)))
-      area = areaPath(pts, pts.map((p) => ({ x: p.x, y: zero })))
+      // one wash per stretch of points without a gap
+      let part: XY[] = []
+      const close = () => {
+        if (part.length > 1) area += areaPath(part, part.map((p) => ({ x: p.x, y: zero })))
+        part = []
+      }
+      for (const p of pts) {
+        if (p) part.push(p)
+        else close()
+      }
+      close()
     }
-    return { s, color: colorOf(s), runs, area, pts }
+    const present = pts.filter((p): p is XY => p !== null)
+    const alone = pts.filter((p, i): p is XY => p !== null && !pts[i - 1] && !pts[i + 1])
+    const dots = showMarkers.value || lone.value ? present : [...new Set([...alone, ...(present.length ? [present[present.length - 1]] : [])])]
+    return { s, color: colorOf(s), runs, area, pts, dots }
   }),
 )
 // The line of a single point is a dot, not a path.
@@ -169,12 +195,15 @@ const onFocus = () => {
   if (active.value === null && n.value) active.value = n.value - 1
 }
 
+/** a value as words; a gap says so, it is never shown as zero */
+const valueText = (v: number | null | undefined) => (known(v) ? props.format(v) : t('charts.no_data'))
+
 const tip = computed<TooltipData | null>(() => {
   const i = active.value
   if (i === null || i < 0 || i >= n.value) return null
-  const rows = shown.value.map((s) => ({ key: s.key, label: s.label, value: props.format(s.values[i] ?? 0), color: colorOf(s), dashed: s.dashed }))
+  const rows = shown.value.map((s) => ({ key: s.key, label: s.label, value: valueText(s.values[i]), color: colorOf(s), dashed: s.dashed }))
   if (props.stacked && shown.value.length > 1) {
-    const total = shown.value.reduce((sum, s) => sum + Math.max(0, s.values[i] ?? 0), 0)
+    const total = shown.value.reduce((sum, s) => sum + Math.max(0, known(s.values[i]) ? (s.values[i] as number) : 0), 0)
     rows.push({ key: '__total', label: t('charts.total'), value: props.format(total), color: 'var(--p-text-muted-color)', dashed: false })
   }
   return { title: props.categories[i], rows, note: props.partial?.[i] ? t('charts.partial') : undefined }
@@ -188,7 +217,7 @@ const legend = computed<LegendItem[]>(() =>
 const table = computed<ChartTableData>(() => ({
   corner: props.corner ?? '',
   columns: props.series.map((s) => s.label),
-  rows: props.categories.map((c, i) => ({ label: c, cells: props.series.map((s) => props.format(s.values[i] ?? 0)) })),
+  rows: props.categories.map((c, i) => ({ label: c, cells: props.series.map((s) => valueText(s.values[i])) })),
 }))
 const isEmpty = computed(() => n.value === 0 || props.series.length === 0)
 </script>
@@ -232,14 +261,13 @@ const isEmpty = computed(() => n.value === 0 || props.series.length === 0)
         <g v-for="l in lines" :key="l.s.key" class="series">
           <path v-if="l.area" :d="l.area" :fill="l.color" :fill-opacity="stacked ? 0.55 : 0.14" :stroke="stacked ? 'var(--chart-surface)' : undefined" stroke-width="1" />
           <path v-for="(r, k) in l.runs" :key="k" :d="r.d" fill="none" :stroke="l.color" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :stroke-dasharray="r.dashed || l.s.dashed ? '5 4' : undefined" :opacity="r.dashed ? 0.7 : 1" />
-          <template v-if="showMarkers || lone">
-            <circle v-for="(p, i) in l.pts" :key="i" :cx="p.x" :cy="p.y" r="3.5" :fill="l.color" stroke="var(--chart-surface)" stroke-width="2" />
-          </template>
-          <circle v-else-if="l.pts.length" :cx="l.pts[l.pts.length - 1].x" :cy="l.pts[l.pts.length - 1].y" r="4" :fill="l.color" stroke="var(--chart-surface)" stroke-width="2" />
+          <circle v-for="(p, i) in l.dots" :key="i" :cx="p.x" :cy="p.y" :r="showMarkers || lone ? 3.5 : 4" :fill="l.color" stroke="var(--chart-surface)" stroke-width="2" />
         </g>
         <g v-if="active !== null" class="cursor">
           <line :x1="tipX" :x2="tipX" :y1="M.top" :y2="yBase" />
-          <circle v-for="l in lines" :key="l.s.key" :cx="l.pts[active]?.x ?? tipX" :cy="l.pts[active]?.y ?? 0" r="5" :fill="l.color" stroke="var(--chart-surface)" stroke-width="2" />
+          <template v-for="l in lines" :key="l.s.key">
+            <circle v-if="l.pts[active]" :cx="l.pts[active]!.x" :cy="l.pts[active]!.y" r="5" :fill="l.color" stroke="var(--chart-surface)" stroke-width="2" />
+          </template>
         </g>
       </svg>
       <ChartTooltip v-if="tip" :data="tip" :x="tipX" :y="M.top" :box-width="width" />
