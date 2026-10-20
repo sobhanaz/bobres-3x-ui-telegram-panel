@@ -93,6 +93,9 @@ func (h *Handler) showHome(r *req) {
 	}
 	kb.Row(r.button("btn.wallet", "wallet"), r.button("btn.trial", "trial")).
 		Row(r.button("btn.support", "support"), r.button("btn.language", "lang"))
+	if h.helpTutorials.Load() { // only while the owner has an enabled tutorial (help.go)
+		kb.Row(r.button("btn.tutorials", "tut"))
+	}
 	switch {
 	case r.isReseller(): // their invite link is in the panel, with their commission
 		kb.Row(r.button("btn.reseller", "rs"))
@@ -114,7 +117,7 @@ func (h *Handler) showHome(r *req) {
 var menuItems = []struct{ key, data string }{
 	{"btn.store", "store"}, {"btn.buy", "buy"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
 	{"btn.support", "support"}, {"btn.reseller", "rs"}, {"btn.invite", "ref"}, {"btn.language", "lang"},
-	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"},
+	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"}, {"btn.tutorials", "tut"},
 	{"btn.admin", "adm"}, {"btn.dashboard", "dash"},
 }
 
@@ -165,6 +168,9 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 	m.Row(item("btn.buy")).
 		Row(item("btn.services"), item("btn.wallet")).
 		Row(item("btn.trial"), item("btn.support"))
+	if h.helpTutorials.Load() { // as on the home screen
+		m.Row(item("btn.tutorials"))
+	}
 	var more []tg.MenuButton
 	switch {
 	case r.isReseller():

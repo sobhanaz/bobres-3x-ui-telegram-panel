@@ -96,7 +96,7 @@
     },
     "branding": {
       "title": "Branding & texts",
-      "desc": "Store name, logo, colors and every bot text in Persian and English."
+      "desc": "Store name, logo, colors, every bot text in Persian and English, and the FAQ and tutorials."
     },
     "settings": {
       "title": "Settings",
@@ -945,7 +945,8 @@
       "rs": "Reseller panel",
       "gift": "Gift codes",
       "bulk": "Bulk purchase",
-      "profile": "Bot profile"
+      "profile": "Bot profile",
+      "help": "Help screens"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -966,6 +967,102 @@
       "other": "Not accepted ({code}): {arg}"
     },
     "owner_only": "Only the store owner can change the payment texts (where customers are told to send money)."
+  },
+  "help": {
+    "tab": "Help content",
+    "intro": "What customers read in the bot: the FAQ under Support, and the tutorials behind the Tutorials button (how to connect, where to download the apps). Write each entry in Persian and English: a customer whose language has no translation reads the other one. A list with nothing switched on is left out of the bot. Saved changes reach the bot within a few seconds.",
+    "count": "Shown to customers: {on} of {total}",
+    "stale": "Someone changed this meanwhile. The list was loaded again.",
+    "defaults_done": "The default entries were added.",
+    "deleted": "Deleted.",
+    "shown_on": "Shown to customers.",
+    "shown_off": "Hidden from customers.",
+    "not_written": "not written",
+    "only": "{lang} only",
+    "buttons_count": "{n} button | {n} buttons",
+    "at_limit": "A store keeps at most {cap} entries of this kind.",
+    "col": {
+      "order": "Order",
+      "buttons": "Buttons",
+      "shown": "Shown"
+    },
+    "move_up": "Move “{title}” up",
+    "move_down": "Move “{title}” down",
+    "edit_named": "Edit “{title}”",
+    "delete_named": "Delete “{title}”",
+    "switch_named": "Show “{title}” to customers",
+    "delete": {
+      "title": "Delete",
+      "confirm": "Delete “{title}”? Customers will no longer see it. This cannot be undone."
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "hint": "The first thing under Support. A short FAQ is one numbered message; a long one becomes a numbered list of the questions, each opening its answer.",
+      "add": "Add a question",
+      "defaults": "Start from the default questions",
+      "empty": "No questions yet: the FAQ button is left out of the bot.",
+      "new": "New question",
+      "edit": "Edit question",
+      "title_label": "Question",
+      "body_label": "Answer"
+    },
+    "tutorial": {
+      "title": "Tutorials",
+      "hint": "The Tutorials button on the bot's home screen and bottom menu opens this list. A tutorial is a text, with link buttons if you add them (an app's download page, for example).",
+      "add": "Add a tutorial",
+      "defaults": "Start from the default tutorials",
+      "empty": "No tutorials yet: the Tutorials button is left out of the bot.",
+      "new": "New tutorial",
+      "edit": "Edit tutorial",
+      "title_label": "Title",
+      "body_label": "Text"
+    },
+    "layout": {
+      "title": "How customers read the FAQ",
+      "message": "one message",
+      "list": "a numbered list of questions",
+      "none": "nothing: the FAQ button is left out",
+      "line": "{lang}: {layout}",
+      "size": "In {lang} the questions shown take {used} of the {cap} characters one message holds (and one message holds at most {entries} questions).",
+      "rule": "Up to {entries} questions with {cap} characters in all are shown as one message; anything longer becomes a list."
+    },
+    "edit": {
+      "shown": "Shown to customers",
+      "shown_hint": "Switched off, the entry stays here but customers do not see it.",
+      "langs_hint": "Write it in at least one language. In a language you leave empty, customers read the other language's text.",
+      "state_complete": "Ready",
+      "state_half": "Incomplete",
+      "state_empty": "Not written",
+      "html_hint": "Telegram formatting works in the text: {tags}. Write the characters {chars} as {entities}. Links must start with {https}.",
+      "line_hint": "Plain text on one line.",
+      "buttons": "Link buttons",
+      "buttons_hint": "Shown under the tutorial, one to a line. Each needs an {https} address and a label in at least one language. Up to {cap}.",
+      "button_n": "Button {n}",
+      "button_url": "Link",
+      "button_label": "Label ({lang})",
+      "add_button": "Add a button",
+      "remove_button": "Remove button {n}",
+      "saved": "Saved.",
+      "created": "Added."
+    },
+    "preview": {
+      "title": "How it looks in the bot",
+      "note": "The bot's own buttons are shown with their default wording.",
+      "nothing": "Nothing to show in this language yet.",
+      "fallback": "Customers whose language is {lang} read the {other} text."
+    },
+    "problem": {
+      "pair_missing": "Write both a title and a text in this language, or leave it empty.",
+      "need_one_language": "Write the entry in at least one language.",
+      "unknown_kind": "Unknown kind of entry.",
+      "bad_url": "Not a link the bot can use. It must start with {https}, have a site name with a dot, and have no spaces or non-English letters ({arg}).",
+      "url_missing": "Add the link.",
+      "label_missing": "Give the button a label in at least one language.",
+      "too_many_buttons": "At most {arg} buttons.",
+      "buttons_not_allowed": "Only a tutorial has buttons.",
+      "bad_link": "Links in the text must start with {https} ({arg}).",
+      "lang_unused": "Only Persian and English are used."
+    }
   },
   "settings": {
     "intro": "Each card saves on its own. Changes reach the bot within a few seconds.",
@@ -1394,6 +1491,7 @@
       "dashboard": "Dashboard account",
       "ticket": "Support ticket",
       "canned_reply": "Saved reply",
+      "help_entry": "Help content",
       "broadcast": "Broadcast",
       "reseller": "Reseller",
       "reseller_tier": "Reseller tier",
@@ -1420,6 +1518,7 @@
       "export": "Exports",
       "ticket": "Tickets",
       "canned": "Saved replies",
+      "help": "Help content",
       "broadcast": "Broadcasts",
       "reseller": "Resellers",
       "reseller_tier": "Reseller tiers",
@@ -1486,6 +1585,15 @@
         "set": "Bot text changed",
         "reset": "Bot text reset to default",
         "import": "Bot texts imported"
+      },
+      "help": {
+        "create": "Help entry added",
+        "update": "Help entry changed",
+        "enable": "Help entry shown",
+        "disable": "Help entry hidden",
+        "delete": "Help entry deleted",
+        "reorder": "Help entries reordered",
+        "defaults": "Default help entries added"
       },
       "branding": {
         "logo": {

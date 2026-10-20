@@ -514,6 +514,14 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 			out.JoinChats = append(out.JoinChats, &corev1.JoinChat{Chat: c.Chat, Link: c.Link, Label: c.Label})
 		}
 	}
+	// Whether the FAQ and the tutorials have anything to show: the bot's buttons
+	// follow. A read that fails fails the refresh, so the bot keeps what it had
+	// instead of hiding the buttons for a minute.
+	faq, tutorials, err := s.dom.HelpAvailable(ctx)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out.HelpFaq, out.HelpTutorials = faq, tutorials
 	return out, nil
 }
 

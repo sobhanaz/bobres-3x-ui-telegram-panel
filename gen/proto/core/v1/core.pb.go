@@ -2363,13 +2363,20 @@ type Settings struct {
 	// "Become a reseller" button. False when it does not, and for an older core
 	// that never sets it, so a missing answer hides the button.
 	ResellersEnabled bool `protobuf:"varint,5,opt,name=resellers_enabled,json=resellersEnabled,proto3" json:"resellers_enabled,omitempty"`
+	// Whether the help screens have anything to show: at least one enabled FAQ
+	// question and at least one enabled tutorial that a customer can read in some
+	// language. The bot shows its FAQ button (under Support) and its Tutorials
+	// button only while these are true. Both are false for an older core, which
+	// never sets them.
+	HelpFaq       bool `protobuf:"varint,6,opt,name=help_faq,json=helpFaq,proto3" json:"help_faq,omitempty"`
+	HelpTutorials bool `protobuf:"varint,7,opt,name=help_tutorials,json=helpTutorials,proto3" json:"help_tutorials,omitempty"`
 	// The extra channels and groups customers must join, after the first one (the
 	// settings join.channel, join.link and join.label, in values), in the order
 	// customers are asked, limited to what the license in effect allows
 	// (max_join_chats): the chats the bot is to enforce, not the ones merely
 	// saved. Empty while the first one is not set, and for an older core, which
 	// never sets it: the bot then holds customers to the first chat only.
-	JoinChats     []*JoinChat `protobuf:"bytes,6,rep,name=join_chats,json=joinChats,proto3" json:"join_chats,omitempty"`
+	JoinChats     []*JoinChat `protobuf:"bytes,8,rep,name=join_chats,json=joinChats,proto3" json:"join_chats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2435,6 +2442,20 @@ func (x *Settings) GetMiniappUrl() string {
 func (x *Settings) GetResellersEnabled() bool {
 	if x != nil {
 		return x.ResellersEnabled
+	}
+	return false
+}
+
+func (x *Settings) GetHelpFaq() bool {
+	if x != nil {
+		return x.HelpFaq
+	}
+	return false
+}
+
+func (x *Settings) GetHelpTutorials() bool {
+	if x != nil {
+		return x.HelpTutorials
 	}
 	return false
 }
@@ -9089,7 +9110,7 @@ var File_core_v1_core_proto protoreflect.FileDescriptor
 
 const file_core_v1_core_proto_rawDesc = "" +
 	"\n" +
-	"\x12core/v1/core.proto\x12\acore.v1\x1a\x15common/v1/types.proto\"\x9b\x02\n" +
+	"\x12core/v1/core.proto\x12\acore.v1\x1a\x15common/v1/types.proto\x1a\x12core/v1/help.proto\"\x9b\x02\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vtelegram_id\x18\x02 \x01(\x03R\n" +
@@ -9308,7 +9329,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\vhalt_reason\x18\x03 \x01(\tR\n" +
 	"haltReason\"(\n" +
 	"\x0eBroadcastState\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\"\xc9\x02\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"\x8b\x03\n" +
 	"\bSettings\x125\n" +
 	"\x06values\x18\x01 \x03(\v2\x1d.core.v1.Settings.ValuesEntryR\x06values\x12*\n" +
 	"\x11bot_photo_version\x18\x02 \x01(\tR\x0fbotPhotoVersion\x12\x1f\n" +
@@ -9316,9 +9337,11 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"whiteLabel\x12\x1f\n" +
 	"\vminiapp_url\x18\x04 \x01(\tR\n" +
 	"miniappUrl\x12+\n" +
-	"\x11resellers_enabled\x18\x05 \x01(\bR\x10resellersEnabled\x120\n" +
+	"\x11resellers_enabled\x18\x05 \x01(\bR\x10resellersEnabled\x12\x19\n" +
+	"\bhelp_faq\x18\x06 \x01(\bR\ahelpFaq\x12%\n" +
+	"\x0ehelp_tutorials\x18\a \x01(\bR\rhelpTutorials\x120\n" +
 	"\n" +
-	"join_chats\x18\x06 \x03(\v2\x11.core.v1.JoinChatR\tjoinChats\x1a9\n" +
+	"join_chats\x18\b \x03(\v2\x11.core.v1.JoinChatR\tjoinChats\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"H\n" +
@@ -9857,7 +9880,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x19GIFT_CODE_OUTCOME_USED_UP\x10\x03\x12&\n" +
 	"\"GIFT_CODE_OUTCOME_ALREADY_REDEEMED\x10\x04\x12\x1c\n" +
 	"\x18GIFT_CODE_OUTCOME_LOCKED\x10\x05\x12\x19\n" +
-	"\x15GIFT_CODE_OUTCOME_OFF\x10\x062\xea(\n" +
+	"\x15GIFT_CODE_OUTCOME_OFF\x10\x062\x82*\n" +
 	"\vCoreService\x127\n" +
 	"\n" +
 	"UpsertUser\x12\x1a.core.v1.UpsertUserRequest\x1a\r.core.v1.User\x121\n" +
@@ -9919,6 +9942,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x13SetSubscriptionNote\x12#.core.v1.SetSubscriptionNoteRequest\x1a\x15.core.v1.Subscription\x12c\n" +
 	"\x14ListInvitedCustomers\x12$.core.v1.ListInvitedCustomersRequest\x1a%.core.v1.ListInvitedCustomersResponse\x12=\n" +
 	"\vGetBotPhoto\x12\x1b.core.v1.GetBotPhotoRequest\x1a\x11.core.v1.BotPhoto\x12T\n" +
+	"\x0fListHelpEntries\x12\x1f.core.v1.ListHelpEntriesRequest\x1a .core.v1.ListHelpEntriesResponse\x12@\n" +
+	"\fGetHelpEntry\x12\x1c.core.v1.GetHelpEntryRequest\x1a\x12.core.v1.HelpEntry\x12T\n" +
 	"\x0fAdminTodayStats\x12\x1f.core.v1.AdminTodayStatsRequest\x1a .core.v1.AdminTodayStatsResponse\x12f\n" +
 	"\x15AdminListSettingSpecs\x12%.core.v1.AdminListSettingSpecsRequest\x1a&.core.v1.AdminListSettingSpecsResponse\x12W\n" +
 	"\x10AdminListServers\x12 .core.v1.AdminListServersRequest\x1a!.core.v1.AdminListServersResponse\x12F\n" +
@@ -10091,6 +10116,10 @@ var file_core_v1_core_proto_goTypes = []any{
 	(*v1.Money)(nil),                         // 144: common.v1.Money
 	(*v1.Pagination)(nil),                    // 145: common.v1.Pagination
 	(*v1.PageInfo)(nil),                      // 146: common.v1.PageInfo
+	(*ListHelpEntriesRequest)(nil),           // 147: core.v1.ListHelpEntriesRequest
+	(*GetHelpEntryRequest)(nil),              // 148: core.v1.GetHelpEntryRequest
+	(*ListHelpEntriesResponse)(nil),          // 149: core.v1.ListHelpEntriesResponse
+	(*HelpEntry)(nil),                        // 150: core.v1.HelpEntry
 }
 var file_core_v1_core_proto_depIdxs = []int32{
 	133, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
@@ -10229,83 +10258,87 @@ var file_core_v1_core_proto_depIdxs = []int32{
 	72,  // 133: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
 	73,  // 134: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
 	81,  // 135: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
-	112, // 136: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
-	116, // 137: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
-	119, // 138: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
-	122, // 139: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
-	123, // 140: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
-	126, // 141: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
-	127, // 142: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
-	129, // 143: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
-	131, // 144: core.v1.CoreService.RedeemGiftCode:input_type -> core.v1.RedeemGiftCodeRequest
-	2,   // 145: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
-	2,   // 146: core.v1.CoreService.GetUser:output_type -> core.v1.User
-	35,  // 147: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
-	5,   // 148: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
-	5,   // 149: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
-	6,   // 150: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
-	62,  // 151: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
-	64,  // 152: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
-	9,   // 153: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
-	30,  // 154: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
-	30,  // 155: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
-	85,  // 156: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
-	5,   // 157: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
-	85,  // 158: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
-	5,   // 159: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
-	111, // 160: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
-	85,  // 161: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
-	85,  // 162: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
-	85,  // 163: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
-	85,  // 164: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
-	90,  // 165: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
-	93,  // 166: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
-	95,  // 167: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
-	98,  // 168: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
-	100, // 169: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
-	102, // 170: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
-	6,   // 171: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
-	2,   // 172: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
-	3,   // 173: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
-	30,  // 174: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
-	38,  // 175: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
-	40,  // 176: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
-	43,  // 177: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
-	43,  // 178: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
-	46,  // 179: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
-	49,  // 180: core.v1.CoreService.GetTopInviters:output_type -> core.v1.TopInviters
-	50,  // 181: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
-	53,  // 182: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
-	58,  // 183: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
-	57,  // 184: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
-	12,  // 185: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
-	14,  // 186: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
-	16,  // 187: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
-	9,   // 188: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
-	19,  // 189: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
-	21,  // 190: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
-	23,  // 191: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
-	26,  // 192: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
-	29,  // 193: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
-	8,   // 194: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
-	78,  // 195: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
-	68,  // 196: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
-	8,   // 197: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
-	71,  // 198: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
-	8,   // 199: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
-	75,  // 200: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
-	82,  // 201: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
-	115, // 202: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
-	118, // 203: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
-	121, // 204: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
-	120, // 205: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
-	125, // 206: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
-	124, // 207: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
-	128, // 208: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
-	130, // 209: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
-	132, // 210: core.v1.CoreService.RedeemGiftCode:output_type -> core.v1.RedeemGiftCodeResponse
-	145, // [145:211] is the sub-list for method output_type
-	79,  // [79:145] is the sub-list for method input_type
+	147, // 136: core.v1.CoreService.ListHelpEntries:input_type -> core.v1.ListHelpEntriesRequest
+	148, // 137: core.v1.CoreService.GetHelpEntry:input_type -> core.v1.GetHelpEntryRequest
+	112, // 138: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
+	116, // 139: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
+	119, // 140: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
+	122, // 141: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
+	123, // 142: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
+	126, // 143: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
+	127, // 144: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
+	129, // 145: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
+	131, // 146: core.v1.CoreService.RedeemGiftCode:input_type -> core.v1.RedeemGiftCodeRequest
+	2,   // 147: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
+	2,   // 148: core.v1.CoreService.GetUser:output_type -> core.v1.User
+	35,  // 149: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
+	5,   // 150: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
+	5,   // 151: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
+	6,   // 152: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
+	62,  // 153: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
+	64,  // 154: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
+	9,   // 155: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
+	30,  // 156: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
+	30,  // 157: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
+	85,  // 158: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
+	5,   // 159: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
+	85,  // 160: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
+	5,   // 161: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
+	111, // 162: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
+	85,  // 163: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
+	85,  // 164: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
+	85,  // 165: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
+	85,  // 166: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
+	90,  // 167: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
+	93,  // 168: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
+	95,  // 169: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
+	98,  // 170: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
+	100, // 171: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
+	102, // 172: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
+	6,   // 173: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
+	2,   // 174: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
+	3,   // 175: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
+	30,  // 176: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
+	38,  // 177: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
+	40,  // 178: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
+	43,  // 179: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
+	43,  // 180: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
+	46,  // 181: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
+	49,  // 182: core.v1.CoreService.GetTopInviters:output_type -> core.v1.TopInviters
+	50,  // 183: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
+	53,  // 184: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
+	58,  // 185: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
+	57,  // 186: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
+	12,  // 187: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
+	14,  // 188: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
+	16,  // 189: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
+	9,   // 190: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
+	19,  // 191: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
+	21,  // 192: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
+	23,  // 193: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
+	26,  // 194: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
+	29,  // 195: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
+	8,   // 196: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
+	78,  // 197: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
+	68,  // 198: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
+	8,   // 199: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
+	71,  // 200: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
+	8,   // 201: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
+	75,  // 202: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
+	82,  // 203: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
+	149, // 204: core.v1.CoreService.ListHelpEntries:output_type -> core.v1.ListHelpEntriesResponse
+	150, // 205: core.v1.CoreService.GetHelpEntry:output_type -> core.v1.HelpEntry
+	115, // 206: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
+	118, // 207: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
+	121, // 208: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
+	120, // 209: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
+	125, // 210: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
+	124, // 211: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
+	128, // 212: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
+	130, // 213: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
+	132, // 214: core.v1.CoreService.RedeemGiftCode:output_type -> core.v1.RedeemGiftCodeResponse
+	147, // [147:215] is the sub-list for method output_type
+	79,  // [79:147] is the sub-list for method input_type
 	79,  // [79:79] is the sub-list for extension type_name
 	79,  // [79:79] is the sub-list for extension extendee
 	0,   // [0:79] is the sub-list for field type_name
@@ -10316,6 +10349,7 @@ func file_core_v1_core_proto_init() {
 	if File_core_v1_core_proto != nil {
 		return
 	}
+	file_core_v1_help_proto_init()
 	file_core_v1_core_proto_msgTypes[31].OneofWrappers = []any{
 		(*GetUserRequest_Id)(nil),
 		(*GetUserRequest_TelegramId)(nil),

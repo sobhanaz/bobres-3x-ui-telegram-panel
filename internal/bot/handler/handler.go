@@ -121,6 +121,12 @@ type Handler struct {
 	// always asks); a field so that a test can switch it off.
 	joinSem     chan struct{}
 	joinMissTTL time.Duration
+	// helpFAQ and helpTutorials are Settings.help_faq and help_tutorials from the
+	// last refresh: whether the owner has an enabled question and an enabled
+	// tutorial to show. The FAQ button under Support and the Tutorials button of
+	// the menus show only while they are true (false until the first refresh).
+	helpFAQ       atomic.Bool
+	helpTutorials atomic.Bool
 }
 
 // New builds a Handler. limiter may be nil.
@@ -181,6 +187,8 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 		}
 	}
 	h.joinExtras.Store(&extras)
+	h.helpFAQ.Store(s.GetHelpFaq())
+	h.helpTutorials.Store(s.GetHelpTutorials())
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
@@ -597,6 +605,10 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onSupport(r)
 	case "tk":
 		h.onTicketButton(r, rest)
+	case "faq": // the FAQ under Support (help.go)
+		h.onFAQ(r, rest)
+	case "tut": // the Tutorials menu
+		h.onTutorials(r, rest)
 	case "dash":
 		if !r.isTeam() {
 			r.toast, r.alert = r.t("admin.forbidden"), true

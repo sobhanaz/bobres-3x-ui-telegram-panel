@@ -318,6 +318,72 @@ export interface TextCheck {
   max: number
 }
 
+/** The two kinds of help content: the questions under Support and the tutorials. */
+export type HelpKind = 'faq' | 'tutorial'
+
+/** A tutorial's URL button: an https address and a label per language. */
+export interface HelpButton {
+  url: string
+  label: LangPair
+}
+
+/** One question or tutorial, as core stores it (GET /help). */
+export interface HelpItem {
+  id: string
+  kind: HelpKind
+  /** the question, or the tutorial's title: plain text on one line */
+  title: LangPair
+  /** the answer, or the tutorial's text: the limited HTML the bot's texts allow */
+  body: LangPair
+  buttons: HelpButton[]
+  sort: number
+  enabled: boolean
+  /** the version read: sent back with an edit, so one made from an old copy is refused */
+  version: number
+  updated_at: number
+}
+
+/** What an entry is checked against, from core (the same numbers the bot applies). */
+export interface HelpLimits {
+  max_faq: number
+  max_tutorials: number
+  question: number
+  tutorial_title: number
+  body: number
+  buttons: number
+  button_label: number
+  url: number
+  one_message_entries: number
+  one_message_units: number
+}
+
+/** How the bot shows the enabled FAQ in a language ("" when there is none). */
+export type HelpLayout = '' | 'message' | 'list'
+
+export interface HelpPage {
+  faq: HelpItem[]
+  tutorials: HelpItem[]
+  faq_layout: Record<keyof LangPair, HelpLayout>
+  limits: HelpLimits
+  languages: string[]
+}
+
+/** Why core cannot save an entry: the field ("title.fa", "body.en", "buttons.0.url", "buttons.1.label.fa", "buttons"; "" for the whole entry), a code, and what it names. */
+export interface HelpProblem {
+  field: string
+  code: string
+  arg: string
+}
+
+/** What is written in the editor (and sent to core). */
+export interface HelpDraft {
+  kind: HelpKind
+  enabled: boolean
+  title: LangPair
+  body: LangPair
+  buttons: HelpButton[]
+}
+
 export interface StaffItem {
   id: string
   telegram_id: number

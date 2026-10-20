@@ -6,14 +6,14 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
-What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
-
-Two more of the requests of 2026-10-20: the bot lists plans as a **two-column table**, and a customer can **buy several
-services at once** (Bulk purchase). **Gift codes** add a fixed amount of credit to a customer's wallet.
+Four more of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
+plans as a **two-column table**, a customer can **buy several services at once** (Bulk purchase), and **gift codes**
+add a fixed amount of credit to a customer's wallet.
 
 ### Updating
-- Two database migrations (00026: the table `core.bulk_orders` and two columns on `core.orders`; 00027: gift codes, below);
-  `sudo bobres update` runs them. It only adds, so a rollback keeps every order. Nothing to configure.
+- Three database migrations (00026: the table `core.bulk_orders` and two columns on `core.orders`; 00027: gift codes;
+  00028: the help content table, below); `sudo bobres update` runs them. They only add, so a rollback keeps every order.
+  Nothing to configure.
 - Core and the bot move together (three new gRPC calls, one new event, and a `bulk_id` on three events):
   update both, as `sudo bobres update` does. Every change to the contract is additive.
 - After the update the bot lists plans as a table (a header row, then each plan as a row of two buttons, its name and
@@ -26,6 +26,9 @@ services at once** (Bulk purchase). **Gift codes** add a fixed amount of credit 
   the owner's switch is the setting `gift_codes.enabled`.
 - Rolling the gift code migration back drops its three tables but keeps the ledger's new kind: the ledger is
   append-only, so credits already paid stay.
+- Help content adds one more database migration (00028, the `help_entries` table), and the services' calls only gain
+  `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings` (additive: an older bot shows no help buttons, a bot
+  on an older core simply has none to show). Nothing has to be configured.
 
 ### Known limits
 - Nothing of this has been seen in a real Telegram: the table's look on phones, the one message with many links, the
@@ -33,6 +36,21 @@ services at once** (Bulk purchase). **Gift codes** add a fixed amount of credit 
 - A bulk purchase is paid **from the wallet only** (a customer with too little in it is taken to the top-up and comes
   back), takes **no discount code**, buys **a paid plan only** (not a free plan, a trial or a traffic package) and is in
   the **bot only**: the Mini App has no screen for it.
+- The help screens (the FAQ and the tutorials) have not been seen in a real Telegram either, and the default texts and
+  the Persian of the help content are a first draft that wants a native review. The Mini App does not show them.
+
+### Help content: a FAQ and tutorials the owner writes
+- **The bot has a FAQ and a Tutorials menu, written by the owner in the dashboard** (Branding, "Help content" tab,
+  `branding.write`, in Persian and English). A FAQ button is the first button of the Support screen (and stays beside
+  "ticket history" while a ticket is open); a small FAQ opens as one numbered message, a large one as a numbered list
+  of questions, and every FAQ screen ends with a "Send a message to support" button. A Tutorials button on the home
+  screen and in the bottom menu lists the tutorials, each opening its text with up to 8 https URL buttons (an app's
+  download link) and a way back. Both buttons appear only while there is something enabled to show.
+- The dashboard editor adds, edits, reorders, switches on or off and deletes entries, checks them as you type and
+  previews them as the bot will show them, in either language. Every change is audited (`help.*`, entity
+  `help_entry`) and reaches the bot within seconds; an edit from an out-of-date copy is refused.
+- A new install is offered a generic FAQ and tutorials (the subscription link, then v2rayNG, Hiddify, Streisand,
+  V2Box and HAPP) once, to edit or delete; they do not come back when deleted. An empty list can be given them again.
 
 ### Bulk purchase
 - **New: Bulk purchase on the home menu.** The customer picks a plan, how many services (2, 3, 5 or 10 by a button, or
@@ -93,6 +111,9 @@ services at once** (Bulk purchase). **Gift codes** add a fixed amount of credit 
 - API (additive): the `RedeemGiftCode` call (the bot only) and `/api/v1/gift-codes*` in the dashboard's API
   ([docs/02-events-and-apis.md](docs/02-events-and-apis.md)). Tables are in [docs/01-database.md](docs/01-database.md),
   the bot's flow in [docs/03-bot-ux.md](docs/03-bot-ux.md), the page in [docs/04-dashboard.md](docs/04-dashboard.md).
+
+What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
 
 ## [0.7.0] — 2026-10-20
 

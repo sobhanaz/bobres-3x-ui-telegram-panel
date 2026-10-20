@@ -231,6 +231,8 @@ var buttonStyles = map[string]string{
 	"btn.reseller":       "primary",
 	"btn.top_users":      "primary",
 	"btn.reseller_apply": "primary",
+	"btn.tutorials":      "primary",
+	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
 
 	"btn.cancel":          "danger",
 	"btn.reject":          "danger",

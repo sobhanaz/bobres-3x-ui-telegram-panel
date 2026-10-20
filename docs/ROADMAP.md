@@ -38,14 +38,16 @@ What is still open:
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
   list: it is now tested against the real 0.8.4 image in CI; Marzban 1.0 is not supported yet.)
 - **Built after v0.7.0, in the next release:** the **two-column plan list** (the bot lists plans as a table of name and
-  price, or as a list, by `bot.plan_layout`) and the **bulk purchase** (a home-menu button: N services of one plan paid
-  from the wallet in one transaction, all or nothing, one message with every link), and **gift credit codes** (a code
-  that adds a fixed amount to a customer's wallet: made in the dashboard, shown once and kept only as a keyed hash, and
-  applied from the bot's wallet screen).
-- **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** a help center (an owner-editable FAQ and
-  usage tutorials); server monitoring in the dashboard
-  (the host, Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview); charts and a
-  3D report view on the Reports page; a full uninstall on the server that leaves it as on day one; and downloading and
+  price, or as a list, by `bot.plan_layout`), the **bulk purchase** (a home-menu button: N services of one plan paid
+  from the wallet in one transaction, all or nothing, one message with every link), **gift credit codes** (a code that
+  adds a fixed amount to a customer's wallet: made in the dashboard, shown once and kept only as a keyed hash, and
+  applied from the bot's wallet screen) and the **help center** (an owner-editable FAQ and usage tutorials in Persian
+  and English: the owner edits them on the Branding page's Help content tab, and the bot shows the FAQ under Support
+  and the tutorials from the home screen and the bottom menu, see [03-bot-ux.md](03-bot-ux.md); the Mini App does not
+  show them yet).
+- **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** server monitoring in the dashboard (the
+  host, Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview); charts and a 3D
+  report view on the Reports page; a full uninstall on the server that leaves it as on day one; and downloading and
   restoring a backup from the dashboard.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
