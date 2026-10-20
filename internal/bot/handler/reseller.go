@@ -196,10 +196,7 @@ func (h *Handler) showResellerPlans(r *req) {
 		return
 	}
 	kb := &tg.Keyboard{}
-	for _, p := range ps {
-		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())),
-			"rs:p:"+p.GetId()))
-	}
+	h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "rs:p:" + p.GetId() })
 	kb.Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
 	r.show(r.t("rs.buy_title"), kb)
 }

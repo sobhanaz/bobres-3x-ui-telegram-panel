@@ -87,8 +87,11 @@ func (h *Handler) showHome(r *req) {
 	if url := h.miniAppURL(); url != "" {
 		kb.Row(r.webAppButton("btn.store", url)) // opens the app at once: an inline button gives it the sign-in data
 	}
-	kb.Row(r.button("btn.buy", "buy"), r.button("btn.services", "subs")).
-		Row(r.button("btn.wallet", "wallet"), r.button("btn.trial", "trial")).
+	kb.Row(r.button("btn.buy", "buy"), r.button("btn.services", "subs"))
+	if h.bulkOn() { // a second green button under Buy
+		kb.Row(r.button("btn.bulk", "bk"))
+	}
+	kb.Row(r.button("btn.wallet", "wallet"), r.button("btn.trial", "trial")).
 		Row(r.button("btn.support", "support"), r.button("btn.language", "lang"))
 	switch {
 	case r.isReseller(): // their invite link is in the panel, with their commission

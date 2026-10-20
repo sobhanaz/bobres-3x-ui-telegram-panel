@@ -147,6 +147,9 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
+		if e.BulkID != "" {
+			return nil // a service of a bulk purchase: its link comes in the bulk's one message (BulkReady)
+		}
 		lang := n.lang(ctx, e.TelegramID)
 		expires := n.cat.T(lang, "sub.no_expiry")
 		if e.ExpiresAt > 0 {
@@ -261,7 +264,17 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 				return err
 			}
 		}
+		if e.BulkID != "" {
+			return nil // the customer is told by the bulk's own message, not once per service
+		}
 		return n.send(ctx, e.TelegramID, n.cat.T(n.lang(ctx, e.TelegramID), "sub.delayed"), nil)
+
+	case events.BulkReady:
+		var e events.BulkReadyEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.deliverBulk(ctx, e)
 
 	case events.SystemAlert:
 		var e events.SystemAlertEvent
@@ -760,6 +773,11 @@ func (n *Notifier) DeadLetter(ctx context.Context, m eventbus.Message, cause err
 // saleAlert tells the staff about a paid order (notify.sales); a staff
 // member's own purchase is not announced to them.
 func (n *Notifier) saleAlert(ctx context.Context, e events.OrderPaidEvent) error {
+	// A bulk purchase is one sale: announced with its first order, for the
+	// whole quantity (its orders cost the same).
+	if e.BulkID != "" && e.BulkIndex != 1 {
+		return nil
+	}
 	buyer := fmt.Sprintf("id %d", e.TelegramID)
 	if u, err := n.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: e.TelegramID}}); err == nil && u.GetUsername() != "" {
 		buyer = "@" + u.GetUsername()
@@ -771,6 +789,12 @@ func (n *Notifier) saleAlert(ctx context.Context, e events.OrderPaidEvent) error
 				names = p.GetNameI18N()
 			}
 		}
+	}
+	if e.BulkID != "" && e.BulkQuantity > 1 {
+		return n.alert(ctx, e.TelegramID, func(lang string) string {
+			return n.cat.T(lang, "admin.new_bulk_sale", "user", html.EscapeString(buyer), "n", i18n.Number(lang, int64(e.BulkQuantity)),
+				"plan", html.EscapeString(planName(names, lang, e.PlanID)), "amount", i18n.Money(lang, e.Amount*int64(e.BulkQuantity), e.Currency))
+		})
 	}
 	return n.alert(ctx, e.TelegramID, func(lang string) string {
 		return n.cat.T(lang, "admin.new_sale", "user", html.EscapeString(buyer),
