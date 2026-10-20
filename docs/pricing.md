@@ -1,8 +1,8 @@
 # Pricing and tiers
 
 Status: the model, the tiers and the policy behind them are decided (2026-10-14; the policy is
-[05-license.md](05-license.md), "Free core, paid premium"). **The prices are the owner's to set**: they are placeholders
-until then. The one file that holds the tiers and their prices is [`internal/license/tiers.json`](../internal/license/tiers.json);
+[05-license.md](05-license.md), "Free core, paid premium"). **The owner set the prices on 2026-10-20**: Standard 4 USDT a month, Pro 12 USDT a month, and a year at ten months
+(40 and 120 USDT); the Support rows stay open. The one file that holds the tiers and their prices is [`internal/license/tiers.json`](../internal/license/tiers.json);
 `go run ./tools/license tiers` prints it as a table. The legal texts that go with it are in [legal/](legal/README.md).
 
 ## The model
@@ -21,13 +21,13 @@ until then. The one file that holds the tiers and their prices is [`internal/lic
 
 ## The tiers
 
-Prices are shown per install. "SET ME" is a placeholder for the owner's number.
+Prices are shown per install, in USDT (TRC20, the only way to pay). "SET ME" marks what is still open.
 
 | | Free | Standard | Pro | Trial |
 |---|---|---|---|---|
-| **Price per month** | free | SET ME | SET ME | free |
-| **Price per year** | free | SET ME | SET ME | free |
-| **Currency** | | SET ME | SET ME | |
+| **Price per month** | free | 4 | 12 | free |
+| **Price per year** | free | 40 | 120 | free |
+| **Currency** | | USDT (TRC20) | USDT (TRC20) | |
 | **Length** | no limit | while paid | while paid | 30 days |
 | 3x-ui servers | 1 | 3 | unlimited | unlimited |
 | Active services | 25 | 500 | unlimited | unlimited |
@@ -157,6 +157,6 @@ charged.]
 
 ## Open points
 
-- The prices (the owner's) and the currency.
+- The prices are set (above); the first twenty buyers' launch discount and the affiliate commission are the owner's to decide.
 - Support scope and response times per tier.
 - The legal texts: a lawyer must review them ([launch-checklist.md](launch-checklist.md)).

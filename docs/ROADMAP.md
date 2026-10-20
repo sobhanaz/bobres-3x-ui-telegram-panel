@@ -10,10 +10,12 @@ v0.4.0 (2026-10-17: Marzban panels, the subscription page, the Mini App, IDPay a
 and the owner's tools), v0.5.0 (2026-10-20: several owners, a list of the payments to review, Marzban tested against
 a real panel), v0.6.0 (2026-10-20: the Mini App on by default with Stars, receipts, trial, invites, support and a
 reseller panel; reseller management; the 3x-ui group `bobres_bot`), v0.6.1 (2026-10-20: the Mini App holds the
-store's required channel and takes a half-made manual payment up again) and v0.7.0 (2026-10-20: updating from the
-dashboard, the Reports calendar and the CSV files, maintenance mode in every option, and the growth features of the bot).
+store's required channel and takes a half-made manual payment up again) v0.7.0 (2026-10-20: updating from the
+dashboard, the Reports calendar and the CSV files, maintenance mode in every option, and the growth features of the bot)
+and v0.8.0 (2026-10-20: server monitoring, charts and a 3D report, backup download and restore from the dashboard, a full
+uninstall, the help center, the plan table, bulk purchase, gift codes and several required channels).
 
-## Where things stand (after v0.7.0)
+## Where things stand (after v0.8.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
 Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
@@ -37,18 +39,13 @@ What is still open:
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
   list: it is now tested against the real 0.8.4 image in CI; Marzban 1.0 is not supported yet.)
-- **Built after v0.7.0, in the next release:** the **two-column plan list** (the bot lists plans as a table of name and
-  price, or as a list, by `bot.plan_layout`), the **bulk purchase** (a home-menu button: N services of one plan paid
-  from the wallet in one transaction, all or nothing, one message with every link), **gift credit codes** (a code that
-  adds a fixed amount to a customer's wallet: made in the dashboard, shown once and kept only as a keyed hash, and
-  applied from the bot's wallet screen) and the **help center** (an owner-editable FAQ and usage tutorials in Persian
-  and English: the owner edits them on the Branding page's Help content tab, and the bot shows the FAQ under Support
-  and the tutorials from the home screen and the bottom menu, see [03-bot-ux.md](03-bot-ux.md); the Mini App does not
-  show them yet).
-- **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** server monitoring in the dashboard (the
-  host, Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview); charts and a 3D
-  report view on the Reports page; a full uninstall on the server that leaves it as on day one; and downloading and
-  restoring a backup from the dashboard.
+- **Built in v0.8.0, from the owner's requests of 2026-10-20:** the **two-column plan list**, the **bulk purchase**,
+  **gift credit codes**, the **help center** (an owner-editable FAQ and tutorials), **several required channels and
+  groups** (one on the free tier and Standard, any number on Pro), **server monitoring** in the dashboard (the host,
+  Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview), **charts and a 3D
+  professional report** on the Reports page, **downloading and restoring a backup** from the dashboard, and a full
+  **uninstall** that leaves a server as on day one (`sudo bobres uninstall --purge`). See the changelog for what has
+  and has not been tried for real.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
