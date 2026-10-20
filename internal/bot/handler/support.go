@@ -58,9 +58,13 @@ func (h *Handler) onSupport(r *req) {
 			return
 		}
 		r.setState(sceneTicket, map[string]string{"tid": t.GetId()})
+		more := []tg.Button{r.button("btn.ticket_history", "tk:l")}
+		if h.helpFAQ.Load() { // the FAQ stays a tap away while a ticket is open
+			more = append(more, r.button("btn.faq", "faq"))
+		}
 		kb := (&tg.Keyboard{}).
 			Row(r.button("btn.ticket_more", "tk:r:"+t.GetId()), r.button("btn.ticket_close", "tk:c:"+t.GetId())).
-			Row(r.button("btn.ticket_history", "tk:l")).
+			Row(more...).
 			Row(r.button("btn.home", "home"))
 		r.show(h.threadText(r, th), kb)
 		return
@@ -84,7 +88,11 @@ func (h *Handler) showSupportPrompt(r *req, cat string) {
 		}
 		cats = append(cats, tg.CB(label, "tk:n:"+c))
 	}
-	kb := (&tg.Keyboard{}).Row(cats...).Row(h.legalButtons(r)...).
+	kb := &tg.Keyboard{}
+	if h.helpFAQ.Load() { // the first thing under Support: many questions are answered there (help.go)
+		kb.Row(r.button("btn.faq", "faq"))
+	}
+	kb.Row(cats...).Row(h.legalButtons(r)...).
 		Row(r.button("btn.ticket_history", "tk:l")).
 		Row(r.button("btn.cancel", "cancel"))
 	r.show(r.t("support.prompt", "contact", contact), kb)

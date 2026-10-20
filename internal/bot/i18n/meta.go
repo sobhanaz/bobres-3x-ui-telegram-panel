@@ -207,6 +207,8 @@ var buttonStyles = map[string]string{
 	"btn.join_channel":  "primary",
 	"btn.invite":        "primary",
 	"btn.reseller":      "primary",
+	"btn.tutorials":     "primary",
+	"btn.faq_support":   "primary", // the way on to support from the FAQ, like Support itself
 
 	"btn.cancel":          "danger",
 	"btn.reject":          "danger",
