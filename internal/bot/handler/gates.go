@@ -12,9 +12,36 @@ import (
 )
 
 // Gates (milestone 3): maintenance mode (maintenance.enabled) and joining a
-// channel first (join.channel). Handle checks them after the rate limit and
-// before routing; Stars pre-checkouts and successful payments are served
-// before that and are never gated.
+// channel first (join.channel). Handle runs them once for every update, after
+// the rate limit and before anything reads what the update means, so that no
+// command, button, bottom-menu tap, scene or conversation ever sees an update a
+// gate holds back. A Stars pre-checkout and a successful payment are served
+// before that and are never held. The settings are read as the last reload left
+// them, so switching a gate on or off takes hold when the bot reloads (core
+// asks it to at once, and it does so by itself every minute), never at a restart.
+//
+// Maintenance mode holds every update but these (maintenancePasses is the
+// whole list; TestMaintenanceAllowlist and TestMaintenanceAnswersEveryCustomerUpdate
+// test both sides):
+//   - staff (owner, admin or support) and the owners the server names, who may
+//     not have an account yet;
+//   - /paysupport, which Telegram requires of a bot that sells with Stars;
+//   - a payment already under way: its proof (the receipt, the bank reference or
+//     the TXID, as a message sent while the bot waits for it) and its check
+//     (the chk button);
+//   - a newcomer's /start and language choice, which make the account and keep
+//     an invite code; they are then told about the maintenance like anyone.
+//
+// Everything else gets the maintenance text, whatever it was and whatever the
+// customer was doing: a popup for a button, a message for anything the customer
+// typed or sent, every time (an album, which Telegram delivers one part at a
+// time, once). That includes the bottom menu, Support and the answers to a
+// ticket. Maintenance comes first: while it is on, nobody is asked to join the
+// channel.
+//
+// The required channel holds the same way, and lets a few more through (the
+// language picker, and a customer going on with a ticket; see exempt and
+// continuesTicket).
 
 // joinCacheTTL is how long a confirmed channel member is not asked again.
 const joinCacheTTL = 10 * time.Minute
@@ -29,17 +56,22 @@ func (h *Handler) gate(r *req) bool {
 		return false
 	}
 	r.held = true // what passes below passes for what it is, unless a member
+	if maintenance {
+		if h.maintenancePasses(r) {
+			return false
+		}
+		h.sayMaintenance(r)
+		return true
+	}
 	if h.exempt(r) {
 		return false
 	}
-	if !maintenance {
-		if r.cb != nil && r.cb.Data == "jn" {
-			return false // "I've joined" checks by itself
-		}
-		if h.inChannel(r.ctx, r.from.ID, channel) {
-			r.held = false
-			return false
-		}
+	if r.cb != nil && r.cb.Data == "jn" {
+		return false // "I've joined" checks by itself
+	}
+	if h.inChannel(r.ctx, r.from.ID, channel) {
+		r.held = false
+		return false
 	}
 	if h.payingNow(r) {
 		return false
@@ -48,16 +80,38 @@ func (h *Handler) gate(r *req) bool {
 		r.gated = true // what turns out to start a ticket gets the answer below
 		return false
 	}
-	if maintenance {
-		h.sayMaintenance(r)
-	} else {
-		h.askToJoin(r, channel)
-	}
+	h.askToJoin(r, channel)
 	return true
 }
 
-// answerGate is the gates' answer to an update let through to continue a
-// ticket that turned out not to (r.gated).
+// maintenancePasses is what maintenance mode lets a customer do, besides what
+// staff and the owners the server names do (gate lets them through before):
+// nothing but this. A newcomer, who has no account yet, is one without a user.
+func (h *Handler) maintenancePasses(r *req) bool {
+	if r.cb != nil {
+		verb, _, _ := strings.Cut(r.cb.Data, ":")
+		switch verb {
+		case "chk": // the check of a payment under way
+			return r.user != nil
+		case "lang": // a newcomer picks a language: the account is made
+			return r.user == nil
+		}
+		return false
+	}
+	cmd, _, isCmd := command(r.msg.Text)
+	switch {
+	case !isCmd:
+		return h.payingNow(r) // the proof of a payment under way
+	case cmd == "/paysupport":
+		return true
+	}
+	return cmd == "/start" && r.user == nil // a newcomer starts; the invite code is kept
+}
+
+// answerGate is the required channel's answer to an update let through to
+// continue a ticket that turned out not to (r.gated). (Maintenance, which lets
+// no ticket through, has answered already; it is checked again only because it
+// may have come on since.)
 func (h *Handler) answerGate(r *req) {
 	if h.set.Bool("maintenance.enabled", false) {
 		h.sayMaintenance(r)
@@ -66,12 +120,12 @@ func (h *Handler) answerGate(r *req) {
 	h.askToJoin(r, h.set.Get("join.channel"))
 }
 
-// continuesTicket: a customer going on with a ticket, which the gates let
-// through (starting one they do not): the buttons to answer, close, list or
-// read tickets, a message in the ticket scene that names a ticket (Support
-// is the only bottom-menu tap that counts), or a Telegram reply to a message
-// of the bot (a staff answer, core checks). The state is read only when a
-// gate would otherwise block.
+// continuesTicket: a customer going on with a ticket, which the required
+// channel lets through (starting one it does not; maintenance lets neither):
+// the buttons to answer, close, list or read tickets, a message in the ticket
+// scene that names a ticket (Support is the only bottom-menu tap that counts),
+// or a Telegram reply to a message of the bot (a staff answer, core checks).
+// The state is read only when the gate would otherwise block.
 func (h *Handler) continuesTicket(r *req) bool {
 	if r.user == nil {
 		return false
@@ -100,10 +154,11 @@ func (h *Handler) continuesTicket(r *req) bool {
 	return false
 }
 
-// exempt: the updates both gates let through: /paysupport, which Telegram
-// requires of bots selling Stars; payment checks; the language picker; and
-// a new user's /start, which keeps an invite code until the language is
-// picked.
+// exempt: the updates the required channel lets through before asking about
+// the channel: /paysupport, which Telegram requires of bots selling Stars;
+// payment checks; the language picker; and a new user's /start, which keeps an
+// invite code until the language is picked. (Maintenance mode has a list of its
+// own, shorter: maintenancePasses.)
 func (h *Handler) exempt(r *req) bool {
 	if r.cb != nil {
 		verb, _, _ := strings.Cut(r.cb.Data, ":")
@@ -147,15 +202,22 @@ func (h *Handler) payingNow(r *req) bool {
 	return false
 }
 
-// sayMaintenance: an alert for a tap; for messages, the text at most once a
-// minute, so a customer who keeps writing is not answered every time.
+// sayMaintenance answers a held update with the maintenance text (the owner's
+// own, when they edited it): an alert for a tap, a message for anything the
+// customer typed or sent. Every update gets it, so that a tap is never
+// swallowed because another was answered a moment ago (a flood is the rate
+// limit's business, before the gates). The parts of an album, which Telegram
+// delivers as one update each, are answered once.
 func (h *Handler) sayMaintenance(r *req) {
 	if r.cb != nil {
 		r.toast, r.alert = r.t("maintenance"), true
 		return
 	}
-	if first, err := h.state.Once(r.ctx, "mnt:"+strconv.FormatInt(r.from.ID, 10), time.Minute); err == nil && !first {
-		return
+	if album := r.msg.MediaGroupID; album != "" {
+		key := "mnt:" + strconv.FormatInt(r.from.ID, 10) + ":" + album
+		if first, err := h.state.Once(r.ctx, key, time.Minute); err == nil && !first {
+			return
+		}
 	}
 	r.send(r.t("maintenance"), nil)
 }

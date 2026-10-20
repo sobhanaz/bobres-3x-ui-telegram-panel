@@ -13,11 +13,16 @@ which is off until the store turns it on.
   Orders and Payments, by design (they answer customers about them); the aggregate reports and the CSV exports are
   the ones that need the permission.
 - Where: `core` only. The code is `internal/core/store/reports.go` (SQL), `internal/core/domain/reports.go` (ranges and
-  buckets), `internal/core/web/reports.go` (JSON and CSV) and `web/dashboard/src/pages/ReportsPage.vue`.
+  buckets), `internal/core/web/reports.go` (JSON and CSV), `internal/core/web/csvcells.go` and `csvexport.go` (the rules of
+  every CSV file), `web/dashboard/src/pages/ReportsPage.vue` and, for the calendar and the dates, `web/dashboard/src/calendar.ts`
+  and `components/reports/DateField.vue`.
 - Tests: the numbers are checked against a model of every seeded row to the last unit, in several time zones, in
   `internal/core/store/reports_test.go`; the real money flows (orders of every type, discounts, a free order, a reseller
   on credit, payment events, the wallet, refunds, trials, an over-payment, failed and rejected payments) are run through
-  the service in `internal/core/domain/reports_test.go`.
+  the service in `internal/core/domain/reports_test.go`. The CSV files are checked as a spreadsheet sees them in
+  `internal/core/web/csv_files_test.go`, `csv_totals_test.go` and `csvcells_test.go` (headers, line breaks, numbers and
+  formulas, dates in both calendars, permissions, no secrets, the rows adding up to the report), and the calendar in
+  `web/dashboard/src/__tests__/calendar.test.ts` and `reports.test.ts`.
 
 ## The money rule
 
@@ -43,11 +48,11 @@ instant bounds next to that test are a day wider on each side and only serve the
   Jalali: weeks start on **Saturday** and months are Jalali months (1 Farvardin, 1 Ordibehesht, ...; the leap years
   follow the 33-year rule `core` and the Persian calendar share, checked against `Intl` for 1399 to 1479). A day
   bucket is the same in both calendars. A bucket is named by the Gregorian local date it starts on (`"2026-10-12"`),
-  whatever the calendar; the page writes it in Jalali in Persian. `this_month` and `last_month` follow the calendar
-  (a Jalali month for `jalali`). The store is not changed by this: for a Jalali week or month core reads the days and
-  sums them into buckets (`foldDays`), so a bucket is exactly the sum of its days, the totals equal the Gregorian
-  ones for the same range, and a range that cuts a week or month marks it `partial` as before. The page sends
-  `calendar` only when it is Jalali, and defaults to Jalali in Persian and Gregorian in English.
+  whatever the calendar; the page writes it in the calendar it is set to (see below). `this_month` and `last_month`
+  follow the calendar (a Jalali month for `jalali`). The store is not changed by this: for a Jalali week or month core
+  reads the days and sums them into buckets (`foldDays`), so a bucket is exactly the sum of its days, the totals equal
+  the Gregorian ones for the same range, and a range that cuts a week or month marks it `partial` as before. The page
+  sends `calendar` only when it is Jalali.
 - The range is two local dates, both included (`from=2026-10-01&to=2026-10-14`), or a named range read in the store's
   zone: `range=today|last_7_days|last_30_days|this_month|last_month` (the default is the last 30 days). A named range
   and `from`/`to` together are refused.
@@ -63,6 +68,38 @@ instant bounds next to that test are a day wider on each side and only serve the
   staff member's language). At most two CSV exports run at once; a third gets 429 with `Retry-After: 5`. An export
   may take up to 60 seconds in all (core's HTTP server would cut a response at 30 seconds, so the export handlers
   lift that limit for themselves).
+
+## The calendar on the page
+
+The **Calendar** switch (Jalali or Gregorian) decides every date of the Reports page, not only how weeks and months
+are cut. Before it did only that: dates followed the language (Jalali in Persian, Gregorian in English) and the custom
+range was a browser date field, which is Gregorian whatever the page says.
+
+- **What follows the switch**, at once and in both directions: the days a report covers, the ends of each chart's axis,
+  its tooltips and its text summary, the period column of the table, the week and month names ("Week of 25 Mehr 1405",
+  "Aban 1405", "Month of 1 Oct 2026"), the **From** and **To** fields of a custom range (the same two days written in
+  the other calendar, the request unchanged), the month grid they open, the message about a wrong date, and the CSV
+  files (their extra date column and their file names, see [CSV files](#csv-files)). Digits and month names follow the
+  language: Persian digits in Persian (`۲۲ مهر ۱۴۰۵`, and `۱۴ اکتبر ۲۰۲۶` for Gregorian), Latin in English
+  (`22 Mehr 1405`, `14 Oct 2026`). The API and every query keep Gregorian ISO dates (`from=2026-10-14`).
+- **Typing and picking a custom range.** A date is typed as year, month and day (`1405/07/22`, `1405-7-22`, `14050722`;
+  Persian, Arabic-Indic or Latin digits; a slash, dash, dot or space between; the year in four digits) in the calendar
+  shown, or picked from a month grid that starts on Saturday in Jalali and Monday in Gregorian (the days a report cuts
+  its weeks on), with the arrow, Home, End and Page keys. A date that the calendar does not have (31 Mehr, 30 Esfand of
+  a year that is not leap, 29 February of 2026), one outside the years core reports on (2000 to 2100) or an end before
+  the start is not sent: the field is marked and a line says what a date looks like. Typing waits a moment after the
+  last key before asking.
+- **The conversion is exact.** It is calendar arithmetic, never a `Date` in the browser's zone, so no time zone,
+  daylight-saving change or midnight can move a day (`dashboard/src/calendar.ts`). The Jalali arithmetic is the one
+  core and the bot use (the 33-year rule, `GregorianToJalali` in `internal/bot/i18n`), so a Jalali month the page
+  names is the month core cut. A test converts every day from 1900 to 2200 and back, every Jalali day from 1300 to 1500
+  one after the other, compares every day of 2000 to 2100 with the browser's own Persian calendar, and pins the new
+  year, the leap days and the month lengths. "Today" in the grid and in the examples is the store's today (the zone the
+  report named), not the browser's.
+- **It is remembered.** The choice is kept in this browser (`localStorage`, key `bobres.reports.calendar`), as the
+  language and the theme are; nothing is stored on the server. Until one is made the language decides (Jalali in
+  Persian, Gregorian in English); a blocked or odd value is ignored. The ledger, the audit log and the reseller
+  statement ask their CSV files for the Jalali column when the Reports page is set to Jalali.
 
 ## What each number means
 
@@ -216,37 +253,99 @@ All under `/api/v1/reports`, `GET`, session cookie, permission `reports.read`. Q
 | `/summary` | `{from, to, group, calendar, tz, churn_grace_days, currencies, buckets, totals}`. A bucket is `{date, partial, new_customers, trials, churned_services, churned_customers, at_risk, currencies}`; `currencies` maps each currency to `{revenue, refunds: {count, amount}, net, orders, new_orders, renewals, traffic_topups, topups: {count, amount}, rejected: {count, amount}, gateway_failed: {count, amount}, cancelled: {count, amount}}` (`rejected` is by staff, `gateway_failed` is the gateway line). `totals` has the same shape, summed bucket by bucket within each currency. |
 | `/plans` | `{from, to, tz, plans: [{plan_id, name: {fa, en}, currency, orders, revenue}]}` |
 | `/methods` | `{from, to, tz, methods: [{method, provider, currency, orders, revenue}]}`; `provider` is always there, empty for wallet, unknown and orders paid before it was recorded |
-| `/summary.csv` | The summary as a file (`...-jalali.csv` when `calendar=jalali`). |
+| `/summary.csv` | The summary as a file (`...-jalali.csv` when `calendar=jalali`, with the Jalali days in its name). |
 | `/orders.csv` | Every order paid in the range, as a file. |
+
+`ledger.csv` (`ledger.read`) and `audit.csv` (`audit.read`) follow the same rules and take the same `tz` and `calendar`
+(see below).
 
 ### CSV files
 
-`text/csv; charset=utf-8`, `Content-Disposition: attachment`, a UTF-8 byte-order mark (spreadsheet programs then read
-Persian right), rows streamed from the database one at a time. Amounts are plain decimals in the currency's major
-unit (`2.500000` USDT), times in UTC (and local time where it says so), and any text a customer or staff chose
-(username, plan names) gets a single quote in front when it starts with `=`, `+`, `-`, `@`, a tab or a carriage
-return, or with spaces or line breaks and then one of the first four, so a spreadsheet cannot run it as a formula.
-Numbers are numbers: a negative net stays `-100000`. (`ledger.csv` and `audit.csv` follow the same rules, see below.)
+Four files are the whole of what the product exports as CSV: `summary.csv` and `orders.csv` here, `ledger.csv`
+(`ledger.read`) and `audit.csv` (`audit.read`, with its own page). They share one set of rules (`internal/core/web/csvcells.go`
+and `csvexport.go`). Who may export: the permission of the thing exported, which owner and admin hold and support does
+not (403; nobody without a session either, 401); a reseller is no staff at all. Every export is written to the audit
+log as `export.reports`, `export.ledger` or `export.audit` when it ends, with its filters, range, calendar, zone, number
+of rows and outcome: `complete`, `incomplete` (the file ended short) or `failed` (nothing was sent). A file holds no
+secret: no session, token, link or key of the dashboard, a bot, a gateway or a server is in any of them (the audit log
+records a changed token as "changed", never its value; a test looks for the session cookie, the CSRF token and a login
+link's token in every file).
 
-Nothing is sent until the file has its first row. A failure before that (the range holds too much to read in time, the
-database is down) is an error answer (503 with `timeout` or `unavailable`), never a 200 with only a header that looks
-like "no orders". A failure after rows went out ends the file with a line `# export incomplete: <reason>`. Every export
-is written to the audit log as `export.reports` when it ends, with its kind, range, group, calendar, zone, number of rows and
-outcome: `complete`, `incomplete` (the file ended short) or `failed` (nothing was sent).
+- **The file.** `text/csv; charset=utf-8`, `Content-Disposition: attachment`, `Cache-Control: no-store`, a UTF-8
+  byte-order mark (spreadsheet programs then read Persian right), commas between cells, double quotes around a cell
+  that holds a comma, a quote (doubled) or a line break, and `\r\n` after every row **and** for any line break inside a
+  cell (a cell's `\n`, `\r\n` or `\r` all become one `\r\n`): RFC 4180, what Excel writes itself, and never a mix of two
+  kinds in one file. Rows are streamed from the database one at a time and pushed out every 500 rows, so memory does
+  not grow with the file.
+- **File names** keep to letters, digits, dot, dash and underscore (anything else would become a dash) and carry the days
+  the file covers, in the calendar of the file: `reports-summary-2026-10-31-to-2026-11-03-by-day.csv`,
+  `reports-orders-2026-10-31-to-2026-11-03.csv`, `ledger-2026-10-14-to-2026-10-20.csv` (`ledger-all-to-2026-10-20.csv`
+  when nothing starts it; the days of its `from` and `to` filters, in the store's zone), `audit-...`. A Jalali file has
+  the Jalali days and ends in `-jalali` (`reports-summary-1405-08-09-to-1405-08-12-by-day-jalali.csv`).
+- **Headers** are English `snake_case` names, the same in both languages of the dashboard. A file is read by scripts,
+  pivot tables and other people's spreadsheets, and a column named in Persian for one person and in English for another
+  would break all of them. They are the file's contract and a test pins every one: **a column is only ever added at the
+  end**, so earlier columns keep their positions.
+- **Text** (names, usernames, plan names, reasons, ids, the JSON of an audit entry): a cell that a spreadsheet could run
+  as a formula gets a single quote in front. That is a cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage
+  return, or one of the four after spaces, line breaks, control characters or invisible marks (a right-to-left mark in
+  front of an `=` is still an `=`). A text longer than 32,000 characters is cut and ends in ` …[cut]`: a spreadsheet keeps
+  32,767 and moves the rest into the next row, which would break the file's rows. **Numbers are never quoted**, so a
+  negative amount stays a number (`-100000`).
+- **Money** is a plain decimal in the currency's major unit, exact: `100000` for Toman (no decimals), `2.500000` for
+  USDT (six, never rounded: the dashboard shows two), `.` for the decimal point, no thousands separator, no symbol. The
+  currency is a column of every row that has money (`currency`), and amounts of two currencies are never in one cell.
+  Add a column up only after choosing one currency (a plain sum of `revenue` adds Toman to USDT: that is also why there
+  is no totals row). A spreadsheet whose regional settings use another decimal separator reads `2.500000` as text: import
+  with Data, From Text/CSV and choose English (United States).
+- **Dates follow one rule.** The machine columns never change with the calendar. An **instant** is UTC, ISO 8601 to
+  the second with a `Z` (`2026-10-31T20:29:00Z`: `paid_at_utc`, `time_utc`). A **day** of a report is a Gregorian ISO
+  date in the store's zone (`period_start`, `2026-10-31`). The same instant on the **store's wall clocks** is
+  `YYYY-MM-DD HH:MM:SS` (`paid_at_local`, `time_local`: `2026-10-31 23:59:00`; a space and not a `T`, so a spreadsheet
+  reads it as a date), and every file that has local times or days has a `tz` column naming the zone (`Asia/Tehran`): a
+  local text alone cannot tell the two 01:30 of the night the clocks go back, the UTC column can. The zone is the
+  request's `tz`, else the store's (`general.timezone`, `BOBRES_TIMEZONE`, `Asia/Tehran`), as for the reports; an unknown
+  one is a 400. **For a person**, when the calendar is Jalali (`calendar=jalali`, which is what the Reports page sends
+  when it is set to Jalali; `ledger.csv` and `audit.csv` take the same parameter) there is **one more column at the very
+  end**, the Jalali date written with Latin digits so that it sorts and filters: `YYYY-MM-DD` for a day
+  (`period_start_jalali`: `1405-08-09`) and with the local time for an instant (`paid_at_jalali`, `time_jalali`:
+  `1405-08-09 23:59:00`). It turns over at the store's local midnight, like the day buckets. A Gregorian file has no such
+  column: its machine columns are already Gregorian. `calendar` other than `gregorian` or `jalali` is a 400 in every file.
+- **Nothing is sent until the file has its first row.** A failure before that (the range holds too much to read in
+  time, the database is down) is an error answer (503 with `timeout` or `unavailable`), never a 200 with only a header
+  that looks like "no orders". A failure after rows went out ends the file with a line `# export incomplete: <reason>`.
+  An export of nothing is the header alone (`summary.csv` has a row of zeros for each period instead, as the page does).
+  At most 100,000 rows go into `orders.csv`, `ledger.csv` and `audit.csv`, and a last line asks for a shorter range or a
+  narrower filter. At most two exports run at once (429 and `Retry-After` for a third), for at most 60 seconds.
+
+Columns, in order:
 
 - `summary.csv`: one row per bucket and currency (`period_start`, `partial_period`, `currency`, `revenue`,
   `refund_amount`, `net`, `paid_orders`, `new_orders`, `renewals`, `traffic_topups`, `topup_count`, `topup_amount`,
   `refund_count`, `rejected_count`, `rejected_amount` (by staff), `gateway_failed_count`, `gateway_failed_amount`,
   `cancelled_count`, `cancelled_amount`), and one row per bucket with an **empty currency** that holds `new_customers`
-  and `free_trials` (the counts of people), so no column adds up two currencies or counts a person twice. There is no
-  totals row, for the same reason. The people row also holds the churn counts in the last three columns,
-  `churned_services`, `churned_customers` and `at_risk_services` (empty on the currency rows). New columns are only
-  ever added at the end, so earlier columns keep their positions.
+  and `free_trials` (the counts of people), so no column adds up two currencies or counts a person twice. The people row
+  also holds the churn counts, `churned_services`, `churned_customers` and `at_risk_services` (empty on the currency
+  rows). Then, the same on every row of a file: `group` (`day`, `week`, `month`), `calendar` (`gregorian`, `jalali`: how
+  weeks and months were cut) and `tz`; and `period_start_jalali` in a Jalali file. There is no totals row: the rows of a
+  currency add up to the page's totals for that currency, in every grouping and both calendars (a test sums the file
+  and compares it with the report).
 - `orders.csv`: `paid_at_utc`, `paid_at_local`, `order_id`, `type`, `telegram_id`, `username`, `plan_fa`, `plan_en`,
-  `amount`, `currency`, `paid_with` (wallet, manual, gateway, or empty), `refunded_amount`, `provider` (the provider that
-  took the payment, empty for wallet, trial and free orders and for orders paid before it was recorded; always the last
-  column, so earlier columns keep their positions); oldest first; at most
-  100,000 rows, then a note line asks for a shorter range.
+  `amount`, `currency`, `paid_with` (wallet, manual, gateway, or empty), `refunded_amount`, `provider` (the provider
+  that took the payment, empty for wallet, trial and free orders and for orders paid before it was recorded), `tz`, and
+  `paid_at_jalali` in a Jalali file; oldest first. What the orders cost adds up to the report's revenue.
+- `ledger.csv` (newest first, the ledger page's filters, `?user=`, `kind`, `currency`, `from`, `to`): `time_utc`,
+  `telegram_id`, `username`, `kind`, `amount` (signed: a purchase is negative), `currency`, `balance_after`, `ref_type`,
+  `ref_id`, `entry_id`, `time_local`, `tz`, and `time_jalali` in a Jalali file.
+- `audit.csv` (newest first, the audit page's filters): `time_utc`, `actor_telegram_id`, `actor_username`, `actor_role`,
+  `action`, `entity`, `entity_id`, `reason`, `ip`, `source`, `before`, `after` (JSON), `entry_id`, `time_local`, `tz`,
+  and `time_jalali` in a Jalali file.
+
+What was looked at and **left as it is**, and why: the English headers (above); the six decimals of USDT (a file must be
+exact; the page rounds for the eye); `paid_at_local` as `YYYY-MM-DD HH:MM:SS` rather than ISO 8601 with an offset (a
+spreadsheet reads it as a date-time, and the zone and the UTC column make it exact); the `# ...` note lines at the end of
+a file that is not whole (a script sees a row with one cell; an unmarked short file would be worse); a download link
+that fails shows the browser's own "failed" and not a translated message, since a link cannot carry one.
 
 ## Indexes
 

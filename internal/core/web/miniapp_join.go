@@ -118,7 +118,7 @@ func (s *Server) miniJoinGate(ctx context.Context, settings map[string]string, u
 		return nil
 	case domain.IsStaffRole(u.Role) || s.cfg.Domain.IsConfiguredOwner(u):
 		return nil
-	case settings["maintenance.enabled"] == "true":
+	case s.miniMaintenance(settings, u):
 		return nil
 	}
 	now := s.now()

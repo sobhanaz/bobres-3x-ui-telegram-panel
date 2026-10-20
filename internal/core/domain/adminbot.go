@@ -87,13 +87,14 @@ type AdminSettingView struct {
 }
 
 // settingChangeable reports whether a role may change a setting: payment
-// details are the owner's, like in the dashboard (web.Allowed).
+// details and the server's own operation (its update channel) are the owner's,
+// like in the dashboard (web.Allowed).
 func settingChangeable(role string, sp SettingSpec) bool {
 	switch role {
 	case "owner":
 		return true
 	case "admin":
-		return sp.Perm != permGateways
+		return !ownerOnlyPerm(sp.Perm)
 	}
 	return false
 }

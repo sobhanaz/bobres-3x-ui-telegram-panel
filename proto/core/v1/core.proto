@@ -279,6 +279,11 @@ message Settings {
   // "" otherwise (and for an older core). The bot then puts a Store button in
   // its menu and sets Telegram's menu button to it.
   string miniapp_url = 4;
+  // True when the license in effect (a license, its grace period or the trial;
+  // not the free tier) includes resellers: the bot then offers customers the
+  // "Become a reseller" button. False when it does not, and for an older core
+  // that never sets it, so a missing answer hides the button.
+  bool resellers_enabled = 5;
 }
 
 // --- Request/response messages ---
@@ -416,6 +421,41 @@ message ReferralInfo {
   int32 rewarded = 3; // invited users whose first purchase paid a reward
   repeated common.v1.Money earned = 4; // per currency
   int32 reward_percent = 5; // of an invited user's first purchase; 0 = referrals are off
+}
+
+// GetTopInvitersRequest asks for one page of the top-inviters board, for the
+// customer who is looking at it.
+message GetTopInvitersRequest {
+  string user_id = 1; // who is looking: their own invite count and place come with the page
+  int32 page = 2; // 1-based; 0 = the first
+  int32 page_size = 3; // places per page; 0 = 5, at most 10
+}
+
+// TopInviter is one place on the board. Nothing in it identifies a person
+// whole: core masks the name and the Telegram id and never sends either in full.
+message TopInviter {
+  int32 rank = 1; // 1-based, in the board's order (a tie goes to whoever joined the bot first)
+  string name = 2; // the @username without the @, masked: its first and last characters around ***; "***" when there is none or it is too short to show any
+  string telegram_id = 3; // the Telegram id, masked the same way
+  int32 invited = 4; // users who joined through this customer's invite link
+  bool you = 5; // this place is the customer who asked
+}
+
+// TopInviters is a page of the board of the customers who invited the most
+// people: customers only (never staff, resellers or banned users), at most 50
+// places, each with at least one invited user.
+message TopInviters {
+  // False when the board is off (the owner switched growth.leaderboard.enabled
+  // off, or the referral program is off, referral.reward_percent 0): nothing
+  // else is set.
+  bool enabled = 1;
+  repeated TopInviter entries = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 total = 5; // places on the board, at most 50
+  bool more = 6; // another page follows
+  int32 your_invited = 7; // users who joined through the asking customer's link, on the board or not
+  int32 your_rank = 8; // the asking customer's place on the board; 0 = not on it
 }
 
 message Discount {
@@ -886,6 +926,9 @@ service CoreService {
   rpc CreateBulkOrder(CreateBulkOrderRequest) returns (BulkOrder);
   rpc GetBulkOrder(GetBulkOrderRequest) returns (BulkOrder);
   rpc GetReferralInfo(GetReferralInfoRequest) returns (ReferralInfo);
+  // GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
+  // enabled is false while the board is off. NOT_FOUND for an unknown user.
+  rpc GetTopInviters(GetTopInvitersRequest) returns (TopInviters);
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
   rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);

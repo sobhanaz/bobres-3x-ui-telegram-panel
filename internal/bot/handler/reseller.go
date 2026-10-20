@@ -598,4 +598,5 @@ func (h *Handler) showResellerLink(r *req) {
 		Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
 	r.show(r.t("rs.link", "percent", i18n.Number(r.lang, int64(info.GetCommissionPercent())), "link", esc(link),
 		"customers", i18n.Number(r.lang, info.GetCustomers()), "earned", earned(r, info.GetCommissionEarned())), kb)
+	h.sendPromoCard(r, link) // a card to forward, apart from this screen
 }

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +13,60 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
+
+// csvFile is a CSV answer. Nothing is sent (no header, no byte-order mark)
+// until the file has something to say, so a failure before the first row is an
+// error answer and never a 200 with an empty-looking file.
+//
+// The file is UTF-8 with a byte-order mark (so Excel reads Persian right),
+// commas between cells, double quotes around a cell that needs them, and
+// \r\n after every row (RFC 4180, what Excel writes itself); a line break inside
+// a quoted cell is \r\n too, so no file mixes the two.
+type csvFile struct {
+	w       http.ResponseWriter
+	name    string
+	cw      *csv.Writer
+	rows    int // data rows written, header and notes apart
+	started bool
+}
+
+// start sends the headers and the byte-order mark that makes spreadsheet
+// programs read Persian right.
+func (f *csvFile) start() {
+	if f.started {
+		return
+	}
+	f.started = true
+	attachment(f.w.Header(), f.name)
+	_, _ = f.w.Write([]byte{0xEF, 0xBB, 0xBF})
+	f.cw = csv.NewWriter(f.w)
+	f.cw.UseCRLF = true
+}
+
+// write adds a row (starting the file if it has not started).
+func (f *csvFile) write(cells ...string) error {
+	f.start()
+	return f.cw.Write(cells)
+}
+
+// data adds a data row and pushes the file out every few hundred rows, so a
+// long export is a stream and the connection never sits idle.
+func (f *csvFile) data(cells ...string) error {
+	if err := f.write(cells...); err != nil {
+		return err
+	}
+	if f.rows++; f.rows%500 == 0 {
+		f.cw.Flush()
+		_ = http.NewResponseController(f.w).Flush()
+	}
+	return nil
+}
+
+func (f *csvFile) flush() {
+	if f.cw != nil {
+		f.cw.Flush()
+	}
+}
 
 // csvExport describes one CSV answer that is not a report (ledger.csv,
 // audit.csv). streamCSV gives it everything the reports' exports have: a place
@@ -27,6 +82,47 @@ type csvExport struct {
 	each func(ctx context.Context, row func(cells ...string) error) (more bool, err error)
 	// moreNote is the last line of a file that holds only part of the matches.
 	moreNote string
+}
+
+// exportClock reads the zone and the calendar a ledger or audit file writes its
+// dates in: ?tz= (an IANA name; the store's zone when missing, as the reports
+// read it) and ?calendar=gregorian|jalali (gregorian when missing). Anything
+// else is a 400, before any file is started.
+func (s *Server) exportClock(w http.ResponseWriter, r *http.Request) (clock, bool) {
+	q := r.URL.Query()
+	calendar, err := domain.NormalizeCalendar(q.Get("calendar"))
+	if err != nil {
+		s.fail(w, "export calendar", err)
+		return clock{}, false
+	}
+	loc, err := s.cfg.Domain.ExportZone(r.Context(), q.Get("tz"))
+	if err != nil {
+		s.fail(w, "export zone", err)
+		return clock{}, false
+	}
+	return newClock(loc, calendar), true
+}
+
+// exportFileName names a ledger or audit file by the days it covers, the days
+// of its zone and calendar: "ledger-2026-10-14-to-2026-10-20" for entries from
+// the 14th, "ledger-all-to-2026-10-20" when nothing starts it, "...-jalali" with
+// the Jalali days (1405-07-22) in a Jalali file. to is exclusive (the filter is
+// [from, to)) and the day the file was made ends a range that has no end.
+func exportFileName(kind string, c clock, from, to *time.Time, now time.Time) string {
+	end := now
+	if to != nil {
+		end = to.Add(-time.Second)
+	}
+	day := func(t time.Time) string { return fileDay(t.In(c.loc).Format("2006-01-02"), c.jalali) }
+	start := "all"
+	if from != nil {
+		start = day(*from)
+	}
+	name := kind + "-" + start + "-to-" + day(end)
+	if c.jalali {
+		name += "-jalali"
+	}
+	return name + ".csv"
 }
 
 // exportAuditDetail is what an export's audit entry says: the request's filters

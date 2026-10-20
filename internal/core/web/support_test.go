@@ -144,6 +144,47 @@ func TestSupportTickets(t *testing.T) {
 	}
 }
 
+// A reseller application is a ticket of its own category: the inbox lists it
+// under that name, filters by it, and its page says so; staff answer it like
+// any ticket.
+func TestSupportResellerApplicationsInTheInbox(t *testing.T) {
+	f, b, _ := setupFixture(t)
+	ctx := context.Background()
+	shop := f.customer(9111, "shopper")
+	app, err := f.dom.AddCustomerMessage(ctx, domain.CustomerMessage{UserID: shop.ID, Category: domain.CategoryReseller, Text: "I run a shop\nin Tehran", TGMessageID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payer := f.customer(9112, "payer")
+	if _, err := f.dom.AddCustomerMessage(ctx, domain.CustomerMessage{UserID: payer.ID, Category: "payment", Text: "My card payment is not here", TGMessageID: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	for filter, want := range map[string]float64{"": 2, "reseller": 1, "payment": 1, "service": 0, "other": 0, "nonsense": 0} {
+		code, out := b.do(http.MethodGet, "/api/v1/tickets?category="+filter, nil)
+		if code != 200 || out["total"] != want {
+			t.Errorf("category %q: %d, %v tickets, want %v", filter, code, out["total"], want)
+		}
+	}
+	_, out := b.do(http.MethodGet, "/api/v1/tickets?category=reseller", nil)
+	it := items(out)[0]
+	if it["id"] != app.Ticket.ID || it["category"] != "reseller" || it["subject"] != "I run a shop" || it["user"].(map[string]any)["username"] != "shopper" {
+		t.Fatalf("the application in the inbox: %v", it)
+	}
+	if code, out := b.do(http.MethodGet, "/api/v1/tickets/"+app.Ticket.ID, nil); code != 200 || out["ticket"].(map[string]any)["category"] != "reseller" {
+		t.Fatalf("the application's page: %d %v", code, out)
+	}
+	// Answered like any other: the customer is told through the bot's feed, and the
+	// ticket can be closed, which lets them apply again.
+	if code, out := b.do(http.MethodPost, "/api/v1/tickets/"+app.Ticket.ID+"/messages", map[string]any{"body": "Please send your shop's address", "kind": "reply", "close": true}); code != 200 ||
+		out["ticket"].(map[string]any)["status"] != "closed" {
+		t.Fatalf("answering the application: %d %v", code, out)
+	}
+	if _, err := f.dom.AddCustomerMessage(ctx, domain.CustomerMessage{UserID: shop.ID, Category: domain.CategoryReseller, Text: "The address is in Valiasr", TGMessageID: 3}); err != nil {
+		t.Fatalf("a new application after the first was closed: %v", err)
+	}
+}
+
 func TestBroadcastsAPI(t *testing.T) {
 	f, b, bot := setupFixture(t)
 	ctx := context.Background()

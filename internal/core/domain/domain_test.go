@@ -47,7 +47,9 @@ func testService(t *testing.T) (*Service, *store.Store) {
 	if _, err := s.DB().Exec(ctx, `UPDATE core.install SET trial_started_at = now(), limit_hit_at = NULL`); err != nil {
 		t.Fatalf("reset the trial: %v", err)
 	}
-	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}}), s
+	// The top-inviters board is not kept (LeaderboardTTL below 0), so a test that
+	// changes who invited whom sees it at once; its own test keeps one.
+	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}, LeaderboardTTL: -1}), s
 }
 
 func seedPlan(t *testing.T, s *store.Store, trial bool, price int64) *store.Plan {

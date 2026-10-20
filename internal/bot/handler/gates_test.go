@@ -132,10 +132,12 @@ func TestMaintenanceMode(t *testing.T) {
 	u.text("hello")
 	u.lastHas("under maintenance")
 	shown := len(w.tg.all(801))
-	u.text("hello again") // within the minute: not answered again
+	u.text("hello again") // answered every time: nothing is swallowed
+	u.lastHas("under maintenance")
 	u.text("/menu")
-	if n := len(w.tg.all(801)); n != shown {
-		t.Fatalf("maintenance message repeated: %d messages, want %d", n, shown)
+	u.lastHas("under maintenance")
+	if n := len(w.tg.all(801)); n != shown+2 {
+		t.Fatalf("%d messages after two more, want %d: each is answered", n, shown+2)
 	}
 	u.press("home")
 	u.toast("under maintenance")

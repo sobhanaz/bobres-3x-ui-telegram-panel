@@ -26,3 +26,17 @@ var PostgresInit []byte
 //
 //go:embed .env.example
 var EnvExample []byte
+
+// UpdaterPathUnit is bobres-updater.path, the systemd unit that starts the
+// updater when the dashboard drops an update request. @DIR@ stands for the
+// install directory; bobres install fills it in.
+//
+//go:embed systemd/bobres-updater.path
+var UpdaterPathUnit []byte
+
+// UpdaterServiceUnit is bobres-updater.service, which runs
+// `bobres update --from-request`. @DIR@ is the install directory, @EXE@ the
+// bobres binary, @EXEDIR@ its folder and @STATE@ the release state directory.
+//
+//go:embed systemd/bobres-updater.service
+var UpdaterServiceUnit []byte

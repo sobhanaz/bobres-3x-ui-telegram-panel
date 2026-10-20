@@ -291,9 +291,12 @@ Changes that move money or add days take a request key, so a retried request hap
 - **The bot follows the settings** (`internal/bot/settings`, shared by the handler and the notifier):
   - Gates come after the rate limit and never before a Stars payment: maintenance mode, then the
     required channel. Both let staff (support too), the configured owner, `/paysupport`, payment
-    checks, receipts and TXIDs of payments under way, the language picker and a newcomer's `/start`
-    through.
-    - Maintenance: a popup for taps, the message at most once a minute per user.
+    checks, receipts and TXIDs of payments under way and a newcomer's `/start` and language choice
+    through. The required channel also lets anyone's language picker through.
+    - Maintenance: nothing more than that, decided in one place before any handler or scene sees the
+      update (changed after v0.6.1: it used to let the language picker and a support conversation through
+      too, and to answer a message at most once a minute, so some taps got no answer). A popup for a
+      button, the message for anything else, every time (an album once). See 03-bot-ux.md.
     - Required channel: `getChatMember` with a 3-second limit; members are remembered in Redis for 10
       minutes, non-members never; Telegram errors let users in (logged). A newcomer is checked right
       after picking a language.
@@ -373,7 +376,9 @@ one-way hash of the cookie, so it gives nothing away.
 - **Customers** write from the Support screen, after picking payment, service or other.
   - A message can be text, a photo, an image file or a PDF. An album is confirmed once.
   - They answer a reply with its [Reply] button or with Telegram's reply. They can close their ticket.
-  - Continuing a ticket passes maintenance mode and the required channel; starting one does not.
+  - Continuing a ticket passes the required channel; starting one does not. Maintenance mode holds
+    both (changed after v0.6.1: it used to let a customer go on with a ticket, and Support showed no
+    maintenance message to a customer who had one).
   - Banned customers may still write: it is how they appeal.
 - **Staff replies go through the bot.** Core keeps the reply and publishes `ticket.replied.v1`. The
   bot's notifier fetches it, sends it, and reports delivered, blocked or failed.

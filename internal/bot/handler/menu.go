@@ -99,6 +99,7 @@ func (h *Handler) showHome(r *req) {
 	case h.referralsOn():
 		kb.Row(r.button("btn.invite", "ref"))
 	}
+	kb.Row(h.growthButtons(r)...) // Become a reseller and Top users, each while it is on
 	switch {
 	case r.isStaff():
 		kb.Row(r.button("btn.admin", "adm"), r.button("btn.dashboard", "dash"))
@@ -113,6 +114,7 @@ func (h *Handler) showHome(r *req) {
 var menuItems = []struct{ key, data string }{
 	{"btn.store", "store"}, {"btn.buy", "buy"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
 	{"btn.support", "support"}, {"btn.reseller", "rs"}, {"btn.invite", "ref"}, {"btn.language", "lang"},
+	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"},
 	{"btn.admin", "adm"}, {"btn.dashboard", "dash"},
 }
 
@@ -171,6 +173,14 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		more = append(more, item("btn.invite"))
 	}
 	m.Row(append(more, item("btn.language"))...)
+	var growth []tg.MenuButton // the home screen's row: Become a reseller and Top users, each while it is on
+	if h.resellerApplyOn(r) {
+		growth = append(growth, item("btn.reseller_apply"))
+	}
+	if h.topUsersOn() {
+		growth = append(growth, item("btn.top_users"))
+	}
+	m.Row(growth...)
 	switch {
 	case r.isStaff():
 		m.Row(item("btn.admin"), item("btn.dashboard"))

@@ -366,13 +366,13 @@ func TestReportsOrdersCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	if len(rows) != 4 || strings.Join(rows[0], ",") !=
-		"paid_at_utc,paid_at_local,order_id,type,telegram_id,username,plan_fa,plan_en,amount,currency,paid_with,refunded_amount,provider" {
+		"paid_at_utc,paid_at_local,order_id,type,telegram_id,username,plan_fa,plan_en,amount,currency,paid_with,refunded_amount,provider,tz" {
 		t.Fatalf("rows: %v", rows)
 	}
 	// Oldest first, local times either side of midnight, money as plain decimals.
 	r1, r2, r3 := rows[1], rows[2], rows[3]
 	if r1[0] != "2026-10-31T20:29:00Z" || r1[1] != "2026-10-31 23:59:00" || r1[2] != ids["o1"] || r1[8] != "100000" || r1[9] != "IRT" ||
-		r1[10] != "manual" || r1[11] != "100000" || r1[12] != "manual_card" {
+		r1[10] != "manual" || r1[11] != "100000" || r1[12] != "manual_card" || r1[13] != "Asia/Tehran" || r2[13] != "Asia/Tehran" {
 		t.Errorf("first order: %v", r1)
 	}
 	if r2[1] != "2026-11-01 00:01:00" || r2[10] != "wallet" || r2[11] != "0" || r2[12] != "" {
@@ -416,7 +416,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	// 4 days: one people row and one row per currency (IRT, USDT) each.
-	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 24 {
+	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 27 {
 		t.Fatalf("%d rows: %v", len(rows), rows)
 	}
 	col := map[string]int{}
@@ -425,8 +425,12 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	byKey := map[string][]string{}
 	for _, r := range rows[1:] {
-		if len(r) != 24 {
+		if len(r) != 27 {
 			t.Fatalf("a row has %d cells: %v", len(r), r)
+		}
+		// what every row says about itself: the size of a period, the calendar that cut it, the zone of its days
+		if r[col["group"]] != "day" || r[col["calendar"]] != "gregorian" || r[col["tz"]] != "Asia/Tehran" {
+			t.Fatalf("the context of a row: %v", r)
 		}
 		byKey[r[0]+"|"+r[2]] = r
 	}
@@ -461,11 +465,11 @@ func TestReportsSummaryCSV(t *testing.T) {
 
 func TestCSVTextQuotesWhatCouldRunAsAFormula(t *testing.T) {
 	for in, want := range map[string]string{
-		"=1+1": "'=1+1", "+1": "'+1", "-1": "'-1", "@a": "'@a", "\tx": "'\tx", "\rx": "'\rx",
+		"=1+1": "'=1+1", "+1": "'+1", "-1": "'-1", "@a": "'@a", "\tx": "'\tx", "\rx": "'\nx",
 		"": "", "plain": "plain", "پایه": "پایه", "a=b": "a=b", "1+1": "1+1",
 	} {
-		if got := csvText(in); got != want {
-			t.Errorf("csvText(%q) = %q, want %q", in, got, want)
+		if got := textCell(in); got != want {
+			t.Errorf("textCell(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -674,19 +678,15 @@ func TestReportsAnswerOnAnAmbiguousMidnight(t *testing.T) {
 	}
 }
 
-func TestReportTextQuotesWhatCouldRunAsAFormulaEvenAfterSpaces(t *testing.T) {
+func TestTextCellQuotesWhatCouldRunAsAFormulaEvenAfterSpaces(t *testing.T) {
 	for in, want := range map[string]string{
-		"=1+1": "'=1+1", "+1": "'+1", "-1": "'-1", "@a": "'@a", "\tx": "'\tx", "\rx": "'\rx",
+		"=1+1": "'=1+1", "+1": "'+1", "-1": "'-1", "@a": "'@a", "\tx": "'\tx", "\rx": "'\nx",
 		" =1+1": "' =1+1", "  @SUM(A1)": "'  @SUM(A1)", "\n-2": "'\n-2", " \t +1": "' \t +1",
 		"": "", "plain": "plain", "پایه": "پایه", "a=b": "a=b", " 1+1": " 1+1", " plain": " plain", "  ": "  ",
 	} {
-		if got := reportText(in); got != want {
-			t.Errorf("reportText(%q) = %q, want %q", in, got, want)
+		if got := textCell(in); got != want {
+			t.Errorf("textCell(%q) = %q, want %q", in, got, want)
 		}
-	}
-	// ledger.csv keeps its own rule.
-	if csvText(" =1+1") != " =1+1" {
-		t.Error("csvText changed")
 	}
 }
 
@@ -799,7 +799,8 @@ func TestReportsJalaliCSVNameAndAudit(t *testing.T) {
 		return
 	}
 	q := "?from=2026-10-31&to=2026-11-03&tz=Asia/Tehran"
-	if got := disposition("/api/v1/reports/summary.csv" + q + "&group=month&calendar=jalali"); got != `attachment; filename="reports-summary-2026-10-31-to-2026-11-03-by-month-jalali.csv"` {
+	// the days in the name are the Jalali ones (31 Oct is 9 Aban, 3 Nov is 12 Aban 1405), in Latin digits
+	if got := disposition("/api/v1/reports/summary.csv" + q + "&group=month&calendar=jalali"); got != `attachment; filename="reports-summary-1405-08-09-to-1405-08-12-by-month-jalali.csv"` {
 		t.Errorf("Jalali name: %s", got)
 	}
 	if cal, group := last(); cal != "jalali" || group != "month" {
@@ -820,12 +821,15 @@ func TestReportsJalaliCSVNameAndAudit(t *testing.T) {
 	if len(rows) != 1+1*3 || rows[1][0] != "2026-10-31" || rows[1][1] != "true" {
 		t.Errorf("Jalali weeks CSV: %v", rows)
 	}
-	// The orders file has no buckets: its name is unchanged, and its audit entry names the calendar.
-	if got := disposition("/api/v1/reports/orders.csv" + q + "&calendar=jalali"); got != `attachment; filename="reports-orders-2026-10-31-to-2026-11-03.csv"` {
+	// The orders file has no buckets, but its dates are Jalali too; its audit entry names the calendar.
+	if got := disposition("/api/v1/reports/orders.csv" + q + "&calendar=jalali"); got != `attachment; filename="reports-orders-1405-08-09-to-1405-08-12-jalali.csv"` {
 		t.Errorf("orders name: %s", got)
 	}
 	if cal, _ := last(); cal != "jalali" {
 		t.Errorf("orders audit calendar %q", cal)
+	}
+	if got := disposition("/api/v1/reports/orders.csv" + q); got != `attachment; filename="reports-orders-2026-10-31-to-2026-11-03.csv"` {
+		t.Errorf("Gregorian orders name: %s", got)
 	}
 }
 
@@ -873,7 +877,7 @@ func TestReportsChurn(t *testing.T) {
 		col[name] = i
 	}
 	if col["churned_services"] != 21 || col["churned_customers"] != 22 || col["at_risk_services"] != 23 {
-		t.Fatalf("the churn columns are not the last three: %v", col)
+		t.Fatalf("the churn columns moved: %v", col)
 	}
 	var people []string
 	for _, r := range rows[1:] {

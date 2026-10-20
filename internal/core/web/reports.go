@@ -2,11 +2,9 @@ package web
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
@@ -217,56 +215,6 @@ func (s *Server) takeExport(w http.ResponseWriter) (release func(), ok bool) {
 	}
 }
 
-// csvFile is a CSV answer. Nothing is sent (no header, no byte-order mark)
-// until the file has something to say, so a failure before the first row is an
-// error answer and never a 200 with an empty-looking file.
-type csvFile struct {
-	w       http.ResponseWriter
-	name    string
-	cw      *csv.Writer
-	rows    int // data rows written, header and notes apart
-	started bool
-}
-
-// start sends the headers and the byte-order mark that makes spreadsheet
-// programs read Persian right.
-func (f *csvFile) start() {
-	if f.started {
-		return
-	}
-	f.started = true
-	h := f.w.Header()
-	h.Set("Content-Type", "text/csv; charset=utf-8")
-	h.Set("Content-Disposition", `attachment; filename="`+f.name+`"`)
-	_, _ = f.w.Write([]byte{0xEF, 0xBB, 0xBF})
-	f.cw = csv.NewWriter(f.w)
-}
-
-// write adds a row (starting the file if it has not started).
-func (f *csvFile) write(cells ...string) error {
-	f.start()
-	return f.cw.Write(cells)
-}
-
-// data adds a data row and pushes the file out every few hundred rows, so a
-// long export is a stream and the connection never sits idle.
-func (f *csvFile) data(cells ...string) error {
-	if err := f.write(cells...); err != nil {
-		return err
-	}
-	if f.rows++; f.rows%500 == 0 {
-		f.cw.Flush()
-		_ = http.NewResponseController(f.w).Flush()
-	}
-	return nil
-}
-
-func (f *csvFile) flush() {
-	if f.cw != nil {
-		f.cw.Flush()
-	}
-}
-
 // exportReason says in a few words why a file ended short.
 func exportReason(err error, window time.Duration) string {
 	switch {
@@ -290,10 +238,33 @@ func (s *Server) auditExport(r *http.Request, kind string, rng *domain.ReportRan
 	})
 }
 
+// summaryColumns are the columns of summary.csv in the order they were added.
+// Their names are the file's contract (English, never translated: a script or a
+// pivot table keeps working in either language of the dashboard), and a new
+// column goes at the end, so the earlier ones keep their positions. The last
+// three say what the rows are about, the same on every row of a file: the size
+// of a period, the calendar its weeks and months were cut by and the time zone
+// of its days. A Jalali file has one more column after them (summaryJalali).
+var summaryColumns = []string{
+	"period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders",
+	"renewals", "traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount",
+	"gateway_failed_count", "gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials",
+	"churned_services", "churned_customers", "at_risk_services", "group", "calendar", "tz",
+}
+
+// summaryMoney is how many columns of summary.csv are numbers about money or
+// people (period_start to at_risk_services); the context columns follow.
+const summaryMoney = 24
+
+// summaryJalali is the column a Jalali summary adds: the Jalali date of
+// period_start, with Latin digits.
+const summaryJalali = "period_start_jalali"
+
 // exportReportSummary: GET /api/v1/reports/summary.csv, the summary as one
 // row per bucket and currency, plus one row per bucket for the people counts
 // (empty currency), so no column ever adds up two currencies or counts a
-// person twice.
+// person twice. There is no totals row, for the same reason: a column of
+// totals among the rows would be added twice by the first sum of the column.
 func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 	rng, ok := s.reportRange(w, r)
 	if !ok {
@@ -310,37 +281,58 @@ func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "sales report", err)
 		return
 	}
-	name := "reports-summary-" + rng.From + "-to-" + rng.To + "-by-" + rng.Group
-	if rng.Calendar == domain.CalendarJalali {
+	jalali := rng.Calendar == domain.CalendarJalali
+	name := "reports-summary-" + fileDay(rng.From, jalali) + "-to-" + fileDay(rng.To, jalali) + "-by-" + rng.Group
+	if jalali {
 		name += "-jalali"
 	}
 	f := &csvFile{w: w, name: name + ".csv"}
-	_ = f.write("period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders",
-		"renewals", "traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount",
-		"gateway_failed_count", "gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials",
-		"churned_services", "churned_customers", "at_risk_services")
-	cols := 24
+	header := summaryColumns
+	if jalali {
+		header = append(append([]string{}, header...), summaryJalali)
+	}
+	_ = f.write(header...)
 	n := func(v int64) string { return strconv.FormatInt(v, 10) }
+	// What every row says about itself, after the numbers.
+	tail := func(date string) []string {
+		out := []string{rng.Group, rng.Calendar, rng.TZ}
+		if jalali {
+			out = append(out, jalaliDay(date))
+		}
+		return out
+	}
 	for i := range rep.Buckets {
 		b := &rep.Buckets[i]
 		partial := strconv.FormatBool(b.Partial)
 		// People counts: no currency, no money columns.
-		row := make([]string, cols)
+		row := make([]string, summaryMoney, len(header))
 		row[0], row[1] = b.Date, partial
-		row[cols-5], row[cols-4] = n(b.NewCustomers), n(b.Trials)
-		row[cols-3], row[cols-2], row[cols-1] = n(b.ChurnedServices), n(b.ChurnedCustomers), n(b.AtRisk)
-		_ = f.data(row...)
+		row[summaryMoney-5], row[summaryMoney-4] = n(b.NewCustomers), n(b.Trials)
+		row[summaryMoney-3], row[summaryMoney-2], row[summaryMoney-1] = n(b.ChurnedServices), n(b.ChurnedCustomers), n(b.AtRisk)
+		_ = f.data(append(row, tail(b.Date)...)...)
 		for _, cur := range rep.Currencies {
 			c := b.Currencies[cur]
-			_ = f.data(b.Date, partial, reportText(cur), decimal(c.Revenue, cur), decimal(c.Refunds.Amount, cur), decimal(domain.Net(c), cur),
+			row := []string{b.Date, partial, textCell(cur), decimal(c.Revenue, cur), decimal(c.Refunds.Amount, cur), decimal(domain.Net(c), cur),
 				n(c.Orders), n(c.NewOrders), n(c.Renewals), n(c.TrafficTopups), n(c.Topups.Count), decimal(c.Topups.Amount, cur),
 				n(c.Refunds.Count), n(c.Rejected.Count), decimal(c.Rejected.Amount, cur), n(c.GatewayFailed.Count), decimal(c.GatewayFailed.Amount, cur),
-				n(c.Cancelled.Count), decimal(c.Cancelled.Amount, cur), "", "", "", "", "")
+				n(c.Cancelled.Count), decimal(c.Cancelled.Amount, cur), "", "", "", "", ""}
+			_ = f.data(append(row, tail(b.Date)...)...)
 		}
 	}
 	f.flush()
 	s.auditExport(r, "summary", rng, "complete", f.rows)
 }
+
+// ordersColumns are the columns of orders.csv, with the same rules as the
+// summary's: English names, new columns at the end. paid_at_utc is the
+// instant, paid_at_local the same instant on the wall clocks of the zone the
+// last column (tz) names. A Jalali file has one more column after tz
+// (ordersJalali): the local date and time with the date in the Jalali
+// calendar and Latin digits.
+var ordersColumns = []string{"paid_at_utc", "paid_at_local", "order_id", "type", "telegram_id", "username", "plan_fa", "plan_en",
+	"amount", "currency", "paid_with", "refunded_amount", "provider", "tz"}
+
+const ordersJalali = "paid_at_jalali"
 
 // exportReportOrders: GET /api/v1/reports/orders.csv, every order paid in the
 // range, oldest first, at most maxCSVRows of them. The file starts with the
@@ -356,9 +348,16 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer release()
-	f := &csvFile{w: w, name: "reports-orders-" + rng.From + "-to-" + rng.To + ".csv"}
-	header := []string{"paid_at_utc", "paid_at_local", "order_id", "type", "telegram_id", "username", "plan_fa", "plan_en",
-		"amount", "currency", "paid_with", "refunded_amount", "provider"}
+	jalali := rng.Calendar == domain.CalendarJalali
+	name := "reports-orders-" + fileDay(rng.From, jalali) + "-to-" + fileDay(rng.To, jalali)
+	if jalali {
+		name += "-jalali"
+	}
+	f := &csvFile{w: w, name: name + ".csv"}
+	header := append([]string{}, ordersColumns...)
+	if jalali {
+		header = append(header, ordersJalali)
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.exportWindow())
 	defer cancel()
 	more, err := s.cfg.Domain.EachPaidOrder(ctx, rng, maxCSVRows, func(o store.PaidOrderRow) error {
@@ -374,10 +373,14 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 		if s.rowPause > 0 {
 			time.Sleep(s.rowPause)
 		}
-		return f.data(o.PaidAt.UTC().Format("2006-01-02T15:04:05Z"), o.PaidLocal, o.OrderID, o.Type,
-			strconv.FormatInt(o.TelegramID, 10), reportText(o.Username), reportText(o.PlanName["fa"]), reportText(o.PlanName["en"]),
-			decimal(o.Amount, o.Currency), reportText(o.Currency), reportText(o.Method), decimal(o.Refunded, o.Currency),
-			reportText(o.Provider))
+		cells := []string{o.PaidAt.UTC().Format(time.RFC3339), o.PaidLocal, o.OrderID, o.Type,
+			strconv.FormatInt(o.TelegramID, 10), textCell(o.Username), textCell(o.PlanName["fa"]), textCell(o.PlanName["en"]),
+			decimal(o.Amount, o.Currency), textCell(o.Currency), textCell(o.Method), decimal(o.Refunded, o.Currency),
+			textCell(o.Provider), rng.TZ}
+		if jalali {
+			cells = append(cells, jalaliStamp(o.PaidLocal))
+		}
+		return f.data(cells...)
 	})
 	switch {
 	case err != nil && !f.started:
@@ -402,15 +405,4 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	f.flush()
 	s.auditExport(r, "orders", rng, "complete", f.rows)
-}
-
-// reportText is csvText for the cells of the reports, with one more guard: a
-// spreadsheet program ignores leading spaces and line breaks before a formula,
-// so text that starts with them and then a formula character is quoted too.
-// (csvText, used by the other exports, looks at the first character only.)
-func reportText(s string) string {
-	if t := strings.TrimLeft(s, " \t\r\n\v\f"); t != "" && strings.ContainsRune("=+-@", rune(t[0])) {
-		return "'" + s
-	}
-	return csvText(s)
 }

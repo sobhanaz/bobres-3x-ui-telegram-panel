@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 00025 on a store from before: every existing order belongs to no bulk; a
+// 00026 on a store from before: every existing order belongs to no bulk; a
 // bulk holds 2 to 1000 services whose total is the unit price times the
 // quantity and has one request key; an order is in a bulk with its place in it
 // (both or neither, each place once, the bulk must exist); Down drops what ties
@@ -16,8 +16,8 @@ func TestBulkOrdersMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 24); err != nil {
-		t.Fatalf("up to 24: %v", err)
+	if err := upTo(ctx, dsn, "core", 25); err != nil {
+		t.Fatalf("up to 25: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -119,7 +119,7 @@ func TestBulkOrdersMigration(t *testing.T) {
 		t.Error("a bulk with orders was deleted")
 	}
 
-	if err := downTo(ctx, dsn, "core", 24); err != nil {
+	if err := downTo(ctx, dsn, "core", 25); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var orders int

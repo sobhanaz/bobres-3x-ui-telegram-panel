@@ -14,7 +14,11 @@ release: [06-installer.md](../06-installer.md), "Restore, update and rollback"; 
 A store picks its channel with `BOBRES_UPDATE_CHANNEL=stable|beta` in `/opt/bobres/.env`, set with
 `sudo bobres config set BOBRES_UPDATE_CHANNEL beta` (see the last section). The bot reads it (the
 dashboard's **System → Updates** tab shows the channel), `bobres update` and the menu read it, and
-`bobres update --channel stable|beta` overrides it for one run. install.sh installs the latest stable release
+`bobres update --channel stable|beta` overrides it for one run. The owner can also choose the channel in the
+dashboard (**System → Updates**, the `updates.channel` setting): when it is set it wins for the bot's check and for
+**Update now**, which sends the channel it shows; unset, `BOBRES_UPDATE_CHANNEL` decides. `sudo bobres update` typed on
+the server still reads `.env` (or `--channel`), which is why the page shows the command with the channel it follows.
+install.sh installs the latest stable release
 unless `BOBRES_BASE_URL` points at another one, and refuses a release signed for beta unless it runs with
 `BOBRES_UPDATE_CHANNEL=beta` (install.sh uses it only to accept that release; to keep the store on beta afterwards,
 set it with `bobres config` too, see the last section):
@@ -159,6 +163,7 @@ sudo bobres config set BOBRES_UPDATE_CHANNEL beta   # or stable; checks it, writ
 sudo bobres update --check                          # "Channel: beta"
 ```
 
+- An owner can also choose the channel in the dashboard (System → Updates) when the server's dashboard updater is installed; an update started there keeps `BOBRES_UPDATE_CHANNEL` in step with the channel it ran on ([Update and roll back](update-rollback.md#update-from-the-dashboard)).
 - `bobres config set` accepts only `stable` or `beta` and waits until the bot is healthy again. Do not edit `.env` by
   hand for it: the bot does not start with another value.
 - Beta releases are less tested. Take a backup you keep off the server first (`sudo bobres backup`, then copy it).

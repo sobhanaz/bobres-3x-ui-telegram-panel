@@ -293,6 +293,13 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		return n.dailySummaryEvent(ctx, m, e)
 
+	case events.SystemUpdate:
+		var e events.SystemUpdateEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.systemUpdateEvent(ctx, m, e)
+
 	case events.DepositUnmatched:
 		var e events.DepositUnmatchedEvent
 		if err := decode(m, &e); err != nil {
@@ -407,6 +414,80 @@ func (n *Notifier) systemAlert(lang string, e events.SystemAlertEvent) string {
 		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
 	}
 	return text
+}
+
+// updateNoticeMaxAge is how long a notice about an update from the dashboard
+// may wait to be sent. The bot is itself restarted by the update, so the
+// notices of an update are normally sent a few minutes late; one older than
+// this is history, not news.
+const updateNoticeMaxAge = 24 * time.Hour
+
+// systemUpdateEvent tells one owner about an update asked for in the dashboard
+// or its end (core wrote one event for each owner). It is dropped when it is
+// too old, or when the staff list the bot knows no longer has the person as an
+// owner (demoted or removed since: the message names who asked for what, and
+// is for owners). A failure is returned for the consumer to retry; a refusal
+// no retry can change (Telegram says the chat is gone, or the bot may not write
+// there) is permanent, so it does not hold up the events behind it.
+func (n *Notifier) systemUpdateEvent(ctx context.Context, m eventbus.Message, e events.SystemUpdateEvent) error {
+	if age := n.now().Sub(m.CreatedAt); !m.CreatedAt.IsZero() && age > updateNoticeMaxAge {
+		n.log.Info("update notice is too old; dropped", "state", e.State, "chat", e.TelegramID, "queued_hours_ago", int(age.Hours()))
+		return nil
+	}
+	if len(n.set.Staff()) > 0 {
+		if c, ok := n.set.Contact(e.TelegramID); !ok || c.Role != "owner" {
+			n.log.Info("update notice dropped: the recipient is no longer an owner", "state", e.State, "chat", e.TelegramID)
+			return nil
+		}
+	}
+	text, known := n.systemUpdate(i18n.Normalize(e.Language), e)
+	if !known {
+		return nil // a state a newer core writes
+	}
+	err := n.send(ctx, e.TelegramID, text, nil)
+	if tg.IsRefused(err) {
+		n.log.Warn("update notice refused by Telegram; dropped", "state", e.State, "chat", e.TelegramID, "err", err)
+		return eventbus.Permanent(err)
+	}
+	return err
+}
+
+// systemUpdate renders an update notice in lang: what happened, from which
+// version to which, on which channel and who asked, and, for an end that is
+// not a success, the server updater's own sentence under it. Every value is a
+// release number, a name or text from outside, escaped. known is false for a
+// state this bot has no text for.
+func (n *Notifier) systemUpdate(lang string, e events.SystemUpdateEvent) (string, bool) {
+	key := map[string]string{
+		events.UpdateRequested:  "update.requested",
+		events.UpdateDone:       "update.done",
+		events.UpdateFailed:     "update.failed",
+		events.UpdateRolledBack: "update.rolled_back",
+		events.UpdateNotStarted: "update.not_started",
+	}[e.State]
+	if key == "" {
+		return "", false
+	}
+	version := func(v string) string {
+		if v = strings.TrimSpace(v); v == "" {
+			return "?"
+		}
+		return html.EscapeString(truncateRunes(v, 40))
+	}
+	by := strings.TrimSpace(e.By)
+	if by == "" {
+		by = "?"
+	}
+	channel := "update.channel_stable"
+	if e.Channel == "beta" {
+		channel = "update.channel_beta"
+	}
+	text := n.cat.T(lang, key, "by", html.EscapeString(truncateRunes(by, 64)), "from", version(e.From), "to", version(e.To),
+		"channel", n.cat.T(lang, channel))
+	if d := strings.TrimSpace(e.Message); d != "" && e.State != events.UpdateRequested && e.State != events.UpdateDone {
+		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
+	}
+	return text, true
 }
 
 // summaryMaxAge is how long a daily summary may wait to be sent. Core queues
@@ -659,18 +740,22 @@ func (n *Notifier) ticketAlert(ctx context.Context, messageID string, customer, 
 		if u := v.GetUrl(); strings.HasPrefix(u, "https://") {
 			kb = (&tg.Keyboard{}).Row(n.linkButton(lang, "btn.ticket_open", u))
 		}
+		k := key
+		if k == "admin.ticket_opened" && v.GetCategory() == "reseller" {
+			k = "admin.reseller_application" // an application has words of its own: staff must not take it for a support question
+		}
 		args := []any{"user", html.EscapeString(user), "id", v.GetTicketNumber(), "text", preview}
-		if key == "admin.ticket_opened" {
+		if k == "admin.ticket_opened" {
 			args = append(args, "category", n.category(lang, v.GetCategory()))
 		}
-		return n.cat.T(lang, key, args...), kb
+		return n.cat.T(lang, k, args...), kb
 	})
 }
 
 // category names a ticket's topic in lang (older tickets have "general").
 func (n *Notifier) category(lang, c string) string {
 	switch c {
-	case "payment", "service":
+	case "payment", "service", "reseller":
 	default:
 		c = "other"
 	}
