@@ -144,6 +144,35 @@ func TestOverviewWithoutACollector(t *testing.T) {
 	}
 }
 
+func TestOverviewListsTheWatchedSystemdUnits(t *testing.T) {
+	e := newEnv(t)
+	if o := e.overview(); o.Units == nil || len(o.Units) != 0 {
+		t.Fatalf("no collector, no units, and a list rather than null: %+v", o.Units)
+	}
+	e.snap(func(s *snapshot.Snapshot) {
+		s.Units = []snapshot.Unit{
+			{Name: "bobres-monitor.timer", Load: "loaded", Active: "active", Sub: "waiting", Enabled: "enabled", Since: 1000},
+			{Name: "docker.service", Load: "loaded", Active: "failed", Sub: "failed", Enabled: "enabled", Result: "exit-code", Restarts: 2},
+		}
+	})
+	o := e.overview()
+	if len(o.Units) != 2 {
+		t.Fatalf("units: %+v", o.Units)
+	}
+	if u := o.Units[0]; u.Name != "bobres-monitor.timer" || u.Load != "loaded" || u.Active != "active" || u.Sub != "waiting" ||
+		u.Enabled != "enabled" || u.Result != "" || u.Since != 1000 || u.Restarts != 0 {
+		t.Errorf("first unit: %+v", u)
+	}
+	if u := o.Units[1]; u.Name != "docker.service" || u.Active != "failed" || u.Result != "exit-code" || u.Restarts != 2 {
+		t.Errorf("second unit: %+v", u)
+	}
+	// A snapshot that went stale shows no units, as it shows no containers: the same evidence.
+	e.clk.add(4 * time.Minute)
+	if o := e.overview(); len(o.Units) != 0 || o.Units == nil {
+		t.Errorf("a stale collector's units are not shown: %+v", o.Units)
+	}
+}
+
 func TestOverviewWithAStaleCollector(t *testing.T) {
 	e := newEnv(t)
 	e.snap(nil)
@@ -292,12 +321,12 @@ func TestOverviewJSONShape(t *testing.T) {
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"generated_at", "status", "components", "host", "containers", "kubernetes", "counters", "ci", "collector", "deployments"} {
+	for _, key := range []string{"generated_at", "status", "components", "host", "containers", "units", "kubernetes", "counters", "ci", "collector", "deployments"} {
 		if _, ok := got[key]; !ok {
 			t.Errorf("no %q", key)
 		}
 	}
-	for _, key := range []string{"components", "containers", "deployments"} {
+	for _, key := range []string{"components", "containers", "units", "deployments"} {
 		if string(got[key]) == "null" {
 			t.Errorf("%s is null", key)
 		}

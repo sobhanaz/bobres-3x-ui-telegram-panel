@@ -47,10 +47,15 @@ type Event struct {
 	Source string `json:"source"`
 	Kind   string `json:"kind"`
 	// Key and State are those of an alert (its check, and AlertOpen, AlertClosed or AlertResolved).
-	Key    string `json:"key,omitempty"`
-	State  string `json:"state,omitempty"`
-	Title  string `json:"title"`
-	Detail string `json:"detail"`
+	Key   string `json:"key,omitempty"`
+	State string `json:"state,omitempty"`
+	// TitleKey and Args are the bot's text key (alert.disk_low) and its values for an alert, so a page
+	// can write the sentence in its own language as the Telegram message does; Title stays the
+	// English sentence for a page that cannot.
+	TitleKey string            `json:"title_key,omitempty"`
+	Args     map[string]string `json:"args,omitempty"`
+	Title    string            `json:"title"`
+	Detail   string            `json:"detail"`
 }
 
 // EventsQuery says what to list. Logs allows the services' own log lines (they carry Telegram ids:
@@ -168,7 +173,8 @@ func (m *Monitor) Events(ctx context.Context, q EventsQuery) (*EventsResult, err
 		openSeen := map[string]bool{}
 		for _, a := range history { // newest first
 			e := Event{At: a.At.Unix(), Level: levelOfSeverity(a.Severity), Source: "alert", Kind: KindAlert, Key: snapshot.Clean(a.Key, 120),
-				Title: snapshot.Clean(a.Title, maxEventText), Detail: snapshot.Clean(a.Detail, maxEventText)}
+				TitleKey: snapshot.Clean(a.TitleKey, 80), Args: cleanArgs(a.Args), Title: snapshot.Clean(a.Title, maxEventText),
+				Detail: snapshot.Clean(a.Detail, maxEventText)}
 			switch {
 			case a.State == "resolved":
 				e.State = AlertResolved
@@ -227,4 +233,20 @@ func (m *Monitor) Events(ctx context.Context, q EventsQuery) (*EventsResult, err
 		res.Items[i].Title = strings.TrimSpace(res.Items[i].Title)
 	}
 	return res, nil
+}
+
+// cleanArgs bounds an alert's values for its text (a mount, a container, a number): at most 8, each
+// cut and plain. nil when there are none, so the field is left out.
+func cleanArgs(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for _, k := range sortedKeys(in) {
+		if len(out) == 8 {
+			break
+		}
+		out[snapshot.Clean(k, 32)] = snapshot.Clean(in[k], 120)
+	}
+	return out
 }
