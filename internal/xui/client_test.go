@@ -286,7 +286,7 @@ func TestSetLimitsKeepsTheClientIdentity(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/get/"):
 			_, _ = w.Write([]byte(`{"success":true,"obj":{"client":{"id":17,"uuid":"6f1c2e1a-0000-4000-8000-000000000017",
 				"email":"u1","subId":"sub-u1","password":"tr0jan","flow":"xtls-rprx-vision","reverse":"","allowedIPs":"10.0.0.2/32, 10.0.0.3/32",
-				"totalGB":1,"expiryTime":2,"enable":false,"limitHwid":2,"createdAt":5,"updatedAt":6},"inboundIds":[1],"usedTraffic":9}}`))
+				"totalGB":1,"expiryTime":2,"enable":false,"limitHwid":2,"group":"bobres_bot","createdAt":5,"updatedAt":6},"inboundIds":[1],"usedTraffic":9}}`))
 		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/update/u1"):
 			_ = json.NewDecoder(r.Body).Decode(&got)
 			_, _ = w.Write([]byte(`{"success":true,"msg":"ok","obj":null}`))
@@ -306,6 +306,10 @@ func TestSetLimitsKeepsTheClientIdentity(t *testing.T) {
 		got["limitHwid"] != float64(2) || len(ips) != 2 || ips[1] != "10.0.0.3/32" {
 		t.Fatalf("update body: %v", got)
 	}
+	// The panel writes the group of the body, and clears it when there is none.
+	if got["group"] != "bobres_bot" {
+		t.Fatalf("the update dropped the client's group: %v", got["group"])
+	}
 	if _, ok := got["reverse"]; ok {
 		t.Fatalf("an empty reverse must be left out (the panel wants an object): %v", got["reverse"])
 	}
@@ -323,7 +327,7 @@ func TestSetEnabledKeepsTheLimits(t *testing.T) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/get/"):
 			_, _ = w.Write([]byte(`{"success":true,"obj":{"client":{"id":17,"uuid":"6f1c2e1a-0000-4000-8000-000000000017",
-				"email":"u1","subId":"sub-u1","totalGB":1073741824,"expiryTime":1800000000000,"enable":true,
+				"email":"u1","subId":"sub-u1","totalGB":1073741824,"expiryTime":1800000000000,"enable":true,"group":"vip",
 				"createdAt":5,"updatedAt":6},"inboundIds":[1],"usedTraffic":9}}`))
 		case strings.HasPrefix(r.URL.Path, "/panel/api/clients/update/u1"):
 			got = nil
@@ -342,6 +346,9 @@ func TestSetEnabledKeepsTheLimits(t *testing.T) {
 		if got["enable"] != enable || got["id"] != "6f1c2e1a-0000-4000-8000-000000000017" || got["subId"] != "sub-u1" ||
 			got["totalGB"] != float64(gib) || got["expiryTime"] != float64(1_800_000_000_000) || got["createdAt"] != nil {
 			t.Fatalf("update body (enable %v): %v", enable, got)
+		}
+		if got["group"] != "vip" { // whatever group it has, an operator's included
+			t.Fatalf("the update dropped the client's group (enable %v): %v", enable, got["group"])
 		}
 	}
 	if err := c.SetEnabled(context.Background(), "bad email!", false); err == nil {

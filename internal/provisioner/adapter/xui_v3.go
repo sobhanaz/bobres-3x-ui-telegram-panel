@@ -13,6 +13,11 @@ type XUIv3 struct {
 	c *xui.Client
 }
 
+var (
+	_ PanelAdapter = (*XUIv3)(nil)
+	_ GroupTagger  = (*XUIv3)(nil)
+)
+
 // NewXUIv3 wraps a base URL + API token.
 func NewXUIv3(baseURL, apiToken string, opts ...xui.Option) (*XUIv3, error) {
 	c, err := xui.New(baseURL, apiToken, opts...)
@@ -22,6 +27,9 @@ func NewXUIv3(baseURL, apiToken string, opts ...xui.Option) (*XUIv3, error) {
 	return &XUIv3{c: c}, nil
 }
 
+// CreateClient adds the client in the bot group (xui.BotGroup). Later changes
+// to it keep the group: SetLimits and SetEnabled send the stored row back with
+// its group, and the panel's own bulkAdjust and resetTraffic leave it.
 func (a *XUIv3) CreateClient(ctx context.Context, email, subID string, expiryMs, trafficBytes int64, inboundIDs []int) error {
 	spec := xui.ClientSpec{
 		Email:      email,
@@ -29,8 +37,61 @@ func (a *XUIv3) CreateClient(ctx context.Context, email, subID string, expiryMs,
 		ExpiryTime: expiryMs,
 		TotalGB:    trafficBytes,
 		Enable:     true,
+		Group:      xui.BotGroup,
 	}
 	return a.c.AddClient(ctx, spec, inboundIDs)
+}
+
+// tagPasses bounds how often TagUngrouped lists the panel: the first listing
+// finds the clients to tag, the next ones check that none is left.
+const tagPasses = 3
+
+func (a *XUIv3) TagUngrouped(ctx context.Context, managed map[string]string) (TagResult, error) {
+	res := TagResult{Managed: len(managed)}
+	if len(managed) == 0 {
+		res.Converged = true
+		return res, nil
+	}
+	for pass := 0; pass < tagPasses; pass++ {
+		rows, err := a.c.ListClients(ctx)
+		if err != nil {
+			return res, err
+		}
+		seen, grouped := map[string]bool{}, 0
+		var todo []string
+		for _, r := range rows {
+			sub, ok := managed[r.Email]
+			if !ok || seen[r.Email] || (sub != "" && r.SubID != sub) {
+				continue
+			}
+			seen[r.Email] = true
+			switch {
+			case r.Group != "":
+				grouped++
+			case xui.ValidateIdentifier(r.Email) == nil:
+				todo = append(todo, r.Email)
+			}
+		}
+		if pass == 0 {
+			res.Grouped = grouped
+		}
+		res.Missing = len(managed) - len(seen)
+		if len(todo) == 0 {
+			res.Converged = true
+			return res, nil
+		}
+		n, err := a.c.AddToGroup(ctx, todo, xui.BotGroup)
+		res.Tagged += n
+		if err != nil {
+			return res, err
+		}
+	}
+	return res, nil
+}
+
+func (a *XUIv3) EnsureTagged(ctx context.Context, email string) error {
+	_, err := a.c.AddToGroupIfNone(ctx, email, xui.BotGroup)
+	return err
 }
 
 func (a *XUIv3) Renew(ctx context.Context, email string, addDays, addBytes int64) error {
