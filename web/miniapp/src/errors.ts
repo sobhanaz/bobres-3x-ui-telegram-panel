@@ -54,13 +54,14 @@ export function errorKey(e: unknown): Key {
   }
 }
 
-export type Gate = '' | 'not_telegram' | 'maintenance' | 'banned' | 'expired' | 'unavailable' | 'off'
+export type Gate = '' | 'not_telegram' | 'maintenance' | 'banned' | 'join_required' | 'expired' | 'unavailable' | 'off'
 
 /** gateFor is the full-screen state a failure of signing in or of any call means, or "" for an ordinary error. */
 export function gateFor(e: unknown): Gate {
   if (!(e instanceof ApiError)) return ''
   if (e.code === 'maintenance') return 'maintenance'
   if (e.code === 'banned') return 'banned'
+  if (e.code === 'join_required') return 'join_required'
   if (e.status === 404 && e.code === 'disabled') return 'off'
   if (e.status === 401) return 'expired'
   if (e.status === 503 && e.code === 'unavailable') return 'unavailable'

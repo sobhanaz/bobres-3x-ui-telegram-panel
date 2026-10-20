@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Plan, Service } from './api'
-import { tr } from './i18n'
+import { tr, type Key } from './i18n'
 import { sectionsFor, type Section } from './sections'
-import { boot, state } from './store'
+import { boot, recheckJoin, state } from './store'
 import { onBack, openLink, openTelegram } from './telegram'
 import CheckoutView from './views/CheckoutView.vue'
 import MoreView from './views/MoreView.vue'
@@ -25,6 +25,19 @@ const tabs = computed<Tab[]>(() => (sectionsFor(state.me).length ? ['store', 'se
 const gateText = computed(() => (state.gate ? tr('gate.' + state.gate) : ''))
 const bot = computed(() => state.me?.brand.bot_url ?? '')
 const support = computed(() => state.me?.brand.support_url ?? '')
+
+// the gate of the store's required channel: "I've joined" asks again, and says why when it cannot let the customer in
+const joinNote = ref<Key | ''>('')
+const checkingJoin = ref(false)
+async function checkJoin() {
+  checkingJoin.value = true
+  joinNote.value = ''
+  try {
+    joinNote.value = await recheckJoin()
+  } finally {
+    checkingJoin.value = false
+  }
+}
 
 function pick(plan: Plan) {
   if (choosing.value) buying.value = { plan, type: choosing.value.type, subscriptionId: choosing.value.service.id }
@@ -69,8 +82,15 @@ onMounted(boot)
 
   <main v-else-if="state.gate" class="screen gate" role="alert">
     <p>{{ gateText }}</p>
-    <button v-if="bot && state.gate !== 'banned'" class="btn" type="button" @click="openTelegram(bot)">{{ tr('common.open_bot') }}</button>
-    <button v-if="support && state.gate === 'banned'" class="btn secondary" type="button" @click="openLink(support)">{{ tr('common.support') }}</button>
+    <template v-if="state.gate === 'join_required'">
+      <p v-if="joinNote" class="muted" role="status">{{ tr(joinNote) }}</p>
+      <button v-if="state.joinUrl" class="btn" type="button" @click="openTelegram(state.joinUrl)">{{ tr('join.channel') }}</button>
+      <button class="btn secondary" type="button" :disabled="checkingJoin" @click="checkJoin">{{ checkingJoin ? tr('join.checking') : tr('join.check') }}</button>
+    </template>
+    <template v-else>
+      <button v-if="bot && state.gate !== 'banned'" class="btn" type="button" @click="openTelegram(bot)">{{ tr('common.open_bot') }}</button>
+      <button v-if="support && state.gate === 'banned'" class="btn secondary" type="button" @click="openLink(support)">{{ tr('common.support') }}</button>
+    </template>
   </main>
 
   <template v-else>
