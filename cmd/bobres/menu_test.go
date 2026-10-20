@@ -62,7 +62,7 @@ func TestMenuRunsTheCommands(t *testing.T) {
 	// status, live logs, start, stop (declined, then confirmed), restart,
 	// dashboard link, server check, the HTTPS menu (and back), uninstall
 	// (declined), exit
-	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n17\n\n19\n0\n\n20\nn\n\n0\n", f)
+	m, out, _, _, doctors := testMenu(dir, "1\n\n2\n\n3\n\n4\nn\n\n4\ny\n\n5\n\n15\n\n17\n\n19\n0\n\n20\n1\nn\n\n0\n", f)
 	if code := m.loop(); code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}

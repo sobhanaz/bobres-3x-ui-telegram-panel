@@ -710,6 +710,39 @@ verify_release() {
   return 0
 }
 
+# ---- what this script installs, recorded for `bobres uninstall` ---------------------------------
+# When this script has to install something itself (Docker, openssl), it writes down exactly what
+# appeared, so that `sudo bobres uninstall --purge --remove-docker` can remove that and nothing
+# else, and only when nothing else needs it. The record is a text file per component in
+# $STATE_DIR/installed/ ("package NAME", "file PATH", "group NAME" lines); `bobres install` copies
+# it into the install receipt, and the uninstall reads it too.
+
+# snap_system FILE: the installed packages ("p NAME"), the files in apt's source and key directories
+# ("f PATH") and the docker group ("g docker"), one fact per line, sorted.
+snap_system() {
+  {
+    dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' 2>/dev/null | awk '$2 ~ /^ii/ { print "p " $1 }'
+    local d
+    for d in /etc/apt/sources.list.d /etc/apt/keyrings /etc/apt/trusted.gpg.d /usr/share/keyrings; do
+      if [ -d "$d" ]; then find "$d" -maxdepth 1 -type f 2>/dev/null | sed 's/^/f /'; fi
+    done
+    if getent group docker >/dev/null 2>&1; then echo "g docker"; fi
+  } 2>/dev/null | LC_ALL=C sort -u >"$1" || true
+}
+
+# record_installed NAME BEFORE AFTER STATE_DIR: what appeared between two snapshots becomes
+# STATE_DIR/installed/NAME. Never fails the install.
+record_installed() {
+  local name=$1 before=$2 after=$3 state=$4 out
+  out="$state/installed/$name"
+  mkdir -p "$state/installed" 2>/dev/null || return 0
+  {
+    printf '# written by install.sh %s on %s\n' "$VERSION_SCRIPT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    LC_ALL=C comm -13 "$before" "$after" | awk '$1 == "p" { print "package " $2 } $1 == "f" { print "file " $2 } $1 == "g" { print "group " $2 }'
+  } >"$out.tmp" 2>/dev/null && mv -f "$out.tmp" "$out" || rm -f "$out.tmp" 2>/dev/null || true
+  return 0
+}
+
 main() {
   export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   umask 022
@@ -720,6 +753,7 @@ main() {
   # from (even when GitHub serves it as the latest release).
   local CHANNEL
   local INSTALL_DIR="${BOBRES_BIN_DIR:-/usr/local/bin}"
+  local STATE_DIR="${BOBRES_STATE_DIR:-/var/lib/bobres}"
 
   usage() {
     cat <<EOF
@@ -837,8 +871,15 @@ EOF
     else
       info "Installing openssl (needed to verify the release signature)"
       export DEBIAN_FRONTEND=noninteractive
+      local ssl_before ssl_after ssl_rc=0
+      ssl_before="$(mktemp)"; ssl_after="$(mktemp)"
       ui_run apt-get update -qq </dev/null || true
-      ui_run apt-get install -y -qq openssl </dev/null || die "could not install openssl"
+      snap_system "$ssl_before"
+      ui_run apt-get install -y -qq openssl </dev/null || ssl_rc=$?
+      snap_system "$ssl_after"
+      record_installed openssl "$ssl_before" "$ssl_after" "$STATE_DIR"
+      rm -f "$ssl_before" "$ssl_after"
+      [ "$ssl_rc" -eq 0 ] || die "could not install openssl"
     fi
   fi
 
@@ -855,11 +896,16 @@ EOF
   else
     ui_step_begin docker
     info "Installing Docker (official convenience script from https://get.docker.com; its output is in $UI_LOG)"
-    local tmp_docker
-    tmp_docker="$(mktemp)"
+    local tmp_docker snap_before snap_after docker_rc=0
+    tmp_docker="$(mktemp)"; snap_before="$(mktemp)"; snap_after="$(mktemp)"
     ui_run "${CURL[@]}" https://get.docker.com -o "$tmp_docker" || die "could not download the Docker installer from https://get.docker.com"
-    ui_run sh "$tmp_docker" </dev/null || die "the Docker installer failed"
-    rm -f "$tmp_docker"
+    # What Docker's installer adds is written down, so that the uninstall can remove exactly that.
+    snap_system "$snap_before"
+    ui_run sh "$tmp_docker" </dev/null || docker_rc=$?
+    snap_system "$snap_after"
+    record_installed docker "$snap_before" "$snap_after" "$STATE_DIR"
+    rm -f "$tmp_docker" "$snap_before" "$snap_after"
+    [ "$docker_rc" -eq 0 ] || die "the Docker installer failed"
     ui_run systemctl enable --now docker </dev/null || true
     docker info >/dev/null 2>&1 || die "Docker was installed but the daemon is not reachable"
   fi
@@ -888,7 +934,6 @@ EOF
 
   ui_step_begin verify
   info "Verifying release signature"
-  local STATE_DIR="${BOBRES_STATE_DIR:-/var/lib/bobres}"
   verify_release "$WORK" "$STATE_DIR" "$CHANNEL" || die "verification failed; refusing to install"
 
   info "Verifying checksum"

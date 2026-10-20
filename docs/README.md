@@ -49,6 +49,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 | [HTTPS certificates](runbooks/https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; recovery when browsers refuse the dashboard |
 | [Restore a backup](runbooks/restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](runbooks/update-rollback.md) | Install a new release, or undo the last one |
+| [Uninstall and start over](runbooks/uninstall.md) | Take BOBRES off a server so that it is as on day one (with a final backup), move the store, or start again |
 | [Releases and update channels](runbooks/releases.md) | Publish a stable or beta release, re-sign a quiet stable channel, move a store between channels |
 
 ## Design notes and plans (history of each phase)

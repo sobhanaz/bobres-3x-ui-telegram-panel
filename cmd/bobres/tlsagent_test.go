@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -781,68 +780,45 @@ func TestGatewayStateOf(t *testing.T) {
 // the install's compose file does not declare: after a rollback to a release
 // from before the HTTPS manager, down --volumes leaves tls_request (the request
 // for the HTTPS setting, which holds an own certificate's private key),
-// tls_result and caddy_admin.
+// tls_result and caddy_admin. The lab (uninstall_lab_test.go) is the server.
 func TestPurgeRemovesEveryVolumeOfTheProject(t *testing.T) {
-	const listed = "bobres_pg_data\nbobres_redis_data\nbobres_tls_request\nbobres_tls_result\nbobres_caddy_admin\nbobres_caddy_data\n"
-	run := func(t *testing.T, left string, rmErr error, args ...string) (*fakeVolumes, *bytes.Buffer, *bytes.Buffer, int, string) {
-		t.Helper()
-		dir := installDir(t)
-		writeOldCompose(t, dir) // the rolled-back compose file: it declares only pg_data
-		f := &fakeVolumes{left: left, rmErr: rmErr}
-		o, out, errOut := testOps("", &fakeOps{})
-		o.run = f.run
-		code := o.uninstallCmd(append([]string{"--dir", dir, "--purge", "--yes"}, args...))
-		return f, out, errOut, code, dir
+	l := newLab(t)
+	l.installBobres()
+	if l.declared["bobres_tls_request"] {
+		t.Fatal("the lab's compose file declares tls_request: this test needs the rolled-back one")
 	}
-
-	f, out, errOut, code, dir := run(t, listed, nil)
-	if code != 0 {
-		t.Fatalf("exit %d: %s%s", code, out, errOut)
+	if code := l.run("", l.yesArgs()...); code != 0 {
+		t.Fatalf("exit %d: %s%s", code, l.out, l.err)
+	}
+	for _, v := range []string{"bobres_pg_data", "bobres_redis_data", "bobres_tls_request", "bobres_tls_result", "bobres_caddy_admin", "bobres_caddy_data"} {
+		if l.hasVolume(v) {
+			t.Errorf("the volume %s is left", v)
+		}
+	}
+	if !l.hasVolume("someone_data") {
+		t.Error("a volume of somebody else's was removed")
 	}
 	// Every profile is on for the down: a container of a service whose profile is off (the
 	// agent of a release the install went back from) goes too, with its volume and network.
-	if len(f.calls) != 3 || !strings.HasSuffix(f.calls[0], "--profile * down --remove-orphans --volumes") {
-		t.Fatalf("calls %q", f.calls)
-	}
-	if f.calls[1] != "volume ls --quiet --filter label=com.docker.compose.project=bobres" {
-		t.Errorf("the volumes were listed by %q: the label is the project's", f.calls[1])
-	}
-	if f.calls[2] != "volume rm bobres_pg_data bobres_redis_data bobres_tls_request bobres_tls_result bobres_caddy_admin bobres_caddy_data" {
-		t.Errorf("removed by %q", f.calls[2])
-	}
-	for _, want := range []string{"bobres_tls_request", "bobres_tls_result", "bobres_caddy_admin", "Removed containers, volumes and " + dir} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("the output does not say %q:\n%s", want, out)
-		}
-	}
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Error("the install directory is still there")
-	}
-
-	// Nothing left: no removal, and no talk of volumes down left.
-	f, out, _, code, _ = run(t, "", nil)
-	if code != 0 || len(f.calls) != 2 || strings.Contains(out.String(), "Also removed") {
-		t.Errorf("nothing left: %d %q\n%s", code, f.calls, out)
-	}
-	// A warning line in the listing is not a volume name.
-	f, _, _, code, _ = run(t, "WARNING: a variable is not set. Defaulting to a blank string.\nbobres_tls_request\n\n", nil)
-	if code != 0 || len(f.calls) != 3 || f.calls[2] != "volume rm bobres_tls_request" {
-		t.Errorf("a warning in the listing: %d %q", code, f.calls)
+	if i := l.cmdIndex("docker compose --project-name bobres"); i < 0 || !strings.Contains(l.events[i], "--profile * down --remove-orphans --volumes") {
+		t.Errorf("the stack was not taken down with every profile on: %v", l.events)
 	}
 	// A volume that cannot be removed: the message says so, the directory stays, exit 1.
-	_, out, errOut, code, dir = run(t, listed, errors.New("exit status 1"))
-	if code != 1 || !strings.Contains(errOut.String(), "docker volume rm") || !strings.Contains(errOut.String(), "still on this server") {
-		t.Errorf("a failing removal: %d\n%s%s", code, out, errOut)
+	l2 := newLab(t)
+	l2.installBobres()
+	l2.fail["docker volume rm"] = errors.New("exit status 1")
+	if code := l2.run("", l2.yesArgs()...); code != 1 {
+		t.Fatalf("a failing removal: %d\n%s%s", code, l2.out, l2.err)
 	}
-	if strings.Contains(out.String(), "Nothing of BOBRES remains") {
-		t.Errorf("it says nothing remains:\n%s", out)
+	if strings.Contains(l2.out.String(), "Nothing of BOBRES remains") {
+		t.Errorf("it says nothing remains:\n%s", l2.out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".env")); err != nil {
-		t.Errorf("the install directory was removed while data is left: %v", err)
+	if !existsReal(l2.dir) {
+		t.Error("the install directory was removed while data is left")
 	}
 	// Without --purge no volume is touched.
-	dir = installDir(t)
-	g := &fakeVolumes{left: listed}
+	dir := installDir(t)
+	g := &fakeVolumes{left: "bobres_pg_data\nbobres_tls_request\n"}
 	o, out2, _ := testOps("", &fakeOps{})
 	o.run = g.run
 	if code := o.uninstallCmd([]string{"--dir", dir, "--yes"}); code != 0 || len(g.calls) != 1 || strings.Contains(g.calls[0], "--volumes") {
