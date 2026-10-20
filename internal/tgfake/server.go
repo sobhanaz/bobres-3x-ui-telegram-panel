@@ -8,6 +8,10 @@
 // outgoing messages as JSON) and POST /_fail (a Failure for one chat, as
 // {"chat_id", "code", "description", "retry_after", "times"}).
 //
+// getChatMember answers for the channels a test adds (AddChannel, SetMember):
+// the status it gave a user, "left" for anyone else, and "chat not found" for a
+// chat that was never added.
+//
 // A Stars invoice link (createInvoiceLink) is kept, and a test can play a
 // customer paying it (PreCheckout, Paid, PayInvoiceLink): Telegram sends the
 // bot a pre_checkout_query and then a successful_payment message for a link
@@ -88,6 +92,9 @@ type Server struct {
 	links    []InvoiceLink
 	linkFail *Failure
 	charges  int
+	// channels are the chats getChatMember knows (by the chat as the bot names
+	// it, an @name or a -100… id) and the status of each member in them.
+	channels map[string]map[int64]string
 }
 
 // InvoiceLink is a Stars invoice link the bot made with createInvoiceLink.
@@ -109,7 +116,26 @@ const BotID = 1000
 // New returns an empty fake.
 func New() *Server {
 	return &Server{nextUpd: 1, nextMsg: 1, notified: make(chan struct{}, 1), files: map[string][]byte{},
-		fails: map[int64]*Failure{}}
+		fails: map[int64]*Failure{}, channels: map[string]map[int64]string{}}
+}
+
+// AddChannel makes getChatMember know a channel, as the bot names it (an @name
+// or a -100… id), with nobody in it: everyone is "left".
+func (s *Server) AddChannel(chat string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.channels[chat] == nil {
+		s.channels[chat] = map[int64]string{}
+	}
+}
+
+// SetMember sets a user's status in a channel (creator, administrator, member,
+// restricted, left or kicked), adding the channel if it is new.
+func (s *Server) SetMember(chat string, userID int64, status string) {
+	s.AddChannel(chat)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.channels[chat][userID] = status
 }
 
 // Failure is what Telegram answers a send or edit to one chat with,
@@ -620,6 +646,8 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		reply(w, tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}})
 	case "createInvoiceLink":
 		s.createInvoiceLink(w, p)
+	case "getChatMember":
+		s.getChatMember(w, p)
 	case "answerPreCheckoutQuery":
 		ok, _ := p["ok"].(bool)
 		s.mu.Lock()
@@ -665,6 +693,29 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	default:
 		fail(w, http.StatusNotFound, "Not Found: method "+parts[1])
 	}
+}
+
+// getChatMember answers for a channel AddChannel or SetMember made: a user's
+// status there, "left" if none was set; any other chat is one Telegram does not
+// know. The chat is read as the bot sends it, an @name or a number.
+func (s *Server) getChatMember(w http.ResponseWriter, p map[string]any) {
+	chat := str(p["chat_id"])
+	if n, ok := p["chat_id"].(float64); ok {
+		chat = strconv.FormatInt(int64(n), 10)
+	}
+	user := num(p["user_id"])
+	s.mu.Lock()
+	members, known := s.channels[chat]
+	status := members[user]
+	s.mu.Unlock()
+	if !known {
+		fail(w, http.StatusBadRequest, "Bad Request: chat not found")
+		return
+	}
+	if status == "" {
+		status = "left"
+	}
+	reply(w, tg.ChatMember{Status: status, IsMember: status == "restricted", User: tg.User{ID: user}})
 }
 
 // createInvoiceLink keeps a Stars invoice link, refusing what Telegram

@@ -77,6 +77,7 @@ func newMiniWorld(t *testing.T) *miniWorld {
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(miniBotToken, "test_vpn_bot", miniCoreToken, nil))
+	mux.Handle("POST /internal/miniapp/channel-member", runner.MiniAppChannelMember(bot, miniCoreToken, quiet))
 	mux.Handle("POST /internal/miniapp/invoice", runner.MiniAppInvoice(bot, cat, miniCoreToken, quiet))
 	mux.Handle("POST /internal/miniapp/receipt", runner.MiniAppReceipt(bot, cat, miniCoreToken, quiet))
 	mux.Handle("POST /internal/miniapp/proof-alert", runner.MiniAppProofAlert(func(ctx context.Context, a runner.ProofAlert) {
@@ -89,7 +90,7 @@ func newMiniWorld(t *testing.T) *miniWorld {
 	peer := botfiles.New(botSrv.URL, miniCoreToken)
 	appMux := http.NewServeMux()
 	web.New(web.Config{Store: stack.Store, Domain: stack.Domain, Payments: stack.PayClient, Provisioner: stack.Prov,
-		MiniAppVerify: peer, MiniAppBot: peer, Log: quiet}).Register(appMux)
+		MiniAppVerify: peer, MiniAppBot: peer, MiniAppMembers: peer, Log: quiet}).Register(appMux)
 	app := httptest.NewServer(appMux)
 	t.Cleanup(app.Close)
 

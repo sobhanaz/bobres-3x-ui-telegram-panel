@@ -549,3 +549,41 @@ func TestProfilePhotoIsReadBack(t *testing.T) {
 		t.Fatalf("recorded: %v", methods) // reads are not profile changes
 	}
 }
+
+func TestChatMembersOfAnAddedChannel(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	ctx := context.Background()
+
+	// A chat nobody added is one Telegram does not know.
+	if _, err := c.GetChatMember(ctx, "@mynews", 7); err == nil || !strings.Contains(err.Error(), "chat not found") {
+		t.Fatalf("a chat that was never added: %v", err)
+	}
+	f.AddChannel("@mynews")
+	f.SetMember("-1001234567890", 7, "member")
+	f.SetMember("-1001234567890", 8, "restricted")
+	f.SetMember("@mynews", 9, "administrator")
+	for chat, want := range map[string]map[int64]bool{
+		"@mynews":        {7: false, 9: true},
+		"-1001234567890": {7: true, 8: true, 9: false},
+	} {
+		for user, joined := range want {
+			m, err := c.GetChatMember(ctx, chat, user)
+			if err != nil || m.Joined() != joined || m.User.ID != user {
+				t.Errorf("user %d in %s: %+v %v (want joined %v)", user, chat, m, err, joined)
+			}
+		}
+	}
+	if m, _ := c.GetChatMember(ctx, "@mynews", 9); !m.IsAdmin() || m.Status != "administrator" {
+		t.Errorf("an administrator: %+v", m)
+	}
+	if m, _ := c.GetChatMember(ctx, "@mynews", 1234); m.Status != "left" {
+		t.Errorf("anyone else is gone from the channel: %+v", m)
+	}
+	f.SetMember("@mynews", 9, "kicked")
+	if m, _ := c.GetChatMember(ctx, "@mynews", 9); m.Joined() || m.Status != "kicked" {
+		t.Errorf("a status that changed: %+v", m)
+	}
+}
