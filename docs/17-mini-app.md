@@ -135,7 +135,9 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
   customer's own); `me` adds the section's flags to `features` in the sign-in and `/me` answers.
 - **App:** a folder `web/miniapp/src/sections/<name>/` with `index.ts` (calls `registerSection({ id, title, visible,
   component })`, where `visible` reads `me.features`) and `messages.ts` (default export `{ fa, en }`, the texts in both
-  languages). `sections/index.ts` loads every folder; a test fails if a text a view asks for is missing in either language.
+  languages). `sections/index.ts` loads every folder (`main.ts` imports it by that file name: `./sections` alone is
+  the registry, `sections.ts`); a test fails if a text a view asks for is missing in either language, and another if
+  the app's entry does not register every folder.
 
 ## Check by hand with a real Telegram (nothing here can prove it)
 
