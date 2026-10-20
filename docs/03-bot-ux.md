@@ -74,7 +74,7 @@ on (ranks 6 to 10, 11 to 15, up to rank 50); the viewer's own place is marked wh
 active customers only, never staff, resellers (their invites are their commission link) or banned users, however many
 they invited; the count is the one of the Invite friends screen (every user who joined through the link); a tie goes
 to whoever joined the bot first; a customer who invited nobody is not ranked. The board is one query for all
-customers, kept for 30 seconds in core, and took 60 to 120 ms over 100,000 users, a third of them invited by one of
+customers, kept for 30 seconds in core, and took 50 to 125 ms over 100,000 users, a third of them invited by one of
 about 2,000 inviters, on a busy laptop (`BOBRES_SCALE_TEST=1 go test ./internal/core/store -run TopInvitersAtScale -v`
 seeds them and prints the timings and the plan); the viewer's own count is always read fresh. With the switch off (or the program off) the button is gone from both menus, and a tap on an old
 button answers "not available" and shows the home screen. Not built: a board in the Mini App.
