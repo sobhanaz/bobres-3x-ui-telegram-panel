@@ -152,7 +152,7 @@ func helpLine(s string, max int) (string, []i18n.Problem) {
 	v := strings.Join(strings.Fields(i18n.NormalizeText(s)), " ")
 	var ps []i18n.Problem
 	for _, r := range v {
-		if unicode.IsControl(r) || r == ' ' || r == ' ' {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
 			ps = append(ps, i18n.Problem{Code: i18n.ProblemControlChar, Arg: strconv.QuoteRune(r)})
 		}
 	}

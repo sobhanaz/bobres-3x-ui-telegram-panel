@@ -24,13 +24,13 @@ import (
 // that it can be told from the English one).
 func helpQ(q, a string) coredomain.HelpInput {
 	return coredomain.HelpInput{Kind: helpcontent.KindFAQ, Enabled: true,
-		Title: map[string]string{"en": q, "fa": "س‌ " + q}, Body: map[string]string{"en": a, "fa": "پ‌ " + a}}
+		Title: map[string]string{"en": q, "fa": "س\u200c " + q}, Body: map[string]string{"en": a, "fa": "پ\u200c " + a}}
 }
 
 // helpT is a tutorial in both languages with URL buttons.
 func helpT(title, body string, buttons ...corestore.HelpButton) coredomain.HelpInput {
 	return coredomain.HelpInput{Kind: helpcontent.KindTutorial, Enabled: true, Buttons: buttons,
-		Title: map[string]string{"en": title, "fa": "آ‌ " + title}, Body: map[string]string{"en": body, "fa": "م‌ " + body}}
+		Title: map[string]string{"en": title, "fa": "آ\u200c " + title}, Body: map[string]string{"en": body, "fa": "م\u200c " + body}}
 }
 
 func helpLink(url, en, fa string) corestore.HelpButton {
@@ -47,6 +47,14 @@ func (w *world) addHelp(in coredomain.HelpInput) *corestore.HelpEntry {
 	}
 	w.reloadSettings()
 	return e
+}
+
+// helpSQL writes a row the way nothing in core would: by hand.
+func (w *world) helpSQL(q string, args ...any) {
+	w.t.Helper()
+	if _, err := w.stack.Store.DB().Exec(context.Background(), q, args...); err != nil {
+		w.t.Fatal(err)
+	}
 }
 
 func (w *world) reloadSettings() {
@@ -287,6 +295,16 @@ func TestHelpHomeAndBottomMenuAgree(t *testing.T) {
 		}
 	}
 	check("nothing extra")
+	// The growth items (Top users beside invites, Become a reseller while the
+	// license has resellers) are on both, so they are part of what is compared.
+	if !slices.Contains(actionsOf(customer.shown()), "top") || !slices.Contains(actionsOf(customer.shown()), "ap") {
+		t.Fatalf("the customer's home has no growth buttons to compare: %v", actionsOf(customer.shown()))
+	}
+	owner.text("/set growth.leaderboard.enabled false")
+	owner.sees("Saved")
+	check("with the leaderboard off")
+	owner.text("/set growth.leaderboard.enabled true")
+	owner.sees("Saved")
 
 	w.addHelp(helpT("T", "text"))
 	check("with tutorials")
@@ -324,7 +342,7 @@ func TestHelpTutorialsListAndOne(t *testing.T) {
 	}
 
 	app := w.addHelp(helpT("Install <the> app & go", "<b>Step 1:</b> open the store &amp; search.\nStep 2: install.",
-		helpLink("https://example.com/get", "Download", "دانلود"), helpLink("https://example.com/web", "Website", "وب‌سایت")))
+		helpLink("https://example.com/get", "Download", "دانلود"), helpLink("https://example.com/web", "Website", "وب\u200cسایت")))
 	w.addHelp(helpT("Second", "Another text"))
 	u.press("home")
 	u.press("tut")
@@ -490,14 +508,14 @@ func TestHelpTutorialsInPersianAndWithFallback(t *testing.T) {
 
 	fa.tapMenu("fa", "btn.tutorials")
 	labels := fa.last().labels()
-	if len(labels) != 4 || labels[0] != "آ‌ Both" || labels[1] != "English only" || labels[2] != "فقط فارسی" || labels[3] != w.h.cat.T("fa", "btn.home") {
+	if len(labels) != 4 || labels[0] != "آ\u200c Both" || labels[1] != "English only" || labels[2] != "فقط فارسی" || labels[3] != w.h.cat.T("fa", "btn.home") {
 		t.Fatalf("Persian list: %q", labels)
 	}
 	if !strings.Contains(fa.last().text, "آموزش استفاده") {
 		t.Fatalf("Persian heading: %q", fa.last().text)
 	}
 	fa.press("tut:v:1:" + both.ID)
-	if m := fa.shown(); !strings.Contains(m.text, "م‌ Text") || linkButtons(m)[0] != [2]string{"دریافت", "https://example.com/a"} || m.labels()[len(m.labels())-2] != w.h.cat.T("fa", "btn.back") {
+	if m := fa.shown(); !strings.Contains(m.text, "م\u200c Text") || linkButtons(m)[0] != [2]string{"دریافت", "https://example.com/a"} || m.labels()[len(m.labels())-2] != w.h.cat.T("fa", "btn.back") {
 		t.Fatalf("a Persian tutorial: %q %v", m.text, m.labels())
 	}
 	// The English-only tutorial, for a Persian customer: English, whole, with its English label.
@@ -533,7 +551,7 @@ func TestHelpTutorialsAreSentWhateverIsStored(t *testing.T) {
 	w, _ := helpWorld(t)
 	u := w.customer(7501, "tut_odd")
 	long := strings.Repeat("long text ", 700) // far past a message
-	w.stack.Store.DB().Exec(context.Background(), `INSERT INTO core.help_entries (id, kind, title, body, buttons, sort) VALUES
+	w.helpSQL(`INSERT INTO core.help_entries (id, kind, title, body, buttons, sort) VALUES
 		('00000000-0000-7000-8000-000000007501', 'tutorial', '{"en":"Odd"}', jsonb_build_object('en', $1::text),
 		 '[{"url":"http://insecure.example.com","label":{"en":"Insecure"}},{"url":"https://ok.example.com/x","label":{"en":"Fine"}},{"url":"not a url","label":{"en":"Broken"}}]', 1)`, "<b>"+long+"</b>")
 	w.reloadSettings()
@@ -585,7 +603,7 @@ func TestHelpFAQOneMessageWhenItFits(t *testing.T) {
 	fa := w.persian(7602, "faq_fa")
 	fa.press("support")
 	fa.press("faq")
-	if m := fa.shown(); !strings.Contains(m.text, "<b>۱. س‌ Will I get my own IP?</b>\nپ‌ No.") || !strings.Contains(m.text, "<b>۲. ") ||
+	if m := fa.shown(); !strings.Contains(m.text, "<b>۱. س\u200c Will I get my own IP?</b>\nپ\u200c No.") || !strings.Contains(m.text, "<b>۲. ") ||
 		!strings.Contains(m.text, w.h.cat.T("fa", "help.faq_title")) || strings.Contains(m.text, "<b>1.") {
 		t.Fatalf("Persian: %q", m.text)
 	}
@@ -787,7 +805,7 @@ func TestHelpFAQListPagesAndAnswers(t *testing.T) {
 	fa.press("support")
 	fa.press("faq")
 	m = fa.shown()
-	if !strings.Contains(m.text, "<b>۱.</b> س‌ Question number 1?") || !strings.Contains(m.text, "صفحهٔ ۱ از ۳") || m.kb.InlineKeyboard[1][4].Text != "۱۰" {
+	if !strings.Contains(m.text, "<b>۱.</b> س\u200c Question number 1?") || !strings.Contains(m.text, "صفحهٔ ۱ از ۳") || m.kb.InlineKeyboard[1][4].Text != "۱۰" {
 		t.Fatalf("Persian list: %q %+v", m.text, m.kb.InlineKeyboard[1])
 	}
 }
@@ -819,7 +837,7 @@ func TestHelpFAQLongAnswers(t *testing.T) {
 		t.Fatalf("the answer is %d units", n)
 	}
 	// Written by hand past what core allows: sent, shortened, plain.
-	w.stack.Store.DB().Exec(context.Background(), `INSERT INTO core.help_entries (id, kind, title, body, sort) VALUES
+	w.helpSQL(`INSERT INTO core.help_entries (id, kind, title, body, sort) VALUES
 		('00000000-0000-7000-8000-000000008001', 'faq', '{"en":"Huge"}', jsonb_build_object('en', $1::text), 9)`, "<b>"+strings.Repeat("h", 6000)+"</b>")
 	w.reloadSettings()
 	u.tap("faq:q:1:00000000-0000-7000-8000-000000008001")
@@ -964,7 +982,7 @@ func TestHelpScreensGoThroughTheGates(t *testing.T) {
 	u.hasMenuLabel("fa", "btn.tutorials")
 	u.tapMenu("fa", "btn.tutorials")
 	u.lastHas("آموزش استفاده")
-	if labels := u.last().labels(); labels[0] != "آ‌ Tutorial" {
+	if labels := u.last().labels(); labels[0] != "آ\u200c Tutorial" {
 		t.Fatalf("Persian: %q", labels)
 	}
 }

@@ -154,8 +154,8 @@ func TestHelpNormalizeTidiesWhatItKeeps(t *testing.T) {
 		t.Fatalf("an empty language is not kept: %+v", out)
 	}
 	// The half-space of Persian stays, and a button's address is trimmed.
-	zw, _ := NormalizeHelp(tutorialInput("می‌خواهم", "b", goButton("  https://example.com/x  ")))
-	if zw.Title["en"] != "می‌خواهم" || zw.Buttons[0].URL != "https://example.com/x" {
+	zw, _ := NormalizeHelp(tutorialInput("می\u200cخواهم", "b", goButton("  https://example.com/x  ")))
+	if zw.Title["en"] != "می\u200cخواهم" || zw.Buttons[0].URL != "https://example.com/x" {
 		t.Fatalf("ZWNJ or address: %+v", zw)
 	}
 }
