@@ -203,12 +203,13 @@ func setup(rt *app.Runtime) error {
 		licSrv   domain.LicenseServer
 		publicIP web.PublicIPSource
 		miniAuth web.MiniAppVerifier
+		miniBot  web.MiniAppBot
 	)
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.BotInternalToken)
-		files, bot, licSrv, publicIP, miniAuth = peer, peer, peer, peer, peer
+		files, bot, licSrv, publicIP, miniAuth, miniBot = peer, peer, peer, peer, peer, peer
 		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
@@ -235,7 +236,7 @@ func setup(rt *app.Runtime) error {
 	}
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
 		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
-		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), MiniApp: miniapp.Handler(), MiniAppVerify: miniAuth, Log: rt.Log}).Register(rt.Mux)
+		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), MiniApp: miniapp.Handler(), MiniAppVerify: miniAuth, MiniAppBot: miniBot, Log: rt.Log}).Register(rt.Mux)
 	// An activated license is renewed once a day through the bot (core has
 	// no internet access); a pasted or imported one is left alone.
 	if licSrv != nil {

@@ -232,6 +232,173 @@ func TestStarsInvoiceAndPreCheckoutAreRecorded(t *testing.T) {
 	}
 }
 
+// A Stars invoice link is kept as the bot made it and refused as Telegram
+// refuses it.
+func TestInvoiceLinkIsKeptAndValidated(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	ctx := context.Background()
+
+	link, err := c.CreateInvoiceLink(ctx, tg.Invoice{Title: "Monthly", Description: "Payment of 150,000 Toman", Payload: "intent-1", Stars: 100})
+	if err != nil || !strings.HasPrefix(link, "https://t.me/$") {
+		t.Fatalf("link %q: %v", link, err)
+	}
+	inv, ok := f.Invoice(link)
+	if !ok || inv != (InvoiceLink{URL: link, Title: "Monthly", Description: "Payment of 150,000 Toman", Payload: "intent-1", Currency: "XTR", Stars: 100}) {
+		t.Fatalf("kept: %+v %v", inv, ok)
+	}
+	again, _ := c.CreateInvoiceLink(ctx, tg.Invoice{Title: "Monthly", Description: "d", Payload: "intent-1", Stars: 100})
+	if again == link || len(f.InvoiceLinks()) != 2 {
+		t.Fatalf("each call makes a link of its own: %q %q %+v", link, again, f.InvoiceLinks())
+	}
+	if sent := f.Sent(); len(sent) != 2 || sent[0].Method != "createInvoiceLink" || sent[0].Payload != "intent-1" || sent[0].Stars != 100 {
+		t.Fatalf("log: %+v", sent)
+	}
+
+	for name, bad := range map[string]tg.Invoice{
+		"title too long":       {Title: strings.Repeat("x", 33), Description: "d", Payload: "p", Stars: 1},
+		"no title":             {Description: "d", Payload: "p", Stars: 1},
+		"description too long": {Title: "t", Description: strings.Repeat("d", 256), Payload: "p", Stars: 1},
+		"no description":       {Title: "t", Payload: "p", Stars: 1},
+		"payload too long":     {Title: "t", Description: "d", Payload: strings.Repeat("p", 129), Stars: 1},
+		"no payload":           {Title: "t", Description: "d", Stars: 1},
+		"no price":             {Title: "t", Description: "d", Payload: "p"},
+	} {
+		if _, err := c.CreateInvoiceLink(ctx, bad); !tg.IsRefused(err) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// The limits count characters, not bytes: a Persian title of 32 is fine.
+	if _, err := c.CreateInvoiceLink(ctx, tg.Invoice{Title: strings.Repeat("ا", 32), Description: strings.Repeat("ب", 255), Payload: "p", Stars: 1}); err != nil {
+		t.Errorf("a title of 32 Persian letters: %v", err)
+	}
+	if n := len(f.InvoiceLinks()); n != 3 {
+		t.Errorf("a refused call must not leave a link: %d", n)
+	}
+
+	f.FailInvoiceLinks(Failure{Code: 500, Description: "Internal Server Error", Times: 1})
+	if _, err := c.CreateInvoiceLink(ctx, tg.Invoice{Title: "t", Description: "d", Payload: "p", Stars: 1}); err == nil {
+		t.Error("an injected failure did not fail")
+	}
+	if _, err := c.CreateInvoiceLink(ctx, tg.Invoice{Title: "t", Description: "d", Payload: "p", Stars: 1}); err != nil {
+		t.Errorf("after its one failure: %v", err)
+	}
+}
+
+// A test plays a customer paying a link: Telegram asks the bot first, and
+// reports the payment, in the customer's chat with the bot, only if the bot
+// said yes.
+func TestInvoiceLinkCanBePaid(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	link, err := c.CreateInvoiceLink(ctx, tg.Invoice{Title: "Monthly", Description: "d", Payload: "intent-9", Stars: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payer := tg.User{ID: 4242, Username: "dana", FirstName: "Dana"}
+
+	// A bot that answers every new pre-checkout the way answer says; stop
+	// waits until it has gone, so it cannot answer the next payment.
+	answer := func(ok bool, msg string) (stop func()) {
+		var offset int64
+		for _, u := range pending(t, c, 0) {
+			offset = u.UpdateID + 1
+		}
+		done, gone := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(gone)
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				ups, err := c.GetUpdates(ctx, offset, 1)
+				if err != nil {
+					return
+				}
+				for _, u := range ups {
+					offset = u.UpdateID + 1
+					if q := u.PreCheckoutQuery; q != nil {
+						_ = c.AnswerPreCheckoutQuery(ctx, q.ID, ok && q.TotalAmount == 100 && q.InvoicePayload == "intent-9" && q.Currency == "XTR", msg)
+					}
+				}
+			}
+		}()
+		return func() { close(done); <-gone }
+	}
+
+	// Refused: nothing is charged and no payment is reported.
+	stop := answer(false, "this invoice has expired")
+	if _, err := f.PayInvoiceLink(ctx, link, payer); err == nil || !strings.Contains(err.Error(), "this invoice has expired") {
+		t.Fatalf("a refused payment: %v", err)
+	}
+	stop()
+	for _, u := range pending(t, c, 0) {
+		if u.Message != nil && u.Message.SuccessfulPayment != nil {
+			t.Fatalf("a refused payment was reported as paid: %+v", u.Message)
+		}
+	}
+
+	// Accepted: the pre-checkout first, then the payment in the payer's own chat.
+	stop = answer(true, "")
+	charge, err := f.PayInvoiceLink(ctx, link, payer)
+	stop()
+	if err != nil || charge == "" {
+		t.Fatalf("pay: %q %v", charge, err)
+	}
+	var query *tg.PreCheckoutQuery
+	var paid *tg.Message
+	for _, u := range pending(t, c, 0) {
+		if u.PreCheckoutQuery != nil {
+			query = u.PreCheckoutQuery
+		}
+		if u.Message != nil && u.Message.SuccessfulPayment != nil {
+			paid = u.Message
+		}
+	}
+	if query == nil || query.From.ID != 4242 || query.Currency != "XTR" || query.TotalAmount != 100 || query.InvoicePayload != "intent-9" {
+		t.Fatalf("pre-checkout: %+v", query)
+	}
+	if paid == nil || paid.From == nil || paid.From.ID != 4242 || paid.Chat.ID != 4242 || paid.Chat.Type != "private" ||
+		paid.SuccessfulPayment.InvoicePayload != "intent-9" || paid.SuccessfulPayment.TotalAmount != 100 ||
+		paid.SuccessfulPayment.Currency != "XTR" || paid.SuccessfulPayment.TelegramPaymentChargeID != charge {
+		t.Fatalf("successful payment: %+v", paid)
+	}
+	if ok, _, answered := f.PreCheckoutAnswer("no-such-query"); ok || answered {
+		t.Error("an unknown query was answered")
+	}
+	if _, err := f.PreCheckout("https://t.me/$nope", payer); err == nil {
+		t.Error("a pre-checkout for a link nobody made")
+	}
+	if err := f.Paid("https://t.me/$nope", payer, "c"); err == nil {
+		t.Error("a payment for a link nobody made")
+	}
+
+	// A bot that never answers is an error after the context ends.
+	short, stopWaiting := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer stopWaiting()
+	if _, err := f.PayInvoiceLink(short, link, payer); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("no answer: %v", err)
+	}
+}
+
+// pending returns every update queued from offset on, without waiting.
+func pending(t *testing.T, c *tg.Client, offset int64) []tg.Update {
+	t.Helper()
+	ups, err := c.GetUpdates(context.Background(), offset, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ups
+}
+
 func TestDocumentUploadIsRecorded(t *testing.T) {
 	f := New()
 	srv := httptest.NewServer(f.Handler())

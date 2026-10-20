@@ -573,6 +573,25 @@ func (c *Client) SendInvoice(ctx context.Context, chatID int64, inv Invoice) (*M
 	return &m, nil
 }
 
+// CreateInvoiceLink makes a link to a Telegram Stars invoice (Bot API
+// createInvoiceLink): the same fields SendInvoice sends (currency XTR, one
+// price line) and an empty provider token, which is how Stars are paid. Whoever
+// opens the link (a Mini App calls Telegram.WebApp.openInvoice with it) pays
+// the invoice, and Telegram then sends the bot the same pre_checkout_query and
+// successful_payment updates it sends for an invoice message, with the
+// payload as given.
+func (c *Client) CreateInvoiceLink(ctx context.Context, inv Invoice) (string, error) {
+	body := map[string]any{
+		"title": inv.Title, "description": inv.Description, "payload": inv.Payload, "provider_token": "",
+		"currency": "XTR", "prices": []LabeledPrice{{Label: inv.Title, Amount: inv.Stars}},
+	}
+	var link string
+	if err := c.call(ctx, "createInvoiceLink", jsonBody(body), &link); err != nil {
+		return "", err
+	}
+	return link, nil
+}
+
 // AnswerPreCheckoutQuery confirms (ok) or refuses a payment before Telegram
 // charges it; errMsg is shown to the user when refusing.
 func (c *Client) AnswerPreCheckoutQuery(ctx context.Context, queryID string, ok bool, errMsg string) error {

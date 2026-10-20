@@ -10,6 +10,9 @@ interface BackButton {
   offClick(cb: () => void): void
 }
 
+/** How a Telegram Stars invoice ended: paid, cancelled, failed, or pending (Telegram is still processing it). */
+export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending'
+
 interface WebApp {
   initData?: string
   initDataUnsafe?: { user?: { language_code?: string } }
@@ -18,6 +21,8 @@ interface WebApp {
   close?(): void
   openLink?(url: string): void
   openTelegramLink?(url: string): void
+  openInvoice?(url: string, callback?: (status: InvoiceStatus) => void): void
+  isVersionAtLeast?(version: string): boolean
   setHeaderColor?(color: string): void
   BackButton?: BackButton
   HapticFeedback?: { notificationOccurred(type: 'success' | 'error' | 'warning'): void }
@@ -63,6 +68,22 @@ export function openTelegram(url: string): void {
   const a = app()
   if (a?.openTelegramLink) a.openTelegramLink(url)
   else openLink(url)
+}
+
+/**
+ * openInvoice opens a Telegram Stars invoice link (https://t.me/$...) in Telegram's own payment sheet; callback says how it
+ * ended. It returns false when this Telegram cannot (it is older than 6.1, or this is not Telegram): the caller then opens
+ * the link with openTelegram and has the customer say when they have paid.
+ */
+export function openInvoice(url: string, callback: (status: InvoiceStatus) => void): boolean {
+  const a = app()
+  if (!a?.openInvoice || (a.isVersionAtLeast && !a.isVersionAtLeast('6.1'))) return false
+  try {
+    a.openInvoice(url, callback)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function closeApp(): void {

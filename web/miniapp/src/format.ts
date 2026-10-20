@@ -1,6 +1,8 @@
 // Numbers, money and dates in the customer's language: Persian digits and the
 // Jalali calendar for fa, Latin digits and Gregorian dates for en (the
 // browser's own Intl, no library).
+import { plainAmount } from './pay'
+
 export type Lang = 'fa' | 'en'
 
 const numberLocale = (lang: Lang) => (lang === 'fa' ? 'fa-IR' : 'en-US')
@@ -19,6 +21,14 @@ export function money(amount: number, currency: string, scale: number, lang: Lan
   const value = amount / 10 ** scale
   const formatted = new Intl.NumberFormat(numberLocale(lang), { maximumFractionDigits: Math.min(scale, 2) }).format(value)
   return `${formatted} ${names[currency]?.[lang] ?? currency}`
+}
+
+/**
+ * exactMoney writes an amount with every decimal it has, in Latin digits in either language: the amount a customer is told
+ * to send ("2.500731 USDT") is typed or pasted into a wallet, and a payment of a cent less is not matched to the order.
+ */
+export function exactMoney(amount: number, currency: string, scale: number, lang: Lang): string {
+  return `${plainAmount(amount, scale)} ${names[currency]?.[lang] ?? currency}`
 }
 
 const byteUnits: Record<Lang, [string, string, string]> = {

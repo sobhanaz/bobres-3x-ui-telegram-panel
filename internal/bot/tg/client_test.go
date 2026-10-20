@@ -589,3 +589,43 @@ func TestGetUserProfilePhotos(t *testing.T) {
 		t.Fatalf("photos: %+v", p)
 	}
 }
+
+// An invoice link carries the fields of a Stars invoice message: the currency
+// XTR, one price line, the payload as given and an empty provider token. A
+// refusal comes back as Telegram's error, which never holds the bot token.
+func TestCreateInvoiceLink(t *testing.T) {
+	var method string
+	var got map[string]any
+	var reply any = ok("https://t.me/$AbCdEfGh")
+	c, _ := fakeAPI(t, func(m string, body []byte, _ *http.Request) any {
+		method = m
+		got = nil
+		_ = json.Unmarshal(body, &got)
+		return reply
+	})
+	const payload = "0a1b2c3d-0000-4000-8000-000000000001"
+	link, err := c.CreateInvoiceLink(context.Background(), Invoice{Title: "VPN 50 GB", Description: "Payment of 150,000 Toman", Payload: payload, Stars: 100})
+	if err != nil || link != "https://t.me/$AbCdEfGh" {
+		t.Fatalf("link %q: %v", link, err)
+	}
+	prices, _ := got["prices"].([]any)
+	if len(prices) != 1 {
+		t.Fatalf("an invoice has one price line: %v", got)
+	}
+	line, _ := prices[0].(map[string]any)
+	providerToken, hasProviderToken := got["provider_token"]
+	if method != "createInvoiceLink" || got["title"] != "VPN 50 GB" || got["description"] != "Payment of 150,000 Toman" ||
+		got["payload"] != payload || got["currency"] != "XTR" || line["amount"] != float64(100) || line["label"] != "VPN 50 GB" ||
+		!hasProviderToken || providerToken != "" {
+		t.Fatalf("createInvoiceLink %s %v", method, got)
+	}
+	if _, set := got["chat_id"]; set {
+		t.Fatalf("a link is not sent to a chat: %v", got)
+	}
+
+	reply = map[string]any{"ok": false, "error_code": 400, "description": "Bad Request: AMOUNT_TOO_BIG"}
+	_, err = c.CreateInvoiceLink(context.Background(), Invoice{Title: "t", Description: "d", Payload: "p", Stars: 1 << 40})
+	if err == nil || !IsRefused(err) || strings.Contains(err.Error(), token) {
+		t.Fatalf("a refusal: %v", err)
+	}
+}

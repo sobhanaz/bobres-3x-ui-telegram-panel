@@ -29,6 +29,26 @@ export function errorKey(e: unknown): Key {
     case 'invalid':
     case 'discount':
       return 'err.invalid'
+    // Stars and manual payments (the texts are in sections/payments/messages.ts)
+    case 'method_off':
+    case 'too_large':
+    case 'bad_type':
+    case 'empty':
+    case 'no_receipt':
+    case 'one_receipt':
+    case 'reference_required':
+    case 'bad_txid':
+    case 'already_submitted':
+    case 'payment_closed':
+    case 'duplicate':
+    case 'txid_announced':
+    case 'chat_closed':
+    case 'invoice_refused':
+    case 'busy':
+    case 'bot_unavailable':
+      return `err.${e.code}`
+    case 'unavailable': // payments or the store behind core is away for a moment
+      return 'err.busy'
     default:
       return 'err.unknown'
   }

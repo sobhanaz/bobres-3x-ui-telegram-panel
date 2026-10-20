@@ -138,6 +138,9 @@ var contexts = map[string]Context{
 	"pay.topup_title":     CtxInvoiceTitle,
 	"pay.stars_desc":      CtxInvoiceDesc,
 	"pay.precheck_failed": CtxPlain,
+	// The caption of a receipt the Mini App sends to the customer's chat: a
+	// photo's (HTML) or a document's (plain), so it holds no markup.
+	"pay.receipt_caption": CtxPlain,
 	"ref.share_text":      CtxPlain,
 	"paysupport.in_bot":   CtxPlain,
 	"admin.status_reason": CtxInternal,

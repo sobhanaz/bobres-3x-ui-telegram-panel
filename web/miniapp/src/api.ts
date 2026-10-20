@@ -76,7 +76,23 @@ export interface Intent {
   gateway_amount: number
   gateway_currency: string
   scale_gateway: number
-  details: { pay_address?: string; network?: string; expires_at?: string; reference?: string }
+  /** what the payment shows: the USDT address of an automatic payment; for a manual one the card, the addresses, the link and the payment reference */
+  details: {
+    pay_address?: string
+    network?: string
+    expires_at?: string
+    reference?: string
+    card_number?: string
+    card_holder?: string
+    usdt_trc20?: string
+    usdt_erc20?: string
+    zarinpal_link?: string
+  }
+  /** Telegram Stars: the invoice to open, and its price in Stars */
+  invoice_url?: string
+  stars?: number
+  /** manual USDT: what to send, in micro-USDT (6 decimals) */
+  usdt_amount?: number
 }
 /** label names a new service a reseller buys for a customer (core ignores it for anyone else). */
 export interface OrderRequest { plan_id: string; type?: string; subscription_id?: string; discount_code?: string; key?: string; label?: string }
@@ -86,11 +102,18 @@ let signingIn: Promise<Me> | null = null
 
 async function raw<T>(method: string, path: string, body?: unknown, auth = true): Promise<T> {
   const headers: Record<string, string> = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  // A form (a receipt image) goes as it is: the browser writes its Content-Type, with the boundary.
+  const form = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !form) headers['Content-Type'] = 'application/json'
   if (auth && token) headers.Authorization = `Bearer ${token}`
   let res: Response
   try {
-    res = await fetch(`/api/mini/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store' })
+    res = await fetch(`/api/mini/v1${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body),
+      cache: 'no-store',
+    })
   } catch {
     throw new ApiError(0, 'network', 'network error')
   }
@@ -149,6 +172,16 @@ export const api = {
   pay: (id: string, method: string) => call<Intent>('POST', `/orders/${id}/pay`, { method }),
   topup: (amount: number, method: string, key: string) => call<Intent>('POST', '/topup', { amount, method, key }),
   checkPayment: (id: string) => call<{ intent_id: string; status: string; order_id: string; failure_reason: string }>('POST', `/payments/${id}/check`, {}),
+  /** sendReceipt sends the receipt image of a manual payment, with the bank's tracking number; the payment then waits for staff. */
+  sendReceipt: (id: string, receipt: Blob, filename: string, reference: string) => {
+    const form = new FormData()
+    if (reference) form.append('reference', reference)
+    form.append('receipt', receipt, filename)
+    return call<{ intent_id: string; status: string }>('POST', `/payments/${id}/proof`, form)
+  },
+  /** sendTxid sends a crypto payment's transaction hash instead of an image. */
+  sendTxid: (id: string, txid: string, network: string) =>
+    call<{ intent_id: string; status: string }>('POST', `/payments/${id}/proof`, { txid, network }),
   logout: () => raw<{ ok: boolean }>('POST', '/logout', {}).finally(() => (token = '')),
 }
 

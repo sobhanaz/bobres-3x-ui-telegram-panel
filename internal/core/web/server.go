@@ -82,7 +82,12 @@ type Config struct {
 	// asking the bot (nil: no bot; signing in answers 503).
 	MiniApp       http.Handler
 	MiniAppVerify MiniAppVerifier
-	Log           *slog.Logger
+	// MiniAppBot makes the Mini App's Stars invoice links, sends its receipts
+	// to the customer's chat and has the staff alerted to a payment proof, all
+	// through the bot, which alone holds the Telegram token (nil: the Mini App
+	// offers no Stars and no manual payment).
+	MiniAppBot MiniAppBot
+	Log        *slog.Logger
 }
 
 // Server is the dashboard API.

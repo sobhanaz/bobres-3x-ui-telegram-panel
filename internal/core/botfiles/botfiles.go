@@ -42,12 +42,16 @@ type File struct {
 type Client struct {
 	base, token string
 	hc          *http.Client
+	// upload carries a Mini App customer's receipt, which the bot reads,
+	// checks and sends on to Telegram before it answers.
+	upload *http.Client
 }
 
 // New returns a client for the bot at baseURL (http://bot:8080), presenting
 // core's service token.
 func New(baseURL, token string) *Client {
-	return &Client{base: baseURL, token: token, hc: &http.Client{Timeout: 40 * time.Second}}
+	return &Client{base: baseURL, token: token, hc: &http.Client{Timeout: 40 * time.Second},
+		upload: &http.Client{Timeout: 110 * time.Second}}
 }
 
 // Fetch downloads a file by its Telegram file id.

@@ -263,7 +263,11 @@ func (h *Handler) onStarsPaid(parent context.Context, m *tg.Message) {
 		lang = l
 	}
 	if err == nil && ref.GetStatus() == "succeeded" {
-		h.sendTo(ctx, m.Chat.ID, h.cat.T(lang, "pay.stars_received"))
+		text := "pay.stars_received"
+		if ref.GetOrderId() == "" { // a wallet top-up (the Mini App takes them by Stars): no service is being prepared
+			text = "pay.check_paid_topup"
+		}
+		h.sendTo(ctx, m.Chat.ID, h.cat.T(lang, text))
 		return
 	}
 	h.log.Error("Stars payment not recorded as paid", "telegram_id", from.ID, "charge_id", sp.TelegramPaymentChargeID,

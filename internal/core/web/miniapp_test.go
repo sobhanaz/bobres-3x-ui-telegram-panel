@@ -47,6 +47,9 @@ func (v fakeVerifier) VerifyMiniApp(_ context.Context, initData string) (*botfil
 	return u, nil
 }
 
+// miniIntentID is the id of the payment miniPay makes: a UUID, as every real one is.
+const miniIntentID = "0000000a-0000-4000-8000-000000000001"
+
 // miniPay is a payments service with one gateway.
 type miniPay struct {
 	fakePay
@@ -58,7 +61,7 @@ func (p *miniPay) ListGateways(context.Context) ([]string, error) {
 }
 func (p *miniPay) StartGateway(_ context.Context, g domain.GatewayStart) (*domain.GatewayIntent, error) {
 	p.started = append(p.started, g)
-	return &domain.GatewayIntent{ID: "int-1", Status: "pending", OrderID: g.OrderID, Provider: g.Provider, Amount: g.Amount,
+	return &domain.GatewayIntent{ID: miniIntentID, Status: "pending", OrderID: g.OrderID, Provider: g.Provider, Amount: g.Amount,
 		Currency: g.Currency, GatewayAmount: g.GatewayAmount, GatewayCurrency: g.GatewayCurrency, PayURL: "https://pay.example/x"}, nil
 }
 func (p *miniPay) CheckIntent(_ context.Context, _, id string) (*domain.GatewayIntent, error) {
@@ -453,13 +456,13 @@ func TestMiniAppGatewayAndTopup(t *testing.T) {
 	if code != 200 {
 		t.Skipf("Zarinpal is not offered in this license state: %d %v", code, res)
 	}
-	if res["pay_url"] != "https://pay.example/x" || res["intent_id"] != "int-1" {
+	if res["pay_url"] != "https://pay.example/x" || res["intent_id"] != miniIntentID {
 		t.Fatalf("intent: %v", res)
 	}
 	if g := m.pay.started[0]; g.OrderID != id || g.IdempotencyKey != "int:"+id+":zarinpal" || g.GatewayCurrency != "IRR" {
 		t.Fatalf("started: %+v", g)
 	}
-	if code, out := m.call(http.MethodPost, "/api/mini/v1/payments/int-1/check", tok, map[string]any{}); code != 200 || out["status"] != "succeeded" {
+	if code, out := m.call(http.MethodPost, "/api/mini/v1/payments/"+miniIntentID+"/check", tok, map[string]any{}); code != 200 || out["status"] != "succeeded" {
 		t.Fatalf("check: %d %v", code, out)
 	}
 

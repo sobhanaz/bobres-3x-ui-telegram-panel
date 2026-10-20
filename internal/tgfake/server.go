@@ -7,13 +7,21 @@
 // POST /_inject (an Update without update_id), GET /_sent (the recorded
 // outgoing messages as JSON) and POST /_fail (a Failure for one chat, as
 // {"chat_id", "code", "description", "retry_after", "times"}).
+//
+// A Stars invoice link (createInvoiceLink) is kept, and a test can play a
+// customer paying it (PreCheckout, Paid, PayInvoiceLink): Telegram sends the
+// bot a pre_checkout_query and then a successful_payment message for a link
+// as it does for an invoice message, but there is no message of the bot's in
+// the customer's chat that the payment belongs to.
 package tgfake
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -21,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 )
@@ -74,6 +83,24 @@ type Server struct {
 	// photos set, each a new one, like Telegram's.
 	photo  []tg.PhotoSize
 	photos int
+	// links are the Stars invoice links made so far, oldest first;
+	// linkFail is what the next createInvoiceLink calls fail with.
+	links    []InvoiceLink
+	linkFail *Failure
+	charges  int
+}
+
+// InvoiceLink is a Stars invoice link the bot made with createInvoiceLink.
+type InvoiceLink struct {
+	URL         string
+	Title       string
+	Description string
+	Payload     string
+	Currency    string
+	Stars       int64
+	// ProviderToken is the provider_token that came with the request. Stars
+	// take none, so the fake refuses a request that has one.
+	ProviderToken string
 }
 
 // BotID is the fake bot's own user id (getMe).
@@ -169,6 +196,138 @@ func (s *Server) Sent() []Sent {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]Sent(nil), s.sent...)
+}
+
+// FailInvoiceLinks makes createInvoiceLink fail with f (f.Times calls, then it
+// works again; 0: until it is cleared with a zero Failure).
+func (s *Server) FailInvoiceLinks(f Failure) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f.Code == 0 {
+		s.linkFail = nil
+		return
+	}
+	s.linkFail = &f
+}
+
+// linkFailure is the failure due for a createInvoiceLink call, if any.
+func (s *Server) linkFailure() *Failure {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.linkFail == nil {
+		return nil
+	}
+	out := *s.linkFail
+	if s.linkFail.Times > 0 {
+		if s.linkFail.Times--; s.linkFail.Times == 0 {
+			s.linkFail = nil
+		}
+	}
+	return &out
+}
+
+// InvoiceLinks returns the Stars invoice links made so far, oldest first.
+func (s *Server) InvoiceLinks() []InvoiceLink {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.links)
+}
+
+// Invoice finds an invoice link by its URL.
+func (s *Server) Invoice(url string) (InvoiceLink, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, l := range s.links {
+		if l.URL == url {
+			return l, true
+		}
+	}
+	return InvoiceLink{}, false
+}
+
+// PreCheckout plays Telegram asking the bot to confirm that from pays the
+// invoice behind link: it queues the pre_checkout_query and returns its id.
+// The bot has 10 seconds to answer it; PreCheckoutAnswer shows how it did.
+func (s *Server) PreCheckout(link string, from tg.User) (queryID string, err error) {
+	inv, ok := s.Invoice(link)
+	if !ok {
+		return "", fmt.Errorf("tgfake: no invoice link %q", link)
+	}
+	s.mu.Lock()
+	s.charges++
+	queryID = "fake-pcq-" + strconv.Itoa(s.charges)
+	s.mu.Unlock()
+	s.Inject(tg.Update{PreCheckoutQuery: &tg.PreCheckoutQuery{
+		ID: queryID, From: from, Currency: inv.Currency, TotalAmount: inv.Stars, InvoicePayload: inv.Payload,
+	}})
+	return queryID, nil
+}
+
+// PreCheckoutAnswer is the bot's answer to a pre-checkout query: whether it
+// said yes, the message it gave when it said no, and whether it answered yet.
+func (s *Server) PreCheckoutAnswer(queryID string) (ok bool, message string, answered bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.sent {
+		if m.Method == "answerPreCheckoutQuery" && m.QueryID == queryID && m.OK != nil {
+			return *m.OK, m.Text, true
+		}
+	}
+	return false, "", false
+}
+
+// Paid plays Telegram telling the bot that from paid the invoice behind link:
+// the successful_payment service message of the customer's private chat with
+// the bot (there is no earlier message of the bot's in it for a link). A real
+// payment is only reported after the bot said yes to the pre-checkout; Paid
+// does not wait for that (PayInvoiceLink does).
+func (s *Server) Paid(link string, from tg.User, chargeID string) error {
+	inv, ok := s.Invoice(link)
+	if !ok {
+		return fmt.Errorf("tgfake: no invoice link %q", link)
+	}
+	s.mu.Lock()
+	id := s.nextMsg
+	s.nextMsg++
+	s.mu.Unlock()
+	s.Inject(tg.Update{Message: &tg.Message{
+		MessageID: id, From: &from, Chat: tg.Chat{ID: from.ID, Type: "private"}, Date: time.Now().Unix(),
+		SuccessfulPayment: &tg.SuccessfulPayment{
+			Currency: inv.Currency, TotalAmount: inv.Stars, InvoicePayload: inv.Payload, TelegramPaymentChargeID: chargeID,
+		},
+	}})
+	return nil
+}
+
+// PayInvoiceLink plays a customer paying a Stars invoice link, as Telegram
+// does: the pre-checkout query, then, only if the bot answered yes within ctx,
+// the successful payment. It returns the charge id. When the bot says no, the
+// error carries the message Telegram would show the customer, and nothing is
+// charged. The bot has to be running (polling) while it waits.
+func (s *Server) PayInvoiceLink(ctx context.Context, link string, from tg.User) (chargeID string, err error) {
+	q, err := s.PreCheckout(link, from)
+	if err != nil {
+		return "", err
+	}
+	for {
+		ok, msg, answered := s.PreCheckoutAnswer(q)
+		if answered {
+			if !ok {
+				return "", fmt.Errorf("tgfake: the bot refused the payment: %s", msg)
+			}
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("tgfake: the bot never answered the pre-checkout: %w", ctx.Err())
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	s.mu.Lock()
+	s.charges++
+	chargeID = "fake-charge-" + strconv.Itoa(s.charges)
+	s.mu.Unlock()
+	return chargeID, s.Paid(link, from, chargeID)
 }
 
 // Profile returns a copy of the profile calls so far.
@@ -459,6 +618,8 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			Text: "[invoice] " + str(p["title"]), Payload: str(p["payload"]), Stars: stars})
 		s.mu.Unlock()
 		reply(w, tg.Message{MessageID: id, Chat: tg.Chat{ID: num(p["chat_id"]), Type: "private"}})
+	case "createInvoiceLink":
+		s.createInvoiceLink(w, p)
 	case "answerPreCheckoutQuery":
 		ok, _ := p["ok"].(bool)
 		s.mu.Lock()
@@ -504,6 +665,50 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	default:
 		fail(w, http.StatusNotFound, "Not Found: method "+parts[1])
 	}
+}
+
+// createInvoiceLink keeps a Stars invoice link, refusing what Telegram
+// refuses: a title of 1 to 32 characters, a description of 1 to 255, a
+// payload of 1 to 128 bytes, any currency but XTR, a price list that is not
+// one positive line, and a provider token (Stars take none).
+func (s *Server) createInvoiceLink(w http.ResponseWriter, p map[string]any) {
+	if f := s.linkFailure(); f != nil {
+		failWith(w, *f)
+		return
+	}
+	l := InvoiceLink{Title: str(p["title"]), Description: str(p["description"]), Payload: str(p["payload"]),
+		Currency: str(p["currency"]), ProviderToken: str(p["provider_token"])}
+	prices, _ := p["prices"].([]any)
+	if len(prices) == 1 {
+		if line, ok := prices[0].(map[string]any); ok {
+			l.Stars = num(line["amount"])
+		}
+	}
+	var problem string
+	switch n := utf8.RuneCountInString(l.Title); {
+	case n < 1 || n > 32:
+		problem = "invoice title is invalid"
+	case utf8.RuneCountInString(l.Description) < 1 || utf8.RuneCountInString(l.Description) > 255:
+		problem = "invoice description is invalid"
+	case len(l.Payload) < 1 || len(l.Payload) > 128:
+		problem = "invoice payload is invalid"
+	case l.Currency != "XTR":
+		problem = "currency is invalid"
+	case l.ProviderToken != "":
+		problem = "PAYMENT_PROVIDER_INVALID"
+	case len(prices) != 1 || l.Stars <= 0:
+		problem = "prices must be one positive amount of Stars"
+	}
+	if problem != "" {
+		fail(w, http.StatusBadRequest, "Bad Request: "+problem)
+		return
+	}
+	s.mu.Lock()
+	l.URL = "https://t.me/$fakeInvoice" + strconv.Itoa(len(s.links)+1)
+	s.links = append(s.links, l)
+	s.sent = append(s.sent, Sent{Method: "createInvoiceLink", Text: "[invoice link] " + l.Title, Payload: l.Payload, Stars: l.Stars})
+	s.mu.Unlock()
+	reply(w, l.URL)
 }
 
 // recordProfile records a profile call and applies what it changes (then,
