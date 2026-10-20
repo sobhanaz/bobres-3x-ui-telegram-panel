@@ -1548,9 +1548,22 @@ func TestMiniAppACustomerHasOneReceiptOnItsWayAtATime(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("rae's first receipt never reached the bot")
 	}
-	// Rae's second, for another payment, waits for the first: it does not even reach the bot.
-	if code, out := p.receipt(rae, b, "998877", img); code != 409 || out["error"] != "busy" {
-		t.Errorf("rae's second at once: %d %v", code, out)
+	// Rae's second, for another payment, waits for the first: it does not even reach the bot. (Asked on the
+	// side: where there is no such rule it would sit at the bot with the first, and the test must say so.)
+	second := make(chan [2]any, 1)
+	go func() {
+		code, out := p.receipt(rae, b, "998877", img)
+		second <- [2]any{code, out}
+	}()
+	select {
+	case r := <-second:
+		if out, _ := r[1].(map[string]any); r[0] != 409 || out["error"] != "busy" {
+			t.Errorf("rae's second at once: %v", r)
+		}
+	case <-p.bot.started:
+		t.Error("rae's second receipt got to the bot while the first was still on its way")
+	case <-time.After(10 * time.Second):
+		t.Error("rae's second was neither turned away nor sent")
 	}
 	// Sol is not held up.
 	other := make(chan int, 1)
