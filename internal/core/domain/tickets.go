@@ -26,8 +26,30 @@ const (
 	maxSubjectRunes  = 100
 )
 
-// TicketCategories a customer picks from; "general" is what older tickets have.
-var TicketCategories = []string{"payment", "service", "other"}
+// CategoryReseller is the category of a reseller application: a customer's
+// request to become a reseller, which the bot's Become a reseller button files
+// as a ticket of its own (see AddCustomerMessage).
+const CategoryReseller = "reseller"
+
+// TicketCategories are the categories a ticket can have; "general" is what
+// older tickets have.
+var TicketCategories = []string{"payment", "service", "other", CategoryReseller}
+
+// SupportCategories are the topics a customer picks from when they write to
+// support, in the bot and in the Mini App: a reseller application is filed by
+// its own button, not picked.
+var SupportCategories = []string{"payment", "service", "other"}
+
+// The refusals of a reseller application that the bot words for the customer
+// (they are part of the error text, like the other states the bot reads).
+const (
+	// ApplicationOpen: the customer has an application waiting already.
+	ApplicationOpen = "a reseller application is open already"
+	// ConversationOpen: another conversation with support is open: an
+	// application is a ticket of its own, and a customer has one open ticket at
+	// a time.
+	ConversationOpen = "another support conversation is open"
+)
 
 // CustomerMessage is a customer's message for support (from the bot).
 type CustomerMessage struct {
@@ -92,9 +114,20 @@ func (s *Service) AddCustomerMessage(ctx context.Context, p CustomerMessage) (*C
 	if !slices.Contains(TicketCategories, p.Category) {
 		p.Category = "other"
 	}
+	// A reseller application is a conversation of its own: a new ticket, never
+	// an answer in another one, and only from a customer who may apply.
+	application := p.Category == CategoryReseller
+	if application && (p.TicketID != "" || p.ReplyToTGID > 0) {
+		return nil, invalid("a reseller application starts a ticket of its own")
+	}
 	u, err := s.st.GetUser(ctx, s.st.Conn(), p.UserID)
 	if err != nil {
 		return nil, err // banned customers may write: it is how they appeal
+	}
+	if application {
+		if err := s.requireApplicant(ctx, u); err != nil {
+			return nil, err
+		}
 	}
 	var key *string
 	if p.TGMessageID > 0 {
@@ -156,6 +189,15 @@ func (s *Service) addCustomerMessage(ctx context.Context, tx pgx.Tx, u *store.Us
 		if t, err = s.st.OpenTicketOf(ctx, tx, u.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
 			return nil, err
 		}
+		if t != nil && p.Category == CategoryReseller {
+			// One open ticket at a time: an application neither joins the open
+			// conversation (it would not be an application any more) nor
+			// starts a second one.
+			if t.Category == CategoryReseller {
+				return nil, stateErr("%s", ApplicationOpen)
+			}
+			return nil, stateErr("%s", ConversationOpen)
+		}
 	}
 	if t == nil {
 		t = &store.Ticket{UserID: u.ID, Category: p.Category, Subject: subjectOf(p.Text, p.FileName)}
@@ -197,6 +239,20 @@ func (s *Service) addCustomerMessage(ctx context.Context, tx pgx.Tx, u *store.Us
 		err = s.publish(ctx, tx, events.TicketCustomerReplied, e)
 	}
 	return res, err
+}
+
+// requireApplicant: only an active customer, one who is not staff and not a
+// reseller already, may apply to become a reseller, and only while the license
+// in effect includes resellers (the refusal that names the license is for
+// staff: the bot tells a customer only that this is not available).
+func (s *Service) requireApplicant(ctx context.Context, u *store.User) error {
+	switch {
+	case u.Status != "active":
+		return ErrUserBanned
+	case u.Role != "user":
+		return stateErr("only a customer can apply to become a reseller")
+	}
+	return s.requireResellers(ctx)
 }
 
 // MyTickets is the customer's open ticket (if any) and their recent ones.

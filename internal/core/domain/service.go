@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -39,6 +40,9 @@ type Config struct {
 	Log *slog.Logger
 	// License is what a license token is checked against.
 	License LicenseConfig
+	// LeaderboardTTL is how long the top-inviters board is kept before it is
+	// read again (0: 30 seconds; below 0: never kept, every call reads it).
+	LeaderboardTTL time.Duration
 }
 
 // Service composes the store with business rules.
@@ -52,6 +56,8 @@ type Service struct {
 	// embedded is the license key ring built into core, read once.
 	keysOnce sync.Once
 	embedded license.KeyRing
+	// boards keeps the top-inviters board for a short time (Config.LeaderboardTTL).
+	boards boardCache
 }
 
 // New builds a Service publishing to core's outbox.

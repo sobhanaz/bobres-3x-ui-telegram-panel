@@ -51,6 +51,7 @@ const (
 	CoreService_AdminSetSetting_FullMethodName           = "/core.v1.CoreService/AdminSetSetting"
 	CoreService_QuoteOrder_FullMethodName                = "/core.v1.CoreService/QuoteOrder"
 	CoreService_GetReferralInfo_FullMethodName           = "/core.v1.CoreService/GetReferralInfo"
+	CoreService_GetTopInviters_FullMethodName            = "/core.v1.CoreService/GetTopInviters"
 	CoreService_AdminUpsertDiscount_FullMethodName       = "/core.v1.CoreService/AdminUpsertDiscount"
 	CoreService_AdminListDiscounts_FullMethodName        = "/core.v1.CoreService/AdminListDiscounts"
 	CoreService_CreateDashboardLink_FullMethodName       = "/core.v1.CoreService/CreateDashboardLink"
@@ -127,6 +128,9 @@ type CoreServiceClient interface {
 	AdminSetSetting(ctx context.Context, in *AdminSetSettingRequest, opts ...grpc.CallOption) (*Settings, error)
 	QuoteOrder(ctx context.Context, in *QuoteOrderRequest, opts ...grpc.CallOption) (*Quote, error)
 	GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error)
+	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
+	// enabled is false while the board is off. NOT_FOUND for an unknown user.
+	GetTopInviters(ctx context.Context, in *GetTopInvitersRequest, opts ...grpc.CallOption) (*TopInviters, error)
 	AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error)
 	AdminListDiscounts(ctx context.Context, in *AdminListDiscountsRequest, opts ...grpc.CallOption) (*AdminListDiscountsResponse, error)
 	CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error)
@@ -501,6 +505,16 @@ func (c *coreServiceClient) GetReferralInfo(ctx context.Context, in *GetReferral
 	return out, nil
 }
 
+func (c *coreServiceClient) GetTopInviters(ctx context.Context, in *GetTopInvitersRequest, opts ...grpc.CallOption) (*TopInviters, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TopInviters)
+	err := c.cc.Invoke(ctx, CoreService_GetTopInviters_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Discount)
@@ -836,6 +850,9 @@ type CoreServiceServer interface {
 	AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error)
 	QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error)
 	GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error)
+	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
+	// enabled is false while the board is off. NOT_FOUND for an unknown user.
+	GetTopInviters(context.Context, *GetTopInvitersRequest) (*TopInviters, error)
 	AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error)
 	AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error)
 	CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error)
@@ -984,6 +1001,9 @@ func (UnimplementedCoreServiceServer) QuoteOrder(context.Context, *QuoteOrderReq
 }
 func (UnimplementedCoreServiceServer) GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetReferralInfo not implemented")
+}
+func (UnimplementedCoreServiceServer) GetTopInviters(context.Context, *GetTopInvitersRequest) (*TopInviters, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTopInviters not implemented")
 }
 func (UnimplementedCoreServiceServer) AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminUpsertDiscount not implemented")
@@ -1669,6 +1689,24 @@ func _CoreService_GetReferralInfo_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_GetTopInviters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTopInvitersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetTopInviters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetTopInviters_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetTopInviters(ctx, req.(*GetTopInvitersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_AdminUpsertDiscount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AdminUpsertDiscountRequest)
 	if err := dec(in); err != nil {
@@ -2325,6 +2363,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetReferralInfo",
 			Handler:    _CoreService_GetReferralInfo_Handler,
+		},
+		{
+			MethodName: "GetTopInviters",
+			Handler:    _CoreService_GetTopInviters_Handler,
 		},
 		{
 			MethodName: "AdminUpsertDiscount",

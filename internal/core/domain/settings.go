@@ -125,6 +125,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "your Zarinpal payment link (https://zarinp.al/...); customers pay there and send the receipt screenshot for approval"},
 	{Key: "referral.reward_percent", Group: "referral", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: 100,
 		Help: "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)"},
+	{Key: SettingLeaderboard, Group: "growth", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = while the referral program is on, customers see a Top users board in the bot: the customers who invited the most people, with their names and Telegram ids masked (never staff, resellers or banned users); false = the Top users button and the board are gone"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
