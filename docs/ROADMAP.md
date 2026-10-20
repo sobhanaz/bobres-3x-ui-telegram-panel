@@ -32,16 +32,20 @@ services, join date) on the wallet screen; a **card to forward** in Invite frien
 `/status` in the bot's command menu; and the **reseller application** (a button for customers, a ticket in a new
 "reseller" category, an alert to staff, the category in the dashboard's inbox and in the Mini App).
 
+Built after v0.7.0 (unreleased): the **help center**, an owner-editable FAQ and usage tutorials in Persian and English.
+The owner edits them on the dashboard's Branding page (the Help content tab); the bot shows the FAQ under Support and
+the tutorials from the home screen and the bottom menu ([03-bot-ux.md](03-bot-ux.md), migration 00026). The Mini App
+does not show them yet.
+
 What is still open:
 
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
   list: it is now tested against the real 0.8.4 image in CI; Marzban 1.0 is not supported yet.)
 - **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** gift credit codes; bulk purchase and a
-  two-column plan list; a help center (an owner-editable FAQ and usage tutorials); server monitoring in the dashboard
-  (the host, Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview); charts and a
-  3D report view on the Reports page; a full uninstall on the server that leaves it as on day one; and downloading and
-  restoring a backup from the dashboard.
+  two-column plan list; server monitoring in the dashboard (the host, Docker, Kubernetes pods when there are any,
+  services, CI/CD, alerts and logs, one overview); charts and a 3D report view on the Reports page; a full uninstall on
+  the server that leaves it as on day one; and downloading and restoring a backup from the dashboard.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, gift codes, a lottery or wheel, reseller targets); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
