@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
@@ -42,9 +45,13 @@ func helperRequestCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 	o := newOps(in, outTee, errTee)
 	stop := st.startFlusher(time.Second)
 	defer stop()
+	// A stop of the service (systemctl stop, a shutdown) reaches a restore as a cancelled context,
+	// which ends it through its own failure path: the services are started again.
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	defer cancel()
 	h := &helperRun{
-		u: newUpdater(o), dir: *dir, coreUID: coreUID, now: o.clock, st: st, helper: helperVersion(),
-		flush: func() { outTee.flush(); errTee.flush() },
+		u: newUpdater(o), dir: *dir, coreUID: coreUID, backupOwner: backupUID, now: o.clock, st: st, helper: helperVersion(),
+		flush: func() { outTee.flush(); errTee.flush() }, ctx: ctx, settle: restoreSettle,
 	}
 	return h.exec()
 }
@@ -60,6 +67,13 @@ type helperRun struct {
 	helper string
 	// flush hands the status the last unfinished line of the output.
 	flush func()
+	// backupOwner is the user that owns the backups the backup service wrote (a restore of one of
+	// them is refused when the file belongs to anyone else, root apart).
+	backupOwner int
+	// ctx is cancelled by a stop of the service; settle is how long a restore waits, once the
+	// backup is checked, before it stops the services (restoreSettle).
+	ctx    context.Context
+	settle time.Duration
 }
 
 // exec takes the install lock, consumes the request and runs it. Whatever the request was, it is
@@ -93,28 +107,49 @@ func (h *helperRun) exec() (code int) {
 		return 0
 	}
 	id := ""
-	var req *updateRequest
+	action := actionUpdate
+	var (
+		req  *updateRequest
+		rreq *restoreRequest
+	)
 	if rerr == nil {
 		id = requestIDHint(raw)
-		req, rerr = parseUpdateRequest(raw, h.now())
+		if action = requestAction(raw); action == actionRestore {
+			// Core's copy of an uploaded backup goes whatever becomes of the request.
+			if up := uploadHint(raw); up != "" {
+				defer removeEntry(uploadPath(h.dir, up))
+			}
+			rreq, rerr = parseRestoreRequest(raw, h.now())
+		} else {
+			req, rerr = parseUpdateRequest(raw, h.now())
+		}
 	}
 	switch {
 	case lockErr != nil && !busy:
-		return h.reject(id, fmt.Sprintf("The update could not start: %v.", lockErr), false)
+		return h.reject(id, fmt.Sprintf("The %s could not start: %v.", action, lockErr), false)
 	case busy:
 		return h.reject(id, "Another update, a rollback or a restore is running on this server: try again when it has finished.", true)
 	case rerr != nil:
-		return h.reject(id, "The update request was refused: "+rerr.Error()+".", false)
+		return h.reject(id, "The "+action+" request was refused: "+rerr.Error()+".", false)
 	case dashboardUpdatesOff(env):
 		return h.reject(id, "Updating from the dashboard is switched off on this server ("+dashboardUpdatesKey+"=off).", false)
 	}
-	again, err := markHandled(h.dir, req.ID, h.now())
+	handled := ""
+	if rreq != nil {
+		handled = rreq.ID
+	} else {
+		handled = req.ID
+	}
+	again, err := markHandled(h.dir, handled, h.now())
 	switch {
 	case err != nil:
 		return h.reject(id, "The request could not be recorded, so it was not run: "+firstLine(err.Error())+".", false)
 	case again:
-		fmt.Fprintf(u.errOut, "The request %s was handled before: ignored.\n", req.ID)
+		fmt.Fprintf(u.errOut, "The request %s was handled before: ignored.\n", handled)
 		return 0
+	}
+	if rreq != nil {
+		return h.runRestore(rreq, env)
 	}
 	return h.run(req, env)
 }
@@ -152,7 +187,8 @@ func (h *helperRun) run(req *updateRequest, env map[string]string) int {
 	started := h.now()
 	h.st.update(func(s *helperStatus) {
 		*s = helperStatus{V: requestProtocol, Installed: true, Helper: h.helper, State: helperRunning, ID: req.ID, From: from, To: to,
-			Channel: req.Channel, Step: stepVerifying, Message: "Checking the release signature.", StartedAt: stamp(started)}
+			Channel: req.Channel, Action: actionUpdate, By: req.By, RequestedAt: stamp(req.At),
+			Step: stepVerifying, Message: "Checking the release signature.", StartedAt: stamp(started)}
 	})
 	u.event, u.locked, u.outcome = h.event, true, updateOutcome{}
 	args := []string{"--dir", h.dir, "--yes", "--channel", req.Channel}
