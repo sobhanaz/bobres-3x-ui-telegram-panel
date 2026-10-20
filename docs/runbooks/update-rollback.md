@@ -19,6 +19,15 @@ install that one). A "Note: this release ... is newer than your license's update
 information only: the license's update date is before that release came out, and `bobres update` installs it all the
 same (security updates are never withheld).
 
+The same page can also **update the install** (Update now, the owner only; it asks the server's updater to run the same
+`bobres update`, so everything below still applies: the signature check, the backup and the automatic rollback), and has
+the channel setting and a **Check again** button. It needs the updater the installer sets up: an install from before it
+gets it with one normal `sudo bobres update` over SSH, and until then the page says updating from the dashboard is not
+available yet. If an update from the dashboard seems stuck, `sudo journalctl -u bobres-updater` and
+`/opt/bobres/run/update/status.json` show what the updater is doing; the dashboard and the bot are away for a few
+minutes during a normal one. Details: [04-dashboard.md](../04-dashboard.md), [02-events-and-apis.md](../02-events-and-apis.md),
+[07-security.md](../07-security.md).
+
 The store follows the **stable** channel unless `/opt/bobres/.env` says `BOBRES_UPDATE_CHANNEL=beta` (pre-releases
 too). `--channel stable|beta` overrides it for one command. How to change channel, and what going back to stable
 means: [Releases and update channels](releases.md#change-a-stores-channel-store-owners).

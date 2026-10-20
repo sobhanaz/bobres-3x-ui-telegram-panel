@@ -28,6 +28,10 @@ const (
 	// DailySummary: yesterday's sales for one staff member who may read the
 	// reports (DailySummaryEvent).
 	DailySummary = "report.daily_summary.v1"
+	// SystemUpdate: an update of the install was asked for in the dashboard
+	// (System > Updates > Update now), or one ended; one event for each owner
+	// (SystemUpdateEvent), so an update nobody asked for is noticed.
+	SystemUpdate = "system.update.v1"
 	// DepositUnmatched: USDT reached the store's TRON address but matched no
 	// automatic payment (DepositUnmatchedEvent); staff credit it by hand.
 	DepositUnmatched = "payment.deposit_unmatched.v1"
@@ -330,6 +334,43 @@ type SystemAlertEvent struct {
 	// lasted).
 	At     int64 `json:"at"`
 	Repeat bool  `json:"repeat,omitempty"`
+}
+
+// States of a SystemUpdateEvent.
+const (
+	// UpdateRequested: an owner asked for the update (the dashboard wrote its
+	// request for the server's updater).
+	UpdateRequested = "requested"
+	// UpdateDone: the install runs the new version.
+	UpdateDone = "done"
+	// UpdateFailed: the update did not finish.
+	UpdateFailed = "failed"
+	// UpdateRolledBack: the new version did not come up healthy and the
+	// install went back to the old one on its own.
+	UpdateRolledBack = "rolled_back"
+	// UpdateNotStarted: the updater never picked the request up; nothing changed.
+	UpdateNotStarted = "not_started"
+)
+
+// SystemUpdateEvent: an owner asked for an update in the dashboard, or the
+// update ended. Core writes one event for each owner who has a Telegram
+// account, in the transaction that records the request (or its end), so a
+// crash neither loses nor repeats the message. The bot sends it as it is to
+// that owner (TelegramID), in their language; versions are release numbers
+// core checked, and By is the dashboard user's name as core cut it. Message
+// is the server updater's own short sentence for an end that is not done (it
+// is text from outside core: the bot escapes it).
+type SystemUpdateEvent struct {
+	TelegramID int64  `json:"telegram_id"`
+	Language   string `json:"language"` // fa or en: the owner's own
+	State      string `json:"state"`
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Channel    string `json:"channel"` // stable or beta
+	By         string `json:"by"`
+	// At is when it was asked (requested) or ended, in unix seconds.
+	At      int64  `json:"at"`
+	Message string `json:"message,omitempty"`
 }
 
 // DailySummaryFlow is how many things happened and the money they carried

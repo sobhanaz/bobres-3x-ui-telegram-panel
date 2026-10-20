@@ -138,14 +138,38 @@ English and can be edited like the others.
   time).
 - Nothing of this has been tried in a real Telegram yet.
 
+### Updating from the dashboard
+- **System > Updates can now update the install**: the owner confirms and core asks the server's updater (a root systemd
+  path unit installed by `bobres install` and `bobres update`) to run the same signed, backed-up, self-rolling-back
+  `bobres update`. Core never gets the Docker socket. The page shows the steps, the updater's sentence and (to the owner)
+  its log, copes with core restarting in the middle, and offers a reload when the new version is up. A request, its
+  outcome and a Telegram notice to every owner are recorded (`system.update.requested` and `system.update.<outcome>` in
+  the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
+- **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
+  unset, the server's variable still decides. A pre-release needs its own confirmation.
+- **An update that was cut off does not block the next one.** If the server loses power in the middle of an update, the
+  updater's status keeps saying "running"; the dashboard now takes a status the updater has not rewritten for 10
+  minutes (it does every 30 seconds) for an interrupted update, records it as failed, tells the owners and lets another
+  be asked for. Without it the page would wait for ever and only `sudo bobres update` on the server could clear it.
+- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** "Check again" only re-read the
+  bot's cached answer (`GET /api/v1/system`), because core had no way to make the bot look again, so "Last checked" never
+  moved and a failed check (GitHub unreachable when the bot started) stayed for an hour. It now calls
+  `POST /api/v1/system/updates/check`, which has the bot reload its settings and look at GitHub at once, and shows when
+  it looked and why a look failed (GitHub's own words included). The update button was never one: the page only showed
+  `sudo bobres update` with a copy button that did nothing at all in a browser without a clipboard (a dashboard opened
+  over plain http), and the command ignored the channel the page showed. The command now names the channel, copying
+  falls back to the older way and says when it cannot, and there is an Update now.
+- New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
+  Updating from the dashboard needs the server's updater (below) and the `./run/update` mount in `docker-compose.yml`;
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
+
 ### Updating from the dashboard (host side)
 - **A server can now be updated without logging in to it.** `bobres install` (so every `bobres update`) sets up two
   systemd units, `bobres-updater.path` and `bobres-updater.service`, and `bobres update --from-request` (not in the
   help) is what the service runs: it reads the one request the dashboard dropped into `/opt/bobres/run/update`,
   deletes it, takes the same install lock as `update`, `rollback` and `restore`, and runs exactly what
   `bobres update --yes --channel C [--version V]` runs (signed release, backup, restore point, install, health check,
-  automatic rollback). It reports each step in `run/update/status.json`, which the dashboard shows (the dashboard half
-  of this is a separate change).
+  automatic rollback). It reports each step in `run/update/status.json`, which the dashboard shows.
 - **The request carries only a channel (`stable` or `beta`) and a release name** and is checked as strictly as it can
   be: the file is opened without following a link, must be a regular file of core's user of 2 KiB at most, has exactly
   the protocol's fields, is dated within 15 minutes, and an id seen before is ignored. A compromised dashboard can at

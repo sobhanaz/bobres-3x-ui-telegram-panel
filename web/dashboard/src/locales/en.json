@@ -2133,26 +2133,23 @@
     "updates": {
       "title": "Version",
       "current": "This install",
-      "latest": "Latest release",
+      "latest": "Newest release",
       "released": "Released",
       "channel": "Channel",
       "channel_name": {
         "stable": "Stable",
         "beta": "Beta"
       },
-      "channel_hint": "The channel is BOBRES_UPDATE_CHANNEL (stable or beta) in the server's .env file.",
-      "beta_note": "This install follows beta releases: newer pre-releases, less tested. Going back to stable does not downgrade: the install stays on its version until a stable release is newer.",
       "checked_at": "Last checked {time}",
       "state": {
         "newer": "Update available",
         "current": "Up to date",
         "unknown": "Not known"
       },
-      "up_to_date": "This install runs the latest release.",
       "available": "Version {version} is available.",
       "newer_than_license": "This release is newer than your license's update date. It is installed all the same: security updates are never withheld.",
       "see_license": "See the license",
-      "how": "To install it, run this on the server (as root):",
+      "how": "To install it by hand, run this on the server (as root):",
       "copy_command": "Copy the update command",
       "backup_first": "It checks the release signature, backs up the database, installs the new version and rolls back on its own if the store does not come back healthy; sudo bobres rollback undoes the last update later. If bobres update stops with an error, the update and rollback runbook says what each message means and how to fix it.",
       "unverified": "The bot did not check this release's signature. bobres update checks it before installing anything.",
@@ -2167,6 +2164,122 @@
         "invalid": "The latest release's checksum file does not say which version it is.",
         "unsupported": "This version of core does not report updates.",
         "other": "The check failed:"
+      },
+      "prerelease": "Pre-release",
+      "notes": "Release notes",
+      "never_checked": "Not checked yet",
+      "checking": "Checking GitHub…",
+      "reload": "Reload",
+      "verdict": {
+        "current": "This install runs the newest release of the {channel} channel.",
+        "newer": "A newer release is available: {version}.",
+        "newer_pre": "A newer pre-release is available: {version}.",
+        "unknown": "It is not known whether a newer release is out."
+      },
+      "copy_failed": "The browser did not allow copying. Select the command and copy it by hand.",
+      "check_error": "Checking again did not work.",
+      "update": {
+        "now": "Update now",
+        "hint": "The server updates itself, as sudo bobres update does: it checks the release signature, backs up the database, installs the new version and goes back on its own if the store does not come back healthy.",
+        "not_available_title": "Updating from the dashboard is not available yet",
+        "not_available": "One normal update on the server installs the updater that makes this possible; after that, updates can be made from this page. Run it once, over SSH, as root:",
+        "helper_problem": {
+          "no_dir": "The updater's folder is not available to the dashboard.",
+          "no_status": "The updater has not reported yet.",
+          "not_installed": "The updater is not installed on this server.",
+          "bad_status": "The updater's status could not be read.",
+          "unsupported": "The updater is of another version."
+        },
+        "owner_only": "Only the store owner can update from the dashboard. Ask the owner, or run the command below on the server.",
+        "running": "An update is being made right now. Its progress is below.",
+        "server_title": "Update on the server instead"
+      },
+      "confirm": {
+        "title": "Update to {version}?",
+        "from_to": "From {from} to {to}",
+        "channel": "Channel: {channel}",
+        "prerelease_title": "This is a pre-release",
+        "prerelease": "Pre-releases are tested less than stable releases and can have bugs a stable release does not.",
+        "prerelease_check": "I understand, and I want this pre-release",
+        "downtime": "The dashboard and the bot will be unavailable for a few minutes while the services restart. Customers' VPN links keep working.",
+        "safe": "A backup of the database is made first. If the new version does not come back healthy, the update goes back to the previous version on its own.",
+        "owners": "Every owner is told on Telegram when it is asked for and when it ends.",
+        "submit": "Update now"
+      },
+      "refusal": {
+        "helper_missing": "The server's updater is not installed yet: run sudo bobres update once on the server.",
+        "already_running": "An update is already being made.",
+        "check_unavailable": "The bot, which looks for releases, did not answer. Try again in a minute.",
+        "no_release": "No release with a checked signature is known. Check again.",
+        "not_newer": "This install already runs that release or a newer one.",
+        "version_changed": "A different release is the newest now ({latest}). Close this, check again and confirm that one.",
+        "channel_changed": "The channel changed meanwhile. Close this and check again.",
+        "prerelease_unconfirmed": "Confirm that you want the pre-release.",
+        "dev_build": "This is a development build: it cannot tell what is newer.",
+        "request_failed": "The request could not be handed to the server's updater. Try again, or update on the server.",
+        "confirm_required": "Confirm the update first.",
+        "code_required": "Enter the code from your authenticator app.",
+        "code_wrong": "That code is not right. Check the time on your phone and try the next code.",
+        "locked": "Too many wrong codes. Try again in 15 minutes, or log in with a link from the bot."
+      },
+      "progress": {
+        "title": {
+          "queued": "Update requested",
+          "running": "Updating to {to}…",
+          "done": "Updated to {to}",
+          "failed": "The update failed",
+          "rolled_back": "The update was rolled back",
+          "not_started": "The update did not start",
+          "elsewhere": "An update is running on the server"
+        },
+        "asked_by": "Asked by {by} · {time}",
+        "queued": "Waiting for the server's updater to pick the request up. This normally takes a few seconds.",
+        "running": "You can leave this page: the update goes on. Every owner is told on Telegram when it ends.",
+        "elsewhere": "It was started on the server, not here. This page follows it.",
+        "step": {
+          "verify": "Checking the release signature",
+          "backup": "Backing up the database",
+          "pull": "Downloading the new version",
+          "restart": "Restarting the services",
+          "health": "Waiting until everything is healthy",
+          "rollback": "Going back to the previous version"
+        },
+        "steps": "Steps of the update",
+        "reconnecting": "Reconnecting… the dashboard restarts during the update. This page keeps trying.",
+        "done": "BOBRES now runs {version}. Reload the page to use the new dashboard.",
+        "rolled_back": "The new version did not come back healthy, so BOBRES went back to {from} on its own.",
+        "failed": "The update stopped before it finished. On the server, sudo bobres status shows what runs; the update and rollback runbook says what each message means.",
+        "not_started": "The server's updater did not pick the request up, so nothing changed. Run sudo bobres update once on the server.",
+        "reload": "Reload the page",
+        "details": "Details",
+        "dismiss": "Close",
+        "log": "The updater's log (newest lines)"
+      },
+      "channel_card": {
+        "title": "Update channel",
+        "intro": "Which releases this install is offered.",
+        "stable": "Stable",
+        "stable_hint": "Fully tested releases only. Recommended.",
+        "beta": "Beta",
+        "beta_hint": "The newest of all releases, pre-releases included: newer features, less tested.",
+        "beta_warning": "Pre-releases can have bugs a stable release does not, so update on a quiet hour. Going back from beta to stable never downgrades: the install stays on its version until a stable release is newer.",
+        "save": "Save channel",
+        "saved": "Channel saved.",
+        "save_error": "The channel was not saved.",
+        "source_setting": "Chosen here.",
+        "source_server": "From the server's settings ({name}). Choosing here overrides it.",
+        "reset": "Follow the server's setting again",
+        "owner_only": "Only the store owner can change the channel."
+      },
+      "last": {
+        "title": "Last update from the dashboard",
+        "by": "Asked by {by}",
+        "outcome": {
+          "done": "Done",
+          "failed": "Failed",
+          "rolled_back": "Rolled back",
+          "not_started": "Not started"
+        }
       }
     },
     "backups": {

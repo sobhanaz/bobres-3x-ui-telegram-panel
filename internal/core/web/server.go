@@ -66,6 +66,11 @@ type Config struct {
 	// Backups lists and starts backups (nil: the backup service is not
 	// installed).
 	Backups Backups
+	// Updates is "Update now" and the channel setting of the System > Updates
+	// tab: the bot's check, the server's updater (core shares a folder with
+	// it, never the Docker socket) and the record of each request (nil: those
+	// endpoints answer 503).
+	Updates *domain.Updates
 	// LicenseServer reaches the vendor's license server through the bot, to
 	// activate a license key (nil: no bot, activation answers 503).
 	LicenseServer domain.LicenseServer
@@ -271,6 +276,13 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// Backups: the list for owner and admin, "back up now" for the owner.
 	s.route(api, "GET /api/v1/system/backups", PermSystemRead, s.systemBackups)
 	s.route(api, "POST /api/v1/system/backups/run", PermSystemWrite, s.runBackup)
+	// Updates: the state (the bot's check, the updater's progress) for owner
+	// and admin; checking again, the channel and "Update now" for the owner.
+	s.route(api, "GET /api/v1/system/updates", PermSystemRead, s.getUpdates)
+	s.route(api, "GET /api/v1/system/updates/progress", PermSystemRead, s.updateProgress)
+	s.route(api, "POST /api/v1/system/updates/check", PermSystemWrite, s.checkUpdatesNow)
+	s.route(api, "PUT /api/v1/system/updates/channel", PermSystemWrite, s.putUpdateChannel)
+	s.route(api, "POST /api/v1/system/updates/apply", PermSystemWrite, s.applyUpdate)
 	// HTTPS: the state for owner and admin, changes and detecting the
 	// server's IP address (through the bot) by the owner.
 	s.route(api, "GET /api/v1/system/tls", PermSystemRead, s.getTLS)

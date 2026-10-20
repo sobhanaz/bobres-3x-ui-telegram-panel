@@ -14,7 +14,11 @@ release: [06-installer.md](../06-installer.md), "Restore, update and rollback"; 
 A store picks its channel with `BOBRES_UPDATE_CHANNEL=stable|beta` in `/opt/bobres/.env`, set with
 `sudo bobres config set BOBRES_UPDATE_CHANNEL beta` (see the last section). The bot reads it (the
 dashboard's **System → Updates** tab shows the channel), `bobres update` and the menu read it, and
-`bobres update --channel stable|beta` overrides it for one run. install.sh installs the latest stable release
+`bobres update --channel stable|beta` overrides it for one run. The owner can also choose the channel in the
+dashboard (**System → Updates**, the `updates.channel` setting): when it is set it wins for the bot's check and for
+**Update now**, which sends the channel it shows; unset, `BOBRES_UPDATE_CHANNEL` decides. `sudo bobres update` typed on
+the server still reads `.env` (or `--channel`), which is why the page shows the command with the channel it follows.
+install.sh installs the latest stable release
 unless `BOBRES_BASE_URL` points at another one, and refuses a release signed for beta unless it runs with
 `BOBRES_UPDATE_CHANNEL=beta` (install.sh uses it only to accept that release; to keep the store on beta afterwards,
 set it with `bobres config` too, see the last section):
