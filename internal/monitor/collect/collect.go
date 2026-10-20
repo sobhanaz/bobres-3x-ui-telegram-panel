@@ -121,6 +121,7 @@ func (c *Collector) Collect(ctx context.Context) *snapshot.Snapshot {
 		s.Journal.Sources = append(s.Journal.Sources, *dres.gateway)
 	}
 	s.Kubernetes = kube
+	s.Update = c.lastUpdate()
 	slices.Sort(s.Errors)
 	s.Errors = slices.Compact(s.Errors)
 	s.DurationMS = c.Now().Sub(start).Milliseconds()

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -103,6 +104,50 @@ type MonitorChecks struct {
 // MonitorProbe evaluates the monitoring rules for the watchdog (internal/core/monitor).
 type MonitorProbe interface {
 	WatchdogChecks(ctx context.Context, now time.Time) (MonitorChecks, error)
+}
+
+// AlertEntry is one entry of the alert history: a problem the watchdog announced, or its fix.
+type AlertEntry struct {
+	At       time.Time // when the watchdog announced it
+	Key      string
+	Severity string // critical | warning
+	State    string // problem | resolved
+	TitleKey string
+	Args     map[string]string
+	// Title is the text in English, without tags.
+	Title  string
+	Detail string
+	// Since is when the problem was first seen.
+	Since time.Time
+}
+
+// AlertHistory lists the watchdog's announcements, newest first: a problem when it was announced
+// (not its 6-hour and daily reminders, which repeat it) and its fix when it was. The outbox keeps
+// them for ever; limit bounds how many are read.
+func (s *Service) AlertHistory(ctx context.Context, limit int) ([]AlertEntry, error) {
+	rows, err := s.st.RecentAlertEvents(ctx, s.st.Conn(), limit)
+	if err != nil {
+		return nil, err
+	}
+	cat := Texts()
+	out := make([]AlertEntry, 0, len(rows))
+	for _, r := range rows {
+		var e events.SystemAlertEvent
+		if json.Unmarshal(r.Payload, &e) != nil || e.Key == "" || e.Repeat {
+			continue
+		}
+		args := e.Args
+		if args == nil {
+			args = map[string]string{}
+		}
+		at := r.CreatedAt
+		if e.At > 0 {
+			at = time.Unix(e.At, 0)
+		}
+		out = append(out, AlertEntry{At: at, Key: e.Key, Severity: e.Severity, State: e.State, TitleKey: e.TitleKey, Args: args,
+			Title: alertTitle(cat, e.TitleKey, args), Detail: clipDetail(e.Detail, maxAlertDetail), Since: time.Unix(e.Since, 0)})
+	}
+	return out, nil
 }
 
 // monitorScope is the prefix of every monitoring alert's key: switching monitoring off, or removing

@@ -75,6 +75,26 @@ func (s *Store) OpenSystemUpdate(ctx context.Context, q querier) (*SystemUpdate,
 	return u, nil
 }
 
+// ListSystemUpdates lists the updates asked for in the dashboard, newest first (an open one is the
+// newest).
+func (s *Store) ListSystemUpdates(ctx context.Context, q querier, limit int) ([]SystemUpdate, error) {
+	rows, err := q.Query(ctx, `SELECT `+systemUpdateCols+` FROM core.system_updates
+		ORDER BY requested_at DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list system updates: %w", err)
+	}
+	defer rows.Close()
+	var out []SystemUpdate
+	for rows.Next() {
+		u, err := scanSystemUpdate(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *u)
+	}
+	return out, rows.Err()
+}
+
 // LastSystemUpdate is the update that ended last (ErrNotFound when none did).
 func (s *Store) LastSystemUpdate(ctx context.Context, q querier) (*SystemUpdate, error) {
 	u, err := scanSystemUpdate(q.QueryRow(ctx, `SELECT `+systemUpdateCols+` FROM core.system_updates

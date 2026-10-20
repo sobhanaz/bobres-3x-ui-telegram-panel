@@ -68,6 +68,20 @@ type Snapshot struct {
 	Units      []Unit   `json:"units,omitempty"`
 	Journal    *Journal `json:"journal,omitempty"`
 	Kubernetes *Kube    `json:"kubernetes,omitempty"`
+	// Update is the newest update this install made, whoever ran it (the dashboard's helper or
+	// `bobres update` by hand); nil when there is none or it could not be read.
+	Update *LastUpdate `json:"update,omitempty"`
+}
+
+// LastUpdate is read from the restore point `bobres update` leaves for `bobres rollback`: the
+// versions and the time, nothing of the files in it.
+type LastUpdate struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	// At is when the update began (the restore point's time, unix seconds); RolledBackAt when
+	// `bobres rollback` used the restore point, 0 for never.
+	At           int64 `json:"at"`
+	RolledBackAt int64 `json:"rolled_back_at,omitempty"`
 }
 
 // Host is the machine itself.

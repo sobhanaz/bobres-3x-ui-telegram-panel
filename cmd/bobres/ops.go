@@ -104,9 +104,9 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 			cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr = dir, in, w, errOut
 			return cmd.Run()
 		},
-		freeGB:  freeDiskGB,
-		sleep:   time.Sleep,
-		now:     time.Now,
+		freeGB: freeDiskGB,
+		sleep:  time.Sleep,
+		now:    time.Now,
 	}
 }
 

@@ -59,6 +59,14 @@ func (s *Snapshot) Normalize(now time.Time) error {
 	if s.Kubernetes != nil {
 		s.Kubernetes.normalize()
 	}
+	if s.Update != nil {
+		u := s.Update
+		u.From, u.To = ifShaped(Clean(u.From, 64), reVersion), ifShaped(Clean(u.To, 64), reVersion)
+		u.At, u.RolledBackAt = min(max(u.At, 0), math.MaxInt32*4), min(max(u.RolledBackAt, 0), math.MaxInt32*4)
+		if u.To == "" || u.At == 0 {
+			s.Update = nil // not an update anybody can describe
+		}
+	}
 	return nil
 }
 

@@ -27,10 +27,17 @@ CREATE TABLE IF NOT EXISTS monitor_series (
     PRIMARY KEY (metric_id, step, bucket)
 );
 CREATE INDEX IF NOT EXISTS monitor_series_bucket_idx ON monitor_series (step, bucket);
+
+-- The Monitoring page's event list reads the watchdog's alert events
+-- (system.alert.v1) from core's outbox, which is kept for ever and has no index
+-- on topic. A partial index on the one topic keeps "the newest alerts" a short
+-- walk of the index however large the outbox grows.
+CREATE INDEX IF NOT EXISTS outbox_core_alerts_idx ON outbox_core (id) WHERE topic = 'system.alert.v1';
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+DROP INDEX IF EXISTS outbox_core_alerts_idx;
 DROP TABLE IF EXISTS monitor_series;
 DROP TABLE IF EXISTS monitor_metric;
 -- +goose StatementEnd

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The monitoring time series (docs/04-dashboard.md, migration 00025). A row of
+// The monitoring time series (docs/04-dashboard.md, migration 00030). A row of
 // core.monitor_series is a block of one metric: FullSlots slots of FullStep
 // seconds (one hour) at full resolution, or RolledSlots slots of RolledStep
 // seconds (one day) once rolled up. A slot nobody sampled is NULL.
@@ -326,4 +326,32 @@ func (s *Store) MonitorCounters(ctx context.Context, q querier) (*MonitorCounter
 func (s *Store) PoolStats() (inUse, total, limit int32) {
 	st := s.db.Stat()
 	return st.AcquiredConns(), st.TotalConns(), st.MaxConns()
+}
+
+// AlertEventRow is one watchdog alert event (system.alert.v1) as the outbox keeps it.
+type AlertEventRow struct {
+	ID        int64
+	CreatedAt time.Time
+	Payload   []byte
+}
+
+// RecentAlertEvents reads the newest alert events, newest first (the outbox is kept for ever; the
+// partial index of migration 00030 keeps this a short walk). The topic is written out in the query so
+// that the index applies whatever plan the server picks.
+func (s *Store) RecentAlertEvents(ctx context.Context, q querier, limit int) ([]AlertEventRow, error) {
+	rows, err := q.Query(ctx, `SELECT id, created_at, payload FROM core.outbox_core
+		WHERE topic = 'system.alert.v1' ORDER BY id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("recent alert events: %w", err)
+	}
+	defer rows.Close()
+	var out []AlertEventRow
+	for rows.Next() {
+		var r AlertEventRow
+		if err := rows.Scan(&r.ID, &r.CreatedAt, &r.Payload); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

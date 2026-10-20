@@ -841,9 +841,13 @@ func (s *Service) OpenAlerts(ctx context.Context) ([]Alert, error) {
 		if args == nil {
 			args = map[string]string{}
 		}
-		title := i18n.StripHTML(cat.T("en", r.TitleKey, i18n.AlertArgs("en", args, escapeTags.Replace)...))
-		out = append(out, Alert{Key: r.Key, Severity: r.Severity, TitleKey: r.TitleKey, Args: args, Title: title,
+		out = append(out, Alert{Key: r.Key, Severity: r.Severity, TitleKey: r.TitleKey, Args: args, Title: alertTitle(cat, r.TitleKey, args),
 			Detail: r.Detail, Since: r.Since})
 	}
 	return out, nil
+}
+
+// alertTitle is an alert's text in English, without tags.
+func alertTitle(cat *i18n.Catalog, titleKey string, args map[string]string) string {
+	return i18n.StripHTML(cat.T("en", titleKey, i18n.AlertArgs("en", args, escapeTags.Replace)...))
 }
