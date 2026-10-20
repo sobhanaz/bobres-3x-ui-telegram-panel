@@ -1042,12 +1042,13 @@ func TestMiniAppReceiptSizeAndShape(t *testing.T) {
 	}
 }
 
-// webpHeader is a WebP file's first 36 bytes; padded with zeros to any length
-// it is still taken for a WebP (its RIFF size says it is 36 bytes long, which
-// no longer file is shorter than).
+// webpHeader is the first 36 bytes of a lossy WebP of 320 x 240 pixels: padded
+// with zeros to any length it is still taken for a WebP (its RIFF size says the
+// file is 44 bytes long, which no longer file is shorter than).
 func webpHeader() []byte {
 	b := []byte("RIFF\x24\x00\x00\x00WEBPVP8 \x10\x00\x00\x00")
-	return append(b, make([]byte, 16)...)
+	b = append(b, 0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, 0x40, 0x01, 0xf0, 0x00) // the frame tag, the start code, 320, 240
+	return append(b, make([]byte, 6)...)
 }
 
 func TestMiniAppReceiptWithoutABotOrTrouble(t *testing.T) {
@@ -1322,10 +1323,12 @@ func TestMiniAppPaymentsInMaintenance(t *testing.T) {
 	tok := p.signIn("tg:88:eve:en")
 	order := p.buy(tok, plan, "maintkey123")
 	card, _ := p.payOK(tok, order, "manual_card")
+	crypto, _ := p.payOK(tok, p.buy(tok, plan, "maintkey124"), "manual_crypto")
 	stars, _ := p.payOK(tok, order, "stars")
 	img := pngReceipt(t, 40, 30)
 
 	p.setting("maintenance.enabled", "true")
+	// Nothing new starts.
 	if code, out := p.call(http.MethodGet, "/api/mini/v1/methods?currency=IRT&amount=150000", tok, nil); code != 503 || out["error"] != "maintenance" {
 		t.Errorf("methods: %d %v", code, out)
 	}
@@ -1334,17 +1337,8 @@ func TestMiniAppPaymentsInMaintenance(t *testing.T) {
 			t.Errorf("pay by %s: %d %v", method, code, out)
 		}
 	}
-	if code, out := p.call(http.MethodPost, "/api/mini/v1/topup", tok, map[string]any{"amount": 200_000, "method": "stars", "key": "maint-topup-1"}); code != 503 || out["error"] != "maintenance" {
+	if code, out := p.call(http.MethodPost, "/api/mini/v1/topup", tok, map[string]any{"amount": 200_000, "method": "stars", "key": "maint-topup-key"}); code != 503 || out["error"] != "maintenance" {
 		t.Errorf("top-up: %d %v", code, out)
-	}
-	if code, out := p.receipt(tok, card, "998877", img); code != 503 || out["error"] != "maintenance" {
-		t.Errorf("receipt: %d %v", code, out)
-	}
-	if code, out := p.txid(tok, card, map[string]any{"txid": hash64}); code != 503 || out["error"] != "maintenance" {
-		t.Errorf("transaction id: %d %v", code, out)
-	}
-	if len(p.bot.sent()) != 0 || len(p.bot.alerted()) != 0 {
-		t.Errorf("the bot was asked for something in maintenance")
 	}
 	// A payment already started is still seen (a Stars payment in flight finishes).
 	for _, id := range []string{card, stars} {
@@ -1352,8 +1346,24 @@ func TestMiniAppPaymentsInMaintenance(t *testing.T) {
 			t.Errorf("check in maintenance: %d %v", code, out)
 		}
 	}
+	// And so is its proof: a customer who has paid by hand must be able to say so, as the bot lets a
+	// payment under way finish. The bot is asked, and the staff alerted, as ever.
+	if code, out := p.receipt(tok, card, "998877", img); code != 200 || out["status"] != "confirming" {
+		t.Errorf("receipt in maintenance: %d %v", code, out)
+	}
+	if code, out := p.txid(tok, crypto, map[string]any{"txid": hash64}); code != 200 || out["status"] != "confirming" {
+		t.Errorf("transaction id in maintenance: %d %v", code, out)
+	}
+	if len(p.bot.sent()) != 1 || len(p.bot.alerted()) != 2 {
+		t.Errorf("%d receipts sent and %d alerts in maintenance", len(p.bot.sent()), len(p.bot.alerted()))
+	}
+	// Still once.
+	if code, out := p.receipt(tok, card, "998877", img); code != 409 || out["error"] != "already_submitted" {
+		t.Errorf("a second receipt in maintenance: %d %v", code, out)
+	}
+	// The store opens again.
 	p.setting("maintenance.enabled", "false")
-	if code, out := p.receipt(tok, card, "998877", img); code != 200 {
+	if code, out := p.pay(tok, order, "manual_zarinpal"); code != 200 {
 		t.Errorf("after maintenance: %d %v", code, out)
 	}
 }
@@ -1477,16 +1487,17 @@ func TestMiniAppReceiptsAreCheckedFewAtATime(t *testing.T) {
 	p := newPayFix(t)
 	p.loosen()
 	p.api.mini.uploads = make(chan struct{}, 1)
+	p.api.mini.upload = newLimiter(1, miniUploadWindow) // one receipt each: a turn-away that counted would be seen
 	plan := p.plan("Gold", 30, 50<<30, 150_000)
-	tok := p.signIn("tg:93:jay:en")
-	a, _ := p.payOK(tok, p.buy(tok, plan, "fewkey12345"), "manual_card")
-	b, _ := p.payOK(tok, p.buy(tok, plan, "fewkey12346"), "manual_card")
+	jay, kit := p.signIn("tg:93:jay:en"), p.signIn("tg:95:kit:en")
+	a, _ := p.payOK(jay, p.buy(jay, plan, "fewkey12345"), "manual_card")
+	b, _ := p.payOK(kit, p.buy(kit, plan, "fewkey12346"), "manual_card")
 	img := pngReceipt(t, 40, 30)
 	p.bot.hold, p.bot.started = make(chan struct{}), make(chan struct{}, 2)
 
 	done := make(chan int, 1)
 	go func() {
-		code, _ := p.receipt(tok, a, "998877", img)
+		code, _ := p.receipt(jay, a, "998877", img)
 		done <- code
 	}()
 	select {
@@ -1494,15 +1505,137 @@ func TestMiniAppReceiptsAreCheckedFewAtATime(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the first receipt never reached the bot")
 	}
-	if code, out := p.receipt(tok, b, "998877", img); code != 503 || out["error"] != "busy" {
-		t.Errorf("one too many: %d %v", code, out)
+	// No room for kit's, however often they try: being turned away for lack of room uses none of their allowance.
+	for i := 0; i < 4; i++ {
+		if code, out := p.receipt(kit, b, "998877", img); code != 503 || out["error"] != "busy" {
+			t.Errorf("one too many (try %d): %d %v", i+1, code, out)
+		}
 	}
 	close(p.bot.hold)
 	if code := <-done; code != 200 {
 		t.Errorf("the first: %d", code)
 	}
-	if code, _ := p.receipt(tok, b, "998877", img); code != 200 {
-		t.Errorf("when there is room: %d", code)
+	if code, out := p.receipt(kit, b, "998877", img); code != 200 {
+		t.Errorf("when there is room: %d %v", code, out)
+	}
+	// Their one receipt is used now, and that is the allowance speaking.
+	c, _ := p.payOK(kit, p.buy(kit, plan, "fewkey12347"), "manual_card")
+	if code, out := p.receipt(kit, c, "998877", img); code != 429 || out["error"] != "rate_limited" {
+		t.Errorf("past the allowance: %d %v", code, out)
+	}
+}
+
+// One account must not be able to hold every place: a customer has one receipt
+// on its way at a time, and another customer is not held up by it.
+func TestMiniAppACustomerHasOneReceiptOnItsWayAtATime(t *testing.T) {
+	p := newPayFix(t)
+	p.loosen()
+	plan := p.plan("Gold", 30, 50<<30, 150_000)
+	rae, sol := p.signIn("tg:96:rae:en"), p.signIn("tg:97:sol:en")
+	a, _ := p.payOK(rae, p.buy(rae, plan, "onekey12345"), "manual_card")
+	b, _ := p.payOK(rae, p.buy(rae, plan, "onekey12346"), "manual_card")
+	c, _ := p.payOK(sol, p.buy(sol, plan, "onekey12347"), "manual_card")
+	img := pngReceipt(t, 40, 30)
+	p.bot.hold, p.bot.started = make(chan struct{}), make(chan struct{}, 4)
+
+	first := make(chan int, 1)
+	go func() {
+		code, _ := p.receipt(rae, a, "998877", img)
+		first <- code
+	}()
+	select {
+	case <-p.bot.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("rae's first receipt never reached the bot")
+	}
+	// Rae's second, for another payment, waits for the first: it does not even reach the bot.
+	if code, out := p.receipt(rae, b, "998877", img); code != 409 || out["error"] != "busy" {
+		t.Errorf("rae's second at once: %d %v", code, out)
+	}
+	// Sol is not held up.
+	other := make(chan int, 1)
+	go func() {
+		code, _ := p.receipt(sol, c, "998877", img)
+		other <- code
+	}()
+	select {
+	case <-p.bot.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("sol's receipt never reached the bot")
+	}
+	close(p.bot.hold)
+	for name, ch := range map[string]chan int{"rae's first": first, "sol's": other} {
+		select {
+		case code := <-ch:
+			if code != 200 {
+				t.Errorf("%s: %d", name, code)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s never finished", name)
+		}
+	}
+	if len(p.bot.sent()) != 2 {
+		t.Errorf("%d receipts reached the bot, want rae's first and sol's", len(p.bot.sent()))
+	}
+	if code, out := p.receipt(rae, b, "998877", img); code != 200 {
+		t.Errorf("rae's second once the first is done: %d %v", code, out)
+	}
+}
+
+// Payments takes a bank reference of 256 bytes, whatever the characters; core
+// says no before the receipt has gone to Telegram, not after.
+func TestMiniAppReferenceIsLimitedInBytesAsPaymentsDoes(t *testing.T) {
+	p := newPayFix(t)
+	p.loosen()
+	plan := p.plan("Gold", 30, 50<<30, 150_000)
+	tok := p.signIn("tg:99:ash:en")
+	id, _ := p.payOK(tok, p.buy(tok, plan, "refkey123456"), "manual_card")
+	img := pngReceipt(t, 40, 30)
+
+	tooLong := strings.Repeat("😀", 65) // 65 characters, 260 bytes
+	if code, out := p.receipt(tok, id, tooLong, img); code != 400 || out["error"] != "invalid" {
+		t.Errorf("a reference of 260 bytes: %d %v", code, out)
+	}
+	if len(p.bot.sent()) != 0 || p.model.calls("SubmitReceipt") != 0 {
+		t.Fatalf("a receipt was sent for a reference that payments would have refused: %d %d", len(p.bot.sent()), p.model.calls("SubmitReceipt"))
+	}
+	if code, out := p.receipt(tok, id, strings.Repeat("😀", 64), img); code != 200 { // exactly 256 bytes
+		t.Errorf("a reference of 256 bytes: %d %v", code, out)
+	}
+}
+
+// What payments finds wrong with a proof is its own wording; the customer gets ours.
+func TestMiniAppProofRefusedByPaymentsIsNotRepeated(t *testing.T) {
+	p := newPayFix(t)
+	p.loosen()
+	plan := p.plan("Gold", 30, 50<<30, 150_000)
+	tok := p.signIn("tg:100:bea:en")
+	id, _ := p.payOK(tok, p.buy(tok, plan, "wordkey12345"), "manual_card")
+	p.model.submitErr = status.Error(codes.InvalidArgument, "payments: invalid argument: receipt details too long")
+	code, out := p.receipt(tok, id, "998877", pngReceipt(t, 40, 30))
+	if code != 400 || out["error"] != "invalid" || strings.Contains(fmt.Sprint(out["message"]), "payments") {
+		t.Errorf("a proof payments refused: %d %v", code, out)
+	}
+}
+
+// A payment id is a UUID, in either case; anything else is no payment of the
+// customer's and payments is not asked (it answers an internal error to one).
+func TestMiniAppCheckRefusesWhatIsNotAPaymentID(t *testing.T) {
+	p := newPayFix(t)
+	plan := p.plan("Gold", 30, 50<<30, 150_000)
+	tok := p.signIn("tg:101:cyd:en")
+	id, _ := p.payOK(tok, p.buy(tok, plan, "malkey123456"), "manual_card")
+	before := p.model.calls("CheckIntent")
+	for _, bad := range []string{"not-a-uuid", "1", "%00", strings.Repeat("a", 65), "0000000a-0000-4000-8000-00000000000g", "0000000a-0000-4000-8000-0000000000011"} {
+		if code, out := p.call(http.MethodPost, "/api/mini/v1/payments/"+bad+"/check", tok, map[string]any{}); code != 404 || out["error"] != "not_found" {
+			t.Errorf("a check of %q: %d %v", bad, code, out)
+		}
+	}
+	if got := p.model.calls("CheckIntent"); got != before {
+		t.Errorf("payments was asked about %d ids that are not payment ids", got-before)
+	}
+	if code, out := p.call(http.MethodPost, "/api/mini/v1/payments/"+strings.ToUpper(id)+"/check", tok, map[string]any{}); code != 200 || out["intent_id"] != id {
+		t.Errorf("the id in capitals: %d %v", code, out)
 	}
 }
 

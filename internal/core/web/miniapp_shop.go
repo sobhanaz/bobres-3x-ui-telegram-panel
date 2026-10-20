@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
@@ -380,11 +381,14 @@ func (s *Server) miniCheckPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := miniFrom(r.Context())
-	if len(r.PathValue("id")) > 64 {
+	// A payment id is a UUID, in either case; anything else is no payment of
+	// this customer (payments answers an internal error to a malformed one).
+	id := strings.ToLower(r.PathValue("id"))
+	if !miniUUIDRe.MatchString(id) {
 		s.miniFail(w, "mini app payment check", store.ErrNotFound)
 		return
 	}
-	gi, err := s.cfg.Domain.CheckPayment(r.Context(), s.cfg.Payments, c.user.ID, r.PathValue("id"))
+	gi, err := s.cfg.Domain.CheckPayment(r.Context(), s.cfg.Payments, c.user.ID, id)
 	if err != nil {
 		s.miniFail(w, "mini app payment check", err)
 		return

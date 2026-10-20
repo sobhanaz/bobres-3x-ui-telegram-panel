@@ -249,13 +249,16 @@ func pngHeaderOnly(w, h uint32) []byte {
 	return b.Bytes()
 }
 
+// webpImage is a lossy WebP of 320 x 240 pixels as far as its header goes: the
+// frame tag, the start code and the two sizes.
 func webpImage() []byte {
 	var b bytes.Buffer
 	b.WriteString("RIFF")
 	_ = binary.Write(&b, binary.LittleEndian, uint32(4+8+16))
 	b.WriteString("WEBPVP8 ")
 	_ = binary.Write(&b, binary.LittleEndian, uint32(16))
-	b.Write(make([]byte, 16))
+	b.Write([]byte{0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, 0x40, 0x01, 0xf0, 0x00})
+	b.Write(make([]byte, 6))
 	return b.Bytes()
 }
 

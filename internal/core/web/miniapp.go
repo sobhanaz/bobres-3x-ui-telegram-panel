@@ -65,10 +65,13 @@ type miniState struct {
 	// links use it until the owner sets one in Branding.
 	bot atomic.Pointer[string]
 	// upload limits the receipts a customer sends (on top of write), uploads
-	// holds a place for each receipt being checked and sent, and proofs the
-	// payments a proof is being sent for (miniapp_pay.go).
+	// holds a place for each receipt being checked and sent, senders the
+	// customers who have one on its way (one each, so that no one account
+	// holds every place) and proofs the payments a proof is being sent for
+	// (miniapp_pay.go).
 	upload  *limiter
 	uploads chan struct{}
+	senders *miniInflight
 	proofs  *miniInflight
 }
 
@@ -82,7 +85,8 @@ func (m *miniState) noteBot(name string) {
 func newMiniState() *miniState {
 	return &miniState{sessions: newMiniSessions(), auth: newLimiter(miniAuthRate, time.Minute),
 		api: newLimiter(miniAPIRate, time.Minute), write: newLimiter(miniWriteRate, time.Minute),
-		upload: newLimiter(miniUploadRate, miniUploadWindow), uploads: make(chan struct{}, miniUploadSlots), proofs: newMiniInflight()}
+		upload: newLimiter(miniUploadRate, miniUploadWindow), uploads: make(chan struct{}, miniUploadSlots),
+		senders: newMiniInflight(), proofs: newMiniInflight()}
 }
 
 type miniKey struct{}
@@ -104,6 +108,10 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/mini/v1/logout", s.miniSession(true, s.miniLogout))
 	api.HandleFunc("GET /api/mini/v1/orders/{id}", s.miniSession(true, s.miniGetOrder))
 	api.HandleFunc("POST /api/mini/v1/payments/{id}/check", s.miniSession(true, s.miniCheckPayment))
+	// The proof of a manual payment (a receipt image, or a transaction id) too: a
+	// customer who has paid by hand must be able to say so, as the bot lets a
+	// payment under way finish. It only ever concerns a payment already started.
+	api.HandleFunc("POST /api/mini/v1/payments/{id}/proof", s.miniSession(true, s.miniProof))
 
 	api.HandleFunc("GET /api/mini/v1/plans", s.miniSession(false, s.miniPlans))
 	api.HandleFunc("GET /api/mini/v1/services", s.miniSession(false, s.miniServices))
@@ -114,8 +122,6 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay-wallet", s.miniSession(false, s.miniPayWallet))
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay", s.miniSession(false, s.miniPayOrder))
 	api.HandleFunc("POST /api/mini/v1/topup", s.miniSession(false, s.miniTopup))
-	// The proof of a manual payment: a receipt image, or a transaction id.
-	api.HandleFunc("POST /api/mini/v1/payments/{id}/proof", s.miniSession(false, s.miniProof))
 	for _, f := range miniFeatures { // the sections beyond the shop (miniapp_features.go)
 		if f.routes != nil {
 			f.routes(s, api)

@@ -64,8 +64,10 @@ const (
 	// miniUploadSlots receipts are checked and sent at the same time; each is
 	// held in memory meanwhile.
 	miniUploadSlots = 4
-	// miniReferenceMax is the longest bank reference number, in characters.
-	miniReferenceMax = 128
+	// miniReferenceMax is the longest bank reference number, in characters, and
+	// miniReferenceBytes in bytes (payments takes 256, whatever the characters).
+	miniReferenceMax   = 128
+	miniReferenceBytes = 256
 )
 
 // miniTxidRe is a transaction hash as the bot takes it: 64 hexadecimal
@@ -234,8 +236,6 @@ func (s *Server) miniProof(w http.ResponseWriter, r *http.Request) {
 	}
 	// The same payment in capitals is the same payment (the database takes
 	// either), so the one-at-a-time guard below must not tell them apart.
-	// The same payment in capitals is the same payment (the database takes
-	// either), so the one-at-a-time guard below must not tell them apart.
 	id := strings.ToLower(r.PathValue("id"))
 	if !miniUUIDRe.MatchString(id) {
 		s.miniFail(w, "mini app proof", store.ErrNotFound)
@@ -318,7 +318,8 @@ func (s *Server) miniProofFail(w http.ResponseWriter, err error) {
 			return
 		}
 	case codes.InvalidArgument:
-		writeError(w, http.StatusBadRequest, "invalid", msg)
+		// What payments finds wrong is wording for the bot's staff; the app words it itself.
+		writeError(w, http.StatusBadRequest, "invalid", "the payment does not take this proof")
 		return
 	}
 	s.miniFail(w, "mini app proof", err)
@@ -380,10 +381,11 @@ func miniUploadErr(w http.ResponseWriter, err error) {
 }
 
 // cleanReference reads a bank reference number as typed: trimmed, at most
-// miniReferenceMax characters, on one line.
+// miniReferenceMax characters and miniReferenceBytes bytes (payments refuses
+// more, after the receipt has gone to Telegram), on one line.
 func cleanReference(s string) (string, bool) {
 	s = strings.TrimSpace(s)
-	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > miniReferenceMax {
+	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > miniReferenceMax || len(s) > miniReferenceBytes {
 		return "", false
 	}
 	for _, r := range s {
@@ -405,11 +407,15 @@ func (s *Server) miniReceiptProof(w http.ResponseWriter, r *http.Request, gi *do
 		writeError(w, http.StatusBadGateway, "bot_unavailable", "receipts are sent through the bot, which is not connected")
 		return none, false
 	}
-	if !s.mini.upload.allow(c.user.ID, s.now()) {
-		w.Header().Set("Retry-After", "300")
-		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many receipts; wait a few minutes")
+	// One receipt of a customer at a time: the places below are few, and one
+	// account must not be able to hold them all.
+	if !s.mini.senders.begin(c.user.ID) {
+		writeError(w, http.StatusConflict, "busy", "another receipt of yours is being sent")
 		return none, false
 	}
+	defer s.mini.senders.end(c.user.ID)
+	// A place for it, asked before the customer's allowance is used: being
+	// turned away for lack of room costs them nothing.
 	select {
 	case s.mini.uploads <- struct{}{}:
 		defer func() { <-s.mini.uploads }()
@@ -418,10 +424,17 @@ func (s *Server) miniReceiptProof(w http.ResponseWriter, r *http.Request, gi *do
 		writeError(w, http.StatusServiceUnavailable, "busy", "many receipts are being sent; try again in a moment")
 		return none, false
 	}
-	// The server's deadlines are seconds; a phone's upload may take longer.
-	// Not every ResponseWriter can (a test recorder): no matter.
+	if !s.mini.upload.allow(c.user.ID, s.now()) {
+		w.Header().Set("Retry-After", "300")
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many receipts; wait a few minutes")
+		return none, false
+	}
+	// The server's deadlines are seconds; a phone's upload may take longer, up
+	// to the 30 seconds the proxy gives a request body (a place is held that
+	// long by a sender who is slow on purpose). Not every ResponseWriter can
+	// (a test recorder): no matter.
 	rc := http.NewResponseController(w)
-	_ = rc.SetReadDeadline(time.Now().Add(45 * time.Second))
+	_ = rc.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_ = rc.SetWriteDeadline(time.Now().Add(3 * time.Minute))
 
 	mr, err := r.MultipartReader()

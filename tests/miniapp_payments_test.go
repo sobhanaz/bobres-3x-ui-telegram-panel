@@ -568,4 +568,18 @@ func TestMiniAppTopupByStarsIsCreditedByTheBotsHandlers(t *testing.T) {
 	if out := kim.must(http.MethodPost, "/api/mini/v1/payments/"+intent+"/check", map[string]any{}); out["status"] != "succeeded" {
 		t.Errorf("the payment after settling: %v", out)
 	}
+	// The bot's message says the wallet was credited, not that a service is being prepared.
+	w.eventually("the bot to confirm the top-up", func() bool {
+		for _, s := range w.sentTo(4012) {
+			if s.Method == "sendMessage" && strings.Contains(s.Text, "added to your wallet") {
+				return true
+			}
+		}
+		return false
+	})
+	for _, s := range w.sentTo(4012) {
+		if strings.Contains(s.Text, "being prepared") {
+			t.Errorf("a top-up was told a service is being prepared: %q", s.Text)
+		}
+	}
 }

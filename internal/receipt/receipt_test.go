@@ -52,16 +52,38 @@ func pngHeader(w, h uint32) []byte {
 	return b.Bytes()
 }
 
-// webpBytes is a RIFF/WEBP container with the given first chunk and n bytes of payload.
-func webpBytes(chunk string, n int) []byte {
+// webpFile is a RIFF/WEBP container whose first chunk is called chunk and has this payload.
+func webpFile(chunk string, payload []byte) []byte {
 	var b bytes.Buffer
 	b.WriteString("RIFF")
-	_ = binary.Write(&b, binary.LittleEndian, uint32(4+8+n)) //nolint:gosec // a small test size
+	_ = binary.Write(&b, binary.LittleEndian, uint32(4+8+len(payload))) //nolint:gosec // a small test size
 	b.WriteString("WEBP")
 	b.WriteString(chunk)
-	_ = binary.Write(&b, binary.LittleEndian, uint32(n)) //nolint:gosec // a small test size
-	b.Write(make([]byte, n))
+	_ = binary.Write(&b, binary.LittleEndian, uint32(len(payload))) //nolint:gosec // a small test size
+	b.Write(payload)
 	return b.Bytes()
+}
+
+// webpLossy has the header of a lossy picture: a frame tag, the start code and the two sizes.
+func webpLossy(w, h uint16) []byte {
+	p := []byte{0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a}
+	p = binary.LittleEndian.AppendUint16(p, w)
+	p = binary.LittleEndian.AppendUint16(p, h)
+	return webpFile("VP8 ", append(p, make([]byte, 8)...))
+}
+
+// webpLossless has the header of a lossless picture: the signature, then 14 bits of width-1 and 14 of height-1.
+func webpLossless(w, h uint32) []byte {
+	p := binary.LittleEndian.AppendUint32([]byte{0x2f}, (w-1)|(h-1)<<14)
+	return webpFile("VP8L", append(p, make([]byte, 8)...))
+}
+
+// webpExtended has the header of an extended picture: flags, then the canvas size minus one in 24 bits each.
+func webpExtended(w, h uint32) []byte {
+	p := []byte{0x10, 0, 0, 0}
+	p = append(p, binary.LittleEndian.AppendUint32(nil, w-1)[:3]...)
+	p = append(p, binary.LittleEndian.AppendUint32(nil, h-1)[:3]...)
+	return webpFile("VP8X", append(p, make([]byte, 8)...))
 }
 
 func TestInspectAcceptsJPEGPNGAndWebP(t *testing.T) {
@@ -72,9 +94,9 @@ func TestInspectAcceptsJPEGPNGAndWebP(t *testing.T) {
 	}{
 		{"jpeg", jpegBytes(t, 40, 30), Info{ContentType: "image/jpeg", Ext: "jpg", Width: 40, Height: 30}},
 		{"png", pngBytes(t, 20, 50), Info{ContentType: "image/png", Ext: "png", Width: 20, Height: 50}},
-		{"webp lossy", webpBytes("VP8 ", 16), Info{ContentType: "image/webp", Ext: "webp"}},
-		{"webp lossless", webpBytes("VP8L", 16), Info{ContentType: "image/webp", Ext: "webp"}},
-		{"webp extended", webpBytes("VP8X", 16), Info{ContentType: "image/webp", Ext: "webp"}},
+		{"webp lossy", webpLossy(640, 480), Info{ContentType: "image/webp", Ext: "webp", Width: 640, Height: 480}},
+		{"webp lossless", webpLossless(320, 200), Info{ContentType: "image/webp", Ext: "webp", Width: 320, Height: 200}},
+		{"webp extended", webpExtended(1000, 2000), Info{ContentType: "image/webp", Ext: "webp", Width: 1000, Height: 2000}},
 	}
 	for _, c := range cases {
 		got, err := Inspect(c.data)
@@ -86,7 +108,12 @@ func TestInspectAcceptsJPEGPNGAndWebP(t *testing.T) {
 
 func TestInspectRefusesWhatIsNotAReceipt(t *testing.T) {
 	truncatedPNG := pngBytes(t, 20, 50)[:20]
-	truncatedWebP := webpBytes("VP8 ", 64)[:40]
+	truncatedWebP := webpLossy(64, 64)[:30]
+	noStartCode := webpLossy(64, 64)
+	noStartCode[24] = 0x00
+	noSignature := webpLossless(64, 64)
+	noSignature[20] = 0x00
+	shortExtended := webpFile("VP8X", make([]byte, 6))
 	cases := map[string][]byte{
 		"html":              []byte("<!doctype html><script>alert(1)</script>"),
 		"svg":               []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`),
@@ -99,8 +126,12 @@ func TestInspectRefusesWhatIsNotAReceipt(t *testing.T) {
 		"jpeg magic only":   {0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0},
 		"png magic only":    []byte("\x89PNG\r\n\x1a\n"),
 		"truncated png":     truncatedPNG,
-		"webp unknown":      webpBytes("ABCD", 16),
+		"webp unknown":      webpFile("ABCD", make([]byte, 16)),
 		"webp truncated":    truncatedWebP,
+		"webp no start":     noStartCode,
+		"webp no signature": noSignature,
+		"webp short header": shortExtended,
+		"webp no size":      webpLossy(0, 0),
 		"riff but not webp": append([]byte("RIFF\x24\x00\x00\x00WAVEfmt "), make([]byte, 40)...),
 	}
 	for name, data := range cases {
@@ -123,7 +154,7 @@ func TestInspectLimits(t *testing.T) {
 	if _, err := Inspect(big); !errors.Is(err, ErrTooLarge) {
 		t.Errorf("over the size limit: %v", err)
 	}
-	exact := append(webpBytes("VP8 ", 16), make([]byte, MaxBytes-len(webpBytes("VP8 ", 16)))...)
+	exact := append(webpLossy(100, 100), make([]byte, MaxBytes-len(webpLossy(100, 100)))...)
 	if len(exact) != MaxBytes {
 		t.Fatalf("test data is %d bytes", len(exact))
 	}
@@ -150,6 +181,36 @@ func TestInspectLimits(t *testing.T) {
 	}
 	if _, err := Inspect(pngHeader(16384, 100)); err != nil {
 		t.Errorf("a wide but allowed picture: %v", err)
+	}
+}
+
+// A picture's size is read from its header whatever the format, because the
+// dashboard shows every receipt in an <img> and so decodes all of it.
+func TestInspectLimitsThePictureOfEveryFormat(t *testing.T) {
+	tooLarge := map[string][]byte{
+		"png of 42 megapixels":        pngHeader(7000, 6000),
+		"lossy webp over every limit": webpLossy(16383, 16383),
+		"lossless webp 16384 square":  webpLossless(16384, 16384), // a header of 29 bytes that claims 268 megapixels
+		"lossless webp 42 megapixels": webpLossless(7000, 6000),
+		"extended webp too wide":      webpExtended(20000, 10),
+		"extended webp 16 million":    webpExtended(1<<24, 1<<24),
+		"extended webp 42 megapixels": webpExtended(6500, 6500),
+	}
+	for name, data := range tooLarge {
+		if _, err := Inspect(data); !errors.Is(err, ErrTooLarge) {
+			t.Errorf("%s: %v, want ErrTooLarge", name, err)
+		}
+	}
+	allowed := map[string][]byte{
+		"png of 36 megapixels":        pngHeader(6000, 6000),
+		"lossless webp 16384 wide":    webpLossless(16384, 100),
+		"extended webp 36 megapixels": webpExtended(6000, 6000),
+		"lossy webp of a phone":       webpLossy(4000, 3000),
+	}
+	for name, data := range allowed {
+		if _, err := Inspect(data); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
 

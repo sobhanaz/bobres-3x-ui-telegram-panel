@@ -179,7 +179,7 @@
   "pay.check_paid": "✅ Payment received. Your service is being prepared and will arrive here shortly.",
   "pay.check_pending": "Not confirmed yet. If you paid, wait a minute and check again.",
   "pay.check_failed": "❌ This payment was not completed. {reason}\n\nYou can choose a plan and pay again.",
-  "pay.precheck_failed": "This invoice is no longer valid. Open the bot and start the purchase again.",
+  "pay.precheck_failed": "This invoice is no longer valid. Start the purchase again.",
   "pay.stars_received": "✅ Payment received. Your service is being prepared.",
   "pay.stars_unrecorded": "⚠️ Telegram took your payment, but we could not record it yet. Send /paysupport this code and we will fix it: <code>{code}</code>",
   "paysupport": "💬 <b>Payment support</b>\nFor any problem with a payment, contact {contact} and include the payment reference or the code from the payment message.",
