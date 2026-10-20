@@ -146,7 +146,7 @@ func TestBulkQuantityLimitFromTheOwner(t *testing.T) {
 	u.press("bk")
 	u.pressLabel("Monthly 50GB")
 	u.pressLabel("✏️ Another number")
-	u.text("4") // the bot still thinks 4 is allowed
+	u.text("4")                             // the bot still thinks 4 is allowed
 	u.lastHas("Please send a whole number") // a typed answer gets its refusal as a message
 	if strings.Contains(u.shown().text, "Total:") {
 		t.Fatalf("core quoted past its limit: %q", u.shown().text)

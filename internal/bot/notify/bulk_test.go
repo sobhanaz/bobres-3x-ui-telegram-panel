@@ -183,7 +183,7 @@ func TestBulkDeliveryIsOneMessageWithEveryLink(t *testing.T) {
 	}
 	fa := faTG.take()
 	if len(fa) != 1 || !strings.Contains(fa[0].text, "<b>۳ سرویس شما آماده است!</b>") || !strings.Contains(fa[0].text, "۱. <b>Family 1</b>") ||
-		fa[0].kb.InlineKeyboard[0][0].Text != "📦 سرویس‌های من" {
+		fa[0].kb.InlineKeyboard[0][0].Text != "📦 سرویس\u200cهای من" {
 		t.Errorf("the Persian message: %+v", fa)
 	}
 }
@@ -516,7 +516,7 @@ func (f *flakyUpload) SendDocumentUpload(ctx context.Context, chatID int64, name
 func TestBulkServicesAreNotAnnouncedOnTheirOwn(t *testing.T) {
 	b, _ := bulkOf(3, "Q", allReady)
 	n, core, tgf, _ := bulkNotifier(t, b, true)
-	core.fakeCore.langs[enBuyer] = "en"
+	core.langs[enBuyer] = "en"
 
 	// A delivered service of a bulk: nothing sent (not even for the links lookup).
 	prov := events.SubscriptionProvisionedEvent{SubscriptionID: "sub-1", OrderID: "order-001", UserID: "user-1", TelegramID: enBuyer,

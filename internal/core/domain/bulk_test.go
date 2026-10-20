@@ -178,12 +178,12 @@ func TestBulkPurchaseMakesOnePaidOrderPerService(t *testing.T) {
 	var orderIDs []string
 	for i, sv := range v.Services {
 		want := fmt.Sprintf("Family %d", i+1)
-		if sv.BulkIndex == nil || int(*sv.BulkIndex) != i+1 || sv.Order.Status != "paid" || sv.Order.Amount != 1000 || sv.Order.Type != "new" ||
-			sv.Order.Label == nil || *sv.Order.Label != want || sv.Order.IdempotencyKey != fmt.Sprintf("%s#%d", p.IdempotencyKey, i+1) ||
-			sv.Order.BulkID == nil || *sv.Order.BulkID != v.ID || sv.SubscriptionID != "" {
+		if sv.BulkIndex == nil || int(*sv.BulkIndex) != i+1 || sv.Status != "paid" || sv.Amount != 1000 || sv.Type != "new" ||
+			sv.Label == nil || *sv.Label != want || sv.IdempotencyKey != fmt.Sprintf("%s#%d", p.IdempotencyKey, i+1) ||
+			sv.BulkID == nil || *sv.BulkID != v.ID || sv.SubscriptionID != "" {
 			t.Fatalf("service %d: %+v", i+1, sv)
 		}
-		orderIDs = append(orderIDs, sv.Order.ID)
+		orderIDs = append(orderIDs, sv.ID)
 	}
 	// One debit per order, kept under the order's own key, and a balance that
 	// is the sum of the ledger.
@@ -234,7 +234,7 @@ func TestBulkPurchaseMakesOnePaidOrderPerService(t *testing.T) {
 	// A bulk without a name makes unnamed services.
 	f2 := f.params(2)
 	fund(t, f.s, f.buyer.ID, 2000)
-	if v2, err := f.svc.CreateBulk(ctx, f2); err != nil || v2.LabelPrefix != nil || v2.Services[0].Order.Label != nil {
+	if v2, err := f.svc.CreateBulk(ctx, f2); err != nil || v2.LabelPrefix != nil || v2.Services[0].Label != nil {
 		t.Fatalf("unnamed bulk: %v %+v", err, v2)
 	}
 }
@@ -359,8 +359,8 @@ func TestBulkPrice(t *testing.T) {
 			t.Errorf("%s: charged %d, want %d", c.who, v.Amount, c.total)
 		}
 		for _, sv := range v.Services {
-			if sv.Order.Amount != c.unit {
-				t.Errorf("%s: an order of %d, want %d (as a single purchase)", c.who, sv.Order.Amount, c.unit)
+			if sv.Amount != c.unit {
+				t.Errorf("%s: an order of %d, want %d (as a single purchase)", c.who, sv.Amount, c.unit)
 			}
 		}
 		if after, _, _ := ledger(t, s, c.u.ID); before-after != c.total {
@@ -488,7 +488,7 @@ func TestBulkNames(t *testing.T) {
 		case !c.ok && !errors.Is(err, ErrInvalid):
 			t.Errorf("%q x%d: %v", c.prefix, c.q, err)
 		case c.ok && strings.TrimSpace(c.prefix) != "":
-			last := v.Services[c.q-1].Order.Label
+			last := v.Services[c.q-1].Label
 			if last == nil || *last != strings.TrimSpace(c.prefix)+fmt.Sprintf(" %d", c.q) {
 				t.Errorf("%q x%d: the last service is %v", c.prefix, c.q, last)
 			}
@@ -588,7 +588,7 @@ func TestBulkNeedsTheWholeTotal(t *testing.T) {
 		if bal, sum, _ := ledger(t, s, r.ID); bal != -2700 || sum != -2700 {
 			t.Fatalf("the reseller's balance %d, ledger %d: they owe 2700", bal, sum)
 		}
-		if v.Services[0].Order.Label == nil || *v.Services[0].Order.Label != "Ali 1" {
+		if v.Services[0].Label == nil || *v.Services[0].Label != "Ali 1" {
 			t.Fatalf("a reseller's names: %+v", v.Services[0].Order)
 		}
 		// Past the limit by one: the next purchase, however small, is refused.
@@ -620,7 +620,7 @@ func TestBulkIsIdempotent(t *testing.T) {
 		t.Fatalf("again: %v %+v", err, again)
 	}
 	for i := range again.Services {
-		if again.Services[i].Order.ID != first.Services[i].Order.ID {
+		if again.Services[i].ID != first.Services[i].ID {
 			t.Fatalf("service %d is another order", i+1)
 		}
 	}
@@ -1072,8 +1072,8 @@ func TestBulkIsAnnouncedOnceWhenEveryServiceIsDone(t *testing.T) {
 		t.Fatalf("announcement: %+v", e)
 	}
 	for i, id := range e.ReadyOrders {
-		if id != v.Services[i].Order.ID {
-			t.Fatalf("ready order %d is %s, want %s (in the bulk's order)", i+1, id, v.Services[i].Order.ID)
+		if id != v.Services[i].ID {
+			t.Fatalf("ready order %d is %s, want %s (in the bulk's order)", i+1, id, v.Services[i].ID)
 		}
 	}
 	if got, _ := f.s.GetBulk(ctx, f.s.Conn(), v.ID); got.DeliveredAt == nil {
@@ -1091,7 +1091,7 @@ func TestBulkIsAnnouncedOnceWhenEveryServiceIsDone(t *testing.T) {
 		t.Fatalf("view: %v %+v", err, got)
 	}
 	for i, sv := range got.Services {
-		if sv.SubscriptionID == "" || sv.SubStatus != "active" || !strings.HasPrefix(sv.SubLink, "https://sub.example.com/sub/") || sv.Order.Status != "active" {
+		if sv.SubscriptionID == "" || sv.SubStatus != "active" || !strings.HasPrefix(sv.SubLink, "https://sub.example.com/sub/") || sv.Status != "active" {
 			t.Fatalf("service %d: %+v", i+1, sv)
 		}
 	}
@@ -1119,7 +1119,7 @@ func TestBulkWithAServiceThatFails(t *testing.T) {
 	}
 	var failed store.Order
 	for _, sv := range v.Services {
-		o, _ := f.s.GetOrder(ctx, f.s.Conn(), sv.Order.ID)
+		o, _ := f.s.GetOrder(ctx, f.s.Conn(), sv.ID)
 		if o.Status == "provision_failed" {
 			failed = *o
 		}
@@ -1217,7 +1217,7 @@ func TestBulkIgnoresRefundedOrders(t *testing.T) {
 	}
 	fp := &fakeProvisioner{}
 	w := f.svc.NewProvisionWorker(fp, nil)
-	if _, err := f.svc.RefundOrder(ctx, own, fp, v.Services[2].Order.ID, "wrong plan"); err != nil {
+	if _, err := f.svc.RefundOrder(ctx, own, fp, v.Services[2].ID, "wrong plan"); err != nil {
 		t.Fatal(err)
 	}
 	if bal, _, _ := ledger(t, f.s, f.buyer.ID); bal != 8000 {
@@ -1243,7 +1243,7 @@ func TestBulkIgnoresRefundedOrders(t *testing.T) {
 	}
 	own = owner(t, g.svc)
 	for _, sv := range vg.Services {
-		if _, err := g.svc.RefundOrder(ctx, own, fp, sv.Order.ID, "changed my mind"); err != nil {
+		if _, err := g.svc.RefundOrder(ctx, own, fp, sv.ID, "changed my mind"); err != nil {
 			t.Fatal(err)
 		}
 	}

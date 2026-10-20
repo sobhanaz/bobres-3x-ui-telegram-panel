@@ -69,7 +69,7 @@ func bulkToProto(v *domain.BulkView) *corev1.BulkOrder {
 	}
 	for _, sv := range v.Services {
 		svc := &corev1.BulkService{
-			OrderId: sv.Order.ID, OrderStatus: sv.Order.Status,
+			OrderId: sv.ID, OrderStatus: sv.Status,
 			SubscriptionId: sv.SubscriptionID, Status: sv.SubStatus, SubscriptionLink: sv.SubLink,
 		}
 		if sv.BulkIndex != nil {
@@ -78,8 +78,8 @@ func bulkToProto(v *domain.BulkView) *corev1.BulkOrder {
 		switch {
 		case sv.SubLabel != nil:
 			svc.Label = *sv.SubLabel
-		case sv.Order.Label != nil:
-			svc.Label = *sv.Order.Label
+		case sv.Label != nil:
+			svc.Label = *sv.Label
 		}
 		if sv.ExpiresAt != nil {
 			svc.ExpiresAt = sv.ExpiresAt.Unix()

@@ -34,8 +34,6 @@ const (
 	// tableNameWidth is how many characters of a plan's name a table button
 	// shows (half a row on a phone); a longer name ends in an ellipsis.
 	tableNameWidth = 24
-	// maxCallbackData is Telegram's limit for a button's callback data, in bytes.
-	maxCallbackData = 64
 )
 
 // planEntry is one plan as a list or table needs it.
