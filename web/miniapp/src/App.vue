@@ -12,7 +12,7 @@ import ServicesView from './views/ServicesView.vue'
 import WalletView from './views/WalletView.vue'
 
 type Tab = 'store' | 'services' | 'wallet' | 'more'
-interface Buying { plan: Plan; type: 'new' | 'renew' | 'traffic_topup'; subscriptionId?: string }
+interface Buying { plan: Plan; type: 'new' | 'renew' | 'traffic_topup'; subscriptionId?: string; label?: string }
 
 const tab = ref<Tab>('store')
 const buying = ref<Buying | null>(null)
@@ -29,6 +29,13 @@ const support = computed(() => state.me?.brand.support_url ?? '')
 function pick(plan: Plan) {
   if (choosing.value) buying.value = { plan, type: choosing.value.type, subscriptionId: choosing.value.service.id }
   else buying.value = { plan, type: 'new' }
+}
+// a section (the reseller panel) can start a purchase, a renewal or a top-up of its own through the same checkout
+function startBuying(b: Buying) {
+  buying.value = b
+}
+function startChoosing(type: 'renew' | 'traffic_topup', service: Service) {
+  choosing.value = { type, service }
 }
 function inServices() {
   buying.value = null
@@ -73,6 +80,7 @@ onMounted(boot)
       :plan="buying.plan"
       :type="buying.type"
       :subscription-id="buying.subscriptionId"
+      :label="buying.label"
       @close="home"
       @services="inServices"
     />
@@ -81,7 +89,14 @@ onMounted(boot)
       <button class="btn secondary" type="button" @click="choosing = null">{{ tr('common.back') }}</button>
     </main>
     <main v-else-if="section" class="screen">
-      <component :is="section.component" @close="section = null" @services="inServices" />
+      <component
+        :is="section.component"
+        @close="section = null"
+        @services="inServices"
+        @buy="startBuying"
+        @renew="(s: Service) => startChoosing('renew', s)"
+        @topup="(s: Service) => startChoosing('traffic_topup', s)"
+      />
       <button class="btn secondary" type="button" @click="section = null">{{ tr('common.back') }}</button>
     </main>
     <main v-else class="screen">

@@ -14,7 +14,8 @@ export class ApiError extends Error {
   }
 }
 
-export interface Wallet { currency: string; balance: number; scale: number }
+/** credit_limit is a reseller's: the balance may go down to minus it (0, or absent, for everyone else). */
+export interface Wallet { currency: string; balance: number; scale: number; credit_limit?: number }
 /** Features are what the sections of the app say about this customer (core's miniFeature.me); a section reads its own keys. */
 export type Features = Record<string, boolean | number | string | undefined>
 
@@ -77,7 +78,8 @@ export interface Intent {
   scale_gateway: number
   details: { pay_address?: string; network?: string; expires_at?: string; reference?: string }
 }
-export interface OrderRequest { plan_id: string; type?: string; subscription_id?: string; discount_code?: string; key?: string }
+/** label names a new service a reseller buys for a customer (core ignores it for anyone else). */
+export interface OrderRequest { plan_id: string; type?: string; subscription_id?: string; discount_code?: string; key?: string; label?: string }
 
 let token = ''
 let signingIn: Promise<Me> | null = null

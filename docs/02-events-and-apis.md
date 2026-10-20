@@ -48,6 +48,20 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   for resellers (`discount: reseller`, FAILED_PRECONDITION). Removing a reseller cancels their unpaid orders (paying
   one afterwards is FAILED_PRECONDITION `order not payable`); a `CreateOrder` that priced the plan for a reseller whose
   removal committed first is FAILED_PRECONDITION, and asked again it gets the store price.
+- core, reseller management (built, additive; the proto stays compatible): a reseller's own services and customers.
+  `ListResellerServices` (the reseller's services, newest first, paged at most 50 and searched like `ListSubscriptions`,
+  narrowed by `status` = active, expiring_soon, expired (time or traffic ran out), paused or pending, with the counts
+  of every group in `counts`, whatever the filter, and each service's usage, link and `note`);
+  `SetResellerServiceEnabled` (pause or resume: the same panel call, checks and audit entry as staff's, the reseller
+  as the actor, source `bot`; repeating it changes nothing; a service support paused is FAILED_PRECONDITION "paused by
+  support"); `DeleteResellerService` (like staff's delete, no refund, idempotent, FAILED_PRECONDITION while the service
+  is being delivered or has a renewal being applied); `SetSubscriptionNote` (one line, at most 200 characters, empty
+  clears); `ListInvitedCustomers` (the users who joined through the reseller's link, newest first, paged at most 50:
+  `telegram_id`, `username`, `joined_at`, `paid_orders`, `spent` and `commission` per currency, nothing else);
+  `Subscription.note`. Each call is the reseller's own: PERMISSION_DENIED for a customer, staff, a former reseller, a
+  reseller after `resellers` left the license ("domain: forbidden") and a banned one ("user is banned"); NOT_FOUND for
+  an unknown user or a service that is not theirs; INVALID_ARGUMENT for an unknown status or a note or search that is
+  too long. Over the Mini App the same functions answer `/api/mini/v1/reseller/...` ([17-mini-app.md](17-mini-app.md)).
 - core, payment method switches (milestone 6a, built): `ListPaymentMethods` leaves out Telegram Stars while
   `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
   turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments

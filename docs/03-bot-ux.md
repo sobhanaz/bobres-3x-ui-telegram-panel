@@ -104,12 +104,14 @@ included, a one-time dashboard login link.
   services. Buy or renew a license to sell more." (`alert.license_limit`).
 
 ## Reseller panel
-Built (milestone 5, 2026-10-11). Resellers work only in the bot; the owner and admins make them, set their tier,
-credit limits and commission, and record their payments in the dashboard. Customers see none of this.
+Built (milestone 5, 2026-10-11; managing their customers' services and the customers who joined through their link,
+2026-10-20). Resellers work in the bot and in the Mini App's reseller section ([17-mini-app.md](17-mini-app.md)),
+never in the dashboard; the owner and admins make them, set their tier, credit limits and commission, and record their
+payments in the dashboard. Customers see none of this.
 - **Home:** a "Reseller panel" button instead of "Invite friends" (their link is in the panel).
 - **Panel:** tier, discount and commission %; per currency the balance (a negative balance is shown as "debt X",
   never with a minus), credit limit and what they can spend (balance + limit); customers who joined through their
-  link and commission earned. Buttons: Buy for a customer, Customer services, Statement, My link, Home.
+  link and commission earned. Buttons: Buy for a customer, Customer services, Customers, Statement, My link, Home.
 - **Buy for a customer:** the plans at their prices, then "type a name for this service, like Ali's phone, or tap
   Skip" (one line, at most 64 characters), then the regular checkout. Their regular Buy, renewals and traffic
   packages show their prices too.
@@ -117,8 +119,31 @@ credit limits and commission, and record their payments in the dashboard. Custom
   limit covers the price, with the amount they can spend; other payment methods stay. Past the limit they see what
   they can still spend, the other methods and a Panel button.
 - **Customer services** (also their "My services"): 8 a page with Previous/Next, each the name or #short id, status
-  and expiry; a search by part of the name or the #number, paged with the search. A service opens the usual page,
-  with a Rename button (a new name, or Remove the name).
+  and expiry; a search by part of the name or the #number, paged with the search. Under the list the services are
+  grouped, each group a button with its count: All, Active, Ending soon, Ended (the time or the traffic ran out) and
+  Paused. The group shown is ticked; a search started inside a group stays inside it and its pages keep both. Every
+  service is in exactly one group, so the counts add up, and the counts do not follow the group or the search. A
+  service opens the usual page, with a Rename button (a new name, or Remove the name).
+- **A customer service's page** (the reseller's own services only): beside Renew, Add traffic, QR code and Rename:
+  - **Pause / Resume:** turns the service off or on in the panel (the customer's link stops working while it is
+    paused; a service paused shows "Paused"). Doing it twice changes nothing. A service that **support** paused cannot
+    be resumed by the reseller: the popup says to contact support. A service being delivered cannot be paused.
+  - **Note:** a private note, one line of at most 200 characters, shown on the page under the service; only the
+    reseller sees it (not the customer, not the public page). Send a new text to replace it, or Remove the note.
+  - **Delete:** a confirmation screen first ("removed from the server for good, the customer's link stops working at
+    once, this cannot be undone, nothing is refunded"), then Yes, delete it or No, keep it. A service being delivered,
+    or with a renewal still being applied, cannot be deleted yet. Money never moves.
+  A reseller cannot reset a service's traffic or give free days or free traffic: those stay with staff. Pausing and
+  deleting are in the audit log under the reseller's name, source `bot`.
+- **Customers** (the panel's Customers button): the people who joined through the reseller's invite link, newest
+  first, 10 a page. Each line: their @username (or their Telegram id when they have none), the day they joined, how
+  many paid orders they made (refunded and free ones do not count), what they spent per currency, and the commission
+  those purchases paid the reseller. Nobody who did not join through this reseller's link is shown, and nothing else
+  about them.
+- **When resellers are no longer in the license** the reseller keeps their account and their services: the plain list
+  of services still opens (without the groups) and each service shows its link, and renewals still work. Pause,
+  Resume, Delete, Note and Customers answer "This is not available right now. Please contact support." (never a word
+  about licensing) and change nothing ([05-license.md](05-license.md)).
 - **Names in messages:** the service page, the delivery message, renewals and top-ups, and reminders start with the
   service's name when it has one.
 - **Statement** (also their wallet History): 10 transactions a page, commissions and payments to the store included.

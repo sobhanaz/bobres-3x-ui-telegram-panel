@@ -26,9 +26,13 @@ const (
 	// maxLabel is the longest name a reseller gives a service, in characters
 	// (core's domain.MaxLabel).
 	maxLabel = 64
-	// servicesPage and statementPage are what one page lists.
+	// maxNote is the longest private note on a service, in characters (core's
+	// domain.MaxNote).
+	maxNote = 200
+	// servicesPage, statementPage and customersPage are what one page lists.
 	servicesPage  = 8
 	statementPage = 10
+	customersPage = 10
 	// maxSearch is the longest search, in bytes: the paging buttons carry it
 	// within Telegram's 64 bytes of callback data.
 	maxSearch = 40
@@ -54,17 +58,33 @@ func (h *Handler) routeReseller(r *req, rest string) {
 			h.showCheckout(r, c)
 		}
 	case "subs":
-		h.showCustomerServices(r, pageArg(arg), "")
+		h.showResellerServices(r, pageArg(arg), "", "")
 	case "sq":
 		page, query, _ := strings.Cut(arg, ":")
-		h.showCustomerServices(r, pageArg(page), query)
-	case "find":
-		r.setState(sceneResellerFind, nil)
+		h.showResellerServices(r, pageArg(page), query, "")
+	case "sf": // "rs:sf:<filter>:<page>[:<search>]"
+		h.onServiceFilter(r, arg)
+	case "find": // "rs:find[:<filter>]": the search is made within the filter
+		r.setState(sceneResellerFind, map[string]string{"f": arg})
 		r.show(r.t("rs.search_ask"), cancelKeyboard(r))
 	case "rn":
 		h.askRename(r, arg)
 	case "rc":
 		h.setLabel(r, arg, "")
+	case "pz":
+		h.setPaused(r, arg, true)
+	case "rz":
+		h.setPaused(r, arg, false)
+	case "dl":
+		h.askDelete(r, arg)
+	case "dy":
+		h.deleteService(r, arg)
+	case "nt":
+		h.askNote(r, arg)
+	case "nc":
+		h.setNote(r, arg, "")
+	case "cu":
+		h.showInvitedCustomers(r, pageArg(arg))
 	case "st":
 		h.showStatement(r, pageArg(arg))
 	case "link":
@@ -153,7 +173,8 @@ func (h *Handler) showResellerPanel(r *req) {
 	}
 	kb := (&tg.Keyboard{}).
 		Row(r.button("btn.rs_buy", "rs:buy"), r.button("btn.rs_services", "rs:subs:1")).
-		Row(r.button("btn.rs_statement", "rs:st:1"), r.button("btn.rs_link", "rs:link")).
+		Row(r.button("btn.rs_customers", "rs:cu:1"), r.button("btn.rs_statement", "rs:st:1")).
+		Row(r.button("btn.rs_link", "rs:link")).
 		Row(r.button("btn.home", "home"))
 	r.show(r.t("rs.panel", "tier", esc(info.GetTierName()),
 		"discount", i18n.Number(r.lang, int64(info.GetDiscountPercent())),
@@ -259,7 +280,8 @@ func (h *Handler) onResellerScene(r *req, st state.State) {
 			return
 		}
 		r.clearState()
-		h.showCustomerServices(r, 1, q)
+		bucket, _ := filterBucket(st.Get("f")) // the search is made within the filter it was asked in
+		h.showResellerServices(r, 1, q, bucket)
 	case sceneResellerRename:
 		label, ok := cleanLabel(r.msg.Text)
 		if !ok {
@@ -267,13 +289,172 @@ func (h *Handler) onResellerScene(r *req, st state.State) {
 			return
 		}
 		h.setLabel(r, st.Get("sub"), label)
+	case sceneResellerNote:
+		note, ok := cleanNote(r.msg.Text)
+		if !ok {
+			r.send(r.t("rs.note_bad", "max", i18n.Number(r.lang, maxNote)), cancelKeyboard(r))
+			return
+		}
+		h.setNote(r, st.Get("sub"), note)
 	}
 }
 
-// showCustomerServices handles "rs:subs:<page>" and "rs:sq:<page>:<search>":
-// the reseller's services, newest first, servicesPage at a time, each opening
-// the service's page.
+// showCustomerServices is the reseller's list of services, all of them.
 func (h *Handler) showCustomerServices(r *req, page int32, query string) {
+	h.showResellerServices(r, page, query, "")
+}
+
+// The filters of the list, as the buttons carry them: a short code in the
+// callback data and the status group core knows it by.
+var resellerFilters = []struct{ code, bucket string }{
+	{"a", "active"}, {"e", "expiring_soon"}, {"x", "expired"}, {"p", "paused"},
+}
+
+// filterBucket is the status group of a filter's code (false for anything
+// else, which means no filter).
+func filterBucket(code string) (string, bool) {
+	for _, f := range resellerFilters {
+		if f.code == code {
+			return f.bucket, true
+		}
+	}
+	return "", false
+}
+
+func filterCode(bucket string) string {
+	for _, f := range resellerFilters {
+		if f.bucket == bucket {
+			return f.code
+		}
+	}
+	return ""
+}
+
+// serviceCount is how many services the counts say a group has ("" = all).
+func serviceCount(c *corev1.ServiceCounts, bucket string) int64 {
+	switch bucket {
+	case "active":
+		return c.GetActive()
+	case "expiring_soon":
+		return c.GetExpiringSoon()
+	case "expired":
+		return c.GetExpired()
+	case "paused":
+		return c.GetPaused()
+	}
+	return c.GetTotal()
+}
+
+// onServiceFilter handles "rs:sf:<filter>:<page>[:<search>]".
+func (h *Handler) onServiceFilter(r *req, arg string) {
+	code, rest, _ := strings.Cut(arg, ":")
+	bucket, ok := filterBucket(code)
+	if !ok {
+		h.showResellerServices(r, 1, "", "")
+		return
+	}
+	page, query, _ := strings.Cut(rest, ":")
+	h.showResellerServices(r, pageArg(page), query, bucket)
+}
+
+// serviceListData is the callback data that shows a page of the list in a
+// filter (bucket "" = all) and a search.
+func serviceListData(bucket, query string, page int32) string {
+	p := strconv.Itoa(int(page))
+	switch {
+	case bucket == "" && query == "":
+		return "rs:subs:" + p
+	case bucket == "":
+		return "rs:sq:" + p + ":" + query
+	case query == "":
+		return "rs:sf:" + filterCode(bucket) + ":" + p
+	}
+	return "rs:sf:" + filterCode(bucket) + ":" + p + ":" + query
+}
+
+// showResellerServices handles "rs:subs:<page>", "rs:sq:<page>:<search>" and
+// "rs:sf:<filter>:<page>[:<search>]": the reseller's services, newest first,
+// servicesPage at a time, each opening the service's page, with the groups
+// to filter by and how many services each holds. Once resellers are no longer
+// in the license core refuses the groups; the plain list still shows what
+// they bought.
+func (h *Handler) showResellerServices(r *req, page int32, query, bucket string) {
+	resp, err := h.core.ListResellerServices(r.ctx, &corev1.ListResellerServicesRequest{UserId: r.user.GetId(), Status: bucket, Query: query,
+		Pagination: &commonv1.Pagination{Page: page, PageSize: servicesPage}})
+	if st := status.Convert(err); (st.Code() == codes.PermissionDenied && !strings.Contains(strings.ToLower(st.Message()), "banned")) || st.Code() == codes.Unimplemented {
+		h.showPlainServices(r, page, query) // resellers left the license, or this core is older than the bot
+		return
+	}
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	if len(resp.GetSubscriptions()) == 0 && page > 1 { // past the end (services ended meanwhile): the first page
+		h.showResellerServices(r, 1, query, bucket)
+		return
+	}
+	total, counts := resp.GetPageInfo().GetTotal(), resp.GetCounts()
+	pages := max((total+servicesPage-1)/servicesPage, 1)
+	if counts.GetTotal() == 0 {
+		r.show(r.t("rs.services_empty"), (&tg.Keyboard{}).Row(r.button("btn.rs_buy", "rs:buy")).
+			Row(r.button("btn.back", "rs"), r.button("btn.home", "home")))
+		return
+	}
+	num := func(n int64) string { return i18n.Number(r.lang, n) }
+	kb := &tg.Keyboard{}
+	for _, s := range resp.GetSubscriptions() {
+		kb.Row(tg.CB(h.serviceButton(r, s), "sub:"+s.GetId()))
+	}
+	kb.Row(pager(r, page, int64(page) < pages, func(p int32) string { return serviceListData(bucket, query, p) })...)
+	// The groups, with how many services each holds; the one shown is ticked.
+	filter := func(b string) tg.Button {
+		name := r.t("rs.filter.all")
+		if b != "" {
+			name = r.t("rs.filter." + b)
+		}
+		label := name + " (" + num(serviceCount(counts, b)) + ")"
+		if b == bucket {
+			label = "✔️ " + label
+		}
+		return tg.CB(label, serviceListData(b, "", 1))
+	}
+	kb.Row(filter(""), filter("active")).Row(filter("expiring_soon"), filter("expired"), filter("paused"))
+	find := "rs:find"
+	if bucket != "" {
+		find += ":" + filterCode(bucket)
+	}
+	search := []tg.Button{r.button("btn.rs_search", find)}
+	if query != "" {
+		search = append(search, r.button("btn.rs_all", serviceListData(bucket, "", 1)))
+	}
+	kb.Row(search...).Row(r.button("btn.back", "rs"), r.button("btn.home", "home"))
+	var text string
+	filterName := ""
+	if bucket != "" {
+		filterName = r.t("rs.filter." + bucket)
+	}
+	switch {
+	case total == 0 && bucket == "":
+		text = r.t("rs.services_none_found", "query", esc(query))
+	case total == 0 && query == "":
+		text = r.t("rs.services_filtered_none", "filter", filterName)
+	case total == 0:
+		text = r.t("rs.services_filtered_found_none", "filter", filterName, "query", esc(query))
+	case bucket == "" && query == "":
+		text = r.t("rs.services_title", "total", num(total), "page", num(int64(page)), "pages", num(pages))
+	case bucket == "":
+		text = r.t("rs.services_found", "query", esc(query), "total", num(total), "page", num(int64(page)), "pages", num(pages))
+	case query == "":
+		text = r.t("rs.services_filtered", "filter", filterName, "total", num(total), "page", num(int64(page)), "pages", num(pages))
+	default:
+		text = r.t("rs.services_filtered_found", "filter", filterName, "query", esc(query), "total", num(total), "page", num(int64(page)), "pages", num(pages))
+	}
+	r.show(text, kb)
+}
+
+// showPlainServices is the list of services without the groups: all of them,
+// paged and searched, as core lists any user's.
+func (h *Handler) showPlainServices(r *req, page int32, query string) {
 	resp, err := h.core.ListSubscriptions(r.ctx, &corev1.ListSubscriptionsRequest{UserId: r.user.GetId(), Query: query,
 		Pagination: &commonv1.Pagination{Page: page, PageSize: servicesPage}})
 	if err != nil {
@@ -281,7 +462,7 @@ func (h *Handler) showCustomerServices(r *req, page int32, query string) {
 		return
 	}
 	if len(resp.GetSubscriptions()) == 0 && page > 1 { // past the end (services ended meanwhile): the first page
-		h.showCustomerServices(r, 1, query)
+		h.showPlainServices(r, 1, query)
 		return
 	}
 	total := resp.GetPageInfo().GetTotal()

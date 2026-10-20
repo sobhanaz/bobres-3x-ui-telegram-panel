@@ -680,7 +680,7 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onDiscountCode(r, st)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:
 		h.onAdminScene(r, st)
-	case sceneResellerLabel, sceneResellerFind, sceneResellerRename:
+	case sceneResellerLabel, sceneResellerFind, sceneResellerRename, sceneResellerNote:
 		h.onResellerScene(r, st)
 	default:
 		r.clearState()
@@ -700,10 +700,11 @@ const (
 	sceneAdminAdjust = "adm_adjust"
 	sceneAdminReason = "adm_reason"
 	// A reseller's name for a service they buy for a customer, a search of
-	// their services, and a new name for one of them.
+	// their services, a new name for one of them, and a private note on one.
 	sceneResellerLabel  = "rs_label"
 	sceneResellerFind   = "rs_find"
 	sceneResellerRename = "rs_rename"
+	sceneResellerNote   = "rs_note"
 )
 
 // nonce makes each rendered payment menu unique: a double tap on one button

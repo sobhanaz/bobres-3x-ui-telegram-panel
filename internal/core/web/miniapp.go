@@ -407,11 +407,13 @@ func (s *Server) miniWallets(ctx context.Context, userID string) ([]map[string]a
 			hasIRT = true
 		}
 		if w.Currency == "IRT" || w.Balance != 0 {
-			out = append(out, map[string]any{"currency": w.Currency, "balance": w.Balance, "scale": bmoney.Scale(w.Currency)})
+			// credit_limit is a reseller's: the balance may go down to minus
+			// that (0 for everyone else), so what they can pay with is the two.
+			out = append(out, map[string]any{"currency": w.Currency, "balance": w.Balance, "credit_limit": w.CreditLimit, "scale": bmoney.Scale(w.Currency)})
 		}
 	}
 	if !hasIRT { // a customer without a wallet yet sees an empty one
-		out = append([]map[string]any{{"currency": "IRT", "balance": 0, "scale": 0}}, out...)
+		out = append([]map[string]any{{"currency": "IRT", "balance": 0, "credit_limit": 0, "scale": 0}}, out...)
 	}
 	return out, nil
 }

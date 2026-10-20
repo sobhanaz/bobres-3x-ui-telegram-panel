@@ -152,6 +152,9 @@ type miniOrderIn struct {
 	SubscriptionID string `json:"subscription_id"`
 	DiscountCode   string `json:"discount_code"`
 	Key            string `json:"key"`
+	// Label is a reseller's name for the new service they buy for a customer
+	// (core ignores it for anyone else, and on renewals and top-ups).
+	Label string `json:"label"`
 }
 
 func (in *miniOrderIn) check() error {
@@ -220,7 +223,7 @@ func (s *Server) miniCreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o, err := s.cfg.Domain.CreateOrder(ctx, domain.CreateOrderParams{UserID: c.user.ID, PlanID: in.PlanID, Type: in.Type,
-		SubscriptionID: in.SubscriptionID, DiscountCode: in.DiscountCode, IdempotencyKey: "mini:" + c.user.ID + ":" + in.Key})
+		SubscriptionID: in.SubscriptionID, DiscountCode: in.DiscountCode, Label: in.Label, IdempotencyKey: "mini:" + c.user.ID + ":" + in.Key})
 	if err != nil {
 		s.miniFail(w, "mini app order", err)
 		return

@@ -11,10 +11,10 @@ built (Phase 4, 2026-10-12), and page 18, Reports, was added after v0.1.1; the f
 | owner | Everything incl. license, staff, gateway secrets, danger zone |
 | admin | Users, orders, plans, discounts, broadcasts, settings, branding, 3x-ui servers (write-only tokens), reports, audit log (no staff, license, gateway secrets or payment details) |
 | support | Tickets, read-only users/orders, limited actions (extend a service, read it from the panel) |
-| reseller | Not a staff role and no dashboard access: works only in the Telegram bot (reseller panel). Owner and admin manage resellers on the Resellers page (`resellers.write`) |
+| reseller | Not a staff role and no dashboard access: works only in the Telegram bot and the Mini App (the reseller panel and section: buy for customers, pause, resume, delete and keep notes on their own customers' services, see the customers who joined through their link). Owner and admin manage resellers on the Resellers page (`resellers.write`) |
 | finance (optional) | Payments, ledger, reports, exports, no user edits. Not built: owner, admin and support cover v1 (`reports.read` is its own flag, so a finance role can be given it later) |
 Permissions are a list of granular flags (e.g. `users.write`, `wallet.adjust`, `reports.read`) so custom roles are possible later. Roles are defined in code (`internal/core/web/perms.go`), so a new flag reaches existing installs with the update and needs no migration: `reports.read` is held by owner and admin, not by support.
-Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban) need a reason field.
+Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban) need a reason field. What a reseller does to their own services is in it too: pausing, resuming and deleting a service are `subscription.disable`, `subscription.enable` and `subscription.delete` with the reseller as the actor (role reseller), source `bot` (the Mini App is the bot's second face) and the reason "paused by the reseller", "resumed by the reseller" or "deleted by the reseller". A service the reseller paused can be told from one a staff member paused by the actor; the reseller cannot resume the second.
 
 ## Pages
 1. **Overview:** revenue (only in the answer for staff with `reports.read`: support does not get it), new users, active services, expiring soon, failed provisions, gateway health (on, off, details missing, failing), panel health per server (switched-off servers are not counted).

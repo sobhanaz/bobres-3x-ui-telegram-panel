@@ -1,0 +1,36 @@
+/* The reseller section (src/sections/reseller). Every class starts with rs-
+   so none touches the shop's. Logical properties only: the app is right to
+   left in Persian and left to right in English. */
+.rs { display: grid; gap: 0.75rem; }
+.rs-grid { display: grid; gap: 0.5rem; }
+.rs h2 { margin-top: 0; }
+
+.rs-tabs, .rs-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.rs-tabs button, .rs-chip {
+  min-height: 2.25rem; padding: 0.3rem 0.85rem; border: 0; border-radius: 1.2rem;
+  background: var(--card); color: var(--fg); font: inherit; font-size: 0.875rem; cursor: pointer;
+}
+.rs-tabs button[aria-selected='true'], .rs-chip[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg); }
+
+.rs-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.rs-kv .big { font-size: 1.25rem; }
+
+.rs-search { flex: 1; min-width: 0; padding: 0.6rem; border-radius: 0.5rem; border: 1px solid var(--muted); background: var(--bg); color: var(--fg); font: inherit; }
+
+.rs-pager { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+
+.card .rs-chip { background: var(--bg); }
+.card .rs-chip[aria-pressed='true'] { background: var(--accent); }
+
+.rs-picked { box-shadow: inset 0 0 0 2px var(--accent); }
+
+.rs-service { gap: 0.6rem; }
+.rs-head { display: grid; gap: 0.35rem; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.rs-line { display: block; }
+.rs-note { color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.rs-actions { display: grid; gap: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--bg); }
+.rs-confirm { display: grid; gap: 0.5rem; padding: 0.75rem; border-radius: 0.6rem; background: var(--bg); box-shadow: inset 0 0 0 1px var(--danger); }
+.btn.rs-danger { color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.btn.rs-danger-fill { background: var(--danger); color: #fff; }
+.badge.pending { color: var(--muted); }
+.badge.expiring_soon { color: #d97706; }

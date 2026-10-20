@@ -104,6 +104,9 @@ message Subscription {
   // The branded page for this service (public base URL + /sub/<token>); "" when
   // the page is switched off or the public URL is not set.
   string page_url = 14;
+  // A reseller's private note about the service (one line, at most 200
+  // characters; "" = none). Only the reseller's own screens show it.
+  string note = 15;
 }
 
 message Ticket {
@@ -434,6 +437,81 @@ message SetSubscriptionLabelRequest {
   string label = 3; // at most 64 characters; empty clears it
 }
 
+// ServiceCounts is how many services a reseller has in each status bucket
+// (the deleted ones are not counted); every service is in exactly one bucket.
+message ServiceCounts {
+  int64 total = 1;
+  int64 active = 2;
+  int64 expiring_soon = 3;
+  int64 expired = 4; // the time or the traffic ran out
+  int64 paused = 5; // turned off (status disabled)
+  int64 pending = 6; // still being delivered
+}
+
+// ListResellerServicesRequest pages through a reseller's own services, newest
+// first (page_size at most 50, 10 when unset).
+message ListResellerServicesRequest {
+  string user_id = 1; // the reseller
+  string status = 2; // "" (all) | active | expiring_soon | expired | paused | pending
+  string query = 3; // part of the name, or the end of the number (#a1b2c3); at most 100 characters
+  common.v1.Pagination pagination = 4;
+}
+
+message ListResellerServicesResponse {
+  repeated Subscription subscriptions = 1; // each with its usage and note
+  common.v1.PageInfo page_info = 2; // total: the services matching status and query
+  ServiceCounts counts = 3; // all the reseller's services, whatever the filter
+}
+
+// SetResellerServiceEnabledRequest pauses (enabled = false) or resumes one of
+// the reseller's services. Doing it twice changes nothing. A service staff
+// paused cannot be resumed by its reseller (FAILED_PRECONDITION "paused by
+// support").
+message SetResellerServiceEnabledRequest {
+  string user_id = 1; // the reseller
+  string subscription_id = 2;
+  bool enabled = 3;
+}
+
+// DeleteResellerServiceRequest deletes one of the reseller's services from the
+// panel for good; nothing is refunded. Deleting it again is not an error.
+message DeleteResellerServiceRequest {
+  string user_id = 1; // the reseller
+  string subscription_id = 2;
+}
+
+message DeleteResellerServiceResponse {}
+
+// SetSubscriptionNoteRequest sets the private note on one of a reseller's
+// services.
+message SetSubscriptionNoteRequest {
+  string user_id = 1; // the reseller
+  string subscription_id = 2;
+  string note = 3; // one line, at most 200 characters; empty clears it
+}
+
+// ListInvitedCustomersRequest pages through the users who joined through the
+// reseller's invite link, newest first (page_size at most 50, 10 when unset).
+message ListInvitedCustomersRequest {
+  string user_id = 1; // the reseller
+  common.v1.Pagination pagination = 2;
+}
+
+// InvitedCustomer is one of them, with only what the reseller may see.
+message InvitedCustomer {
+  int64 telegram_id = 1;
+  string username = 2; // "" without a public @username
+  int64 joined_at = 3; // unix seconds
+  int64 paid_orders = 4; // orders that stand paid (not refunded, not free)
+  repeated common.v1.Money spent = 5; // per currency
+  repeated common.v1.Money commission = 6; // what their purchases paid the reseller, per currency
+}
+
+message ListInvitedCustomersResponse {
+  repeated InvitedCustomer customers = 1;
+  common.v1.PageInfo page_info = 2; // total: everyone who joined through the link
+}
+
 message GetResellerInfoRequest {
   string user_id = 1;
 }
@@ -750,6 +828,17 @@ service CoreService {
   // Resellers (milestone 5).
   rpc SetSubscriptionLabel(SetSubscriptionLabelRequest) returns (Subscription);
   rpc GetResellerInfo(GetResellerInfoRequest) returns (ResellerInfo);
+  // Reseller management: a reseller's own services (list with status filters
+  // and counts, pause and resume, delete, a private note) and the customers
+  // who joined through their invite link. Every call is the reseller's own:
+  // core checks they are an active reseller and that resellers are in the
+  // install's license, answers PERMISSION_DENIED otherwise (banned: "user is
+  // banned"), and NOT_FOUND for a service that is not theirs.
+  rpc ListResellerServices(ListResellerServicesRequest) returns (ListResellerServicesResponse);
+  rpc SetResellerServiceEnabled(SetResellerServiceEnabledRequest) returns (Subscription);
+  rpc DeleteResellerService(DeleteResellerServiceRequest) returns (DeleteResellerServiceResponse);
+  rpc SetSubscriptionNote(SetSubscriptionNoteRequest) returns (Subscription);
+  rpc ListInvitedCustomers(ListInvitedCustomersRequest) returns (ListInvitedCustomersResponse);
   // GetBotPhoto returns the bot photo, for the bot to set in Telegram when
   // Settings.bot_photo_version changes; NOT_FOUND when there is none.
   rpc GetBotPhoto(GetBotPhotoRequest) returns (BotPhoto);
