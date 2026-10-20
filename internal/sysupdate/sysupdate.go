@@ -331,7 +331,7 @@ func (d *Dir) ReadStatus() (Status, error) {
 	if contains(steps, raw.Step) {
 		st.Step = raw.Step
 	}
-	st.Message = Clean(raw.Message, MaxMessage)
+	st.Message = Clean(scrub(strings.ToValidUTF8(raw.Message, "")), MaxMessage)
 	st.StartedAt, st.FinishedAt = when(raw.StartedAt), when(raw.FinishedAt)
 	st.Log = cleanLog(raw.Log)
 	if !st.Installed {

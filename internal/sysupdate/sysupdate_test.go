@@ -608,6 +608,19 @@ func TestReadStatusCleansEveryField(t *testing.T) {
 	}
 }
 
+func TestReadStatusMasksSecretsInTheMessage(t *testing.T) {
+	d := newDir(t)
+	writeFile(t, d, StatusFile, statusJSON(t, map[string]any{"state": "failed",
+		"message": "The pull failed: password=hunter2 was refused by the registry"}))
+	st, err := d.ReadStatus()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(st.Message, "hunter2") || !strings.Contains(st.Message, "was refused by the registry") {
+		t.Fatalf("message %q: want the secret masked and the rest kept", st.Message)
+	}
+}
+
 func TestReadStatusMasksSecretsInTheLog(t *testing.T) {
 	d := newDir(t)
 	writeFile(t, d, StatusFile, statusJSON(t, map[string]any{"state": "running", "log": []string{
