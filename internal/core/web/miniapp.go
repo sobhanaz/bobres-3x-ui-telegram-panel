@@ -201,9 +201,20 @@ func bearer(r *http.Request) string {
 	return ""
 }
 
+// miniMaintenance reports whether the store is closed to this customer: its
+// maintenance mode is on, and they are neither staff (owner, admin, support) nor
+// an owner the server names. It is the one decision, for every call and for the
+// flag /me and the sign-in carry, and it is the bot's rule (internal/bot/handler,
+// gates.go): a customer gets the maintenance answer to everything but what a
+// payment under way needs.
+func (s *Server) miniMaintenance(settings map[string]string, u *store.User) bool {
+	return settings["maintenance.enabled"] == "true" && !domain.IsStaffRole(u.Role) && !s.cfg.Domain.IsConfiguredOwner(u)
+}
+
 // miniSession requires a live session of an active customer. During
 // maintenance only the calls marked inMaintenance are served (to staff and
-// the configured owner everything is).
+// the configured owner everything is): the ones that show who is signed in,
+// and the ones a payment already started needs.
 func (s *Server) miniSession(inMaintenance bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -238,7 +249,7 @@ func (s *Server) miniSession(inMaintenance bool, next http.HandlerFunc) http.Han
 			s.internal(w, "mini app settings", err)
 			return
 		}
-		maintenance := settings["maintenance.enabled"] == "true" && !domain.IsStaffRole(u.Role) && !s.cfg.Domain.IsConfiguredOwner(u)
+		maintenance := s.miniMaintenance(settings, u)
 		if maintenance && !inMaintenance {
 			writeError(w, http.StatusServiceUnavailable, "maintenance", "the store is under maintenance")
 			return
@@ -443,7 +454,7 @@ func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any,
 		"user":        map[string]any{"id": u.ID, "username": u.Username, "language": u.Language},
 		"wallets":     wallets,
 		"brand":       map[string]any{"name": brandName(settings), "color": color, "support": support, "support_url": supportURL, "bot_url": bot},
-		"maintenance": settings["maintenance.enabled"] == "true" && !domain.IsStaffRole(u.Role) && !s.cfg.Domain.IsConfiguredOwner(u),
+		"maintenance": s.miniMaintenance(settings, u),
 		"top_up":      map[string]any{"currency": "IRT", "min": miniMinTopup, "max": miniMaxTopup},
 		"features":    features,
 	}, nil
