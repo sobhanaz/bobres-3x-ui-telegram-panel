@@ -280,7 +280,9 @@ func TestHelpHomeAndBottomMenuAgree(t *testing.T) {
 		t.Helper()
 		for _, c := range people {
 			c.p.text("/menu")
-			home, menu := actionsOf(c.p.shown()), c.p.menuActionsOf(c.p.lastMenu())
+			// Bulk purchase is the one home button that has no bottom-menu item on purpose (docs/03-bot-ux.md).
+			home := slices.DeleteFunc(actionsOf(c.p.shown()), func(a string) bool { return a == "bk" })
+			menu := c.p.menuActionsOf(c.p.lastMenu())
 			if !slices.Equal(home, menu) {
 				t.Errorf("%s, %s:\n home %v\n menu %v", c.name, state, home, menu)
 			}
