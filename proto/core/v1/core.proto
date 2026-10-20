@@ -292,6 +292,20 @@ message Settings {
   // never sets them.
   bool help_faq = 6;
   bool help_tutorials = 7;
+  // The extra channels and groups customers must join, after the first one (the
+  // settings join.channel, join.link and join.label, in values), in the order
+  // customers are asked, limited to what the license in effect allows
+  // (max_join_chats): the chats the bot is to enforce, not the ones merely
+  // saved. Empty while the first one is not set, and for an older core, which
+  // never sets it: the bot then holds customers to the first chat only.
+  repeated JoinChat join_chats = 8;
+}
+
+// A required channel or group.
+message JoinChat {
+  string chat = 1;  // a public chat's @name, or a private chat's -100… id
+  string link = 2;  // the https://t.me/… link of the Join button; "" = the chat's t.me page
+  string label = 3; // the short name on the button; "" = the chat's @name
 }
 
 // --- Request/response messages ---

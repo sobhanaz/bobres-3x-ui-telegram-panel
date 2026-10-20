@@ -262,7 +262,7 @@ WARNING ("max_active_services is 0 or missing: the install will floor it at the 
 ```json
 {"white_label": false, "max_servers": 2, "max_active_services": 500, "resellers": true,
  "gateways": ["zarinpal", "stars", "manual_card"], "crypto_watcher": false,
- "dashboard_staff_seats": 3, "updates_until": "2027-10-31"}
+ "dashboard_staff_seats": 3, "max_join_chats": 1, "updates_until": "2027-10-31"}
 ```
 
 ```sh

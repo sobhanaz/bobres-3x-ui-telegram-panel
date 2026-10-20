@@ -20,14 +20,14 @@ func TestEmbeddedPresets(t *testing.T) {
 	all := []string{"zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"}
 	std, _ := p.Get(TierStandard)
 	e := std.Entitlements
-	if e.MaxServers != 3 || e.MaxActiveServices != 500 || !e.Resellers || !e.CryptoWatcher || e.DashboardStaffSeat != 5 ||
+	if e.MaxServers != 3 || e.MaxActiveServices != 500 || !e.Resellers || !e.CryptoWatcher || e.DashboardStaffSeat != 5 || e.MaxJoinChats != 1 ||
 		e.WhiteLabel || strings.Join(e.Gateways, ",") != strings.Join(all, ",") {
 		t.Errorf("standard: %+v", e)
 	}
 	pro, _ := p.Get(TierPro)
 	e = pro.Entitlements
 	if e.MaxServers != Unlimited || e.MaxActiveServices != Unlimited || !e.Resellers || !e.CryptoWatcher ||
-		e.DashboardStaffSeat != Unlimited || !e.WhiteLabel || strings.Join(e.Gateways, ",") != strings.Join(all, ",") {
+		e.DashboardStaffSeat != Unlimited || e.MaxJoinChats != Unlimited || !e.WhiteLabel || strings.Join(e.Gateways, ",") != strings.Join(all, ",") {
 		t.Errorf("pro: %+v", e)
 	}
 	trial, _ := p.Get(TierTrial)
@@ -64,7 +64,7 @@ func TestPresetsAreNotBelowTheFreeTier(t *testing.T) {
 		e := tier.Entitlements
 		atLeast := func(have, floor int) bool { return have == Unlimited || (floor != Unlimited && have >= floor) }
 		if !atLeast(e.MaxServers, free.MaxServers) || !atLeast(e.MaxActiveServices, free.MaxActiveServices) ||
-			!atLeast(e.DashboardStaffSeat, free.DashboardStaffSeat) {
+			!atLeast(e.DashboardStaffSeat, free.DashboardStaffSeat) || !atLeast(e.MaxJoinChats, free.MaxJoinChats) {
 			t.Errorf("%s grants less than the free tier: %+v", name, e)
 		}
 		for _, g := range AllGateways() {

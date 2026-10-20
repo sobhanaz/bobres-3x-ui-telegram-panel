@@ -511,7 +511,7 @@ var gatewayRe = regexp.MustCompile(`^[a-z0-9_]{1,40}$`)
 
 func checkEntitlements(e license.Entitlements) error {
 	var errs []error
-	if e.MaxServers < license.Unlimited || e.MaxActiveServices < license.Unlimited || e.DashboardStaffSeat < license.Unlimited {
+	if e.MaxServers < license.Unlimited || e.MaxActiveServices < license.Unlimited || e.DashboardStaffSeat < license.Unlimited || e.MaxJoinChats < license.Unlimited {
 		errs = append(errs, errors.New("entitlements: limits must be -1 (unlimited) or more"))
 	}
 	for _, g := range e.Gateways {

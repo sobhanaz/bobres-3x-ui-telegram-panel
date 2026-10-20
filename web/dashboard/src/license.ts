@@ -188,7 +188,7 @@ export function outsideLicense(allowed: readonly string[], enabled: readonly str
 }
 
 export type EntitlementRow =
-  | { key: 'servers' | 'active_services' | 'staff_seats'; kind: 'limit'; used: number | null; limit: number; state: LimitState }
+  | { key: 'servers' | 'active_services' | 'staff_seats' | 'join_chats'; kind: 'limit'; used: number | null; limit: number; state: LimitState }
   | { key: 'resellers' | 'white_label' | 'crypto_watcher'; kind: 'feature'; on: boolean }
   | { key: 'gateways'; kind: 'gateways'; allowed: string[]; outside: string[] }
   | { key: 'updates_until'; kind: 'date'; value: string }
@@ -197,7 +197,7 @@ export type EntitlementRow =
 export function entitlementRows(info: Pick<LicenseInfo, 'entitlements'>): EntitlementRow[] {
   const e = info.entitlements
   if (!e) return []
-  const limit = (key: 'servers' | 'active_services' | 'staff_seats', l: LicenseLimit | undefined): EntitlementRow => {
+  const limit = (key: 'servers' | 'active_services' | 'staff_seats' | 'join_chats', l: LicenseLimit | undefined): EntitlementRow => {
     const max = l?.limit ?? 0
     const used = l?.used ?? null
     return { key, kind: 'limit', used, limit: max, state: limitState(used, max) }
@@ -207,6 +207,7 @@ export function entitlementRows(info: Pick<LicenseInfo, 'entitlements'>): Entitl
     limit('servers', e.max_servers),
     limit('active_services', e.max_active_services),
     limit('staff_seats', e.dashboard_staff_seats),
+    ...(e.max_join_chats ? [limit('join_chats', e.max_join_chats)] : []), // an older core does not send it
     { key: 'gateways', kind: 'gateways', allowed, outside: outsideLicense(allowed, e.gateways?.enabled ?? []) },
     { key: 'resellers', kind: 'feature', on: e.resellers },
     { key: 'white_label', kind: 'feature', on: e.white_label },

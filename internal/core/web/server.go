@@ -267,6 +267,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/settings", PermSettingsWrite, s.getSettings)
 	s.route(api, "PUT /api/v1/settings", PermSettingsWrite, s.putSettings)
 	s.route(api, "POST /api/v1/settings/channel-check", PermSettingsWrite, s.checkChannel)
+	// The required channels and groups: the Settings page's Join card (seen by
+	// owner and admin, changed by the owner).
+	s.route(api, "GET /api/v1/join-chats", PermSettingsWrite, s.getJoinChats)
+	s.route(api, "PUT /api/v1/join-chats", PermJoinWrite, s.putJoinChats)
 
 	// Infrastructure: 3x-ui servers (owner and admin), payment gateways (owner).
 	s.route(api, "GET /api/v1/servers", PermServersWrite, s.listServers)

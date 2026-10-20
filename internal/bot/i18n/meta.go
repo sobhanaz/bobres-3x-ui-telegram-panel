@@ -116,6 +116,8 @@ var contexts = map[string]Context{
 	"admin.already_reviewed": CtxToastHTML,
 	"maintenance":            CtxToastHTML,
 	"join.not_yet":           CtxToast,
+	"join.not_yet_many":      CtxToast,
+	"join.unnamed":           CtxButtonHTML, // a chat with no name, in a button and in the popup that lists what is missing
 	"support.closed":         CtxToast,
 	"rs.forbidden":           CtxToastHTML,
 	"rs.label_removed":       CtxToast,
@@ -224,6 +226,7 @@ var buttonStyles = map[string]string{
 	"btn.ticket_reply":   "primary",
 	"btn.share":          "primary",
 	"btn.join_channel":   "primary",
+	"btn.join_chat":      "primary",
 	"btn.invite":         "primary",
 	"btn.reseller":       "primary",
 	"btn.top_users":      "primary",

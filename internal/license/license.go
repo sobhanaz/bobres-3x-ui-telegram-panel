@@ -43,7 +43,12 @@ type Entitlements struct {
 	Gateways           []string `json:"gateways"`
 	CryptoWatcher      bool     `json:"crypto_watcher"`
 	DashboardStaffSeat int      `json:"dashboard_staff_seats"`
-	UpdatesUntil       string   `json:"updates_until,omitempty"` // YYYY-MM-DD
+	// MaxJoinChats is how many channels and groups customers must join to use
+	// the bot (the store's required chats): Unlimited (-1) or a count. A token
+	// signed before the field existed has none, which the policy raises to
+	// the free tier's 1.
+	MaxJoinChats int    `json:"max_join_chats"`
+	UpdatesUntil string `json:"updates_until,omitempty"` // YYYY-MM-DD
 }
 
 // Token is the signed payload.
@@ -272,7 +277,7 @@ func (t Token) Validate() error {
 	if t.GraceDays < 0 || t.GraceDays > maxGraceDays {
 		errs = append(errs, fmt.Errorf("grace_days must be 0..%d", maxGraceDays))
 	}
-	if t.Entitlements.MaxServers < Unlimited || t.Entitlements.MaxActiveServices < Unlimited || t.Entitlements.DashboardStaffSeat < Unlimited {
+	if t.Entitlements.MaxServers < Unlimited || t.Entitlements.MaxActiveServices < Unlimited || t.Entitlements.DashboardStaffSeat < Unlimited || t.Entitlements.MaxJoinChats < Unlimited {
 		errs = append(errs, errors.New("limits must be >= -1"))
 	}
 	if len(errs) > 0 {
@@ -326,6 +331,7 @@ func (e Entitlements) AtLeast(f Entitlements) Entitlements {
 	out.MaxServers = largerLimit(e.MaxServers, f.MaxServers)
 	out.MaxActiveServices = largerLimit(e.MaxActiveServices, f.MaxActiveServices)
 	out.DashboardStaffSeat = largerLimit(e.DashboardStaffSeat, f.DashboardStaffSeat)
+	out.MaxJoinChats = largerLimit(e.MaxJoinChats, f.MaxJoinChats)
 	out.Gateways = slices.Clone(e.Gateways)
 	for _, g := range f.Gateways {
 		if !out.HasGateway(g) {

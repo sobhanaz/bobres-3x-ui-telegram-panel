@@ -506,6 +506,14 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	if plain, err := s.dom.Settings(ctx); err == nil && domain.MiniAppOn(plain) {
 		out.MiniappUrl = domain.MiniAppURL(s.dashboardURL(ctx))
 	}
+	// The extra required chats the license allows. When they cannot be read the
+	// bot holds customers to the first chat alone (the floor of every license),
+	// as it does for an older core.
+	if extras, err := s.dom.EnforcedJoinExtras(ctx); err == nil {
+		for _, c := range extras {
+			out.JoinChats = append(out.JoinChats, &corev1.JoinChat{Chat: c.Chat, Link: c.Link, Label: c.Label})
+		}
+	}
 	// Whether the FAQ and the tutorials have anything to show: the bot's buttons
 	// follow. A read that fails fails the refresh, so the bot keeps what it had
 	// instead of hiding the buttons for a minute.

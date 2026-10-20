@@ -158,15 +158,16 @@ func TestValidateRejectsUnsafeTokens(t *testing.T) {
 	pub, priv := keypair(t)
 	now := time.Now().UTC()
 	mut := map[string]func(*Token){
-		"no license id":        func(t *Token) { t.LicenseID = "" },
-		"unknown tier":         func(t *Token) { t.Tier = "enterprise" },
-		"expires before issue": func(t *Token) { t.ExpiresAt = t.IssuedAt.Add(-time.Hour) },
-		"zero expiry":          func(t *Token) { t.ExpiresAt = time.Time{} },
-		"huge grace":           func(t *Token) { t.GraceDays = 1 << 40 },
-		"negative grace":       func(t *Token) { t.GraceDays = -1 },
-		"limit below -1":       func(t *Token) { t.Entitlements.MaxServers = -5 },
-		"wrong version":        func(t *Token) { t.V = 9 },
-		"license ends early":   func(t *Token) { end := t.ExpiresAt.Add(-time.Second); t.LicenseEndsAt = &end },
+		"no license id":           func(t *Token) { t.LicenseID = "" },
+		"unknown tier":            func(t *Token) { t.Tier = "enterprise" },
+		"expires before issue":    func(t *Token) { t.ExpiresAt = t.IssuedAt.Add(-time.Hour) },
+		"zero expiry":             func(t *Token) { t.ExpiresAt = time.Time{} },
+		"huge grace":              func(t *Token) { t.GraceDays = 1 << 40 },
+		"negative grace":          func(t *Token) { t.GraceDays = -1 },
+		"limit below -1":          func(t *Token) { t.Entitlements.MaxServers = -5 },
+		"required chats below -1": func(t *Token) { t.Entitlements.MaxJoinChats = -2 },
+		"wrong version":           func(t *Token) { t.V = 9 },
+		"license ends early":      func(t *Token) { end := t.ExpiresAt.Add(-time.Second); t.LicenseEndsAt = &end },
 	}
 	for name, f := range mut {
 		tok := sample(now)

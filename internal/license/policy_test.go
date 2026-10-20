@@ -11,13 +11,13 @@ var policyNow = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 
 // The free tier and the trial are what the owner decided on 2026-10-14.
 func TestFreeAndTrialEntitlements(t *testing.T) {
-	want := Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2,
+	want := Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, MaxJoinChats: 1,
 		Gateways: []string{"zarinpal", "idpay", "nextpay", "stars", "manual_card", "manual_crypto", "manual_zarinpal"}}
 	if got := FreeEntitlements(); !reflect.DeepEqual(got, want) {
 		t.Errorf("free tier:\n got %+v\nwant %+v", got, want)
 	}
 	wantTrial := Entitlements{MaxServers: Unlimited, MaxActiveServices: Unlimited, Resellers: true, CryptoWatcher: true,
-		DashboardStaffSeat: 5, Gateways: []string{"zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"}}
+		DashboardStaffSeat: 5, MaxJoinChats: Unlimited, Gateways: []string{"zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"}}
 	if got := TrialEntitlements(); !reflect.DeepEqual(got, wantTrial) {
 		t.Errorf("trial:\n got %+v\nwant %+v", got, wantTrial)
 	}
@@ -136,16 +136,20 @@ func TestResolveNeverBelowFree(t *testing.T) {
 	}{
 		{"an all-zero license", Entitlements{}, free},
 		{"limits omitted, a feature granted", Entitlements{Resellers: true, MaxServers: 2, DashboardStaffSeat: 3, Gateways: []string{"zarinpal"}},
-			Entitlements{Resellers: true, MaxServers: 2, MaxActiveServices: 25, DashboardStaffSeat: 3, Gateways: free.Gateways}},
+			Entitlements{Resellers: true, MaxServers: 2, MaxActiveServices: 25, DashboardStaffSeat: 3, MaxJoinChats: 1, Gateways: free.Gateways}},
 		{"unlimited beats the free tier's number", Entitlements{MaxServers: Unlimited, MaxActiveServices: Unlimited, DashboardStaffSeat: Unlimited},
-			Entitlements{MaxServers: Unlimited, MaxActiveServices: Unlimited, DashboardStaffSeat: Unlimited, Gateways: free.Gateways}},
+			Entitlements{MaxServers: Unlimited, MaxActiveServices: Unlimited, DashboardStaffSeat: Unlimited, MaxJoinChats: 1, Gateways: free.Gateways}},
+		{"unlimited required chats beat the free tier's one", Entitlements{MaxJoinChats: Unlimited},
+			Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, MaxJoinChats: Unlimited, Gateways: free.Gateways}},
+		{"a license that names no required chats still has the free tier's one", Entitlements{MaxServers: 4},
+			Entitlements{MaxServers: 4, MaxActiveServices: 25, DashboardStaffSeat: 2, MaxJoinChats: 1, Gateways: free.Gateways}},
 		{"a limit below the free tier's is raised", Entitlements{MaxServers: 1, MaxActiveServices: 10, DashboardStaffSeat: 1},
-			Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, Gateways: free.Gateways}},
+			Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, MaxJoinChats: 1, Gateways: free.Gateways}},
 		{"gateways are united, a name once, case aside", Entitlements{Gateways: []string{"Stars", "usdt_trc20_auto"}, CryptoWatcher: true},
-			Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, CryptoWatcher: true,
+			Entitlements{MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, MaxJoinChats: 1, CryptoWatcher: true,
 				Gateways: []string{"Stars", "usdt_trc20_auto", "zarinpal", "idpay", "nextpay", "manual_card", "manual_crypto", "manual_zarinpal"}}},
 		{"white label and updates_until are the license's", Entitlements{WhiteLabel: true, UpdatesUntil: "2027-09-30"},
-			Entitlements{WhiteLabel: true, MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, Gateways: free.Gateways, UpdatesUntil: "2027-09-30"}},
+			Entitlements{WhiteLabel: true, MaxServers: 1, MaxActiveServices: 25, DashboardStaffSeat: 2, MaxJoinChats: 1, Gateways: free.Gateways, UpdatesUntil: "2027-09-30"}},
 	} {
 		for state, basis := range map[State]Basis{Active: BasisLicense, Grace: BasisGrace} {
 			got := Resolve(&Token{Tier: TierStandard, Entitlements: c.ents}, state, started, policyNow)

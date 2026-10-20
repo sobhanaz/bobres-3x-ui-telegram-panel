@@ -1083,6 +1083,31 @@
     "tz_default": "Server default",
     "tz_filter": "Search a region or city",
     "tz_now": "Time there now: {time}",
+    "join": {
+      "locked": "Only the store owner can change the required channels and groups.",
+      "dormant": "The first channel is empty, so customers are not asked to join anything. The chats below are saved, but do nothing until the list is saved: its first row then becomes the first channel.",
+      "count": "Required channels and groups: {used} of {limit} (allowed by your plan)",
+      "count_unlimited": "Required channels and groups: {used} · no limit",
+      "limit_note": "Your plan’s limit here is {limit}; the Pro plan has no limit.",
+      "over_note": "Your plan counts only the first rows of this list (limit: {limit}). The others stay saved but are inactive until your plan allows them. You can still reorder, edit or remove them.",
+      "empty": "No channel or group is required, so customers can use the bot without joining anything. Add one to require it.",
+      "first": "First channel or group",
+      "nth": "Channel or group {n}",
+      "inactive": "Inactive: needs Pro",
+      "inactive_hint": "Saved, but customers are not asked to join it: your plan allows fewer required chats.",
+      "move_up": "Move up: row {n}",
+      "move_down": "Move down: row {n}",
+      "remove": "Remove row {n}",
+      "add": "Add a channel or group",
+      "max": "The list holds at most {max}.",
+      "see_license": "See the license",
+      "label_example": "For example: News",
+      "field": {
+        "chat": "Channel or group",
+        "link": "Join link",
+        "label": "Name on the button"
+      }
+    },
     "maintenance_confirm": {
       "title": "Turn on maintenance mode?",
       "message": "From now on customers only see the maintenance message in the bot: they cannot buy or open their services there. Active services keep working, staff can still use the bot, and payments already under way can finish.",
@@ -1096,12 +1121,14 @@
       "problem": {
         "not_found": "Telegram cannot find this channel. Check the name; for a private channel use its numeric id and make sure the bot is an admin.",
         "not_admin": "The bot is not an admin of this channel. Add it as an admin in the channel settings and check again.",
-        "not_channel": "This is not a channel (it may be a group or a user).",
+        "not_channel": "This is not a channel or a group (it may be a user).",
         "error": "Telegram returned an error. Check the name or id and try again."
       }
     },
     "invalid": {
       "channel": "A channel {'@'}username (5 to 32 English letters, digits or _, starting with a letter) or a numeric id starting with -100.",
+      "required": "Enter a channel or group, or remove this row.",
+      "duplicate": "This channel or group is already in the list.",
       "tme_link": "A link that starts with https://t.me/",
       "link_required": "A private channel (numeric id) needs an invite link.",
       "https": "A full address that starts with https://",
@@ -1147,9 +1174,9 @@
         "desc": "Close the bot to customers for a while, for example while you move servers."
       },
       "join": {
-        "title": "Required channel",
-        "desc": "Customers must join your channel before they can use the bot.",
-        "note": "The bot must be an administrator of the channel to check who joined. For a private channel, enter its numeric id (starting with -100) and put an invite link in “Join link”."
+        "title": "Required channels and groups",
+        "desc": "Customers must join these before they can use the bot or the Mini App. The free tier and Standard allow one; Pro and the trial any number.",
+        "note": "The bot must be an administrator of each channel or group to check who joined. For a private one, enter its numeric id (starting with -100) and put its invite link in “Join link”. The first row is the channel the bot’s /set join.channel changes; the order is the order customers are asked in. A name on the button is optional: without one, a public channel shows its {'@'}username."
       },
       "notify": {
         "title": "Staff notifications",
@@ -2839,6 +2866,7 @@
       "resellers": "Resellers are not included here. Buy or renew a license that includes them.",
       "gateways": "This payment method is not included here. Buy or renew a license that includes it.",
       "crypto_watcher": "Automatic USDT payments are not included here. Buy or renew a license that includes them.",
+      "max_join_chats": "This plan allows only one required channel or group. Buy or renew a license (the Pro plan has no limit) to add more.",
       "other": "This is not included here. Buy or renew a license."
     },
     "reason": {
@@ -2903,6 +2931,7 @@
       "servers": "Panel servers",
       "active_services": "Active services",
       "staff_seats": "Staff seats (the store owner is not counted)",
+      "join_chats": "Required channels and groups (join to use the bot)",
       "gateways": "Payment methods",
       "resellers": "Resellers",
       "white_label": "White label (no “Powered by BOBRES”)",

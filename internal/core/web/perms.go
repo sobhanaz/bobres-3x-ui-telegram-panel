@@ -31,19 +31,20 @@ const (
 	PermAuditRead      = "audit.read"
 	PermStaffWrite     = "staff.write"
 	PermLicenseWrite   = "license.write"
+	PermJoinWrite      = "join.write" // the required channels and groups: owner only
 )
 
 var allPerms = []string{
 	PermOverviewRead, PermUsersRead, PermUsersWrite, PermWalletAdjust, PermServicesRead, PermServicesExtend,
 	PermServicesWrite, PermPlansWrite, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermDiscountsWrite,
 	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
-	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite,
+	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite, PermJoinWrite,
 }
 
-// ownerOnly: staff accounts, the license, gateway secrets and system actions
-// (backups) stay with the owner.
+// ownerOnly: staff accounts, the license, gateway secrets, system actions
+// (backups) and the list of required channels and groups stay with the owner.
 var ownerOnly = map[string]bool{
-	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true,
+	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true, PermJoinWrite: true,
 }
 
 var supportPerms = map[string]bool{

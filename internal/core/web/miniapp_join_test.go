@@ -418,7 +418,7 @@ func TestMiniJoinAbandonedRequestIsNotAnAnswer(t *testing.T) {
 	}
 	gone, hangUp := context.WithCancel(context.Background())
 	hangUp()
-	if need := j.api.miniJoinGate(gone, settings, u); need == nil || need.url != "https://t.me/mynews" {
+	if need := j.api.miniJoinGate(gone, settings, u); need == nil || len(need.chats) != 1 || need.chats[0].url != "https://t.me/mynews" {
 		t.Fatalf("a hung-up request was let in: %+v", need)
 	}
 	if j.api.mini.join.allowed(116, joinChannel, j.clock.Now()) {

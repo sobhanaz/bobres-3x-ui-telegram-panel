@@ -1,7 +1,7 @@
 // What the app shows, loaded from core and kept here: one small reactive
 // object (no state library).
 import { reactive } from 'vue'
-import { api, ApiError, type LedgerEntry, type Me, type Plan, type Service, type Wallet } from './api'
+import { api, ApiError, type JoinChatLink, type LedgerEntry, type Me, type Plan, type Service, type Wallet } from './api'
 import { errorKey, gateFor, type Gate } from './errors'
 import { signIn } from './api'
 import { initData, telegramLanguage } from './telegram'
@@ -12,6 +12,8 @@ export const state = reactive({
   gate: '' as Gate,
   /** the gate join_required: where to join the store's channel ("" when the store gave no link) */
   joinUrl: '',
+  /** the gate join_required when the store requires several channels and groups: every one the customer still lacks (empty for one) */
+  joinChats: [] as JoinChatLink[],
   me: null as Me | null,
   plans: null as Plan[] | null,
   services: null as Service[] | null,
@@ -23,7 +25,10 @@ export const state = reactive({
 export function fail(e: unknown): boolean {
   const g = gateFor(e)
   if (g) state.gate = g
-  if (g === 'join_required') state.joinUrl = e instanceof ApiError ? e.joinUrl : ''
+  if (g === 'join_required') {
+    state.joinUrl = e instanceof ApiError ? e.joinUrl : ''
+    state.joinChats = e instanceof ApiError ? e.joinChats : []
+  }
   return g !== ''
 }
 
@@ -63,12 +68,13 @@ export async function recheckJoin(): Promise<Key | ''> {
     const me = await signIn()
     state.gate = ''
     state.joinUrl = ''
+    state.joinChats = []
     applyMe(me)
     return ''
   } catch (e) {
     if (gateFor(e) === 'join_required') {
       fail(e)
-      return 'join.not_yet'
+      return state.joinChats.length ? 'join.not_yet_many' : 'join.not_yet'
     }
     return fail(e) ? '' : errorKey(e)
   }

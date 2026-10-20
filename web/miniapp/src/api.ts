@@ -3,6 +3,9 @@
 // data Telegram gave it (which Telegram itself keeps for the whole visit).
 import { initData } from './telegram'
 
+/** A channel or group the customer still has to join: its link ("" when the store gave none) and the name to show ("" when none). */
+export interface JoinChatLink { url: string; label: string }
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -11,9 +14,21 @@ export class ApiError extends Error {
     public reason = '',
     /** join_required: where to join the store's required channel (a t.me link; "" when the store gave none) */
     public joinUrl = '',
+    /** join_required, when the store requires several channels and groups: every one the customer still lacks */
+    public joinChats: JoinChatLink[] = [],
   ) {
     super(message)
   }
+}
+
+/** joinChatsOf reads the chats of a join_required answer; anything that is not a list of {url, label} is none. */
+function joinChatsOf(v: unknown): JoinChatLink[] {
+  if (!Array.isArray(v)) return []
+  return v.flatMap((c) => {
+    if (typeof c !== 'object' || c === null) return []
+    const { url, label } = c as Record<string, unknown>
+    return [{ url: typeof url === 'string' ? url : '', label: typeof label === 'string' ? label : '' }]
+  })
 }
 
 /** credit_limit is a reseller's: the balance may go down to minus it (0, or absent, for everyone else). */
@@ -131,7 +146,7 @@ async function raw<T>(method: string, path: string, body?: unknown, auth = true)
     // an answer without a body: the status says it all
   }
   if (!res.ok) {
-    throw new ApiError(res.status, String(data.error ?? 'error'), String(data.message ?? res.statusText), String(data.reason ?? ''), String(data.join_url ?? ''))
+    throw new ApiError(res.status, String(data.error ?? 'error'), String(data.message ?? res.statusText), String(data.reason ?? ''), String(data.join_url ?? ''), joinChatsOf(data.join_chats))
   }
   return data as T
 }

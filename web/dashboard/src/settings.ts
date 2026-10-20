@@ -84,6 +84,16 @@ function httpsURL(v: string): boolean {
   }
 }
 
+/** validChannel: a normalized channel or group, a public one's @name or a private one's -100… id. */
+export function validChannel(v: string): boolean {
+  return channelName.test(v) || channelId.test(v)
+}
+
+/** validJoinLink: the https://t.me/… link of a Join button (core takes the same). */
+export function validJoinLink(v: string): boolean {
+  return /^https:\/\/t\.me\/[^\s/]/.test(v) && httpsURL(v)
+}
+
 /** validate checks a normalized value. others holds every key's canonical
  * value in the same card, for rules that join two keys. "" always means
  * "back to the default" and is accepted, except join.link for a private channel. */

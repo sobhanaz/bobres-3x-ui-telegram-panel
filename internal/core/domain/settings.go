@@ -92,9 +92,11 @@ var SettingSpecs = []SettingSpec{
 	{Key: "maintenance.enabled", Group: "maintenance", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = customers only get the maintenance message; staff and payments in progress still work"},
 	{Key: "join.channel", Group: "join", Kind: KindChannel, Perm: permSettings,
-		Help: "channel customers must join to use the bot: @name or -100… id (the bot must be its admin; empty = off)"},
+		Help: "the first channel or group customers must join to use the bot: @name or -100… id (the bot must be its admin; empty = off, the extra required chats too)"},
 	{Key: "join.link", Group: "join", Kind: KindURL, Perm: permSettings,
 		Help: "https://t.me/… link of the join button (needed for a private channel)"},
+	{Key: "join.label", Group: "join", Kind: KindText, Perm: permSettings, MaxLen: JoinLabelMax,
+		Help: "short name of this channel on the join button when customers must join several (empty = its @name)"},
 	{Key: "notify.new_payment", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "message staff when a payment needs review"},
 	{Key: "notify.new_ticket", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
@@ -503,24 +505,7 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 			if before[k] == norm[k] {
 				continue
 			}
-			if norm[k] == "" {
-				err = s.st.DeleteSetting(ctx, tx, k)
-			} else {
-				raw, _ := json.Marshal(norm[k])
-				err = s.st.SetSetting(ctx, tx, k, raw)
-			}
-			if err != nil {
-				return err
-			}
-			action, entity, entityID := "setting.set", "settings", k
-			if lang, tk, ok := i18n.SplitTextKey(k); ok {
-				action, entity, entityID = "text.set", "text", lang+"."+tk
-				if norm[k] == "" {
-					action = "text.reset"
-				}
-			}
-			if err := s.auditChange(ctx, tx, actor, action, entity, entityID,
-				map[string]string{"value": before[k]}, map[string]string{"value": norm[k]}, ""); err != nil {
+			if err := s.writeSetting(ctx, tx, actor, k, before[k], norm[k]); err != nil {
 				return err
 			}
 			changes = append(changes, SettingChange{Key: k, Before: before[k], After: norm[k]})
@@ -531,6 +516,31 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 		return nil, err
 	}
 	return changes, nil
+}
+
+// writeSetting stores one changed, already checked setting inside a
+// transaction ("" removes it, so its default applies) with its audit entry
+// (the value before and after).
+func (s *Service) writeSetting(ctx context.Context, tx pgx.Tx, actor *store.User, key, before, after string) error {
+	var err error
+	if after == "" {
+		err = s.st.DeleteSetting(ctx, tx, key)
+	} else {
+		raw, _ := json.Marshal(after)
+		err = s.st.SetSetting(ctx, tx, key, raw)
+	}
+	if err != nil {
+		return err
+	}
+	action, entity, entityID := "setting.set", "settings", key
+	if lang, tk, ok := i18n.SplitTextKey(key); ok {
+		action, entity, entityID = "text.set", "text", lang+"."+tk
+		if after == "" {
+			action = "text.reset"
+		}
+	}
+	return s.auditChange(ctx, tx, actor, action, entity, entityID,
+		map[string]string{"value": before}, map[string]string{"value": after}, "")
 }
 
 // ImportTexts replaces the overrides of many texts of one language at once:

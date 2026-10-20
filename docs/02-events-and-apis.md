@@ -106,6 +106,18 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   ticket open (FAILED_PRECONDITION "a reseller application is open already" or "another support conversation is open": the
   bot reads them). `Ticket.category` can be `reseller`; the topics a customer picks from stay payment, service and other
   (`domain.SupportCategories`, which is also what the Mini App lists).
+- core, required chats (built, additive; the proto stays compatible): `Settings.join_chats` (field 8, `repeated JoinChat
+  {chat, link, label}`) are the **extra** channels and groups customers must join, after the first one (the settings
+  `join.channel`, `join.link` and the new `join.label`, which stay in `Settings.values`), in the order they are asked and
+  already limited to what the license in effect allows (`max_join_chats`: the free tier and Standard 1, so none here;
+  Pro and the trial any number). It is empty while `join.channel` is empty (the requirement is off) and for an older
+  core; an older bot ignores it and holds customers to the first chat only. `AdminSetSetting` takes `join.label` like
+  the other settings. The extras are saved by the dashboard (`GET` and `PUT /api/v1/join-chats`, [04-dashboard.md](04-dashboard.md))
+  and live in the `core.join_chats` table (migration 00029); nothing else of the bot-core contract changed, and the
+  bot's `POST /internal/miniapp/channel-member` and `GET /internal/channel-check` take any channel or group, a call each
+  ([17-mini-app.md](17-mini-app.md)). The channel check accepts a group or supergroup as well as a channel. The
+  license's token has a new field `max_join_chats` ([05-license.md](05-license.md)), and `GET /api/v1/license` lists
+  it among the entitlements with the chats saved as its use.
 - core, payment method switches (milestone 6a, built): `ListPaymentMethods` leaves out Telegram Stars while
   `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
   turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments

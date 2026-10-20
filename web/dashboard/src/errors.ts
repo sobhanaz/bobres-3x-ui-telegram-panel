@@ -3,7 +3,7 @@ import { ApiError } from './api'
 type T = (key: string, params?: Record<string, unknown>) => string
 
 /** The limits and features a refusal can name (409 with `license`: the gate). */
-const LICENSE_GATES = ['max_servers', 'max_active_services', 'dashboard_staff_seats', 'resellers', 'gateways', 'crypto_watcher']
+const LICENSE_GATES = ['max_servers', 'max_active_services', 'dashboard_staff_seats', 'resellers', 'gateways', 'crypto_watcher', 'max_join_chats']
 
 /** errorText is what a failed request shows: a sentence in the staff
  * member's language, and the server's own reason when it says more. A new

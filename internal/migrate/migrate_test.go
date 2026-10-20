@@ -58,7 +58,7 @@ func TestUpAppliesAllSchemas(t *testing.T) {
 			"subscriptions", "tickets", "ticket_messages", "ticket_canned", "broadcasts", "broadcast_recipients", "audit_log", "settings", "staff_credentials", "web_sessions", "login_links",
 			"outbox_core", "inbox_core", "outbox_core_cursors", "dead_letters", "reseller_tiers", "reseller_tier_prices", "resellers",
 			"plan_servers", "plan_inbounds", "install", "license", "alert_state", "tls_config", "daily_summary_claims", "system_updates",
-			"gift_codes", "gift_code_redemptions", "gift_code_failures"},
+			"gift_codes", "gift_code_redemptions", "gift_code_failures", "join_chats"},
 		"payments": {"payment_intents", "manual_receipts", "ledger_entries",
 			"outbox_payments", "inbox_payments", "outbox_payments_cursors", "gateway_configs"},
 		"provisioner": {"xui_servers", "provision_jobs", "client_map",

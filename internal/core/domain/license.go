@@ -135,7 +135,7 @@ func LicenseReasonText(code string) string {
 // LicenseRefusal is a new action the effective entitlements do not allow
 // (409): the license, the trial or the free tier says no. Gate names the
 // entitlement: resellers, max_servers, max_active_services,
-// dashboard_staff_seats, gateways or crypto_watcher (or GateResellerPurchase).
+// dashboard_staff_seats, gateways, crypto_watcher or max_join_chats (or GateResellerPurchase).
 // Msg is for staff (it names the limit and says to buy or renew a license); a
 // customer is never shown it (PurchasesPaused is what the bot gets for the two
 // gates a purchase can meet).
@@ -343,6 +343,9 @@ type LicenseUsage struct {
 	Servers        *int
 	ActiveServices int
 	StaffSeats     int
+	// JoinChats counts the required channels and groups saved, the first one
+	// (the setting join.channel) included.
+	JoinChats int
 	// Gateways are the payment methods switched on now (wallet left out).
 	Gateways []string
 }
@@ -357,6 +360,16 @@ func (s *Service) LicenseUsage(ctx context.Context, sa ServerAdmin, ga GatewayAd
 	}
 	if u.StaffSeats, err = s.st.CountStaffSeats(ctx, s.st.Conn(), s.PrimaryOwnerID()); err != nil {
 		return nil, err
+	}
+	extras, err := s.st.ListJoinChats(ctx, s.st.Conn())
+	if err != nil {
+		return nil, err
+	}
+	u.JoinChats = len(extras)
+	if settings, err := s.Settings(ctx); err != nil {
+		return nil, err
+	} else if settings["join.channel"] != "" {
+		u.JoinChats++
 	}
 	if sa != nil {
 		if list, err := sa.ListServers(ctx); err == nil {
@@ -471,6 +484,7 @@ var gateAction = map[string]string{
 	"max_servers":           "add servers",
 	GateActiveServices:      "sell more services",
 	"dashboard_staff_seats": "add staff",
+	GateJoinChats:           "add more required channels and groups",
 	GateResellerPurchase:    "let resellers buy",
 	"gateways":              "switch payment methods on",
 	"crypto_watcher":        "switch automatic USDT on",
