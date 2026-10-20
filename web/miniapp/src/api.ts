@@ -9,6 +9,8 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public reason = '',
+    /** join_required: where to join the store's required channel (a t.me link; "" when the store gave none) */
+    public joinUrl = '',
   ) {
     super(message)
   }
@@ -129,7 +131,7 @@ async function raw<T>(method: string, path: string, body?: unknown, auth = true)
     // an answer without a body: the status says it all
   }
   if (!res.ok) {
-    throw new ApiError(res.status, String(data.error ?? 'error'), String(data.message ?? res.statusText), String(data.reason ?? ''))
+    throw new ApiError(res.status, String(data.error ?? 'error'), String(data.message ?? res.statusText), String(data.reason ?? ''), String(data.join_url ?? ''))
   }
   return data as T
 }

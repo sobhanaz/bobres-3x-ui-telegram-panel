@@ -73,6 +73,9 @@ type miniState struct {
 	uploads chan struct{}
 	senders *miniInflight
 	proofs  *miniInflight
+	// join remembers who need not be asked about the store's required channel
+	// for a while (miniapp_join.go).
+	join *miniJoin
 }
 
 // noteBot remembers the bot's username from a sign-in (a malformed one is ignored).
@@ -86,7 +89,7 @@ func newMiniState() *miniState {
 	return &miniState{sessions: newMiniSessions(), auth: newLimiter(miniAuthRate, time.Minute),
 		api: newLimiter(miniAPIRate, time.Minute), write: newLimiter(miniWriteRate, time.Minute),
 		upload: newLimiter(miniUploadRate, miniUploadWindow), uploads: make(chan struct{}, miniUploadSlots),
-		senders: newMiniInflight(), proofs: newMiniInflight()}
+		senders: newMiniInflight(), proofs: newMiniInflight(), join: newMiniJoin()}
 }
 
 type miniKey struct{}
@@ -240,6 +243,15 @@ func (s *Server) miniSession(inMaintenance bool, next http.HandlerFunc) http.Han
 			writeError(w, http.StatusServiceUnavailable, "maintenance", "the store is under maintenance")
 			return
 		}
+		// The required channel: a customer who has left it, or a channel the owner turned
+		// on while sessions were open, stops here. What a payment under way needs is left
+		// open, as it is in maintenance and as the bot lets a payment finish.
+		if !inMaintenance {
+			if need := s.miniJoinGate(ctx, settings, u); need != nil {
+				miniJoinRequired(w, need)
+				return
+			}
+		}
 		next(w, r.WithContext(context.WithValue(ctx, miniKey{}, &miniCaller{user: u, maintenance: maintenance, token: token})))
 	}
 }
@@ -352,6 +364,15 @@ func (s *Server) miniAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	if u.Status != "active" {
 		writeError(w, http.StatusForbidden, "banned", "this account cannot use the store")
+		return
+	}
+	settings, err := s.cfg.Domain.Settings(ctx)
+	if err != nil {
+		s.internal(w, "mini app settings", err)
+		return
+	}
+	if need := s.miniJoinGate(ctx, settings, u); need != nil {
+		miniJoinRequired(w, need)
 		return
 	}
 	token, ok := s.mini.sessions.open(u.ID, u.TelegramID, s.now())

@@ -9,6 +9,23 @@ All notable changes to BOBRES are written here. The format follows
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Telegram Mini App
+- **The Mini App now holds the store's required channel** (`join.channel`), as the bot does: a customer who is not in
+  it can no longer skip the gate by opening the app. Core answers a sign-in, and any later call except what a payment
+  under way needs, with `403 join_required` and the channel's public link (`join_url`), and the app shows a full-screen
+  gate, in Persian and English, with **Join the channel** and **I've joined** (which signs in again and asks at once).
+  Only the bot can ask Telegram who is in a channel, so core asks it, through a new internal endpoint of the bot
+  (`POST /internal/miniapp/channel-member`, core's token, never routed from outside; additive).
+- The bot's own rules, copied: staff and the configured owners are never asked, and nobody is while the store is in
+  maintenance; a confirmed member is remembered for 10 minutes and a customer outside the channel never, so "I've
+  joined" works at once; and **when Telegram cannot tell** (the bot is not the channel's administrator, no such
+  channel, a timeout) **the customer is let in**, as the bot lets them in, with a warning in core's log once a minute
+  and no new question about that customer for a minute. The owner turning the requirement on stops the app's open
+  sessions at their next call; a member who leaves the channel is stopped within 10 minutes.
+- Updating: the bot and core move together (`sudo bobres update`). A core with a bot too old to know the question
+  lets everyone in and logs the warning, as when Telegram cannot answer. Nothing to configure. Not tried in a real
+  Telegram: [17-mini-app.md](docs/17-mini-app.md), check 12.
+- Not as in the bot: a customer outside the channel cannot go on with a support conversation in the app (they can in
+  the bot), and one who has to sign in again cannot send a payment proof from the app.
 - **A manual payment left half-way can be taken up again.** When Telegram reloaded the app (or the customer closed it)
   between paying at the bank and sending the receipt, the screen that showed the card, the addresses or the link and
   took the proof was gone, and reopening a plan made a new order. The Wallet tab now lists the customer's manual payments

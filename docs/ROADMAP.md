@@ -23,8 +23,7 @@ group). What is still open:
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, gift codes, a lottery or wheel, reseller targets); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
-  sign-in inside the bot; an Undo for the last change in the bot's admin menu; in the Mini App, enforcing the store's
-  required channel (the bot does).
+  sign-in inside the bot; an Undo for the last change in the bot's admin menu.
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 

@@ -142,6 +142,9 @@ func setup(rt *app.Runtime) error {
 		// The Mini App store (/app on core): core has no bot token, so it asks
 		// the bot to check the init data a Mini App is opened with.
 		rt.Mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(cfg.TelegramBotToken, me.Username, cfg.PeerCoreToken, nil))
+		// The store's required channel (join.channel) holds in the app as in the
+		// bot: only the bot, the channel's admin, can ask Telegram who is in it.
+		rt.Mux.Handle("POST /internal/miniapp/channel-member", runner.MiniAppChannelMember(bot, cfg.PeerCoreToken, rt.Log))
 		// Its payments, the same reason: a Stars invoice link, a receipt sent to
 		// the customer's chat (core stores the file id Telegram gives back), and
 		// the staff alert for a proof core recorded (the alert is the bot's).

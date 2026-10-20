@@ -3,7 +3,8 @@
 A web store that opens inside Telegram: browse plans, buy with the wallet, an online gateway, Telegram Stars or by hand
 (card to card, USDT, a Zarinpal payment link, with a receipt), see and renew your services, top up the wallet, take the
 free trial, invite friends, write to support and, for a reseller, manage their customers' services. It is the same
-store as the bot (same plans, prices, discount codes, wallet, orders and support inbox), in a nicer screen.
+store as the bot (same plans, prices, discount codes, wallet, orders and support inbox, and the same gates: bans,
+maintenance and the required channel), in a nicer screen.
 
 It is **on by default**, for every store, with nothing to set up in @BotFather: the bot opens it from a **Store** button
 on its home screen, a **Store** item in its bottom menu and Telegram's own **menu button** next to the message box.
@@ -52,17 +53,60 @@ Mini App   --initData-->  core  --POST /internal/miniapp/verify (Bearer core tok
 - The init data is never logged, audited or stored. The session token is kept as a SHA-256 hash in core's memory.
   Sessions last 6 hours and end after 1 hour without a call; a restart of core ends them all. The app then signs in
   again with the same init data, which works while it is under an hour old; after that the customer reopens the app.
-- A banned customer gets 403 and nothing else. A user that is gone ends the session.
+- A banned customer gets 403 `banned` and nothing else. A customer outside the store's required channel gets 403
+  `join_required` and no session ([The required channel](#the-required-channel)). A user that is gone ends the session.
+
+## The required channel
+
+When the store makes customers join a channel first (`join.channel` in Settings, Join; `join.link` for a private one),
+the app holds it as the bot does ([03-bot-ux.md](03-bot-ux.md)): a customer who is not in the channel gets a screen
+that asks them to join, and nothing of the store behind it. Telegram shows a channel's members only to its
+administrators, which the bot is, and core has no bot token, so core asks the bot:
+
+```
+core  --POST /internal/miniapp/channel-member {"chat","user_id"} (Bearer core token)-->  bot  --getChatMember-->  Telegram
+      <-- {"ok":true,"member":true|false}   or   429 / 502 {"ok":false,"problem","detail"}
+```
+
+- **When.** At the sign-in, and at every call except what a payment under way needs: `/me`, `/logout`, an order, a
+  payment check and the proof of a manual payment already started (maintenance leaves the same open, and the bot lets
+  a payment finish). So a customer who leaves the channel, or an owner who turns the requirement on while customers
+  have the app open, stops them at their next call, within the 10 minutes below.
+- **The answer.** `403 {"error":"join_required","message":"...","join_url":"https://t.me/..."}`; a sign-in that gets it
+  opens no session. `join_url` is the address the bot's Join button opens: `join.link` when set, else a public
+  channel's `https://t.me/<name>`, and empty for a private channel with no link (the settings do not allow that). It
+  is never the channel's id, and an address on `telegram.me` is written `t.me`, the only host Telegram's script
+  opens inside Telegram.
+- **Who is never asked.** Staff (owners, admins, support) and the owners the server names, whether or not they have an
+  account; and nobody while the store is in maintenance (the maintenance screen comes first, and the bot asks about
+  one of the two as well). A banned customer is told `banned` and nothing about the channel.
+- **Who is remembered.** A confirmed member is not asked about again for 10 minutes (as long as the bot remembers
+  one), per customer and per channel: another channel asks again. A customer outside the channel is never
+  remembered, so "I've joined" is answered at once. The table holds at most 100,000 customers.
+- **When Telegram cannot tell** (the bot is not the channel's administrator, there is no such channel, a timeout, a
+  bot too old to know the question, or no bot), the customer is let in: the bot's own gate does the same, so that a
+  channel set up wrongly cannot lock every customer out. Core logs "cannot check members of the join channel" once a
+  minute, and does not ask again about that customer for a minute, so that a channel that does not answer does not
+  make every call wait. The dashboard's check on the Settings page says whether the bot is the channel's
+  administrator.
+- **What the app shows.** A full-screen gate like the maintenance and banned ones, from the sign-in or from any
+  call, wherever the customer is: the text, **Join the channel** (opens `join_url` inside Telegram; absent when there
+  is none) and **I've joined**, which signs in again, so that core asks the bot at once. It lets the customer in,
+  says they have not joined yet, or says why the check could not be made; a gate that comes up meanwhile
+  (maintenance, banned) takes the screen over. The texts are the bot's own, in Persian and English.
+- **Not as in the bot:** the bot lets a customer outside the channel go on with a support conversation. In the app,
+  support is closed to them like the rest of the store; only what a payment under way needs stays open. A customer
+  outside the channel who has to sign in again cannot send a proof from the app (they can in the bot).
 
 ## The API (`/api/mini/v1`)
 
 JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with codes such as `unauthorized`,
-`rate_limited`, `banned`, `maintenance`, `insufficient_funds`, `plan_unavailable`, `not_extendable`, `not_payable`,
+`rate_limited`, `banned`, `join_required` (403, with `join_url`: the store's required channel), `maintenance`, `insufficient_funds`, `plan_unavailable`, `not_extendable`, `not_payable`,
 `state`, `invalid`, `unavailable` (a service behind core is busy), `disabled` (the setting is off).
 
 | Call | What it does |
 |---|---|
-| `POST /auth` `{init_data}` | Verify, start a session. Returns `me` and `token`, `expires_in`. Public, 20 a minute per client address |
+| `POST /auth` `{init_data}` | Verify, start a session. Returns `me` and `token`, `expires_in`; 403 `banned`, or `join_required` for a customer outside the store's required channel. Public, 20 a minute per client address |
 | `GET /me`, `POST /logout` | The customer, wallets (a reseller's carry their `credit_limit`), branding, maintenance flag, top-up bounds, `features` (what the sections show, for example `reseller`); end the session |
 | `GET /plans` | Plans on sale (enabled, not a trial) with the customer's price (reseller prices apply), `topup` marks traffic packages |
 | `GET /services` | The customer's own services: label, status, expiry, traffic, link, page address, `can_renew`, `can_topup` |
@@ -191,7 +235,7 @@ method the owner switched off since is not listed, but the proof call still take
 started in the bot is the same payment and is listed too; the bot itself has no such list (its proof flow goes on with
 the payment its conversation is on).
 
-The bot's endpoints for core, all behind core's service token and never routed from outside:
+The bot's endpoints for core (the last one is the required channel's, above), all behind core's service token and never routed from outside:
 
 | Endpoint | What it is for |
 |---|---|
@@ -199,6 +243,7 @@ The bot's endpoints for core, all behind core's service token and never routed f
 | `POST /internal/miniapp/invoice` | Make a Stars invoice link: `{payload, stars, lang, title, amount, currency, topup}` gives `{url}` |
 | `POST /internal/miniapp/receipt` | Send a receipt image to the customer's chat: gives `{file_id, kind}` |
 | `POST /internal/miniapp/proof-alert` | Alert the staff to a stored proof |
+| `POST /internal/miniapp/channel-member` | Is a customer in the required channel: `{chat, user_id}` gives `{ok, member}` |
 
 Error codes of these calls, besides the general ones: `method_off`, `bad_type` (415), `too_large` (413), `empty`,
 `no_receipt`, `one_receipt`, `reference_required`, `bad_txid`, `already_submitted`, `payment_closed`, `duplicate`,
@@ -297,8 +342,11 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
   of room does not) on top of the 20 changes a minute. Each customer has one receipt on its way at a time, and 4 are
   checked and sent at once (each is held in memory meanwhile, up to 30 seconds while it is read, which is what the
   proxy gives a request body), so one account cannot hold every place; a customer who finds none is told to try
-  again in a moment. A receipt is not stored by core and not logged or audited anywhere. The bot's four internal
+  again in a moment. A receipt is not stored by core and not logged or audited anywhere. The bot's five internal
   endpoints answer only to core's token, and core never holds the Telegram token.
+- **The required channel** is checked by the bot, never by the browser: the app cannot say it has joined, only ask
+  core, which asks the bot. A refusal opens no session, the answer carries the channel's public link and nothing else
+  of it (never its id), and a failed check is logged without the customer's id.
 - The session token is held in memory by the page (no cookie, no local storage), so it is not sent by the browser on
   its own and a page of another site cannot make the app act.
 
@@ -307,7 +355,6 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 - For a reseller: recording what they paid the store (staff do it, in the dashboard).
 - Resetting a service's traffic and free days or free traffic for a customer's service (staff only, by design).
 - Photos and files in support (sent from the bot).
-- The store's forced channel (`join.channel`): the bot asks a customer to join it, the app does not.
 - PDF receipts (the bot takes images only, too) and more than one image for a payment.
 - Push messages (the bot sends those).
 
@@ -358,7 +405,15 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
    every owner gets the alert, and a customer who never pressed Start gets the "open the bot" message.
 11. The copy buttons inside Telegram's web view (card number, amounts, addresses, reference), and the new screens' Persian
     layout with long addresses.
-12. **A payment left half-way, with a real bot:** tap card to card (and, in another try, USDT) for a plan and for a top-up,
+12. **The required channel, with a real bot that administers a real channel** (the tests play Telegram with a fake):
+    with `join.channel` set, an account that is not in the channel sees the gate, in its language and with nothing of
+    the store behind it; **Join the channel** opens the channel inside Telegram on iOS, Android and Desktop (a public
+    one by its name, a private one by its invite link), and the app is still there afterwards or opens signed in again;
+    **I've joined** lets the customer in right after they joined and says "not yet" before; a customer who leaves
+    the channel is stopped at their next call once 10 minutes have passed; an owner, an admin and a support member are
+    never stopped; a bot that is not the channel's administrator lets everyone in and the core log has the warning
+    once a minute.
+13. **A payment left half-way, with a real bot:** tap card to card (and, in another try, USDT) for a plan and for a top-up,
     close the app without sending a receipt, and open it again from the bot: the wallet tab lists each payment with its
     reference and age, "Send the receipt" opens the same screen, the receipt reaches the staff, and the row goes. Do it
     once with Telegram killed between paying and sending (the reload this exists for), and once with the owner switching
