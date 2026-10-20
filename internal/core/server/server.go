@@ -444,6 +444,9 @@ func subscriptionToProto(sc *store.Subscription, page func(token string) string)
 	if sc.Label != nil {
 		sp.Label = *sc.Label
 	}
+	if sc.Note != nil {
+		sp.Note = *sc.Note
+	}
 	return sp
 }
 

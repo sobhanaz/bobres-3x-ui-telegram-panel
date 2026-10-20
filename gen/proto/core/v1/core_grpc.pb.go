@@ -19,62 +19,67 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CoreService_UpsertUser_FullMethodName               = "/core.v1.CoreService/UpsertUser"
-	CoreService_GetUser_FullMethodName                  = "/core.v1.CoreService/GetUser"
-	CoreService_ListPlans_FullMethodName                = "/core.v1.CoreService/ListPlans"
-	CoreService_CreateOrder_FullMethodName              = "/core.v1.CoreService/CreateOrder"
-	CoreService_GetOrder_FullMethodName                 = "/core.v1.CoreService/GetOrder"
-	CoreService_GetWallet_FullMethodName                = "/core.v1.CoreService/GetWallet"
-	CoreService_ListLedgerEntries_FullMethodName        = "/core.v1.CoreService/ListLedgerEntries"
-	CoreService_ListSubscriptions_FullMethodName        = "/core.v1.CoreService/ListSubscriptions"
-	CoreService_CreateSupportTicket_FullMethodName      = "/core.v1.CoreService/CreateSupportTicket"
-	CoreService_GetSettings_FullMethodName              = "/core.v1.CoreService/GetSettings"
-	CoreService_UpdateBranding_FullMethodName           = "/core.v1.CoreService/UpdateBranding"
-	CoreService_ReviewManualPayment_FullMethodName      = "/core.v1.CoreService/ReviewManualPayment"
-	CoreService_PayOrderWithWallet_FullMethodName       = "/core.v1.CoreService/PayOrderWithWallet"
-	CoreService_CreatePaymentIntent_FullMethodName      = "/core.v1.CoreService/CreatePaymentIntent"
-	CoreService_StartTrial_FullMethodName               = "/core.v1.CoreService/StartTrial"
-	CoreService_CanStartTrial_FullMethodName            = "/core.v1.CoreService/CanStartTrial"
-	CoreService_SubmitPaymentProof_FullMethodName       = "/core.v1.CoreService/SubmitPaymentProof"
-	CoreService_CheckPayment_FullMethodName             = "/core.v1.CoreService/CheckPayment"
-	CoreService_StarsPreCheckout_FullMethodName         = "/core.v1.CoreService/StarsPreCheckout"
-	CoreService_StarsPaid_FullMethodName                = "/core.v1.CoreService/StarsPaid"
-	CoreService_ListPaymentMethods_FullMethodName       = "/core.v1.CoreService/ListPaymentMethods"
-	CoreService_GetSubscriptionLinks_FullMethodName     = "/core.v1.CoreService/GetSubscriptionLinks"
-	CoreService_AdminGetStats_FullMethodName            = "/core.v1.CoreService/AdminGetStats"
-	CoreService_AdminListPendingPayments_FullMethodName = "/core.v1.CoreService/AdminListPendingPayments"
-	CoreService_AdminGetPayment_FullMethodName          = "/core.v1.CoreService/AdminGetPayment"
-	CoreService_AdminFindUser_FullMethodName            = "/core.v1.CoreService/AdminFindUser"
-	CoreService_AdminAdjustBalance_FullMethodName       = "/core.v1.CoreService/AdminAdjustBalance"
-	CoreService_AdminSetUserStatus_FullMethodName       = "/core.v1.CoreService/AdminSetUserStatus"
-	CoreService_AdminUpsertPlan_FullMethodName          = "/core.v1.CoreService/AdminUpsertPlan"
-	CoreService_AdminSetSetting_FullMethodName          = "/core.v1.CoreService/AdminSetSetting"
-	CoreService_QuoteOrder_FullMethodName               = "/core.v1.CoreService/QuoteOrder"
-	CoreService_GetReferralInfo_FullMethodName          = "/core.v1.CoreService/GetReferralInfo"
-	CoreService_AdminUpsertDiscount_FullMethodName      = "/core.v1.CoreService/AdminUpsertDiscount"
-	CoreService_AdminListDiscounts_FullMethodName       = "/core.v1.CoreService/AdminListDiscounts"
-	CoreService_CreateDashboardLink_FullMethodName      = "/core.v1.CoreService/CreateDashboardLink"
-	CoreService_ListStaffContacts_FullMethodName        = "/core.v1.CoreService/ListStaffContacts"
-	CoreService_AddTicketMessage_FullMethodName         = "/core.v1.CoreService/AddTicketMessage"
-	CoreService_GetMyTickets_FullMethodName             = "/core.v1.CoreService/GetMyTickets"
-	CoreService_GetMyTicket_FullMethodName              = "/core.v1.CoreService/GetMyTicket"
-	CoreService_CloseMyTicket_FullMethodName            = "/core.v1.CoreService/CloseMyTicket"
-	CoreService_GetTicketMessage_FullMethodName         = "/core.v1.CoreService/GetTicketMessage"
-	CoreService_ReportTicketDelivery_FullMethodName     = "/core.v1.CoreService/ReportTicketDelivery"
-	CoreService_SetUserBotBlocked_FullMethodName        = "/core.v1.CoreService/SetUserBotBlocked"
-	CoreService_ClaimBroadcastBatch_FullMethodName      = "/core.v1.CoreService/ClaimBroadcastBatch"
-	CoreService_ReportBroadcastResults_FullMethodName   = "/core.v1.CoreService/ReportBroadcastResults"
-	CoreService_SetSubscriptionLabel_FullMethodName     = "/core.v1.CoreService/SetSubscriptionLabel"
-	CoreService_GetResellerInfo_FullMethodName          = "/core.v1.CoreService/GetResellerInfo"
-	CoreService_GetBotPhoto_FullMethodName              = "/core.v1.CoreService/GetBotPhoto"
-	CoreService_AdminTodayStats_FullMethodName          = "/core.v1.CoreService/AdminTodayStats"
-	CoreService_AdminListSettingSpecs_FullMethodName    = "/core.v1.CoreService/AdminListSettingSpecs"
-	CoreService_AdminListServers_FullMethodName         = "/core.v1.CoreService/AdminListServers"
-	CoreService_AdminSetServer_FullMethodName           = "/core.v1.CoreService/AdminSetServer"
-	CoreService_AdminListStaff_FullMethodName           = "/core.v1.CoreService/AdminListStaff"
-	CoreService_AdminAddStaff_FullMethodName            = "/core.v1.CoreService/AdminAddStaff"
-	CoreService_AdminRemoveStaff_FullMethodName         = "/core.v1.CoreService/AdminRemoveStaff"
-	CoreService_AdminBroadcast_FullMethodName           = "/core.v1.CoreService/AdminBroadcast"
+	CoreService_UpsertUser_FullMethodName                = "/core.v1.CoreService/UpsertUser"
+	CoreService_GetUser_FullMethodName                   = "/core.v1.CoreService/GetUser"
+	CoreService_ListPlans_FullMethodName                 = "/core.v1.CoreService/ListPlans"
+	CoreService_CreateOrder_FullMethodName               = "/core.v1.CoreService/CreateOrder"
+	CoreService_GetOrder_FullMethodName                  = "/core.v1.CoreService/GetOrder"
+	CoreService_GetWallet_FullMethodName                 = "/core.v1.CoreService/GetWallet"
+	CoreService_ListLedgerEntries_FullMethodName         = "/core.v1.CoreService/ListLedgerEntries"
+	CoreService_ListSubscriptions_FullMethodName         = "/core.v1.CoreService/ListSubscriptions"
+	CoreService_CreateSupportTicket_FullMethodName       = "/core.v1.CoreService/CreateSupportTicket"
+	CoreService_GetSettings_FullMethodName               = "/core.v1.CoreService/GetSettings"
+	CoreService_UpdateBranding_FullMethodName            = "/core.v1.CoreService/UpdateBranding"
+	CoreService_ReviewManualPayment_FullMethodName       = "/core.v1.CoreService/ReviewManualPayment"
+	CoreService_PayOrderWithWallet_FullMethodName        = "/core.v1.CoreService/PayOrderWithWallet"
+	CoreService_CreatePaymentIntent_FullMethodName       = "/core.v1.CoreService/CreatePaymentIntent"
+	CoreService_StartTrial_FullMethodName                = "/core.v1.CoreService/StartTrial"
+	CoreService_CanStartTrial_FullMethodName             = "/core.v1.CoreService/CanStartTrial"
+	CoreService_SubmitPaymentProof_FullMethodName        = "/core.v1.CoreService/SubmitPaymentProof"
+	CoreService_CheckPayment_FullMethodName              = "/core.v1.CoreService/CheckPayment"
+	CoreService_StarsPreCheckout_FullMethodName          = "/core.v1.CoreService/StarsPreCheckout"
+	CoreService_StarsPaid_FullMethodName                 = "/core.v1.CoreService/StarsPaid"
+	CoreService_ListPaymentMethods_FullMethodName        = "/core.v1.CoreService/ListPaymentMethods"
+	CoreService_GetSubscriptionLinks_FullMethodName      = "/core.v1.CoreService/GetSubscriptionLinks"
+	CoreService_AdminGetStats_FullMethodName             = "/core.v1.CoreService/AdminGetStats"
+	CoreService_AdminListPendingPayments_FullMethodName  = "/core.v1.CoreService/AdminListPendingPayments"
+	CoreService_AdminGetPayment_FullMethodName           = "/core.v1.CoreService/AdminGetPayment"
+	CoreService_AdminFindUser_FullMethodName             = "/core.v1.CoreService/AdminFindUser"
+	CoreService_AdminAdjustBalance_FullMethodName        = "/core.v1.CoreService/AdminAdjustBalance"
+	CoreService_AdminSetUserStatus_FullMethodName        = "/core.v1.CoreService/AdminSetUserStatus"
+	CoreService_AdminUpsertPlan_FullMethodName           = "/core.v1.CoreService/AdminUpsertPlan"
+	CoreService_AdminSetSetting_FullMethodName           = "/core.v1.CoreService/AdminSetSetting"
+	CoreService_QuoteOrder_FullMethodName                = "/core.v1.CoreService/QuoteOrder"
+	CoreService_GetReferralInfo_FullMethodName           = "/core.v1.CoreService/GetReferralInfo"
+	CoreService_AdminUpsertDiscount_FullMethodName       = "/core.v1.CoreService/AdminUpsertDiscount"
+	CoreService_AdminListDiscounts_FullMethodName        = "/core.v1.CoreService/AdminListDiscounts"
+	CoreService_CreateDashboardLink_FullMethodName       = "/core.v1.CoreService/CreateDashboardLink"
+	CoreService_ListStaffContacts_FullMethodName         = "/core.v1.CoreService/ListStaffContacts"
+	CoreService_AddTicketMessage_FullMethodName          = "/core.v1.CoreService/AddTicketMessage"
+	CoreService_GetMyTickets_FullMethodName              = "/core.v1.CoreService/GetMyTickets"
+	CoreService_GetMyTicket_FullMethodName               = "/core.v1.CoreService/GetMyTicket"
+	CoreService_CloseMyTicket_FullMethodName             = "/core.v1.CoreService/CloseMyTicket"
+	CoreService_GetTicketMessage_FullMethodName          = "/core.v1.CoreService/GetTicketMessage"
+	CoreService_ReportTicketDelivery_FullMethodName      = "/core.v1.CoreService/ReportTicketDelivery"
+	CoreService_SetUserBotBlocked_FullMethodName         = "/core.v1.CoreService/SetUserBotBlocked"
+	CoreService_ClaimBroadcastBatch_FullMethodName       = "/core.v1.CoreService/ClaimBroadcastBatch"
+	CoreService_ReportBroadcastResults_FullMethodName    = "/core.v1.CoreService/ReportBroadcastResults"
+	CoreService_SetSubscriptionLabel_FullMethodName      = "/core.v1.CoreService/SetSubscriptionLabel"
+	CoreService_GetResellerInfo_FullMethodName           = "/core.v1.CoreService/GetResellerInfo"
+	CoreService_ListResellerServices_FullMethodName      = "/core.v1.CoreService/ListResellerServices"
+	CoreService_SetResellerServiceEnabled_FullMethodName = "/core.v1.CoreService/SetResellerServiceEnabled"
+	CoreService_DeleteResellerService_FullMethodName     = "/core.v1.CoreService/DeleteResellerService"
+	CoreService_SetSubscriptionNote_FullMethodName       = "/core.v1.CoreService/SetSubscriptionNote"
+	CoreService_ListInvitedCustomers_FullMethodName      = "/core.v1.CoreService/ListInvitedCustomers"
+	CoreService_GetBotPhoto_FullMethodName               = "/core.v1.CoreService/GetBotPhoto"
+	CoreService_AdminTodayStats_FullMethodName           = "/core.v1.CoreService/AdminTodayStats"
+	CoreService_AdminListSettingSpecs_FullMethodName     = "/core.v1.CoreService/AdminListSettingSpecs"
+	CoreService_AdminListServers_FullMethodName          = "/core.v1.CoreService/AdminListServers"
+	CoreService_AdminSetServer_FullMethodName            = "/core.v1.CoreService/AdminSetServer"
+	CoreService_AdminListStaff_FullMethodName            = "/core.v1.CoreService/AdminListStaff"
+	CoreService_AdminAddStaff_FullMethodName             = "/core.v1.CoreService/AdminAddStaff"
+	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
+	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -141,6 +146,17 @@ type CoreServiceClient interface {
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error)
 	GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
+	// Reseller management: a reseller's own services (list with status filters
+	// and counts, pause and resume, delete, a private note) and the customers
+	// who joined through their invite link. Every call is the reseller's own:
+	// core checks they are an active reseller and that resellers are in the
+	// install's license, answers PERMISSION_DENIED otherwise (banned: "user is
+	// banned"), and NOT_FOUND for a service that is not theirs.
+	ListResellerServices(ctx context.Context, in *ListResellerServicesRequest, opts ...grpc.CallOption) (*ListResellerServicesResponse, error)
+	SetResellerServiceEnabled(ctx context.Context, in *SetResellerServiceEnabledRequest, opts ...grpc.CallOption) (*Subscription, error)
+	DeleteResellerService(ctx context.Context, in *DeleteResellerServiceRequest, opts ...grpc.CallOption) (*DeleteResellerServiceResponse, error)
+	SetSubscriptionNote(ctx context.Context, in *SetSubscriptionNoteRequest, opts ...grpc.CallOption) (*Subscription, error)
+	ListInvitedCustomers(ctx context.Context, in *ListInvitedCustomersRequest, opts ...grpc.CallOption) (*ListInvitedCustomersResponse, error)
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error)
@@ -635,6 +651,56 @@ func (c *coreServiceClient) GetResellerInfo(ctx context.Context, in *GetReseller
 	return out, nil
 }
 
+func (c *coreServiceClient) ListResellerServices(ctx context.Context, in *ListResellerServicesRequest, opts ...grpc.CallOption) (*ListResellerServicesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResellerServicesResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListResellerServices_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) SetResellerServiceEnabled(ctx context.Context, in *SetResellerServiceEnabledRequest, opts ...grpc.CallOption) (*Subscription, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Subscription)
+	err := c.cc.Invoke(ctx, CoreService_SetResellerServiceEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) DeleteResellerService(ctx context.Context, in *DeleteResellerServiceRequest, opts ...grpc.CallOption) (*DeleteResellerServiceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteResellerServiceResponse)
+	err := c.cc.Invoke(ctx, CoreService_DeleteResellerService_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) SetSubscriptionNote(ctx context.Context, in *SetSubscriptionNoteRequest, opts ...grpc.CallOption) (*Subscription, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Subscription)
+	err := c.cc.Invoke(ctx, CoreService_SetSubscriptionNote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ListInvitedCustomers(ctx context.Context, in *ListInvitedCustomersRequest, opts ...grpc.CallOption) (*ListInvitedCustomersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInvitedCustomersResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListInvitedCustomers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BotPhoto)
@@ -789,6 +855,17 @@ type CoreServiceServer interface {
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error)
 	GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error)
+	// Reseller management: a reseller's own services (list with status filters
+	// and counts, pause and resume, delete, a private note) and the customers
+	// who joined through their invite link. Every call is the reseller's own:
+	// core checks they are an active reseller and that resellers are in the
+	// install's license, answers PERMISSION_DENIED otherwise (banned: "user is
+	// banned"), and NOT_FOUND for a service that is not theirs.
+	ListResellerServices(context.Context, *ListResellerServicesRequest) (*ListResellerServicesResponse, error)
+	SetResellerServiceEnabled(context.Context, *SetResellerServiceEnabledRequest) (*Subscription, error)
+	DeleteResellerService(context.Context, *DeleteResellerServiceRequest) (*DeleteResellerServiceResponse, error)
+	SetSubscriptionNote(context.Context, *SetSubscriptionNoteRequest) (*Subscription, error)
+	ListInvitedCustomers(context.Context, *ListInvitedCustomersRequest) (*ListInvitedCustomersResponse, error)
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error)
@@ -952,6 +1029,21 @@ func (UnimplementedCoreServiceServer) SetSubscriptionLabel(context.Context, *Set
 }
 func (UnimplementedCoreServiceServer) GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetResellerInfo not implemented")
+}
+func (UnimplementedCoreServiceServer) ListResellerServices(context.Context, *ListResellerServicesRequest) (*ListResellerServicesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListResellerServices not implemented")
+}
+func (UnimplementedCoreServiceServer) SetResellerServiceEnabled(context.Context, *SetResellerServiceEnabledRequest) (*Subscription, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetResellerServiceEnabled not implemented")
+}
+func (UnimplementedCoreServiceServer) DeleteResellerService(context.Context, *DeleteResellerServiceRequest) (*DeleteResellerServiceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteResellerService not implemented")
+}
+func (UnimplementedCoreServiceServer) SetSubscriptionNote(context.Context, *SetSubscriptionNoteRequest) (*Subscription, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSubscriptionNote not implemented")
+}
+func (UnimplementedCoreServiceServer) ListInvitedCustomers(context.Context, *ListInvitedCustomersRequest) (*ListInvitedCustomersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInvitedCustomers not implemented")
 }
 func (UnimplementedCoreServiceServer) GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBotPhoto not implemented")
@@ -1847,6 +1939,96 @@ func _CoreService_GetResellerInfo_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListResellerServices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListResellerServicesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListResellerServices(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListResellerServices_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListResellerServices(ctx, req.(*ListResellerServicesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_SetResellerServiceEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResellerServiceEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetResellerServiceEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetResellerServiceEnabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetResellerServiceEnabled(ctx, req.(*SetResellerServiceEnabledRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_DeleteResellerService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteResellerServiceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).DeleteResellerService(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_DeleteResellerService_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).DeleteResellerService(ctx, req.(*DeleteResellerServiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_SetSubscriptionNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSubscriptionNoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetSubscriptionNote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetSubscriptionNote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetSubscriptionNote(ctx, req.(*SetSubscriptionNoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ListInvitedCustomers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInvitedCustomersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListInvitedCustomers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListInvitedCustomers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListInvitedCustomers(ctx, req.(*ListInvitedCustomersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_GetBotPhoto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBotPhotoRequest)
 	if err := dec(in); err != nil {
@@ -2203,6 +2385,26 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetResellerInfo",
 			Handler:    _CoreService_GetResellerInfo_Handler,
+		},
+		{
+			MethodName: "ListResellerServices",
+			Handler:    _CoreService_ListResellerServices_Handler,
+		},
+		{
+			MethodName: "SetResellerServiceEnabled",
+			Handler:    _CoreService_SetResellerServiceEnabled_Handler,
+		},
+		{
+			MethodName: "DeleteResellerService",
+			Handler:    _CoreService_DeleteResellerService_Handler,
+		},
+		{
+			MethodName: "SetSubscriptionNote",
+			Handler:    _CoreService_SetSubscriptionNote_Handler,
+		},
+		{
+			MethodName: "ListInvitedCustomers",
+			Handler:    _CoreService_ListInvitedCustomers_Handler,
 		},
 		{
 			MethodName: "GetBotPhoto",
