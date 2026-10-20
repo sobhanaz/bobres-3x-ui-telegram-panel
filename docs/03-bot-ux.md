@@ -256,7 +256,44 @@ included, a one-time dashboard login link.
   are remembered for 10 minutes; if Telegram cannot answer, users are let in. Staff and a newcomer's `/start` and
   language choice are never blocked, nor is a payment under way, and a customer may go on with a support ticket they
   already have (starting one asks them to join first). The Mini App holds the same rule, with the same exemptions and
-  the same choice when Telegram cannot answer ([17-mini-app.md](17-mini-app.md), "The required channel").
+  the same choice when Telegram cannot answer ([17-mini-app.md](17-mini-app.md), "The required channel"). The owner
+  can require **more than one channel or group** (below).
+- **Required chats** (several channels and groups; built 2026-10-20). The store can require any number of channels and
+  groups, up to what the license allows: **1 on the free tier and Standard, any number on Pro and during the 30-day
+  trial** (`max_join_chats`, [05-license.md](05-license.md); a technical bound of 50 holds whatever the license says,
+  since every customer's update costs a lookup for each chat they have not joined and a Telegram keyboard holds 100
+  buttons). Each has the chat (a public chat's `@name`, or a private chat's `-100…` id; a channel or a group), an
+  invite link (`https://t.me/…`, required for a private chat; a public chat's link is its `t.me` page), and an optional
+  short name (at most 32 characters) shown to customers.
+  - **Where they live.** The **first** one is what it has always been, the settings `join.channel`, `join.link` and the
+    new `join.label` (its name): the bot's `/set` editor, the Mini App and every older bot read it there, and emptying
+    `join.channel` turns the whole requirement off, the extras too (they stay saved and do nothing). The **others** are
+    rows of `core.join_chats` (migration 00029), in the order customers are asked. They are edited in the dashboard
+    (Settings, Required channels and groups: the owner changes the list, an admin sees it) and saved all at once; they
+    are in every backup (they are an ordinary table of the core database), and each change is in the audit log
+    (`setting.set` for the first one, `join_chat.add`, `.update`, `.move`, `.remove` for the others).
+  - **The prompt.** A customer who has not joined one of them gets one message with a **Join** button for **each chat
+    they have not joined** (the chat's name, else its `@name`, else "channel N"; never a private chat's id) and one
+    **I've joined**. With one chat required it is the message and the button it always was. **I've joined** asks about
+    every chat again at once and says which are still missing in its popup ("You haven't joined yet: VIP, @team"),
+    and the prompt under it keeps only their buttons; the chats the customer is already in are not named again.
+    Maintenance still comes first (nobody is asked, nothing is looked up), and the exemptions are the same for every
+    chat: staff, the owners the server names, a newcomer's `/start` and language choice, a payment under way, and a
+    ticket already open.
+  - **A chat the bot cannot check** (the bot is not its administrator, the chat does not exist, a timeout) is skipped,
+    as the single required channel always was: the customer is let in **for that chat**, the bot logs it once a minute
+    ("cannot check members of a required channel", naming the chat), and the other chats still hold. The "member of
+    every chat" cache below is not written then, so that chat is asked about again at the next update.
+  - **Few lookups.** A confirmed member of a chat is remembered for 10 minutes (per customer and chat, so a chat added
+    later is the only one asked about); a customer who is a member of the whole list costs **one** cache read per
+    update. A chat not joined is not asked about again by an ordinary update for 2 seconds (**I've joined** always
+    asks). One update's lookups run **4 at a time** and the bot runs **8 at a time** in all, each with a 3-second
+    timeout and 8 seconds for the update; a chat unanswered by then counts as one Telegram could not tell about.
+  - **When the license drops** (a license that ends, the trial over): nothing is deleted. Only the first N chats of the
+    list, the first one always, are enforced; the dashboard marks the others "Inactive: needs Pro" and the License
+    tab counts them against the limit. The owner can still remove, edit and reorder them, but not add more than
+    exist; they count again when the limit allows. The bot learns the enforced list with its settings (at most a
+    minute, or at once when the dashboard saves).
 - **Limits:** taps and messages per 10 seconds (checked before the gates; a message over it is not answered, a tap gets
   "Too many requests"), support messages per day.
 - **Plans and bulk purchase** (Settings, the "Plans and bulk purchase" card; the bot's admin menu has the same group):

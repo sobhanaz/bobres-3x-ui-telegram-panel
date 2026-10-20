@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 00028 adds the table of the extra required chats and nothing else: an install
+// 00029 adds the table of the extra required chats and nothing else: an install
 // from before has none (its first required chat is the setting join.channel,
 // which the migration leaves alone); the table takes the chats the settings
 // take and refuses what they refuse; Down drops it and touches no other data;
@@ -16,8 +16,8 @@ func TestJoinChatsMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 27); err != nil {
-		t.Fatalf("up to 27: %v", err)
+	if err := upTo(ctx, dsn, "core", 28); err != nil {
+		t.Fatalf("up to 28: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -33,7 +33,7 @@ func TestJoinChatsMigration(t *testing.T) {
 	}
 	before, has := tables()
 	if has {
-		t.Fatal("the table exists before 00028")
+		t.Fatal("the table exists before 00029")
 	}
 	// A store that already requires a channel keeps it as it is.
 	for k, v := range map[string]string{"join.channel": `"@mychannel"`, "join.link": `"https://t.me/mychannel"`} {
@@ -42,11 +42,11 @@ func TestJoinChatsMigration(t *testing.T) {
 		}
 	}
 
-	if err := upTo(ctx, dsn, "core", 28); err != nil {
+	if err := upTo(ctx, dsn, "core", 29); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
 	if n, has := tables(); !has || n != before+1 {
-		t.Fatalf("%d tables before, %d after (has the table: %v): 00028 adds exactly one", before, n, has)
+		t.Fatalf("%d tables before, %d after (has the table: %v): 00029 adds exactly one", before, n, has)
 	}
 	var rows int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM core.join_chats`).Scan(&rows); err != nil || rows != 0 {
@@ -90,7 +90,7 @@ func TestJoinChatsMigration(t *testing.T) {
 	}
 
 	// the same statements run again do not fail and keep the rows (IF NOT EXISTS)
-	body, err := fsys.ReadFile("migrations/core/00028_join_chats.sql")
+	body, err := fsys.ReadFile("migrations/core/00029_join_chats.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestJoinChatsMigration(t *testing.T) {
 		t.Errorf("%d rows after running the statements again, want the 2 there: %v", rows, err)
 	}
 
-	if err := downTo(ctx, dsn, "core", 27); err != nil {
+	if err := downTo(ctx, dsn, "core", 28); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	if n, has := tables(); has || n != before {

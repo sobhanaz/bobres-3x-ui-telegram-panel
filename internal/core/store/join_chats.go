@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The extra required chats (migration 00028, docs/03-bot-ux.md): the channels
+// The extra required chats (migration 00029, docs/03-bot-ux.md): the channels
 // and groups customers must join besides the first one, which is the settings
 // join.channel and join.link.
 

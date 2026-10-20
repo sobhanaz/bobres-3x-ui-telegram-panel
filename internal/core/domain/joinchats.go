@@ -18,7 +18,7 @@ import (
 // The FIRST one is what it has always been: the settings join.channel and
 // join.link (and join.label, its optional name on the button). The bot's /set
 // editor, the Mini App and every older bot read it there. The EXTRA ones are
-// the rows of core.join_chats (migration 00028), in the order customers are
+// the rows of core.join_chats (migration 00029), in the order customers are
 // asked. The dashboard edits the whole list at once (SetJoinChats); the first
 // row is the setting.
 //
