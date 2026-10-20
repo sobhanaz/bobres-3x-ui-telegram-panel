@@ -142,7 +142,7 @@ func TestCommandsPassTheGatesLikeTheButtons(t *testing.T) {
 	commands := []string{"/new", "/renew", "/status"}
 	shown := []string{cat.T("en", "plans.title"), cat.T("en", "renew.none"), cat.T("en", "subs.empty")}
 	var held, outside []*person
-	for i := range commands { // one customer a command: maintenance answers a message at most once a minute
+	for i := range commands { // one customer a command, so each answer is that command's own
 		held = append(held, w.customer(7300000010+int64(i), "held"))
 		outside = append(outside, w.customer(7300000020+int64(i), "outside"))
 	}

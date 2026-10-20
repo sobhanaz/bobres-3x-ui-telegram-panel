@@ -284,6 +284,7 @@ func gatedCases() []gatedCase {
 	// admins only"); and ones the bot does not know.
 	for _, text := range []string{
 		"/start", "/start r_abc123", "/start@test_vpn_bot", "/START", " /menu", "/menu", "/buy", "/wallet", "/support", "/trial",
+		"/new", "/renew", "/status",
 		"/cancel", "/terms", "/dashboard", "/admin", "/help", "/nonsense",
 		"/set maintenance.enabled false", "/plan_add 1 IRT 1 1 Free", "/topup_add 1 IRT 1 +1GB", "/trial 1 1",
 		"/discount_add FREE 100% 1 30", "/discount_off FREE", "/discounts",
@@ -302,6 +303,7 @@ func gatedCases() []gatedCase {
 		"lang", "lang:fa", "lang:en", "home", "cancel",
 		"buy", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
 		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "whist", "trial", "store",
+		"top", "top:2", "ap", "renew",
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
 		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1",
 		"jn", "nope", "x",
@@ -354,6 +356,7 @@ func gatedCases() []gatedCase {
 		sceneCase(sceneDiscount, map[string]string{"co": "n1"}, "", "a discount code", textIn("SPRING20")),
 		sceneCase(sceneTicket, nil, "", "a first message to support", textIn("my vpn is slow")),
 		sceneCase(sceneTicket, nil, "", "a photo for support", func(p *person) { p.photo("shot-3", "see") }),
+		sceneCase(sceneResellerApply, nil, "", "a reseller application", textIn("I run a shop and want to resell")),
 		sceneCase(sceneAdminFind, nil, "", "a search", textIn("@mallory")),
 		sceneCase(sceneAdminAdjust, nil, "", "an adjustment", textIn("1000 gift")),
 		sceneCase(sceneAdminReason, nil, "", "a reason", textIn("bad receipt")),
@@ -717,9 +720,10 @@ func TestMaintenanceNewcomers(t *testing.T) {
 	m.owner.lastHas("Saved")
 	inviter := m.customer(6601, "inviter")
 	inviter.press("ref")
-	link := regexp.MustCompile(`start=r_([a-z0-9]+)`).FindStringSubmatch(inviter.last().text)
+	screen := inviter.lastWith("Invite friends").text // its promo card and the line about forwarding it come after it
+	link := regexp.MustCompile(`start=r_([a-z0-9]+)`).FindStringSubmatch(screen)
 	if link == nil {
-		t.Fatalf("no invite link: %q", inviter.last().text)
+		t.Fatalf("no invite link: %q", screen)
 	}
 	m.maintenance(true)
 	en, fa := m.h.cat.T("en", "maintenance"), m.h.cat.T("fa", "maintenance")
