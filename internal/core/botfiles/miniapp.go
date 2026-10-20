@@ -67,3 +67,46 @@ func (c *Client) VerifyMiniApp(ctx context.Context, initData string) (*MiniAppUs
 	out.User.BotUsername = out.BotUsername
 	return &out.User, nil
 }
+
+// ChannelMember asks the bot whether a Telegram user is a member of the
+// channel the store requires (join.channel: an @name or a -100… id), for the
+// Mini App's sign-in. Only the bot can ask Telegram: core has no token, and
+// only the channel's administrators see its members, which the bot is. An error
+// means the bot could not tell (Telegram did not answer, the bot is not the
+// channel's administrator, the bot is an older one without the endpoint): the
+// caller decides what that lets through.
+func (c *Client) ChannelMember(ctx context.Context, channel string, telegramID int64) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	body, err := json.Marshal(map[string]any{"chat": channel, "user_id": telegramID})
+	if err != nil {
+		return false, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/miniapp/channel-member", bytes.NewReader(body))
+	if err != nil {
+		return false, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("botfiles: channel member: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var out struct {
+		OK      *bool  `json:"ok"`
+		Member  *bool  `json:"member"`
+		Problem string `json:"problem"`
+		Detail  string `json:"detail"`
+	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	decodeErr := json.Unmarshal(raw, &out) // not JSON (a refused token, an older bot): the status says it
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("botfiles: channel member: the bot answered %d %s: %s", resp.StatusCode, clip(out.Problem, 40), clip(out.Detail, 200))
+	}
+	// A "no" is only an answer that says so: a field of the wrong type decodes as false.
+	if decodeErr != nil || out.OK == nil || !*out.OK || out.Member == nil {
+		return false, errors.New("botfiles: channel member: the bot gave no answer")
+	}
+	return *out.Member, nil
+}
