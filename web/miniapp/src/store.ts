@@ -63,3 +63,9 @@ export async function loadWallet(): Promise<void> {
 export function irtBalance(): number {
   return state.wallets.find((w) => w.currency === 'IRT')?.balance ?? 0
 }
+
+/** irtSpendable is what the wallet can pay: the balance plus a reseller's credit (0 for everyone else). */
+export function irtSpendable(): number {
+  const w = state.wallets.find((x) => x.currency === 'IRT')
+  return (w?.balance ?? 0) + (w?.credit_limit ?? 0)
+}

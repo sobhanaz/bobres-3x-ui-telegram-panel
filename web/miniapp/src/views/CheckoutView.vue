@@ -9,13 +9,14 @@ import { errorKey, gateFor } from '../errors'
 import { tr } from '../i18n'
 import { fmtMoney, nameOf, planFacts } from '../fmt'
 import { newKey } from '../format'
-import { fail, irtBalance, loadServices, loadWallet } from '../store'
+import { fail, irtSpendable, loadServices, loadWallet, state } from '../store'
 import { haptic } from '../telegram'
 import type { Plan } from '../api'
 import Methods from '../components/Methods.vue'
 import PayPanel from '../components/PayPanel.vue'
 
-const props = defineProps<{ plan: Plan; type: 'new' | 'renew' | 'traffic_topup'; subscriptionId?: string }>()
+// label: the name a reseller gave the new service they buy for a customer
+const props = defineProps<{ plan: Plan; type: 'new' | 'renew' | 'traffic_topup'; subscriptionId?: string; label?: string }>()
 const emit = defineEmits<{ close: []; services: [] }>()
 
 type Stage = 'review' | 'pay' | 'wait' | 'done'
@@ -36,12 +37,15 @@ const total = computed(() => quote.value?.total ?? props.plan.price)
 const summaryKey = computed(() =>
   props.type === 'renew' ? 'checkout.summary_renew' : props.type === 'traffic_topup' ? 'checkout.summary_topup' : 'checkout.summary_new',
 )
-const canWallet = computed(() => props.plan.currency === 'IRT' && irtBalance() >= (order.value?.amount ?? total.value))
+// a reseller pays with the balance and the credit; discount codes are for customers (resellers pay tier prices)
+const reseller = computed(() => state.me?.features.reseller === true)
+const canWallet = computed(() => props.plan.currency === 'IRT' && irtSpendable() >= (order.value?.amount ?? total.value))
 const request = () => ({
   plan_id: props.plan.id,
   type: props.type,
   subscription_id: props.subscriptionId,
-  discount_code: code.value.trim() || undefined,
+  discount_code: reseller.value ? undefined : code.value.trim() || undefined,
+  label: props.type === 'new' ? props.label || undefined : undefined,
 })
 
 function stop() {
@@ -196,7 +200,8 @@ const doneKey = computed(() => {
     <section class="card">
       <h2>{{ tr(summaryKey, { plan: nameOf(plan) }) }}</h2>
       <p class="muted">{{ planFacts(plan) }}</p>
-      <template v-if="stage === 'review'">
+      <p v-if="label && type === 'new'" class="muted">🏷 {{ label }}</p>
+      <template v-if="stage === 'review' && !reseller">
         <label class="field">
           <span>{{ tr('checkout.discount') }}</span>
           <span class="row">
@@ -221,7 +226,7 @@ const doneKey = computed(() => {
 
     <template v-else-if="stage === 'pay' && order">
       <button class="btn" type="button" :disabled="busy || !canWallet" @click="payWallet">
-        {{ tr('checkout.pay_wallet', { balance: fmtMoney(irtBalance(), 'IRT', 0) }) }}
+        {{ tr('checkout.pay_wallet', { balance: fmtMoney(irtSpendable(), 'IRT', 0) }) }}
       </button>
       <p v-if="!canWallet" class="muted">{{ tr('checkout.low_wallet') }}</p>
       <h2>{{ tr('checkout.pay_methods') }}</h2>
