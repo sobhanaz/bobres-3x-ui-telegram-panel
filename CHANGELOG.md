@@ -11,8 +11,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 ### Telegram Mini App
 - The Mini App store is **on by default**, for every store: `miniapp.enabled` used to be off until set, and is now on
   unless the owner switches it off, so a store that never touched it has the app after `bobres update`. The bot opens
-  it from a **Store** button at the top of its bottom menu and from Telegram's own menu button, and sets both itself:
-  there is nothing to configure in @BotFather. They appear only when the store has a public HTTPS address (not an IP
+  it from a **Store** button on its home screen, a **Store** item in its bottom menu (it answers with the button that
+  opens the app: Telegram gives a Mini App opened from a reply keyboard button no sign-in data) and Telegram's own
+  menu button, and sets them itself: there is nothing to configure in @BotFather. They appear only when the store has a public HTTPS address (not an IP
   address, `localhost` or a private name, where Telegram could not open the page) and go again when the app is
   switched off (the bot only takes back a menu button it set itself).
 - New in the app: the **free trial** (the bot's trial: one per account, whichever door it was taken through),

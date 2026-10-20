@@ -553,6 +553,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showHistory(r)
 	case "trial":
 		h.onTrial(r)
+	case "store":
+		h.onStore(r)
 	case "support":
 		r.keep = r.keep || rest == "m" // under a notification, which must stay as it is
 		h.onSupport(r)
@@ -748,6 +750,14 @@ func (r *req) button(key, data string, args ...any) tg.Button {
 // linkButton is a URL button labelled with key's text, colored the same way.
 func (r *req) linkButton(key, url string) tg.Button {
 	b := tg.Link(r.t(key), url)
+	b.Style = i18n.ButtonStyle(key)
+	return b
+}
+
+// webAppButton is an inline button labelled with key's text that opens the
+// Mini App at url, colored the same way.
+func (r *req) webAppButton(key, url string) tg.Button {
+	b := tg.WebApp(r.t(key), url)
 	b.Style = i18n.ButtonStyle(key)
 	return b
 }

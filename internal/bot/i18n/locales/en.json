@@ -374,6 +374,7 @@
   "alert.tls_caddy_down": "Caddy, which serves the store's HTTPS addresses, is not answering: the dashboard and the payment pages cannot be reached.",
   "alert.tls_problem": "The store's HTTPS setting is not working as saved.",
   "menu.keyboard": "👇 Use the menu below.",
+  "store.open": "🛍 <b>Store</b>\nThe whole store inside Telegram: plans, your services, wallet and support. Tap the button to open it.",
   "menu.placeholder": "Choose from the menu",
   "btn.open_page": "🌐 Open page",
   "subpage.guide.v2rayng": "Android: install v2rayNG, tap the button above, and confirm the import. Then pick the new profile and tap the connect button.",

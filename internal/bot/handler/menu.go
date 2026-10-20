@@ -83,8 +83,11 @@ func (h *Handler) showHome(r *req) {
 		h.askLanguage(r)
 		return
 	}
-	kb := (&tg.Keyboard{}).
-		Row(r.button("btn.buy", "buy"), r.button("btn.services", "subs")).
+	kb := &tg.Keyboard{}
+	if url := h.miniAppURL(); url != "" {
+		kb.Row(r.webAppButton("btn.store", url)) // opens the app at once: an inline button gives it the sign-in data
+	}
+	kb.Row(r.button("btn.buy", "buy"), r.button("btn.services", "subs")).
 		Row(r.button("btn.wallet", "wallet"), r.button("btn.trial", "trial")).
 		Row(r.button("btn.support", "support"), r.button("btn.language", "lang"))
 	switch {
@@ -105,9 +108,24 @@ func (h *Handler) showHome(r *req) {
 // menuItems are the bottom menu's buttons: each text key and the action a
 // tap runs, the callback data of the same inline button (dispatch).
 var menuItems = []struct{ key, data string }{
-	{"btn.buy", "buy"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
+	{"btn.store", "store"}, {"btn.buy", "buy"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
 	{"btn.support", "support"}, {"btn.reseller", "rs"}, {"btn.invite", "ref"}, {"btn.language", "lang"},
 	{"btn.admin", "adm"}, {"btn.dashboard", "dash"},
+}
+
+// onStore answers a tap on the bottom menu's Store item with the button that
+// opens the Mini App. (The menu cannot hold that button itself: a Mini App opened
+// from a reply keyboard button gets no sign-in data from Telegram.) A menu sent
+// before the app was switched off, or lost its public address, still has the
+// item: it then leads to the plans, as the shop in the chat.
+func (h *Handler) onStore(r *req) {
+	url := h.miniAppURL()
+	if url == "" {
+		h.showPlans(r)
+		return
+	}
+	kb := (&tg.Keyboard{}).Row(r.webAppButton("btn.store", url)).Row(r.button("btn.home", "home"))
+	r.show(r.t("store.open"), kb)
 }
 
 // menuData is the action of the bottom-menu button labelled with key.
@@ -134,9 +152,10 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		return tg.MenuButton{Text: text, Style: i18n.ButtonStyle(key)}
 	}
 	m = &tg.Menu{IsPersistent: true, Resize: true, Placeholder: r.t("menu.placeholder")}
-	if url := h.miniAppURL(); url != "" {
-		// The Store opens the Mini App: a tap sends no text, so it needs no label.
-		m.Row(tg.MenuButton{Text: r.t("btn.store"), Style: i18n.ButtonStyle("btn.store"), WebApp: &tg.WebAppInfo{URL: url}})
+	if h.miniAppURL() != "" {
+		// A tap sends the label as text and onStore answers with the button that
+		// opens the app: a reply keyboard button could not give the app its sign-in data.
+		m.Row(item("btn.store"))
 	}
 	m.Row(item("btn.buy")).
 		Row(item("btn.services"), item("btn.wallet")).

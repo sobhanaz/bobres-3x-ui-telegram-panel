@@ -6,8 +6,9 @@ services, top up the wallet, take the free trial, invite friends and write to su
 payments and the reseller panel are still done in the bot (see "Not built").
 
 It is **on by default**, for every store, with nothing to set up in @BotFather: the bot opens it from a **Store** button
-at the top of its bottom menu and from Telegram's own **menu button** next to the message box. Switch it off with the
-setting `miniapp.enabled` (Settings, General) and both buttons go within a minute and `/app/` answers 404.
+on its home screen, a **Store** item in its bottom menu and Telegram's own **menu button** next to the message box.
+Switch it off with the setting `miniapp.enabled` (Settings, General) and the buttons go within a minute and `/app/`
+answers 404.
 
 ## Set up
 
@@ -15,11 +16,17 @@ setting `miniapp.enabled` (Settings, General) and both buttons go within a minut
    else is required. With an IP address, `localhost`, a private or `.local` name or plain http, Telegram could not open
    the page, so the bot adds no button (the app itself is still served).
 2. Core tells the bot that address with its settings, and the bot (which reloads them every minute and at once on a
-   change in the dashboard) sets the menu button, titled "Store" / "فروشگاه", and puts a Store button first in its
-   bottom menu. The menu button is set for all chats, once (and again when the address or the title changes),
-   replacing a button set by hand in @BotFather before; Telegram's default button is given back when the app is
-   switched off or the address is lost, but only if the bot had set the button. A Web App button on another keyboard or
-   an inline button with the same URL works too.
+   change in the dashboard) sets the menu button, titled "Store" / "فروشگاه", puts a Store button first on its home
+   screen and a Store item first in its bottom menu. The menu button is set for all chats, once (and again when the
+   address or the title changes), replacing a button set by hand in @BotFather before; Telegram's default button is
+   given back when the app is switched off or the address is lost, but only if the bot had set the button.
+   An inline Web App button with the same URL works anywhere else too.
+
+   **Why the bottom menu holds a text item and not the app button itself:** Telegram gives a Mini App opened from a
+   *reply keyboard* button no sign-in data (`WebAppInitData` is empty; such a Mini App can only `sendData` back), so
+   core could not tell who the customer is. Inline buttons and the menu button do give it. A tap on the Store item
+   therefore sends its label as a message, and the bot answers with a message holding the inline button that opens
+   the app. (The home screen's button opens it at once.)
 3. Open the bot on a phone, tap Store, and check it signs in (the checklist at the end of this page).
 
 The bot's username (Branding, `branding.bot_username`) is used for the "Open the bot" button the app shows where it
@@ -144,8 +151,9 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
 
 1. The init data signature with the real bot token: open the app from the menu button on a phone and a desktop client;
    it must show the plans, not "open from Telegram".
-2. The Store button in the bot's bottom menu and Telegram's menu button, a minute after an update or a change of
-   `miniapp.enabled`: both appear on, both go off, and a store with only an IP address gets neither.
+2. The Store item in the bot's bottom menu, the Store button on its home screen and Telegram's menu button, a minute
+   after an update or a change of `miniapp.enabled`: all three appear on, all three go off, and a store with only an IP
+   address gets none. Each must open the app signed in (the bottom menu's after one more tap, on the bot's answer).
 3. The CSP and framing in Telegram's web clients (web.telegram.org) and the mobile apps; nothing blocked in the console.
 4. Theme colours, dark and light, safe-area (notch) and Telegram's Back button inside a purchase.
 5. A payment page opening from the app (Zarinpal, IDPay, NextPay) and coming back; the automatic USDT address, exact
