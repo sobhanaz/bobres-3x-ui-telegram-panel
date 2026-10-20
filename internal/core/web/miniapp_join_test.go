@@ -210,8 +210,8 @@ func TestMiniJoinMemberAndNonMemberAtSignIn(t *testing.T) {
 	}
 }
 
-// A refused sign-in is the bot's rule for a newcomer too: the app asks before
-// anything is bought, and a customer who joined later is let in as before.
+// A newcomer's first visit is gated like anyone's (the bot's gate asks a new user too, once
+// the language is picked), and once they have joined the same account is theirs.
 func TestMiniJoinNewcomer(t *testing.T) {
 	j := newJoinFixture(t)
 	code, out := j.auth(104)
