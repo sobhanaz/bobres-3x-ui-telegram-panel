@@ -552,8 +552,22 @@
       "jalali": "Jalali"
     },
     "calendar_note": {
-      "gregorian": "Weeks start on Monday and months are Gregorian calendar months.",
-      "jalali": "Weeks start on Saturday and months are Jalali (Persian calendar) months. A period is named by its first day."
+      "gregorian": "Dates are Gregorian. Weeks start on Monday and months are Gregorian calendar months.",
+      "jalali": "Dates are Jalali (Persian calendar). Weeks start on Saturday and months are Jalali months. A period is named by its first day."
+    },
+    "custom_error": {
+      "format": "Type each date as year, month and day in the {calendar} calendar, for example {example}.",
+      "range": "Reports cover the dates from {min} to {max}.",
+      "order": "The end date is before the start date.",
+      "span": "A report covers at most 400 days."
+    },
+    "date": {
+      "open": "Choose a date",
+      "prev_year": "Previous year",
+      "prev_month": "Previous month",
+      "next_month": "Next month",
+      "next_year": "Next year",
+      "today": "Today"
     },
     "export_summary": "Summary CSV",
     "export_orders": "Paid orders CSV",

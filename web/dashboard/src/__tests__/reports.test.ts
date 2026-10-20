@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { localDate, money, moneyCompact, percent } from '../format'
 import {
   bars,
   currenciesOf,
   defaultCalendar,
   exportParams,
+  initialCalendar,
   jalaliMonth,
   hasData,
   periodLabel,
+  rememberCalendar,
   reportParams,
+  savedCalendar,
   share,
   validCustom,
   type ReportBucket,
@@ -129,10 +133,49 @@ describe('report dates and numbers', () => {
     expect(periodLabel('2026-10-23', 'month', 'en', t, 'jalali')).toBe('Aban 1405')
     expect(periodLabel('2026-10-23', 'month', 'fa', t, 'jalali')).toBe('آبان ۱۴۰۵')
     expect(periodLabel('2026-03-21', 'month', 'en', t, 'jalali')).toBe('Farvardin 1405')
-    // weeks and days keep their wording in either calendar
-    expect(periodLabel('2026-10-17', 'week', 'en', t, 'jalali')).toBe('reports.period.week_of:17 Oct 2026')
-    expect(periodLabel('2026-10-17', 'day', 'en', t, 'jalali')).toBe('17 Oct 2026')
+    // weeks and days are named by their first day, written in the calendar of the report
+    expect(periodLabel('2026-10-17', 'week', 'en', t, 'jalali')).toBe('reports.period.week_of:25 Mehr 1405')
+    expect(periodLabel('2026-10-17', 'day', 'en', t, 'jalali')).toBe('25 Mehr 1405')
+    expect(periodLabel('2026-10-17', 'day', 'fa', t, 'jalali')).toBe('۲۵ مهر ۱۴۰۵')
+    expect(periodLabel('2026-10-17', 'day', 'fa', t, 'gregorian')).toBe('۱۷ اکتبر ۲۰۲۶') // Persian, but the Gregorian calendar was asked for
     expect(periodLabel('2026-10-01', 'month', 'en', t, 'gregorian')).toBe('reports.period.month_of:1 Oct 2026')
+    expect(periodLabel('2026-10-01', 'month', 'fa', t, 'gregorian')).toBe('reports.period.month_of:۱ اکتبر ۲۰۲۶')
+  })
+
+  it('writes the dates in the calendar the page is set to, even before a report cut that way arrives', () => {
+    const t = (key: string, p?: Record<string, unknown>) => key + ':' + (p?.date ?? '')
+    // the periods on screen are Gregorian months, the page was just switched to Jalali: a true date, not a month's name
+    expect(periodLabel('2026-10-01', 'month', 'en', t, 'gregorian', 'jalali')).toBe('reports.period.month_of:9 Mehr 1405')
+    // and the other way round: a Jalali month starting on 23 October is not "October"
+    expect(periodLabel('2026-10-23', 'month', 'en', t, 'jalali', 'gregorian')).toBe('reports.period.month_of:23 Oct 2026')
+    expect(periodLabel('2026-10-23', 'month', 'en', t, 'jalali', 'jalali')).toBe('Aban 1405')
+  })
+
+  it('remembers the calendar per browser, and ignores what storage holds that is no calendar', () => {
+    localStorage.removeItem('bobres.reports.calendar')
+    expect(savedCalendar()).toBeNull()
+    expect(initialCalendar('fa')).toBe('jalali')
+    expect(initialCalendar('en')).toBe('gregorian')
+    rememberCalendar('gregorian')
+    expect(localStorage.getItem('bobres.reports.calendar')).toBe('gregorian')
+    expect(initialCalendar('fa')).toBe('gregorian') // a choice wins over the language
+    rememberCalendar('jalali')
+    expect(initialCalendar('en')).toBe('jalali')
+    localStorage.setItem('bobres.reports.calendar', 'persian')
+    expect(savedCalendar()).toBeNull()
+    expect(initialCalendar('fa')).toBe('jalali')
+    localStorage.removeItem('bobres.reports.calendar')
+    // blocked storage: the default, and no error
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    expect(initialCalendar('fa')).toBe('jalali')
+    expect(() => rememberCalendar('gregorian')).not.toThrow()
+    get.mockRestore()
+    set.mockRestore()
   })
 
   it('agrees with the Jalali calendar on the first day of each month (the same anchors as core)', () => {
@@ -209,6 +252,7 @@ describe('the Reports page', () => {
     unmount()
     try {
       localStorage.removeItem('bobres.lang')
+      localStorage.removeItem('bobres.reports.calendar')
     } catch {
       /* nothing was stored */
     }
@@ -261,16 +305,27 @@ describe('the Reports page', () => {
       { method: 'unknown', provider: '', currency: 'USDT', orders: 1, revenue: 100_000 },
     ],
   })
+  const params = (url: string) => new URL(url, 'https://x.example').searchParams
+  // What core answers: the calendar and the group it was asked for, echoed.
+  const answered = (url: string): ReportSummary => {
+    const q = params(url)
+    return { ...summary(), calendar: q.get('calendar') === 'jalali' ? 'jalali' : 'gregorian', group: (q.get('group') || 'day') as ReportSummary['group'] }
+  }
   const core =
-    (over: { summary?: () => Response; daily?: () => Response }): Answer =>
+    (over: { summary?: (url: string) => Response; daily?: () => Response }): Answer =>
     (url) => {
       if (url === '/api/v1/reports/daily-summary' && over.daily) return over.daily()
-      if (url.startsWith('/api/v1/reports/summary')) return over.summary ? over.summary() : json(200, summary())
+      if (url.startsWith('/api/v1/reports/summary')) return over.summary ? over.summary(url) : json(200, answered(url))
       if (url.startsWith('/api/v1/reports/plans')) return json(200, plans())
       if (url.startsWith('/api/v1/reports/methods')) return json(200, methods())
       return undefined
     }
   const text = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  // Typing into a field: the text, and the input event a keystroke makes.
+  const typeInto = (el: HTMLInputElement, value: string) => {
+    el.value = value
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  }
 
   it('shows each currency on its own: a card, a chart and a table per currency, never a sum', async () => {
     const { fetchMock } = await boot('/admin/reports', ['overview.read', 'reports.read'], core({}))
@@ -431,20 +486,18 @@ describe('the Reports page', () => {
     click('Custom')
     const from = await found<HTMLInputElement>('.date-from')
     const to = await found<HTMLInputElement>('.date-to')
-    expect(from.type).toBe('date')
-    // it starts from the dates on screen
+    // it starts from the dates on screen, written in the calendar shown (English, Gregorian: year-month-day)
     expect(from.value).toBe('2026-10-15')
     expect(to.value).toBe('2026-10-17')
-    from.value = '2026-10-01'
-    from.dispatchEvent(new Event('input'))
+    typeInto(from, '2026-10-01')
     await vi.waitFor(() => expect(fetchMock.mock.calls.map((c) => String(c[0]))).toContain('/api/v1/reports/summary?from=2026-10-01&to=2026-10-17&group=day'))
-    // a range core would refuse is not sent
+    // a range core would refuse is not sent, and the page says why
     const before = fetchMock.mock.calls.length
-    to.value = '2026-09-01'
-    to.dispatchEvent(new Event('input'))
-    await new Promise((r) => setTimeout(r, 30))
+    typeInto(to, '2026-09-01')
+    await new Promise((r) => setTimeout(r, 450))
     expect(fetchMock.mock.calls.length).toBe(before)
     expect(to.getAttribute('aria-invalid')).toBe('true')
+    expect(text(document.querySelector('.custom-problem'))).toBe('The end date is before the start date.')
   })
 
   it('reads in Persian: Persian digits, Jalali dates, right to left', async () => {
@@ -478,6 +531,388 @@ describe('the Reports page', () => {
     expect(jalali).toBeDefined()
     jalali!.click()
     await vi.waitFor(() => expect(fetchMock.mock.calls.map((c) => String(c[0]))).toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali'))
+  })
+
+  // The calendar switch: Jalali or Gregorian decides every date the page shows or takes. The API keeps asking in
+  // Gregorian ISO days; what changes is how a person reads, types and picks them.
+  describe('the calendar', () => {
+    const urls = (fetchMock: { mock: { calls: unknown[][] } }) => fetchMock.mock.calls.map((c) => String(c[0]))
+    const pressed = (name: string) =>
+      [...document.querySelectorAll<HTMLElement>('.calendar [role="button"], .calendar button')].find((e) => text(e) === name)
+    const choose = (name: string) => {
+      const b = pressed(name)
+      expect(b, name).toBeDefined()
+      b!.click()
+    }
+    const range = (label: string) => {
+      const b = [...document.querySelectorAll<HTMLElement>('.range [role="button"], .range button')].find((e) => text(e) === label)
+      expect(b, label).toBeDefined()
+      b!.click()
+    }
+    // Every place a date is written: the covered days, the chart axes, tooltips and summaries, the table's periods.
+    const dates = () => ({
+      covers: text(document.querySelector('.covers')),
+      axes: [...document.querySelectorAll('.chart .axis')].map((a) => [...a.querySelectorAll('span')].map(text)),
+      tooltips: [...document.querySelectorAll('.chart[data-currency="IRT"] .slot')].map((e) => e.getAttribute('title')),
+      peak: document.querySelector('.chart[data-currency="USDT"] .plot')?.getAttribute('aria-label'),
+      rows: [...document.querySelectorAll('.period-table tbody tr td:first-child')].map(text),
+    })
+    const zone = '⁨Asia/Tehran⁩'
+
+    it('switches every date of the page to the calendar chosen, and back, in English', async () => {
+      const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}))
+      await found('.currency-card')
+      const gregorian = {
+        covers: `15 Oct 2026 to 17 Oct 2026 · time zone ${zone}`,
+        axes: [['15 Oct', '17 Oct'], ['15 Oct', '17 Oct']],
+        tooltips: ['15 Oct 2026: 100,000 Toman', '16 Oct 2026: 0 Toman', '17 Oct 2026: 250,000 Toman'],
+        peak: 'USDT (Tether): highest 2.5 USDT, in 16 Oct 2026',
+        rows: ['15 Oct 2026', '16 Oct 2026', '17 Oct 2026'],
+      }
+      expect(dates()).toEqual(gregorian)
+      expect(pressed('Gregorian')?.getAttribute('aria-pressed')).toBe('true')
+
+      choose('Jalali') // 15 Oct 2026 is 23 Mehr 1405
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali'))
+      await vi.waitFor(() => expect(dates().covers).toContain('Mehr 1405'))
+      const jalali = {
+        covers: `23 Mehr 1405 to 25 Mehr 1405 · time zone ${zone}`,
+        axes: [['23 Mehr', '25 Mehr'], ['23 Mehr', '25 Mehr']],
+        tooltips: ['23 Mehr 1405: 100,000 Toman', '24 Mehr 1405: 0 Toman', '25 Mehr 1405: 250,000 Toman'],
+        peak: 'USDT (Tether): highest 2.5 USDT, in 24 Mehr 1405',
+        rows: ['23 Mehr 1405', '24 Mehr 1405', '25 Mehr 1405'],
+      }
+      expect(dates()).toEqual(jalali)
+      expect(pressed('Jalali')?.getAttribute('aria-pressed')).toBe('true')
+      expect(localStorage.getItem('bobres.reports.calendar')).toBe('jalali')
+      // the files are asked for in the calendar on screen
+      const link = new URL(document.querySelector<HTMLAnchorElement>('.export-summary')!.getAttribute('href')!, 'https://x.example')
+      expect(link.searchParams.get('calendar')).toBe('jalali')
+
+      choose('Gregorian')
+      await vi.waitFor(() => expect(dates().covers).toContain('Oct 2026'))
+      expect(dates()).toEqual(gregorian)
+      expect(localStorage.getItem('bobres.reports.calendar')).toBe('gregorian')
+      expect(new URL(document.querySelector<HTMLAnchorElement>('.export-summary')!.getAttribute('href')!, 'https://x.example').searchParams.has('calendar')).toBe(false)
+    })
+
+    it('switches every date of the page to the calendar chosen, and back, in Persian (digits stay Persian)', async () => {
+      const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}), 'fa')
+      await found('.currency-card')
+      const jalali = {
+        covers: `۲۳ مهر ۱۴۰۵ تا ۲۵ مهر ۱۴۰۵ · منطقهٔ زمانی ${zone}`,
+        axes: [['۲۳ مهر', '۲۵ مهر'], ['۲۳ مهر', '۲۵ مهر']],
+        tooltips: ['۲۳ مهر ۱۴۰۵: ۱۰۰٬۰۰۰ تومان', '۲۴ مهر ۱۴۰۵: ۰ تومان', '۲۵ مهر ۱۴۰۵: ۲۵۰٬۰۰۰ تومان'],
+        rows: ['۲۳ مهر ۱۴۰۵', '۲۴ مهر ۱۴۰۵', '۲۵ مهر ۱۴۰۵'],
+      }
+      // the peak line names the currency by its own catalog entry; the rest is compared exactly
+      const { peak, ...rest } = dates()
+      expect(rest).toEqual(jalali)
+      expect(peak).toContain('در ۲۴ مهر ۱۴۰۵')
+
+      choose('میلادی')
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?range=last_30_days&group=day'))
+      await vi.waitFor(() => expect(dates().covers).toContain('اکتبر'))
+      const after = dates()
+      expect(after.covers).toBe(`۱۵ اکتبر ۲۰۲۶ تا ۱۷ اکتبر ۲۰۲۶ · منطقهٔ زمانی ${zone}`)
+      expect(after.axes).toEqual([['۱۵ اکتبر', '۱۷ اکتبر'], ['۱۵ اکتبر', '۱۷ اکتبر']])
+      expect(after.tooltips[0]).toBe('۱۵ اکتبر ۲۰۲۶: ۱۰۰٬۰۰۰ تومان')
+      expect(after.peak).toContain('در ۱۶ اکتبر ۲۰۲۶')
+      expect(after.rows).toEqual(['۱۵ اکتبر ۲۰۲۶', '۱۶ اکتبر ۲۰۲۶', '۱۷ اکتبر ۲۰۲۶'])
+      expect(localStorage.getItem('bobres.reports.calendar')).toBe('gregorian')
+      // and back: the same days, Jalali again
+      choose('شمسی')
+      await vi.waitFor(() => expect(dates().covers).toContain('مهر'))
+      expect(dates().rows).toEqual(jalali.rows)
+      expect(dates().covers).toBe(jalali.covers)
+    })
+
+    it('names the weeks by their first day and a Jalali month by its name, whichever calendar cut them', async () => {
+      const bucket = (date: string) => ({ ...summary().buckets[0], date, partial: false })
+      const starts: Record<string, string[]> = {
+        'week|gregorian': ['2026-10-05', '2026-10-12'], // Mondays
+        'week|jalali': ['2026-10-03', '2026-10-10'], // Saturdays
+        'month|gregorian': ['2026-10-01', '2026-11-01'],
+        'month|jalali': ['2026-09-23', '2026-10-23'], // 1 Mehr and 1 Aban 1405
+      }
+      const answer = (url: string) => {
+        const q = params(url)
+        const key = `${q.get('group') || 'day'}|${q.get('calendar') === 'jalali' ? 'jalali' : 'gregorian'}`
+        const base = answered(url)
+        return json(200, { ...base, buckets: key.startsWith('day') ? base.buckets : starts[key].map(bucket) })
+      }
+      await boot('/admin/reports', ['reports.read'], core({ summary: answer }))
+      await found('.currency-card')
+      const periods = () => [...document.querySelectorAll('.period-table tbody tr td:first-child')].map(text)
+      const group = async (label: string) => {
+        document.querySelector<HTMLElement>('.p-select.group')!.click()
+        const option = await vi.waitFor(() => {
+          const o = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((e) => text(e) === label)
+          expect(o, label).toBeDefined()
+          return o!
+        })
+        option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) // PrimeVue picks on mousedown
+      }
+      await group('Week')
+      await vi.waitFor(() => expect(periods()).toEqual(['Week of 5 Oct 2026', 'Week of 12 Oct 2026']))
+      choose('Jalali')
+      await vi.waitFor(() => expect(periods()).toEqual(['Week of 11 Mehr 1405', 'Week of 18 Mehr 1405']))
+      await group('Month')
+      await vi.waitFor(() => expect(periods()).toEqual(['Mehr 1405', 'Aban 1405']))
+      expect(document.querySelector('.chart[data-currency="IRT"] .slot')?.getAttribute('title')).toBe('Mehr 1405: 100,000 Toman')
+      choose('Gregorian')
+      await vi.waitFor(() => expect(periods()).toEqual(['Month of 1 Oct 2026', 'Month of 1 Nov 2026']))
+    })
+
+    it("starts in the calendar chosen last time, else the language's own, and survives blocked storage", async () => {
+      localStorage.setItem('bobres.reports.calendar', 'gregorian')
+      const fa = await boot('/admin/reports', ['reports.read'], core({}), 'fa')
+      await found('.currency-card')
+      // Persian page, Gregorian calendar: remembered, so no Jalali weeks are asked for
+      expect(urls(fa.fetchMock)).toContain('/api/v1/reports/summary?range=last_30_days&group=day')
+      expect(urls(fa.fetchMock).some((u) => u.includes('calendar=jalali'))).toBe(false)
+      expect(pressed('میلادی')?.getAttribute('aria-pressed')).toBe('true')
+      expect(text(document.querySelector('.covers'))).toContain('اکتبر ۲۰۲۶')
+      localStorage.setItem('bobres.reports.calendar', 'jalali')
+      const en = await boot('/admin/reports', ['reports.read'], core({}))
+      await found('.currency-card')
+      expect(urls(en.fetchMock)).toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali')
+      expect(text(document.querySelector('.covers'))).toContain('Mehr 1405')
+      // something that is no calendar is ignored
+      localStorage.setItem('bobres.reports.calendar', 'hijri')
+      const other = await boot('/admin/reports', ['reports.read'], core({}))
+      await found('.currency-card')
+      expect(urls(other.fetchMock).some((u) => u.includes('calendar='))).toBe(false)
+    })
+
+    it('opens with storage blocked, in the language\'s calendar, and still switches', async () => {
+      const real = Storage.prototype.getItem
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, k: string) {
+        if (k === 'bobres.lang') return real.call(this, k)
+        throw new Error('blocked')
+      })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation((k: string) => {
+        if (k !== 'bobres.lang') throw new Error('blocked')
+      })
+      const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}), 'fa')
+      await found('.currency-card')
+      expect(urls(fetchMock)).toContain('/api/v1/reports/summary?range=last_30_days&group=day&calendar=jalali')
+      choose('میلادی') // not remembered, but it works
+      await vi.waitFor(() => expect(text(document.querySelector('.covers'))).toContain('اکتبر'))
+    })
+
+    it('takes a custom range typed in the Jalali calendar as the exact Gregorian days, and shows it in the other calendar on a switch', async () => {
+      const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}), 'fa')
+      await found('.currency-card')
+      range('دلخواه')
+      const from = await found<HTMLInputElement>('.date-from')
+      const to = await found<HTMLInputElement>('.date-to')
+      // the days on screen, in the Jalali calendar and Persian digits
+      expect(from.value).toBe('۱۴۰۵/۰۷/۲۳')
+      expect(to.value).toBe('۱۴۰۵/۰۷/۲۵')
+      expect(from.placeholder).toMatch(/^[۰-۹]{4}\/[۰-۹]{2}\/[۰-۹]{2}$/)
+      expect(from.closest('.date-field')?.querySelector('label')?.getAttribute('for')).toBe(from.id)
+      // Latin digits typed in the Persian page are read; the first and the last day of a month of 30 days
+      typeInto(from, '1405/07/01')
+      typeInto(to, '۱۴۰۵/۰۷/۳۰')
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?from=2026-09-23&to=2026-10-22&group=day&calendar=jalali'))
+      expect(from.getAttribute('aria-invalid')).not.toBe('true')
+      expect(document.querySelector('.custom-problem')).toBeNull()
+      // the year edge: 30 Esfand exists in the leap year 1403 and the new year 1404 starts the day after it
+      typeInto(from, '1403/12/30')
+      typeInto(to, '1404/01/01')
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?from=2025-03-20&to=2025-03-21&group=day&calendar=jalali'))
+      // ... and does not in 1404, nor does a 31st of Mehr: nothing is sent, and the page says what a date looks like
+      let before = fetchMock.mock.calls.length
+      typeInto(to, '1404/12/30')
+      await new Promise((r) => setTimeout(r, 450))
+      expect(fetchMock.mock.calls.length).toBe(before)
+      expect(to.getAttribute('aria-invalid')).toBe('true')
+      expect(text(document.querySelector('.custom-problem'))).toMatch(/^هر تاریخ را به صورت سال، ماه و روز در تقویم شمسی بنویسید، مثلاً .+\.$/)
+      typeInto(to, '1405/07/31')
+      await new Promise((r) => setTimeout(r, 450))
+      expect(fetchMock.mock.calls.length).toBe(before)
+      expect(to.getAttribute('aria-invalid')).toBe('true')
+      // a date outside the years core reports on is refused here too, with the range in the calendar shown
+      typeInto(from, '1300/01/01')
+      typeInto(to, '1300/01/05')
+      await vi.waitFor(() => expect(text(document.querySelector('.custom-problem'))).toContain('۱۳۷۸/۱۰/۱۱'))
+      expect(text(document.querySelector('.custom-problem'))).toContain('۱۴۷۹/۱۰/۱۰')
+      expect(fetchMock.mock.calls.length).toBe(before)
+      // mid-typing is not an error that clears the text
+      typeInto(from, '1405/07/')
+      await new Promise((r) => setTimeout(r, 50))
+      expect(from.value).toBe('1405/07/')
+      // a good range again, then the switch: the same two days, written the other way, with the same request minus the calendar
+      typeInto(from, '1405/07/01')
+      typeInto(to, '1405/07/30')
+      await vi.waitFor(() => expect(document.querySelector('.custom-problem')).toBeNull())
+      await vi.waitFor(() => expect(urls(fetchMock).filter((u) => u === '/api/v1/reports/summary?from=2026-09-23&to=2026-10-22&group=day&calendar=jalali').length).toBeGreaterThan(1))
+      before = fetchMock.mock.calls.length
+      choose('میلادی')
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?from=2026-09-23&to=2026-10-22&group=day'))
+      expect(from.value).toBe('۲۰۲۶/۰۹/۲۳')
+      expect(to.value).toBe('۲۰۲۶/۱۰/۲۲')
+      choose('شمسی')
+      await vi.waitFor(() => expect(from.value).toBe('۱۴۰۵/۰۷/۰۱'))
+      expect(to.value).toBe('۱۴۰۵/۰۷/۳۰')
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(before)
+    })
+
+    it('takes a custom range typed in English the same way, with Gregorian days as the default', async () => {
+      const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}))
+      await found('.currency-card')
+      range('Custom')
+      const from = await found<HTMLInputElement>('.date-from')
+      const to = await found<HTMLInputElement>('.date-to')
+      // a Jalali date typed into the Gregorian field is a different (and here unsupported) day, not silently converted
+      typeInto(from, '1405-07-01')
+      typeInto(to, '1405-07-30')
+      await vi.waitFor(() => expect(text(document.querySelector('.custom-problem'))).toContain('Reports cover the dates from ⁨2000-01-01⁩ to ⁨2100-12-31⁩.'))
+      // 29 February exists in 2028 only
+      typeInto(from, '2028-02-29')
+      typeInto(to, '2028-03-01')
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?from=2028-02-29&to=2028-03-01&group=day'))
+      typeInto(from, '2027-02-29')
+      await vi.waitFor(() => expect(text(document.querySelector('.custom-problem'))).toContain('Type each date as year, month and day in the Gregorian calendar, for example'))
+      // switched to Jalali, the same two days are Jalali dates (and the same request, plus the calendar)
+      typeInto(from, '2028-02-29')
+      choose('Jalali')
+      await vi.waitFor(() => expect(from.value).toBe('1406-12-10'))
+      expect(to.value).toBe('1406-12-11')
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?from=2028-02-29&to=2028-03-01&group=day&calendar=jalali'))
+    })
+
+    it("picks a day from a month grid in the calendar shown, with the week starting where the calendar's does", async () => {
+      const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}), 'fa')
+      await found('.currency-card')
+      range('دلخواه')
+      const from = await found<HTMLInputElement>('.date-from')
+      const open = (field: HTMLInputElement) => field.closest('.date-input')!.querySelector<HTMLButtonElement>('button.open')!
+      open(from).click()
+      const picker = await found<HTMLElement>('.picker')
+      expect(picker.getAttribute('data-calendar')).toBe('jalali')
+      expect(text(picker.querySelector('.title'))).toBe('مهر ۱۴۰۵')
+      expect([...picker.querySelectorAll('th')].map(text)).toEqual(['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']) // Saturday first
+      // Mehr starts on a Wednesday: four empty cells, then 1 2 3
+      expect([...picker.querySelectorAll('tbody tr:first-child td')].map(text)).toEqual(['', '', '', '', '۱', '۲', '۳'])
+      expect(picker.querySelectorAll('.day')).toHaveLength(30)
+      // the day on screen is marked
+      expect(picker.querySelector('.day.selected')?.getAttribute('data-date')).toBe('2026-10-15')
+      expect(text(picker.querySelector('.day.selected'))).toBe('۲۳')
+      expect(picker.querySelector('.day[data-date="2026-10-15"]')?.getAttribute('aria-pressed')).toBe('true')
+      expect(picker.querySelector('.day[data-date="2026-10-15"]')?.getAttribute('aria-label')).toBe('پنجشنبه ۲۳ مهر ۱۴۰۵')
+      // 15 Mehr is 7 October
+      picker.querySelector<HTMLButtonElement>('.day[data-date="2026-10-07"]')!.click()
+      await vi.waitFor(() => expect(from.value).toBe('۱۴۰۵/۰۷/۱۵'))
+      await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?from=2026-10-07&to=2026-10-17&group=day&calendar=jalali'))
+      await vi.waitFor(() => expect(document.querySelector('.picker')).toBeNull()) // a pick closes it
+      expect(document.activeElement).toBe(open(from)) // and the focus goes back to the button that opened it
+
+      // months and years: the end of a Jalali year is Esfand, whose 30th a common year does not have
+      open(from).click()
+      const again = await found<HTMLElement>('.picker')
+      const click = (selector: string) => again.querySelector<HTMLButtonElement>(selector)!.click()
+      click('.next-month')
+      await vi.waitFor(() => expect(text(again.querySelector('.title'))).toBe('آبان ۱۴۰۵'))
+      expect(again.querySelectorAll('.day')).toHaveLength(30)
+      click('.prev-year')
+      click('.prev-year')
+      await vi.waitFor(() => expect(text(again.querySelector('.title'))).toBe('آبان ۱۴۰۳'))
+      for (let i = 0; i < 4; i++) click('.next-month')
+      await vi.waitFor(() => expect(text(again.querySelector('.title'))).toBe('اسفند ۱۴۰۳'))
+      expect(again.querySelectorAll('.day')).toHaveLength(30) // 1403 is a leap year
+      click('.next-year')
+      await vi.waitFor(() => expect(text(again.querySelector('.title'))).toBe('اسفند ۱۴۰۴'))
+      expect(again.querySelectorAll('.day')).toHaveLength(29)
+      click('.pick-today')
+      await vi.waitFor(() => expect(document.querySelector('.picker')).toBeNull())
+      // the Gregorian grid starts on Monday
+      choose('میلادی')
+      await vi.waitFor(() => expect(from.value).toMatch(/^[۰-۹]{4}\/[۰-۹]{2}\/[۰-۹]{2}$/))
+      open(from).click()
+      const greg = await found<HTMLElement>('.picker')
+      expect(greg.getAttribute('data-calendar')).toBe('gregorian')
+      expect([...greg.querySelectorAll('th')].map(text)).toEqual(['د', 'س', 'چ', 'پ', 'ج', 'ش', 'ی'])
+      expect(text(greg.querySelector('.title'))).toMatch(/^[^\d۰-۹]+ [۰-۹]{4}$/)
+    })
+
+    it('asks the ledger and audit files for their Jalali date column when the calendar is Jalali', async () => {
+      const lists: Answer = (url) => (url.startsWith('/api/v1/ledger') || url.startsWith('/api/v1/audit') ? json(200, { items: [], total: 0, page: 1, size: 25 }) : undefined)
+      const link = async (path: string, lang: 'en' | 'fa') => {
+        await boot(path, ['ledger.read', 'audit.read'], lists, lang)
+        const a = await found<HTMLAnchorElement>('a[download]')
+        return new URL(a.getAttribute('href')!, 'https://x.example')
+      }
+      // nothing chosen: the language's calendar
+      let u = await link('/admin/ledger', 'fa')
+      expect(u.pathname).toBe('/api/v1/ledger.csv')
+      expect(u.searchParams.get('calendar')).toBe('jalali')
+      u = await link('/admin/audit', 'fa')
+      expect(u.pathname).toBe('/api/v1/audit.csv')
+      expect(u.searchParams.get('calendar')).toBe('jalali')
+      u = await link('/admin/ledger', 'en')
+      expect(u.searchParams.has('calendar')).toBe(false)
+      u = await link('/admin/audit', 'en')
+      expect(u.searchParams.has('calendar')).toBe(false)
+      // the calendar the Reports page was set to wins, either way
+      localStorage.setItem('bobres.reports.calendar', 'jalali')
+      u = await link('/admin/ledger', 'en')
+      expect(u.searchParams.get('calendar')).toBe('jalali')
+      localStorage.setItem('bobres.reports.calendar', 'gregorian')
+      u = await link('/admin/audit', 'fa')
+      expect(u.searchParams.has('calendar')).toBe(false)
+    })
+
+    it('moves around the month grid with the arrow keys the way the page reads, and stops at the supported years', async () => {
+      await boot('/admin/reports', ['reports.read'], core({}))
+      await found('.currency-card')
+      range('Custom')
+      const from = await found<HTMLInputElement>('.date-from')
+      from.closest('.date-input')!.querySelector<HTMLButtonElement>('button.open')!.click()
+      const picker = await found<HTMLElement>('.picker')
+      const day = (iso: string) => picker.querySelector<HTMLButtonElement>(`.day[data-date="${iso}"]`)
+      const press = async (key: string, shiftKey = false) => {
+        const target = (document.activeElement as HTMLElement | null)?.closest('[data-date]') ?? picker.querySelector('[data-date][tabindex="0"]')!
+        target.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }))
+        await nextTick() // the grid follows, and the new day takes the focus
+      }
+      const focused = () => (document.activeElement as HTMLElement | null)?.dataset.date
+      // only the focused day is in the tab order
+      expect(picker.querySelectorAll('.day[tabindex="0"]')).toHaveLength(1)
+      expect(day('2026-10-15')?.getAttribute('tabindex')).toBe('0')
+      day('2026-10-15')!.focus()
+      await press('ArrowRight')
+      expect(focused()).toBe('2026-10-16') // English reads left to right: right is the next day
+      await press('ArrowDown')
+      expect(focused()).toBe('2026-10-23')
+      await press('ArrowLeft')
+      expect(focused()).toBe('2026-10-22')
+      await press('ArrowUp')
+      expect(focused()).toBe('2026-10-15')
+      await press('Home') // the week starts on Monday: 12 Oct
+      expect(focused()).toBe('2026-10-12')
+      await press('End')
+      expect(focused()).toBe('2026-10-18')
+      // into the next month and back; the grid follows
+      await press('ArrowDown')
+      await press('ArrowDown')
+      await press('ArrowDown')
+      expect(focused()).toBe('2026-11-08')
+      await vi.waitFor(() => expect(text(picker.querySelector('.title'))).toBe('November 2026'))
+      await press('PageUp')
+      expect(focused()).toBe('2026-10-08')
+      await press('PageDown', true) // a year ahead
+      expect(focused()).toBe('2027-10-08')
+      // the supported years end at 2000 and 2100
+      for (let i = 0; i < 30; i++) await press('PageUp', true)
+      expect(focused()).toBe('2000-10-08')
+      await press('PageUp', true)
+      expect(focused()).toBe('2000-10-08') // stays: no month before 2000 is offered
+      expect(picker.querySelector<HTMLButtonElement>('.prev-year')!.disabled).toBe(true) // a year back is before 2000
+      day('2000-10-08')!.click()
+      await vi.waitFor(() => expect(from.value).toBe('2000-10-08'))
+    })
   })
 
   it('draws a long daily range as a dense chart that shrinks to its card (no gaps between hairline bars)', async () => {

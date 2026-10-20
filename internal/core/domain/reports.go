@@ -135,12 +135,9 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 	if !contains(reportGroups, group) {
 		return nil, invalid("group must be day, week or month")
 	}
-	calendar := req.Calendar
-	if calendar == "" {
-		calendar = CalendarGregorian
-	}
-	if calendar != CalendarGregorian && calendar != CalendarJalali {
-		return nil, invalid("calendar must be gregorian or jalali")
+	calendar, err := NormalizeCalendar(req.Calendar)
+	if err != nil {
+		return nil, err
 	}
 	grace := DefaultChurnGraceDays
 	if req.ChurnGraceDays != "" {
@@ -194,6 +191,18 @@ func NewReportRange(req ReportRequest, defaultTZ string, now time.Time) (*Report
 		rng.Buckets = append(rng.Buckets, ReportSpan{Start: start.Format(dateLayout), Partial: start.Before(from) || last.After(to)})
 	}
 	return rng, nil
+}
+
+// NormalizeCalendar reads the calendar a request names: "" is Gregorian, and
+// anything but gregorian and jalali is refused with the reason the API gives.
+func NormalizeCalendar(s string) (string, error) {
+	switch s {
+	case "":
+		return CalendarGregorian, nil
+	case CalendarGregorian, CalendarJalali:
+		return s, nil
+	}
+	return "", invalid("calendar must be gregorian or jalali")
 }
 
 // loadZone checks a time zone name: a zone Go knows (the name goes to
@@ -288,6 +297,23 @@ func (s *Service) ReportRange(ctx context.Context, req ReportRequest, now time.T
 		})
 	}
 	return NewReportRange(req, def, now)
+}
+
+// ExportZone is the time zone a CSV file writes its local times in (the ledger
+// and audit exports): the request's, else the store's, as the reports read it.
+// A name Go does not know is refused.
+func (s *Service) ExportZone(ctx context.Context, requested string) (*time.Location, error) {
+	name := requested
+	if name == "" {
+		set, err := s.Settings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		name = s.storeZone(set, func(source, zone string) {
+			s.cfg.Log.Warn("exports: not a time zone, skipped", "source", source, "value", zone)
+		})
+	}
+	return loadZone(name)
 }
 
 // storeZone is the time zone the store's days are read in: the general.timezone

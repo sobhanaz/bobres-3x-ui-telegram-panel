@@ -2,7 +2,10 @@
 // query a choice of range and group makes, and the arithmetic of the chart.
 // Amounts are integers in each currency's minor unit and are never added
 // across currencies: every list here is grouped by currency first.
+import { daysBetween, formatMonth, inRange, parseIso, type Calendar } from './calendar'
 import { localDate, type Lang } from './format'
+
+export type { Calendar } from './calendar'
 
 type T = (key: string, params?: Record<string, unknown>) => string
 
@@ -87,8 +90,9 @@ export interface ReportMethod {
 }
 
 export type Group = 'day' | 'week' | 'month'
-/** gregorian: weeks start on Monday, months are calendar months. jalali: weeks start on Saturday, months are Jalali months. */
-export type Calendar = 'gregorian' | 'jalali'
+// Calendar (calendar.ts): gregorian, whose weeks start on Monday and months are calendar months, or jalali, whose
+// weeks start on Saturday and months are Jalali months. It also decides how every date of the page is written,
+// typed and picked; the API and the queries keep Gregorian ISO dates.
 export type Range = 'today' | 'last_7_days' | 'last_30_days' | 'this_month' | 'last_month' | 'custom'
 
 export const groups: Group[] = ['day', 'week', 'month']
@@ -98,6 +102,44 @@ export const calendars: Calendar[] = ['gregorian', 'jalali']
 export function defaultCalendar(lang: Lang): Calendar {
   return lang === 'fa' ? 'jalali' : 'gregorian'
 }
+
+const calendarKey = 'bobres.reports.calendar'
+
+/** savedCalendar is the calendar the person chose on this browser last time
+ * (kept in localStorage like the language and the theme); null when none was
+ * chosen, or storage is blocked or holds something else. */
+export function savedCalendar(): Calendar | null {
+  try {
+    const v = localStorage.getItem(calendarKey)
+    if (v === 'gregorian' || v === 'jalali') return v
+  } catch {
+    /* storage blocked: the default applies */
+  }
+  return null
+}
+
+/** rememberCalendar keeps a choice for the next visit. */
+export function rememberCalendar(c: Calendar): void {
+  try {
+    localStorage.setItem(calendarKey, c)
+  } catch {
+    /* not remembered: fine */
+  }
+}
+
+/** initialCalendar is the calendar the page starts in: the one chosen before,
+ * else the language's own. */
+export function initialCalendar(lang: Lang): Calendar {
+  return savedCalendar() ?? defaultCalendar(lang)
+}
+
+/** csvCalendar is the calendar to ask the ledger and audit CSV files for: the
+ * one the Reports page is set to ("jalali" adds a column with the Jalali date
+ * of every row), nothing for Gregorian, which is what the files assume. */
+export function csvCalendar(lang: Lang): 'jalali' | undefined {
+  return initialCalendar(lang) === 'jalali' ? 'jalali' : undefined
+}
+
 export const ranges: Range[] = ['today', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'custom']
 
 export interface Selection {
@@ -109,14 +151,26 @@ export interface Selection {
   to: string
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/
+/** What is wrong with a custom range: a date that is none (or is missing), a
+ * date core does not report on (years 2000 to 2100), an end before the start,
+ * or more than 400 days. */
+export type CustomProblem = 'format' | 'range' | 'order' | 'span'
 
-/** validCustom says whether a custom range can be asked for: two dates, in
- * order, at most 400 days apart (core refuses more). */
+/** customProblem says why a custom range cannot be asked for, or null when it
+ * can: two real dates, in order, inside the years core reports on, at most 400
+ * days apart (core refuses more). The dates are Gregorian ISO text whatever
+ * calendar they were typed in. */
+export function customProblem(from: string, to: string): CustomProblem | null {
+  if (!parseIso(from) || !parseIso(to)) return 'format'
+  if (!inRange(from) || !inRange(to)) return 'range'
+  if (to < from) return 'order'
+  if (daysBetween(from, to) + 1 > 400) return 'span'
+  return null
+}
+
+/** validCustom says whether a custom range can be asked for. */
 export function validCustom(from: string, to: string): boolean {
-  if (!DATE.test(from) || !DATE.test(to) || to < from) return false
-  const days = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1
-  return Number.isFinite(days) && days <= 400
+  return customProblem(from, to) === null
 }
 
 /** reportParams are the query values a selection makes: a named range goes
@@ -180,19 +234,22 @@ export function hasData(s: ReportSummary): boolean {
 /** jalaliMonth writes the Jalali month a date ("2026-10-23") starts, as
  * "Aban 1405" or "آبان ۱۴۰۵": the month's name and its year, nothing else. */
 export function jalaliMonth(date: string, lang: Lang): string {
-  const [y, m, d] = date.split('-').map(Number)
-  const parts = new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-US-u-ca-persian', { month: 'long', year: 'numeric', timeZone: 'UTC' }).formatToParts(
-    new Date(Date.UTC(y, m - 1, d)),
-  )
-  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
-  return `${pick('month')} ${pick('year')}`
+  return formatMonth(date, lang, 'jalali')
 }
 
-/** periodLabel names a period by the date it starts on: a day by its date, a
- * week as "Week of 12 Oct", a month as "Month of 1 Oct" (Jalali dates in
- * Persian). A Jalali month is named by its Jalali month and year. */
-export function periodLabel(date: string, group: Group, lang: Lang, t: T, calendar: Calendar = 'gregorian'): string {
-  if (group === 'month' && calendar === 'jalali') return jalaliMonth(date, lang)
-  const d = localDate(date, lang)
+/** periodLabel names a period by the date it starts on, written in a calendar:
+ * a day by its date, a week as "Week of 12 Oct 2026" ("Week of 20 Mehr 1405" in
+ * Jalali), a Gregorian month as "Month of 1 Oct 2026". A Jalali month is named
+ * by its Jalali month and year.
+ *
+ * `calendar` is how the report cut its periods and `dates` the calendar the
+ * page is set to write them in. They are the same once a report has arrived;
+ * for the moment after the calendar was switched, while the old periods are
+ * still on screen, the dates are already the new calendar's (a Gregorian month
+ * is then "Month of 9 Mehr 1405", which is true) and only the report's own
+ * Jalali months get a month's name. */
+export function periodLabel(date: string, group: Group, lang: Lang, t: T, calendar: Calendar = 'gregorian', dates: Calendar = calendar): string {
+  if (group === 'month' && calendar === 'jalali' && dates === 'jalali') return jalaliMonth(date, lang)
+  const d = localDate(date, lang, 'medium', dates)
   return group === 'day' ? d : t('reports.period.' + group + '_of', { date: d })
 }

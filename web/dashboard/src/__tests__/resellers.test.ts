@@ -773,7 +773,7 @@ describe('reseller pages', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.query.tab).toBe('ledger'))
     await vi.waitFor(() => expect(panel().textContent).toContain(text('ledger.kind.commission')))
     expect(panel().textContent).toContain('بدهی ۲۳۸٬۰۰۰ تومان') // the balance after, as debt
-    expect(panel().querySelector('a[download]')?.getAttribute('href')).toBe(`/api/v1/ledger.csv?user=${rid}`)
+    expect(panel().querySelector('a[download]')?.getAttribute('href')).toBe(`/api/v1/ledger.csv?user=${rid}&calendar=jalali`)
     // a commission links to the customer's order
     expect(panel().querySelector('a[href^="/admin/payments/orders/"]')).not.toBeNull()
 
