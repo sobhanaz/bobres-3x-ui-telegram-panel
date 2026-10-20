@@ -142,6 +142,14 @@ func setup(rt *app.Runtime) error {
 		// The Mini App store (/app on core): core has no bot token, so it asks
 		// the bot to check the init data a Mini App is opened with.
 		rt.Mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(cfg.TelegramBotToken, me.Username, cfg.PeerCoreToken, nil))
+		// Its payments, the same reason: a Stars invoice link, a receipt sent to
+		// the customer's chat (core stores the file id Telegram gives back), and
+		// the staff alert for a proof core recorded (the alert is the bot's).
+		rt.Mux.Handle("POST /internal/miniapp/invoice", runner.MiniAppInvoice(bot, cat, cfg.PeerCoreToken, rt.Log))
+		rt.Mux.Handle("POST /internal/miniapp/receipt", runner.MiniAppReceipt(bot, cat, cfg.PeerCoreToken, rt.Log))
+		rt.Mux.Handle("POST /internal/miniapp/proof-alert", runner.MiniAppProofAlert(func(ctx context.Context, a runner.ProofAlert) {
+			h.NotifyProofSubmitted(ctx, handler.ProofNotice{TelegramID: a.TelegramID, Username: a.Username, IntentID: a.IntentID, Amount: a.Amount, Currency: a.Currency})
+		}, cfg.PeerCoreToken))
 		// The System page's update check: the bot has internet access, core
 		// none. It reads the newest release of BOBRES_UPDATE_CHANNEL (stable:
 		// the latest release; beta: the highest version GitHub's API lists,
