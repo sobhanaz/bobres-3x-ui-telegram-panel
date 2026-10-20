@@ -66,7 +66,7 @@ func TestSeamEveryRestoreRequestCoreWritesIsAccepted(t *testing.T) {
 		{"an upload", "upload", "my backup (3).bkp", "owner", 999},
 		{"an upload with a Persian name", "upload", "پشتیبان فروشگاه.bkp", "سبحان آذرزاده", 999},
 		{"an upload name at the limit", "upload", strings.Repeat("ب", sysupdate.MaxFileName), "owner", 999},
-		{"an upload name with controls and bidi", "upload", "a‮b\nc\x00d.bkp", "a\nb", 999},
+		{"an upload name with controls and bidi", "upload", "a\u202eb\nc\x00d.bkp", "a\nb", 999},
 		{"an upload name too long", "upload", strings.Repeat("x", 500), "owner", 999},
 		{"no name", "backup", "bobres-20261011T033000Z.bkp", "", 5},
 	} {
@@ -92,7 +92,7 @@ func TestSeamEveryRestoreRequestCoreWritesIsAccepted(t *testing.T) {
 			if tc.source == "backup" && got.File != tc.file {
 				t.Fatalf("the file name changed: %q", got.File)
 			}
-			if strings.ContainsAny(got.By+got.File, "\n\x00‮") {
+			if strings.ContainsAny(got.By+got.File, "\n\x00\u202e") {
 				t.Fatalf("not plain lines: %q %q", got.By, got.File)
 			}
 		})

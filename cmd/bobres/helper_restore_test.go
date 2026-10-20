@@ -150,7 +150,7 @@ func (rt *restoreTest) putBackup(path, key string, keys map[string]string, dump 
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		rt.tb.Fatal(err)
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
+	if err := os.WriteFile(path, b, 0o600); err != nil { //nolint:gosec // the test's own temp directory
 		rt.tb.Fatal(err)
 	}
 	sum := sha256.Sum256(b)

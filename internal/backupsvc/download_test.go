@@ -14,7 +14,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backup"
 )
 
-const downloadToken = "core-token-for-tests"
+const downloadToken = "core-token-for-tests" //nolint:gosec // a test value
 
 func getFile(t *testing.T, h http.Handler, token, name string) *httptest.ResponseRecorder {
 	t.Helper()

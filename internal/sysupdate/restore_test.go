@@ -41,8 +41,8 @@ func TestRestoreRequestIsOneValidLine(t *testing.T) {
 		t.Fatal("not one line")
 	}
 	// An upload's name is made a plain line of at most 120 characters, and it is never a path component of the request.
-	u, err := NewRestoreRequest(testRestoreID, SourceUpload, "a‮b\nc"+strings.Repeat("x", 300), testUploadID, testSum, 1, "", now)
-	if err != nil || strings.ContainsAny(u.File, "\n‮") || len([]rune(u.File)) > MaxFileName || u.By != "dashboard" {
+	u, err := NewRestoreRequest(testRestoreID, SourceUpload, "a\u202eb\nc"+strings.Repeat("x", 300), testUploadID, testSum, 1, "", now)
+	if err != nil || strings.ContainsAny(u.File, "\n\u202e") || len([]rune(u.File)) > MaxFileName || u.By != "dashboard" {
 		t.Fatalf("%+v %v", u, err)
 	}
 }
@@ -226,7 +226,7 @@ func TestStageUploadInParallel(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			body := bytes.Repeat([]byte{byte('a' + i)}, 70_000+i)
+			body := bytes.Repeat([]byte{[]byte("abc")[i]}, 70_000+i)
 			up, err := d.StageUpload(id, bytes.NewReader(body), MaxUpload)
 			if err != nil {
 				t.Error(err)
@@ -298,7 +298,7 @@ func TestPurgeUploadsRemovesOldLeftoversOnly(t *testing.T) {
 func TestReadStatusOfARestore(t *testing.T) {
 	dir := t.TempDir()
 	status := `{"v":1,"installed":true,"helper":"0.8.0","state":"done","id":"` + testRestoreID + `","from":"0.8.0","to":"0.8.0","channel":"","step":"done",` +
-		`"message":"BOBRES now runs the data of x.","action":"restore","restore":true,"subject":"my\nbackup‮.bkp","source":"upload","by":"sobhan",` +
+		`"message":"BOBRES now runs the data of x.","action":"restore","restore":true,"subject":"my\nbackup\u202e.bkp","source":"upload","by":"sobhan",` +
 		`"requested_at":"2026-10-20T11:59:00Z","started_at":"2026-10-20T12:00:00Z","finished_at":"2026-10-20T12:05:00Z","log":[]}`
 	if err := os.WriteFile(filepath.Join(dir, StatusFile), []byte(status), 0o644); err != nil { //nolint:gosec // as the updater writes it
 		t.Fatal(err)
@@ -308,7 +308,7 @@ func TestReadStatusOfARestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	if st.Action != ActionRestore || !st.Restore || st.Source != SourceUpload || st.By != "sobhan" || st.Step != StepDone || st.RequestedAt == nil ||
-		st.RequestedAt.Format(time.RFC3339) != "2026-10-20T11:59:00Z" || strings.ContainsAny(st.Subject, "\n‮") || st.Subject != "my backup.bkp" {
+		st.RequestedAt.Format(time.RFC3339) != "2026-10-20T11:59:00Z" || strings.ContainsAny(st.Subject, "\n\u202e") || st.Subject != "my backup.bkp" {
 		t.Fatalf("%+v", st)
 	}
 	// What the status says that core does not know is dropped, not shown.

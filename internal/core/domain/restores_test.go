@@ -269,7 +269,7 @@ func (failingRestoreHelper) WriteRestoreRequest(sysupdate.RestoreRequest) error 
 func TestRestoreUploadFlow(t *testing.T) {
 	w := restoreWorld(t)
 	body := bytes.Repeat([]byte("backup bytes "), 1000)
-	st, err := w.up.StageRestoreUpload(w.ctx, w.owner, "my\nbackup‮.bkp", bytes.NewReader(body))
+	st, err := w.up.StageRestoreUpload(w.ctx, w.owner, "my\nbackup\u202e.bkp", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,10 +359,7 @@ func TestRestoreOneUploadAtATime(t *testing.T) {
 	}()
 	// wait until the first upload is being received
 	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if !w.up.receiving.TryLock() {
-			break
-		}
+	for w.up.receiving.TryLock() {
 		w.up.receiving.Unlock()
 		if time.Now().After(deadline) {
 			t.Fatal("the first upload never started")

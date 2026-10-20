@@ -37,16 +37,22 @@ func TestSystemRestoresMigration(t *testing.T) {
 		action != "update" || subject != "" || source != "" {
 		t.Fatalf("the old update is %q %q %q: %v", action, subject, source, err)
 	}
-	restore := func(id, extra string) error {
-		_, err := db.ExecContext(ctx, `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source`+extra+`)
-			VALUES ($1, 'boss', '0.8.0', '0.8.0', '', 'restore', 'bobres-20261011T033000Z.bkp', 'backup'`+valuesOf(extra)+`)`, id)
+	// restore records a restore, open or (ended) already over
+	restore := func(id string, ended bool) error {
+		q := `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source)
+			VALUES ($1, 'boss', '0.8.0', '0.8.0', '', 'restore', 'bobres-20261011T033000Z.bkp', 'backup')`
+		if ended {
+			q = `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at)
+				VALUES ($1, 'boss', '0.8.0', '0.8.0', '', 'restore', 'bobres-20261011T033000Z.bkp', 'backup', 'done', now())`
+		}
+		_, err := db.ExecContext(ctx, q, id)
 		return err
 	}
-	if err := restore(rst1, ""); err != nil {
+	if err := restore(rst1, false); err != nil {
 		t.Fatalf("a restore: %v", err)
 	}
 	// one open request at a time, an update or a restore
-	if err := restore(rst2, ""); err == nil {
+	if err := restore(rst2, false); err == nil {
 		t.Fatal("a second open request was accepted")
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel)
@@ -57,7 +63,7 @@ func TestSystemRestoresMigration(t *testing.T) {
 		t.Fatalf("ending it: %v", err)
 	}
 	// a restore the helper's status told core of, recorded already ended
-	if err := restore(rst2, ", outcome, outcome_at"); err != nil {
+	if err := restore(rst2, true); err != nil {
 		t.Fatalf("a restore that is already over: %v", err)
 	}
 	for name, q := range map[string]string{
@@ -91,12 +97,4 @@ func TestSystemRestoresMigration(t *testing.T) {
 	if err := Up(ctx, dsn, "core"); err != nil {
 		t.Fatalf("Up again: %v", err)
 	}
-}
-
-// valuesOf is the values that go with the extra columns of restore: an outcome and its time.
-func valuesOf(extra string) string {
-	if extra == "" {
-		return ""
-	}
-	return ", 'done', now()"
 }
