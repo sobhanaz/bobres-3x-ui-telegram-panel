@@ -37,8 +37,10 @@ What is still open:
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
   list: it is now tested against the real 0.8.4 image in CI; Marzban 1.0 is not supported yet.)
-- **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** gift credit codes; bulk purchase and a
-  two-column plan list; a help center (an owner-editable FAQ and usage tutorials); server monitoring in the dashboard
+- **Built after v0.7.0, in the next release:** the **two-column plan list** (the bot lists plans as a table of name and
+  price, or as a list, by `bot.plan_layout`) and the **bulk purchase** (a home-menu button: N services of one plan paid
+  from the wallet in one transaction, all or nothing, one message with every link).
+- **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** gift credit codes; a help center (an owner-editable FAQ and usage tutorials); server monitoring in the dashboard
   (the host, Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview); charts and a
   3D report view on the Reports page; a full uninstall on the server that leaves it as on day one; and downloading and
   restoring a backup from the dashboard.

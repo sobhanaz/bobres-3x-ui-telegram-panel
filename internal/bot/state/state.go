@@ -77,6 +77,12 @@ type Checkout struct {
 	// the name they gave the new service ("" = none).
 	ForCustomer bool   `json:"fc,omitempty"`
 	Label       string `json:"label,omitempty"`
+	// A bulk purchase (Type "bulk"): how many services, the total the buyer
+	// was shown (core refuses the purchase if the price came to another) and
+	// its currency; Label is then the name the services share.
+	Quantity int32  `json:"qty,omitempty"`
+	Total    int64  `json:"tot,omitempty"`
+	Currency string `json:"cur,omitempty"`
 }
 
 func checkoutKey(userID int64, nonce string) string {

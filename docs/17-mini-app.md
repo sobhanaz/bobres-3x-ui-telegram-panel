@@ -273,7 +273,9 @@ Five tabs:
   for the service (one line, at most 64 characters), then the shop's own checkout (the `label` of `POST /orders`).
   The checkout has no discount-code field for a reseller (they pay tier prices, core refuses codes), and its wallet
   button counts the credit: a reseller pays from the balance and the credit, down to the limit, through the usual
-  `pay-wallet`. Online methods work as for any order.
+  `pay-wallet`. Online methods work as for any order. **Bulk purchase is the bot's only** (its home-menu button and its
+  checkout, [03-bot-ux.md](03-bot-ux.md)): the Mini App has no screen for it, and the services it brings show in Services
+  like any other.
 - **Services:** the customers' services, 10 a page, newest first, in groups with their counts (All, Active, Ending
   soon, Ended, Paused), a search by name or number (#a1b2c3), and per service the status, time left, usage bar, the
   private note, and (opened) the subscription link to copy, the service page, **Renew** and **Add traffic** (the shop's

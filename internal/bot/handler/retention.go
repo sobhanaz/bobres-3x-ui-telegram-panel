@@ -100,10 +100,7 @@ func (h *Handler) showPicker(r *req, c state.Checkout, ps []*corev1.Plan, title 
 		return
 	}
 	kb := &tg.Keyboard{}
-	for _, p := range ps {
-		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())),
-			"rp:"+n+":"+p.GetId()))
-	}
+	h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "rp:" + n + ":" + p.GetId() })
 	kb.Row(r.button("btn.back", "sub:"+c.SubscriptionID), r.button("btn.home", "home"))
 	r.show(title, kb)
 }
