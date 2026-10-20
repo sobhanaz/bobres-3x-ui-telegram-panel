@@ -164,19 +164,14 @@ func (s *Service) JoinChats(ctx context.Context) (*JoinChatList, error) {
 	return out, nil
 }
 
-// RequiredChats is the list customers are held to now: the first chat (read
-// from settings, the map the caller has) and the extra ones the entitlements
-// enforce, in order, each chat once (the case of an @name aside). Empty when
-// the requirement is off. The caller decides what an error means; the
-// Mini App's gate lets customers in, the bot's settings go without extras.
-func (s *Service) RequiredChats(ctx context.Context, settings map[string]string) ([]JoinChat, error) {
+// JoinList is the list customers are held to: the first chat (read from the
+// settings the caller has) and the extra ones the entitlements enforce
+// (EnforcedJoinExtras), in order, each chat once (the case of an @name aside).
+// Empty when the requirement is off, whatever the extras are.
+func JoinList(settings map[string]string, extras []JoinChat) []JoinChat {
 	primary := primaryJoin(settings)
 	if primary.Chat == "" {
-		return nil, nil
-	}
-	extras, err := s.EnforcedJoinExtras(ctx)
-	if err != nil {
-		return []JoinChat{primary}, err
+		return nil
 	}
 	out := []JoinChat{primary}
 	seen := map[string]bool{strings.ToLower(primary.Chat): true}
@@ -186,7 +181,7 @@ func (s *Service) RequiredChats(ctx context.Context, settings map[string]string)
 			out = append(out, c)
 		}
 	}
-	return out, nil
+	return out
 }
 
 // EnforcedJoinExtras is the extra required chats customers are held to under

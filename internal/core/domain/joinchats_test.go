@@ -49,6 +49,13 @@ func (w *gateWorld) mustJoin(list ...JoinChat) *JoinChatList {
 	return l
 }
 
+// required is the list customers are held to now, as the Mini App builds it: the first chat of the
+// settings and the extras the license allows.
+func (w *gateWorld) required(ctx context.Context, settings map[string]string) ([]JoinChat, error) {
+	extras, err := w.svc.EnforcedJoinExtras(ctx)
+	return JoinList(settings, extras), err
+}
+
 func (w *gateWorld) audits(action string) int {
 	w.t.Helper()
 	var n int
@@ -81,7 +88,7 @@ func TestJoinChatsList(t *testing.T) {
 	if err != nil || len(rows) != 2 || rows[0].Chat != "-1001234567890" || rows[0].Position != 1 || rows[1].Chat != "@third_group" || rows[1].Position != 2 {
 		t.Fatalf("extras: %+v %v", rows, err)
 	}
-	req, err := w.svc.RequiredChats(ctx, set)
+	req, err := w.required(ctx, set)
 	if err != nil || names(req) != "@first_channel,-1001234567890,@third_group" {
 		t.Fatalf("required: %s %v", names(req), err)
 	}
@@ -105,7 +112,7 @@ func TestJoinChatsList(t *testing.T) {
 	if set, _ = w.svc.Settings(ctx); set["join.channel"] != "" {
 		t.Fatalf("join.channel after an empty list: %q", set["join.channel"])
 	}
-	if req, _ = w.svc.RequiredChats(ctx, set); len(req) != 0 {
+	if req, _ = w.required(ctx, set); len(req) != 0 {
 		t.Fatalf("required while off: %v", req)
 	}
 }
@@ -226,7 +233,7 @@ func TestJoinChatsAfterTheLicenseEnds(t *testing.T) {
 		t.Fatalf("enforced extras: %v %v", extras, err)
 	}
 	set, _ := w.svc.Settings(ctx)
-	if req, err := w.svc.RequiredChats(ctx, set); err != nil || names(req) != "@first_channel" {
+	if req, err := w.required(ctx, set); err != nil || names(req) != "@first_channel" {
 		t.Fatalf("required: %s %v", names(req), err)
 	}
 	if rows, _ := w.s.ListJoinChats(ctx, w.s.Conn()); len(rows) != 2 {
@@ -273,7 +280,7 @@ func TestJoinChatsOffWhileTheFirstIsEmpty(t *testing.T) {
 		t.Fatalf("while off: %+v %v", l, err)
 	}
 	set, _ := w.svc.Settings(ctx)
-	if req, _ := w.svc.RequiredChats(ctx, set); len(req) != 0 {
+	if req, _ := w.required(ctx, set); len(req) != 0 {
 		t.Fatalf("required while off: %v", req)
 	}
 	if extras, _ := w.svc.EnforcedJoinExtras(ctx); len(extras) != 0 {
@@ -287,7 +294,7 @@ func TestJoinChatsOffWhileTheFirstIsEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	set, _ = w.svc.Settings(ctx)
-	if req, _ := w.svc.RequiredChats(ctx, set); names(req) != "@SECOND_channel" {
+	if req, _ := w.required(ctx, set); names(req) != "@SECOND_channel" {
 		t.Fatalf("a chat twice: %v", req)
 	}
 }

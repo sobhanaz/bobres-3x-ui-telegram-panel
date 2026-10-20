@@ -146,19 +146,10 @@ type miniJoinNeeded struct {
 // When the extras cannot be read the first chat alone is enforced (the floor of
 // every license) and the failure is logged.
 func (s *Server) miniRequiredChats(ctx context.Context, settings map[string]string) []domain.JoinChat {
-	primary := domain.JoinChat{Chat: settings["join.channel"], Link: settings["join.link"], Label: settings["join.label"]}
-	if primary.Chat == "" {
+	if settings["join.channel"] == "" {
 		return nil
 	}
-	out := []domain.JoinChat{primary}
-	seen := map[string]bool{strings.ToLower(primary.Chat): true}
-	for _, c := range s.miniJoinExtras(ctx) {
-		if k := strings.ToLower(c.Chat); !seen[k] {
-			seen[k] = true
-			out = append(out, c)
-		}
-	}
-	return out
+	return domain.JoinList(settings, s.miniJoinExtras(ctx))
 }
 
 // miniJoinExtras reads the extra chats now enforced, at most every few seconds.
