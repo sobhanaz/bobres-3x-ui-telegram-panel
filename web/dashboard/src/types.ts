@@ -166,6 +166,37 @@ export interface DiscountItem {
   enabled: boolean
 }
 
+/** A gift code in the list: never the code itself, only its last four
+ * characters (core keeps a keyed hash of it). */
+export interface GiftCodeItem {
+  id: string
+  tail: string
+  /** made by BOBRES (true) or typed by staff (false) */
+  generated: boolean
+  amount: Money
+  max_redemptions: number
+  per_customer_limit: number
+  redeemed: number
+  expires_at: number | null
+  enabled: boolean
+  status: 'active' | 'disabled' | 'expired' | 'used_up'
+  note: string
+  created_at: number
+  created_by: UserBrief | null
+  last_redeemed_at: number | null
+}
+
+/** One customer's use of a gift code. */
+export interface GiftRedemptionItem {
+  id: string
+  user: UserBrief
+  /** the customer's n-th redemption of this code */
+  seq: number
+  amount: Money
+  balance_after: Money
+  created_at: number
+}
+
 export interface ReferrerItem {
   user: UserBrief
   invited: number

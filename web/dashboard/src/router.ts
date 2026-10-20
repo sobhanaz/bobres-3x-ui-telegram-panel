@@ -18,6 +18,7 @@ const built: Record<string, RouteRecordRaw['component']> = {
   ledger: () => import('./pages/LedgerPage.vue'),
   reports: () => import('./pages/ReportsPage.vue'),
   discounts: () => import('./pages/DiscountsPage.vue'),
+  giftcodes: () => import('./pages/GiftCodesPage.vue'),
   resellers: () => import('./pages/ResellersPage.vue'),
   support: () => import('./pages/SupportPage.vue'),
   broadcasts: () => import('./pages/BroadcastsPage.vue'),

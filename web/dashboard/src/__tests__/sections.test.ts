@@ -4,9 +4,17 @@ import fa from '../locales/fa.json'
 import en from '../locales/en.json'
 
 describe('sections', () => {
-  it('lists all 18 dashboard sections once', () => {
-    expect(sections).toHaveLength(18)
-    expect(new Set(sections.map((s) => s.key)).size).toBe(18)
+  it('lists all 19 dashboard sections once', () => {
+    expect(sections).toHaveLength(19)
+    expect(new Set(sections.map((s) => s.key)).size).toBe(19)
+  })
+  it('puts Gift codes beside Discounts, for the staff who hold discounts.write', () => {
+    expect(sections.find((s) => s.key === 'giftcodes')).toMatchObject({ path: 'gift-codes', perm: 'discounts.write', group: 'sales' })
+    const keys = sections.map((s) => s.key)
+    expect(keys.indexOf('giftcodes')).toBe(keys.indexOf('discounts') + 1)
+    const support = ['overview.read', 'users.read', 'services.read', 'services.extend', 'payments.read', 'tickets.write']
+    expect(visibleSections(support).map((s) => s.key)).not.toContain('giftcodes')
+    expect(visibleSections([...support, 'discounts.write']).map((s) => s.key)).toEqual(expect.arrayContaining(['discounts', 'giftcodes']))
   })
   it('shows only what the role may open', () => {
     const support = ['overview.read', 'users.read', 'services.read', 'services.extend', 'payments.read', 'tickets.write']
