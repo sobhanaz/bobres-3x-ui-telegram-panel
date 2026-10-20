@@ -6,48 +6,176 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
-More of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
-plans as a **two-column table**, a customer can **buy several services at once** (Bulk purchase), **gift codes**
-add a fixed amount of credit to a customer's wallet, and the store can require **more than one channel or group** to
-join (one on the free tier and Standard, any number on Pro).
+What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## [0.8.0] — 2026-10-20
+
+The rest of the owner's requests of 2026-10-20, and one more: **server monitoring** in the dashboard, **charts and a
+3D professional report** on the Reports page, **downloading and restoring a backup** from the dashboard, a full
+**uninstall** that leaves a server as on day one, the bot's **FAQ and tutorials**, a **two-column plan list**,
+**bulk purchase**, **gift codes**, and **more than one required channel or group** (one on the free tier and Standard,
+any number on Pro). The prices are set too: **Standard 4 USDT a month, Pro 12 USDT a month** (docs/pricing.md).
 
 ### Updating
-- Three database migrations (00026: the table `core.bulk_orders` and two columns on `core.orders`; 00027: gift codes;
-  00028: the help content table, below); `sudo bobres update` runs them. They only add, so a rollback keeps every order.
-  Nothing to configure.
-- Core and the bot move together (three new gRPC calls, one new event, and a `bulk_id` on three events):
-  update both, as `sudo bobres update` does. Every change to the contract is additive.
-- After the update the bot lists plans as a table (a header row, then each plan as a row of two buttons, its name and
-  its price). `bot.plan_layout` = `list` in Settings > Plans and bulk purchase brings back one button per plan.
-- A new green Bulk purchase button appears on every customer's home menu. `bulk.enabled` = off hides it.
-- Gift codes add one more database migration (00027): the gift code tables and a new wallet ledger kind, `gift_code`.
-  Core and the bot move together here too (core has a new call the bot makes).
-- Gift codes need core's master key (`BOBRES_CORE_MASTER_KEY`, which every install made by the installer has); a
-  store without it can still run, and the dashboard says it cannot make codes. They are on for customers by default;
-  the owner's switch is the setting `gift_codes.enabled`.
-- Rolling the gift code migration back drops its three tables but keeps the ledger's new kind: the ledger is
-  append-only, so credits already paid stay.
-- Help content adds one more database migration (00028, the `help_entries` table), and the services' calls only gain
-  `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings` (additive: an older bot shows no help buttons, a bot
-  on an older core simply has none to show). Nothing has to be configured.
-
-- Required channels and groups add one more database migration (00029, the `join_chats` table, empty at first: the
-  store's present required channel stays the setting `join.channel`, untouched). Nothing to configure. **A license
-  signed before this version has no `max_join_chats`, so it counts 1 required chat** until the seller re-applies its
-  tier (`licensesrv key update <id> -tier pro -reason "..."`, then the install's next daily renewal); nothing that exists
-  is lost, there are no extra chats before this version.
+- **From the dashboard:** System > Updates > Update now (owner only) updates a server that has the updater helper
+  (every server installed or updated to 0.7.0). Without the helper, or if it does not go through, `sudo bobres update`
+  over SSH always does. Core and the bot move together: update both, as either way does.
+- Six database migrations, all additive (so a rollback keeps every order and credit): 00026 bulk orders, 00027 gift
+  codes, 00028 help content, 00029 required chats, 00030 the monitor's samples, 00031 the `action` of dashboard
+  updates (restores use it too). Nothing to configure.
+- **Two more systemd units on the host**, `bobres-monitor.timer` and `bobres-monitor.service` (root, every 30 seconds:
+  they write one snapshot of the host and Docker into `run/monitor`, which core reads through a read-only mount).
+  `bobres update` sets them up; `sudo bobres monitor disable` (or `BOBRES_MONITOR_COLLECTOR=off`) removes them.
+  `bobres check` and `bobres doctor` have a Host monitor line.
+- **Restoring from the dashboard needs this version's updater helper**: `bobres update` installs it. A server whose
+  helper is older is told to run `sudo bobres update` once.
+- After the update the bot lists plans as a table (`bot.plan_layout` = `list` brings back one button per plan), the
+  home menu gains a green Bulk purchase button (`bulk.enabled` = off hides it) and FAQ / Tutorials buttons, and the
+  wallet screen gains Apply gift code (`gift_codes.enabled` = off hides it; it needs core's master key, which every
+  install made by the installer has).
+- **A license signed before this version has no `max_join_chats`**, so it counts one required chat until the seller
+  re-applies its tier (`licensesrv key update <id> -tier pro -reason "..."`, then the install's next daily renewal).
+  Nothing that exists is lost: there are no extra required chats before this version.
+- `sudo bobres uninstall --purge` is new. A server installed before this release has no install receipt until its next
+  `sudo bobres install` or `sudo bobres update`; without one the uninstall takes conservative defaults.
 
 ### Known limits
-- Required channels and groups have not been seen in a real Telegram: the Join buttons of many chats, the popup that
-  names the missing ones, the Mini App's join screen, the group check and the Persian texts want a real look, and so does
-  how Telegram answers many `getChatMember` calls in a row.
-- Nothing of this has been seen in a real Telegram: the table's look on phones, the one message with many links, the
-  text file that comes with a long list and the Persian texts (a first draft) want a real look.
-- A bulk purchase is paid **from the wallet only** (a customer with too little in it is taken to the top-up and comes
-  back), takes **no discount code**, buys **a paid plan only** (not a free plan, a trial or a traffic package) and is in
-  the **bot only**: the Mini App has no screen for it.
-- The help screens (the FAQ and the tutorials) have not been seen in a real Telegram either, and the default texts and
-  the Persian of the help content are a first draft that wants a native review. The Mini App does not show them.
+- **Nothing of this has been seen in a real Telegram:** the table of plans on phones, the one message with many links of
+  a bulk purchase, the Join buttons of many chats, the gift code screen, the FAQ and the tutorials. The Persian texts of
+  all of them are a first draft that wants a native read (every one can be edited).
+- A bulk purchase is paid from the wallet only, takes no discount code, buys a paid plan only and is in the bot only. The
+  FAQ, the tutorials and the bulk purchase are not in the Mini App.
+- **Monitoring** has run against the real systemd and Docker of a lab server and against recorded answers of Kubernetes
+  and GitHub; no live cluster, and no hours-long refresh, has been tried.
+- **Restore from the dashboard** has been proven on a lab server with real systemd, Docker and Postgres (a restore, an
+  upload, a wrong key, a rollback, a symbolic link as the upload), not with a 2 GiB file through Caddy or across schema
+  versions. It restores only backups this server's `BOBRES_BACKUP_KEY` opens (a backup of another server still needs
+  `bobres restore --key-file`), and turning the dashboard updater off turns the dashboard restore off too.
+- **The uninstall** was proven on a lab server (Ubuntu 24.04, systemd); Debian and Ubuntu 22.04 are untried. Docker's
+  iptables chains stay in memory until the next reboot after `--remove-docker`.
+- The Reports page has been looked at in Chrome only (not Safari or Firefox), and the Save-as-PDF dialog was not tried.
+
+### Monitoring: the server, the containers and the stack in one place
+
+A **Monitoring** section for the dashboard: one overview of the whole store and the server it runs on. This is the backend and its API;
+the tab that shows it is described under "Monitoring in the dashboard" below.
+
+**Added.**
+
+- **Host collector.** `bobres monitor snapshot` (a root systemd timer, `bobres-monitor.timer`, every 30 seconds) writes the host's
+  figures (CPU, load, memory, swap, disks, network, uptime), every Docker container (state, health, restarts, CPU, memory, network),
+  Docker's disk use, the error lines of Docker's and BOBRES's journals and of Caddy (scrubbed of tokens, addresses and e-mails), the
+  last update, and, if `kubectl` or `k3s` is on the host, the nodes and pods, into `/opt/bobres/run/monitor/snapshot.json`. It is on by
+  default; `sudo bobres monitor disable` turns it off for good. Core reads the file through a **read-only** mount and treats it as
+  untrusted text; core still has no Docker socket. `bobres check` and `bobres doctor` show a **Host monitor** line.
+- **Core samples** the host, the containers, itself, the queues, the bot, the services, the 3x-ui servers and the gateways every 30
+  seconds into the database (7 days at full resolution, then 5-minute averages up to 30 days, rolled up and pruned by core). A
+  source that is unavailable leaves a gap, never a zero.
+- **API** (owner and admin, read only, permission `monitor.read`): `GET /api/v1/monitor/overview`, `/series`, `/metrics` and `/events`,
+  documented in `docs/04-dashboard.md` ("Monitoring API") with the status rules, the components, every field and the metric list.
+- **Alerts**, through the usual Telegram alerts and the System page's open problems: disk past 85%, memory past 90% for 10 minutes, a
+  container down, unhealthy or restarting repeatedly, the collector silent for 5 minutes, and the CI of `main` failing (off by default).
+  The thresholds are in Settings, in a new Monitoring group (`monitor.enabled`, `monitor.disk_pct`, `monitor.mem_pct`,
+  `monitor.mem_minutes`, `monitor.restarts`, `monitor.collector_minutes`, `monitor.ci_alert`).
+- **CI/CD facts through the bot**: the latest runs of the repository's workflows on `main`, the Release workflow's runs and the latest
+  releases, read from GitHub's public API anonymously (cached 5 minutes, conditional requests, a clear message when GitHub is
+  unreachable or the request limit is used up), and the **deployment history**: the updates asked for on the System page and the
+  last one run by hand on the server. New bot endpoints `GET /internal/ci` and `GET /internal/stats` (core's token only).
+- A runbook, `docs/runbooks/monitoring.md`.
+
+**Updating.**
+
+- One database migration (00030): two tables for the time series and an index on the outbox for the alert history. It only adds;
+  rolling it back drops them.
+- `sudo bobres update` puts the collector's two units and the folder in place and adds the read-only mount to `docker-compose.yml`.
+  Until the update has run, the Monitoring page works without the host figures and says so. Core and the bot move together here too (the
+  bot has two new internal endpoints); `sudo bobres update` does both.
+- To keep the host collector off: `sudo bobres monitor disable` (or `sudo bobres config set BOBRES_MONITOR_COLLECTOR off`).
+- Not verified: the Kubernetes section was tried with recorded `kubectl` answers, not a live cluster; nothing here can be tried in a real Telegram.
+
+### Backups: download and restore from the dashboard
+System > Backups can now hand the owner a backup and put one back, without a shell on the server. Both are the owner's.
+- **Download.** A button on each backup. A dialog says the file is encrypted and that the key (`BOBRES_BACKUP_KEY`) is
+  never sent with it; the authenticator code is asked for where the session has one. The browser takes a single-use
+  address as its own download, and core streams the file from the backup service in chunks, never in memory. Every
+  download is audited (`system.backup.download`) and told to every owner on Telegram before the first byte is sent.
+- **Restore** a backup from the list, or a file uploaded in the new *Restore from a file* card (at most 2 GiB). The
+  dialog says what is lost (everything after the backup's time) and that the dashboard and the bot are unavailable for
+  a few minutes; the owner types the store's domain, ticks that they understand, and gives the authenticator code. The
+  server's updater (the helper of Update now) takes a safety backup of the current data, restores, checks that the
+  store is healthy and goes back to the safety backup on its own if it is not. The backup is copied into a file of the
+  helper's own while its SHA-256 is checked, and read with this server's key before anything is stopped: a backup of
+  another server (or a damaged one) is refused with the reason. The page shows the steps, survives core restarting
+  and finds the end again after the restore replaced core's own database. Every request and its end is audited
+  (`system.restore.*`) and told to every owner on Telegram. Persian first, English second.
+- Updating: one database migration (00031: three columns on `core.system_updates`), and a new helper. Run
+  `sudo bobres update`; until the helper is the new one the Backups tab says so and keeps the `sudo bobres restore`
+  command. Core and the bot move together (a new event, `system.backup.v1`). Nothing to configure; turning the
+  dashboard's updater off (`BOBRES_UPDATE_FROM_DASHBOARD=off`) turns the restore off with it.
+- Limits: only a backup this server's key opens can be restored from the dashboard (one from another server needs
+  `sudo bobres restore FILE --key-file KEYFILE`); the audit log after a restore is the backup's plus one entry for the
+  restore; the restored data has its own login sessions, so the owner may be asked to log in again.
+
+### Reports: charts, a scrolling table and a professional report
+- **Charts on the Reports page**, one currency at a time: revenue and what was kept after refunds, **revenue by plan**
+  over the periods, paid orders by type, how orders were paid (a donut), the top plans, **the busiest hours of the
+  week** (a heatmap) and new customers, free trials and services lost. Every chart follows the range, the grouping and
+  the Calendar switch (Jalali or Gregorian), has a legend that shows and hides series, a tooltip, keyboard keys
+  (the arrow that points right goes right on screen, which is earlier in Persian) and a table of its numbers, and works
+  in light, dark and right to left. The cards carry a small trend line.
+- **The "by period" table scrolls inside its own box** (down and sideways) with its header row, its period column and
+  a new totals row held in place, so a long range or a phone no longer makes the page long or wide.
+- **A Professional report view** (`?view=report`) to read, print or save as PDF: a letterhead, a headline per currency
+  in plain words (Persian and English), each headline number with its **change on the period before** and a sentence
+  about it (rises in lost services are shown as bad news), the charts, and two **3D views**: an isometric column scene
+  of revenue by plan and a tilting donut of how orders were paid. They are SVG (no WebGL, no library), load on demand
+  in their own small chunks, turn with a drag or two sliders, and give way to the flat charts on a phone, when the
+  person prefers reduced motion and for more than 62 periods. The print button uses a paper stylesheet (A4, light
+  colours, no menus).
+- **A chart kit** under `web/dashboard/src/components/charts/` (line and area, bars, donut, heatmap, sparkline, with
+  accessibility, right to left, themes and a README) for the dashboard's other pages; the System > Monitoring page is
+  meant to use it.
+- Two new read-only API calls feed the new charts, **no migration and no new table**: `GET /api/v1/reports/plan-series`
+  and `GET /api/v1/reports/hours` (`reports.read`, documented in [docs/14-reports.md](docs/14-reports.md) and
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md)). The CSV files, the daily summary and every existing answer
+  are unchanged. An older core without the two calls still works: the page leaves those two charts out.
+- Core and the dashboard are one binary, so there is nothing to update separately and nothing to configure.
+- Not seen in a real Telegram (nothing here is in Telegram). Checked in a real browser at 375 px and on a desktop in both
+  languages and both themes against a stand-in for the report API, and in the tests; the 3D views and the print layout
+  were looked at in Chrome only.
+
+### Uninstall: everything BOBRES put on a server, gone
+- **`sudo bobres uninstall --purge` is now the day-one command**: it removes everything installing BOBRES put on the
+  server (the install directory with its secrets and backups, the Docker project's containers, volumes, networks and
+  images, the systemd units named `bobres-*` such as the dashboard updater's, the firewall rules, the fail2ban jail and
+  the other files the hardening wrote, the swap file, BOBRES's state and logs, and last the `bobres` command), so that
+  the server is as it was. It prints the exact plan with sizes and counts, offers a **verified final backup**
+  (`--backup-to FILE`: written outside the install directory and read back completely before anything is deleted;
+  when it fails nothing is deleted), and asks for the install's domain **typed in full**. A script needs
+  `--yes --confirm <the domain>` and `--backup-to` or `--no-backup`. `--dry-run` prints the plan and changes nothing.
+  Plain `bobres uninstall` is unchanged (containers only, data kept). The menu's Uninstall item is a submenu with the
+  same questions.
+- It deletes only what it can prove is BOBRES's: Docker objects by the project label and the `bobres_` name, units by
+  their name (found, not listed, so a unit a later release adds is covered), files by the header BOBRES wrote in them
+  or the receipt, a directory only when it is no system directory or symbolic link and holds BOBRES's marker files.
+  It never touches SSH settings or the SSH firewall rule, DNS, other users' data, or other Docker workloads. It is
+  resumable and harmless to run twice, logs to `/var/log/bobres-uninstall.log` (kept), and ends with a leftover scan
+  ("Nothing of BOBRES is left on this server", or what is and why; exit 1) that is also `bobres uninstall --verify`.
+- **Docker and the packages BOBRES installed go only on request** (`--remove-docker`, `--remove-packages`), only when
+  the install receipt says BOBRES installed them, and only when apt and Docker agree nothing else needs them. ufw
+  stays on by default (`--disable-firewall` turns it off where BOBRES turned it on); `--keep-backups` keeps `backups/`.
+- **The install receipt**: `bobres install` and `bobres harden` now write `/var/lib/bobres/install-receipt.json` (root
+  only, outside the install directory so that the uninstall can read it last): the packages that were new after each
+  apt run, whether ufw was on before, the ufw rules BOBRES added, each file the hardening replaced with its original,
+  the swap file, and the images the install pulled. `install.sh` records what Docker's installer and openssl added in
+  `/var/lib/bobres/installed/`. It is additive and tolerant: no receipt (an install made by an earlier release)
+  means the uninstall uses the markers the installer wrote and takes the conservative choice (see
+  [docs/06-installer.md](docs/06-installer.md), "Uninstall").
+- A complete inventory of what installing BOBRES changes on a server, in three classes (created by BOBRES only, changed
+  in a shared file, installed software), is in [docs/06-installer.md](docs/06-installer.md); tests fail when an
+  installer step, a unit file or a path literal is added that the uninstall does not know. Runbook:
+  [docs/runbooks/uninstall.md](docs/runbooks/uninstall.md) (including restoring the final backup on a new server).
+- CI's end-to-end job now runs the purge as root with `--confirm` and `--no-backup`.
 
 ### Help content: a FAQ and tutorials the owner writes
 - **The bot has a FAQ and a Tutorials menu, written by the owner in the dashboard** (Branding, "Help content" tab,
@@ -151,173 +279,6 @@ join (one on the free tier and Standard, any number on Pro).
   dashboard's API (`join.write`, owner only), a new setting `join.label` (the first chat's name), and the entitlement
   `max_join_chats` in a license token and in `GET /api/v1/license`. `join.channel` and `join.link` stay the first
   chat, so the bot's `/set`, an older bot and an older Mini App keep working.
-
-### Uninstall: everything BOBRES put on a server, gone
-- **`sudo bobres uninstall --purge` is now the day-one command**: it removes everything installing BOBRES put on the
-  server (the install directory with its secrets and backups, the Docker project's containers, volumes, networks and
-  images, the systemd units named `bobres-*` such as the dashboard updater's, the firewall rules, the fail2ban jail and
-  the other files the hardening wrote, the swap file, BOBRES's state and logs, and last the `bobres` command), so that
-  the server is as it was. It prints the exact plan with sizes and counts, offers a **verified final backup**
-  (`--backup-to FILE`: written outside the install directory and read back completely before anything is deleted;
-  when it fails nothing is deleted), and asks for the install's domain **typed in full**. A script needs
-  `--yes --confirm <the domain>` and `--backup-to` or `--no-backup`. `--dry-run` prints the plan and changes nothing.
-  Plain `bobres uninstall` is unchanged (containers only, data kept). The menu's Uninstall item is a submenu with the
-  same questions.
-- It deletes only what it can prove is BOBRES's: Docker objects by the project label and the `bobres_` name, units by
-  their name (found, not listed, so a unit a later release adds is covered), files by the header BOBRES wrote in them
-  or the receipt, a directory only when it is no system directory or symbolic link and holds BOBRES's marker files.
-  It never touches SSH settings or the SSH firewall rule, DNS, other users' data, or other Docker workloads. It is
-  resumable and harmless to run twice, logs to `/var/log/bobres-uninstall.log` (kept), and ends with a leftover scan
-  ("Nothing of BOBRES is left on this server", or what is and why; exit 1) that is also `bobres uninstall --verify`.
-- **Docker and the packages BOBRES installed go only on request** (`--remove-docker`, `--remove-packages`), only when
-  the install receipt says BOBRES installed them, and only when apt and Docker agree nothing else needs them. ufw
-  stays on by default (`--disable-firewall` turns it off where BOBRES turned it on); `--keep-backups` keeps `backups/`.
-- **The install receipt**: `bobres install` and `bobres harden` now write `/var/lib/bobres/install-receipt.json` (root
-  only, outside the install directory so that the uninstall can read it last): the packages that were new after each
-  apt run, whether ufw was on before, the ufw rules BOBRES added, each file the hardening replaced with its original,
-  the swap file, and the images the install pulled. `install.sh` records what Docker's installer and openssl added in
-  `/var/lib/bobres/installed/`. It is additive and tolerant: no receipt (an install made by an earlier release)
-  means the uninstall uses the markers the installer wrote and takes the conservative choice (see
-  [docs/06-installer.md](docs/06-installer.md), "Uninstall").
-- A complete inventory of what installing BOBRES changes on a server, in three classes (created by BOBRES only, changed
-  in a shared file, installed software), is in [docs/06-installer.md](docs/06-installer.md); tests fail when an
-  installer step, a unit file or a path literal is added that the uninstall does not know. Runbook:
-  [docs/runbooks/uninstall.md](docs/runbooks/uninstall.md) (including restoring the final backup on a new server).
-- CI's end-to-end job now runs the purge as root with `--confirm` and `--no-backup`.
-
-### Updating
-- `sudo bobres update` does it. No database migration, no change to the services. Nothing to configure. A server
-  installed before this release has no receipt until the next `sudo bobres install` or `sudo bobres update`.
-
-### Known limits
-- Docker's iptables chains stay in memory until the next reboot after `--remove-docker`, and apt's package lists, the
-  logs, a package apt upgraded as a dependency of Docker and `/etc/group-` are not undone (they are not BOBRES's).
-- Proven on the Docker lab (Ubuntu 24.04, systemd) and by unit tests; not tried on Debian 11/12/13 or Ubuntu 22.04.
-
-What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
-
-
-### Backups: download and restore from the dashboard
-System > Backups can now hand the owner a backup and put one back, without a shell on the server. Both are the owner's.
-- **Download.** A button on each backup. A dialog says the file is encrypted and that the key (`BOBRES_BACKUP_KEY`) is
-  never sent with it; the authenticator code is asked for where the session has one. The browser takes a single-use
-  address as its own download, and core streams the file from the backup service in chunks, never in memory. Every
-  download is audited (`system.backup.download`) and told to every owner on Telegram before the first byte is sent.
-- **Restore** a backup from the list, or a file uploaded in the new *Restore from a file* card (at most 2 GiB). The
-  dialog says what is lost (everything after the backup's time) and that the dashboard and the bot are unavailable for
-  a few minutes; the owner types the store's domain, ticks that they understand, and gives the authenticator code. The
-  server's updater (the helper of Update now) takes a safety backup of the current data, restores, checks that the
-  store is healthy and goes back to the safety backup on its own if it is not. The backup is copied into a file of the
-  helper's own while its SHA-256 is checked, and read with this server's key before anything is stopped: a backup of
-  another server (or a damaged one) is refused with the reason. The page shows the steps, survives core restarting
-  and finds the end again after the restore replaced core's own database. Every request and its end is audited
-  (`system.restore.*`) and told to every owner on Telegram. Persian first, English second.
-- Updating: one database migration (00031: three columns on `core.system_updates`), and a new helper. Run
-  `sudo bobres update`; until the helper is the new one the Backups tab says so and keeps the `sudo bobres restore`
-  command. Core and the bot move together (a new event, `system.backup.v1`). Nothing to configure; turning the
-  dashboard's updater off (`BOBRES_UPDATE_FROM_DASHBOARD=off`) turns the restore off with it.
-- Limits: only a backup this server's key opens can be restored from the dashboard (one from another server needs
-  `sudo bobres restore FILE --key-file KEYFILE`); the audit log after a restore is the backup's plus one entry for the
-  restore; the restored data has its own login sessions, so the owner may be asked to log in again.
-
-### Monitoring: the server, the containers and the stack in one place
-
-A **Monitoring** section for the dashboard: one overview of the whole store and the server it runs on. This is the backend and its API;
-the tab that shows it is described under "Monitoring in the dashboard" below.
-
-**Added.**
-
-- **Host collector.** `bobres monitor snapshot` (a root systemd timer, `bobres-monitor.timer`, every 30 seconds) writes the host's
-  figures (CPU, load, memory, swap, disks, network, uptime), every Docker container (state, health, restarts, CPU, memory, network),
-  Docker's disk use, the error lines of Docker's and BOBRES's journals and of Caddy (scrubbed of tokens, addresses and e-mails), the
-  last update, and, if `kubectl` or `k3s` is on the host, the nodes and pods, into `/opt/bobres/run/monitor/snapshot.json`. It is on by
-  default; `sudo bobres monitor disable` turns it off for good. Core reads the file through a **read-only** mount and treats it as
-  untrusted text; core still has no Docker socket. `bobres check` and `bobres doctor` show a **Host monitor** line.
-- **Core samples** the host, the containers, itself, the queues, the bot, the services, the 3x-ui servers and the gateways every 30
-  seconds into the database (7 days at full resolution, then 5-minute averages up to 30 days, rolled up and pruned by core). A
-  source that is unavailable leaves a gap, never a zero.
-- **API** (owner and admin, read only, permission `monitor.read`): `GET /api/v1/monitor/overview`, `/series`, `/metrics` and `/events`,
-  documented in `docs/04-dashboard.md` ("Monitoring API") with the status rules, the components, every field and the metric list.
-- **Alerts**, through the usual Telegram alerts and the System page's open problems: disk past 85%, memory past 90% for 10 minutes, a
-  container down, unhealthy or restarting repeatedly, the collector silent for 5 minutes, and the CI of `main` failing (off by default).
-  The thresholds are in Settings, in a new Monitoring group (`monitor.enabled`, `monitor.disk_pct`, `monitor.mem_pct`,
-  `monitor.mem_minutes`, `monitor.restarts`, `monitor.collector_minutes`, `monitor.ci_alert`).
-- **CI/CD facts through the bot**: the latest runs of the repository's workflows on `main`, the Release workflow's runs and the latest
-  releases, read from GitHub's public API anonymously (cached 5 minutes, conditional requests, a clear message when GitHub is
-  unreachable or the request limit is used up), and the **deployment history**: the updates asked for on the System page and the
-  last one run by hand on the server. New bot endpoints `GET /internal/ci` and `GET /internal/stats` (core's token only).
-- A runbook, `docs/runbooks/monitoring.md`.
-
-**Updating.**
-
-- One database migration (00030): two tables for the time series and an index on the outbox for the alert history. It only adds;
-  rolling it back drops them.
-- `sudo bobres update` puts the collector's two units and the folder in place and adds the read-only mount to `docker-compose.yml`.
-  Until the update has run, the Monitoring page works without the host figures and says so. Core and the bot move together here too (the
-  bot has two new internal endpoints); `sudo bobres update` does both.
-- To keep the host collector off: `sudo bobres monitor disable` (or `sudo bobres config set BOBRES_MONITOR_COLLECTOR off`).
-- Not verified: the Kubernetes section was tried with recorded `kubectl` answers, not a live cluster; nothing here can be tried in a real Telegram.
-
-### Monitoring in the dashboard: System > Monitoring
-
-A **Monitoring** tab on the System page (owner and admin, read only; a role without `monitor.read` does not see it): one overview of the
-whole bot and store first, then the server, Docker, Kubernetes, the services, CI/CD, the deployments, and alerts and logs. It reads the
-API above; nothing on it changes anything on the server.
-
-- **Overview.** A verdict in words and with an icon (everything is working, working but something needs a look, or something important
-  is down), what needs a look in plain words with the worst first, every part core checks grouped by kind (services, data stores, the
-  server, jobs, panel servers, payment methods) with its state as an icon and a word, and the store in numbers. A figure core could not
-  read is shown as "not known", never as 0.
-- **Server and Docker.** CPU, load, memory, swap, traffic, uptime, every disk with its share, and the OS, kernel, Docker engine and
-  clock; every container with its image version, state, health, restarts, CPU, memory and traffic, and what Docker keeps on the disk.
-  Charts for the range: 1 hour, 6 hours, 24 hours, 7 days or 30 days.
-- **Gaps are gaps.** A moment nobody sampled is a break in the line, never a drop to zero, and the tooltip and the chart's table say
-  "no data" there. This is a small, additive change to the chart kit (`LineChart` takes `null` values).
-- **Without the host collector** the tab says so where the figures would be (not installed or switched off, has not reported for N
-  minutes, or a file core cannot use), with the command to copy (`sudo bobres monitor enable`), and keeps the history that was
-  recorded. **Without Kubernetes** it says no cluster was found, as a note and not as an error; with one it lists nodes and pods.
-- **CI/CD and deployments.** The latest runs on `main`, the Release workflow's runs and the latest release with links into GitHub (a
-  link that is not into github.com is not a link), a note when GitHub cannot be reached or its request limit is used up (what was last
-  read stays on screen), and the update history with who asked, the outcome and how long it took.
-- **Alerts and logs.** The newest warnings and errors in one list with a filter, the alerts written in the language of the page from the
-  same texts as the Telegram message. The services' own log lines carry Telegram ids, so the owner sees them and an admin is told so.
-- **Refresh.** Every 20 seconds while the tab is shown and the browser tab is in front (it stops when either is hidden and reads again
-  when it is shown), with a switch and a "Check again" button. Persian (right to left) and English, light and dark, down to a 375 px
-  phone without a sideways page scroll; the charts keep the kit's keyboard keys, legend and table.
-- **API, additive** (no migration): `GET /api/v1/monitor/overview` gains `units` (the systemd units the collector watches, which the
-  collector already recorded and the answer did not carry), and an alert in `GET /api/v1/monitor/events` gains `title_key` and `args`
-  so a page can write it in its own language. Both are documented in `docs/04-dashboard.md`.
-- Core and the dashboard are one binary, so there is nothing to update separately and nothing to configure.
-- Checked in a real browser at 375 px and on a desktop in Persian and English, in light and dark, against a stand-in API. Not
-  checked: a real host collector and a real cluster feeding the tab, and a refresh left running for hours.
-
-### Reports: charts, a scrolling table and a professional report
-- **Charts on the Reports page**, one currency at a time: revenue and what was kept after refunds, **revenue by plan**
-  over the periods, paid orders by type, how orders were paid (a donut), the top plans, **the busiest hours of the
-  week** (a heatmap) and new customers, free trials and services lost. Every chart follows the range, the grouping and
-  the Calendar switch (Jalali or Gregorian), has a legend that shows and hides series, a tooltip, keyboard keys
-  (the arrow that points right goes right on screen, which is earlier in Persian) and a table of its numbers, and works
-  in light, dark and right to left. The cards carry a small trend line.
-- **The "by period" table scrolls inside its own box** (down and sideways) with its header row, its period column and
-  a new totals row held in place, so a long range or a phone no longer makes the page long or wide.
-- **A Professional report view** (`?view=report`) to read, print or save as PDF: a letterhead, a headline per currency
-  in plain words (Persian and English), each headline number with its **change on the period before** and a sentence
-  about it (rises in lost services are shown as bad news), the charts, and two **3D views**: an isometric column scene
-  of revenue by plan and a tilting donut of how orders were paid. They are SVG (no WebGL, no library), load on demand
-  in their own small chunks, turn with a drag or two sliders, and give way to the flat charts on a phone, when the
-  person prefers reduced motion and for more than 62 periods. The print button uses a paper stylesheet (A4, light
-  colours, no menus).
-- **A chart kit** under `web/dashboard/src/components/charts/` (line and area, bars, donut, heatmap, sparkline, with
-  accessibility, right to left, themes and a README) for the dashboard's other pages; the System > Monitoring page is
-  meant to use it.
-- Two new read-only API calls feed the new charts, **no migration and no new table**: `GET /api/v1/reports/plan-series`
-  and `GET /api/v1/reports/hours` (`reports.read`, documented in [docs/14-reports.md](docs/14-reports.md) and
-  [docs/02-events-and-apis.md](docs/02-events-and-apis.md)). The CSV files, the daily summary and every existing answer
-  are unchanged. An older core without the two calls still works: the page leaves those two charts out.
-- Core and the dashboard are one binary, so there is nothing to update separately and nothing to configure.
-- Not seen in a real Telegram (nothing here is in Telegram). Checked in a real browser at 375 px and on a desktop in both
-  languages and both themes against a stand-in for the report API, and in the tests; the 3D views and the print layout
-  were looked at in Chrome only.
 
 ## [0.7.0] — 2026-10-20
 
