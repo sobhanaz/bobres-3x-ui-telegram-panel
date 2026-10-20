@@ -8,6 +8,21 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.6.1] — 2026-10-20
+
+Two gaps of the Mini App that the 0.6.0 notes named are closed: it now holds the store's required channel as the bot
+does, and a customer can take up a manual payment again after leaving its screen.
+
+### Updating
+- `sudo bobres update` does it (core and the bot move together: core now asks the bot a new question). There is no
+  database migration and no change to the services' calls. Nothing has to be configured.
+- **A store that already has a required channel (`join.channel`) has it enforced in the app after this update**, which
+  is the point of it: a customer who is not in the channel sees a join screen until they join. A store whose bot is not
+  an administrator of the channel keeps letting everyone in, with a warning in core's log once a minute (look for it
+  if the gate should be on and is not).
+- Not tried in a real Telegram yet, like the rest of the Mini App: the join screen and the payments list are checks 12
+  and 13 of the hand-check list in [docs/17-mini-app.md](docs/17-mini-app.md).
+
 ### Telegram Mini App
 - **The Mini App now holds the store's required channel** (`join.channel`), as the bot does: a customer who is not in
   it can no longer skip the gate by opening the app. Core answers a sign-in, and any later call except what a payment
@@ -23,7 +38,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   sessions at their next call; a member who leaves the channel is stopped within 10 minutes.
 - Updating: the bot and core move together (`sudo bobres update`). A core with a bot too old to know the question
   lets everyone in and logs the warning, as when Telegram cannot answer. Nothing to configure. Not tried in a real
-  Telegram: [17-mini-app.md](docs/17-mini-app.md), check 12.
+  Telegram: [17-mini-app.md](docs/17-mini-app.md), checks 12 and 13.
 - Not as in the bot: a customer outside the channel cannot go on with a support conversation in the app (they can in
   the bot), and one who has to sign in again cannot send a payment proof from the app.
 - **A manual payment left half-way can be taken up again.** When Telegram reloaded the app (or the customer closed it)
@@ -37,6 +52,14 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   still offers and, when they have an order, of an order that still waits for payment; it takes nothing from the
   request, and shows the price the payment has and the card, addresses or link the store has now. It uses the payments
   service's existing history filter: no database migration, no change to the services' calls.
+
+### Known limits
+- A customer outside the required channel cannot go on with a support conversation in the app (they can in the bot),
+  and one who has to sign in again cannot send a payment proof from the app.
+- The bot itself has no list of a customer's unpaid manual payments: a payment started in the bot is listed in the app,
+  but the bot's proof flow goes on only with the payment its conversation is on.
+- If support pauses a service its reseller had already paused, nothing is recorded, so the reseller can still resume it.
+- Nothing of the Mini App has been tried in a real Telegram yet (see the 0.6.0 notes).
 
 ## [0.6.0] — 2026-10-20
 
