@@ -9,13 +9,16 @@ import { periodLabel, type Bar, type Calendar, type Group } from '../../reports'
 // in the reading direction, so the oldest period is at the start in both
 // languages. The figures are also in the table below the charts; the chart
 // itself is one image with a text summary.
-const props = defineProps<{ bars: Bar[]; currency: string; group: Group; calendar: Calendar; title: string }>()
+// `calendar` is how the periods were cut; `dates` the calendar the page writes dates in (the same, once a report
+// has arrived after a change of calendar).
+const props = defineProps<{ bars: Bar[]; currency: string; group: Group; calendar: Calendar; dates?: Calendar; title: string }>()
 const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 
 const peak = computed(() => props.bars.reduce((a, b) => (b.value > a.value ? b : a), props.bars[0] ?? { date: '', value: 0, pct: 0, partial: false }))
 const name = computed(() => (te('currency.' + props.currency) ? t('currency.' + props.currency) : props.currency))
-const label = (b: Bar) => periodLabel(b.date, props.group, lang.value, t, props.calendar)
+const written = computed(() => props.dates ?? props.calendar)
+const label = (b: Bar) => periodLabel(b.date, props.group, lang.value, t, props.calendar, written.value)
 const summary = computed(() =>
   peak.value.value > 0
     ? t('reports.chart.peak', { currency: name.value, amount: money({ amount: peak.value.value, currency: props.currency }, lang.value), period: label(peak.value) })
@@ -24,8 +27,9 @@ const summary = computed(() =>
 const tip = (b: Bar) => `${label(b)}: ${money({ amount: b.value, currency: props.currency }, lang.value)}` + (b.partial ? ` (${t('reports.period.partial')})` : '')
 // A bar with revenue is never thinner than a hair line, so it shows.
 const height = (b: Bar) => (b.value > 0 ? Math.max(b.pct, 2) : 0) + '%'
-const first = computed(() => (props.bars.length ? localDate(props.bars[0].date, lang.value, 'short') : ''))
-const last = computed(() => (props.bars.length > 1 ? localDate(props.bars[props.bars.length - 1].date, lang.value, 'short') : ''))
+// The axis ends are dates too: in the report's calendar, like the tooltips and the table.
+const first = computed(() => (props.bars.length ? localDate(props.bars[0].date, lang.value, 'short', written.value) : ''))
+const last = computed(() => (props.bars.length > 1 ? localDate(props.bars[props.bars.length - 1].date, lang.value, 'short', written.value) : ''))
 </script>
 
 <template>

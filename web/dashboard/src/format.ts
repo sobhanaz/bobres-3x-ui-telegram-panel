@@ -2,6 +2,7 @@
 // the Jalali calendar for fa (the browser's own Intl, no library), Latin
 // digits and Gregorian dates for en.
 import { reactive } from 'vue'
+import { formatDate, type Calendar } from './calendar'
 
 export type Lang = 'fa' | 'en'
 
@@ -79,13 +80,12 @@ export function date(unix: number, lang: Lang): string {
 }
 
 /** localDate writes a calendar date given as "2026-10-14" (a date in the
- * store's time zone, not an instant): Jalali in Persian. It is formatted in
- * UTC, so the browser's own zone can never move it to the day before or after. */
-export function localDate(ymd: string, lang: Lang, style: 'medium' | 'short' = 'medium'): string {
-  const [y, m, d] = ymd.split('-').map(Number)
-  const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
-  const opts: Intl.DateTimeFormatOptions = style === 'short' ? { month: 'short', day: 'numeric' } : { dateStyle: 'medium' }
-  return new Intl.DateTimeFormat(locale, { ...opts, timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)))
+ * store's time zone, not an instant) in a calendar: the one asked for, else
+ * the language's own (Jalali in Persian). Digits follow the language, month
+ * names the calendar. It is calendar arithmetic, so the browser's own zone can
+ * never move the date to the day before or after. */
+export function localDate(ymd: string, lang: Lang, style: 'medium' | 'short' = 'medium', calendar: Calendar = lang === 'fa' ? 'jalali' : 'gregorian'): string {
+  return formatDate(ymd, lang, calendar, style)
 }
 
 /** moneyCompact writes an amount short for a chart's axis ("1.2M Toman"). */

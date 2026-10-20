@@ -28,6 +28,7 @@ import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { useList } from '../composables/useList'
 import { date, money, num, type Lang, type Money } from '../format'
+import { csvCalendar } from '../reports'
 import { owed, percent, resellerOf, type Reseller } from '../resellers'
 import type { LedgerItem, OrderItem, ResellerDetail, ServiceItem, UserItem } from '../types'
 
@@ -89,7 +90,7 @@ watch(id, () => {
   void load()
   showTab(tab.value)
 })
-const csvHref = computed(() => '/api/v1/ledger.csv' + query({ user: id.value }))
+const csvHref = computed(() => '/api/v1/ledger.csv' + query({ user: id.value, calendar: csvCalendar(lang.value) }))
 
 // Money moved: the statement shows it the next time it is opened.
 function moneyMoved() {
