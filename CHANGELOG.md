@@ -138,6 +138,22 @@ English and can be edited like the others.
   time).
 - Nothing of this has been tried in a real Telegram yet.
 
+### Updating from the dashboard
+- **System > Updates can now update the install**: the owner confirms and core asks the server's updater (a root systemd
+  path unit installed by `bobres install` and `bobres update`) to run the same signed, backed-up, self-rolling-back
+  `bobres update`. Core never gets the Docker socket. The page shows the steps, the updater's sentence and (to the owner)
+  its log, copes with core restarting in the middle, and offers a reload when the new version is up. A request, its
+  outcome and a Telegram notice to every owner are recorded (`system.update.requested` and `system.update.<outcome>` in
+  the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
+- **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
+  unset, the server's variable still decides. A pre-release needs its own confirmation.
+- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** Core had no way to make the bot
+  look again, so the page only re-read the last result. It now has `POST /api/v1/system/updates/check`, which has the bot
+  reload its settings and look at GitHub at once, and shows why a look failed.
+- New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
+  Updating from the dashboard needs the host half of this change (the updater and the `./run/update` mount in
+  `docker-compose.yml`); [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
+
 ## [0.6.1] — 2026-10-20
 
 Two gaps of the Mini App that the 0.6.0 notes named are closed: it now holds the store's required channel as the bot

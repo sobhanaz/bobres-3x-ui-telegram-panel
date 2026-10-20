@@ -126,7 +126,8 @@ type Request struct {
 	At string `json:"at"`
 }
 
-var idRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+// idRe is a lower-case UUID of version 1 to 8, as the updater requires.
+var idRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 // NewRequest makes a request for an update to version ("" for the newest) on
 // channel, by a person at at. by is cut to MaxBy characters and made one

@@ -446,11 +446,11 @@ func (n *Notifier) systemUpdateEvent(ctx context.Context, m eventbus.Message, e 
 // state this bot has no text for.
 func (n *Notifier) systemUpdate(lang string, e events.SystemUpdateEvent) (string, bool) {
 	key := map[string]string{
-		events.UpdateRequested:  "alert.update_requested",
-		events.UpdateDone:       "alert.update_done",
-		events.UpdateFailed:     "alert.update_failed",
-		events.UpdateRolledBack: "alert.update_rolled_back",
-		events.UpdateNotStarted: "alert.update_not_started",
+		events.UpdateRequested:  "update.requested",
+		events.UpdateDone:       "update.done",
+		events.UpdateFailed:     "update.failed",
+		events.UpdateRolledBack: "update.rolled_back",
+		events.UpdateNotStarted: "update.not_started",
 	}[e.State]
 	if key == "" {
 		return "", false
@@ -465,9 +465,9 @@ func (n *Notifier) systemUpdate(lang string, e events.SystemUpdateEvent) (string
 	if by == "" {
 		by = "?"
 	}
-	channel := "alert.channel_stable"
+	channel := "update.channel_stable"
 	if e.Channel == "beta" {
-		channel = "alert.channel_beta"
+		channel = "update.channel_beta"
 	}
 	text := n.cat.T(lang, key, "by", html.EscapeString(truncateRunes(by, 64)), "from", version(e.From), "to", version(e.To),
 		"channel", n.cat.T(lang, channel))
