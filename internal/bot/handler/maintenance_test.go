@@ -1025,6 +1025,10 @@ func sceneNames(t *testing.T) []string {
 	return out
 }
 
+// addACase is what to do when the tables miss an entry point.
+const addACase = ": maintenance must answer it too. Add a case for it to gatedCases (maintenance_test.go) and see that it is " +
+	"held; if a payment under way needs it, name it in this test and test it in TestMaintenanceAllowlist"
+
 // Every command, button verb, bottom-menu item and scene the handler has is
 // in the tables above: a new one fails here until a case for it is added (or,
 // when it belongs in the allowlist, until it is named below and has a test in
@@ -1042,22 +1046,22 @@ func TestMaintenanceTablesCoverEveryEntryPoint(t *testing.T) {
 	allowedVerbs, allowedCommands := []string{"chk"}, []string{"/paysupport"}
 	for _, verb := range caseStrings(t, "handler.go", "dispatch") {
 		if !verbs[verb] && !slices.Contains(allowedVerbs, verb) {
-			t.Errorf("no case presses a button with the verb %q", verb)
+			t.Errorf("no case presses a button with the verb %q"+addACase, verb)
 		}
 	}
 	for _, cmd := range caseStrings(t, "handler.go", "onCommand") {
 		if !cmds[cmd] && !slices.Contains(allowedCommands, cmd) {
-			t.Errorf("no case sends the command %s", cmd)
+			t.Errorf("no case sends the command %s"+addACase, cmd)
 		}
 	}
 	for _, scene := range sceneNames(t) {
 		if !scenes[scene] {
-			t.Errorf("no case sends a message in the %q scene", scene)
+			t.Errorf("no case sends a message in the %q scene"+addACase, scene)
 		}
 	}
 	for _, it := range menuItems {
 		if !taps[it.key] {
-			t.Errorf("no case taps the bottom menu's %s", it.key)
+			t.Errorf("no case taps the bottom menu's %s"+addACase, it.key)
 		}
 	}
 	if len(i18n.Languages) != 2 {

@@ -103,7 +103,7 @@ func TestMiniAppRoutesAreHeldInMaintenance(t *testing.T) {
 		case !strings.Contains(r.pattern, " "):
 			// The fallback of unknown addresses (404).
 		case !r.wrapped:
-			t.Errorf("%s does not go through miniSession, so maintenance does not hold it", r.pattern)
+			t.Errorf("%s does not go through miniSession, so maintenance does not hold it: register it with s.miniSession(false, handler)", r.pattern)
 		case r.inMaintenance:
 			served = append(served, r.pattern)
 		}
@@ -111,7 +111,8 @@ func TestMiniAppRoutesAreHeldInMaintenance(t *testing.T) {
 	slices.Sort(served)
 	want := slices.Sorted(slices.Values(miniServedInMaintenance))
 	if !slices.Equal(served, want) {
-		t.Errorf("served in maintenance:\n got %q\nwant %q", served, want)
+		t.Errorf("served in maintenance:\n got %q\nwant %q\nOnly what a payment already started needs is served in maintenance; "+
+			"everything else is registered with s.miniSession(false, ...). If this call is one of those, add it to miniServedInMaintenance with the reason.", served, want)
 	}
 }
 
