@@ -137,7 +137,14 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(st.Close)
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
-	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, Timezone: cfg.Timezone, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
+	// Core's master key seals the dashboard's authenticator secrets and the
+	// private key of the store's own HTTPS certificate, and keys the hashes
+	// gift codes are stored as.
+	secrets, err := masterKey(cfg)
+	if err != nil {
+		return fmt.Errorf("master key: %w", err)
+	}
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, Timezone: cfg.Timezone, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}, Secrets: secrets})
 	// A new owner set with bobres menu gets the role now, not at their next /start.
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)
@@ -149,14 +156,8 @@ func setup(rt *app.Runtime) error {
 	} else if applied {
 		rt.Log.Info("default bot photo set (replace it in the dashboard: Branding)")
 	}
-	// Core's master key seals the dashboard's authenticator secrets and the
-	// private key of the store's own HTTPS certificate.
-	secrets, err := masterKey(cfg)
-	if err != nil {
-		return fmt.Errorf("master key: %w", err)
-	}
 	if secrets == nil {
-		rt.Log.Warn("no master key: dashboard password logins and your own HTTPS certificate are off (login links from the bot still work)")
+		rt.Log.Warn("no master key: dashboard password logins, your own HTTPS certificate and gift codes are off (login links from the bot still work)")
 	}
 
 	// HTTPS: core asks the tls-agent (its own service, the only one that

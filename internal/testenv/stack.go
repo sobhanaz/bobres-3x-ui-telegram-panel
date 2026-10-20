@@ -149,9 +149,13 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	for _, f := range opts {
 		f(&o)
 	}
+	coreEnv, err := bcrypto.NewEnvelope([]byte("testenv-core-master-key-0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The top-inviters board is not kept (LeaderboardTTL below 0): a test that
 	// invites someone sees them on it at once.
-	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...), LeaderboardTTL: -1})
+	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...), LeaderboardTTL: -1, Secrets: coreEnv})
 	payConn := Dial(t, payAddr, CoreToken)
 	provClient := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(Dial(t, provAddr, CoreToken)))
 	csrv := coreserver.New(cs, dom)

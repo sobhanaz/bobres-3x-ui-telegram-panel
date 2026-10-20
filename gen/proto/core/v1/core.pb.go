@@ -80,6 +80,73 @@ func (BroadcastOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_core_v1_core_proto_rawDescGZIP(), []int{0}
 }
 
+// How a gift code request ended. Everything a customer can get wrong is an
+// outcome, so the bot answers in their words; an error stays for a broken
+// request, a banned customer (PERMISSION_DENIED) and a backend that is down.
+type GiftCodeOutcome int32
+
+const (
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_UNSPECIFIED GiftCodeOutcome = 0
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_REDEEMED    GiftCodeOutcome = 1 // credited, or (replayed) credited by this very request before
+	// Unknown, switched off or expired, or not a code at all: one answer for all
+	// of them, so nothing tells a guesser which codes exist. Each counts as a
+	// wrong code (five in an hour close entering codes for an hour).
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_INVALID          GiftCodeOutcome = 2
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_USED_UP          GiftCodeOutcome = 3 // told only to someone who sent the whole code
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_ALREADY_REDEEMED GiftCodeOutcome = 4 // this customer used the code as often as they may
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_LOCKED           GiftCodeOutcome = 5 // too many wrong codes: retry_after_seconds
+	GiftCodeOutcome_GIFT_CODE_OUTCOME_OFF              GiftCodeOutcome = 6 // the owner switched gift codes off (or core cannot key them)
+)
+
+// Enum value maps for GiftCodeOutcome.
+var (
+	GiftCodeOutcome_name = map[int32]string{
+		0: "GIFT_CODE_OUTCOME_UNSPECIFIED",
+		1: "GIFT_CODE_OUTCOME_REDEEMED",
+		2: "GIFT_CODE_OUTCOME_INVALID",
+		3: "GIFT_CODE_OUTCOME_USED_UP",
+		4: "GIFT_CODE_OUTCOME_ALREADY_REDEEMED",
+		5: "GIFT_CODE_OUTCOME_LOCKED",
+		6: "GIFT_CODE_OUTCOME_OFF",
+	}
+	GiftCodeOutcome_value = map[string]int32{
+		"GIFT_CODE_OUTCOME_UNSPECIFIED":      0,
+		"GIFT_CODE_OUTCOME_REDEEMED":         1,
+		"GIFT_CODE_OUTCOME_INVALID":          2,
+		"GIFT_CODE_OUTCOME_USED_UP":          3,
+		"GIFT_CODE_OUTCOME_ALREADY_REDEEMED": 4,
+		"GIFT_CODE_OUTCOME_LOCKED":           5,
+		"GIFT_CODE_OUTCOME_OFF":              6,
+	}
+)
+
+func (x GiftCodeOutcome) Enum() *GiftCodeOutcome {
+	p := new(GiftCodeOutcome)
+	*p = x
+	return p
+}
+
+func (x GiftCodeOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GiftCodeOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_core_v1_core_proto_enumTypes[1].Descriptor()
+}
+
+func (GiftCodeOutcome) Type() protoreflect.EnumType {
+	return &file_core_v1_core_proto_enumTypes[1]
+}
+
+func (x GiftCodeOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GiftCodeOutcome.Descriptor instead.
+func (GiftCodeOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{1}
+}
+
 type User struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // uuid
@@ -611,7 +678,7 @@ type LedgerEntry struct {
 	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Currency       string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
 	Amount         int64                  `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
-	Kind           string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"` // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement
+	Kind           string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"` // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement | gift_code
 	RefType        string                 `protobuf:"bytes,6,opt,name=ref_type,json=refType,proto3" json:"ref_type,omitempty"`
 	RefId          string                 `protobuf:"bytes,7,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,8,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
@@ -8805,6 +8872,144 @@ func (x *AdminBroadcastResponse) GetBroadcastId() string {
 	return ""
 }
 
+type RedeemGiftCodeRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Code   string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"` // as the customer typed it: core reads capitals, digits and separators any way they are written
+	// Identifies the request (the bot uses the customer's message): sent again
+	// with the same key, it credits nothing more and answers the same.
+	IdempotencyKey string `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RedeemGiftCodeRequest) Reset() {
+	*x = RedeemGiftCodeRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[128]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedeemGiftCodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedeemGiftCodeRequest) ProtoMessage() {}
+
+func (x *RedeemGiftCodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[128]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedeemGiftCodeRequest.ProtoReflect.Descriptor instead.
+func (*RedeemGiftCodeRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{128}
+}
+
+func (x *RedeemGiftCodeRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RedeemGiftCodeRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *RedeemGiftCodeRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type RedeemGiftCodeResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Outcome           GiftCodeOutcome        `protobuf:"varint,1,opt,name=outcome,proto3,enum=core.v1.GiftCodeOutcome" json:"outcome,omitempty"`
+	Credited          *v1.Money              `protobuf:"bytes,2,opt,name=credited,proto3" json:"credited,omitempty"`                                               // REDEEMED: what was added to the wallet
+	Balance           *v1.Money              `protobuf:"bytes,3,opt,name=balance,proto3" json:"balance,omitempty"`                                                 // REDEEMED: the wallet's balance now
+	RetryAfterSeconds int64                  `protobuf:"varint,4,opt,name=retry_after_seconds,json=retryAfterSeconds,proto3" json:"retry_after_seconds,omitempty"` // LOCKED: how long entering codes stays closed
+	Replayed          bool                   `protobuf:"varint,5,opt,name=replayed,proto3" json:"replayed,omitempty"`                                              // REDEEMED: this request was served before; nothing was credited this time
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RedeemGiftCodeResponse) Reset() {
+	*x = RedeemGiftCodeResponse{}
+	mi := &file_core_v1_core_proto_msgTypes[129]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedeemGiftCodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedeemGiftCodeResponse) ProtoMessage() {}
+
+func (x *RedeemGiftCodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[129]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedeemGiftCodeResponse.ProtoReflect.Descriptor instead.
+func (*RedeemGiftCodeResponse) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{129}
+}
+
+func (x *RedeemGiftCodeResponse) GetOutcome() GiftCodeOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return GiftCodeOutcome_GIFT_CODE_OUTCOME_UNSPECIFIED
+}
+
+func (x *RedeemGiftCodeResponse) GetCredited() *v1.Money {
+	if x != nil {
+		return x.Credited
+	}
+	return nil
+}
+
+func (x *RedeemGiftCodeResponse) GetBalance() *v1.Money {
+	if x != nil {
+		return x.Balance
+	}
+	return nil
+}
+
+func (x *RedeemGiftCodeResponse) GetRetryAfterSeconds() int64 {
+	if x != nil {
+		return x.RetryAfterSeconds
+	}
+	return 0
+}
+
+func (x *RedeemGiftCodeResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
 var File_core_v1_core_proto protoreflect.FileDescriptor
 
 const file_core_v1_core_proto_rawDesc = "" +
@@ -9546,14 +9751,32 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a?\n" +
 	"\x11ButtonLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\xcd\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"m\n" +
+	"\x15RedeemGiftCodeRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12'\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\xf2\x01\n" +
+	"\x16RedeemGiftCodeResponse\x122\n" +
+	"\aoutcome\x18\x01 \x01(\x0e2\x18.core.v1.GiftCodeOutcomeR\aoutcome\x12,\n" +
+	"\bcredited\x18\x02 \x01(\v2\x10.common.v1.MoneyR\bcredited\x12*\n" +
+	"\abalance\x18\x03 \x01(\v2\x10.common.v1.MoneyR\abalance\x12.\n" +
+	"\x13retry_after_seconds\x18\x04 \x01(\x03R\x11retryAfterSeconds\x12\x1a\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed*\xcd\x01\n" +
 	"\x10BroadcastOutcome\x12!\n" +
 	"\x1dBROADCAST_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16BROADCAST_OUTCOME_SENT\x10\x01\x12\x1d\n" +
 	"\x19BROADCAST_OUTCOME_BLOCKED\x10\x02\x12\x1c\n" +
 	"\x18BROADCAST_OUTCOME_FAILED\x10\x03\x12\x1d\n" +
 	"\x19BROADCAST_OUTCOME_UNKNOWN\x10\x04\x12\x1e\n" +
-	"\x1aBROADCAST_OUTCOME_RELEASED\x10\x052\x97(\n" +
+	"\x1aBROADCAST_OUTCOME_RELEASED\x10\x05*\xf3\x01\n" +
+	"\x0fGiftCodeOutcome\x12!\n" +
+	"\x1dGIFT_CODE_OUTCOME_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aGIFT_CODE_OUTCOME_REDEEMED\x10\x01\x12\x1d\n" +
+	"\x19GIFT_CODE_OUTCOME_INVALID\x10\x02\x12\x1d\n" +
+	"\x19GIFT_CODE_OUTCOME_USED_UP\x10\x03\x12&\n" +
+	"\"GIFT_CODE_OUTCOME_ALREADY_REDEEMED\x10\x04\x12\x1c\n" +
+	"\x18GIFT_CODE_OUTCOME_LOCKED\x10\x05\x12\x19\n" +
+	"\x15GIFT_CODE_OUTCOME_OFF\x10\x062\xea(\n" +
 	"\vCoreService\x127\n" +
 	"\n" +
 	"UpsertUser\x12\x1a.core.v1.UpsertUserRequest\x1a\r.core.v1.User\x121\n" +
@@ -9622,7 +9845,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x0eAdminListStaff\x12\x1e.core.v1.AdminListStaffRequest\x1a\x1f.core.v1.AdminListStaffResponse\x12I\n" +
 	"\rAdminAddStaff\x12\x1d.core.v1.AdminAddStaffRequest\x1a\x19.core.v1.AdminStaffMember\x12W\n" +
 	"\x10AdminRemoveStaff\x12 .core.v1.AdminRemoveStaffRequest\x1a!.core.v1.AdminRemoveStaffResponse\x12Q\n" +
-	"\x0eAdminBroadcast\x12\x1e.core.v1.AdminBroadcastRequest\x1a\x1f.core.v1.AdminBroadcastResponseBJZHgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1b\x06proto3"
+	"\x0eAdminBroadcast\x12\x1e.core.v1.AdminBroadcastRequest\x1a\x1f.core.v1.AdminBroadcastResponse\x12Q\n" +
+	"\x0eRedeemGiftCode\x12\x1e.core.v1.RedeemGiftCodeRequest\x1a\x1f.core.v1.RedeemGiftCodeResponseBJZHgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1b\x06proto3"
 
 var (
 	file_core_v1_core_proto_rawDescOnce sync.Once
@@ -9636,364 +9860,372 @@ func file_core_v1_core_proto_rawDescGZIP() []byte {
 	return file_core_v1_core_proto_rawDescData
 }
 
-var file_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 139)
+var file_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 141)
 var file_core_v1_core_proto_goTypes = []any{
 	(BroadcastOutcome)(0),                    // 0: core.v1.BroadcastOutcome
-	(*User)(nil),                             // 1: core.v1.User
-	(*Plan)(nil),                             // 2: core.v1.Plan
-	(*InboundSelection)(nil),                 // 3: core.v1.InboundSelection
-	(*Order)(nil),                            // 4: core.v1.Order
-	(*Wallet)(nil),                           // 5: core.v1.Wallet
-	(*LedgerEntry)(nil),                      // 6: core.v1.LedgerEntry
-	(*Subscription)(nil),                     // 7: core.v1.Subscription
-	(*Ticket)(nil),                           // 8: core.v1.Ticket
-	(*TicketMessage)(nil),                    // 9: core.v1.TicketMessage
-	(*AddTicketMessageRequest)(nil),          // 10: core.v1.AddTicketMessageRequest
-	(*AddTicketMessageResponse)(nil),         // 11: core.v1.AddTicketMessageResponse
-	(*GetMyTicketsRequest)(nil),              // 12: core.v1.GetMyTicketsRequest
-	(*MyTickets)(nil),                        // 13: core.v1.MyTickets
-	(*GetMyTicketRequest)(nil),               // 14: core.v1.GetMyTicketRequest
-	(*TicketThread)(nil),                     // 15: core.v1.TicketThread
-	(*CloseMyTicketRequest)(nil),             // 16: core.v1.CloseMyTicketRequest
-	(*GetTicketMessageRequest)(nil),          // 17: core.v1.GetTicketMessageRequest
-	(*TicketMessageView)(nil),                // 18: core.v1.TicketMessageView
-	(*ReportTicketDeliveryRequest)(nil),      // 19: core.v1.ReportTicketDeliveryRequest
-	(*ReportTicketDeliveryResponse)(nil),     // 20: core.v1.ReportTicketDeliveryResponse
-	(*SetUserBotBlockedRequest)(nil),         // 21: core.v1.SetUserBotBlockedRequest
-	(*SetUserBotBlockedResponse)(nil),        // 22: core.v1.SetUserBotBlockedResponse
-	(*ClaimBroadcastBatchRequest)(nil),       // 23: core.v1.ClaimBroadcastBatchRequest
-	(*BroadcastRecipient)(nil),               // 24: core.v1.BroadcastRecipient
-	(*BroadcastBatch)(nil),                   // 25: core.v1.BroadcastBatch
-	(*BroadcastResult)(nil),                  // 26: core.v1.BroadcastResult
-	(*ReportBroadcastResultsRequest)(nil),    // 27: core.v1.ReportBroadcastResultsRequest
-	(*BroadcastState)(nil),                   // 28: core.v1.BroadcastState
-	(*Settings)(nil),                         // 29: core.v1.Settings
-	(*UpsertUserRequest)(nil),                // 30: core.v1.UpsertUserRequest
-	(*GetUserRequest)(nil),                   // 31: core.v1.GetUserRequest
-	(*ListPlansRequest)(nil),                 // 32: core.v1.ListPlansRequest
-	(*ListPlansResponse)(nil),                // 33: core.v1.ListPlansResponse
-	(*CreateOrderRequest)(nil),               // 34: core.v1.CreateOrderRequest
-	(*QuoteOrderRequest)(nil),                // 35: core.v1.QuoteOrderRequest
-	(*Quote)(nil),                            // 36: core.v1.Quote
-	(*QuoteBulkOrderRequest)(nil),            // 37: core.v1.QuoteBulkOrderRequest
-	(*BulkQuote)(nil),                        // 38: core.v1.BulkQuote
-	(*CreateBulkOrderRequest)(nil),           // 39: core.v1.CreateBulkOrderRequest
-	(*GetBulkOrderRequest)(nil),              // 40: core.v1.GetBulkOrderRequest
-	(*BulkOrder)(nil),                        // 41: core.v1.BulkOrder
-	(*BulkService)(nil),                      // 42: core.v1.BulkService
-	(*GetReferralInfoRequest)(nil),           // 43: core.v1.GetReferralInfoRequest
-	(*ReferralInfo)(nil),                     // 44: core.v1.ReferralInfo
-	(*GetTopInvitersRequest)(nil),            // 45: core.v1.GetTopInvitersRequest
-	(*TopInviter)(nil),                       // 46: core.v1.TopInviter
-	(*TopInviters)(nil),                      // 47: core.v1.TopInviters
-	(*Discount)(nil),                         // 48: core.v1.Discount
-	(*AdminUpsertDiscountRequest)(nil),       // 49: core.v1.AdminUpsertDiscountRequest
-	(*AdminListDiscountsRequest)(nil),        // 50: core.v1.AdminListDiscountsRequest
-	(*AdminListDiscountsResponse)(nil),       // 51: core.v1.AdminListDiscountsResponse
-	(*CreateDashboardLinkRequest)(nil),       // 52: core.v1.CreateDashboardLinkRequest
-	(*ListStaffContactsRequest)(nil),         // 53: core.v1.ListStaffContactsRequest
-	(*StaffContact)(nil),                     // 54: core.v1.StaffContact
-	(*ListStaffContactsResponse)(nil),        // 55: core.v1.ListStaffContactsResponse
-	(*DashboardLink)(nil),                    // 56: core.v1.DashboardLink
-	(*GetOrderRequest)(nil),                  // 57: core.v1.GetOrderRequest
-	(*GetWalletRequest)(nil),                 // 58: core.v1.GetWalletRequest
-	(*ListLedgerEntriesRequest)(nil),         // 59: core.v1.ListLedgerEntriesRequest
-	(*ListLedgerEntriesResponse)(nil),        // 60: core.v1.ListLedgerEntriesResponse
-	(*ListSubscriptionsRequest)(nil),         // 61: core.v1.ListSubscriptionsRequest
-	(*ListSubscriptionsResponse)(nil),        // 62: core.v1.ListSubscriptionsResponse
-	(*SetSubscriptionLabelRequest)(nil),      // 63: core.v1.SetSubscriptionLabelRequest
-	(*ServiceCounts)(nil),                    // 64: core.v1.ServiceCounts
-	(*ListResellerServicesRequest)(nil),      // 65: core.v1.ListResellerServicesRequest
-	(*ListResellerServicesResponse)(nil),     // 66: core.v1.ListResellerServicesResponse
-	(*SetResellerServiceEnabledRequest)(nil), // 67: core.v1.SetResellerServiceEnabledRequest
-	(*DeleteResellerServiceRequest)(nil),     // 68: core.v1.DeleteResellerServiceRequest
-	(*DeleteResellerServiceResponse)(nil),    // 69: core.v1.DeleteResellerServiceResponse
-	(*SetSubscriptionNoteRequest)(nil),       // 70: core.v1.SetSubscriptionNoteRequest
-	(*ListInvitedCustomersRequest)(nil),      // 71: core.v1.ListInvitedCustomersRequest
-	(*InvitedCustomer)(nil),                  // 72: core.v1.InvitedCustomer
-	(*ListInvitedCustomersResponse)(nil),     // 73: core.v1.ListInvitedCustomersResponse
-	(*GetResellerInfoRequest)(nil),           // 74: core.v1.GetResellerInfoRequest
-	(*ResellerBalance)(nil),                  // 75: core.v1.ResellerBalance
-	(*ResellerInfo)(nil),                     // 76: core.v1.ResellerInfo
-	(*CreateSupportTicketRequest)(nil),       // 77: core.v1.CreateSupportTicketRequest
-	(*GetSettingsRequest)(nil),               // 78: core.v1.GetSettingsRequest
-	(*GetBotPhotoRequest)(nil),               // 79: core.v1.GetBotPhotoRequest
-	(*BotPhoto)(nil),                         // 80: core.v1.BotPhoto
-	(*UpdateBrandingRequest)(nil),            // 81: core.v1.UpdateBrandingRequest
-	(*ReviewManualPaymentRequest)(nil),       // 82: core.v1.ReviewManualPaymentRequest
-	(*PaymentIntentRef)(nil),                 // 83: core.v1.PaymentIntentRef
-	(*CheckPaymentRequest)(nil),              // 84: core.v1.CheckPaymentRequest
-	(*StarsPreCheckoutRequest)(nil),          // 85: core.v1.StarsPreCheckoutRequest
-	(*StarsPaidRequest)(nil),                 // 86: core.v1.StarsPaidRequest
-	(*ListPaymentMethodsRequest)(nil),        // 87: core.v1.ListPaymentMethodsRequest
-	(*ListPaymentMethodsResponse)(nil),       // 88: core.v1.ListPaymentMethodsResponse
-	(*SubmitPaymentProofRequest)(nil),        // 89: core.v1.SubmitPaymentProofRequest
-	(*GetSubscriptionLinksRequest)(nil),      // 90: core.v1.GetSubscriptionLinksRequest
-	(*SubscriptionLinks)(nil),                // 91: core.v1.SubscriptionLinks
-	(*AdminGetStatsRequest)(nil),             // 92: core.v1.AdminGetStatsRequest
-	(*AdminStats)(nil),                       // 93: core.v1.AdminStats
-	(*AdminListPendingPaymentsRequest)(nil),  // 94: core.v1.AdminListPendingPaymentsRequest
-	(*PendingPayment)(nil),                   // 95: core.v1.PendingPayment
-	(*AdminListPendingPaymentsResponse)(nil), // 96: core.v1.AdminListPendingPaymentsResponse
-	(*AdminGetPaymentRequest)(nil),           // 97: core.v1.AdminGetPaymentRequest
-	(*AdminPaymentView)(nil),                 // 98: core.v1.AdminPaymentView
-	(*AdminFindUserRequest)(nil),             // 99: core.v1.AdminFindUserRequest
-	(*AdminUserView)(nil),                    // 100: core.v1.AdminUserView
-	(*AdminAdjustBalanceRequest)(nil),        // 101: core.v1.AdminAdjustBalanceRequest
-	(*AdminSetUserStatusRequest)(nil),        // 102: core.v1.AdminSetUserStatusRequest
-	(*AdminUpsertPlanRequest)(nil),           // 103: core.v1.AdminUpsertPlanRequest
-	(*AdminSetSettingRequest)(nil),           // 104: core.v1.AdminSetSettingRequest
-	(*PayOrderWithWalletRequest)(nil),        // 105: core.v1.PayOrderWithWalletRequest
-	(*CreatePaymentIntentRequest)(nil),       // 106: core.v1.CreatePaymentIntentRequest
-	(*StartTrialRequest)(nil),                // 107: core.v1.StartTrialRequest
-	(*CanStartTrialRequest)(nil),             // 108: core.v1.CanStartTrialRequest
-	(*CanStartTrialResponse)(nil),            // 109: core.v1.CanStartTrialResponse
-	(*AdminTodayStatsRequest)(nil),           // 110: core.v1.AdminTodayStatsRequest
-	(*AdminDayLine)(nil),                     // 111: core.v1.AdminDayLine
-	(*AdminDay)(nil),                         // 112: core.v1.AdminDay
-	(*AdminTodayStatsResponse)(nil),          // 113: core.v1.AdminTodayStatsResponse
-	(*AdminListSettingSpecsRequest)(nil),     // 114: core.v1.AdminListSettingSpecsRequest
-	(*AdminSettingSpec)(nil),                 // 115: core.v1.AdminSettingSpec
-	(*AdminListSettingSpecsResponse)(nil),    // 116: core.v1.AdminListSettingSpecsResponse
-	(*AdminListServersRequest)(nil),          // 117: core.v1.AdminListServersRequest
-	(*AdminServer)(nil),                      // 118: core.v1.AdminServer
-	(*AdminListServersResponse)(nil),         // 119: core.v1.AdminListServersResponse
-	(*AdminSetServerRequest)(nil),            // 120: core.v1.AdminSetServerRequest
-	(*AdminListStaffRequest)(nil),            // 121: core.v1.AdminListStaffRequest
-	(*AdminStaffMember)(nil),                 // 122: core.v1.AdminStaffMember
-	(*AdminListStaffResponse)(nil),           // 123: core.v1.AdminListStaffResponse
-	(*AdminAddStaffRequest)(nil),             // 124: core.v1.AdminAddStaffRequest
-	(*AdminRemoveStaffRequest)(nil),          // 125: core.v1.AdminRemoveStaffRequest
-	(*AdminRemoveStaffResponse)(nil),         // 126: core.v1.AdminRemoveStaffResponse
-	(*AdminBroadcastRequest)(nil),            // 127: core.v1.AdminBroadcastRequest
-	(*AdminBroadcastResponse)(nil),           // 128: core.v1.AdminBroadcastResponse
-	nil,                                      // 129: core.v1.Plan.NameI18nEntry
-	nil,                                      // 130: core.v1.BroadcastBatch.TextsEntry
-	nil,                                      // 131: core.v1.BroadcastBatch.ButtonLabelsEntry
-	nil,                                      // 132: core.v1.Settings.ValuesEntry
-	nil,                                      // 133: core.v1.BulkOrder.PlanNameI18nEntry
-	nil,                                      // 134: core.v1.UpdateBrandingRequest.ValuesEntry
-	nil,                                      // 135: core.v1.PaymentIntentRef.DetailsEntry
-	nil,                                      // 136: core.v1.AdminBroadcastRequest.TextsEntry
-	nil,                                      // 137: core.v1.AdminBroadcastRequest.ButtonLabelsEntry
-	nil,                                      // 138: core.v1.AdminBroadcastResponse.TextsEntry
-	nil,                                      // 139: core.v1.AdminBroadcastResponse.ButtonLabelsEntry
-	(*v1.Money)(nil),                         // 140: common.v1.Money
-	(*v1.Pagination)(nil),                    // 141: common.v1.Pagination
-	(*v1.PageInfo)(nil),                      // 142: common.v1.PageInfo
+	(GiftCodeOutcome)(0),                     // 1: core.v1.GiftCodeOutcome
+	(*User)(nil),                             // 2: core.v1.User
+	(*Plan)(nil),                             // 3: core.v1.Plan
+	(*InboundSelection)(nil),                 // 4: core.v1.InboundSelection
+	(*Order)(nil),                            // 5: core.v1.Order
+	(*Wallet)(nil),                           // 6: core.v1.Wallet
+	(*LedgerEntry)(nil),                      // 7: core.v1.LedgerEntry
+	(*Subscription)(nil),                     // 8: core.v1.Subscription
+	(*Ticket)(nil),                           // 9: core.v1.Ticket
+	(*TicketMessage)(nil),                    // 10: core.v1.TicketMessage
+	(*AddTicketMessageRequest)(nil),          // 11: core.v1.AddTicketMessageRequest
+	(*AddTicketMessageResponse)(nil),         // 12: core.v1.AddTicketMessageResponse
+	(*GetMyTicketsRequest)(nil),              // 13: core.v1.GetMyTicketsRequest
+	(*MyTickets)(nil),                        // 14: core.v1.MyTickets
+	(*GetMyTicketRequest)(nil),               // 15: core.v1.GetMyTicketRequest
+	(*TicketThread)(nil),                     // 16: core.v1.TicketThread
+	(*CloseMyTicketRequest)(nil),             // 17: core.v1.CloseMyTicketRequest
+	(*GetTicketMessageRequest)(nil),          // 18: core.v1.GetTicketMessageRequest
+	(*TicketMessageView)(nil),                // 19: core.v1.TicketMessageView
+	(*ReportTicketDeliveryRequest)(nil),      // 20: core.v1.ReportTicketDeliveryRequest
+	(*ReportTicketDeliveryResponse)(nil),     // 21: core.v1.ReportTicketDeliveryResponse
+	(*SetUserBotBlockedRequest)(nil),         // 22: core.v1.SetUserBotBlockedRequest
+	(*SetUserBotBlockedResponse)(nil),        // 23: core.v1.SetUserBotBlockedResponse
+	(*ClaimBroadcastBatchRequest)(nil),       // 24: core.v1.ClaimBroadcastBatchRequest
+	(*BroadcastRecipient)(nil),               // 25: core.v1.BroadcastRecipient
+	(*BroadcastBatch)(nil),                   // 26: core.v1.BroadcastBatch
+	(*BroadcastResult)(nil),                  // 27: core.v1.BroadcastResult
+	(*ReportBroadcastResultsRequest)(nil),    // 28: core.v1.ReportBroadcastResultsRequest
+	(*BroadcastState)(nil),                   // 29: core.v1.BroadcastState
+	(*Settings)(nil),                         // 30: core.v1.Settings
+	(*UpsertUserRequest)(nil),                // 31: core.v1.UpsertUserRequest
+	(*GetUserRequest)(nil),                   // 32: core.v1.GetUserRequest
+	(*ListPlansRequest)(nil),                 // 33: core.v1.ListPlansRequest
+	(*ListPlansResponse)(nil),                // 34: core.v1.ListPlansResponse
+	(*CreateOrderRequest)(nil),               // 35: core.v1.CreateOrderRequest
+	(*QuoteOrderRequest)(nil),                // 36: core.v1.QuoteOrderRequest
+	(*Quote)(nil),                            // 37: core.v1.Quote
+	(*QuoteBulkOrderRequest)(nil),            // 38: core.v1.QuoteBulkOrderRequest
+	(*BulkQuote)(nil),                        // 39: core.v1.BulkQuote
+	(*CreateBulkOrderRequest)(nil),           // 40: core.v1.CreateBulkOrderRequest
+	(*GetBulkOrderRequest)(nil),              // 41: core.v1.GetBulkOrderRequest
+	(*BulkOrder)(nil),                        // 42: core.v1.BulkOrder
+	(*BulkService)(nil),                      // 43: core.v1.BulkService
+	(*GetReferralInfoRequest)(nil),           // 44: core.v1.GetReferralInfoRequest
+	(*ReferralInfo)(nil),                     // 45: core.v1.ReferralInfo
+	(*GetTopInvitersRequest)(nil),            // 46: core.v1.GetTopInvitersRequest
+	(*TopInviter)(nil),                       // 47: core.v1.TopInviter
+	(*TopInviters)(nil),                      // 48: core.v1.TopInviters
+	(*Discount)(nil),                         // 49: core.v1.Discount
+	(*AdminUpsertDiscountRequest)(nil),       // 50: core.v1.AdminUpsertDiscountRequest
+	(*AdminListDiscountsRequest)(nil),        // 51: core.v1.AdminListDiscountsRequest
+	(*AdminListDiscountsResponse)(nil),       // 52: core.v1.AdminListDiscountsResponse
+	(*CreateDashboardLinkRequest)(nil),       // 53: core.v1.CreateDashboardLinkRequest
+	(*ListStaffContactsRequest)(nil),         // 54: core.v1.ListStaffContactsRequest
+	(*StaffContact)(nil),                     // 55: core.v1.StaffContact
+	(*ListStaffContactsResponse)(nil),        // 56: core.v1.ListStaffContactsResponse
+	(*DashboardLink)(nil),                    // 57: core.v1.DashboardLink
+	(*GetOrderRequest)(nil),                  // 58: core.v1.GetOrderRequest
+	(*GetWalletRequest)(nil),                 // 59: core.v1.GetWalletRequest
+	(*ListLedgerEntriesRequest)(nil),         // 60: core.v1.ListLedgerEntriesRequest
+	(*ListLedgerEntriesResponse)(nil),        // 61: core.v1.ListLedgerEntriesResponse
+	(*ListSubscriptionsRequest)(nil),         // 62: core.v1.ListSubscriptionsRequest
+	(*ListSubscriptionsResponse)(nil),        // 63: core.v1.ListSubscriptionsResponse
+	(*SetSubscriptionLabelRequest)(nil),      // 64: core.v1.SetSubscriptionLabelRequest
+	(*ServiceCounts)(nil),                    // 65: core.v1.ServiceCounts
+	(*ListResellerServicesRequest)(nil),      // 66: core.v1.ListResellerServicesRequest
+	(*ListResellerServicesResponse)(nil),     // 67: core.v1.ListResellerServicesResponse
+	(*SetResellerServiceEnabledRequest)(nil), // 68: core.v1.SetResellerServiceEnabledRequest
+	(*DeleteResellerServiceRequest)(nil),     // 69: core.v1.DeleteResellerServiceRequest
+	(*DeleteResellerServiceResponse)(nil),    // 70: core.v1.DeleteResellerServiceResponse
+	(*SetSubscriptionNoteRequest)(nil),       // 71: core.v1.SetSubscriptionNoteRequest
+	(*ListInvitedCustomersRequest)(nil),      // 72: core.v1.ListInvitedCustomersRequest
+	(*InvitedCustomer)(nil),                  // 73: core.v1.InvitedCustomer
+	(*ListInvitedCustomersResponse)(nil),     // 74: core.v1.ListInvitedCustomersResponse
+	(*GetResellerInfoRequest)(nil),           // 75: core.v1.GetResellerInfoRequest
+	(*ResellerBalance)(nil),                  // 76: core.v1.ResellerBalance
+	(*ResellerInfo)(nil),                     // 77: core.v1.ResellerInfo
+	(*CreateSupportTicketRequest)(nil),       // 78: core.v1.CreateSupportTicketRequest
+	(*GetSettingsRequest)(nil),               // 79: core.v1.GetSettingsRequest
+	(*GetBotPhotoRequest)(nil),               // 80: core.v1.GetBotPhotoRequest
+	(*BotPhoto)(nil),                         // 81: core.v1.BotPhoto
+	(*UpdateBrandingRequest)(nil),            // 82: core.v1.UpdateBrandingRequest
+	(*ReviewManualPaymentRequest)(nil),       // 83: core.v1.ReviewManualPaymentRequest
+	(*PaymentIntentRef)(nil),                 // 84: core.v1.PaymentIntentRef
+	(*CheckPaymentRequest)(nil),              // 85: core.v1.CheckPaymentRequest
+	(*StarsPreCheckoutRequest)(nil),          // 86: core.v1.StarsPreCheckoutRequest
+	(*StarsPaidRequest)(nil),                 // 87: core.v1.StarsPaidRequest
+	(*ListPaymentMethodsRequest)(nil),        // 88: core.v1.ListPaymentMethodsRequest
+	(*ListPaymentMethodsResponse)(nil),       // 89: core.v1.ListPaymentMethodsResponse
+	(*SubmitPaymentProofRequest)(nil),        // 90: core.v1.SubmitPaymentProofRequest
+	(*GetSubscriptionLinksRequest)(nil),      // 91: core.v1.GetSubscriptionLinksRequest
+	(*SubscriptionLinks)(nil),                // 92: core.v1.SubscriptionLinks
+	(*AdminGetStatsRequest)(nil),             // 93: core.v1.AdminGetStatsRequest
+	(*AdminStats)(nil),                       // 94: core.v1.AdminStats
+	(*AdminListPendingPaymentsRequest)(nil),  // 95: core.v1.AdminListPendingPaymentsRequest
+	(*PendingPayment)(nil),                   // 96: core.v1.PendingPayment
+	(*AdminListPendingPaymentsResponse)(nil), // 97: core.v1.AdminListPendingPaymentsResponse
+	(*AdminGetPaymentRequest)(nil),           // 98: core.v1.AdminGetPaymentRequest
+	(*AdminPaymentView)(nil),                 // 99: core.v1.AdminPaymentView
+	(*AdminFindUserRequest)(nil),             // 100: core.v1.AdminFindUserRequest
+	(*AdminUserView)(nil),                    // 101: core.v1.AdminUserView
+	(*AdminAdjustBalanceRequest)(nil),        // 102: core.v1.AdminAdjustBalanceRequest
+	(*AdminSetUserStatusRequest)(nil),        // 103: core.v1.AdminSetUserStatusRequest
+	(*AdminUpsertPlanRequest)(nil),           // 104: core.v1.AdminUpsertPlanRequest
+	(*AdminSetSettingRequest)(nil),           // 105: core.v1.AdminSetSettingRequest
+	(*PayOrderWithWalletRequest)(nil),        // 106: core.v1.PayOrderWithWalletRequest
+	(*CreatePaymentIntentRequest)(nil),       // 107: core.v1.CreatePaymentIntentRequest
+	(*StartTrialRequest)(nil),                // 108: core.v1.StartTrialRequest
+	(*CanStartTrialRequest)(nil),             // 109: core.v1.CanStartTrialRequest
+	(*CanStartTrialResponse)(nil),            // 110: core.v1.CanStartTrialResponse
+	(*AdminTodayStatsRequest)(nil),           // 111: core.v1.AdminTodayStatsRequest
+	(*AdminDayLine)(nil),                     // 112: core.v1.AdminDayLine
+	(*AdminDay)(nil),                         // 113: core.v1.AdminDay
+	(*AdminTodayStatsResponse)(nil),          // 114: core.v1.AdminTodayStatsResponse
+	(*AdminListSettingSpecsRequest)(nil),     // 115: core.v1.AdminListSettingSpecsRequest
+	(*AdminSettingSpec)(nil),                 // 116: core.v1.AdminSettingSpec
+	(*AdminListSettingSpecsResponse)(nil),    // 117: core.v1.AdminListSettingSpecsResponse
+	(*AdminListServersRequest)(nil),          // 118: core.v1.AdminListServersRequest
+	(*AdminServer)(nil),                      // 119: core.v1.AdminServer
+	(*AdminListServersResponse)(nil),         // 120: core.v1.AdminListServersResponse
+	(*AdminSetServerRequest)(nil),            // 121: core.v1.AdminSetServerRequest
+	(*AdminListStaffRequest)(nil),            // 122: core.v1.AdminListStaffRequest
+	(*AdminStaffMember)(nil),                 // 123: core.v1.AdminStaffMember
+	(*AdminListStaffResponse)(nil),           // 124: core.v1.AdminListStaffResponse
+	(*AdminAddStaffRequest)(nil),             // 125: core.v1.AdminAddStaffRequest
+	(*AdminRemoveStaffRequest)(nil),          // 126: core.v1.AdminRemoveStaffRequest
+	(*AdminRemoveStaffResponse)(nil),         // 127: core.v1.AdminRemoveStaffResponse
+	(*AdminBroadcastRequest)(nil),            // 128: core.v1.AdminBroadcastRequest
+	(*AdminBroadcastResponse)(nil),           // 129: core.v1.AdminBroadcastResponse
+	(*RedeemGiftCodeRequest)(nil),            // 130: core.v1.RedeemGiftCodeRequest
+	(*RedeemGiftCodeResponse)(nil),           // 131: core.v1.RedeemGiftCodeResponse
+	nil,                                      // 132: core.v1.Plan.NameI18nEntry
+	nil,                                      // 133: core.v1.BroadcastBatch.TextsEntry
+	nil,                                      // 134: core.v1.BroadcastBatch.ButtonLabelsEntry
+	nil,                                      // 135: core.v1.Settings.ValuesEntry
+	nil,                                      // 136: core.v1.BulkOrder.PlanNameI18nEntry
+	nil,                                      // 137: core.v1.UpdateBrandingRequest.ValuesEntry
+	nil,                                      // 138: core.v1.PaymentIntentRef.DetailsEntry
+	nil,                                      // 139: core.v1.AdminBroadcastRequest.TextsEntry
+	nil,                                      // 140: core.v1.AdminBroadcastRequest.ButtonLabelsEntry
+	nil,                                      // 141: core.v1.AdminBroadcastResponse.TextsEntry
+	nil,                                      // 142: core.v1.AdminBroadcastResponse.ButtonLabelsEntry
+	(*v1.Money)(nil),                         // 143: common.v1.Money
+	(*v1.Pagination)(nil),                    // 144: common.v1.Pagination
+	(*v1.PageInfo)(nil),                      // 145: common.v1.PageInfo
 }
 var file_core_v1_core_proto_depIdxs = []int32{
-	129, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
-	140, // 1: core.v1.Plan.price:type_name -> common.v1.Money
-	140, // 2: core.v1.Plan.list_price:type_name -> common.v1.Money
-	3,   // 3: core.v1.Plan.inbounds:type_name -> core.v1.InboundSelection
-	140, // 4: core.v1.Order.amount:type_name -> common.v1.Money
-	140, // 5: core.v1.Order.discount:type_name -> common.v1.Money
-	8,   // 6: core.v1.AddTicketMessageResponse.ticket:type_name -> core.v1.Ticket
-	8,   // 7: core.v1.MyTickets.open:type_name -> core.v1.Ticket
-	8,   // 8: core.v1.MyTickets.recent:type_name -> core.v1.Ticket
-	8,   // 9: core.v1.TicketThread.ticket:type_name -> core.v1.Ticket
-	9,   // 10: core.v1.TicketThread.messages:type_name -> core.v1.TicketMessage
-	130, // 11: core.v1.BroadcastBatch.texts:type_name -> core.v1.BroadcastBatch.TextsEntry
-	131, // 12: core.v1.BroadcastBatch.button_labels:type_name -> core.v1.BroadcastBatch.ButtonLabelsEntry
-	24,  // 13: core.v1.BroadcastBatch.recipients:type_name -> core.v1.BroadcastRecipient
+	132, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
+	143, // 1: core.v1.Plan.price:type_name -> common.v1.Money
+	143, // 2: core.v1.Plan.list_price:type_name -> common.v1.Money
+	4,   // 3: core.v1.Plan.inbounds:type_name -> core.v1.InboundSelection
+	143, // 4: core.v1.Order.amount:type_name -> common.v1.Money
+	143, // 5: core.v1.Order.discount:type_name -> common.v1.Money
+	9,   // 6: core.v1.AddTicketMessageResponse.ticket:type_name -> core.v1.Ticket
+	9,   // 7: core.v1.MyTickets.open:type_name -> core.v1.Ticket
+	9,   // 8: core.v1.MyTickets.recent:type_name -> core.v1.Ticket
+	9,   // 9: core.v1.TicketThread.ticket:type_name -> core.v1.Ticket
+	10,  // 10: core.v1.TicketThread.messages:type_name -> core.v1.TicketMessage
+	133, // 11: core.v1.BroadcastBatch.texts:type_name -> core.v1.BroadcastBatch.TextsEntry
+	134, // 12: core.v1.BroadcastBatch.button_labels:type_name -> core.v1.BroadcastBatch.ButtonLabelsEntry
+	25,  // 13: core.v1.BroadcastBatch.recipients:type_name -> core.v1.BroadcastRecipient
 	0,   // 14: core.v1.BroadcastResult.outcome:type_name -> core.v1.BroadcastOutcome
-	26,  // 15: core.v1.ReportBroadcastResultsRequest.results:type_name -> core.v1.BroadcastResult
-	132, // 16: core.v1.Settings.values:type_name -> core.v1.Settings.ValuesEntry
-	2,   // 17: core.v1.ListPlansResponse.plans:type_name -> core.v1.Plan
-	140, // 18: core.v1.Quote.list_price:type_name -> common.v1.Money
-	140, // 19: core.v1.Quote.discount:type_name -> common.v1.Money
-	140, // 20: core.v1.Quote.total:type_name -> common.v1.Money
-	140, // 21: core.v1.BulkQuote.unit_price:type_name -> common.v1.Money
-	140, // 22: core.v1.BulkQuote.total:type_name -> common.v1.Money
-	140, // 23: core.v1.CreateBulkOrderRequest.expected_total:type_name -> common.v1.Money
-	140, // 24: core.v1.BulkOrder.unit_price:type_name -> common.v1.Money
-	140, // 25: core.v1.BulkOrder.total:type_name -> common.v1.Money
-	133, // 26: core.v1.BulkOrder.plan_name_i18n:type_name -> core.v1.BulkOrder.PlanNameI18nEntry
-	42,  // 27: core.v1.BulkOrder.services:type_name -> core.v1.BulkService
-	140, // 28: core.v1.ReferralInfo.earned:type_name -> common.v1.Money
-	46,  // 29: core.v1.TopInviters.entries:type_name -> core.v1.TopInviter
-	140, // 30: core.v1.Discount.amount:type_name -> common.v1.Money
-	48,  // 31: core.v1.AdminUpsertDiscountRequest.discount:type_name -> core.v1.Discount
-	48,  // 32: core.v1.AdminListDiscountsResponse.discounts:type_name -> core.v1.Discount
-	54,  // 33: core.v1.ListStaffContactsResponse.items:type_name -> core.v1.StaffContact
-	141, // 34: core.v1.ListLedgerEntriesRequest.pagination:type_name -> common.v1.Pagination
-	6,   // 35: core.v1.ListLedgerEntriesResponse.entries:type_name -> core.v1.LedgerEntry
-	142, // 36: core.v1.ListLedgerEntriesResponse.page_info:type_name -> common.v1.PageInfo
-	141, // 37: core.v1.ListSubscriptionsRequest.pagination:type_name -> common.v1.Pagination
-	7,   // 38: core.v1.ListSubscriptionsResponse.subscriptions:type_name -> core.v1.Subscription
-	142, // 39: core.v1.ListSubscriptionsResponse.page_info:type_name -> common.v1.PageInfo
-	141, // 40: core.v1.ListResellerServicesRequest.pagination:type_name -> common.v1.Pagination
-	7,   // 41: core.v1.ListResellerServicesResponse.subscriptions:type_name -> core.v1.Subscription
-	142, // 42: core.v1.ListResellerServicesResponse.page_info:type_name -> common.v1.PageInfo
-	64,  // 43: core.v1.ListResellerServicesResponse.counts:type_name -> core.v1.ServiceCounts
-	141, // 44: core.v1.ListInvitedCustomersRequest.pagination:type_name -> common.v1.Pagination
-	140, // 45: core.v1.InvitedCustomer.spent:type_name -> common.v1.Money
-	140, // 46: core.v1.InvitedCustomer.commission:type_name -> common.v1.Money
-	72,  // 47: core.v1.ListInvitedCustomersResponse.customers:type_name -> core.v1.InvitedCustomer
-	142, // 48: core.v1.ListInvitedCustomersResponse.page_info:type_name -> common.v1.PageInfo
-	75,  // 49: core.v1.ResellerInfo.balances:type_name -> core.v1.ResellerBalance
-	140, // 50: core.v1.ResellerInfo.commission_earned:type_name -> common.v1.Money
-	134, // 51: core.v1.UpdateBrandingRequest.values:type_name -> core.v1.UpdateBrandingRequest.ValuesEntry
-	140, // 52: core.v1.PaymentIntentRef.amount:type_name -> common.v1.Money
-	135, // 53: core.v1.PaymentIntentRef.details:type_name -> core.v1.PaymentIntentRef.DetailsEntry
-	140, // 54: core.v1.PaymentIntentRef.gateway_amount:type_name -> common.v1.Money
-	1,   // 55: core.v1.PendingPayment.user:type_name -> core.v1.User
-	140, // 56: core.v1.PendingPayment.amount:type_name -> common.v1.Money
-	95,  // 57: core.v1.AdminListPendingPaymentsResponse.payments:type_name -> core.v1.PendingPayment
-	95,  // 58: core.v1.AdminPaymentView.payment:type_name -> core.v1.PendingPayment
-	1,   // 59: core.v1.AdminPaymentView.reviewer:type_name -> core.v1.User
-	1,   // 60: core.v1.AdminUserView.user:type_name -> core.v1.User
-	5,   // 61: core.v1.AdminUserView.wallets:type_name -> core.v1.Wallet
-	140, // 62: core.v1.AdminAdjustBalanceRequest.delta:type_name -> common.v1.Money
-	2,   // 63: core.v1.AdminUpsertPlanRequest.plan:type_name -> core.v1.Plan
-	140, // 64: core.v1.CreatePaymentIntentRequest.amount:type_name -> common.v1.Money
-	111, // 65: core.v1.AdminDay.lines:type_name -> core.v1.AdminDayLine
-	112, // 66: core.v1.AdminTodayStatsResponse.today:type_name -> core.v1.AdminDay
-	112, // 67: core.v1.AdminTodayStatsResponse.yesterday:type_name -> core.v1.AdminDay
-	115, // 68: core.v1.AdminListSettingSpecsResponse.specs:type_name -> core.v1.AdminSettingSpec
-	118, // 69: core.v1.AdminListServersResponse.servers:type_name -> core.v1.AdminServer
-	122, // 70: core.v1.AdminListStaffResponse.staff:type_name -> core.v1.AdminStaffMember
-	136, // 71: core.v1.AdminBroadcastRequest.texts:type_name -> core.v1.AdminBroadcastRequest.TextsEntry
-	137, // 72: core.v1.AdminBroadcastRequest.button_labels:type_name -> core.v1.AdminBroadcastRequest.ButtonLabelsEntry
-	138, // 73: core.v1.AdminBroadcastResponse.texts:type_name -> core.v1.AdminBroadcastResponse.TextsEntry
-	139, // 74: core.v1.AdminBroadcastResponse.button_labels:type_name -> core.v1.AdminBroadcastResponse.ButtonLabelsEntry
-	30,  // 75: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
-	31,  // 76: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
-	32,  // 77: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
-	34,  // 78: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
-	57,  // 79: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
-	58,  // 80: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
-	59,  // 81: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
-	61,  // 82: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
-	77,  // 83: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
-	78,  // 84: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
-	81,  // 85: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
-	82,  // 86: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
-	105, // 87: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
-	106, // 88: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
-	107, // 89: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
-	108, // 90: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
-	89,  // 91: core.v1.CoreService.SubmitPaymentProof:input_type -> core.v1.SubmitPaymentProofRequest
-	84,  // 92: core.v1.CoreService.CheckPayment:input_type -> core.v1.CheckPaymentRequest
-	85,  // 93: core.v1.CoreService.StarsPreCheckout:input_type -> core.v1.StarsPreCheckoutRequest
-	86,  // 94: core.v1.CoreService.StarsPaid:input_type -> core.v1.StarsPaidRequest
-	87,  // 95: core.v1.CoreService.ListPaymentMethods:input_type -> core.v1.ListPaymentMethodsRequest
-	90,  // 96: core.v1.CoreService.GetSubscriptionLinks:input_type -> core.v1.GetSubscriptionLinksRequest
-	92,  // 97: core.v1.CoreService.AdminGetStats:input_type -> core.v1.AdminGetStatsRequest
-	94,  // 98: core.v1.CoreService.AdminListPendingPayments:input_type -> core.v1.AdminListPendingPaymentsRequest
-	97,  // 99: core.v1.CoreService.AdminGetPayment:input_type -> core.v1.AdminGetPaymentRequest
-	99,  // 100: core.v1.CoreService.AdminFindUser:input_type -> core.v1.AdminFindUserRequest
-	101, // 101: core.v1.CoreService.AdminAdjustBalance:input_type -> core.v1.AdminAdjustBalanceRequest
-	102, // 102: core.v1.CoreService.AdminSetUserStatus:input_type -> core.v1.AdminSetUserStatusRequest
-	103, // 103: core.v1.CoreService.AdminUpsertPlan:input_type -> core.v1.AdminUpsertPlanRequest
-	104, // 104: core.v1.CoreService.AdminSetSetting:input_type -> core.v1.AdminSetSettingRequest
-	35,  // 105: core.v1.CoreService.QuoteOrder:input_type -> core.v1.QuoteOrderRequest
-	37,  // 106: core.v1.CoreService.QuoteBulkOrder:input_type -> core.v1.QuoteBulkOrderRequest
-	39,  // 107: core.v1.CoreService.CreateBulkOrder:input_type -> core.v1.CreateBulkOrderRequest
-	40,  // 108: core.v1.CoreService.GetBulkOrder:input_type -> core.v1.GetBulkOrderRequest
-	43,  // 109: core.v1.CoreService.GetReferralInfo:input_type -> core.v1.GetReferralInfoRequest
-	45,  // 110: core.v1.CoreService.GetTopInviters:input_type -> core.v1.GetTopInvitersRequest
-	49,  // 111: core.v1.CoreService.AdminUpsertDiscount:input_type -> core.v1.AdminUpsertDiscountRequest
-	50,  // 112: core.v1.CoreService.AdminListDiscounts:input_type -> core.v1.AdminListDiscountsRequest
-	52,  // 113: core.v1.CoreService.CreateDashboardLink:input_type -> core.v1.CreateDashboardLinkRequest
-	53,  // 114: core.v1.CoreService.ListStaffContacts:input_type -> core.v1.ListStaffContactsRequest
-	10,  // 115: core.v1.CoreService.AddTicketMessage:input_type -> core.v1.AddTicketMessageRequest
-	12,  // 116: core.v1.CoreService.GetMyTickets:input_type -> core.v1.GetMyTicketsRequest
-	14,  // 117: core.v1.CoreService.GetMyTicket:input_type -> core.v1.GetMyTicketRequest
-	16,  // 118: core.v1.CoreService.CloseMyTicket:input_type -> core.v1.CloseMyTicketRequest
-	17,  // 119: core.v1.CoreService.GetTicketMessage:input_type -> core.v1.GetTicketMessageRequest
-	19,  // 120: core.v1.CoreService.ReportTicketDelivery:input_type -> core.v1.ReportTicketDeliveryRequest
-	21,  // 121: core.v1.CoreService.SetUserBotBlocked:input_type -> core.v1.SetUserBotBlockedRequest
-	23,  // 122: core.v1.CoreService.ClaimBroadcastBatch:input_type -> core.v1.ClaimBroadcastBatchRequest
-	27,  // 123: core.v1.CoreService.ReportBroadcastResults:input_type -> core.v1.ReportBroadcastResultsRequest
-	63,  // 124: core.v1.CoreService.SetSubscriptionLabel:input_type -> core.v1.SetSubscriptionLabelRequest
-	74,  // 125: core.v1.CoreService.GetResellerInfo:input_type -> core.v1.GetResellerInfoRequest
-	65,  // 126: core.v1.CoreService.ListResellerServices:input_type -> core.v1.ListResellerServicesRequest
-	67,  // 127: core.v1.CoreService.SetResellerServiceEnabled:input_type -> core.v1.SetResellerServiceEnabledRequest
-	68,  // 128: core.v1.CoreService.DeleteResellerService:input_type -> core.v1.DeleteResellerServiceRequest
-	70,  // 129: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
-	71,  // 130: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
-	79,  // 131: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
-	110, // 132: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
-	114, // 133: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
-	117, // 134: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
-	120, // 135: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
-	121, // 136: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
-	124, // 137: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
-	125, // 138: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
-	127, // 139: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
-	1,   // 140: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
-	1,   // 141: core.v1.CoreService.GetUser:output_type -> core.v1.User
-	33,  // 142: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
-	4,   // 143: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
-	4,   // 144: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
-	5,   // 145: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
-	60,  // 146: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
-	62,  // 147: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
-	8,   // 148: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
-	29,  // 149: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
-	29,  // 150: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
-	83,  // 151: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
-	4,   // 152: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
-	83,  // 153: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
-	4,   // 154: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
-	109, // 155: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
-	83,  // 156: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
-	83,  // 157: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
-	83,  // 158: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
-	83,  // 159: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
-	88,  // 160: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
-	91,  // 161: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
-	93,  // 162: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
-	96,  // 163: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
-	98,  // 164: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
-	100, // 165: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
-	5,   // 166: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
-	1,   // 167: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
-	2,   // 168: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
-	29,  // 169: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
-	36,  // 170: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
-	38,  // 171: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
-	41,  // 172: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
-	41,  // 173: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
-	44,  // 174: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
-	47,  // 175: core.v1.CoreService.GetTopInviters:output_type -> core.v1.TopInviters
-	48,  // 176: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
-	51,  // 177: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
-	56,  // 178: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
-	55,  // 179: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
-	11,  // 180: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
-	13,  // 181: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
-	15,  // 182: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
-	8,   // 183: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
-	18,  // 184: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
-	20,  // 185: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
-	22,  // 186: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
-	25,  // 187: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
-	28,  // 188: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
-	7,   // 189: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
-	76,  // 190: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
-	66,  // 191: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
-	7,   // 192: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
-	69,  // 193: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
-	7,   // 194: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
-	73,  // 195: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
-	80,  // 196: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
-	113, // 197: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
-	116, // 198: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
-	119, // 199: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
-	118, // 200: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
-	123, // 201: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
-	122, // 202: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
-	126, // 203: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
-	128, // 204: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
-	140, // [140:205] is the sub-list for method output_type
-	75,  // [75:140] is the sub-list for method input_type
-	75,  // [75:75] is the sub-list for extension type_name
-	75,  // [75:75] is the sub-list for extension extendee
-	0,   // [0:75] is the sub-list for field type_name
+	27,  // 15: core.v1.ReportBroadcastResultsRequest.results:type_name -> core.v1.BroadcastResult
+	135, // 16: core.v1.Settings.values:type_name -> core.v1.Settings.ValuesEntry
+	3,   // 17: core.v1.ListPlansResponse.plans:type_name -> core.v1.Plan
+	143, // 18: core.v1.Quote.list_price:type_name -> common.v1.Money
+	143, // 19: core.v1.Quote.discount:type_name -> common.v1.Money
+	143, // 20: core.v1.Quote.total:type_name -> common.v1.Money
+	143, // 21: core.v1.BulkQuote.unit_price:type_name -> common.v1.Money
+	143, // 22: core.v1.BulkQuote.total:type_name -> common.v1.Money
+	143, // 23: core.v1.CreateBulkOrderRequest.expected_total:type_name -> common.v1.Money
+	143, // 24: core.v1.BulkOrder.unit_price:type_name -> common.v1.Money
+	143, // 25: core.v1.BulkOrder.total:type_name -> common.v1.Money
+	136, // 26: core.v1.BulkOrder.plan_name_i18n:type_name -> core.v1.BulkOrder.PlanNameI18nEntry
+	43,  // 27: core.v1.BulkOrder.services:type_name -> core.v1.BulkService
+	143, // 28: core.v1.ReferralInfo.earned:type_name -> common.v1.Money
+	47,  // 29: core.v1.TopInviters.entries:type_name -> core.v1.TopInviter
+	143, // 30: core.v1.Discount.amount:type_name -> common.v1.Money
+	49,  // 31: core.v1.AdminUpsertDiscountRequest.discount:type_name -> core.v1.Discount
+	49,  // 32: core.v1.AdminListDiscountsResponse.discounts:type_name -> core.v1.Discount
+	55,  // 33: core.v1.ListStaffContactsResponse.items:type_name -> core.v1.StaffContact
+	144, // 34: core.v1.ListLedgerEntriesRequest.pagination:type_name -> common.v1.Pagination
+	7,   // 35: core.v1.ListLedgerEntriesResponse.entries:type_name -> core.v1.LedgerEntry
+	145, // 36: core.v1.ListLedgerEntriesResponse.page_info:type_name -> common.v1.PageInfo
+	144, // 37: core.v1.ListSubscriptionsRequest.pagination:type_name -> common.v1.Pagination
+	8,   // 38: core.v1.ListSubscriptionsResponse.subscriptions:type_name -> core.v1.Subscription
+	145, // 39: core.v1.ListSubscriptionsResponse.page_info:type_name -> common.v1.PageInfo
+	144, // 40: core.v1.ListResellerServicesRequest.pagination:type_name -> common.v1.Pagination
+	8,   // 41: core.v1.ListResellerServicesResponse.subscriptions:type_name -> core.v1.Subscription
+	145, // 42: core.v1.ListResellerServicesResponse.page_info:type_name -> common.v1.PageInfo
+	65,  // 43: core.v1.ListResellerServicesResponse.counts:type_name -> core.v1.ServiceCounts
+	144, // 44: core.v1.ListInvitedCustomersRequest.pagination:type_name -> common.v1.Pagination
+	143, // 45: core.v1.InvitedCustomer.spent:type_name -> common.v1.Money
+	143, // 46: core.v1.InvitedCustomer.commission:type_name -> common.v1.Money
+	73,  // 47: core.v1.ListInvitedCustomersResponse.customers:type_name -> core.v1.InvitedCustomer
+	145, // 48: core.v1.ListInvitedCustomersResponse.page_info:type_name -> common.v1.PageInfo
+	76,  // 49: core.v1.ResellerInfo.balances:type_name -> core.v1.ResellerBalance
+	143, // 50: core.v1.ResellerInfo.commission_earned:type_name -> common.v1.Money
+	137, // 51: core.v1.UpdateBrandingRequest.values:type_name -> core.v1.UpdateBrandingRequest.ValuesEntry
+	143, // 52: core.v1.PaymentIntentRef.amount:type_name -> common.v1.Money
+	138, // 53: core.v1.PaymentIntentRef.details:type_name -> core.v1.PaymentIntentRef.DetailsEntry
+	143, // 54: core.v1.PaymentIntentRef.gateway_amount:type_name -> common.v1.Money
+	2,   // 55: core.v1.PendingPayment.user:type_name -> core.v1.User
+	143, // 56: core.v1.PendingPayment.amount:type_name -> common.v1.Money
+	96,  // 57: core.v1.AdminListPendingPaymentsResponse.payments:type_name -> core.v1.PendingPayment
+	96,  // 58: core.v1.AdminPaymentView.payment:type_name -> core.v1.PendingPayment
+	2,   // 59: core.v1.AdminPaymentView.reviewer:type_name -> core.v1.User
+	2,   // 60: core.v1.AdminUserView.user:type_name -> core.v1.User
+	6,   // 61: core.v1.AdminUserView.wallets:type_name -> core.v1.Wallet
+	143, // 62: core.v1.AdminAdjustBalanceRequest.delta:type_name -> common.v1.Money
+	3,   // 63: core.v1.AdminUpsertPlanRequest.plan:type_name -> core.v1.Plan
+	143, // 64: core.v1.CreatePaymentIntentRequest.amount:type_name -> common.v1.Money
+	112, // 65: core.v1.AdminDay.lines:type_name -> core.v1.AdminDayLine
+	113, // 66: core.v1.AdminTodayStatsResponse.today:type_name -> core.v1.AdminDay
+	113, // 67: core.v1.AdminTodayStatsResponse.yesterday:type_name -> core.v1.AdminDay
+	116, // 68: core.v1.AdminListSettingSpecsResponse.specs:type_name -> core.v1.AdminSettingSpec
+	119, // 69: core.v1.AdminListServersResponse.servers:type_name -> core.v1.AdminServer
+	123, // 70: core.v1.AdminListStaffResponse.staff:type_name -> core.v1.AdminStaffMember
+	139, // 71: core.v1.AdminBroadcastRequest.texts:type_name -> core.v1.AdminBroadcastRequest.TextsEntry
+	140, // 72: core.v1.AdminBroadcastRequest.button_labels:type_name -> core.v1.AdminBroadcastRequest.ButtonLabelsEntry
+	141, // 73: core.v1.AdminBroadcastResponse.texts:type_name -> core.v1.AdminBroadcastResponse.TextsEntry
+	142, // 74: core.v1.AdminBroadcastResponse.button_labels:type_name -> core.v1.AdminBroadcastResponse.ButtonLabelsEntry
+	1,   // 75: core.v1.RedeemGiftCodeResponse.outcome:type_name -> core.v1.GiftCodeOutcome
+	143, // 76: core.v1.RedeemGiftCodeResponse.credited:type_name -> common.v1.Money
+	143, // 77: core.v1.RedeemGiftCodeResponse.balance:type_name -> common.v1.Money
+	31,  // 78: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
+	32,  // 79: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
+	33,  // 80: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
+	35,  // 81: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
+	58,  // 82: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
+	59,  // 83: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
+	60,  // 84: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
+	62,  // 85: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
+	78,  // 86: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
+	79,  // 87: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
+	82,  // 88: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
+	83,  // 89: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
+	106, // 90: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
+	107, // 91: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
+	108, // 92: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
+	109, // 93: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
+	90,  // 94: core.v1.CoreService.SubmitPaymentProof:input_type -> core.v1.SubmitPaymentProofRequest
+	85,  // 95: core.v1.CoreService.CheckPayment:input_type -> core.v1.CheckPaymentRequest
+	86,  // 96: core.v1.CoreService.StarsPreCheckout:input_type -> core.v1.StarsPreCheckoutRequest
+	87,  // 97: core.v1.CoreService.StarsPaid:input_type -> core.v1.StarsPaidRequest
+	88,  // 98: core.v1.CoreService.ListPaymentMethods:input_type -> core.v1.ListPaymentMethodsRequest
+	91,  // 99: core.v1.CoreService.GetSubscriptionLinks:input_type -> core.v1.GetSubscriptionLinksRequest
+	93,  // 100: core.v1.CoreService.AdminGetStats:input_type -> core.v1.AdminGetStatsRequest
+	95,  // 101: core.v1.CoreService.AdminListPendingPayments:input_type -> core.v1.AdminListPendingPaymentsRequest
+	98,  // 102: core.v1.CoreService.AdminGetPayment:input_type -> core.v1.AdminGetPaymentRequest
+	100, // 103: core.v1.CoreService.AdminFindUser:input_type -> core.v1.AdminFindUserRequest
+	102, // 104: core.v1.CoreService.AdminAdjustBalance:input_type -> core.v1.AdminAdjustBalanceRequest
+	103, // 105: core.v1.CoreService.AdminSetUserStatus:input_type -> core.v1.AdminSetUserStatusRequest
+	104, // 106: core.v1.CoreService.AdminUpsertPlan:input_type -> core.v1.AdminUpsertPlanRequest
+	105, // 107: core.v1.CoreService.AdminSetSetting:input_type -> core.v1.AdminSetSettingRequest
+	36,  // 108: core.v1.CoreService.QuoteOrder:input_type -> core.v1.QuoteOrderRequest
+	38,  // 109: core.v1.CoreService.QuoteBulkOrder:input_type -> core.v1.QuoteBulkOrderRequest
+	40,  // 110: core.v1.CoreService.CreateBulkOrder:input_type -> core.v1.CreateBulkOrderRequest
+	41,  // 111: core.v1.CoreService.GetBulkOrder:input_type -> core.v1.GetBulkOrderRequest
+	44,  // 112: core.v1.CoreService.GetReferralInfo:input_type -> core.v1.GetReferralInfoRequest
+	46,  // 113: core.v1.CoreService.GetTopInviters:input_type -> core.v1.GetTopInvitersRequest
+	50,  // 114: core.v1.CoreService.AdminUpsertDiscount:input_type -> core.v1.AdminUpsertDiscountRequest
+	51,  // 115: core.v1.CoreService.AdminListDiscounts:input_type -> core.v1.AdminListDiscountsRequest
+	53,  // 116: core.v1.CoreService.CreateDashboardLink:input_type -> core.v1.CreateDashboardLinkRequest
+	54,  // 117: core.v1.CoreService.ListStaffContacts:input_type -> core.v1.ListStaffContactsRequest
+	11,  // 118: core.v1.CoreService.AddTicketMessage:input_type -> core.v1.AddTicketMessageRequest
+	13,  // 119: core.v1.CoreService.GetMyTickets:input_type -> core.v1.GetMyTicketsRequest
+	15,  // 120: core.v1.CoreService.GetMyTicket:input_type -> core.v1.GetMyTicketRequest
+	17,  // 121: core.v1.CoreService.CloseMyTicket:input_type -> core.v1.CloseMyTicketRequest
+	18,  // 122: core.v1.CoreService.GetTicketMessage:input_type -> core.v1.GetTicketMessageRequest
+	20,  // 123: core.v1.CoreService.ReportTicketDelivery:input_type -> core.v1.ReportTicketDeliveryRequest
+	22,  // 124: core.v1.CoreService.SetUserBotBlocked:input_type -> core.v1.SetUserBotBlockedRequest
+	24,  // 125: core.v1.CoreService.ClaimBroadcastBatch:input_type -> core.v1.ClaimBroadcastBatchRequest
+	28,  // 126: core.v1.CoreService.ReportBroadcastResults:input_type -> core.v1.ReportBroadcastResultsRequest
+	64,  // 127: core.v1.CoreService.SetSubscriptionLabel:input_type -> core.v1.SetSubscriptionLabelRequest
+	75,  // 128: core.v1.CoreService.GetResellerInfo:input_type -> core.v1.GetResellerInfoRequest
+	66,  // 129: core.v1.CoreService.ListResellerServices:input_type -> core.v1.ListResellerServicesRequest
+	68,  // 130: core.v1.CoreService.SetResellerServiceEnabled:input_type -> core.v1.SetResellerServiceEnabledRequest
+	69,  // 131: core.v1.CoreService.DeleteResellerService:input_type -> core.v1.DeleteResellerServiceRequest
+	71,  // 132: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
+	72,  // 133: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
+	80,  // 134: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
+	111, // 135: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
+	115, // 136: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
+	118, // 137: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
+	121, // 138: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
+	122, // 139: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
+	125, // 140: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
+	126, // 141: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
+	128, // 142: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
+	130, // 143: core.v1.CoreService.RedeemGiftCode:input_type -> core.v1.RedeemGiftCodeRequest
+	2,   // 144: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
+	2,   // 145: core.v1.CoreService.GetUser:output_type -> core.v1.User
+	34,  // 146: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
+	5,   // 147: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
+	5,   // 148: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
+	6,   // 149: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
+	61,  // 150: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
+	63,  // 151: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
+	9,   // 152: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
+	30,  // 153: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
+	30,  // 154: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
+	84,  // 155: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
+	5,   // 156: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
+	84,  // 157: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
+	5,   // 158: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
+	110, // 159: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
+	84,  // 160: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
+	84,  // 161: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
+	84,  // 162: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
+	84,  // 163: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
+	89,  // 164: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
+	92,  // 165: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
+	94,  // 166: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
+	97,  // 167: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
+	99,  // 168: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
+	101, // 169: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
+	6,   // 170: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
+	2,   // 171: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
+	3,   // 172: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
+	30,  // 173: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
+	37,  // 174: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
+	39,  // 175: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
+	42,  // 176: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
+	42,  // 177: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
+	45,  // 178: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
+	48,  // 179: core.v1.CoreService.GetTopInviters:output_type -> core.v1.TopInviters
+	49,  // 180: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
+	52,  // 181: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
+	57,  // 182: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
+	56,  // 183: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
+	12,  // 184: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
+	14,  // 185: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
+	16,  // 186: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
+	9,   // 187: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
+	19,  // 188: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
+	21,  // 189: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
+	23,  // 190: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
+	26,  // 191: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
+	29,  // 192: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
+	8,   // 193: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
+	77,  // 194: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
+	67,  // 195: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
+	8,   // 196: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
+	70,  // 197: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
+	8,   // 198: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
+	74,  // 199: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
+	81,  // 200: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
+	114, // 201: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
+	117, // 202: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
+	120, // 203: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
+	119, // 204: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
+	124, // 205: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
+	123, // 206: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
+	127, // 207: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
+	129, // 208: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
+	131, // 209: core.v1.CoreService.RedeemGiftCode:output_type -> core.v1.RedeemGiftCodeResponse
+	144, // [144:210] is the sub-list for method output_type
+	78,  // [78:144] is the sub-list for method input_type
+	78,  // [78:78] is the sub-list for extension type_name
+	78,  // [78:78] is the sub-list for extension extendee
+	0,   // [0:78] is the sub-list for field type_name
 }
 
 func init() { file_core_v1_core_proto_init() }
@@ -10010,8 +10242,8 @@ func file_core_v1_core_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_core_v1_core_proto_rawDesc), len(file_core_v1_core_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   139,
+			NumEnums:      2,
+			NumMessages:   141,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

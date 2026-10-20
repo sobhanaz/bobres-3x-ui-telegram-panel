@@ -117,7 +117,7 @@ All of these read `core.ledger_entries` (append-only), `core.orders` and `core.o
 | **Services lost (churn)** | A service **churned** in a bucket when its **current** `expires_at`, as a local date in the report's zone, is in the bucket, and it ended more than the **grace period** (7 days by default, `churn_grace_days` from 0 to 90) before the moment the report is read. Only the service's final expiry counts, so a service that was renewed is in the bucket of its last end, never of an earlier one. Not counted: services that are `pending`, `disabled` or `deleted`, services with no expiry (unlimited), services of a **trial** plan (`plans.is_trial`, so a trial that lapses is no loss) and services with a **paid renewal waiting** (a `renew` order that is `paid`, `provisioning` or `provision_failed` and has not moved `expires_at` yet). People, so no currency. The grace is counted in 24-hour days, so it does not depend on the zone. |
 | **Customers lost** | A person whose **last** expiry over their non-trial, live services is in the bucket and past the grace period, and who has **no other live service**: a service with no expiry, or one with a renewal waiting, keeps them. A person with three expired services is counted once, in the bucket of the last. |
 | **At risk** | Services that ended in the bucket but are still inside the grace period: they are not churn yet and may renew. Same exclusions as services lost. When the grace period passes they move into services lost. |
-| **Wallet top-ups** (count, amount, per currency) | Money that **stayed in the wallet** from payments. A payment is credited to the wallet as a `topup` entry (`pay-in:<intent id>`) and, when it was for an order, the order's price is taken from it in the same transaction, so the entries carry the same time. What a `topup` entry has left after the purchases of the same user and currency at its instant is the top-up: all of it for a payment with no order or one that arrived for an order already paid another way or cancelled, none for an exact payment, the surplus for a payment larger than the order's price. An entry with nothing left is not counted. A top-up is money in, not a sale: the order it later pays shows up as revenue, paid with the wallet. Admin adjustments, referral rewards, reseller commissions and settlements are other ledger kinds and are not in the reports. |
+| **Wallet top-ups** (count, amount, per currency) | Money that **stayed in the wallet** from payments. A payment is credited to the wallet as a `topup` entry (`pay-in:<intent id>`) and, when it was for an order, the order's price is taken from it in the same transaction, so the entries carry the same time. What a `topup` entry has left after the purchases of the same user and currency at its instant is the top-up: all of it for a payment with no order or one that arrived for an order already paid another way or cancelled, none for an exact payment, the surplus for a payment larger than the order's price. An entry with nothing left is not counted. A top-up is money in, not a sale: the order it later pays shows up as revenue, paid with the wallet. Admin adjustments, referral rewards, gift codes, reseller commissions and settlements are other ledger kinds and are not in the reports. |
 | **Rejected by staff** (count, amount) | Events `payment.rejected.v1` in core's outbox for a **manual** payment (card to card, crypto proof, Zarinpal link) a reviewer rejected. The amount is the payment's. Nothing moved. |
 | **Failed or expired gateway payments** (count, amount) | The same event for an **automated gateway** payment (Zarinpal, IDPay, NextPay, Telegram Stars, automatic USDT) that failed, did not match, or ran out of time. Payments publishes `payment.rejected.v1` for both kinds; core passes it on with the intent's `provider` and the `reason`. The provider decides: a manual provider means staff (whatever words the reviewer typed, "expired" included), any other provider a gateway, so a new gateway lands here, never on the staff line. An event from before core passed the provider on has none, and is told by its reason: a gateway reason (`gateway_failed`, `amount_mismatch`, `expired`, `not_found`, `reversed`, `payer_mismatch`) means a gateway, any other text means staff. The two lists are in one place, `ManualProviders` and `GatewayFailureReasons` in `internal/core/store/reports.go`, and a test reads payments' sources, so a new reason or a new manual provider fails it until someone decides where it goes. |
 | **Cancelled orders** (count, amount) | Orders with `status IN ('cancelled', 'expired')` and `refunded_at IS NULL`, dated by `updated_at` (nothing changes an order after that); the amount is what the order would have cost. Today only cancellation exists (a reseller's removal cancels their open orders); nothing sets `expired`. An order refunded before delivery is also `cancelled` but was paid: it counts as a refund, not here. |
@@ -256,16 +256,18 @@ All under `/api/v1/reports`, `GET`, session cookie, permission `reports.read`. Q
 | `/summary.csv` | The summary as a file (`...-jalali.csv` when `calendar=jalali`, with the Jalali days in its name). |
 | `/orders.csv` | Every order paid in the range, as a file. |
 
-`ledger.csv` (`ledger.read`) and `audit.csv` (`audit.read`) follow the same rules and take the same `tz` and `calendar`
-(see below).
+`ledger.csv` (`ledger.read`), `audit.csv` (`audit.read`) and the two gift code files (`discounts.write`, see the Gift codes
+page) follow the same rules and take the same `tz` and `calendar` (see below).
 
 ### CSV files
 
-Four files are the whole of what the product exports as CSV: `summary.csv` and `orders.csv` here, `ledger.csv`
-(`ledger.read`) and `audit.csv` (`audit.read`, with its own page). They share one set of rules (`internal/core/web/csvcells.go`
-and `csvexport.go`). Who may export: the permission of the thing exported, which owner and admin hold and support does
+Six files are what the product exports as CSV from core: `summary.csv` and `orders.csv` here, `ledger.csv`
+(`ledger.read`), `audit.csv` (`audit.read`, with its own page) and, on the Gift codes page (`discounts.write`),
+`gift-codes.csv` and a code's `redemptions.csv`. They share one set of rules (`internal/core/web/csvcells.go`
+and `csvexport.go`). (The dialog that shows new gift codes once also offers them as a file; the dashboard writes that
+one itself, in the browser, with the same quoting, and core never holds the codes.) Who may export: the permission of the thing exported, which owner and admin hold and support does
 not (403; nobody without a session either, 401); a reseller is no staff at all. Every export is written to the audit
-log as `export.reports`, `export.ledger` or `export.audit` when it ends, with its filters, range, calendar, zone, number
+log as `export.reports`, `export.ledger`, `export.audit`, `export.gift_codes` or `export.gift_redemptions` when it ends, with its filters, range, calendar, zone, number
 of rows and outcome: `complete`, `incomplete` (the file ended short) or `failed` (nothing was sent). A file holds no
 secret: no session, token, link or key of the dashboard, a bot, a gateway or a server is in any of them (the audit log
 records a changed token as "changed", never its value; a test looks for the session cookie, the CSRF token and a login
@@ -315,7 +317,7 @@ link's token in every file).
   time, the database is down) is an error answer (503 with `timeout` or `unavailable`), never a 200 with only a header
   that looks like "no orders". A failure after rows went out ends the file with a line `# export incomplete: <reason>`.
   An export of nothing is the header alone (`summary.csv` has a row of zeros for each period instead, as the page does).
-  At most 100,000 rows go into `orders.csv`, `ledger.csv` and `audit.csv`, and a last line asks for a shorter range or a
+  At most 100,000 rows go into `orders.csv`, `ledger.csv`, `audit.csv`, `gift-codes.csv` and a code's `redemptions.csv`, and a last line asks for a shorter range or a
   narrower filter. At most two exports run at once (429 and `Retry-After` for a third), for at most 60 seconds.
 
 Columns, in order:
@@ -337,6 +339,13 @@ Columns, in order:
 - `ledger.csv` (newest first, the ledger page's filters, `?user=`, `kind`, `currency`, `from`, `to`): `time_utc`,
   `telegram_id`, `username`, `kind`, `amount` (signed: a purchase is negative), `currency`, `balance_after`, `ref_type`,
   `ref_id`, `entry_id`, `time_local`, `tz`, and `time_jalali` in a Jalali file.
+- `gift-codes.csv` (newest first, the Gift codes page's `status` and `q` filters; the file name is `gift-codes-all-to-<day>.csv`): `created_utc`,
+  `code_last4`, `kind` (`custom` or `generated`), `amount`, `currency`, `max_redemptions`, `per_customer_limit`, `redeemed`,
+  `status` (`active`, `disabled`, `expired`, `used_up`), `expires_utc`, `last_redeemed_utc`, `note`, `created_by_telegram_id`,
+  `code_id`, `created_local`, `tz`, and `created_jalali` in a Jalali file. It never holds a code, only its last four characters.
+- A code's `redemptions.csv` (newest first; `gift-code-<last four>-redemptions-all-to-<day>.csv`): `time_utc`, `telegram_id`, `username`,
+  `number` (the customer's n-th use of the code), `amount`, `currency`, `balance_after`, `redemption_id`, `time_local`, `tz`, and
+  `time_jalali` in a Jalali file.
 - `audit.csv` (newest first, the audit page's filters): `time_utc`, `actor_telegram_id`, `actor_username`, `actor_role`,
   `action`, `entity`, `entity_id`, `reason`, `ip`, `source`, `before`, `after` (JSON), `entry_id`, `time_local`, `tz`,
   and `time_jalali` in a Jalali file.

@@ -10,6 +10,8 @@ import type { Page } from '../types'
 export function useList<T, F extends Record<string, string>>(path: string, filters: F, size = 25) {
   const { t } = useI18n()
   const items = ref<T[]>([]) as { value: T[] }
+  // The last answer as it came, for the fields a list adds to the page.
+  const raw = ref<Page<T> | null>(null) as { value: Page<T> | null }
   const total = ref(0)
   const page = ref(1)
   const rows = ref(size)
@@ -26,6 +28,7 @@ export function useList<T, F extends Record<string, string>>(path: string, filte
       const res = await api<Page<T>>('GET', path + query({ ...f, page: page.value, size: rows.value }))
       if (mine !== seq) return
       items.value = res.items
+      raw.value = res
       total.value = res.total
     } catch (e) {
       if (mine === seq) error.value = errorText(e, t).text
@@ -51,5 +54,5 @@ export function useList<T, F extends Record<string, string>>(path: string, filte
     void load()
   }
 
-  return { items, total, page, rows, loading, error, filters: f, load, onPage }
+  return { items, raw, total, page, rows, loading, error, filters: f, load, onPage }
 }

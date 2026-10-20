@@ -251,6 +251,7 @@ var contextPrefixes = map[string]Context{
 	"btn.":            CtxButton,
 	"sub.status.":     CtxButtonHTML,
 	"discount.bad.":   CtxToastHTML,
+	"gift.bad.":       CtxToastHTML,
 	"support.status.": CtxButtonHTML,
 	"support.cat.":    CtxButtonHTML,
 	"profile.cmd.":    CtxCommand,

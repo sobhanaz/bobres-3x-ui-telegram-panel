@@ -51,7 +51,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dom := domain.New(st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}})
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env})
 	api := New(Config{Store: st, Domain: dom, Secrets: env})
 	mux := http.NewServeMux()
 	api.Register(mux)

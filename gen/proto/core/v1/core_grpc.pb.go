@@ -84,6 +84,7 @@ const (
 	CoreService_AdminAddStaff_FullMethodName             = "/core.v1.CoreService/AdminAddStaff"
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
+	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -184,6 +185,10 @@ type CoreServiceClient interface {
 	AdminAddStaff(ctx context.Context, in *AdminAddStaffRequest, opts ...grpc.CallOption) (*AdminStaffMember, error)
 	AdminRemoveStaff(ctx context.Context, in *AdminRemoveStaffRequest, opts ...grpc.CallOption) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(ctx context.Context, in *AdminBroadcastRequest, opts ...grpc.CallOption) (*AdminBroadcastResponse, error)
+	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
+	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
+	// What a customer can get wrong is an outcome of the answer, not an error.
+	RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error)
 }
 
 type coreServiceClient struct {
@@ -845,6 +850,16 @@ func (c *coreServiceClient) AdminBroadcast(ctx context.Context, in *AdminBroadca
 	return out, nil
 }
 
+func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RedeemGiftCodeResponse)
+	err := c.cc.Invoke(ctx, CoreService_RedeemGiftCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -943,6 +958,10 @@ type CoreServiceServer interface {
 	AdminAddStaff(context.Context, *AdminAddStaffRequest) (*AdminStaffMember, error)
 	AdminRemoveStaff(context.Context, *AdminRemoveStaffRequest) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error)
+	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
+	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
+	// What a customer can get wrong is an outcome of the answer, not an error.
+	RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -1147,6 +1166,9 @@ func (UnimplementedCoreServiceServer) AdminRemoveStaff(context.Context, *AdminRe
 }
 func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminBroadcast not implemented")
+}
+func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -2339,6 +2361,24 @@ func _CoreService_AdminBroadcast_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RedeemGiftCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).RedeemGiftCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_RedeemGiftCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).RedeemGiftCode(ctx, req.(*RedeemGiftCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2605,6 +2645,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminBroadcast",
 			Handler:    _CoreService_AdminBroadcast_Handler,
+		},
+		{
+			MethodName: "RedeemGiftCode",
+			Handler:    _CoreService_RedeemGiftCode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

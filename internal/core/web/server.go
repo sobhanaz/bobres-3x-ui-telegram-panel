@@ -194,6 +194,12 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
 	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
+	s.route(api, "GET /api/v1/gift-codes", PermDiscountsWrite, s.listGiftCodes)
+	s.route(api, "POST /api/v1/gift-codes", PermDiscountsWrite, s.createGiftCodes)
+	s.route(api, "GET /api/v1/gift-codes.csv", PermDiscountsWrite, s.exportGiftCodes)
+	s.route(api, "PUT /api/v1/gift-codes/{id}/enabled", PermDiscountsWrite, s.setGiftCodeEnabled)
+	s.route(api, "GET /api/v1/gift-codes/{id}/redemptions", PermDiscountsWrite, s.listGiftRedemptions)
+	s.route(api, "GET /api/v1/gift-codes/{id}/redemptions.csv", PermDiscountsWrite, s.exportGiftRedemptions)
 	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
 	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
 

@@ -35,7 +35,7 @@ watch(period, (p) => {
 
 const kinds = computed(() => [
   { label: t('ledger.all_kinds'), value: '' },
-  ...['topup', 'purchase', 'refund', 'adjust', 'referral', 'commission', 'settlement', 'trial_grant'].map((k) => ({ label: t('ledger.kind.' + k), value: k })),
+  ...['topup', 'purchase', 'refund', 'adjust', 'referral', 'commission', 'settlement', 'trial_grant', 'gift_code'].map((k) => ({ label: t('ledger.kind.' + k), value: k })),
 ])
 const currencyOptions = computed(() => [
   { label: t('ledger.all_currencies'), value: '' },
