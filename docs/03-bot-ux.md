@@ -83,13 +83,44 @@ the role on every call, so a crafted callback cannot do more than the dashboard 
 included, a one-time dashboard login link.
 
 ## Store rules the bot applies (dashboard Settings, 2026-10-10)
-- **Maintenance mode:** customers get the maintenance text (a popup for taps, the message at most once a minute).
-  Staff, the configured owner, `/paysupport`, payment checks and receipts of payments under way still work.
+- **Maintenance mode** (`maintenance.enabled`): customers get the maintenance text and nothing else. One gate decides
+  every update before any command, button, scene or conversation sees it (`internal/bot/handler/gates.go`), so there
+  is no screen that forgets to ask. What a customer gets for what they do:
+  - **A button:** a popup with the maintenance text (an alert, not a toast), whatever the button and however old the
+    message it sits on: the home menu, the language buttons, the ticket buttons, the buttons under a notification.
+  - **Anything typed or sent:** a message with the maintenance text, every time (an album, which Telegram delivers a
+    part at a time, gets one): a command (`/start`, `/menu`, `/buy`, `/support`, the admin commands...), a tap on the
+    bottom menu (Support too, with a ticket open or not), text, a photo, a file, a voice message, a sticker, a
+    Telegram reply to a staff answer, and whatever answers a question left open from before (an amount, a discount
+    code, a message to support, a reseller's name or search). The question stays open, nothing is saved.
+  - **The text** is the built-in one, in Persian and English, unless the owner edited the text "maintenance" (Branding
+    and texts), which is then used for the popup and the message alike. The customer's language is theirs, or the one
+    Telegram reports for someone with no account.
+  - **What still works is this list and nothing else:** staff (owner, admin, support) and the owners the server names,
+    also before they have an account; `/paysupport`, which Telegram requires of a bot that sells with Stars; a payment
+    already under way, that is its receipt, bank reference or TXID while the bot waits for one (a tap on the bottom
+    menu, a command or a button in the middle of it is held), its Check button, and a Stars invoice already sent (its
+    pre-checkout and its payment are always answered); and a newcomer's `/start` and language choice, which make
+    the account and keep an invite code (they are then shown the welcome and the maintenance text, without the bottom
+    menu). What is let through this way gets no bottom menu and no home screen with it.
+  - **Not held, because it is not the bot answering:** notifications to customers (a payment confirmed, a service
+    delivered, a reminder, a staff answer to a ticket) keep arriving; the buttons under them are held like any other.
+    A customer cannot write to support while maintenance is on; the staff answers to their tickets still arrive.
+  - **Order:** maintenance comes before the required channel: while it is on, nobody is asked to join and nobody's
+    membership is looked up.
+  - **Switching it on or off needs no restart.** The bot reads the setting as it last reloaded the settings: the
+    dashboard makes core ask the bot to reload at once, `/set` and the admin panel's buttons reload on the spot, and
+    the bot reloads by itself every minute.
+  - The Mini App holds the same rule call by call, and its sign-in says so ([17-mini-app.md](17-mini-app.md)). The
+    dashboard is for staff and stays open (the owner switches maintenance off there), and a service's own page
+    (`/sub/<token>`) stays up: active services keep working.
 - **Required channel:** customers join it before using the bot (a join button and an "I've joined" check). Members
   are remembered for 10 minutes; if Telegram cannot answer, users are let in. Staff and a newcomer's `/start` and
-  language choice are never blocked. The Mini App holds the same rule, with the same exemptions and the same choice
-  when Telegram cannot answer ([17-mini-app.md](17-mini-app.md), "The required channel").
-- **Limits:** taps and messages per 10 seconds, support messages per day.
+  language choice are never blocked, nor is a payment under way, and a customer may go on with a support ticket they
+  already have (starting one asks them to join first). The Mini App holds the same rule, with the same exemptions and
+  the same choice when Telegram cannot answer ([17-mini-app.md](17-mini-app.md), "The required channel").
+- **Limits:** taps and messages per 10 seconds (checked before the gates; a message over it is not answered, a tap gets
+  "Too many requests"), support messages per day.
 - **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to every owner the
   server names (`BOBRES_ADMIN_TELEGRAM_ID` lists one or several), or to every owner and admin. "Payment taken but not recorded" is always sent. The **daily sales summary** (off until the
   store turns it on, `reports.daily_summary`) goes once a day to every owner and admin, whatever `notify.recipients` says,

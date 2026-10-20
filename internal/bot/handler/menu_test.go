@@ -330,7 +330,8 @@ func TestMenuTapsGetPopupsAsMessages(t *testing.T) {
 }
 
 // A payment under way passes the gates, a tap on the bottom menu never rides
-// on it; going on with a ticket lets Support through, nothing else.
+// on it; going on with a ticket lets Support through the required channel
+// (never maintenance), nothing else.
 func TestMenuTapsDoNotPassTheGates(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
@@ -358,14 +359,18 @@ func TestMenuTapsDoNotPassTheGates(t *testing.T) {
 	}
 	paying.photo("receipt-gate-m", "REF-1") // the payment itself still goes through
 	paying.lastHas("Received")
-	ticket.tapMenu("en", "btn.support")
-	ticket.lastHas("help me please") // the ticket, not the maintenance answer
+	ticket.tapMenu("en", "btn.support") // maintenance holds Support like the rest, ticket or none
+	ticket.lastHas("under maintenance")
 	ticket.tapMenu("en", "btn.buy")
 	ticket.lastHas("under maintenance")
 
 	owner.text("/set maintenance.enabled false")
 	owner.text("/set join.channel @testchan")
 	owner.sees("Saved")
+	ticket.tapMenu("en", "btn.support") // the channel lets the conversation go on
+	ticket.lastHas("help me please")
+	ticket.tapMenu("en", "btn.buy")
+	ticket.lastHas("Join our channel")
 	alerts := owner.count("New payment to review")
 	ref.tapMenu("en", "btn.buy")
 	ref.lastHas("Join our channel")
@@ -509,9 +514,11 @@ func TestOldLabelOnTheKeyboardIsATap(t *testing.T) {
 	isTap(v)
 }
 
-// During maintenance Support goes on with the open ticket; with none open
-// (support closed it, though the scene still names it) the tap gets the
-// maintenance answer, not the prompt to start a ticket.
+// Maintenance holds Support whether a ticket is open or not (the report: it
+// showed the ticket, or nothing at all). The required channel lets Support go
+// on with the open ticket; with none open (support closed it, though the scene
+// still names it) the tap gets the join prompt, not the prompt to start a
+// ticket.
 func TestGatedSupportTapNeedsAnOpenTicket(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
@@ -522,12 +529,17 @@ func TestGatedSupportTapNeedsAnOpenTicket(t *testing.T) {
 	owner.text("/set maintenance.enabled true")
 	owner.sees("Saved")
 	u.tapMenu("en", "btn.support")
+	u.lastHas("under maintenance")
+	owner.text("/set maintenance.enabled false")
+	owner.text("/set join.channel @testchan")
+	owner.sees("Saved")
+	u.tapMenu("en", "btn.support")
 	u.lastHas("my first message")
 	if _, err := w.dom().SetTicketStatus(context.Background(), w.storeUser(ownerID), w.openTicket(2711).ID, "closed", ""); err != nil {
 		t.Fatal(err)
 	}
 	u.tapMenu("en", "btn.support")
-	u.lastHas("under maintenance")
+	u.lastHas("Join our channel")
 }
 
 // Support pressed when the bottom menu is sent ahead of the answer answers

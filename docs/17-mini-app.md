@@ -151,8 +151,13 @@ allowed sources do not include a Mini App one, and the store is the bot's second
 While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check, list the
 manual payments waiting for their proof and send the proof of one already started, so that a payment in flight
 finishes: a Stars payment is settled by the bot all the same, and a customer who has paid by hand can say so, as the bot
-lets them (it takes the receipt, the bank number or the hash of a payment under way). Browsing, buying, top-up and
-starting a payment answer 503 `maintenance`.
+lets them (it takes the receipt, the bank number or the hash of a payment under way). Everything else answers 503
+`maintenance`: browsing, buying, top-up, starting a payment, the free trial, invites, support and the reseller panel.
+It is one check for every call (`miniMaintenance`, the same one that sets the flag in `/me` and in the sign-in), staff
+and the owners the server names are never held, and the bot holds the same rule ([03-bot-ux.md](03-bot-ux.md)): a
+customer in maintenance gets the maintenance text for everything but a payment under way. A test reads the app's routes
+from the source and sweeps every one of them, so a section added later is held unless it is named in the test's list
+of what a payment under way needs.
 
 ## Stars and manual payments
 
