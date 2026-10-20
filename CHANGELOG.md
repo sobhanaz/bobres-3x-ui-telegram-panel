@@ -8,39 +8,90 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-### Bot
-- **Maintenance mode now holds the whole bot.** With `maintenance.enabled` on, the maintenance text did not come from
-  every option, Support among them (the owner reported it). Three things let a customer past it: the text was sent at
-  most once a minute per customer, so the second tap on the bottom menu within a minute got no answer at all; a
-  customer who had written to support went on with their ticket (Support in the bottom menu showed it, and their
-  messages, photos, files, voice messages and albums, their Telegram replies to a staff answer, and the Reply, Close
-  and history buttons all worked); and the language buttons opened the picker, switched the language and brought back
-  the home menu and the bottom menu. Now one decision (`maintenancePasses` in `internal/bot/handler/gates.go`), made
-  before any command, button, scene or conversation sees the update, answers every update of a customer with the
-  maintenance text, every time: a popup for a button, a message for anything typed or sent (an album, which Telegram
-  delivers a part at a time, gets one). The owner's own text for the message ("maintenance" under Branding and texts)
-  is used when set. What still works is a short list and nothing else: staff and the owners the server names (also
-  before they have an account), `/paysupport`, a payment already under way (its receipt, bank reference or TXID, its
-  Check button, a Stars invoice already sent) and a newcomer's `/start` and language choice. Maintenance still comes
-  before the required channel, and switching either on or off takes hold at the bot's next settings reload (at once
-  for a change in the dashboard or by `/set`), never at a restart.
-- **A customer can no longer write to support while maintenance is on**, or answer a staff reply: they are told the
-  bot is under maintenance, and what they sent is not saved. Staff answers to open tickets still reach them. The
-  required channel is not changed: it still lets a customer go on with a ticket they have (starting one asks them to
-  join first) and still lets anyone's language picker through.
-- Tests: every command, button verb, bottom-menu item and scene is sent to the bot in maintenance, twice in a row,
-  from the state a customer would have been in, and a test reads the handler's source and fails when one is missing
-  from its tables. The Mini App, which already held the same rule, got the same treatment: its routes are read from the
-  source and swept for a customer, for each staff role and for an owner the server names; its three copies of the rule
-  are one function now. No change of behavior there, and nothing for the dashboard (staff only) or a service's own
-  page (`/sub/<token>`, which keeps working) to change.
+## [0.7.0] — 2026-10-20
+
+The owner's next batch of 2026-10-20, sent with twelve screenshots of another store's bot: **the dashboard can now
+update the server by itself** (System > Updates: a Check again that checks, a stable or beta channel, and Update now),
+the **Reports page changes every date** with its Calendar switch and the **CSV files were reviewed** and fixed,
+**maintenance mode holds every option** of the bot (Support included), and five features from the other bot arrive:
+Top users, account lines, a card to forward, `/new` `/renew` `/status`, and a reseller application. The rest of that batch
+(gift codes, bulk purchase, a help center, server monitoring, a full uninstall, backup download and restore in the
+dashboard) comes in later releases.
 
 ### Updating
-- Nothing to configure and no migration. Only the bot's behavior changed (core's change is a clean-up).
+- `sudo bobres update --check` shows it and `sudo bobres update` does it. **This update must still be made over SSH**:
+  the new `bobres` it installs is what sets up the helper that lets the dashboard update the server. From the next
+  release on, System > Updates can do it (owner only).
+- One database migration (00025, the table `system_updates`) and one new mount in `docker-compose.yml` (`./run/update`);
+  `bobres update` does both. Nothing to configure. `sudo bobres check` has a new line, Dashboard updates.
+- Two systemd units are added on the host (`bobres-updater.path` and `bobres-updater.service`); `sudo bobres config set
+  BOBRES_UPDATE_FROM_DASHBOARD off` removes them.
+- After the update every customer gets a new bottom menu once, with their next message (a new row: Become a reseller,
+  and Top users while the referral program is on).
+- The CSV files of the reports, the ledger and the audit log have new columns at the end and `\r\n` line ends; a script
+  that reads them by column name keeps working.
+- Core and the bot move together (the bot asks core a new question and reads a new field of the settings): update both,
+  as `sudo bobres update` does.
 
 ### Known limits
-- A flood of messages over the bot's rate limit (`limits.bot_per_10s`, 20 in 10 seconds unless changed) stays
-  unanswered, in maintenance as at any time; buttons over it get "Too many requests".
+- **Updating from the dashboard has not run end to end.** The server's updater was tried on a lab server with a real
+  systemd and Docker (Ubuntu 24.04), with core's half emulated; core's half was tried against the updater's protocol and a
+  fake folder, and the two meet in a test of the protocol. If System > Updates does not work for you, `sudo bobres update`
+  over SSH always does. Ubuntu 22.04, Debian 12 and arm64 are untried, and a rollback that restores the database is
+  covered by unit tests only.
+- Nothing of the bot's new features, the Mini App or the dashboard changes has been seen in a real Telegram. The Persian
+  texts of the new features are a first draft and want a native read (every one can be edited).
+- Top users shows the customers' names and Telegram ids only masked, and there is no board in the Mini App.
+- A customer with another open conversation with support must close it before applying to be a reseller (a customer has
+  one open ticket at a time).
+- A flood of messages over the bot's rate limit (`limits.bot_per_10s`) stays unanswered, in maintenance as at any time.
+- The CSV files were checked as files (byte by byte and with Go's reader), not opened in Excel or LibreOffice.
+
+### Updating from the dashboard: System > Updates
+- **System > Updates can now update the install**: the owner confirms and core asks the server's updater (a root systemd
+  path unit installed by `bobres install` and `bobres update`) to run the same signed, backed-up, self-rolling-back
+  `bobres update`. Core never gets the Docker socket. The page shows the steps, the updater's sentence and (to the owner)
+  its log, copes with core restarting in the middle, and offers a reload when the new version is up. A request, its
+  outcome and a Telegram notice to every owner are recorded (`system.update.requested` and `system.update.<outcome>` in
+  the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
+- **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
+  unset, the server's variable still decides. A pre-release needs its own confirmation.
+- **An update that was cut off does not block the next one.** If the server loses power in the middle of an update, the
+  updater's status keeps saying "running"; the dashboard now takes a status the updater has not rewritten for 10
+  minutes (it does every 30 seconds) for an interrupted update, records it as failed, tells the owners and lets another
+  be asked for. Without it the page would wait for ever and only `sudo bobres update` on the server could clear it.
+- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** "Check again" only re-read the
+  bot's cached answer (`GET /api/v1/system`), because core had no way to make the bot look again, so "Last checked" never
+  moved and a failed check (GitHub unreachable when the bot started) stayed for an hour. It now calls
+  `POST /api/v1/system/updates/check`, which has the bot reload its settings and look at GitHub at once, and shows when
+  it looked and why a look failed (GitHub's own words included). The update button was never one: the page only showed
+  `sudo bobres update` with a copy button that did nothing at all in a browser without a clipboard (a dashboard opened
+  over plain http), and the command ignored the channel the page showed. The command now names the channel, copying
+  falls back to the older way and says when it cannot, and there is an Update now.
+- New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
+  Updating from the dashboard needs the server's updater (below) and the `./run/update` mount in `docker-compose.yml`;
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
+
+### Updating from the dashboard: the server's updater
+- **A server can now be updated without logging in to it.** `bobres install` (so every `bobres update`) sets up two
+  systemd units, `bobres-updater.path` and `bobres-updater.service`, and `bobres update --from-request` (not in the
+  help) is what the service runs: it reads the one request the dashboard dropped into `/opt/bobres/run/update`,
+  deletes it, takes the same install lock as `update`, `rollback` and `restore`, and runs exactly what
+  `bobres update --yes --channel C [--version V]` runs (signed release, backup, restore point, install, health check,
+  automatic rollback). It reports each step in `run/update/status.json`, which the dashboard shows.
+- **The request carries only a channel (`stable` or `beta`) and a release name** and is checked as strictly as it can
+  be: the file is opened without following a link, must be a regular file of core's user of 2 KiB at most, has exactly
+  the protocol's fields, is dated within 15 minutes, and an id seen before is ignored. A compromised dashboard can at
+  worst start an update to a release the vendor signed, at a time the owner did not choose.
+- **The channel chosen in the dashboard is kept**: after a successful run `BOBRES_UPDATE_CHANNEL` in `.env` follows the
+  request's channel, so `sudo bobres update` and the menu agree with it.
+- Core's container gets one new mount, `run/update` (read-write), and no other power over the host; `bobres install`
+  makes the directory (owned by core's user, mode 0700).
+- `sudo bobres check` and `bobres doctor` have a "Dashboard updates" line (WARN, never FAIL). `sudo bobres config set
+  BOBRES_UPDATE_FROM_DASHBOARD off` removes the units, `on` installs them, and `bobres uninstall --purge` removes them
+  with the install.
+- `bobres update`, `bobres rollback` and `bobres restore` now take one lock (`/opt/bobres/.update.lock`): a second one
+  that starts while another runs says so and changes nothing.
 
 ### Reports: the calendar and the CSV files
 - **The Calendar switch of the Reports page changes every date, both ways.** It used to cut Jalali weeks and months
@@ -77,20 +128,37 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
     currency on every row, who may export (owner and admin; support gets 403), streaming and the row cap, nothing secret
     in any file, and that the rows add up to the report's totals (new tests).
 
-### Growth and account features for the bot
-Picked by the owner from a competitor's bot: a Top users board, account lines on the wallet screen, a card to forward in
+### The bot holds maintenance mode in every option
+- **Maintenance mode now holds the whole bot.** With `maintenance.enabled` on, the maintenance text did not come from
+  every option, Support among them (the owner reported it). Three things let a customer past it: the text was sent at
+  most once a minute per customer, so the second tap on the bottom menu within a minute got no answer at all; a
+  customer who had written to support went on with their ticket (Support in the bottom menu showed it, and their
+  messages, photos, files, voice messages and albums, their Telegram replies to a staff answer, and the Reply, Close
+  and history buttons all worked); and the language buttons opened the picker, switched the language and brought back
+  the home menu and the bottom menu. Now one decision (`maintenancePasses` in `internal/bot/handler/gates.go`), made
+  before any command, button, scene or conversation sees the update, answers every update of a customer with the
+  maintenance text, every time: a popup for a button, a message for anything typed or sent (an album, which Telegram
+  delivers a part at a time, gets one). The owner's own text for the message ("maintenance" under Branding and texts)
+  is used when set. What still works is a short list and nothing else: staff and the owners the server names (also
+  before they have an account), `/paysupport`, a payment already under way (its receipt, bank reference or TXID, its
+  Check button, a Stars invoice already sent) and a newcomer's `/start` and language choice. Maintenance still comes
+  before the required channel, and switching either on or off takes hold at the bot's next settings reload (at once
+  for a change in the dashboard or by `/set`), never at a restart.
+- **A customer can no longer write to support while maintenance is on**, or answer a staff reply: they are told the
+  bot is under maintenance, and what they sent is not saved. Staff answers to open tickets still reach them. The
+  required channel is not changed: it still lets a customer go on with a ticket they have (starting one asks them to
+  join first) and still lets anyone's language picker through.
+- Tests: every command, button verb, bottom-menu item and scene is sent to the bot in maintenance, twice in a row,
+  from the state a customer would have been in, and a test reads the handler's source and fails when one is missing
+  from its tables. The Mini App, which already held the same rule, got the same treatment: its routes are read from the
+  source and swept for a customer, for each staff role and for an owner the server names; its three copies of the rule
+  are one function now. No change of behavior there, and nothing for the dashboard (staff only) or a service's own
+  page (`/sub/<token>`, which keeps working) to change.
+
+### The bot: growth and account features
+Picked by the owner from another store's bot: a Top users board, account lines on the wallet screen, a card to forward in
 Invite friends, the commands `/new`, `/renew` and `/status`, and a reseller application. Every text is in Persian and
 English and can be edited like the others.
-
-#### Updating
-- `sudo bobres update` does it: core and the bot move together (the bot asks core a new question and reads a new field of
-  the settings). There is no database migration. Nothing has to be configured.
-- **After the update every customer gets a new bottom menu once**, with their next message, because it has a new row
-  (Become a reseller, and Top users while the referral program is on). A store whose license has no resellers (the free
-  tier) does not offer Become a reseller; the trial has them.
-- The bot's command menu in Telegram gains `/new`, `/renew` and `/status` by itself within a refresh.
-- A bot updated before its core shows no Become a reseller button and answers "not available" to Top users; a core updated
-  before its bot changes nothing a customer sees.
 
 #### Telegram bot
 - **Top users.** A button on the home screen and in the bottom menu opens the board of the customers who invited the most
@@ -131,60 +199,6 @@ English and can be edited like the others.
 - A ticket's category is shown on its card and in its conversation, **Reseller application** included. The topics to write
   under stay Payment, Service and Other: an application is made from the bot's button, and a message from the app that
   names the reseller category is filed as Other.
-
-#### Known limits
-- Top users shows the customers' names and Telegram ids only masked, and there is no board in the Mini App.
-- A customer with another open conversation with support must close it before applying (a customer has one open ticket at a
-  time).
-- Nothing of this has been tried in a real Telegram yet.
-
-### Updating from the dashboard
-- **System > Updates can now update the install**: the owner confirms and core asks the server's updater (a root systemd
-  path unit installed by `bobres install` and `bobres update`) to run the same signed, backed-up, self-rolling-back
-  `bobres update`. Core never gets the Docker socket. The page shows the steps, the updater's sentence and (to the owner)
-  its log, copes with core restarting in the middle, and offers a reload when the new version is up. A request, its
-  outcome and a Telegram notice to every owner are recorded (`system.update.requested` and `system.update.<outcome>` in
-  the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
-- **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
-  unset, the server's variable still decides. A pre-release needs its own confirmation.
-- **An update that was cut off does not block the next one.** If the server loses power in the middle of an update, the
-  updater's status keeps saying "running"; the dashboard now takes a status the updater has not rewritten for 10
-  minutes (it does every 30 seconds) for an interrupted update, records it as failed, tells the owners and lets another
-  be asked for. Without it the page would wait for ever and only `sudo bobres update` on the server could clear it.
-- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** "Check again" only re-read the
-  bot's cached answer (`GET /api/v1/system`), because core had no way to make the bot look again, so "Last checked" never
-  moved and a failed check (GitHub unreachable when the bot started) stayed for an hour. It now calls
-  `POST /api/v1/system/updates/check`, which has the bot reload its settings and look at GitHub at once, and shows when
-  it looked and why a look failed (GitHub's own words included). The update button was never one: the page only showed
-  `sudo bobres update` with a copy button that did nothing at all in a browser without a clipboard (a dashboard opened
-  over plain http), and the command ignored the channel the page showed. The command now names the channel, copying
-  falls back to the older way and says when it cannot, and there is an Update now.
-- New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
-  Updating from the dashboard needs the server's updater (below) and the `./run/update` mount in `docker-compose.yml`;
-  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
-
-### Updating from the dashboard (host side)
-- **A server can now be updated without logging in to it.** `bobres install` (so every `bobres update`) sets up two
-  systemd units, `bobres-updater.path` and `bobres-updater.service`, and `bobres update --from-request` (not in the
-  help) is what the service runs: it reads the one request the dashboard dropped into `/opt/bobres/run/update`,
-  deletes it, takes the same install lock as `update`, `rollback` and `restore`, and runs exactly what
-  `bobres update --yes --channel C [--version V]` runs (signed release, backup, restore point, install, health check,
-  automatic rollback). It reports each step in `run/update/status.json`, which the dashboard shows.
-- **The request carries only a channel (`stable` or `beta`) and a release name** and is checked as strictly as it can
-  be: the file is opened without following a link, must be a regular file of core's user of 2 KiB at most, has exactly
-  the protocol's fields, is dated within 15 minutes, and an id seen before is ignored. A compromised dashboard can at
-  worst start an update to a release the vendor signed, at a time the owner did not choose.
-- **The channel chosen in the dashboard is kept**: after a successful run `BOBRES_UPDATE_CHANNEL` in `.env` follows the
-  request's channel, so `sudo bobres update` and the menu agree with it.
-- Core's container gets one new mount, `run/update` (read-write), and no other power over the host; `bobres install`
-  makes the directory (owned by core's user, mode 0700).
-- `sudo bobres check` and `bobres doctor` have a "Dashboard updates" line (WARN, never FAIL). `sudo bobres config set
-  BOBRES_UPDATE_FROM_DASHBOARD off` removes the units, `on` installs them, and `bobres uninstall --purge` removes them
-  with the install.
-- `bobres update`, `bobres rollback` and `bobres restore` now take one lock (`/opt/bobres/.update.lock`): a second one
-  that starts while another runs says so and changes nothing.
-- Updating: **the first update to this release still goes over SSH** (`sudo bobres update`): the install of the new bobres is
-  what installs the units. After that the dashboard can do it. Nothing to configure.
 
 ## [0.6.1] — 2026-10-20
 
