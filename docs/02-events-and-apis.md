@@ -206,6 +206,25 @@ no internet access: the bot asks `https://api.ipify.org`, then `https://ifconfig
 no proxy), accepts only a 200 answer of at most 64 bytes that is a public IP address, and answers `{"ip": "..."}`.
 Core's `POST /api/v1/system/tls/detect-ip` and the Detect button of the dashboard's HTTPS tab use it.
 
+## Dashboard updates (update helper)
+Core cannot update the store itself (no Docker socket, no internet access). The dashboard's Updates tab asks a helper
+on the host through one host directory, `<install dir>/run/update` (core sees it as `/run/bobres-update`, read-write;
+owner uid 65532, mode 0700, the only part of the host core can write; `deploy/docker-compose.yml`), and two small files
+in it, protocol version 1 (06-installer.md, "Updating from the dashboard", has the rules; 07-security.md the threat model):
+
+| File | Written by | Content |
+|---|---|---|
+| `request.json` | core: a temp file in the same folder, then a rename; at most 2 KiB | `{"v":1,"id":"<uuid>","action":"update","channel":"stable"\|"beta","version":"","by":"<user, 1-64 chars>","at":"<RFC 3339>"}`; `version` is `""` (the newest verified release of the channel) or `X.Y.Z` / `X.Y.Z-label.N`; no other field is accepted; `at` within 15 minutes before and a minute after the server's clock; an id already handled is ignored |
+| `status.json` | the helper (`bobres update --from-request`, run by `bobres-updater.service` when `bobres-updater.path` sees the request): a temp file, then a rename; root's, mode 0644 | `{"v":1,"installed":true,"helper":"0.7.0","state":"idle"\|"running"\|"done"\|"failed"\|"rolled_back","id":"","from":"0.6.1","to":"0.7.0","channel":"stable","step":"verify"\|"backup"\|"pull"\|"restart"\|"health"\|"rollback"\|"done","message":"one short sentence","started_at":null,"finished_at":null,"log":[]}` |
+
+- The helper deletes `request.json` as soon as it has read it, whatever it held, and answers under the request's `id`
+  (an `id` that could not be read is answered as `""`). `installed: true` is how core knows the helper exists; no
+  `status.json` means it is not installed (yet), `installed: false` that the owner switched it off. `started_at` and
+  `finished_at` are RFC 3339 times in UTC, `null` while unknown; `log` has at most 40 lines, secrets scrubbed. While an
+  update runs the file is rewritten at least every 30 seconds.
+- Core should start no request while `state` is `running` and the file is younger than a minute or two; the helper
+  itself refuses (as `failed`) a request that comes while another update, rollback or restore holds the install lock.
+
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.
 - Implemented (2026-10-12): payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and
