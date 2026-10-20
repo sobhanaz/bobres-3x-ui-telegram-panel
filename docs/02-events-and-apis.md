@@ -115,6 +115,14 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   `GetBotPhoto` returns `{version, jpeg}` (a square JPEG of at most 3 MB) or NOT_FOUND. The bot reads the version
   with every settings refresh and fetches the photo only when it changes. An older core sends no version and
   answers UNIMPLEMENTED; an older bot ignores the field.
+- core, help content (built, additive): `ListHelpEntries(user_id, kind, language)` returns the enabled FAQ questions or
+  tutorials in the owner's order, each in the customer's language (the other one where that translation is missing,
+  `HelpEntry.language` says which), and `GetHelpEntry(user_id, id, language)` one of them; a banned customer is
+  PERMISSION_DENIED, an unknown one NOT_FOUND, and an entry that is gone or switched off NOT_FOUND. Titles are plain
+  text, bodies Telegram's HTML subset checked by core, tutorial buttons https only. `Settings.help_faq` and
+  `help_tutorials` say whether there is anything to show (false from an older core, which answers UNIMPLEMENTED: the
+  bot then shows no help buttons). The owner writes the entries over the dashboard's `/api/v1/help` endpoints
+  ([04-dashboard.md](04-dashboard.md)); each change is audited and tells the bot to reload its settings.
 - payments: `CreateIntent`, `GetIntent`, `SubmitReceipt`, `ReviewReceipt`, `ListProviders`; HTTP webhooks per provider behind the gateway.
 - payments, gateway settings (milestone 6a, built; core's token only): `ListGatewayConfigs` (provider, enabled,
   configured, offered, sandbox, merchant_hint = last 4, proxy_set, key_missing, from_env, problem, updated_at/by;
