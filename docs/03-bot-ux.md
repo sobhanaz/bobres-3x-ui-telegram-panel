@@ -8,10 +8,15 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 - Inline keyboards edit the same message (no chat spam). Always a Back and a Home button.
 - A bottom menu (a persistent reply keyboard) holds the main actions: Buy, My services, Wallet, Free trial,
   Support, then Invite friends (only when referrals are on; resellers get the Reseller panel instead) beside
-  Language; owners and admins also get Admin panel and Dashboard, support staff only Dashboard. A tap does what
-  the same inline button does. It comes with the welcome, after a language change and with `/menu`, and again
-  ahead of the next answer whenever it changed (role, language, an edited label). A tap is never taken as the
-  answer to an open question (a bank reference, a service name), and the gates treat it as any message.
+  Language, then a row with Become a reseller (customers only, while the license includes resellers) and Top users
+  (while the referral program and the Top users board are on); owners and admins also get Admin panel and Dashboard,
+  support staff only Dashboard. A tap does what the same inline button does. It comes with the welcome, after a
+  language change and with `/menu`, and again ahead of the next answer whenever it changed (role, language, an edited
+  label, a switch that adds or takes away one of those buttons). A tap is never taken as the answer to an open
+  question (a bank reference, a service name), and the gates treat it as any message.
+- The commands `/new`, `/renew` and `/status` do what Buy, Renew and My services do. They are in the bot's command
+  menu with a Persian and an English description (`profile.cmd.new`, `profile.cmd.renew`, `profile.cmd.status`, edited
+  like any text), and they pass every gate exactly as the buttons do (see "Commands" below).
 - Buttons are colored by what they do, the same on every keyboard: green pays or confirms, blue opens a main
   action, red cancels or refuses (Telegram has these three colors). Link buttons too: the payment link is
   green, sharing an invite link and joining the channel are blue. Navigation, lists and links to read (terms,
@@ -23,11 +28,13 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Main menu (user)
 1. Buy service
 2. My services
-3. Wallet (balance, top up, history)
+3. Wallet (the account lines, balance, top up, history)
 4. Free trial (once per user, abuse-checked)
-5. Invite friends (referral link, earnings)
+5. Invite friends (referral link, earnings, a card to forward)
 6. Support (tickets, FAQ)
 7. Settings (language, notifications)
+8. Top users (only while the referral program is on and the owner has not switched the board off)
+9. Become a reseller (customers who are not resellers or staff, only while the license includes resellers)
 (+ Reseller panel button when role = reseller; + Admin button when role = admin)
 
 ## Key flows
@@ -45,7 +52,61 @@ the chain. A different amount is an unmatched deposit: staff are told and credit
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
 Built (2026-10-10): one open conversation per customer, numbered; text, photos and PDFs; staff replies arrive in the
 chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; past tickets can be read.
+A ticket has a category: the customer picks Payment, Service or Other, and a reseller application (below) is filed under
+its own, **Reseller**; the topics a customer picks from never include it.
 **Referral:** personal link, count, reward rules, balance credited on first paid order of the referred.
+Built (2026-10-20): besides its screen, **Invite friends** sends the customer a **card to forward**: a message of its own,
+with no buttons, holding the store's promo text (`ref.promo`: "get safe, fast services without interruption through the
+`{brand}` bot", edited like any text) that ends in the customer's own invite link as a text link (the label is
+`ref.promo_link`), and then a line that says to forward the message above to their friends (`ref.promo_hint`). A friend
+who joins through the link is the customer's invite. The Share button stays. Each time the screen is opened the card
+comes again. A reseller's **My link** screen sends the same card with their link, whatever the store's referral reward.
+
+**Top users** (built 2026-10-20): the board of the customers who invited the most people, from the **Top users**
+button (home screen and bottom menu), shown only while `referral.reward_percent` is above 0 and the owner's switch
+`growth.leaderboard.enabled` (Settings, Growth; on by default) is on. Five places to a page: the rank, 👤, the name
+and the Telegram id **masked by core** (the first and last three characters of the username with `***` between,
+`***` for no username or a short one; the id the same way: `7102607089` is `710***089`), and how many users joined
+through that customer's link; a name or an id is never sent whole. A name shorter than nine characters shows fewer
+characters at each end, so that at least three always stay hidden (four or fewer: none). Under the places: the
+viewer's own count on a button (`Your invites: 3`, which opens their Invite friends screen) and **Others**, which pages
+on (ranks 6 to 10, 11 to 15, up to rank 50); the viewer's own place is marked when it is on the page. Who is ranked:
+active customers only, never staff, resellers (their invites are their commission link) or banned users, however many
+they invited; the count is the one of the Invite friends screen (every user who joined through the link); a tie goes
+to whoever joined the bot first; a customer who invited nobody is not ranked. The board is one query for all
+customers, kept for 30 seconds in core, and took 60 to 120 ms over 100,000 users, a third of them invited by one of
+about 2,000 inviters, on a busy laptop (`BOBRES_SCALE_TEST=1 go test ./internal/core/store -run TopInvitersAtScale -v`
+seeds them and prints the timings and the plan); the viewer's own count is always read fresh. With the switch off (or the program off) the button is gone from both menus, and a tap on an old
+button answers "not available" and shows the home screen. Not built: a board in the Mini App.
+
+**Account lines** (built 2026-10-20): the **Wallet** screen starts with the customer's account, above the balance and
+the buttons: their numeric Telegram id (Latin digits, tap to copy), how many services they have (the deleted ones do
+not count) and the day they joined the bot (Jalali for Persian, Gregorian for English, in the store's time zone). A
+figure core cannot give shows a dash and costs the customer nothing else.
+
+**Commands** (built 2026-10-20): `/new` opens the buy flow (the Buy button), `/renew` the services that can be renewed,
+each a button that opens its plans to renew with (a reseller: their services list, where a service has Renew), `/status`
+My services. A command goes through `dispatch` as the button does, so it has the same role checks, and `Handle` runs
+the gates in front of it as for any update: maintenance and the required channel answer it (staff pass), and so does
+a language not chosen yet (the picker first). A command is never the answer to an open question: it closes it, as a
+tap on the bottom menu does (a ticket message, a discount code, a bank reference, an application), and a command a gate
+holds back leaves a payment under way untouched, so its receipt can still be sent. They also work as `/new@BotName`.
+
+**Reseller application** (built 2026-10-20): the **Become a reseller** button (customers who are not resellers or staff,
+and not banned, only while the license in effect includes resellers; core tells the bot with every settings refresh,
+and a customer is never told about licensing) asks for **one text message**: the request and what is worth knowing
+about the applicant, then to wait for an admin. The message is filed as a support ticket in the **reseller** category
+through the usual ticket call, and the customer is told its number. Staff get the usual new-ticket alert (the
+`notify.new_ticket` switch, the same recipients) in the words of an application ("New reseller application #12 from
+@name") with the applicant (@username, else the Telegram id) and an **Open in dashboard** button that opens the
+ticket; they answer in the dashboard and the answer reaches the customer in the bot, who can write back. One open
+application per customer, and one open conversation with support at a time: a customer who has another open ticket is
+told to close it or wait, and one whose application is open is told it is waiting (with a Support button that shows
+it). A closed application can be made again. Turning the applicant into a reseller stays the dashboard's Resellers
+page. The dashboard's inbox lists the category ("Reseller application") and filters by it, the ticket page and the
+Mini App name it too. Core refuses an application from a reseller, staff, a banned customer or while resellers are not
+in the license (the bot says only that it is not available), and counts it as a support message for
+`limits.tickets_per_day`.
 
 ## Admin in bot (every task is a button; the dashboard stays the full tool)
 `/admin` is the front door for owners and admins (it says when maintenance mode is on). Nobody has to remember a

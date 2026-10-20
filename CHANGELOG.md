@@ -77,6 +77,67 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
     currency on every row, who may export (owner and admin; support gets 403), streaming and the row cap, nothing secret
     in any file, and that the rows add up to the report's totals (new tests).
 
+### Growth and account features for the bot
+Picked by the owner from a competitor's bot: a Top users board, account lines on the wallet screen, a card to forward in
+Invite friends, the commands `/new`, `/renew` and `/status`, and a reseller application. Every text is in Persian and
+English and can be edited like the others.
+
+#### Updating
+- `sudo bobres update` does it: core and the bot move together (the bot asks core a new question and reads a new field of
+  the settings). There is no database migration. Nothing has to be configured.
+- **After the update every customer gets a new bottom menu once**, with their next message, because it has a new row
+  (Become a reseller, and Top users while the referral program is on). A store whose license has no resellers (the free
+  tier) does not offer Become a reseller; the trial has them.
+- The bot's command menu in Telegram gains `/new`, `/renew` and `/status` by itself within a refresh.
+- A bot updated before its core shows no Become a reseller button and answers "not available" to Top users; a core updated
+  before its bot changes nothing a customer sees.
+
+#### Telegram bot
+- **Top users.** A button on the home screen and in the bottom menu opens the board of the customers who invited the most
+  people, five to a page (Others pages on, to rank 50), each place with the rank, a masked name and Telegram id (the first
+  and last three characters around `***`: `Par***mad (181***314)`; `***` for no username; a short name shows less, so that
+  at least three characters always stay hidden) and the number of invites, the viewer's own count on a button (which
+  opens their Invite friends screen) and their place marked when it is on the page. Core masks the name and the id, so
+  the bot never holds a whole one. Staff, resellers (their invites are their commission link) and banned users are never
+  on it; a tie goes to whoever joined first. It is shown only while the referral program is on
+  (`referral.reward_percent` above 0), and the owner can switch it off with **`growth.leaderboard.enabled`** (Settings,
+  Growth; on by default). New core call `GetTopInviters`: one query for every customer, kept for 30 seconds.
+- **Account lines on the wallet screen**: the customer's numeric Telegram id, how many services they have and the day
+  they joined the bot (Jalali for Persian, Gregorian for English), above the balance and the buttons.
+- **A card to forward in Invite friends** (and a reseller's My link): besides its screen, a message of its own with the
+  store's promo text ("get safe, fast services without interruption through the bot") ending in the customer's own invite
+  link as a text link, then a line telling them to forward it to their friends. The promo text, the link's label and the
+  line are texts the owner can edit (`ref.promo`, `ref.promo_link`, `ref.promo_hint`). The Share button stays.
+- **`/new`, `/renew` and `/status`**: Buy, a list of the services that can be renewed (each opens its plans), and My
+  services, in the command menu with Persian and English descriptions. They pass the gates as the buttons do (maintenance,
+  the required channel, the language not chosen yet), and a command is never taken as the answer to an open question (a
+  ticket message, a discount code, a bank reference): it closes the question and does what it says.
+- **Become a reseller.** A button for customers who are not resellers or staff, shown while the license includes
+  resellers, asks for one message about the applicant and files it as a support ticket in a new **reseller** category.
+  Staff get the usual new-ticket alert, worded as an application, with the applicant and a button that opens the ticket
+  (the `notify.new_ticket` switch applies); the customer is told its number and to wait for an admin, who answers from the
+  dashboard. One open application per customer, and one open ticket at a time: another open conversation is named and
+  asked to be closed first. Core refuses an application from a reseller, staff, a banned customer or while the license has
+  no resellers, and a customer is never told about licensing. Making the applicant a reseller stays the Resellers page.
+- Core: `Settings.resellers_enabled`, `GetTopInviters` and `AddTicketMessage` with category `reseller` are additive
+  (`buf breaking` is clean).
+
+#### Dashboard
+- The support inbox lists and filters by the new category **Reseller application**, and the ticket page names it, in
+  Persian and English.
+- Settings has a **Growth** card with the Top users switch.
+
+#### Telegram Mini App
+- A ticket's category is shown on its card and in its conversation, **Reseller application** included. The topics to write
+  under stay Payment, Service and Other: an application is made from the bot's button, and a message from the app that
+  names the reseller category is filed as Other.
+
+#### Known limits
+- Top users shows the customers' names and Telegram ids only masked, and there is no board in the Mini App.
+- A customer with another open conversation with support must close it before applying (a customer has one open ticket at a
+  time).
+- Nothing of this has been tried in a real Telegram yet.
+
 ## [0.6.1] — 2026-10-20
 
 Two gaps of the Mini App that the 0.6.0 notes named are closed: it now holds the store's required channel as the bot

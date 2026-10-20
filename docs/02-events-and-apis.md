@@ -62,6 +62,23 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   reseller after `resellers` left the license ("domain: forbidden") and a banned one ("user is banned"); NOT_FOUND for
   an unknown user or a service that is not theirs; INVALID_ARGUMENT for an unknown status or a note or search that is
   too long. Over the Mini App the same functions answer `/api/mini/v1/reseller/...` ([17-mini-app.md](17-mini-app.md)).
+- core, growth tools (built after v0.6.1, additive; the proto stays compatible): `GetTopInviters` (a page of the board of
+  the customers who invited the most people: request `user_id` (the viewer), `page` from 1, `page_size` (0 = 5, at most 10);
+  answer `enabled` (false while `referral.reward_percent` is 0 or `growth.leaderboard.enabled` is false, nothing else
+  set), `entries` of `{rank, name, telegram_id, invited, you}`, `page`, `page_size`, `total` (at most 50), `more`,
+  `your_invited` (every user who joined through the viewer's link, as `GetReferralInfo.invited`) and `your_rank` (0: not on
+  the board); NOT_FOUND for an unknown user). Core masks `name` and `telegram_id` itself (the first and last three
+  characters around `***`; at least three always hidden; `***` for no username), so no answer holds a whole one. Only
+  active users with the plain `user` role are ranked, a tie goes to whoever joined first, and the board is kept for 30
+  seconds (`domain.Config.LeaderboardTTL`). `Settings.resellers_enabled` is true while the license in effect includes
+  resellers (a license, its grace, the trial; the free tier does not), for the bot's Become a reseller button; an older
+  core never sets it, so the button stays hidden. `AddTicketMessage` with `category` `reseller` files a reseller
+  application: a new ticket only (never an answer in another: `ticket_id` or `reply_to_tg_message_id` is INVALID_ARGUMENT),
+  from an active customer (a reseller, staff: FAILED_PRECONDITION "only a customer can apply to become a reseller"; banned:
+  PERMISSION_DENIED), while resellers are in the license (FAILED_PRECONDITION, the staff-facing refusal), and with no other
+  ticket open (FAILED_PRECONDITION "a reseller application is open already" or "another support conversation is open": the
+  bot reads them). `Ticket.category` can be `reseller`; the topics a customer picks from stay payment, service and other
+  (`domain.SupportCategories`, which is also what the Mini App lists).
 - core, payment method switches (milestone 6a, built): `ListPaymentMethods` leaves out Telegram Stars while
   `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
   turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments
