@@ -192,6 +192,77 @@ func (s *Server) reportMethods(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"from": rng.From, "to": rng.To, "tz": rng.TZ, "methods": methods})
 }
 
+// reportPlanSeries: GET /api/v1/reports/plan-series, what each plan sold in
+// every bucket of the report (the summary's buckets: the same group and
+// calendar), per currency. Only the buckets where a plan sold are listed. Each
+// currency's best plans come one by one and the rest together as plan_id "".
+func (s *Server) reportPlanSeries(w http.ResponseWriter, r *http.Request) {
+	rng, ok := s.reportRange(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.cfg.Domain.SalesByPlan(r.Context(), rng)
+	if err != nil {
+		s.fail(w, "report plan series", err)
+		return
+	}
+	type point struct {
+		Date    string `json:"date"`
+		Orders  int64  `json:"orders"`
+		Revenue int64  `json:"revenue"`
+	}
+	type series struct {
+		PlanID   string            `json:"plan_id"` // "" for every plan beyond the currency's best
+		Name     map[string]string `json:"name"`
+		Currency string            `json:"currency"`
+		Orders   int64             `json:"orders"`
+		Revenue  int64             `json:"revenue"`
+		Points   []point           `json:"points"`
+	}
+	out := make([]series, 0, len(rows))
+	for _, p := range rows {
+		name := p.Name
+		if name == nil {
+			name = map[string]string{}
+		}
+		sr := series{PlanID: p.PlanID, Name: name, Currency: p.Currency, Orders: p.Orders, Revenue: p.Revenue, Points: make([]point, 0, len(p.Points))}
+		for _, pt := range p.Points {
+			sr.Points = append(sr.Points, point{pt.Date, pt.Orders, pt.Revenue})
+		}
+		out = append(out, sr)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from": rng.From, "to": rng.To, "group": rng.Group, "calendar": rng.Calendar, "tz": rng.TZ, "series": out,
+	})
+}
+
+// reportHours: GET /api/v1/reports/hours, paid orders and their revenue by
+// weekday (ISO: 1 Monday to 7 Sunday) and hour (0 to 23) of the local day, per
+// currency. Only the hours where something was sold are listed.
+func (s *Server) reportHours(w http.ResponseWriter, r *http.Request) {
+	rng, ok := s.reportRange(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.cfg.Domain.SalesHours(r.Context(), rng)
+	if err != nil {
+		s.fail(w, "report hours", err)
+		return
+	}
+	type hour struct {
+		Weekday  int    `json:"weekday"`
+		Hour     int    `json:"hour"`
+		Currency string `json:"currency"`
+		Orders   int64  `json:"orders"`
+		Revenue  int64  `json:"revenue"`
+	}
+	hours := make([]hour, 0, len(rows))
+	for _, h := range rows {
+		hours = append(hours, hour{h.Weekday, h.Hour, h.Currency, h.Orders, h.Revenue})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"from": rng.From, "to": rng.To, "tz": rng.TZ, "hours": hours})
+}
+
 // exportWindow is how long an export may run (a test shortens it).
 func (s *Server) exportWindow() time.Duration {
 	if s.exportTime > 0 {

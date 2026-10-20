@@ -517,6 +517,149 @@ func (s *Service) TopPlans(ctx context.Context, rng *ReportRange) ([]store.PlanR
 	return rows, reportError(err)
 }
 
+// PlanPoint is what a plan sold in one bucket of the report.
+type PlanPoint struct {
+	// Date is the bucket's start, as in SalesReport.
+	Date    string
+	Orders  int64
+	Revenue int64
+}
+
+// PlanSeries is one plan's sales in one currency across the report's buckets.
+// PlanID is empty for the row that holds every plan beyond the currency's top
+// ReportTopPlans ("other"), which has no name.
+type PlanSeries struct {
+	PlanID   string
+	Name     map[string]string
+	Currency string
+	// Orders and Revenue are the totals over the range; they are the figures
+	// TopPlans gives for the plan (for "other", the sum of the plans it holds).
+	Orders  int64
+	Revenue int64
+	// Points are the buckets where the plan sold something, oldest first.
+	Points []PlanPoint
+}
+
+// SalesByPlan splits the range's revenue by plan and by bucket, per currency:
+// the best ReportTopPlans plans of each currency one by one and the rest
+// together as "other", so a bucket's rows add up to its revenue (when every
+// purchase has its order and plan, as TopPlans assumes). The buckets are the
+// report's (a Jalali week or month is read as days and added up, like
+// SalesReport does).
+func (s *Service) SalesByPlan(ctx context.Context, rng *ReportRange) ([]PlanSeries, error) {
+	ctx, cancel := context.WithTimeout(ctx, ReportDeadline())
+	defer cancel()
+	rows, err := s.st.PlanSeries(ctx, rng.Query())
+	if err != nil {
+		return nil, reportError(err)
+	}
+	starts := make(map[string]bool, len(rng.Buckets))
+	for _, span := range rng.Buckets {
+		starts[span.Start] = true
+	}
+	type key struct{ cur, plan string }
+
+	totals := map[key]*PlanSeries{}
+	points := map[key]map[string]*planCell{}
+	for _, r := range rows {
+		bucket := r.Bucket
+		if rng.folds() {
+			d, err := time.Parse(dateLayout, r.Bucket)
+			if err != nil || r.Bucket < rng.From || r.Bucket > rng.To {
+				return nil, fmt.Errorf("plan series: a number fell on %q, outside %s to %s", r.Bucket, rng.From, rng.To)
+			}
+			bucket = bucketStart(d, rng.Group, rng.Calendar).Format(dateLayout)
+		}
+		if !starts[bucket] {
+			return nil, fmt.Errorf("plan series: a number fell outside the report's buckets (%s)", bucket)
+		}
+		k := key{r.Currency, r.PlanID}
+		if totals[k] == nil {
+			totals[k] = &PlanSeries{PlanID: r.PlanID, Name: r.Name, Currency: r.Currency}
+			points[k] = map[string]*planCell{}
+		}
+		totals[k].Orders += r.Orders
+		totals[k].Revenue += r.Revenue
+		c := points[k][bucket]
+		if c == nil {
+			c = &planCell{}
+			points[k][bucket] = c
+		}
+		c.orders += r.Orders
+		c.revenue += r.Revenue
+	}
+	byCurrency := map[string][]*PlanSeries{}
+	for k, p := range totals {
+		byCurrency[k.cur] = append(byCurrency[k.cur], p)
+	}
+	currencies := make([]string, 0, len(byCurrency))
+	for cur := range byCurrency {
+		currencies = append(currencies, cur)
+	}
+	sort.Strings(currencies)
+	out := []PlanSeries{}
+	for _, cur := range currencies {
+		plans := byCurrency[cur]
+		// The same order as TopPlans: revenue, then orders, then the id.
+		sort.Slice(plans, func(i, j int) bool {
+			a, b := plans[i], plans[j]
+			if a.Revenue != b.Revenue {
+				return a.Revenue > b.Revenue
+			}
+			if a.Orders != b.Orders {
+				return a.Orders > b.Orders
+			}
+			return a.PlanID < b.PlanID
+		})
+		other := &PlanSeries{Currency: cur}
+		otherCells := map[string]*planCell{}
+		for i, p := range plans {
+			cells := points[key{cur, p.PlanID}]
+			if i >= ReportTopPlans {
+				other.Orders += p.Orders
+				other.Revenue += p.Revenue
+				for b, c := range cells {
+					if otherCells[b] == nil {
+						otherCells[b] = &planCell{}
+					}
+					otherCells[b].orders += c.orders
+					otherCells[b].revenue += c.revenue
+				}
+				continue
+			}
+			p.Points = pointsOf(cells)
+			out = append(out, *p)
+		}
+		if len(otherCells) > 0 {
+			other.Points = pointsOf(otherCells)
+			out = append(out, *other)
+		}
+	}
+	return out, nil
+}
+
+// planCell is what a plan sold in one bucket while SalesByPlan adds it up.
+type planCell struct{ orders, revenue int64 }
+
+// pointsOf lists a plan's buckets oldest first.
+func pointsOf(cells map[string]*planCell) []PlanPoint {
+	out := make([]PlanPoint, 0, len(cells))
+	for date, c := range cells {
+		out = append(out, PlanPoint{Date: date, Orders: c.orders, Revenue: c.revenue})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
+	return out
+}
+
+// SalesHours counts the range's paid orders by weekday and hour of the local
+// day, per currency.
+func (s *Service) SalesHours(ctx context.Context, rng *ReportRange) ([]store.HourRow, error) {
+	ctx, cancel := context.WithTimeout(ctx, ReportDeadline())
+	defer cancel()
+	rows, err := s.st.SalesHours(ctx, rng.Query())
+	return rows, reportError(err)
+}
+
 // ExportDeadline bounds a CSV export: one minute for the whole of it, the same
 // number as each statement's limit (store.ExportTimeout) and the docs'.
 func ExportDeadline() time.Duration { return store.ExportTimeout }
