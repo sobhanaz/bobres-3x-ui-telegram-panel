@@ -196,7 +196,7 @@ const sizeOf = (l: Lang) => faqSize(items.value, l, limits.value)
           />
         </template>
       </Column>
-      <Column :header="k('title_label')">
+      <Column :header="k('title_label')" body-class="cell-title">
         <template #body="{ data: it }">
           <div v-for="l in HELP_LANGS" :key="l" class="line">
             <span v-if="it.title[l]" :dir="l === 'fa' ? 'rtl' : 'ltr'" :lang="l" :class="'t-' + l">{{ it.title[l] }}</span>
@@ -226,7 +226,7 @@ const sizeOf = (l: Lang) => faqSize(items.value, l, limits.value)
           />
         </template>
       </Column>
-      <Column body-class="app-nowrap">
+      <Column body-class="app-nowrap cell-actions">
         <template #body="{ data: it }">
           <Button icon="pi pi-pencil" text rounded size="small" :aria-label="t('help.edit_named', { title: named(it) })" @click="openEditor(it)" />
           <Button
@@ -305,5 +305,44 @@ const sizeOf = (l: Lang) => faqSize(items.value, l, limits.value)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* On a phone each entry is a card: the title across the top, then the order
+   arrows, the switch and the edit and delete buttons in one row below it, so
+   nothing hides behind a sideways scroll. */
+@media (max-width: 40rem) {
+  .list :deep(.p-datatable-thead) {
+    display: none;
+  }
+  .list :deep(.p-datatable-table),
+  .list :deep(.p-datatable-tbody) {
+    display: block;
+    min-inline-size: 0;
+  }
+  .list :deep(.p-datatable-tbody > tr) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.1rem 0.6rem;
+    padding-block: 0.5rem;
+    border-block-end: 1px solid var(--p-content-border-color);
+  }
+  .list :deep(.p-datatable-table > .p-datatable-tbody > tr > td) {
+    display: block;
+    padding: 0.1rem 0;
+    border: 0;
+  }
+  .list :deep(td.cell-title) {
+    order: -1;
+    flex: 1 1 100%;
+    min-inline-size: 0;
+  }
+  .list :deep(td.cell-actions) {
+    margin-inline-start: auto;
+  }
+  .line,
+  .first {
+    max-inline-size: 100%;
+  }
 }
 </style>
