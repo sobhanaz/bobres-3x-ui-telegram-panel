@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 )
 
 // Setting kinds: how a value is checked and stored.
@@ -37,9 +38,15 @@ const (
 const (
 	permSettings  = "settings.write"
 	permGateways  = "gateways.write" // owner only: where customers' money goes
+	permSystem    = "system.write"   // owner only: how the server itself runs (its updates)
 	permBranding  = "branding.write"
 	permDiscounts = "discounts.write"
 )
+
+// ownerOnlyPerm reports whether a setting's permission is held by the owner
+// alone (the web package's ownerOnly: gateways.write and system.write), so an
+// admin neither sees nor changes it, in the dashboard or the bot.
+func ownerOnlyPerm(perm string) bool { return perm == permGateways || perm == permSystem }
 
 // SettingSpec describes one setting: where it is edited, who may change it
 // and what values it takes. Every value is stored as a JSON string; "" (or
@@ -141,6 +148,9 @@ var SettingSpecs = []SettingSpec{
 		Help: "Persian name of the Toman in prices (empty = تومان)"},
 	{Key: "branding.currency.en", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 16,
 		Help: "English name of the Toman in prices (empty = Toman)"},
+	// The Updates tab edits it (System > Updates, the owner only); it is not on the Settings page.
+	{Key: release.SettingChannel, Group: "updates", Kind: KindEnum, Perm: permSystem, Options: []string{release.ChannelStable, release.ChannelBeta},
+		Help: "the release channel updates follow: stable = the newest stable release, beta = the newest of all releases, pre-releases included (empty = the server's BOBRES_UPDATE_CHANNEL, stable when unset)"},
 }
 
 // SettingKeys maps each setting to its help text (the bot's /set list).
@@ -402,8 +412,11 @@ func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, ke
 	if err != nil {
 		return err
 	}
-	if SettingPerm(key) == permGateways && actor.Role != "owner" {
-		return &FieldError{key, "only the store owner can change payment details"}
+	if perm := SettingPerm(key); ownerOnlyPerm(perm) && actor.Role != "owner" {
+		if perm == permGateways {
+			return &FieldError{key, "only the store owner can change payment details"}
+		}
+		return &FieldError{key, "only the store owner can change how the server runs (its updates)"}
 	}
 	return s.SetSetting(ctx, actor, key, value)
 }
