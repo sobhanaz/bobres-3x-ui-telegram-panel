@@ -22,7 +22,7 @@ group). What is still open:
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
   list: it is now tested against the real 0.8.4 image in CI; Marzban 1.0 is not supported yet.)
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
-  (cashback, gift codes, a lottery or wheel, reseller targets); more bot languages (Arabic, Russian, Turkish); per-server
+  (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
   sign-in inside the bot; an Undo for the last change in the bot's admin menu.
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
@@ -145,7 +145,7 @@ item says where it landed.
 2. **Trust and first login: built, v0.4.0.** The owner's requests above (status screen, login at once with a password, `bobres check`, the default logo, the footer credit) and the bot's owner panel by buttons with every field explained (without the Undo).
 3. **More panels: Marzban built, v0.4.0; tested against the real 0.8.4 image in CI since.** A server has a kind, 3x-ui or Marzban; the adapter is checked against the real panel by the "Marzban integration" CI job (not a required check), which found and fixed six differences from the fake. Marzban 1.0 (beta) has another API and is not supported; flagging untested Marzban versions in the dashboard, as 3x-ui's are, is open. Then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
 4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
-5. **Growth tools: open.** Cashback, gift codes, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish).
+5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish).
 6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits are open.
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
 8. **Alongside:** the audit-log export is built (`audit.csv`). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), a Prometheus endpoint and an uptime page, two-factor sign-in inside the bot.

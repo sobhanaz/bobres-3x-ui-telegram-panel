@@ -24,6 +24,18 @@ Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban)
 5. **Orders and payments:** list, states, retry provisioning, refund, manual receipt review queue.
 6. **Wallet and ledger:** read-only ledger explorer, exports (CSV).
 7. **Discounts and referrals:** codes, limits, usage, referral rules.
+   **Gift codes** (its own page next to Discounts, `discounts.write` like them; a code that adds a fixed amount of wallet
+   credit when a customer applies it in the bot, unlike a discount, which takes money off a purchase): make one code of
+   your own words (at least 8 characters, at least 5 different) or a batch of up to 500 generated ones (12 random
+   characters from an alphabet without 0, O, 1, I and L, shown as `ABCD-EFGH-JKMN`, about 59 bits, with an optional prefix of
+   at most 8 letters or digits), each with an amount and currency, uses in all, uses per customer, an optional expiry and a
+   note. **The codes are shown once**, in a dialog that copies them or downloads them as a CSV (UTF-8 with a byte-order
+   mark, formulas quoted); core keeps only a keyed hash and the last four characters, so they cannot be shown again. The
+   list shows the last four characters, the value, used / in all, status (active, used up, expired, switched off), the
+   expiry, the last use and the note, filters by status and searches a note or the last four characters, exports as a CSV,
+   and has a switch per code (what a code paid stays paid) and a list of who redeemed it and when (also a CSV). A banner
+   says when customers cannot use gift codes (the setting `gift_codes.enabled`, with a button to turn it on for staff who
+   may) or when core has no master key and cannot make them.
 8. **Resellers:** list (search, tier, in debt), tiers with a discount or fixed price per plan and a commission, make a customer a reseller (also from their page), credit limits, recording payments received, their services, customers, statement and orders.
 9. **Servers (3x-ui):** several panels: URL, write-only token, subscription URL, weight, on/off for new services, version, health, services and plans per server, a connection test, and an inbound list whose attach toggles affect new services only. A panel on a private network (plain http allowed there) is the owner's to add, or to give another address or token; admins may rename, reweight or switch one off.
 10. **Payment gateways (owner):** Zarinpal on/off, sandbox, write-only merchant id and proxy, test connection, payments of the last 7 and 30 days and recent check errors; automatic USDT (Phase 6a: on/off, the TRON address, an optional write-only TronGrid key and proxy, test connection, its report, and the unmatched deposits staff mark handled once they credited the customer by hand); the manual methods and Stars with their on/off switch and details (moved from Settings).

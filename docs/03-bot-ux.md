@@ -23,7 +23,7 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Main menu (user)
 1. Buy service
 2. My services
-3. Wallet (balance, top up, history)
+3. Wallet (balance, top up, history, apply a gift code)
 4. Free trial (once per user, abuse-checked)
 5. Invite friends (referral link, earnings)
 6. Support (tickets, FAQ)
@@ -38,6 +38,13 @@ TRON address, the deadline (45 minutes) and a Check button. The payment settles 
 the chain. A different amount is an unmatched deposit: staff are told and credit it by hand.
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
+**Gift code:** Wallet -> Apply gift code (the button is absent while the owner has the setting `gift_codes.enabled` off) -> the
+customer sends the code (any way it is written: small or capital letters, Persian digits, spaces or dashes; Cancel is under
+the question) -> the amount credited and the new balance, with Wallet and Home buttons. A wrong code (unknown, switched off,
+expired or not a code: one message for all) leaves the question open; five wrong ones in an hour close entering codes for an
+hour ("try again in N minutes"). A code used up, or one the customer already used as often as allowed, says so. Core holds
+every rule and counts; the bot keeps no copy of a code and never logs it. The join-channel, maintenance and ban gates apply as
+everywhere; resellers may redeem. The message is the request's idempotency key, so a repeated update credits once.
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> every owner gets an alert whose Review button opens that payment (a staff member's card: the receipt and approve/reject) -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
