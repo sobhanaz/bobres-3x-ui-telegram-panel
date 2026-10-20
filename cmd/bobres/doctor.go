@@ -195,9 +195,24 @@ func resolveHost(domain string) []string {
 // has no TLS line: before an install there is nothing to look at.
 func doctorResults(dir, domain string, offline bool) []Result {
 	h := newHardener(strings.NewReader(""), io.Discard, io.Discard)
+	o := newOps(strings.NewReader(""), io.Discard, io.Discard)
 	rs := ownGateway(runDoctor(domain, offline), caddyRunning())
-	rs = append(rs, hostTLSResults(context.Background(), newOps(strings.NewReader(""), io.Discard, io.Discard), dir, domain)...)
-	return append(rs, h.report(context.Background())...)
+	rs = append(rs, hostTLSResults(context.Background(), o, dir, domain)...)
+	rs = append(rs, h.report(context.Background())...)
+	return append(rs, updaterResults(context.Background(), o, dir)...)
+}
+
+// updaterResults is doctor's line about the dashboard's updater for the install in dir: none
+// without an install. .env is root's: a user who cannot read it still sees whether the units are
+// there.
+func updaterResults(ctx context.Context, o *ops, dir string) []Result {
+	envPath := filepath.Join(dir, ".env")
+	env, ok, err := readEnv(envPath)
+	unreadable := err != nil && exists(envPath)
+	if o.units == nil || (!ok && !unreadable) {
+		return nil
+	}
+	return []Result{o.units.report(ctx, err == nil && dashboardUpdatesOff(env))}
 }
 
 // hostTLSResults looks at the install in dir: the state of its gateway, and

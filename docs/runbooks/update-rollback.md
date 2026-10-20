@@ -81,6 +81,46 @@ The `Note:` and `warning:` rows are information: the update goes on.
 | `this bobres is a development build` | A CLI built from source cannot replace itself | Install the released CLI with the install command from the README |
 | `the backup before the update failed` | The database could not be backed up | Nothing was changed. Check `bobres status` and `df -h /opt/bobres`, fix, run again |
 | `download ...: ... (is GitHub reachable from this server?)` | No route to GitHub | Check the server's network or proxy; GitHub must be reachable for updates |
+| `another bobres update, rollback or restore is running on this install` | One of them holds the install's lock (`/opt/bobres/.update.lock`): an SSH session, or the dashboard's updater | Wait for it. `ps aux \| grep bobres` and `journalctl -u bobres-updater.service` say which. Nothing was changed |
+
+## Update from the dashboard
+
+The dashboard's **System → Updates** tab can run the update without anyone on the server, for the **stable** or the
+**beta** channel (a successful update from the dashboard keeps the channel it was run for in `.env`, as
+`sudo bobres config set BOBRES_UPDATE_CHANNEL` does). It is the same update as above, run by a helper on the server
+(two systemd units, `bobres-updater.path` and `bobres-updater.service`): the same signature check, backup, restore point,
+health check and automatic rollback, and `sudo bobres rollback` undoes it like any update. How it is built and why it is
+safe: [06-installer.md](../06-installer.md), "Updating from the dashboard". There is no rollback in the dashboard.
+
+**The first time, update over SSH.** A store from before the helper has no units: run `sudo bobres update` once. Its new
+`bobres` installs the units and the folder the dashboard writes to (`/opt/bobres/run/update`). If the store already
+runs the newest release, `sudo bobres install` (it keeps every setting and secret) does the same. `sudo bobres check`
+shows "Dashboard updates": PASS when it is ready, WARN with what to do when it is not.
+
+**What the dashboard shows** is `/opt/bobres/run/update/status.json` (read it with `sudo cat`; it is core's folder):
+
+| State | Meaning | What to do |
+|---|---|---|
+| `idle` | The helper is installed; nothing was asked since the install or the last update | - |
+| `running` | The update is on its step (`verify`, `backup`, `pull`, `restart`, `health`, or `rollback`). The store is restarted during it, so the dashboard goes away for a minute or two and comes back | Wait. `sudo journalctl -u bobres-updater.service -f` shows the whole output |
+| `done` | The store runs the new release (or already ran it: "nothing to update") | - |
+| `rolled_back` | The new release did not come up healthy and the store runs the old one again, as in "If the new version fails" above | Read the log on the Updates tab, try again later, report it if it repeats |
+| `failed` | Nothing was changed (the message says why: a release that does not pass the signature check, no space, no backup, another update running, a request refused) **or**, when the step is `rollback`, the automatic rollback did not finish | If the step is `rollback`: connect to the server and follow "If a rollback does not finish". Otherwise fix the cause named and press Update again |
+
+**If something is off**
+
+| Symptom | Meaning | Fix |
+|---|---|---|
+| The tab has no working button, or says the helper is not installed | No `status.json` with `installed: true`: the units were never installed, or are switched off | `sudo bobres update` (or `sudo bobres install`) once. If `sudo bobres config get BOBRES_UPDATE_FROM_DASHBOARD` says `off`: `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD on` |
+| Pressing Update does nothing and the status stays `idle` | The path unit is not running (`systemctl status bobres-updater.path`: inactive or failed, e.g. after a burst of requests that hit systemd's start limit) | `sudo systemctl reset-failed bobres-updater.path bobres-updater.service && sudo systemctl restart bobres-updater.path`, or `sudo bobres install`. `sudo bobres check` says it as a WARN |
+| `failed`: "The update request was refused: ..." | The helper checks the request strictly (not older than 15 minutes, only the fields of the protocol, a channel and a release name of the right form, from core's user); this one did not pass | Press Update again. If it repeats, the dashboard and `bobres` are not the same version: `sudo bobres update --check`, and report the message |
+| `failed`: "Another update, a rollback or a restore is running" | The lock above is held | Wait for it, then press Update again |
+| `running` for much longer than an update takes, and `sudo systemctl status bobres-updater.service` is not active | The helper was killed or the server restarted in the middle (the status is told "interrupted" by whoever next takes the lock: any of `sudo bobres update`, `rollback`, `restore`, or the next request) | `sudo bobres status`. If the store is healthy, press Update again; if not, `sudo bobres rollback` |
+| `failed`, step `rollback` | The automatic rollback did not finish | "If a rollback does not finish" below |
+
+**Switch it off, or remove it.** `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` removes the units (the Updates tab
+then shows the command instead of a button); `... on` installs them again. `sudo systemctl disable --now bobres-updater.path`
+only stops it until the next `bobres install` or `bobres update`.
 
 ## Roll back the last update
 
