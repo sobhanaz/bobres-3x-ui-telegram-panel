@@ -1,0 +1,8 @@
+{"__REALTIME_TIMESTAMP":"1760000100000000","PRIORITY":"3","_SYSTEMD_UNIT":"docker.service","MESSAGE":"level=error msg=\"failed to pull image\" error=\"Get \\\"https://registry.example.com/v2/\\\": dial tcp 203.0.113.9:443: i/o timeout\""}
+{"__REALTIME_TIMESTAMP":"1760000200000000","PRIORITY":"3","_SYSTEMD_UNIT":"docker.service","MESSAGE":"error for token=123456789:AAEhBOweik6ad6PsWRpYgM2RUBXPoX0jEl8x in request to https://api.telegram.org/bot123456789:AAEhBOweik6ad6PsWRpYgM2RUBXPoX0jEl8x/getMe?x=1"}
+this line is not json
+{"__REALTIME_TIMESTAMP":"1760000300000000","PRIORITY":"3","_SYSTEMD_UNIT":"docker.service","MESSAGE":[104,101,108,108,111,32,119,111,114,108,100,0,255]}
+{"__REALTIME_TIMESTAMP":"1760000400000000","PRIORITY":"3","_SYSTEMD_UNIT":"docker.service"}
+{"__REALTIME_TIMESTAMP":"1760000500000000","PRIORITY":"3","_SYSTEMD_UNIT":"docker.service","MESSAGE":"Handler for GET /v1.54/containers/json returned error: <script>alert(1)</script> from 10.0.0.7:5555 by admin@example.com"}
+{"__REALTIME_TIMESTAMP":"1760000600000000","PRIORITY":"3","_SYSTEMD_UNIT":"containerd.service","MESSAGE":"time=\"2026-10-20T10:00:00Z\" level=error msg=\"failed to load cni\""}
+{"__REALTIME_TIMESTAMP":"1760000700000000","PRIORITY":"2","_SYSTEMD_UNIT":"docker.service","MESSAGE":"one more error"}

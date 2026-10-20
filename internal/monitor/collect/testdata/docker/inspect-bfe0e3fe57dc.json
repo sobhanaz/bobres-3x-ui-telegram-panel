@@ -1,0 +1,23 @@
+{
+  "Id": "bfe0e3fe57dc",
+  "Name": "/bobres-tls-agent-1",
+  "RestartCount": 0,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 734,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:05.196088321Z",
+    "FinishedAt": "2026-10-14T23:57:30.395019511Z",
+    "Health": {
+      "Status": "unhealthy",
+      "FailingStreak": 3889
+    }
+  },
+  "Image": "ghcr.io/sobhanaz/bobres-core:0.2.0@sha256:7312e6547fc6a34856ea6eae2df64d7d56655d0513d762cadf86d055086b1396",
+  "Created": "2026-10-14T06:30:35.245716611Z"
+}

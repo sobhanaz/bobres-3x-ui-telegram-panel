@@ -1,0 +1,23 @@
+{
+  "Id": "92cb9c40664f",
+  "Name": "/bobres-redis-1",
+  "RestartCount": 0,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 731,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:05.158929822Z",
+    "FinishedAt": "2026-10-14T23:57:30.445150766Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "redis:7-alpine",
+  "Created": "2026-10-12T23:26:49.283187823Z"
+}
