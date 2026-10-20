@@ -17,8 +17,10 @@ const MiniAppMaxAge = time.Hour
 // token (core keeps none), so core, which serves the Mini App, asks it. It
 // answers 200 with {"ok":true,"user":{"id","username","first_name",
 // "language_code"},"auth_date"} or {"ok":false,"problem":"malformed"|
-// "signature"|"expired"}; the init data is not logged.
-func MiniAppVerify(botToken, coreToken string, now func() time.Time) http.Handler {
+// "signature"|"expired"}; the init data is not logged. An ok answer also
+// carries "bot_username": the bot's own @username (from getMe), which core
+// uses for the app's links when the owner has not set one in Branding.
+func MiniAppVerify(botToken, botUsername, coreToken string, now func() time.Time) http.Handler {
 	if now == nil {
 		now = time.Now
 	}
@@ -48,7 +50,7 @@ func MiniAppVerify(botToken, coreToken string, now func() time.Time) http.Handle
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "problem": problem})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "auth_date": d.AuthDate.Unix(), "user": map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "auth_date": d.AuthDate.Unix(), "bot_username": botUsername, "user": map[string]any{
 			"id": d.User.ID, "username": d.User.Username, "first_name": d.User.FirstName, "language_code": d.User.LanguageCode,
 		}})
 	})

@@ -20,7 +20,10 @@ import (
 
 // fakeVerifier stands in for the bot: init data "tg:<id>[:<username>[:<lang>]]"
 // is signed for that user, anything else is refused.
-type fakeVerifier struct{ err error }
+type fakeVerifier struct {
+	err error
+	bot string // the bot's own username, as the real bot tells it
+}
 
 func (v fakeVerifier) VerifyMiniApp(_ context.Context, initData string) (*botfiles.MiniAppUser, error) {
 	if v.err != nil {
@@ -34,7 +37,7 @@ func (v fakeVerifier) VerifyMiniApp(_ context.Context, initData string) (*botfil
 	if _, err := fmt.Sscan(parts[1], &id); err != nil {
 		return nil, fmt.Errorf("%w: id", botfiles.ErrMiniAppAuth)
 	}
-	u := &botfiles.MiniAppUser{ID: id}
+	u := &botfiles.MiniAppUser{ID: id, BotUsername: v.bot}
 	if len(parts) > 2 {
 		u.Username = parts[2]
 	}

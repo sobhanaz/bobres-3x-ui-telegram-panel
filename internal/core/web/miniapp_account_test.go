@@ -171,6 +171,47 @@ func TestMiniAppInvite(t *testing.T) {
 	}
 }
 
+// The bot's own username (told with every sign-in check) stands in for the
+// Branding setting, so the invite section and the "open the bot" link work on a
+// store whose owner never typed it; the setting, when set, wins.
+func TestMiniAppUsesTheBotsOwnUsername(t *testing.T) {
+	m := newMiniFixture(t, true)
+	m.setting("referral.reward_percent", "10")
+	m.api.cfg.MiniAppVerify = fakeVerifier{bot: "told_bot"}
+
+	// Signing in is what tells core: the same answer already has it.
+	code, out := m.call(http.MethodPost, "/api/mini/v1/auth", "", map[string]any{"init_data": "tg:3401:eli"})
+	tok, _ := out["token"].(string)
+	brand, _ := out["brand"].(map[string]any)
+	features, _ := out["features"].(map[string]any)
+	if code != http.StatusOK || brand["bot_url"] != "https://t.me/told_bot" || features["invite"] != true {
+		t.Fatalf("sign-in with no Branding username: %d %v", code, out)
+	}
+	if _, inv := m.call(http.MethodGet, "/api/mini/v1/invite", tok, nil); !strings.HasPrefix(fmt.Sprint(inv["link"]), "https://t.me/told_bot?start=r_") {
+		t.Fatalf("invite link: %v", inv)
+	}
+
+	// The owner's setting wins.
+	m.setting("branding.bot_username", "@owner_bot")
+	if _, inv := m.call(http.MethodGet, "/api/mini/v1/invite", tok, nil); !strings.HasPrefix(fmt.Sprint(inv["link"]), "https://t.me/owner_bot?start=r_") {
+		t.Fatalf("invite link with the setting: %v", inv)
+	}
+	if _, me := m.call(http.MethodGet, "/api/mini/v1/me", tok, nil); me["brand"].(map[string]any)["bot_url"] != "https://t.me/owner_bot" {
+		t.Fatalf("/me: %v", me)
+	}
+
+	// A bot that says nothing, or something that is not a username, adds nothing.
+	m2 := newMiniFixture(t, true)
+	m2.setting("referral.reward_percent", "10")
+	for _, bot := range []string{"", "not a username", "ab"} {
+		m2.api.cfg.MiniAppVerify = fakeVerifier{bot: bot}
+		_, out := m2.call(http.MethodPost, "/api/mini/v1/auth", "", map[string]any{"init_data": "tg:3402:fay"})
+		if out["features"].(map[string]any)["invite"] != false || out["brand"].(map[string]any)["bot_url"] != "" {
+			t.Fatalf("bot %q: %v", bot, out)
+		}
+	}
+}
+
 func TestMiniAppSupport(t *testing.T) {
 	m := newMiniFixture(t, true)
 	tok := m.signIn("tg:3201:sima")

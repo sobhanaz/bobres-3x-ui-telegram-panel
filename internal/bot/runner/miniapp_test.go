@@ -14,7 +14,7 @@ import (
 func TestMiniAppVerify(t *testing.T) {
 	const botToken, core = "123456:BOT", "core-token"
 	now := time.Unix(1_800_000_000, 0)
-	h := MiniAppVerify(botToken, core, func() time.Time { return now })
+	h := MiniAppVerify(botToken, "acme_bot", core, func() time.Time { return now })
 	call := func(auth, initData string) (*httptest.ResponseRecorder, map[string]any) {
 		body, _ := json.Marshal(map[string]string{"init_data": initData})
 		req := httptest.NewRequest(http.MethodPost, "/internal/miniapp/verify", strings.NewReader(string(body)))
@@ -37,7 +37,7 @@ func TestMiniAppVerify(t *testing.T) {
 	}
 	_, out := call(core, good)
 	user, _ := out["user"].(map[string]any)
-	if out["ok"] != true || user["id"] != float64(9) || user["language_code"] != "en" {
+	if out["ok"] != true || user["id"] != float64(9) || user["language_code"] != "en" || out["bot_username"] != "acme_bot" {
 		t.Fatalf("good: %v", out)
 	}
 	for name, c := range map[string]struct{ data, problem string }{

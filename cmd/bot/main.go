@@ -141,7 +141,7 @@ func setup(rt *app.Runtime) error {
 		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
 		// The Mini App store (/app on core): core has no bot token, so it asks
 		// the bot to check the init data a Mini App is opened with.
-		rt.Mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(cfg.TelegramBotToken, cfg.PeerCoreToken, nil))
+		rt.Mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(cfg.TelegramBotToken, me.Username, cfg.PeerCoreToken, nil))
 		// The System page's update check: the bot has internet access, core
 		// none. It reads the newest release of BOBRES_UPDATE_CHANNEL (stable:
 		// the latest release; beta: the highest version GitHub's API lists,

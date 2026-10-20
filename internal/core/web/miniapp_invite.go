@@ -35,7 +35,7 @@ func init() {
 // at it) and the customer is not a reseller.
 func (s *Server) inviteOn(settings map[string]string, u *store.User) bool {
 	percent, _ := strconv.Atoi(settings["referral.reward_percent"])
-	return percent > 0 && pageBotRe.MatchString(settings[domain.SettingBotUsername]) && u.Role != domain.ResellerRole
+	return percent > 0 && s.miniBot(settings) != "" && u.Role != domain.ResellerRole
 }
 
 // miniInvite: GET /api/mini/v1/invite.
@@ -61,7 +61,7 @@ func (s *Server) miniInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(earned, func(i, j int) bool { return earned[i]["currency"].(string) < earned[j]["currency"].(string) })
 	writeJSON(w, http.StatusOK, map[string]any{
-		"link":    "https://t.me/" + settings[domain.SettingBotUsername] + "?start=r_" + info.Code,
+		"link":    "https://t.me/" + s.miniBot(settings) + "?start=r_" + info.Code,
 		"percent": info.RewardPercent, "invited": info.Invited, "rewarded": info.Rewarded, "earned": earned,
 	})
 }

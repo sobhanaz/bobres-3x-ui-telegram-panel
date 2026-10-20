@@ -29,8 +29,9 @@ answers 404.
    the app. (The home screen's button opens it at once.)
 3. Open the bot on a phone, tap Store, and check it signs in (the checklist at the end of this page).
 
-The bot's username (Branding, `branding.bot_username`) is used for the "Open the bot" button the app shows where it
-cannot finish something itself.
+The bot's username is used for the "Open the bot" button the app shows where it cannot finish something itself, and for
+the invite link. The bot tells core its own username (from `getMe`) with every sign-in check, so nothing has to be typed;
+`branding.bot_username` in Branding, when set, wins.
 
 ## How a customer is recognised
 

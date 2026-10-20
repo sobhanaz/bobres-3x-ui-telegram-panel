@@ -21,6 +21,9 @@ type MiniAppUser struct {
 	Username     string `json:"username"`
 	FirstName    string `json:"first_name"`
 	LanguageCode string `json:"language_code"`
+	// BotUsername is the bot's own @username, as the bot told with its answer
+	// ("" from a bot that does not say).
+	BotUsername string `json:"-"`
 }
 
 // VerifyMiniApp asks the bot to check a Mini App's init data: only the bot
@@ -47,9 +50,10 @@ func (c *Client) VerifyMiniApp(ctx context.Context, initData string) (*MiniAppUs
 		return nil, fmt.Errorf("botfiles: mini app verify: the bot answered %d", resp.StatusCode)
 	}
 	var out struct {
-		OK      bool        `json:"ok"`
-		Problem string      `json:"problem"`
-		User    MiniAppUser `json:"user"`
+		OK          bool        `json:"ok"`
+		Problem     string      `json:"problem"`
+		BotUsername string      `json:"bot_username"`
+		User        MiniAppUser `json:"user"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out); err != nil {
 		return nil, fmt.Errorf("botfiles: mini app verify: %w", err)
@@ -60,5 +64,6 @@ func (c *Client) VerifyMiniApp(ctx context.Context, initData string) (*MiniAppUs
 	if out.User.ID <= 0 {
 		return nil, errors.New("botfiles: mini app verify: the bot sent no user")
 	}
+	out.User.BotUsername = out.BotUsername
 	return &out.User, nil
 }

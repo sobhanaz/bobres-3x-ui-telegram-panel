@@ -27,9 +27,9 @@ func TestVerifyMiniApp(t *testing.T) {
 	c := New(srv.URL, "tok")
 	ctx := context.Background()
 
-	answer = `{"ok":true,"user":{"id":42,"username":"ali","first_name":"Ali","language_code":"fa"},"auth_date":1760000000}`
+	answer = `{"ok":true,"bot_username":"acme_bot","user":{"id":42,"username":"ali","first_name":"Ali","language_code":"fa"},"auth_date":1760000000}`
 	u, err := c.VerifyMiniApp(ctx, "query_id=1&hash=ab")
-	if err != nil || *u != (MiniAppUser{ID: 42, Username: "ali", FirstName: "Ali", LanguageCode: "fa"}) {
+	if err != nil || *u != (MiniAppUser{ID: 42, Username: "ali", FirstName: "Ali", LanguageCode: "fa", BotUsername: "acme_bot"}) {
 		t.Fatalf("got %+v, %v", u, err)
 	}
 	if !strings.Contains(gotBody, `"init_data":"query_id=1\u0026hash=ab"`) && !strings.Contains(gotBody, `"init_data":"query_id=1&hash=ab"`) {

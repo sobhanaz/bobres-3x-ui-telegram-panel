@@ -22,7 +22,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   from the database, so it includes the messages sent through the bot).
   They are sections of the More tab and plug in by themselves ([17-mini-app.md](docs/17-mini-app.md)).
 - Core passes the app's address to the bot with its settings (`miniapp_url`, an additive field of `Settings`); a bot
-  older than core simply shows no button.
+  older than core simply shows no button. The other way round, the bot tells core its own @username with every sign-in
+  check, so the app's invite link and "open the bot" button work without `branding.bot_username` (which still wins
+  when set).
 
 ## [0.5.0] — 2026-10-20
 
