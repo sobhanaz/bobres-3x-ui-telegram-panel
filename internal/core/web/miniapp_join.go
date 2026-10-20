@@ -127,6 +127,12 @@ func (s *Server) miniJoinGate(ctx context.Context, settings map[string]string, u
 	}
 	member, err := s.askMember(ctx, channel, u.TelegramID)
 	if err != nil {
+		if ctx.Err() != nil {
+			// The customer gave up on this request while the bot was asked: nothing was
+			// learned, so nothing is remembered (that would let a customer outside the channel
+			// in for a minute by hanging up at the right moment) and the channel is not at fault.
+			return &miniJoinNeeded{url: miniJoinLink(settings)}
+		}
 		s.logJoinCheck(err, now)
 		s.mini.join.allow(u.TelegramID, channel, miniJoinLetInTTL, now)
 		return nil

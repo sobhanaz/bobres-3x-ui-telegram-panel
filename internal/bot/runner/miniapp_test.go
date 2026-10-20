@@ -74,6 +74,9 @@ func (f *fakeMembers) GetChatMember(ctx context.Context, chat string, userID int
 	if d, ok := ctx.Deadline(); ok {
 		f.deadline = time.Until(d)
 	}
+	if err := ctx.Err(); err != nil { // a real client gives up with its context
+		return nil, err
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -207,5 +210,25 @@ func TestMiniAppChannelMemberLogsOnceAMinute(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), "424242") || strings.Contains(logs.String(), coreTok) {
 		t.Errorf("the log has the customer's id or core's token:\n%s", logs.String())
+	}
+}
+
+// Core hanging up (it gives a check five seconds) is not the channel failing: it is not logged as that.
+func TestMiniAppChannelMemberNotLoggedWhenCoreHangsUp(t *testing.T) {
+	var logs bytes.Buffer
+	h := MiniAppChannelMember(&fakeMembers{}, coreTok, slog.New(slog.NewTextHandler(&logs, nil)))
+	gone, hangUp := context.WithCancel(context.Background())
+	hangUp()
+	req := httptest.NewRequest(http.MethodPost, "/internal/miniapp/channel-member", strings.NewReader(`{"chat":"@mynews","user_id":3}`)).WithContext(gone)
+	req.Header.Set("Authorization", "Bearer "+coreTok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var out map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if rec.Code != http.StatusBadGateway || out["ok"] != false || out["member"] != nil {
+		t.Fatalf("a hung-up check: %d %v", rec.Code, out)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("logged as the channel failing:\n%s", logs.String())
 	}
 }

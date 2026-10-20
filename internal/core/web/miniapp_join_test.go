@@ -32,10 +32,13 @@ type fakeMembers struct {
 	asked []memberAsk
 }
 
-func (f *fakeMembers) ChannelMember(_ context.Context, channel string, id int64) (bool, error) {
+func (f *fakeMembers) ChannelMember(ctx context.Context, channel string, id int64) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.asked = append(f.asked, memberAsk{channel, id})
+	if err := ctx.Err(); err != nil { // a real client gives up with its context
+		return false, err
+	}
 	if f.err != nil {
 		return false, f.err
 	}
@@ -400,6 +403,35 @@ func TestMiniJoinLetsInWhenTelegramCannotTell(t *testing.T) {
 	j.in(110)
 	if n := strings.Count(j.logs.String(), "cannot check members of the join channel"); n != 2 {
 		t.Fatalf("%d warnings, want 2:\n%s", n, j.logs.String())
+	}
+}
+
+// A customer who hangs up while the bot is being asked learns nothing and teaches nothing: they are not let in, no
+// minute of leave is remembered for them (hanging up at the right moment would be a way past the gate), and the
+// channel is not blamed in the log.
+func TestMiniJoinAbandonedRequestIsNotAnAnswer(t *testing.T) {
+	j := newJoinFixture(t)
+	u := j.customer(116, "gone")
+	settings, err := j.dom.Settings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, hangUp := context.WithCancel(context.Background())
+	hangUp()
+	if need := j.api.miniJoinGate(gone, settings, u); need == nil || need.url != "https://t.me/mynews" {
+		t.Fatalf("a hung-up request was let in: %+v", need)
+	}
+	if j.api.mini.join.allowed(116, joinChannel, j.clock.Now()) {
+		t.Fatal("a hung-up request left a customer outside the channel remembered")
+	}
+	if j.logs.String() != "" {
+		t.Fatalf("the channel was blamed:\n%s", j.logs.String())
+	}
+	// The next, whole request is asked afresh, and a customer outside is refused.
+	code, out := j.auth(116)
+	mustJoin(t, "the next sign-in", code, out)
+	if j.members.count() != 2 {
+		t.Fatalf("asked %d times, want 2", j.members.count())
 	}
 }
 

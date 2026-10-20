@@ -122,7 +122,9 @@ func MiniAppChannelMember(bot MemberChecker, coreToken string, log *slog.Logger)
 		defer cancel()
 		m, err := bot.GetChatMember(ctx, in.Chat, in.UserID)
 		if err != nil {
-			warn(in.Chat, err)
+			if r.Context().Err() == nil { // core hanging up is not the channel failing
+				warn(in.Chat, err)
+			}
 			_, detail := telegramError(err)
 			if wait, ok := tg.IsFlood(err); ok {
 				w.Header().Set("Retry-After", strconv.FormatInt(int64(wait/time.Second), 10))
