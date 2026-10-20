@@ -250,15 +250,26 @@ func (s *Store) ListGiftCodes(ctx context.Context, q querier, f GiftCodeFilter, 
 	return out, total, rows.Err()
 }
 
+// GiftCodeRow is a code with the Telegram id of whoever made it (0: nobody),
+// for the export.
+type GiftCodeRow struct {
+	GiftCode
+	CreatedByTelegramID int64
+}
+
 // EachGiftCode calls fn for every matching code, newest first, up to max
 // codes, and reports whether more matched than max. It reads as EachLedger
 // does: a read-only transaction under the exports' statement timeout.
-func (s *Store) EachGiftCode(ctx context.Context, f GiftCodeFilter, max int, fn func(GiftCode) error) (bool, error) {
+func (s *Store) EachGiftCode(ctx context.Context, f GiftCodeFilter, max int, fn func(GiftCodeRow) error) (bool, error) {
 	more := false
 	status, like, tail := giftArgs(f)
 	err := s.readOnly(ctx, ExportTimeout, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+giftCols+` FROM core.gift_codes`+giftWhere+`
-			ORDER BY created_at DESC, id DESC LIMIT $4`, status, like, tail, max+1)
+		rows, err := tx.Query(ctx, `SELECT g.id, g.code_tail, g.generated, g.amount, g.currency, g.max_redemptions, g.per_customer_limit,
+				g.redeemed_count, g.expires_at, g.enabled, g.note, g.created_by, g.created_at, g.updated_at, g.last_redeemed_at,
+				COALESCE(u.telegram_id, 0)
+			FROM (SELECT * FROM core.gift_codes`+giftWhere+` ORDER BY created_at DESC, id DESC LIMIT $4) g
+			LEFT JOIN core.users u ON u.id = g.created_by
+			ORDER BY g.created_at DESC, g.id DESC`, status, like, tail, max+1)
 		if err != nil {
 			return reportErr("each gift code", err)
 		}
@@ -269,8 +280,8 @@ func (s *Store) EachGiftCode(ctx context.Context, f GiftCodeFilter, max int, fn 
 				more = true
 				return nil
 			}
-			var g GiftCode
-			if err := rows.Scan(giftDest(&g)...); err != nil {
+			var g GiftCodeRow
+			if err := rows.Scan(append(giftDest(&g.GiftCode), &g.CreatedByTelegramID)...); err != nil {
 				return err
 			}
 			if err := fn(g); err != nil {

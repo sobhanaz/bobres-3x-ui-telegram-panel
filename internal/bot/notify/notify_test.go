@@ -479,3 +479,31 @@ func TestNotificationButtonColors(t *testing.T) {
 		t.Errorf("Main menu: %+v", b)
 	}
 }
+
+// A gift code is answered in the chat where it was applied; the wallet.credited.v1 event it publishes sends no
+// second message. Every other reason still tells the customer.
+func TestWalletCreditedForAGiftCodeSendsNothingMore(t *testing.T) {
+	n, tgf, _ := alertNotifier(t)
+	credited := func(reason string) error {
+		payload, err := json.Marshal(events.WalletCreditedEvent{TelegramID: adminTG, Amount: 50_000, Currency: "IRT", Balance: 70_000, Reason: reason})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n.Handle(context.Background(), eventbus.Message{Topic: events.WalletCredited, Payload: payload})
+	}
+	if err := credited(events.CreditGiftCode); err != nil {
+		t.Fatal(err)
+	}
+	if got := tgf.take(); len(got) != 0 {
+		t.Fatalf("a gift code credit sent %+v", got)
+	}
+	for _, reason := range []string{events.CreditAdminAdjust, events.CreditTopup, events.CreditReferral, events.CreditRefund} {
+		if err := credited(reason); err != nil {
+			t.Fatal(err)
+		}
+		got := tgf.take()
+		if len(got) != 1 || got[0].chat != adminTG || !strings.Contains(got[0].text, "50,000 Toman") {
+			t.Fatalf("%s: %+v", reason, got)
+		}
+	}
+}
