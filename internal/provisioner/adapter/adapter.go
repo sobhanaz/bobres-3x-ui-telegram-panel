@@ -42,6 +42,33 @@ type PanelAdapter interface {
 	PanelVersion(ctx context.Context) string
 }
 
+// GroupTagger is implemented by adapters whose panel has client groups (3x-ui,
+// as tested from v3.8.5 to v3.9.0; Marzban has none). The group is a label the panel shows and
+// filters on, nothing more: the adapter puts every client it creates in the bot
+// group (xui.BotGroup), and these calls bring the clients made before that into
+// it. An adapter that is not a GroupTagger has nothing to tag.
+type GroupTagger interface {
+	// TagUngrouped puts the clients of managed (email to subscription id, "" for
+	// any) that are on the panel under that subscription id and in NO group into
+	// the bot group. A client in some other group (an operator put it there) and
+	// any client not in managed are left alone, so a repeat changes nothing. It
+	// lists the panel again after tagging and reports Converged when that listing
+	// shows nothing left to tag (a client deleted meanwhile can move the paged
+	// listing and hide another one from the first).
+	TagUngrouped(ctx context.Context, managed map[string]string) (TagResult, error)
+	// EnsureTagged puts one client in the bot group unless it is in a group.
+	EnsureTagged(ctx context.Context, email string) error
+}
+
+// TagResult says what TagUngrouped found and did.
+type TagResult struct {
+	Managed   int  // clients asked about
+	Tagged    int  // put in the bot group by this call
+	Grouped   int  // already in a group (the bot's or an operator's) at the first listing: left alone
+	Missing   int  // not on the panel, or on it under another subscription id
+	Converged bool // the last listing found no client left to tag
+}
+
 // UnknownVersion stands for a v3 panel that did not report its version.
 const UnknownVersion = "v3.x"
 

@@ -5,6 +5,10 @@
 //   - expiryTime is unix MILLISECONDS; 0 means unlimited.
 //   - totalGB is a byte count despite its name; 0 means unlimited.
 //   - clients/add takes {"client": {...}, "inboundIds": [...]}.
+//   - a client has a "group" label (a first-class group in the panel). clients/add
+//     stores it, clients/update replaces the row and so CLEARS it when the body has
+//     none, and clients/groups/bulkAdd sets it for many clients, overriding any group
+//     they have. Checked against real v3.8.5 and v3.9.0 panels.
 //
 // Only the provisioner service may hold the panel API token and use this package.
 package xui
@@ -27,6 +31,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 const maxResponseBytes = 8 << 20
@@ -54,6 +59,41 @@ var ErrPublicPlaintext = errors.New("xui: plain http is allowed only to private,
 
 // ErrBlockedAddress is returned when the panel resolves to a private/loopback address.
 var ErrBlockedAddress = errors.New("xui: panel address is not allowed (private, loopback or link-local)")
+
+// ErrInvalidGroup is returned for a group name the panel would not take as it
+// is (empty, padded with spaces, control characters, or too long).
+var ErrInvalidGroup = errors.New("xui: invalid group name")
+
+// BotGroup is the group every client BOBRES creates in a 3x-ui panel is put in,
+// so an operator sees (and can filter on) everything the bot made. It is only a
+// label: it changes neither the client's links nor how the panel serves it.
+const BotGroup = "bobres_bot"
+
+// MaxGroupBatch is the most emails one clients/groups/bulkAdd call carries;
+// AddToGroup splits longer lists.
+const MaxGroupBatch = 200
+
+// ListPageSize is the page size ListClients asks for, the largest the panel
+// allows (it caps a bigger one at 200).
+const ListPageSize = 200
+
+// maxListPages bounds ListClients against a panel that never ends its listing
+// (a variable only so a test can lower it).
+var maxListPages = 5000
+
+const maxGroupLen = 64
+
+func validGroup(s string) error {
+	if s == "" || s != strings.TrimSpace(s) || utf8.RuneCountInString(s) > maxGroupLen {
+		return ErrInvalidGroup
+	}
+	for _, r := range s {
+		if r < 32 || r == 127 {
+			return ErrInvalidGroup
+		}
+	}
+	return nil
+}
 
 const maxMsgLen = 200
 
@@ -102,6 +142,8 @@ type ClientSpec struct {
 	TgID       int64  `json:"tgId,omitempty"`
 	Comment    string `json:"comment,omitempty"`
 	Flow       string `json:"flow,omitempty"`
+	// Group is the client's group label ("" = none); clients/add stores it.
+	Group string `json:"group,omitempty"`
 }
 
 // ClientRecord is a client as the panel stores it (clients/get). Unlike
@@ -120,6 +162,7 @@ type ClientRecord struct {
 	TgID       int64           `json:"tgId"`
 	Comment    string          `json:"comment"`
 	Flow       string          `json:"flow"`
+	Group      string          `json:"group"`
 }
 
 // ClientDetail is what clients/get returns.
@@ -142,6 +185,26 @@ type Traffic struct {
 
 // Used returns upload + download bytes.
 func (t Traffic) Used() int64 { return t.Up + t.Down }
+
+// ClientRow is one client of the panel's listing (clients/list/paged): the slim
+// record, without protocol secrets. Group is empty for a client in no group.
+type ClientRow struct {
+	Email      string `json:"email"`
+	SubID      string `json:"subId"`
+	Group      string `json:"group"`
+	Enable     bool   `json:"enable"`
+	TotalGB    int64  `json:"totalGB"`
+	ExpiryTime int64  `json:"expiryTime"`
+	InboundIDs []int  `json:"inboundIds"`
+}
+
+// GroupInfo is one entry of the panel's group list. A group made by adding
+// clients to it disappears from the list with its last client; one that
+// bulkAdd made for a new name stays, with a count of 0.
+type GroupInfo struct {
+	Name        string `json:"name"`
+	ClientCount int    `json:"clientCount"`
+}
 
 // InboundOption is one entry of inbounds/options.
 type InboundOption struct {
@@ -425,6 +488,11 @@ func (c *Client) AddClient(ctx context.Context, spec ClientSpec, inboundIDs []in
 			return err
 		}
 	}
+	if spec.Group != "" {
+		if err := validGroup(spec.Group); err != nil {
+			return err
+		}
+	}
 	defer c.lock(spec.Email)()
 	body := struct {
 		Client     ClientSpec `json:"client"`
@@ -561,6 +629,8 @@ func updateBody(stored map[string]json.RawMessage, expiryMs, totalBytes int64) (
 // the stored form has the panel's row id), bookkeeping fields are dropped,
 // and the two fields stored as text but taken as structures are converted
 // ("reverse" holds a JSON object, "allowedIPs" a comma-separated list).
+// Every other stored field goes back as it is, "group" included: the panel
+// writes the group of the body, and an update without one clears it.
 func asUpdate(stored map[string]json.RawMessage) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage, len(stored))
 	for k, v := range stored {
@@ -665,4 +735,124 @@ func (c *Client) SubLinks(ctx context.Context, subID string) ([]string, error) {
 		return nil, err
 	}
 	return l, nil
+}
+
+// ListClients returns every client of the panel, one page at a time: a big
+// panel's whole listing (clients/list, about 750 bytes a client) would pass the
+// response limit. The panel orders by its row id, so a client added meanwhile
+// lands on a later page, while one deleted meanwhile can move a later page up
+// and make it skip a client; a caller that must see them all looks again.
+func (c *Client) ListClients(ctx context.Context) ([]ClientRow, error) {
+	var out []ClientRow
+	for page := 1; page <= maxListPages; page++ {
+		var p struct {
+			Items []ClientRow `json:"items"`
+			Total int         `json:"total"`
+		}
+		path := "/panel/api/clients/list/paged?page=" + strconv.Itoa(page) + "&pageSize=" + strconv.Itoa(ListPageSize)
+		if err := c.do(ctx, http.MethodGet, path, nil, &p); err != nil {
+			return nil, err
+		}
+		out = append(out, p.Items...)
+		if len(p.Items) == 0 || len(out) >= p.Total {
+			return out, nil
+		}
+	}
+	return nil, errors.New("xui: the client listing does not end")
+}
+
+// AddToGroup puts clients in a group (the panel makes the group when the name is
+// new) and returns how many changed group: a client already in it, and an email
+// the panel does not know, are not counted. It OVERRIDES any group a client has,
+// so a caller that must keep an operator's choice lists first (ListClients) and
+// sends only the clients that have no group. A long list goes MaxGroupBatch emails
+// at a time; on an error the batches sent before it are in effect, and the count
+// says how many clients they changed. Each batch holds the emails' locks, so it
+// does not interleave with SetLimits or SetEnabled on the same client (those send
+// the whole row back, group included, and would put back the one they read).
+func (c *Client) AddToGroup(ctx context.Context, emails []string, group string) (int, error) {
+	if err := validGroup(group); err != nil {
+		return 0, err
+	}
+	for _, e := range emails {
+		if err := validIdent(e); err != nil {
+			return 0, err
+		}
+	}
+	total := 0
+	for start := 0; start < len(emails); start += MaxGroupBatch {
+		n, err := c.addBatchToGroup(ctx, emails[start:min(start+MaxGroupBatch, len(emails))], group)
+		total += n
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+func (c *Client) addBatchToGroup(ctx context.Context, emails []string, group string) (int, error) {
+	defer c.lock(emails...)()
+	return c.bulkAdd(ctx, emails, group)
+}
+
+// bulkAdd is one clients/groups/bulkAdd call; the caller holds the emails' locks.
+func (c *Client) bulkAdd(ctx context.Context, emails []string, group string) (int, error) {
+	body := struct {
+		Emails []string `json:"emails"`
+		Group  string   `json:"group"`
+	}{emails, group}
+	var r struct {
+		Affected int `json:"affected"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/panel/api/clients/groups/bulkAdd", body, &r); err != nil {
+		return 0, err
+	}
+	return r.Affected, nil
+}
+
+// AddToGroupIfNone puts one client in a group unless it already has a group
+// (any: an operator's choice is kept), and reports whether it did. Reading the
+// client and writing the group happen under the client's lock.
+func (c *Client) AddToGroupIfNone(ctx context.Context, email, group string) (bool, error) {
+	if err := validIdent(email); err != nil {
+		return false, err
+	}
+	if err := validGroup(group); err != nil {
+		return false, err
+	}
+	defer c.lock(email)()
+	stored, err := c.storedClient(ctx, email)
+	if err != nil {
+		return false, err
+	}
+	var current string
+	if v, ok := stored["group"]; ok {
+		_ = json.Unmarshal(v, &current)
+	}
+	if current != "" {
+		return false, nil
+	}
+	n, err := c.bulkAdd(ctx, []string{email}, group)
+	return n > 0, err
+}
+
+// Groups lists the panel's groups with their client counts.
+func (c *Client) Groups(ctx context.Context) ([]GroupInfo, error) {
+	var g []GroupInfo
+	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/groups", nil, &g); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+// GroupEmails lists the emails of the clients in a group.
+func (c *Client) GroupEmails(ctx context.Context, group string) ([]string, error) {
+	if err := validGroup(group); err != nil {
+		return nil, err
+	}
+	var e []string
+	if err := c.do(ctx, http.MethodGet, "/panel/api/clients/groups/"+esc(group)+"/emails", nil, &e); err != nil {
+		return nil, err
+	}
+	return e, nil
 }

@@ -118,6 +118,7 @@ func (s *Server) addServer(ctx context.Context, sv *store.Server, test bool) (*s
 	if test {
 		s.recordHealth(ctx, created.ID, created.UpdatedAt, true, version, "")
 	}
+	s.kickGroupBackfill() // the backfill records the new server as done: it holds no client of ours yet
 	return created, nil
 }
 
@@ -243,6 +244,9 @@ func (s *Server) UpdateServer(ctx context.Context, req *provisionerv1.UpdateServ
 	s.forget(sv.ID)
 	if tested {
 		s.recordHealth(ctx, sv.ID, sv.UpdatedAt, true, version, "")
+	}
+	if connChanged { // a new address or token: a server that could not be reached may be reachable now
+		s.kickGroupBackfill()
 	}
 	return s.serverInfo(ctx, sv.ID)
 }
@@ -571,5 +575,6 @@ func (s *Server) checkServer(ctx context.Context, in *store.ServerInfo) {
 		s.log.Warn("3x-ui server failed its health check", "server", in.Name, "detail", detail)
 	case ok && was != nil && !*was:
 		s.log.Info("3x-ui server is healthy again", "server", in.Name)
+		s.kickGroupBackfill() // it may have been waiting for the panel
 	}
 }

@@ -106,7 +106,11 @@ fifth container, `backup`, makes the daily encrypted backups (Phase 4 milestone 
 - Client key = email. Built as `u{telegramId}-{8 random characters}`; we store our own client_ref.
 - Endpoints: clients/add, update/{email}, del/{email}, bulkAdjust (renew: addDays/addBytes),
   resetTraffic/{email}, traffic/{email}, links/{email}, subLinks/{subId}, get/tgId/{tgId}, onlines.
-- clients/update REPLACES the row (not a patch): use per-client lock + read-modify-write.
+- clients/update REPLACES the row (not a patch): use per-client lock + read-modify-write. That includes the client's
+  `group`: a body without one clears it, so the stored row goes back whole.
+- Every client we create is in the panel's client group `bobres_bot` (`xui.BotGroup`; `clients/add` stores `client.group`),
+  and the clients made before that are put in it once by a provisioner backfill that touches only clients we hold that have
+  no group (details and what the real panels do: 02-events-and-apis.md, "3x-ui adapter"). Marzban 0.8 has no groups.
 - Use a separate Telegram bot token from 3x-ui's built-in bot.
 - Planned: generate the Go client from the OpenAPI spec (oapi-codegen). Built instead: a typed client on the
   standard library only (`internal/xui`), checked against the v3.8.5 source and run in CI against real v3.8.5 and

@@ -37,6 +37,8 @@ type Server struct {
 
 	mu       sync.Mutex
 	adapters map[string]cachedAdapter // by server id
+
+	fill groupFill // the backfill of the bot group (groupfill.go)
 }
 
 // cachedAdapter is reused for every call to one panel (keep-alive connections,
@@ -48,7 +50,7 @@ type cachedAdapter struct {
 
 // New builds the server. xuiOpts relax panel-client hardening in tests only.
 func New(st *store.Store, xuiOpts ...xui.Option) *Server {
-	return &Server{st: st, xuiOpts: xuiOpts, log: slog.New(slog.DiscardHandler), adapters: map[string]cachedAdapter{}}
+	return &Server{st: st, xuiOpts: xuiOpts, log: slog.New(slog.DiscardHandler), adapters: map[string]cachedAdapter{}, fill: newGroupFill()}
 }
 
 // SetLogger enables logging of panel failures (xui errors carry neither the
@@ -430,10 +432,18 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 			s.release(ctx, cm) // the email is someone else's there, so none of ours is
 			return nil, status.Error(codes.AlreadyExists, "another client on the panel already uses this email")
 		}
-		// Ours, from an earlier attempt: adopt it with the limits it has.
+		// Ours, from an earlier attempt: adopt it with the limits it has, and in the
+		// bot group if that attempt (made before BOBRES grouped its clients) left it in none.
 		if st, err := a.Status(ctx, email); err == nil {
 			expiryMs = max(st.ExpiryMs, 0)
 		}
+		s.ensureTagged(ctx, a, email)
+	} else if !fresh {
+		// A retry. An earlier attempt may have made the client before BOBRES grouped
+		// its clients, and a 3x-ui panel takes a create of a client it has (same
+		// subscription id, on the inbounds it is on) as a success that changes
+		// nothing, its group included.
+		s.ensureTagged(ctx, a, email)
 	}
 	done := &store.ClientMap{
 		SubscriptionID: cm.SubscriptionID, ServerID: cm.ServerID, Email: email,

@@ -474,6 +474,78 @@ func (s *Store) GetClientMap(ctx context.Context, subscriptionID string) (*Clien
 	return &cm, nil
 }
 
+// MappedClient is a client BOBRES holds on a server: its panel email and the
+// subscription id derived for it ("" when the row has none).
+type MappedClient struct {
+	Email    string
+	XUISubID string
+}
+
+// ServerClients lists the clients mapped to a server, reservations included (a
+// reserved client may already be on the panel).
+func (s *Store) ServerClients(ctx context.Context, serverID string) ([]MappedClient, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT email, coalesce(xui_sub_id, '') FROM provisioner.client_map WHERE server_id = $1 ORDER BY email`, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server clients: %w", err)
+	}
+	defer rows.Close()
+	var out []MappedClient
+	for rows.Next() {
+		var c MappedClient
+		if err := rows.Scan(&c.Email, &c.XUISubID); err != nil {
+			return nil, fmt.Errorf("server clients: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server clients: %w", err)
+	}
+	return out, nil
+}
+
+// ServerRef names a server for a list that does not need the rest.
+type ServerRef struct {
+	ID   string
+	Name string
+}
+
+// GroupBackfillPending lists the 3x-ui servers (enabled or not) whose clients
+// have not all been put in the bot group yet, oldest first. A Marzban server
+// has no groups and is never listed.
+func (s *Store) GroupBackfillPending(ctx context.Context) ([]ServerRef, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, name FROM provisioner.xui_servers
+		WHERE kind = 'xui' AND group_backfilled_at IS NULL ORDER BY created_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("group backfill pending: %w", err)
+	}
+	defer rows.Close()
+	var out []ServerRef
+	for rows.Next() {
+		var ref ServerRef
+		if err := rows.Scan(&ref.ID, &ref.Name); err != nil {
+			return nil, fmt.Errorf("group backfill pending: %w", err)
+		}
+		out = append(out, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("group backfill pending: %w", err)
+	}
+	return out, nil
+}
+
+// MarkGroupBackfilled records that every client BOBRES made on the server is
+// in a group. updated_at does not move, so the cached panel client stays.
+func (s *Store) MarkGroupBackfilled(ctx context.Context, serverID string) error {
+	if _, err := s.db.Exec(ctx, `
+		UPDATE provisioner.xui_servers SET group_backfilled_at = now()
+		WHERE id = $1 AND group_backfilled_at IS NULL`, serverID); err != nil {
+		return fmt.Errorf("mark group backfilled: %w", err)
+	}
+	return nil
+}
+
 // DeleteClientMap removes the mapping (after panel delete).
 func (s *Store) DeleteClientMap(ctx context.Context, subscriptionID string) error {
 	_, err := s.db.Exec(ctx, `DELETE FROM provisioner.client_map WHERE subscription_id = $1`, subscriptionID)

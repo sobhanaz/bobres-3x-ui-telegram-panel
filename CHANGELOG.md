@@ -26,6 +26,43 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   check, so the app's invite link and "open the bot" button work without `branding.bot_username` (which still wins
   when set).
 
+### 3x-ui groups
+- Every client the bot makes in a 3x-ui panel is now in the panel's client group **`bobres_bot`** (3x-ui v3.8.5 and
+  v3.9.0, the versions BOBRES is tested with, have client groups: a group list with counts, and a group filter on the
+  Clients page), so one filter shows everything the bot made. The group is only a label: a client's links, limits and
+  subscription are the same as before. A renewal, new limits, switching a client off and on, and a traffic reset all
+  keep it. A client you move to another group by hand stays there: BOBRES never gives a group to a client that has one.
+- The clients made before this version are put in the group once, by the provisioner, after the update. Only the
+  clients BOBRES holds in its own records (the ones it made on that server) that are in **no** group are touched; a
+  client of the panel's other users, and one you put in a group of your own, are left as they are (a client you took
+  out of every group by hand before this run is put back). It runs when the provisioner starts, when a server is added
+  and when a server that did not answer answers again, and is tried again every 5 minutes for a panel that is down; it
+  is safe to repeat and is recorded per server (`provisioner.xui_servers.group_backfilled_at`, a column added when the
+  provisioner starts), so it does not run on every start. The provisioner's log has one line per server when it is done,
+  `3x-ui groups: backfill finished`, with `tagged`, `already_in_a_group` and `missing` (clients BOBRES holds that the
+  panel does not have). Marzban 0.8 has no groups: nothing changes on a Marzban server. Tagging does not restart the
+  panel's Xray, so nobody is disconnected (watched on both versions: the panel's restart count did not move while 200
+  clients were put in the group and taken out again). A panel without client groups (older than the tested versions,
+  not tried) cannot finish the backfill: the provisioner logs why, once, and tries again every 5 minutes.
+- Checked on real panels, v3.8.5 and v3.9.0, which behave alike here, in CI's "3x-ui integration" job (it now also
+  runs the provisioner's tests, with a database): a new client is in the group; a renewal, new limits, off and on and a
+  traffic reset keep it; the backfill tags old clients, skips one in another group, and ignores a client BOBRES does
+  not hold. What the code relies on, and the tests assert so that a 3x-ui release that changes it fails CI first:
+  - `clients/update` replaces the whole client row and **clears the group of a body that has none**. BOBRES sends the
+    stored row back with its group; code that sent a row without it would have emptied the group at the first renewal
+    or switch-off.
+  - `clients/groups/bulkAdd` sets the group of the clients it is given **whatever group they have**, ignores an email it
+    does not know, and counts only what changed. So the backfill lists first and sends only the clients with no group,
+    at most 200 emails a call.
+  - A create of a client the panel has (same subscription id, on the inbounds it is on) is a success that changes
+    nothing, group included. The retry of a create that was started before this version puts the client in the group
+    itself.
+  - The panel lists 200 clients a page at most, and its whole listing is about 750 bytes a client, so the backfill reads
+    the paged listing (`clients/list/paged`), not `clients/list`.
+  - A group made by a client's own label goes from the group list with its last client; one that `bulkAdd` made for a
+    new name stays, empty. Attaching and detaching a client leaves its group.
+- The in-memory 3x-ui fake used by the tests (`internal/xuifake`) follows all of this now, with its own tests.
+
 ## [0.5.0] — 2026-10-20
 
 Several owners, a list of the payments waiting for review, and Marzban tested against a real panel.

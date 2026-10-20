@@ -92,6 +92,37 @@ A health loop checks every enabled server each 60 s and reads the panel version 
 `ListServers` flags versions outside the tested range (v3.8.5 to v3.9.0, the CI matrix). Per-client mutex because
 `clients/update` replaces the row.
 
+**Client group `bobres_bot`.** 3x-ui (v3.8.5 and v3.9.0) has client groups, and every client the 3x-ui adapter creates is put
+in the group named by `xui.BotGroup`, `bobres_bot`, so an operator can filter on everything the bot made in the panel's
+Clients page. It is a label only: links, limits and the subscription do not depend on it. Marzban 0.8 has no groups; its
+adapter does nothing about them. What the code relies on, as the real panels do it (the adapter's integration tests assert
+each on both versions, in CI's "3x-ui integration" job):
+- `clients/add` stores `client.group` (the OpenAPI text for it does not list the field). A create of a client the panel
+  already has under the same subscription id, on the inbounds it is on, succeeds and changes nothing, the group
+  included; under another subscription id it is refused.
+- `clients/update` replaces the row and writes the group of its body, so a body without one **clears it**. `SetLimits` and
+  `SetEnabled` read the stored row and send it back whole, group included. `clients/bulkAdjust` (renewal) and
+  `resetTraffic` do not touch it. Attach, detach and delete leave the other clients' groups alone.
+- `clients/groups/bulkAdd` sets the group of the listed clients **whatever group they have**, ignores an email it does not
+  know and counts only the clients that changed. `xui.Client.AddToGroup` sends at most 200 emails a call and holds the
+  clients' locks, so a tagging cannot fall between the read and the write of an update. Callers choose whom to send: the
+  backfill sends only clients that have no group, so a group an operator chose is respected.
+- `clients/list/paged` (200 rows a page at most) is the listing used (`xui.Client.ListClients`); `clients/list` is about 750
+  bytes a client and would pass the 8 MiB response limit at around 11,000 clients.
+
+**Backfill.** The clients made before the group existed are put in it by the provisioner (`server.RunGroupBackfill`, started
+by `cmd/provisioner`). For each 3x-ui server (`kind = 'xui'`, switched on or off) whose `group_backfilled_at` is NULL it
+reads the client map of that server (reservations included), lists the panel's clients, and calls `bulkAdd` with the ones
+that are held, carry the derived subscription id the map has for them (it is the proof that the client is ours and not a
+stranger's under the same email) and have **no** group. It lists again after tagging and records the server only when
+a listing finds nothing left to tag (the paged listing can skip a client when one is deleted meanwhile). It runs at
+start, when a server is added or its connection is edited, when the health loop sees a server answer again, and every
+5 minutes for a server that is not recorded yet (a panel that is down, or too old to have groups: the failure is logged
+once per distinct reason). A server that holds no client of ours is recorded without calling the panel. The log line
+`3x-ui groups: backfill finished` has `managed`, `tagged`, `already_in_a_group` and `missing`. A retried create (the
+reservation was written by an earlier attempt) checks the client's group once more, for an attempt made before the group
+existed.
+
 ## Public HTTP surface (via gateway)
 - `/webhooks/<provider>` (signature verified, replay-protected)
 - `/sub/<token>` subscription info page (branded; server-rendered, no script, one fixed 404 for anything unknown; see 15-subscription-page.md). `POST /api/v1/services/{id}/page-token/regenerate` (services.write) gives a service a new address

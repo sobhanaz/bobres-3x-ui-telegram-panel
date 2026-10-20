@@ -417,6 +417,29 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 		before[id] = strings.Join(links, "\n")
 		fmt.Printf("panel has subscription %s with %d link(s)\n", id, len(links))
 	}
+	// Every account the bot made is in the panel's bot group, as the panel lists them.
+	inBotGroup := func(when string) {
+		t.Helper()
+		rows, err := c.ListClients(ctx)
+		if err != nil {
+			t.Fatalf("%s: the panel's client listing: %v", when, err)
+		}
+		found := 0
+		for _, r := range rows {
+			if !subIDs[r.SubID] {
+				continue
+			}
+			found++
+			if r.Group != xui.BotGroup {
+				t.Fatalf("%s: the client %s (subscription %s) is in group %q, want %q", when, r.Email, r.SubID, r.Group, xui.BotGroup)
+			}
+		}
+		if found != len(subIDs) {
+			t.Fatalf("%s: %d of the %d accounts are in the panel's listing", when, found, len(subIDs))
+		}
+		fmt.Printf("%s: all %d accounts are in the panel's group %s\n", when, found, xui.BotGroup)
+	}
+	inBotGroup("after the purchases")
 
 	// Renewal (Phase 3): carol renews her newest service with the wallet. The
 	// real panel takes the new absolute limits (50 GB more: 100 GB), and every
@@ -444,4 +467,5 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 			t.Fatalf("subscription %s changed after the renewal: %v\nbefore %s\nafter  %s", id, err, was, strings.Join(links, "\n"))
 		}
 	}
+	inBotGroup("after the renewal") // the new limits were sent as a whole row: the group went with it
 }

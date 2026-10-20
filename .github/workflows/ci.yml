@@ -349,11 +349,27 @@ jobs:
   # Our 3x-ui adapter against REAL panels: the version PLAN.md was written
   # against and the newest release, pinned by digest. Add a version here when
   # upstream ships one, and change .github/rulesets/protect-main.json with it
-  # (each matrix entry is a required check there).
+  # (each matrix entry is a required check there). It also runs the client
+  # group tests: the "bobres_bot" group every client is put in, kept through
+  # every call BOBRES makes, and the backfill for the clients made before it.
+  # The provisioner's part of them keeps its client map in a real database, as
+  # the test job does.
   xui:
     name: 3x-ui integration (${{ matrix.xui }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      BOBRES_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      BOBRES_TEST_REQUIRE_DB: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -371,13 +387,15 @@ jobs:
           cache: true
       - name: Start a real 3x-ui panel
         run: docker run -d --name xui -p 127.0.0.1:2053:2053 -e XUI_ENABLE_FAIL2BAN=false "ghcr.io/mhsanaei/3x-ui:${{ matrix.xui }}@${{ matrix.digest }}"
-      - name: Adapter against the panel
+      # -p 1: one package at a time on the one panel (the adapter's tests add an
+      # inbound for a while, which the provisioner's would attach clients to).
+      - name: Adapter and provisioner against the panel
         run: |
           set -euo pipefail
           token=$(go run ./tools/xuidev -url http://127.0.0.1:2053)
           echo "::add-mask::$token"
           XUI_TEST_REQUIRE=1 XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN="$token" XUI_TEST_ALLOW_PRIVATE=1 \
-            go test -tags integration -count=1 -v -run Integration ./internal/provisioner/adapter/
+            go test -tags integration -count=1 -p 1 -v -run Integration ./internal/provisioner/adapter/ ./internal/provisioner/server/
       - name: Panel logs on failure
         if: failure()
         run: docker logs --tail 200 xui || true
