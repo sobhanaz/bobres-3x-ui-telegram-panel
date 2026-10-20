@@ -859,9 +859,19 @@ export interface UpdateHelper {
   finished_at: number | null
   /** the newest lines of the update's log: the owner's only */
   log?: string[]
+  /** what the status is about: update | restore ('' for none; absent from an older core) */
+  action?: string
+  /** this updater can restore a backup (false for one from before that existed) */
+  restore?: boolean
+  /** a restore's backup (its file name, or the name an upload had), where it
+   * came from (backup | upload), who asked and when */
+  subject?: string
+  source?: string
+  by?: string
+  requested_at?: number | null
 }
 
-/** An update asked for in the dashboard (core.system_updates). */
+/** An update, or a restore of a backup, asked for in the dashboard (core.system_updates). */
 export interface UpdateRun {
   id: string
   /** the dashboard user who asked */
@@ -877,6 +887,48 @@ export interface UpdateRun {
   /** while open: queued (the updater has not taken it up) | running | done |
    * failed | rolled_back (the updater finished, core has not recorded it yet) */
   phase?: string
+  /** update | restore (absent from an older core: an update) */
+  action?: string
+  /** a restore's backup and where it came from (backup | upload) */
+  subject?: string
+  source?: string
+}
+
+/** A backup the owner uploaded, waiting for the confirmation of its restore. */
+export interface RestoreUpload {
+  id: string
+  /** the name it had on the owner's computer */
+  name: string
+  size: number
+  sha256: string
+  at: number
+  expires_at: number
+}
+
+/** GET /system/restore: the restore part of the Backups tab. */
+export interface RestoreState {
+  version: string
+  helper: UpdateHelper
+  /** the restore core handed the updater and has not ended; null when none */
+  run: UpdateRun | null
+  /** the restore that ended last */
+  last: UpdateRun | null
+  /** "update" while an update is open (a restore waits for it) */
+  other: string | null
+  /** allowed: this role may; ready: a restore would be accepted now; reason: why
+   * not (no_domain | helper_missing | restore_unsupported | already_running) */
+  can: { allowed: boolean; ready: boolean; reason: string }
+  /** what the owner types to confirm (the owner's only) */
+  domain?: string
+  /** the owner's only */
+  upload: RestoreUpload | null
+  limits: { max_upload: number; staged_seconds: number }
+}
+
+/** POST /system/backups/download-ticket */
+export interface DownloadTicket {
+  url: string
+  expires_in: number
 }
 
 /** GET /system/updates/progress: the light state the page polls while an

@@ -58,6 +58,44 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   return data as T
 }
 
+/**
+ * upload sends a file as the raw body of a POST (type application/octet-stream),
+ * the way the browser streams it from disk: nothing of it is read into the
+ * page. onProgress hears how many bytes have gone; abort() stops it. The
+ * answer and the errors are api()'s.
+ */
+export function upload<T>(path: string, body: Blob, onProgress?: (sent: number, total: number) => void): { done: Promise<T>; abort: () => void } {
+  const xhr = new XMLHttpRequest()
+  const done = new Promise<T>((resolve, reject) => {
+    xhr.open('POST', '/api/v1' + path)
+    xhr.setRequestHeader('Accept', 'application/json')
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+    if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded, e.total)
+    }
+    xhr.onerror = () => reject(new ApiError(0, 'network', 'network'))
+    xhr.ontimeout = () => reject(new ApiError(0, 'network', 'network'))
+    xhr.onabort = () => reject(new ApiError(0, 'aborted', 'aborted'))
+    xhr.onload = () => {
+      let data: Record<string, unknown> = {}
+      try {
+        data = JSON.parse(xhr.responseText || '{}') as Record<string, unknown>
+      } catch {
+        /* not JSON: the status says enough */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T)
+        return
+      }
+      if (xhr.status === 401) onAuthLost()
+      reject(new ApiError(xhr.status, typeof data.error === 'string' ? data.error : 'error', typeof data.message === 'string' ? data.message : xhr.statusText, data))
+    }
+    xhr.send(body)
+  })
+  return { done, abort: () => xhr.abort() }
+}
+
 /** query builds "?a=1&b=x" from the values that are set. */
 export function query(params: Record<string, string | number | boolean | undefined | null>): string {
   const q = new URLSearchParams()

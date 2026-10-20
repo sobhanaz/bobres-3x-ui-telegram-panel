@@ -2607,9 +2607,111 @@
         "fix": "To correct the setting named above, run {command} on the server. For the access or secret key, edit the {file} file on the server, then run {key_command}.",
         "restore": "To restore a copy from off-site storage, run {command} on the server (it downloads the file first), or download it from the storage yourself."
       },
-      "restore_title": "How to restore",
-      "restore": "Restoring is done on the server, with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
-      "restore_later": "To restore, run sudo bobres restore <file> on the server (see the restore runbook)."
+      "restore_title": "Restoring",
+      "restore": "To restore, pick a backup in the list above or upload a file here. Only a backup made by this server can be restored from the dashboard: it is opened with the backup key kept on the server. A backup from another server, or a restore while the dashboard is down, is done on the server with the backup key the installer showed once (it is also in bobres menu, under Backup key). Each backup carries the services' own keys too, so a backup and the backup key are all you need. Keep the key safe, off the server.",
+      "restore_later": "On the server: sudo bobres restore <file> (see the restore runbook).",
+      "dl": {
+        "button": "Download",
+        "title": "Download this backup",
+        "encrypted": "The file is encrypted. Nobody can read it without the backup key.",
+        "key": "The key is never sent with the file: it stays on the server (BOBRES_BACKUP_KEY, shown once by the installer and in bobres menu under Backup key). Keep it separate from the file.",
+        "keep": "The file holds all of the store's data. Keep it somewhere safe.",
+        "audited": "The download is recorded in the audit log and every owner is told on Telegram.",
+        "submit": "Download",
+        "started": "The download has started in your browser.",
+        "error": "The download could not be started."
+      },
+      "rs": {
+        "button": "Restore",
+        "title": "Restore {name}?",
+        "made": "made {time}",
+        "source": {
+          "backup": "a backup kept on this server",
+          "upload": "a file you uploaded"
+        },
+        "lost_title": "Everything after this backup is lost",
+        "lost": "A restore replaces ALL the store's data with the backup's. Orders, payments, new customers and services, wallet balances, tickets and settings go back to what the backup holds, and everything that happened after its time is gone. The dashboard cannot undo this.",
+        "downtime": "The dashboard and the bot are unavailable for a few minutes while the data is replaced. Customers' VPN links keep working.",
+        "safe": "A backup of the current data is taken first. If the restored store does not come back healthy, BOBRES goes back to that data on its own.",
+        "key": "Only a backup made by this server can be restored here: it is opened with this server's backup key. A backup from another server needs its own key, on the server: sudo bobres restore FILE --key-file KEYFILE.",
+        "owners": "Every owner is told on Telegram when the restore is asked for and when it ends, and both are recorded in the audit log.",
+        "ack": "I understand that everything after the backup's time is lost and that the dashboard and the bot are unavailable meanwhile.",
+        "type_domain": "Type the store's domain to confirm:",
+        "submit": "Restore now",
+        "panel_title": "Restore from a file",
+        "panel_hint": "Upload a backup file (.bkp) made by this server, at most {n} {unit}. It is only stored until you confirm; the server checks it, with its backup key, before anything is stopped.",
+        "choose": "Choose a backup file",
+        "choose_other": "Choose another file",
+        "restore_this": "Restore this file",
+        "uploading": "Uploading {percent}: {sent} of {total}",
+        "uploaded": "Uploaded. It waits for your confirmation until {time}.",
+        "upload_error": "The file could not be uploaded.",
+        "last": "The last restore: {name}, {time}, {outcome}.",
+        "outcome": {
+          "done": "done",
+          "failed": "failed",
+          "rolled_back": "rolled back",
+          "not_started": "never started"
+        },
+        "not_ready": {
+          "no_domain": "Core does not know this store's domain (BOBRES_DOMAIN), so a restore cannot be confirmed from the dashboard. Restore on the server: sudo bobres restore <file>.",
+          "helper_missing": "The server's updater is not installed yet: run sudo bobres update once on the server. Then the dashboard can restore.",
+          "restore_unsupported": "The server's updater is from before restoring from the dashboard: run sudo bobres update once on the server.",
+          "already_running": "An update or a restore is being made. A restore can be asked for when it ends.",
+          "update": "An update is being made. A restore can be asked for when it ends."
+        },
+        "refusal": {
+          "helper_missing": "The server's updater is not installed yet: run sudo bobres update once on the server.",
+          "restore_unsupported": "The server's updater is from before restoring from the dashboard: run sudo bobres update once on the server.",
+          "no_domain": "Core does not know this store's domain, so a restore cannot be confirmed here. Restore on the server.",
+          "already_running": "An update or a restore is already being made.",
+          "confirm_wrong": "Type the store's domain exactly as shown.",
+          "ack_required": "Tick that you understand that everything after the backup's time is lost.",
+          "backup_unknown": "The backup service has no such backup any more. Refresh the list.",
+          "upload_missing": "The uploaded file is gone (it waits 30 minutes). Upload it again.",
+          "upload_busy": "Another file is being uploaded. Try again in a minute.",
+          "upload_too_large": "The file is larger than the limit of {n} {unit}.",
+          "upload_empty": "The file is empty.",
+          "request_failed": "The request could not be handed to the server's updater. Try again, or restore on the server.",
+          "code_required": "Enter the code from your authenticator app.",
+          "code_wrong": "That code is not right. Check the time on your phone and try the next code.",
+          "locked": "Too many wrong codes. Try again in 15 minutes, or log in with a link from the bot."
+        },
+        "progress": {
+          "title": {
+            "queued": "Restore requested",
+            "running": "Restoring {name}…",
+            "done": "Restored {name}",
+            "failed": "The restore failed",
+            "rolled_back": "The restore was rolled back",
+            "not_started": "The restore did not start",
+            "elsewhere": "A restore is running on the server"
+          },
+          "asked_by": "Asked by {by} · {time}",
+          "queued": "Waiting for the server's updater to pick the request up. This normally takes a few seconds.",
+          "running": "You can leave this page: the restore goes on. The dashboard and the bot are away for a few minutes, and this page keeps trying. Every owner is told on Telegram when it ends.",
+          "elsewhere": "It was started elsewhere. This page follows it.",
+          "step": {
+            "verify": "Checking the backup and its key",
+            "safety": "Backing up the current data",
+            "stop": "Stopping the services",
+            "restore": "Restoring the database",
+            "start": "Starting the services",
+            "health": "Waiting until everything is healthy",
+            "rollback": "Going back to the data from before"
+          },
+          "steps": "Steps of the restore",
+          "reconnecting": "Reconnecting… the dashboard restarts during the restore. This page keeps trying.",
+          "done": "The store now runs the data of the backup. Reload the page. You may be asked to log in again: the restored data has its own sessions. The data from before is kept in the server's backups folder.",
+          "rolled_back": "The restored data did not come back healthy, so BOBRES went back to the data from before the restore on its own.",
+          "failed": "The restore stopped before it finished. On the server, sudo bobres status shows what runs; the data from before the restore is kept in the backups folder (the file ending in -before-restore.bkp).",
+          "not_started": "The server's updater did not pick the request up, so nothing changed. Run sudo bobres update once on the server.",
+          "reload": "Reload the page",
+          "details": "Details",
+          "dismiss": "Close",
+          "log": "The updater's log (newest lines)"
+        }
+      }
     },
     "https": {
       "load_error": "The HTTPS state could not be read.",
