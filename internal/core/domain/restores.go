@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -95,8 +96,30 @@ type StagedUpload struct {
 	By     string // the dashboard user who uploaded it
 }
 
+// UploadLimit is the most bytes an uploaded backup may have (MaxUpload unless a test lowers it).
+func (u *Updates) UploadLimit() int64 {
+	if u.MaxUpload > 0 && u.MaxUpload < sysupdate.MaxUpload {
+		return u.MaxUpload
+	}
+	return sysupdate.MaxUpload
+}
+
+// UploadLimitText is UploadLimit for a message: "2048 MiB".
+func (u *Updates) UploadLimitText() string {
+	if l := u.UploadLimit(); l%(1<<20) != 0 {
+		return strconv.FormatInt(l, 10) + " bytes"
+	}
+	return strconv.FormatInt(u.UploadLimit()>>20, 10) + " MiB"
+}
+
 // StoreDomain is what an owner types to confirm a restore ("" when core does not know it).
 func (u *Updates) StoreDomain() string { return u.storeDomain }
+
+// ConfirmMatches reports whether what the owner typed is the store's domain (case and the spaces
+// around it do not matter; nothing else does not).
+func (u *Updates) ConfirmMatches(typed string) bool {
+	return u.storeDomain != "" && strings.EqualFold(strings.TrimSpace(typed), u.storeDomain)
+}
 
 // Staged is the upload waiting for confirmation (nil when none is, or it expired).
 func (u *Updates) Staged() *StagedUpload {
@@ -184,10 +207,10 @@ func (u *Updates) StageRestoreUpload(ctx context.Context, actor *store.User, nam
 	if err != nil {
 		return nil, err
 	}
-	up, err := u.helper.StageUpload(id, body, sysupdate.MaxUpload)
+	up, err := u.helper.StageUpload(id, body, u.UploadLimit())
 	switch {
 	case errors.Is(err, sysupdate.ErrTooLarge):
-		return nil, updateRefusal(RestoreUploadTooLarge, "the file is larger than %d MiB", sysupdate.MaxUpload>>20)
+		return nil, updateRefusal(RestoreUploadTooLarge, "the file is larger than the limit of %s", u.UploadLimitText())
 	case errors.Is(err, sysupdate.ErrEmptyUpload):
 		return nil, updateRefusal(RestoreUploadEmpty, "the file is empty")
 	case err != nil:
@@ -251,7 +274,7 @@ func (u *Updates) ApplyRestore(ctx context.Context, actor *store.User, in ApplyR
 	if !in.Acknowledge {
 		return nil, updateRefusal(RestoreAckRequired, "confirm that you understand that everything after the backup's time is lost")
 	}
-	if !strings.EqualFold(strings.TrimSpace(in.Confirm), u.storeDomain) {
+	if !u.ConfirmMatches(in.Confirm) {
 		return nil, updateRefusal(RestoreConfirmWrong, "type the store's domain exactly to confirm")
 	}
 	var (

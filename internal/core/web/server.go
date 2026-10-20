@@ -108,6 +108,10 @@ type Server struct {
 	tests *limiter
 	// probes limits connection tests (servers, gateways) per staff member.
 	probes *limiter
+	// uploads, restores and downloads limit the dashboard's backup uploads (5 an hour), restore
+	// requests (6 an hour) and download links (10 an hour) per owner; tickets are the download links.
+	uploads, restores, downloads *limiter
+	tickets                      tickets
 	// hashing holds a slot per password hash being computed or checked:
 	// each takes 32 MiB, so a burst of logins must not run them all at once.
 	hashing chan struct{}
@@ -135,7 +139,7 @@ func New(cfg Config) *Server {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), subPages: newLimiter(subPageRate, time.Minute), tests: newLimiter(5, time.Minute),
-		probes: newLimiter(10, time.Minute), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
+		probes: newLimiter(10, time.Minute), uploads: newLimiter(5, time.Hour), restores: newLimiter(6, time.Hour), downloads: newLimiter(10, time.Hour), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
 		now: time.Now, mini: newMiniState()}
 }
 
@@ -295,6 +299,14 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// Backups: the list for owner and admin, "back up now" for the owner.
 	s.route(api, "GET /api/v1/system/backups", PermSystemRead, s.systemBackups)
 	s.route(api, "POST /api/v1/system/backups/run", PermSystemWrite, s.runBackup)
+	// Downloading a backup and restoring one: the owner's. A download is a ticket (it needs the
+	// authenticator code) and then the browser's own GET; a restore is an upload or a backup of the
+	// server, a typed confirmation and the code. The upload is mounted below, outside this mux, for
+	// it is not a small request.
+	s.route(api, "POST /api/v1/system/backups/download-ticket", PermSystemWrite, s.downloadTicket)
+	s.route(api, "GET /api/v1/system/backups/download/{ticket}", PermSystemWrite, s.downloadBackup)
+	s.route(api, "GET /api/v1/system/restore", PermSystemRead, s.getRestore)
+	s.route(api, "POST /api/v1/system/restore", PermSystemWrite, s.applyRestore)
 	// Updates: the state (the bot's check, the updater's progress) for owner
 	// and admin; checking again, the channel and "Update now" for the owner.
 	s.route(api, "GET /api/v1/system/updates", PermSystemRead, s.getUpdates)
@@ -329,6 +341,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
 	mux.Handle("/api/v1/", apiHeaders(api))
+	// A backup uploaded for a restore is the one request that is not small: it has the usual
+	// headers and the audit context, and its own limit (domain.StagedUpload, uploadRestore).
+	mux.Handle("POST /api/v1/system/restore/upload", apiHeadersLimit(s.session(s.require(PermSystemWrite, s.uploadRestore)), 0))
 	// The branded service page: public, the token in the address is the
 	// credential. Every other path under /sub/ gets the same generic 404.
 	mux.HandleFunc("GET /sub/{token}", s.subPage)
@@ -347,11 +362,16 @@ func (s *Server) route(mux *http.ServeMux, pattern, perm string, h http.HandlerF
 	mux.HandleFunc(pattern, s.session(s.require(perm, h)))
 }
 
-func apiHeaders(next http.Handler) http.Handler {
+func apiHeaders(next http.Handler) http.Handler { return apiHeadersLimit(next, maxBody) }
+
+// apiHeadersLimit is apiHeaders with another limit on the body (0: the handler sets its own).
+func apiHeadersLimit(next http.Handler, limit int64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+		if limit > 0 {
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+		}
 		// Audit entries written for this request record where it came from.
 		ctx := store.WithSource(store.WithClientIP(r.Context(), clientIP(r)), store.SourceDashboard)
 		next.ServeHTTP(w, r.WithContext(ctx))

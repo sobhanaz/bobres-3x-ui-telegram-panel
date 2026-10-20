@@ -75,6 +75,9 @@ func helperJSON(h domain.UpdateHelperState, owner bool) map[string]any {
 		"available": h.Available, "problem": h.Problem, "version": st.Helper, "state": st.State, "id": st.ID,
 		"from": st.From, "to": st.To, "channel": st.Channel, "step": st.Step, "message": st.Message,
 		"started_at": unix(st.StartedAt), "finished_at": unix(st.FinishedAt),
+		// Added with the dashboard's restore: what the status is about (update | restore), whether this
+		// updater can restore a backup, and what it says of a restore.
+		"action": st.Action, "restore": st.Restore, "subject": st.Subject, "source": st.Source, "by": st.By, "requested_at": unix(st.RequestedAt),
 	}
 	if owner {
 		log := st.Log
@@ -91,8 +94,13 @@ func runJSON(u *store.SystemUpdate, phase string) map[string]any {
 	if u == nil {
 		return nil
 	}
+	action := u.Action
+	if action == "" {
+		action = store.ActionUpdate
+	}
 	out := map[string]any{"id": u.ID, "by": u.RequestedByName, "from": u.From, "to": u.To, "channel": u.Channel,
-		"requested_at": u.RequestedAt.Unix(), "outcome": u.Outcome, "outcome_at": unix(u.OutcomeAt), "message": u.Message}
+		"requested_at": u.RequestedAt.Unix(), "outcome": u.Outcome, "outcome_at": unix(u.OutcomeAt), "message": u.Message,
+		"action": action, "subject": u.Subject, "source": u.Source}
 	if phase != "" {
 		out["phase"] = phase
 	}

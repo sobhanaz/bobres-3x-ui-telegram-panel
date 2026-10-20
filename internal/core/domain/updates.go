@@ -187,6 +187,9 @@ type Updates struct {
 
 	lastErr string // the last Step failure logged, so one that repeats is one line
 
+	// MaxUpload is the most bytes an uploaded backup may have (0: sysupdate.MaxUpload).
+	MaxUpload int64
+
 	// The dashboard's restore (restores.go).
 	storeDomain string
 	restoreState
