@@ -4,7 +4,7 @@
 import { computed, ref } from 'vue'
 import type { Intent } from '../api'
 import { tr } from '../i18n'
-import { fmtMoney, fmtDateTime } from '../fmt'
+import { fmtDateTime, fmtExact } from '../fmt'
 import { copyText, openLink } from '../telegram'
 import { isolate } from '../format'
 import { isManual } from '../pay'
@@ -19,8 +19,10 @@ defineEmits<{ check: [quiet?: boolean]; leave: [] }>()
 const copied = ref(false)
 const address = computed(() => props.intent.details.pay_address ?? '')
 const expires = computed(() => Number(props.intent.details.expires_at ?? 0))
+// Every payment to the address has an amount of its own, down to the last micro-USDT (that is how it is told from the
+// others), so it is shown whole: "2.500731", never "2.5".
 const charged = computed(() =>
-  props.intent.gateway_currency === 'USDT' ? fmtMoney(props.intent.gateway_amount, 'USDT', props.intent.scale_gateway) : '',
+  props.intent.gateway_currency === 'USDT' ? fmtExact(props.intent.gateway_amount, 'USDT', props.intent.scale_gateway) : '',
 )
 
 async function copy() {

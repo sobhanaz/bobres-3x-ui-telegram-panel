@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bytes, daysLeft, isolate, latinDigits, money, newKey, num, wholeNumber } from '../format'
+import { bytes, daysLeft, exactMoney, isolate, latinDigits, money, newKey, num, wholeNumber } from '../format'
 
 describe('format', () => {
   it('writes numbers with Persian digits for fa', () => {
@@ -12,6 +12,17 @@ describe('format', () => {
     expect(money(100000, 'IRT', 0, 'fa')).toContain('تومان')
     expect(money(2_500_000, 'USDT', 6, 'en')).toBe('2.5 USDT')
     expect(money(2_500_000, 'USDT', 6, 'fa')).toContain('تتر')
+  })
+
+  it('writes an amount to send with every decimal it has, in Latin digits in either language', () => {
+    // money() keeps two decimals, which is right for a price and wrong for "send exactly": a payment of 2.5
+    // does not match one that was asked to be 2.500731.
+    expect(money(2_500_731, 'USDT', 6, 'en')).toBe('2.5 USDT')
+    expect(exactMoney(2_500_731, 'USDT', 6, 'en')).toBe('2.500731 USDT')
+    expect(exactMoney(2_500_731, 'USDT', 6, 'fa')).toBe('2.500731 تتر')
+    expect(exactMoney(2_500_000, 'USDT', 6, 'en')).toBe('2.5 USDT')
+    expect(exactMoney(1, 'USDT', 6, 'en')).toBe('0.000001 USDT')
+    expect(exactMoney(150_000, 'IRT', 0, 'en')).toBe('150000 Toman')
   })
 
   it('writes traffic in MB, GB or TB', () => {

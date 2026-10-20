@@ -1,8 +1,18 @@
 // Small helpers of the payment screens (Stars and the manual methods).
+import type { Key } from './i18n'
 
 /** isManual says whether a payment method is one the customer pays by hand and then sends a proof for. */
 export function isManual(provider: string): boolean {
   return provider === 'manual_card' || provider === 'manual_crypto' || provider === 'manual_zarinpal'
+}
+
+/**
+ * notYetKey is what is said when the customer asks about a payment and it is not there yet: a Stars payment may be
+ * on its way from Telegram (so: do not pay twice), a manual one waits for the staff.
+ */
+export function notYetKey(provider: string): Key {
+  if (provider === 'stars') return 'stars.not_yet'
+  return isManual(provider) ? 'manual.still_waiting' : 'pay.not_yet'
 }
 
 /** cardDigits is a card number as a bank app takes it: digits only (an IR sheba keeps its letters). */

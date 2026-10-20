@@ -101,9 +101,10 @@ same: price and discount are decided on the server, a wallet cannot go below zer
 their credit limit), an order is the customer's own or a 404. Changes are audited with source `bot` (the audit log's
 allowed sources do not include a Mini App one, and the store is the bot's second face), under the customer's id.
 
-While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check (so a
-payment in flight finishes: a Stars payment is settled by the bot all the same), but browsing, buying, top-up and
-sending a proof answer 503 `maintenance`, as the bot does not take a receipt then either.
+While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check, and send
+the proof of a manual payment already started, so that a payment in flight finishes: a Stars payment is settled by the
+bot all the same, and a customer who has paid by hand can say so, as the bot lets them (it takes the receipt, the bank
+number or the hash of a payment under way). Browsing, buying, top-up and starting a payment answer 503 `maintenance`.
 
 ## Stars and manual payments
 
@@ -242,8 +243,8 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 ## Security
 
 - **Signed, bot-verified identity.** No customer id from the browser is ever trusted: every call is bound to the
-  session's own user, order and service ids must match a UUID shape, and an order or service of another customer is a
-  404.
+  session's own user, order, service and payment ids must match a UUID shape (in either case), and an order, service or
+  payment of another customer is a 404.
 - **Telegram's script** (`https://telegram.org/js/telegram-web-app.js`) is the only outside code the page loads. If it
   cannot be loaded, the app still reads the init data from the URL fragment Telegram opens it with.
 - **Headers** (`web/miniapp/embed.go`, repeated in the Caddyfile `/app` block, and a test keeps the two equal):
@@ -259,11 +260,15 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
   started only if the store offers it for that price at that moment.
 - **Proofs and receipts:** a proof is accepted for the customer's own, manual, waiting payment, once (another
   customer's payment, or one that does not exist, is a 404; a second proof sent while the first is on its way is turned
-  away). An upload is a JPEG, PNG or WebP by its bytes, at most 8 MB, one image per submission; a request over 8.25 MB
-  is refused by its Content-Length before it is read. A customer may send 6 receipts in 10 minutes (a refused one counts)
-  on top of the 20 changes a minute, and 4 are checked and sent at once (each is held in memory meanwhile). A receipt is
-  not stored by core and not logged or audited anywhere. The bot's four internal endpoints answer only to core's
-  token, and core never holds the Telegram token.
+  away). An upload is a JPEG, PNG or WebP by its bytes, at most 8 MB, one image per submission, and no more than 40
+  megapixels (read from the header of each format, never by decoding: the review list shows every receipt in the
+  dashboard, and a small file can claim a gigantic picture); a request over 8.25 MB is refused by its Content-Length
+  before it is read. A customer may send 6 receipts in 10 minutes (a refused one counts, being turned away for lack
+  of room does not) on top of the 20 changes a minute. Each customer has one receipt on its way at a time, and 4 are
+  checked and sent at once (each is held in memory meanwhile, up to 30 seconds while it is read, which is what the
+  proxy gives a request body), so one account cannot hold every place; a customer who finds none is told to try
+  again in a moment. A receipt is not stored by core and not logged or audited anywhere. The bot's four internal
+  endpoints answer only to core's token, and core never holds the Telegram token.
 - The session token is held in memory by the page (no cookie, no local storage), so it is not sent by the browser on
   its own and a page of another site cannot make the app act.
 
@@ -272,9 +277,15 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 - For a reseller: recording what they paid the store (staff do it, in the dashboard).
 - Resetting a service's traffic and free days or free traffic for a customer's service (staff only, by design).
 - Photos and files in support (sent from the bot).
-- Picking up a payment that was started and left: reopening a plan makes a new order, the earlier payment stays unpaid,
-  and a receipt for it cannot be sent from the app. A payment whose receipt is in is followed by the bot's message when
-  staff decide, and by the app while it stays open.
+- Picking up a payment that was started and left. The screen that shows the card, or the addresses, and takes the
+  receipt lives in the app's memory: if Telegram reloads the app (or the customer closes it) between paying at the
+  bank and sending the proof, reopening a plan makes a new order, the earlier payment stays unpaid, and a receipt for
+  it cannot be sent from the app (nor from the bot, which has no list of unpaid orders to go on with). Support can
+  still find the payment by its reference, which the customer was told to write in the bank's description. The next
+  step is a list of the customer's own pending manual payments (the payments service can already filter by customer
+  and status) with a "send the receipt" row on the wallet screen. A payment whose receipt is in is followed by the
+  bot's message when staff decide, and by the app while it stays open.
+- The store's forced channel (`join.channel`): the bot asks a customer to join it, the app does not.
 - PDF receipts (the bot takes images only, too) and more than one image for a payment.
 - Push messages (the bot sends those).
 

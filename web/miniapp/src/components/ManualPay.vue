@@ -5,12 +5,12 @@
 // reference), takes the proof, and then says it is waiting for review.
 import { computed, ref } from 'vue'
 import { api, ApiError, type Intent } from '../api'
-import { errorKey } from '../errors'
+import { errorKey, gateFor } from '../errors'
 import { tr, type Key } from '../i18n'
-import { fmtMoney } from '../fmt'
+import { fmtExact, fmtMoney } from '../fmt'
 import { cardDigits, cleanTxid, networkFor, networksOf, plainAmount, txidPattern, type Network } from '../pay'
 import { type PreparedReceipt } from '../receipt'
-import { fail, state } from '../store'
+import { state } from '../store'
 import { haptic, openLink, openTelegram } from '../telegram'
 import CopyField from './CopyField.vue'
 import ReceiptPicker from './ReceiptPicker.vue'
@@ -20,8 +20,13 @@ const emit = defineEmits<{ check: [quiet?: boolean]; leave: [] }>()
 
 const provider = computed(() => props.intent.provider)
 const d = computed(() => props.intent.details)
-const amount = computed(() => fmtMoney(props.intent.amount, props.intent.currency, props.intent.scale))
-const usdt = computed(() => (props.intent.usdt_amount ? fmtMoney(props.intent.usdt_amount, 'USDT', 6) : ''))
+// An amount in USDT is shown whole, as it is copied (a price in USDT can have fractions of a cent): the customer sends exactly it.
+const amount = computed(() =>
+  props.intent.currency === 'USDT'
+    ? fmtExact(props.intent.amount, 'USDT', props.intent.scale)
+    : fmtMoney(props.intent.amount, props.intent.currency, props.intent.scale),
+)
+const usdt = computed(() => (props.intent.usdt_amount ? fmtExact(props.intent.usdt_amount, 'USDT', 6) : ''))
 const networks = computed(() => networksOf(d.value))
 // Only a web address is opened (core checks it too).
 const payLink = computed(() => (/^https?:\/\//i.test(d.value.zarinpal_link ?? '') ? (d.value.zarinpal_link ?? '') : ''))
@@ -59,7 +64,13 @@ async function send() {
     sent.value = true
     haptic('success')
   } catch (e) {
-    if (fail(e)) return
+    // Being signed out, banned or switched off replaces the screen. A busy store or payments does not: the receipt stays
+    // chosen and typed in, and the customer sends it again in a moment.
+    const gate = gateFor(e)
+    if (gate && gate !== 'maintenance' && gate !== 'unavailable') {
+      state.gate = gate
+      return
+    }
     if (e instanceof ApiError && e.code === 'already_submitted') {
       sent.value = true // an earlier send arrived after all: it waits for review
       return

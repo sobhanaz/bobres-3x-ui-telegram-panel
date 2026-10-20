@@ -1,9 +1,11 @@
 // Formatting in the current language, for templates.
 import { lang, planName as pickName, tr, type Key } from './i18n'
-import { bytes, date, dateTime, money, num } from './format'
+import { bytes, date, dateTime, exactMoney, money, num } from './format'
 import type { Plan } from './api'
 
 export const fmtMoney = (amount: number, currency: string, scale: number) => money(amount, currency, scale, lang.value)
+/** fmtExact is an amount to send, with every decimal (fmtMoney keeps two). */
+export const fmtExact = (amount: number, currency: string, scale: number) => exactMoney(amount, currency, scale, lang.value)
 export const fmtBytes = (n: number) => bytes(n, lang.value)
 export const fmtDate = (unix: number) => date(unix, lang.value)
 export const fmtDateTime = (unix: number) => dateTime(unix, lang.value)

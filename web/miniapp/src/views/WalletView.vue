@@ -5,7 +5,7 @@ import { errorKey } from '../errors'
 import { tr } from '../i18n'
 import { fmtDateTime, fmtMoney, ledgerKey } from '../fmt'
 import { newKey, wholeNumber } from '../format'
-import { isManual } from '../pay'
+import { isManual, notYetKey } from '../pay'
 import { fail, loadWallet, state } from '../store'
 import Methods from '../components/Methods.vue'
 import PayPanel from '../components/PayPanel.vue'
@@ -21,6 +21,7 @@ const checking = ref(false)
 const note = ref('')
 let key = newKey()
 let timer: ReturnType<typeof setInterval> | undefined
+let alive = true
 
 const top = computed(() => state.me?.top_up ?? { currency: 'IRT', min: 10_000, max: 50_000_000 })
 
@@ -33,7 +34,25 @@ async function load() {
   }
 }
 onMounted(load)
-onBeforeUnmount(() => timer && clearInterval(timer))
+
+function stop() {
+  if (timer) clearInterval(timer)
+  timer = undefined
+}
+onBeforeUnmount(() => {
+  alive = false
+  stop()
+})
+
+// A payment is asked about every 5 seconds, as long as the screen is open. One that waits for the staff (the result comes
+// in the bot) is asked about every 30 seconds, for half an hour: it would use most of the customer's changes a minute.
+function startPolling(provider: string) {
+  stop()
+  if (!alive) return // the customer left while the call that led here was on its way
+  const manual = isManual(provider)
+  let polls = 0
+  timer = setInterval(() => (manual && ++polls > 60 ? stop() : void check(true)), manual ? 30_000 : 5000)
+}
 
 function choose(n: number) {
   error.value = ''
@@ -56,12 +75,10 @@ async function pick(method: string) {
       error.value = tr('pay.failed')
       return
     }
+    if (!alive) return
     intent.value = made
     stage.value = 'wait'
-    // Asked every 5 seconds for 5 minutes; a payment that waits for staff to review it is told in the bot.
-    let polls = 0
-    if (timer) clearInterval(timer)
-    timer = setInterval(() => (++polls > 60 ? clearInterval(timer) : void check(true)), 5000)
+    startPolling(made.provider)
   } catch (e) {
     if (!fail(e)) error.value = tr(errorKey(e))
   } finally {
@@ -70,19 +87,25 @@ async function pick(method: string) {
 }
 
 async function check(quiet = false) {
-  if (!intent.value) return
+  const current = intent.value
+  if (!current) return
   if (!quiet) checking.value = true
   try {
-    const r = await api.checkPayment(intent.value.intent_id)
+    const r = await api.checkPayment(current.intent_id)
+    if (intent.value !== current) return // the customer went back while the call was on its way
     if (r.status === 'succeeded') {
-      if (timer) clearInterval(timer)
+      stop()
       stage.value = 'amount'
       intent.value = null
       note.value = tr('done.topup')
       await loadWallet()
-    } else if (!quiet) note.value = tr(isManual(intent.value.provider) ? 'manual.still_waiting' : 'pay.not_yet')
+    } else if (r.status === 'failed' || r.status === 'expired' || r.status === 'rejected') {
+      // Over: the staff turned a manual payment down, or a gateway's time ran out. Nothing more to wait for.
+      stop()
+      note.value = tr('pay.failed')
+    } else if (!quiet) note.value = tr(notYetKey(current.provider))
   } catch (e) {
-    if (fail(e) && timer) clearInterval(timer)
+    if (fail(e)) stop()
     else if (!quiet) error.value = tr(errorKey(e))
   } finally {
     checking.value = false
@@ -90,7 +113,8 @@ async function check(quiet = false) {
 }
 
 function back() {
-  if (timer) clearInterval(timer)
+  stop()
+  if (intent.value) note.value = '' // what was said about that payment (still waiting, did not go through) is old now
   stage.value = 'amount'
   intent.value = null
 }

@@ -192,6 +192,35 @@ describe('ManualPay: card to card', () => {
     m.unmount()
   })
 
+  it('keeps the form when the store is busy, and gives up the screen only when the session is over', async () => {
+    // The receipt is chosen and the number typed in: a busy store, payments away or maintenance must not throw them away.
+    let answer: Response = json(503, { error: 'unavailable', message: 'x' })
+    signedIn(() => answer)
+    const m = mount(ManualPay, props(card()), [])
+    await settle(5)
+    await chooseFile(m.el, png())
+    await type(m, 0, '998877')
+    await m.click('Send the receipt')
+    await settle(30)
+    expect(state.gate).toBe('')
+    expect(m.text()).toContain('Busy right now. Try again in a moment.')
+    expect(m.el.querySelector('img')).not.toBeNull() // the picture is still there
+    expect(input(m, 0).value).toBe('998877')
+    expect(m.button('Send the receipt').disabled).toBe(false)
+    answer = json(503, { error: 'maintenance', message: 'x' })
+    await m.click('Send the receipt')
+    await settle(30)
+    expect(state.gate).toBe('')
+    expect(m.text()).toContain('The store is under maintenance.')
+    expect(m.el.querySelector('img')).not.toBeNull()
+    // Signed out: there is nothing to send with, and the screen says so.
+    answer = json(401, { error: 'unauthorized', message: 'x' })
+    await m.click('Send the receipt')
+    await settle(30)
+    expect(state.gate).toBe('expired')
+    m.unmount()
+  })
+
   it('starts where the payment is: waiting, approved, or closed', async () => {
     let m = mount(ManualPay, props(card({ status: 'confirming' })), [])
     await settle(5)
@@ -254,6 +283,19 @@ describe('ManualPay: USDT', () => {
     await settle(5)
     expect(m.text()).toContain('Send exactly 5 USDT to one of these addresses')
     expect(m.text()).not.toContain('about')
+    m.unmount()
+  })
+
+  it('shows an amount with fractions of a cent whole, as it is copied', async () => {
+    // a price in USDT can have any of the 6 decimals; "4.12" on the screen over "4.123456" in the clipboard would be a payment short by 0.003456
+    const copied = clipboard()
+    const m = mount(ManualPay, props(crypto({ currency: 'USDT', scale: 6, amount: 4_123_456, usdt_amount: 4_123_456 })), [])
+    await settle(5)
+    expect(m.text()).toContain('Send exactly 4.123456 USDT to one of these addresses')
+    expect(m.text()).not.toContain('4.12 USDT')
+    m.buttons().filter((b) => b.textContent?.trim() === 'Copy')[0].click()
+    await settle(5)
+    expect(copied).toEqual(['4.123456'])
     m.unmount()
   })
 

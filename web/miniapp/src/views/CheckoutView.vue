@@ -9,7 +9,7 @@ import { errorKey, gateFor } from '../errors'
 import { tr } from '../i18n'
 import { fmtMoney, nameOf, planFacts } from '../fmt'
 import { newKey } from '../format'
-import { isManual } from '../pay'
+import { notYetKey } from '../pay'
 import { fail, irtSpendable, loadServices, loadWallet, state } from '../store'
 import { haptic } from '../telegram'
 import type { Plan } from '../api'
@@ -33,6 +33,7 @@ const note = ref('')
 const checking = ref(false)
 let key = newKey()
 let timer: ReturnType<typeof setInterval> | undefined
+let alive = true
 
 const total = computed(() => quote.value?.total ?? props.plan.price)
 const summaryKey = computed(() =>
@@ -53,7 +54,10 @@ function stop() {
   if (timer) clearInterval(timer)
   timer = undefined
 }
-onBeforeUnmount(stop)
+onBeforeUnmount(() => {
+  alive = false
+  stop()
+})
 
 function oops(e: unknown) {
   if (fail(e)) return
@@ -143,6 +147,7 @@ async function finish() {
 // Poll the order every few seconds until it is delivered or ends.
 function startPolling() {
   stop()
+  if (!alive) return // the customer left while the call that led here was on its way
   let n = 0
   timer = setInterval(async () => {
     if (!order.value || ++n > 80) return stop()
@@ -181,7 +186,7 @@ async function check(quiet = false) {
       const o = await api.order(order.value.id)
       order.value = o
       if (isPaid(o.status)) await finish()
-      else if (!quiet) note.value = tr(isManual(intent.value.provider) ? 'manual.still_waiting' : 'pay.not_yet')
+      else if (!quiet) note.value = tr(notYetKey(intent.value.provider))
     }
   } catch (e) {
     if (!quiet) oops(e)

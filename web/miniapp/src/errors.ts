@@ -47,6 +47,8 @@ export function errorKey(e: unknown): Key {
     case 'busy':
     case 'bot_unavailable':
       return `err.${e.code}`
+    case 'unavailable': // payments or the store behind core is away for a moment
+      return 'err.busy'
     default:
       return 'err.unknown'
   }

@@ -84,6 +84,25 @@ describe('PayPanel', () => {
     m.unmount()
   })
 
+  it('writes the amount of an automatic USDT payment whole, down to the last micro-USDT', async () => {
+    // Every payment to the address has an amount of its own (that is how it is told from the others): "2.5" would be a
+    // payment nobody asked for.
+    const m = mount(
+      PayPanel,
+      {
+        intent: intent({
+          provider: 'usdt_trc20_auto', gateway_amount: 2_500_731, gateway_currency: 'USDT', scale_gateway: 6,
+          details: { pay_address: 'TS3xQSYkuSNpuUzmCprGpTHHKq9XVTgu3r', network: 'TRC20' },
+        }),
+        checking: false, message: '',
+      },
+      [],
+    )
+    await settle(5)
+    expect(m.text()).toContain('Send exactly 2.500731 USDT to this address')
+    m.unmount()
+  })
+
   it('passes a check and a leave on, and shows or hides the way out', async () => {
     const m = mount(PayPanel, { intent: intent({ status: 'confirming' }), checking: false, message: '' }, ['check', 'leave'])
     await settle(5)
@@ -285,6 +304,171 @@ describe('topping up the wallet', () => {
     await settle(20)
     expect(m.text()).toContain('The payment did not go through.')
     expect(m.text()).not.toContain('Pay with Telegram Stars')
+    m.unmount()
+  })
+})
+
+// Leaving, failing, and how often a payment is asked about.
+describe('leaving a payment screen and asking about a payment', () => {
+  const waiting = (over: Partial<Intent> = {}): Intent => intent({ status: 'confirming', order_id: '', amount: 100000, ...over })
+  const wallet = { wallets: [{ currency: 'IRT', balance: 0, scale: 0 }], ledger: [] }
+  const checks = (calls: Call[]) => calls.filter((c) => c.path === '/payments/i1/check').length
+
+  // A top-up of 100,000 by the method, as far as its screen.
+  async function topUpBy(method: string): Promise<Mounted> {
+    const m = mount(WalletView, {}, [])
+    await settle(20)
+    await m.click('100,000 Toman')
+    await settle(20)
+    await m.click(method)
+    await settle(20)
+    return m
+  }
+
+  it('does not trip when Back is pressed while a check is on its way', async () => {
+    let release: () => void = () => {}
+    const held = new Promise<void>((r) => (release = r))
+    signedIn(async ({ method, path }) => {
+      if (path === '/wallet') return wallet
+      if (path.startsWith('/methods')) return { methods: ['manual_card'] }
+      if (path === '/topup' && method === 'POST') return waiting()
+      if (path === '/payments/i1/check') {
+        await held
+        return { intent_id: 'i1', status: 'confirming', order_id: '', failure_reason: '' }
+      }
+      return {}
+    })
+    const m = await topUpBy('Card to card')
+    expect(m.text()).toContain('Receipt received')
+    m.button('Check status').click() // the answer is held
+    await settle(5)
+    await m.click('Back')
+    release()
+    await settle(30)
+    expect(m.el.querySelector('[role=alert]')).toBeNull() // no "something went wrong" for a screen that is gone
+    expect(m.text()).toContain('Add funds')
+    expect(m.text()).not.toContain('Still waiting for review.') // said about a payment that is no longer on screen
+    m.unmount()
+  })
+
+  it('asks about a manual payment every 30 seconds, learns it was turned down, and stops asking', async () => {
+    vi.useFakeTimers()
+    let status = 'confirming'
+    const calls = signedIn(({ method, path }) => {
+      if (path === '/wallet') return wallet
+      if (path.startsWith('/methods')) return { methods: ['manual_card'] }
+      if (path === '/topup' && method === 'POST') return waiting()
+      if (path === '/payments/i1/check') return { intent_id: 'i1', status, order_id: '', failure_reason: '' }
+      return {}
+    })
+    const m = await topUpBy('Card to card')
+    expect(checks(calls)).toBe(0)
+    await settle(29_000)
+    expect(checks(calls)).toBe(0) // not every 5 seconds: it would use most of the customer's changes a minute
+    await settle(1_500)
+    expect(checks(calls)).toBe(1)
+    expect(m.text()).not.toContain('Still waiting for review.') // asked by itself: nothing said while nothing is new
+    status = 'rejected'
+    await settle(30_000)
+    expect(checks(calls)).toBe(2)
+    expect(m.text()).toContain('The payment did not go through.') // the staff turned it down
+    await settle(10 * 60_000)
+    expect(checks(calls)).toBe(2) // and nothing more to wait for
+    m.unmount()
+  })
+
+  it('asks about a manual payment for half an hour at most, and about an online one as long as the screen is open', async () => {
+    vi.useFakeTimers()
+    let calls = signedIn(({ method, path }) => {
+      if (path === '/wallet') return wallet
+      if (path.startsWith('/methods')) return { methods: ['manual_card', 'zarinpal'] }
+      if (path === '/topup' && method === 'POST') return waiting()
+      if (path === '/payments/i1/check') return { intent_id: 'i1', status: 'confirming', order_id: '', failure_reason: '' }
+      return {}
+    })
+    let m = await topUpBy('Card to card')
+    await settle(40 * 60_000)
+    expect(checks(calls)).toBe(60)
+    m.unmount()
+
+    calls = signedIn(({ method, path }) => {
+      if (path === '/wallet') return wallet
+      if (path.startsWith('/methods')) return { methods: ['zarinpal'] }
+      if (path === '/topup' && method === 'POST') return intent({ provider: 'zarinpal', pay_url: 'https://pay.example/x', order_id: '', details: {} })
+      if (path === '/payments/i1/check') return { intent_id: 'i1', status: 'pending', order_id: '', failure_reason: '' }
+      return {}
+    })
+    m = await topUpBy('Zarinpal')
+    await settle(10 * 60_000)
+    expect(checks(calls)).toBeGreaterThan(100) // every 5 seconds, as it was
+    m.unmount()
+  })
+
+  it('starts no polling for a screen the customer has already left', async () => {
+    vi.useFakeTimers()
+    let release: () => void = () => {}
+    const held = new Promise<void>((r) => (release = r))
+    const calls = signedIn(async ({ method, path }) => {
+      if (path === '/orders' && method === 'POST') return order()
+      if (path.startsWith('/methods')) return { methods: ['zarinpal'] }
+      if (path === '/orders/o1/pay') {
+        await held
+        return intent({ provider: 'zarinpal', pay_url: 'https://pay.example/x', details: {} })
+      }
+      if (path === '/orders/o1') return order()
+      return {}
+    })
+    const flush = () => vi.advanceTimersByTimeAsync(10)
+    const m = await startCheckout(() => {}, flush)
+    m.button('Zarinpal').click() // the payment is being made...
+    await flush()
+    m.unmount() // ...and the customer goes
+    release()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(calls.filter((c) => c.path === '/orders/o1' && c.method === 'GET')).toHaveLength(0)
+
+    // The same for a top-up.
+    let release2: () => void = () => {}
+    const second = new Promise<void>((r) => (release2 = r))
+    const calls2 = signedIn(async ({ method, path }) => {
+      if (path === '/wallet') return wallet
+      if (path.startsWith('/methods')) return { methods: ['zarinpal'] }
+      if (path === '/topup' && method === 'POST') {
+        await second
+        return intent({ provider: 'zarinpal', pay_url: 'https://pay.example/x', order_id: '', details: {} })
+      }
+      return {}
+    })
+    const w = mount(WalletView, {}, [])
+    await settle(20)
+    await w.click('100,000 Toman')
+    await settle(20)
+    w.button('Zarinpal').click()
+    await settle(20)
+    w.unmount()
+    release2()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(calls2.filter((c) => c.path === '/payments/i1/check')).toHaveLength(0)
+  })
+
+  it('tells a Stars payer who asks too early not to pay twice', async () => {
+    telegram({ openInvoice: vi.fn(), isVersionAtLeast: () => true })
+    signedIn(({ method, path }) => {
+      if (path === '/orders' && method === 'POST') return order()
+      if (path.startsWith('/methods')) return { methods: ['stars'] }
+      if (path === '/orders/o1/pay') return starsIntent()
+      if (path === '/orders/o1') return order()
+      if (path === '/payments/i1/check') return { intent_id: 'i1', status: 'pending', order_id: 'o1', failure_reason: '' }
+      return {}
+    })
+    const flush = () => settle(30)
+    const m = await startCheckout(() => {}, flush)
+    await m.click('Telegram Stars')
+    await flush()
+    await m.click('I have paid')
+    await flush()
+    // not the bare "No payment seen yet.", which would send them back to the payment sheet
+    expect(m.text()).toContain('wait a few seconds and check again; do not pay twice')
     m.unmount()
   })
 })

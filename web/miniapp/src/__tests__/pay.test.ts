@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, resetSession } from '../api'
 import { errorKey } from '../errors'
 import { messages } from '../i18n'
-import { cardDigits, cleanTxid, isManual, networkFor, networksOf, plainAmount, txidPattern } from '../pay'
+import { cardDigits, cleanTxid, isManual, networkFor, networksOf, notYetKey, plainAmount, txidPattern } from '../pay'
 import { openInvoice } from '../telegram'
 import { json, noTelegram, signedIn, telegram } from './helpers'
 
@@ -15,6 +15,15 @@ describe('payment helpers', () => {
   it('knows the manual methods', () => {
     for (const m of ['manual_card', 'manual_crypto', 'manual_zarinpal']) expect(isManual(m)).toBe(true)
     for (const m of ['stars', 'zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'wallet', '', 'manual_']) expect(isManual(m)).toBe(false)
+  })
+
+  it('says what is not there yet in the words of the method, and warns a Stars payer not to pay twice', () => {
+    expect(notYetKey('stars')).toBe('stars.not_yet')
+    expect(notYetKey('manual_card')).toBe('manual.still_waiting')
+    expect(notYetKey('manual_crypto')).toBe('manual.still_waiting')
+    expect(notYetKey('zarinpal')).toBe('pay.not_yet')
+    expect(messages.en['stars.not_yet']).toContain('do not pay twice')
+    expect(messages.fa['stars.not_yet']).toBeTruthy()
   })
 
   it('copies a card number as digits', () => {
@@ -121,6 +130,8 @@ describe('proofs', () => {
       expect(messages.en[key], `en ${key}`).toBeTruthy()
     }
     expect(errorKey(new ApiError(500, 'something_else', ''))).toBe('err.unknown')
+    // payments or the store behind core away for a moment: said as busy, not as an unknown failure
+    expect(errorKey(new ApiError(503, 'unavailable', ''))).toBe('err.busy')
   })
 
   it('has a name for each payment method in both languages', () => {

@@ -16,6 +16,7 @@ export default {
     'stars.failed': 'پرداخت انجام نشد. دوباره تلاش کنید یا روش دیگری انتخاب کنید.',
     'stars.opened': 'صفحه پرداخت تلگرام باز شد. بعد از پرداخت به همین‌جا برگردید.',
     'stars.paid': 'پرداخت دریافت شد.',
+    'stars.not_yet': 'هنوز پرداختی دیده نشد. اگر در تلگرام پرداخت کرده‌اید، چند ثانیه صبر کنید و دوباره بررسی کنید؛ دوباره پرداخت نکنید.',
 
     'manual.card_send': 'مبلغ زیر را دقیقاً به این کارت واریز کنید:',
     'manual.amount': 'مبلغ',
@@ -83,6 +84,7 @@ export default {
     'stars.failed': 'The payment did not go through. Try again, or pick another way to pay.',
     'stars.opened': "Telegram's payment sheet is open. Come back here once you have paid.",
     'stars.paid': 'Payment received.',
+    'stars.not_yet': 'No payment seen yet. If you have already paid in Telegram, wait a few seconds and check again; do not pay twice.',
 
     'manual.card_send': 'Transfer exactly this amount to this card:',
     'manual.amount': 'Amount',

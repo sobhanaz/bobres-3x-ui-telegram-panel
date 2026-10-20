@@ -108,10 +108,17 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   tell the staff (every owner) about a proof, as it does for one that comes in its chat. The app shrinks big phone
   photos before sending them.
 - Limits and care: every call acts on the customer's own order and payment (another's is a 404, also for the
-  payment check, which used to answer 500), prices come from the order, a payment starts only by a method on offer, a
-  proof is accepted once, uploads are limited to 6 in 10 minutes and 4 at a time on top of the write limit, and no
-  receipt or file id is ever logged or audited. See [docs/17-mini-app.md](docs/17-mini-app.md) for the API, the new
-  error codes and what only a real Telegram can prove.
+  payment check, which used to answer 500, as it did for an id that is not a payment id), prices come from the order, a
+  payment starts only by a method on offer, a proof is accepted once (also in maintenance, so that a customer who has
+  paid can say so, as in the bot), a receipt is no more than 8 MB and 40 megapixels (read from the header, WebP
+  included), uploads are limited to 6 in 10 minutes and one at a time for a customer on top of the write limit (4 in
+  all), and no receipt or file id is ever logged or audited. See [docs/17-mini-app.md](docs/17-mini-app.md) for the
+  API, the new error codes and what only a real Telegram can prove.
+- Fixed: the Mini App showed the amount of an automatic USDT payment rounded to cents ("Send exactly 2.5 USDT" for a
+  payment of 2.500731, whose last digits are what tells it from the others, so it was not matched and waited for the
+  staff); it shows every decimal now, as the bot does. The bot's "payment received" message for a top-up paid by Stars
+  says the wallet was credited (it said a service is being prepared), and the pre-checkout refusal no longer sends a
+  Mini App customer "to the bot".
 - Updating: no migration and no change to the gRPC API. The new bot endpoints (`/internal/miniapp/invoice`, `/receipt`,
   `/proof-alert`) are called by core, so update core and the bot together with `sudo bobres update`; a core newer than
   its bot would list Stars and the manual methods and answer "Telegram could not be reached" when one is picked.
