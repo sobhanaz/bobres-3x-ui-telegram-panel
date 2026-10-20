@@ -6,9 +6,10 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
-Four more of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
-plans as a **two-column table**, a customer can **buy several services at once** (Bulk purchase), and **gift codes**
-add a fixed amount of credit to a customer's wallet.
+More of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
+plans as a **two-column table**, a customer can **buy several services at once** (Bulk purchase), **gift codes**
+add a fixed amount of credit to a customer's wallet, and the store can require **more than one channel or group** to
+join (one on the free tier and Standard, any number on Pro).
 
 ### Updating
 - Three database migrations (00026: the table `core.bulk_orders` and two columns on `core.orders`; 00027: gift codes;
@@ -30,7 +31,16 @@ add a fixed amount of credit to a customer's wallet.
   `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings` (additive: an older bot shows no help buttons, a bot
   on an older core simply has none to show). Nothing has to be configured.
 
+- Required channels and groups add one more database migration (00029, the `join_chats` table, empty at first: the
+  store's present required channel stays the setting `join.channel`, untouched). Nothing to configure. **A license
+  signed before this version has no `max_join_chats`, so it counts 1 required chat** until the seller re-applies its
+  tier (`licensesrv key update <id> -tier pro -reason "..."`, then the install's next daily renewal); nothing that exists
+  is lost, there are no extra chats before this version.
+
 ### Known limits
+- Required channels and groups have not been seen in a real Telegram: the Join buttons of many chats, the popup that
+  names the missing ones, the Mini App's join screen, the group check and the Persian texts want a real look, and so does
+  how Telegram answers many `getChatMember` calls in a row.
 - Nothing of this has been seen in a real Telegram: the table's look on phones, the one message with many links, the
   text file that comes with a long list and the Persian texts (a first draft) want a real look.
 - A bulk purchase is paid **from the wallet only** (a customer with too little in it is taken to the top-up and comes
@@ -111,6 +121,36 @@ add a fixed amount of credit to a customer's wallet.
 - API (additive): the `RedeemGiftCode` call (the bot only) and `/api/v1/gift-codes*` in the dashboard's API
   ([docs/02-events-and-apis.md](docs/02-events-and-apis.md)). Tables are in [docs/01-database.md](docs/01-database.md),
   the bot's flow in [docs/03-bot-ux.md](docs/03-bot-ux.md), the page in [docs/04-dashboard.md](docs/04-dashboard.md).
+
+### Required channels and groups: more than one, and any number on Pro
+- **The owner can now require several channels and groups** before customers use the bot or the Mini App, not just
+  one. Settings has a new card, **Required channels and groups**: a list where each row has the channel or group
+  (a public one's `@name` or a private one's `-100…` id), its join link (required for a private one), an optional
+  name for the button and a **Check channel** button; add, remove and reorder rows, and the first row stays first. The
+  card counts the rows against the license (**"2 of 1"** when more are saved than the plan counts) and marks the rows
+  the plan does not count "Inactive: needs Pro". Only the owner changes the list; an admin sees it.
+- **The limit is a new license entitlement, `max_join_chats`: the free tier and Standard 1, Pro and the 30-day trial
+  any number** (a technical bound of 50 whatever the license says). A second chat on the free tier or Standard is
+  refused with a message naming the limit and the Pro plan. The prices are not touched. When a license ends, nothing is
+  deleted: the first chat stays enforced, the others stay saved but inactive, and can still be edited, reordered and
+  removed, but not added to; they count again when the limit allows.
+- **The bot's join message lists every chat the customer has not joined, each with its own Join button** (the name,
+  else the `@name`, else "channel N"; never a private chat's id), and one "I've joined". The check asks about all of
+  them again and its popup names the ones still missing. With one required chat everything reads and works as before.
+  A chat the bot cannot check (it is not its administrator) lets the customer in for that chat only, as the single
+  channel always did, and is logged once a minute; the others still hold. Telegram is asked as little as can be: members
+  are remembered per chat for 10 minutes (a member of the whole list costs one cache read), a chat not joined is not
+  asked about again by an ordinary update for 2 seconds, and the lookups run 4 at a time for a customer and 8 at a time
+  for all of them, each with a timeout. Maintenance still comes before the join message.
+- **The Mini App holds the same list.** Its 403 `join_required` answer keeps `join_url` and, when more than one chat is
+  required, adds `join_chats` (each chat still lacking, with its link and name); its join screen shows a Join button
+  for each and **I've joined** shows only what is still missing. The check endpoint of the bot is unchanged, so core
+  asks about one chat at a time, four at once.
+- The channel check now accepts a **group** or supergroup as well as a channel, since a required chat can be either.
+- API (additive): `Settings.join_chats` (field 8) in the gRPC contract, `GET` and `PUT /api/v1/join-chats` in the
+  dashboard's API (`join.write`, owner only), a new setting `join.label` (the first chat's name), and the entitlement
+  `max_join_chats` in a license token and in `GET /api/v1/license`. `join.channel` and `join.link` stay the first
+  chat, so the bot's `/set`, an older bot and an older Mini App keep working.
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 

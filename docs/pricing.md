@@ -32,6 +32,7 @@ Prices are shown per install. "SET ME" is a placeholder for the owner's number.
 | 3x-ui servers | 1 | 3 | unlimited | unlimited |
 | Active services | 25 | 500 | unlimited | unlimited |
 | Dashboard staff seats (the main owner takes none) | 2 | 5 | unlimited | 5 |
+| Required channels and groups (customers must join to use the bot) | 1 | 1 | unlimited | unlimited |
 | Resellers | no | yes | yes | yes |
 | Automatic USDT (TRON watcher) | no | yes | yes | yes |
 | Other payment methods (wallet, card to card, manual USDT, Zarinpal, Stars) | yes | yes | yes | yes |
@@ -48,6 +49,12 @@ How to read it:
   except the main owner the install names** (the first id in `BOBRES_ADMIN_TELEGRAM_ID` in its settings): a second owner
   takes a seat like anyone else, whether they were added in the dashboard or named in that same setting
   (`bobres admin owners add`). Nobody is removed when a limit is lowered; staff who are already over keep their access.
+- **Required channels and groups** are the channels and groups customers must join before they can use the bot or
+  the Mini App (Settings, Required channels and groups). Every tier can require **one**; **Pro** (and the trial)
+  any number (a technical bound of 50 holds). Adding a second on the free tier or Standard is refused with a message
+  that names the limit and the Pro plan. If a license ends, the chats already saved stay: only the first one is
+  enforced, the dashboard marks the others "Inactive: needs Pro", and they count again with a license that allows
+  them.
 - **Payment methods.** The wallet is always on. The free tier also has Zarinpal, Telegram Stars, card to card, manual USDT
   and manual Zarinpal. Automatic USDT needs a paid tier (or the trial). Standard and Pro name every method.
 - **"Powered by BOBRES"** is shown on the dashboard's footer and login page on every install, **unless a valid license
@@ -115,7 +122,7 @@ Renewing brings the paid features back at once, on the next daily renewal. Nothi
 label, then the free tier.
 
 **Can I run my own store on the free tier for ever?** Yes, within its limits (LICENSE, section 2): 1 server, 25 active
-services and 2 staff seats. Past them, a license.
+services, 2 staff seats and 1 required channel or group. Past them, a license.
 
 **Does the trial start again if I restore a backup?** It can. The trial's start is kept in the install's database, so a
 backup made before this version existed, or a rollback to an older version followed by an update, starts the 30 days

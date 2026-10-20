@@ -36,7 +36,7 @@ license server is built but still has to be deployed by the owner. What is left 
   links that reward the inviter on a friend's first paid purchase.
 - Reminders 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - Support conversations with text, photos and PDFs; staff replies arrive in the chat.
-- Store rules: maintenance mode, a required channel, rate limits, terms and privacy links.
+- Store rules: maintenance mode, required channels and groups (one on the free tier, more with Pro), rate limits, terms and privacy links.
 - A page for each service at `/sub/<token>`, under the store's own brand: usage and days left, the subscription link
   and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box, and a Renew button. The import links are not
   yet verified on real devices.
@@ -93,7 +93,7 @@ license server is built but still has to be deployed by the owner. What is left 
 **Free core, paid premium**
 - No license is needed to run a store. An install without one has a free tier: 1 server, 25 active services, 2 staff
   seats, the Zarinpal, Stars and manual payment methods, and security updates always. Resellers, automatic USDT,
-  more servers, services and staff, and removing "Powered by BOBRES" come with a license.
+  more servers, services, staff and required channels, and removing "Powered by BOBRES" come with a license.
 - Every install starts with a 30-day trial that has everything but white label. When it ends, the limits stop only
   new servers, services, resellers, staff and payment methods: existing services keep working and renewing, and a
   customer never sees a word about licensing ([docs/05-license.md](docs/05-license.md)).
