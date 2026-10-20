@@ -22,6 +22,7 @@ export const sections: Section[] = [
   { key: 'ledger', path: 'ledger', icon: 'pi pi-wallet', perm: 'ledger.read', group: 'sales', milestone: 2 },
   { key: 'reports', path: 'reports', icon: 'pi pi-chart-line', perm: 'reports.read', group: 'sales', milestone: 7 },
   { key: 'discounts', path: 'discounts', icon: 'pi pi-percentage', perm: 'discounts.write', group: 'sales', milestone: 2 },
+  { key: 'giftcodes', path: 'gift-codes', icon: 'pi pi-gift', perm: 'discounts.write', group: 'sales', milestone: 8 },
   { key: 'resellers', path: 'resellers', icon: 'pi pi-sitemap', perm: 'resellers.write', group: 'sales', milestone: 5 },
   { key: 'branding', path: 'branding', icon: 'pi pi-palette', perm: 'branding.write', group: 'setup', milestone: 3 },
   { key: 'settings', path: 'settings', icon: 'pi pi-cog', perm: 'settings.write', group: 'setup', milestone: 3 },

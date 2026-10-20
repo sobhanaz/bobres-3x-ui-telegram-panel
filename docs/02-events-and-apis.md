@@ -23,7 +23,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | order.bulk_ready.v1 | core (the provisioning worker's loop) | notifier | Every order of a bulk purchase is delivered, or has failed 3 times and is retried in the background. `{bulk_id, user_id, telegram_id, plan_id, quantity, ready_orders (the delivered orders, in their order in the bulk), delayed (the others still retried), amount (the whole bulk), currency}`. Announced once per bulk (`core.bulk_orders.delivered_at`, set in the same transaction); a bulk with nothing left to tell (every order refunded) is closed without an event. The bot asks `GetBulkOrder` and sends the links of `ready_orders` in one message (a few, with a text file, when it would be too long) and says which services are still being prepared |
 | subscription.usage_updated.v1 | provisioner | core | Traffic/expiry sync from 3x-ui |
 | subscription.expiring.v1 / expired.v1 | core(scheduler) | notifier | Reminder triggers |
-| wallet.credited.v1 / debited.v1 | core | notifier | Balance change. Reasons on credited: topup, order_not_payable, admin_adjust, referral, refund, commission (a reseller's commission on a customer's order; never name the customer), settlement (staff recorded a reseller's payment) |
+| wallet.credited.v1 / debited.v1 | core | notifier | Balance change. Reasons on credited: topup, order_not_payable, admin_adjust, referral, refund, commission (a reseller's commission on a customer's order; never name the customer), settlement (staff recorded a reseller's payment), gift_code (the customer applied a gift code: the bot answers in the same chat, so the notifier sends no second message) |
 | refund.requested.v1 / completed.v1 | core | payments | Refund flow |
 | ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | subscription.provisioned.v1 / extended.v1 / reminder.v1 `label` | core | notifier | The name a reseller gave the service (empty for customers), for the bot's texts |
@@ -41,6 +41,18 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 
 ## gRPC APIs (sketch)
 - core: `GetUser`, `UpsertUser`, `ListPlans`, `CreateOrder`, `ApplyDiscount`, `GetWallet`, `CreditWallet`, `DebitWallet`, `ListSubscriptions`, `OpenTicket`, entitlement checks `HasFeature`.
+- core, gift codes (additive; `buf breaking` stays clean): `RedeemGiftCode(user_id, code, idempotency_key)`, called by the
+  bot only. Everything a customer can get wrong is an **outcome** of the answer, not an error: `REDEEMED` (with
+  `credited`, `balance` and `replayed`), `INVALID` (unknown, switched off, expired or not a code: one answer for all, so
+  nothing tells a guesser which codes exist), `USED_UP` and `ALREADY_REDEEMED` (told only to someone who sent the whole
+  code; the customer's own count is checked first), `LOCKED` (`retry_after_seconds`) and `OFF` (the owner's switch
+  `gift_codes.enabled`, or no master key). Errors stay for a broken request, a banned customer (PERMISSION_DENIED) and
+  a key that already redeemed another code (`idempotency conflict`). It is one transaction that locks the code's row,
+  checks it, credits the wallet (ledger kind `gift_code`, key `gift:<code id>:<user id>:<n>`), records the redemption,
+  counts it, writes the audit entry `gift_code.redeem` and the `wallet.credited.v1` event (reason `gift_code`). Sent
+  again with the same `idempotency_key` it credits nothing more and answers the same with `replayed`. Five wrong codes
+  in an hour close entering codes for an hour (`gift_code.lock` in the audit log); a code is never logged or audited,
+  only its last four characters.
 - core, bulk purchase (built 2026-10-20, additive; [03-bot-ux.md](03-bot-ux.md), "Bulk purchase"): `QuoteBulkOrder`
   (user, plan, quantity: the unit price, the total and the most the store allows now; it fails as `CreateBulkOrder` would for what
   can be known beforehand, the license's places included), `CreateBulkOrder` (user, plan, quantity, `idempotency_key`,
@@ -176,6 +188,13 @@ existed.
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".
   P8 adds the HTTPS manager's `/api/v1/system/tls` (below).
+  Gift codes (discounts.write): `GET /api/v1/gift-codes?status=&q=&page=&size=` (newest first; besides the page it says
+  `enabled`, the owner's switch, and `available`, whether core has the master key to make codes), `POST /api/v1/gift-codes`
+  (`{code}` for one code of the owner's own words, or `{count, prefix}` for a batch of generated ones, with
+  `{amount, currency, max_redemptions, per_customer_limit, expires_at, note}`; the answer holds the codes and is the
+  only place they can ever be read), `GET /api/v1/gift-codes.csv`, `PUT /api/v1/gift-codes/{id}/enabled` (nothing paid is
+  taken back), `GET /api/v1/gift-codes/{id}/redemptions` and `.../redemptions.csv`. Audit actions: `gift_code.create`,
+  `gift_code.enable`, `gift_code.disable`, `gift_code.redeem`, `gift_code.lock`, and the CSV exports like the other exports.
 
 ## HTTPS manager (P8)
 Core never writes Caddy's files or reaches its admin socket. It asks the `tls-agent` (no network) through two small

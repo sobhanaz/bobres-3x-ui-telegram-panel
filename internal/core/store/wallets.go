@@ -22,6 +22,10 @@ var (
 	// transaction must be aborted: silently accepting it would either move
 	// money twice or mark something paid that was never paid.
 	ErrIdempotencyConflict = errors.New("store: idempotency key reused for a different operation")
+	// ErrBalanceOverflow means a credit would take the balance past what a
+	// bigint holds. Nothing changed. (Never seen in practice; a wrapped sum
+	// must still never be stored.)
+	ErrBalanceOverflow = errors.New("store: wallet balance would overflow")
 )
 
 // ledgerKeyConstraint is the UNIQUE constraint on ledger_entries.idempotency_key.
@@ -121,6 +125,9 @@ func move(ctx context.Context, tx pgx.Tx, e *LedgerEntry, delta int64) (*Wallet,
 		return nil, fmt.Errorf("ledger lookup: %w", err)
 	}
 	next := balance + delta
+	if delta > 0 && next < balance {
+		return nil, ErrBalanceOverflow
+	}
 	if delta < 0 && next < -limit {
 		return nil, ErrInsufficientFunds
 	}

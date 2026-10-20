@@ -87,6 +87,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "the bot's @username: the renew button of the subscription page opens https://t.me/<username> (empty = no renew button)"},
 	{Key: "miniapp.enabled", Group: "general", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the Telegram Mini App store is open at /app/ (the whole store inside Telegram: plans, buying, renewing, wallet, support, invites and the reseller panel) and the bot opens it from a Store button and Telegram's menu button; false = /app/ and its API answer 404 and the buttons go. It needs the store's public HTTPS address, see docs/17-mini-app.md"},
+	{Key: SettingGiftCodes, Group: "general", Kind: KindBool, Perm: permDiscounts, Default: "true",
+		Help: "true = customers can apply a gift code (a code the store made, worth a fixed amount of wallet credit) from the wallet screen in the bot; false = that button goes and no code is accepted (codes can still be made in the dashboard). Needs the master key"},
 	{Key: "maintenance.enabled", Group: "maintenance", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = customers only get the maintenance message; staff and payments in progress still work"},
 	{Key: "join.channel", Group: "join", Kind: KindChannel, Perm: permSettings,

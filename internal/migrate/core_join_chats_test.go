@@ -17,7 +17,7 @@ func TestJoinChatsMigration(t *testing.T) {
 	dropSchemas(t, dsn)
 	ctx := context.Background()
 	if err := upTo(ctx, dsn, "core", 27); err != nil {
-		t.Fatalf("up to 26: %v", err)
+		t.Fatalf("up to 27: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {

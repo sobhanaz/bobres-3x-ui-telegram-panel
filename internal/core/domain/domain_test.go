@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
@@ -47,9 +48,13 @@ func testService(t *testing.T) (*Service, *store.Store) {
 	if _, err := s.DB().Exec(ctx, `UPDATE core.install SET trial_started_at = now(), limit_hit_at = NULL`); err != nil {
 		t.Fatalf("reset the trial: %v", err)
 	}
+	env, err := bcrypto.NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The top-inviters board is not kept (LeaderboardTTL below 0), so a test that
 	// changes who invited whom sees it at once; its own test keeps one.
-	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}, LeaderboardTTL: -1}), s
+	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}, LeaderboardTTL: -1, Secrets: env}), s
 }
 
 func seedPlan(t *testing.T, s *store.Store, trial bool, price int64) *store.Plan {
