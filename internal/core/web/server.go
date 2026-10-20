@@ -95,7 +95,9 @@ type Config struct {
 	// MiniAppMembers asks the bot whether a customer is in the store's required
 	// channel (nil: no bot; the app then lets everyone in).
 	MiniAppMembers MiniAppMembers
-	Log            *slog.Logger
+	// Monitor serves the Monitoring section (nil: its endpoints answer 503).
+	Monitor MonitorSource
+	Log     *slog.Logger
 }
 
 // Server is the dashboard API.
@@ -307,6 +309,12 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/system/tls", PermSystemRead, s.getTLS)
 	s.route(api, "PUT /api/v1/system/tls", PermSystemWrite, s.putTLS)
 	s.route(api, "POST /api/v1/system/tls/detect-ip", PermSystemWrite, s.detectIP)
+	// Monitoring (read only; owner and admin): the stack at a glance, the metrics over time, the
+	// recent warnings and errors.
+	s.route(api, "GET /api/v1/monitor/overview", PermMonitorRead, s.monitorOverview)
+	s.route(api, "GET /api/v1/monitor/series", PermMonitorRead, s.monitorSeries)
+	s.route(api, "GET /api/v1/monitor/metrics", PermMonitorRead, s.monitorMetrics)
+	s.route(api, "GET /api/v1/monitor/events", PermMonitorRead, s.monitorEvents)
 	s.route(api, "GET /api/v1/license", PermSystemRead, s.getLicense)
 	s.route(api, "POST /api/v1/license/check", PermLicenseWrite, s.checkLicense)
 	s.route(api, "PUT /api/v1/license", PermLicenseWrite, s.putLicense)

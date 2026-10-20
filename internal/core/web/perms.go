@@ -31,14 +31,15 @@ const (
 	PermAuditRead      = "audit.read"
 	PermStaffWrite     = "staff.write"
 	PermLicenseWrite   = "license.write"
-	PermJoinWrite      = "join.write" // the required channels and groups: owner only
+	PermJoinWrite      = "join.write"   // the required channels and groups: owner only
+	PermMonitorRead    = "monitor.read" // the Monitoring section: read only, owner and admin
 )
 
 var allPerms = []string{
 	PermOverviewRead, PermUsersRead, PermUsersWrite, PermWalletAdjust, PermServicesRead, PermServicesExtend,
 	PermServicesWrite, PermPlansWrite, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermDiscountsWrite,
 	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
-	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite, PermJoinWrite,
+	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite, PermJoinWrite, PermMonitorRead,
 }
 
 // ownerOnly: staff accounts, the license, gateway secrets, system actions
