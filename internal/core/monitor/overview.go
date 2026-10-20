@@ -18,6 +18,7 @@ type Overview struct {
 	Components  []Component `json:"components"`
 	Host        HostView    `json:"host"`
 	Containers  []Box       `json:"containers"`
+	Units       []UnitView  `json:"units"`
 	Kubernetes  KubeView    `json:"kubernetes"`
 	Counters    Counters    `json:"counters"`
 	CI          CIView      `json:"ci"`
@@ -109,6 +110,21 @@ type Box struct {
 	NetTxBytes uint64   `json:"net_tx_bytes"`
 	OOMKilled  bool     `json:"oom_killed"`
 	ExitCode   *int     `json:"exit_code"`
+}
+
+// UnitView is a systemd unit the host collector watches (BOBRES's helpers and Docker), as systemd
+// reports it: Load is loaded or not-found, Active and Sub its state, Enabled the unit file's state,
+// Result why it last ended ("" when it did not fail). Since is when it entered its state and Restarts
+// how often systemd restarted it; both 0 when systemd does not say.
+type UnitView struct {
+	Name     string `json:"name"`
+	Load     string `json:"load"`
+	Active   string `json:"active"`
+	Sub      string `json:"sub"`
+	Enabled  string `json:"enabled"`
+	Result   string `json:"result"`
+	Since    int64  `json:"since"`
+	Restarts int    `json:"restarts"`
 }
 
 // KubeView is the optional Kubernetes section.
@@ -210,6 +226,7 @@ func (m *Monitor) Overview(ctx context.Context) *Overview {
 	o := &Overview{GeneratedAt: now.Unix(), Components: comps, Status: overall(comps, p)}
 	o.Host = hostView(cv)
 	o.Containers = boxViews(cv.Snap)
+	o.Units = unitViews(cv.Snap)
 	o.Kubernetes = kubeView(cv.Snap)
 	o.Counters = m.counters(ctx, p, now)
 	o.CI = m.ciView()
@@ -262,6 +279,20 @@ func boxViews(s *snapshot.Snapshot) []Box {
 		out = append(out, Box{Name: c.Name, Project: c.Project, Service: c.Service, Image: c.Image, State: c.State, Health: c.Health,
 			Restarts: c.Restarts, StartedAt: c.StartedAt, CPUPct: c.CPUPct, MemBytes: c.MemBytes, MemLimit: c.MemLimit,
 			NetRxBytes: c.NetRx, NetTxBytes: c.NetTx, OOMKilled: c.OOMKilled, ExitCode: c.ExitCode})
+	}
+	return out
+}
+
+// unitViews lists the watched systemd units the snapshot reports, in its order; empty while there is
+// no snapshot (the collector's host figures are not available then either).
+func unitViews(s *snapshot.Snapshot) []UnitView {
+	out := []UnitView{}
+	if s == nil {
+		return out
+	}
+	for _, u := range s.Units {
+		out = append(out, UnitView{Name: u.Name, Load: u.Load, Active: u.Active, Sub: u.Sub, Enabled: u.Enabled,
+			Result: u.Result, Since: u.Since, Restarts: u.Restarts})
 	}
 	return out
 }

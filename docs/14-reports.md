@@ -129,7 +129,7 @@ readers and for exact values). The arrow keys move between points, the right arr
 (earlier, in Persian). The **by period table** scrolls inside its own box (down and sideways) with its header row, its
 period column and a totals row held in place, so neither a long range nor a phone makes the page long or wide; the box
 can be focused and scrolled with the keyboard. The charts are the chart kit in `web/dashboard/src/components/charts/`
-(documented in its `README.md`: props, colours, keyboard, accessibility, right to left), which the monitoring page is meant to reuse.
+(documented in its `README.md`: props, colours, keyboard, accessibility, right to left), which the System page's Monitoring tab reuses.
 
 **Professional report** (`components/reports/ProfessionalReport.vue`, its own chunk: loaded only when this view opens).
 A report to read, print or show someone, per currency and then for the people:

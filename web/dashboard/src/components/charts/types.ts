@@ -20,6 +20,12 @@ export interface ChartSeries {
   area?: boolean
 }
 
+/** A series of a line chart, which may have gaps: a `null` value means nothing was measured at that point (a
+ * host that was off, a collector that was quiet). The line breaks there; it is never drawn as zero. */
+export interface GapSeries extends Omit<ChartSeries, 'values'> {
+  values: (number | null)[]
+}
+
 /** A number written for people: "1,200,000 Toman", "۱٫۲ میلیون", "42%". */
 export type ValueFormat = (n: number) => string
 

@@ -1,7 +1,6 @@
 # Chart kit
 
-Small SVG charts for the dashboard, with no chart library. Written for the Reports page and meant to be reused (the
-System > Monitoring page is next). Everything is drawn from props; nothing here knows about sales.
+Small SVG charts for the dashboard, with no chart library. Written for the Reports page and reused by the System page's Monitoring tab. Everything is drawn from props; nothing here knows about sales.
 
 ```ts
 import { LineChart, BarChart, DonutChart, Heatmap, Sparkline } from '../components/charts'
@@ -35,6 +34,10 @@ interface ChartSeries {
 }
 type ValueFormat = (n: number) => string
 ```
+
+A line chart's series may have **gaps**: `LineChart` takes `GapSeries` (`values: (number | null)[]`), where `null` means nothing was measured at that point
+(a host that was off, a collector that was quiet). The line breaks there and is never drawn down to zero, a point between two gaps is a dot, the value axis fits what
+was measured, and the tooltip, the live region and the table say "No data" for it. The Monitoring tab puts every series on a fixed time grid, so a missing sample is a `null`.
 
 Common props of `LineChart`, `BarChart`:
 

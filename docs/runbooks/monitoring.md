@@ -1,9 +1,9 @@
 # Monitoring
 
-Use this when the dashboard's **Monitoring** page shows no server figures ("the host collector is not installed" or "sent nothing for
+Use this when the dashboard's **System → Monitoring** tab shows no server figures ("the host collector is not installed" or "sent nothing for
 N minutes"), when a monitoring alert arrives (disk, memory, a container, the collector, CI of `main`), or when you want to turn
 host monitoring off. How it is built: [installer, "Host monitoring"](../06-installer.md); what it exposes:
-[security, "Host monitoring"](../07-security.md); the page and its API: [dashboard, "Monitoring API"](../04-dashboard.md).
+[security, "Host monitoring"](../07-security.md); the tab and its API: [dashboard, "Monitoring API"](../04-dashboard.md).
 
 Run the commands on the server as root. See the README's "Before you start" for the `dc` helper used below.
 

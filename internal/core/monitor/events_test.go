@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -181,6 +182,17 @@ func TestEventsShowAnAlertRaisedAndFixed(t *testing.T) {
 	// The detail of a monitoring alert (a few figures) is included.
 	if !strings.Contains(raised.Detail, "of") {
 		t.Errorf("detail: %q", raised.Detail)
+	}
+	// An alert carries the bot's text key and its values, so a page writes the sentence in its own
+	// language as the Telegram message does (the fix names the same text).
+	for _, ev := range []*Event{raised, fixed} {
+		if ev.TitleKey != "alert.monitor_disk" || ev.Args["mount"] != "/" || ev.Args["percent"] != "93" || ev.Args["free"] == "" {
+			t.Errorf("text key and values: %q %v", ev.TitleKey, ev.Args)
+		}
+	}
+	// A log line or a journal line has neither; the field is left out of the JSON.
+	if raw, err := json.Marshal(Event{Source: "bot", Kind: KindLog, Title: "x"}); err != nil || strings.Contains(string(raw), "title_key") || strings.Contains(string(raw), "args") {
+		t.Errorf("a log line: %s %v", raw, err)
 	}
 
 	// The same problem again is open, and the repeat reminders are not listed twice.

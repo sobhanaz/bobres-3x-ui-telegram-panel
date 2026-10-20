@@ -78,6 +78,32 @@ describe('LineChart', () => {
     expect(all(el, 'svg .series')).toHaveLength(2)
   })
 
+  it('breaks the line where a value is null: a gap is not a zero, and a lone point is a dot', async () => {
+    const gaps = [{ key: 'a', label: 'CPU', values: [10, 20, null, null, 50, null, 70], slot: 0, area: true }]
+    const el = mount(LineChart, { ...base, categories: ['1', '2', '3', '4', '5', '6', '7'], ticks: ['1', '2', '3', '4', '5', '6', '7'], series: gaps, markers: false })
+    const series = el.querySelector('svg .series')!
+    // the stretch 1-2 is a line; 5 stands alone between two gaps and so does 7 (the last), 3 4 and 6 are nothing
+    expect(series.querySelectorAll('path[fill="none"]')).toHaveLength(1)
+    expect(series.querySelectorAll('circle')).toHaveLength(2) // the lone point and the last one
+    // the wash under the line is drawn for the stretch of two points only
+    expect(series.querySelectorAll('path[fill-opacity]')).toHaveLength(1)
+    // the value axis fits what was measured; the gaps do not pull it down to zero
+    expect(all(el, '.y-tick').map(text)).toEqual(['0', '20', '40', '60', '80'])
+    // the tooltip and the live region say there was nothing, they never invent a value
+    const plot = el.querySelector<HTMLElement>('.plot')!
+    plot.focus()
+    key(plot, 'Home')
+    key(plot, 'ArrowRight')
+    key(plot, 'ArrowRight')
+    await nextTick()
+    expect(live(el)).toBe('3: CPU No data')
+    expect(el.querySelector('.cursor circle')).toBeNull() // no point to mark
+    // the table has a cell for it
+    el.querySelector<HTMLButtonElement>('.table-btn')!.click()
+    await nextTick()
+    expect(all(el, '.chart-table tbody tr').map((r) => [...r.children].map(text))[2]).toEqual(['3', 'No data'])
+  })
+
   it('has no legend for one series: its title says what it is', () => {
     const el = mount(LineChart, { ...base, series: [two[0]] })
     expect(el.querySelector('.legend')).toBeNull()

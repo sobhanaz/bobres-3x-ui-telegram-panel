@@ -200,7 +200,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 ### Monitoring: the server, the containers and the stack in one place
 
 A **Monitoring** section for the dashboard: one overview of the whole store and the server it runs on. This is the backend and its API;
-the page itself comes with the dashboard's next change.
+the tab that shows it is described under "Monitoring in the dashboard" below.
 
 **Added.**
 
@@ -234,6 +234,39 @@ the page itself comes with the dashboard's next change.
   bot has two new internal endpoints); `sudo bobres update` does both.
 - To keep the host collector off: `sudo bobres monitor disable` (or `sudo bobres config set BOBRES_MONITOR_COLLECTOR off`).
 - Not verified: the Kubernetes section was tried with recorded `kubectl` answers, not a live cluster; nothing here can be tried in a real Telegram.
+
+### Monitoring in the dashboard: System > Monitoring
+
+A **Monitoring** tab on the System page (owner and admin, read only; a role without `monitor.read` does not see it): one overview of the
+whole bot and store first, then the server, Docker, Kubernetes, the services, CI/CD, the deployments, and alerts and logs. It reads the
+API above; nothing on it changes anything on the server.
+
+- **Overview.** A verdict in words and with an icon (everything is working, working but something needs a look, or something important
+  is down), what needs a look in plain words with the worst first, every part core checks grouped by kind (services, data stores, the
+  server, jobs, panel servers, payment methods) with its state as an icon and a word, and the store in numbers. A figure core could not
+  read is shown as "not known", never as 0.
+- **Server and Docker.** CPU, load, memory, swap, traffic, uptime, every disk with its share, and the OS, kernel, Docker engine and
+  clock; every container with its image version, state, health, restarts, CPU, memory and traffic, and what Docker keeps on the disk.
+  Charts for the range: 1 hour, 6 hours, 24 hours, 7 days or 30 days.
+- **Gaps are gaps.** A moment nobody sampled is a break in the line, never a drop to zero, and the tooltip and the chart's table say
+  "no data" there. This is a small, additive change to the chart kit (`LineChart` takes `null` values).
+- **Without the host collector** the tab says so where the figures would be (not installed or switched off, has not reported for N
+  minutes, or a file core cannot use), with the command to copy (`sudo bobres monitor enable`), and keeps the history that was
+  recorded. **Without Kubernetes** it says no cluster was found, as a note and not as an error; with one it lists nodes and pods.
+- **CI/CD and deployments.** The latest runs on `main`, the Release workflow's runs and the latest release with links into GitHub (a
+  link that is not into github.com is not a link), a note when GitHub cannot be reached or its request limit is used up (what was last
+  read stays on screen), and the update history with who asked, the outcome and how long it took.
+- **Alerts and logs.** The newest warnings and errors in one list with a filter, the alerts written in the language of the page from the
+  same texts as the Telegram message. The services' own log lines carry Telegram ids, so the owner sees them and an admin is told so.
+- **Refresh.** Every 20 seconds while the tab is shown and the browser tab is in front (it stops when either is hidden and reads again
+  when it is shown), with a switch and a "Check again" button. Persian (right to left) and English, light and dark, down to a 375 px
+  phone without a sideways page scroll; the charts keep the kit's keyboard keys, legend and table.
+- **API, additive** (no migration): `GET /api/v1/monitor/overview` gains `units` (the systemd units the collector watches, which the
+  collector already recorded and the answer did not carry), and an alert in `GET /api/v1/monitor/events` gains `title_key` and `args`
+  so a page can write it in its own language. Both are documented in `docs/04-dashboard.md`.
+- Core and the dashboard are one binary, so there is nothing to update separately and nothing to configure.
+- Checked in a real browser at 375 px and on a desktop in Persian and English, in light and dark, against a stand-in API. Not
+  checked: a real host collector and a real cluster feeding the tab, and a refresh left running for hours.
 
 ### Reports: charts, a scrolling table and a professional report
 - **Charts on the Reports page**, one currency at a time: revenue and what was kept after refunds, **revenue by plan**
