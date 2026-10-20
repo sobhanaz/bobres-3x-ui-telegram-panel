@@ -183,18 +183,18 @@ func (s *Server) restoreView(ctx context.Context, w http.ResponseWriter, r *http
 
 // getRestore: GET /api/v1/system/restore (owner and admin), the restore part of the Backups tab:
 //
-//	{version, helper, run, last, other, can, domain, upload, limits}
+//		{version, helper, run, last, other, can, domain, upload, limits}
 //
-//   - helper: the server's updater as GET /system/updates gives it (action, restore (it can restore a
-//     backup), subject, source, by, requested_at besides);
-//   - run: the restore core handed the updater and has not ended, {id, by, action, subject, source,
-//     requested_at, phase (queued | running | done | failed | rolled_back)}, or null; last: the restore
-//     that ended last, with outcome, outcome_at and message, or null. other is "update" while an
-//     update is open (a restore waits for it);
-//   - can: {allowed (the role may), ready (a restore would be accepted now), reason (why not:
-//     no_domain | helper_missing | restore_unsupported | already_running)};
-//   - domain and upload (the file waiting for confirmation, {id, name, size, sha256, at, expires_at}) are
-//     the owner's; limits: {max_upload (bytes), staged_seconds}.
+//	  - helper: the server's updater as GET /system/updates gives it (action, restore (it can restore a
+//	    backup), subject, source, by, requested_at besides);
+//	  - run: the restore core handed the updater and has not ended, {id, by, action, subject, source,
+//	    requested_at, phase (queued | running | done | failed | rolled_back)}, or null; last: the restore
+//	    that ended last, with outcome, outcome_at and message, or null. other is "update" while an
+//	    update is open (a restore waits for it);
+//	  - can: {allowed (the role may), ready (a restore would be accepted now), reason (why not:
+//	    no_domain | helper_missing | restore_unsupported | already_running)};
+//	  - domain and upload (the file waiting for confirmation, {id, name, size, sha256, at, expires_at}) are
+//	    the owner's; limits: {max_upload (bytes), staged_seconds}.
 func (s *Server) getRestore(w http.ResponseWriter, r *http.Request) {
 	up := s.updates(w)
 	if up == nil {

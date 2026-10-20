@@ -394,11 +394,11 @@ func TestRestoreApplyRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		"no acknowledgement": {body: restoreBody(map[string]any{"acknowledge": false}), status: 400, code: "ack_required"},
-		"the wrong domain":   {body: restoreBody(map[string]any{"confirm": "panel.example.org"}), status: 400, code: "confirm_wrong"},
-		"no domain":          {body: restoreBody(map[string]any{"confirm": ""}), status: 400, code: "confirm_wrong"},
-		"no backup and no upload": {body: restoreBody(map[string]any{"backup": nil}), status: 400, code: "invalid"},
-		"both a backup and an upload": {body: restoreBody(map[string]any{"upload_id": rsOlder}), status: 400, code: "invalid"},
+		"no acknowledgement":                 {body: restoreBody(map[string]any{"acknowledge": false}), status: 400, code: "ack_required"},
+		"the wrong domain":                   {body: restoreBody(map[string]any{"confirm": "panel.example.org"}), status: 400, code: "confirm_wrong"},
+		"no domain":                          {body: restoreBody(map[string]any{"confirm": ""}), status: 400, code: "confirm_wrong"},
+		"no backup and no upload":            {body: restoreBody(map[string]any{"backup": nil}), status: 400, code: "invalid"},
+		"both a backup and an upload":        {body: restoreBody(map[string]any{"upload_id": rsOlder}), status: 400, code: "invalid"},
 		"a backup the service does not list": {body: restoreBody(map[string]any{"backup": "bobres-20240101T000000Z.bkp"}), status: 404, code: "backup_unknown"},
 		"a failed run":                       {body: restoreBody(map[string]any{"backup": rsFailed}), status: 404, code: "backup_unknown"},
 		"a path":                             {body: restoreBody(map[string]any{"backup": "../../etc/passwd"}), status: 404, code: "backup_unknown"},

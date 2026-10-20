@@ -157,24 +157,24 @@ func TestRestoreApplyRefusals(t *testing.T) {
 			}
 			return u
 		}, code: "forbidden"},
-		"nobody": {who: func(*updatesWorld) *store.User { return nil }, code: "forbidden"},
-		"no acknowledgement":    {mod: func(in *ApplyRestoreInput) { in.Acknowledge = false }, code: RestoreAckRequired},
-		"the wrong domain":      {mod: func(in *ApplyRestoreInput) { in.Confirm = "panel.example.org" }, code: RestoreConfirmWrong},
-		"no domain typed":       {mod: func(in *ApplyRestoreInput) { in.Confirm = "" }, code: RestoreConfirmWrong},
-		"the domain with a path": {mod: func(in *ApplyRestoreInput) { in.Confirm = "https://panel.example.com" }, code: RestoreConfirmWrong},
-		"core does not know the domain": {prep: func(w *updatesWorld) { w.up.storeDomain = "" }, code: RestoreNoDomain},
-		"the updater is not installed": {prep: func(w *updatesWorld) { w.status(map[string]any{"installed": false}) }, code: UpdateHelperMissing},
+		"nobody":                                 {who: func(*updatesWorld) *store.User { return nil }, code: "forbidden"},
+		"no acknowledgement":                     {mod: func(in *ApplyRestoreInput) { in.Acknowledge = false }, code: RestoreAckRequired},
+		"the wrong domain":                       {mod: func(in *ApplyRestoreInput) { in.Confirm = "panel.example.org" }, code: RestoreConfirmWrong},
+		"no domain typed":                        {mod: func(in *ApplyRestoreInput) { in.Confirm = "" }, code: RestoreConfirmWrong},
+		"the domain with a path":                 {mod: func(in *ApplyRestoreInput) { in.Confirm = "https://panel.example.com" }, code: RestoreConfirmWrong},
+		"core does not know the domain":          {prep: func(w *updatesWorld) { w.up.storeDomain = "" }, code: RestoreNoDomain},
+		"the updater is not installed":           {prep: func(w *updatesWorld) { w.status(map[string]any{"installed": false}) }, code: UpdateHelperMissing},
 		"the updater is from before the restore": {prep: func(w *updatesWorld) { w.status(map[string]any{"restore": false}) }, code: RestoreUnsupported},
 		"the updater is busy": {prep: func(w *updatesWorld) {
 			w.status(map[string]any{"restore": true, "state": "running", "id": restoreOther, "started_at": time.Now().UTC().Format(time.RFC3339)})
 			w.wrote(time.Now())
 		}, code: UpdateAlreadyRunning},
-		"a name that is a path":    {mod: func(in *ApplyRestoreInput) { in.Backup.File = "../" + restoreFile }, code: RestoreBackupUnknown},
-		"a sidecar":                {mod: func(in *ApplyRestoreInput) { in.Backup.File = "bobres-20261011T033000Z.json" }, code: RestoreBackupUnknown},
-		"a backup of no size":      {mod: func(in *ApplyRestoreInput) { in.Backup.Size = 0 }, code: RestoreBackupUnknown},
-		"a backup over the limit":  {mod: func(in *ApplyRestoreInput) { in.Backup.Size = sysupdate.MaxUpload + 1 }, code: RestoreBackupUnknown},
-		"a backup with no hash":    {mod: func(in *ApplyRestoreInput) { in.Backup.SHA256 = "" }, code: RestoreBackupUnknown},
-		"an upload nobody sent":    {mod: func(in *ApplyRestoreInput) { in.Backup, in.UploadID = nil, restoreOther }, code: RestoreUploadMissing},
+		"a name that is a path":   {mod: func(in *ApplyRestoreInput) { in.Backup.File = "../" + restoreFile }, code: RestoreBackupUnknown},
+		"a sidecar":               {mod: func(in *ApplyRestoreInput) { in.Backup.File = "bobres-20261011T033000Z.json" }, code: RestoreBackupUnknown},
+		"a backup of no size":     {mod: func(in *ApplyRestoreInput) { in.Backup.Size = 0 }, code: RestoreBackupUnknown},
+		"a backup over the limit": {mod: func(in *ApplyRestoreInput) { in.Backup.Size = sysupdate.MaxUpload + 1 }, code: RestoreBackupUnknown},
+		"a backup with no hash":   {mod: func(in *ApplyRestoreInput) { in.Backup.SHA256 = "" }, code: RestoreBackupUnknown},
+		"an upload nobody sent":   {mod: func(in *ApplyRestoreInput) { in.Backup, in.UploadID = nil, restoreOther }, code: RestoreUploadMissing},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := restoreWorld(t)

@@ -7,7 +7,7 @@ import (
 )
 
 // 00030 teaches the table of the dashboard's updates (00025) to hold restores too: three columns
-// with defaults that keep every row there is an update, a channel that may be '' for a restore
+// with defaults that keep every row there is an update, a channel that may be ” for a restore
 // only, and the same single open request for both. Down removes the restores and the columns
 // and keeps the updates; Up runs again afterwards.
 func TestSystemRestoresMigration(t *testing.T) {
@@ -61,15 +61,15 @@ func TestSystemRestoresMigration(t *testing.T) {
 		t.Fatalf("a restore that is already over: %v", err)
 	}
 	for name, q := range map[string]string{
-		"an update with no channel":      `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.1.0', '', 'done', now())`,
-		"a restore with a channel":       `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', 'stable', 'restore', 'x.bkp', 'upload', 'done', now())`,
-		"a restore with no backup":       `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', '', 'upload', 'done', now())`,
-		"a restore with no source":       `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', 'x.bkp', 'done', now())`,
-		"an update that names a backup":  `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, subject, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.1.0', 'stable', 'x.bkp', 'done', now())`,
-		"an action nobody knows":         `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'format', 'x.bkp', 'upload', 'done', now())`,
-		"a source nobody knows":          `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', 'x.bkp', 'url', 'done', now())`,
+		"an update with no channel":       `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.1.0', '', 'done', now())`,
+		"a restore with a channel":        `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', 'stable', 'restore', 'x.bkp', 'upload', 'done', now())`,
+		"a restore with no backup":        `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', '', 'upload', 'done', now())`,
+		"a restore with no source":        `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', 'x.bkp', 'done', now())`,
+		"an update that names a backup":   `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, subject, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.1.0', 'stable', 'x.bkp', 'done', now())`,
+		"an action nobody knows":          `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'format', 'x.bkp', 'upload', 'done', now())`,
+		"a source nobody knows":           `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', 'x.bkp', 'url', 'done', now())`,
 		"a backup name that is a novella": `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.0.0', '', 'restore', repeat('x', 201), 'upload', 'done', now())`,
-		"a channel that is none":         `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.1.0', 'nightly', 'done', now())`,
+		"a channel that is none":          `INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, outcome, outcome_at) VALUES ('0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f70', 'b', '1.0.0', '1.1.0', 'nightly', 'done', now())`,
 	} {
 		if _, err := db.ExecContext(ctx, q); err == nil {
 			t.Errorf("%s was accepted", name)
