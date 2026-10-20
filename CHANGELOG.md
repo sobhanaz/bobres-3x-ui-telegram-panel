@@ -155,6 +155,29 @@ join (one on the free tier and Standard, any number on Pro).
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 
+### Backups: download and restore from the dashboard
+System > Backups can now hand the owner a backup and put one back, without a shell on the server. Both are the owner's.
+- **Download.** A button on each backup. A dialog says the file is encrypted and that the key (`BOBRES_BACKUP_KEY`) is
+  never sent with it; the authenticator code is asked for where the session has one. The browser takes a single-use
+  address as its own download, and core streams the file from the backup service in chunks, never in memory. Every
+  download is audited (`system.backup.download`) and told to every owner on Telegram before the first byte is sent.
+- **Restore** a backup from the list, or a file uploaded in the new *Restore from a file* card (at most 2 GiB). The
+  dialog says what is lost (everything after the backup's time) and that the dashboard and the bot are unavailable for
+  a few minutes; the owner types the store's domain, ticks that they understand, and gives the authenticator code. The
+  server's updater (the helper of Update now) takes a safety backup of the current data, restores, checks that the
+  store is healthy and goes back to the safety backup on its own if it is not. The backup is copied into a file of the
+  helper's own while its SHA-256 is checked, and read with this server's key before anything is stopped: a backup of
+  another server (or a damaged one) is refused with the reason. The page shows the steps, survives core restarting
+  and finds the end again after the restore replaced core's own database. Every request and its end is audited
+  (`system.restore.*`) and told to every owner on Telegram. Persian first, English second.
+- Updating: one database migration (00030: three columns on `core.system_updates`), and a new helper. Run
+  `sudo bobres update`; until the helper is the new one the Backups tab says so and keeps the `sudo bobres restore`
+  command. Core and the bot move together (a new event, `system.backup.v1`). Nothing to configure; turning the
+  dashboard's updater off (`BOBRES_UPDATE_FROM_DASHBOARD=off`) turns the restore off with it.
+- Limits: only a backup this server's key opens can be restored from the dashboard (one from another server needs
+  `sudo bobres restore FILE --key-file KEYFILE`); the audit log after a restore is the backup's plus one entry for the
+  restore; the restored data has its own login sessions, so the owner may be asked to log in again.
+
 ## [0.7.0] — 2026-10-20
 
 The owner's next batch of 2026-10-20, sent with twelve screenshots of another store's bot: **the dashboard can now
