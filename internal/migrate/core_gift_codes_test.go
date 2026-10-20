@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// 00026 on a store from before: a ledger that already has entries keeps them, gift codes and their redemptions
+// 00027 on a store from before: a ledger that already has entries keeps them, gift codes and their redemptions
 // get the checks the application relies on as a last guard (a code is never stored, a redemption is counted
 // once per customer and per request, a code is never over-redeemed), the ledger takes the gift_code kind, and
 // Down drops the three tables but leaves the entries a redemption wrote: the ledger is append-only.
@@ -16,7 +16,7 @@ func TestGiftCodesMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 25); err != nil {
+	if err := upTo(ctx, dsn, "core", 26); err != nil {
 		t.Fatalf("up to 25: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
@@ -47,7 +47,7 @@ func TestGiftCodesMigration(t *testing.T) {
 	// Before: a gift code entry is refused, the old kinds are all fine.
 	if err := exec(`INSERT INTO core.ledger_entries (id, user_id, currency, amount, kind, idempotency_key, balance_after)
 		VALUES (gen_random_uuid(), $1, 'IRT', 10, 'gift_code', 'k-early', 510)`, u1); err == nil {
-		t.Fatal("before 00026 the ledger took a gift_code entry")
+		t.Fatal("before 00027 the ledger took a gift_code entry")
 	}
 	if err := Up(ctx, dsn, "core"); err != nil {
 		t.Fatalf("Up: %v", err)
@@ -172,7 +172,7 @@ func TestGiftCodesMigration(t *testing.T) {
 	}
 
 	// Down: the three tables go; the ledger keeps what was credited, and Up brings the tables back empty.
-	if err := downTo(ctx, dsn, "core", 25); err != nil {
+	if err := downTo(ctx, dsn, "core", 26); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	for _, table := range []string{"gift_codes", "gift_code_redemptions", "gift_code_failures"} {

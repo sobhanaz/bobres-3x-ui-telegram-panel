@@ -310,6 +310,11 @@ func gatedCases() []gatedCase {
 	} {
 		add(buttonCase(data))
 	}
+	// The plan table's header, and every step of a bulk purchase: its plans, a
+	// plan, a quantity, another number, the total, the name, no name, Pay.
+	for _, data := range []string{"nop", "bk", "bk:p:p1", "bk:q:n1:3", "bk:o:n1", "bk:c:n1", "bk:n:n1", "bk:nc:n1", "bk:y:n1"} {
+		add(buttonCase(data))
+	}
 	// Resellers are held like customers, in their panel too.
 	for _, data := range []string{"rs", "rs:buy", "rs:subs:1", "rs:cu:1", "rs:st:1", "rs:link", "rs:pz:s1", "rs:dy:s1"} {
 		c := buttonCase(data)
@@ -366,6 +371,12 @@ func gatedCases() []gatedCase {
 		sceneCase(sceneResellerFind, nil, "reseller", "a search", textIn("Ali")),
 		sceneCase(sceneResellerRename, map[string]string{"id": "s1"}, "reseller", "a new name", textIn("Ali")),
 		sceneCase(sceneResellerNote, map[string]string{"id": "s1"}, "reseller", "a note", textIn("pays late")),
+	)
+	// A bulk purchase's open questions: how many, and what to call them.
+	add(
+		sceneCase(sceneBulkQuantity, map[string]string{"co": "n1"}, "", "a number of services", textIn("5")),
+		sceneCase(sceneBulkName, map[string]string{"co": "n1"}, "", "a name for the services", textIn("Family")),
+		sceneCase(sceneBulkQuantity, map[string]string{"co": "n1"}, "reseller", "a reseller's number of services", textIn("5")),
 	)
 
 	// A payment's proof is what goes on (TestMaintenanceAllowlist); whatever

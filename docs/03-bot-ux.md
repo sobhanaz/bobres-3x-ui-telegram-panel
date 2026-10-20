@@ -35,11 +35,81 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 7. Settings (language, notifications)
 8. Top users (only while the referral program is on and the owner has not switched the board off)
 9. Become a reseller (customers who are not resellers or staff, only while the license includes resellers)
+10. Bulk purchase (a second green button right under Buy, for everyone, while the owner has not switched it off:
+    setting `bulk.enabled`; it has no item in the bottom menu)
 (+ Reseller panel button when role = reseller; + Admin button when role = admin)
 
 ## Key flows
 **Buy:** plan list -> plan detail (price, GB, days) -> discount code (optional) -> payment method
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).
+**The plan list (built 2026-10-20):** Buy, a reseller's Buy for a customer, the Renew and Add traffic pickers and the
+Bulk purchase's plan step all draw their plans with one helper, in the layout the owner chose (setting `bot.plan_layout`:
+Settings, "Plans and bulk purchase" in the dashboard and in the bot's admin menu; `table` until it is set):
+- **table**: a header row (`plans.head_name`, `plans.head_price`: "Plan | Price", two buttons that do nothing when
+  tapped), then each plan as ONE ROW OF TWO BUTTONS, its name and its price, that both open that plan (the same callback
+  data as ever), in the plan order, with the price this customer pays (a reseller's tier price), then Back and Home. In
+  a right-to-left chat Telegram puts the first button of a row on the right, so in Persian the name is on the right and
+  the price on the left. The buttons have no color (as the plan buttons never had). A name longer than 24 characters is cut
+  with an ellipsis (never inside a vowel sign, a half-space or a joined emoji, and never ending in a space); the price is
+  never cut.
+- **list**: one button per plan, "name · price" (`plan.button`), as before the table existed.
+Telegram's limits are kept (at most 100 buttons in a keyboard, 8 in a row, 64 bytes of callback data): a table of more
+than 46 plans (2 + 2 x 46 = 94 buttons, which leaves room for Back, Home and a pager) is drawn as a list, and a list shows
+at most the first 94 plans. Both the header texts and the order of the plans are the same for every customer.
+**Bulk purchase (built 2026-10-20):** a customer, a reseller or staff member buys N services of one plan at once and
+pays for all of them from the wallet. Plan (in the store's layout; only plans that cost something: a free plan is not
+sold in bulk) -> how many (quick buttons 2, 3, 5 and 10, only those the limit allows, or **Another number**: a number
+typed in any digits, from 2 to `bulk.max_quantity`; one that will not do is explained and asked for again, and Cancel
+closes the question) -> the total: the services, the price of each, the total, the wallet beside it, and optionally **Name
+the services** (one name, at most 62 characters for a bulk of up to 9 services, 61 up to 99 and 60 for 100: the services are
+named "<name> 1" to "<name> N", as a reseller's names are; **No name** takes it off) -> **Pay** (green) -> "Paid X for N
+services. They are being prepared: you will get all the links in one message." with My services and Home.
+- **Price.** The price of each service is what a single purchase of the plan costs this customer (the store price; a
+  reseller's tier price, fixed or by the tier's discount), times N. The total shown is core's (`QuoteBulkOrder`), and Pay
+  carries it: when the price changed between the screen and the tap, nothing is charged, the customer is told "The price
+  changed" and sees the new total. **A discount code is not used in a bulk purchase**: a code can be used once per customer,
+  so it could only cut the price of one service out of N; to use one, buy that service on its own. Discounts a
+  reseller's tier gives are in the price of every service.
+- **Only the wallet pays** (decided 2026-10-20). A gateway or a manual payment is made for one order of a fixed amount: the
+  payments service, its intents, its review and its refunds are built around that, and paying N orders with one payment
+  would need a second order model. So a bulk is paid from the wallet, and a wallet that falls short is told what is missing
+  and offered a top-up of exactly that amount (any method the store offers, then buy), as the single purchase does. A
+  reseller buys on credit down to their limit: past it there is no Pay and no top-up, only "Not enough credit" and the way
+  out (settle with the store).
+- **All or nothing, once.** Core makes the N orders and takes the N payments in ONE database transaction: all of it, or
+  nothing is written (no partial debit, no order without its payment, no payment without its order, no announcement
+  without the purchase). The N orders are ordinary ones (each with its own ledger entry `purchase:<order id>`, refunded,
+  retried, counted in the reports and paying a commission as any order does), tied together by a row that holds the
+  request key: the nonce of the screen's Pay button, so a double tap, four taps at once or a retry after an answer that
+  never came is ONE purchase and one debit. A key reused for another purchase is refused.
+- **Limits.** `bulk.max_quantity` (default 20, 2 to 100) is the most in one purchase and `bulk.enabled` the switch; core
+  enforces both (a stale button or a crafted call is refused), not only the bot. The bot has no limit of purchases per
+  customer per day (only the taps and messages per 10 seconds, `limits.bot_per_10s`), so none is applied to a bulk.
+  Maintenance mode, the required channel and a ban stop a bulk purchase as they stop any other (the buttons and the typed
+  number are held by the gates; core refuses a banned buyer).
+- **The license.** The places among the active services (`max_active_services`) are counted for ALL N at once under the
+  lock that makes purchases take turns: three at twenty-three of twenty-five are refused whole, two are not. The customer
+  is told what any new purchase refused for the limit says ("New purchases are temporarily unavailable. Please contact
+  support.", never a word about licensing); the quote refuses early, before the customer is shown a total they cannot pay,
+  and the staff alert "A new purchase was refused" counts it. A reseller's purchase also needs the resellers feature.
+- **Delivery.** The provisioning worker picks the N orders up like any others. When every service is delivered, or has
+  failed three times and is retried in the background, core announces the bulk once (`order.bulk_ready.v1`) and the bot sends
+  ONE message with every link (each service named, its link in a code span to copy) and a My services button; the
+  services are not announced one by one. A message that would be longer than Telegram allows (about 35 services) is a few
+  messages, the first with the header and the others starting "…continued", and a **text file of all the links** (name,
+  a tab, the link, one a line) follows. A service that is not delivered by then is listed as "Being prepared" under its number, the
+  message says how many are, and each of those is sent on its own, as any service, when it is ready. The staff get the usual
+  "Provisioning failed" alert for each failed service (the order id names it) and the customer no "taking longer" note per
+  service; if none is ready the message says so ("Your N services are not ready yet"). Nothing paid for is lost: a
+  service the panel cannot make stays a paid order the worker retries with growing waits, and staff can retry or refund it
+  from the dashboard as any order.
+- **Staff and records.** The staff alert for a sale (`notify.sales`) is one message per bulk, for the whole quantity ("New
+  bulk sale: @name bought 3 × Plan for 450,000 Toman"). The audit log has one `order.bulk` entry per bulk (the buyer as the
+  actor, source bot, with the plan, the quantity, the price of each and the total); the orders, the ledger and every report
+  count N orders and N payments. The referral reward of an invited customer is paid on the first paid purchase, which is the
+  bulk's first order (as it is for any customer's first order); a reseller's commission on a customer who joined through
+  their link is paid on every order, so N times.
+- **Not in the Mini App** (the app buys one service at a time).
 **Automatic USDT (Phase 6a):** the payment screen shows the exact amount to send (copyable, Latin digits), the store's
 TRON address, the deadline (45 minutes) and a Check button. The payment settles by itself once the transfer is seen on
 the chain. A different amount is an unmatched deposit: staff are told and credit it by hand.
@@ -189,6 +259,10 @@ included, a one-time dashboard login link.
   the same choice when Telegram cannot answer ([17-mini-app.md](17-mini-app.md), "The required channel").
 - **Limits:** taps and messages per 10 seconds (checked before the gates; a message over it is not answered, a tap gets
   "Too many requests"), support messages per day.
+- **Plans and bulk purchase** (Settings, the "Plans and bulk purchase" card; the bot's admin menu has the same group):
+  `bot.plan_layout` (`table`, the default, or `list`), `bulk.enabled` (on by default) and `bulk.max_quantity` (2 to 100, 20
+  by default). The bot reads them as it last reloaded its settings (core asks it to at once after a change); core itself
+  refuses a bulk purchase while it is off or past the limit.
 - **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to every owner the
   server names (`BOBRES_ADMIN_TELEGRAM_ID` lists one or several), or to every owner and admin. "Payment taken but not recorded" is always sent. The **daily sales summary** (off until the
   store turns it on, `reports.daily_summary`) goes once a day to every owner and admin, whatever `notify.recipients` says,
@@ -215,6 +289,10 @@ payments in the dashboard. Customers see none of this.
 - **Buy for a customer:** the plans at their prices, then "type a name for this service, like Ali's phone, or tap
   Skip" (one line, at most 64 characters), then the regular checkout. Their regular Buy, renewals and traffic
   packages show their prices too.
+- **Bulk purchase** (the home menu's button, Key flows above) works for resellers: the plans and every service at their
+  prices, paid from the wallet down to their credit limit (the screen says what they can spend; past it, "Not enough
+  credit" and no Pay or top-up), the services named "<name> 1" to "<name> N" like a name they give a single one, and the
+  one message with every link. Their credit limit is respected in the same transaction as every debit.
 - **Checkout for resellers:** no discount-code button; the wallet button shows only when the balance plus the credit
   limit covers the price, with the amount they can spend; other payment methods stay. Past the limit they see what
   they can still spend, the other methods and a Panel button.

@@ -527,7 +527,8 @@ func TestCardPurchaseReviewedByAdminAndDelivered(t *testing.T) {
 	buyer.text("/start")
 	buyer.press("lang:en")
 	buyer.press("buy")
-	buyer.sees("Monthly 50GB · 150,000 Toman")
+	buyer.sees("Monthly 50GB")
+	buyer.sees("150,000 Toman") // a plan is a row of two buttons, its name and its price
 	buyer.press("plan:")
 	buyer.sees("⏳ 30 days")
 	buyer.sees("📶 50 GB")

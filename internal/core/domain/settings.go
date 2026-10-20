@@ -43,6 +43,15 @@ const (
 	permDiscounts = "discounts.write"
 )
 
+// The layouts of the bot's plan lists (SettingPlanLayout): a table puts each
+// plan on a row of two buttons (its name and its price) under a header row;
+// a list has one button per plan.
+const (
+	SettingPlanLayout = "bot.plan_layout"
+	PlanLayoutTable   = "table"
+	PlanLayoutList    = "list"
+)
+
 // ownerOnlyPerm reports whether a setting's permission is held by the owner
 // alone (the web package's ownerOnly: gateways.write and system.write), so an
 // admin neither sees nor changes it, in the dashboard or the bot.
@@ -102,6 +111,12 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = every day at the time below, the bot messages yesterday's sales (revenue per currency, paid orders, refunds, top-ups, new customers, free trials) to every owner and admin; off by default"},
 	{Key: SettingDailySummaryTime, Group: "reports", Kind: KindTime, Perm: permSettings, Default: DefaultDailySummaryTime,
 		Help: "time of day (HH:MM, 24-hour) in the store's time zone at which the daily sales summary is sent"},
+	{Key: SettingPlanLayout, Group: "shop", Kind: KindEnum, Perm: permSettings, Default: PlanLayoutTable, Options: []string{PlanLayoutTable, PlanLayoutList},
+		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
+	{Key: SettingBulkEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = the bot's home menu has a Bulk purchase button: a customer buys several services of one plan at once and pays from the wallet; false = no button, and core refuses bulk purchases"},
+	{Key: SettingBulkMax, Group: "shop", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultBulkMax), Min: MinBulkQuantity, Max: MaxBulkQuantity,
+		Help: "the most services one bulk purchase may hold (2 to 100)"},
 	{Key: "support.autoclose_days", Group: "support", Kind: KindInt, Perm: permSettings, Default: "7", Min: 0, Max: 90,
 		Help: "close a ticket this many days after staff answered, when the customer does not write back (0 = never)"},
 	{Key: "limits.bot_per_10s", Group: "limits", Kind: KindInt, Perm: permSettings, Default: "20", Min: 5, Max: 200,

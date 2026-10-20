@@ -16,10 +16,11 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | order.created.v1 | core | payments | Order awaiting payment |
 | payment.succeeded.v1 | payments | core | Money confirmed |
 | payment.failed.v1 / payment.expired.v1 | payments | core, notifier | Payment did not complete |
-| order.paid.v1 | core | provisioner, notifier, sales reports | Provision the service. `{order_id, user_id, telegram_id, plan_id, amount, currency, source, provider}`: `source` is wallet, manual, gateway, trial or free; `provider` (optional, additive) is the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, ...), absent for wallet, trial and free orders and for events from before it was recorded |
+| order.paid.v1 | core | provisioner, notifier, sales reports | Provision the service. `{order_id, user_id, telegram_id, plan_id, amount, currency, source, provider}`: `source` is wallet, manual, gateway, trial or free; `provider` (optional, additive) is the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, ...), absent for wallet, trial and free orders and for events from before it was recorded `bulk_id`, `bulk_index` and `bulk_quantity` (optional, additive) are set when the order is one of a bulk purchase: the bulk, its place in it (from 1) and how many orders it has; the bot tells the staff about such a sale once, with the first order |
 | subscription.provision_requested.v1 | core | provisioner | Create/renew/reset command |
-| subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links |
-| subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention |
+| subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links. `bulk_id` (optional, additive) is set while the service belongs to a bulk purchase whose one message is still to come: the bot sends nothing for it on its own. A service that is ready after that message carries none |
+| subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention. `bulk_id` (optional, additive) names the bulk the order belongs to: the staff are alerted as for any order, the customer is told by the bulk's own message |
+| order.bulk_ready.v1 | core (the provisioning worker's loop) | notifier | Every order of a bulk purchase is delivered, or has failed 3 times and is retried in the background. `{bulk_id, user_id, telegram_id, plan_id, quantity, ready_orders (the delivered orders, in their order in the bulk), delayed (the others still retried), amount (the whole bulk), currency}`. Announced once per bulk (`core.bulk_orders.delivered_at`, set in the same transaction); a bulk with nothing left to tell (every order refunded) is closed without an event. The bot asks `GetBulkOrder` and sends the links of `ready_orders` in one message (a few, with a text file, when it would be too long) and says which services are still being prepared |
 | subscription.usage_updated.v1 | provisioner | core | Traffic/expiry sync from 3x-ui |
 | subscription.expiring.v1 / expired.v1 | core(scheduler) | notifier | Reminder triggers |
 | wallet.credited.v1 / debited.v1 | core | notifier | Balance change. Reasons on credited: topup, order_not_payable, admin_adjust, referral, refund, commission (a reseller's commission on a customer's order; never name the customer), settlement (staff recorded a reseller's payment), gift_code (the customer applied a gift code: the bot answers in the same chat, so the notifier sends no second message) |
@@ -52,6 +53,19 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   again with the same `idempotency_key` it credits nothing more and answers the same with `replayed`. Five wrong codes
   in an hour close entering codes for an hour (`gift_code.lock` in the audit log); a code is never logged or audited,
   only its last four characters.
+- core, bulk purchase (built 2026-10-20, additive; [03-bot-ux.md](03-bot-ux.md), "Bulk purchase"): `QuoteBulkOrder`
+  (user, plan, quantity: the unit price, the total and the most the store allows now; it fails as `CreateBulkOrder` would for what
+  can be known beforehand, the license's places included), `CreateBulkOrder` (user, plan, quantity, `idempotency_key`,
+  optional `label_prefix` and `expected_total`) and `GetBulkOrder` (bulk id, optional user id: the buyer's own bulk or
+  NOT_FOUND). `CreateBulkOrder` makes N ordinary orders and pays each from the wallet in ONE transaction (all or nothing,
+  audited as `order.bulk` made in the bot) and answers the `BulkOrder` with a `BulkService` per order (order status, then
+  service id, status, name and link once delivered); a repeat with the same key answers the first purchase with
+  `replayed = true` and charges nothing. Errors: FAILED_PRECONDITION with "insufficient" (the wallet, or a reseller's balance plus
+  credit limit, cannot pay for all), "price changed" (`expected_total` is not what the price came to), "turned off"
+  (`bulk.enabled` is false), the neutral "new purchases are paused" (the license's limit for N services at once, or a reseller
+  without the feature) or "plan unavailable" (a free, switched-off or trial plan); INVALID_ARGUMENT for a quantity outside 2 to
+  `bulk.max_quantity`, a name too long for "<name> <n>" or a missing key; PERMISSION_DENIED for a banned buyer;
+  ALREADY_EXISTS when the key belongs to another purchase; NOT_FOUND for an unknown plan, buyer or bulk.
 - core, resellers (milestone 5, built): `ListPlans.user_id` answers that user's price (a reseller's tier price) with the
   store price in `Plan.list_price`; `CreateOrder.label` and `Subscription.label`; `ListSubscriptions` pages (at most 50,
   `page_info.total`) and searches (`query`: label or id suffix) when asked, else the newest 100 as before;
