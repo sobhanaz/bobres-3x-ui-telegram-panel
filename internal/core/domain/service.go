@@ -255,13 +255,23 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 // paid, after the effects of paying (discount use, referral reward). provider
 // is who took the money for a payment, "" for wallet, trial and free orders.
 func (s *Service) publishOrderPaid(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source, provider string) error {
+	return s.publishOrderPaidIn(ctx, tx, o, telegramID, source, provider, 0)
+}
+
+// publishOrderPaidIn is publishOrderPaid for an order that may be one of a
+// bulk purchase of bulkQuantity orders (0: it is not).
+func (s *Service) publishOrderPaidIn(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source, provider string, bulkQuantity int) error {
 	if err := s.orderPaidEffects(ctx, tx, o, source); err != nil {
 		return err
 	}
-	return s.publish(ctx, tx, events.OrderPaid, events.OrderPaidEvent{
+	e := events.OrderPaidEvent{
 		OrderID: o.ID, UserID: o.UserID, TelegramID: telegramID, PlanID: o.PlanID,
 		Amount: o.Amount, Currency: o.Currency, Source: source, Provider: provider,
-	})
+	}
+	if o.BulkID != nil && o.BulkIndex != nil {
+		e.BulkID, e.BulkIndex, e.BulkQuantity = *o.BulkID, int(*o.BulkIndex), bulkQuantity
+	}
+	return s.publish(ctx, tx, events.OrderPaid, e)
 }
 
 // PayOrderWithWallet debits the buyer's wallet and marks the order paid in one
