@@ -38,6 +38,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - **Guessing is limited per customer:** five wrong codes in an hour close entering codes for an hour (`gift_code.lock` in
   the audit log); only wrong codes count and a success does not reset them. Unknown, switched-off and expired codes get
   one answer, so nothing tells a guesser which codes exist.
+- The two CSV files (the list, and a code's redemptions) follow the CSV rules of
+  [docs/14-reports.md](docs/14-reports.md): English headers, UTC and local times with the zone, a Jalali column when the
+  page's calendar is Jalali, formulas quoted. The Mini App's wallet history names the credit "Gift code".
 - API (additive): the `RedeemGiftCode` call (the bot only) and `/api/v1/gift-codes*` in the dashboard's API
   ([docs/02-events-and-apis.md](docs/02-events-and-apis.md)). Tables are in [docs/01-database.md](docs/01-database.md),
   the bot's flow in [docs/03-bot-ux.md](docs/03-bot-ux.md), the page in [docs/04-dashboard.md](docs/04-dashboard.md).
