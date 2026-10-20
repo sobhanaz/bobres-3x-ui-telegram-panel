@@ -23,8 +23,7 @@ group). What is still open:
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, gift codes, a lottery or wheel, reseller targets); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
-  sign-in inside the bot; an Undo for the last change in the bot's admin menu; in the Mini App, picking up a manual
-  payment again after its screen was left.
+  sign-in inside the bot; an Undo for the last change in the bot's admin menu.
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 
@@ -98,8 +97,7 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
 ### 4. Telegram Mini App store (L) — built, see [17-mini-app.md](17-mini-app.md)
 - **Status: built.** Left to do: a check with a real Telegram (sign-in, payments, theme, Persian layout). Everything
   the bot sells is in the app: the wallet and the online gateways, Telegram Stars, card to card, USDT and a Zarinpal
-  link with a receipt, the free trial, invites and support. Not built: picking up a manual payment again after its
-  screen was left (the next step is a list of the customer's pending payments).
+  link with a receipt (a payment left half-way is taken up again from the wallet), the free trial, invites and support.
 - **What:** the store as a Telegram web app: browse plans, buy with the wallet or a gateway, see and renew services,
   open the subscription page, all in one screen instead of chat buttons.
 - **Why last:** the largest piece, and it needs an HTTPS domain; the bot already sells everything it would. It pays

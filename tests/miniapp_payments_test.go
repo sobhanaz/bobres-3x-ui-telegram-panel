@@ -26,6 +26,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/web"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testenv"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tgauth"
@@ -238,7 +239,7 @@ func (w *miniWorld) eventually(what string, ok func() bool) {
 // pending is the review list as the staff see it.
 func (w *miniWorld) pending() []*corev1.PendingPayment {
 	w.t.Helper()
-	q, err := w.stack.Core.AdminListPendingPayments(context.Background(), &corev1.AdminListPendingPaymentsRequest{ActorTelegramId: ownerTG})
+	q, err := w.stack.Core.AdminListPendingPayments(context.Background(), &corev1.AdminListPendingPaymentsRequest{ActorTelegramId: ownerTG, Limit: 50})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -583,4 +584,170 @@ func TestMiniAppTopupByStarsIsCreditedByTheBotsHandlers(t *testing.T) {
 			t.Errorf("a top-up was told a service is being prepared: %q", s.Text)
 		}
 	}
+}
+
+// ---- a payment left half-way ----
+
+// pendingList is the customer's payments waiting for a receipt, as the wallet screen asks for them, by payment id.
+func (c *miniCustomer) pendingList() map[string]map[string]any {
+	c.w.t.Helper()
+	out := map[string]map[string]any{}
+	for _, r := range c.must(http.MethodGet, "/api/mini/v1/payments/pending", nil)["payments"].([]any) {
+		row := r.(map[string]any)
+		out[row["intent_id"].(string)] = row
+	}
+	return out
+}
+
+// A customer pays at the bank and Telegram reloads the app before the receipt is sent: the app starts again from
+// nothing. The payments they left are in the wallet's list, read from the real payments service, with what each
+// showed; the receipt for one goes the way every receipt does, and it is gone from the list.
+func TestMiniAppAPaymentLeftHalfWayIsTakenUpAgain(t *testing.T) {
+	w := newMiniWorld(t)
+	rin := w.open(4020, "rin")
+	pat := w.open(4021, "pat")
+
+	// Rin starts a card payment for an order, a top-up by USDT and a payment by Stars (which takes no receipt)...
+	order := rin.order("leftkey00001")
+	card := rin.must(http.MethodPost, "/api/mini/v1/orders/"+order+"/pay", map[string]any{"method": "manual_card"})
+	cardID := card["intent_id"].(string)
+	top := rin.must(http.MethodPost, "/api/mini/v1/topup", map[string]any{"amount": 200000, "method": "manual_crypto", "key": "lefttopup001"})
+	topID := top["intent_id"].(string)
+	stars := rin.must(http.MethodPost, "/api/mini/v1/orders/"+rin.order("leftkey00002")+"/pay", map[string]any{"method": "stars"})
+	if rin.pendingList()[stars["intent_id"].(string)] != nil {
+		t.Fatalf("a Stars payment is listed")
+	}
+	// A payment started in the bot (the call its "card to card" button makes) is the same payment, and left too.
+	fromBot, err := w.stack.Core.CreatePaymentIntent(context.Background(), &corev1.CreatePaymentIntentRequest{UserId: rin.id, Provider: "manual_card",
+		Amount: &commonv1.Money{Amount: 120000, Currency: "IRT"}, IdempotencyKey: "bot-topup-left-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	botID := fromBot.GetId()
+
+	// ...and the app is reloaded: all it had in its memory is gone, and it signs in again.
+	rin = w.open(4020, "rin")
+	list := rin.pendingList()
+	if len(list) != 3 || list[cardID] == nil || list[topID] == nil || list[botID] == nil {
+		t.Fatalf("the list after the reload: %v", list)
+	}
+	if list[botID]["amount"] != float64(120000) || list[botID]["order_id"] != "" || list[botID]["details"].(map[string]any)["reference"] != domain.PaymentReference(botID) {
+		t.Errorf("the payment the bot started: %v", list[botID])
+	}
+	// Each is what the call that started it showed, and when it began.
+	for id, started := range map[string]map[string]any{cardID: card, topID: top} {
+		row := list[id]
+		at, _ := row["created_at"].(float64)
+		if time.Since(time.Unix(int64(at), 0)) > time.Minute || at == 0 {
+			t.Errorf("%s began at %v", id, row["created_at"])
+		}
+		delete(row, "created_at")
+		if got, want := mustJSON(t, row), mustJSON(t, started); got != want {
+			t.Errorf("%s is not what the payment showed:\n got  %s\n want %s", id, got, want)
+		}
+	}
+	if d := list[cardID]["details"].(map[string]any); d["card_number"] != "6037-9911-2222-3333" || d["reference"] == "" || list[cardID]["amount"] != float64(150000) || list[cardID]["order_id"] != order {
+		t.Errorf("the card payment: %v", list[cardID])
+	}
+	if list[topID]["usdt_amount"] != float64(3_340_000) || list[topID]["order_id"] != "" {
+		t.Errorf("the USDT top-up: %v", list[topID])
+	}
+
+	// What the owner switches off is not offered again; switched on, it is.
+	w.set("payments.manual_card.enabled", "false")
+	if got := rin.pendingList(); len(got) != 1 || got[topID] == nil {
+		t.Errorf("with card to card switched off: %v", got)
+	}
+	w.set("payments.manual_card.enabled", "true")
+	if got := rin.pendingList(); len(got) != 3 {
+		t.Errorf("with it on again: %v", got)
+	}
+
+	// Nobody else sees them, reads their screens or sends a proof for them.
+	if got := pat.pendingList(); len(got) != 0 {
+		t.Fatalf("pat sees %v", got)
+	}
+	for _, id := range []string{cardID, topID, botID} {
+		if code, out := pat.upload(id, "998877", receiptPNG(t)); code != 404 {
+			t.Errorf("pat's receipt for %s: %d %v", id, code, out)
+		}
+		if code, out := pat.do(http.MethodPost, "/api/mini/v1/payments/"+id+"/check", map[string]any{}); code != 404 {
+			t.Errorf("pat's check of %s: %d %v", id, code, out)
+		}
+	}
+	if got := w.pending(); len(got) != 0 {
+		t.Fatalf("a proof of someone else's reached the review queue: %d", len(got))
+	}
+
+	// Rin sends the receipt for the card payment from the list, as the screen taken up again does: it is in the review
+	// queue and out of the list; and the hash of the top-up.
+	if code, out := rin.upload(cardID, "998877", receiptPNG(t)); code != 200 || out["status"] != "confirming" {
+		t.Fatalf("the receipt: %d %v", code, out)
+	}
+	if got := rin.pendingList(); len(got) != 2 || got[topID] == nil || got[botID] == nil {
+		t.Errorf("after the receipt: %v", got)
+	}
+	// The payment the bot started takes its receipt from the app as well.
+	if code, out := rin.upload(botID, "556677", receiptPNG(t)); code != 200 || out["status"] != "confirming" {
+		t.Fatalf("the receipt for the bot's payment: %d %v", code, out)
+	}
+	hash := strings.Repeat("ab12", 16)
+	if out := rin.must(http.MethodPost, "/api/mini/v1/payments/"+topID+"/proof", map[string]any{"txid": hash, "network": "TRC20"}); out["status"] != "confirming" {
+		t.Fatalf("the hash: %v", out)
+	}
+	if got := rin.pendingList(); len(got) != 0 {
+		t.Errorf("after both proofs: %v", got)
+	}
+	if queue := w.pending(); len(queue) != 3 {
+		t.Fatalf("review queue: %+v", queue)
+	}
+
+	// The staff approve them: the order is delivered and the wallet is credited (the two top-ups), and nothing comes
+	// back to the list.
+	w.approve(cardID)
+	w.approve(topID)
+	w.approve(botID)
+	rin.waitOrder(order, "active")
+	w.eventually("the wallet to be credited", func() bool {
+		ws, _ := rin.must(http.MethodGet, "/api/mini/v1/wallet", nil)["wallets"].([]any)
+		return len(ws) > 0 && ws[0].(map[string]any)["balance"] == float64(320000)
+	})
+	if got := rin.pendingList(); len(got) != 0 {
+		t.Errorf("after the review: %v", got)
+	}
+}
+
+// A payment for an order that was paid another way is not one to send a receipt for.
+func TestMiniAppPendingPaymentOfAnOrderPaidAnotherWayIsNotListed(t *testing.T) {
+	w := newMiniWorld(t)
+	sue := w.open(4022, "sue")
+	order := sue.order("leftkey00003")
+	card := sue.must(http.MethodPost, "/api/mini/v1/orders/"+order+"/pay", map[string]any{"method": "manual_card"})["intent_id"].(string)
+	if got := sue.pendingList(); got[card] == nil {
+		t.Fatalf("the payment is not listed: %v", got)
+	}
+	// The order is paid from the wallet meanwhile (a top-up first, the wallet being empty).
+	topup := sue.must(http.MethodPost, "/api/mini/v1/topup", map[string]any{"amount": 150000, "method": "manual_card", "key": "lefttopup002"})["intent_id"].(string)
+	if code, out := sue.upload(topup, "112233", receiptPNG(t)); code != 200 {
+		t.Fatalf("receipt: %d %v", code, out)
+	}
+	w.approve(topup)
+	w.eventually("the wallet to be credited", func() bool {
+		ws, _ := sue.must(http.MethodGet, "/api/mini/v1/wallet", nil)["wallets"].([]any)
+		return len(ws) > 0 && ws[0].(map[string]any)["balance"] == float64(150000)
+	})
+	sue.must(http.MethodPost, "/api/mini/v1/orders/"+order+"/pay-wallet", map[string]any{})
+	sue.waitOrder(order, "active")
+	if got := sue.pendingList(); len(got) != 0 {
+		t.Errorf("a payment for a paid order is listed: %v", got)
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v) // map keys are sorted: two equal maps are equal strings
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

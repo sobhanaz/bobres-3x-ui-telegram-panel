@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, resetSession } from '../api'
 import { errorKey } from '../errors'
 import { messages } from '../i18n'
-import { cardDigits, cleanTxid, isManual, networkFor, networksOf, notYetKey, plainAmount, txidPattern } from '../pay'
+import { cardDigits, cleanTxid, isManual, networkFor, networksOf, notYetKey, plainAmount, shortMethodKey, txidPattern } from '../pay'
 import { openInvoice } from '../telegram'
 import { json, noTelegram, signedIn, telegram } from './helpers'
 
@@ -24,6 +24,16 @@ describe('payment helpers', () => {
     expect(notYetKey('zarinpal')).toBe('pay.not_yet')
     expect(messages.en['stars.not_yet']).toContain('do not pay twice')
     expect(messages.fa['stars.not_yet']).toBeTruthy()
+  })
+
+  it('has a short name, in both languages, for each manual method in a list', () => {
+    for (const m of ['manual_card', 'manual_crypto', 'manual_zarinpal']) {
+      const key = shortMethodKey(m)
+      expect(messages.fa[key], `fa ${m}`).toBeTruthy()
+      expect(messages.en[key], `en ${m}`).toBeTruthy()
+      expect(messages.en[key].length, m).toBeLessThan(messages.en['method.' + m].length + 1) // the short one is not the long one
+    }
+    expect(new Set(['manual_card', 'manual_crypto', 'manual_zarinpal'].map(shortMethodKey)).size).toBe(3)
   })
 
   it('copies a card number as digits', () => {
@@ -97,6 +107,23 @@ describe('proofs', () => {
     expect(calls[0].path).toBe('/payments/i2/proof')
     expect((calls[0].init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(calls[0].init.body))).toEqual({ txid: 'ab12'.repeat(16), network: 'TRC20' })
+  })
+
+  it('lists the payments waiting for a receipt with a plain GET that names nobody', async () => {
+    const rows = [{ intent_id: 'i1', provider: 'manual_card', created_at: 1 }]
+    const calls = signedIn(() => ({ payments: rows }))
+    expect(await api.pendingPayments()).toEqual(rows)
+    expect(calls).toHaveLength(1)
+    const c = calls[0]
+    expect(c.method).toBe('GET')
+    expect(c.path).toBe('/payments/pending') // no user, status or amount in the request: the customer is the session's
+    expect(c.init.body).toBeUndefined()
+    expect((c.init.headers as Record<string, string>).Authorization).toBe('Bearer tok1')
+  })
+
+  it('takes an answer without a list as an empty one', async () => {
+    signedIn(() => ({}))
+    expect(await api.pendingPayments()).toEqual([])
   })
 
   it('sends the same form again after one expired session is renewed', async () => {

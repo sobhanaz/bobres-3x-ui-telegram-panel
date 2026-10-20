@@ -120,6 +120,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `POST /topup` `{amount, method, key}` | Wallet top-up, 10,000 to 50,000,000 Toman, same bounds as the bot; any method of `/methods` |
 | `POST /payments/{id}/check` | The status of the customer's own payment, asking the gateway where there is one ("I have paid"); also how a Stars or manual payment is followed |
 | `POST /payments/{id}/proof` | The proof of the customer's own manual payment, once: `multipart/form-data` with `receipt` (an image) and `reference` (the bank's tracking number), or JSON `{txid, network}` for a crypto payment |
+| `GET /payments/pending` | The customer's own manual payments that still wait for their proof, newest first, at most 10: each as `pay` answered when it was started, plus `created_at` (see "Taking a payment up again") |
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
 | `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing |
@@ -147,10 +148,11 @@ same: price and discount are decided on the server, a wallet cannot go below zer
 their credit limit), an order is the customer's own or a 404. Changes are audited with source `bot` (the audit log's
 allowed sources do not include a Mini App one, and the store is the bot's second face), under the customer's id.
 
-While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check, and send
-the proof of a manual payment already started, so that a payment in flight finishes: a Stars payment is settled by the
-bot all the same, and a customer who has paid by hand can say so, as the bot lets them (it takes the receipt, the bank
-number or the hash of a payment under way). Browsing, buying, top-up and starting a payment answer 503 `maintenance`.
+While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check, list the
+manual payments waiting for their proof and send the proof of one already started, so that a payment in flight
+finishes: a Stars payment is settled by the bot all the same, and a customer who has paid by hand can say so, as the bot
+lets them (it takes the receipt, the bank number or the hash of a payment under way). Browsing, buying, top-up and
+starting a payment answer 503 `maintenance`.
 
 ## Stars and manual payments
 
@@ -208,6 +210,30 @@ handler, which core cannot reach. So once the proof is stored, core asks the bot
 (`POST /internal/miniapp/proof-alert`): to everyone who gets payment alerts (every owner; `notify.recipients` can widen
 it), in their language, except the customer if they are staff, and unless `notify.new_payment` is off. If that call
 fails the proof still waits in the review list (the dashboard's, and the bot's "Review payments").
+
+**Taking a payment up again.** The screen that shows the card, the addresses or the link and takes the proof lives in the
+app's memory, so when Telegram reloads the app (or the customer closes it) between paying at the bank and sending the
+receipt it is gone, and reopening a plan makes a new order. The **wallet screen** gives it back: it lists the customer's
+manual payments that still wait for their proof ("Payments waiting for your receipt", newest first, at most 10), each with
+its method, whether it is for a purchase or a top-up, the amount, the payment reference and how long ago it began, and a
+**Send the receipt** button that opens the same payment screen again (the card or the addresses or the link, the exact
+amount, the reference, and the form for the receipt or the hash), which ends in `POST /payments/{id}/proof` like any
+other and is followed as any manual payment is (asked about every 30 seconds for half an hour while it is on screen).
+Back at the wallet, a payment whose proof went is no longer in the list. Texts in Persian and English.
+
+`GET /payments/pending` takes nothing from the request (not a query string: the customer is the session's) and answers
+`{"payments": [...]}`, each as `pay` and `topup` answered when the payment was started (`intent_id`, `provider`, `amount`,
+`currency`, `order_id`, `details`, `usdt_amount`) plus `created_at` (unix seconds). It asks the payments service for the
+customer's own pending payments of each manual method, and checks the answer again, so another customer's payment never
+appears. A payment is listed when it is the customer's own, was made by a manual method and is still `pending` (no proof
+yet, not rejected or settled); when the store would still take that method for its price (the rule of `GET /methods`: set
+up, not switched off, in the license, the bot connected); and, if it has an order, when that order still waits for
+payment (one paid another way, cancelled or removed is not listed). The price is the payment's own; the card, the
+addresses, the link and the USDT amount (at today's rate) are the store's as they are now, because the payments service
+keeps none of them. Served in maintenance like the proof call, and counted in the 120 calls a minute. A payment of a
+method the owner switched off since is not listed, but the proof call still takes it while it is `pending`. A payment
+started in the bot is the same payment and is listed too; the bot itself has no such list (its proof flow goes on with
+the payment its conversation is on).
 
 The bot's endpoints for core (the last one is the required channel's, above), all behind core's service token and never routed from outside:
 
@@ -307,7 +333,9 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
   started only if the store offers it for that price at that moment.
 - **Proofs and receipts:** a proof is accepted for the customer's own, manual, waiting payment, once (another
   customer's payment, or one that does not exist, is a 404; a second proof sent while the first is on its way is turned
-  away). An upload is a JPEG, PNG or WebP by its bytes, at most 8 MB, one image per submission, and no more than 40
+  away). The list of payments waiting for a proof (`GET /payments/pending`) shows the session's customer's own manual
+  `pending` payments only, whatever the payments service answers, and an id from it is a 404 for anyone else. An upload
+  is a JPEG, PNG or WebP by its bytes, at most 8 MB, one image per submission, and no more than 40
   megapixels (read from the header of each format, never by decoding: the review list shows every receipt in the
   dashboard, and a small file can claim a gigantic picture); a request over 8.25 MB is refused by its Content-Length
   before it is read. A customer may send 6 receipts in 10 minutes (a refused one counts, being turned away for lack
@@ -327,14 +355,6 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 - For a reseller: recording what they paid the store (staff do it, in the dashboard).
 - Resetting a service's traffic and free days or free traffic for a customer's service (staff only, by design).
 - Photos and files in support (sent from the bot).
-- Picking up a payment that was started and left. The screen that shows the card, or the addresses, and takes the
-  receipt lives in the app's memory: if Telegram reloads the app (or the customer closes it) between paying at the
-  bank and sending the proof, reopening a plan makes a new order, the earlier payment stays unpaid, and a receipt for
-  it cannot be sent from the app (nor from the bot, which has no list of unpaid orders to go on with). Support can
-  still find the payment by its reference, which the customer was told to write in the bank's description. The next
-  step is a list of the customer's own pending manual payments (the payments service can already filter by customer
-  and status) with a "send the receipt" row on the wallet screen. A payment whose receipt is in is followed by the
-  bot's message when staff decide, and by the app while it stays open.
 - PDF receipts (the bot takes images only, too) and more than one image for a payment.
 - Push messages (the bot sends those).
 
@@ -393,3 +413,8 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
     the channel is stopped at their next call once 10 minutes have passed; an owner, an admin and a support member are
     never stopped; a bot that is not the channel's administrator lets everyone in and the core log has the warning
     once a minute.
+13. **A payment left half-way, with a real bot:** tap card to card (and, in another try, USDT) for a plan and for a top-up,
+    close the app without sending a receipt, and open it again from the bot: the wallet tab lists each payment with its
+    reference and age, "Send the receipt" opens the same screen, the receipt reaches the staff, and the row goes. Do it
+    once with Telegram killed between paying and sending (the reload this exists for), and once with the owner switching
+    the method off meanwhile (the row goes until it is switched on again).

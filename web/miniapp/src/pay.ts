@@ -6,6 +6,18 @@ export function isManual(provider: string): boolean {
   return provider === 'manual_card' || provider === 'manual_crypto' || provider === 'manual_zarinpal'
 }
 
+/** shortMethodKey is the short name of a manual method, for a row of a list (the full names run on: "USDT, then send a receipt"). */
+export function shortMethodKey(provider: string): Key {
+  switch (provider) {
+    case 'manual_card':
+      return 'wallet.pending_card'
+    case 'manual_crypto':
+      return 'wallet.pending_crypto'
+    default:
+      return 'wallet.pending_link'
+  }
+}
+
 /**
  * notYetKey is what is said when the customer asks about a payment and it is not there yet: a Stars payment may be
  * on its way from Telegram (so: do not pay twice), a manual one waits for the staff.
