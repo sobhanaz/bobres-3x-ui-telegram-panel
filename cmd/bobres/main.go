@@ -136,7 +136,8 @@ Available now:
   start      Start the store and wait until it is healthy
   stop       Stop the store (nothing is deleted)
   restart    Restart the store and wait until it is healthy
-  uninstall  Remove the containers (data kept unless --purge)
+  uninstall  Remove the containers (data kept); --purge removes everything BOBRES put on this server, as on
+             day one (asks first; --dry-run shows the plan; --verify scans for leftovers)
   admin link Print a one-time dashboard login link (for when the bot is down)
   admin password  Reset the owner's dashboard password and show it once (no Telegram needed)
   license    Show the license (license status), install one (license import < token.txt)

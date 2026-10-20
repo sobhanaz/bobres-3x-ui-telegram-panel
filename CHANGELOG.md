@@ -152,6 +152,48 @@ join (one on the free tier and Standard, any number on Pro).
   `max_join_chats` in a license token and in `GET /api/v1/license`. `join.channel` and `join.link` stay the first
   chat, so the bot's `/set`, an older bot and an older Mini App keep working.
 
+### Uninstall: everything BOBRES put on a server, gone
+- **`sudo bobres uninstall --purge` is now the day-one command**: it removes everything installing BOBRES put on the
+  server (the install directory with its secrets and backups, the Docker project's containers, volumes, networks and
+  images, the systemd units named `bobres-*` such as the dashboard updater's, the firewall rules, the fail2ban jail and
+  the other files the hardening wrote, the swap file, BOBRES's state and logs, and last the `bobres` command), so that
+  the server is as it was. It prints the exact plan with sizes and counts, offers a **verified final backup**
+  (`--backup-to FILE`: written outside the install directory and read back completely before anything is deleted;
+  when it fails nothing is deleted), and asks for the install's domain **typed in full**. A script needs
+  `--yes --confirm <the domain>` and `--backup-to` or `--no-backup`. `--dry-run` prints the plan and changes nothing.
+  Plain `bobres uninstall` is unchanged (containers only, data kept). The menu's Uninstall item is a submenu with the
+  same questions.
+- It deletes only what it can prove is BOBRES's: Docker objects by the project label and the `bobres_` name, units by
+  their name (found, not listed, so a unit a later release adds is covered), files by the header BOBRES wrote in them
+  or the receipt, a directory only when it is no system directory or symbolic link and holds BOBRES's marker files.
+  It never touches SSH settings or the SSH firewall rule, DNS, other users' data, or other Docker workloads. It is
+  resumable and harmless to run twice, logs to `/var/log/bobres-uninstall.log` (kept), and ends with a leftover scan
+  ("Nothing of BOBRES is left on this server", or what is and why; exit 1) that is also `bobres uninstall --verify`.
+- **Docker and the packages BOBRES installed go only on request** (`--remove-docker`, `--remove-packages`), only when
+  the install receipt says BOBRES installed them, and only when apt and Docker agree nothing else needs them. ufw
+  stays on by default (`--disable-firewall` turns it off where BOBRES turned it on); `--keep-backups` keeps `backups/`.
+- **The install receipt**: `bobres install` and `bobres harden` now write `/var/lib/bobres/install-receipt.json` (root
+  only, outside the install directory so that the uninstall can read it last): the packages that were new after each
+  apt run, whether ufw was on before, the ufw rules BOBRES added, each file the hardening replaced with its original,
+  the swap file, and the images the install pulled. `install.sh` records what Docker's installer and openssl added in
+  `/var/lib/bobres/installed/`. It is additive and tolerant: no receipt (an install made by an earlier release)
+  means the uninstall uses the markers the installer wrote and takes the conservative choice (see
+  [docs/06-installer.md](docs/06-installer.md), "Uninstall").
+- A complete inventory of what installing BOBRES changes on a server, in three classes (created by BOBRES only, changed
+  in a shared file, installed software), is in [docs/06-installer.md](docs/06-installer.md); tests fail when an
+  installer step, a unit file or a path literal is added that the uninstall does not know. Runbook:
+  [docs/runbooks/uninstall.md](docs/runbooks/uninstall.md) (including restoring the final backup on a new server).
+- CI's end-to-end job now runs the purge as root with `--confirm` and `--no-backup`.
+
+### Updating
+- `sudo bobres update` does it. No database migration, no change to the services. Nothing to configure. A server
+  installed before this release has no receipt until the next `sudo bobres install` or `sudo bobres update`.
+
+### Known limits
+- Docker's iptables chains stay in memory until the next reboot after `--remove-docker`, and apt's package lists, the
+  logs, a package apt upgraded as a dependency of Docker and `/etc/group-` are not undone (they are not BOBRES's).
+- Proven on the Docker lab (Ubuntu 24.04, systemd) and by unit tests; not tried on Debian 11/12/13 or Ubuntu 22.04.
+
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 
@@ -192,6 +234,34 @@ the page itself comes with the dashboard's next change.
   bot has two new internal endpoints); `sudo bobres update` does both.
 - To keep the host collector off: `sudo bobres monitor disable` (or `sudo bobres config set BOBRES_MONITOR_COLLECTOR off`).
 - Not verified: the Kubernetes section was tried with recorded `kubectl` answers, not a live cluster; nothing here can be tried in a real Telegram.
+
+### Reports: charts, a scrolling table and a professional report
+- **Charts on the Reports page**, one currency at a time: revenue and what was kept after refunds, **revenue by plan**
+  over the periods, paid orders by type, how orders were paid (a donut), the top plans, **the busiest hours of the
+  week** (a heatmap) and new customers, free trials and services lost. Every chart follows the range, the grouping and
+  the Calendar switch (Jalali or Gregorian), has a legend that shows and hides series, a tooltip, keyboard keys
+  (the arrow that points right goes right on screen, which is earlier in Persian) and a table of its numbers, and works
+  in light, dark and right to left. The cards carry a small trend line.
+- **The "by period" table scrolls inside its own box** (down and sideways) with its header row, its period column and
+  a new totals row held in place, so a long range or a phone no longer makes the page long or wide.
+- **A Professional report view** (`?view=report`) to read, print or save as PDF: a letterhead, a headline per currency
+  in plain words (Persian and English), each headline number with its **change on the period before** and a sentence
+  about it (rises in lost services are shown as bad news), the charts, and two **3D views**: an isometric column scene
+  of revenue by plan and a tilting donut of how orders were paid. They are SVG (no WebGL, no library), load on demand
+  in their own small chunks, turn with a drag or two sliders, and give way to the flat charts on a phone, when the
+  person prefers reduced motion and for more than 62 periods. The print button uses a paper stylesheet (A4, light
+  colours, no menus).
+- **A chart kit** under `web/dashboard/src/components/charts/` (line and area, bars, donut, heatmap, sparkline, with
+  accessibility, right to left, themes and a README) for the dashboard's other pages; the System > Monitoring page is
+  meant to use it.
+- Two new read-only API calls feed the new charts, **no migration and no new table**: `GET /api/v1/reports/plan-series`
+  and `GET /api/v1/reports/hours` (`reports.read`, documented in [docs/14-reports.md](docs/14-reports.md) and
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md)). The CSV files, the daily summary and every existing answer
+  are unchanged. An older core without the two calls still works: the page leaves those two charts out.
+- Core and the dashboard are one binary, so there is nothing to update separately and nothing to configure.
+- Not seen in a real Telegram (nothing here is in Telegram). Checked in a real browser at 375 px and on a desktop in both
+  languages and both themes against a stand-in for the report API, and in the tests; the 3D views and the print layout
+  were looked at in Chrome only.
 
 ## [0.7.0] — 2026-10-20
 

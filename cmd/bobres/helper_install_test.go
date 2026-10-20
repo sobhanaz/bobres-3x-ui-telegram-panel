@@ -413,24 +413,29 @@ func TestUninstallPurgeRemovesTheUpdater(t *testing.T) {
 	if code := o.uninstallCmd([]string{"--dir", dir}); code != 0 || len(host.files) != 2 {
 		t.Fatalf("uninstall: %d %v\n%s", code, host.files, out)
 	}
-	f = &fakeOps{}
-	o, out, _ = testOps("panel.example.com\n", f)
-	o.units = host.units()
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge"}); code != 0 {
-		t.Fatalf("purge: %d\n%s", code, out)
+	// The day-one purge (uninstall.go) removes the updater first, with the remover the setting
+	// uses, and then everything else named bobres*. Only the updater's own host holds its units here.
+	l := newLab(t)
+	l.installBobres()
+	for _, n := range []string{"bobres-updater.path", "bobres-updater.service", "bobres-monitor.timer", "bobres-monitor.service"} {
+		_ = os.RemoveAll(l.p("/etc/systemd/system/" + n))
+	}
+	l.o.units = host.units()
+	if code := l.run("", l.yesArgs()...); code != 0 {
+		t.Fatalf("purge: %d\n%s%s", code, l.out, l.err)
 	}
 	if len(host.files) != 0 || host.enabled {
 		t.Errorf("units left: %v %v", host.files, host.enabled)
 	}
-	if !strings.Contains(out.String(), "Dashboard updater: the dashboard can no longer update this server (the units are removed).") {
-		t.Errorf("output:\n%s", out)
+	if !strings.Contains(l.out.String(), "Dashboard updater: the dashboard can no longer update this server (the units are removed).") {
+		t.Errorf("output:\n%s", l.out)
 	}
 	// With nothing installed, the purge says nothing about it.
-	dir = installDir(t)
-	o, out, _ = testOps("panel.example.com\n", &fakeOps{})
-	o.units = newFakeUnitHost().units()
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge"}); code != 0 || strings.Contains(out.String(), "Dashboard updater") {
-		t.Errorf("purge without units: %d\n%s", code, out)
+	l2 := newLab(t)
+	l2.installBobres()
+	l2.o.units = newFakeUnitHost().units()
+	if code := l2.run("", l2.yesArgs()...); code != 0 || strings.Contains(l2.out.String(), "Dashboard updater") {
+		t.Errorf("purge without units: %d\n%s", code, l2.out)
 	}
 }
 

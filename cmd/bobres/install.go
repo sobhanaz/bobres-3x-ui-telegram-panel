@@ -66,6 +66,9 @@ type installer struct {
 	survive func()
 	// botName is the bot's username once Telegram has said it.
 	botName string
+	// rcpt is the install receipt, which records what this install did to the
+	// server for `bobres uninstall --purge` (nil: nothing is recorded).
+	rcpt *receiptStore
 	// units installs the dashboard updater's systemd units once the store is up (nil: it is
 	// not installed). exe is the bobres they run and stateDir the release state directory.
 	units    *systemUnits
@@ -95,6 +98,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		sleep:     time.Sleep,
 		runLines:  streamDocker,
 		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
+		rcpt:  newReceiptStore(defaultStateDir()),
 		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(), monitorUnits: newSystemUnits(),
 	}
 	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
@@ -478,6 +482,7 @@ func (ins *installer) runInstall(args []string) int {
 		return 1
 	}
 	fmt.Fprintf(ins.out, "Wrote %s (.env is readable by root only).\n", *dir)
+	ins.recordInstall(*dir, env)
 	if *noStart {
 		for _, k := range []string{stepPull, stepStart, stepHealthy, stepHarden} {
 			ins.prog.Skip(k, "--no-start")
@@ -485,6 +490,7 @@ func (ins *installer) runInstall(args []string) int {
 		fmt.Fprintf(ins.out, "Not starting (--no-start). Start with: cd %s && docker compose up -d\n", *dir)
 		return 0
 	}
+	ins.recordImages(ctx, *dir)
 	if code := ins.start(ctx, *dir, env); code != 0 {
 		return code
 	}

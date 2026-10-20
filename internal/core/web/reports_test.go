@@ -237,6 +237,88 @@ func TestReportsPlansAndMethodsJSON(t *testing.T) {
 	}
 }
 
+// The plan series come in the summary's buckets (a Jalali month too), per
+// currency, with the plans that sold and the days they sold on; the hours come
+// as ISO weekdays and local hours.
+func TestReportsPlanSeriesAndHoursJSON(t *testing.T) {
+	_, b, ids := reportFixture(t)
+	code, out := b.do(http.MethodGet, "/api/v1/reports/plan-series"+reportQuery, nil)
+	series, _ := out["series"].([]any)
+	if code != 200 || len(series) != 3 || out["group"] != "day" || out["calendar"] != "gregorian" || out["tz"] != "Asia/Tehran" {
+		t.Fatalf("plan series: %d %v", code, out)
+	}
+	type want struct {
+		cur     string
+		revenue float64
+		days    []string
+	}
+	got := map[string]want{}
+	for _, raw := range series {
+		sr := raw.(map[string]any)
+		var days []string
+		for _, p := range sr["points"].([]any) {
+			days = append(days, p.(map[string]any)["date"].(string))
+		}
+		got[sr["plan_id"].(string)] = want{sr["currency"].(string), num(sr["revenue"]), days}
+		if _, ok := sr["name"].(map[string]any); !ok {
+			t.Errorf("a series without a name: %v", sr)
+		}
+	}
+	// Tehran is UTC+3:30: the first sale (20:29Z on 31 Oct) is 31 Oct, the second (20:31Z) is 1 Nov.
+	for id, w := range map[string]want{
+		ids["basic"]: {"IRT", 100_000, []string{"2026-10-31"}},
+		ids["odd"]:   {"IRT", 250_000, []string{"2026-11-01"}},
+		ids["usdt"]:  {"USDT", 2_500_000, []string{"2026-11-02"}},
+	} {
+		if g := got[id]; g.cur != w.cur || g.revenue != w.revenue || strings.Join(g.days, ",") != strings.Join(w.days, ",") {
+			t.Errorf("plan %s: got %+v, want %+v", id, g, w)
+		}
+	}
+	// A month in the Jalali calendar is named by its first day (Aban 1405 begins on 23 October).
+	_, out = b.do(http.MethodGet, "/api/v1/reports/plan-series?from=2026-10-31&to=2026-11-03&group=month&calendar=jalali&tz=Asia/Tehran", nil)
+	for _, raw := range out["series"].([]any) {
+		for _, p := range raw.(map[string]any)["points"].([]any) {
+			if d := p.(map[string]any)["date"]; d != "2026-10-23" {
+				t.Errorf("a Jalali month point on %v", d)
+			}
+		}
+	}
+	if out["calendar"] != "jalali" || out["group"] != "month" {
+		t.Errorf("echo: %v", out)
+	}
+
+	code, out = b.do(http.MethodGet, "/api/v1/reports/hours"+reportQuery, nil)
+	hours, _ := out["hours"].([]any)
+	if code != 200 || len(hours) != 3 {
+		t.Fatalf("hours: %d %v", code, out)
+	}
+	type slot struct {
+		weekday, hour float64
+		cur           string
+	}
+	seen := map[slot]float64{}
+	for _, raw := range hours {
+		h := raw.(map[string]any)
+		seen[slot{num(h["weekday"]), num(h["hour"]), h["currency"].(string)}] = num(h["revenue"])
+	}
+	// 23:59 on Saturday 31 Oct, 00:01 on Sunday 1 Nov, and 13:30 on Monday 2 Nov (10:00Z).
+	for s, rev := range map[slot]float64{{6, 23, "IRT"}: 100_000, {7, 0, "IRT"}: 250_000, {1, 13, "USDT"}: 2_500_000} {
+		if seen[s] != rev {
+			t.Errorf("hours %v: got %v, want %v (all: %v)", s, seen[s], rev, seen)
+		}
+	}
+	// The same rules as every report: a bad zone or range is a 400 with the reason.
+	if code, _ = b.do(http.MethodGet, "/api/v1/reports/plan-series?tz=Mars/Olympus", nil); code != 400 {
+		t.Errorf("plan series with a bad zone: %d", code)
+	}
+	if code, _ = b.do(http.MethodGet, "/api/v1/reports/hours?from=2026-10-05&to=2026-10-01", nil); code != 400 {
+		t.Errorf("hours with an inverted range: %d", code)
+	}
+	if code, _ = b.do(http.MethodGet, "/api/v1/reports/plan-series?calendar=hijri", nil); code != 400 {
+		t.Errorf("plan series with a bad calendar: %d", code)
+	}
+}
+
 func TestReportsRangesAndLimits(t *testing.T) {
 	f, b, _ := reportFixture(t)
 	// A named range is read in the store's zone: at 21:00 UTC it is already tomorrow in Tehran.
@@ -292,7 +374,7 @@ func TestReportsNeedThePermission(t *testing.T) {
 	if admin.loginWithLink(7101) != 200 || support.loginWithLink(7102) != 200 {
 		t.Fatal("login")
 	}
-	paths := []string{"summary", "plans", "methods", "summary.csv", "orders.csv", "daily-summary"}
+	paths := []string{"summary", "plans", "methods", "plan-series", "hours", "summary.csv", "orders.csv", "daily-summary"}
 	for _, p := range paths {
 		url := "/api/v1/reports/" + p + reportQuery
 		if code, _ := owner.do(http.MethodGet, url, nil); code != 200 {
@@ -491,6 +573,12 @@ func TestReportsOnAnEmptyStore(t *testing.T) {
 	}
 	if code, out = b.do(http.MethodGet, "/api/v1/reports/plans?from=2026-10-01&to=2026-10-03", nil); code != 200 || len(out["plans"].([]any)) != 0 {
 		t.Errorf("plans: %d %v", code, out)
+	}
+	if code, out = b.do(http.MethodGet, "/api/v1/reports/plan-series?from=2026-10-01&to=2026-10-03", nil); code != 200 || len(out["series"].([]any)) != 0 {
+		t.Errorf("plan series: %d %v", code, out)
+	}
+	if code, out = b.do(http.MethodGet, "/api/v1/reports/hours?from=2026-10-01&to=2026-10-03", nil); code != 200 || len(out["hours"].([]any)) != 0 {
+		t.Errorf("hours: %d %v", code, out)
 	}
 	_, _, body := b.get("/api/v1/reports/orders.csv?from=2026-10-01&to=2026-10-03")
 	if rows := parseCSV(t, body); len(rows) != 1 {

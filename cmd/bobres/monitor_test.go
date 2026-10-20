@@ -319,14 +319,6 @@ func TestEnsureMonitorWhenTurnedOffTakesTheUnitsAndTheSnapshotAway(t *testing.T)
 	if _, err := os.Stat(monitorDir(dir)); err != nil {
 		t.Errorf("the directory core mounts must stay: %v", err)
 	}
-	// The uninstall says nothing when there is nothing to remove, and the same when it removes.
-	u.ensureMonitor(context.Background(), monitorOptions{dir: dir, exe: testExe})
-	if res := u.uninstallMonitor(context.Background(), dir); !res.changed || len(f.files) != 0 {
-		t.Errorf("uninstall: %+v %v", res, f.files)
-	}
-	if res := u.uninstallMonitor(context.Background(), dir); res.text != "" || res.changed {
-		t.Errorf("uninstall again: %+v", res)
-	}
 }
 
 func TestEnsureMonitorReportsWhatSystemdRefuses(t *testing.T) {
@@ -905,19 +897,4 @@ func containers(n int) []snapshot.Container {
 		out[i] = snapshot.Container{ID: fmt.Sprintf("%012x", i+1), Name: fmt.Sprintf("c%d", i), State: snapshot.StateRunning, Health: snapshot.HealthNone}
 	}
 	return out
-}
-
-func TestUninstallTakesTheMonitoringUnitsAway(t *testing.T) {
-	dir := installDir(t)
-	f := newFakeMonitorSystem()
-	u := f.units()
-	u.ensureMonitor(context.Background(), monitorOptions{dir: dir, exe: testExe})
-	o, out, errOut := testOps("y\n", &fakeOps{})
-	o.monitorUnits = u
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge", "--yes"}); code != 0 {
-		t.Fatalf("exit %d: %s", code, errOut)
-	}
-	if len(f.files) != 0 || f.ran("systemctl disable --now") != 1 || !strings.Contains(out.String(), "Host monitoring: host monitoring is off") {
-		t.Errorf("units left: %v, calls %v\n%s", f.files, f.cmds, out)
-	}
 }

@@ -152,19 +152,6 @@ func (s *systemUnits) removeMonitor(ctx context.Context, dir, why string) unitRe
 	return unitResult{kind: markOK, text: why + " (the units are removed)", changed: true}
 }
 
-// uninstallMonitor is removeMonitor for an uninstall: silent when there is nothing to remove, and
-// nothing when the units cannot be managed from here.
-func (s *systemUnits) uninstallMonitor(ctx context.Context, dir string) unitResult {
-	if s.unavailable() != "" {
-		return unitResult{kind: markSkip}
-	}
-	res := s.removeMonitor(ctx, dir, "host monitoring is off")
-	if !res.changed && res.kind == markOK {
-		res.text = ""
-	}
-	return res
-}
-
 // monitorUnitState is what systemd says about the collector.
 type monitorUnitState struct {
 	Installed bool // both unit files are there

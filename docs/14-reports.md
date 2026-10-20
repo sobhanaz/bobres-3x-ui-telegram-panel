@@ -15,14 +15,17 @@ which is off until the store turns it on.
 - Where: `core` only. The code is `internal/core/store/reports.go` (SQL), `internal/core/domain/reports.go` (ranges and
   buckets), `internal/core/web/reports.go` (JSON and CSV), `internal/core/web/csvcells.go` and `csvexport.go` (the rules of
   every CSV file), `web/dashboard/src/pages/ReportsPage.vue` and, for the calendar and the dates, `web/dashboard/src/calendar.ts`
-  and `components/reports/DateField.vue`.
+  and `components/reports/DateField.vue`; for the charts and the professional report see
+  [Charts and the professional report](#charts-and-the-professional-report).
 - Tests: the numbers are checked against a model of every seeded row to the last unit, in several time zones, in
   `internal/core/store/reports_test.go`; the real money flows (orders of every type, discounts, a free order, a reseller
   on credit, payment events, the wallet, refunds, trials, an over-payment, failed and rejected payments) are run through
   the service in `internal/core/domain/reports_test.go`. The CSV files are checked as a spreadsheet sees them in
   `internal/core/web/csv_files_test.go`, `csv_totals_test.go` and `csvcells_test.go` (headers, line breaks, numbers and
   formulas, dates in both calendars, permissions, no secrets, the rows adding up to the report), and the calendar in
-  `web/dashboard/src/__tests__/calendar.test.ts` and `reports.test.ts`.
+  `web/dashboard/src/__tests__/calendar.test.ts` and `reports.test.ts`. The plan series and the hours of the week have their own
+  tests in the three layers (`store/reports_series_test.go`, `domain/reports_series_test.go`, `web/reports_test.go`), and the
+  charts and the professional report are tested in `charts*.test.ts`, `reportsvisual.test.ts` and `reports-visual.test.ts`.
 
 ## The money rule
 
@@ -61,8 +64,8 @@ instant bounds next to that test are a day wider on each side and only serve the
 - Empty buckets are returned as zeros, for every currency the range saw, so a chart has no gaps.
 - Limits: at most 400 days and at most 400 buckets per request, dates from 2000 to 2100, a time zone Go and PostgreSQL
   both know. Anything else is a 400 with the reason.
-- Time and load: every report runs in one read-only transaction on one snapshot (per request: the page makes three
-  requests, summary, plans and methods, so the three are not one snapshot, and a sale made between them can show in
+- Time and load: every report runs in one read-only transaction on one snapshot (per request: the page makes five
+  requests, summary, plans, methods, plan-series and hours (six, with the period before, in the professional report), so they are not one snapshot, and a sale made between them can show in
   one and not in another). PostgreSQL cancels a statement after 15 seconds for a report and 60 seconds for an export;
   a report that runs out of time answers 503 `timeout` ("choose a shorter range", shown in the dashboard in the
   staff member's language). At most two CSV exports run at once; a third gets 429 with `Retry-After: 5`. An export
@@ -100,6 +103,66 @@ range was a browser date field, which is Gregorian whatever the page says.
   language and the theme are; nothing is stored on the server. Until one is made the language decides (Jalali in
   Persian, Gregorian in English); a blocked or odd value is ignored. The ledger, the audit log and the reseller
   statement ask their CSV files for the Jalali column when the Reports page is set to Jalali.
+
+## Charts and the professional report
+
+The page has two views of the same numbers, switched at the top (`?view=report` in the address, so a view can be linked
+and survives a reload). Both follow the range, the grouping and the **Calendar** switch (every date they write is in
+the calendar chosen), and both are Persian first and English second.
+
+**Charts and tables** (the default). Cards per currency, customers and churn, each with a small trend line; then the
+charts, **one currency at a time** (a switch when there is more than one: amounts of two currencies never share an
+axis), then the table:
+
+- revenue and what was kept after refunds, per period (areas and lines; a period the range cuts is joined by a dashed
+  segment);
+- revenue **by plan** over the periods (stacked columns: the five best plans one by one, then "other");
+- paid orders by type (new, renewals, traffic packages), stacked;
+- how orders were paid (a donut with each way's value and share) and the top plans (a ranking);
+- **when customers pay**: paid orders by weekday and hour of the day, in the store's time zone, the week read from
+  Saturday in Jalali and from Monday in Gregorian (a heatmap);
+- new customers, free trials and services lost per period.
+
+Every chart has a legend that shows and hides its series, a tooltip listing every series at the point under the pointer
+or the keyboard's focus, and **a table with the same numbers** behind a "Show as table" button (the alternative for screen
+readers and for exact values). The arrow keys move between points, the right arrow going the way it points on screen
+(earlier, in Persian). The **by period table** scrolls inside its own box (down and sideways) with its header row, its
+period column and a totals row held in place, so neither a long range nor a phone makes the page long or wide; the box
+can be focused and scrolled with the keyboard. The charts are the chart kit in `web/dashboard/src/components/charts/`
+(documented in its `README.md`: props, colours, keyboard, accessibility, right to left), which the monitoring page is meant to reuse.
+
+**Professional report** (`components/reports/ProfessionalReport.vue`, its own chunk: loaded only when this view opens).
+A report to read, print or show someone, per currency and then for the people:
+
+- a letterhead: the store's name, "Sales report", the days (in the calendar chosen), the time zone, the date it was
+  prepared and what the changes are compared with;
+- a headline in plain words (how many orders, worth how much, the best day, refunds, the best-selling plan, the way most
+  money came in, the busiest time) and, for each headline number (revenue, kept after refunds, paid orders, average
+  order; then new customers, free trials, services lost, customers lost), the number, its **change on the period before**,
+  a small trend line and a sentence ("Revenue was 301,230,000 Toman, 51% higher than the previous 30 days.");
+- the charts above, with two 3D views (below);
+- a footer that says how money is counted (never added across currencies, net before payouts) and that churn is "as of
+  now".
+
+*The period before* is the same number of days right before the range ("the previous 30 days"), fetched with the same summary call (`from`, `to`, the same `tz`, `group=month` so only its few buckets are
+read; only its totals are used) and only while the report view is open. It is not asked for when it would start before
+2000-01-01 (the note says there is no earlier period), and when the call fails the note says so and every number is
+written alone, with no change. The rules are the daily summary in Telegram's: a rise or fall in whole percent, "exactly
+the same", "about the same" (under half a percent), "while the period before had none" (nothing before), a rise past 999%
+is "more than 999%", and a period that had sales is at most "down 99%". A **rise in lost services or customers is drawn
+as bad news** (red), a rise in sales as good (green), always with an arrow and the percent beside the colour.
+
+*3D*: the plan columns are an isometric 3D stacked-column scene and the payment methods a thick donut that leans back;
+both turn with a drag or two sliders (Rotate, Tilt) and reset. They are **SVG polygons from an orthographic camera**
+(`components/charts3d/projection.ts`): no WebGL and no library, so they print and scale and need no fallback for a missing
+GPU, and they are two small chunks loaded on demand. The flat charts show instead (and are one switch away) on a screen
+under 640 px wide, for a person who prefers reduced motion (3D is one click away and has no entrance motion then), and
+for ranges of more than 62 periods, which a 3D scene cannot show readably. The 3D charts have the same legend, tooltip,
+keys and table as the flat ones.
+
+*Print or save as PDF*: the button calls the browser's print. A paper stylesheet (A4, 12 mm margins) leaves out the
+menus, the toolbar and the buttons, prints the light colours whatever theme is on screen, keeps cards and charts from
+being cut across pages and starts every currency after the first, and the customers, on a new page.
 
 ## What each number means
 
@@ -253,6 +316,8 @@ All under `/api/v1/reports`, `GET`, session cookie, permission `reports.read`. Q
 | `/summary` | `{from, to, group, calendar, tz, churn_grace_days, currencies, buckets, totals}`. A bucket is `{date, partial, new_customers, trials, churned_services, churned_customers, at_risk, currencies}`; `currencies` maps each currency to `{revenue, refunds: {count, amount}, net, orders, new_orders, renewals, traffic_topups, topups: {count, amount}, rejected: {count, amount}, gateway_failed: {count, amount}, cancelled: {count, amount}}` (`rejected` is by staff, `gateway_failed` is the gateway line). `totals` has the same shape, summed bucket by bucket within each currency. |
 | `/plans` | `{from, to, tz, plans: [{plan_id, name: {fa, en}, currency, orders, revenue}]}` |
 | `/methods` | `{from, to, tz, methods: [{method, provider, currency, orders, revenue}]}`; `provider` is always there, empty for wallet, unknown and orders paid before it was recorded |
+| `/plan-series` | `{from, to, group, calendar, tz, series: [{plan_id, name: {fa, en}, currency, orders, revenue, points: [{date, orders, revenue}]}]}`: what each plan sold in each bucket of the report, per currency (takes `group` and `calendar` like the summary, and its buckets are the summary's: a Jalali week or month is cut the same way, `date` is the bucket's Gregorian start). Only the buckets where a plan sold are listed. A currency's best 20 plans come one by one (the order and the totals of `/plans`) and the rest together as one row with `plan_id: ""` and no name, so a bucket's rows add up to its revenue (when every purchase has its order and plan, as `/plans` assumes). `[]` when nothing was sold. |
+| `/hours` | `{from, to, tz, hours: [{weekday, hour, currency, orders, revenue}]}`: paid orders by ISO weekday (1 Monday to 7 Sunday) and hour of the local day (0 to 23, the wall clock in `tz`), per currency, only where something was sold. It reads the same purchase entries as the revenue. |
 | `/summary.csv` | The summary as a file (`...-jalali.csv` when `calendar=jalali`, with the Jalali days in its name). |
 | `/orders.csv` | Every order paid in the range, as a file. |
 

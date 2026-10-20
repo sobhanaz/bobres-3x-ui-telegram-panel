@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -75,6 +74,12 @@ type ops struct {
 	// gatewayState is the state of the install's gateway container, "" when
 	// there is none (nil: caddyState, which asks Docker).
 	gatewayState func(ctx context.Context) string
+	// host is how the day-one uninstall reaches the server outside Docker (nil:
+	// the real one).
+	host *hostSys
+	// tty says a person is at the terminal although in is not the terminal
+	// itself (the menu reads through its own buffer).
+	tty bool
 	// units looks at, and removes, the dashboard updater's systemd units (nil: not asked), and
 	// exe is the bobres they run (nil: this one).
 	units *systemUnits
@@ -309,115 +314,110 @@ func (o *ops) logsCmd(args []string) int {
 	return 0
 }
 
-// uninstallCmd stops and removes the containers. Data (database, Redis,
-// certificates) and the install directory stay unless --purge is given.
+// uninstallCmd stops and removes the containers; data (database, Redis,
+// certificates) and the install directory stay. With --purge it is the day-one
+// command (uninstall.go): everything BOBRES put on this server goes, so that it
+// is as before. --verify only scans the server for what is left.
 func (o *ops) uninstallCmd(args []string) int {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
 	dir := fs.String("dir", defaultDir(), dirUsage)
-	purge := fs.Bool("purge", false, "also delete the database, Redis data, certificates and the install directory (irreversible)")
-	yes := fs.Bool("yes", false, "do not ask for confirmation")
+	purge := fs.Bool("purge", false, "remove everything BOBRES put on this server, data and backups included (irreversible): the server is as on day one")
+	yes := fs.Bool("yes", false, "do not ask for confirmation (with --purge only together with --confirm)")
+	confirm := fs.String("confirm", "", "with --purge --yes: the token you would have typed (the install's domain, else this host's name)")
+	dryRun := fs.Bool("dry-run", false, "print what would be removed and change nothing")
+	verify := fs.Bool("verify", false, "scan the server for what is left of BOBRES (exit 1 if anything is)")
+	backupTo := fs.String("backup-to", "", "with --purge: write a verified final backup of the database to this file (or into this directory) first")
+	noBackup := fs.Bool("no-backup", false, "with --purge: no final backup (and no question about one)")
+	keepBackups := fs.Bool("keep-backups", false, "with --purge: keep <dir>/backups")
+	removeDocker := fs.Bool("remove-docker", false, "with --purge: also remove Docker, when BOBRES installed it and nothing else uses it")
+	removePackages := fs.Bool("remove-packages", false, "with --purge: also remove the packages BOBRES installed (ufw, fail2ban...), when nothing else needs them")
+	disableFirewall := fs.Bool("disable-firewall", false, "with --purge: turn ufw off again, when BOBRES turned it on")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	env, ok := o.requireInstall(*dir)
+	if fs.NArg() > 0 {
+		fmt.Fprintln(o.errOut, uninstallUsage)
+		return 2
+	}
+	opts := purgeOptions{dir: *dir, yes: *yes, confirm: *confirm, dryRun: *dryRun, backupTo: *backupTo, noBackup: *noBackup,
+		keepBackups: *keepBackups, removeDocker: *removeDocker, removePackages: *removePackages, disableFirewall: *disableFirewall}
+	if msg := uninstallFlagProblem(opts, *purge, *verify); msg != "" {
+		fmt.Fprintf(o.errOut, "error: %s\n%s\n", msg, uninstallUsage)
+		return 2
+	}
+	switch {
+	case *verify:
+		return newUninstaller(o).verifyCmd(context.Background(), opts)
+	case *purge:
+		return newUninstaller(o).purge(context.Background(), opts, args)
+	}
+	return o.uninstallContainers(opts)
+}
+
+// uninstallFlagProblem says what is wrong with a combination of flags, "" when it is fine.
+func uninstallFlagProblem(o purgeOptions, purge, verify bool) string {
+	purgeOnly := map[string]bool{
+		"--confirm": o.confirm != "", "--backup-to": o.backupTo != "", "--no-backup": o.noBackup, "--keep-backups": o.keepBackups,
+		"--remove-docker": o.removeDocker, "--remove-packages": o.removePackages, "--disable-firewall": o.disableFirewall,
+	}
+	var used []string
+	for _, k := range []string{"--confirm", "--backup-to", "--no-backup", "--keep-backups", "--remove-docker", "--remove-packages", "--disable-firewall"} {
+		if purgeOnly[k] {
+			used = append(used, k)
+		}
+	}
+	switch {
+	case verify && (purge || o.yes || o.dryRun || len(used) > 0):
+		return "--verify only scans: it takes no other flag than --dir"
+	case !purge && len(used) > 0:
+		return strings.Join(used, ", ") + " only work with --purge"
+	case !purge:
+		return ""
+	case o.backupTo != "" && o.noBackup:
+		return "--backup-to and --no-backup contradict each other"
+	case o.confirm != "" && !o.yes:
+		return "--confirm goes with --yes (without --yes the token is typed)"
+	case o.yes && !o.dryRun && o.confirm == "":
+		return "--purge --yes needs --confirm <token>: the install's domain (else this host's name). Run --dry-run to see it"
+	case o.yes && !o.dryRun && o.backupTo == "" && !o.noBackup:
+		return "--purge --yes needs --backup-to FILE (a verified final backup) or --no-backup"
+	}
+	return ""
+}
+
+// uninstallContainers is the plain uninstall: it stops and removes the containers and keeps the
+// data, the certificates and the install directory.
+func (o *ops) uninstallContainers(opts purgeOptions) int {
+	env, ok := o.requireInstall(opts.dir)
 	if !ok {
 		return 2
 	}
-	if *purge {
-		// The backups live in the install directory: they go too.
-		fmt.Fprintf(o.out, "Warning: --purge also deletes every backup in %s. Copy them elsewhere first if you may need them.\n",
-			filepath.Join(*dir, "backups"))
+	if opts.dryRun {
+		fmt.Fprintf(o.out, "Dry run: would stop and remove the BOBRES containers in %s. The data, the certificates and %s stay. Nothing was changed.\n",
+			opts.dir, opts.dir)
+		return 0
 	}
-	if !*yes {
-		if *purge {
-			fmt.Fprintf(o.out, "This deletes ALL data of %s (users, orders, ledger, panel token, backups) and %s.\nType the domain (%s) to confirm: ",
-				orDash(env["BOBRES_DOMAIN"]), *dir, env["BOBRES_DOMAIN"])
-		} else {
-			fmt.Fprintf(o.out, "Stop and remove the BOBRES containers in %s? Data is kept. [y/N]: ", *dir)
-		}
+	if !opts.yes {
+		fmt.Fprintf(o.out, "Stop and remove the BOBRES containers in %s? Data is kept. [y/N]: ", opts.dir)
 		var answer string
 		fmt.Fscanln(o.in, &answer) //nolint:errcheck // an empty answer means no
-		answer = strings.TrimSpace(answer)
-		confirmed := (*purge && answer == env["BOBRES_DOMAIN"] && answer != "") || (!*purge && strings.EqualFold(answer, "y"))
-		if !confirmed {
+		if !strings.EqualFold(strings.TrimSpace(answer), "y") {
 			fmt.Fprintln(o.out, "Cancelled.")
 			return 1
 		}
 	}
+	_ = env
 	// Every profile is on, so that a container of a service whose profile is off
 	// now (the tls-agent of a release the install went back from) goes too.
 	cargs := composeArgs("--profile", "*", "down", "--remove-orphans")
-	if *purge {
-		cargs = append(cargs, "--volumes")
-	}
-	ctx := context.Background()
-	if out, err := o.run(ctx, *dir, cargs...); err != nil {
+	if out, err := o.run(context.Background(), opts.dir, cargs...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose down failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	if !*purge {
-		fmt.Fprintf(o.out, "Containers removed. Kept: the database and Redis volumes (%s_*), certificates, and %s (run `bobres install` to start again, or `bobres uninstall --purge` to delete everything).\n",
-			composeProject, *dir)
-		return 0
-	}
-	left, err := o.removeProjectVolumes(ctx, *dir)
-	if len(left) > 0 {
-		fmt.Fprintf(o.out, "Also removed volumes of this install that docker compose down left (this docker-compose.yml may be from an older release): %s\n",
-			strings.Join(left, ", "))
-	}
-	if err != nil {
-		fmt.Fprintf(o.errOut, "error: %v\nData of BOBRES is still on this server; %s is kept. Run `bobres uninstall --purge` again, or remove the volumes with docker volume rm.\n", err, *dir)
-		return 1
-	}
-	// The dashboard updater has nothing left to update, and the collector nothing left to look at.
-	if o.units != nil {
-		if res := o.units.uninstall(ctx); res.text != "" {
-			fmt.Fprintf(o.out, "Dashboard updater: %s.\n", res.text)
-		}
-	}
-	if o.monitorUnits != nil {
-		if res := o.monitorUnits.uninstallMonitor(ctx, *dir); res.text != "" {
-			fmt.Fprintf(o.out, "Host monitoring: %s.\n", res.text)
-		}
-	}
-	if err := os.RemoveAll(*dir); err != nil {
-		fmt.Fprintf(o.errOut, "error: remove %s: %v\n", *dir, err)
-		return 1
-	}
-	fmt.Fprintf(o.out, "Removed containers, volumes and %s. Nothing of BOBRES remains on this server except the images (docker image prune to drop them).\n", *dir)
+	fmt.Fprintf(o.out, "Containers removed. Kept: the database and Redis volumes (%s_*), certificates, and %s (run `bobres install` to start again, or `bobres uninstall --purge` to delete everything).\n",
+		composeProject, opts.dir)
 	return 0
-}
-
-// projectVolumeRe is what the name of a Docker volume looks like: it keeps a
-// warning line in a command's output from being taken for one.
-var projectVolumeRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
-
-// removeProjectVolumes removes every volume that carries the label of the
-// compose project, whether or not the install's docker-compose.yml declares
-// it. `down --volumes` removes only the declared ones: after a rollback to a
-// release from before the HTTPS manager the file lacks tls_request (which
-// holds the request for the HTTPS setting, with the private key of an own
-// certificate), tls_result and caddy_admin. It returns the names it removed
-// (those `down` left), and the error that stopped it.
-func (o *ops) removeProjectVolumes(ctx context.Context, dir string) ([]string, error) {
-	out, err := o.run(ctx, dir, "volume", "ls", "--quiet", "--filter", "label=com.docker.compose.project="+composeProject)
-	if err != nil {
-		return nil, fmt.Errorf("docker volume ls failed: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-	var names []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if line = strings.TrimSpace(line); projectVolumeRe.MatchString(line) {
-			names = append(names, line)
-		}
-	}
-	if len(names) == 0 {
-		return nil, nil
-	}
-	if out, err := o.run(ctx, dir, append([]string{"volume", "rm"}, names...)...); err != nil {
-		return nil, fmt.Errorf("docker volume rm %s failed: %w: %s", strings.Join(names, " "), err, strings.TrimSpace(string(out)))
-	}
-	return names, nil
 }
 
 // dirOnly parses the --dir flag of start/stop/restart/backup and checks the

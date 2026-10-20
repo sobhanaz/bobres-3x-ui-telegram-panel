@@ -17,6 +17,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [HTTPS certificates](https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; browsers refuse the dashboard after a change |
 | [Restore a backup](restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
+| [Uninstall and start over](uninstall.md) | Take BOBRES off a server so that it is as on day one (with a final backup), move the store to another server, or start again from nothing |
 | [Releases and update channels](releases.md) | Publish a stable or beta release, re-sign a quiet stable channel (signatures expire after 45 days), or move a store between stable and beta |
 | [Monitoring](monitoring.md) | The Monitoring page has no server figures, a monitoring alert arrived (disk, memory, a container, the collector, CI of `main`), or you want host monitoring off |
 
