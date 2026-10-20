@@ -40,8 +40,8 @@ license server is built but still has to be deployed by the owner. What is left 
   yet verified on real devices.
 - A Telegram Mini App store at `/app/`, on for every store: the bot opens it from a Store button and Telegram's menu
   button. Plans, buying, services, renewals, the wallet, the free trial, invites and support, paid with the wallet, a
-  gateway, Telegram Stars, or card to card, USDT and a Zarinpal link with a receipt. It is not yet checked against a
-  real Telegram.
+  gateway, Telegram Stars, or card to card, USDT and a Zarinpal link with a receipt. It follows the store's rules as
+  the bot does (bans, maintenance, the required channel). It is not yet checked against a real Telegram.
 
 **Resellers, in the bot and the Mini App**
 - A reseller panel: buy for customers at the tier's prices, on credit up to a limit; name and find their services;

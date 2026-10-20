@@ -87,7 +87,8 @@ included, a one-time dashboard login link.
   Staff, the configured owner, `/paysupport`, payment checks and receipts of payments under way still work.
 - **Required channel:** customers join it before using the bot (a join button and an "I've joined" check). Members
   are remembered for 10 minutes; if Telegram cannot answer, users are let in. Staff and a newcomer's `/start` and
-  language choice are never blocked.
+  language choice are never blocked. The Mini App holds the same rule, with the same exemptions and the same choice
+  when Telegram cannot answer ([17-mini-app.md](17-mini-app.md), "The required channel").
 - **Limits:** taps and messages per 10 seconds, support messages per day.
 - **Staff alerts:** new payments to review, new tickets, failed deliveries and (optionally) every sale, to every owner the
   server names (`BOBRES_ADMIN_TELEGRAM_ID` lists one or several), or to every owner and admin. "Payment taken but not recorded" is always sent. The **daily sales summary** (off until the
