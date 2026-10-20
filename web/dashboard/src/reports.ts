@@ -203,23 +203,6 @@ export function byCurrency<T extends { currency: string }>(rows: T[], currency: 
   return rows.filter((r) => r.currency === currency)
 }
 
-export interface Bar {
-  date: string
-  value: number
-  /** height as a share of the tallest bar, 0 to 100 */
-  pct: number
-  partial: boolean
-}
-
-/** bars are one currency's revenue per period, for a chart scaled to that
- * currency alone (a period with nothing is a bar of height 0, so the chart has
- * no gaps). */
-export function bars(summary: ReportSummary, currency: string): Bar[] {
-  const values = summary.buckets.map((b) => b.currencies[currency]?.revenue ?? 0)
-  const max = Math.max(0, ...values)
-  return summary.buckets.map((b, i) => ({ date: b.date, value: values[i], pct: max > 0 ? (values[i] * 100) / max : 0, partial: b.partial }))
-}
-
 /** share is a part of a total, in whole percent (0 when the total is 0). */
 export function share(part: number, total: number): number {
   return total > 0 ? Math.round((part * 100) / total) : 0
