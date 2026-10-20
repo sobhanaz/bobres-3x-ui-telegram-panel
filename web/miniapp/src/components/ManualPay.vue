@@ -15,7 +15,11 @@ import { haptic, openLink, openTelegram } from '../telegram'
 import CopyField from './CopyField.vue'
 import ReceiptPicker from './ReceiptPicker.vue'
 
-const props = withDefaults(defineProps<{ intent: Intent; checking: boolean; message: string; showLeave?: boolean }>(), { showLeave: true })
+// reopened: the customer took this payment up again from their list of payments waiting for a receipt (they may have paid already)
+const props = withDefaults(defineProps<{ intent: Intent; checking: boolean; message: string; showLeave?: boolean; reopened?: boolean }>(), {
+  showLeave: true,
+  reopened: false,
+})
 const emit = defineEmits<{ check: [quiet?: boolean]; leave: [] }>()
 
 const provider = computed(() => props.intent.provider)
@@ -107,6 +111,7 @@ async function send() {
 
   <section v-else class="card pay">
     <h2>{{ tr(('method.' + provider) as Key) }}</h2>
+    <p v-if="reopened" class="muted">{{ tr('manual.reopened') }}</p>
 
     <template v-if="provider === 'manual_card'">
       <p>{{ tr('manual.card_send') }}</p>

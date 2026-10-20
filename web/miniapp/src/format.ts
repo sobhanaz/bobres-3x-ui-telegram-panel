@@ -55,6 +55,21 @@ export function dateTime(unix: number, lang: Lang): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(unix * 1000))
 }
 
+/**
+ * ago says how long before nowMs a time was, in the customer's language and digits ("5 minutes ago", "yesterday",
+ * "۳ روز پیش"): minutes up to an hour, hours up to a day, then days. A time that has not come yet (a clock that is off) is "now".
+ */
+export function ago(unix: number, nowMs: number, lang: Lang): string {
+  const rtf = new Intl.RelativeTimeFormat(numberLocale(lang), { numeric: 'auto' })
+  const seconds = Math.max(0, Math.floor(nowMs / 1000 - unix))
+  if (seconds < 60) return rtf.format(0, 'second')
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return rtf.format(-minutes, 'minute')
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return rtf.format(-hours, 'hour')
+  return rtf.format(-Math.floor(hours / 24), 'day')
+}
+
 /** latinDigits turns Persian and Arabic-Indic digits into 0-9 (typed amounts). */
 export function latinDigits(s: string): string {
   return s.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))

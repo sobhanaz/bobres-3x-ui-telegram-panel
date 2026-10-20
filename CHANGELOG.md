@@ -8,6 +8,19 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Telegram Mini App
+- **A manual payment left half-way can be taken up again.** When Telegram reloaded the app (or the customer closed it)
+  between paying at the bank and sending the receipt, the screen that showed the card, the addresses or the link and
+  took the proof was gone, and reopening a plan made a new order. The Wallet tab now lists the customer's manual payments
+  that still wait for their receipt ("Payments waiting for your receipt", the newest 10): the method, whether it is for
+  a purchase or a top-up, the amount, the payment reference and how long ago it began, with a **Send the receipt**
+  button that opens the same payment screen again and ends in the existing proof call. In Persian and English.
+- New call `GET /api/mini/v1/payments/pending`, served in maintenance like the proof call and counted in the usual
+  limits. It lists only the signed-in customer's own manual payments that are still pending, of a method the store
+  still offers and, when they have an order, of an order that still waits for payment; it takes nothing from the
+  request, and shows the price the payment has and the card, addresses or link the store has now. It uses the payments
+  service's existing history filter: no database migration, no change to the services' calls.
+
 ## [0.6.0] — 2026-10-20
 
 The Telegram Mini App is on by default and now reaches most of what the bot does (the free trial, invites, support,

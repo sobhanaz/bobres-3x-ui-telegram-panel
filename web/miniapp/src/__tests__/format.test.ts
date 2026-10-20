@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bytes, daysLeft, exactMoney, isolate, latinDigits, money, newKey, num, wholeNumber } from '../format'
+import { ago, bytes, daysLeft, exactMoney, isolate, latinDigits, money, newKey, num, wholeNumber } from '../format'
 
 describe('format', () => {
   it('writes numbers with Persian digits for fa', () => {
@@ -45,6 +45,27 @@ describe('format', () => {
     const now = Date.UTC(2026, 0, 1)
     expect(daysLeft(now / 1000 + 3 * 86400, now)).toBe(3)
     expect(daysLeft(now / 1000 - 2 * 86400, now)).toBe(-2)
+  })
+
+  it('says how long ago something was, in minutes, hours and days, in either language', () => {
+    const now = Date.UTC(2026, 0, 10, 12)
+    const before = (seconds: number) => now / 1000 - seconds
+    expect(ago(before(5), now, 'en')).toBe('now')
+    expect(ago(before(59), now, 'en')).toBe('now')
+    expect(ago(before(60), now, 'en')).toBe('1 minute ago')
+    expect(ago(before(5 * 60 + 30), now, 'en')).toBe('5 minutes ago')
+    expect(ago(before(59 * 60 + 59), now, 'en')).toBe('59 minutes ago')
+    expect(ago(before(3600), now, 'en')).toBe('1 hour ago')
+    expect(ago(before(23 * 3600 + 3599), now, 'en')).toBe('23 hours ago')
+    expect(ago(before(86400), now, 'en')).toBe('yesterday')
+    expect(ago(before(3 * 86400 + 100), now, 'en')).toBe('3 days ago')
+    expect(ago(before(45 * 86400), now, 'en')).toBe('45 days ago')
+    // a clock that is behind the server's is not a time in the future
+    expect(ago(before(-3600), now, 'en')).toBe('now')
+    // Persian digits and words
+    expect(ago(before(3 * 3600), now, 'fa')).toBe('۳ ساعت پیش')
+    expect(ago(before(3 * 86400), now, 'fa')).toBe('۳ روز پیش')
+    expect(ago(before(86400), now, 'fa')).toBe('دیروز')
   })
 
   it('makes distinct valid request keys', () => {

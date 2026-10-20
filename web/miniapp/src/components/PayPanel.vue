@@ -11,7 +11,10 @@ import { isManual } from '../pay'
 import ManualPay from './ManualPay.vue'
 import StarsPay from './StarsPay.vue'
 
-const props = withDefaults(defineProps<{ intent: Intent; checking: boolean; message: string; showLeave?: boolean }>(), { showLeave: true })
+const props = withDefaults(defineProps<{ intent: Intent; checking: boolean; message: string; showLeave?: boolean; reopened?: boolean }>(), {
+  showLeave: true,
+  reopened: false,
+})
 // check: the customer says they paid (quiet: nobody asked, so say nothing if it is not seen yet); leave: they are done here
 // (a screen that has its own way out says showLeave is false).
 defineEmits<{ check: [quiet?: boolean]; leave: [] }>()
@@ -44,6 +47,7 @@ async function copy() {
     :checking="checking"
     :message="message"
     :show-leave="showLeave"
+    :reopened="reopened"
     @check="(quiet) => $emit('check', quiet)"
     @leave="$emit('leave')"
   />

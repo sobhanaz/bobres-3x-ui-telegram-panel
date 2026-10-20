@@ -1,6 +1,6 @@
 // Formatting in the current language, for templates.
 import { lang, planName as pickName, tr, type Key } from './i18n'
-import { bytes, date, dateTime, exactMoney, money, num } from './format'
+import { ago, bytes, date, dateTime, exactMoney, money, num } from './format'
 import type { Plan } from './api'
 
 export const fmtMoney = (amount: number, currency: string, scale: number) => money(amount, currency, scale, lang.value)
@@ -10,6 +10,8 @@ export const fmtBytes = (n: number) => bytes(n, lang.value)
 export const fmtDate = (unix: number) => date(unix, lang.value)
 export const fmtDateTime = (unix: number) => dateTime(unix, lang.value)
 export const fmtNum = (n: number) => num(n, lang.value)
+/** fmtAgo is how long ago a time was (unix seconds), by the device's clock. */
+export const fmtAgo = (unix: number) => ago(unix, Date.now(), lang.value)
 export const nameOf = (p: Plan) => pickName(p.names, lang.value)
 
 /** planFacts: "30 days · 50 GB" for a plan. */

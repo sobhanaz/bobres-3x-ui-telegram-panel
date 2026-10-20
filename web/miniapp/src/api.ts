@@ -94,6 +94,11 @@ export interface Intent {
   /** manual USDT: what to send, in micro-USDT (6 decimals) */
   usdt_amount?: number
 }
+/**
+ * PendingPayment is one of the customer's manual payments that still waits for its receipt (GET /payments/pending): what
+ * the call that started it answered, so the same payment screen can be drawn again, and when it began (unix seconds).
+ */
+export interface PendingPayment extends Intent { created_at: number }
 /** label names a new service a reseller buys for a customer (core ignores it for anyone else). */
 export interface OrderRequest { plan_id: string; type?: string; subscription_id?: string; discount_code?: string; key?: string; label?: string }
 
@@ -172,6 +177,8 @@ export const api = {
   pay: (id: string, method: string) => call<Intent>('POST', `/orders/${id}/pay`, { method }),
   topup: (amount: number, method: string, key: string) => call<Intent>('POST', '/topup', { amount, method, key }),
   checkPayment: (id: string) => call<{ intent_id: string; status: string; order_id: string; failure_reason: string }>('POST', `/payments/${id}/check`, {}),
+  /** pendingPayments lists the customer's own manual payments that still wait for their receipt, newest first. */
+  pendingPayments: () => call<{ payments?: PendingPayment[] }>('GET', '/payments/pending').then((r) => r.payments ?? []),
   /** sendReceipt sends the receipt image of a manual payment, with the bank's tracking number; the payment then waits for staff. */
   sendReceipt: (id: string, receipt: Blob, filename: string, reference: string) => {
     const form = new FormData()
