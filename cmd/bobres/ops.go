@@ -75,6 +75,9 @@ type ops struct {
 	// gatewayState is the state of the install's gateway container, "" when
 	// there is none (nil: caddyState, which asks Docker).
 	gatewayState func(ctx context.Context) string
+	// monitor puts the host monitoring units in place and takes them away
+	// (nil: the machine's systemd is left alone, as in tests).
+	monitor *monitorHost
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
@@ -97,9 +100,10 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 			cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr = dir, in, w, errOut
 			return cmd.Run()
 		},
-		freeGB: freeDiskGB,
-		sleep:  time.Sleep,
-		now:    time.Now,
+		freeGB:  freeDiskGB,
+		sleep:   time.Sleep,
+		now:     time.Now,
+		monitor: newMonitorHost(),
 	}
 }
 
@@ -348,6 +352,13 @@ func (o *ops) uninstallCmd(args []string) int {
 	if out, err := o.run(ctx, *dir, cargs...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose down failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
+	}
+	// The collector has nothing to look at once the containers are gone, and its
+	// units point into the install directory.
+	if o.monitor != nil {
+		if _, err := o.monitor.removeUnits(ctx, *dir); err != nil {
+			fmt.Fprintf(o.errOut, "warning: the host monitoring units were not removed: %v\n", err)
+		}
 	}
 	if !*purge {
 		fmt.Fprintf(o.out, "Containers removed. Kept: the database and Redis volumes (%s_*), certificates, and %s (run `bobres install` to start again, or `bobres uninstall --purge` to delete everything).\n",

@@ -22,6 +22,11 @@
 #   service that can), makes Caddy load them through its admin socket (volume caddy_admin: only
 #   caddy and the agent mount it) and answers in a result file (volume tls_result, the agent writes,
 #   core reads). Caddy reads ./caddy (its main Caddyfile) and ./tls read-only.
+# Host monitoring (the dashboard's Monitoring section, `bobres monitor`)
+#   A root helper on the host writes <install>/run/monitor/snapshot.json every 30 seconds (two systemd
+#   units that `bobres install` and `bobres update` put in place). Core mounts that directory read-only
+#   and reads the file, whose fields are allow-listed and which it validates again. No container gets
+#   the Docker socket.
 # Profiles
 #   backup  : the backup service. `bobres install` turns it on (COMPOSE_PROFILES=backup in .env)
 #             when the install runs images that have it and off when they do not, so an
@@ -193,11 +198,18 @@ services:
       BOBRES_BACKUP_URL: ${BOBRES_BACKUP_URL:-}
       # What core presents to the backup service: its own token for that one service.
       BOBRES_BACKUP_TOKEN: ${BOBRES_TOKEN_CORE_BACKUP:-}
+      # Where core reads the host snapshot for the dashboard's Monitoring section (the mount below).
+      BOBRES_MONITOR_DIR: /run/bobres-monitor
     volumes:
       # Core's request to the tls-agent (read-write), and the agent's answer (read-only). Core mounts
       # nothing of Caddy's: neither the admin socket nor the TLS files.
       - tls_request:/request
       - tls_result:/tls-result:ro
+      # The host monitoring snapshot, READ-ONLY. `bobres monitor snapshot`, a root helper that a systemd
+      # timer runs every 30 seconds (docs/06-installer.md, "Host monitoring"), writes snapshot.json there.
+      # It is all core knows of the machine and of Docker: core has no Docker socket and never gets one.
+      # `bobres install` makes the directory first, so that Docker does not make it as root.
+      - ./run/monitor:/run/bobres-monitor:ro
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend]

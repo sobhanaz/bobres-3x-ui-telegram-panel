@@ -232,9 +232,10 @@ func TestComposeHTTPSMounts(t *testing.T) {
 		t.Errorf("the tls-agent mounts tls_result at %s (read-only %v), want %s read-write", m.target, m.readOnly, tlsconf.AgentResultDir)
 	}
 
-	// Core in particular: nothing of Caddy's.
+	// Core in particular: nothing of Caddy's. The one place of the install it reads is the host
+	// monitoring snapshot, read-only (compose_monitor_test.go).
 	for _, m := range serviceMounts(t, "core") {
-		if m.source == "caddy_admin" || strings.HasPrefix(m.source, "./") {
+		if m.source == "caddy_admin" || (strings.HasPrefix(m.source, "./") && !(m.source == "./run/monitor" && m.readOnly)) {
 			t.Errorf("core mounts %s: it must not reach Caddy's admin socket or the install's files", m.source)
 		}
 	}
@@ -492,7 +493,16 @@ func TestDockerComposeReadsTheHTTPSMountsTheSame(t *testing.T) {
 		for _, v := range project.Services[svc].Volumes {
 			src := v.Source
 			if v.Type == "bind" {
-				src = "./" + filepath.Base(src)
+				// Relative to the project directory, as the file writes it ("./tls", "./run/monitor").
+				real, err := filepath.EvalSymlinks(dir)
+				if err != nil {
+					real = dir
+				}
+				rel, err := filepath.Rel(real, src)
+				if err != nil {
+					rel = filepath.Base(src)
+				}
+				src = "./" + filepath.ToSlash(rel)
 			}
 			got = append(got, mount{src, v.Target, v.ReadOnly})
 		}

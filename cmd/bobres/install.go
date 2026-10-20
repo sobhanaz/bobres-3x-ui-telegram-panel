@@ -66,6 +66,8 @@ type installer struct {
 	survive func()
 	// botName is the bot's username once Telegram has said it.
 	botName string
+	// monitor puts the host monitoring collector in place (nil: the real machine).
+	monitor *monitorHost
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -88,6 +90,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		sleep:     time.Sleep,
 		runLines:  streamDocker,
 		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
+		monitor: newMonitorHost(),
 	}
 	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
 		ins.logPath = p
@@ -470,6 +473,7 @@ func (ins *installer) runInstall(args []string) int {
 		return 1
 	}
 	fmt.Fprintf(ins.out, "Wrote %s (.env is readable by root only).\n", *dir)
+	ins.ensureMonitor(ctx, *dir, env, notes)
 	if *noStart {
 		for _, k := range []string{stepPull, stepStart, stepHealthy, stepHarden} {
 			ins.prog.Skip(k, "--no-start")
@@ -514,6 +518,30 @@ func (ins *installer) runInstall(args []string) int {
 		ins.summary(env, *dir)
 	}
 	return 0
+}
+
+// ensureMonitor makes the install ready for host monitoring: the snapshot
+// directory core mounts, and the collector's two systemd units where the
+// machine can run them. It never stops an install: what cannot be done is a
+// warning (or a note), and `sudo bobres monitor enable` does it later.
+func (ins *installer) ensureMonitor(ctx context.Context, dir string, env map[string]string, notes io.Writer) {
+	h := ins.monitor
+	if h == nil {
+		// No host to change (a test): the directory core mounts is still made.
+		if err := ensureMonitorDirs(dir); err != nil {
+			fmt.Fprintf(ins.errOut, "warning: the monitoring directory was not made: %v\n", err)
+		}
+		return
+	}
+	o := h.ensure(ctx, dir, env)
+	switch {
+	case o.Err != nil:
+		fmt.Fprintf(ins.errOut, "warning: host monitoring was not put in place (%v): the install goes on; sudo bobres monitor enable tries again.\n", o.Err)
+	case o.State == "installed" || o.State == "updated":
+		fmt.Fprintf(notes, "Host monitoring: the snapshot timer %s (%s, every 30 seconds). Turn it off for good: sudo bobres monitor disable\n", o.State, monitorTimer)
+	case o.State == "skipped":
+		fmt.Fprintf(notes, "Host monitoring was not put in place: %s.\n", o.Why)
+	}
 }
 
 // ownerLogin is the owner's one-time dashboard login (see core's

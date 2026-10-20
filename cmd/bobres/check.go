@@ -56,10 +56,12 @@ type checker struct {
 	webhook func(ctx context.Context, token, root string) (webhookInfo, error)
 	// stateDir holds the release state install.sh records.
 	stateDir string
+	// monitor reads the host monitoring units' state (nil: only the snapshot is looked at).
+	monitor *monitorHost
 }
 
 func newChecker(o *ops) *checker {
-	return &checker{o: o, getMe: botUsername, webhook: telegramWebhook, stateDir: defaultStateDir()}
+	return &checker{o: o, getMe: botUsername, webhook: telegramWebhook, stateDir: defaultStateDir(), monitor: newMonitorHost()}
 }
 
 // checkCmd runs every check of the install: this host's side (settings,
@@ -131,6 +133,7 @@ func (c *checker) all(ctx context.Context, dir string, env map[string]string) []
 	rs = append(rs, c.coreResults(ctx, dir)...)
 	rs = append(rs, hostTLSResults(ctx, o, dir, env["BOBRES_DOMAIN"])...)
 	rs = append(rs, checkBackupAge(listBackups(filepath.Join(dir, "backups")), now))
+	rs = append(rs, monitorResult(ctx, c.monitor, dir, env, now))
 	rs = append(rs, checkReleaseExpiry(c.stateDir, now))
 	rs = append(rs, c.botResults(ctx, env)...)
 	return rs
