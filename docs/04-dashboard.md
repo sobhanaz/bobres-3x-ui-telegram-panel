@@ -3,7 +3,8 @@
 Stack: Vue 3 + Vite + TypeScript (embedded in `core` via embed.FS), JSON API on `core`, behind the gateway. See PLAN.md §12. Branded per install (logo, colors, name).
 Sessions: secure cookie, CSRF. Login with a one-time link from the bot (or `bobres admin link`), or with a password that always needs a TOTP code. The owner can also sign in with no Telegram at all: the installer (or `bobres admin password`) issues a random initial password for the login `owner`; it opens a restricted session where only My account works (a forced screen to choose a new password and turn on 2FA, with no menu), and the rest of the dashboard follows once the first code is confirmed (see 06-installer.md, Owner login without Telegram).
 Decisions, milestones and status: `superpowers/specs/2026-10-07-phase4-dashboard-design.md`. All 17 pages below are
-built (Phase 4, 2026-10-12), and page 18, Reports, was added after v0.1.1; the few parts that are not built are marked.
+built (Phase 4, 2026-10-12), and page 18, Reports, was added after v0.1.1; the few parts that are not built are marked. Page 19, Monitoring,
+is built on the server side (the API below, the collector, the alerts); its page in this dashboard comes with a later change.
 
 ## Roles and permissions
 | Role | Scope |
@@ -49,6 +50,206 @@ Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban)
 16. **System (owner and admin):** tabs. *Health*: every service (core, bot, payments, provisioner, backup) with its version, health and readiness checks, a warning when versions differ, and the 3x-ui servers and payment methods. *License*: what applies now (the free tier, the 30-day trial with its days left, or the license's tier) with whom to contact to buy or renew a license (the owner's `BOBRES_SELLER_CONTACT`, or "ask the seller you got BOBRES from" when none is set); the installed token's state (none, invalid with the reason, active, grace, expired), tier, ids, dates and days left, the domain and install binding, this install's id to copy, and each entitlement in effect with its use (a warning from 90%); the owner pastes or opens a token, checks it, and saves it with a reason, or activates one with a license key from the seller (05-license.md). *Updates*: the running and newest versions, with a **Check again** button (the bot looks at GitHub now and the page shows the result, including why a look failed), the update channel, and **Update now**. The channel is the owner's choice (stable, or beta which includes pre-releases; saved as the `updates.channel` setting, audited as `setting.set`; unset, the server's `BOBRES_UPDATE_CHANNEL` decides) and changing it makes the bot look again at once. **Update now** (the owner; `system.write`) opens a confirmation that names the versions and channel, says the dashboard and the bot are away for a few minutes while customers' VPN links keep working, and that a backup comes first and the update goes back on its own if the new version does not come up healthy; a pre-release needs its own tick, and an owner with a password login and an authenticator app gives a current code (as for replacing the password). Core never touches Docker: it records the request (audit `system.update.requested`, a Telegram notice to every owner) and writes `request.json` into a folder it shares with the host's updater (a systemd path unit, `bobres-updater.path`, installed by `bobres install` and `bobres update`), which runs the same signed, backed-up, rolling-back `bobres update` as the command line. The page then shows the steps (verify, backup, pull, restart, health check), the updater's sentence and, for the owner, the newest log lines; it says so and keeps trying while core restarts, and offers to reload the dashboard when the new version is up. The outcome (done, failed, rolled back, or never picked up) is audited and sent to every owner. Where the updater is not installed yet (an install from before it, or the folder not mounted) the page says updating from the dashboard is not available yet and keeps the `sudo bobres update` command to copy. An informational note shows when the newest release is newer than the license's update date (the update is offered all the same: security updates are never withheld). *Backups*: each backup with its size, Telegram delivery and off-site copy, a button to run one now, and the off-site storage's state. *HTTPS*: how each address the store is served on (the domain, the server's IP address, the Zarinpal domain) gets its certificate, with the issuer, expiry, whether browsers trust it, the live error and the HTTPS applier's last result (and a red line, "HTTPS gateway (Caddy) is not reachable", when Caddy answers on none of them); the owner switches between the domain's automatic certificate, a Let's Encrypt certificate for the server's IP address and an own certificate and key, with the warnings of each mode (`system.write`, audited as `system.tls.set`; the runbook is runbooks/https.md). *Logs* (owner only): the newest warnings and errors of every service, redacted. The Health tab also lists the open system problems. Restoring a backup is CLI only (`bobres restore`). Without a valid license the install runs on the free tier after its trial, and its limits refuse only new servers, services, staff, resellers and payment methods (a refusal names the limit and says to buy or renew a license); staff who see this page get a small chip in the top bar for the free tier, the trial (with its days left) or a license that needs a look. "Powered by BOBRES" shows at the foot of the dashboard and the login page on every install except one whose license includes white label.
 17. **Audit log:** filterable, exportable.
 18. **Reports** (`reports.read`: owner and admin; support has neither the page nor the revenue cards of the Overview, while single orders' amounts stay visible to support through Orders by design): revenue per day, week or month for a range (today, last 7 or 30 days, this month, last month, or two dates), always per currency (never summed), with paid orders (new, renewals, traffic packages), new customers, free trials, churn (services and customers lost after a 7-day grace period, and the services still inside it; trials, unlimited services and pending renewals are not counted), wallet top-ups, refunds, payments rejected by staff, failed or expired gateway payments and cancelled orders; a revenue chart per currency, the top plans and how orders were paid (wallet, staff-approved, gateway, each split by the provider that took the payment: Zarinpal, Stars, automatic USDT, card to card...); CSV files of the summary and of the paid orders, audited as `export.reports` with their outcome. A Calendar switch picks Gregorian (weeks from Monday, calendar months) or Jalali (weeks from Saturday, Jalali months named by month and year), and every date of the page follows it, in both directions: the days covered, the charts, the table, the custom range (dates typed or picked from a month grid in the calendar shown, converted exactly to the Gregorian days the API takes) and the CSV files' extra Jalali date column and names. The choice is kept in the browser; until one is made it is Jalali in Persian and Gregorian in English. All in the store's time zone (the Settings page, else `BOBRES_TIMEZONE`, else Asia/Tehran). A line under the hint says whether the daily summary in Telegram is on, at what time and in which zone, and links to its settings for staff who may change settings. Every number is defined in [14-reports.md](14-reports.md).
+19. **Monitoring** (`monitor.read`: owner and admin, read only; support has no access): one overview of the whole store and the server it runs on, built from what core samples every 30 seconds (the full contract, with every JSON field, is in [Monitoring API](#monitoring-api) below). Sections: **Status** (a banner: `ok`, `degraded` or `down`, and the components with their state, version and uptime: the services core asks, the database, Redis, Caddy and the TLS agent, the server, every 3x-ui panel, every payment gateway that is on, the backups, the host collector and the CI of the main branch); **Server** (CPU, load, memory, swap, every disk, network traffic, uptime, OS, kernel, Docker's version and what it keeps on the disk, with graphs for 1 hour to 30 days); **Containers** (state, health, restarts, CPU, memory, network, with graphs per container) and **Kubernetes pods** (only where `kubectl` or `k3s` finds a cluster; "not detected" otherwise); **Store** (open alerts, errors in the last hour, pending orders and payments, the provisioning queue, the event backlog, open tickets, active services, customers, the bot's updates per minute, errors per minute, core's goroutines, memory and database connections and size); **CI/CD** (the latest runs of the repository's workflows on `main`, the Release workflow's runs, the latest releases and the **deployment history**: updates asked for on the System page and updates run by hand on the server); **Events** (the newest warnings and errors in one list: the watchdog's alerts raised and fixed, the error lines of the host's journal, and, for the owner only, the lines the services logged, as on the System page's logs tab). The host figures, the containers and the host's journal need the **host collector** (`bobres monitor`, a root timer on the server that is on by default, [06-installer.md](06-installer.md) "Host monitoring"); without it the page still shows everything core can ask itself and says so: `host.available` is `false`, never zeros. The graphs have a gap where nothing was sampled. **Settings → Monitoring** has the switch (`monitor.enabled`, on) and the alert thresholds (`monitor.disk_pct` 85, `monitor.mem_pct` 90, `monitor.mem_minutes` 10, `monitor.restarts` 3, `monitor.collector_minutes` 5, `monitor.ci_alert` off). The alerts reach the staff on Telegram and the System page's open problems like every other alert ([runbooks/monitoring.md](runbooks/monitoring.md)).
+
+## Monitoring API
+
+Four read-only endpoints under `/api/v1/monitor/`, the dashboard's usual session cookie (no CSRF token, they are `GET`s), the
+permission `monitor.read` (owner and admin; support gets `403 {"error":"forbidden"}`), `Cache-Control: no-store`, and `503
+{"error":"not_configured"}` when this build of core was started without the monitor. A request that is wrong is `400
+{"error":"invalid","message":"..."}`; nothing here writes. Every list is a list (`[]`, never `null`); a figure core does not
+know is `null` or absent (`"available": false`), never `0`. Times are unix seconds; sizes are bytes; rates are per second.
+
+### `GET /api/v1/monitor/overview`
+
+Everything the page draws, in one answer. It costs one asking of the other services at most every 10 seconds however many pages are open
+(the answer is shared), so a page may poll every 15 to 30 seconds.
+
+```json
+{
+  "generated_at": 1792500000,
+  "status": "degraded",
+  "components": [
+    {"id": "core", "name": "Core", "kind": "service", "status": "ok", "detail": "answers in 2 ms", "version": "0.7.0", "uptime_s": 86400, "since": 1792413600},
+    {"id": "bot", "name": "Telegram bot", "kind": "service", "status": "ok", "detail": "answers in 4 ms", "version": "0.7.0", "uptime_s": 86300, "since": 1792413700},
+    {"id": "postgres", "name": "Postgres", "kind": "datastore", "status": "ok", "detail": "answers in 1 ms, 84.2 MiB of data", "version": "16-alpine", "uptime_s": 864000, "since": 1791636000},
+    {"id": "redis", "name": "Redis", "kind": "datastore", "status": "ok", "detail": "running, healthy", "version": "7-alpine", "uptime_s": 864000, "since": 1791636000},
+    {"id": "caddy", "name": "Caddy (web gateway)", "kind": "service", "status": "warn", "detail": "running, but its health check fails", "version": "2.11.7-alpine", "uptime_s": 600, "since": 1792499400},
+    {"id": "host", "name": "Server", "kind": "host", "status": "ok", "detail": "cpu 12%, memory 41%, disk / 55%", "version": "Ubuntu 24.04.5 LTS", "uptime_s": 1209600, "since": 1791290400},
+    {"id": "panel.0d7c...", "name": "DE-1", "kind": "panel", "status": "ok", "detail": "212 clients", "version": "2.4.0", "uptime_s": null, "since": null},
+    {"id": "gateway.zarinpal", "name": "zarinpal", "kind": "gateway", "status": "ok", "detail": "offered to customers", "version": "", "uptime_s": null, "since": null},
+    {"id": "collector", "name": "Host collector", "kind": "job", "status": "ok", "detail": "last snapshot 12 seconds ago", "version": "0.7.0", "uptime_s": null, "since": null},
+    {"id": "backups", "name": "Backups", "kind": "job", "status": "ok", "detail": "last backup 3 hours ago", "version": "", "uptime_s": null, "since": 1792489200},
+    {"id": "ci", "name": "CI of main", "kind": "job", "status": "ok", "detail": "the latest CI run on main passed", "version": "", "uptime_s": null, "since": 1792480000}
+  ],
+  "host": {
+    "available": true,
+    "hostname": "srv1",
+    "cpu_pct": 12.5,
+    "load": [0.5, 0.4, 0.3],
+    "cores": 4,
+    "mem": {"used": 3400000000, "total": 8300000000},
+    "swap": {"used": 1048576, "total": 1073741824},
+    "disks": [{"mount": "/", "used": 42949672960, "total": 107374182400, "avail": 59055800320, "pct": 42.1, "roles": ["install"]}],
+    "net": {"rx_bps": 18432.5, "tx_bps": 20211.1},
+    "uptime_s": 1209600,
+    "os": "Ubuntu 24.04.5 LTS",
+    "kernel": "6.8.0-45-generic",
+    "docker": {"ok": true, "version": "29.1.0", "api": "1.52", "error": ""},
+    "clock": {"synchronized": true, "ntp": true},
+    "docker_disk": {"images": 3200000000, "images_reclaimable": 800000000, "containers": 12000000, "volumes": 900000000, "build_cache": 0, "collected_at": 1792499800}
+  },
+  "containers": [
+    {"name": "bobres-core-1", "project": "bobres", "service": "core", "image": "ghcr.io/sobhanaz/bobres-core:0.7.0", "state": "running", "health": "healthy",
+     "restarts": 0, "started_at": 1792413600, "cpu_pct": 3.2, "mem_bytes": 91750400, "mem_limit": 536870912, "net_rx_bytes": 123456, "net_tx_bytes": 234567,
+     "oom_killed": false, "exit_code": null}
+  ],
+  "kubernetes": {"detected": false, "reason": "not detected", "nodes": [], "pods": [], "truncated": false},
+  "counters": {"open_alerts": 1, "errors_1h": 3, "orders_pending": 2, "payments_pending": 1, "provision_queue": 0, "outbox_backlog": 0,
+               "tickets_open": 4, "services_active": 212, "customers_total": 640},
+  "ci": {
+    "available": true, "checked_at": 1792499900, "error": "", "detail": "", "repo": "sobhanaz/bobres-3x-ui-telegram-panel",
+    "runs": [{"workflow": "CI", "branch": "main", "event": "push", "status": "completed", "conclusion": "success", "url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/actions/runs/1", "sha": "abc1234", "at": 1792480000}],
+    "release_runs": [{"workflow": "Release", "branch": "v0.7.0", "event": "push", "status": "completed", "conclusion": "success", "url": "https://github.com/...", "sha": "def5678", "at": 1792300000}],
+    "latest_release": {"tag": "v0.7.0", "published_at": 1792300500, "prerelease": false, "url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/tag/v0.7.0"},
+    "rate_reset_at": 0, "main_failing": false
+  },
+  "collector": {"installed": true, "fresh": true, "age_s": 12, "error": "", "version": "0.7.0", "generated_at": 1792499988, "interval_s": 30, "duration_ms": 180, "notes": []},
+  "deployments": [
+    {"id": "5f1c...", "from": "0.6.1", "to": "0.7.0", "channel": "stable", "at": 1792300600, "finished_at": 1792300780, "outcome": "done", "source": "dashboard", "by": "Sam", "message": ""}
+  ]
+}
+```
+
+**`status`** is the stack at a glance, computed by these rules: `down` when a **required** component is `down` (`core`, `bot`,
+`payments`, `provisioner`, `postgres`); otherwise `degraded` when any other component is `warn` or `down`, or an alert at the
+critical level is open; otherwise `ok`. A component whose state is `unknown` never worsens it (a server that was never checked,
+a collector that is not installed).
+
+**`components[]`**: `id` is stable (a page may translate it), `name` is its English label, `detail` a short sentence, `version`
+`""` when not known, `uptime_s` and `since` (when it started) `null` when not known.
+
+| `kind` | ids | `ok` / `warn` / `down` / `unknown` |
+|---|---|---|
+| `service` | `core`, `bot`, `payments`, `provisioner`, `backup` (only where installed): the services core asks at `/healthz` and `/readyz`; `caddy`, `tls-agent` and any other Compose service of the install, from the containers (only while the collector's snapshot is fresh) | `ok` answers; `warn` alive but not ready (`detail` names the failing check), running with a failing Docker health check, paused, or running another version than core; `down` does not answer, not running, restarting in a loop, or listed by Compose with no container; `unknown` not configured |
+| `datastore` | `postgres` (core pings it and says how big it is), `redis` (from its container) | as above |
+| `host` | `host` | `warn` when a disk or the memory is past its alert threshold (`detail` says which); `unknown` while the collector says nothing |
+| `panel` | `panel.<server id>` for every 3x-ui server | `ok` answers, `down` does not (`detail` is the server's last error), `unknown` never checked |
+| `gateway` | `gateway.<provider>` for every payment gateway that is switched on (`zarinpal`, `idpay`, `nextpay`, `usdt_auto`) | `ok` offered to customers; `warn` switched on but not offered, or its settings have a problem. This is the state the payments service reports, not a live call to the provider |
+| `job` | `collector` (the host collector), `backups` (the newest backup and its age), `ci` (the CI of `main`) | `collector`: `ok` fresh, `warn` it has gone quiet, `unknown` not installed. `backups`: `warn` older than 26 hours or its last run failed, `unknown` none yet. `ci`: `warn` the latest finished CI run on `main` failed, `unknown` GitHub unreachable or no finished run |
+
+**`host`**: when the collector is not installed, is off, or its snapshot is older than 90 seconds, `available` is `false`, `reason`
+says why in a sentence, and every other field is empty (`null`, `0`, `[]`, `""`); show "no data", not zeros. Otherwise: `cpu_pct`
+is the busy share since the previous snapshot (`null` on the first), `load` the 1, 5 and 15 minute averages, `mem.used` is total
+less what a program could still get without swapping, `disks[]` are the filesystems of the install directory and of Docker's
+data root (`pct` is what `df` shows; `roles` says `install` and/or `docker`), `net.rx_bps` and `net.tx_bps` are the real
+interfaces' traffic between two snapshots (`null` until there are two), `docker.ok` is `false` when the engine did not answer
+(`error` says why), `clock.synchronized` and `clock.ntp` are `null` when not known, `docker_disk` is `null` or what `docker
+system df` showed at `collected_at` (it is refreshed every 15 minutes).
+
+**`containers[]`**: every container the engine lists (at most 64), `project` is its Compose project (`bobres` for the stack),
+`state` is `running`, `restarting`, `paused`, `created`, `removing`, `exited`, `dead` or `unknown`, `health` is `none`,
+`starting`, `healthy` or `unhealthy`, `cpu_pct` is the share of one core since the previous snapshot (`null` when unknown),
+`mem_limit` is `0` for no limit, `exit_code` is `null` while it runs. Empty while the host is not available.
+
+**`kubernetes`**: `detected` is `false` where there is no `kubectl` (or `k3s kubectl`) or no cluster answers (`reason` says
+which); otherwise `nodes[]` is `{name, ready, roles, version}` and `pods[]` is `{namespace, name, phase, ready, restarts, node}`
+(at most 32 nodes and 200 pods; `truncated`). BOBRES itself does not run on Kubernetes; this shows a cluster that happens to be on the server.
+
+**`counters`**: `open_alerts` (the watchdog's open problems), `errors_1h` (error lines the services kept in the last hour: what
+their log buffers still hold, at most 500 lines each), `orders_pending` (created or awaiting payment), `payments_pending` (manual
+payments waiting for a review, at most 200), `provision_queue` (paid and not yet delivered), `outbox_backlog` (core events the
+slowest consumer has not read), `tickets_open`, `services_active`, `customers_total`. A figure core could not read is `null`.
+
+**`ci`**: from GitHub's public API through the bot (core has no internet access), cached for about 5 minutes. `available` is `true` when
+there are facts (possibly older ones: then `error` says what is wrong now), `error` is `""`, `not_checked` (the first look has not
+finished), `unreachable` (GitHub or the bot did not answer), `rate_limited` (GitHub's 60 requests an hour per address are used up; `rate_reset_at`
+says when they come back) or `invalid`; `detail` is a sentence. `runs[]` are the newest runs of any workflow on `main` (at most 10, newest first),
+`release_runs[]` the newest runs of the Release workflow (`branch` is the tag it ran for), `latest_release` the newest published release
+(`null` when none), `main_failing` whether the newest finished CI run on `main` failed (`null` when none). Links point into the repository only.
+
+**`collector`**: `installed` (a snapshot file exists), `fresh` (not older than 90 seconds), `age_s`, `error` (`""`, `invalid`, `too_large`
+or `unreadable`: the file cannot be used), `version` (the bobres that wrote it), `notes[]` (the parts the last run could not read).
+
+**`deployments[]`**: the updates of the install, newest first, at most 10. `source` is `dashboard` (asked for on the System page: `by`
+is who, `outcome` is `running` while it is open, then `done`, `failed`, `rolled_back` or `not_started`, `message` the updater's sentence)
+or `cli` (run by hand with `bobres update`, only the newest is known: `outcome` is `unknown`, or `rolled_back` once `bobres rollback`
+used its restore point). `at` is when it began, `finished_at` is `0` while it is open or not known.
+
+### `GET /api/v1/monitor/series?metric=<id>&range=1h|6h|24h|7d|30d`
+
+```json
+{"metric": "host.cpu_pct", "unit": "percent", "step_s": 30, "agg": "avg", "points": [[1792496400, 11.2], [1792496430, 13.8]]}
+```
+
+`range` defaults to `1h`. `points` are `[unix_seconds, value]`, oldest first; each is one bucket of `step_s` seconds (1h: 30, 6h: 60, 24h: 300,
+7d: 1800, 30d: 7200, so at most about 360 points) and its time is the bucket's start. A bucket nobody sampled has **no point**: draw a gap.
+`agg` says how the samples of a bucket became one value: `avg`, `min` (up/down metrics, so any downtime shows) or `max` (counters and queue
+depths). A metric with no data yet is `200` with `"points": []`; a name that is not a metric (or needs a subject it has not got) is `400`.
+Several at once: `metrics=a,b,c` (at most 12) answers `{"range": "1h", "series": [<the object above>, ...]}`; `metric` and `metrics` are not
+combined.
+
+`GET /api/v1/monitor/metrics` lists the metrics that have data, `{"metrics": [{"metric", "unit", "agg"}]}`, so a page can offer this
+install's disks and containers.
+
+| Metric (`<subject>` after a colon) | Unit | What |
+|---|---|---|
+| `host.cpu_pct`, `host.load1`, `host.mem_pct`, `host.swap_pct` | `percent`, `load` | the host (needs the collector) |
+| `host.disk_pct:<mount>` | `percent` | one filesystem, e.g. `host.disk_pct:/var/lib/docker` |
+| `host.net_rx_bps`, `host.net_tx_bps` | `bytes_per_s` | the host's traffic |
+| `container.cpu_pct:<service>`, `container.mem_bytes:<service>`, `container.restarts:<service>` | `percent`, `bytes`, `count` | a Compose service of the stack (`core`, `bot`, `postgres`, ...); a service with several containers is summed (restarts: the largest) |
+| `core.goroutines`, `core.heap_bytes`, `core.db_conns`, `core.db_size_bytes` | `count`, `bytes` | core itself, its database connections in use, the database's size |
+| `core.errors_per_min`, `core.warnings_per_min`, `bot.errors_per_min`, `bot.warnings_per_min`, `bot.updates_per_min` | `per_min` | rates from counters; no value for the round after a restart |
+| `bot.updates_queued`, `bot.goroutines`, `bot.heap_bytes` | `count`, `bytes` | the bot's own gauges |
+| `queue.provisioning`, `queue.outbox`, `queue.pending_orders`, `queue.pending_payments` | `count` | queue depths |
+| `service.up:<name>`, `service.latency_ms:<name>` | `bool`, `ms` | `core`, `bot`, `payments`, `provisioner`, `backup`: `1` answers, `0` does not; latency only while it answers |
+| `panel.up:<server id>`, `gateway.up:<provider>`, `license.ok` | `bool` | `1` healthy, `0` not; `license.ok` is `0` only in the license's grace period |
+
+### `GET /api/v1/monitor/events?level=warn|error&limit=100`
+
+```json
+{"items": [
+   {"at": 1792499000, "level": "warn", "source": "alert", "kind": "alert", "key": "monitor.disk:/", "state": "open",
+    "title": "The disk at / is 88% full (12 GB free).", "detail": "87.8% of 98.0 GiB used"},
+   {"at": 1792498500, "level": "error", "source": "host.docker", "kind": "journal", "title": "level=error msg=\"failed to start\"", "detail": ""},
+   {"at": 1792498000, "level": "error", "source": "bot", "kind": "log", "title": "send failed", "detail": "{\"user_id\":42}"}
+ ],
+ "logs_visible": true, "unreachable": [], "truncated": false}
+```
+
+Newest first. `level=warn` (the default) lists warnings and errors, `level=error` errors only; `limit` is 1 to 200 (default 100); anything else
+is `400`. `source`/`kind`: `alert` (`kind: "alert"`, `key` is the check, `state` is `open` while the problem is open, `closed` for one that was
+raised and has been fixed since, `resolved` for the entry that says it was fixed; `level` is the alert's: `error` for critical, `warn` for
+warning), `host.docker` / `host.bobres` / `host.caddy` (`kind: "journal"`: error lines of the host's journal the collector scrubbed), and
+`core` / `bot` / `payments` / `provisioner` (`kind: "log"`: lines the service logged, with its fields in `detail`). **The log lines carry
+Telegram ids, so only the owner gets them** (`logs_visible` is `false` for an admin, who gets alerts and the journal); `unreachable` names
+the services that did not answer. An alert's `detail` is shown only to those who may read it elsewhere (a gateway's to the owner). All text
+is plain and cut (240 characters; `detail` 200 for a log's fields). `truncated` says more matched than `limit`.
+
+### The alert rules
+
+They run in core's watchdog once a minute, so they have its debounce: seen failing twice in a row, announced, repeated after 6 hours and
+daily, fixed once passing for 5 minutes ([runbooks/README.md](runbooks/README.md)); they go to the staff on Telegram and show in the System
+page's open problems. The keys, thresholds and settings:
+
+| Rule | Key | Fails when | Setting (default, range) |
+|---|---|---|---|
+| Disk | `monitor.disk:<mount>` | a monitored filesystem is fuller than the threshold (critical at 95%) | `monitor.disk_pct` (85, 50 to 99) |
+| Memory | `monitor.memory` | memory use is above the threshold for the whole hold (critical at 98%) | `monitor.mem_pct` (90, 50 to 99), `monitor.mem_minutes` (10, 1 to 120) |
+| Container down | `monitor.container.<service>.down` | a container of the stack is not running (or Compose lists the service with none) for 2 minutes. Not for `core`, `bot`, `payments`, `provisioner` and `backup`: their `service.<name>` checks already say it | |
+| Container unhealthy | `monitor.container.<service>.unhealthy` | its Docker health check fails for 3 minutes | |
+| Container restarting | `monitor.container.<service>.restarting` | it restarted this many times within 15 minutes (the rises of the recorded restart counter) | `monitor.restarts` (3, 2 to 50) |
+| Collector quiet | `monitor.collector` | no snapshot for this long, or the file is unusable (only where the collector was installed: switching it off with `bobres monitor disable` removes its file and the alert) | `monitor.collector_minutes` (5, 2 to 60) |
+| CI of main | `monitor.ci.main` | the newest finished `CI` run on `main` failed | `monitor.ci_alert` (**off**: a store that runs releases does not need to hear about `main`) |
+
+While the snapshot is stale the host rules are not evaluated and their open alerts stay as they are (no evidence is not a recovery);
+`monitor.enabled` off forgets them all without a message. A bot or GitHub that cannot be reached neither raises nor clears the CI alert.
+
+### Storage and retention
+
+Core's own database (`core.monitor_metric`, `core.monitor_series`, migration 00030, [01-database.md](01-database.md)): 30-second samples
+for 7 days, then 5-minute averages for 23 more days (30 days in all), rolled up and pruned by core itself, so a restart or a long
+outage loses nothing and writes a slot twice at most once. About 60 metrics make a few megabytes. The backup carries the history.
 
 ## Non-goals for v1
 No public marketing site, no end-user web portal (users stay in Telegram), no mobile app.

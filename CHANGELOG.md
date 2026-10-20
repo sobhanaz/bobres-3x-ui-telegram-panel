@@ -155,6 +155,44 @@ join (one on the free tier and Standard, any number on Pro).
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 
+### Monitoring: the server, the containers and the stack in one place
+
+A **Monitoring** section for the dashboard: one overview of the whole store and the server it runs on. This is the backend and its API;
+the page itself comes with the dashboard's next change.
+
+**Added.**
+
+- **Host collector.** `bobres monitor snapshot` (a root systemd timer, `bobres-monitor.timer`, every 30 seconds) writes the host's
+  figures (CPU, load, memory, swap, disks, network, uptime), every Docker container (state, health, restarts, CPU, memory, network),
+  Docker's disk use, the error lines of Docker's and BOBRES's journals and of Caddy (scrubbed of tokens, addresses and e-mails), the
+  last update, and, if `kubectl` or `k3s` is on the host, the nodes and pods, into `/opt/bobres/run/monitor/snapshot.json`. It is on by
+  default; `sudo bobres monitor disable` turns it off for good. Core reads the file through a **read-only** mount and treats it as
+  untrusted text; core still has no Docker socket. `bobres check` and `bobres doctor` show a **Host monitor** line.
+- **Core samples** the host, the containers, itself, the queues, the bot, the services, the 3x-ui servers and the gateways every 30
+  seconds into the database (7 days at full resolution, then 5-minute averages up to 30 days, rolled up and pruned by core). A
+  source that is unavailable leaves a gap, never a zero.
+- **API** (owner and admin, read only, permission `monitor.read`): `GET /api/v1/monitor/overview`, `/series`, `/metrics` and `/events`,
+  documented in `docs/04-dashboard.md` ("Monitoring API") with the status rules, the components, every field and the metric list.
+- **Alerts**, through the usual Telegram alerts and the System page's open problems: disk past 85%, memory past 90% for 10 minutes, a
+  container down, unhealthy or restarting repeatedly, the collector silent for 5 minutes, and the CI of `main` failing (off by default).
+  The thresholds are in Settings, in a new Monitoring group (`monitor.enabled`, `monitor.disk_pct`, `monitor.mem_pct`,
+  `monitor.mem_minutes`, `monitor.restarts`, `monitor.collector_minutes`, `monitor.ci_alert`).
+- **CI/CD facts through the bot**: the latest runs of the repository's workflows on `main`, the Release workflow's runs and the latest
+  releases, read from GitHub's public API anonymously (cached 5 minutes, conditional requests, a clear message when GitHub is
+  unreachable or the request limit is used up), and the **deployment history**: the updates asked for on the System page and the
+  last one run by hand on the server. New bot endpoints `GET /internal/ci` and `GET /internal/stats` (core's token only).
+- A runbook, `docs/runbooks/monitoring.md`.
+
+**Updating.**
+
+- One database migration (00030): two tables for the time series and an index on the outbox for the alert history. It only adds;
+  rolling it back drops them.
+- `sudo bobres update` puts the collector's two units and the folder in place and adds the read-only mount to `docker-compose.yml`.
+  Until the update has run, the Monitoring page works without the host figures and says so. Core and the bot move together here too (the
+  bot has two new internal endpoints); `sudo bobres update` does both.
+- To keep the host collector off: `sudo bobres monitor disable` (or `sudo bobres config set BOBRES_MONITOR_COLLECTOR off`).
+- Not verified: the Kubernetes section was tried with recorded `kubectl` answers, not a live cluster; nothing here can be tried in a real Telegram.
+
 ## [0.7.0] — 2026-10-20
 
 The owner's next batch of 2026-10-20, sent with twelve screenshots of another store's bot: **the dashboard can now

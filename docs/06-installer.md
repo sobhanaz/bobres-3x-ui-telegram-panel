@@ -171,13 +171,13 @@ Bot API server (`BOBRES_TELEGRAM_API_URL`), it must be version 9.4 or newer. The
 (`/setname`).
 
 ## Layout on server
-`/opt/bobres/{bobres.yml, .env, docker-compose.yml, caddy/, tls/, run/update/, data/, backups/, logs/}`, and
+`/opt/bobres/{bobres.yml, .env, docker-compose.yml, caddy/, tls/, run/update/, run/monitor/, data/, backups/, logs/}`, and
 `.restore-point/` after an update (root only); state in named volumes. install.sh and `bobres update` record the last
 verified key list and release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`). `caddy/` and `tls/`
 are the HTTPS layout (see HTTPS certificates). `run/update/` is where the dashboard and its updater meet (owned by uid
 65532, mode 0700: `request.json` and `status.json`; see Updating from the dashboard), `.update.lock` is the lock of
 updates, rollbacks and restores and `.updater-handled` the ids of the requests the updater ran (both root's, mode 0600).
-`/etc/systemd/system/bobres-updater.{path,service}` are the updater's units. An install made before P8 also keeps its
+`/etc/systemd/system/bobres-updater.{path,service}` are the updater's units; `run/monitor/` (root's, mode 0755, read only in core) holds the host collector's `snapshot.json` and `/etc/systemd/system/bobres-monitor.{timer,service}` are its units (see Host monitoring). An install made before P8 also keeps its
 old top-level `Caddyfile`.
 
 ## Status (2026-10-12)
@@ -202,6 +202,7 @@ changed with `bobres menu` ("Owners") or `bobres admin owners`, which core appli
 | `bobres install / uninstall` | Set up / remove (uninstall keeps data unless `--purge`) |
 | `bobres status [--json]` | Services (state and health), version, domain, free disk; exit 1 when a service is not healthy. `--json` prints the menu header's dashboard as one object instead: `installed`, `dir`, `domain`, `version`, `dashboard_url`, `services` (`state`: `running`, `partly running`, `stopped`, `unknown`; `up`, `total`, `down`), `license` (`known`, `basis`, `tier`, `state`, `days_left`), `https` (`mode`, `cert_days_left`), `backup` (`enabled`, `newest`, `age_hours`, `size_bytes`) and `disk_free_gb`; a value that could not be read is `null`/`known: false`. Same exit codes |
 | `bobres check [--dir D] [--json]` | Every check of the install in one list, a line per check, `PASS`/`WARN`/`FAIL`/`SKIP`; exit 1 when one FAILs (see Check). `--json` prints `{results:[{name,status,detail}], pass, warn, fail}` |
+| `bobres monitor status [--json] \| enable \| disable \| snapshot [--print] [--out DIR]` | The host collector for the dashboard's Monitoring section: whether it runs and how old its snapshot is, put it in place or take it away for good (`BOBRES_MONITOR_COLLECTOR`), or take one snapshot now (what the timer runs; see Host monitoring) |
 | `bobres logs [service] [-f]` | Tail logs |
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
 | `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists (with a note when it is newer than the license's update date: the update is never refused for it). One update, rollback or restore at a time (a lock). `bobres update --from-request` is the same update for the dashboard's request, run by `bobres-updater.service`; it is not in the help and not for people (see Updating from the dashboard) |
@@ -674,6 +675,71 @@ store can be started again with `bobres start`).
 helper needs Docker and systemd on the server, and root's `bobres` at the path the units name; a server without
 systemd (a container, a non-systemd distribution) has no helper, and says so on the Updates tab. A request that finds
 bobres or Docker broken ends as `failed` with the reason.
+
+## Host monitoring
+
+The dashboard's **Monitoring** section ([04-dashboard.md](04-dashboard.md)) shows the server and its containers, which core cannot
+see: it runs in a container, with no Docker socket, no shell and no access to the host. So a small **collector** on the host looks
+for it. It is `bobres monitor snapshot`, run every 30 seconds by a systemd timer as root, and it writes one file that core reads.
+**It is on by default** and costs about 0.2 seconds of one core every 30 seconds (the unit is limited to 25% of a core and 192 MiB).
+
+```
+bobres-monitor.timer (every 30 s)  ->  bobres-monitor.service  ->  bobres monitor snapshot  (root)
+        reads: /proc, mountinfo, the Docker Engine API (read only), systemctl, journalctl, timedatectl, kubectl if there is one
+        writes: /opt/bobres/run/monitor/snapshot.json   (root:root, 0644, atomic)
+                        core sees it read only as /run/bobres-monitor/snapshot.json (BOBRES_MONITOR_DIR)
+```
+
+**What is installed.** `bobres install` and `bobres update` (their last step, after the updater's units) make `/opt/bobres/run/monitor`
+(root, mode 0755, never through a link; `run/` is the updater's folder too, whose own subfolder stays core's) and the two units
+`/etc/systemd/system/bobres-monitor.{timer,service}` from templates in the release (`@DIR@` and `@EXE@` filled in: the install directory and
+the path of this bobres binary, checked for safe characters). Each step is idempotent: a unit is rewritten only if it differs, a
+stopped timer is started again, a moved binary is followed, and nothing happens on a host without systemd or when not run as root
+(a one-line note says so; the rest of the install is not affected). `docker-compose.yml` mounts the folder **read only** into core only
+(`./run/monitor:/run/bobres-monitor:ro`, `BOBRES_MONITOR_DIR`); an install made before this feature gets the mount with its next
+`sudo bobres update`, and until then the page says the collector's file is not reachable.
+
+**The service.** `Type=oneshot`, `User=root`, `ExecCondition` that this bobres has the collector (an older binary left in the unit is
+skipped, not failed), `TimeoutStartSec=30`, `Nice=10`, idle I/O, `CPUQuota=25%`, `MemoryMax=192M`, `TasksMax=64`, `UMask=0022`,
+`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict` with write access to `run/monitor` only, `ProtectHome=read-only`, the kernel,
+clock and cgroup protections, `RestrictAddressFamilies` limited to unix, inet, inet6 and netlink, `RestrictNamespaces`, `LockPersonality`,
+`SystemCallArchitectures=native`. `systemd-analyze security` rates it 6.1 MEDIUM: a root service that talks to the Docker socket
+cannot be much tighter. The timer: `OnBootSec=20s`, `OnUnitActiveSec=30s`, `AccuracySec=1s`.
+
+**What it reads, and nothing else.** `/proc/{stat,meminfo,loadavg,uptime,net/dev,self/mountinfo,sys/kernel/osrelease}`, `/etc/os-release`,
+the hostname, `statfs` of the install directory's and Docker's filesystems, the Docker Engine API over its socket with `GET` only
+(`/version`, `/info`, `/containers/json`, `/containers/{id}/json`, `/containers/{id}/stats?stream=false&one-shot=true`, `/system/df`
+every 15 minutes, and the last lines of Caddy's log), `systemctl show` for BOBRES's three unit families and Docker, `journalctl -p err`
+for Docker's and BOBRES's units, `timedatectl show`, `<dir>/.restore-point/restore-point.json` (only its versions and time) and, if
+`kubectl` or `k3s` is on the host, `get nodes` and `get pods -A`. Programs are looked up in a fixed list of system directories and run
+with a minimal environment. What goes into the file, and what never does, is in [02-events-and-apis.md](02-events-and-apis.md)
+("The snapshot") and [07-security.md](07-security.md) ("Host monitoring").
+
+**Commands.**
+
+| Command | What it does |
+|---|---|
+| `sudo bobres monitor status [--json]` | Whether the units are in place, the timer is active and the snapshot is fresh (exit 1 when it is not working) |
+| `sudo bobres monitor enable` / `disable` | Put the collector in place / take it away for good: the choice is `BOBRES_MONITOR_COLLECTOR` in `.env` (the same as `bobres config set BOBRES_MONITOR_COLLECTOR on\|off`), which install and update follow. `disable` removes the units and the snapshot, so the dashboard shows "not installed" and no alert about it |
+| `sudo bobres monitor snapshot [--print] [--out DIR]` | Take one snapshot now: what the timer runs. `--print` shows it instead of writing it |
+
+**How to switch it off.** `sudo bobres monitor disable`. Core then has no host figures: the Monitoring page still shows what core can ask
+itself (the services, the database, the 3x-ui servers, the gateways, the queues, the bot, the CI) and says the host is not available. The
+monitoring in core itself is `monitor.enabled` in Settings (off: nothing is recorded and no monitoring alert is raised; the history stays).
+
+**Check and doctor.** `bobres check` and `bobres doctor` show one line, **Host monitor**: `PASS a snapshot 24s old, docker 29.9.0 with 9
+containers`; `WARN` when the units are missing, the timer is not active or the snapshot is older than 90 seconds, saying what to run;
+`SKIP` when it is turned off. It is never a `FAIL`: host monitoring is optional.
+
+**Update and uninstall.** `bobres update` re-runs the install step, so the units follow the new binary and the new templates; a rollback
+restores `.env` and `docker-compose.yml`, and the units are rewritten by the next update. `bobres uninstall --purge` removes the two
+units with the rest of the install (a plain `bobres uninstall` leaves them, as it leaves the updater's: the collector then reports an
+empty server).
+
+**When the snapshot is not there.** An older compose file without the mount, a stopped timer, a host without systemd, or a snapshot
+older than 90 seconds all give the same picture on the dashboard: `host.available` is `false` with the reason, the graphs have a gap,
+and after `monitor.collector_minutes` (5) without a snapshot the alert **Collector quiet** is raised, if the collector was ever in place.
+[runbooks/monitoring.md](runbooks/monitoring.md) walks through each case.
 
 ## Support bundle
 `bobres support-bundle [--dir D] [--offline]` writes `<dir>/bobres-support-<UTC stamp>.tar.gz` (mode 0600, through

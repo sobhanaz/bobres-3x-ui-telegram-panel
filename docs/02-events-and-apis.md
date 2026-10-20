@@ -325,6 +325,117 @@ in it, protocol version 1 (06-installer.md, "Updating from the dashboard", has t
   restore holds the install lock. A `running` status that has not been rewritten for 10 minutes (the heartbeat is
   30 seconds) belongs to an update that was cut off, a power cut or a killed helper: core reads it as `failed`.
 
+## Monitoring
+
+The dashboard's Monitoring section ([04-dashboard.md](04-dashboard.md), "Monitoring API") is fed by four sources, none of which
+gives core a new power over the host:
+
+```
+host collector (root, systemd timer, every 30 s)  --- snapshot.json --->  <install>/run/monitor/  (core: /run/bobres-monitor, read only)
+bot (has internet)  --- GET /internal/ci, GET /internal/stats --->  core
+services' /healthz, /readyz, gRPC (servers, gateways, pending payments, logs), core's database  --->  core
+core (sampler, every 30 s) ---> core.monitor_series ---> GET /api/v1/monitor/{overview,series,metrics,events}
+```
+
+### The snapshot (`snapshot.json`, schema 1)
+
+Written by `bobres monitor snapshot` (the code is `internal/monitor/collect`, the format and its reader are `internal/monitor/snapshot`).
+One JSON object, at most 1 MiB, replaced atomically (a temporary file in the same folder, synced, renamed; mode 0644, owner root).
+Core reads it as untrusted text: `snapshot.Read` opens it without following a link, requires a regular file, and `Normalize` drops or
+cuts anything that is not what the format says (a name that is not shaped like a name, a percentage that cannot be one, a list past its
+bound, a control, bidirectional or zero-width character in any text; `<` and `>` become single-angle quotes). A schema other than 1 is refused,
+not guessed at; fields core does not know are ignored. A snapshot is **fresh** for 90 seconds (three missed rounds) and counts for nothing after
+that; one dated more than 5 minutes ahead of core's clock is refused.
+
+```json
+{
+  "schema": 1, "generated_at": 1792521150, "generated_ms": 1792521150499, "interval_s": 30, "duration_ms": 204, "version": "0.7.0",
+  "errors": ["host: the disk of the docker directory could not be read"],
+  "host": {
+    "hostname": "srv1", "os": "Ubuntu 24.04.5 LTS", "kernel": "6.8.0-45-generic", "arch": "amd64", "uptime_s": 1209600, "cores": 4,
+    "cpu": {"pct": 12.5, "busy": 123456, "total": 987654}, "load": [0.5, 0.4, 0.3],
+    "mem": {"total": 8320897024, "available": 6918156288}, "swap": {"total": 1073737728, "used": 0},
+    "disks": [{"mount": "/", "fs": "ext4", "total": 107374182400, "used": 42949672960, "avail": 59055800320, "inodes_total": 6553600, "inodes_used": 210000, "roles": ["install"]}],
+    "net": {"ifaces": [{"name": "eth0", "rx_bytes": 123456789, "tx_bytes": 98765432}]},
+    "clock": {"synchronized": true, "ntp": true}
+  },
+  "docker": {
+    "ok": true, "version": "29.1.0", "api": "1.52", "truncated": false,
+    "containers": [{"id": "1a2b3c4d5e6f", "name": "bobres-core-1", "project": "bobres", "service": "core", "image": "ghcr.io/sobhanaz/bobres-core:0.7.0",
+      "state": "running", "health": "healthy", "restarts": 0, "started_at": 1792413600, "cpu_ns": 12345678901, "cpu_pct": 3.2, "mem_bytes": 91750400, "mem_limit": 536870912,
+      "net_rx_bytes": 123456, "net_tx_bytes": 234567, "blk_read_bytes": 0, "blk_write_bytes": 4096, "pids": 12}],
+    "df": {"images_bytes": 3200000000, "images_reclaimable_bytes": 800000000, "containers_bytes": 12000000, "volumes_bytes": 900000000, "build_cache_bytes": 0, "collected_at": 1792520000, "attempted_at": 1792520000},
+    "compose": {"expected": ["backup", "bot", "caddy", "core", "payments", "postgres", "provisioner", "redis", "tls-agent"], "missing": []}
+  },
+  "units": [{"name": "bobres-monitor.timer", "load": "loaded", "active": "active", "sub": "waiting", "enabled": "enabled", "since": 1792400000}],
+  "journal": {"window_s": 3600, "sources": [{"name": "docker", "errors": 1, "capped": false, "lines": [{"at": 1792520500, "msg": "level=error msg=\"...\""}]}]},
+  "kubernetes": {"detected": false, "reason": "kubectl and k3s were not found on this host"},
+  "update": {"from": "0.6.1", "to": "0.7.0", "at": 1792300600}
+}
+```
+
+| Section | What it holds, and what it never holds |
+|---|---|
+| `host` | `/proc` figures (CPU jiffies and the share since the previous snapshot, load, memory, swap, uptime, network byte counters of the real interfaces), the OS name and kernel, the hostname, and the filesystems of the install directory and of Docker's data root (by mount point; `roles` says which). Never a path inside a home directory, a process list, a user name or an address |
+| `docker` | From the Engine API over its socket, read only (`GET /containers/json`, `/containers/{id}/json`, `/containers/{id}/stats?stream=false&one-shot=true`, `/info`, `/version`, `/system/df`): per container only the short id, the name, the Compose project and service, the image reference and tag **without a digest**, the state and health words, restart count, start time, exit code, whether it was killed for memory, the CPU, memory, network and block counters and the process count. **Never** its environment, command line, labels (apart from the two Compose ones), mounts, ports, addresses or networks. At most 64 containers; `compose.expected` is what the install is meant to run (from `.env`'s profiles) and `missing` what has no running container |
+| `units` | `systemctl show` of `bobres-monitor.{timer,service}`, `bobres-updater.{path,service}` and `docker.service`, those that are installed |
+| `journal` | A count of error-level lines of the last hour for `docker` (the engine and containerd), `bobres` (BOBRES's own units) and `caddy` (read from its container's log), and up to 5 lines each, **scrubbed**: tokens, bearer and key-value secrets, URL credentials and query strings, subscription tokens, e-mail addresses, long hex or base64 strings and IP addresses are replaced; each line at most 240 characters |
+| `kubernetes` | Optional: only when `kubectl` or `k3s kubectl` is found in a fixed list of directories and answers. Node name, readiness, roles, version; pod namespace, name, phase, readiness, restart count and node (at most 32 nodes and 200 pods). Never a pod spec, annotation, env or secret |
+| `update` | The versions and the time of the newest update, from the restore point `bobres update` leaves; none of its paths |
+| `errors` | In a few words, the parts the run could not read (at most 10) |
+
+CPU shares and rates need the previous snapshot: the collector keeps the cumulative counters and divides by the time between the two
+(`generated_ms`); with none, or one older than 10 minutes, or after a reboot, the share is `null`, not zero.
+
+### The bot's internal endpoints
+
+Both need core's service token (`Authorization: Bearer <BOBRES_BOT_INTERNAL_TOKEN>`, as every `/internal/` endpoint of the bot) and answer `401`
+otherwise. Core is the only caller.
+
+`GET /internal/ci` answers the repository's public CI/CD facts (`internal/cicd`). The bot asks GitHub's REST API **anonymously** (no token, no
+cookie; 60 requests an hour per address), `GET /repos/{repo}/actions/runs?branch=main&per_page=10`,
+`.../actions/workflows/release.yml/runs?per_page=5` and `.../releases?per_page=5`, with the update check's conventions: 10 seconds per request,
+2 MiB per answer, `User-Agent: bobres/<version> (+https://github.com/<repo>)`, conditional requests (`If-None-Match`; a `304` costs no quota),
+a 5-minute cache, two retries with a doubling pause after a network error or a `5xx`, and once GitHub says the quota is gone (`403` or `429`
+with `X-RateLimit-Remaining: 0` or `Retry-After`) **no request is made until it is back**. The repository is a constant of the build
+(`release.Repo`), never read from a setting or a request. It answers `200` with the status even when GitHub cannot be reached:
+
+```json
+{"available": true, "checked_at": 1792499900, "error": "", "detail": "", "repo": "sobhanaz/bobres-3x-ui-telegram-panel",
+ "runs": [{"workflow": "CI", "branch": "main", "event": "push", "status": "completed", "conclusion": "success", "url": "https://github.com/.../actions/runs/1", "sha": "abc1234", "at": 1792480000}],
+ "release_runs": [], "releases": [{"tag": "v0.7.0", "published_at": 1792300500, "prerelease": false, "url": "https://github.com/.../releases/tag/v0.7.0"}],
+ "rate_reset_at": 0}
+```
+
+`error` is `""`, `not_checked`, `unreachable`, `rate_limited` or `invalid`; with an error the earlier facts stay (`available` stays true when
+there are any). GitHub's text is untrusted: only these fields are kept, each shaped and cut (a branch, tag, event and hash must look like one; a
+workflow name is plain text of at most 64 characters; a link is kept only if it points into the repository on `github.com`), and core checks
+the answer again before it reaches a page (`cicd.Sanitize`).
+
+`GET /internal/stats` answers the bot's own counters:
+
+```json
+{"started_at": 1792413700, "updates_total": 120345, "updates_queued": 0, "warnings_total": 17, "errors_total": 2, "goroutines": 41, "heap_bytes": 18874368}
+```
+
+`*_total` only grow while the bot runs; core turns them into per-minute rates between two readings and records no rate when `started_at`
+changed (the bot restarted) or the readings are more than 5 minutes apart.
+
+### Alert events
+
+The monitoring rules are checks of core's watchdog, so they are announced as `system.alert.v1` like every other
+([runbooks/README.md](runbooks/README.md)). Their bot texts (`alert.monitor_*`, Persian and English) and values:
+
+| Key | `title_key` | `args` |
+|---|---|---|
+| `monitor.disk:<mount>` | `alert.monitor_disk` | `mount`, `percent`, `free` (bytes) |
+| `monitor.memory` | `alert.monitor_memory` | `percent`, `minutes` |
+| `monitor.container.<service>.down` | `alert.monitor_container_down` | `container` |
+| `monitor.container.<service>.unhealthy` | `alert.monitor_container_unhealthy` | `container` |
+| `monitor.container.<service>.restarting` | `alert.monitor_container_restarting` | `container`, `count`, `minutes` |
+| `monitor.collector` | `alert.monitor_collector_stale` | `minutes` |
+| `monitor.ci.main` | `alert.monitor_ci` | `workflow` |
+
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.
 - Implemented (2026-10-12): payments publishes `payment.succeeded.v1` / `payment.rejected.v1` (core owns wallets and

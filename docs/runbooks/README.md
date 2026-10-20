@@ -18,6 +18,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Restore a backup](restore.md) | Put the store back to a backup, or move it to a new server |
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
 | [Releases and update channels](releases.md) | Publish a stable or beta release, re-sign a quiet stable channel (signatures expire after 45 days), or move a store between stable and beta |
+| [Monitoring](monitoring.md) | The Monitoring page has no server figures, a monitoring alert arrived (disk, memory, a container, the collector, CI of `main`), or you want host monitoring off |
 
 ## System alerts in Telegram
 
@@ -50,6 +51,9 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 | An HTTPS certificate is close to its end (renewal failing, or an own certificate not replaced), or an address has served no valid certificate for 30 minutes | `tls.<role>.expiring`, `tls.<role>.failing` (`<role>`: `domain`, `ip`, `zarinpal`) | [HTTPS certificates](https.md#alerts) |
 | The saved HTTPS setting is not in use | `tls.setting` | [HTTPS certificates](https.md#an-own-certificate-after-a-domain-change-or-a-new-master-key) |
 | The HTTPS applier (`tls-agent`) has not answered core for 5 minutes | `tls.agent` | [HTTPS certificates, other problems](https.md#other-problems) |
+| The disk is more than 85% full (a monitored filesystem; the threshold is a setting), or memory has been above 90% for 10 minutes | `monitor.disk:<mount>`, `monitor.memory` | [Monitoring](monitoring.md#an-alert), [Disk full](disk-full.md) |
+| A container of the stack is not running, reports unhealthy, or keeps restarting (3 restarts in 15 minutes) | `monitor.container.<service>.down`, `.unhealthy`, `.restarting` | [Monitoring](monitoring.md#an-alert) |
+| The host collector has sent no snapshot for 5 minutes, or the latest CI run on `main` failed (off unless `monitor.ci_alert` is on) | `monitor.collector`, `monitor.ci.main` | [Monitoring](monitoring.md) |
 
 ## Before you start
 
