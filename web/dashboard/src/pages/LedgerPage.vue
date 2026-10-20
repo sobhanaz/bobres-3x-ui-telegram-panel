@@ -9,10 +9,11 @@ import Chip from 'primevue/chip'
 import LedgerTable from '../components/LedgerTable.vue'
 import { useList } from '../composables/useList'
 import { query } from '../api'
-import { currencies } from '../format'
+import { currencies, type Lang } from '../format'
+import { csvCalendar } from '../reports'
 import type { LedgerItem } from '../types'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const list = useList<LedgerItem, { user: string; kind: string; currency: string; from: string }>('/ledger', {
   user: String(route.query.user ?? ''),
@@ -46,7 +47,8 @@ const periods = computed(() => [
   { label: t('ledger.period.week'), value: 'week' },
   { label: t('ledger.period.month'), value: 'month' },
 ])
-const csvHref = computed(() => '/api/v1/ledger.csv' + query({ ...list.filters }))
+// The file adds a Jalali date column when the Reports page is set to that calendar.
+const csvHref = computed(() => '/api/v1/ledger.csv' + query({ ...list.filters, calendar: csvCalendar(locale.value as Lang) }))
 </script>
 
 <template>

@@ -123,7 +123,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /payments/pending` | The customer's own manual payments that still wait for their proof, newest first, at most 10: each as `pay` answered when it was started, plus `created_at` (see "Taking a payment up again") |
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
-| `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing |
+| `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing. `categories` lists the three topics to write under (payment, service, other); a ticket's own `category` can also be `reseller`, a reseller application the bot filed, which the app shows with its label (a message named `reseller` from the app is filed as `other`: an application is made from the bot's button) |
 
 The app takes **Zarinpal, IDPay, NextPay, automatic USDT, Telegram Stars and the three manual methods**: whatever the
 store has on for the amount of the purchase (the next section).
@@ -151,8 +151,13 @@ allowed sources do not include a Mini App one, and the store is the bot's second
 While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check, list the
 manual payments waiting for their proof and send the proof of one already started, so that a payment in flight
 finishes: a Stars payment is settled by the bot all the same, and a customer who has paid by hand can say so, as the bot
-lets them (it takes the receipt, the bank number or the hash of a payment under way). Browsing, buying, top-up and
-starting a payment answer 503 `maintenance`.
+lets them (it takes the receipt, the bank number or the hash of a payment under way). Everything else answers 503
+`maintenance`: browsing, buying, top-up, starting a payment, the free trial, invites, support and the reseller panel.
+It is one check for every call (`miniMaintenance`, the same one that sets the flag in `/me` and in the sign-in), staff
+and the owners the server names are never held, and the bot holds the same rule ([03-bot-ux.md](03-bot-ux.md)): a
+customer in maintenance gets the maintenance text for everything but a payment under way. A test reads the app's routes
+from the source and sweeps every one of them, so a section added later is held unless it is named in the test's list
+of what a payment under way needs.
 
 ## Stars and manual payments
 

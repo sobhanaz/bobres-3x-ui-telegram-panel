@@ -201,7 +201,7 @@ func TestGiftCodesDashboard(t *testing.T) {
 	_, _, body := b.get("/api/v1/gift-codes.csv")
 	rows := parseCSV(t, body)
 	if len(rows) != 5 || strings.Join(rows[0], ",") !=
-		"created_utc,code_last4,kind,amount,currency,max_redemptions,per_customer_limit,redeemed,status,expires_utc,last_redeemed_utc,note,created_by_telegram_id,code_id" {
+		"created_utc,code_last4,kind,amount,currency,max_redemptions,per_customer_limit,redeemed,status,expires_utc,last_redeemed_utc,note,created_by_telegram_id,code_id,created_local,tz" {
 		t.Fatalf("gift-codes.csv: %v", rows)
 	}
 	var ownRow []string
@@ -219,7 +219,7 @@ func TestGiftCodesDashboard(t *testing.T) {
 	}
 	_, h, body := b.get("/api/v1/gift-codes/" + id + "/redemptions.csv")
 	rows = parseCSV(t, body)
-	if len(rows) != 2 || strings.Join(rows[0], ",") != "time_utc,telegram_id,username,number,amount,currency,balance_after,redemption_id" ||
+	if len(rows) != 2 || strings.Join(rows[0], ",") != "time_utc,telegram_id,username,number,amount,currency,balance_after,redemption_id,time_local,tz" ||
 		rows[1][1] != "8801" || rows[1][2] != "dara" || rows[1][3] != "1" || rows[1][4] != "25000" || rows[1][6] != "25000" ||
 		!strings.Contains(h.Get("Content-Disposition"), "-redemptions-") {
 		t.Fatalf("redemptions.csv: %v (%v)", rows, h)
@@ -229,6 +229,37 @@ func TestGiftCodesDashboard(t *testing.T) {
 	}
 	if code, _, _ := b.get("/api/v1/gift-codes/00000000-0000-0000-0000-00000000beef/redemptions.csv"); code != 404 {
 		t.Fatalf("redemptions.csv of a code that is not there: %d", code)
+	}
+}
+
+// The files follow the rules of docs/14-reports.md for dates: UTC instants, the local wall clock and the zone, a
+// Jalali column at the very end of a Jalali file, a file name that says so, and a 400 for a calendar or a zone
+// nobody knows.
+func TestGiftCodesCSVDates(t *testing.T) {
+	_, b, _, _ := salesFixture(t)
+	if code, out := b.do(http.MethodPost, "/api/v1/gift-codes", map[string]any{"amount": "5", "currency": "IRT", "max_redemptions": 1, "note": "dates"}); code != 200 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	code, h, body := b.get("/api/v1/gift-codes.csv?tz=Asia/Tehran")
+	rows := parseCSV(t, body)
+	if code != 200 || len(rows) < 2 || rows[0][len(rows[0])-1] != "tz" || rows[1][len(rows[1])-1] != "Asia/Tehran" ||
+		!regexp.MustCompile(`^attachment; filename="gift-codes-all-to-\d{4}-\d\d-\d\d\.csv"$`).MatchString(h.Get("Content-Disposition")) {
+		t.Fatalf("gregorian file: %d %v %v", code, h, rows)
+	}
+	if utc, local := rows[1][0], rows[1][len(rows[1])-2]; !strings.HasSuffix(utc, "Z") || len(local) != len("2006-01-02 15:04:05") || local[10] != ' ' {
+		t.Fatalf("created_utc %q, created_local %q", utc, local)
+	}
+	code, h, body = b.get("/api/v1/gift-codes.csv?tz=Asia/Tehran&calendar=jalali")
+	rows = parseCSV(t, body)
+	last := rows[0][len(rows[0])-1]
+	if code != 200 || last != "created_jalali" || !regexp.MustCompile(`^1\d{3}-\d\d-\d\d \d\d:\d\d:\d\d$`).MatchString(rows[1][len(rows[1])-1]) ||
+		!strings.HasSuffix(h.Get("Content-Disposition"), `-jalali.csv"`) {
+		t.Fatalf("jalali file: %d %v %v", code, h, rows[:2])
+	}
+	for _, q := range []string{"calendar=hijri", "tz=Mars/Base"} {
+		if code, _, _ := b.get("/api/v1/gift-codes.csv?" + q); code != 400 {
+			t.Errorf("%s: %d", q, code)
+		}
 	}
 }
 

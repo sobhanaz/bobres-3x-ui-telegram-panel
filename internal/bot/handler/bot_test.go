@@ -1049,9 +1049,10 @@ func TestInviteLinkRewardsTheInviter(t *testing.T) {
 	inviter.press("lang:en")
 	inviter.press("ref")
 	inviter.sees("Invite friends")
-	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(inviter.last().text)
+	screen := inviter.lastWith("Invite friends").text // the promo card and the line about forwarding it come after it
+	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(screen)
 	if m == nil {
-		t.Fatalf("no invite link: %q", inviter.last().text)
+		t.Fatalf("no invite link: %q", screen)
 	}
 
 	friend := w.person(722, "fred")

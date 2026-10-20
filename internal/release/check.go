@@ -53,10 +53,12 @@ type Status struct {
 	Detail    string `json:"detail"`     // a short English reason, "" when fine
 }
 
-// Checker looks for a newer release now and then and keeps the answer.
+// Checker looks for a newer release now and then and keeps the answer. The
+// channel it follows can change while it runs (SetChannel: the dashboard's
+// updates.channel setting), and a person can ask it to look again at once
+// (CheckNow: the dashboard's "Check again").
 type Checker struct {
 	current string
-	channel string
 	src     Source
 	hc      *http.Client
 	roots   []string
@@ -66,9 +68,22 @@ type Checker struct {
 	// Every and Retry are the pauses after a check that worked and one that
 	// did not.
 	Every, Retry time.Duration
+	// ManualGap: a check a person asks for is answered with the last one,
+	// when that worked and finished less than this long ago, so a click
+	// (or two people clicking) never costs GitHub more than one look.
+	// ManualTimeout bounds the check a person waits for (core's answer to the
+	// dashboard must come within its 30 second write timeout).
+	ManualGap, ManualTimeout time.Duration
 
-	mu   sync.Mutex
-	last Status
+	// run holds one check at a time (the scheduled one and the ones people
+	// ask for); mu guards the state below it.
+	run      sync.Mutex
+	mu       sync.Mutex
+	channel  string
+	last     Status
+	lastDone time.Time // when the last check finished
+	// kick wakes Run to look again at once (the channel changed).
+	kick chan struct{}
 }
 
 // maxFile bounds each downloaded metadata file.
@@ -86,8 +101,9 @@ func NewChecker(current, channel string, log *slog.Logger) *Checker {
 	return &Checker{
 		current: current, channel: channel, src: DefaultSource(hc), roots: Roots, now: time.Now, log: log,
 		hc:    hc,
-		Every: 12 * time.Hour, Retry: time.Hour,
+		Every: 12 * time.Hour, Retry: time.Hour, ManualGap: 10 * time.Second, ManualTimeout: 22 * time.Second,
 		last: Status{Current: current, Channel: channel, Error: ErrNotChecked},
+		kick: make(chan struct{}, 1),
 	}
 }
 
@@ -98,7 +114,43 @@ func (c *Checker) Status() Status {
 	return c.last
 }
 
-// Run checks at once, then every c.Every (c.Retry after a failure), until ctx ends.
+// Channel is the channel the checks follow now.
+func (c *Checker) Channel() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.channel
+}
+
+// SetChannel makes the checks follow channel (stable or beta, as ParseChannel
+// reads it; anything else leaves the channel as it is) and reports whether
+// that changed it. A change forgets what the other channel's check found
+// (its newest release is not this one's) and makes Run look again at once,
+// so the page never shows one channel's release under the other's name.
+func (c *Checker) SetChannel(channel string) bool {
+	ch, err := ParseChannel(channel)
+	if err != nil {
+		c.log.Warn("update check: the channel is not stable or beta; keeping the current one", "channel", channel)
+		return false
+	}
+	c.mu.Lock()
+	if ch == c.channel {
+		c.mu.Unlock()
+		return false
+	}
+	c.channel = ch
+	c.last = Status{Current: c.current, Channel: ch, Error: ErrNotChecked}
+	c.lastDone = time.Time{}
+	c.mu.Unlock()
+	c.log.Info("update check: following another channel", "channel", ch)
+	select {
+	case c.kick <- struct{}{}:
+	default:
+	}
+	return true
+}
+
+// Run checks at once, then every c.Every (c.Retry after a failure), until
+// ctx ends; a change of channel (SetChannel) checks again without waiting.
 func (c *Checker) Run(ctx context.Context) error {
 	for {
 		wait := c.Every
@@ -111,6 +163,8 @@ func (c *Checker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			t.Stop()
 			return nil
+		case <-c.kick:
+			t.Stop()
 		case <-t.C:
 		}
 	}
@@ -121,23 +175,69 @@ func (c *Checker) Run(ctx context.Context) error {
 // check read stays known (with the failure), so an outage does not hide an
 // update.
 func (c *Checker) Check(ctx context.Context) Status {
-	st := c.check(ctx)
-	st.Current, st.Channel, st.CheckedAt = c.current, c.channel, c.now().Unix()
-	if ctx.Err() != nil && st.Error != "" {
+	c.run.Lock()
+	defer c.run.Unlock()
+	return c.look(ctx, false)
+}
+
+// CheckNow is "check again": it looks now, whatever the timers say, and
+// returns the outcome. A check that worked and finished less than ManualGap
+// ago is returned as it is. A caller that stops waiting (ctx) gets the last
+// outcome; the check goes on, bounded by ManualTimeout, and is kept.
+func (c *Checker) CheckNow(ctx context.Context) Status {
+	done := make(chan Status, 1)
+	go func() { done <- c.checkNow() }()
+	select {
+	case st := <-done:
+		return st
+	case <-ctx.Done():
+		return c.Status()
+	}
+}
+
+func (c *Checker) checkNow() Status {
+	c.run.Lock()
+	defer c.run.Unlock()
+	c.mu.Lock()
+	if c.last.Error == "" && !c.lastDone.IsZero() && c.now().Sub(c.lastDone) < c.ManualGap {
+		st := c.last
+		c.mu.Unlock()
+		return st
+	}
+	c.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), c.ManualTimeout)
+	defer cancel()
+	return c.look(ctx, true)
+}
+
+// look makes one check (the caller holds c.run) and keeps its outcome. A
+// check the process cut short (shutting down) keeps the last outcome; one a
+// person asked for keeps even its timeout, which says GitHub did not answer
+// in time.
+func (c *Checker) look(ctx context.Context, manual bool) Status {
+	channel := c.Channel()
+	st := c.check(ctx, channel)
+	st.Current, st.Channel, st.CheckedAt = c.current, channel, c.now().Unix()
+	if !manual && ctx.Err() != nil && st.Error != "" {
 		return st // shutting down: keep the last outcome
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.channel != channel {
+		// The channel changed while GitHub was being asked: this answer is
+		// about the other one and is dropped; Run looks again at once.
+		return c.last
+	}
 	if st.Error == ErrUnreachable && c.last.Verified {
 		st.Latest, st.Issued, st.Newer, st.Verified = c.last.Latest, c.last.Issued, c.last.Newer, c.last.Verified
 	}
-	c.last = st
-	c.mu.Unlock()
+	c.last, c.lastDone = st, c.now()
 	return st
 }
 
-func (c *Checker) check(ctx context.Context) Status {
+func (c *Checker) check(ctx context.Context, channel string) Status {
 	fail := func(code string, err error) Status { return Status{Error: code, Detail: err.Error()} }
-	base, want, err := c.src.Resolve(ctx, c.channel)
+	base, want, err := c.src.Resolve(ctx, channel)
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return fail(ErrNoRelease, err)
@@ -195,8 +295,8 @@ func (c *Checker) check(ctx context.Context) Status {
 	if want != "" && rel.Version != want {
 		return claimed(ErrBadSignature, fmt.Errorf("the files of release %s are signed for %s", want, rel.Version))
 	}
-	if !ChannelAllows(c.channel, rel.Channel) {
-		return claimed(ErrBadSignature, fmt.Errorf("release %s is signed for the %s channel, and this install follows %s", rel.Version, rel.Channel, c.channel))
+	if !ChannelAllows(channel, rel.Channel) {
+		return claimed(ErrBadSignature, fmt.Errorf("release %s is signed for the %s channel, and this install follows %s", rel.Version, rel.Channel, channel))
 	}
 	return Status{
 		Latest: rel.Version, Issued: rel.Issued, Verified: true,

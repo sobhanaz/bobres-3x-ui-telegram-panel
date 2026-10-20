@@ -308,6 +308,44 @@ describe('support pages', () => {
     expect(router.currentRoute.value.params.id).toBe(tid)
   })
 
+  it('names a reseller application in the inbox and on its ticket, and filters the inbox by it', async () => {
+    // The bot files an application from its "Become a reseller" button as a ticket of its own category.
+    const application: TicketItem = { ...baseTicket, category: 'reseller', subject: 'I run a shop in Tehran' }
+    const { calls, router } = await boot('/admin/support', supportPerms, (url) => {
+      if (url.startsWith('/api/v1/tickets?')) return json(200, { items: [application], total: 1, page: 1, size: 25 })
+      if (url === `/api/v1/tickets/${tid}`) return json(200, { ticket: application, messages: baseMessages(), can_manage: false })
+    })
+    await vi.waitFor(() => expect(document.querySelector('.p-datatable-tbody')?.textContent).toContain('#1024'))
+    // the table names the category, in words (not the raw "reseller")
+    const row = document.querySelector('.p-datatable-tbody tr') as HTMLElement
+    expect(row.textContent).toContain(text('support.category.reseller'))
+    expect(row.textContent).not.toContain('reseller')
+
+    // the filter lists it after the others, and choosing it asks core for that category only
+    const selects = document.querySelectorAll('.app-toolbar .p-select')
+    expect(selects).toHaveLength(2)
+    ;(selects[1] as HTMLElement).click()
+    const options = await vi.waitFor(() => {
+      const found = [...document.querySelectorAll('.p-select-option')]
+      expect(found.length).toBeGreaterThan(0)
+      return found
+    })
+    expect(options.map((o) => o.textContent?.trim())).toEqual([
+      text('support.category_all'),
+      text('support.category.payment'),
+      text('support.category.service'),
+      text('support.category.other'),
+      text('support.category.reseller'),
+    ])
+    options[4].dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) // PrimeVue picks on mousedown
+    await vi.waitFor(() => expect(calls).toContain('GET /api/v1/tickets?status=open&category=reseller&page=1&size=25'))
+
+    // the ticket's page says so too
+    ;(document.querySelector('.p-datatable-tbody tr td:nth-child(3)') as HTMLElement).click()
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('ticket'))
+    await vi.waitFor(() => expect(document.querySelector('.side')?.textContent).toContain(text('support.category.reseller')))
+  })
+
   it('shows a thread safely and replies with request keys', async () => {
     // A small stateful core: replies and notes join the thread.
     let ticket: TicketItem = { ...baseTicket }

@@ -496,7 +496,8 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	if err != nil {
 		return nil, fail(err)
 	}
-	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx)}
+	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx),
+		ResellersEnabled: s.resellersIncluded(ctx)}
 	for k, v := range m {
 		out.Values[k] = string(v)
 	}
@@ -513,6 +514,14 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 func (s *Server) whiteLabel(ctx context.Context) bool {
 	eff, err := s.dom.Effective(ctx)
 	return err == nil && eff.WhiteLabel()
+}
+
+// resellersIncluded: the license in effect includes resellers, so the bot
+// offers customers the Become a reseller button. When the license cannot be
+// read it is false: no button, rather than an application core would refuse.
+func (s *Server) resellersIncluded(ctx context.Context) bool {
+	eff, err := s.dom.Effective(ctx)
+	return err == nil && eff.Entitlements.Resellers
 }
 
 // botPhotoVersion is the bot photo's version (without reading the photo): ""

@@ -733,6 +733,80 @@ export interface UpdateCheck {
    * all the same (security updates are never withheld). null when no license
    * is in force or the date is not known, absent from older cores */
   covered?: boolean | null
+  /** latest is a pre-release (1.5.0-rc.1); core says so from the version it
+   * checked (GET /system/updates only) */
+  prerelease?: boolean
+  /** where latest's notes are on GitHub, built by core from a release number
+   * (GET /system/updates only; absent when latest is not one) */
+  notes_url?: string
+}
+
+/** The server's updater: the root service on the host that runs the same
+ * verified `bobres update` when core asks (docs/04-dashboard.md). Every
+ * text in it comes from the updater and is shown as text, never as markup. */
+export interface UpdateHelper {
+  /** installed, and its status could be read */
+  available: boolean
+  /** why not: no_dir | no_status | not_installed | bad_status | unsupported; '' when available */
+  problem: string
+  /** the updater's own version */
+  version: string
+  /** idle | running | done | failed | rolled_back; '' when unknown */
+  state: string
+  /** the request being run, or the last one run */
+  id: string
+  from: string
+  to: string
+  channel: string
+  /** verify | backup | pull | restart | health | rollback | done; '' when none */
+  step: string
+  /** one short sentence from the updater */
+  message: string
+  started_at: number | null
+  finished_at: number | null
+  /** the newest lines of the update's log: the owner's only */
+  log?: string[]
+}
+
+/** An update asked for in the dashboard (core.system_updates). */
+export interface UpdateRun {
+  id: string
+  /** the dashboard user who asked */
+  by: string
+  from: string
+  to: string
+  channel: string
+  requested_at: number
+  /** '' while it is open; then done | failed | rolled_back | not_started */
+  outcome: string
+  outcome_at: number | null
+  message: string
+  /** while open: queued (the updater has not taken it up) | running | done |
+   * failed | rolled_back (the updater finished, core has not recorded it yet) */
+  phase?: string
+}
+
+/** GET /system/updates/progress: the light state the page polls while an
+ * update runs, and while core restarts in the middle of it. */
+export interface UpdatesProgress {
+  /** the version core runs */
+  version: string
+  helper: UpdateHelper
+  run: UpdateRun | null
+  last: UpdateRun | null
+}
+
+/** GET /system/updates: everything the Updates tab shows. */
+export interface UpdatesState extends UpdatesProgress {
+  check: UpdateCheck
+  /** setting: what the owner chose here ('' none: the server's .env decides);
+   * effective: the channel the bot follows now; source: setting | server */
+  channel: { setting: string; effective: string; source: string }
+  /** would an update be accepted now: allowed (this role may), ready (it
+   * would), reason (why not: helper_missing | already_running |
+   * check_unavailable | no_release | not_newer | dev_build), target (the release it
+   * would install) */
+  apply: { allowed: boolean; ready: boolean; reason: string; target: string }
 }
 
 /** One kept log line: a warning or an error, already redacted. */

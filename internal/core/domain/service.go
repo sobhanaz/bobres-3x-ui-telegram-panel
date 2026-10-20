@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -44,6 +45,9 @@ type Config struct {
 	// a copy of the database cannot be read back into codes. Nil: no gift
 	// code can be made or redeemed (core says so; nothing is stored in clear).
 	Secrets *bcrypto.Envelope
+	// LeaderboardTTL is how long the top-inviters board is kept before it is
+	// read again (0: 30 seconds; below 0: never kept, every call reads it).
+	LeaderboardTTL time.Duration
 }
 
 // Service composes the store with business rules.
@@ -57,6 +61,8 @@ type Service struct {
 	// embedded is the license key ring built into core, read once.
 	keysOnce sync.Once
 	embedded license.KeyRing
+	// boards keeps the top-inviters board for a short time (Config.LeaderboardTTL).
+	boards boardCache
 }
 
 // New builds a Service publishing to core's outbox.

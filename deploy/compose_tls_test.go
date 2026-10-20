@@ -232,9 +232,10 @@ func TestComposeHTTPSMounts(t *testing.T) {
 		t.Errorf("the tls-agent mounts tls_result at %s (read-only %v), want %s read-write", m.target, m.readOnly, tlsconf.AgentResultDir)
 	}
 
-	// Core in particular: nothing of Caddy's.
+	// Core in particular: nothing of Caddy's, and of the install's files only the directory of the
+	// dashboard's update requests (TestComposeUpdateRequestMount).
 	for _, m := range serviceMounts(t, "core") {
-		if m.source == "caddy_admin" || strings.HasPrefix(m.source, "./") {
+		if m.source == "caddy_admin" || (strings.HasPrefix(m.source, "./") && m.source != updateRequestDir) {
 			t.Errorf("core mounts %s: it must not reach Caddy's admin socket or the install's files", m.source)
 		}
 	}
@@ -448,7 +449,10 @@ func TestDockerComposeReadsTheHTTPSMountsTheSame(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker is not installed")
 	}
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir()) // docker prints real paths
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "docker-compose.yml"), ComposeFile, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +496,11 @@ func TestDockerComposeReadsTheHTTPSMountsTheSame(t *testing.T) {
 		for _, v := range project.Services[svc].Volumes {
 			src := v.Source
 			if v.Type == "bind" {
-				src = "./" + filepath.Base(src)
+				rel, err := filepath.Rel(dir, src)
+				if err != nil {
+					t.Fatalf("%s: %v", src, err)
+				}
+				src = "./" + rel
 			}
 			got = append(got, mount{src, v.Target, v.ReadOnly})
 		}

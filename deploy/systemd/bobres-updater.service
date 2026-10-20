@@ -1,0 +1,43 @@
+# Written by `bobres install` and `bobres update` (they replace it: do not edit it). It runs the
+# same update as `sudo bobres update`, for the one request the dashboard dropped into
+# @DIR@/run/update. The request carries a channel and a version and nothing else; the
+# release is verified against the keys built into bobres. docs/06-installer.md, "Updating
+# from the dashboard".
+[Unit]
+Description=BOBRES: update this server on the dashboard's request
+Documentation=https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/06-installer.md
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=BOBRES_STATE_DIR=@STATE@
+ExecStart=@EXE@ update --from-request --dir @DIR@
+# bobres deletes the request before it does anything. Should it not get that far (a start that
+# failed, an older bobres that does not know the flag), the request goes here, or the path unit
+# would start this service again for ever.
+ExecStopPost=-/bin/sh -c '[ "$$SERVICE_RESULT" = success ] || exec /bin/rm -f -- @DIR@/run/update/request.json'
+# An update is slow (backup, image pull, health wait) and has time limits of its own; this only
+# stops one that hangs. The long stop time lets an update that is interrupted roll back first.
+TimeoutStartSec=3h
+TimeoutStopSec=20min
+# Docker and the install directory, nothing else. systemd gives the service a private /tmp and
+# makes the rest of the file system read-only, but for what an update writes: the install
+# directory, the folder bobres is replaced in, the release state, the install log and the units.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=@DIR@ @EXEDIR@ /etc/systemd/system -@STATE@ -/var/log/bobres-install.log
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native

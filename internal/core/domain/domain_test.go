@@ -52,7 +52,9 @@ func testService(t *testing.T) (*Service, *store.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env}), s
+	// The top-inviters board is not kept (LeaderboardTTL below 0), so a test that
+	// changes who invited whom sees it at once; its own test keeps one.
+	return New(s, Config{OwnerTelegramIDs: []int64{ownerTG}, LeaderboardTTL: -1, Secrets: env}), s
 }
 
 func seedPlan(t *testing.T, s *store.Store, trial bool, price int64) *store.Plan {

@@ -454,11 +454,13 @@ func TestResellerLinkCommissionStatementInPersian(t *testing.T) {
 	rs.text("/menu")
 	rs.press("rs")
 	rs.press("rs:link")
-	rs.shownHas("🔗 <b>لینک دعوت شما</b>")
-	rs.shownHas("۱۰٪ پورسانت")
-	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(rs.shown().text)
+	link := rs.lastWith("🔗 <b>لینک دعوت شما</b>") // the promo card and the line about forwarding it come after it
+	if !strings.Contains(link.text, "۱۰٪ پورسانت") {
+		t.Fatalf("the link screen: %q", link.text)
+	}
+	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(link.text)
 	if m == nil {
-		t.Fatalf("no invite link with referrals off: %q", rs.shown().text)
+		t.Fatalf("no invite link with referrals off: %q", link.text)
 	}
 
 	// Referral rewards on: a reseller's customer still pays them nothing.
@@ -469,7 +471,7 @@ func TestResellerLinkCommissionStatementInPersian(t *testing.T) {
 		t.Fatalf("reseller's home with referrals on: %v", cb)
 	}
 	rs.tap("ref") // an old Invite button: their own link
-	rs.shownHas("🔗 <b>لینک دعوت شما</b>")
+	rs.lastWith("🔗 <b>لینک دعوت شما</b>")
 	cust := w.person(1702, "custo")
 	cust.text("/start r_" + m[1])
 	cust.press("lang:en")

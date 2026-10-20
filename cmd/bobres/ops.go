@@ -75,11 +75,16 @@ type ops struct {
 	// gatewayState is the state of the install's gateway container, "" when
 	// there is none (nil: caddyState, which asks Docker).
 	gatewayState func(ctx context.Context) string
+	// units looks at, and removes, the dashboard updater's systemd units (nil: not asked), and
+	// exe is the bobres they run (nil: this one).
+	units *systemUnits
+	exe   func() (string, error)
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
 	return &ops{
 		in: in, out: out, errOut: errOut,
+		units: newSystemUnits(),
 		run: func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
 			cmd.Dir = dir
@@ -362,6 +367,12 @@ func (o *ops) uninstallCmd(args []string) int {
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: %v\nData of BOBRES is still on this server; %s is kept. Run `bobres uninstall --purge` again, or remove the volumes with docker volume rm.\n", err, *dir)
 		return 1
+	}
+	// The dashboard updater has nothing left to update.
+	if o.units != nil {
+		if res := o.units.uninstall(ctx); res.text != "" {
+			fmt.Fprintf(o.out, "Dashboard updater: %s.\n", res.text)
+		}
 	}
 	if err := os.RemoveAll(*dir); err != nil {
 		fmt.Fprintf(o.errOut, "error: remove %s: %v\n", *dir, err)

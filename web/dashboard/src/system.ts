@@ -226,12 +226,15 @@ export function updateReason(u: Pick<UpdateCheck, 'latest' | 'error' | 'checked_
 }
 
 /** updateDetail is the bot's own words to show under the reason (English):
- * its detail for a release that failed the checks, or the whole error for
- * one the page does not know; '' otherwise. */
+ * why GitHub could not be reached (a timeout, a refused connection, its
+ * hourly limit), its detail for a release that failed the checks, or the
+ * whole error for one the page does not know; '' otherwise (the page's
+ * own sentence says it all). */
 export function updateDetail(u: Pick<UpdateCheck, 'error' | 'detail'> | null | undefined, reason: UpdateReason | null): string {
   if (!u) return ''
   const detail = (u.detail ?? '').trim()
   switch (reason) {
+    case 'unreachable':
     case 'bad_signature':
     case 'invalid':
       return detail

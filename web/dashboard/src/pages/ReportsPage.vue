@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import Skeleton from 'primevue/skeleton'
 import BarChart from '../components/reports/BarChart.vue'
+import DateField from '../components/reports/DateField.vue'
 import { api, query } from '../api'
+import { DATE_MAX, DATE_MIN, formatInput, todayIn } from '../calendar'
 import { fieldId } from '../settings'
 import { useAuth } from '../stores/auth'
 import { errorText } from '../errors'
@@ -21,12 +22,14 @@ import {
   byCurrency,
   calendars,
   currenciesOf,
-  defaultCalendar,
+  customProblem,
   exportParams,
   groups,
   hasData,
+  initialCalendar,
   periodLabel,
   ranges,
+  rememberCalendar,
   reportParams,
   share,
   validCustom,
@@ -55,7 +58,10 @@ async function loadDaily() {
 onMounted(loadDaily)
 const dailyLink = { name: 'settings', hash: '#' + fieldId('reports.daily_summary') }
 
-const sel = reactive<Selection>({ range: 'last_30_days', group: 'day', calendar: defaultCalendar(lang.value), from: '', to: '' })
+// The calendar starts as the person left it (kept per browser, like the language and the theme), else the
+// language's own. It decides every date of the page: how they are written, typed and picked.
+const sel = reactive<Selection>({ range: 'last_30_days', group: 'day', calendar: initialCalendar(lang.value), from: '', to: '' })
+watch(() => sel.calendar, rememberCalendar)
 const summary = ref<ReportSummary | null>(null)
 const plans = ref<ReportPlan[]>([])
 const methods = ref<ReportMethod[]>([])
@@ -93,7 +99,24 @@ async function load() {
   }
 }
 onMounted(load)
-watch(() => [sel.range, sel.group, sel.calendar, sel.from, sel.to], load)
+// A choice asks at once. Dates typed in the custom range ask a moment after the last key, so "1405/07/1" on the
+// way to "1405/07/10" does not make three requests for a day nobody wanted.
+let typing: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => [sel.range, sel.group, sel.calendar],
+  () => {
+    clearTimeout(typing)
+    void load()
+  },
+)
+watch(
+  () => [sel.from, sel.to],
+  () => {
+    clearTimeout(typing)
+    typing = setTimeout(() => void load(), 300)
+  },
+)
+onBeforeUnmount(() => clearTimeout(typing))
 
 // Picking "custom" starts from the dates on screen.
 watch(
@@ -109,16 +132,42 @@ watch(
 const rangeOptions = computed(() => ranges.map((r) => ({ label: t('reports.range.' + r), value: r })))
 const groupOptions = computed(() => groups.map((g) => ({ label: t('reports.group.' + g), value: g })))
 const calendarOptions = computed(() => calendars.map((c) => ({ label: t('reports.calendar.' + c), value: c })))
-const customInvalid = computed(() => sel.range === 'custom' && !validCustom(sel.from, sel.to))
+const problem = computed(() => (sel.range === 'custom' ? customProblem(sel.from, sel.to) : null))
+const customInvalid = computed(() => problem.value !== null)
+// "Today" for the grid and the example is the store's today once a report has said which zone that is.
+const today = computed(() => todayIn(summary.value?.tz))
+const problemText = computed(() => {
+  const cal = sel.calendar
+  const write = (iso: string) => isolate(formatInput(iso, lang.value, cal))
+  switch (problem.value) {
+    case 'format':
+      return t('reports.custom_error.format', { calendar: t('reports.calendar.' + cal), example: write(today.value) })
+    case 'range':
+      return t('reports.custom_error.range', { min: write(DATE_MIN), max: write(DATE_MAX) })
+    case 'order':
+      return t('reports.custom_error.order')
+    case 'span':
+      return t('reports.custom_error.span')
+    default:
+      return ''
+  }
+})
 
 const currencies = computed(() => (summary.value ? currenciesOf(summary.value, plans.value, methods.value) : []))
 const currencyName = (c: string) => (te('currency.' + c) ? t('currency.' + c) : c)
 const m = (amount: number, currency: string) => money({ amount, currency }, lang.value)
-const label = (date: string) => (summary.value ? periodLabel(date, summary.value.group, lang.value, t, summary.value.calendar) : date)
+// Dates are written in the calendar the page is set to the moment it changes; the periods (a Jalali month, a week
+// from Saturday) change when the new report arrives.
+const label = (date: string) => (summary.value ? periodLabel(date, summary.value.group, lang.value, t, summary.value.calendar, sel.calendar) : date)
 
+// The days the report covers, in the calendar the page is set to.
 const covers = computed(() =>
   summary.value
-    ? t('reports.covers', { from: localDate(summary.value.from, lang.value), to: localDate(summary.value.to, lang.value), tz: isolate(summary.value.tz) })
+    ? t('reports.covers', {
+        from: localDate(summary.value.from, lang.value, 'medium', sel.calendar),
+        to: localDate(summary.value.to, lang.value, 'medium', sel.calendar),
+        tz: isolate(summary.value.tz),
+      })
     : '',
 )
 
@@ -167,16 +216,16 @@ const providerLabel = (r: ReportMethod) => {
       :aria-label="t('reports.period_label')"
       class="range"
     />
-    <template v-if="sel.range === 'custom'">
-      <label class="date-field">
-        <span>{{ t('reports.from') }}</span>
-        <InputText v-model="sel.from" type="date" class="date-from" :invalid="customInvalid" />
-      </label>
-      <label class="date-field">
-        <span>{{ t('reports.to') }}</span>
-        <InputText v-model="sel.to" type="date" class="date-to" :invalid="customInvalid" />
-      </label>
-    </template>
+    <span v-if="sel.range === 'custom'" class="date-range">
+      <span class="date-field">
+        <label for="report-from">{{ t('reports.from') }}</label>
+        <DateField id="report-from" v-model="sel.from" :calendar="sel.calendar" :today="today" :invalid="customInvalid" input-class="date-from" />
+      </span>
+      <span class="date-field">
+        <label for="report-to">{{ t('reports.to') }}</label>
+        <DateField id="report-to" v-model="sel.to" :calendar="sel.calendar" :today="today" :invalid="customInvalid" input-class="date-to" />
+      </span>
+    </span>
     <Select
       v-model="sel.group"
       :options="groupOptions"
@@ -196,6 +245,7 @@ const providerLabel = (r: ReportMethod) => {
     />
     <Button v-if="loading" text loading :aria-label="t('app.loading')" />
   </div>
+  <p v-if="problemText" class="custom-problem" role="alert">{{ problemText }}</p>
   <p v-if="summary" class="app-muted covers">{{ covers }}</p>
 
   <Message v-if="failure.text" severity="error" :closable="false" class="report-error">
@@ -266,6 +316,7 @@ const providerLabel = (r: ReportMethod) => {
               :currency="cur"
               :group="summary.group"
               :calendar="summary.calendar"
+              :dates="sel.calendar"
               :title="t('reports.chart.title.' + summary.group)"
             />
           </div>
@@ -384,10 +435,27 @@ const providerLabel = (r: ReportMethod) => {
   margin-block: 0 1rem;
   font-size: 0.9rem;
 }
+/* The six ranges do not fit in one row on a phone: they wrap rather than widen the page. */
+.range {
+  flex-wrap: wrap;
+  max-inline-size: 100%;
+}
+/* From and To wrap together, never one at the end of a row and the other at the start of the next. */
+.date-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
 .date-field {
   display: inline-flex;
   gap: 0.4rem;
   align-items: center;
+}
+.custom-problem {
+  margin-block: 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--p-message-error-simple-color, var(--p-red-600));
 }
 .report-error {
   margin-block-end: 1rem;

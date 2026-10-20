@@ -217,7 +217,7 @@ func TestWantedProfile(t *testing.T) {
 		t.Fatalf("languages %v, photo %q", p.Langs, p.Photo)
 	}
 	def, fa, en := p.Langs[""], p.Langs["fa"], p.Langs["en"]
-	if names(fa.Commands) != "start menu paysupport" {
+	if names(fa.Commands) != "start menu new renew status paysupport" {
 		t.Fatalf("customer menu without terms links: %q", names(fa.Commands))
 	}
 	if def.Description != fa.Description || def.About != fa.About || def.Commands[0].Description != fa.Commands[0].Description {
@@ -230,19 +230,19 @@ func TestWantedProfile(t *testing.T) {
 	if fa.About == en.About {
 		t.Fatal("the Persian profile is in English")
 	}
-	if got := names(p.Staff[1]); got != "start menu paysupport admin dashboard" {
+	if got := names(p.Staff[1]); got != "start menu new renew status paysupport admin dashboard" {
 		t.Fatalf("owner menu: %q", got)
 	}
-	if p.Staff[1][3].Description != cat.Default("en", "profile.cmd.admin") {
+	if p.Staff[1][6].Description != cat.Default("en", "profile.cmd.admin") {
 		t.Fatalf("the owner's menu is not in their language: %+v", p.Staff[1])
 	}
-	if got := names(p.Staff[2]); got != "start menu paysupport dashboard" {
+	if got := names(p.Staff[2]); got != "start menu new renew status paysupport dashboard" {
 		t.Fatalf("support menu: %q", got)
 	}
 	if p.Staff[2][0].Description != cat.Default("fa", "profile.cmd.start") {
 		t.Fatal("staff without a language get the first language")
 	}
-	if got := names(p.Staff[3]); got != "start menu paysupport admin dashboard" {
+	if got := names(p.Staff[3]); got != "start menu new renew status paysupport admin dashboard" {
 		t.Fatalf("admin menu: %q", got)
 	}
 
@@ -251,7 +251,7 @@ func TestWantedProfile(t *testing.T) {
 		t.Fatalf("override dropped: %v", dropped)
 	}
 	p, _ = wantedProfile(cat, set, "", true, "")
-	if names(p.Langs["en"].Commands) != "start menu terms paysupport" || p.Langs["en"].About != "Best VPN in town" {
+	if names(p.Langs["en"].Commands) != "start menu new renew status terms paysupport" || p.Langs["en"].About != "Best VPN in town" {
 		t.Fatalf("with a privacy link and an override: %+v", p.Langs["en"])
 	}
 	if p.Langs["fa"].About == "Best VPN in town" {
@@ -284,7 +284,7 @@ func TestProfileSyncSetsOnlyWhatChanged(t *testing.T) {
 	if got := strings.Join(api.take(), " "); got != want {
 		t.Fatalf("first sync:\n%s\nwant:\n%s", got, want)
 	}
-	if api.text["description/en"] != cat.Default("en", "profile.description") || names(api.cmds["7/"]) != "start menu paysupport admin dashboard" {
+	if api.text["description/en"] != cat.Default("en", "profile.description") || names(api.cmds["7/"]) != "start menu new renew status paysupport admin dashboard" {
 		t.Fatalf("set: %v %v", api.text, api.cmds)
 	}
 	apply()

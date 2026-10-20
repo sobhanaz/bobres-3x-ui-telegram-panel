@@ -56,7 +56,7 @@ func (s *Server) giftCodeItems(ctx context.Context, codes []store.GiftCode) []gi
 		}
 	}
 	users := s.usersByID(ctx, ids)
-	now := time.Now()
+	now := s.now()
 	items := make([]giftCodeJSON, 0, len(codes))
 	for i := range codes {
 		items = append(items, giftCodeOf(&codes[i], now, users))
@@ -184,20 +184,32 @@ func (s *Server) listGiftRedemptions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func utcStamp(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+// giftCodeColumns are the columns of gift-codes.csv in the order they were added
+// (English names, new columns at the end), the contract of the files in
+// docs/14-reports.md: created_utc is the instant, created_local the same instant on the wall
+// clocks of the zone the tz column names, and a Jalali file (?calendar=jalali)
+// has one more column at the very end, created_jalali.
+var giftCodeColumns = []string{"created_utc", "code_last4", "kind", "amount", "currency", "max_redemptions", "per_customer_limit", "redeemed",
+	"status", "expires_utc", "last_redeemed_utc", "note", "created_by_telegram_id", "code_id", "created_local", "tz"}
 
-func utcStampOrEmpty(t *time.Time) string {
+// giftRedemptionColumns are the columns of a code's redemptions file, in the same way.
+var giftRedemptionColumns = []string{"time_utc", "telegram_id", "username", "number", "amount", "currency", "balance_after", "redemption_id",
+	"time_local", "tz"}
+
+// utcOrEmpty is an optional instant in UTC (the clock's rule), or nothing.
+func utcOrEmpty(c clock, t *time.Time) string {
 	if t == nil {
 		return ""
 	}
-	return utcStamp(*t)
+	return c.utc(*t)
 }
 
-// exportGiftCodes: GET /api/v1/gift-codes.csv?status=&q= is the list as a file, newest
-// first, at most maxGiftCSVRows rows: an export like the ledger's (streamCSV: UTF-8
-// with a byte-order mark, a place among the running exports, a deadline, an
-// "export incomplete" note, an audit entry with how it ended). It never holds a
-// code, only the last four characters; text cells go through reportText, so a
+// exportGiftCodes: GET /api/v1/gift-codes.csv?status=&q=&tz=&calendar= is the list as
+// a file, newest first, at most maxGiftCSVRows rows: an export like the ledger's
+// (streamCSV: UTF-8 with a byte-order mark, a place among the running exports, a
+// deadline, an "export incomplete" note, an audit entry with how it ended) that
+// follows the rules of docs/14-reports.md for its cells and dates. It never holds
+// a code, only the last four characters; text cells go through textCell, so a
 // note that is a spreadsheet formula is quoted.
 func (s *Server) exportGiftCodes(w http.ResponseWriter, r *http.Request) {
 	f := giftFilter(r)
@@ -207,13 +219,20 @@ func (s *Server) exportGiftCodes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid", "status must be active, disabled, expired or used_up")
 		return
 	}
-	now := time.Now()
+	clk, ok := s.exportClock(w, r)
+	if !ok {
+		return
+	}
+	header := append([]string{}, giftCodeColumns...)
+	if clk.jalali {
+		header = append(header, "created_jalali")
+	}
+	now := s.now()
 	s.streamCSV(w, r, csvExport{
-		name:   "gift-codes-" + s.now().UTC().Format("20060102-1504") + ".csv",
+		name:   exportFileName("gift-codes", clk, nil, nil, now),
 		action: "export.gift_codes",
 		query:  r.URL.Query(),
-		header: []string{"created_utc", "code_last4", "kind", "amount", "currency", "max_redemptions", "per_customer_limit", "redeemed",
-			"status", "expires_utc", "last_redeemed_utc", "note", "created_by_telegram_id", "code_id"},
+		header: header,
 		each: func(ctx context.Context, row func(cells ...string) error) (bool, error) {
 			return s.cfg.Store.EachGiftCode(ctx, f, maxGiftCSVRows, func(g store.GiftCodeRow) error {
 				kind := "custom"
@@ -224,9 +243,14 @@ func (s *Server) exportGiftCodes(w http.ResponseWriter, r *http.Request) {
 				if g.CreatedByTelegramID != 0 {
 					by = strconv.FormatInt(g.CreatedByTelegramID, 10)
 				}
-				return row(utcStamp(g.CreatedAt), reportText(g.Tail), kind, decimal(g.Amount, g.Currency), reportText(g.Currency),
+				cells := []string{clk.utc(g.CreatedAt), textCell(g.Tail), kind, decimal(g.Amount, g.Currency), textCell(g.Currency),
 					strconv.Itoa(g.MaxRedemptions), strconv.Itoa(g.PerCustomerLimit), strconv.Itoa(g.Redeemed),
-					domain.GiftCodeStatus(&g.GiftCode, now), utcStampOrEmpty(g.ExpiresAt), utcStampOrEmpty(g.LastRedeemedAt), reportText(g.Note), by, g.ID)
+					domain.GiftCodeStatus(&g.GiftCode, now), utcOrEmpty(clk, g.ExpiresAt), utcOrEmpty(clk, g.LastRedeemedAt), textCell(g.Note), by, g.ID,
+					clk.local(g.CreatedAt), clk.zone}
+				if clk.jalali {
+					cells = append(cells, clk.jalaliTime(g.CreatedAt))
+				}
+				return row(cells...)
 			})
 		},
 		moreNote: moreEntriesNote(maxGiftCSVRows),
@@ -234,7 +258,8 @@ func (s *Server) exportGiftCodes(w http.ResponseWriter, r *http.Request) {
 }
 
 // exportGiftRedemptions: GET /api/v1/gift-codes/{id}/redemptions.csv, who redeemed one
-// code, newest first, as exportGiftCodes writes its file.
+// code, newest first, as exportGiftCodes writes its file (time_local, tz and, in a
+// Jalali file, time_jalali after the machine columns).
 func (s *Server) exportGiftRedemptions(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
@@ -245,17 +270,30 @@ func (s *Server) exportGiftRedemptions(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "export gift redemptions", err)
 		return
 	}
+	clk, ok := s.exportClock(w, r)
+	if !ok {
+		return
+	}
+	header := append([]string{}, giftRedemptionColumns...)
+	if clk.jalali {
+		header = append(header, timeJalali)
+	}
 	q := r.URL.Query()
 	q.Set("code_id", g.ID)
 	s.streamCSV(w, r, csvExport{
-		name:   "gift-code-" + g.Tail + "-redemptions-" + s.now().UTC().Format("20060102-1504") + ".csv",
+		name:   exportFileName("gift-code-"+g.Tail+"-redemptions", clk, nil, nil, s.now()),
 		action: "export.gift_redemptions",
 		query:  q,
-		header: []string{"time_utc", "telegram_id", "username", "number", "amount", "currency", "balance_after", "redemption_id"},
+		header: header,
 		each: func(ctx context.Context, row func(cells ...string) error) (bool, error) {
 			return s.cfg.Store.EachGiftRedemption(ctx, g.ID, maxGiftCSVRows, func(x store.GiftRedemptionRow) error {
-				return row(utcStamp(x.CreatedAt), strconv.FormatInt(x.TelegramID, 10), reportText(x.Username), strconv.Itoa(x.Seq),
-					decimal(x.Amount, x.Currency), reportText(x.Currency), decimal(x.BalanceAfter, x.Currency), x.ID)
+				cells := []string{clk.utc(x.CreatedAt), strconv.FormatInt(x.TelegramID, 10), textCell(x.Username), strconv.Itoa(x.Seq),
+					decimal(x.Amount, x.Currency), textCell(x.Currency), decimal(x.BalanceAfter, x.Currency), x.ID,
+					clk.local(x.CreatedAt), clk.zone}
+				if clk.jalali {
+					cells = append(cells, clk.jalaliTime(x.CreatedAt))
+				}
+				return row(cells...)
 			})
 		},
 		moreNote: moreEntriesNote(maxGiftCSVRows),

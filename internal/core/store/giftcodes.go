@@ -11,7 +11,7 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-// GiftCode mirrors core.gift_codes (migration 00025). The code itself is never
+// GiftCode mirrors core.gift_codes (migration 00026). The code itself is never
 // stored: only a keyed hash of it (Hash, set when a row is read to be redeemed)
 // and its last four characters (Tail), so staff can tell codes apart.
 type GiftCode struct {

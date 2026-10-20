@@ -191,36 +191,29 @@ func (c *Client) TestBroadcast(ctx context.Context, t TestBroadcast) (*TestResul
 }
 
 // UpdateCheck is the bot's last look for a newer release (release.Status).
-type UpdateCheck struct {
-	Current string `json:"current"`
-	Latest  string `json:"latest"`
-	// Channel is the release channel the bot follows (stable or beta; an
-	// older bot sent the latest release's own channel here).
-	Channel string `json:"channel"`
-	// Issued is when Latest was signed (2006-01-02T15:04Z), "" when the bot
-	// does not say.
-	Issued    string `json:"issued,omitempty"`
-	Newer     bool   `json:"newer"`
-	Verified  bool   `json:"verified"`
-	CheckedAt int64  `json:"checked_at"`
-	Error     string `json:"error"`
-	Detail    string `json:"detail"`
-	// Covered is core's own answer, never the bot's, and ADVISORY: whether
-	// the installed license's update date (updates_until) is not before the
-	// day Latest was issued. false adds a note ("this release is newer than
-	// your license's update date") to the update check and hides nothing:
-	// the update is offered and installed all the same. nil when no license
-	// is in force (the free tier, the trial and an ended license have no
-	// update date) or the day is not known.
-	Covered *bool `json:"covered,omitempty"`
-}
+type UpdateCheck = domain.UpdateCheck
 
 // CheckUpdates reads the bot's cached update check (it does not make the bot
 // look again), within 3 seconds.
 func (c *Client) CheckUpdates(ctx context.Context) (*UpdateCheck, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/internal/update-check", nil)
+	return c.updateCheck(ctx, http.MethodGet, "/internal/update-check")
+}
+
+// CheckUpdatesNow makes the bot look for a newer release now (the dashboard's
+// "Check again"): the bot reloads its settings, asks GitHub, verifies what it
+// finds and answers with the outcome, a failed look included (its error and
+// detail say why). The bot bounds its own look; core waits at most 25 seconds,
+// inside the dashboard's 30-second write limit.
+func (c *Client) CheckUpdatesNow(ctx context.Context) (*UpdateCheck, error) {
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	return c.updateCheck(ctx, http.MethodPost, "/internal/update-check/refresh")
+}
+
+func (c *Client) updateCheck(ctx context.Context, method, path string) (*UpdateCheck, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("botfiles: %w", err)
 	}
