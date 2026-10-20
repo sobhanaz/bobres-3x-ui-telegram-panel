@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
@@ -29,6 +30,8 @@ type Dispatcher struct {
 	ctx    context.Context
 	handle HandleFunc
 	urgent chan struct{} // bounds pre-checkout answers running outside the queues
+
+	received atomic.Uint64 // updates accepted since start (the Monitoring page's updates per minute)
 }
 
 // maxUrgent bounds concurrent pre-checkout answers handled outside the queues.
@@ -61,6 +64,7 @@ func (d *Dispatcher) Dispatch(u tg.Update) {
 	if d.closed {
 		return // shutting down: Telegram redelivers what we did not confirm
 	}
+	d.received.Add(1)
 	if u.PreCheckoutQuery != nil {
 		// Telegram cancels a payment whose pre-checkout is not answered within
 		// 10 s, so it must not wait behind a slow update of the same worker.
@@ -85,6 +89,18 @@ func (d *Dispatcher) Dispatch(u tg.Update) {
 		id = -id
 	}
 	d.queues[id%int64(len(d.queues))] <- u
+}
+
+// Received is how many updates Dispatch has accepted since the dispatcher started.
+func (d *Dispatcher) Received() uint64 { return d.received.Load() }
+
+// Queued is how many updates wait for a worker right now.
+func (d *Dispatcher) Queued() int {
+	n := 0
+	for _, q := range d.queues {
+		n += len(q)
+	}
+	return n
 }
 
 // Stop drains the queues and waits for in-flight updates, until ctx expires.

@@ -1328,6 +1328,10 @@
         "title": "Support",
         "desc": "How support tickets are handled."
       },
+      "monitor": {
+        "title": "Monitoring",
+        "desc": "What core watches on the server and in the stack, and when it raises an alert."
+      },
       "growth": {
         "title": "Growth",
         "desc": "Tools that help customers bring in more customers."
@@ -1472,6 +1476,36 @@
             "label": "Offer Telegram Stars",
             "help": "When off, customers do not see Stars, even with a rate set."
           }
+        }
+      },
+      "monitor": {
+        "enabled": {
+          "label": "Monitoring",
+          "help": "Core records the figures of the server and of the stack every 30 seconds for the Monitoring page and raises its alerts. Turned off, it records and alerts nothing; the history stays readable."
+        },
+        "disk_pct": {
+          "label": "Disk full alert (%)",
+          "help": "A disk of BOBRES or of Docker that is fuller than this raises an alert."
+        },
+        "mem_pct": {
+          "label": "Memory alert (%)",
+          "help": "Memory use above this for the minutes below raises an alert."
+        },
+        "mem_minutes": {
+          "label": "Memory alert after (minutes)",
+          "help": "How long memory must stay above the percent before the alert is raised."
+        },
+        "restarts": {
+          "label": "Container restarts alert",
+          "help": "A container that restarts this many times within 15 minutes raises an alert: it is in a crash loop."
+        },
+        "collector_minutes": {
+          "label": "Collector silent for (minutes)",
+          "help": "Minutes without a snapshot from the host collector before an alert is raised. Only where the collector is installed."
+        },
+        "ci_alert": {
+          "label": "Alert when CI on main fails",
+          "help": "While the latest CI run on the repository's main branch has failed, an alert is raised. For a store built from main; leave it off for a store that runs releases."
         }
       },
       "growth": {
@@ -2533,6 +2567,13 @@
         "tls_failing": "{address} has not served a valid HTTPS certificate for 30 minutes",
         "tls_caddy_down": "Caddy, which serves the store's HTTPS addresses, is not answering: the dashboard and the payment pages cannot be reached",
         "tls_problem": "The store's HTTPS setting is not working as saved",
+        "monitor_disk": "The disk at {mount} is {percent}% full ({free} free).",
+        "monitor_memory": "Memory use has been above {percent}% for more than {minutes} minute | Memory use has been above {percent}% for more than {minutes} minutes",
+        "monitor_container_down": "The container {container} is not running.",
+        "monitor_container_unhealthy": "The container {container} reports that it is unhealthy.",
+        "monitor_container_restarting": "The container {container} keeps restarting: {count} restart in the last {minutes} minutes | The container {container} keeps restarting: {count} restarts in the last {minutes} minutes",
+        "monitor_collector_stale": "The server monitor has sent no new snapshot for {minutes} minute, so the Monitoring page is out of date. Check it with: sudo bobres monitor status | The server monitor has sent no new snapshot for {minutes} minutes, so the Monitoring page is out of date. Check it with: sudo bobres monitor status",
+        "monitor_ci": "The latest CI run on main failed ({workflow}).",
         "check": "The {key} check reports a problem"
       }
     },

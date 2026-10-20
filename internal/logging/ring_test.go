@@ -75,6 +75,29 @@ func TestRingWrapsOldestFirstAndCutsLongFields(t *testing.T) {
 	}
 }
 
+// The counters never wrap, unlike the lines the ring keeps, and count what stdout's level hides.
+func TestRingCountsEveryWarningAndError(t *testing.T) {
+	ring := NewRing(2)
+	l := newLogger(&bytes.Buffer{}, ring, "core", "error", "json")
+	for range 5 {
+		l.Warn("w")
+	}
+	l.Error("e")
+	l.Info("i")
+	l.Debug("d")
+	if w, e := ring.Counts(); w != 5 || e != 1 {
+		t.Fatalf("counts %d warnings, %d errors, want 5 and 1", w, e)
+	}
+	if len(ring.Lines()) != 2 {
+		t.Fatalf("lines: %d", len(ring.Lines()))
+	}
+	w0, e0 := Counts()
+	NewWithWriter(&bytes.Buffer{}, "core", "info", "json").Error("counted in the process's ring")
+	if w, e := Counts(); w != w0 || e != e0+1 {
+		t.Fatalf("process counts %d,%d after %d,%d", w, e, w0, e0)
+	}
+}
+
 func TestRingConcurrentWrites(t *testing.T) {
 	ring := NewRing(RingSize)
 	l := newLogger(&bytes.Buffer{}, ring, "core", "warn", "json")

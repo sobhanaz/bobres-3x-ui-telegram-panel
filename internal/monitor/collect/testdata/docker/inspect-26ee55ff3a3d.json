@@ -1,0 +1,23 @@
+{
+  "Id": "26ee55ff3a3d",
+  "Name": "/bobres-provisioner-1",
+  "RestartCount": 1,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 1121,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:06.182146212Z",
+    "FinishedAt": "2026-10-19T17:37:05.795756613Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "ghcr.io/sobhanaz/bobres-provisioner:0.2.0@sha256:5d81e7e6e02aaa35a75fe0bd462920d4eafdf9db4f022ce1a8b64549fa3b8c63",
+  "Created": "2026-10-14T06:30:35.059753991Z"
+}

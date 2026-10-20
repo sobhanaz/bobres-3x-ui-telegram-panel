@@ -1,0 +1,23 @@
+{
+  "Id": "e6de1c098e0d",
+  "Name": "/bobres-postgres-1",
+  "RestartCount": 0,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 752,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:05.203572793Z",
+    "FinishedAt": "2026-10-14T23:57:30.486669725Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "postgres:16-alpine",
+  "Created": "2026-10-12T23:26:49.285401227Z"
+}

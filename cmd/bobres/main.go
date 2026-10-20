@@ -98,6 +98,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return newOps(stdin, out, errOut).sslCmd(args[1:])
 	case "secrets":
 		return newRotator(newOps(stdin, out, errOut)).secretsCmd(args[1:])
+	case "monitor":
+		return monitorCmd(args[1:], stdin, out, errOut)
 	default:
 		fmt.Fprintf(errOut, "bobres: unknown command %q\n\n", cmd)
 		usage(errOut)
@@ -148,6 +150,7 @@ Available now:
   ssl        The HTTPS certificate: ssl status | auto | ip | manual --cert FILE --key FILE
   secrets    Rotate a secret: secrets rotate bot-token|db-passwords|service-tokens|redis-password
   harden     Firewall (ufw), fail2ban, automatic security updates and swap, each asked first
+  monitor    Host monitoring for the dashboard: monitor status | enable | disable | snapshot
   doctor     Check this server (RAM, disk, ports, Docker, DNS, HTTPS certificate, hardening)
   check      Check the whole install (settings, services, disk, backups, bot token, release
              signature, license, servers): PASS/WARN/FAIL lines, exit 1 on a FAIL; --json

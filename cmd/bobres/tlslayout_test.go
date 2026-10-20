@@ -492,7 +492,7 @@ func TestWriteIfMissingChecksTheOwnerAsRoot(t *testing.T) {
 // A whole install as root (the real one runs as root on a server): tls/ goes to
 // the agent, backups/ to the backup service's user and run/update/ (where the
 // dashboard drops its update requests) to core's, each by a chown of its own
-// (run/ stays root's), and the files and modes of the layout are the ones a
+// (run/ and run/monitor stay root's), and the files and modes of the layout are the ones a
 // server gets.
 func TestInstallAsRootGivesTheDirectoriesAway(t *testing.T) {
 	f := withFakeRoot(t)
@@ -502,10 +502,10 @@ func TestInstallAsRootGivesTheDirectoriesAway(t *testing.T) {
 	if code := ins.install(append(baseArgs(dir), "--no-start")); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if want := []string{"backups 65532:65532", "run 0:0", "tls 65532:65532", "update 65532:65532"}; !slices.Equal(sortedCopy(f.chowned), want) {
+	if want := []string{"backups 65532:65532", "monitor 0:0", "run 0:0", "tls 65532:65532", "update 65532:65532"}; !slices.Equal(sortedCopy(f.chowned), want) {
 		t.Errorf("chown calls %q, want %q", f.chowned, want)
 	}
-	for path, mode := range map[string]os.FileMode{"run": 0o755, filepath.Join("run", "update"): 0o700} {
+	for path, mode := range map[string]os.FileMode{"run": 0o755, filepath.Join("run", "update"): 0o700, filepath.Join("run", "monitor"): 0o755} {
 		if st, err := os.Stat(filepath.Join(dir, path)); err != nil || !st.IsDir() || st.Mode().Perm() != mode {
 			t.Errorf("%s: %v %v, want a directory of mode %04o", path, st, err, mode)
 		}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 00030 teaches the table of the dashboard's updates (00025) to hold restores too: three columns
+// 00031 teaches the table of the dashboard's updates (00025) to hold restores too: three columns
 // with defaults that keep every row there is an update, a channel that may be ” for a restore
 // only, and the same single open request for both. Down removes the restores and the columns
 // and keeps the updates; Up runs again afterwards.
@@ -14,8 +14,8 @@ func TestSystemRestoresMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 29); err != nil {
-		t.Fatalf("up to 29: %v", err)
+	if err := upTo(ctx, dsn, "core", 30); err != nil {
+		t.Fatalf("up to 30: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -29,7 +29,7 @@ func TestSystemRestoresMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := upTo(ctx, dsn, "core", 30); err != nil {
+	if err := upTo(ctx, dsn, "core", 31); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
 	var action, subject, source string
@@ -82,7 +82,7 @@ func TestSystemRestoresMigration(t *testing.T) {
 		}
 	}
 
-	if err := downTo(ctx, dsn, "core", 29); err != nil {
+	if err := downTo(ctx, dsn, "core", 30); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var n int

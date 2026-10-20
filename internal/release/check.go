@@ -14,7 +14,7 @@ import (
 )
 
 // releasesURL is this repository's GitHub releases.
-const releasesURL = "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases"
+const releasesURL = "https://github.com/" + Repo + "/releases"
 
 // DefaultBaseURL is where the latest (non-pre-release) GitHub release's files
 // are, as in install/install.sh.

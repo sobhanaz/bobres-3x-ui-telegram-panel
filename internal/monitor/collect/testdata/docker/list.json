@@ -1,0 +1,376 @@
+[
+  {
+    "Id": "0a3d06e4cd8b9657bb84648e69072cf40210a0944872ac5d617324b41985cef8",
+    "Names": [
+      "/bobres-bot-1"
+    ],
+    "Image": "ghcr.io/sobhanaz/bobres-bot:0.2.0@sha256:3384685ce3b4c547f87f352237e845a8a0b6d95f5e41a5122b7a485900551af9",
+    "ImageID": "sha256:3384685ce3b4c547f87f352237e845a8a0b6d95f5e41a5122b7a485900551af9",
+    "Command": "/app",
+    "Created": 1791959435,
+    "Ports": [],
+    "Labels": {
+      "com.docker.compose.config-hash": "de40a125b33fc55d387f747d139ad88547ea1fa781913569d9b34f04d099af34",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "core:service_healthy:false,redis:service_healthy:false",
+      "com.docker.compose.image": "sha256:3d3ff254b29436443af362a45a5c17ce906c326bdd332a6e401f375979bc5c61",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "bot-1",
+      "com.docker.compose.service": "bot",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.created": "2026-10-14T06:19:50.187Z",
+      "org.opencontainers.image.description": "Telegram bot and management panel for selling and managing 3x-ui subscriptions",
+      "org.opencontainers.image.licenses": "NOASSERTION",
+      "org.opencontainers.image.revision": "c76f56690912e346c88d84618e5fdd33d4b007fb",
+      "org.opencontainers.image.source": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.title": "bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.version": "0.2.0"
+    },
+    "State": "restarting",
+    "Status": "Restarting (1) 57 seconds ago",
+    "Health": {
+      "Status": "unhealthy",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "bfe0e3fe57dcdd19c6db67618c43b41a36d0c5d4ef7459919f580d33b2fa0201",
+    "Names": [
+      "/bobres-tls-agent-1"
+    ],
+    "Image": "ghcr.io/sobhanaz/bobres-core:0.2.0@sha256:7312e6547fc6a34856ea6eae2df64d7d56655d0513d762cadf86d055086b1396",
+    "ImageID": "sha256:7312e6547fc6a34856ea6eae2df64d7d56655d0513d762cadf86d055086b1396",
+    "Command": "/app tls-agent",
+    "Created": 1791959435,
+    "Ports": [],
+    "Labels": {
+      "com.docker.compose.config-hash": "ebe82112994c6cacd5aa3e24a414a834778958db9539aaa7343ea64c8b68e088",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:e38358e8a2d1c235addcd62de3bfccd00e821b3e9cb1411316db8589cdba08d0",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "tls-agent-1",
+      "com.docker.compose.service": "tls-agent",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.created": "2026-10-14T06:19:49.266Z",
+      "org.opencontainers.image.description": "Telegram bot and management panel for selling and managing 3x-ui subscriptions",
+      "org.opencontainers.image.licenses": "NOASSERTION",
+      "org.opencontainers.image.revision": "c76f56690912e346c88d84618e5fdd33d4b007fb",
+      "org.opencontainers.image.source": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.title": "bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.version": "0.2.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (unhealthy)",
+    "Health": {
+      "Status": "unhealthy",
+      "FailingStreak": 3889
+    }
+  },
+  {
+    "Id": "995876ae142103a51180ea19dec86888b9879849c027944b0d8f0f208d32f96e",
+    "Names": [
+      "/bobres-core-1"
+    ],
+    "Image": "ghcr.io/sobhanaz/bobres-core:0.2.0@sha256:7312e6547fc6a34856ea6eae2df64d7d56655d0513d762cadf86d055086b1396",
+    "ImageID": "sha256:7312e6547fc6a34856ea6eae2df64d7d56655d0513d762cadf86d055086b1396",
+    "Command": "/app",
+    "Created": 1791959435,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 8080,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "2cfaca9af8575d9dbc44d241a07a05ae14fd3fe34202070e03cc4b6ee41ef609",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "postgres:service_healthy:false",
+      "com.docker.compose.image": "sha256:e38358e8a2d1c235addcd62de3bfccd00e821b3e9cb1411316db8589cdba08d0",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "core-1",
+      "com.docker.compose.service": "core",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.created": "2026-10-14T06:19:49.266Z",
+      "org.opencontainers.image.description": "Telegram bot and management panel for selling and managing 3x-ui subscriptions",
+      "org.opencontainers.image.licenses": "NOASSERTION",
+      "org.opencontainers.image.revision": "c76f56690912e346c88d84618e5fdd33d4b007fb",
+      "org.opencontainers.image.source": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.title": "bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.version": "0.2.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (healthy)",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "858e05f51fc0dfef60d76048b3e263ff98d2bae8a4d4596e0daa590d1f788516",
+    "Names": [
+      "/bobres-backup-1"
+    ],
+    "Image": "ghcr.io/sobhanaz/bobres-backup:0.2.0@sha256:f630676454b10a4f4622a25b81ef1e90a37d753029b6cc09f54a1f9c6973f72d",
+    "ImageID": "sha256:f630676454b10a4f4622a25b81ef1e90a37d753029b6cc09f54a1f9c6973f72d",
+    "Command": "/app",
+    "Created": 1791959435,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 5432,
+        "Type": "tcp"
+      },
+      {
+        "IP": "",
+        "PrivatePort": 8080,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "309c49e59be0344e96d289db0c13754a8824c310b16d30b007f390af9568e763",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "postgres:service_healthy:false",
+      "com.docker.compose.image": "sha256:ec9ef17ed404448c0cfe0f9aa26cd9ae971f6f728d82f75386d858ccca42fe2e",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "backup-1",
+      "com.docker.compose.service": "backup",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.created": "2026-10-14T06:19:48.921Z",
+      "org.opencontainers.image.description": "Telegram bot and management panel for selling and managing 3x-ui subscriptions",
+      "org.opencontainers.image.licenses": "NOASSERTION",
+      "org.opencontainers.image.revision": "c76f56690912e346c88d84618e5fdd33d4b007fb",
+      "org.opencontainers.image.source": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.title": "bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.version": "0.2.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (healthy)",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "e913e5ad770809eaa89010368fbd3823314fc44a1d43317e5933706b81104818",
+    "Names": [
+      "/bobres-payments-1"
+    ],
+    "Image": "ghcr.io/sobhanaz/bobres-payments:0.2.0@sha256:5e2fcaf9b69b0cb59d551a730c4d7d4859774be03e82b720817edbd5e04020ef",
+    "ImageID": "sha256:5e2fcaf9b69b0cb59d551a730c4d7d4859774be03e82b720817edbd5e04020ef",
+    "Command": "/app",
+    "Created": 1791959435,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 8080,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "d7ca17a7cf574db1e2e558cfa8371fd77f3493c531ca4430c73777e2b4bce679",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "postgres:service_healthy:false",
+      "com.docker.compose.image": "sha256:a67e19a02728392e380c778297b2efe78ef4653cef2b35a4094b36f31cb9bf1e",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "payments-1",
+      "com.docker.compose.service": "payments",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.created": "2026-10-14T06:19:59.266Z",
+      "org.opencontainers.image.description": "Telegram bot and management panel for selling and managing 3x-ui subscriptions",
+      "org.opencontainers.image.licenses": "NOASSERTION",
+      "org.opencontainers.image.revision": "c76f56690912e346c88d84618e5fdd33d4b007fb",
+      "org.opencontainers.image.source": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.title": "bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.version": "0.2.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (healthy)",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "26ee55ff3a3d631aeec8870a94a25689dfdb8d742afefdca852c0aa09ce2b1e1",
+    "Names": [
+      "/bobres-provisioner-1"
+    ],
+    "Image": "ghcr.io/sobhanaz/bobres-provisioner:0.2.0@sha256:5d81e7e6e02aaa35a75fe0bd462920d4eafdf9db4f022ce1a8b64549fa3b8c63",
+    "ImageID": "sha256:5d81e7e6e02aaa35a75fe0bd462920d4eafdf9db4f022ce1a8b64549fa3b8c63",
+    "Command": "/app",
+    "Created": 1791959435,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 8080,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "ee4cfed828d2ef97668fe3741a77a69b602f48378c67851c79382db72859e155",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "postgres:service_healthy:false",
+      "com.docker.compose.image": "sha256:5b606c351373e45d2ae5c5d45f87f471dffe6e476bec51afa9a02e68e6f17c8e",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "provisioner-1",
+      "com.docker.compose.service": "provisioner",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.created": "2026-10-14T06:19:57.879Z",
+      "org.opencontainers.image.description": "Telegram bot and management panel for selling and managing 3x-ui subscriptions",
+      "org.opencontainers.image.licenses": "NOASSERTION",
+      "org.opencontainers.image.revision": "c76f56690912e346c88d84618e5fdd33d4b007fb",
+      "org.opencontainers.image.source": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.title": "bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.url": "https://github.com/sobhanaz/bobres-3x-ui-telegram-panel",
+      "org.opencontainers.image.version": "0.2.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (healthy)",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "cdb81141d2698cf22d3df56393be54c25e1a166e0c21865106c97044cce0cbe6",
+    "Names": [
+      "/bobres-caddy-1"
+    ],
+    "Image": "caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
+    "ImageID": "sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
+    "Command": "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+    "Created": 1791936589,
+    "Ports": [],
+    "Labels": {
+      "com.docker.compose.config-hash": "fb59ca1dd911cb6f6b62c496211fd5705ef9db883a58a1daa7392bad22f0bfe1",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "core:service_healthy:false,payments:service_healthy:false",
+      "com.docker.compose.image": "sha256:173b26306d711395accaeba8b67afcaad2a085ccb1e6bf26010bfe8c095a5229",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.replace": "caddy-1",
+      "com.docker.compose.service": "caddy",
+      "com.docker.compose.version": "5.6.0",
+      "org.opencontainers.image.description": "a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go",
+      "org.opencontainers.image.documentation": "https://caddyserver.com/docs",
+      "org.opencontainers.image.licenses": "Apache-2.0",
+      "org.opencontainers.image.source": "https://github.com/caddyserver/caddy-docker",
+      "org.opencontainers.image.title": "Caddy",
+      "org.opencontainers.image.url": "https://caddyserver.com",
+      "org.opencontainers.image.vendor": "Light Code Labs",
+      "org.opencontainers.image.version": "v2.11.7"
+    },
+    "State": "exited",
+    "Status": "Exited (0) 5 days ago",
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "e6de1c098e0d46d5f9556a33e6c7cfa8885b343bb1abfcaa7b164aa0249f88ef",
+    "Names": [
+      "/bobres-postgres-1"
+    ],
+    "Image": "postgres:16-alpine",
+    "ImageID": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "Command": "docker-entrypoint.sh postgres",
+    "Created": 1791847609,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 5432,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "37922f26462039e0175021eaf486fc5e38c1d8d6a409432a485d830efcb8a70f",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:1a66d744c1b459e13b05a8fca341da84cb63383e99ce262210efee5a319d4551",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.service": "postgres",
+      "com.docker.compose.version": "5.6.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (healthy)",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  {
+    "Id": "92cb9c40664f3726ca3c2c69a3d9e99f40a807b33ddffd50e4345a5f6ac6fdfd",
+    "Names": [
+      "/bobres-redis-1"
+    ],
+    "Image": "redis:7-alpine",
+    "ImageID": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+    "Command": "docker-entrypoint.sh sh -c 'exec redis-server --requirepass \"$REDIS_PASSWORD\" --appendonly yes'",
+    "Created": 1791847609,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 6379,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "b4b26fde250093b284c63d5ae96b78e2cc1baceaf1b18c66b276a9f274094f85",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "bobres",
+      "com.docker.compose.project.config_files": "/opt/bobres/docker-compose.yml",
+      "com.docker.compose.project.environment_file": "/opt/bobres/.env",
+      "com.docker.compose.project.working_dir": "/opt/bobres",
+      "com.docker.compose.service": "redis",
+      "com.docker.compose.version": "5.6.0"
+    },
+    "State": "running",
+    "Status": "Up 16 hours (healthy)",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  }
+]

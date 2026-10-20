@@ -40,3 +40,16 @@ var UpdaterPathUnit []byte
 //
 //go:embed systemd/bobres-updater.service
 var UpdaterServiceUnit []byte
+
+// MonitorServiceUnit is bobres-monitor.service, which runs
+// `bobres monitor snapshot` as root. @DIR@ is the install directory and @EXE@
+// the bobres binary.
+//
+//go:embed systemd/bobres-monitor.service
+var MonitorServiceUnit []byte
+
+// MonitorTimerUnit is bobres-monitor.timer, which starts the service every 30
+// seconds.
+//
+//go:embed systemd/bobres-monitor.timer
+var MonitorTimerUnit []byte

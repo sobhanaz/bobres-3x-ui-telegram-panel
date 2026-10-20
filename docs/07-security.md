@@ -217,6 +217,58 @@ helper above ([installer, "Restoring from the dashboard"](06-installer.md), [run
   the old key); an attacker who can write to `backups/` as the backup service's user and also holds the key; a host
   where another program runs as uid 65532 and reaches `run/update`.
 
+## Host monitoring
+
+The Monitoring section ([04-dashboard.md](04-dashboard.md)) needs to see the server and its containers; core must still never get the Docker
+socket or any other power over the host. So a root helper on the host (the collector, `bobres monitor snapshot`, run every 30 seconds by
+`bobres-monitor.timer`; [installer, "Host monitoring"](06-installer.md)) writes one file into a folder core mounts **read only**, the same
+model as the updater turned around.
+
+| | core | the collector (root, on the host) | others |
+|---|---|---|---|
+| `run/monitor/` (`/run/bobres-monitor` in core): owner root, mode 0755 | **read only** mount, the only one | writes `snapshot.json` by a temporary file and a rename | none |
+| the Docker socket, the rest of `/opt/bobres`, `.env` | none | the socket (read only calls), the install directory's `.env` for the list of expected services only | root only |
+
+- **Nothing in the folder is core's to write.** Core cannot change the file, plant a link in the folder or fill it: the mount is read only
+  and the folder is root's. The collector still checks the folder before it writes or reads there (real directories, owned by root, not
+  writable by others), and reads back its own previous snapshot (for CPU shares) only if the file is a regular file of its own user that
+  others cannot write. A snapshot that does not pass is not used.
+- **What the snapshot holds is allow-listed field by field** (the structs of `internal/monitor/snapshot` are the whole list; there is no
+  generic map and no pass-through of anything the engine or `systemctl` printed). Per container: the short id, name, Compose project and
+  service, image reference and tag (a digest is dropped), state, health, restart count, times, counters. **Never** a container's
+  environment, command line, labels apart from the two Compose ones, mounts, ports, networks or addresses; never an environment
+  variable of the host, a process list, a user, a file from a home directory, `.env`, or a key. `docker inspect` is never printed: only
+  named fields are decoded from it. The test suite plants secrets in recorded engine and `kubectl` answers (an environment variable,
+  a label, a mount, a pod's env and annotations) and fails if one reaches the file.
+- **The free text that does get in is scrubbed:** the journal and Caddy lines are cut to 240 characters and have bot tokens, `Bearer`
+  values, `key=value` secrets (`token`, `secret`, `password`, `key`, `authorization`), URL credentials and query strings, `/sub/<token>`
+  paths, e-mail addresses, long hexadecimal or base64 runs and IP addresses replaced before they are written. On the lab server
+  the real file was searched for each of the 32 values of the install's `.env` that are 6 characters or longer: none was in it.
+- **Core reads the file as untrusted text** whoever wrote it ([02-events-and-apis.md](02-events-and-apis.md), "The snapshot"): opened
+  without following a link, a regular file of at most 1 MiB, strict schema version, every list bounded, every name checked against a
+  pattern, every number clamped, every text made plain (controls, bidirectional and zero-width characters removed, `<` and `>` replaced).
+  The dashboard shows these as text, never as HTML. A file that is wrong is "the collector's file cannot be read" on the page and
+  the alert **Collector quiet**, never a crash. A snapshot older than 90 seconds says nothing about now, and one dated in the future
+  is refused (like the updater's status, which core takes for an interrupted update after a while).
+- **The collector's own surface.** It is root, so the unit is confined (`ProtectSystem=strict` with write access to `run/monitor` only,
+  `NoNewPrivileges`, a private `/tmp`, the kernel, clock and cgroup protections, address families limited, 25% of a core and 192 MiB,
+  30 seconds at most). It talks to Docker with `GET` requests only and never to a TCP port of the engine, runs programs from a fixed
+  list of system directories with a minimal environment, caps what it reads from each (4 MiB of `/proc` files, the engine's answers, 64 KiB of
+  a restore point), and gives each source its own time limit, so a hung `docker` or `kubectl` costs its own section and not the run.
+  `journalctl` runs with `-p err` for fixed units; `kubectl` with `get` only.
+- **What a compromised core can do with this:** nothing it could not before. It can read the snapshot (the figures above, which the
+  dashboard shows to owner and admin anyway). It cannot write it, start or stop the collector, or reach the socket. **What a compromised
+  collector (root on the host) can do:** everything root can, as `bobres update` can; the snapshot is how it could lie to the dashboard.
+- **Who sees what.** `monitor.read` (owner and admin); read only. The services' own log lines in the events list carry Telegram ids and are
+  the owner's only, as on the System page's logs tab. An alert's detail follows the permission it needs elsewhere (a gateway's error is the
+  owner's). The hostname, OS, kernel, the names and images of the containers and the mount points are visible to owner and admin.
+- **The CI feed** is the bot's, not core's: it asks GitHub's public API anonymously, for a repository fixed in the build; no credential is
+  sent or stored, the answer is bounded, shaped and checked again by core, and a link is kept only if it points into the repository.
+- **Kubernetes** is optional and only looked at where `kubectl` or `k3s` is on the host; BOBRES does not run there. The cluster's
+  answer is reduced to names, phases, readiness and restart counts. It was tried with recorded and constructed `kubectl` answers, not
+  against a live cluster.
+- **Off switch:** `sudo bobres monitor disable` removes the units and the snapshot. The compose mount can stay: with no collector the folder is empty.
+
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
 |---|---|

@@ -1,0 +1,23 @@
+{
+  "Id": "995876ae1421",
+  "Name": "/bobres-core-1",
+  "RestartCount": 1,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 1081,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:06.091923598Z",
+    "FinishedAt": "2026-10-19T17:37:05.744618177Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "ghcr.io/sobhanaz/bobres-core:0.2.0@sha256:7312e6547fc6a34856ea6eae2df64d7d56655d0513d762cadf86d055086b1396",
+  "Created": "2026-10-14T06:30:35.147471619Z"
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/backupclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/monitor"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/paymentsclient"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/provisionerclient"
 	coreserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/server"
@@ -217,6 +218,7 @@ func setup(rt *app.Runtime) error {
 		miniBot  web.MiniAppBot
 		miniJoin web.MiniAppMembers
 		releases domain.UpdateSource
+		monBot   monitor.Bot
 	)
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
@@ -224,6 +226,7 @@ func setup(rt *app.Runtime) error {
 		peer := botfiles.New(cfg.BotURL, cfg.BotInternalToken)
 		files, bot, licSrv, publicIP, miniAuth, miniBot, miniJoin, releases = peer, peer, peer, peer, peer, peer, peer, peer
 		logs["bot"] = peer
+		monBot = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
@@ -259,7 +262,14 @@ func setup(rt *app.Runtime) error {
 	// BOBRES_PUBLIC_URL on a local test setup that has no domain.
 	updates := dom.NewUpdates(domain.UpdatesConfig{Source: releases, Helper: sysupdate.NewDir(cfg.UpdateDir), Domain: storeDomain(cfg), Log: rt.Log})
 	rt.Go("updates", updates.Run)
-	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
+	// The Monitoring section: every 30 seconds core samples the host (from the snapshot the server's
+	// collector leaves in BOBRES_MONITOR_DIR, mounted read only; core has no Docker socket), the
+	// containers, itself, the queues, the bot, the panels and the gateways into the time series, and
+	// its alert rules run in the watchdog below.
+	mon := monitor.New(monitor.Config{Store: st, Domain: dom, Dir: cfg.MonitorDir, Health: system, Servers: prov, Gateways: pay, Payments: pay,
+		Backups: backupStatus(backups), Bot: monBot, Logs: monitorLogs(logs), Log: rt.Log, Version: version.Version})
+	rt.Go("monitor", mon.Run)
+	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay, Monitor: mon,
 		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups, Updates: updates,
 		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), MiniApp: miniapp.Handler(), MiniAppVerify: miniAuth, MiniAppBot: miniBot, MiniAppMembers: miniJoin, Log: rt.Log}).Register(rt.Mux)
 	// An activated license is renewed once a day through the bot (core has
@@ -281,7 +291,7 @@ func setup(rt *app.Runtime) error {
 	// service is not installed), deliveries, the bot's event feed, the
 	// license and the HTTPS certificates; the bot tells the staff when one
 	// goes wrong and when it is fixed (system.alert.v1).
-	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups, TLS: tlsMgr}
+	watch := domain.WatchdogSources{Health: system, Servers: prov, Gateways: pay, Backups: backups, TLS: tlsMgr, Monitor: mon}
 	rt.Go("watchdog", dom.NewWatchdog(watch, rt.Log).Run)
 	// The daily sales summary (off until the store turns it on): once a local
 	// day, yesterday's sales go to the staff who hold reports.read (the

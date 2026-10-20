@@ -1,0 +1,12 @@
+149 73 0:46 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/YXTOFQR2DKVSS6BWIEHVNJLC2E:/var/lib/docker/overlay2/l/OJFL3ITPXTWIWEGK7LSFUF7BZ2:/var/lib/docker/overlay2/l/42HPSCNFASNOFKJ556AU7Z4RJW,upperdir=/var/lib/docker/overlay2/ef035df061c003a9def3cfb3f49feb629255c157a47e3430a69fb76e23fb0e30/diff,workdir=/var/lib/docker/overlay2/ef035df061c003a9def3cfb3f49feb629255c157a47e3430a69fb76e23fb0e30/work,nouserxattr
+151 149 0:63 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+152 149 0:64 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+153 152 0:65 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666
+154 149 0:66 / /sys rw,nosuid,nodev,noexec,relatime - sysfs sysfs rw
+155 154 0:36 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw
+156 152 0:60 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+157 152 0:67 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k
+158 149 254:1 /docker/volumes/bobres-lab_bot_opt/_data /opt rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+159 149 0:68 / /run rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,mode=755
+160 149 0:69 / /tmp rw,nosuid,nodev,relatime - tmpfs tmpfs rw
+161 149 254:1 /docker/containers/ceb822487adc89c8b783e1073f8a6f899cd23b650d91e3f09190d5736fd6f3ad/hostname /etc/hostname rw,relatime - ext4 /dev/vda1 rw,discard

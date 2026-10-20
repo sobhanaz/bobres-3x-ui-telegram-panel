@@ -197,6 +197,10 @@ The plan as written, with what was built under each heading ("Built").
   service, the dashboard's System page (versions, health, open problems, and the newest warnings and errors of every
   service), and a core watchdog that checks the store every minute and alerts staff on Telegram
   (runbooks/README.md). No metrics, tracing or error-tracking stack, and no public status page.
+- Added after v0.7 (the Monitoring section): a host collector (a root timer writing a snapshot core reads read only; core still has no Docker socket),
+  core's own time series (30 s samples for 7 days, 5-minute averages to 30 days, in Postgres), alerts for disk, memory, containers and the
+  collector, and the repository's CI/CD facts through the bot ([04-dashboard.md](04-dashboard.md) "Monitoring API",
+  [06-installer.md](06-installer.md) "Host monitoring"). Still no Prometheus, Grafana, Loki or tracing.
 
 ### Update and license (for selling later)
 - `bobres update` pulls signed images, runs migrations, health checks, auto-rollback on failure.

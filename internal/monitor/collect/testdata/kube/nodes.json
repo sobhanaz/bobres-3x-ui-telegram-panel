@@ -1,0 +1,38 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "metadata": {
+        "name": "worker-1",
+        "labels": {
+          "beta.kubernetes.io/arch": "amd64",
+          "kubernetes.io/hostname": "worker-1",
+          "secret-looking-label": "label-value-must-not-leak"
+        },
+        "annotations": {"k3s.io/node-args": "[\"agent\",\"--token\",\"K10node-join-token-must-not-leak\"]"}
+      },
+      "status": {
+        "conditions": [
+          {"type": "MemoryPressure", "status": "False"},
+          {"type": "Ready", "status": "True"}
+        ],
+        "nodeInfo": {"kubeletVersion": "v1.30.4+k3s1", "machineID": "0123456789abcdef", "systemUUID": "aaaa-bbbb"}
+      }
+    },
+    {
+      "metadata": {
+        "name": "control-1",
+        "labels": {
+          "node-role.kubernetes.io/control-plane": "true",
+          "node-role.kubernetes.io/master": "true",
+          "kubernetes.io/hostname": "control-1"
+        }
+      },
+      "status": {
+        "conditions": [{"type": "Ready", "status": "False"}],
+        "nodeInfo": {"kubeletVersion": "v1.30.4+k3s1"}
+      }
+    }
+  ]
+}

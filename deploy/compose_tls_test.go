@@ -233,9 +233,10 @@ func TestComposeHTTPSMounts(t *testing.T) {
 	}
 
 	// Core in particular: nothing of Caddy's, and of the install's files only the directory of the
-	// dashboard's update requests (TestComposeUpdateRequestMount).
+	// dashboard's update requests (TestComposeUpdateRequestMount) and the host monitoring snapshot,
+	// read-only (TestComposeMountsTheMonitorSnapshotIntoCoreReadOnly).
 	for _, m := range serviceMounts(t, "core") {
-		if m.source == "caddy_admin" || (strings.HasPrefix(m.source, "./") && m.source != updateRequestDir) {
+		if m.source == "caddy_admin" || (strings.HasPrefix(m.source, "./") && m.source != updateRequestDir && (m.source != "./run/monitor" || !m.readOnly)) {
 			t.Errorf("core mounts %s: it must not reach Caddy's admin socket or the install's files", m.source)
 		}
 	}

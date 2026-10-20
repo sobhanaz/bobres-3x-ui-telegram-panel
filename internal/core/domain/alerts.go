@@ -112,6 +112,8 @@ type WatchdogSources struct {
 	Gateways GatewayReporter
 	Backups  BackupStatus
 	TLS      TLSWatcher
+	// Monitor evaluates the monitoring rules (nil: there are none).
+	Monitor MonitorProbe
 }
 
 // alertCheck is one check's result in a run.
@@ -207,7 +209,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls,
+		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup
@@ -839,9 +841,13 @@ func (s *Service) OpenAlerts(ctx context.Context) ([]Alert, error) {
 		if args == nil {
 			args = map[string]string{}
 		}
-		title := i18n.StripHTML(cat.T("en", r.TitleKey, i18n.AlertArgs("en", args, escapeTags.Replace)...))
-		out = append(out, Alert{Key: r.Key, Severity: r.Severity, TitleKey: r.TitleKey, Args: args, Title: title,
+		out = append(out, Alert{Key: r.Key, Severity: r.Severity, TitleKey: r.TitleKey, Args: args, Title: alertTitle(cat, r.TitleKey, args),
 			Detail: r.Detail, Since: r.Since})
 	}
 	return out, nil
+}
+
+// alertTitle is an alert's text in English, without tags.
+func alertTitle(cat *i18n.Catalog, titleKey string, args map[string]string) string {
+	return i18n.StripHTML(cat.T("en", titleKey, i18n.AlertArgs("en", args, escapeTags.Replace)...))
 }
