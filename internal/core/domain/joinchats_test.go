@@ -188,7 +188,10 @@ func TestJoinChatsLimit(t *testing.T) {
 	t.Run("Pro", func(t *testing.T) {
 		w := newGateWorld(t)
 		w.endTrial()
-		w.install(func(tok *license.Token) { tok.Tier = license.TierPro; tok.Entitlements.MaxJoinChats = license.Unlimited })
+		w.install(func(tok *license.Token) {
+			tok.Tier = license.TierPro
+			tok.Entitlements.MaxJoinChats = license.Unlimited
+		})
 		var list []JoinChat
 		for i := range 12 {
 			list = append(list, chat(fmt.Sprintf("channel_%02d", i)))
@@ -206,7 +209,10 @@ func TestJoinChatsAfterTheLicenseEnds(t *testing.T) {
 	ctx := context.Background()
 	w := newGateWorld(t)
 	w.endTrial()
-	pro := func(tok *license.Token) { tok.Tier = license.TierPro; tok.Entitlements.MaxJoinChats = license.Unlimited }
+	pro := func(tok *license.Token) {
+		tok.Tier = license.TierPro
+		tok.Entitlements.MaxJoinChats = license.Unlimited
+	}
 	w.install(pro)
 	w.mustJoin(chat("first_channel"), chat("second_channel"), chat("third_channel"))
 

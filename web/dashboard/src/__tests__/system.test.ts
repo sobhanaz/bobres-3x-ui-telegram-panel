@@ -468,6 +468,14 @@ describe('license', () => {
     expect(outsideLicense([], ['wallet'])).toEqual([])
     expect(outsideLicense([], ['manual_crypto'])).toEqual(['manual_crypto'])
   })
+  it('lists the required channels and groups when core sends them, over the limit when more are saved than counted', () => {
+    const rows = entitlementRows({ entitlements: ents({ max_join_chats: { limit: 1, used: 2 } }) })
+    expect(rows.find((r) => r.key === 'join_chats')).toEqual({ key: 'join_chats', kind: 'limit', used: 2, limit: 1, state: 'over' })
+    expect(warnings(rows)).toBeGreaterThanOrEqual(1)
+    expect(entitlementRows({ entitlements: ents({ max_join_chats: { limit: -1, used: 7 } }) }).find((r) => r.key === 'join_chats')).toMatchObject({ state: 'unlimited' })
+    // an older core does not send it: no row
+    expect(entitlementRows({ entitlements: ents() }).some((r) => r.key === 'join_chats')).toBe(false)
+  })
   it('lists what it grants with what this install uses', () => {
     const rows = entitlementRows({ entitlements: ents({ max_active_services: { limit: -1, used: 460 } }) })
     expect(rows).toEqual([

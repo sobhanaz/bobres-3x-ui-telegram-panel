@@ -236,6 +236,33 @@ export interface SettingsReply {
   groups: string[]
 }
 
+/** A required channel or group (GET and PUT /join-chats). The first row is the
+ * setting join.channel; the others are the extra chats. */
+export interface JoinChatRow {
+  chat: string
+  link: string
+  label: string
+  primary: boolean
+  /** customers are asked to join it under the license in effect */
+  active: boolean
+}
+
+export interface JoinChatsReply {
+  chats: JoinChatRow[]
+  /** the first chat is set, so customers must join */
+  on: boolean
+  /** how many the license allows; -1 = no limit */
+  limit: number
+  used: number
+  /** the most the list can hold, whatever the license says */
+  max: number
+  basis: string
+  /** free, trial, standard or pro */
+  tier: string
+  /** this role may change the list (the owner) */
+  editable: boolean
+}
+
 export interface ChannelCheck {
   ok: boolean
   title?: string
@@ -921,6 +948,8 @@ export interface LicenseEntitlements {
   max_active_services: LicenseLimit
   /** staff besides the owner */
   dashboard_staff_seats: LicenseLimit
+  /** the required channels and groups customers must join (absent from an older core) */
+  max_join_chats?: LicenseLimit
   /** the payment methods it names, and those turned on now (the wallet,
    * always allowed, left out) */
   gateways: { licensed: string[]; enabled: string[] }

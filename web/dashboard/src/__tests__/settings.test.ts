@@ -24,7 +24,7 @@ import {
   zoneNow,
   zoneOptions,
 } from '../settings'
-import type { SettingItem, SettingsReply } from '../types'
+import type { JoinChatRow, JoinChatsReply, SettingItem, SettingsReply } from '../types'
 
 function item(key: string, kind: SettingItem['kind'], extra: Partial<SettingItem> = {}): SettingItem {
   return { key, group: key.split('.')[0], kind, value: '', default: '', options: [], min: null, max: null, editable: true, ...extra }
@@ -328,11 +328,19 @@ describe('settings page', () => {
   const text = (path: string) => path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], fa) ?? path
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
+  // The required channels and groups have a card of their own (JoinChatsCard), loaded from /join-chats.
+  const joinNone: JoinChatsReply = { chats: [], on: false, limit: -1, used: 0, max: 50, basis: 'trial', tier: 'trial', editable: true }
+  const joinRow = (chat: string, extra: Partial<JoinChatRow> = {}): JoinChatRow => ({ chat, link: '', label: '', primary: false, active: true, ...extra })
+  let joinPuts: { chats: { chat: string; link: string; label: string }[] }[] = []
+  let joinPut: (body: { chats: { chat: string; link: string; label: string }[] }) => Response = () => json(500, { error: 'internal', message: 'no' })
+
   async function open(
     put: (values: Record<string, string>) => Response,
-    opts: { permissions?: string[]; items?: SettingItem[]; groups?: string[]; cards?: number; hash?: string } = {},
+    opts: { permissions?: string[]; items?: SettingItem[]; groups?: string[]; cards?: number; hash?: string; join?: Partial<JoinChatsReply> } = {},
   ) {
     const items = opts.items ?? start
+    joinPuts = []
+    const join: JoinChatsReply = { ...joinNone, ...opts.join }
     const listed = opts.groups ?? groups
     vi.resetModules()
     vi.spyOn(console, 'warn').mockImplementation(() => {}) // texts not merged into the catalogs yet
@@ -351,6 +359,12 @@ describe('settings page', () => {
           const { values } = JSON.parse(String(init?.body)) as { values: Record<string, string> }
           puts.push(values)
           return put(values)
+        }
+        if (url === '/api/v1/join-chats' && method === 'GET') return json(200, join)
+        if (url === '/api/v1/join-chats' && method === 'PUT') {
+          const body = JSON.parse(String(init?.body)) as (typeof joinPuts)[number]
+          joinPuts.push(body)
+          return joinPut(body)
         }
         if (url === '/api/v1/settings/channel-check') return json(503, { error: 'unavailable', message: 'bot down' })
         return json(404, { error: 'not_found', message: 'not in this test' })
@@ -371,6 +385,17 @@ describe('settings page', () => {
     input(key).value = value
     input(key).dispatchEvent(new Event('input'))
   }
+  // The required channels and groups card: its rows, their inputs and its buttons.
+  const joinCard = () => document.querySelector('.join-card') as HTMLElement
+  const joinSave = () => joinCard().querySelector('button[type=submit]') as HTMLButtonElement
+  const joinRows = () => [...joinCard().querySelectorAll('li.row')] as HTMLElement[]
+  const joinInput = (row: number, field: 'chat' | 'link' | 'label') => joinRows()[row].querySelector(`input[id$="-${field}"]`) as HTMLInputElement
+  const joinType = (row: number, field: 'chat' | 'link' | 'label', value: string) => {
+    joinInput(row, field).value = value
+    joinInput(row, field).dispatchEvent(new Event('input'))
+  }
+  const joinButton = (label: string) => [...joinCard().querySelectorAll('button')].find((b) => (b.textContent ?? '').includes(label) || b.getAttribute('aria-label') === label) as HTMLButtonElement
+  const joinLoaded = (rows: number) => vi.waitFor(() => expect(joinRows()).toHaveLength(rows))
 
   afterEach(() => {
     // stop this test's app: Vue and PrimeVue are shared between tests
@@ -386,7 +411,7 @@ describe('settings page', () => {
     expect(saveButton('limits.bot_per_10s').disabled).toBe(true)
     type('limits.bot_per_10s', '۳۰')
     await vi.waitFor(() => expect(saveButton('limits.bot_per_10s').disabled).toBe(false))
-    expect(saveButton('join.channel').disabled).toBe(true)
+    expect(joinSave().disabled).toBe(true)
     saveButton('limits.bot_per_10s').click()
     await vi.waitFor(() => expect(puts).toEqual([{ 'limits.bot_per_10s': '30' }]))
     await vi.waitFor(() => expect(saveButton('limits.bot_per_10s').disabled).toBe(true))
@@ -395,7 +420,7 @@ describe('settings page', () => {
     expect(card('limits.tickets_per_day').querySelector('.pi-lock')).not.toBeNull()
     expect(input('limits.tickets_per_day').readOnly).toBe(true)
     expect(input('limits.tickets_per_day').value).toBe('5')
-    expect(card('join.channel').querySelector('.pi-lock')).toBeNull()
+    expect(joinCard().querySelector('.pi-lock')).toBeNull()
     // an admin is not sent to the Gateways page
     expect(document.querySelector('a.payments-moved')).toBeNull()
   })
@@ -412,16 +437,135 @@ describe('settings page', () => {
   })
 
   it('shows core’s reason under the field it names, and a bot that cannot be reached', async () => {
-    await open(() => json(400, { error: 'invalid', message: 'join.link: not an invite link', field: 'join.link' }))
-    type('join.channel', '-1001234567890')
-    type('join.link', 'https://t.me/+AbCdEf')
-    await vi.waitFor(() => expect(saveButton('join.channel').disabled).toBe(false))
-    saveButton('join.channel').click()
-    await vi.waitFor(() => expect(input('join.link').closest('.field')?.textContent).toContain('join.link: not an invite link'))
-    const check = card('join.channel').querySelector('.field button') as HTMLButtonElement
+    await open(saved, { join: { chats: [joinRow('@first_news', { primary: true })], on: true, used: 1 } })
+    await joinLoaded(1)
+    joinPut = () => json(400, { error: 'invalid', message: 'chats.0.link: not an invite link', field: 'chats.0.link' })
+    joinType(0, 'chat', '-1001234567890')
+    joinType(0, 'link', 'https://t.me/+AbCdEf')
+    await vi.waitFor(() => expect(joinSave().disabled).toBe(false))
+    joinSave().click()
+    await vi.waitFor(() => expect(joinInput(0, 'link').closest('.field')?.textContent).toContain('chats.0.link: not an invite link'))
+    const check = joinRows()[0].querySelector('.control button') as HTMLButtonElement
     expect(check.disabled).toBe(false)
     check.click()
-    await vi.waitFor(() => expect(card('join.channel').textContent).toContain(text('settings.check.unreachable')))
+    await vi.waitFor(() => expect(joinRows()[0].textContent).toContain(text('settings.check.unreachable')))
+  })
+
+  it('lists the required chats, counts them against the limit and marks the ones the plan does not count', async () => {
+    await open(saved, {
+      join: { chats: [joinRow('@first_news', { primary: true, label: 'News' }), joinRow('-1001234567890', { link: 'https://t.me/+AbC', active: false }), joinRow('@third_group', { active: false })], on: true, limit: 1, used: 3, basis: 'free', tier: 'free' },
+    })
+    await joinLoaded(3)
+    expect(joinInput(0, 'chat').value).toBe('@first_news')
+    expect(joinInput(0, 'label').value).toBe('News')
+    expect(joinInput(1, 'link').value).toBe('https://t.me/+AbC')
+    expect(joinInput(0, 'chat').dir).toBe('ltr')
+    // "3 of 1": more are saved than the plan counts
+    expect(joinCard().querySelector('.count')?.textContent).toBe(String(text('settings.join.count')).replace('{used}', '۳').replace('{limit}', '۱'))
+    expect(joinCard().querySelector('.count')?.classList.contains('is-over')).toBe(true)
+    expect(joinCard().textContent).toContain(text('settings.join.inactive'))
+    expect(joinRows().map((r) => r.classList.contains('inactive'))).toEqual([false, true, true])
+    // nothing can be added past the limit, and the plan to upgrade to is named
+    const add = joinButton(String(text('settings.join.add')))
+    expect(add.disabled).toBe(true)
+    expect(joinCard().querySelector('.limit-note a')?.getAttribute('href')).toContain('license')
+    // the saved ones can still be removed
+    joinRows()[2].querySelector<HTMLButtonElement>('.pi-trash')?.closest('button')?.click()
+    await joinLoaded(2)
+    expect(joinSave().disabled).toBe(false)
+  })
+
+  it('adds, reorders and removes rows and saves the whole list, the first row staying first', async () => {
+    await open(saved, { join: { chats: [joinRow('@first_news', { primary: true }), joinRow('@second_chan'), joinRow('@third_chan')], on: true, used: 3 } })
+    await joinLoaded(3)
+    expect(joinSave().disabled).toBe(true)
+    // the first row has no way to move; the second cannot go up above it
+    const arrows = (i: number) => [...joinRows()[i].querySelectorAll('.pi-arrow-up, .pi-arrow-down')].map((e) => e.className.includes('up') ? 'up' : 'down')
+    expect(arrows(0)).toEqual([])
+    expect(arrows(1)).toEqual(['down'])
+    expect(arrows(2)).toEqual(['up'])
+    joinRows()[2].querySelector<HTMLButtonElement>('.pi-arrow-up')?.closest('button')?.click()
+    await vi.waitFor(() => expect(joinInput(1, 'chat').value).toBe('@third_chan'))
+    expect(joinInput(2, 'chat').value).toBe('@second_chan')
+    // add one, in Persian digits and as a t.me link, with a name
+    joinButton(String(text('settings.join.add'))).click()
+    await joinLoaded(4)
+    joinType(3, 'chat', 'https://t.me/fourth_chan')
+    joinType(3, 'label', '  دوستان   ما ')
+    // remove the middle one
+    joinRows()[2].querySelector<HTMLButtonElement>('.pi-trash')?.closest('button')?.click()
+    await joinLoaded(3)
+    await vi.waitFor(() => expect(joinSave().disabled).toBe(false))
+    joinPut = (body) =>
+      json(200, { ...joinNone, chats: body.chats.map((c, i) => joinRow(c.chat, { ...c, primary: i === 0 })), on: true, used: body.chats.length })
+    joinSave().click()
+    await vi.waitFor(() =>
+      expect(joinPuts).toEqual([
+        {
+          chats: [
+            { chat: '@first_news', link: '', label: '' },
+            { chat: '@third_chan', link: '', label: '' },
+            { chat: '@fourth_chan', link: '', label: 'دوستان ما' },
+          ],
+        },
+      ]),
+    )
+    await vi.waitFor(() => expect(joinSave().disabled).toBe(true))
+    expect(joinInput(2, 'label').value).toBe('دوستان ما')
+  })
+
+  it('checks every row where it is typed, as core does, and sends nothing while a row is wrong', async () => {
+    await open(saved, { join: { chats: [joinRow('@first_news', { primary: true })], on: true, used: 1 } })
+    await joinLoaded(1)
+    joinButton(String(text('settings.join.add'))).click()
+    await joinLoaded(2)
+    joinType(1, 'chat', '-1009876543210') // a private channel needs its invite link
+    joinType(1, 'label', 'x'.repeat(40))
+    joinSave().click()
+    await vi.waitFor(() => expect(joinRows()[1].textContent).toContain(text('settings.invalid.link_required')))
+    expect(joinRows()[1].textContent).toContain(String(text('settings.invalid.too_long')).replace('{max}', '۳۲'))
+    expect(joinPuts).toEqual([])
+    joinType(1, 'link', 'https://example.com/x')
+    joinSave().click()
+    await vi.waitFor(() => expect(joinRows()[1].textContent).toContain(text('settings.invalid.tme_link')))
+    // the same chat twice, the case of an @name aside
+    joinType(1, 'chat', '@First_News')
+    joinType(1, 'link', '')
+    joinType(1, 'label', '')
+    joinSave().click()
+    await vi.waitFor(() => expect(joinRows()[1].textContent).toContain(text('settings.invalid.duplicate')))
+    // a row left empty
+    joinType(1, 'chat', '')
+    joinSave().click()
+    await vi.waitFor(() => expect(joinRows()[1].textContent).toContain(text('settings.invalid.required')))
+    expect(joinPuts).toEqual([])
+  })
+
+  it('says what the license refuses when core will not add a chat', async () => {
+    await open(saved, { join: { chats: [joinRow('@first_news', { primary: true })], on: true, used: 1, limit: 2 } })
+    await joinLoaded(1)
+    joinButton(String(text('settings.join.add'))).click()
+    await joinLoaded(2)
+    joinType(1, 'chat', '@second_chan')
+    joinPut = () =>
+      json(409, { error: 'state', license: 'max_join_chats', message: 'the license allows 1 required chat (channels and groups customers must join): buy or renew a license to add more' })
+    await vi.waitFor(() => expect(joinSave().disabled).toBe(false))
+    joinSave().click()
+    await vi.waitFor(() => expect(joinCard().textContent).toContain(text('license.refused.max_join_chats')))
+    expect(joinCard().textContent).toContain('the license allows 1 required chat')
+    expect(joinRows()).toHaveLength(2) // what was typed stays
+  })
+
+  it('shows the list read only to a role that may not change it, and the requirement being off', async () => {
+    await open(saved, { join: { chats: [joinRow('@first_news')], on: false, used: 1, editable: false } })
+    await joinLoaded(1)
+    expect(joinCard().querySelector('.pi-lock')).not.toBeNull()
+    expect(joinInput(0, 'chat').readOnly).toBe(true)
+    expect(joinCard().textContent).toContain(text('settings.join.locked'))
+    expect(joinCard().textContent).toContain(text('settings.join.dormant'))
+    expect(joinCard().querySelector('button[type=submit]')).toBeNull()
+    expect(joinCard().querySelector('.pi-trash')).toBeNull()
+    expect(joinButton(String(text('settings.join.add')))).toBeUndefined()
   })
 
   it('turns the system problem alerts off and on in the notifications card', async () => {

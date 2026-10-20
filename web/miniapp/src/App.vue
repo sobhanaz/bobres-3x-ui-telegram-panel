@@ -22,7 +22,15 @@ const choosing = ref<{ type: 'renew' | 'traffic_topup'; service: Service } | nul
 // a section of the More tab (the trial, invites, support, the reseller panel...) shown in place of the tabs
 const section = ref<Section | null>(null)
 const tabs = computed<Tab[]>(() => (sectionsFor(state.me).length ? ['store', 'services', 'wallet', 'more'] : ['store', 'services', 'wallet']))
-const gateText = computed(() => (state.gate ? tr('gate.' + state.gate) : ''))
+const gateText = computed(() => {
+  if (!state.gate) return ''
+  // several required channels and groups: the text is for them
+  return state.gate === 'join_required' && state.joinChats.length ? tr('gate.join_required_many') : tr('gate.' + state.gate)
+})
+// the chats the customer still lacks, each with its own Join button (a chat the store gave no link for has none)
+const joinButtons = computed(() =>
+  state.joinChats.flatMap((c, i) => (c.url ? [{ url: c.url, text: tr('join.chat', { name: c.label || tr('join.unnamed', { n: i + 1 }) }) }] : [])),
+)
 const bot = computed(() => state.me?.brand.bot_url ?? '')
 const support = computed(() => state.me?.brand.support_url ?? '')
 
@@ -84,7 +92,10 @@ onMounted(boot)
     <p>{{ gateText }}</p>
     <template v-if="state.gate === 'join_required'">
       <p v-if="joinNote" class="muted" role="status">{{ tr(joinNote) }}</p>
-      <button v-if="state.joinUrl" class="btn" type="button" @click="openTelegram(state.joinUrl)">{{ tr('join.channel') }}</button>
+      <template v-if="state.joinChats.length">
+        <button v-for="b in joinButtons" :key="b.url" class="btn" type="button" @click="openTelegram(b.url)">{{ b.text }}</button>
+      </template>
+      <button v-else-if="state.joinUrl" class="btn" type="button" @click="openTelegram(state.joinUrl)">{{ tr('join.channel') }}</button>
       <button class="btn secondary" type="button" :disabled="checkingJoin" @click="checkJoin">{{ checkingJoin ? tr('join.checking') : tr('join.check') }}</button>
     </template>
     <template v-else>

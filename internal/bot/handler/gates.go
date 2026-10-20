@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 // Gates (milestone 3): maintenance mode (maintenance.enabled) and joining a

@@ -42,7 +42,7 @@ const labels = (m: Mounted) => m.buttons().map((b) => (b.textContent ?? '').trim
 beforeEach(() => {
   resetSession()
   window.location.hash = '#tgWebAppData=' + encodeURIComponent('user=%7B%7D&hash=abc')
-  Object.assign(state, { booted: false, gate: '', joinUrl: '', me: null, plans: null, services: null, wallets: [], ledger: [] })
+  Object.assign(state, { booted: false, gate: '', joinUrl: '', joinChats: [], me: null, plans: null, services: null, wallets: [], ledger: [] })
   setLang('en')
 })
 afterEach(() => {
@@ -184,6 +184,77 @@ describe('the channel gate', () => {
     await settle(10)
     expect(m.text()).toContain('هنوز عضو کانال نشده‌اید.')
     m.unmount()
+  })
+})
+
+// A store that requires several channels and groups: core names every one the customer still lacks.
+describe('several required chats', () => {
+  const chat = (url: string, label: string) => ({ url, label })
+  const lacking = (...chats: { url: string; label: string }[]) => () =>
+    json(403, { error: 'join_required', message: 'join the store’s channel to continue', join_url: chats[0].url, join_chats: chats })
+
+  it('shows each channel the customer lacks with its own Join button, and one check', async () => {
+    const open = vi.fn()
+    telegram({ openTelegramLink: open })
+    serve([lacking(chat('https://t.me/mynews', 'News'), chat('https://t.me/+AbCd', 'VIP room'), chat('https://t.me/team', 'channel 3'))])
+    const m = mount(App)
+    await settle(10)
+    expect(m.text()).toContain('To use the store, join the channels below first, then tap “I’ve joined”.')
+    expect(labels(m)).toEqual(['Join News', 'Join VIP room', 'Join channel 3', 'I’ve joined'])
+    expect(m.el.querySelector('nav')).toBeNull()
+    await m.click('Join VIP room')
+    expect(open).toHaveBeenCalledWith('https://t.me/+AbCd')
+    expect(state.joinChats).toHaveLength(3)
+    m.unmount()
+  })
+
+  it('numbers a chat with no name and leaves out one with no link', async () => {
+    serve([lacking(chat('https://t.me/mynews', ''), chat('', 'Private'), chat('https://t.me/+Zz', ''))])
+    const m = mount(App)
+    await settle(10)
+    expect(labels(m)).toEqual(['Join channel 1', 'Join channel 3', 'I’ve joined'])
+    m.unmount()
+  })
+
+  it('asks again at the check and shows only what is still missing', async () => {
+    const s = serve([lacking(chat('https://t.me/a_news', 'A'), chat('https://t.me/b_news', 'B')), lacking(chat('https://t.me/b_news', 'B'))])
+    const m = mount(App)
+    await settle(10)
+    await m.click('I’ve joined')
+    await settle(10)
+    expect(s.signIns()).toBe(2)
+    expect(m.text()).toContain('You haven’t joined all of them yet. Join the rest, then tap “I’ve joined” again.')
+    expect(labels(m)).toEqual(['Join B', 'I’ve joined'])
+    m.unmount()
+  })
+
+  it('lets the customer in when they have joined the last one', async () => {
+    serve([lacking(chat('https://t.me/a_news', 'A')), joined])
+    const m = mount(App)
+    await settle(10)
+    await m.click('I’ve joined')
+    await settle(20)
+    expect(state.gate).toBe('')
+    expect(state.joinChats).toEqual([])
+    expect(m.el.querySelector('nav')).not.toBeNull()
+    m.unmount()
+  })
+
+  it('is in Persian for a Persian customer', async () => {
+    telegram({ initDataUnsafe: { user: { language_code: 'fa' } } })
+    serve([lacking(chat('https://t.me/a_news', 'اخبار'), chat('https://t.me/b_news', ''))])
+    const m = mount(App)
+    await settle(10)
+    expect(m.text()).toContain('در کانال‌های زیر عضو شوید')
+    expect(labels(m)).toEqual(['عضویت در اخبار', 'عضویت در کانال 2', 'عضو شدم'])
+    m.unmount()
+  })
+
+  it('reads the answer carefully: a list that is not one is no chats', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(403, { error: 'join_required', message: 'x', join_url: 'https://t.me/mynews', join_chats: 'nope' }))
+    await expect(signIn()).rejects.toMatchObject({ joinUrl: 'https://t.me/mynews', joinChats: [] })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(403, { error: 'join_required', message: 'x', join_chats: [{ url: 'https://t.me/a_news' }, 7, null, { label: 3 }] }))
+    await expect(signIn()).rejects.toMatchObject({ joinChats: [{ url: 'https://t.me/a_news', label: '' }, { url: '', label: '' }] })
   })
 })
 

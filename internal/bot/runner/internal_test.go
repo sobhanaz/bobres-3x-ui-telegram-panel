@@ -135,8 +135,8 @@ func TestChannelCheck(t *testing.T) {
 	}
 	for chat, problem := range map[string]string{
 		"@nosuchchan": ProblemNotFound,
-		"@hidden":     ProblemNotAdmin, // Telegram hides members from non-admins
-		"@readers":    ProblemNotAdmin, // a plain member
+		"@hidden":     ProblemNotAdmin,   // Telegram hides members from non-admins
+		"@readers":    ProblemNotAdmin,   // a plain member
 		"@somebody":   ProblemNotChannel, // a user, not a chat to join
 	} {
 		got := check(chat)
