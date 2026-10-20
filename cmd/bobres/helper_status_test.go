@@ -19,7 +19,10 @@ import (
 
 // statusKeys are the fields of status.json, protocol version 1: core and the helper agree on
 // exactly these.
-var statusKeys = []string{"v", "installed", "helper", "state", "id", "from", "to", "channel", "step", "message", "started_at", "finished_at", "log"}
+// The dashboard's restore added action, restore, subject, source, by and requested_at; core ignores what it does not know, and an
+// older helper's status has none of them.
+var statusKeys = []string{"v", "installed", "helper", "state", "id", "from", "to", "channel", "step", "message", "started_at", "finished_at", "log",
+	"action", "restore", "subject", "source", "by", "requested_at"}
 
 func readStatusMap(t *testing.T, path string) map[string]any {
 	t.Helper()

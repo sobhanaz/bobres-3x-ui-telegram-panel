@@ -11,8 +11,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backup"
 )
 
 // Timeout bounds every call: the System page shows a service that does not
@@ -22,17 +25,23 @@ const Timeout = 3 * time.Second
 // ErrRunning: a backup is already running (the service answered 409).
 var ErrRunning = errors.New("backupclient: a backup is already running")
 
+// ErrNoBackup: the service has no such backup file (it answered 404, or the name is not one).
+var ErrNoBackup = errors.New("backupclient: there is no such backup")
+
 // Client calls the backup service.
 type Client struct {
 	base, token string
 	hc          *http.Client
+	// stream has no time limit of its own: a download of a large backup takes as long as it
+	// takes, and ends with its context.
+	stream *http.Client
 }
 
 // New returns a client for the backup service at baseURL
 // (http://backup:8080), presenting token: core's token for that service
 // only (BOBRES_BACKUP_TOKEN), never its own service token.
 func New(baseURL, token string) *Client {
-	return &Client{base: strings.TrimRight(baseURL, "/"), token: token, hc: &http.Client{Timeout: 10 * time.Second}}
+	return &Client{base: strings.TrimRight(baseURL, "/"), token: token, hc: &http.Client{Timeout: 10 * time.Second}, stream: &http.Client{}}
 }
 
 func (c *Client) call(ctx context.Context, method, path string) (*http.Response, error) {
@@ -95,6 +104,37 @@ func (c *Client) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("backupclient: run: the backup service answered %d", resp.StatusCode)
 	}
+}
+
+// Download opens the backup file name (a backup file name, bobres-<time>[-tag].bkp) for streaming
+// to the owner: its size and its body, which the caller reads to the end and closes. The body is
+// never read into memory here, and no time limit but ctx's applies. ErrNoBackup when the service
+// has no such file (or the name is not a backup file name).
+func (c *Client) Download(ctx context.Context, name string) (io.ReadCloser, int64, error) {
+	if !backup.ValidFileName(name) {
+		return nil, 0, ErrNoBackup
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/internal/backups/file?name="+url.QueryEscape(name), nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("backupclient: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.stream.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("backupclient: download: %w", err)
+	}
+	switch {
+	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest:
+		_ = resp.Body.Close()
+		return nil, 0, ErrNoBackup
+	case resp.StatusCode != http.StatusOK:
+		_ = resp.Body.Close()
+		return nil, 0, fmt.Errorf("backupclient: download: the backup service answered %d", resp.StatusCode)
+	case resp.ContentLength < 1:
+		_ = resp.Body.Close()
+		return nil, 0, errors.New("backupclient: download: the backup service did not say how large the file is")
+	}
+	return resp.Body, resp.ContentLength, nil
 }
 
 // Summary is the newest backup and the schedule, for the System page's

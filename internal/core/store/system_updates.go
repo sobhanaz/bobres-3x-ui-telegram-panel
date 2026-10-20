@@ -15,7 +15,13 @@ import (
 // ErrUpdateOpen: an update is already open (it has no outcome yet).
 var ErrUpdateOpen = errors.New("an update is already open")
 
-// SystemUpdate is one update asked for in the dashboard.
+// The two things core asks the server's updater for (migration 00031).
+const (
+	ActionUpdate  = "update"
+	ActionRestore = "restore"
+)
+
+// SystemUpdate is one update, or one restore of a backup, asked for in the dashboard.
 type SystemUpdate struct {
 	// ID is the request's id (the id in the request file and in the updater's
 	// status).
@@ -25,8 +31,14 @@ type SystemUpdate struct {
 	RequestedBy     *string
 	RequestedByName string
 	From, To        string
-	Channel         string
-	RequestedAt     time.Time
+	// Channel is the release channel of an update, "" for a restore (which has neither channel
+	// nor release: From and To are the version core runs).
+	Channel string
+	// Action is ActionUpdate (the zero value is taken for it) or ActionRestore; Subject is the
+	// backup of a restore (its file name, or the name an upload had) and Source where it came
+	// from (backup or upload); both are "" for an update.
+	Action, Subject, Source string
+	RequestedAt             time.Time
 	// Outcome is "" while the update is open, then done, failed, rolled_back
 	// or not_started.
 	Outcome   string
@@ -35,12 +47,13 @@ type SystemUpdate struct {
 	Message string
 }
 
-const systemUpdateCols = `id, requested_by, requested_by_name, from_version, to_version, channel, requested_at,
+const systemUpdateCols = `id, requested_by, requested_by_name, from_version, to_version, channel, action, subject, source, requested_at,
 	COALESCE(outcome, ''), outcome_at, message`
 
 func scanSystemUpdate(row pgx.Row) (*SystemUpdate, error) {
 	var u SystemUpdate
-	if err := row.Scan(&u.ID, &u.RequestedBy, &u.RequestedByName, &u.From, &u.To, &u.Channel, &u.RequestedAt, &u.Outcome, &u.OutcomeAt, &u.Message); err != nil {
+	if err := row.Scan(&u.ID, &u.RequestedBy, &u.RequestedByName, &u.From, &u.To, &u.Channel, &u.Action, &u.Subject, &u.Source, &u.RequestedAt,
+		&u.Outcome, &u.OutcomeAt, &u.Message); err != nil {
 		return nil, err
 	}
 	return &u, nil
@@ -50,10 +63,13 @@ func scanSystemUpdate(row pgx.Row) (*SystemUpdate, error) {
 // the database's clock). It is ErrUpdateOpen when another update is open:
 // at most one is at a time.
 func (s *Store) CreateSystemUpdate(ctx context.Context, tx pgx.Tx, u *SystemUpdate) error {
+	if u.Action == "" {
+		u.Action = ActionUpdate
+	}
 	err := tx.QueryRow(ctx, `
-		INSERT INTO core.system_updates (id, requested_by, requested_by_name, from_version, to_version, channel)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING requested_at`,
-		u.ID, u.RequestedBy, u.RequestedByName, u.From, u.To, u.Channel).Scan(&u.RequestedAt)
+		INSERT INTO core.system_updates (id, requested_by, requested_by_name, from_version, to_version, channel, action, subject, source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING requested_at`,
+		u.ID, u.RequestedBy, u.RequestedByName, u.From, u.To, u.Channel, u.Action, u.Subject, u.Source).Scan(&u.RequestedAt)
 	if isUniqueViolation(err) {
 		return ErrUpdateOpen
 	}
@@ -97,8 +113,17 @@ func (s *Store) ListSystemUpdates(ctx context.Context, q querier, limit int) ([]
 
 // LastSystemUpdate is the update that ended last (ErrNotFound when none did).
 func (s *Store) LastSystemUpdate(ctx context.Context, q querier) (*SystemUpdate, error) {
+	return s.lastSystem(ctx, q, ActionUpdate)
+}
+
+// LastSystemRestore is the restore that ended last (ErrNotFound when none did).
+func (s *Store) LastSystemRestore(ctx context.Context, q querier) (*SystemUpdate, error) {
+	return s.lastSystem(ctx, q, ActionRestore)
+}
+
+func (s *Store) lastSystem(ctx context.Context, q querier, action string) (*SystemUpdate, error) {
 	u, err := scanSystemUpdate(q.QueryRow(ctx, `SELECT `+systemUpdateCols+` FROM core.system_updates
-		WHERE outcome IS NOT NULL ORDER BY outcome_at DESC, requested_at DESC LIMIT 1`))
+		WHERE outcome IS NOT NULL AND action = $1 ORDER BY outcome_at DESC, requested_at DESC LIMIT 1`, action))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -106,6 +131,25 @@ func (s *Store) LastSystemUpdate(ctx context.Context, q querier) (*SystemUpdate,
 		return nil, fmt.Errorf("last system update: %w", err)
 	}
 	return u, nil
+}
+
+// AdoptSystemRestore records a restore that is already over, from what the helper's status says of
+// it: the restore replaced this database with a backup's, which holds no row for the request, so
+// the end of the request is written here, as a row that is born ended (u.Outcome and u.RequestedAt
+// are given; OutcomeAt is now). It reports false when a row with that id is there already (the
+// restore ended before, or the data restored held its row): whoever inserts it first writes the
+// audit entry and the notices, once.
+func (s *Store) AdoptSystemRestore(ctx context.Context, tx pgx.Tx, u *SystemUpdate) (bool, error) {
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO core.system_updates (id, requested_by_name, from_version, to_version, channel, action, subject, source,
+			requested_at, outcome, outcome_at, message)
+		VALUES ($1, $2, $3, $4, '', 'restore', $5, $6, $7, $8, now(), $9)
+		ON CONFLICT (id) DO NOTHING`,
+		u.ID, u.RequestedByName, u.From, u.To, u.Subject, u.Source, u.RequestedAt, u.Outcome, u.Message)
+	if err != nil {
+		return false, fmt.Errorf("adopt system restore: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 // EndSystemUpdate gives the open update id its outcome (done, failed,

@@ -31,6 +31,13 @@ const (
 	stepWaiting    = "health"
 	stepRollingBk  = "rollback"
 	stepFinished   = "done"
+	// The restore's own steps (verify, health, rollback and done are the update's too): the
+	// safety backup of the current data, stopping the services, loading the dump and starting
+	// the store again.
+	stepSafety    = "safety"
+	stepStopping  = "stop"
+	stepRestoring = "restore"
+	stepStarting  = "start"
 
 	// statusLogLines is how many lines of the update's output status.json keeps (the newest).
 	statusLogLines = 40
@@ -55,6 +62,19 @@ type helperStatus struct {
 	Channel   string `json:"channel"`
 	Step      string `json:"step"`
 	Message   string `json:"message"` // one short sentence
+	// Action is what the status is about: update or restore ("" for idle and for a request that
+	// could not be read). Restore says this helper can restore a backup: false (or missing) in a
+	// status written by a bobres from before the dashboard's restore.
+	Action  string `json:"action"`
+	Restore bool   `json:"restore"`
+	// Subject, Source, By and RequestedAt describe a restore after its request is gone, and after
+	// the restore replaced core's database, which then knows nothing of it: the backup (its file
+	// name, or the name it was uploaded as), where it came from (backup or upload), who asked and
+	// when (the request's own time). core records the end of the restore from them.
+	Subject     string  `json:"subject"`
+	Source      string  `json:"source"`
+	By          string  `json:"by"`
+	RequestedAt *string `json:"requested_at"`
 	// StartedAt and FinishedAt are RFC 3339 times in UTC, null while they are not known.
 	StartedAt  *string  `json:"started_at"`
 	FinishedAt *string  `json:"finished_at"`
@@ -98,6 +118,7 @@ func writeHelperStatus(path string, st *helperStatus) error {
 	if st.Log == nil {
 		st.Log = []string{}
 	}
+	st.Restore = true // this bobres can restore a backup; whatever wrote the status before could not
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
@@ -141,6 +162,9 @@ func clearStaleStatus(dir string, now time.Time) {
 	}
 	st.State = helperFailed
 	st.Message = "The update was interrupted before it finished (bobres or the server stopped). Check the store: sudo bobres status"
+	if st.Action == actionRestore {
+		st.Message = "The restore was interrupted before it finished (bobres or the server stopped). The store may be stopped: sudo bobres status (the data from before it is in backups/, as bobres-<time>-before-restore.bkp)"
+	}
 	st.FinishedAt = stamp(now)
 	_ = writeHelperStatus(path, &st)
 }

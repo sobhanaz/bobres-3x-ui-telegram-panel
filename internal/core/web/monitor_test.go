@@ -168,7 +168,9 @@ func TestMonitorOverviewWithAndWithoutACollector(t *testing.T) {
 func TestMonitorSeriesRequests(t *testing.T) {
 	m := newMonFixture(t)
 	b := m.login(ownerTG, "owner")
-	base := time.Now().Add(-10 * time.Minute)
+	// The three samples are a minute apart in all: cut to a five-minute boundary so that they always share one
+	// bucket of the 24h range (they fell in two when the clock was within a minute of a boundary).
+	base := time.Now().Add(-10 * time.Minute).Truncate(5 * time.Minute)
 	for i, v := range []float64{10, 20, 30} {
 		if _, err := m.st.RecordSamples(context.Background(), base.Add(time.Duration(i)*30*time.Second), []store.MonitorSample{
 			{Name: "host.cpu_pct", Value: v}, {Name: "host.disk_pct:/", Value: v + 1}}); err != nil {

@@ -61,6 +61,8 @@ export function progressView(p: Pick<UpdatesProgress, 'helper' | 'run' | 'last'>
   if (!p) return null
   const h = p.helper
   const about = (id: string) => h.available && h.id === id
+  // a restore of a backup (System > Backups) is not an update: the Backups tab follows it
+  if (p.run?.action === 'restore') return null
   if (p.run) {
     const r = p.run
     const mine = about(r.id)
@@ -79,7 +81,7 @@ export function progressView(p: Pick<UpdatesProgress, 'helper' | 'run' | 'last'>
       requestedAt: r.requested_at, finishedAt: r.outcome_at,
     }
   }
-  if (h.available && h.state === 'running') {
+  if (h.available && h.state === 'running' && h.action !== 'restore') {
     return {
       phase: 'running', mine: false, id: h.id, from: h.from, to: h.to, channel: h.channel, by: '', step: h.step, message: h.message,
       log: h.log ?? [], requestedAt: h.started_at, finishedAt: null,

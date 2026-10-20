@@ -23,6 +23,15 @@ func FileName(t time.Time) string {
 	return "bobres-" + t.UTC().Format(stampLayout) + ".bkp"
 }
 
+// fileRe is a backup file as the backup service and `bobres restore` write it: bobres-<UTC time>.bkp,
+// and with a tag after the time (before-restore, before-rotation) for a safety backup.
+var fileRe = regexp.MustCompile(`^bobres-[0-9]{8}T[0-9]{6}Z(-[a-z][a-z0-9-]{0,39})?\.bkp$`)
+
+// ValidFileName reports whether name is a backup file name and nothing else: no path, no dot
+// segment, nothing a shell or a URL would read. It is what the dashboard's download and restore
+// accept before they look at a file.
+func ValidFileName(name string) bool { return fileRe.MatchString(name) }
+
 // SidecarName is the .json sidecar name of a backup file name.
 func SidecarName(file string) string {
 	return strings.TrimSuffix(file, ".bkp") + ".json"

@@ -8,6 +8,17 @@ All commands run on the server as root. The install is in `/opt/bobres` unless y
 `--dir <dir>` to each command). How it works in detail: [06-installer.md](../06-installer.md), "Restore, update and
 rollback".
 
+## From the dashboard
+
+The owner can also restore from **System → Backups** (a backup in the list, or a file uploaded there), and download any
+backup. It runs this same code through the server's updater, with a safety backup first and an **automatic rollback** to
+it when the restored store is not healthy (the command line tells you what to run instead). It only restores a backup
+this server's own `BOBRES_BACKUP_KEY` opens: for a backup from another server, or when the dashboard is down, use the
+commands below. If a dashboard restore stops half way, `sudo bobres status` shows what runs, and the data from before it
+is in `/opt/bobres/backups/bobres-<time>-before-restore.bkp` (restore it with the command below). The status, with the
+step it stopped at, is `/opt/bobres/run/update/status.json`. How it works: [06-installer.md](../06-installer.md),
+"Restoring from the dashboard".
+
 ## When to use it
 
 - Data was lost or damaged (a wrong bulk change, a broken migration, a disk problem the database survived).

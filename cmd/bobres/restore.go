@@ -139,46 +139,156 @@ func (o *ops) restoreCmd(args []string) int {
 		return 1
 	}
 
+	code, _ := o.restoreRun(ctx, &restorePlan{dir: *dir, env: env, key: key, file: file, source: source, sum: sum, keepKeys: *keepKeys})
+	return code
+}
+
+// restoreEvent is the stage a restore has reached, for the dashboard's status (Step is one of the
+// step names of helper_status.go).
+type restoreEvent struct{ Step, Message string }
+
+// restorePlan is a restore past the point where the backup was checked and the operator (or the
+// dashboard's confirmation) said yes. `bobres restore` and the dashboard's helper both run it.
+type restorePlan struct {
+	dir    string
+	env    map[string]string
+	key    []byte
+	file   *os.File // the verified backup, at its start
+	source string   // what the messages call it
+	sum    backup.Summary
+	// keepKeys keeps this install's master keys in .env even where the backup's differ.
+	keepKeys bool
+	// rollback goes back to the safety backup on its own when the restored data does not come
+	// up healthy (the dashboard's restore; the command line says how to go back instead).
+	rollback bool
+	// event, when set, is told how far the restore has got.
+	event func(restoreEvent)
+}
+
+func (p *restorePlan) emit(step, message string) {
+	if p.event != nil {
+		p.event(restoreEvent{Step: step, Message: message})
+	}
+}
+
+// restoreResult is how a restore ended, besides the exit code.
+type restoreResult struct {
+	// safety is the path of the backup of the data from before the restore ("" before it was made).
+	safety string
+	// replaced: the database held the backup's data at some point (false: it was never changed).
+	replaced bool
+	// rolledBack: the data from before the restore is back and healthy; rollbackIncomplete: going
+	// back was tried and did not finish.
+	rolledBack, rollbackIncomplete bool
+	// keys are the master keys the backup's differed in.
+	keys []string
+}
+
+// restoreRun does the restore proper: stop the services that use the database, back the current
+// data up, load the dump in one transaction, put the backup's master keys in .env, start and wait
+// until healthy. The exit code is 0 when done and 1 when it failed (with p.rollback, the result
+// says whether the data from before is back).
+func (o *ops) restoreRun(ctx context.Context, p *restorePlan) (int, restoreResult) {
+	dir := p.dir
+	var res restoreResult
+	// A restore that stops half way must not leave the store down: this starts it again, with a
+	// context that the interrupt that stopped the restore did not cancel.
+	again := func() { o.startAndWait(context.WithoutCancel(ctx), dir) }
 	// The services stop first, so that nothing is written after the safety
 	// backup is taken (it would be in neither that backup nor the restore).
-	if err := o.stopApp(ctx, *dir, env); err != nil {
+	p.emit(stepStopping, "Stopping the BOBRES services (the database stays up).")
+	if err := o.stopApp(ctx, dir, p.env); err != nil {
 		fmt.Fprintf(o.errOut, "error: %v. Nothing was changed; starting the services again...\n", err)
-		o.startAndWait(ctx, *dir)
-		return 1
+		again()
+		return 1, res
 	}
-	safety, err := o.safetyBackup(ctx, *dir, env, "before-restore", "made by bobres restore before it replaced the data")
+	p.emit(stepSafety, "Backing up the current data first.")
+	safety, err := o.safetyBackup(ctx, dir, p.env, "before-restore", "made by bobres restore before it replaced the data")
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: the backup of the current data failed: %v. Nothing was changed; starting the services again...\n", err)
-		o.startAndWait(ctx, *dir)
-		return 1
+		again()
+		return 1, res
 	}
-	safetyPath := filepath.Join(*dir, "backups", safety)
+	safetyPath := filepath.Join(dir, "backups", safety)
+	res.safety = safetyPath
 	fmt.Fprintf(o.out, "Current data saved in %s\n", safetyPath)
 
-	archiveKeys, err := o.loadDumpFrom(ctx, *dir, file, key)
+	p.emit(stepRestoring, "Restoring the database.")
+	archiveKeys, err := o.loadDumpFrom(ctx, dir, p.file, p.key)
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: the restore failed: %v\nThe database was not changed (the restore runs in one transaction). Starting the services again...\n", err)
-		o.startAndWait(ctx, *dir)
-		return 1
+		again()
+		return 1, res
 	}
+	res.replaced = true
 	fmt.Fprintln(o.out, "Database restored.")
 
-	changed, err := applyMasterKeys(*dir, archiveKeys, *keepKeys)
+	changed, err := applyMasterKeys(dir, archiveKeys, p.keepKeys)
+	res.keys = changed
 	if err != nil {
-		fmt.Fprintf(o.errOut, "error: the database is restored, but .env could not take the backup's master keys: %v\n"+
-			"Fix it and run: bobres restore %s --yes   (or go back with: bobres restore %s --yes)\n", err, source, safetyPath)
-		return 1
+		fmt.Fprintf(o.errOut, "error: the database is restored, but .env could not take the backup's master keys: %v\n", err)
+		if p.rollback {
+			o.rollBackRestore(ctx, p, &res)
+			return 1, res
+		}
+		fmt.Fprintf(o.errOut, "Fix it and run: bobres restore %s --yes   (or go back with: bobres restore %s --yes)\n", p.source, safetyPath)
+		return 1, res
 	}
-	o.reportKeys(changed, *keepKeys)
-	code := o.startAndWait(ctx, *dir)
-	o.healthHints(*dir, code == 0, *keepKeys && len(changed) > 0)
+	o.reportKeys(changed, p.keepKeys)
+	p.emit(stepStarting, "Starting BOBRES with the restored data.")
+	code := o.startAndWaitEv(ctx, dir, p.event)
+	o.healthHints(dir, code == 0, p.keepKeys && len(changed) > 0)
 	if code != 0 {
+		if p.rollback {
+			o.rollBackRestore(ctx, p, &res)
+			return 1, res
+		}
 		fmt.Fprintf(o.errOut, "The data is restored but the store is not healthy yet. To go back to the data from before: bobres restore %s --yes\n", safetyPath)
-		return 1
+		return 1, res
 	}
 	fmt.Fprintf(o.out, "\nRestore complete: the store runs on the data of %s (backup made %s).\nThe data from before the restore is in %s\n",
-		path.Base(filepath.ToSlash(source)), sum.Created.Format("2006-01-02 15:04 MST"), safetyPath)
-	return 0
+		path.Base(filepath.ToSlash(p.source)), p.sum.Created.Format("2006-01-02 15:04 MST"), safetyPath)
+	return 0, res
+}
+
+// rollBackRestore puts the data from before the restore back (the safety backup, opened with this
+// install's own key; it also puts back the master keys the restore replaced) and starts the store
+// on it. It fills in res.
+func (o *ops) rollBackRestore(ctx context.Context, p *restorePlan, res *restoreResult) {
+	// The data is put back even if an interrupt is what stopped the restore.
+	ctx = context.WithoutCancel(ctx)
+	p.emit(stepRollingBk, "The restored data did not come up healthy: going back to the data from before the restore.")
+	fmt.Fprintf(o.errOut, "Going back to the data from before the restore (%s)...\n", res.safety)
+	fail := func(format string, args ...any) {
+		fmt.Fprintf(o.errOut, "error: "+format+"\n", args...)
+		res.rollbackIncomplete = true
+	}
+	// The services that started on the restored data are stopped first; one that cannot be
+	// stopped is a warning, the load below is the step that matters.
+	if err := o.stopApp(ctx, p.dir, p.env); err != nil {
+		fmt.Fprintf(o.errOut, "warning: %v\n", err)
+	}
+	f, err := os.Open(res.safety) //nolint:gosec // the backup this restore just made
+	if err != nil {
+		fail("the backup of the data from before cannot be opened: %v", err)
+		return
+	}
+	defer f.Close() //nolint:errcheck // read-only
+	keys, err := o.loadDumpFrom(ctx, p.dir, f, p.key)
+	if err != nil {
+		fail("going back failed: %v", err)
+		return
+	}
+	if _, err := applyMasterKeys(p.dir, keys, false); err != nil {
+		fail("the data is back, but .env could not take its master keys: %v", err)
+		return
+	}
+	if code := o.startAndWaitEv(ctx, p.dir, p.event); code != 0 {
+		fail("the data from before the restore is back, but the store is not healthy yet")
+		return
+	}
+	res.rolledBack = true
+	fmt.Fprintln(o.out, "The data from before the restore is back and the store is healthy.")
 }
 
 // s3Scheme marks a backup in S3-compatible storage: s3://bucket/key.
@@ -606,6 +716,12 @@ func (o *ops) reportKeys(changed []string, keep bool) {
 // startAndWait starts the stack as .env now says (extra goes to compose up)
 // and waits until it is healthy.
 func (o *ops) startAndWait(ctx context.Context, dir string, extra ...string) int {
+	return o.startAndWaitEv(ctx, dir, nil, extra...)
+}
+
+// startAndWaitEv is startAndWait that tells event when it starts waiting for the services to be
+// healthy (the dashboard's "health" step).
+func (o *ops) startAndWaitEv(ctx context.Context, dir string, event func(restoreEvent), extra ...string) int {
 	env, _, err := readEnv(filepath.Join(dir, ".env"))
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: read %s: %v\n", filepath.Join(dir, ".env"), err)
@@ -615,6 +731,9 @@ func (o *ops) startAndWait(ctx context.Context, dir string, extra ...string) int
 	if out, err := o.run(ctx, dir, composeArgs(append([]string{"up", "-d"}, extra...)...)...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
+	}
+	if event != nil {
+		event(restoreEvent{Step: stepWaiting, Message: "Waiting for the services to be healthy."})
 	}
 	return waitHealthy(ctx, o.run, o.sleep, dir, appServices(dir, env), o.out, o.errOut)
 }

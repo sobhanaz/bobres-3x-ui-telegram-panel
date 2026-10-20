@@ -27,18 +27,68 @@ import {
   unixOf,
   type BackupSent,
 } from '../../system'
+import { canDownload, restoreRefusalOf, startDownload } from '../../restore'
 import { useAuth } from '../../stores/auth'
 import type { BackupRun, SystemBackups } from '../../types'
+import DownloadDialog from './DownloadDialog.vue'
+import RestorePanel from './RestorePanel.vue'
 
 // The backups the backup service keeps on the server (the last 7), made daily
 // and on demand, each sent by the bot to the owner on Telegram and, when it is
 // set up, copied to off-site storage (an S3-compatible bucket). The owner can
-// start one now; restoring stays on the server, with the backup key.
+// start one now, download any of them (encrypted: the key is never sent with
+// it) and restore one, or a file uploaded here (RestorePanel); the command that
+// restores on the server stays as it was.
 const { t, locale } = useI18n()
 const toast = useToast()
 const auth = useAuth()
 const lang = computed(() => locale.value as Lang)
 const canRun = computed(() => auth.can('system.write'))
+const restorePanel = ref<InstanceType<typeof RestorePanel> | null>(null)
+const canRestore = computed(() => canRun.value && restorePanel.value?.ready === true)
+
+// ---- download ----
+const dlTarget = ref<{ file: string; size: number } | null>(null)
+const dlOpen = ref(false)
+const dlBusy = ref(false)
+const dlError = ref('')
+const dlDetail = ref('')
+const askCode = ref(false) // core asked for the authenticator code, or /me says it will
+const needsCode = computed(() => askCode.value || auth.me?.password?.reauth === true)
+function openDownload(b: { file?: string; size: number }) {
+  if (!b.file) return
+  dlTarget.value = { file: b.file, size: b.size }
+  dlError.value = ''
+  dlDetail.value = ''
+  dlOpen.value = true
+}
+async function download(p: { code: string }) {
+  if (!dlTarget.value) return
+  dlBusy.value = true
+  dlError.value = ''
+  dlDetail.value = ''
+  try {
+    await startDownload(dlTarget.value.file, p.code)
+    dlOpen.value = false
+    askCode.value = false
+    toast.add({ severity: 'success', summary: t('system.backups.dl.started'), life: 4000 })
+  } catch (e) {
+    const why = restoreRefusalOf(e)
+    if (why) {
+      dlError.value = t('system.backups.rs.refusal.' + why)
+      if (why === 'code_required') askCode.value = true
+    } else {
+      const err = errorText(e, t)
+      dlError.value = t('system.backups.dl.error') + ' ' + err.text
+      dlDetail.value = err.detail
+    }
+  } finally {
+    dlBusy.value = false
+  }
+}
+function restoreFrom(b: { file?: string; size: number; at: number | null }) {
+  if (b.file) restorePanel.value?.openFor({ file: b.file, size: b.size, madeAt: b.at })
+}
 
 const reply = ref<SystemBackups | null>(null)
 const loading = ref(true)
@@ -286,11 +336,39 @@ async function copyCommand() {
                 <span class="upload-state">{{ t('system.backups.upload.not_uploaded') }}</span>
               </div>
               <div v-if="b.file" class="app-ltr app-mono file">{{ b.file }}</div>
+              <div v-if="canRun && b.file && canDownload(b)" class="backup-actions">
+                <Button :label="t('system.backups.dl.button')" icon="pi pi-download" size="small" severity="secondary" outlined class="download" @click="openDownload(b)" />
+                <Button
+                  :label="t('system.backups.rs.button')"
+                  icon="pi pi-replay"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  :disabled="!canRestore"
+                  class="restore"
+                  @click="restoreFrom(b)"
+                />
+              </div>
             </li>
           </ol>
         </template>
       </Card>
     </template>
+
+    <!-- the restore: its progress, the upload of a file, the confirmation (also for a backup of the list) -->
+    <RestorePanel v-if="state === 'ok'" ref="restorePanel" :owner="canRun" @ended="refresh" />
+
+    <DownloadDialog
+      v-if="dlTarget"
+      v-model:visible="dlOpen"
+      :file="dlTarget.file"
+      :size="dlTarget.size"
+      :needs-code="needsCode"
+      :busy="dlBusy"
+      :error="dlError"
+      :detail="dlDetail"
+      @confirm="download"
+    />
 
     <Message v-if="state === 'ok'" severity="secondary" icon="pi pi-replay" :closable="false" class="restore-note">
       <div class="title">{{ t('system.backups.restore_title') }}</div>
@@ -417,6 +495,12 @@ async function copyCommand() {
 }
 .offsite-error {
   display: block;
+}
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
 }
 .file {
   margin-block-start: 0.25rem;

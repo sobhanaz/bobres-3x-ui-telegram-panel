@@ -641,8 +641,8 @@ time the owner did not choose. The design lets it do **at most that**:
   expired signature, a release of another channel are all refused).
 - It can cause **downtime** (the stack restarts; the update backs up first and rolls back by itself when the store does
   not come back) and one update to a signed release newer than the installed one, which may be an earlier one than the
-  newest when it names `version`. It cannot roll back, restore, change a setting other than the update channel, or run
-  anything else.
+  newest when it names `version`. It cannot roll back, change a setting other than the update channel, or run
+  anything else. (The restore request is a second action with its own rules: "Restoring from the dashboard".)
 - The helper reads a directory core controls, so it trusts none of it: the directory itself is checked first (`run/` and
   `update/` are real directories nobody else can write to, owned by root or core), the request is opened without
   following a link or waiting for a pipe and must be a regular file owned by uid 65532 (a hard link to a file of root's
@@ -674,10 +674,104 @@ alone stops it until the next `bobres install` or `bobres update`, which turns i
 `sudo bobres uninstall --purge` removes the units with the install; `bobres uninstall` without `--purge` keeps them (the
 store can be started again with `bobres start`).
 
-**Limits.** The dashboard cannot roll back (`sudo bobres rollback` can; the restore point it leaves is the same). The
+**Limits.** The dashboard cannot undo an update (`sudo bobres rollback` can; the restore point it leaves is the same). The
 helper needs Docker and systemd on the server, and root's `bobres` at the path the units name; a server without
 systemd (a container, a non-systemd distribution) has no helper, and says so on the Updates tab. A request that finds
 bobres or Docker broken ends as `failed` with the reason.
+
+## Restoring from the dashboard
+
+The **System → Backups** tab can **download** any backup and **restore** one: a backup the backup service keeps, or a
+file the owner uploads. Both are the owner's. It is the same helper as the update (the units above), a second action
+in the same protocol, and it runs the code `sudo bobres restore` runs; nothing here gives core the Docker socket or any
+other power over the host.
+
+**Download.** The page asks for a single-use address (`POST /system/backups/download-ticket`: the owner's authenticator
+code is checked there when the session has one), and the browser follows it as its own download. Core fetches the file
+from the backup service (`GET /internal/backups/file?name=`, core's token for that service only) and copies it through
+in chunks; the file is never read into memory, on either side. The file is what is on disk: encrypted (AES-256-GCM,
+`BOBRES_BACKUP_KEY`), and **the key is never sent with it** (the page says so). The backup service serves only a name
+that is a backup file name (`bobres-<time>[-tag].bkp`: no path, no sidecar, no temporary file) and only a plain file,
+opened without following a link. Before the first byte, core audits the download (`system.backup.download`) and writes a
+Telegram notice for every owner (`system.backup.v1`) in one transaction: if that fails, nothing is sent.
+
+**Restore: the flow.**
+1. The owner picks a backup in the list, or uploads a file (`POST /system/restore/upload`, the raw body, at most 2 GiB,
+   one at a time, 5 an hour). Core streams the upload into `run/update/upload/<uuid>.bkp` (a folder of its own, mode
+   0700, owned by core; the file is created with `O_EXCL`, never through a link, mode 0600), counting and hashing it as
+   it is written, and keeps it 30 minutes (a second upload replaces it; leftovers older than 2 hours are removed).
+2. The owner confirms (`POST /system/restore`): **types the store's domain** (`BOBRES_DOMAIN`, or the host of
+   `BOBRES_PUBLIC_URL` on a local test setup; core refuses to restore when it knows neither), **ticks** that everything
+   after the backup's time is lost and that the dashboard and the bot are unavailable meanwhile, and gives the
+   **authenticator code** when the session has one (a mistyped domain is refused before the code is checked, so it does
+   not spend one). The dialog says what is lost plainly: orders, payments, new customers and services, wallet balances,
+   tickets and settings go back to the backup's. 6 requests an hour.
+3. Core records the request (a row in `core.system_updates` with `action = 'restore'`, the audit entry
+   `system.restore.requested`, a Telegram notice to every owner) and only then writes `request.json`. At most one
+   update **or** restore is open at a time (the unique index covers both; an update is refused while a restore is open
+   and the other way round). For a backup of the server, the size and SHA-256 are the backup service's own record,
+   never the page's.
+4. `bobres-updater.service` runs `bobres update --from-request`, which reads the request (rules below), takes the same
+   install lock as `update`, `rollback` and `restore`, and:
+   - **verify**: copies the backup into a file of its own (`backups/.dashboard-restore-*/backup.bkp`, root's, 0600)
+     **while hashing it**, and refuses a file whose SHA-256 or size is not the one core named; opens the original
+     without following a link or waiting for a pipe, requires a regular file owned by the right user, checks the free
+     space (twice the backup plus 512 MiB), then reads the whole copy with this install's `BOBRES_BACKUP_KEY`: the format,
+     the key and every chunk. A backup of another server (its key does not open it), a newer format, a damaged or cut file
+     are refused here, **before anything is stopped**, with the reason, and the command for a backup of another server
+     (`sudo bobres restore FILE --key-file KEYFILE`). Whatever core does to the upload afterwards is not what is restored.
+     It then waits 6 seconds, so that the notice of the request reaches the owners' Telegram before the stack that holds
+     it stops;
+   - **safety**, **stop**, **restore**, **start**, **health**: the code of `bobres restore --yes`: stop the services that
+     use the database, a **safety backup of the current data** (`backups/bobres-<time>-before-restore.bkp`, with a
+     sidecar, outside the service's retention), the dump loaded in **one transaction** (a failure leaves the database as
+     it was, and the services are started again), the backup's master keys put in `.env` where they differ, start,
+     wait until healthy;
+   - **rollback**: if the restored data does not come up healthy (or `.env` cannot take the backup's keys), the services
+     are stopped, the safety backup is loaded (which also puts back the master keys the restore replaced), and the store
+     is started on it. The result is `rolled_back`; if going back does not finish either, it is `failed` at the step
+     `rollback`, with the command for the safety backup. `bobres restore` over SSH has no automatic rollback (it tells the
+     operator what to run); the dashboard's has.
+   A stop of the service (SIGTERM) in the middle of a restore starts the services again.
+5. It writes `status.json` at every step, as for an update (the steps are `verify`, `safety`, `stop`, `restore`, `start`,
+   `health`, `rollback`, `done`).
+
+**What core's record looks like after a restore.** The restore replaces core's own database, so the row and the audit
+entry of the request are gone when it succeeds (the backup does not hold them), and `core.system_updates` is the
+backup's. The status carries what is needed (`action`, `subject`, `source`, `by`, `requested_at`), and core's worker, when
+it finds no open request, records the end of a finished restore of the last 3 hours from it: a row that is *born ended*
+(`INSERT ... ON CONFLICT (id) DO NOTHING`; whichever core inserts first writes the audit entry `system.restore.<outcome>`
+and the notices to every owner, once), so the dashboard shows the result and the owners are told. A restore that failed
+before the database changed, or went back, keeps its row (the safety backup holds it) and ends as an update does. The
+audit log after a successful restore is the backup's, plus that one entry, which names who asked and which backup.
+While core is stopped and restarted the page says it is reconnecting and keeps trying; in between, it shows the restore
+from the updater's status. A restored database has its own login sessions: the owner may have to log in again.
+
+**Stale and interrupted.** The status is rewritten at least every 30 seconds while the helper runs; one that says
+`running` and is older than 10 minutes is shown as failed ("interrupted"), and core ends the request as failed. A
+restore the helper says it runs for over 3 hours is ended as failed (systemd stops the service at 3 hours). If the
+helper died with the services stopped, `sudo bobres status` and `sudo bobres start` bring the store up; the data from
+before is in `backups/…-before-restore.bkp`.
+
+**Protocol (request.json, version 1, action `restore`).**
+`{"v":1,"id":"<uuid>","action":"restore","source":"backup"|"upload","file":"<name>","upload":"<uuid>"|"","sha256":"<64 hex>","size":<bytes>,"by":"<name>","at":"<RFC 3339>"}`
+- All ten fields and no others, as for an update. `source: backup` needs `file` to be a backup file name and `upload` to
+  be `""`; `source: upload` needs `upload` to be a lower-case UUID (the file `run/update/upload/<uuid>.bkp`) and `file`
+  to be the name it had, one plain line of at most 120 characters (it is shown, never used as a path). `sha256` is 64
+  lower-case hex digits, `size` 1 to 2 GiB. `id`, `by` and `at` are as for an update (an id handled before is ignored).
+- The upload folder is checked like `run/update`: a real directory (not a link) that root or core owns and nobody else
+  can write to. The upload file must be a regular file owned by core's uid. The helper deletes the upload whatever
+  becomes of the request, once it has read the request (also when it refuses it).
+- `status.json` gains `action` (`update` | `restore`), `restore` (true: this helper can restore; absent from a helper
+  from before, which refuses a restore request as "the action restore is not update", and the dashboard then says to run
+  `sudo bobres update` once), `subject`, `source`, `by` and `requested_at`.
+
+**Security.** See 07-security.md: owner only, CSRF, rate limits, the typed domain, the acknowledgement, the authenticator
+code, audit and Telegram on the request and on the outcome, and the same careful reading of everything core can write
+(symlinks, pipes, oversized files, concurrent requests, a file changed after it was hashed). What a hijacked owner session
+can do is the worst the dashboard can already do to the data: replace it with a backup **of this server** (a backup
+that this server's `BOBRES_BACKUP_KEY` opens), with a safety backup of what was there, and every owner told. The
+dashboard turns restores off with the updater: `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off`.
 
 ## Host monitoring
 

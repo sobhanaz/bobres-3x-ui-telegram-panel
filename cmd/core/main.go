@@ -257,7 +257,10 @@ func setup(rt *app.Runtime) error {
 	// holds no Docker socket and no power over the host. The worker ends an open
 	// update when the updater says it is over, also after core has been
 	// restarted by it, and tells every owner on Telegram.
-	updates := dom.NewUpdates(domain.UpdatesConfig{Source: releases, Helper: sysupdate.NewDir(cfg.UpdateDir), Log: rt.Log})
+	// The same updater restores a backup on the owner's request (System > Backups): the owner
+	// confirms by typing the store's domain, which is BOBRES_DOMAIN, or the host of
+	// BOBRES_PUBLIC_URL on a local test setup that has no domain.
+	updates := dom.NewUpdates(domain.UpdatesConfig{Source: releases, Helper: sysupdate.NewDir(cfg.UpdateDir), Domain: storeDomain(cfg), Log: rt.Log})
 	rt.Go("updates", updates.Run)
 	// The Monitoring section: every 30 seconds core samples the host (from the snapshot the server's
 	// collector leaves in BOBRES_MONITOR_DIR, mounted read only; core has no Docker socket), the

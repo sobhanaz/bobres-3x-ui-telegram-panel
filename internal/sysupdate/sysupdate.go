@@ -51,7 +51,8 @@ const (
 	RequestFile     = "request.json"
 	StatusFile      = "status.json"
 	ProtocolVersion = 1
-	// ActionUpdate is the only action there is.
+	// ActionUpdate asks the updater to update the install (ActionRestore, restore.go, to restore a
+	// backup: the only two actions there are).
 	ActionUpdate = "update"
 	// MaxRequest is the most a request may take: it carries nothing but its
 	// seven short fields. MaxStatus bounds what core will read of status.json.
@@ -99,11 +100,17 @@ const (
 	StepHealth   = "health"
 	StepRollback = "rollback"
 	StepDone     = "done"
+	// The restore's own steps (it shares verify, health, rollback and done): the safety backup of
+	// the current data, stopping the services, loading the dump and starting the store again.
+	StepSafety  = "safety"
+	StepStop    = "stop"
+	StepRestore = "restore"
+	StepStart   = "start"
 )
 
 var (
 	states = []string{StateIdle, StateRunning, StateDone, StateFailed, StateRolledBack}
-	steps  = []string{StepVerify, StepBackup, StepPull, StepRestart, StepHealth, StepRollback, StepDone}
+	steps  = []string{StepVerify, StepBackup, StepPull, StepRestart, StepHealth, StepRollback, StepDone, StepSafety, StepStop, StepRestore, StepStart}
 )
 
 // Finished reports whether a state is the end of an update.
@@ -197,9 +204,21 @@ type Status struct {
 	Channel  string
 	Step     string
 	// Message is one short sentence from the updater.
-	Message    string
-	StartedAt  *time.Time
-	FinishedAt *time.Time
+	Message string
+	// Action is what the status is about (ActionUpdate or ActionRestore, "" for none) and Restore
+	// says the updater can restore a backup (false for one from before that existed).
+	Action  string
+	Restore bool
+	// Subject, Source, By and RequestedAt describe a restore: the backup's file name (or the name
+	// an upload had), where it came from (SourceBackup or SourceUpload), who asked and when.
+	// The restore replaces core's database, which then knows nothing of the request: core
+	// records the end of the restore from them.
+	Subject     string
+	Source      string
+	By          string
+	RequestedAt *time.Time
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
 	// ModTime is when the file was last written (zero when unknown). The
 	// updater rewrites a running update's status at least every 30 seconds,
 	// so its age says whether the updater is still alive.
@@ -225,6 +244,13 @@ type rawStatus struct {
 	StartedAt  string   `json:"started_at"`
 	FinishedAt string   `json:"finished_at"`
 	Log        []string `json:"log"`
+	// Added with the dashboard's restore; absent from an older updater's status.
+	Action      string `json:"action"`
+	Restore     bool   `json:"restore"`
+	Subject     string `json:"subject"`
+	Source      string `json:"source"`
+	By          string `json:"by"`
+	RequestedAt string `json:"requested_at"`
 }
 
 // Dir is the updater's folder as core sees it.
@@ -343,6 +369,16 @@ func (d *Dir) ReadStatus() (Status, error) {
 	st.Message = Clean(scrub(strings.ToValidUTF8(raw.Message, "")), MaxMessage)
 	st.StartedAt, st.FinishedAt = when(raw.StartedAt), when(raw.FinishedAt)
 	st.Log = cleanLog(raw.Log)
+	st.Restore = raw.Restore
+	if raw.Action == ActionUpdate || raw.Action == ActionRestore {
+		st.Action = raw.Action
+	}
+	if raw.Source == SourceBackup || raw.Source == SourceUpload {
+		st.Source = raw.Source
+	}
+	st.Subject = Clean(scrub(strings.ToValidUTF8(raw.Subject, "")), MaxSubject)
+	st.By = Clean(raw.By, MaxBy)
+	st.RequestedAt = when(raw.RequestedAt)
 	if !st.Installed {
 		return st, ErrNotInstalled
 	}
@@ -359,6 +395,11 @@ func (d *Dir) WriteRequest(r Request) error {
 	if err != nil {
 		return err
 	}
+	return d.writeRequestBytes(data)
+}
+
+// writeRequestBytes is WriteRequest for the bytes of a request already checked.
+func (d *Dir) writeRequestBytes(data []byte) error {
 	if err := d.checkDir(); err != nil {
 		return err
 	}
@@ -421,13 +462,24 @@ func (d *Dir) ReadRequest() (*Request, error) {
 // another id, or one that cannot be read, is left alone). It reports whether
 // a file was removed.
 func (d *Dir) RemoveRequest(requestID string) (bool, error) {
-	r, err := d.ReadRequest()
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return false, nil
-	case err != nil:
+	// The request is an update's or a restore's: only its id matters here.
+	if err := d.checkDir(); err != nil {
 		return false, err
-	case r.ID != requestID:
+	}
+	data, _, err := d.readSmall(RequestFile, MaxRequest)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var r struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &r); err != nil {
+		return false, fmt.Errorf("%w: the request is not JSON", ErrBadStatus)
+	}
+	if r.ID != requestID {
 		return false, nil
 	}
 	if err := os.Remove(filepath.Join(d.path, RequestFile)); err != nil && !errors.Is(err, os.ErrNotExist) {

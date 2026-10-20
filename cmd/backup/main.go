@@ -66,6 +66,7 @@ func setup(rt *app.Runtime) error {
 	}
 	rt.Mux.Handle("GET /internal/backups", backupsvc.List(r, cfg.CoreToken))
 	rt.Mux.Handle("POST /internal/backups/run", backupsvc.Start(r, cfg.CoreToken))
+	rt.Mux.Handle("GET /internal/backups/file", backupsvc.Download(r, cfg.CoreToken))
 	return nil
 }
 

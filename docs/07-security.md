@@ -173,6 +173,50 @@ root, which runs the same update `sudo bobres update` runs and reports in `statu
 - **Off switch:** `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` removes the units. The compose mount can stay: with
   no helper nobody reads the file.
 
+## Downloading and restoring backups from the dashboard
+The Backups tab can hand the owner a backup file and replace the store's data with a backup, and core must still never get
+the Docker socket. A download is core copying a file from the backup service; a restore is a second action of the update
+helper above ([installer, "Restoring from the dashboard"](06-installer.md), [runbook](runbooks/restore.md)): core drops a
+`request.json` with `"action":"restore"`, and the root helper runs the code `sudo bobres restore` runs.
+
+- **Download.** The owner only, with the authenticator code where the session has one, 10 an hour. The code buys a ticket
+  (a random value, single use, a minute, for that session's user only), because a code does not belong in an address; the
+  browser follows the ticket as its own download. The file is the encrypted backup as it is on disk, copied through in
+  chunks (never held in memory); **the key is never sent**, and a downloaded file is useless without `BOBRES_BACKUP_KEY`.
+  The backup service serves only a backup file name (no path, no sidecar), only a plain file, opened without following a
+  link, and only to core's token for it. Every download is audited (`system.backup.download`) and told to every owner
+  on Telegram, written before the first byte is sent: if that cannot be recorded, nothing is sent.
+- **Restore.** The owner only, CSRF-guarded, 6 requests and 5 uploads an hour, one upload at a time and at most 2 GiB. It
+  needs the store's **domain typed**, a **ticked acknowledgement** that everything after the backup is lost and that the
+  dashboard and bot are unavailable meanwhile, and the **authenticator code** where there is one. Every request and its
+  end (`system.restore.requested`, `.done`, `.failed`, `.rolled_back`, `.not_started`, and `system.restore.upload` for
+  a file received) is audited and told to every owner on Telegram, also the end of a restore that replaced the database
+  that held the request (core records it again from the helper's status, once).
+- **What a restore request can say** is a source (a backup of the server, or an upload), a name, the file's SHA-256 and
+  size, and the usual id, user name and time; decoded into exactly those fields, with the same refusals as an update's
+  (stale, replayed, unknown or missing fields). For a backup of the server, core takes the size and hash from the backup
+  service's own list, never from the page, and a name that is not a backup file name never reaches the service. It
+  cannot name a path: an upload is always `run/update/upload/<uuid>.bkp`, the uuid being checked.
+- **The helper reads files core controls**, so for an upload it checks the folder (a real directory, not writable by others,
+  owned by root or core), opens the file without following a link or waiting for a pipe, requires a regular file of
+  exactly the size named and owned by core (or, for a backup of the server, by the backup service's user or root), and
+  **copies it into a file of its own while hashing it**: a file that changed, a link swapped in, a hash that differs are
+  all refused, and what is checked and restored is the copy, which core cannot reach. Two requests at once cannot
+  both run (the install lock, shared with `update`, `rollback` and `restore`; the database allows one open request).
+- **Nothing is stopped before the backup is known good.** The format, this server's key and every chunk are read first. A
+  backup of another server (its key does not open it) or of a newer format is refused with the reason and nothing
+  changes. The dashboard restores only backups this server's `BOBRES_BACKUP_KEY` opens; a backup of another server is
+  restored on the server with `--key-file`, by someone with a shell.
+- **It can go back.** A safety backup of the current data is made before the data is replaced; the dump loads in one
+  transaction; if the restored store is not healthy within 5 minutes the helper loads the safety backup (and the master
+  keys the restore replaced) and starts the store on it. If that fails too, the status says so and gives the command.
+- **The domain is only a confirmation, not a secret**: it stops a slip, not an attacker who holds an owner session and
+  the code. Such an attacker can already do the worst the dashboard allows, replace the data with an older copy of the
+  store's own; the safety backup, the audit log and every owner's Telegram message are what limit it.
+- Not covered: a backup of this server made while the key was different (it cannot be opened: restore it on the server with
+  the old key); an attacker who can write to `backups/` as the backup service's user and also holds the key; a host
+  where another program runs as uid 65532 and reaches `run/update`.
+
 ## Host monitoring
 
 The Monitoring section ([04-dashboard.md](04-dashboard.md)) needs to see the server and its containers; core must still never get the Docker
@@ -250,6 +294,8 @@ model as the updater turned around.
 | Hostile or mistaken update from the dashboard (a compromised core, a staff account) | Core has no Docker socket and no network: it can only drop a small `request.json` (channel `stable`/`beta`, an exact release name, a user name, a time) into `run/update`, the one host directory it can write, and a systemd path unit starts `bobres update --from-request` as root. That reads the file opened without following links, as a regular file of core's uid of at most 2 KiB, with every field checked and no other accepted, deletes it, ignores an id it has seen, and runs the same code as `sudo bobres update`: the release is verified against the keys built into bobres (signature, channel, key-list `seq`, expiry), never older than the installed one, backed up first, and rolled back if the store does not come back. A request has no URL, command, environment or flag to carry. Worst case: one update, to a signed release, at a time the owner did not choose, with the downtime of a restart. Not covered: Docker user-namespace remapping, or another program running as host uid 65532 (06-installer.md, "Updating from the dashboard"). `BOBRES_UPDATE_FROM_DASHBOARD=off` removes the helper |
 | Hostile or mistaken HTTPS change (a compromised core, a staff account) | The owner only, 10 a minute, audited without the key. Core cannot reach Caddy: the tls-agent checks the request again, accepts only the install's own domain and Zarinpal host, and writes fixed templates. A change is committed only after Caddy accepts it, and `sudo bobres ssl auto` on the server undoes any of them |
 | Hostile or mistaken update from the dashboard (a stolen owner session, a compromised core) | The owner only (`system.write`), CSRF-guarded, 10 a minute, an authenticator code when the owner has one, and an explicit confirmation for the exact release the page showed (a pre-release needs its own). Core never holds the Docker socket or any host power: it writes one small request file (an id, the channel, an optional release number, who asked, when; no URL, flag or environment) into a folder shared with a root systemd path unit, whose updater accepts it only from core's own uid, fresh, once, and then runs the same `bobres update` as the command line: the release's signed `checksums.txt`, the CLI's SHA-256, a backup first and an automatic rollback if the new version is not healthy. So a hijacked session or core can start the update of a genuine, signed release of the channel and nothing else: it cannot choose code, a source or a downgrade past what the updater verifies. Every request and its end is audited (`system.update.*`) and sent to every owner on Telegram, so an update nobody asked for is noticed. The updater's `status.json` is read as untrusted text (no link followed, size and field limits, escaped in the page, its log shown to the owner only). Cost of a hijack: an unwanted but genuine update and a few minutes of downtime; `sudo bobres update` and the runbook's rollback undo it |
+| A backup taken from the dashboard (a stolen owner session) | The owner only, an authenticator code where there is one (a single-use ticket carries it to the browser's download), 10 an hour, every download audited (`system.backup.download`) and told to every owner on Telegram before a byte is sent. The file is encrypted with `BOBRES_BACKUP_KEY`, which is never sent with it and is not in the dashboard; the backup service serves only backup file names, plain files, to core's token. Cost of a hijack: an encrypted copy of the data, useless without the key, and an alert nobody can suppress |
+| Hostile or mistaken restore from the dashboard (a stolen owner session, a compromised core) | The owner only, CSRF-guarded, 6 requests and 5 uploads an hour, at most 2 GiB, one upload at a time; the store's domain typed, an acknowledgement that the data after the backup is lost, and the authenticator code where there is one. Core has no Docker socket: it drops a request file; the root helper takes the install lock, copies the backup into a file of its own while checking its SHA-256 and size, opens everything core can write without following links or waiting for pipes, and reads the whole backup with this server's key **before it stops anything**. A safety backup of the current data comes first, the dump loads in one transaction, and the helper goes back to the safety backup if the store is not healthy. Every request and its end is audited and told to every owner on Telegram, also after the restore replaced the database that held the request. Cost of a hijack: the data replaced by an older copy of this server's own (a backup this server's key opens), some minutes of downtime, the safety backup and the alerts to undo it; `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` removes the helper |
 | Hostile or mistaken update request (a compromised core, a staff account, a stale or forged request file) | Core has no Docker socket and no write access to the host but one folder; its request names only a channel and a release, checked by pattern, fresh (15 minutes), used once and read the careful way (owner uid 65532, no link, no pipe, 2 KiB); the update is `bobres update` itself, so the release must be vendor-signed and newer than the install, with the backup first, the automatic rollback and one lock for update, rollback and restore. At worst: an untimely update of a signed release (downtime), a busy helper, a full disk. `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` removes the helper |
 | Leak of an own certificate's private key | Sealed with core's master key in the database; never logged, audited, answered or put in the support bundle; deleted when the mode changes. It is in clear only in the request volume, `tls/certs/` and the memory of the agent and of Caddy while that mode is on |
 | The panel answers anyone who scans the server's IP address (ip mode) | Warned about in the dashboard and the runbook, and the owner confirms an address the bot did not detect. Dashboard links move to the IP address only while Caddy serves a publicly trusted certificate for it and the bot's own detection of the server's public address, at most 5 minutes old, is that same address (a recycled address keeps a valid short-lived certificate for days, so the certificate alone proves nothing). Where the two never agree (a VPN, a NAT egress, a floating IP address) links stay on the domain, and `BOBRES_PUBLIC_URL` overrides. The panel still needs a login |

@@ -32,6 +32,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | report.daily_summary.v1 | core (daily summary worker) | notifier(staff) | Yesterday's sales (one store-local day) for **one** staff member who holds `reports.read` and has a Telegram account; core writes one event per such member, in the transaction that claims the day (`core.daily_summary_claims`), so each recipient's blocking, refusal or failure is their own (a blocked bot is skipped; a refusal no retry changes, a 4xx other than a blocked bot, a flood limit or a refused token, is dead-lettered at once; any other failure is retried, and since a feed is applied in order the events behind it wait for it until it is sent or dead-lettered), and a member who lost the permission before the claim gets none (the bot also drops the event when it knows the person is no longer an owner or admin, and when it is sent more than a day after it was queued). Queued exactly once, delivered at least once. Only when the store turned `reports.daily_summary` on. `{telegram_id, language (fa\|en, the member's own), date ("2026-10-13"), zone (IANA), new_customers, trials, currencies: [{currency, revenue, prev_revenue (the day before, for the comparison), orders, new_orders, renewals, traffic_topups, refunds: {count, amount}, net, topups: {count, amount}, rejected: {count, amount} (by staff), gateway_failed: {count, amount}}]}`. Amounts are integers in the currency's smallest unit and are never added across currencies; `currencies` lists only those with something to report (none: a quiet day, which the bot says in one line). No names, customers, plans or order ids ([14-reports.md](14-reports.md#the-daily-summary-in-telegram)) |
 | system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`; the notice `license.limit` is sent at most every 24 h, has no 6-hour reminder and no `resolved`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes, limit are numbers, free is bytes, date is unix seconds, the rest names; name of `license.limit` is the limited thing, `active_services`), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
 | system.update.v1 | core | notifier(owners) | An update asked for in the dashboard (System > Updates > Update now) or its end, one event per owner with a Telegram account, written in the transaction that records the request or its end. `{telegram_id, language, state: requested\|done\|failed\|rolled_back\|not_started, from, to, channel, by, at (unix seconds), message?}`; `message` is the updater's own short sentence for an end that is not `done` (outside text: the bot escapes it) |
+| system.backup.v1 | core | notifier(owners) | A backup downloaded from the dashboard (System > Backups), or a restore of one asked for there and its end; one event per owner with a Telegram account, written in the transaction that records it (and, for the end of a restore that replaced the database that held the request, in the one that records the end again). `{telegram_id, language, kind: download\|restore, state: downloaded (download) \| requested\|done\|failed\|rolled_back\|not_started (restore), file, source?: backup\|upload, by, at (unix seconds), size? (a download's), message?}`; `file` and `message` are outside text (the bot escapes them) |
 | sales.daily_summary.v1 | core (daily-summary worker) | notifier(staff alerts) | Yesterday's sales, once a day after `notify.daily_summary_hour` when `notify.daily_summary` is on ([14-reports.md](14-reports.md)). `{date (the local day), tz, new_customers, trials, currencies: [{currency, revenue, net, orders, new_orders, renewals, refunds (count), refund_amount, topups (count), topup_amount}]}`, money in minor units, one entry per currency, never added together; an empty day has no currencies. Sent to `notify.recipients` (never support staff) |
 
 ## Purchase saga (happy path)
@@ -309,6 +310,51 @@ which core sees as `/run/bobres-update` (`BOBRES_UPDATE_DIR`). Protocol version 
     503 `unavailable` (`check_unavailable`, `request_failed`).
 - The bot's `POST /internal/update-check/refresh` (core's service token) reloads its settings, looks now and answers
   with the check as `GET /internal/update-check` does; core waits at most 25 seconds.
+
+## Downloading and restoring backups from the dashboard
+System > Backups (the owner's; 07-security.md has the threat model, 06-installer.md "Restoring from the dashboard" the helper's
+rules). Core never holds the Docker socket: a download is core copying a file from the backup service, a restore is a second
+action in the folder protocol above.
+
+- Backup service (internal, core's token for it only): `GET /internal/backups/file?name=bobres-<time>[-tag].bkp` streams the
+  file as it is on disk (`Content-Length`, no time limit but one hour of writing); a name that is not a backup file name is
+  400, a file that is missing, a link or not a plain file is 404.
+- `request.json`, action `restore` (all ten fields, no others): `{v: 1, id, action: "restore", source: backup\|upload,
+  file, upload, sha256, size, by, at}`. `source: backup`: `file` is a backup file name, `upload` is "". `source: upload`:
+  `upload` is a lower-case UUID, the file is `run/update/upload/<upload>.bkp` (written by core: mode 0600, a file of its
+  own, `O_EXCL`, no link, at most 2 GiB), and `file` is the name it had (one plain line of at most 120 characters, never a
+  path). `sha256` is 64 lower-case hex digits, `size` 1 to 2147483648; the helper copies the file into one of its own while
+  hashing and refuses a difference. `id`, `by` and `at` are as for an update.
+- `status.json` gains `action` (`update` \| `restore`), `restore` (true: this helper can restore), `subject` (the backup),
+  `source`, `by`, `requested_at`; the restore's `step` is `verify`, `safety`, `stop`, `restore`, `start`, `health`,
+  `rollback` or `done`. A status older than this protocol has no `restore`: core then refuses to ask (`restore_unsupported`).
+- Core keeps a restore in the same table (`core.system_updates`, migration 00031: `action`, `subject`, `source`; `channel`
+  is "" for a restore), so one update or restore is open at a time. The restore replaces this database, which holds no row
+  for the request: when core finds nothing open it records a finished restore of the last 3 hours from the status
+  (`action: restore`, an id, `subject`, `source`, `requested_at`, `finished_at`) as a row that is born ended, with its
+  audit entry (`system.restore.<outcome>`, by the system) and notices, once (the id is the key).
+- Dashboard API:
+  - `GET /system/restore` (system.read): `{version, helper, run, last, other, can, domain, upload, limits}`; from the folder
+    and the database only (polled while a restore runs and while core restarts). `run` is the open restore (with `phase`:
+    `queued`, `running`, `done`, `failed`, `rolled_back`), `last` the restore that ended last, `other` is `"update"` while
+    an update is open, `can` is `{allowed, ready, reason}` (`no_domain`, `helper_missing`, `restore_unsupported`,
+    `already_running`), `domain` and `upload` (`{id, name, size, sha256, at, expires_at}`) are the owner's, `limits` is
+    `{max_upload, staged_seconds}`.
+  - `POST /system/restore/upload?name=<file name>` (system.write, 5 an hour, CSRF): the raw body, `Content-Type:
+    application/octet-stream` (415 otherwise), at most 2 GiB (413 `upload_too_large`), not empty (400 `upload_empty`), one
+    at a time (409 `upload_busy`); 201 `{upload}`. Nothing is read into memory.
+  - `POST /system/restore` `{backup\|upload_id, confirm, acknowledge, code}` (system.write, 6 an hour, CSRF): exactly one
+    of `backup` (a file the backup service lists) and `upload_id`; `confirm` is the store's domain (case and spaces do not
+    matter) and `acknowledge` must be true; an owner with an authenticator app gives `code` (403 `code_required`, 400
+    `code_wrong`, checked after the cheap checks so a typing mistake does not spend a code). 202 with the state as GET gives
+    it, or `{error, code, message}`: 400 `invalid` (`ack_required`, `confirm_wrong`), 404 `not_found` (`backup_unknown`,
+    `upload_missing`), 409 `state` (`helper_missing`, `restore_unsupported`, `already_running`, `no_domain`), 503
+    `unavailable` (`request_failed`).
+  - `POST /system/backups/download-ticket` `{file, code}` (system.write, 10 an hour, CSRF) answers `{url, expires_in}`: a
+    single-use address (60 seconds, for this session's user, in memory) for `GET /system/backups/download/{ticket}`
+    (system.write), which streams the file with `Content-Disposition: attachment`. The audit entry
+    (`system.backup.download`) and the notices are written before the first byte; if that fails, 500 and nothing is sent.
+- Events: `system.backup.v1` (below); a restore's request and end are also audited as `system.restore.*`.
 
 ## Dashboard updates: the server's updater
 Core cannot update the store itself (no Docker socket, no internet access). The dashboard's Updates tab asks a helper
