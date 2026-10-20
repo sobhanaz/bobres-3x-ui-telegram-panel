@@ -505,6 +505,14 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	if plain, err := s.dom.Settings(ctx); err == nil && domain.MiniAppOn(plain) {
 		out.MiniappUrl = domain.MiniAppURL(s.dashboardURL(ctx))
 	}
+	// Whether the FAQ and the tutorials have anything to show: the bot's buttons
+	// follow. A read that fails fails the refresh, so the bot keeps what it had
+	// instead of hiding the buttons for a minute.
+	faq, tutorials, err := s.dom.HelpAvailable(ctx)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out.HelpFaq, out.HelpTutorials = faq, tutorials
 	return out, nil
 }
 

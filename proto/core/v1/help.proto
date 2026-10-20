@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package core.v1;
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
+
+// Help content: the FAQ under Support and the tutorials behind the Tutorials
+// button, which the owner writes in the dashboard in Persian and English. The
+// bot reads the enabled ones with CoreService.ListHelpEntries and GetHelpEntry.
+
+// HelpButton is a URL button of a tutorial, labelled in the language the entry
+// is read in.
+message HelpButton {
+  string label = 1; // plain text, at most 64 characters
+  string url = 2; // https only
+}
+
+// HelpEntry is one question or tutorial as a customer reads it: its text is in
+// one language already, the one asked for or, when that translation is missing,
+// the other.
+message HelpEntry {
+  string id = 1; // uuid
+  string kind = 2; // faq | tutorial
+  string title = 3; // the question, or the tutorial's title: plain text on one line
+  string body = 4; // the answer, or the tutorial's text: Telegram's HTML subset, checked by core
+  repeated HelpButton buttons = 5; // tutorials only, in order
+  string language = 6; // fa | en: the language title and body are in
+}
+
+message ListHelpEntriesRequest {
+  string user_id = 1; // the customer asking (uuid): a banned one is refused as everywhere else
+  string kind = 2; // faq | tutorial
+  string language = 3; // fa | en; empty: the customer's own
+}
+
+message ListHelpEntriesResponse {
+  repeated HelpEntry entries = 1; // the enabled ones, in the owner's order
+}
+
+message GetHelpEntryRequest {
+  string user_id = 1;
+  string id = 2;
+  string language = 3;
+}

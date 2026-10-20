@@ -72,6 +72,8 @@ const (
 	CoreService_SetSubscriptionNote_FullMethodName       = "/core.v1.CoreService/SetSubscriptionNote"
 	CoreService_ListInvitedCustomers_FullMethodName      = "/core.v1.CoreService/ListInvitedCustomers"
 	CoreService_GetBotPhoto_FullMethodName               = "/core.v1.CoreService/GetBotPhoto"
+	CoreService_ListHelpEntries_FullMethodName           = "/core.v1.CoreService/ListHelpEntries"
+	CoreService_GetHelpEntry_FullMethodName              = "/core.v1.CoreService/GetHelpEntry"
 	CoreService_AdminTodayStats_FullMethodName           = "/core.v1.CoreService/AdminTodayStats"
 	CoreService_AdminListSettingSpecs_FullMethodName     = "/core.v1.CoreService/AdminListSettingSpecs"
 	CoreService_AdminListServers_FullMethodName          = "/core.v1.CoreService/AdminListServers"
@@ -160,6 +162,13 @@ type CoreServiceClient interface {
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error)
+	// Help content (help.proto): the enabled questions or tutorials of a kind in
+	// the customer's language (the other one where a translation is missing), in
+	// the owner's order, and one of them. PERMISSION_DENIED for a banned
+	// customer, NOT_FOUND for an unknown customer, and for an entry that is gone
+	// or switched off (GetHelpEntry).
+	ListHelpEntries(ctx context.Context, in *ListHelpEntriesRequest, opts ...grpc.CallOption) (*ListHelpEntriesResponse, error)
+	GetHelpEntry(ctx context.Context, in *GetHelpEntryRequest, opts ...grpc.CallOption) (*HelpEntry, error)
 	// The bot's button-driven admin menu (WP-D). Every call is the actor's own:
 	// core checks the role again and audits each change like the dashboard does.
 	AdminTodayStats(ctx context.Context, in *AdminTodayStatsRequest, opts ...grpc.CallOption) (*AdminTodayStatsResponse, error)
@@ -711,6 +720,26 @@ func (c *coreServiceClient) GetBotPhoto(ctx context.Context, in *GetBotPhotoRequ
 	return out, nil
 }
 
+func (c *coreServiceClient) ListHelpEntries(ctx context.Context, in *ListHelpEntriesRequest, opts ...grpc.CallOption) (*ListHelpEntriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHelpEntriesResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListHelpEntries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetHelpEntry(ctx context.Context, in *GetHelpEntryRequest, opts ...grpc.CallOption) (*HelpEntry, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HelpEntry)
+	err := c.cc.Invoke(ctx, CoreService_GetHelpEntry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) AdminTodayStats(ctx context.Context, in *AdminTodayStatsRequest, opts ...grpc.CallOption) (*AdminTodayStatsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AdminTodayStatsResponse)
@@ -869,6 +898,13 @@ type CoreServiceServer interface {
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error)
+	// Help content (help.proto): the enabled questions or tutorials of a kind in
+	// the customer's language (the other one where a translation is missing), in
+	// the owner's order, and one of them. PERMISSION_DENIED for a banned
+	// customer, NOT_FOUND for an unknown customer, and for an entry that is gone
+	// or switched off (GetHelpEntry).
+	ListHelpEntries(context.Context, *ListHelpEntriesRequest) (*ListHelpEntriesResponse, error)
+	GetHelpEntry(context.Context, *GetHelpEntryRequest) (*HelpEntry, error)
 	// The bot's button-driven admin menu (WP-D). Every call is the actor's own:
 	// core checks the role again and audits each change like the dashboard does.
 	AdminTodayStats(context.Context, *AdminTodayStatsRequest) (*AdminTodayStatsResponse, error)
@@ -1047,6 +1083,12 @@ func (UnimplementedCoreServiceServer) ListInvitedCustomers(context.Context, *Lis
 }
 func (UnimplementedCoreServiceServer) GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBotPhoto not implemented")
+}
+func (UnimplementedCoreServiceServer) ListHelpEntries(context.Context, *ListHelpEntriesRequest) (*ListHelpEntriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHelpEntries not implemented")
+}
+func (UnimplementedCoreServiceServer) GetHelpEntry(context.Context, *GetHelpEntryRequest) (*HelpEntry, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHelpEntry not implemented")
 }
 func (UnimplementedCoreServiceServer) AdminTodayStats(context.Context, *AdminTodayStatsRequest) (*AdminTodayStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminTodayStats not implemented")
@@ -2047,6 +2089,42 @@ func _CoreService_GetBotPhoto_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListHelpEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHelpEntriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListHelpEntries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListHelpEntries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListHelpEntries(ctx, req.(*ListHelpEntriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetHelpEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHelpEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetHelpEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetHelpEntry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetHelpEntry(ctx, req.(*GetHelpEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_AdminTodayStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AdminTodayStatsRequest)
 	if err := dec(in); err != nil {
@@ -2409,6 +2487,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBotPhoto",
 			Handler:    _CoreService_GetBotPhoto_Handler,
+		},
+		{
+			MethodName: "ListHelpEntries",
+			Handler:    _CoreService_ListHelpEntries_Handler,
+		},
+		{
+			MethodName: "GetHelpEntry",
+			Handler:    _CoreService_GetHelpEntry_Handler,
 		},
 		{
 			MethodName: "AdminTodayStats",

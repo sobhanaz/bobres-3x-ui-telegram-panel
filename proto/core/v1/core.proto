@@ -3,6 +3,7 @@ syntax = "proto3";
 package core.v1;
 
 import "common/v1/types.proto";
+import "core/v1/help.proto";
 
 option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
 
@@ -279,6 +280,13 @@ message Settings {
   // "" otherwise (and for an older core). The bot then puts a Store button in
   // its menu and sets Telegram's menu button to it.
   string miniapp_url = 4;
+  // Whether the help screens have anything to show: at least one enabled FAQ
+  // question and at least one enabled tutorial that a customer can read in some
+  // language. The bot shows its FAQ button (under Support) and its Tutorials
+  // button only while these are true. Both are false for an older core, which
+  // never sets them.
+  bool help_faq = 5;
+  bool help_tutorials = 6;
 }
 
 // --- Request/response messages ---
@@ -842,6 +850,13 @@ service CoreService {
   // GetBotPhoto returns the bot photo, for the bot to set in Telegram when
   // Settings.bot_photo_version changes; NOT_FOUND when there is none.
   rpc GetBotPhoto(GetBotPhotoRequest) returns (BotPhoto);
+  // Help content (help.proto): the enabled questions or tutorials of a kind in
+  // the customer's language (the other one where a translation is missing), in
+  // the owner's order, and one of them. PERMISSION_DENIED for a banned
+  // customer, NOT_FOUND for an unknown customer, and for an entry that is gone
+  // or switched off (GetHelpEntry).
+  rpc ListHelpEntries(ListHelpEntriesRequest) returns (ListHelpEntriesResponse);
+  rpc GetHelpEntry(GetHelpEntryRequest) returns (HelpEntry);
   // The bot's button-driven admin menu (WP-D). Every call is the actor's own:
   // core checks the role again and audits each change like the dashboard does.
   rpc AdminTodayStats(AdminTodayStatsRequest) returns (AdminTodayStatsResponse);

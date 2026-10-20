@@ -148,6 +148,15 @@ func setup(rt *app.Runtime) error {
 	} else if applied {
 		rt.Log.Info("default bot photo set (replace it in the dashboard: Branding)")
 	}
+	// A new store (or an update that brings this feature) gets a generic FAQ and
+	// the tutorials for the VPN apps, once, for the owner to edit or switch off in
+	// the dashboard (Branding, Help content); what the owner changes or deletes
+	// is never put back.
+	if applied, err := dom.EnsureDefaultHelp(rt.Ctx); err != nil {
+		rt.Log.Warn("default help content", "err", err)
+	} else if applied {
+		rt.Log.Info("default FAQ and tutorials added (edit them in the dashboard: Branding, Help content)")
+	}
 	// Core's master key seals the dashboard's authenticator secrets and the
 	// private key of the store's own HTTPS certificate.
 	secrets, err := masterKey(cfg)
