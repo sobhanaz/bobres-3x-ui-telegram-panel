@@ -433,3 +433,76 @@ func parseReleases(body []byte, repo string) ([]Release, error) {
 	}
 	return out, nil
 }
+
+// Sanitize re-checks a Status that came over the wire (core receives the bot's answer and shows it to
+// staff): the lists are cut to their bounds, every text is cleaned, every code is one of the known
+// ones and a link is kept only when it points into the release repository. The repository is the
+// build's, whatever the sender says.
+func Sanitize(in Status) Status {
+	out := Status{Available: in.Available, Repo: release.Repo, Runs: []Run{}, ReleaseRuns: []Run{}, Releases: []Release{}}
+	if in.CheckedAt > 0 {
+		out.CheckedAt = in.CheckedAt
+	}
+	if in.RateResetAt > 0 {
+		out.RateResetAt = in.RateResetAt
+	}
+	switch in.Error {
+	case "", ErrNotChecked, ErrUnreachable, ErrRateLimited, ErrInvalid:
+		out.Error = in.Error
+	default:
+		out.Error = ErrInvalid
+	}
+	out.Detail = clean(in.Detail, 300)
+	out.Runs, out.ReleaseRuns = sanitizeRuns(in.Runs, maxRuns), sanitizeRuns(in.ReleaseRuns, maxRelRuns)
+	for _, r := range in.Releases {
+		if len(out.Releases) == maxRels {
+			break
+		}
+		if !tagRe.MatchString(r.Tag) {
+			continue
+		}
+		n := Release{Tag: r.Tag, Prerelease: r.Prerelease, URL: ownLink(r.URL, release.Repo)}
+		if r.PublishedAt > 0 {
+			n.PublishedAt = r.PublishedAt
+		}
+		out.Releases = append(out.Releases, n)
+	}
+	return out
+}
+
+func sanitizeRuns(list []Run, limit int) []Run {
+	res := []Run{}
+	for _, r := range list {
+		if len(res) == limit {
+			break
+		}
+		n := Run{Workflow: clean(r.Workflow, 64), URL: ownLink(r.URL, release.Repo), Status: "unknown"}
+		if n.Workflow == "" {
+			continue
+		}
+		if branchRe.MatchString(r.Branch) {
+			n.Branch = r.Branch
+		}
+		if eventRe.MatchString(r.Event) {
+			n.Event = r.Event
+		}
+		for _, s := range statuses {
+			if r.Status == s {
+				n.Status = s
+			}
+		}
+		for _, s := range conclusions {
+			if r.Conclusion == s {
+				n.Conclusion = s
+			}
+		}
+		if shaRe.MatchString(r.SHA) && len(r.SHA) <= 12 {
+			n.SHA = r.SHA
+		}
+		if r.At > 0 {
+			n.At = r.At
+		}
+		res = append(res, n)
+	}
+	return res
+}

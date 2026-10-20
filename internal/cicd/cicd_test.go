@@ -374,6 +374,43 @@ func TestDefaultClientAsksTheReleaseRepository(t *testing.T) {
 	}
 }
 
+// Core checks the bot's answer again before it reaches a page.
+func TestSanitizeBoundsAndCleansWhatCameOverTheWire(t *testing.T) {
+	good := "https://github.com/" + release.Repo + "/actions/runs/5"
+	in := Status{Available: true, CheckedAt: -5, Error: "something else", Detail: "<b>x</b>‮" + strings.Repeat("d", 900), Repo: "evil/repo",
+		RateResetAt: -1,
+		Runs: []Run{
+			{Workflow: "CI", Branch: "main", Status: "completed", Conclusion: "success", URL: good, SHA: "abcdef0", At: 100},
+			{Workflow: "Bad<>", Branch: "a b", Event: "x y", Status: "weird", Conclusion: "owned", URL: "https://evil.example/x", SHA: "zzz", At: -3},
+			{Workflow: ""},
+		},
+		Releases: []Release{{Tag: "v1.0.0", URL: good}, {Tag: "bad tag"}, {Tag: "v1.0.1", PublishedAt: 7, URL: "javascript:alert(1)"}}}
+	for range 30 {
+		in.Runs = append(in.Runs, Run{Workflow: "W"})
+		in.Releases = append(in.Releases, Release{Tag: "v9"})
+	}
+	out := Sanitize(in)
+	if out.Repo != release.Repo || out.CheckedAt != 0 || out.RateResetAt != 0 || out.Error != ErrInvalid || len(out.Detail) > 320 ||
+		strings.ContainsAny(out.Detail, "<>‮") {
+		t.Fatalf("status: %+v", out)
+	}
+	if len(out.Runs) != maxRuns || out.Runs[0].URL != good || out.Runs[0].SHA != "abcdef0" || out.Runs[0].Conclusion != "success" {
+		t.Fatalf("runs: %+v", out.Runs)
+	}
+	bad := out.Runs[1]
+	if strings.ContainsAny(bad.Workflow, "<>") || bad.Branch != "" || bad.Event != "" || bad.Status != "unknown" || bad.Conclusion != "" || bad.URL != "" ||
+		bad.SHA != "" || bad.At != 0 {
+		t.Fatalf("hostile run: %+v", bad)
+	}
+	if len(out.Releases) != maxRels || out.Releases[0].URL != good || out.Releases[1].Tag != "v1.0.1" || out.Releases[1].URL != "" {
+		t.Fatalf("releases: %+v", out.Releases)
+	}
+	// An empty status keeps its lists as lists.
+	if e := Sanitize(Status{}); e.Runs == nil || e.ReleaseRuns == nil || e.Releases == nil {
+		t.Fatalf("null lists: %+v", e)
+	}
+}
+
 func TestConcurrentCallsShareOneRefresh(t *testing.T) {
 	g := newGithub()
 	srv := httptest.NewServer(g)

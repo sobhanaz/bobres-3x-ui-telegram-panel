@@ -19,6 +19,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/runner"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/cicd"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
@@ -184,6 +185,12 @@ func setup(rt *app.Runtime) error {
 		// The System page's logs tab (owner): this process's kept warnings
 		// and errors, already redacted.
 		rt.Mux.Handle("GET /internal/logs", runner.Logs(logging.Recent, cfg.PeerCoreToken))
+		// The Monitoring page's CI/CD panel: the repository's latest runs on
+		// main and releases, read from GitHub's public API by the bot (core has
+		// no internet access): anonymous, conditional, cached for about 5
+		// minutes, and an offline or rate-limited GitHub is an answer.
+		ci := cicd.New(version.Version)
+		rt.Mux.Handle("GET /internal/ci", runner.CI(ci.Status, cfg.PeerCoreToken))
 		// Activating a license key and the daily renewal: core has no
 		// internet access, so the bot passes its calls to the vendor's
 		// license server (BOBRES_LICENSE_SERVER) and keeps nothing.
@@ -208,6 +215,11 @@ func setup(rt *app.Runtime) error {
 
 	d := runner.NewDispatcher(rt.Ctx, 8, h.Handle)
 	rt.OnStop(d.Stop)
+	if cfg.PeerCoreToken != "" {
+		// The bot's own counters for the Monitoring page's time series
+		// (updates received, warnings and errors logged, queue depth).
+		rt.Mux.Handle("GET /internal/stats", runner.Stats(runner.StatsSource(time.Now(), d), cfg.PeerCoreToken))
+	}
 	if cfg.WebhookURL != "" {
 		if err := bot.SetWebhook(rt.Ctx, cfg.WebhookURL, cfg.WebhookSecret); err != nil {
 			return fmt.Errorf("set webhook: %w", err)
