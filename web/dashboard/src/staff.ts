@@ -150,6 +150,9 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
       return { name: 'branding', query: { tab: 'texts' } }
     case 'branding':
       return { name: 'branding' }
+    case 'help_entry':
+      // The FAQ and the tutorials are a tab of the Branding page.
+      return { name: 'branding', query: { tab: 'help' } }
     case 'dashboard':
       return e.actor ? { name: 'audit', query: { actor: e.actor.id } } : null
     case 'ticket':
