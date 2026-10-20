@@ -173,6 +173,9 @@ const (
 	CreditCommission = "commission"
 	// CreditSettlement: staff recorded a payment the reseller made to the store.
 	CreditSettlement = "settlement"
+	// CreditGiftCode: the customer applied a gift code (docs/03-bot-ux.md). They asked for it in the bot, which
+	// answered with the amount and the new balance in the same chat, so the notifier sends no second message.
+	CreditGiftCode = "gift_code"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.

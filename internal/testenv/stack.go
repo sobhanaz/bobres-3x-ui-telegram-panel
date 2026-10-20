@@ -149,7 +149,11 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	for _, f := range opts {
 		f(&o)
 	}
-	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...)})
+	coreEnv, err := bcrypto.NewEnvelope([]byte("testenv-core-master-key-0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...), Secrets: coreEnv})
 	payConn := Dial(t, payAddr, CoreToken)
 	provClient := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(Dial(t, provAddr, CoreToken)))
 	csrv := coreserver.New(cs, dom)

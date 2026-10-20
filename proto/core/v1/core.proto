@@ -79,7 +79,7 @@ message LedgerEntry {
   string user_id = 2;
   string currency = 3;
   int64 amount = 4;
-  string kind = 5; // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement
+  string kind = 5; // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement | gift_code
   string ref_type = 6;
   string ref_id = 7;
   string idempotency_key = 8;
@@ -852,6 +852,10 @@ service CoreService {
   rpc AdminAddStaff(AdminAddStaffRequest) returns (AdminStaffMember);
   rpc AdminRemoveStaff(AdminRemoveStaffRequest) returns (AdminRemoveStaffResponse);
   rpc AdminBroadcast(AdminBroadcastRequest) returns (AdminBroadcastResponse);
+  // RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
+  // an active account only (a banned one is PERMISSION_DENIED "user is banned").
+  // What a customer can get wrong is an outcome of the answer, not an error.
+  rpc RedeemGiftCode(RedeemGiftCodeRequest) returns (RedeemGiftCodeResponse);
 }
 
 message CanStartTrialRequest {
@@ -994,4 +998,36 @@ message AdminBroadcastResponse {
   map<string, string> texts = 4; // normalised
   map<string, string> button_labels = 5;
   string broadcast_id = 6; // set once sent
+}
+
+// How a gift code request ended. Everything a customer can get wrong is an
+// outcome, so the bot answers in their words; an error stays for a broken
+// request, a banned customer (PERMISSION_DENIED) and a backend that is down.
+enum GiftCodeOutcome {
+  GIFT_CODE_OUTCOME_UNSPECIFIED = 0;
+  GIFT_CODE_OUTCOME_REDEEMED = 1; // credited, or (replayed) credited by this very request before
+  // Unknown, switched off or expired, or not a code at all: one answer for all
+  // of them, so nothing tells a guesser which codes exist. Each counts as a
+  // wrong code (five in an hour close entering codes for an hour).
+  GIFT_CODE_OUTCOME_INVALID = 2;
+  GIFT_CODE_OUTCOME_USED_UP = 3; // told only to someone who sent the whole code
+  GIFT_CODE_OUTCOME_ALREADY_REDEEMED = 4; // this customer used the code as often as they may
+  GIFT_CODE_OUTCOME_LOCKED = 5; // too many wrong codes: retry_after_seconds
+  GIFT_CODE_OUTCOME_OFF = 6; // the owner switched gift codes off (or core cannot key them)
+}
+
+message RedeemGiftCodeRequest {
+  string user_id = 1;
+  string code = 2; // as the customer typed it: core reads capitals, digits and separators any way they are written
+  // Identifies the request (the bot uses the customer's message): sent again
+  // with the same key, it credits nothing more and answers the same.
+  string idempotency_key = 3;
+}
+
+message RedeemGiftCodeResponse {
+  GiftCodeOutcome outcome = 1;
+  common.v1.Money credited = 2; // REDEEMED: what was added to the wallet
+  common.v1.Money balance = 3; // REDEEMED: the wallet's balance now
+  int64 retry_after_seconds = 4; // LOCKED: how long entering codes stays closed
+  bool replayed = 5; // REDEEMED: this request was served before; nothing was credited this time
 }
