@@ -1,0 +1,10 @@
+// The chart kit (README.md). Import what a page needs from here:
+//   import { LineChart, BarChart, DonutChart, Heatmap, Sparkline } from '../components/charts'
+export { default as LineChart } from './LineChart.vue'
+export { default as BarChart } from './BarChart.vue'
+export { default as DonutChart } from './DonutChart.vue'
+export { default as Heatmap } from './Heatmap.vue'
+export { default as Sparkline } from './Sparkline.vue'
+export { default as ChartFrame } from './ChartFrame.vue'
+export { seriesColor, sequentialColor, SLOTS } from './palette'
+export type { ChartSeries, ChartTableData, DonutSlice, LegendItem, TooltipData, TooltipRow, ValueFormat } from './types'
