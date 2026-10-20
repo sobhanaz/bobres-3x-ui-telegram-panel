@@ -220,7 +220,7 @@ func TestResellerBuysForACustomerOnCredit(t *testing.T) {
 
 	// Buy for a customer: the plans at tier prices, a name, the checkout.
 	rs.press("rs:buy")
-	rs.lastButton("Monthly 50GB · 120,000 Toman")
+	rs.lastButton("120,000 Toman") // the tier price, on the price button
 	rs.press("rs:p:")
 	rs.shownHas("Type a name for this service")
 	rs.text(strings.Repeat("x", 65))
@@ -291,7 +291,7 @@ func TestResellerBuysForACustomerOnCredit(t *testing.T) {
 	rs.shownHas("🏷 <b>Ali&#39;s &lt;phone&gt; 2</b>\n📦 <b>Service</b>")
 	rs.press("rnw:")
 	rs.shownHas("🏷 <b>Ali&#39;s &lt;phone&gt; 2</b>\n🔄 <b>Renew service #")
-	rs.lastButton("Monthly 50GB · 120,000 Toman")
+	rs.lastButton("120,000 Toman") // the tier price, on the price button
 	rs.press("rp:")
 	rs.press("pay:w:")
 	rs.shownHas("Paid from your wallet")

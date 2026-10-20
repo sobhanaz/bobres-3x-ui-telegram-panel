@@ -1278,3 +1278,33 @@ func TestGetBulkBelongsToTheBuyer(t *testing.T) {
 		t.Fatalf("an unknown bulk: %v", err)
 	}
 }
+
+// The reports read the ledger and the orders, so a bulk purchase of N services
+// is N paid orders and the sum of their prices, with no case of its own.
+func TestBulkIsCountedByTheReportsAsOrdinaryOrders(t *testing.T) {
+	f := newBulkFixture(t, 1000, 9000)
+	ctx := context.Background()
+	if _, err := f.svc.CreateBulk(ctx, f.params(4)); err != nil {
+		t.Fatal(err)
+	}
+	rng, err := f.svc.ReportRange(ctx, ReportRequest{Range: "last_7_days", Group: "week"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := f.svc.SalesReport(ctx, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	irt := rep.Totals.Currencies["IRT"]
+	if irt.Revenue != 4000 || irt.Orders != 4 || irt.NewOrders != 4 || irt.Renewals != 0 || rep.Totals.NewCustomers != 1 {
+		t.Fatalf("sales %+v, new customers %d", irt, rep.Totals.NewCustomers)
+	}
+	methods, err := f.svc.SalesByMethod(ctx, rng)
+	if err != nil || len(methods) != 1 || methods[0].Method != "wallet" || methods[0].Revenue != 4000 || methods[0].Orders != 4 {
+		t.Fatalf("by method: %+v %v", methods, err)
+	}
+	plans, err := f.svc.TopPlans(ctx, rng)
+	if err != nil || len(plans) != 1 || plans[0].PlanID != f.plan.ID || plans[0].Orders != 4 || plans[0].Revenue != 4000 {
+		t.Fatalf("top plans: %+v %v", plans, err)
+	}
+}

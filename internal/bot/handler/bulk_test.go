@@ -317,7 +317,7 @@ func TestBulkTypedQuantity(t *testing.T) {
 	u.pressLabel("✏️ Another number")
 	u.tapMenu("en", "btn.wallet")
 	u.shownHas("Wallet")
-	if strings.Contains(u.shown().text, "Services:") {
+	if strings.Contains(u.shown().text, "Total: <b>") {
 		t.Fatalf("a menu tap was taken as the number: %q", u.shown().text)
 	}
 }
