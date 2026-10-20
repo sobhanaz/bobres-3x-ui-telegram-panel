@@ -43,7 +43,7 @@ const (
 // every install. A run that is not root cannot give them away, and leaves them as they are made.
 func ensureMonitorDirs(dir string) error {
 	for _, p := range []string{filepath.Join(dir, runDirName), monitorDir(dir)} {
-		if fi, err := os.Lstat(p); err == nil && p != monitorDir(dir) && fi.IsDir() {
+		if fi, err := os.Lstat(p); err == nil && p != monitorDir(dir) && fi.IsDir() { //nolint:gosec // Lstat follows nothing; dir is the install directory the operator named
 			continue // run/ is there: prepareUpdateDir put it right
 		}
 		d, err := openDir(p, 0o755)
@@ -71,7 +71,7 @@ func ensureMonitorDirs(dir string) error {
 func checkMonitorDir(dir string) error {
 	me := os.Geteuid()
 	for _, p := range []string{filepath.Join(dir, runDirName), monitorDir(dir)} {
-		fi, err := os.Lstat(p)
+		fi, err := os.Lstat(p) //nolint:gosec // Lstat follows nothing; dir is the install directory the operator named
 		switch {
 		case err != nil:
 			return err

@@ -18,7 +18,7 @@ func TestValidMetric(t *testing.T) {
 		}
 	}
 	bad := []string{"", "host.cpu_pct:", "host.cpu_pct:x" /* has no subject */, "host.disk_pct" /* needs one */, "nope.metric", "host.cpu_pct; DROP TABLE x",
-		"HOST.CPU_PCT", "host.disk_pct:/a b", "host.disk_pct:" + string(make([]byte, 200)), "container.cpu_pct:a:b", "../etc/passwd", "service.up:‮core"}
+		"HOST.CPU_PCT", "host.disk_pct:/a b", "host.disk_pct:" + string(make([]byte, 200)), "container.cpu_pct:a:b", "../etc/passwd", "service.up:\u202ecore"}
 	for _, n := range bad {
 		if ValidMetric(n) {
 			t.Errorf("%q accepted", n)

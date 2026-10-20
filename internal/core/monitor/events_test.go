@@ -57,7 +57,7 @@ func TestEventsMergeAlertsLogsAndTheJournalNewestFirst(t *testing.T) {
 	real := time.Now()
 	e.clk.t = real
 	e.logs["bot"] = &fakeLogs{lines: []logging.Line{
-		{Time: real.Add(-30 * time.Minute).Unix(), Level: "ERROR", Msg: "send failed <b>x</b>‮", Attrs: `{"user_id":42,"err":"timeout"}`},
+		{Time: real.Add(-30 * time.Minute).Unix(), Level: "ERROR", Msg: "send failed <b>x</b>\u202e", Attrs: `{"user_id":42,"err":"timeout"}`},
 		{Time: real.Add(-20 * time.Minute).Unix(), Level: "WARN", Msg: "slow reply", Attrs: "{}"},
 	}}
 	e.logs["payments"] = &fakeLogs{err: errBoom}
@@ -98,7 +98,7 @@ func TestEventsMergeAlertsLogsAndTheJournalNewestFirst(t *testing.T) {
 				t.Errorf("alert: %+v", ev)
 			}
 		case "bot":
-			if strings.ContainsAny(ev.Title, "<>‮") || (ev.Level == LevelError) != (strings.HasPrefix(ev.Title, "send failed")) {
+			if strings.ContainsAny(ev.Title, "<>\u202e") || (ev.Level == LevelError) != (strings.HasPrefix(ev.Title, "send failed")) {
 				t.Errorf("log: %+v", ev)
 			}
 			if ev.Level == LevelError && !strings.Contains(ev.Detail, `"user_id":42`) {

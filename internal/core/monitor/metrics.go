@@ -119,9 +119,3 @@ func ValidMetric(name string) bool {
 	}
 	return has == subjected[b] && (!has || subject != "")
 }
-
-// subjectOf is the part of a metric after ":".
-func subjectOf(metric string) string {
-	_, s, _ := strings.Cut(metric, ":")
-	return s
-}

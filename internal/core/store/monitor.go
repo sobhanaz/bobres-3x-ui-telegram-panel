@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -68,7 +69,7 @@ func (s *Store) RecordSamples(ctx context.Context, at time.Time, samples []Monit
 			}
 			var id int
 			err := tx.QueryRow(ctx, `SELECT id FROM core.monitor_metric WHERE name = $1`, sm.Name).Scan(&id)
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				if known >= MaxMetrics {
 					continue
 				}

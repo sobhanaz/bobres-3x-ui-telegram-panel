@@ -45,9 +45,9 @@ type github struct {
 
 func newGithub() *github {
 	return &github{hits: map[string]int{}, cond: map[string]int{}, etag: `W/"v1"`, body: map[string]string{
-		"/repos/o/r/actions/runs":                         runsJSON,
-		"/repos/o/r/actions/workflows/release.yml/runs":   releaseRunsJSON,
-		"/repos/o/r/releases":                             releasesJSON,
+		"/repos/o/r/actions/runs":                       runsJSON,
+		"/repos/o/r/actions/workflows/release.yml/runs": releaseRunsJSON,
+		"/repos/o/r/releases":                           releasesJSON,
 	}}
 }
 
@@ -322,7 +322,7 @@ func TestOversizedAndMalformedAnswersAreRefused(t *testing.T) {
 func TestHostileFieldsAreCleanedOrDropped(t *testing.T) {
 	g := newGithub()
 	g.body["/repos/o/r/actions/runs"] = `{"workflow_runs":[
-	 {"name":"CI‮<script>alert(1)</script>","head_branch":"main; rm -rf /","event":"push\n","status":"weird","conclusion":"owned",
+	 {"name":"CI\u202e<script>alert(1)</script>","head_branch":"main; rm -rf /","event":"push\n","status":"weird","conclusion":"owned",
 	  "html_url":"https://github.com/o/r/actions/runs/1?token=x","head_sha":"not-a-sha","updated_at":"yesterday"},
 	 {"name":"","head_branch":"main","status":"completed"},
 	 {"name":"` + strings.Repeat("W", 500) + `","head_branch":"main","status":"completed","conclusion":"success"}]}`
@@ -334,7 +334,7 @@ func TestHostileFieldsAreCleanedOrDropped(t *testing.T) {
 		t.Fatalf("status: %+v", st)
 	}
 	r := st.Runs[0]
-	if strings.ContainsAny(r.Workflow, "<>‮") || r.Branch != "" || r.Event != "" || r.Status != "unknown" || r.Conclusion != "" ||
+	if strings.ContainsAny(r.Workflow, "<>\u202e") || r.Branch != "" || r.Event != "" || r.Status != "unknown" || r.Conclusion != "" ||
 		r.URL != "" || r.SHA != "" || r.At != 0 {
 		t.Fatalf("hostile run kept: %+v", r)
 	}
@@ -377,7 +377,7 @@ func TestDefaultClientAsksTheReleaseRepository(t *testing.T) {
 // Core checks the bot's answer again before it reaches a page.
 func TestSanitizeBoundsAndCleansWhatCameOverTheWire(t *testing.T) {
 	good := "https://github.com/" + release.Repo + "/actions/runs/5"
-	in := Status{Available: true, CheckedAt: -5, Error: "something else", Detail: "<b>x</b>‮" + strings.Repeat("d", 900), Repo: "evil/repo",
+	in := Status{Available: true, CheckedAt: -5, Error: "something else", Detail: "<b>x</b>\u202e" + strings.Repeat("d", 900), Repo: "evil/repo",
 		RateResetAt: -1,
 		Runs: []Run{
 			{Workflow: "CI", Branch: "main", Status: "completed", Conclusion: "success", URL: good, SHA: "abcdef0", At: 100},
@@ -391,7 +391,7 @@ func TestSanitizeBoundsAndCleansWhatCameOverTheWire(t *testing.T) {
 	}
 	out := Sanitize(in)
 	if out.Repo != release.Repo || out.CheckedAt != 0 || out.RateResetAt != 0 || out.Error != ErrInvalid || len(out.Detail) > 320 ||
-		strings.ContainsAny(out.Detail, "<>‮") {
+		strings.ContainsAny(out.Detail, "<>\u202e") {
 		t.Fatalf("status: %+v", out)
 	}
 	if len(out.Runs) != maxRuns || out.Runs[0].URL != good || out.Runs[0].SHA != "abcdef0" || out.Runs[0].Conclusion != "success" {
