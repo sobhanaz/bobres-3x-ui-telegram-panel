@@ -73,20 +73,24 @@ func (m *Monitor) sampleHost(ctx context.Context, now time.Time) {
 		return
 	}
 	m.mu.Lock()
-	if cv.Snap.GeneratedMS <= m.sampled {
-		m.mu.Unlock()
-		return
-	}
-	m.sampled = cv.Snap.GeneratedMS
+	done := cv.Snap.GeneratedMS <= m.sampled
 	m.mu.Unlock()
-	samples := hostSamples(cv)
-	if len(samples) == 0 {
+	if done {
 		return
 	}
-	at := time.Unix(cv.Snap.GeneratedAt, 0)
-	if _, err := m.cfg.Store.RecordSamples(ctx, at, samples); err != nil && ctx.Err() == nil {
-		m.log.Warn("monitor: record host samples", "err", err)
+	samples := hostSamples(cv)
+	if len(samples) > 0 {
+		at := time.Unix(cv.Snap.GeneratedAt, 0)
+		if _, err := m.cfg.Store.RecordSamples(ctx, at, samples); err != nil {
+			if ctx.Err() == nil {
+				m.log.Warn("monitor: record host samples", "err", err) // tried again at the next step
+			}
+			return
+		}
 	}
+	m.mu.Lock()
+	m.sampled = max(m.sampled, cv.Snap.GeneratedMS)
+	m.mu.Unlock()
 }
 
 // hostSamples are the figures a fresh snapshot gives: the host's, and the stack's containers by
