@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,10 @@ import (
 
 // fakeVerifier stands in for the bot: init data "tg:<id>[:<username>[:<lang>]]"
 // is signed for that user, anything else is refused.
-type fakeVerifier struct{ err error }
+type fakeVerifier struct {
+	err error
+	bot string // the bot's own username, as the real bot tells it
+}
 
 func (v fakeVerifier) VerifyMiniApp(_ context.Context, initData string) (*botfiles.MiniAppUser, error) {
 	if v.err != nil {
@@ -33,7 +37,7 @@ func (v fakeVerifier) VerifyMiniApp(_ context.Context, initData string) (*botfil
 	if _, err := fmt.Sscan(parts[1], &id); err != nil {
 		return nil, fmt.Errorf("%w: id", botfiles.ErrMiniAppAuth)
 	}
-	u := &botfiles.MiniAppUser{ID: id}
+	u := &botfiles.MiniAppUser{ID: id, BotUsername: v.bot}
 	if len(parts) > 2 {
 		u.Username = parts[2]
 	}
@@ -76,9 +80,8 @@ func newMiniFixture(t *testing.T, on bool) *miniFix {
 	m := &miniFix{fixture: f, pay: &miniPay{}, prov: &fakeProv{}}
 	f.api.cfg.Payments, f.api.cfg.Provisioner = m.pay, m.prov
 	f.api.cfg.MiniAppVerify = fakeVerifier{}
-	if on {
-		m.setting("miniapp.enabled", "true")
-	}
+	// The app is on unless switched off, so a fixture that wants it off says so.
+	m.setting("miniapp.enabled", strconv.FormatBool(on))
 	return m
 }
 
@@ -146,7 +149,7 @@ func (m *miniFix) fund(userID string, amount int64) {
 		ON CONFLICT (user_id, currency) DO UPDATE SET balance = $2`, userID, amount)
 }
 
-func TestMiniAppIsOffUntilEnabled(t *testing.T) {
+func TestMiniAppFollowsTheSwitch(t *testing.T) {
 	m := newMiniFixture(t, false)
 	if code, _ := m.call(http.MethodPost, "/api/mini/v1/auth", "", map[string]any{"init_data": "tg:1"}); code != 404 {
 		t.Fatalf("auth while off: %d", code)
@@ -157,6 +160,20 @@ func TestMiniAppIsOffUntilEnabled(t *testing.T) {
 	m.setting("miniapp.enabled", "true")
 	if code, _ := m.call(http.MethodPost, "/api/mini/v1/auth", "", map[string]any{"init_data": "tg:1"}); code != 200 {
 		t.Fatalf("auth when on: %d", code)
+	}
+}
+
+// A store that never touched the switch has the app: it is on by default,
+// and only an explicit false closes it.
+func TestMiniAppIsOnUnlessSwitchedOff(t *testing.T) {
+	m := newMiniFixture(t, true)
+	m.sql(`DELETE FROM core.settings WHERE key = 'miniapp.enabled'`)
+	if code, _ := m.call(http.MethodPost, "/api/mini/v1/auth", "", map[string]any{"init_data": "tg:1"}); code != 200 {
+		t.Fatalf("auth with the switch never set: %d", code)
+	}
+	m.setting("miniapp.enabled", "false")
+	if code, _ := m.call(http.MethodPost, "/api/mini/v1/auth", "", map[string]any{"init_data": "tg:1"}); code != 404 {
+		t.Fatalf("auth after switching it off: %d", code)
 	}
 }
 
@@ -472,7 +489,7 @@ func TestMiniAppBodyLimit(t *testing.T) {
 }
 
 func TestMiniAppStaticFollowsTheSwitch(t *testing.T) {
-	m := newMiniFixture(t, false)
+	m := newMiniFixture(t, false) // switched off explicitly
 	m.api.cfg.MiniApp = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("app")) })
 	mux := http.NewServeMux()
 	m.api.registerMiniApp(mux)

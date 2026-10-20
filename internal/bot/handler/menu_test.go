@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -671,4 +672,107 @@ func TestButtonColors(t *testing.T) {
 	owner.press("adm:no:")
 	colors("reasons", item, map[string]string{"adm:nr:0:": tg.StyleDanger, "adm:nr:1:": tg.StyleDanger,
 		"adm:nr:2:": tg.StyleDanger, "adm:nx:": tg.StyleDanger, "adm:pi:": ""})
+}
+
+// With the Mini App on and a public address, the bottom menu opens with a
+// Store item: a plain text button, never a web app button, because a Mini App
+// opened from a reply keyboard button gets no sign-in data from Telegram. The
+// rest of the menu is unchanged, and the item goes when the app does (the menu
+// is sent again by itself when it changes).
+func TestBottomMenuHasTheStoreItemWhileTheMiniAppIsOn(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	cat := w.h.cat
+	u := w.customer(2101, "store_en")
+	u.hasMenu("en", menuRows([]string{"btn.language"})...)
+
+	const app = "https://shop.example.com/app/"
+	w.h.miniApp.Store(&[]string{app}[0])
+	u.text("/menu")
+	got := u.lastMenu()
+	store := got.Keyboard[0]
+	if len(store) != 1 || store[0].Text != cat.T("en", "btn.store") || store[0].Style != tg.StylePrimary {
+		t.Fatalf("the Store item: %+v", got.Keyboard[0])
+	}
+	if raw, _ := json.Marshal(got); strings.Contains(string(raw), "web_app") {
+		t.Fatalf("a reply keyboard button opens no Mini App (it would get no sign-in data): %s", raw)
+	}
+	rest := *got
+	rest.Keyboard = got.Keyboard[1:]
+	want := &tg.Menu{IsPersistent: true, Resize: true, Placeholder: cat.T("en", "menu.placeholder")}
+	for _, keys := range menuRows([]string{"btn.language"}) {
+		var row []tg.MenuButton
+		for _, k := range keys {
+			row = append(row, tg.MenuButton{Text: cat.T("en", k), Style: menuStyles[k]})
+		}
+		want.Row(row...)
+	}
+	if !reflect.DeepEqual(&rest, want) {
+		t.Fatalf("the rest of the menu\n got %+v\nwant %+v", &rest, want)
+	}
+	// In Persian too, from the Persian text.
+	fa := w.person(2102, "store_fa")
+	fa.text("/start")
+	fa.press("lang:fa")
+	if m := fa.lastMenu(); m.Keyboard[0][0].Text != cat.T("fa", "btn.store") || len(m.Keyboard[0]) != 1 {
+		t.Fatalf("Persian: %+v", m.Keyboard[0])
+	}
+
+	// A tap on it is answered with the button that opens the app.
+	u.tapMenu("en", "btn.store")
+	m := u.last()
+	var open *tg.Button
+	for _, b := range buttons(m) {
+		if b.WebApp != nil {
+			open = &b
+		}
+	}
+	if open == nil || open.WebApp.URL != app || open.Text != cat.T("en", "btn.store") || open.Style != tg.StylePrimary {
+		t.Fatalf("the answer to the Store item: %q %+v", m.text, buttons(m))
+	}
+	if !strings.Contains(m.text, "Store") || !offers(m, "home") {
+		t.Fatalf("the answer: %q", m.text)
+	}
+
+	// The app goes: the menu is sent again without the item, by itself, and an
+	// old menu's Store item still leads somewhere useful (the plans).
+	w.h.miniApp.Store(&[]string{""}[0])
+	u.text("hello")
+	if m := u.lastMenu(); m.Keyboard[0][0].Text == cat.T("en", "btn.store") {
+		t.Fatalf("after the app went: %+v", m.Keyboard[0])
+	}
+	u.tapMenu("en", "btn.store")
+	if m := u.last(); !offers(m, "plan:") || buttonsHaveWebApp(m) {
+		t.Fatalf("an old Store item without the app: %q %+v", m.text, buttons(m))
+	}
+}
+
+func buttonsHaveWebApp(m *msg) bool {
+	for _, b := range buttons(m) {
+		if b.WebApp != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// The home screen opens the app with its first button while the app is on (an
+// inline web app button gives the app the sign-in data), and has no such
+// button otherwise.
+func TestHomeOpensTheMiniAppWhileItIsOn(t *testing.T) {
+	w := newWorld(t)
+	setupStore(t, w)
+	u := w.customer(2103, "home_app")
+
+	u.text("/start")
+	if buttonsHaveWebApp(u.last()) {
+		t.Fatalf("the home screen without an app: %+v", buttons(u.last()))
+	}
+	const app = "https://shop.example.com/app/"
+	w.h.miniApp.Store(&[]string{app}[0])
+	u.text("/start")
+	first := u.last().kb.InlineKeyboard[0]
+	if len(first) != 1 || first[0].WebApp == nil || first[0].WebApp.URL != app || first[0].Text != w.h.cat.T("en", "btn.store") {
+		t.Fatalf("the home screen's first row: %+v", first)
+	}
 }

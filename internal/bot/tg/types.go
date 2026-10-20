@@ -242,10 +242,11 @@ const (
 
 // Button is one inline keyboard button: either callback data or a URL.
 type Button struct {
-	Text         string `json:"text"`
-	CallbackData string `json:"callback_data,omitempty"`
-	URL          string `json:"url,omitempty"`
-	Style        string `json:"style,omitempty"` // one of the styles above, or none
+	Text         string      `json:"text"`
+	CallbackData string      `json:"callback_data,omitempty"`
+	URL          string      `json:"url,omitempty"`
+	WebApp       *WebAppInfo `json:"web_app,omitempty"`
+	Style        string      `json:"style,omitempty"` // one of the styles above, or none
 }
 
 // Primary returns the button in blue.
@@ -285,11 +286,28 @@ func CB(text, data string) Button { return Button{Text: text, CallbackData: data
 // Link is a URL button.
 func Link(text, url string) Button { return Button{Text: text, URL: url} }
 
+// WebApp is an inline button that opens a Mini App (private chats only).
+func WebApp(text, url string) Button { return Button{Text: text, WebApp: &WebAppInfo{URL: url}} }
+
 // MenuButton is a button of the reply keyboard: a tap sends its text as a
-// message.
+// message. It never carries a Mini App: Telegram gives one opened from a reply
+// keyboard button no sign-in data (WebAppInitData is empty), so the app could
+// not know who the customer is. Inline buttons and the menu button do.
 type MenuButton struct {
 	Text  string `json:"text"`
 	Style string `json:"style,omitempty"` // as Button's
+}
+
+// WebAppInfo is a Mini App: the HTTPS address Telegram opens.
+type WebAppInfo struct {
+	URL string `json:"url"`
+}
+
+// MenuButtonWebApp is the menu button next to the message box when it opens
+// a Mini App (setChatMenuButton).
+type MenuButtonWebApp struct {
+	Text string
+	URL  string
 }
 
 // Menu is a persistent reply keyboard (the bottom menu). Only a new message

@@ -99,6 +99,10 @@ type Handler struct {
 	// photoVersion is Settings.bot_photo_version from the last refresh, for
 	// RunProfile (nil before the first).
 	photoVersion atomic.Pointer[string]
+	// miniApp is Settings.miniapp_url from the last refresh: where the Mini
+	// App opens from ("" until the first refresh, when it is off, or when the
+	// store has no public HTTPS address).
+	miniApp atomic.Pointer[string]
 	// whiteLabel is Settings.white_label from the last refresh (false until
 	// then: the credit shows unless core says otherwise).
 	whiteLabel atomic.Bool
@@ -151,6 +155,8 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	// The bot photo's version: RunProfile fetches the photo when it changes.
 	photo := s.GetBotPhotoVersion()
 	h.photoVersion.Store(&photo)
+	miniApp := s.GetMiniappUrl()
+	h.miniApp.Store(&miniApp)
 	h.whiteLabel.Store(s.GetWhiteLabel())
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
@@ -547,6 +553,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showHistory(r)
 	case "trial":
 		h.onTrial(r)
+	case "store":
+		h.onStore(r)
 	case "support":
 		r.keep = r.keep || rest == "m" // under a notification, which must stay as it is
 		h.onSupport(r)
@@ -742,6 +750,14 @@ func (r *req) button(key, data string, args ...any) tg.Button {
 // linkButton is a URL button labelled with key's text, colored the same way.
 func (r *req) linkButton(key, url string) tg.Button {
 	b := tg.Link(r.t(key), url)
+	b.Style = i18n.ButtonStyle(key)
+	return b
+}
+
+// webAppButton is an inline button labelled with key's text that opens the
+// Mini App at url, colored the same way.
+func (r *req) webAppButton(key, url string) tg.Button {
+	b := tg.WebApp(r.t(key), url)
 	b.Style = i18n.ButtonStyle(key)
 	return b
 }

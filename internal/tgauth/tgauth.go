@@ -65,8 +65,9 @@ func Validate(initData, botToken string, maxAge time.Duration, now time.Time) (*
 	}
 	lines := make([]string, 0, len(vals))
 	for k, v := range vals {
-		// "signature" (the third-party validation field) is not part of the
-		// bot-token check; "hash" is the value being checked.
+		// Every received field but "hash" (the value being checked) is in the
+		// data-check-string, "signature" too: Telegram leaves it out only of the
+		// Ed25519 check for third parties, which is not what runs here.
 		if k == "hash" || len(v) != 1 {
 			if k != "hash" {
 				return nil, ErrMalformed // a repeated key is not what Telegram sends

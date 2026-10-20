@@ -31,6 +31,9 @@ type ProfileAPI interface {
 	SetMyShortDescription(ctx context.Context, text, lang string) error
 	SetMyProfilePhoto(ctx context.Context, jpeg []byte) error
 	RemoveMyProfilePhoto(ctx context.Context) error
+	// SetChatMenuButton sets the menu button next to the message box for every
+	// chat: a Mini App, or (nil) back to the default.
+	SetChatMenuButton(ctx context.Context, b *tg.MenuButtonWebApp) error
 	GetUserProfilePhotos(ctx context.Context, userID int64, limit int) (*tg.UserProfilePhotos, error)
 }
 
@@ -50,13 +53,22 @@ type profileLang struct {
 
 // profile is the whole profile the bot wants: per language ("" for the
 // users of any other language, in the bot's first language), the menus of
-// staff chats, which add the staff commands, and the version of the bot
+// staff chats, which add the staff commands, the version of the bot
 // photo uploaded on the Branding page ("" none, photoUnknown when core could
-// not read it).
+// not read it), and the menu button that opens the Mini App (nil: the
+// default one).
 type profile struct {
 	Langs map[string]profileLang
 	Staff map[int64][]tg.BotCommand
 	Photo string
+	Menu  *menuButton
+}
+
+// menuButton is the Mini App button next to the message box: Telegram has one
+// text for everyone, so it is the bot's first language's.
+type menuButton struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
 }
 
 // photoUnknown is the photo version core sends when it cannot read the
@@ -72,7 +84,7 @@ var customerCommands = []string{"start", "menu", "terms", "paysupport"}
 // photo (its version) call for, with the vendor credit in the about text
 // unless the license is white label; false when general.bot_profile is off (the
 // operator sets the profile in @BotFather).
-func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string, whiteLabel bool) (profile, bool) {
+func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string, whiteLabel bool, miniApp string) (profile, bool) {
 	if !set.Bool("general.bot_profile", true) {
 		return profile{}, false
 	}
@@ -88,6 +100,9 @@ func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string, whiteLa
 		return out
 	}
 	p := profile{Langs: map[string]profileLang{}, Staff: map[int64][]tg.BotCommand{}, Photo: photo}
+	if miniApp != "" {
+		p.Menu = &menuButton{Text: cat.T(i18n.Normalize(""), "profile.menu_button"), URL: miniApp}
+	}
 	for _, code := range append([]string{""}, i18n.Languages...) {
 		lang := i18n.Normalize(code) // "" is the first language
 		p.Langs[code] = profileLang{Commands: menu(lang), Description: cat.T(lang, "profile.description"), About: branding.AboutWithCredit(cat.T(lang, "profile.about"), whiteLabel)}
@@ -148,6 +163,10 @@ type refusedPhoto struct {
 // goneRetry is how long a staff chat the bot could not reach waits before
 // its menu is tried again.
 const goneRetry = time.Hour
+
+// menuPart is the key of the Mini App menu button in applied: the
+// fingerprint of what the bot set (missing: the default button).
+const menuPart = "menu_button"
 
 // photoPart is the key of the profile photo in applied: the version of the
 // photo the bot set (missing: none of its own). photoIDPart is the
@@ -287,8 +306,37 @@ func (s *profileSync) sync(ctx context.Context, want profile, on bool) error {
 		delete(s.applied, key)
 		changed = true
 	}
+	if err := s.syncMenuButton(ctx, want.Menu, &changed); err != nil {
+		return err
+	}
 	// The photo last: a photo Telegram refuses never holds up the rest.
 	return s.syncPhoto(ctx, want.Photo, &changed)
+}
+
+// syncMenuButton sets the menu button to the Mini App when one is wanted and
+// is not set yet, and gives the default one back when the bot set one and
+// none is wanted now (the app was switched off, or the store lost its
+// public address).
+func (s *profileSync) syncMenuButton(ctx context.Context, want *menuButton, changed *bool) error {
+	have, had := s.applied[menuPart]
+	switch {
+	case want != nil:
+		fp := fingerprint(want)
+		if have == fp {
+			return nil
+		}
+		if err := s.api.SetChatMenuButton(ctx, &tg.MenuButtonWebApp{Text: want.Text, URL: want.URL}); err != nil {
+			return fmt.Errorf("menu button: %w", err)
+		}
+		s.applied[menuPart], *changed = fp, true
+	case had:
+		if err := s.api.SetChatMenuButton(ctx, nil); err != nil {
+			return fmt.Errorf("menu button: %w", err)
+		}
+		delete(s.applied, menuPart)
+		*changed = true
+	}
+	return nil
 }
 
 // syncPhoto sets the photo core has or, when core has none, takes off the
@@ -421,7 +469,7 @@ func photoRefused(err error) bool {
 func (s *profileSync) clear(ctx context.Context, changed *bool) error {
 	keys := make([]string, 0, len(s.applied))
 	for key := range s.applied {
-		if key != photoPart && key != photoIDPart {
+		if key != photoPart && key != photoIDPart && key != menuPart {
 			keys = append(keys, key)
 		}
 	}
@@ -443,6 +491,13 @@ func (s *profileSync) clear(ctx context.Context, changed *bool) error {
 			}
 		}
 		delete(s.applied, key)
+		*changed = true
+	}
+	if _, ok := s.applied[menuPart]; ok { // the Mini App button goes, so what @BotFather sets shows again
+		if err := s.api.SetChatMenuButton(ctx, nil); err != nil {
+			return fmt.Errorf("menu button: %w", err)
+		}
+		delete(s.applied, menuPart)
 		*changed = true
 	}
 	clear(s.gone)
@@ -477,7 +532,7 @@ func (h *Handler) RunProfile(ctx context.Context, api ProfileAPI, botID int64, m
 		if time.Now().Before(notBefore) {
 			continue
 		}
-		want, on := wantedProfile(h.cat, h.set, h.botPhotoVersion(), h.whiteLabel.Load())
+		want, on := wantedProfile(h.cat, h.set, h.botPhotoVersion(), h.whiteLabel.Load(), h.miniAppURL())
 		err := s.sync(ctx, want, on)
 		if err == nil || ctx.Err() != nil {
 			continue
@@ -487,6 +542,15 @@ func (h *Handler) RunProfile(ctx context.Context, api ProfileAPI, botID int64, m
 		}
 		h.log.Warn("bot profile not updated in Telegram; trying again at a later refresh", "err", err)
 	}
+}
+
+// miniAppURL is where the Mini App opens from, as core last said ("" when it
+// is off, has no public HTTPS address, or settings are not loaded yet).
+func (h *Handler) miniAppURL() string {
+	if u := h.miniApp.Load(); u != nil {
+		return *u
+	}
+	return ""
 }
 
 // botPhotoVersion is the bot photo's version from the last settings

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -23,7 +24,7 @@ import (
 // init data Telegram gives the Mini App (the bot checks its signature: only
 // the bot holds the bot token) and gets a bearer token; every call then acts
 // on that customer's own account, through the same domain functions the bot
-// uses. It is off until miniapp.enabled is set.
+// uses. It is on unless the owner sets miniapp.enabled to false.
 
 // MiniAppVerifier checks a Mini App's init data (botfiles.Client asks the bot).
 type MiniAppVerifier interface {
@@ -55,6 +56,16 @@ type miniState struct {
 	auth     *limiter
 	api      *limiter
 	write    *limiter
+	// bot is the bot's own @username as it told core at a sign-in: the app's
+	// links use it until the owner sets one in Branding.
+	bot atomic.Pointer[string]
+}
+
+// noteBot remembers the bot's username from a sign-in (a malformed one is ignored).
+func (m *miniState) noteBot(name string) {
+	if pageBotRe.MatchString(name) {
+		m.bot.Store(&name)
+	}
 }
 
 func newMiniState() *miniState {
@@ -108,10 +119,10 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	}
 }
 
-// miniOn reads the switch (settings are unset until the owner turns it on).
+// miniOn reads the switch: on unless the owner turned it off (domain.MiniAppOn).
 func (s *Server) miniOn(ctx context.Context) (settings map[string]string, on bool, err error) {
 	settings, err = s.cfg.Domain.Settings(ctx)
-	return settings, err == nil && settings["miniapp.enabled"] == "true", err
+	return settings, err == nil && domain.MiniAppOn(settings), err
 }
 
 // miniStatic serves the app, or the same answer as for any unknown address
@@ -275,6 +286,9 @@ func (s *Server) miniAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tu, err := s.cfg.MiniAppVerify.VerifyMiniApp(ctx, in.InitData)
+	if err == nil {
+		s.mini.noteBot(tu.BotUsername)
+	}
 	switch {
 	case errors.Is(err, botfiles.ErrMiniAppAuth):
 		writeError(w, http.StatusUnauthorized, "auth", "open the store from Telegram")
@@ -337,6 +351,18 @@ func (s *Server) miniMe(w http.ResponseWriter, r *http.Request) {
 }
 
 // miniMeBody is who the customer is, their balances and the store's look.
+// miniBot is the bot's @username for the app's links: the one the owner set in
+// Branding, else the one the bot told at a sign-in ("" while neither is known).
+func (s *Server) miniBot(settings map[string]string) string {
+	if b := settings[domain.SettingBotUsername]; pageBotRe.MatchString(b) {
+		return b
+	}
+	if b := s.mini.bot.Load(); b != nil {
+		return *b
+	}
+	return ""
+}
+
 func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any, error) {
 	settings, err := s.cfg.Domain.Settings(ctx)
 	if err != nil {
@@ -351,7 +377,7 @@ func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any,
 		color = defaultColor
 	}
 	bot := ""
-	if b := settings[domain.SettingBotUsername]; pageBotRe.MatchString(b) {
+	if b := s.miniBot(settings); b != "" {
 		bot = "https://t.me/" + b
 	}
 	support, supportURL := supportContact(settings["branding.support"])

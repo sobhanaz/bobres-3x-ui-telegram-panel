@@ -58,3 +58,57 @@ func TestDashboardLinksFollowTheOrigin(t *testing.T) {
 		t.Fatalf("fixed: %q", got)
 	}
 }
+
+// The bot learns where the Mini App opens from with every settings read: the
+// store's public HTTPS address plus /app/, only while the app is on, and none
+// for an address Telegram cannot reach.
+func TestSettingsCarryTheMiniAppAddress(t *testing.T) {
+	f := newFixtureWith(t, func(s *Server) { s.SetPublicURL("https://shop.example.com") })
+	ctx := context.Background()
+	if _, err := f.st.DB().Exec(ctx, `DELETE FROM core.settings WHERE key = 'miniapp.enabled'`); err != nil {
+		t.Fatal(err)
+	}
+	c := f.client(t, botToken)
+	url := func() string {
+		t.Helper()
+		s, err := c.GetSettings(ctx, &corev1.GetSettingsRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s.GetMiniappUrl()
+	}
+	if got := url(); got != "https://shop.example.com/app/" { // never switched: on by default
+		t.Fatalf("by default: %q", got)
+	}
+	set := func(v string) {
+		t.Helper()
+		if _, err := f.st.DB().Exec(ctx, `INSERT INTO core.settings (key, value) VALUES ('miniapp.enabled', $1)
+			ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, `"`+v+`"`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set("false")
+	if got := url(); got != "" {
+		t.Fatalf("switched off: %q", got)
+	}
+	set("true")
+	if got := url(); got != "https://shop.example.com/app/" {
+		t.Fatalf("switched on: %q", got)
+	}
+}
+
+func TestSettingsHaveNoMiniAppAddressWithoutAPublicOne(t *testing.T) {
+	for name, origin := range map[string]string{"none": "", "plain http": "http://shop.example.com", "local": "https://bobres.localhost:8443", "private IP": "https://10.0.0.2"} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixtureWith(t, func(s *Server) {
+				if origin != "" {
+					s.SetPublicURL(origin)
+				}
+			})
+			s, err := f.client(t, botToken).GetSettings(context.Background(), &corev1.GetSettingsRequest{})
+			if err != nil || s.GetMiniappUrl() != "" {
+				t.Fatalf("%q: %q %v", origin, s.GetMiniappUrl(), err)
+			}
+		})
+	}
+}

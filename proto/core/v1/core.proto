@@ -271,6 +271,11 @@ message Settings {
   // vendor credit out of its about text. False when it is not, and for an
   // older core that never sets it, so a missing answer shows the credit.
   bool white_label = 3;
+  // Where the Telegram Mini App store is opened from, https://<domain>/app/,
+  // when it is on and the store has a public HTTPS address Telegram can reach;
+  // "" otherwise (and for an older core). The bot then puts a Store button in
+  // its menu and sets Telegram's menu button to it.
+  string miniapp_url = 4;
 }
 
 // --- Request/response messages ---

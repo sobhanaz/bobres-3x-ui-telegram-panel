@@ -142,6 +142,7 @@ var contexts = map[string]Context{
 
 	"profile.description": CtxBotDescription,
 	"profile.about":       CtxBotAbout,
+	"profile.menu_button": CtxButton, // the text of Telegram's menu button, which opens the Mini App
 	"menu.placeholder":    CtxPlaceholder,
 }
 
@@ -181,6 +182,7 @@ var buttonStyles = map[string]string{
 	"btn.try_again":     "primary",
 	"btn.rs_buy":        "primary",
 	"btn.adm_pending":   "primary",
+	"btn.store":         "primary",
 	"btn.review_now":    "primary",
 	"btn.ticket_more":   "primary",
 	"btn.ticket_reply":  "primary",

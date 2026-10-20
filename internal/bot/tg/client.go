@@ -380,6 +380,17 @@ func (c *Client) SetMyDescription(ctx context.Context, text, lang string) error 
 	return c.call(ctx, "setMyDescription", jsonBody(withLang(map[string]any{"description": text}, lang)), nil)
 }
 
+// SetChatMenuButton sets the menu button next to the message box, for every
+// chat: it opens the Mini App b describes, or, with nil, goes back to the
+// default (the commands menu, or what @BotFather sets).
+func (c *Client) SetChatMenuButton(ctx context.Context, b *MenuButtonWebApp) error {
+	button := map[string]any{"type": "default"}
+	if b != nil {
+		button = map[string]any{"type": "web_app", "text": b.Text, "web_app": map[string]any{"url": b.URL}}
+	}
+	return c.call(ctx, "setChatMenuButton", jsonBody(map[string]any{"menu_button": button}), nil)
+}
+
 // SetMyShortDescription sets the bot's about text: its profile page, and
 // the preview when the bot is shared.
 func (c *Client) SetMyShortDescription(ctx context.Context, text, lang string) error {

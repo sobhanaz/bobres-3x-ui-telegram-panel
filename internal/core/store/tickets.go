@@ -493,6 +493,17 @@ func (s *Store) CountUserTickets(ctx context.Context, q querier, userID string) 
 	return n, nil
 }
 
+// CountCustomerMessagesSince counts the messages a customer wrote to support
+// since a time, in all their tickets (the daily limit).
+func (s *Store) CountCustomerMessagesSince(ctx context.Context, q querier, userID string, since time.Time) (int64, error) {
+	var n int64
+	if err := q.QueryRow(ctx, `SELECT count(*) FROM core.ticket_messages m JOIN core.tickets t ON t.id = m.ticket_id
+		WHERE t.user_id = $1 AND m.kind = 'customer' AND m.created_at > $2`, userID, since).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count customer messages: %w", err)
+	}
+	return n, nil
+}
+
 // StaleAnswered lists tickets answered more than `after` ago with no reply
 // from the customer since (to close them).
 func (s *Store) StaleAnswered(ctx context.Context, q querier, after time.Duration, limit int) ([]string, error) {

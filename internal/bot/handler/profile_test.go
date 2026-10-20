@@ -27,6 +27,7 @@ type fakeProfileAPI struct {
 	cmds  map[string][]tg.BotCommand // "chat/lang" -> menu
 	text  map[string]string          // "description/lang", "about/lang"
 	photo string                     // the profile photo's bytes ("" none)
+	menu  string                     // the menu button now: "" never set, "default", or "<text> <url>"
 	// photoID is the current photo's identity ("" none): each photo set,
 	// by the bot or in @BotFather, is a new one (photos counts them).
 	photoID string
@@ -98,6 +99,21 @@ func (f *fakeProfileAPI) SetMyShortDescription(_ context.Context, text, lang str
 	}
 	f.mu.Lock()
 	f.text["about/"+lang] = text
+	f.mu.Unlock()
+	return nil
+}
+
+// SetChatMenuButton records the Mini App button ("menu <url>") or the default one ("menu default").
+func (f *fakeProfileAPI) SetChatMenuButton(_ context.Context, b *tg.MenuButtonWebApp) error {
+	what := "default"
+	if b != nil {
+		what = b.Text + " " + b.URL
+	}
+	if err := f.record("menu " + what); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	f.menu = what
 	f.mu.Unlock()
 	return nil
 }
@@ -193,7 +209,7 @@ func TestWantedProfile(t *testing.T) {
 		{TelegramID: 2, Language: "", Role: "support"},
 		{TelegramID: 3, Language: "fa", Role: "admin"},
 	})
-	p, on := wantedProfile(cat, set, "1760000000000000000", true)
+	p, on := wantedProfile(cat, set, "1760000000000000000", true, "")
 	if !on {
 		t.Fatal("the profile is on by default")
 	}
@@ -234,7 +250,7 @@ func TestWantedProfile(t *testing.T) {
 	if dropped := cat.SetOverrides(map[string]string{"texts.en.profile.about": "Best VPN in town"}); len(dropped) > 0 {
 		t.Fatalf("override dropped: %v", dropped)
 	}
-	p, _ = wantedProfile(cat, set, "", true)
+	p, _ = wantedProfile(cat, set, "", true, "")
 	if names(p.Langs["en"].Commands) != "start menu terms paysupport" || p.Langs["en"].About != "Best VPN in town" {
 		t.Fatalf("with a privacy link and an override: %+v", p.Langs["en"])
 	}
@@ -243,7 +259,7 @@ func TestWantedProfile(t *testing.T) {
 	}
 
 	set.Replace(map[string]string{"general.bot_profile": "false"})
-	if _, on := wantedProfile(cat, set, "", true); on {
+	if _, on := wantedProfile(cat, set, "", true, ""); on {
 		t.Fatal("general.bot_profile=false must leave the profile alone")
 	}
 }
@@ -257,7 +273,7 @@ func TestProfileSyncSetsOnlyWhatChanged(t *testing.T) {
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}
 	apply := func() {
 		t.Helper()
-		p, on := wantedProfile(cat, set, "", true)
+		p, on := wantedProfile(cat, set, "", true, "")
 		if err := s.sync(ctx, p, on); err != nil {
 			t.Fatalf("sync: %v", err)
 		}
@@ -341,7 +357,7 @@ func TestProfileSyncMemoUnreadable(t *testing.T) {
 	set := settings.New()
 	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}})
 	api, memo := newFakeProfileAPI(), &failingMemo{}
-	p, _ := wantedProfile(cat, set, "", true)
+	p, _ := wantedProfile(cat, set, "", true, "")
 	if err := (&profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}).sync(ctx, p, true); err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +365,7 @@ func TestProfileSyncMemoUnreadable(t *testing.T) {
 	before := memo.v
 
 	set.SetStaff(nil) // the owner left while the bot was down
-	p, _ = wantedProfile(cat, set, "", true)
+	p, _ = wantedProfile(cat, set, "", true, "")
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)}
 	memo.err = errors.New("redis: connection refused")
 	if err := s.sync(ctx, p, true); err == nil {
@@ -374,7 +390,7 @@ func TestProfileSyncFailures(t *testing.T) {
 	set.SetStaff([]settings.Contact{{TelegramID: 7, Role: "owner"}, {TelegramID: 9, Role: "admin"}})
 	api := newFakeProfileAPI()
 	s := &profileSync{api: api, log: slog.New(slog.DiscardHandler)}
-	p, _ := wantedProfile(cat, set, "", true)
+	p, _ := wantedProfile(cat, set, "", true, "")
 
 	// Telegram is down for the English part: the parts before it are kept,
 	// and the rest is tried at the next refresh.
@@ -516,7 +532,7 @@ func photoSync(t *testing.T, set *settings.Store) (*profileSync, *fakeProfileAPI
 	api.me = profileBotID
 	s := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler), botID: profileBotID, photo: core.get}
 	return s, api, memo, core, func(version string) error {
-		p, on := wantedProfile(cat, set, version, true)
+		p, on := wantedProfile(cat, set, version, true, "")
 		return s.sync(context.Background(), p, on)
 	}
 }
@@ -553,7 +569,7 @@ func TestProfileSyncPhoto(t *testing.T) {
 	// A restart: the version the bot set is remembered, with the identity
 	// Telegram gave the photo (its largest size's).
 	s2 := &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler), botID: profileBotID, photo: core.get}
-	p, _ := wantedProfile(i18n.MustLoad(), set, "v1", true)
+	p, _ := wantedProfile(i18n.MustLoad(), set, "v1", true, "")
 	if err := s2.sync(context.Background(), p, true); err != nil {
 		t.Fatal(err)
 	}
@@ -839,7 +855,7 @@ func TestProfileSyncPhotoNeverRemovesBlindly(t *testing.T) {
 func TestWantedProfileVendorCredit(t *testing.T) {
 	cat, set := i18n.MustLoad(), settings.New()
 	for _, white := range []bool{false, true} {
-		p, _ := wantedProfile(cat, set, "", white)
+		p, _ := wantedProfile(cat, set, "", white, "")
 		for code, l := range p.Langs {
 			if got := strings.Contains(l.About, "Made by TECSO-DEV"); got == white {
 				t.Fatalf("white label %v, language %q: about %q", white, code, l.About)
@@ -848,5 +864,83 @@ func TestWantedProfileVendorCredit(t *testing.T) {
 				t.Fatalf("language %q: about is %d characters, Telegram takes 120", code, n)
 			}
 		}
+	}
+}
+
+// The menu button next to the message box opens the Mini App while the app
+// is on and the store has a public address, is set once, follows an address
+// that changes, and gives the default back when the app goes (or the profile
+// is handed back to @BotFather).
+func TestProfileSyncMenuButton(t *testing.T) {
+	ctx := context.Background()
+	cat, set := i18n.MustLoad(), settings.New()
+	api, memo := newFakeProfileAPI(), &memMemo{}
+	newSync := func() *profileSync { return &profileSync{api: api, memo: memo, log: slog.New(slog.DiscardHandler)} }
+	s := newSync()
+	menuCalls := func() int {
+		n := 0
+		for _, c := range api.calls {
+			if strings.HasPrefix(c, "menu ") {
+				n++
+			}
+		}
+		return n
+	}
+	apply := func(s *profileSync, url string, botProfile bool) {
+		t.Helper()
+		if !botProfile {
+			set.Replace(map[string]string{"general.bot_profile": "false"})
+		} else {
+			set.Replace(nil)
+		}
+		p, on := wantedProfile(cat, set, "", true, url)
+		if err := s.sync(ctx, p, on); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const app = "https://shop.example.com/app/"
+	want := cat.T("fa", "profile.menu_button") + " " + app // the first language's text, one for everyone
+
+	apply(s, "", true)
+	if menuCalls() != 0 || api.menu != "" {
+		t.Fatalf("no Mini App: nothing is set (%v)", api.calls)
+	}
+	apply(s, app, true)
+	if api.menu != want || menuCalls() != 1 {
+		t.Fatalf("the Mini App appears: %q after %d calls", api.menu, menuCalls())
+	}
+	apply(s, app, true)
+	apply(newSync(), app, true) // after a restart: the memo says it is set
+	if menuCalls() != 1 {
+		t.Fatalf("an unchanged button is not set again: %d calls", menuCalls())
+	}
+	apply(s, "https://other.example.org/app/", true)
+	if api.menu != cat.T("fa", "profile.menu_button")+" https://other.example.org/app/" || menuCalls() != 2 {
+		t.Fatalf("a new address: %q after %d calls", api.menu, menuCalls())
+	}
+	apply(s, "", true) // switched off, or no public address any more
+	if api.menu != "default" || menuCalls() != 3 {
+		t.Fatalf("the app goes: %q after %d calls", api.menu, menuCalls())
+	}
+	apply(s, "", true)
+	if menuCalls() != 3 {
+		t.Fatalf("the default is not set again: %d calls", menuCalls())
+	}
+	// Handing the profile back to @BotFather takes the button back too.
+	apply(s, app, true)
+	apply(s, app, false)
+	if api.menu != "default" {
+		t.Fatalf("general.bot_profile off: %q", api.menu)
+	}
+	// A refusal stops the sync, to be tried again at the next refresh.
+	api.fail["menu "] = errors.New("flood")
+	set.Replace(nil)
+	p, on := wantedProfile(cat, set, "", true, app)
+	if err := s.sync(ctx, p, on); err == nil {
+		t.Fatal("a refused menu button must stop the sync")
+	}
+	delete(api.fail, "menu ")
+	if err := s.sync(ctx, p, on); err != nil || api.menu != want {
+		t.Fatalf("retried at the next refresh: %v, %q", err, api.menu)
 	}
 }

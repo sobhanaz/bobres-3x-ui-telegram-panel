@@ -497,6 +497,11 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	for k, v := range m {
 		out.Values[k] = string(v)
 	}
+	// Where the Mini App opens from: only while it is on and the store has a
+	// public HTTPS address Telegram can reach.
+	if plain, err := s.dom.Settings(ctx); err == nil && domain.MiniAppOn(plain) {
+		out.MiniappUrl = domain.MiniAppURL(s.dashboardURL(ctx))
+	}
 	return out, nil
 }
 
