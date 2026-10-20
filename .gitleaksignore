@@ -45,3 +45,8 @@ cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-log
 8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/gateway/nextpay/nextpay_test.go:generic-api-key:17
 8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/web/keyed_test.go:generic-api-key:50
 8422a57d2be5d35865695bada0636913b27ebc1f:internal/payments/web/keyed_test.go:generic-api-key:54
+# False positives: made-up values in the host monitor's log-scrubbing test (they prove the scrubber removes these shapes).
+# The test now builds low-entropy values; these pin the original commit's findings.
+2a69e2ea6d9a915172fd6ccf850236761f850497:internal/monitor/collect/scrub_test.go:generic-api-key:13
+2a69e2ea6d9a915172fd6ccf850236761f850497:internal/monitor/collect/scrub_test.go:generic-api-key:17
+2a69e2ea6d9a915172fd6ccf850236761f850497:internal/monitor/collect/scrub_test.go:generic-api-key:18
