@@ -69,7 +69,8 @@ func (c *Client) VerifyMiniApp(ctx context.Context, initData string) (*MiniAppUs
 }
 
 // ChannelMember asks the bot whether a Telegram user is a member of the
-// channel the store requires (join.channel: an @name or a -100… id), for the
+// channel or group the store requires (join.channel or one of its extra
+// required chats: an @name or a -100… id; one chat for each call), for the
 // Mini App's sign-in. Only the bot can ask Telegram: core has no token, and
 // only the channel's administrators see its members, which the bot is. An error
 // means the bot could not tell (Telegram did not answer, the bot is not the

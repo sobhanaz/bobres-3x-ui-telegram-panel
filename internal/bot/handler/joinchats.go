@@ -294,15 +294,66 @@ func acquire(ctx context.Context, sem chan struct{}) bool {
 func (r *req) joinNames(missing, list []joinReq) string {
 	var names []string
 	size := 0
-	for i, c := range missing {
+	for _, c := range missing {
 		n := r.joinName(c, list)
 		if size+len([]rune(n)) > joinToastNames {
 			names = append(names, "…")
-			_ = i
 			break
 		}
 		size += len([]rune(n)) + 2
 		names = append(names, n)
 	}
 	return strings.Join(names, ", ")
+}
+
+// askToJoin sends the join prompt for the chats the user has not joined: a
+// Join button for each and "I've joined" (jn). Always a new message: the button
+// pressed may sit under a notification (a delivered service and its link),
+// which must stay as it is.
+func (h *Handler) askToJoin(r *req, missing []joinReq) {
+	text, kb := r.joinPrompt(missing)
+	r.send(text, kb)
+}
+
+// onJoinCheck handles "jn": the user says they joined. Every chat is asked
+// about again, at once; when some are still missing the popup names them and
+// the prompt under it keeps only their buttons.
+func (h *Handler) onJoinCheck(r *req) {
+	if list := h.joinList(); len(list) > 0 && !r.isTeam() && !h.isOwnerID(r) {
+		if missing := h.missingChats(r.ctx, r.from.ID, true); len(missing) > 0 {
+			if len(list) == 1 {
+				r.toast, r.alert = r.t("join.not_yet"), true
+				return
+			}
+			r.toast, r.alert = r.t("join.not_yet_many", "names", r.joinNames(missing, list)), true
+			text, kb := r.joinPrompt(missing)
+			r.show(text, kb)
+			return
+		}
+	}
+	h.showHome(r) // the language picker for a user not registered yet
+}
+
+// gateNewUser runs the gates for a user who just picked a language (the
+// picker itself is not gated): the picker becomes the welcome, without the
+// bottom menu, and the maintenance message or the join prompt comes instead
+// of the first home menu. It reports whether it answered.
+func (h *Handler) gateNewUser(r *req) bool {
+	if r.isTeam() || h.isOwnerID(r) {
+		return false
+	}
+	maintenance := h.set.Bool("maintenance.enabled", false)
+	var missing []joinReq
+	if !maintenance {
+		if missing = h.missingChats(r.ctx, r.from.ID, false); len(missing) == 0 {
+			return false
+		}
+	}
+	r.show(r.t("welcome", "brand", esc(h.brand())), nil)
+	if maintenance {
+		r.send(r.t("maintenance"), nil)
+	} else {
+		h.askToJoin(r, missing)
+	}
+	return true
 }
