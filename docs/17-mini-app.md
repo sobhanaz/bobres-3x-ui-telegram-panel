@@ -1,9 +1,9 @@
 # Telegram Mini App store
 
-A web store that opens inside Telegram: browse plans, buy with the wallet or an online gateway, see and renew your
-services, top up the wallet, take the free trial, invite friends, write to support and, for a reseller, manage their
-customers' services. It is the same store as the bot (same plans, prices, discount codes, wallet, orders and support
-inbox), in a nicer screen. Manual card and Stars payments are still done in the bot (see "Not built").
+A web store that opens inside Telegram: browse plans, buy with the wallet, an online gateway, Telegram Stars or by hand
+(card to card, USDT, a Zarinpal payment link, with a receipt), see and renew your services, top up the wallet, take the
+free trial, invite friends, write to support and, for a reseller, manage their customers' services. It is the same
+store as the bot (same plans, prices, discount codes, wallet, orders and support inbox), in a nicer screen.
 
 It is **on by default**, for every store, with nothing to set up in @BotFather: the bot opens it from a **Store** button
 on its home screen, a **Store** item in its bottom menu and Telegram's own **menu button** next to the message box.
@@ -65,20 +65,21 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /plans` | Plans on sale (enabled, not a trial) with the customer's price (reseller prices apply), `topup` marks traffic packages |
 | `GET /services` | The customer's own services: label, status, expiry, traffic, link, page address, `can_renew`, `can_topup` |
 | `GET /wallet` | Balances and the last 20 ledger entries |
-| `GET /methods?currency=&amount=` | Online methods usable for that amount |
+| `GET /methods?currency=&amount=` | The payment methods the store offers for that amount and currency, as the bot offers them: the online ones, `stars`, and `manual_card`, `manual_crypto`, `manual_zarinpal` |
 | `POST /quote` | Price with a discount code, without making an order |
 | `POST /orders` | New order (`new`, `renew`, `traffic_topup`) with a request `key`; the same key returns the same order. A reseller may add a `label` (the name of the new service they buy for a customer, at most 64 characters, one line); core ignores it for anyone else and on a renewal or top-up |
 | `POST /orders/{id}/pay-wallet` | Pay from the wallet |
-| `POST /orders/{id}/pay` `{method}` | Start an online payment; returns a pay URL, or the USDT address and exact amount |
+| `POST /orders/{id}/pay` `{method}` | Start a payment by any method of `/methods`; returns a pay URL, the USDT address and exact amount, a Stars `invoice_url`, or what to pay by hand (card, addresses, link, reference, exact amount) |
 | `GET /orders/{id}` | Order status (poll it until delivered) |
-| `POST /topup` `{amount, method, key}` | Wallet top-up, 10,000 to 50,000,000 Toman, same bounds as the bot |
-| `POST /payments/{id}/check` | Ask the gateway whether a payment landed ("I have paid") |
+| `POST /topup` `{amount, method, key}` | Wallet top-up, 10,000 to 50,000,000 Toman, same bounds as the bot; any method of `/methods` |
+| `POST /payments/{id}/check` | The status of the customer's own payment, asking the gateway where there is one ("I have paid"); also how a Stars or manual payment is followed |
+| `POST /payments/{id}/proof` | The proof of the customer's own manual payment, once: `multipart/form-data` with `receipt` (an image) and `reference` (the bank's tracking number), or JSON `{txid, network}` for a crypto payment |
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
 | `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing |
 
-The app offers **Zarinpal, IDPay, NextPay and automatic USDT**. Telegram Stars and manual card or receipt payments
-are refused with a 400 here and are done in the bot.
+The app takes **Zarinpal, IDPay, NextPay, automatic USDT, Telegram Stars and the three manual methods**: whatever the
+store has on for the amount of the purchase (the next section).
 
 ### Account sections
 
@@ -101,7 +102,79 @@ their credit limit), an order is the customer's own or a 404. Changes are audite
 allowed sources do not include a Mini App one, and the store is the bot's second face), under the customer's id.
 
 While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check (so a
-payment in flight finishes), but browsing, buying and top-up answer 503 `maintenance`.
+payment in flight finishes: a Stars payment is settled by the bot all the same), but browsing, buying, top-up and
+sending a proof answer 503 `maintenance`, as the bot does not take a receipt then either.
+
+## Stars and manual payments
+
+`GET /methods` is the bot's decision, asked of core. A gateway is offered when payments has it on and can charge that
+amount. **Stars** are offered when `payments.stars_rate` is set and `payments.stars.enabled` is not off; **card to card**
+for a Toman price when `payments.card_number` is set; **USDT by hand** when a TRC20 or ERC20 address is set and the
+price is in USDT or there is a `payments.usdt_rate`; the **Zarinpal link** for a Toman price when `payments.zarinpal_link`
+is set. A manual method is also left out when its `payments.<method>.enabled` is off or the license does not include it
+(the free tier includes Stars and the three manual methods). Starting a payment by a method that is not in that list is
+a 400 `method_off`. Without the bot connected there are no Stars and no manual methods (an invoice and a receipt both
+go through the bot).
+
+**Telegram Stars.** `POST /orders/{id}/pay {"method":"stars"}` makes the payment exactly as the bot does (the key is
+`int:<order id>:stars`, so an order started in the bot goes on in the app and the other way round; the Stars are the
+price at `payments.stars_rate`, rounded up) and asks the bot for an invoice link (`POST /internal/miniapp/invoice`,
+which calls the Bot API's `createInvoiceLink`): the title is the plan's name in the customer's language (or the store's
+own text), the description "Payment of <amount>", the payload the payment's id, the currency XTR, one price line and
+no provider token. The answer carries `invoice_url`, `stars` and the price. The app opens the link with
+`Telegram.WebApp.openInvoice` (an older Telegram opens it in the chat) and asks until it sees the payment succeed.
+Telegram is expected to send the bot a `pre_checkout_query` and then a `successful_payment` message, as for an invoice
+message (the tests play that with a fake; only a phone proves it, check-by-hand item 9), and the bot's own handlers
+answer and settle them. Nothing in them depends on a message the bot sent: they read the payload, the payer, the amount
+and the currency, so a payment is refused for another customer, for another amount, a second time, or after its hour
+(a Stars invoice can be paid for one hour). `POST /topup` works the same for the wallet.
+
+**Manual payments.** The same call (`pay`, or `topup`) makes the payment as the bot does (`int:<order id>:<method>`) and
+answers what the bot shows: `details.card_number` and `card_holder`, the TRC20 and ERC20 addresses and the amount to
+send in USDT (`usdt_amount`, 6 decimals: a Toman price at the store's rate, rounded up to a cent, or the USDT price),
+the Zarinpal link, the payment `reference` and the exact amount. The customer pays outside the store and then sends the
+proof to `POST /payments/{id}/proof`, which stores it with the domain function the bot's proof flow ends in
+(`SubmitPaymentProof`), so the review list, the staff alert, the possible-duplicate warning and the admin card with the
+receipt work as they do for a proof sent in the bot. It is accepted once, while the payment waits for it
+(`already_submitted` after that, `payment_closed` once it was rejected):
+
+- **A receipt image** (card, payment link and crypto): one JPEG, PNG or WebP of at most 8 MB, checked by its bytes
+  (never its name or `Content-Type`), with the bank's tracking number (required for card, as in the bot; the app asks
+  for it for the payment link too). Images only, like the bot (it takes a photo or an image file, no PDF). A card
+  payment without the number is `reference_required`.
+- **A transaction hash** (crypto): 64 hexadecimal characters, with `0x` in front on ERC20, and the network (`TRC20` or
+  `ERC20`, one the store has an address for; left out, it is the bot's guess: a `0x` hash, or a store with no TRC20
+  address, means ERC20). A hash can pay one payment only (`duplicate`).
+
+**Receipts and the bot.** Core keeps no file and holds no Telegram token. It checks the upload and sends the bytes to the
+bot (`POST /internal/miniapp/receipt?chat=<the customer's Telegram id>&lang=&ref=`, the image as the body with its
+Content-Length, at most 8 MB, checked again there). The bot sends them to **the customer's own chat with the bot**, as a
+photo when Telegram takes the picture as one and as a document when not (a WebP, or a size beyond Telegram's photo
+limits), with the caption "Receipt for payment <reference>" in the customer's language (the text `pay.receipt_caption`).
+Telegram answers with a file id and core stores that as the receipt: the same kind of id the bot's own flow stores. A
+customer who never started the bot, or blocked it, cannot be written to: the app says so (`chat_closed`) and sends them
+to the bot. The app makes a picture over 1.5 MB smaller before it sends it (at most 2560 pixels on a side, as a JPEG), so
+that a phone photo reaches core over a slow connection. A receipt is never logged or audited, in core or in the bot.
+
+**The staff alert.** The bot sends "new payment to review", with the Review button of that payment, from its message
+handler, which core cannot reach. So once the proof is stored, core asks the bot to send it
+(`POST /internal/miniapp/proof-alert`): to everyone who gets payment alerts (every owner; `notify.recipients` can widen
+it), in their language, except the customer if they are staff, and unless `notify.new_payment` is off. If that call
+fails the proof still waits in the review list (the dashboard's, and the bot's "Review payments").
+
+The bot's endpoints for core, all behind core's service token and never routed from outside:
+
+| Endpoint | What it is for |
+|---|---|
+| `POST /internal/miniapp/verify` | Check the init data's signature |
+| `POST /internal/miniapp/invoice` | Make a Stars invoice link: `{payload, stars, lang, title, amount, currency, topup}` gives `{url}` |
+| `POST /internal/miniapp/receipt` | Send a receipt image to the customer's chat: gives `{file_id, kind}` |
+| `POST /internal/miniapp/proof-alert` | Alert the staff to a stored proof |
+
+Error codes of these calls, besides the general ones: `method_off`, `bad_type` (415), `too_large` (413), `empty`,
+`no_receipt`, `one_receipt`, `reference_required`, `bad_txid`, `already_submitted`, `payment_closed`, `duplicate`,
+`txid_announced` (support already has this transaction), `chat_closed`, `invoice_refused`, `busy` and
+`bot_unavailable` (502: Telegram or the bot could not be reached).
 
 ## The reseller section
 
@@ -179,9 +252,18 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` for the API. The app
   may be framed only by Telegram's own sites; the dashboard stays unframeable.
 - **Limits:** 20 sign-ins a minute per client address, 120 calls and 20 changes a minute per customer, 16 KiB request
-  bodies, at most 5 live sessions per customer.
+  bodies (8.25 MiB for a proof), at most 5 live sessions per customer.
 - **Money:** a payment is created once per order and method (the gateway key is the bot's), so a second tap or a retry
-  never charges twice; the app's order key is `mini:<user>:<key>`.
+  never charges twice; the app's order key is `mini:<user>:<key>`. The amount and the currency come from the order (for
+  a top-up, from the amount in Toman, within the bot's bounds), never from a request that names a price, and a method is
+  started only if the store offers it for that price at that moment.
+- **Proofs and receipts:** a proof is accepted for the customer's own, manual, waiting payment, once (another
+  customer's payment, or one that does not exist, is a 404; a second proof sent while the first is on its way is turned
+  away). An upload is a JPEG, PNG or WebP by its bytes, at most 8 MB, one image per submission; a request over 8.25 MB
+  is refused by its Content-Length before it is read. A customer may send 6 receipts in 10 minutes (a refused one counts)
+  on top of the 20 changes a minute, and 4 are checked and sent at once (each is held in memory meanwhile). A receipt is
+  not stored by core and not logged or audited anywhere. The bot's four internal endpoints answer only to core's
+  token, and core never holds the Telegram token.
 - The session token is held in memory by the page (no cookie, no local storage), so it is not sent by the browser on
   its own and a page of another site cannot make the app act.
 
@@ -189,8 +271,11 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
 
 - For a reseller: recording what they paid the store (staff do it, in the dashboard).
 - Resetting a service's traffic and free days or free traffic for a customer's service (staff only, by design).
-- Stars and manual (card, receipt) payments.
 - Photos and files in support (sent from the bot).
+- Picking up a payment that was started and left: reopening a plan makes a new order, the earlier payment stays unpaid,
+  and a receipt for it cannot be sent from the app. A payment whose receipt is in is followed by the bot's message when
+  staff decide, and by the app while it stays open.
+- PDF receipts (the bot takes images only, too) and more than one image for a payment.
 - Push messages (the bot sends those).
 
 ## Adding a section (for developers)
@@ -228,3 +313,15 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
    stays paused, deleting it after the confirmation, the note and the new name; the customers and the statement; the
    section disappears (and its calls answer 403) when resellers leave the license, and the Telegram back button steps
    out of the checkout to the section's screen you left.
+9. **Stars, with a real Telegram and a small plan** (the tests play Telegram with a fake; only a phone proves these): the
+   payment sheet opens inside the app on iOS, Android and Desktop, in the customer's language, with the plan's name and
+   the Stars the app showed; Telegram does send the bot `pre_checkout_query` and `successful_payment` for a payment made
+   through a *link* (the code and the tests assume it does, as the Bot API describes), and the order is delivered within
+   seconds; cancelling and closing the sheet leave the app usable; a Telegram older than 6.1 opens the invoice in the
+   chat; paying the same link twice is refused; a refund (`refundStarPayment`) works for a payment made through a link.
+10. **Receipts, with a real bot:** a screenshot and a phone photo (12 MB or more from the camera, and an iPhone's HEIC
+   picked from the library) reach the customer's chat as a photo with the caption, are made smaller and upload over a
+   slow mobile connection (Caddy gives a request body 30 seconds), the admin card shows the photo (a WebP as a file),
+   every owner gets the alert, and a customer who never pressed Start gets the "open the bot" message.
+11. The copy buttons inside Telegram's web view (card number, amounts, addresses, reference), and the new screens' Persian
+    layout with long addresses.

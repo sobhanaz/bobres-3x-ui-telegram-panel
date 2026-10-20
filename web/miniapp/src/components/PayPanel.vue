@@ -1,15 +1,20 @@
 <script setup lang="ts">
-// What the customer does to pay once an online payment is started: open the
-// gateway's page, or send USDT to an address; then "I have paid".
+// What the customer does to pay once a payment is started: open the gateway's page, or send USDT to an address (then
+// "I have paid"); open a Telegram Stars invoice; or pay by hand and send the proof (card to card, USDT, a Zarinpal link).
 import { computed, ref } from 'vue'
 import type { Intent } from '../api'
 import { tr } from '../i18n'
 import { fmtMoney, fmtDateTime } from '../fmt'
 import { copyText, openLink } from '../telegram'
 import { isolate } from '../format'
+import { isManual } from '../pay'
+import ManualPay from './ManualPay.vue'
+import StarsPay from './StarsPay.vue'
 
-const props = defineProps<{ intent: Intent; checking: boolean; message: string }>()
-defineEmits<{ check: [] }>()
+const props = withDefaults(defineProps<{ intent: Intent; checking: boolean; message: string; showLeave?: boolean }>(), { showLeave: true })
+// check: the customer says they paid (quiet: nobody asked, so say nothing if it is not seen yet); leave: they are done here
+// (a screen that has its own way out says showLeave is false).
+defineEmits<{ check: [quiet?: boolean]; leave: [] }>()
 
 const copied = ref(false)
 const address = computed(() => props.intent.details.pay_address ?? '')
@@ -30,7 +35,17 @@ async function copy() {
 </script>
 
 <template>
-  <section class="card pay">
+  <StarsPay v-if="intent.provider === 'stars'" :intent="intent" :checking="checking" :message="message" @check="(quiet) => $emit('check', quiet)" />
+  <ManualPay
+    v-else-if="isManual(intent.provider)"
+    :intent="intent"
+    :checking="checking"
+    :message="message"
+    :show-leave="showLeave"
+    @check="(quiet) => $emit('check', quiet)"
+    @leave="$emit('leave')"
+  />
+  <section v-else class="card pay">
     <p class="muted">{{ tr('pay.waiting') }}</p>
     <template v-if="address">
       <p>{{ tr('pay.usdt_send', { amount: charged }) }}</p>

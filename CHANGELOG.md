@@ -87,6 +87,35 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   `SetSubscriptionNote`, `ListInvitedCustomers`, `Subscription.note`): update core and the bot together with
   `sudo bobres update`. An older bot keeps working; a newer bot against an older core shows the plain list.
 
+### Mini App payments
+- The Mini App store now takes **Telegram Stars** and the **manual payment methods** (card to card, USDT by hand, a
+  Zarinpal payment link, each with a receipt), besides Zarinpal, IDPay, NextPay and automatic USDT. `GET /api/mini/v1/methods`
+  lists exactly what the store offers for the amount and currency, by the bot's own rule (`payments.*` settings and
+  switches), and `pay` and `topup` accept each of them, creating the payment as the bot does (the same keys and
+  statuses, so a payment started in the bot goes on in the app and the other way round).
+- **Stars:** the bot has a new internal endpoint, `POST /internal/miniapp/invoice`, that makes an invoice link with the
+  Bot API's `createInvoiceLink` (the same title, description, payload and XTR price as the bot's invoice message; new
+  `CreateInvoiceLink` in `internal/bot/tg`). The app opens it with `Telegram.WebApp.openInvoice`; the bot's existing
+  pre-checkout and successful-payment handlers settle it, and a test shows they do for a link (no message of the bot's
+  needed). `internal/tgfake` makes invoice links and can play a customer paying one.
+- **Manual payments:** the app shows the card, the USDT addresses and the exact amount in USDT, or the Zarinpal link,
+  with the payment reference and a copy button for each, and `POST /api/mini/v1/payments/{id}/proof` takes the proof
+  once: a receipt image (JPEG, PNG or WebP by its bytes, 8 MB at most) with the bank's tracking number, or a
+  transaction hash. It ends in the same domain call the bot's proof flow ends in, so the review list, the possible
+  duplicate warning and the admin card with the receipt work unchanged. Core keeps no file and holds no Telegram
+  token: the bot (`POST /internal/miniapp/receipt`) sends the image to the customer's own chat and core stores the
+  Telegram file id, like the bot's own receipts. A third endpoint, `POST /internal/miniapp/proof-alert`, has the bot
+  tell the staff (every owner) about a proof, as it does for one that comes in its chat. The app shrinks big phone
+  photos before sending them.
+- Limits and care: every call acts on the customer's own order and payment (another's is a 404, also for the
+  payment check, which used to answer 500), prices come from the order, a payment starts only by a method on offer, a
+  proof is accepted once, uploads are limited to 6 in 10 minutes and 4 at a time on top of the write limit, and no
+  receipt or file id is ever logged or audited. See [docs/17-mini-app.md](docs/17-mini-app.md) for the API, the new
+  error codes and what only a real Telegram can prove.
+- Updating: no migration and no change to the gRPC API. The new bot endpoints (`/internal/miniapp/invoice`, `/receipt`,
+  `/proof-alert`) are called by core, so update core and the bot together with `sudo bobres update`; a core newer than
+  its bot would list Stars and the manual methods and answer "Telegram could not be reached" when one is picked.
+
 ## [0.5.0] — 2026-10-20
 
 Several owners, a list of the payments waiting for review, and Marzban tested against a real panel.

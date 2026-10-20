@@ -9,6 +9,7 @@ import { errorKey, gateFor } from '../errors'
 import { tr } from '../i18n'
 import { fmtMoney, nameOf, planFacts } from '../fmt'
 import { newKey } from '../format'
+import { isManual } from '../pay'
 import { fail, irtSpendable, loadServices, loadWallet, state } from '../store'
 import { haptic } from '../telegram'
 import type { Plan } from '../api'
@@ -116,7 +117,14 @@ async function payOnline(method: string) {
   error.value = ''
   busy.value = true
   try {
-    intent.value = await api.pay(order.value.id, method)
+    const made = await api.pay(order.value.id, method)
+    // A payment by this method that already failed or ran out (a Stars invoice is open for an hour) cannot be paid again:
+    // the customer picks another way.
+    if (made.status === 'failed' || made.status === 'expired') {
+      error.value = tr('pay.failed')
+      return
+    }
+    intent.value = made
     stage.value = 'wait'
     startPolling()
   } catch (e) {
@@ -158,10 +166,14 @@ function startPolling() {
   }, 3000)
 }
 
-async function check() {
+// check asks whether the payment landed. quiet: the panel asks by itself (after Telegram says a Stars payment was made),
+// so nothing is said until it has.
+async function check(quiet = false) {
   if (!intent.value || !order.value) return
-  checking.value = true
-  note.value = ''
+  if (!quiet) {
+    checking.value = true
+    note.value = ''
+  }
   try {
     const r = await api.checkPayment(intent.value.intent_id)
     if (r.status === 'failed' || r.status === 'expired' || r.status === 'rejected') note.value = tr('pay.failed')
@@ -169,10 +181,10 @@ async function check() {
       const o = await api.order(order.value.id)
       order.value = o
       if (isPaid(o.status)) await finish()
-      else note.value = tr('pay.not_yet')
+      else if (!quiet) note.value = tr(isManual(intent.value.provider) ? 'manual.still_waiting' : 'pay.not_yet')
     }
   } catch (e) {
-    oops(e)
+    if (!quiet) oops(e)
   } finally {
     checking.value = false
   }
@@ -233,7 +245,14 @@ const doneKey = computed(() => {
       <Methods :currency="order.currency" :amount="order.amount" :busy="busy" @pick="payOnline" />
     </template>
 
-    <PayPanel v-else-if="stage === 'wait' && intent" :intent="intent" :checking="checking" :message="note" @check="check" />
+    <PayPanel
+      v-else-if="stage === 'wait' && intent"
+      :intent="intent"
+      :checking="checking"
+      :message="note"
+      @check="(quiet) => check(quiet)"
+      @leave="emit('services')"
+    />
 
     <section v-else-if="stage === 'done'" class="card" role="status">
       <h2>{{ tr('done.title') }}</h2>

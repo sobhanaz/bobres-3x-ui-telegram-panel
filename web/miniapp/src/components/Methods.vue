@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// The online payment methods the store offers for an amount.
+// The payment methods the store offers for an amount: online ones, Telegram Stars, and the manual ones (card to card,
+// USDT, a Zarinpal link) that are paid by hand and then proved with a receipt.
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { errorKey } from '../errors'
@@ -31,7 +32,11 @@ onMounted(load)
       <button v-for="m in methods" :key="m" class="btn secondary" type="button" :disabled="busy" @click="emit('pick', m)">
         {{ tr(('method.' + m) as Key) }}
       </button>
-      <p class="muted small">{{ tr('checkout.other_methods') }}</p>
     </template>
   </div>
 </template>
+
+<style scoped>
+/* one method to a line: the names of the manual ones are long */
+.methods { display: grid; gap: 0.5rem; }
+</style>

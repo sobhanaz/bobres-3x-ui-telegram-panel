@@ -5,6 +5,7 @@ import { errorKey } from '../errors'
 import { tr } from '../i18n'
 import { fmtDateTime, fmtMoney, ledgerKey } from '../fmt'
 import { newKey, wholeNumber } from '../format'
+import { isManual } from '../pay'
 import { fail, loadWallet, state } from '../store'
 import Methods from '../components/Methods.vue'
 import PayPanel from '../components/PayPanel.vue'
@@ -49,9 +50,18 @@ async function pick(method: string) {
   busy.value = true
   error.value = ''
   try {
-    intent.value = await api.topup(amount.value, method, key)
+    const made = await api.topup(amount.value, method, key)
+    // A payment by this method that already failed or ran out cannot be paid again: another way is chosen.
+    if (made.status === 'failed' || made.status === 'expired') {
+      error.value = tr('pay.failed')
+      return
+    }
+    intent.value = made
     stage.value = 'wait'
-    timer = setInterval(() => void check(true), 5000)
+    // Asked every 5 seconds for 5 minutes; a payment that waits for staff to review it is told in the bot.
+    let polls = 0
+    if (timer) clearInterval(timer)
+    timer = setInterval(() => (++polls > 60 ? clearInterval(timer) : void check(true)), 5000)
   } catch (e) {
     if (!fail(e)) error.value = tr(errorKey(e))
   } finally {
@@ -70,7 +80,7 @@ async function check(quiet = false) {
       intent.value = null
       note.value = tr('done.topup')
       await loadWallet()
-    } else if (!quiet) note.value = tr('pay.not_yet')
+    } else if (!quiet) note.value = tr(isManual(intent.value.provider) ? 'manual.still_waiting' : 'pay.not_yet')
   } catch (e) {
     if (fail(e) && timer) clearInterval(timer)
     else if (!quiet) error.value = tr(errorKey(e))
@@ -118,7 +128,7 @@ function back() {
         <button class="btn secondary" type="button" @click="back">{{ tr('common.back') }}</button>
       </template>
       <template v-else-if="intent">
-        <PayPanel :intent="intent" :checking="checking" :message="note" @check="check()" />
+        <PayPanel :intent="intent" :checking="checking" :message="note" :show-leave="false" @check="(quiet) => check(quiet)" />
         <button class="btn secondary" type="button" @click="back">{{ tr('common.back') }}</button>
       </template>
     </section>
