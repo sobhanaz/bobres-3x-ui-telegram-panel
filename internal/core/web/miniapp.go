@@ -42,10 +42,15 @@ const (
 	miniLedger   = 20
 )
 
-// miniMethods are the payment methods the app can complete by itself: a
-// payment page to open, or an address to send USDT to. Stars (an invoice only
-// the bot can send) and the manual methods (a receipt photo) stay in the bot.
-var miniMethods = map[string]bool{domain.Zarinpal: true, domain.IDPay: true, domain.NextPay: true, domain.USDTAuto: true}
+// miniMethods are the payment methods the app can take a customer through: a
+// payment page to open, an address to send USDT to, a Telegram Stars invoice
+// to open, or the card, USDT address or Zarinpal link to pay and then send a
+// receipt for. Which of them a customer is offered is the store's decision
+// (domain.OfferedMethods); a method outside this list is refused whatever.
+var miniMethods = map[string]bool{
+	domain.Zarinpal: true, domain.IDPay: true, domain.NextPay: true, domain.USDTAuto: true,
+	domain.Stars: true, domain.ManualCard: true, domain.ManualCrypto: true, domain.ManualZarinpal: true,
+}
 
 var miniUUIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
@@ -59,6 +64,12 @@ type miniState struct {
 	// bot is the bot's own @username as it told core at a sign-in: the app's
 	// links use it until the owner sets one in Branding.
 	bot atomic.Pointer[string]
+	// upload limits the receipts a customer sends (on top of write), uploads
+	// holds a place for each receipt being checked and sent, and proofs the
+	// payments a proof is being sent for (miniapp_pay.go).
+	upload  *limiter
+	uploads chan struct{}
+	proofs  *miniInflight
 }
 
 // noteBot remembers the bot's username from a sign-in (a malformed one is ignored).
@@ -70,7 +81,8 @@ func (m *miniState) noteBot(name string) {
 
 func newMiniState() *miniState {
 	return &miniState{sessions: newMiniSessions(), auth: newLimiter(miniAuthRate, time.Minute),
-		api: newLimiter(miniAPIRate, time.Minute), write: newLimiter(miniWriteRate, time.Minute)}
+		api: newLimiter(miniAPIRate, time.Minute), write: newLimiter(miniWriteRate, time.Minute),
+		upload: newLimiter(miniUploadRate, miniUploadWindow), uploads: make(chan struct{}, miniUploadSlots), proofs: newMiniInflight()}
 }
 
 type miniKey struct{}
@@ -102,6 +114,8 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay-wallet", s.miniSession(false, s.miniPayWallet))
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay", s.miniSession(false, s.miniPayOrder))
 	api.HandleFunc("POST /api/mini/v1/topup", s.miniSession(false, s.miniTopup))
+	// The proof of a manual payment: a receipt image, or a transaction id.
+	api.HandleFunc("POST /api/mini/v1/payments/{id}/proof", s.miniSession(false, s.miniProof))
 	for _, f := range miniFeatures { // the sections beyond the shop (miniapp_features.go)
 		if f.routes != nil {
 			f.routes(s, api)
@@ -150,7 +164,11 @@ func (s *Server) miniGuard(next http.Handler) http.Handler {
 		h.Set("Cache-Control", "no-store")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
-		r.Body = http.MaxBytesReader(w, r.Body, miniBody)
+		limit := int64(miniBody)
+		if isMiniUpload(r) { // the one call that may carry a receipt image
+			limit = miniUploadBody
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if _, on, err := s.miniOn(r.Context()); err != nil {
 			s.internal(w, "mini app settings", err)
 			return
@@ -231,6 +249,9 @@ func (s *Server) miniFail(w http.ResponseWriter, what string, err error) {
 		writeError(w, http.StatusConflict, "unavailable_now", "the store cannot sell this right now")
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "no such item")
+	case status.Code(unwrapAll(err)) == codes.PermissionDenied:
+		// Payments says a payment is another customer's: for this customer it does not exist.
+		writeError(w, http.StatusNotFound, "not_found", "no such item")
 	case errors.Is(err, domain.ErrUserBanned):
 		writeError(w, http.StatusForbidden, "banned", "this account cannot use the store")
 	case errors.Is(err, domain.ErrForbidden):
@@ -256,6 +277,9 @@ func (s *Server) miniFail(w http.ResponseWriter, what string, err error) {
 	case status.Code(unwrapAll(err)) == codes.InvalidArgument || status.Code(unwrapAll(err)) == codes.FailedPrecondition:
 		// The payments service refuses a request by policy (a limit, a method not set up).
 		writeError(w, http.StatusConflict, "state", status.Convert(unwrapAll(err)).Message())
+	case status.Code(unwrapAll(err)) == codes.AlreadyExists:
+		// The payments service saw this before (a key used for another payment, a payment settled).
+		writeError(w, http.StatusConflict, "conflict", status.Convert(unwrapAll(err)).Message())
 	default:
 		s.internal(w, what, err)
 	}

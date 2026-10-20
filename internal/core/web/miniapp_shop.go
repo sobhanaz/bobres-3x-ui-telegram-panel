@@ -1,8 +1,10 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
@@ -112,9 +114,10 @@ func (s *Server) miniWallet(w http.ResponseWriter, r *http.Request) {
 }
 
 // miniPaymentMethods: GET /api/mini/v1/methods?currency=IRT&amount=N, the
-// payment methods the app can complete for that price right now.
+// payment methods the store offers for that price right now: the online ones
+// (Stars among them) and the manual ones (card to card, USDT, a Zarinpal
+// link), the same the bot offers.
 func (s *Server) miniPaymentMethods(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	currency := r.URL.Query().Get("currency")
 	if currency != "IRT" && currency != "USDT" {
 		s.miniFail(w, "mini app methods", errInvalid("currency must be IRT or USDT"))
@@ -125,18 +128,10 @@ func (s *Server) miniPaymentMethods(w http.ResponseWriter, r *http.Request) {
 		s.miniFail(w, "mini app methods", errInvalid("amount out of range"))
 		return
 	}
-	methods := []string{}
-	if s.cfg.Payments != nil {
-		all, err := s.cfg.Domain.PaymentMethods(ctx, s.cfg.Payments, currency, amount)
-		if err != nil {
-			s.miniFail(w, "mini app methods", err)
-			return
-		}
-		for _, m := range all {
-			if miniMethods[m] {
-				methods = append(methods, m)
-			}
-		}
+	methods, err := s.miniOffered(r.Context(), currency, amount)
+	if err != nil {
+		s.miniFail(w, "mini app methods", err)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"methods": methods})
 }
@@ -273,9 +268,15 @@ func (s *Server) miniPayWallet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, miniOrderBody(paid))
 }
 
+// miniIntentDetails are the details of a payment the customer is shown: the
+// USDT address of an automatic payment, and what a manual payment says (the
+// card, the addresses, the link, the payment reference), as in the bot.
+var miniIntentDetails = []string{"pay_address", "network", "expires_at", "reference",
+	"card_number", "card_holder", "usdt_trc20", "usdt_erc20", "zarinpal_link"}
+
 func miniIntentBody(res *domain.IntentResult) map[string]any {
 	details := map[string]string{}
-	for _, k := range []string{"pay_address", "network", "expires_at", "reference"} {
+	for _, k := range miniIntentDetails {
 		if v := res.Details[k]; v != "" {
 			details[k] = v
 		}
@@ -289,21 +290,47 @@ type miniPayIn struct {
 	Method string `json:"method"`
 }
 
-func (s *Server) miniStartPayment(w http.ResponseWriter, r *http.Request, p domain.CreatePaymentIntentParams) {
+// miniStartPayment makes the payment of a purchase or a top-up by a method the
+// store offers for its price (the amount and the currency are the order's, or
+// the top-up's, never the request's) and answers what the app shows next:
+// a page to open, a USDT address, a Stars invoice to open, or what to pay by
+// hand and where to send the proof.
+func (s *Server) miniStartPayment(w http.ResponseWriter, r *http.Request, p domain.CreatePaymentIntentParams, price miniPrice) {
+	ctx := r.Context()
 	if s.cfg.Payments == nil {
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "payments are not connected")
 		return
 	}
 	if !miniMethods[p.Provider] {
-		s.miniFail(w, "mini app pay", errInvalid("this payment method is paid in the bot"))
+		s.miniFail(w, "mini app pay", errInvalid("unknown payment method"))
 		return
 	}
-	res, err := s.cfg.Domain.CreatePaymentIntent(r.Context(), s.cfg.Payments, p)
+	// What the store offers for this price now, asked again: the list the app
+	// showed may be old, and a method must not be started that was never offered.
+	offered, err := s.miniOffered(ctx, price.currency, price.amount)
 	if err != nil {
 		s.miniFail(w, "mini app payment", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, miniIntentBody(res))
+	if !slices.Contains(offered, p.Provider) {
+		writeError(w, http.StatusBadRequest, "method_off", "this payment method is not available for this payment")
+		return
+	}
+	res, err := s.cfg.Domain.CreatePaymentIntent(ctx, s.cfg.Payments, p)
+	if err != nil {
+		s.miniFail(w, "mini app payment", err)
+		return
+	}
+	body := miniIntentBody(res)
+	switch err := s.miniPaymentExtras(ctx, miniFrom(ctx).user, res, price, body); {
+	case errors.Is(err, errMethodOff):
+		writeError(w, http.StatusBadRequest, "method_off", "this payment method is not available for this payment")
+		return
+	case err != nil:
+		s.miniBotFail(w, "invoice", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // miniPayOrder: POST /api/mini/v1/orders/{id}/pay {method}. The intent's key
@@ -319,7 +346,7 @@ func (s *Server) miniPayOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.miniStartPayment(w, r, domain.CreatePaymentIntentParams{UserID: o.UserID, OrderID: o.ID, Provider: in.Method,
-		IdempotencyKey: "int:" + o.ID + ":" + in.Method})
+		IdempotencyKey: "int:" + o.ID + ":" + in.Method}, miniPrice{amount: o.Amount, currency: o.Currency, planID: o.PlanID})
 }
 
 // miniTopup: POST /api/mini/v1/topup {amount, method, key} in Toman.
@@ -342,7 +369,7 @@ func (s *Server) miniTopup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.miniStartPayment(w, r, domain.CreatePaymentIntentParams{UserID: c.user.ID, Provider: in.Method, Amount: in.Amount, Currency: "IRT",
-		IdempotencyKey: "mini:topup:" + c.user.ID + ":" + in.Key + ":" + in.Method})
+		IdempotencyKey: "mini:topup:" + c.user.ID + ":" + in.Key + ":" + in.Method}, miniPrice{amount: in.Amount, currency: "IRT"})
 }
 
 // miniCheckPayment: POST /api/mini/v1/payments/{id}/check asks payments to check the

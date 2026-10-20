@@ -72,6 +72,10 @@ type Stack struct {
 	// panel, edit a plan, turn a service off, delete it).
 	Domain *coredomain.Service
 	Prov   *provisionerclient.Client
+	// PayClient is core's client of the payments service, as the dashboard's
+	// and the Mini App's handlers hold it (the gRPC calls the bot makes go
+	// through Core).
+	PayClient *paymentsclient.Client
 }
 
 // ZarinpalMerchant is the merchant id the stack's Zarinpal gateway uses.
@@ -149,7 +153,8 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	payConn := Dial(t, payAddr, CoreToken)
 	provClient := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(Dial(t, provAddr, CoreToken)))
 	csrv := coreserver.New(cs, dom)
-	csrv.SetPayments(paymentsclient.New(paymentsv1.NewPaymentsServiceClient(payConn)))
+	payClient := paymentsclient.New(paymentsv1.NewPaymentsServiceClient(payConn))
+	csrv.SetPayments(payClient)
 	csrv.SetProvisioner(provClient)
 	consumer, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(eventsv1.NewEventFeedServiceClient(payConn)),
@@ -175,7 +180,7 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 		Store:    cs,
 		Zarinpal: zp, PaySite: paySite, Payments: paySvc,
 		Usage: dom.NewUsageWorker(provClient, nil),
-		Gates: gates, Domain: dom, Prov: provClient,
+		Gates: gates, Domain: dom, Prov: provClient, PayClient: payClient,
 	}
 }
 
