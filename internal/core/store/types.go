@@ -118,7 +118,10 @@ type Subscription struct {
 	LastSyncedAt *time.Time
 	SubLink      string
 	Label        *string // the name a reseller gave it
-	CreatedAt    time.Time
+	// Note is the reseller's private note about the service (one line, at
+	// most 200 characters); never shown to the customer.
+	Note      *string
+	CreatedAt time.Time
 	// PageToken is the secret in the branded page's URL (/sub/<token>); it
 	// grants the same power as SubLink and is rotated by RegeneratePageToken.
 	PageToken string

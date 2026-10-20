@@ -13,12 +13,12 @@ import (
 
 const subscriptionCols = `id, user_id, order_id, COALESCE(server_id::text, ''), client_email, sub_id, status,
 	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at,
-	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token`
+	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token, note`
 
 func subscriptionDest(sc *Subscription) []any {
 	return []any{&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
 		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
-		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken}
+		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken, &sc.Note}
 }
 
 func scanSubscription(row pgx.Row) (*Subscription, error) {
@@ -97,14 +97,49 @@ func (s *Store) ListSubscriptions(ctx context.Context, q querier, userID string,
 // label (any case) or the end of the id (the bot shows its last 6 hex digits,
 // "#" optional).
 func (s *Store) ListUserSubscriptions(ctx context.Context, q querier, userID, query string, p Page) ([]Subscription, int64, error) {
+	return s.listUserSubscriptions(ctx, q, userID, query, nil, p)
+}
+
+// ServiceBuckets groups the statuses of a delivered or pending service the way
+// a reseller filters their list: every service is in exactly one bucket, so
+// the counts add up. "expired" holds both the services whose time ran out and
+// those whose traffic did; "paused" the ones turned off ("disabled").
+var ServiceBuckets = map[string][]string{
+	"active":        {"active"},
+	"expiring_soon": {"expiring_soon"},
+	"expired":       {"expired", "depleted"},
+	"paused":        {"disabled"},
+	"pending":       {"pending"},
+}
+
+// ListUserServices is ListUserSubscriptions narrowed to one bucket of
+// ServiceBuckets ("" keeps every service); an unknown bucket matches nothing.
+func (s *Store) ListUserServices(ctx context.Context, q querier, userID, query, bucket string, p Page) ([]Subscription, int64, error) {
+	var statuses []string
+	if bucket != "" {
+		if statuses = ServiceBuckets[bucket]; statuses == nil {
+			return nil, 0, nil
+		}
+	}
+	return s.listUserSubscriptions(ctx, q, userID, query, statuses, p)
+}
+
+// userSubscriptionsWhere selects a user's services (not the deleted ones) that
+// match a search and, when the status array is not empty, one of its statuses.
+const userSubscriptionsWhere = `WHERE user_id = $1 AND status <> 'deleted'
+	  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR ($4 <> '' AND replace(id::text, '-', '') LIKE '%' || $4))
+	  AND (cardinality($5::text[]) = 0 OR status = ANY($5::text[]))`
+
+func (s *Store) listUserSubscriptions(ctx context.Context, q querier, userID, query string, statuses []string, p Page) ([]Subscription, int64, error) {
 	p = p.clamp()
 	query = strings.TrimPrefix(strings.TrimSpace(query), "#")
 	_, _, like := search(query)
-	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+`, count(*) OVER () FROM core.subscriptions
-		WHERE user_id = $1 AND status <> 'deleted'
-		  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR ($4 <> '' AND replace(id::text, '-', '') LIKE '%' || $4))
+	if statuses == nil {
+		statuses = []string{}
+	}
+	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+`, count(*) OVER () FROM core.subscriptions `+userSubscriptionsWhere+`
 		ORDER BY created_at DESC, id DESC
-		LIMIT $5 OFFSET $6`, userID, query, like, idPart(query), p.Limit, p.Offset)
+		LIMIT $6 OFFSET $7`, userID, query, like, idPart(query), statuses, p.Limit, p.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list user subscriptions: %w", err)
 	}
@@ -120,7 +155,17 @@ func (s *Store) ListUserSubscriptions(ctx context.Context, q querier, userID, qu
 		}
 		out = append(out, sc)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	rows.Close()
+	if len(out) == 0 && p.Offset > 0 { // a page past the end: the total is still what matches
+		if err := q.QueryRow(ctx, `SELECT count(*) FROM core.subscriptions `+userSubscriptionsWhere,
+			userID, query, like, idPart(query), statuses).Scan(&total); err != nil {
+			return nil, 0, fmt.Errorf("count user subscriptions: %w", err)
+		}
+	}
+	return out, total, nil
 }
 
 // SetSubscriptionLabel names a subscription (nil clears the name).
@@ -133,6 +178,65 @@ func (s *Store) SetSubscriptionLabel(ctx context.Context, q querier, id string, 
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetSubscriptionNote sets a service's private note (nil clears it).
+func (s *Store) SetSubscriptionNote(ctx context.Context, q querier, id string, note *string) error {
+	tag, err := q.Exec(ctx, `UPDATE core.subscriptions SET note = $2, updated_at = now() WHERE id = $1`, id, note)
+	if err != nil {
+		return fmt.Errorf("set subscription note: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ServiceCounts counts a user's services (the deleted ones left out) by
+// ServiceBuckets; Total is all of them.
+type ServiceCounts struct {
+	Total, Active, ExpiringSoon, Expired, Paused, Pending int64
+}
+
+// CountUserServices counts a user's services per bucket.
+func (s *Store) CountUserServices(ctx context.Context, q querier, userID string) (ServiceCounts, error) {
+	var c ServiceCounts
+	err := q.QueryRow(ctx, `SELECT count(*),
+			count(*) FILTER (WHERE status = 'active'),
+			count(*) FILTER (WHERE status = 'expiring_soon'),
+			count(*) FILTER (WHERE status IN ('expired', 'depleted')),
+			count(*) FILTER (WHERE status = 'disabled'),
+			count(*) FILTER (WHERE status = 'pending')
+		FROM core.subscriptions WHERE user_id = $1 AND status <> 'deleted'`, userID).
+		Scan(&c.Total, &c.Active, &c.ExpiringSoon, &c.Expired, &c.Paused, &c.Pending)
+	if err != nil {
+		return c, fmt.Errorf("count user services: %w", err)
+	}
+	return c, nil
+}
+
+// SubscriptionToggle is the latest pause or resume of a service in the audit
+// log: Action is "subscription.disable" or "subscription.enable", ActorID who
+// did it (nil: the system).
+type SubscriptionToggle struct {
+	Action  string
+	ActorID *string
+}
+
+// LastSubscriptionToggle returns the latest pause or resume of a service;
+// ErrNotFound when it was never paused or resumed.
+func (s *Store) LastSubscriptionToggle(ctx context.Context, q querier, id string) (*SubscriptionToggle, error) {
+	var t SubscriptionToggle
+	err := q.QueryRow(ctx, `SELECT action, actor_id::text FROM core.audit_log
+		WHERE entity = 'subscription' AND entity_id = $1 AND action IN ('subscription.disable', 'subscription.enable')
+		ORDER BY created_at DESC, id DESC LIMIT 1`, id).Scan(&t.Action, &t.ActorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("last subscription toggle: %w", err)
+	}
+	return &t, nil
 }
 
 // ActivateSubscription records the provisioned panel client.

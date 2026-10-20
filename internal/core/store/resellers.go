@@ -548,6 +548,107 @@ func (s *Store) CountInvited(ctx context.Context, q querier, userID string) (int
 	return n, nil
 }
 
+// InvitedCustomer is one user who joined through a reseller's invite link, with
+// the only things the reseller may see of them: who they are on Telegram, when
+// they joined, and what they bought and paid the reseller since.
+type InvitedCustomer struct {
+	TelegramID int64
+	Username   string // "" for a user without a public @username
+	JoinedAt   time.Time
+	// PaidOrders counts the orders that stand paid (money received, not
+	// refunded, not free); Spent adds up what they cost, per currency.
+	PaidOrders int64
+	Spent      map[string]int64
+	// Commission is what the customer's purchases paid the reseller, per
+	// currency (commission ledger entries that refer to the customer's orders).
+	Commission map[string]int64
+}
+
+// ListInvitedCustomers is a page of the users whose referred_by is inviterID,
+// newest first, and how many there are. Nobody else is ever returned: the
+// orders and commissions are looked up for the listed users only, and the
+// commissions for inviterID's ledger only.
+func (s *Store) ListInvitedCustomers(ctx context.Context, q querier, inviterID string, p Page) ([]InvitedCustomer, int64, error) {
+	p = p.clamp()
+	rows, err := q.Query(ctx, `SELECT u.id, u.telegram_id, COALESCE(u.username, ''), u.created_at, count(*) OVER ()
+		FROM core.users u WHERE u.referred_by = $1
+		ORDER BY u.created_at DESC, u.id DESC LIMIT $2 OFFSET $3`, inviterID, p.Limit, p.Offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list invited customers: %w", err)
+	}
+	defer rows.Close()
+	var (
+		out   []InvitedCustomer
+		ids   []string
+		total int64
+	)
+	for rows.Next() {
+		var (
+			id string
+			c  = InvitedCustomer{Spent: map[string]int64{}, Commission: map[string]int64{}}
+		)
+		if err := rows.Scan(&id, &c.TelegramID, &c.Username, &c.JoinedAt, &total); err != nil {
+			return nil, 0, err
+		}
+		ids = append(ids, id)
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	rows.Close()
+	if len(out) == 0 { // nobody, or a page past the end: the total is still everyone
+		total, err = s.CountInvited(ctx, q, inviterID)
+		return out, total, err
+	}
+	idx := make(map[string]int, len(ids))
+	for i, id := range ids {
+		idx[id] = i
+	}
+	orows, err := q.Query(ctx, `SELECT o.user_id::text, o.currency, count(*), sum(o.amount) FROM core.orders o
+		WHERE o.user_id = ANY($1::uuid[]) AND o.status IN ('paid', 'provisioning', 'active', 'provision_failed')
+		  AND o.amount > 0 AND o.refunded_at IS NULL
+		GROUP BY o.user_id, o.currency`, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invited customers: orders: %w", err)
+	}
+	defer orows.Close()
+	for orows.Next() {
+		var (
+			id, cur string
+			n, sum  int64
+		)
+		if err := orows.Scan(&id, &cur, &n, &sum); err != nil {
+			return nil, 0, err
+		}
+		c := &out[idx[id]]
+		c.PaidOrders += n
+		c.Spent[cur] = sum
+	}
+	if err := orows.Err(); err != nil {
+		return nil, 0, err
+	}
+	crows, err := q.Query(ctx, `SELECT o.user_id::text, l.currency, sum(l.amount)
+		FROM core.ledger_entries l JOIN core.orders o ON o.id = l.ref_id
+		WHERE l.user_id = $1 AND l.kind = 'commission' AND l.ref_type = 'order' AND o.user_id = ANY($2::uuid[])
+		GROUP BY o.user_id, l.currency`, inviterID, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invited customers: commissions: %w", err)
+	}
+	defer crows.Close()
+	for crows.Next() {
+		var (
+			id, cur string
+			sum     int64
+		)
+		if err := crows.Scan(&id, &cur, &sum); err != nil {
+			return nil, 0, err
+		}
+		out[idx[id]].Commission[cur] = sum
+	}
+	return out, total, crows.Err()
+}
+
 // ResellerSummary counts the resellers and sums what is owed to the store
 // (the negative balances), per currency.
 func (s *Store) ResellerSummary(ctx context.Context, q querier) (int64, map[string]int64, error) {

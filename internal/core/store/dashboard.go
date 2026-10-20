@@ -120,7 +120,7 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 // subscriptionColsS is subscriptionCols for a query that names the table s.
 const subscriptionColsS = `s.id, s.user_id, s.order_id, COALESCE(s.server_id::text, ''), s.client_email, s.sub_id, s.status,
 	s.expires_at, s.traffic_total_bytes, COALESCE(s.traffic_used_bytes, 0), s.last_synced_at, COALESCE(s.sub_link, ''), s.created_at,
-	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label, s.page_token`
+	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label, s.page_token, s.note`
 
 // SubscriptionFilter narrows the services list. Query matches a Telegram id,
 // part of a username or panel email, or part of a service id (the bot shows
