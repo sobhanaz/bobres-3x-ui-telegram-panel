@@ -171,6 +171,11 @@ type Updates struct {
 	// failed (the updater's own status stays what it says, and keeps another
 	// update from starting).
 	PickupWait, StuckAfter time.Duration
+	// StatusStale is how long a "running" status may go unwritten before core
+	// takes it for an update that was interrupted (the server lost power, the
+	// updater was killed): the updater rewrites it at least every 30 seconds
+	// while it runs, so this is many missed beats. Zero: never.
+	StatusStale time.Duration
 	// Every is how often Run looks.
 	Every time.Duration
 
@@ -198,7 +203,7 @@ func (s *Service) NewUpdates(cfg UpdatesConfig) *Updates {
 		cfg.Version = version.Version
 	}
 	return &Updates{s: s, src: cfg.Source, helper: cfg.Helper, version: cfg.Version, log: cfg.Log.With("worker", "updates"), now: time.Now,
-		PickupWait: 15 * time.Minute, StuckAfter: 60 * time.Minute, Every: 5 * time.Second}
+		PickupWait: 15 * time.Minute, StuckAfter: 60 * time.Minute, StatusStale: 10 * time.Minute, Every: 5 * time.Second}
 }
 
 // Version is the version core runs.
@@ -212,7 +217,7 @@ func (u *Updates) Helper() UpdateHelperState {
 	st, err := u.helper.ReadStatus()
 	switch {
 	case err == nil:
-		return UpdateHelperState{Available: true, Status: st}
+		return UpdateHelperState{Available: true, Status: u.interrupted(st)}
 	case errors.Is(err, sysupdate.ErrNotInstalled):
 		return UpdateHelperState{Problem: HelperNotInstalled, Status: st}
 	case errors.Is(err, sysupdate.ErrNoDir):
@@ -223,6 +228,29 @@ func (u *Updates) Helper() UpdateHelperState {
 		return UpdateHelperState{Problem: HelperUnsupported}
 	}
 	return UpdateHelperState{Problem: HelperBadStatus}
+}
+
+// interrupted reads a status that says "running" but that the updater has not
+// written for StatusStale as what it is: an update that was cut off (the server
+// lost power, the updater was killed). It is then a failed one, so the dashboard
+// does not wait for it for ever and another update may be asked for (the
+// updater's lock keeps two from running at once whatever core believes, and
+// clears the status it finds in this state). A status of any other state, or
+// whose age is not known, is returned as it is.
+func (u *Updates) interrupted(st sysupdate.Status) sysupdate.Status {
+	if st.State != sysupdate.StateRunning || st.ModTime.IsZero() || u.StatusStale <= 0 {
+		return st
+	}
+	silent := u.now().Sub(st.ModTime)
+	if silent <= u.StatusStale {
+		return st
+	}
+	st.State = sysupdate.StateFailed
+	st.Message = fmt.Sprintf("The update was interrupted: the updater has said nothing for %d minutes (did the server stop?). Check the store: sudo bobres status",
+		int(silent.Minutes()))
+	finished := st.ModTime
+	st.FinishedAt = &finished
+	return st
 }
 
 // Check reads the bot's last outcome (cached): nil with an error when the bot

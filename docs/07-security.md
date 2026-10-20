@@ -131,6 +131,48 @@ fixed templates), reach the admin socket or load a configuration of its own, rea
 of certificates Caddy issued, or write outside the request file. A compromised agent would control the gateway, which
 is why it has no network, no secrets of its own and a single small input.
 
+## Updating from the dashboard
+The dashboard's Updates tab can update the store, and core must still never get the Docker socket or any other power
+over the host. So core only asks: it drops one small file, `request.json`, into `/opt/bobres/run/update` (core's
+`/run/bobres-update`), and a systemd path unit on the host (`bobres-updater.path`) runs `bobres update --from-request` as
+root, which runs the same update `sudo bobres update` runs and reports in `status.json` in the same folder
+([installer, "Updating from the dashboard"](06-installer.md), [runbook](runbooks/update-rollback.md)).
+
+| | core | the helper (root, on the host) | others |
+|---|---|---|---|
+| `run/update/` (`/run/bobres-update` in core): owner uid 65532, mode 0700 | read-write, the only mount of it | reads `request.json`, writes `status.json` | none |
+| the Docker socket, the rest of `/opt/bobres`, `.env` | none | all (it is root, as `sudo bobres update` is) | root only |
+
+- **What a request can say** is a channel (`stable` or `beta`) and a release (`""` for the newest, or `X.Y.Z[-label.N]`),
+  plus an id, the dashboard user's name and a time. The file is decoded into exactly those fields; an unknown one, a
+  missing one, text after the object, a bad value, a time older than 15 minutes or a minute ahead, or an id already
+  handled (kept in root's `.updater-handled`) refuses the request, which is deleted all the same. No URL, base URL,
+  environment variable or flag can be named, and the release is the vendor's: verified against the keys built into
+  bobres, with the same refusals as `bobres update` (an older release, a replayed key list, an expired or
+  other-channel signature).
+- **The helper reads a directory core controls**, so it checks the directory first (real directories, not writable by
+  others, owned by root or core), opens the request without following a link or waiting for a pipe, requires a regular
+  file of at most 2 KiB owned by uid 65532 (checked on the open descriptor, the read capped) and removes whatever it
+  finds in the request's place, links without following them. It writes `status.json` by a temp file and a rename, which
+  replaces a link instead of writing through it. The log it keeps there is scrubbed of the install's secrets, bot
+  tokens, long hex strings and public IP addresses.
+- **The service** runs as root with `ProtectSystem=strict` (write access to the install, the folder bobres sits in,
+  `/etc/systemd/system`, the release state and the install log only), `NoNewPrivileges`, a private `/tmp` and the
+  kernel, clock and cgroup protections; it is killed after 3 hours at most. It takes the lock that `bobres update`,
+  `rollback` and `restore` take, so none of them overlaps another.
+- **What a compromised core can do:** start an update to a signed release newer than the installed one (so downtime, with
+  the backup first and the automatic rollback), at a time the owner did not choose; keep the helper busy with requests
+  (past systemd's start limit of 5 starts in 10 seconds the path unit stops, `failed`, until `bobres install`, `bobres update`
+  or `systemctl reset-failed` brings it back); fill
+  the disk with files in its folder; lie in what the dashboard shows. **What it cannot do:** download from anywhere but
+  the vendor's release address, install anything the vendor did not sign, roll back, restore, change a setting other than
+  the update channel (kept in `.env` after a successful update), run a command, or reach the Docker socket or any file
+  outside the folder.
+- **Not covered:** Docker with user namespace remapping (container uid 65532 is then not host uid 65532, as for `backups/` and
+  `tls/`), and any program on the host that runs as uid 65532 (it could drop a request: the same signed update).
+- **Off switch:** `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` removes the units. The compose mount can stay: with
+  no helper nobody reads the file.
+
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
 |---|---|
@@ -151,8 +193,10 @@ is why it has no network, no secrets of its own and a single small input.
 | Stolen 3x-ui token | Token stored encrypted at rest, provisioner isolated, rotation command, recommend private/HTTPS access, IP allowlist on panel. The panel URL must be https; plain http is accepted only with allow-private, and every connection is then checked to go to a private, loopback or link-local address (`xui.ErrPublicPlaintext`). This bounds the first hop only: a private next hop that NATs or proxies onward is the operator's network, and a custom HTTP client (`xui.WithHTTPClient`) is refused for plain http |
 | Supply chain | Pinned deps (`go.sum`, `package-lock.json`), a govulncheck gate and a gitleaks secret scan in CI (no trivy image scan yet), release images signed with keyless cosign, with SBOM and provenance, and run by the digests built into the signed CLI (next row), minimal base images, CI with least-privilege tokens |
 | Malicious update / MITM of installer | install.sh and `bobres update` check `keys.txt` against the embedded root keys, the release key's Ed25519 signature on `checksums.txt` (version, channel, expiry) and the CLI's SHA-256 before they run it, over HTTPS. BOBRES's five images run by the digests built into that signed CLI (`BOBRES_IMAGE_DIGEST_<SERVICE>`, appended to each image's tag): the release workflow takes a digest only after checking its keyless cosign signature from that workflow and tag, so a moved tag on ghcr.io changes nothing. The servers do not run cosign. Not covered by a signature: install.sh itself (fetched over HTTPS), Docker's install script (get.docker.com), the Caddy image (Docker Hub; pinned by version and digest in the compose file, which stops a moved tag but is not a signature check), the Postgres and Redis images (Docker Hub, by tag), and BOBRES images run by tag (a `BOBRES_VERSION` other than the CLI's own, or a development build of the CLI) |
+| Hostile or mistaken update from the dashboard (a compromised core, a staff account) | Core has no Docker socket and no network: it can only drop a small `request.json` (channel `stable`/`beta`, an exact release name, a user name, a time) into `run/update`, the one host directory it can write, and a systemd path unit starts `bobres update --from-request` as root. That reads the file opened without following links, as a regular file of core's uid of at most 2 KiB, with every field checked and no other accepted, deletes it, ignores an id it has seen, and runs the same code as `sudo bobres update`: the release is verified against the keys built into bobres (signature, channel, key-list `seq`, expiry), never older than the installed one, backed up first, and rolled back if the store does not come back. A request has no URL, command, environment or flag to carry. Worst case: one update, to a signed release, at a time the owner did not choose, with the downtime of a restart. Not covered: Docker user-namespace remapping, or another program running as host uid 65532 (06-installer.md, "Updating from the dashboard"). `BOBRES_UPDATE_FROM_DASHBOARD=off` removes the helper |
 | Hostile or mistaken HTTPS change (a compromised core, a staff account) | The owner only, 10 a minute, audited without the key. Core cannot reach Caddy: the tls-agent checks the request again, accepts only the install's own domain and Zarinpal host, and writes fixed templates. A change is committed only after Caddy accepts it, and `sudo bobres ssl auto` on the server undoes any of them |
 | Hostile or mistaken update from the dashboard (a stolen owner session, a compromised core) | The owner only (`system.write`), CSRF-guarded, 10 a minute, an authenticator code when the owner has one, and an explicit confirmation for the exact release the page showed (a pre-release needs its own). Core never holds the Docker socket or any host power: it writes one small request file (an id, the channel, an optional release number, who asked, when; no URL, flag or environment) into a folder shared with a root systemd path unit, whose updater accepts it only from core's own uid, fresh, once, and then runs the same `bobres update` as the command line: the release's signed `checksums.txt`, the CLI's SHA-256, a backup first and an automatic rollback if the new version is not healthy. So a hijacked session or core can start the update of a genuine, signed release of the channel and nothing else: it cannot choose code, a source or a downgrade past what the updater verifies. Every request and its end is audited (`system.update.*`) and sent to every owner on Telegram, so an update nobody asked for is noticed. The updater's `status.json` is read as untrusted text (no link followed, size and field limits, escaped in the page, its log shown to the owner only). Cost of a hijack: an unwanted but genuine update and a few minutes of downtime; `sudo bobres update` and the runbook's rollback undo it |
+| Hostile or mistaken update request (a compromised core, a staff account, a stale or forged request file) | Core has no Docker socket and no write access to the host but one folder; its request names only a channel and a release, checked by pattern, fresh (15 minutes), used once and read the careful way (owner uid 65532, no link, no pipe, 2 KiB); the update is `bobres update` itself, so the release must be vendor-signed and newer than the install, with the backup first, the automatic rollback and one lock for update, rollback and restore. At worst: an untimely update of a signed release (downtime), a busy helper, a full disk. `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` removes the helper |
 | Leak of an own certificate's private key | Sealed with core's master key in the database; never logged, audited, answered or put in the support bundle; deleted when the mode changes. It is in clear only in the request volume, `tls/certs/` and the memory of the agent and of Caddy while that mode is on |
 | The panel answers anyone who scans the server's IP address (ip mode) | Warned about in the dashboard and the runbook, and the owner confirms an address the bot did not detect. Dashboard links move to the IP address only while Caddy serves a publicly trusted certificate for it and the bot's own detection of the server's public address, at most 5 minutes old, is that same address (a recycled address keeps a valid short-lived certificate for days, so the certificate alone proves nothing). Where the two never agree (a VPN, a NAT egress, a floating IP address) links stay on the domain, and `BOBRES_PUBLIC_URL` overrides. The panel still needs a login |
 | License key sharing | Install binding, re-activation limits, revocation; accept residual risk |

@@ -147,6 +147,10 @@ English and can be edited like the others.
   the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
 - **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
   unset, the server's variable still decides. A pre-release needs its own confirmation.
+- **An update that was cut off does not block the next one.** If the server loses power in the middle of an update, the
+  updater's status keeps saying "running"; the dashboard now takes a status the updater has not rewritten for 10
+  minutes (it does every 30 seconds) for an interrupted update, records it as failed, tells the owners and lets another
+  be asked for. Without it the page would wait for ever and only `sudo bobres update` on the server could clear it.
 - **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** "Check again" only re-read the
   bot's cached answer (`GET /api/v1/system`), because core had no way to make the bot look again, so "Last checked" never
   moved and a failed check (GitHub unreachable when the bot started) stayed for an hour. It now calls
@@ -156,8 +160,31 @@ English and can be edited like the others.
   over plain http), and the command ignored the channel the page showed. The command now names the channel, copying
   falls back to the older way and says when it cannot, and there is an Update now.
 - New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
-  Updating from the dashboard needs the host half of this change (the updater and the `./run/update` mount in
-  `docker-compose.yml`); [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
+  Updating from the dashboard needs the server's updater (below) and the `./run/update` mount in `docker-compose.yml`;
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
+
+### Updating from the dashboard (host side)
+- **A server can now be updated without logging in to it.** `bobres install` (so every `bobres update`) sets up two
+  systemd units, `bobres-updater.path` and `bobres-updater.service`, and `bobres update --from-request` (not in the
+  help) is what the service runs: it reads the one request the dashboard dropped into `/opt/bobres/run/update`,
+  deletes it, takes the same install lock as `update`, `rollback` and `restore`, and runs exactly what
+  `bobres update --yes --channel C [--version V]` runs (signed release, backup, restore point, install, health check,
+  automatic rollback). It reports each step in `run/update/status.json`, which the dashboard shows.
+- **The request carries only a channel (`stable` or `beta`) and a release name** and is checked as strictly as it can
+  be: the file is opened without following a link, must be a regular file of core's user of 2 KiB at most, has exactly
+  the protocol's fields, is dated within 15 minutes, and an id seen before is ignored. A compromised dashboard can at
+  worst start an update to a release the vendor signed, at a time the owner did not choose.
+- **The channel chosen in the dashboard is kept**: after a successful run `BOBRES_UPDATE_CHANNEL` in `.env` follows the
+  request's channel, so `sudo bobres update` and the menu agree with it.
+- Core's container gets one new mount, `run/update` (read-write), and no other power over the host; `bobres install`
+  makes the directory (owned by core's user, mode 0700).
+- `sudo bobres check` and `bobres doctor` have a "Dashboard updates" line (WARN, never FAIL). `sudo bobres config set
+  BOBRES_UPDATE_FROM_DASHBOARD off` removes the units, `on` installs them, and `bobres uninstall --purge` removes them
+  with the install.
+- `bobres update`, `bobres rollback` and `bobres restore` now take one lock (`/opt/bobres/.update.lock`): a second one
+  that starts while another runs says so and changes nothing.
+- Updating: **the first update to this release still goes over SSH** (`sudo bobres update`): the install of the new bobres is
+  what installs the units. After that the dashboard can do it. Nothing to configure.
 
 ## [0.6.1] — 2026-10-20
 

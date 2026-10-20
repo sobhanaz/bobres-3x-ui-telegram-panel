@@ -122,6 +122,15 @@ func (w *updatesWorld) status(over map[string]any) {
 
 func (w *updatesWorld) helperIdle() { w.status(nil) }
 
+// wrote marks the status file as written at the moment of at, as the updater's
+// heartbeat does while it runs.
+func (w *updatesWorld) wrote(at time.Time) {
+	w.t.Helper()
+	if err := os.Chtimes(filepath.Join(w.dir.Path(), sysupdate.StatusFile), at, at); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
 func (w *updatesWorld) apply(in ApplyUpdate) (*store.SystemUpdate, error) {
 	return w.up.Apply(w.ctx, w.owner, in)
 }
@@ -604,6 +613,7 @@ func TestUpdatesStepWithdrawsARequestNobodyTookUp(t *testing.T) {
 	// the updater is busy with something else: it is not dead, so keep waiting
 	w.status(map[string]any{"state": "running", "id": "0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f99", "started_at": time.Now().UTC().Format(time.RFC3339)})
 	later(20 * time.Minute)
+	w.wrote(w.up.now()) // its heartbeat: it is alive
 	if err := w.up.Step(w.ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -660,6 +670,88 @@ func TestUpdatesStepGivesUpOnAnUpdateThatNeverEnds(t *testing.T) {
 	}
 	if p, _ := w2.up.Progress(w2.ctx); p.Run == nil {
 		t.Fatal("ended at 59 minutes")
+	}
+}
+
+// An update whose status says "running" but that the updater has not written for
+// ten minutes was cut off (the server lost power, the updater was killed): core
+// records it as failed, tells the owners, and lets another update be asked for.
+func TestUpdatesStepEndsAnUpdateTheUpdaterNoLongerReports(t *testing.T) {
+	w := newUpdatesWorld(t)
+	run := w.applyOK()
+	w.status(map[string]any{"state": "running", "id": run.ID, "step": "pull", "message": "Installing the new release: pulling its images.",
+		"started_at": time.Now().Add(-12 * time.Minute).UTC().Format(time.RFC3339)})
+	w.wrote(time.Now().Add(-11 * time.Minute))
+	p, err := w.up.Progress(w.ctx)
+	if err != nil || p.Helper.Status.State != sysupdate.StateFailed || p.Phase != sysupdate.StateFailed {
+		t.Fatalf("a silent updater is still running: %+v %v", p, err)
+	}
+	if err := w.up.Step(w.ctx); err != nil {
+		t.Fatal(err)
+	}
+	last, err := w.s.LastSystemUpdate(w.ctx, w.s.Conn())
+	if err != nil || last.ID != run.ID || last.Outcome != events.UpdateFailed || !strings.Contains(last.Message, "interrupted") || !strings.Contains(last.Message, "sudo bobres status") {
+		t.Fatalf("last: %+v %v", last, err)
+	}
+	if n := len(w.audits("system.update.failed")); n != 1 {
+		t.Fatalf("%d audit entries", n)
+	}
+	if got := w.notices(); len(got) != 4 || got[2].State != events.UpdateFailed || got[3].State != events.UpdateFailed {
+		t.Fatalf("notices: %+v", got)
+	}
+	// the file still says running, but nobody is behind it: another update may be asked for
+	if _, err := w.apply(ApplyUpdate{Version: "0.7.0", Channel: "stable"}); err != nil {
+		t.Fatalf("after an interrupted update: %v", err)
+	}
+}
+
+// A status that is still being written is running, however old the update is,
+// and so is one that has been quiet for a while but not for ten minutes.
+func TestUpdatesAStatusBeingWrittenStaysRunning(t *testing.T) {
+	w := newUpdatesWorld(t)
+	run := w.applyOK()
+	w.status(map[string]any{"state": "running", "id": run.ID, "step": "health", "started_at": time.Now().Add(-40 * time.Minute).UTC().Format(time.RFC3339)})
+	for _, quiet := range []time.Duration{0, 29 * time.Second, 9 * time.Minute} {
+		w.wrote(time.Now().Add(-quiet))
+		p, err := w.up.Progress(w.ctx)
+		if err != nil || p.Phase != PhaseRunning || !p.Helper.Running() {
+			t.Fatalf("quiet for %v: %+v %v", quiet, p, err)
+		}
+		if err := w.up.Step(w.ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.s.OpenSystemUpdate(w.ctx, w.s.Conn()); err != nil {
+			t.Fatalf("quiet for %v: the update was ended: %v", quiet, err)
+		}
+		if _, err := w.apply(ApplyUpdate{Version: "0.7.0"}); updCode(err) != UpdateAlreadyRunning {
+			t.Fatalf("quiet for %v: %v", quiet, err)
+		}
+	}
+}
+
+// A "running" status left by an update that was cut off earlier does not block a
+// new one: the dashboard would otherwise wait for ever on an updater that is gone.
+func TestUpdatesAnOldRunningStatusDoesNotBlockANewUpdate(t *testing.T) {
+	w := newUpdatesWorld(t)
+	w.status(map[string]any{"state": "running", "id": "0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f99", "started_at": time.Now().Add(-3 * time.Hour).UTC().Format(time.RFC3339)})
+	w.wrote(time.Now().Add(-3 * time.Hour))
+	p, err := w.up.Progress(w.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.up.CanApply(w.src.check, p) != "" {
+		t.Fatalf("an old running status blocks: %q", w.up.CanApply(w.src.check, p))
+	}
+	if _, err := w.apply(ApplyUpdate{Version: "0.7.0", Channel: "stable"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	// with the rule switched off (StatusStale 0) such a status blocks, as it did
+	w2 := newUpdatesWorld(t)
+	w2.up.StatusStale = 0
+	w2.status(map[string]any{"state": "running", "id": "0199a5b2-7c3e-7d11-9f2a-1b2c3d4e5f99"})
+	w2.wrote(time.Now().Add(-3 * time.Hour))
+	if _, err := w2.apply(ApplyUpdate{Version: "0.7.0"}); updCode(err) != UpdateAlreadyRunning {
+		t.Fatalf("switched off: %v", err)
 	}
 }
 

@@ -228,6 +228,8 @@ which core sees as `/run/bobres-update` (`BOBRES_UPDATE_DIR`). Protocol version 
   end) and `system.update.v1` notices. At most one update is open at a time. It ends the row exactly once, when the
   updater's status for that id says so, or as `not_started` when the updater never picked the request up. Core itself
   restarts in the middle of an update, so the end is found again from the database and the file after the restart.
+  A status that says `running` but that the updater has not written for 10 minutes is an update that was cut off (the
+  server lost power, the helper was killed): core ends it as `failed`, tells the owners, and lets another be asked for.
 - Dashboard API (`/api/v1/system/updates...`; 503 `not_configured` when core has no update service):
   - `GET /system/updates` (system.read): `{version, check, channel, helper, run, last, apply}`: the bot's last check
     (with `prerelease` and `notes_url` that core builds), the channel (`setting`, `effective`, `source`), the updater
@@ -248,6 +250,27 @@ which core sees as `/run/bobres-update` (`BOBRES_UPDATE_DIR`). Protocol version 
     503 `unavailable` (`check_unavailable`, `request_failed`).
 - The bot's `POST /internal/update-check/refresh` (core's service token) reloads its settings, looks now and answers
   with the check as `GET /internal/update-check` does; core waits at most 25 seconds.
+
+## Dashboard updates: the server's updater
+Core cannot update the store itself (no Docker socket, no internet access). The dashboard's Updates tab asks a helper
+on the host through one host directory, `<install dir>/run/update` (core sees it as `/run/bobres-update`, read-write;
+owner uid 65532, mode 0700, the only part of the host core can write; `deploy/docker-compose.yml`), and two small files
+in it, protocol version 1 (06-installer.md, "Updating from the dashboard", has the rules; 07-security.md the threat model):
+
+| File | Written by | Content |
+|---|---|---|
+| `request.json` | core: a temp file in the same folder, then a rename; at most 2 KiB | `{"v":1,"id":"<uuid>","action":"update","channel":"stable"\|"beta","version":"","by":"<user, 1-64 chars>","at":"<RFC 3339>"}`; `version` is `""` (the newest verified release of the channel) or `X.Y.Z` / `X.Y.Z-label.N`; no other field is accepted; `at` within 15 minutes before and a minute after the server's clock; an id already handled is ignored |
+| `status.json` | the helper (`bobres update --from-request`, run by `bobres-updater.service` when `bobres-updater.path` sees the request): a temp file, then a rename; root's, mode 0644 | `{"v":1,"installed":true,"helper":"0.7.0","state":"idle"\|"running"\|"done"\|"failed"\|"rolled_back","id":"","from":"0.6.1","to":"0.7.0","channel":"stable","step":"verify"\|"backup"\|"pull"\|"restart"\|"health"\|"rollback"\|"done","message":"one short sentence","started_at":null,"finished_at":null,"log":[]}` |
+
+- The helper deletes `request.json` as soon as it has read it, whatever it held, and answers under the request's `id`
+  (an `id` that could not be read is answered as `""`). `installed: true` is how core knows the helper exists; no
+  `status.json` means it is not installed (yet), `installed: false` that the owner switched it off. `started_at` and
+  `finished_at` are RFC 3339 times in UTC, `null` while unknown; `log` has at most 40 lines, secrets scrubbed. While an
+  update runs the file is rewritten at least every 30 seconds.
+- Core starts no request while `state` is `running` (it answers `already_running` itself, see "Updating from the
+  dashboard" above); the helper itself refuses (as `failed`) a request that comes while another update, rollback or
+  restore holds the install lock. A `running` status that has not been rewritten for 10 minutes (the heartbeat is
+  30 seconds) belongs to an update that was cut off, a power cut or a killed helper: core reads it as `failed`.
 
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.

@@ -163,6 +163,7 @@ sudo bobres config set BOBRES_UPDATE_CHANNEL beta   # or stable; checks it, writ
 sudo bobres update --check                          # "Channel: beta"
 ```
 
+- An owner can also choose the channel in the dashboard (System → Updates) when the server's dashboard updater is installed; an update started there keeps `BOBRES_UPDATE_CHANNEL` in step with the channel it ran on ([Update and roll back](update-rollback.md#update-from-the-dashboard)).
 - `bobres config set` accepts only `stable` or `beta` and waits until the bot is healthy again. Do not edit `.env` by
   hand for it: the bot does not start with another value.
 - Beta releases are less tested. Take a backup you keep off the server first (`sudo bobres backup`, then copy it).

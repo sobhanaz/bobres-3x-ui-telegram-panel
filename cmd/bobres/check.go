@@ -130,6 +130,9 @@ func (c *checker) all(ctx context.Context, dir string, env map[string]string) []
 	rs = append(rs, checkDisk(gb))
 	rs = append(rs, c.coreResults(ctx, dir)...)
 	rs = append(rs, hostTLSResults(ctx, o, dir, env["BOBRES_DOMAIN"])...)
+	if o.units != nil {
+		rs = append(rs, o.units.report(ctx, dashboardUpdatesOff(env)))
+	}
 	rs = append(rs, checkBackupAge(listBackups(filepath.Join(dir, "backups")), now))
 	rs = append(rs, checkReleaseExpiry(c.stateDir, now))
 	rs = append(rs, c.botResults(ctx, env)...)

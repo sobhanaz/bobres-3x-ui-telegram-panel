@@ -200,6 +200,10 @@ type Status struct {
 	Message    string
 	StartedAt  *time.Time
 	FinishedAt *time.Time
+	// ModTime is when the file was last written (zero when unknown). The
+	// updater rewrites a running update's status at least every 30 seconds,
+	// so its age says whether the updater is still alive.
+	ModTime time.Time
 	// Log is the newest lines of the update's log, already scrubbed by the
 	// updater and again here (at most MaxLog lines of MaxLine characters).
 	Log []string
@@ -277,21 +281,26 @@ func (d *Dir) openRegular(name string, limit int64) (*os.File, error) {
 	return f, nil
 }
 
-// readSmall reads a whole small file (at most limit bytes).
-func (d *Dir) readSmall(name string, limit int64) ([]byte, error) {
+// readSmall reads a whole small file (at most limit bytes) and says when it
+// was last written.
+func (d *Dir) readSmall(name string, limit int64) ([]byte, time.Time, error) {
 	f, err := d.openRegular(name, limit)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	defer func() { _ = f.Close() }()
+	var written time.Time
+	if fi, err := f.Stat(); err == nil {
+		written = fi.ModTime()
+	}
 	data, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s: %w", ErrBadStatus, name, err)
+		return nil, time.Time{}, fmt.Errorf("%w: %s: %w", ErrBadStatus, name, err)
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("%w: %s is larger than %d bytes", ErrBadStatus, name, limit)
+		return nil, time.Time{}, fmt.Errorf("%w: %s is larger than %d bytes", ErrBadStatus, name, limit)
 	}
-	return data, nil
+	return data, written, nil
 }
 
 // ReadStatus reads and checks status.json. It returns an error wrapping
@@ -302,7 +311,7 @@ func (d *Dir) ReadStatus() (Status, error) {
 	if err := d.checkDir(); err != nil {
 		return Status{}, err
 	}
-	data, err := d.readSmall(StatusFile, MaxStatus)
+	data, written, err := d.readSmall(StatusFile, MaxStatus)
 	if errors.Is(err, os.ErrNotExist) {
 		return Status{}, ErrNoStatus
 	}
@@ -317,7 +326,7 @@ func (d *Dir) ReadStatus() (Status, error) {
 	if raw.V != ProtocolVersion {
 		return Status{}, fmt.Errorf("%w: version %d", ErrUnsupported, raw.V)
 	}
-	st := Status{Installed: raw.Installed}
+	st := Status{Installed: raw.Installed, ModTime: written}
 	if !contains(states, raw.State) {
 		return Status{}, fmt.Errorf("%w: it names a state this core does not know", ErrBadStatus)
 	}
@@ -393,7 +402,7 @@ func (d *Dir) ReadRequest() (*Request, error) {
 	if err := d.checkDir(); err != nil {
 		return nil, err
 	}
-	data, err := d.readSmall(RequestFile, MaxRequest)
+	data, _, err := d.readSmall(RequestFile, MaxRequest)
 	if err != nil {
 		return nil, err
 	}

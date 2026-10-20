@@ -395,6 +395,29 @@ func TestReadStatusStates(t *testing.T) {
 	}
 }
 
+// The status says when the updater last wrote it: a running update that has
+// gone quiet is one that was cut off.
+func TestReadStatusSaysWhenItWasWritten(t *testing.T) {
+	d := newDir(t)
+	writeFile(t, d, StatusFile, statusJSON(t, map[string]any{"state": "running", "id": goodID}))
+	written := time.Now().Add(-7 * time.Minute).Truncate(time.Second)
+	if err := os.Chtimes(filepath.Join(d.Path(), StatusFile), written, written); err != nil {
+		t.Fatal(err)
+	}
+	st, err := d.ReadStatus()
+	if err != nil || !st.ModTime.Equal(written) {
+		t.Fatalf("written at %v, read as %v (%v)", written, st.ModTime, err)
+	}
+	// the file's own words cannot change it
+	writeFile(t, d, StatusFile, statusJSON(t, map[string]any{"state": "running", "id": goodID, "started_at": "2001-01-01T00:00:00Z", "finished_at": "2001-01-01T00:00:00Z"}))
+	if err := os.Chtimes(filepath.Join(d.Path(), StatusFile), written, written); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = d.ReadStatus(); err != nil || !st.ModTime.Equal(written) {
+		t.Fatalf("the time came from the file's words: %v (%v)", st.ModTime, err)
+	}
+}
+
 func TestReadStatusNotInstalled(t *testing.T) {
 	d := newDir(t)
 	writeFile(t, d, StatusFile, statusJSON(t, map[string]any{"installed": false}))
