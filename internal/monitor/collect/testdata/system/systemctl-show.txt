@@ -18,7 +18,7 @@ ActiveEnterTimestampMonotonic=58650000000
 
 Result=success
 NRestarts=0
-Id=bobres-update.path
+Id=bobres-updater.path
 LoadState=not-found
 ActiveState=inactive
 SubState=dead
@@ -26,23 +26,7 @@ UnitFileState=
 
 Result=success
 NRestarts=0
-Id=bobres-update.service
-LoadState=not-found
-ActiveState=inactive
-SubState=dead
-UnitFileState=
-
-Result=success
-NRestarts=0
-Id=bobres-backup.timer
-LoadState=not-found
-ActiveState=inactive
-SubState=dead
-UnitFileState=
-
-Result=success
-NRestarts=0
-Id=bobres-backup.service
+Id=bobres-updater.service
 LoadState=not-found
 ActiveState=inactive
 SubState=dead

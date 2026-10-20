@@ -17,8 +17,7 @@ import (
 // services is looked at.
 var WatchedUnits = []string{
 	"bobres-monitor.timer", "bobres-monitor.service",
-	"bobres-update.path", "bobres-update.service",
-	"bobres-backup.timer", "bobres-backup.service",
+	"bobres-updater.path", "bobres-updater.service",
 	"docker.service",
 }
 
@@ -30,8 +29,7 @@ var journalSources = []struct {
 	units []string
 }{
 	{"docker", []string{"docker.service", "containerd.service"}},
-	{"bobres", []string{"bobres-monitor.service", "bobres-monitor.timer", "bobres-update.service", "bobres-update.path",
-		"bobres-backup.service", "bobres-backup.timer"}},
+	{"bobres", []string{"bobres-monitor.service", "bobres-monitor.timer", "bobres-updater.service", "bobres-updater.path"}},
 }
 
 // journalCap is how many lines one source's query reads at most.
