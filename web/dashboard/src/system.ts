@@ -111,7 +111,7 @@ export const ALERT_FALLBACK = 'system.alerts.kind.check'
 
 /** The values of a problem's text that are numbers of something: alertArgs
  * writes them in the language's digits. */
-const ALERT_NUMBERS = ['count', 'days', 'hours', 'minutes', 'limit']
+const ALERT_NUMBERS = ['count', 'days', 'hours', 'minutes', 'limit', 'percent']
 
 const wholeNumber = (raw: unknown): number => (/^-?\d+$/.test(String(raw).trim()) ? Number(raw) : NaN)
 
@@ -128,7 +128,7 @@ export function alertCount(a: Pick<SystemAlert, 'args'>): number | undefined {
 }
 
 /** alertArgs are a problem's values for its text, as the bot writes them:
- * count, days, hours, minutes and limit as numbers, free (bytes) as a size,
+ * count, days, hours, minutes, limit and percent as numbers, free (bytes) as a size,
  * date (unix seconds) as a day, and anything else as a name (service names
  * and the name of a license limit through name), each kept whole inside a
  * sentence. key is the check's key when core does not give one. */

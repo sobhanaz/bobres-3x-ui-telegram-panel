@@ -182,7 +182,8 @@ describe('open problems', () => {
     // every text the bot has for a problem is here too, in both languages
     const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'idpay_failing', 'idpay_stuck', 'nextpay_failing', 'nextpay_stuck', 'backup_failed', 'backup_stale',
       'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'license_limit', 'trial_ending', 'trial_ended', 'check',
-      'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down']
+      'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down',
+      'monitor_disk', 'monitor_memory', 'monitor_container_down', 'monitor_container_unhealthy', 'monitor_container_restarting', 'monitor_collector_stale', 'monitor_ci']
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(ALERT_FALLBACK).toBe('system.alerts.kind.check')
@@ -211,6 +212,13 @@ describe('open problems', () => {
     expect(alertArgs(alert('x.y', { args }), 'en').count).toBe('3')
     expect(alertArgs(alert('x.y', { args: { key: 'other' } }), 'en').key).toBe('\u2068other\u2069')
     expect(alertArgs(alert('x.y', { args: null }), 'en')).toEqual({ key: '\u2068x.y\u2069' })
+    // the monitoring alerts: a percent as a number, the mount and the container as names
+    expect(alertArgs(alert('monitor.disk:/', { args: { mount: '/', percent: '91', free: String(2 ** 30) } }), 'fa')).toEqual({
+      key: '\u2068monitor.disk:/\u2069', mount: '\u2068/\u2069', percent: '\u06f9\u06f1', free: bytes(2 ** 30, 'fa'),
+    })
+    expect(alertArgs(alert('monitor.container.bot.restarting', { args: { container: 'bot', count: '4', minutes: '15' } }), 'en')).toEqual({
+      key: '\u2068monitor.container.bot.restarting\u2069', container: '\u2068bot\u2069', count: '4', minutes: '15',
+    })
     // a text is used only when every value it needs is there
     expect(fills('No new backup for {hours} hours', { hours: '30' })).toBe(true)
     expect(fills('No new backup for {hours} hours', { key: 'x' })).toBe(false)
