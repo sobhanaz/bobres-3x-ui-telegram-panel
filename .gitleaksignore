@@ -50,3 +50,6 @@ cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-log
 2a69e2ea6d9a915172fd6ccf850236761f850497:internal/monitor/collect/scrub_test.go:generic-api-key:13
 2a69e2ea6d9a915172fd6ccf850236761f850497:internal/monitor/collect/scrub_test.go:generic-api-key:17
 2a69e2ea6d9a915172fd6ccf850236761f850497:internal/monitor/collect/scrub_test.go:generic-api-key:18
+# False positive: a made-up temporary file name in the backup service's download test (no secret). The
+# line is a test table row next to the name of a test token; this pins the commit's finding.
+223abaf20f0bf6a31a598d1ff8275b0f6f55bc89:internal/backupsvc/download_test.go:generic-api-key:87
