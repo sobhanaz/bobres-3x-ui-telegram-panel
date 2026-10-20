@@ -43,7 +43,13 @@ var menuStyles = map[string]string{
 	"btn.buy": tg.StyleSuccess, "btn.trial": tg.StyleSuccess,
 	"btn.services": tg.StylePrimary, "btn.wallet": tg.StylePrimary, "btn.support": tg.StylePrimary,
 	"btn.reseller": tg.StylePrimary, "btn.invite": tg.StylePrimary,
+	"btn.reseller_apply": tg.StylePrimary, "btn.top_users": tg.StylePrimary,
 }
+
+// applyRow is the bottom menu's row of a customer who can apply to become a
+// reseller (the license includes resellers: it does in the trial the tests
+// run in); resellers and staff do not have it.
+var applyRow = []string{"btn.reseller_apply"}
 
 // hasMenu checks the user's bottom menu: rows of text keys in lang, colored
 // as menuStyles says, persistent and resized, with the hint.
@@ -107,27 +113,27 @@ func TestBottomMenuPerRoleAndLanguage(t *testing.T) {
 	if ms := en.menus(); len(ms) != 1 || ms[0].text != cat.T("en", "welcome", "brand", "TestVPN") {
 		t.Fatalf("the welcome brings the menu: %v", texts(ms))
 	}
-	en.hasMenu("en", menuRows([]string{"btn.language"})...)
+	en.hasMenu("en", menuRows([]string{"btn.language"}, applyRow)...)
 	fa := w.person(2002, "menu_fa")
 	fa.text("/start")
 	fa.press("lang:fa")
-	fa.hasMenu("fa", menuRows([]string{"btn.language"})...)
+	fa.hasMenu("fa", menuRows([]string{"btn.language"}, applyRow)...)
 
 	owner.text("/set referral.reward_percent 10") // Invite friends, for all but resellers
 	owner.sees("referral.reward_percent")
 	en.text("/menu")
-	en.hasMenu("en", menuRows([]string{"btn.invite", "btn.language"})...)
+	en.hasMenu("en", menuRows([]string{"btn.invite", "btn.language"}, []string{"btn.reseller_apply", "btn.top_users"})...)
 	if text := en.menus()[len(en.menus())-1].text; text != cat.T("en", "menu.keyboard") || !strings.Contains(en.last().text, "Main menu") {
 		t.Fatalf("/menu: %q, then %q", text, en.last().text)
 	}
 	w.makeReseller(2001, 0, 10, 0)
 	en.text("/menu")
-	en.hasMenu("en", menuRows([]string{"btn.reseller", "btn.language"})...)
+	en.hasMenu("en", menuRows([]string{"btn.reseller", "btn.language"}, []string{"btn.top_users"})...) // no Become a reseller
 	w.role(2002, "support")
 	fa.text("/menu")
-	fa.hasMenu("fa", menuRows([]string{"btn.invite", "btn.language"}, []string{"btn.dashboard"})...)
+	fa.hasMenu("fa", menuRows([]string{"btn.invite", "btn.language"}, []string{"btn.top_users"}, []string{"btn.dashboard"})...)
 	owner.text("/menu")
-	owner.hasMenu("en", menuRows([]string{"btn.invite", "btn.language"}, []string{"btn.admin", "btn.dashboard"})...)
+	owner.hasMenu("en", menuRows([]string{"btn.invite", "btn.language"}, []string{"btn.top_users"}, []string{"btn.admin", "btn.dashboard"})...)
 }
 
 // Every button of the bottom menu does what the same inline button does, in
@@ -164,6 +170,9 @@ func TestMenuLabelsRoute(t *testing.T) {
 		{"btn.support", "customer", "tk:n:", ""},
 		{"btn.language", "customer", "lang:fa", ""},
 		{"btn.invite", "customer", "https://t.me/share/url", ""},
+		{"btn.top_users", "customer", "ref", ""},
+		{"btn.reseller_apply", "customer", "cancel", ""},
+		{"btn.top_users", "reseller", "ref", ""},
 		{"btn.reseller", "reseller", "rs:buy", ""},
 		{"btn.admin", "staff", "adm:pend", ""},
 		{"btn.dashboard", "staff", "", "admin.dashboard_unavailable"},
@@ -172,6 +181,9 @@ func TestMenuLabelsRoute(t *testing.T) {
 			p := people[lang][c.role]
 			p.tapMenu(lang, c.key)
 			got := p.last()
+			if c.offers != "" && len(buttons(got)) == 0 {
+				got = p.lastKeyboard() // the invite screen is followed by its promo card, which has no buttons
+			}
 			if c.text != "" && got.text != cat.T(lang, c.text) || c.offers != "" && !offers(got, c.offers) {
 				t.Errorf("%s %s: answered %q %v", lang, c.key, got.text, callbacks(got))
 			}
@@ -209,7 +221,7 @@ func TestMenuLabelsAtStartAndAfterEdits(t *testing.T) {
 	h := New(nil, newFakeTG(), state.NewMemory(), cat, nil, Config{}, nil)
 	want := map[string]string{"btn.buy": "buy", "btn.services": "subs", "btn.wallet": "wallet", "btn.trial": "trial",
 		"btn.support": "support", "btn.language": "lang", "btn.invite": "ref", "btn.reseller": "rs",
-		"btn.admin": "adm", "btn.dashboard": "dash"}
+		"btn.reseller_apply": "ap", "btn.top_users": "top", "btn.admin": "adm", "btn.dashboard": "dash"}
 	for _, lang := range i18n.Languages {
 		for key, data := range want {
 			if got, ok := h.menuAction(cat.T(lang, key)); !ok || got != data {
@@ -696,7 +708,7 @@ func TestBottomMenuHasTheStoreItemWhileTheMiniAppIsOn(t *testing.T) {
 	setupStore(t, w)
 	cat := w.h.cat
 	u := w.customer(2101, "store_en")
-	u.hasMenu("en", menuRows([]string{"btn.language"})...)
+	u.hasMenu("en", menuRows([]string{"btn.language"}, applyRow)...)
 
 	const app = "https://shop.example.com/app/"
 	w.h.miniApp.Store(&[]string{app}[0])
@@ -712,7 +724,7 @@ func TestBottomMenuHasTheStoreItemWhileTheMiniAppIsOn(t *testing.T) {
 	rest := *got
 	rest.Keyboard = got.Keyboard[1:]
 	want := &tg.Menu{IsPersistent: true, Resize: true, Placeholder: cat.T("en", "menu.placeholder")}
-	for _, keys := range menuRows([]string{"btn.language"}) {
+	for _, keys := range menuRows([]string{"btn.language"}, applyRow) {
 		var row []tg.MenuButton
 		for _, k := range keys {
 			row = append(row, tg.MenuButton{Text: cat.T("en", k), Style: menuStyles[k]})

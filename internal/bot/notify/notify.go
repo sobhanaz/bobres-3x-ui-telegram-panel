@@ -646,18 +646,22 @@ func (n *Notifier) ticketAlert(ctx context.Context, messageID string, customer, 
 		if u := v.GetUrl(); strings.HasPrefix(u, "https://") {
 			kb = (&tg.Keyboard{}).Row(n.linkButton(lang, "btn.ticket_open", u))
 		}
+		k := key
+		if k == "admin.ticket_opened" && v.GetCategory() == "reseller" {
+			k = "admin.reseller_application" // an application has words of its own: staff must not take it for a support question
+		}
 		args := []any{"user", html.EscapeString(user), "id", v.GetTicketNumber(), "text", preview}
-		if key == "admin.ticket_opened" {
+		if k == "admin.ticket_opened" {
 			args = append(args, "category", n.category(lang, v.GetCategory()))
 		}
-		return n.cat.T(lang, key, args...), kb
+		return n.cat.T(lang, k, args...), kb
 	})
 }
 
 // category names a ticket's topic in lang (older tickets have "general").
 func (n *Notifier) category(lang, c string) string {
 	switch c {
-	case "payment", "service":
+	case "payment", "service", "reseller":
 	default:
 		c = "other"
 	}

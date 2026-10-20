@@ -177,7 +177,7 @@ func (h *Handler) showWallet(r *req) {
 	}
 	kb := (&tg.Keyboard{}).Row(r.button("btn.topup", "wtop"), r.button("btn.history", "whist")).
 		Row(r.button("btn.home", "home"))
-	text := r.t("wallet.title", "balance", r.balance(w.GetBalance(), "IRT"))
+	text := h.accountInfo(r) + "\n\n" + r.t("wallet.title", "balance", r.balance(w.GetBalance(), "IRT"))
 	if r.isReseller() {
 		text += "\n" + r.t("rs.wallet_credit", "limit", r.money(w.GetCreditLimit(), "IRT"),
 			"available", r.money(w.GetBalance()+w.GetCreditLimit(), "IRT"))
