@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
@@ -40,6 +41,10 @@ type Config struct {
 	Log *slog.Logger
 	// License is what a license token is checked against.
 	License LicenseConfig
+	// Secrets (core's master key) keys the hashes gift codes are stored as, so
+	// a copy of the database cannot be read back into codes. Nil: no gift
+	// code can be made or redeemed (core says so; nothing is stored in clear).
+	Secrets *bcrypto.Envelope
 	// LeaderboardTTL is how long the top-inviters board is kept before it is
 	// read again (0: 30 seconds; below 0: never kept, every call reads it).
 	LeaderboardTTL time.Duration

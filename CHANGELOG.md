@@ -6,18 +6,27 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
-Three more of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
-plans as a **two-column table**, and a customer can **buy several services at once** (Bulk purchase).
+Four more of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
+plans as a **two-column table**, a customer can **buy several services at once** (Bulk purchase), and **gift codes**
+add a fixed amount of credit to a customer's wallet.
 
 ### Updating
-- Bulk purchase adds one database migration (00026: the table `core.bulk_orders` and two columns on `core.orders`);
-  `sudo bobres update` runs both migrations. It only adds, so a rollback keeps every order. Nothing to configure.
+- Three database migrations (00026: the table `core.bulk_orders` and two columns on `core.orders`; 00027: gift codes;
+  00028: the help content table, below); `sudo bobres update` runs them. They only add, so a rollback keeps every order.
+  Nothing to configure.
 - Core and the bot move together (three new gRPC calls, one new event, and a `bulk_id` on three events):
   update both, as `sudo bobres update` does. Every change to the contract is additive.
 - After the update the bot lists plans as a table (a header row, then each plan as a row of two buttons, its name and
   its price). `bot.plan_layout` = `list` in Settings > Plans and bulk purchase brings back one button per plan.
 - A new green Bulk purchase button appears on every customer's home menu. `bulk.enabled` = off hides it.
-- Help content adds one more database migration (00027, the `help_entries` table), and the services' calls only gain
+- Gift codes add one more database migration (00027): the gift code tables and a new wallet ledger kind, `gift_code`.
+  Core and the bot move together here too (core has a new call the bot makes).
+- Gift codes need core's master key (`BOBRES_CORE_MASTER_KEY`, which every install made by the installer has); a
+  store without it can still run, and the dashboard says it cannot make codes. They are on for customers by default;
+  the owner's switch is the setting `gift_codes.enabled`.
+- Rolling the gift code migration back drops its three tables but keeps the ledger's new kind: the ledger is
+  append-only, so credits already paid stay.
+- Help content adds one more database migration (00028, the `help_entries` table), and the services' calls only gain
   `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings` (additive: an older bot shows no help buttons, a bot
   on an older core simply has none to show). Nothing has to be configured.
 
@@ -75,7 +84,36 @@ plans as a **two-column table**, and a customer can **buy several services at on
   Telegram's limits (100 buttons, 8 to a row) falls back to one button per plan. `bot.plan_layout` = `list` is the old
   look.
 
+### Gift codes
+- **A gift code adds a fixed amount of credit to a customer's wallet.** The customer taps **Apply gift code** on the
+  bot's wallet screen and sends the code, written any way (small letters, Persian digits, spaces or dashes). Unlike a
+  discount code, which takes money off a purchase, this is money in the wallet; resellers may use them too.
+- **Staff make them in the dashboard** (page **Gift codes**, permission `discounts.write` as for discounts): one code of
+  their own words, or a batch of up to 500 generated ones with a prefix such as `NOWRUZ`, with an amount and currency,
+  uses in all, uses per customer, an optional expiry and a note. Generated codes are 12 characters from `crypto/rand`
+  (about 59 bits) in an alphabet with no 0, O, 1, I or L, shown as `ABCD-EFGH-JKMN`. They are listed with their last four
+  characters, the value, used / in all and status, and can be switched off (what a code paid stays paid), exported as a CSV
+  and traced to who redeemed them and when.
+- **A code is never stored.** Core keeps an HMAC-SHA256 of it under a key derived from the master key, and its last four
+  characters; a copy of the database cannot be read back into codes or tried offline. **The codes are shown once**, when
+  they are made, in a dialog that copies them or downloads them as a CSV; no log, audit entry or export holds one.
+- **Built for money:** one transaction locks the code's row and the wallet, so the last use of a code has exactly one
+  winner, a customer's limit holds under any number of taps at once, and a code never pays above its limit (the database
+  refuses it as well). A request sent again (Telegram redelivering the message) credits once. Each redemption writes one
+  ledger entry (`gift_code`) and one record that names it, and sends the audit entries `gift_code.create`, `.enable`,
+  `.disable` and `.redeem`.
+- **Guessing is limited per customer:** five wrong codes in an hour close entering codes for an hour (`gift_code.lock` in
+  the audit log); only wrong codes count and a success does not reset them. Unknown, switched-off and expired codes get
+  one answer, so nothing tells a guesser which codes exist.
+- The two CSV files (the list, and a code's redemptions) follow the CSV rules of
+  [docs/14-reports.md](docs/14-reports.md): English headers, UTC and local times with the zone, a Jalali column when the
+  page's calendar is Jalali, formulas quoted. The Mini App's wallet history names the credit "Gift code".
+- API (additive): the `RedeemGiftCode` call (the bot only) and `/api/v1/gift-codes*` in the dashboard's API
+  ([docs/02-events-and-apis.md](docs/02-events-and-apis.md)). Tables are in [docs/01-database.md](docs/01-database.md),
+  the bot's flow in [docs/03-bot-ux.md](docs/03-bot-ux.md), the page in [docs/04-dashboard.md](docs/04-dashboard.md).
+
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
 
 ## [0.7.0] — 2026-10-20
 

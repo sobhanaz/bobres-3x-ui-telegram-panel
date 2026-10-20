@@ -191,6 +191,12 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if err := decode(m, &e); err != nil {
 			return err
 		}
+		// A gift code was applied in the bot, which answered with the amount
+		// and the balance in the same chat (as a wallet payment does): a
+		// second message would only repeat it.
+		if e.Reason == events.CreditGiftCode {
+			return nil
+		}
 		// A commission names the amount only: the customer who bought is
 		// never shown to the reseller.
 		key := map[string]string{

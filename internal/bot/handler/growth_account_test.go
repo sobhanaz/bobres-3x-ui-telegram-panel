@@ -31,7 +31,7 @@ func TestWalletShowsTheAccount(t *testing.T) {
 	if got, want := u.shown().text, block("0")+"\n\n👛 <b>Wallet</b>\nBalance: <b>0 Toman</b>"; got != want {
 		t.Fatalf("the wallet screen:\n%s\nwant:\n%s", got, want)
 	}
-	if cb := callbacks(u.shown()); !slices.Equal(cb, []string{"wtop", "whist", "home"}) {
+	if cb := callbacks(u.shown()); !slices.Equal(cb, []string{"wtop", "whist", "gift", "home"}) {
 		t.Fatalf("the wallet's buttons: %v", cb)
 	}
 

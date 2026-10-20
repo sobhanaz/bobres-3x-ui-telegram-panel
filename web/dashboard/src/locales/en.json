@@ -86,6 +86,10 @@
       "title": "Discounts & referrals",
       "desc": "Discount codes and their use, the referral reward and top inviters."
     },
+    "giftcodes": {
+      "title": "Gift codes",
+      "desc": "Codes that add a fixed amount of credit to a customer's wallet: make them, switch them off, see who used them."
+    },
     "resellers": {
       "title": "Resellers",
       "desc": "Reseller tiers and prices, credit limits, their customers and settlements."
@@ -505,7 +509,8 @@
       "referral": "Invitation reward",
       "trial_grant": "Free trial",
       "commission": "Reseller commission",
-      "settlement": "Reseller payment"
+      "settlement": "Reseller payment",
+      "gift_code": "Gift code"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -699,6 +704,92 @@
     "rewarded": "Rewarded purchases",
     "earned": "Earned"
   },
+  "giftcodes": {
+    "intro": "A gift code adds a fixed amount of credit to a customer's wallet. Customers apply it from the Wallet screen of the bot, with the Apply gift code button. A code is not kept: only its last four characters stay in this list, so copy new codes when you make them.",
+    "new": "New codes",
+    "export": "Export CSV",
+    "no_key": "Gift codes need the master key of this install (BOBRES_CORE_MASTER_KEY), which core does not have: none can be made or used. Run bobres install again to add it.",
+    "off": "Gift codes are turned off: the bot hides the button and accepts no code. You can still make codes.",
+    "turn_on": "Turn on",
+    "turned_on": "Gift codes are on",
+    "all_statuses": "All statuses",
+    "status_col": "Status",
+    "status": {
+      "active": "Active",
+      "disabled": "Switched off",
+      "expired": "Ended",
+      "used_up": "Used up"
+    },
+    "search": "Search a note or the last 4 characters",
+    "none": "No gift codes yet.",
+    "code": "Code",
+    "kind_generated": "Made by BOBRES",
+    "kind_own": "Your own",
+    "value": "Worth",
+    "used": "Used",
+    "used_of": "{used} of {max}",
+    "per_customer_short": "Per customer: {n}",
+    "ends": "Ends",
+    "never": "Never",
+    "last_used": "Last used",
+    "note": "Note",
+    "made": "Made {date}",
+    "active": "Active",
+    "redemptions": "Who used it",
+    "redemptions_of": "Used by, code",
+    "redemptions_none": "Nobody has used this code yet.",
+    "credited": "Credited",
+    "number": "Time",
+    "export_redemptions": "Export CSV",
+    "mode": "What to make",
+    "mode_batch": "Generated codes",
+    "mode_own": "A code of my own",
+    "batch_intro": "BOBRES makes the codes at random, like ABCD-EFGH-JKMN. Give each one to one person or one group.",
+    "own_intro": "A word of your own for a campaign. Anyone who learns it can use it, so give it few uses and an end date.",
+    "amount": "Amount per use",
+    "uses": "Uses in all",
+    "per_customer": "Uses per customer",
+    "count": "How many codes",
+    "prefix": "Start of every code (optional)",
+    "prefix_placeholder": "Like NOWRUZ",
+    "own_code": "Your code",
+    "code_hint": "Letters and digits, 8 to 32, with dashes if you like. Customers can type it in small letters.",
+    "days": "Ends in (days)",
+    "ends_in": "in {n} day | in {n} days",
+    "note_field": "Note (only staff see it)",
+    "note_placeholder": "Why it exists",
+    "sum_codes": "Codes",
+    "sum_value": "Worth per use",
+    "sum_ends": "Ends",
+    "sum_most": "Most it can pay out",
+    "shown_once": "You see the codes once, right after you make them.",
+    "make": "Make codes",
+    "invalid": {
+      "amount": "A positive amount.",
+      "uses": "A whole number from 1 to 1,000,000.",
+      "per_customer": "A whole number from 1 to 100, and not more than the uses in all.",
+      "days": "A whole number of days, 1 to 3,650, or empty for never.",
+      "note": "One line, at most 200 characters.",
+      "count": "A whole number from 1 to 500.",
+      "prefix": "Up to 8 letters or digits.",
+      "code_chars": "Letters and digits only (dashes and spaces are fine).",
+      "code_length": "8 to 32 letters and digits.",
+      "code_easy": "Too easy to guess: use at least 5 different characters."
+    },
+    "shown_title": "{n} code, shown only now | {n} codes, shown only now",
+    "shown_warning": "Copy these codes now. They are shown only this once: BOBRES keeps no copy of a code, so they cannot be read again.",
+    "shown_codes": "The new codes",
+    "shown_hint": "One code per line. Download the CSV to keep them with their terms.",
+    "copy_all": "Copy",
+    "download": "Download CSV",
+    "done": "Done",
+    "copied": "Copied",
+    "copy_failed": "The browser did not allow copying: select the codes and copy them by hand.",
+    "unsaved_title": "Close without saving the codes?",
+    "unsaved_message": "You have not copied or downloaded them. They cannot be shown again: you would have to switch these codes off and make new ones.",
+    "close_anyway": "Close anyway",
+    "keep_open": "Keep it open"
+  },
   "branding": {
     "tab_store": "Store",
     "doc_title": "{brand} · Dashboard",
@@ -852,6 +943,7 @@
       "topup": "Extra traffic",
       "admin": "Admin panel",
       "rs": "Reseller panel",
+      "gift": "Gift codes",
       "bulk": "Bulk purchase",
       "profile": "Bot profile",
       "help": "Help screens"
@@ -1248,6 +1340,12 @@
           "help": "The bot’s {'@'}username (without the {'@'}), for the “Renew” button on the subscription page, which opens the bot. Empty: the page has no renew button."
         }
       },
+      "gift_codes": {
+        "enabled": {
+          "label": "Gift codes",
+          "help": "Customers can apply a gift code from the wallet screen in the bot: a code you made in the dashboard (Gift codes) adds a fixed amount to their wallet. Turned off, the button goes and no code is accepted; codes can still be made. Gift codes need the master key of the install."
+        }
+      },
       "miniapp": {
         "enabled": {
           "label": "Telegram Mini App store",
@@ -1358,6 +1456,7 @@
       "plan": "Plan",
       "payment_intent": "Payment",
       "discount": "Discount code",
+      "gift_code": "Gift code",
       "settings": "Settings",
       "text": "Bot text",
       "branding": "Branding",
@@ -1382,6 +1481,7 @@
       "plan": "Plans",
       "setting": "Settings",
       "discount": "Discount codes",
+      "gift_code": "Gift codes",
       "subscription": "Services",
       "order": "Orders",
       "dashboard": "Dashboard",
@@ -1418,6 +1518,13 @@
       },
       "discount": {
         "upsert": "Discount code saved"
+      },
+      "gift_code": {
+        "create": "Gift code made",
+        "enable": "Gift code switched on",
+        "disable": "Gift code switched off",
+        "redeem": "Gift code used",
+        "lock": "Gift codes closed for a customer (too many wrong codes)"
       },
       "subscription": {
         "extend": "Service extended",
@@ -1490,6 +1597,8 @@
       "export": {
         "ledger": "Wallet history exported",
         "audit": "Audit log exported",
+        "gift_codes": "Gift codes exported",
+        "gift_redemptions": "Uses of a gift code exported",
         "reports": "Sales report exported"
       },
       "ticket": {
