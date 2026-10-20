@@ -551,6 +551,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		r.show(r.t("wallet.enter_amount", "min", r.money(minTopup, "IRT"), "max", r.money(maxTopup, "IRT")), cancelKeyboard(r))
 	case "whist":
 		h.showHistory(r)
+	case "gift":
+		h.askGiftCode(r)
 	case "trial":
 		h.onTrial(r)
 	case "store":
@@ -678,6 +680,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onTicket(r, st)
 	case sceneDiscount:
 		h.onDiscountCode(r, st)
+	case sceneGiftCode:
+		h.onGiftCode(r)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:
 		h.onAdminScene(r, st)
 	case sceneResellerLabel, sceneResellerFind, sceneResellerRename, sceneResellerNote:
