@@ -8,6 +8,40 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Bot
+- **Maintenance mode now holds the whole bot.** With `maintenance.enabled` on, the maintenance text did not come from
+  every option, Support among them (the owner reported it). Three things let a customer past it: the text was sent at
+  most once a minute per customer, so the second tap on the bottom menu within a minute got no answer at all; a
+  customer who had written to support went on with their ticket (Support in the bottom menu showed it, and their
+  messages, photos, files, voice messages and albums, their Telegram replies to a staff answer, and the Reply, Close
+  and history buttons all worked); and the language buttons opened the picker, switched the language and brought back
+  the home menu and the bottom menu. Now one decision (`maintenancePasses` in `internal/bot/handler/gates.go`), made
+  before any command, button, scene or conversation sees the update, answers every update of a customer with the
+  maintenance text, every time: a popup for a button, a message for anything typed or sent (an album, which Telegram
+  delivers a part at a time, gets one). The owner's own text for the message ("maintenance" under Branding and texts)
+  is used when set. What still works is a short list and nothing else: staff and the owners the server names (also
+  before they have an account), `/paysupport`, a payment already under way (its receipt, bank reference or TXID, its
+  Check button, a Stars invoice already sent) and a newcomer's `/start` and language choice. Maintenance still comes
+  before the required channel, and switching either on or off takes hold at the bot's next settings reload (at once
+  for a change in the dashboard or by `/set`), never at a restart.
+- **A customer can no longer write to support while maintenance is on**, or answer a staff reply: they are told the
+  bot is under maintenance, and what they sent is not saved. Staff answers to open tickets still reach them. The
+  required channel is not changed: it still lets a customer go on with a ticket they have (starting one asks them to
+  join first) and still lets anyone's language picker through.
+- Tests: every command, button verb, bottom-menu item and scene is sent to the bot in maintenance, twice in a row,
+  from the state a customer would have been in, and a test reads the handler's source and fails when one is missing
+  from its tables. The Mini App, which already held the same rule, got the same treatment: its routes are read from the
+  source and swept for a customer, for each staff role and for an owner the server names; its three copies of the rule
+  are one function now. No change of behavior there, and nothing for the dashboard (staff only) or a service's own
+  page (`/sub/<token>`, which keeps working) to change.
+
+### Updating
+- Nothing to configure and no migration. Only the bot's behavior changed (core's change is a clean-up).
+
+### Known limits
+- A flood of messages over the bot's rate limit (`limits.bot_per_10s`, 20 in 10 seconds unless changed) stays
+  unanswered, in maintenance as at any time; buttons over it get "Too many requests".
+
 ## [0.6.1] — 2026-10-20
 
 Two gaps of the Mini App that the 0.6.0 notes named are closed: it now holds the store's required channel as the bot
