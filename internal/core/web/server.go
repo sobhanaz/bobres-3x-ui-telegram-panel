@@ -194,6 +194,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/reports/summary.csv", PermReportsRead, s.exportReportSummary)
 	s.route(api, "GET /api/v1/reports/plans", PermReportsRead, s.reportPlans)
 	s.route(api, "GET /api/v1/reports/methods", PermReportsRead, s.reportMethods)
+	s.route(api, "GET /api/v1/reports/plan-series", PermReportsRead, s.reportPlanSeries)
+	s.route(api, "GET /api/v1/reports/hours", PermReportsRead, s.reportHours)
 	s.route(api, "GET /api/v1/reports/orders.csv", PermReportsRead, s.exportReportOrders)
 	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
 	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)

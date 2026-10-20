@@ -157,3 +157,95 @@ html[lang='fa'] body {
 .app-nowrap {
   white-space: nowrap;
 }
+
+/* Paper: the dashboard's own chrome stays off the page, and what is left is one column. */
+@media print {
+  .sidebar,
+  .topbar,
+  .attribution,
+  .p-toast,
+  .app-no-print {
+    display: none !important;
+  }
+  .layout,
+  .main {
+    display: block !important;
+  }
+  .content {
+    padding: 0 !important;
+    max-inline-size: none !important;
+  }
+}
+
+/* Chart colours (components/charts). The eight categorical slots are a palette
+   checked for colour-blind readers, stepped separately for the dark surface; the
+   sequential ramp is one hue (light is little in the light theme, bright is a lot
+   in the dark one). Charts hold no hex of their own: they read these. */
+:root {
+  --chart-c1: #2a78d6;
+  --chart-c2: #eb6834;
+  --chart-c3: #1baf7a;
+  --chart-c4: #eda100;
+  --chart-c5: #e87ba4;
+  --chart-c6: #008300;
+  --chart-c7: #6250d6;
+  --chart-c8: #e34948;
+  --chart-other: #8a93a3;
+  --chart-surface: var(--p-content-background, #fff);
+  --chart-grid: var(--p-content-border-color, #e2e8f0);
+  --chart-axis: #94a3b8;
+  --chart-axis-text: var(--p-text-muted-color, #64748b);
+  --chart-hover: rgb(128 128 128 / 0.13);
+  --chart-seq-0: #eef2f7;
+  --chart-seq-1: #cde2fb;
+  --chart-seq-2: #9ec5f4;
+  --chart-seq-3: #6da7ec;
+  --chart-seq-4: #3987e5;
+  --chart-seq-5: #1c5cab;
+  --chart-seq-6: #104281;
+}
+:root.app-dark {
+  --chart-c1: #3987e5;
+  --chart-c2: #d95926;
+  --chart-c3: #199e70;
+  --chart-c4: #c98500;
+  --chart-c5: #d55181;
+  --chart-c6: #008300;
+  --chart-c7: #9085e9;
+  --chart-c8: #e66767;
+  --chart-other: #7b869b;
+  --chart-axis: #6178a3;
+  --chart-seq-0: #18243c;
+  --chart-seq-1: #184f95;
+  --chart-seq-2: #256abf;
+  --chart-seq-3: #3987e5;
+  --chart-seq-4: #6da7ec;
+  --chart-seq-5: #9ec5f4;
+  --chart-seq-6: #cde2fb;
+}
+/* On paper the charts are always the light ones, whatever theme is on screen. */
+@media print {
+  :root,
+  :root.app-dark {
+    --chart-c1: #2a78d6;
+    --chart-c2: #eb6834;
+    --chart-c3: #1baf7a;
+    --chart-c4: #eda100;
+    --chart-c5: #e87ba4;
+    --chart-c6: #008300;
+    --chart-c7: #6250d6;
+    --chart-c8: #e34948;
+    --chart-other: #8a93a3;
+    --chart-surface: #fff;
+    --chart-grid: #e2e8f0;
+    --chart-axis: #94a3b8;
+    --chart-axis-text: #475569;
+    --chart-seq-0: #eef2f7;
+    --chart-seq-1: #cde2fb;
+    --chart-seq-2: #9ec5f4;
+    --chart-seq-3: #6da7ec;
+    --chart-seq-4: #3987e5;
+    --chart-seq-5: #1c5cab;
+    --chart-seq-6: #104281;
+  }
+}

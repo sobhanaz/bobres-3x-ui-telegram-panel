@@ -331,7 +331,9 @@ jobs:
           /tmp/bobres uninstall --dir "$dir" --yes
           test -z "$(docker ps -aq --filter label=com.docker.compose.project=bobres)"
           docker volume ls -q | grep -q '^bobres_pg_data$'
-          /tmp/bobres uninstall --dir "$dir" --purge --yes
+          # The day-one purge changes the system (units, firewall, files), so it runs as root, and a
+          # script says what it means: the domain it would have typed, and no final backup.
+          sudo /tmp/bobres uninstall --dir "$dir" --purge --yes --confirm ci.example.test --no-backup
           test ! -e "$dir"
           ! docker volume ls -q | grep -q '^bobres_'
       - name: Dump logs on failure

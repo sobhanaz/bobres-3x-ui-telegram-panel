@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { localDate, money, moneyCompact, percent } from '../format'
+import { revenueSeries } from '../reportsvisual'
 import {
-  bars,
   currenciesOf,
   defaultCalendar,
   exportParams,
@@ -77,7 +77,7 @@ describe('report dates and numbers', () => {
     expect(validCustom('2026-01-01', '2027-02-05')).toBe(false) // 401
   })
 
-  it('scales each currency alone and keeps empty periods as zero-height bars', () => {
+  it('keeps each currency on its own, empty periods as zeros, and knows when a report has nothing to show', () => {
     const cell = (revenue: number): ReportCell => ({
       revenue, refunds: { count: 0, amount: 0 }, net: revenue, orders: revenue ? 1 : 0, new_orders: 0, renewals: 0, traffic_topups: 0,
       topups: { count: 0, amount: 0 }, rejected: { count: 0, amount: 0 }, gateway_failed: { count: 0, amount: 0 }, cancelled: { count: 0, amount: 0 },
@@ -90,10 +90,10 @@ describe('report dates and numbers', () => {
       buckets: [bucket('2026-10-01', 100, 0), bucket('2026-10-02', 0, 5_000_000), bucket('2026-10-03', 50, 0, true)],
       totals: { new_customers: 0, trials: 0, ...churn0, currencies: { IRT: cell(150), USDT: cell(5_000_000) } },
     } as ReportSummary
-    expect(bars(s, 'IRT').map((b) => b.pct)).toEqual([100, 0, 50])
-    expect(bars(s, 'USDT').map((b) => b.pct)).toEqual([0, 100, 0]) // 5,000,000 micro-USDT never lifts the Toman bars
-    expect(bars(s, 'IRT')[2].partial).toBe(true)
-    expect(bars(s, 'EUR').map((b) => b.pct)).toEqual([0, 0, 0]) // no revenue: a flat chart, not NaN
+    // a currency's series are its own (5,000,000 micro-USDT never lifts the Toman ones), and a currency with none is flat, not NaN
+    expect(revenueSeries(s, 'IRT').revenue).toEqual([100, 0, 50])
+    expect(revenueSeries(s, 'USDT').revenue).toEqual([0, 5_000_000, 0])
+    expect(revenueSeries(s, 'EUR').revenue).toEqual([0, 0, 0])
     expect(hasData(s)).toBe(true)
     expect(hasData({ ...s, currencies: [], totals: { new_customers: 0, trials: 0, ...churn0, currencies: {} } })).toBe(false)
     expect(hasData({ ...s, currencies: [], totals: { new_customers: 2, trials: 0, ...churn0, currencies: {} } })).toBe(true)
@@ -321,6 +321,15 @@ describe('the Reports page', () => {
       return undefined
     }
   const text = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  /** The currency's name as the page writes it (the catalog's, whatever it is). */
+  const currencyOf = (c: string) => (document.querySelector(`.currency-card[data-currency="${c}"] .p-card-subtitle`)?.textContent ?? '').trim()
+  /** The numbers of a chart as its own table, the alternative to the drawing: it opens the table and reads the rows. */
+  const chartTable = async (selector: string) => {
+    const btn = await found<HTMLButtonElement>(`${selector} .table-btn`)
+    if (btn.getAttribute('aria-pressed') !== 'true') btn.click()
+    await vi.waitFor(() => expect(document.querySelector(`${selector} .chart-table`)).not.toBeNull())
+    return [...document.querySelectorAll(`${selector} .chart-table tbody tr`)].map((r) => [...r.children].map(text))
+  }
   // Typing into a field: the text, and the input event a keystroke makes.
   const typeInto = (el: HTMLInputElement, value: string) => {
     el.value = value
@@ -368,18 +377,45 @@ describe('the Reports page', () => {
     expect(churn).toContain('not renewed within 7 days')
     expect(churn).toContain('Customers lost: 2')
     expect(churn).toContain('Ended, still inside the grace period: 3')
-    const headers = [...document.querySelectorAll('.period-table th')].map((h) => text(h))
+    const headers = [...document.querySelectorAll('.period-table thead th')].map((h) => text(h))
     expect(headers.slice(-2)).toEqual(['Services lost', 'At risk'])
     const firstRow = [...document.querySelectorAll('.period-table tbody tr:first-child td')].map((c) => text(c))
     expect(firstRow.slice(-2)).toEqual(['2', '0'])
-    // one chart per currency, a bar per period
-    const charts = [...document.querySelectorAll<HTMLElement>('.chart')]
-    expect(charts.map((c) => c.dataset.currency)).toEqual(['IRT', 'USDT'])
-    expect(charts[0].querySelectorAll('.bar')).toHaveLength(3)
-    const heights = [...charts[0].querySelectorAll<HTMLElement>('.bar')].map((b) => b.style.height)
-    expect(heights).toEqual(['40%', '0%', '100%'])
-    expect(charts[1].querySelector('.plot')?.getAttribute('aria-label')).toBe('USDT (Tether): highest 2.5 USDT, in 16 Oct 2026')
-    expect(charts[0].querySelector('.slot')?.getAttribute('title')).toBe('15 Oct 2026: 100,000 Toman')
+    // the charts of one currency at a time (amounts of two currencies never share an axis), with a switch between them
+    const revenue = () => document.querySelector<HTMLElement>('.revenue-chart')!
+    expect(revenue().dataset.currency).toBe('IRT')
+    const switchLabels = [...document.querySelectorAll('.currency-switch [role="button"], .currency-switch button')].map(text)
+    expect(switchLabels).toHaveLength(2)
+    expect(switchLabels[1]).toBe('USDT (Tether)')
+    expect(revenue().querySelector('.plot')?.getAttribute('aria-label')).toBe(`${switchLabels[0]}: highest 250,000 Toman, in 17 Oct 2026`)
+    // revenue and what was kept after refunds, per period, in the chart's own table
+    expect(await chartTable('.revenue-chart')).toEqual([
+      ['15 Oct 2026', '100,000 Toman', '100,000 Toman'],
+      ['16 Oct 2026', '0 Toman', '0 Toman'],
+      ['17 Oct 2026', '250,000 Toman', '200,000 Toman'],
+    ])
+    expect([...revenue().querySelectorAll('.legend .item')].map(text)).toEqual(['Revenue', 'After refunds'])
+    // the other charts of the currency: order types, how it was paid (a part for each, with its share), top plans
+    expect(await chartTable('.orders-chart')).toEqual([
+      ['15 Oct 2026', '1', '0', '0'],
+      ['16 Oct 2026', '0', '0', '0'],
+      ['17 Oct 2026', '1', '0', '1'],
+    ])
+    const parts = [...document.querySelectorAll('.methods-chart .parts li')].map(text)
+    expect(parts).toHaveLength(2)
+    expect(parts[0]).toContain('Wallet balance')
+    expect(parts[0]).toContain('250,000 Toman')
+    expect(parts[0]).toContain('71%')
+    expect(parts[1]).toContain('Card to card')
+    expect([...document.querySelectorAll('.top-plans-chart .row-label')].map(text)).toEqual(['Basic'])
+    // the plan-by-period chart and the hours need the two newer answers: this core gave neither
+    expect(document.querySelector('.plans-chart')).toBeNull()
+    expect(document.querySelector('.heat-chart')).toBeNull()
+    // and the other currency is one click away
+    ;[...document.querySelectorAll<HTMLElement>('.currency-switch [role="button"], .currency-switch button')][1].click()
+    await vi.waitFor(() => expect(revenue().dataset.currency).toBe('USDT'))
+    expect(revenue().querySelector('.plot')?.getAttribute('aria-label')).toBe('USDT (Tether): highest 2.5 USDT, in 16 Oct 2026')
+    expect((await chartTable('.revenue-chart'))[1]).toEqual(['16 Oct 2026', '2.5 USDT', '2.5 USDT'])
     // by period, top plans and by method
     expect(document.querySelectorAll('.period-table tbody tr')).toHaveLength(3)
     expect(text(document.querySelector('.plans-card [data-currency="IRT"]'))).toContain('Basic')
@@ -550,23 +586,25 @@ describe('the Reports page', () => {
       b!.click()
     }
     // Every place a date is written: the covered days, the chart axes, tooltips and summaries, the table's periods.
+    // (The revenue chart's table is opened once, then read as it follows the calendar.)
     const dates = () => ({
       covers: text(document.querySelector('.covers')),
-      axes: [...document.querySelectorAll('.chart .axis')].map((a) => [...a.querySelectorAll('span')].map(text)),
-      tooltips: [...document.querySelectorAll('.chart[data-currency="IRT"] .slot')].map((e) => e.getAttribute('title')),
-      peak: document.querySelector('.chart[data-currency="USDT"] .plot')?.getAttribute('aria-label'),
-      rows: [...document.querySelectorAll('.period-table tbody tr td:first-child')].map(text),
+      axes: [...document.querySelectorAll('.revenue-chart .x-tick')].map(text),
+      tooltips: [...document.querySelectorAll('.revenue-chart .chart-table tbody tr')].map((r) => `${text(r.children[0])}: ${text(r.children[1])}`),
+      peak: document.querySelector('.revenue-chart .plot')?.getAttribute('aria-label'),
+      rows: [...document.querySelectorAll('.period-table tbody tr th')].map(text),
     })
     const zone = '⁨Asia/Tehran⁩'
 
     it('switches every date of the page to the calendar chosen, and back, in English', async () => {
       const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}))
       await found('.currency-card')
+      await chartTable('.revenue-chart')
       const gregorian = {
         covers: `15 Oct 2026 to 17 Oct 2026 · time zone ${zone}`,
-        axes: [['15 Oct', '17 Oct'], ['15 Oct', '17 Oct']],
+        axes: ['15 Oct', '16 Oct', '17 Oct'],
         tooltips: ['15 Oct 2026: 100,000 Toman', '16 Oct 2026: 0 Toman', '17 Oct 2026: 250,000 Toman'],
-        peak: 'USDT (Tether): highest 2.5 USDT, in 16 Oct 2026',
+        peak: `${currencyOf('IRT')}: highest 250,000 Toman, in 17 Oct 2026`,
         rows: ['15 Oct 2026', '16 Oct 2026', '17 Oct 2026'],
       }
       expect(dates()).toEqual(gregorian)
@@ -577,9 +615,9 @@ describe('the Reports page', () => {
       await vi.waitFor(() => expect(dates().covers).toContain('Mehr 1405'))
       const jalali = {
         covers: `23 Mehr 1405 to 25 Mehr 1405 · time zone ${zone}`,
-        axes: [['23 Mehr', '25 Mehr'], ['23 Mehr', '25 Mehr']],
+        axes: ['23 Mehr', '24 Mehr', '25 Mehr'],
         tooltips: ['23 Mehr 1405: 100,000 Toman', '24 Mehr 1405: 0 Toman', '25 Mehr 1405: 250,000 Toman'],
-        peak: 'USDT (Tether): highest 2.5 USDT, in 24 Mehr 1405',
+        peak: `${currencyOf('IRT')}: highest 250,000 Toman, in 25 Mehr 1405`,
         rows: ['23 Mehr 1405', '24 Mehr 1405', '25 Mehr 1405'],
       }
       expect(dates()).toEqual(jalali)
@@ -599,25 +637,26 @@ describe('the Reports page', () => {
     it('switches every date of the page to the calendar chosen, and back, in Persian (digits stay Persian)', async () => {
       const { fetchMock } = await boot('/admin/reports', ['reports.read'], core({}), 'fa')
       await found('.currency-card')
+      await chartTable('.revenue-chart')
       const jalali = {
         covers: `۲۳ مهر ۱۴۰۵ تا ۲۵ مهر ۱۴۰۵ · منطقهٔ زمانی ${zone}`,
-        axes: [['۲۳ مهر', '۲۵ مهر'], ['۲۳ مهر', '۲۵ مهر']],
+        axes: ['۲۳ مهر', '۲۴ مهر', '۲۵ مهر'],
         tooltips: ['۲۳ مهر ۱۴۰۵: ۱۰۰٬۰۰۰ تومان', '۲۴ مهر ۱۴۰۵: ۰ تومان', '۲۵ مهر ۱۴۰۵: ۲۵۰٬۰۰۰ تومان'],
         rows: ['۲۳ مهر ۱۴۰۵', '۲۴ مهر ۱۴۰۵', '۲۵ مهر ۱۴۰۵'],
       }
       // the peak line names the currency by its own catalog entry; the rest is compared exactly
       const { peak, ...rest } = dates()
       expect(rest).toEqual(jalali)
-      expect(peak).toContain('در ۲۴ مهر ۱۴۰۵')
+      expect(peak).toContain('در ۲۵ مهر ۱۴۰۵')
 
       choose('میلادی')
       await vi.waitFor(() => expect(urls(fetchMock)).toContain('/api/v1/reports/summary?range=last_30_days&group=day'))
       await vi.waitFor(() => expect(dates().covers).toContain('اکتبر'))
       const after = dates()
       expect(after.covers).toBe(`۱۵ اکتبر ۲۰۲۶ تا ۱۷ اکتبر ۲۰۲۶ · منطقهٔ زمانی ${zone}`)
-      expect(after.axes).toEqual([['۱۵ اکتبر', '۱۷ اکتبر'], ['۱۵ اکتبر', '۱۷ اکتبر']])
+      expect(after.axes).toEqual(['۱۵ اکتبر', '۱۶ اکتبر', '۱۷ اکتبر'])
       expect(after.tooltips[0]).toBe('۱۵ اکتبر ۲۰۲۶: ۱۰۰٬۰۰۰ تومان')
-      expect(after.peak).toContain('در ۱۶ اکتبر ۲۰۲۶')
+      expect(after.peak).toContain('در ۱۷ اکتبر ۲۰۲۶')
       expect(after.rows).toEqual(['۱۵ اکتبر ۲۰۲۶', '۱۶ اکتبر ۲۰۲۶', '۱۷ اکتبر ۲۰۲۶'])
       expect(localStorage.getItem('bobres.reports.calendar')).toBe('gregorian')
       // and back: the same days, Jalali again
@@ -643,7 +682,7 @@ describe('the Reports page', () => {
       }
       await boot('/admin/reports', ['reports.read'], core({ summary: answer }))
       await found('.currency-card')
-      const periods = () => [...document.querySelectorAll('.period-table tbody tr td:first-child')].map(text)
+      const periods = () => [...document.querySelectorAll('.period-table tbody tr th')].map(text)
       const group = async (label: string) => {
         document.querySelector<HTMLElement>('.p-select.group')!.click()
         const option = await vi.waitFor(() => {
@@ -659,7 +698,7 @@ describe('the Reports page', () => {
       await vi.waitFor(() => expect(periods()).toEqual(['Week of 11 Mehr 1405', 'Week of 18 Mehr 1405']))
       await group('Month')
       await vi.waitFor(() => expect(periods()).toEqual(['Mehr 1405', 'Aban 1405']))
-      expect(document.querySelector('.chart[data-currency="IRT"] .slot')?.getAttribute('title')).toBe('Mehr 1405: 100,000 Toman')
+      expect((await chartTable('.revenue-chart'))[0].slice(0, 2)).toEqual(['Mehr 1405', '100,000 Toman'])
       choose('Gregorian')
       await vi.waitFor(() => expect(periods()).toEqual(['Month of 1 Oct 2026', 'Month of 1 Nov 2026']))
     })
@@ -915,18 +954,22 @@ describe('the Reports page', () => {
     })
   })
 
-  it('draws a long daily range as a dense chart that shrinks to its card (no gaps between hairline bars)', async () => {
+  it('draws a long daily range as one chart that shrinks to its card, with thinned labels and every day in its table', async () => {
     const long = summary()
     long.buckets = Array.from({ length: 130 }, (_, i) => ({ ...summary().buckets[i % 3], date: new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10) }))
     await boot('/admin/reports', ['reports.read'], core({ summary: () => json(200, long) }))
-    await found('.chart')
-    const plot = document.querySelector('.chart .plot')!
-    expect(plot.querySelectorAll('.slot')).toHaveLength(130)
-    expect(plot.classList.contains('dense')).toBe(true)
-    // a short range keeps its gaps
+    await found('.revenue-chart')
+    const svg = document.querySelector('.revenue-chart svg')!
+    expect(Number(svg.getAttribute('width'))).toBeLessThanOrEqual(640) // never wider than the card
+    const ticks = document.querySelectorAll('.revenue-chart .x-tick').length
+    expect(ticks).toBeGreaterThan(2)
+    expect(ticks).toBeLessThan(20) // the labels are thinned out, not crowded
+    expect(document.querySelectorAll('.revenue-chart svg .series circle').length).toBeLessThan(5) // a dot on every point only for a short range
+    expect(await chartTable('.revenue-chart')).toHaveLength(130)
+    // a short range puts a dot on every point of both lines
     await boot('/admin/reports', ['reports.read'], core({}))
-    await found('.chart')
-    expect(document.querySelector('.chart .plot')?.classList.contains('dense')).toBe(false)
+    await found('.revenue-chart')
+    expect(document.querySelectorAll('.revenue-chart svg .series circle')).toHaveLength(6)
   }, 20_000)
 
   it('tells a report that ran out of time to choose a shorter range, in the language', async () => {

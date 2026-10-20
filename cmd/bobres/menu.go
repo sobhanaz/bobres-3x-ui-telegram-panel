@@ -59,6 +59,7 @@ func menuCmd(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	br := bufio.NewReader(in)
 	m := &menu{in: br, out: out, errOut: errOut, dir: *dir, ops: newOps(br, out, errOut)}
+	m.ops.tty = interactive(in, out)
 	if f, ok := in.(*os.File); ok {
 		m.readHide = hiddenInput(f, out)
 	}
@@ -171,8 +172,39 @@ func (m *menu) items(env map[string]string, installed bool) []menuItem {
 		{label: "Check this server", run: func() { m.doctor([]string{"--dir", m.dir, "--domain", env["BOBRES_DOMAIN"]}) }},
 		{label: "Check everything (server, settings, services, bot, backups, license)", run: func() { m.ops.checkCmd(d) }},
 		{label: "HTTPS certificate", run: func() { m.https(env) }, group: true},
-		{label: "Uninstall", run: func() { m.ops.uninstallCmd(d) }, group: true},
+		{label: "Uninstall", run: m.uninstall, group: true},
 		{label: "About BOBRES (version, license, links)", run: m.about, group: true},
+	}
+}
+
+// uninstall is the Uninstall item: a short menu of its own whose choices are the commands of
+// bobres uninstall. Removing everything runs the command as it is, with the same final-backup
+// question and the same typed confirmation: the menu offers no shortcut around them.
+func (m *menu) uninstall() {
+	fmt.Fprintln(m.out, "Uninstall")
+	for i, label := range []string{
+		"Stop and remove the containers, keep all data (bobres start brings the store back)",
+		"Remove EVERYTHING BOBRES put on this server, data and backups included (asks for the domain, typed in full)",
+		"Show what of BOBRES is left on this server",
+	} {
+		fmt.Fprintf(m.out, "  %s %s\n", m.paint("32", fmt.Sprintf("%2d.", i+1)), label)
+	}
+	fmt.Fprintf(m.out, "  %s Back\n", m.paint("32", " 0."))
+	choice, ok := m.ask("\nChoose an option [0-3]: ")
+	if !ok {
+		return
+	}
+	fmt.Fprintln(m.out)
+	switch choice {
+	case "1":
+		m.ops.uninstallCmd([]string{"--dir", m.dir})
+	case "2":
+		m.ops.uninstallCmd([]string{"--dir", m.dir, "--purge"})
+	case "3":
+		m.ops.uninstallCmd([]string{"--dir", m.dir, "--verify"})
+	case "", "0":
+	default:
+		fmt.Fprintf(m.out, "There is no option %q.\n", choice)
 	}
 }
 

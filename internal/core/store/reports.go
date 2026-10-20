@@ -550,6 +550,88 @@ func (s *Store) TopPlans(ctx context.Context, q ReportQuery, perCurrency int) ([
 	return out, nil
 }
 
+// PlanBucketRow is what one plan sold in one bucket and one currency.
+type PlanBucketRow struct {
+	// Bucket is the bucket's local start date ("2006-01-02"), cut by the
+	// query's Group (a week starts on Monday).
+	Bucket   string
+	PlanID   string
+	Name     map[string]string
+	Currency string
+	Orders   int64
+	Revenue  int64
+}
+
+// PlanSeries lists what each plan sold per bucket and currency, only where
+// something was sold (the caller fills the gaps). It reads the same purchase
+// entries, joined to the same orders and plans, as TopPlans, so a plan's rows
+// add up to its row there.
+func (s *Store) PlanSeries(ctx context.Context, q ReportQuery) ([]PlanBucketRow, error) {
+	args := []any{q.From, q.To, q.TZ, q.Group}
+	var out []PlanBucketRow
+	err := s.readOnly(ctx, ReportTimeout, func(tx pgx.Tx) error {
+		return each(ctx, tx, `
+			SELECT `+bucketOf("e.created_at")+`, o.plan_id::text, p.name_i18n, e.currency, count(*), sum(-e.amount)::bigint
+			FROM core.ledger_entries e
+			JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
+			JOIN core.plans p ON p.id = o.plan_id
+			WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
+			GROUP BY 1, o.plan_id, p.name_i18n, e.currency
+			ORDER BY 1, e.currency, o.plan_id`, args, func(r pgx.Rows) error {
+			var row PlanBucketRow
+			if err := r.Scan(&row.Bucket, &row.PlanID, &row.Name, &row.Currency, &row.Orders, &row.Revenue); err != nil {
+				return err
+			}
+			out = append(out, row)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, reportErr("report plan series", err)
+	}
+	return out, nil
+}
+
+// HourRow is the paid orders of one currency that fell in one hour of the
+// week, in the report's time zone.
+type HourRow struct {
+	// Weekday is the ISO weekday: 1 Monday to 7 Sunday. Hour is 0 to 23.
+	Weekday  int
+	Hour     int
+	Currency string
+	Orders   int64
+	Revenue  int64
+}
+
+// SalesHours counts the range's paid orders and their revenue by weekday and
+// hour of the local day, per currency, only where something was sold. The
+// week and the hour are the clock on the wall in the zone (on the day the
+// clocks change one hour is missing or shown twice, as the wall clock shows it).
+func (s *Store) SalesHours(ctx context.Context, q ReportQuery) ([]HourRow, error) {
+	args := []any{q.From, q.To, q.TZ}
+	var out []HourRow
+	err := s.readOnly(ctx, ReportTimeout, func(tx pgx.Tx) error {
+		return each(ctx, tx, `
+			SELECT extract(isodow FROM e.created_at AT TIME ZONE $3::text)::int, extract(hour FROM e.created_at AT TIME ZONE $3::text)::int,
+				e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
+			FROM core.ledger_entries e
+			WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
+			GROUP BY 1, 2, 3
+			ORDER BY 3, 1, 2`, args, func(r pgx.Rows) error {
+			var h HourRow
+			if err := r.Scan(&h.Weekday, &h.Hour, &h.Currency, &h.Orders, &h.Revenue); err != nil {
+				return err
+			}
+			out = append(out, h)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, reportErr("report hours", err)
+	}
+	return out, nil
+}
+
 // PaidOrderRow is one paid order of the export.
 type PaidOrderRow struct {
 	PaidAt     time.Time

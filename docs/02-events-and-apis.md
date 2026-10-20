@@ -216,6 +216,12 @@ existed.
   only place they can ever be read), `GET /api/v1/gift-codes.csv`, `PUT /api/v1/gift-codes/{id}/enabled` (nothing paid is
   taken back), `GET /api/v1/gift-codes/{id}/redemptions` and `.../redemptions.csv`. Audit actions: `gift_code.create`,
   `gift_code.enable`, `gift_code.disable`, `gift_code.redeem`, `gift_code.lock`, and the CSV exports like the other exports.
+  Sales reports (reports.read: owner and admin; [14-reports.md](14-reports.md)) are `GET`s only: `/api/v1/reports/summary`,
+  `daily-summary`, `plans`, `methods`, the CSV files `summary.csv` and `orders.csv`, and two read-only answers for the
+  dashboard's charts: `/api/v1/reports/plan-series` (revenue and orders per plan per bucket of the summary's own buckets,
+  per currency, the best 20 plans one by one and the rest as one row with an empty `plan_id`) and `/api/v1/reports/hours`
+  (paid orders and revenue by ISO weekday and local hour, per currency). They take the summary's `range` or `from`/`to`,
+  `tz`, and for the first also `group` and `calendar`; they write nothing, add no table and change no event or CSV file.
 
 ## HTTPS manager (P8)
 Core never writes Caddy's files or reaches its admin socket. It asks the `tls-agent` (no network) through two small

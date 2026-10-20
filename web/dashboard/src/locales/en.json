@@ -531,6 +531,24 @@
     },
     "one_customer": "One customer"
   },
+  "charts": {
+    "legend": "Series (select to show or hide)",
+    "table_show": "Show as table",
+    "table_hide": "Show chart",
+    "loading": "Loading the chart",
+    "empty": "Nothing to show for this period.",
+    "keys_hint": "Use the arrow keys to move between points, Home and End to jump to the first and last, Escape to leave.",
+    "total": "Total",
+    "partial": "Only part of this period is inside the range.",
+    "value": "Value",
+    "share": "Share",
+    "less": "Less",
+    "more": "More",
+    "other": "Other",
+    "rotate": "Rotate",
+    "tilt": "Tilt",
+    "reset_view": "Reset view"
+  },
   "reports": {
     "hint": "Sales read from the ledger and the orders, in the store's time zone. Every currency is counted on its own: amounts in different currencies are never added together.",
     "period_label": "Period",
@@ -614,7 +632,17 @@
       },
       "peak": "{currency}: highest {amount}, in {period}",
       "zero": "{currency}: no revenue in this period",
-      "partial": "The range cuts the lighter bars: they hold only part of their period."
+      "partial": "The range cuts the lighter bars and the dashed lines: they hold only part of their period.",
+      "revenue": "Revenue",
+      "net": "After refunds",
+      "plans_title": "Revenue by plan",
+      "orders_title": "Paid orders by type",
+      "people_title": "New customers, free trials and services lost",
+      "type": {
+        "new": "New",
+        "renew": "Renewals",
+        "traffic": "Traffic"
+      }
     },
     "period": {
       "week_of": "Week of {date}",
@@ -629,7 +657,8 @@
       "new_customers": "New customers",
       "trials": "Free trials",
       "churned": "Services lost",
-      "at_risk": "At risk"
+      "at_risk": "At risk",
+      "total": "Total"
     },
     "plans": {
       "title": "Top plans",
@@ -667,6 +696,110 @@
       "on": "Daily summary in Telegram: on. Yesterday's sales go to every owner and admin at {time} ({tz}).",
       "off": "Daily summary in Telegram: off. Turn it on to get yesterday's sales in a message every day.",
       "link": "Daily summary settings"
+    },
+    "view_label": "View",
+    "view": {
+      "analysis": "Charts and tables",
+      "report": "Professional report"
+    },
+    "charts": {
+      "title": "Charts",
+      "currency": "Currency of the charts"
+    },
+    "spark": {
+      "up": "{what}: rising over the period",
+      "down": "{what}: falling over the period",
+      "flat": "{what}: level over the period",
+      "none": "{what}: no change to show"
+    },
+    "heat": {
+      "title": "When customers pay",
+      "day": "Day",
+      "none": "No paid orders to show in this period.",
+      "hint": "Paid orders by weekday and hour of the day, in the store's time zone ({tz}). The darker the cell, the more orders.",
+      "peak": "Busiest time: {day} around {hour}, with {n} paid order | Busiest time: {day} around {hour}, with {n} paid orders"
+    },
+    "pro": {
+      "title": "Sales report",
+      "period": "{from} to {to}",
+      "zone": "Time zone {tz}",
+      "prepared": "prepared on {date}",
+      "print": "Print or save as PDF",
+      "mode_label": "How to draw the charts",
+      "mode": {
+        "3d": "3D",
+        "flat": "Flat"
+      },
+      "prev_period": "the previous {n} day | the previous {n} days",
+      "compared": "Every change is against the {n}-day period right before this one, {from} to {to}.",
+      "compared_loading": "Loading the period before, to compare with.",
+      "compared_failed": "The period before could not be loaded, so changes are not shown.",
+      "compared_none": "There is no earlier period to compare with.",
+      "change": {
+        "up": "{pct} higher than {period}",
+        "up_lots": "more than {pct} higher than {period}",
+        "down": "{pct} lower than {period}",
+        "same": "exactly the same as {period}",
+        "about": "about the same as {period}",
+        "new": "while {period} had none"
+      },
+      "badge": {
+        "same": "the same",
+        "new": "new"
+      },
+      "kpi": {
+        "revenue": "Revenue",
+        "net": "Kept after refunds",
+        "orders": "Paid orders",
+        "aov": "Average order",
+        "new_customers": "New customers",
+        "trials": "Free trials",
+        "churned_services": "Services lost",
+        "churned_customers": "Customers lost"
+      },
+      "count": {
+        "orders": "{n} order | {n} orders",
+        "customers": "{n} customer | {n} customers",
+        "people": "{n} person | {n} people",
+        "services": "{n} service | {n} services",
+        "refunds": "{n} refund | {n} refunds"
+      },
+      "story": {
+        "revenue": "Revenue was {value}, {change}.",
+        "revenue_alone": "Revenue was {value}.",
+        "net": "After refunds you kept {value}, {change}.",
+        "net_alone": "After refunds you kept {value}.",
+        "orders": "Customers paid for {value}, {change}.",
+        "orders_alone": "Customers paid for {value}.",
+        "aov": "The average order was worth {value}, {change}.",
+        "aov_alone": "The average order was worth {value}.",
+        "new_customers": "{value} made a first purchase, {change}.",
+        "new_customers_alone": "{value} made a first purchase.",
+        "trials": "{value} started a free trial, {change}.",
+        "trials_alone": "{value} started a free trial.",
+        "churned_services": "{value} ended without being renewed, {change}.",
+        "churned_services_alone": "{value} ended without being renewed.",
+        "churned_customers": "{value} lost their last service, {change}.",
+        "churned_customers_alone": "{value} lost their last service."
+      },
+      "unit": {
+        "day": "day",
+        "week": "week",
+        "month": "month"
+      },
+      "hl": {
+        "none": "There were no sales in {currency} in this period.",
+        "sales": "Customers paid for {orders} in this period, worth {revenue}.",
+        "best": "The best {unit} was {period}, with {amount}.",
+        "refunds": "Refunds: {what}, worth {refunds}.",
+        "plan": "{plan} sold best: {share} of the revenue.",
+        "method": "Most of the money came in through {method}: {share} of the revenue.",
+        "busiest": "Customers paid most often on {day} around {hour}."
+      },
+      "people": "Customers",
+      "note_money": "Every currency is counted on its own: amounts in different currencies are never added together. Revenue is what customers were charged for paid orders; \"kept after refunds\" takes refunds off it, before any payout to resellers or for invitations.",
+      "note_churn": "Services lost are counted as of now: a service that is renewed after this report leaves the period it was counted in, so a past period's number can shrink later.",
+      "made": "Prepared by {brand} with BOBRES."
     }
   },
   "discount": {
