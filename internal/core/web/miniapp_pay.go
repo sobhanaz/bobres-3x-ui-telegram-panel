@@ -38,6 +38,8 @@ import (
 // transaction id, to POST /payments/{id}/proof, which stores it through the
 // same domain call the bot's proof flow uses: the review list, the staff
 // alert and the admin card work as they do for a proof sent in the bot's chat.
+// A customer who left the screen before sending it (Telegram reloaded the app)
+// finds the payment again in GET /payments/pending.
 // A receipt image is not kept by core, which has no Telegram token: the bot
 // sends it to the customer's own chat and core keeps the file id Telegram
 // gives back, the kind of receipt the bot's flow stores.
@@ -68,6 +70,8 @@ const (
 	// miniReferenceBytes in bytes (payments takes 256, whatever the characters).
 	miniReferenceMax   = 128
 	miniReferenceBytes = 256
+	// miniPendingMax is the most payments GET /payments/pending lists (the newest).
+	miniPendingMax = 10
 )
 
 // miniTxidRe is a transaction hash as the bot takes it: 64 hexadecimal
@@ -220,6 +224,49 @@ func (s *Server) miniBotFail(w http.ResponseWriter, what string, err error) {
 		s.cfg.Log.Warn("mini app: the bot did not do what a payment needed", "what", what, "err", err)
 		writeError(w, http.StatusBadGateway, "bot_unavailable", "Telegram could not be reached; try again in a minute")
 	}
+}
+
+// miniPendingPayments: GET /api/mini/v1/payments/pending, the customer's own
+// manual payments that still wait for their proof, newest first (at most
+// miniPendingMax). A customer who left the payment screen between paying and
+// sending the receipt (Telegram reloaded the app, they closed it) takes the
+// payment up again from here: each comes as the call that started it answered
+// (what to pay and where, the reference, the exact amount; the answer of pay and
+// topup, so the app draws the same screen) with the time it began. Everything
+// comes from the payments service and the store's settings: the customer is the
+// session's, and the request carries nothing. A payment the store would not
+// start again now (its method switched off or its details gone, its order closed)
+// is not listed, nor is one that has its proof in or was settled or rejected.
+func (s *Server) miniPendingPayments(w http.ResponseWriter, r *http.Request) {
+	ctx, c := r.Context(), miniFrom(r.Context())
+	if s.cfg.Payments == nil {
+		writeError(w, http.StatusServiceUnavailable, "unavailable", "payments are not connected")
+		return
+	}
+	out := []map[string]any{}
+	// A receipt goes through the bot: without it nothing here can be sent (as in miniOffered).
+	if s.cfg.MiniAppBot != nil {
+		list, err := s.cfg.Domain.PendingManualPayments(ctx, s.cfg.Payments, c.user.ID, miniPendingMax)
+		if err != nil {
+			s.miniFail(w, "mini app pending payments", err)
+			return
+		}
+		for i := range list {
+			res := &list[i].IntentResult
+			body := miniIntentBody(res)
+			// The same checks as when the payment was started: a method whose details are gone shows nothing to pay.
+			switch err := s.miniPaymentExtras(ctx, c.user, res, miniPrice{}, body); {
+			case errors.Is(err, errMethodOff):
+				continue
+			case err != nil:
+				s.miniFail(w, "mini app pending payments", err)
+				return
+			}
+			body["created_at"] = list[i].CreatedAt.Unix()
+			out = append(out, body)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"payments": out})
 }
 
 // miniProof: POST /api/mini/v1/payments/{id}/proof, the proof of the

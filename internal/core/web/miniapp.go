@@ -112,6 +112,9 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	// customer who has paid by hand must be able to say so, as the bot lets a
 	// payment under way finish. It only ever concerns a payment already started.
 	api.HandleFunc("POST /api/mini/v1/payments/{id}/proof", s.miniSession(true, s.miniProof))
+	// And the customer's own manual payments still waiting for one: the proof of
+	// a payment whose screen was lost is sent from there.
+	api.HandleFunc("GET /api/mini/v1/payments/pending", s.miniSession(true, s.miniPendingPayments))
 
 	api.HandleFunc("GET /api/mini/v1/plans", s.miniSession(false, s.miniPlans))
 	api.HandleFunc("GET /api/mini/v1/services", s.miniSession(false, s.miniServices))

@@ -1,9 +1,16 @@
 package domain
 
 import (
+	"cmp"
 	"context"
+	"errors"
+	"maps"
 	"math"
 	"slices"
+	"strings"
+	"time"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
 
 // The manual payment methods: the customer pays outside the store (to a card,
@@ -95,4 +102,103 @@ func (s *Service) ManualCryptoAmount(ctx context.Context, amount int64, currency
 		return 0, false
 	}
 	return cents * usdtCent, true
+}
+
+// PendingManualPayment is a manual payment of a customer that still waits for
+// its proof (PendingManualPayments): what its screen shows, and when it began.
+type PendingManualPayment struct {
+	// IntentResult is the payment as CreatePaymentIntent answers it: status
+	// "pending", the price, and Details (the card, the addresses or the link the
+	// store has set now, and the payment reference).
+	IntentResult
+	CreatedAt time.Time
+}
+
+// pendingManualFetch is how many of a method's newest pending payments
+// PendingManualPayments looks at: more than a customer has waiting for a proof,
+// and few enough for an order to be read for each.
+const pendingManualFetch = 20
+
+// PendingManualPayments lists the customer's own manual payments that still
+// wait for their proof, newest first and at most limit: what a customer needs to
+// take a payment up again after leaving its screen between paying and sending
+// the receipt (the Mini App reloaded, the chat closed). A payment is listed when
+//
+//   - it is the customer's own, made by a manual method, and still pending: no
+//     proof was sent, and it was not rejected or settled;
+//   - the store still takes that method for its price (ManualMethods: set up, not
+//     switched off, in the license), so there is something to show; and
+//   - its order, if it has one, still waits for payment: a payment for an order
+//     paid another way, cancelled or gone is not one to send a proof for.
+//
+// Everything comes from the payment and from the store's settings. The payments
+// service is asked to filter by customer, status and method, and its answer is
+// checked again.
+func (s *Service) PendingManualPayments(ctx context.Context, pay PaymentsClient, userID string, limit int) ([]PendingManualPayment, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	if _, err := s.activeUser(ctx, nil, userID); err != nil {
+		return nil, err
+	}
+	var recs []PaymentRecord
+	for _, method := range []string{ManualCard, ManualCrypto, ManualZarinpal} {
+		got, _, err := pay.ListPayments(ctx, PaymentFilter{UserID: userID, Status: "pending", Provider: method}, 1, pendingManualFetch)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range got {
+			if r.UserID == userID && r.Provider == method && r.Status == "pending" {
+				recs = append(recs, r)
+			}
+		}
+	}
+	slices.SortFunc(recs, func(a, b PaymentRecord) int {
+		return cmp.Or(b.CreatedAt.Compare(a.CreatedAt), strings.Compare(b.IntentID, a.IntentID))
+	})
+
+	var (
+		out     []PendingManualPayment
+		offered = map[string][]string{}          // ManualMethods, by currency
+		details = map[string]map[string]string{} // paymentDetails, by method
+	)
+	for _, r := range recs {
+		if len(out) == limit {
+			break
+		}
+		methods, ok := offered[r.Currency]
+		if !ok {
+			var err error
+			if methods, err = s.ManualMethods(ctx, r.Currency); err != nil {
+				return nil, err
+			}
+			offered[r.Currency] = methods
+		}
+		if !slices.Contains(methods, r.Provider) {
+			continue
+		}
+		if r.OrderID != "" {
+			o, err := s.st.GetOrder(ctx, s.st.Conn(), r.OrderID)
+			switch {
+			case errors.Is(err, store.ErrNotFound):
+				continue
+			case err != nil:
+				return nil, err
+			case o.UserID != userID || !isPayable(o.Status):
+				continue
+			}
+		}
+		d, ok := details[r.Provider]
+		if !ok {
+			d = s.paymentDetails(ctx, r.Provider)
+			details[r.Provider] = d
+		}
+		shown := maps.Clone(d)
+		shown["reference"] = PaymentReference(r.IntentID)
+		out = append(out, PendingManualPayment{
+			IntentResult: IntentResult{IntentID: r.IntentID, Status: r.Status, OrderID: r.OrderID, Provider: r.Provider, Amount: r.Amount, Currency: r.Currency, Details: shown},
+			CreatedAt:    r.CreatedAt,
+		})
+	}
+	return out, nil
 }

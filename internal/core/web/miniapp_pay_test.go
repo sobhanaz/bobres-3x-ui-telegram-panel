@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -46,13 +48,23 @@ type payModel struct {
 	submitErr error
 	// asked counts the calls by name.
 	asked map[string]int
+	// filters are what ListPayments was asked for, in order; ignoreFilter makes
+	// it answer every payment whatever the filter says (a payments service that
+	// does not filter, which the Mini App must not trust to).
+	filters      []domain.PaymentFilter
+	ignoreFilter bool
 }
 
 type modelIntent struct {
 	domain.GatewayIntent
 	userID, key                       string
 	receipt, reference, network, txid string
+	created                           time.Time
 }
+
+// modelEpoch is when the first payment of a model began: each next one a second
+// later, so that "newest first" is a fixed order.
+const modelEpoch = 1_800_000_000
 
 func (p *payModel) enter(call string) error {
 	if p.asked == nil {
@@ -75,7 +87,7 @@ func (p *payModel) add(userID, key string, g domain.GatewayIntent) *modelIntent 
 	p.seq++
 	g.ID = fmt.Sprintf("0000000a-0000-4000-8000-%012d", p.seq) // a letter, so that capitals are a different spelling
 	g.Status = "pending"
-	in := &modelIntent{GatewayIntent: g, userID: userID, key: key}
+	in := &modelIntent{GatewayIntent: g, userID: userID, key: key, created: time.Unix(modelEpoch+int64(p.seq), 0)}
 	p.byID[g.ID], p.byKey[key] = in, g.ID
 	return in
 }
@@ -195,8 +207,38 @@ func (p *payModel) ListPending(context.Context, int) ([]domain.PendingPayment, e
 func (p *payModel) Review(context.Context, string, string, string, string) (string, error) {
 	return "", errNotUsed
 }
-func (p *payModel) ListPayments(context.Context, domain.PaymentFilter, int, int) ([]domain.PaymentRecord, int64, error) {
-	return nil, 0, errNotUsed
+
+// ListPayments is the payment history as the real service answers it: the
+// payments that match every filter given, newest first, a page of them.
+func (p *payModel) ListPayments(_ context.Context, f domain.PaymentFilter, page, size int) ([]domain.PaymentRecord, int64, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.enter("ListPayments"); err != nil {
+		return nil, 0, err
+	}
+	p.filters = append(p.filters, f)
+	var all []*modelIntent
+	for _, in := range p.byID {
+		if p.ignoreFilter || ((f.UserID == "" || in.userID == f.UserID) && (f.OrderID == "" || in.OrderID == f.OrderID) &&
+			(f.Status == "" || in.Status == f.Status) && (f.Provider == "" || in.Provider == f.Provider) && (f.IntentID == "" || in.ID == f.IntentID)) {
+			all = append(all, in)
+		}
+	}
+	slices.SortFunc(all, func(a, b *modelIntent) int { return cmp.Or(b.created.Compare(a.created), strings.Compare(b.ID, a.ID)) })
+	if size <= 0 || size > 200 {
+		size = 25
+	}
+	if page <= 0 {
+		page = 1
+	}
+	from := min((page-1)*size, len(all))
+	to := min(from+size, len(all))
+	out := make([]domain.PaymentRecord, 0, to-from)
+	for _, in := range all[from:to] {
+		out = append(out, domain.PaymentRecord{IntentID: in.ID, OrderID: in.OrderID, UserID: in.userID, Provider: in.Provider, Status: in.Status,
+			Amount: in.Amount, Currency: in.Currency, GatewayAmount: in.GatewayAmount, GatewayCurrency: in.GatewayCurrency, CreatedAt: in.created})
+	}
+	return out, int64(len(all)), nil
 }
 func (p *payModel) PrecheckStars(context.Context, string, string, int64, string) (*domain.GatewayIntent, error) {
 	return nil, errNotUsed
@@ -213,6 +255,20 @@ func (p *payModel) intent(id string) modelIntent {
 		return *in
 	}
 	return modelIntent{}
+}
+
+// filterCount is how many times ListPayments has been asked, and filtersFrom
+// the filters it was given after the first n of them.
+func (p *payModel) filterCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.filters)
+}
+
+func (p *payModel) filtersFrom(n int) []domain.PaymentFilter {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]domain.PaymentFilter(nil), p.filters[n:]...)
 }
 
 func (p *payModel) setStatus(id, st string) {
