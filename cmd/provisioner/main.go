@@ -58,6 +58,10 @@ func setup(rt *app.Runtime) error {
 		rt.Log.Info("BOBRES_XUI_URL is not applied: it only seeds the first server; edit servers in the dashboard")
 	}
 	rt.Go("panel-health", func(ctx context.Context) error { return srv.RunHealth(ctx, provisionserver.HealthInterval) })
+	// Clients made before BOBRES grouped them get the panel's "bobres_bot" group, once per 3x-ui server.
+	rt.Go("group-backfill", func(ctx context.Context) error {
+		return srv.RunGroupBackfill(ctx, provisionserver.GroupBackfillInterval)
+	})
 
 	// Only core may call the provisioner (the only holder of 3x-ui tokens).
 	gs, err := grpcx.NewServer(rt.Log, grpcauth.Peer{Name: "core", Token: cfg.CoreToken})
