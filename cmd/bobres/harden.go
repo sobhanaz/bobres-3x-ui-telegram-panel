@@ -73,6 +73,9 @@ type hardener struct {
 	// one line); outcome is what the step in progress has settled on.
 	notify  func(kind markKind, label, text string)
 	outcome *stepOutcome
+	// rec is the install receipt the step's changes are written to, so that
+	// `bobres uninstall --purge` can undo exactly them (nil: not recorded).
+	rec *receiptStore
 }
 
 // stepOutcome is how a hardening step ended, in one line.
@@ -106,7 +109,7 @@ func newHardener(in io.Reader, out, errOut io.Writer) *hardener {
 		},
 		readFile: os.ReadFile, writeFile: writeAtomic, remove: os.Remove, exists: exists,
 		lookPath: exec.LookPath, euid: os.Geteuid, memMB: memMB, freeGB: freeDiskGB, getenv: os.Getenv,
-		goos: runtime.GOOS,
+		goos: runtime.GOOS, rec: newReceiptStore(defaultStateDir()),
 	}
 }
 
@@ -275,8 +278,9 @@ func (h *hardener) installed(ctx context.Context, pkg string) bool {
 }
 
 // install installs the packages that are missing (the package lists are
-// refreshed once per run first).
-func (h *hardener) install(ctx context.Context, pkgs ...string) error {
+// refreshed once per run first). group names the step in the install receipt,
+// which records the packages that were new afterwards, dependencies included.
+func (h *hardener) install(ctx context.Context, group string, pkgs ...string) error {
 	var missing []string
 	for _, p := range pkgs {
 		if !h.installed(ctx, p) {
@@ -292,7 +296,72 @@ func (h *hardener) install(ctx context.Context, pkgs ...string) error {
 		}
 		h.aptUpdated = true
 	}
-	return h.do(ctx, "apt-get", append([]string{"install", "-y", "-q"}, missing...)...)
+	var before map[string]bool
+	if h.rec != nil {
+		before = h.packageSet(ctx)
+	}
+	err := h.do(ctx, "apt-get", append([]string{"install", "-y", "-q"}, missing...)...)
+	if h.rec != nil {
+		// A failed install may have put some of the packages in place: they are recorded too.
+		added := append([]string(nil), missing...)
+		if after := h.packageSet(ctx); before != nil && after != nil {
+			for p := range after {
+				if !before[p] {
+					added = append(added, p)
+				}
+			}
+		}
+		h.record(func(r *receipt) {
+			r.setPackages(pkgGroup{Name: group, By: "bobres harden", At: time.Now().UTC().Truncate(time.Second), Requested: missing, Packages: added})
+		})
+	}
+	return err
+}
+
+// packageSet is the installed packages, nil when they cannot be listed reliably (dpkg itself is
+// always among them).
+func (h *hardener) packageSet(ctx context.Context) map[string]bool {
+	out, err := h.query(ctx, "dpkg-query", "-W", "-f=${Package} ${db:Status-Abbrev}\n")
+	if err != nil && out == "" {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && strings.HasPrefix(f[1], "ii") {
+			set[f[0]] = true
+		}
+	}
+	if !set["dpkg"] {
+		return nil
+	}
+	return set
+}
+
+// record updates the install receipt; a failure is only noted, as the hardening does not depend on it.
+func (h *hardener) record(fn func(r *receipt)) {
+	if h.rec == nil {
+		return
+	}
+	if err := h.rec.update(fn); err != nil {
+		fmt.Fprintf(h.out, "  (the install receipt was not updated: %v)\n", err)
+	}
+}
+
+// noteWrite records a file the hardening is about to write: what it holds now, so that the
+// uninstall can put it back.
+func (h *hardener) noteWrite(path string, data []byte) {
+	if h.rec == nil {
+		return
+	}
+	before, err := h.readFile(path)
+	existed := err == nil
+	h.record(func(r *receipt) {
+		if existed && strings.Contains(string(before), hardenMarker) {
+			r.recordUnknownBefore(path, data)
+			return
+		}
+		r.recordFile(path, before, existed, data)
+	})
 }
 
 // fileIs reports whether path holds exactly want.
@@ -675,6 +744,7 @@ func (h *hardener) firewall(ctx context.Context, opt hardenOptions, ssh []int, l
 		status, _ = h.query(ctx, "ufw", "status")
 	}
 	if strings.Contains(status, "Status: active") {
+		h.noteFirewall(true)
 		return h.firewallOn(ctx, opt, status, rules, hosts, xui)
 	}
 
@@ -732,11 +802,12 @@ func (h *hardener) firewall(ctx context.Context, opt hardenOptions, ssh []int, l
 		return nil
 	}
 	if !haveUfw {
-		if err := h.install(ctx, "ufw"); err != nil {
+		if err := h.install(ctx, "ufw", "ufw"); err != nil {
 			return err
 		}
 	}
 	// The allow rules first, then on: the SSH port is open before anything is refused.
+	h.noteFirewall(false)
 	if err := h.allow(ctx, append(rules, hostRules(hosts, sources)...)); err != nil {
 		return err
 	}
@@ -745,6 +816,11 @@ func (h *hardener) firewall(ctx context.Context, opt hardenOptions, ssh []int, l
 			return err
 		}
 	}
+	h.record(func(r *receipt) {
+		if r.Firewall != nil && !r.Firewall.WasActive {
+			r.Firewall.EnabledByBobres = true
+		}
+	})
 	fmt.Fprintln(h.out, "  Firewall on.")
 	h.say(markOK, "on: SSH "+joinInts(ssh)+", HTTP, HTTPS allowed; every other incoming connection refused")
 	return nil
@@ -809,6 +885,10 @@ func (h *hardener) firewallOn(ctx context.Context, opt hardenOptions, status str
 }
 
 func (h *hardener) allow(ctx context.Context, rules []fwRule) error {
+	var existing map[string]string
+	if h.rec != nil {
+		existing = h.existingRules(ctx)
+	}
 	for _, r := range rules {
 		args := []string{"allow", r.spec()}
 		if r.from != "" {
@@ -817,8 +897,43 @@ func (h *hardener) allow(ctx context.Context, rules []fwRule) error {
 		if err := h.do(ctx, "ufw", append(args, "comment", "bobres "+r.what)...); err != nil {
 			return err
 		}
+		// The receipt keeps the rule in ufw's own words. A rule that was there before, with a comment
+		// that is not BOBRES's, is not BOBRES's to delete: ufw only changed its comment.
+		spec := strings.Join(args, " ")
+		comment, was := existing[spec]
+		h.record(func(rc *receipt) {
+			rc.addRule(fwRuleReceipt{Spec: spec, Comment: "bobres " + r.what, Preexisting: was && !strings.HasPrefix(comment, "bobres ")})
+		})
 	}
 	return nil
+}
+
+// existingRules are the rules ufw holds (`ufw show added`), by their words, with their comment.
+func (h *hardener) existingRules(ctx context.Context) map[string]string {
+	out, err := h.query(ctx, "ufw", "show", "added")
+	if err != nil {
+		return nil
+	}
+	rules := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		if m := ufwShowRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			comment := m[2]
+			if comment == "" {
+				comment = m[3]
+			}
+			rules[strings.Join(strings.Fields(m[1]), " ")] = comment
+		}
+	}
+	return rules
+}
+
+// noteFirewall records, the first time the hardening touches ufw, whether it was on already.
+func (h *hardener) noteFirewall(wasActive bool) {
+	h.record(func(r *receipt) {
+		if r.Firewall == nil {
+			r.Firewall = &fwReceipt{WasActive: wasActive}
+		}
+	})
 }
 
 func describeRules(rules []fwRule) string {
@@ -896,10 +1011,11 @@ func (h *hardener) fail2ban(ctx context.Context, opt hardenOptions, ssh []int) e
 	if journal {
 		pkgs = append(pkgs, "python3-systemd") // the journal backend
 	}
-	if err := h.install(ctx, pkgs...); err != nil {
+	if err := h.install(ctx, "fail2ban", pkgs...); err != nil {
 		return err
 	}
 	fmt.Fprintf(h.out, "  > write %s\n", fail2banJail)
+	h.noteWrite(fail2banJail, []byte(jail))
 	if err := h.writeFile(fail2banJail, []byte(jail), 0o644); err != nil {
 		return err
 	}
@@ -954,11 +1070,12 @@ func (h *hardener) securityUpdates(ctx context.Context, opt hardenOptions, distr
 		fmt.Fprintln(h.out, "  Skipped.")
 		return nil
 	}
-	if err := h.install(ctx, "unattended-upgrades"); err != nil {
+	if err := h.install(ctx, "unattended-upgrades", "unattended-upgrades"); err != nil {
 		return err
 	}
 	for _, f := range []struct{ path, data string }{{autoUpgradesConf, autoUpgrades}, {securityOnlyConf, want}} {
 		fmt.Fprintf(h.out, "  > write %s\n", f.path)
+		h.noteWrite(f.path, []byte(f.data))
 		if err := h.writeFile(f.path, []byte(f.data), 0o644); err != nil {
 			return err
 		}
@@ -1038,6 +1155,9 @@ func (h *hardener) swap(ctx context.Context, opt hardenOptions) error {
 			return err
 		}
 	}
+	h.record(func(r *receipt) {
+		r.Swap = &swapReceipt{Path: swapFile, SizeMB: size, FstabLine: swapFile + " none swap sw 0 0", At: time.Now().UTC().Truncate(time.Second)}
+	})
 	fstab, err := h.readFile("/etc/fstab")
 	if err != nil {
 		return fmt.Errorf("the swap file is on, but /etc/fstab could not be read (%w): add  %s none swap sw 0 0  to it, or it is off after a reboot", err, swapFile)
@@ -1057,6 +1177,11 @@ func (h *hardener) swap(ctx context.Context, opt hardenOptions) error {
 	if err := h.writeFile("/etc/fstab", []byte(text+swapFile+" none swap sw 0 0\n"), 0o644); err != nil {
 		return fmt.Errorf("the swap file is on, but /etc/fstab was not updated (%w): it is off after a reboot", err)
 	}
+	h.record(func(r *receipt) {
+		if r.Swap != nil {
+			r.Swap.FstabAdded = true
+		}
+	})
 	fmt.Fprintln(h.out, "  Swap on.")
 	h.say(markOK, fmt.Sprintf("%d GB swap file on (%d MB of RAM)", size/1024, mb))
 	return nil

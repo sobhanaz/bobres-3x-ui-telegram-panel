@@ -168,31 +168,21 @@ func TestUninstall(t *testing.T) {
 	if !strings.Contains(out.String(), "Kept") {
 		t.Fatalf("output: %s", out)
 	}
-	// Purge needs the domain typed in; a wrong answer does nothing.
+	// --purge is covered on the lab host in uninstall_test.go (it never runs without a host).
+	// Flag combinations that make no sense are refused before anything is touched.
 	f = &fakeOps{}
-	o, out, _ = testOps("yes\n", f)
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge"}); code != 1 || len(f.calls) != 0 {
-		t.Fatalf("purge with wrong confirmation: %d %s", code, out)
+	o, _, errOut := testOps("", f)
+	if code := o.uninstallCmd([]string{"--dir", dir, "--remove-docker"}); code != 2 || !strings.Contains(errOut.String(), "only work with --purge") || len(f.calls) != 0 {
+		t.Fatalf("--remove-docker without --purge: %d %s", code, errOut)
 	}
-	o, out, _ = testOps("panel.example.com\n", f)
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge"}); code != 0 {
-		t.Fatalf("purge: %d %s", code, out)
+	if code := o.uninstallCmd([]string{"--dir", dir, "--purge", "--yes"}); code != 2 || !strings.Contains(errOut.String(), "needs --confirm") || len(f.calls) != 0 {
+		t.Fatalf("--purge --yes without --confirm: %d %s", code, errOut)
 	}
-	if args := strings.Join(f.calls[0], " "); !strings.Contains(args, "down --remove-orphans --volumes") {
-		t.Fatalf("purge args: %s", args)
-	}
-	if !strings.Contains(out.String(), "also deletes every backup in "+filepath.Join(dir, "backups")) {
-		t.Fatalf("purge did not warn about the backups: %s", out)
-	}
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Fatal("install directory still exists after --purge")
-	}
-	// --yes skips every prompt.
-	dir = installDir(t)
+	// --yes skips the question of the plain uninstall.
 	f = &fakeOps{}
 	o, _, _ = testOps("", f)
-	if code := o.uninstallCmd([]string{"--dir", dir, "--purge", "--yes"}); code != 0 || len(f.calls) != 2 {
-		t.Fatalf("--yes: %d calls=%v (down, then the project's volumes)", code, f.calls)
+	if code := o.uninstallCmd([]string{"--dir", dir, "--yes"}); code != 0 || len(f.calls) != 1 {
+		t.Fatalf("--yes: %d calls=%v", code, f.calls)
 	}
 }
 
