@@ -108,9 +108,7 @@ func (h *Handler) showPlans(r *req) {
 		return
 	}
 	kb := &tg.Keyboard{}
-	for _, p := range ps {
-		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())), "plan:"+p.GetId()))
-	}
+	h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "plan:" + p.GetId() })
 	kb.Row(r.button("btn.home", "home"))
 	r.show(r.t("plans.title"), kb)
 }
@@ -283,6 +281,10 @@ func (h *Handler) onPay(r *req, rest string) {
 		c = state.Checkout{Type: "new", PlanID: parts[1]}
 	default:
 		h.showPlans(r)
+		return
+	}
+	if c.Type == checkoutBulk { // a bulk purchase is paid by its own screen, never as one order
+		r.show(r.t("error.menu_expired"), (&tg.Keyboard{}).Row(r.button("btn.buy", "buy"), r.button("btn.home", "home")))
 		return
 	}
 	p, err := h.findPlan(r, c.PlanID, false)

@@ -529,6 +529,9 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showHome(r)
 	case "buy":
 		h.showPlans(r)
+	case "nop": // a plan table's header button: nothing to do, the tap is only answered
+	case "bk":
+		h.routeBulk(r, rest)
 	case "plan":
 		h.showPlan(r, rest)
 	case "pay":
@@ -713,6 +716,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onResellerScene(r, st)
 	case sceneResellerApply:
 		h.onResellerApplication(r)
+	case sceneBulkQuantity, sceneBulkName:
+		h.onBulkScene(r, st)
 	default:
 		r.clearState()
 		h.showHome(r)
@@ -736,6 +741,9 @@ const (
 	sceneResellerFind   = "rs_find"
 	sceneResellerRename = "rs_rename"
 	sceneResellerNote   = "rs_note"
+	// A bulk purchase: the number of services typed, and the name they share.
+	sceneBulkQuantity = "bulk_qty"
+	sceneBulkName     = "bulk_name"
 )
 
 // nonce makes each rendered payment menu unique: a double tap on one button

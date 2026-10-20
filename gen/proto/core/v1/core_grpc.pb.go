@@ -50,6 +50,9 @@ const (
 	CoreService_AdminUpsertPlan_FullMethodName           = "/core.v1.CoreService/AdminUpsertPlan"
 	CoreService_AdminSetSetting_FullMethodName           = "/core.v1.CoreService/AdminSetSetting"
 	CoreService_QuoteOrder_FullMethodName                = "/core.v1.CoreService/QuoteOrder"
+	CoreService_QuoteBulkOrder_FullMethodName            = "/core.v1.CoreService/QuoteBulkOrder"
+	CoreService_CreateBulkOrder_FullMethodName           = "/core.v1.CoreService/CreateBulkOrder"
+	CoreService_GetBulkOrder_FullMethodName              = "/core.v1.CoreService/GetBulkOrder"
 	CoreService_GetReferralInfo_FullMethodName           = "/core.v1.CoreService/GetReferralInfo"
 	CoreService_GetTopInviters_FullMethodName            = "/core.v1.CoreService/GetTopInviters"
 	CoreService_AdminUpsertDiscount_FullMethodName       = "/core.v1.CoreService/AdminUpsertDiscount"
@@ -129,6 +132,13 @@ type CoreServiceClient interface {
 	AdminUpsertPlan(ctx context.Context, in *AdminUpsertPlanRequest, opts ...grpc.CallOption) (*Plan, error)
 	AdminSetSetting(ctx context.Context, in *AdminSetSettingRequest, opts ...grpc.CallOption) (*Settings, error)
 	QuoteOrder(ctx context.Context, in *QuoteOrderRequest, opts ...grpc.CallOption) (*Quote, error)
+	// Bulk purchase: N services of one plan paid from the wallet in one
+	// transaction (all or nothing, idempotent by the request key), then
+	// provisioned like any order. GetBulkOrder gives the services of one, with
+	// their links once they are delivered (for the bot's one message).
+	QuoteBulkOrder(ctx context.Context, in *QuoteBulkOrderRequest, opts ...grpc.CallOption) (*BulkQuote, error)
+	CreateBulkOrder(ctx context.Context, in *CreateBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error)
+	GetBulkOrder(ctx context.Context, in *GetBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error)
 	GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error)
 	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
 	// enabled is false while the board is off. NOT_FOUND for an unknown user.
@@ -498,6 +508,36 @@ func (c *coreServiceClient) QuoteOrder(ctx context.Context, in *QuoteOrderReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Quote)
 	err := c.cc.Invoke(ctx, CoreService_QuoteOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) QuoteBulkOrder(ctx context.Context, in *QuoteBulkOrderRequest, opts ...grpc.CallOption) (*BulkQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkQuote)
+	err := c.cc.Invoke(ctx, CoreService_QuoteBulkOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) CreateBulkOrder(ctx context.Context, in *CreateBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkOrder)
+	err := c.cc.Invoke(ctx, CoreService_CreateBulkOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetBulkOrder(ctx context.Context, in *GetBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkOrder)
+	err := c.cc.Invoke(ctx, CoreService_GetBulkOrder_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -878,6 +918,13 @@ type CoreServiceServer interface {
 	AdminUpsertPlan(context.Context, *AdminUpsertPlanRequest) (*Plan, error)
 	AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error)
 	QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error)
+	// Bulk purchase: N services of one plan paid from the wallet in one
+	// transaction (all or nothing, idempotent by the request key), then
+	// provisioned like any order. GetBulkOrder gives the services of one, with
+	// their links once they are delivered (for the bot's one message).
+	QuoteBulkOrder(context.Context, *QuoteBulkOrderRequest) (*BulkQuote, error)
+	CreateBulkOrder(context.Context, *CreateBulkOrderRequest) (*BulkOrder, error)
+	GetBulkOrder(context.Context, *GetBulkOrderRequest) (*BulkOrder, error)
 	GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error)
 	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
 	// enabled is false while the board is off. NOT_FOUND for an unknown user.
@@ -1034,6 +1081,15 @@ func (UnimplementedCoreServiceServer) AdminSetSetting(context.Context, *AdminSet
 }
 func (UnimplementedCoreServiceServer) QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error) {
 	return nil, status.Error(codes.Unimplemented, "method QuoteOrder not implemented")
+}
+func (UnimplementedCoreServiceServer) QuoteBulkOrder(context.Context, *QuoteBulkOrderRequest) (*BulkQuote, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuoteBulkOrder not implemented")
+}
+func (UnimplementedCoreServiceServer) CreateBulkOrder(context.Context, *CreateBulkOrderRequest) (*BulkOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBulkOrder not implemented")
+}
+func (UnimplementedCoreServiceServer) GetBulkOrder(context.Context, *GetBulkOrderRequest) (*BulkOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBulkOrder not implemented")
 }
 func (UnimplementedCoreServiceServer) GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetReferralInfo not implemented")
@@ -1709,6 +1765,60 @@ func _CoreService_QuoteOrder_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).QuoteOrder(ctx, req.(*QuoteOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_QuoteBulkOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteBulkOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).QuoteBulkOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_QuoteBulkOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).QuoteBulkOrder(ctx, req.(*QuoteBulkOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_CreateBulkOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBulkOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CreateBulkOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CreateBulkOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CreateBulkOrder(ctx, req.(*CreateBulkOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetBulkOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBulkOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetBulkOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetBulkOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetBulkOrder(ctx, req.(*GetBulkOrderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2437,6 +2547,18 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QuoteOrder",
 			Handler:    _CoreService_QuoteOrder_Handler,
+		},
+		{
+			MethodName: "QuoteBulkOrder",
+			Handler:    _CoreService_QuoteBulkOrder_Handler,
+		},
+		{
+			MethodName: "CreateBulkOrder",
+			Handler:    _CoreService_CreateBulkOrder_Handler,
+		},
+		{
+			MethodName: "GetBulkOrder",
+			Handler:    _CoreService_GetBulkOrder_Handler,
 		},
 		{
 			MethodName: "GetReferralInfo",

@@ -17,6 +17,10 @@ const (
 	ProvisionFailed         = "subscription.provision_failed.v1"
 	SubscriptionExtended    = "subscription.extended.v1"
 	SubscriptionReminder    = "subscription.reminder.v1"
+	// BulkReady: the services of a bulk purchase are delivered (or are the
+	// provisioning machinery's to retry): the bot sends the customer every
+	// link in one message (BulkReadyEvent).
+	BulkReady = "order.bulk_ready.v1"
 	// Support tickets: ids only (the outbox is kept for ever, bodies are not
 	// put in it); the bot fetches a message with GetTicketMessage.
 	TicketOpened          = "ticket.opened.v1"
@@ -152,6 +156,13 @@ type OrderPaidEvent struct {
 	// usdt_auto, manual_card, ...); empty for wallet, trial and free orders,
 	// and for events published before it was recorded.
 	Provider string `json:"provider,omitempty"`
+	// BulkID, BulkIndex and BulkQuantity are set when the order is one of a
+	// bulk purchase: the bulk it belongs to, its place in it (1 to the
+	// quantity) and how many orders the bulk has. The bot announces such a
+	// purchase to the staff once (with the first order), not once per order.
+	BulkID       string `json:"bulk_id,omitempty"`
+	BulkIndex    int    `json:"bulk_index,omitempty"`
+	BulkQuantity int    `json:"bulk_quantity,omitempty"`
 }
 
 // Reasons on wallet.credited.v1.
@@ -217,6 +228,11 @@ type SubscriptionProvisionedEvent struct {
 	ExpiresAt        int64  `json:"expires_at,omitempty"` // unix seconds, 0 = no expiry
 	TrafficBytes     int64  `json:"traffic_bytes,omitempty"`
 	Label            string `json:"label,omitempty"` // the name a reseller gave the service
+	// BulkID is set when the service belongs to a bulk purchase whose one
+	// message with every link has not been announced yet (BulkReady): the
+	// bot sends nothing for this service on its own. A service that is ready
+	// after that message carries no BulkID and is delivered like any other.
+	BulkID string `json:"bulk_id,omitempty"`
 }
 
 // ProvisionFailedEvent: provisioning keeps failing; an admin should look.
@@ -226,6 +242,32 @@ type ProvisionFailedEvent struct {
 	TelegramID int64  `json:"telegram_id"`
 	Attempts   int    `json:"attempts"`
 	Error      string `json:"error"`
+	// BulkID is set when the order belongs to a bulk purchase: the staff are
+	// told about it as for any order, and the customer is told by the bulk's
+	// own message (BulkReady) instead of one "delayed" note per service.
+	BulkID string `json:"bulk_id,omitempty"`
+}
+
+// BulkReadyEvent: every order of a bulk purchase is delivered or has failed
+// enough times for the provisioning machinery to keep retrying it. The bot
+// asks core for the services (GetBulkOrder) and sends the customer the links
+// of the ones in ReadyOrders in one message (or a few, with a text file when
+// there are many), and says which are still being prepared. Announced once
+// per bulk; a service that becomes ready after it comes as an ordinary
+// SubscriptionProvisionedEvent (so it is never in both).
+type BulkReadyEvent struct {
+	BulkID     string `json:"bulk_id"`
+	UserID     string `json:"user_id"`
+	TelegramID int64  `json:"telegram_id"`
+	PlanID     string `json:"plan_id"`
+	Quantity   int    `json:"quantity"`
+	// ReadyOrders are the orders delivered when the bulk was announced, in
+	// their order in the bulk; Delayed is how many of the others are still
+	// being retried.
+	ReadyOrders []string `json:"ready_orders"`
+	Delayed     int      `json:"delayed"`
+	Amount      int64    `json:"amount"` // what the whole bulk cost
+	Currency    string   `json:"currency"`
 }
 
 // SubscriptionExtendedEvent: a renewal or traffic top-up was applied.

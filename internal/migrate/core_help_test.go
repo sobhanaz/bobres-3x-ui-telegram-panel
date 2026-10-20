@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 00026 on a store from before: the help table appears empty, the checks keep a
+// 00027 on a store from before: the help table appears empty, the checks keep a
 // bad row out (a kind, the shape of the three JSON columns, at most 8 buttons,
 // buttons only on a tutorial, an entry readable in some language), and Down
 // drops the table and forgets that the default content was offered, so that Up
@@ -16,8 +16,8 @@ func TestHelpContentMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 25); err != nil {
-		t.Fatalf("up to 25: %v", err)
+	if err := upTo(ctx, dsn, "core", 26); err != nil {
+		t.Fatalf("up to 26: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -100,7 +100,7 @@ func TestHelpContentMigration(t *testing.T) {
 	}
 
 	// Down drops the table and the marker, and leaves the other settings.
-	if err := downTo(ctx, dsn, "core", 25); err != nil {
+	if err := downTo(ctx, dsn, "core", 26); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var exists bool

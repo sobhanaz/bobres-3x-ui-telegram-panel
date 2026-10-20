@@ -544,6 +544,63 @@ describe('settings page', () => {
     }
   })
 
+  // The plan list's layout and the bulk purchase: one card, Table by default, the
+  // switch on, the most at 20; each saved alone, the number checked where it is typed
+  // (2 to 100), the texts in the language of the page.
+  const planLayout = item('bot.plan_layout', 'enum', { group: 'shop', default: 'table', options: ['table', 'list'] })
+  const bulkOn = item('bulk.enabled', 'bool', { group: 'shop', default: 'true' })
+  const bulkMax = item('bulk.max_quantity', 'int', { group: 'shop', default: '20', min: 2, max: 100 })
+  const shopItems = [...start, planLayout, bulkOn, bulkMax]
+  const shopGroups = [...groups, 'shop']
+  const shopSaved = (values: Record<string, string>) =>
+    json(200, { items: shopItems.map((i) => (i.key in values ? { ...i, value: values[i.key] } : i)), groups: shopGroups } satisfies SettingsReply)
+
+  it('has the plan layout and bulk purchase in a card of their own', async () => {
+    const puts = await open(shopSaved, { items: shopItems, groups: shopGroups, cards: 6 })
+    expect(card('bot.plan_layout')).toBe(card('bulk.enabled'))
+    expect(card('bulk.enabled')).toBe(card('bulk.max_quantity'))
+    expect(card('bot.plan_layout')).not.toBe(card('notify.sales'))
+    expect(card('bot.plan_layout').querySelector('.card-title')?.textContent).toBe(text('settings.group.shop.title'))
+    for (const key of ['bot.plan_layout', 'bulk.enabled', 'bulk.max_quantity']) {
+      const field = (document.getElementById('setting-' + key.replace(/[^A-Za-z0-9]/g, '-')) as HTMLElement).closest('.field') as HTMLElement
+      expect(field.querySelector('.label')?.textContent?.trim(), key).toBe(text(`settings.field.${key}.label`))
+      expect(field.querySelector('.help')?.textContent, key).toBe(text(`settings.field.${key}.help`))
+    }
+    // what the store has now: the table, the switch on, 20
+    expect(card('bot.plan_layout').querySelector('.p-select-label')?.textContent).toBe(text('settings.option.bot.plan_layout.table'))
+    expect(input('bulk.enabled').checked).toBe(true)
+    expect(input('bulk.max_quantity').value).toBe('20')
+    expect(input('bulk.max_quantity').dir).toBe('ltr')
+    expect(saveButton('bulk.max_quantity').disabled).toBe(true)
+
+    // a number out of range is refused where it is typed, and nothing is sent
+    for (const bad of ['1', '101', 'many']) {
+      type('bulk.max_quantity', bad)
+      await vi.waitFor(() => expect(saveButton('bulk.max_quantity').disabled).toBe(false))
+      saveButton('bulk.max_quantity').click()
+      await vi.waitFor(() => expect(input('bulk.max_quantity').closest('.field')?.querySelector('[role=alert]')).not.toBeNull())
+      expect(puts, bad).toEqual([])
+    }
+
+    // the layout, the switch and the limit together: only what changed, the number in ASCII digits
+    type('bulk.max_quantity', '۵۰')
+    input('bulk.enabled').click()
+    card('bot.plan_layout').querySelector<HTMLElement>('.p-select')!.click()
+    const list = await vi.waitFor(() => {
+      const el = [...document.querySelectorAll('.p-select-option')].find((o) => o.textContent?.includes(String(text('settings.option.bot.plan_layout.list')))) as HTMLElement | undefined
+      expect(el).toBeDefined()
+      return el!
+    })
+    list.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) // PrimeVue picks on mousedown
+    await vi.waitFor(() => expect(saveButton('bot.plan_layout').disabled).toBe(false))
+    saveButton('bot.plan_layout').click()
+    await vi.waitFor(() => expect(puts).toEqual([{ 'bot.plan_layout': 'list', 'bulk.enabled': 'false', 'bulk.max_quantity': '50' }]))
+    await vi.waitFor(() => expect(saveButton('bot.plan_layout').disabled).toBe(true))
+    expect(input('bulk.enabled').checked).toBe(false)
+    expect(input('bulk.max_quantity').value).toBe('50')
+    expect(card('bot.plan_layout').querySelector('.p-select-label')?.textContent).toBe(text('settings.option.bot.plan_layout.list'))
+  })
+
   it('brings the entry a link names into view', async () => {
     const scrolled = vi.fn()
     const proto = Element.prototype as { scrollIntoView?: unknown }

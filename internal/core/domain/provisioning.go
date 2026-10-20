@@ -94,7 +94,16 @@ func (s *Service) NewProvisionWorker(prov Provisioner, log *slog.Logger) *Provis
 	}
 }
 
+// SettleBulks announces the bulk purchases whose services have come to a
+// rest (SettleBulks of the service, with this worker's alert threshold: an
+// order that failed that many attempts counts as delayed, not as on its way).
+func (w *ProvisionWorker) SettleBulks(ctx context.Context) (int, error) {
+	return w.svc.SettleBulks(ctx, w.AlertAfter)
+}
+
 // Run provisions until ctx is done. Errors are logged; they never stop the loop.
+// After each step it also looks for a bulk purchase whose services are all
+// done, whose one message with every link is then announced.
 func (w *ProvisionWorker) Run(ctx context.Context) error {
 	for {
 		worked, err := w.ProvisionNext(ctx)
@@ -103,6 +112,9 @@ func (w *ProvisionWorker) Run(ctx context.Context) error {
 		}
 		if err != nil {
 			w.log.Warn("provisioning step failed", "err", err)
+		}
+		if _, err := w.SettleBulks(ctx); err != nil && ctx.Err() == nil {
+			w.log.Warn("announcing bulk purchases failed", "err", err)
 		}
 		if worked {
 			continue // there may be more
@@ -239,9 +251,16 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 			return fmt.Errorf("order %s changed state while provisioning", job.order.ID)
 		}
 		w.log.Info("provisioned", "order_id", job.order.ID, "subscription_id", job.sub.ID)
+		// A service of a bulk purchase whose one message is still to come is
+		// not announced on its own: the bulk's message carries its link.
+		bulkID, err := w.svc.bulkIDForEvent(ctx, tx, job.order)
+		if err != nil {
+			return err
+		}
 		return w.svc.publish(ctx, tx, events.SubscriptionProvisioned, events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic, Label: derefStr(job.sub.Label),
+			BulkID: bulkID,
 		})
 	})
 }
@@ -307,7 +326,7 @@ func (w *ProvisionWorker) fail(ctx context.Context, job *provisionJob, cause err
 		}
 		return w.svc.publish(ctx, tx, events.ProvisionFailed, events.ProvisionFailedEvent{
 			OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
-			Attempts: attempts, Error: reason,
+			Attempts: attempts, Error: reason, BulkID: derefStr(job.order.BulkID),
 		})
 	})
 }

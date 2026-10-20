@@ -121,6 +121,15 @@ var contexts = map[string]Context{
 	"rs.label_removed":       CtxToast,
 	"wallet.debt":            CtxButtonHTML,
 
+	// The two buttons of the plan table's header, and the bulk purchase's
+	// popups and the caption of the file with every link.
+	"plans.head_name":    CtxButton,
+	"plans.head_price":   CtxButton,
+	"bulk.price_changed": CtxToastHTML,
+	"bulk.unavailable":   CtxToastHTML,
+	"bulk.bad_quantity":  CtxToastHTML, // a popup, or the answer to a number that will not do
+	"bulk.file_caption":  CtxPlain,
+
 	// A reseller's management of their services: the popups, and the words
 	// used on buttons and inside lines.
 	"rs.deleted_done":      CtxToast,
@@ -177,6 +186,8 @@ var contexts = map[string]Context{
 // navigation, lists to choose from, links to read.
 var buttonStyles = map[string]string{
 	"btn.buy":               "success",
+	"btn.bulk":              "success",
+	"btn.bulk_pay":          "success",
 	"btn.trial":             "success",
 	"btn.pay_wallet":        "success",
 	"btn.pay_credit":        "success",
@@ -267,6 +278,7 @@ var markupArgs = map[string][]string{
 	"ref.top_screen":       {"entries", "range"}, // rendered texts: the places, and the ranks of a page
 	"ref.top_entry":        {"you"},              // a rendered text
 	"ref.promo":            {"link"},             // the invite link as a text link (<a>)
+	"bulk.checkout":        {"names"},
 	"alert.critical":       {"title"},
 	"alert.warning":        {"title"},
 	"alert.repeat":         {"title"},

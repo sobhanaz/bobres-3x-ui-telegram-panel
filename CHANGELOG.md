@@ -6,6 +6,30 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
+Three more of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
+plans as a **two-column table**, and a customer can **buy several services at once** (Bulk purchase).
+
+### Updating
+- Bulk purchase adds one database migration (00026: the table `core.bulk_orders` and two columns on `core.orders`);
+  `sudo bobres update` runs both migrations. It only adds, so a rollback keeps every order. Nothing to configure.
+- Core and the bot move together (three new gRPC calls, one new event, and a `bulk_id` on three events):
+  update both, as `sudo bobres update` does. Every change to the contract is additive.
+- After the update the bot lists plans as a table (a header row, then each plan as a row of two buttons, its name and
+  its price). `bot.plan_layout` = `list` in Settings > Plans and bulk purchase brings back one button per plan.
+- A new green Bulk purchase button appears on every customer's home menu. `bulk.enabled` = off hides it.
+- Help content adds one more database migration (00027, the `help_entries` table), and the services' calls only gain
+  `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings` (additive: an older bot shows no help buttons, a bot
+  on an older core simply has none to show). Nothing has to be configured.
+
+### Known limits
+- Nothing of this has been seen in a real Telegram: the table's look on phones, the one message with many links, the
+  text file that comes with a long list and the Persian texts (a first draft) want a real look.
+- A bulk purchase is paid **from the wallet only** (a customer with too little in it is taken to the top-up and comes
+  back), takes **no discount code**, buys **a paid plan only** (not a free plan, a trial or a traffic package) and is in
+  the **bot only**: the Mini App has no screen for it.
+- The help screens (the FAQ and the tutorials) have not been seen in a real Telegram either, and the default texts and
+  the Persian of the help content are a first draft that wants a native review. The Mini App does not show them.
+
 ### Help content: a FAQ and tutorials the owner writes
 - **The bot has a FAQ and a Tutorials menu, written by the owner in the dashboard** (Branding, "Help content" tab,
   `branding.write`, in Persian and English). A FAQ button is the first button of the Support screen (and stays beside
@@ -19,11 +43,37 @@ All notable changes to BOBRES are written here. The format follows
 - A new install is offered a generic FAQ and tutorials (the subscription link, then v2rayNG, Hiddify, Streisand,
   V2Box and HAPP) once, to edit or delete; they do not come back when deleted. An empty list can be given them again.
 
-### Updating
-- `sudo bobres update` does it (core and the bot move together). One database migration (00026) adds the
-  `help_entries` table; the services' calls only gain `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings`
-  (additive: an older bot shows no help buttons, a bot on an older core simply has none to show). Nothing has to be
-  configured.
+### Bulk purchase
+- **New: Bulk purchase on the home menu.** The customer picks a plan, how many services (2, 3, 5 or 10 by a button, or
+  any number typed, up to `bulk.max_quantity`, 20 by default and at most 100), may give them a name (`Name 1`,
+  `Name 2`, ... as the services are labelled) and sees the unit price, the total and the wallet beside it before
+  paying.
+- **All or nothing.** A bulk purchase is N ordinary orders, each with its own wallet debit, made in **one database
+  transaction**: either every service is paid for or the wallet is untouched. A new table, `core.bulk_orders`, holds
+  the purchase with its **request key** (unique), so a retry, a double tap or a second open checkout returns the first
+  result and never charges twice; two taps at the same instant make one purchase. The price is checked against the one
+  the customer saw (a changed price asks again), a reseller's balance may use their credit limit for the whole total, and
+  the license's limit is checked for all N services at once (a store that fits 3 more services refuses 5 with the
+  usual "new purchases are paused", never half).
+- **One message for the whole purchase.** The provisioner works on the services as it does for any order; when all
+  are ready, or the last ones have failed three times and are retried in the background, the customer gets one message
+  with every link (split in a few, with a text file of `name<TAB>link` lines, when it would not fit) and a line for each
+  service still being prepared; a service that is ready later is sent on its own, as for any order. A failed service
+  uses the ordinary `provision_failed` path: staff are alerted and can retry or refund, and no paid order is lost.
+- **The rest is ordinary.** Commissions, the referral reward, revenue, the daily summary and the reports see N orders
+  (each with its own purchase entry); staff get one sale alert per bulk, not N. The audit log has one `order.bulk` entry.
+  A banned customer, maintenance mode and the required channel stop it as they stop any purchase.
+- New settings (Settings > Plans and bulk purchase): `bulk.enabled` (on) and `bulk.max_quantity` (20).
+- New gRPC calls (additive): `QuoteBulkOrder`, `CreateBulkOrder`, `GetBulkOrder`. New event `order.bulk_ready.v1`; a
+  `bulk_id` (and, on `order.paid.v1`, `bulk_index` and `bulk_quantity`) on three events. See
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) and [docs/03-bot-ux.md](docs/03-bot-ux.md).
+
+### Two-column plan list
+- **The plan lists of the bot are a table**: a header row, then each plan as a row of two buttons, its name and its
+  price, both opening the plan. It is the same in Buy, a reseller's Buy for a customer, and the renewal and traffic
+  package pickers. A long name is cut with an ellipsis, and a store with so many plans that a table would not fit
+  Telegram's limits (100 buttons, 8 to a row) falls back to one button per plan. `bot.plan_layout` = `list` is the old
+  look.
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 

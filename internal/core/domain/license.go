@@ -584,6 +584,14 @@ func (s *Service) requireReseller(ctx context.Context, g *slotGate, u *store.Use
 // notes a refusal for the staff alert after the transaction has ended
 // (noteRefusedPurchase): a write inside it would be rolled back.
 func (s *Service) requireServiceSlot(ctx context.Context, tx pgx.Tx, g *slotGate, idempotencyKey string) error {
+	return s.requireServiceSlots(ctx, tx, g, idempotencyKey, 1)
+}
+
+// requireServiceSlots is requireServiceSlot for several new services at once
+// (a bulk purchase): all of them must fit, or none is let through, so a
+// purchase of five at twenty-three of twenty-five is refused whole. The
+// idempotency key is that of the first order the request makes.
+func (s *Service) requireServiceSlots(ctx context.Context, tx pgx.Tx, g *slotGate, idempotencyKey string, want int) error {
 	limit := g.eff.Entitlements.MaxActiveServices
 	if limit == license.Unlimited {
 		return nil
@@ -602,10 +610,35 @@ func (s *Service) requireServiceSlot(ctx context.Context, tx pgx.Tx, g *slotGate
 	if err != nil {
 		return err
 	}
-	if license.WithinLimit(limit, n) {
+	if license.WithinLimit(limit, n+max(want, 1)-1) { // n + want <= limit
 		return nil
 	}
-	return g.eff.refuse(GateActiveServices, "allows "+plural(max(limit, 0), "active service"))
+	return g.refuseServices()
+}
+
+// refuseServices is the refusal of a new service the active-services limit
+// has no place for.
+func (g *slotGate) refuseServices() error {
+	return g.eff.refuse(GateActiveServices, "allows "+plural(max(g.eff.Entitlements.MaxActiveServices, 0), "active service"))
+}
+
+// servicesFit says whether want more services fit the active-services limit
+// as the services stand now, without locking anything: an early answer
+// (the quote of a bulk purchase) that the transaction which makes the orders
+// checks again under its lock (requireServiceSlots).
+func (s *Service) servicesFit(ctx context.Context, g *slotGate, want int) error {
+	limit := g.eff.Entitlements.MaxActiveServices
+	if limit == license.Unlimited {
+		return nil
+	}
+	n, err := s.st.CountActiveServices(ctx, s.st.Conn())
+	if err != nil {
+		return err
+	}
+	if license.WithinLimit(limit, n+max(want, 1)-1) {
+		return nil
+	}
+	return g.refuseServices()
 }
 
 // noteRefusedPurchase records a purchase refused for the active-services

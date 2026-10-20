@@ -852,6 +852,7 @@
       "topup": "Extra traffic",
       "admin": "Admin panel",
       "rs": "Reseller panel",
+      "bulk": "Bulk purchase",
       "profile": "Bot profile",
       "help": "Help screens"
     },
@@ -1027,6 +1028,12 @@
       "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59)."
     },
     "option": {
+      "bot": {
+        "plan_layout": {
+          "table": "Table",
+          "list": "List"
+        }
+      },
       "notify": {
         "recipients": {
           "owner": "Only the store owner",
@@ -1038,6 +1045,10 @@
       "general": {
         "title": "General",
         "desc": "The time zone the bot shows dates in, and the bot’s own Telegram profile."
+      },
+      "shop": {
+        "title": "Plans and bulk purchase",
+        "desc": "How the bot lists plans, and buying several services at once."
       },
       "maintenance": {
         "title": "Maintenance mode",
@@ -1083,6 +1094,22 @@
         "bot_profile": {
           "label": "Keep the bot’s Telegram profile up to date",
           "help": "The bot sets its menu commands, its description (the text of an empty chat) and its short description (its profile page), in Persian and English, from its texts: edit them under Branding & texts → Bot texts → Bot profile. It also sets its profile photo from Branding & texts → Store → Telegram bot. Turned off, it takes back its Persian and English texts and the staff menus, so what you set in {'@'}BotFather shows; the photo stays. The bot’s name is always set in {'@'}BotFather."
+        }
+      },
+      "bot": {
+        "plan_layout": {
+          "label": "Plan list layout",
+          "help": "How the bot lists plans when a customer buys or renews. A table puts each plan on a row of two buttons, its name and its price, under a header row. A list has one button per plan, with the name and the price together."
+        }
+      },
+      "bulk": {
+        "enabled": {
+          "label": "Bulk purchase",
+          "help": "A Bulk purchase button on the bot’s home menu: a customer buys several services of one plan at once and pays for all of them from the wallet. Turned off, the button is gone and core refuses the purchase too."
+        },
+        "max_quantity": {
+          "label": "Most services in a bulk purchase",
+          "help": "The most services one bulk purchase may hold, from 2 to 100. Each service is an ordinary order; the whole purchase is made, or refused, together."
         }
       },
       "maintenance": {
@@ -1342,6 +1369,7 @@
       "broadcast": "Broadcast",
       "reseller": "Reseller",
       "reseller_tier": "Reseller tier",
+      "bulk_order": "Bulk purchase",
       "server": "Panel server",
       "gateway": "Payment gateway",
       "license": "License",
@@ -1400,7 +1428,8 @@
       },
       "order": {
         "retry": "Order retried",
-        "refund": "Order refunded"
+        "refund": "Order refunded",
+        "bulk": "Bulk purchase made"
       },
       "dashboard": {
         "login": "Logged in",
