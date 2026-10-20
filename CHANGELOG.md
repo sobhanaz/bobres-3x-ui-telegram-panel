@@ -155,6 +155,34 @@ join (one on the free tier and Standard, any number on Pro).
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 
+### Reports: charts, a scrolling table and a professional report
+- **Charts on the Reports page**, one currency at a time: revenue and what was kept after refunds, **revenue by plan**
+  over the periods, paid orders by type, how orders were paid (a donut), the top plans, **the busiest hours of the
+  week** (a heatmap) and new customers, free trials and services lost. Every chart follows the range, the grouping and
+  the Calendar switch (Jalali or Gregorian), has a legend that shows and hides series, a tooltip, keyboard keys
+  (the arrow that points right goes right on screen, which is earlier in Persian) and a table of its numbers, and works
+  in light, dark and right to left. The cards carry a small trend line.
+- **The "by period" table scrolls inside its own box** (down and sideways) with its header row, its period column and
+  a new totals row held in place, so a long range or a phone no longer makes the page long or wide.
+- **A Professional report view** (`?view=report`) to read, print or save as PDF: a letterhead, a headline per currency
+  in plain words (Persian and English), each headline number with its **change on the period before** and a sentence
+  about it (rises in lost services are shown as bad news), the charts, and two **3D views**: an isometric column scene
+  of revenue by plan and a tilting donut of how orders were paid. They are SVG (no WebGL, no library), load on demand
+  in their own small chunks, turn with a drag or two sliders, and give way to the flat charts on a phone, when the
+  person prefers reduced motion and for more than 62 periods. The print button uses a paper stylesheet (A4, light
+  colours, no menus).
+- **A chart kit** under `web/dashboard/src/components/charts/` (line and area, bars, donut, heatmap, sparkline, with
+  accessibility, right to left, themes and a README) for the dashboard's other pages; the System > Monitoring page is
+  meant to use it.
+- Two new read-only API calls feed the new charts, **no migration and no new table**: `GET /api/v1/reports/plan-series`
+  and `GET /api/v1/reports/hours` (`reports.read`, documented in [docs/14-reports.md](docs/14-reports.md) and
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md)). The CSV files, the daily summary and every existing answer
+  are unchanged. An older core without the two calls still works: the page leaves those two charts out.
+- Core and the dashboard are one binary, so there is nothing to update separately and nothing to configure.
+- Not seen in a real Telegram (nothing here is in Telegram). Checked in a real browser at 375 px and on a desktop in both
+  languages and both themes against a stand-in for the report API, and in the tests; the 3D views and the print layout
+  were looked at in Chrome only.
+
 ## [0.7.0] — 2026-10-20
 
 The owner's next batch of 2026-10-20, sent with twelve screenshots of another store's bot: **the dashboard can now
