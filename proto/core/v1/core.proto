@@ -336,6 +336,76 @@ message Quote {
   string discount_code = 4; // normalized (upper case)
 }
 
+// QuoteBulkOrderRequest prices a bulk purchase before it is made; it fails as
+// CreateBulkOrder would for what can be known beforehand.
+message QuoteBulkOrderRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  int32 quantity = 3;
+}
+
+message BulkQuote {
+  int32 quantity = 1;
+  common.v1.Money unit_price = 2; // what this user pays for one service
+  common.v1.Money total = 3; // unit_price x quantity
+  int32 max_quantity = 4; // the most the store allows in one purchase now
+}
+
+// CreateBulkOrderRequest buys quantity services of one plan and pays for them
+// all from the wallet, all or nothing (docs/03-bot-ux.md, "Bulk purchase").
+message CreateBulkOrderRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  int32 quantity = 3;
+  // Required: a repeat of the request (a double tap, a retry) returns the
+  // first result and charges nothing more.
+  string idempotency_key = 4;
+  // Names the services "<prefix> 1" .. "<prefix> N" (optional, one line, at
+  // most 64 characters with the number).
+  string label_prefix = 5;
+  // The total the buyer was shown (optional): the purchase is refused
+  // (FAILED_PRECONDITION "price changed") when it comes to anything else.
+  common.v1.Money expected_total = 6;
+}
+
+message GetBulkOrderRequest {
+  string bulk_id = 1;
+  string user_id = 2; // when set, must be the buyer (NOT_FOUND otherwise)
+}
+
+// BulkOrder is a bulk purchase: its orders are ordinary orders, one per
+// service, in the order they were made.
+message BulkOrder {
+  string id = 1;
+  string user_id = 2;
+  string plan_id = 3;
+  int32 quantity = 4;
+  common.v1.Money unit_price = 5;
+  common.v1.Money total = 6;
+  string label_prefix = 7;
+  int64 created_at = 8;
+  // When core announced the one message with every link (0: not yet).
+  int64 delivered_at = 9;
+  map<string, string> plan_name_i18n = 10;
+  repeated BulkService services = 11;
+  // CreateBulkOrder: the request had been made before, nothing was charged
+  // again.
+  bool replayed = 12;
+}
+
+// BulkService is one order of a bulk purchase and the service made for it.
+message BulkService {
+  int32 index = 1; // 1 to quantity
+  string order_id = 2;
+  string order_status = 3; // paid | provisioning | provision_failed | active | cancelled
+  string subscription_id = 4; // "" until the service exists
+  string status = 5; // the service's status, "" until it exists
+  string label = 6;
+  string subscription_link = 7; // "" until delivered
+  int64 expires_at = 8;
+  int64 traffic_total_bytes = 9;
+}
+
 message GetReferralInfoRequest {
   string user_id = 1;
 }
@@ -808,6 +878,13 @@ service CoreService {
   rpc AdminUpsertPlan(AdminUpsertPlanRequest) returns (Plan);
   rpc AdminSetSetting(AdminSetSettingRequest) returns (Settings);
   rpc QuoteOrder(QuoteOrderRequest) returns (Quote);
+  // Bulk purchase: N services of one plan paid from the wallet in one
+  // transaction (all or nothing, idempotent by the request key), then
+  // provisioned like any order. GetBulkOrder gives the services of one, with
+  // their links once they are delivered (for the bot's one message).
+  rpc QuoteBulkOrder(QuoteBulkOrderRequest) returns (BulkQuote);
+  rpc CreateBulkOrder(CreateBulkOrderRequest) returns (BulkOrder);
+  rpc GetBulkOrder(GetBulkOrderRequest) returns (BulkOrder);
   rpc GetReferralInfo(GetReferralInfoRequest) returns (ReferralInfo);
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);

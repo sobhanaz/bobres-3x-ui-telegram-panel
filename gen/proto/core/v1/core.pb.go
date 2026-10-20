@@ -2847,6 +2847,526 @@ func (x *Quote) GetDiscountCode() string {
 	return ""
 }
 
+// QuoteBulkOrderRequest prices a bulk purchase before it is made; it fails as
+// CreateBulkOrder would for what can be known beforehand.
+type QuoteBulkOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PlanId        string                 `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	Quantity      int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QuoteBulkOrderRequest) Reset() {
+	*x = QuoteBulkOrderRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuoteBulkOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuoteBulkOrderRequest) ProtoMessage() {}
+
+func (x *QuoteBulkOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuoteBulkOrderRequest.ProtoReflect.Descriptor instead.
+func (*QuoteBulkOrderRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *QuoteBulkOrderRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *QuoteBulkOrderRequest) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *QuoteBulkOrderRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+type BulkQuote struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Quantity      int32                  `protobuf:"varint,1,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	UnitPrice     *v1.Money              `protobuf:"bytes,2,opt,name=unit_price,json=unitPrice,proto3" json:"unit_price,omitempty"`        // what this user pays for one service
+	Total         *v1.Money              `protobuf:"bytes,3,opt,name=total,proto3" json:"total,omitempty"`                                 // unit_price x quantity
+	MaxQuantity   int32                  `protobuf:"varint,4,opt,name=max_quantity,json=maxQuantity,proto3" json:"max_quantity,omitempty"` // the most the store allows in one purchase now
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BulkQuote) Reset() {
+	*x = BulkQuote{}
+	mi := &file_core_v1_core_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkQuote) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkQuote) ProtoMessage() {}
+
+func (x *BulkQuote) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkQuote.ProtoReflect.Descriptor instead.
+func (*BulkQuote) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *BulkQuote) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *BulkQuote) GetUnitPrice() *v1.Money {
+	if x != nil {
+		return x.UnitPrice
+	}
+	return nil
+}
+
+func (x *BulkQuote) GetTotal() *v1.Money {
+	if x != nil {
+		return x.Total
+	}
+	return nil
+}
+
+func (x *BulkQuote) GetMaxQuantity() int32 {
+	if x != nil {
+		return x.MaxQuantity
+	}
+	return 0
+}
+
+// CreateBulkOrderRequest buys quantity services of one plan and pays for them
+// all from the wallet, all or nothing (docs/03-bot-ux.md, "Bulk purchase").
+type CreateBulkOrderRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	UserId   string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PlanId   string                 `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	Quantity int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	// Required: a repeat of the request (a double tap, a retry) returns the
+	// first result and charges nothing more.
+	IdempotencyKey string `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	// Names the services "<prefix> 1" .. "<prefix> N" (optional, one line, at
+	// most 64 characters with the number).
+	LabelPrefix string `protobuf:"bytes,5,opt,name=label_prefix,json=labelPrefix,proto3" json:"label_prefix,omitempty"`
+	// The total the buyer was shown (optional): the purchase is refused
+	// (FAILED_PRECONDITION "price changed") when it comes to anything else.
+	ExpectedTotal *v1.Money `protobuf:"bytes,6,opt,name=expected_total,json=expectedTotal,proto3" json:"expected_total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateBulkOrderRequest) Reset() {
+	*x = CreateBulkOrderRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateBulkOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateBulkOrderRequest) ProtoMessage() {}
+
+func (x *CreateBulkOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateBulkOrderRequest.ProtoReflect.Descriptor instead.
+func (*CreateBulkOrderRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *CreateBulkOrderRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CreateBulkOrderRequest) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *CreateBulkOrderRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CreateBulkOrderRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *CreateBulkOrderRequest) GetLabelPrefix() string {
+	if x != nil {
+		return x.LabelPrefix
+	}
+	return ""
+}
+
+func (x *CreateBulkOrderRequest) GetExpectedTotal() *v1.Money {
+	if x != nil {
+		return x.ExpectedTotal
+	}
+	return nil
+}
+
+type GetBulkOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BulkId        string                 `protobuf:"bytes,1,opt,name=bulk_id,json=bulkId,proto3" json:"bulk_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // when set, must be the buyer (NOT_FOUND otherwise)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBulkOrderRequest) Reset() {
+	*x = GetBulkOrderRequest{}
+	mi := &file_core_v1_core_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBulkOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBulkOrderRequest) ProtoMessage() {}
+
+func (x *GetBulkOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBulkOrderRequest.ProtoReflect.Descriptor instead.
+func (*GetBulkOrderRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *GetBulkOrderRequest) GetBulkId() string {
+	if x != nil {
+		return x.BulkId
+	}
+	return ""
+}
+
+func (x *GetBulkOrderRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// BulkOrder is a bulk purchase: its orders are ordinary orders, one per
+// service, in the order they were made.
+type BulkOrder struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId      string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PlanId      string                 `protobuf:"bytes,3,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	Quantity    int32                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	UnitPrice   *v1.Money              `protobuf:"bytes,5,opt,name=unit_price,json=unitPrice,proto3" json:"unit_price,omitempty"`
+	Total       *v1.Money              `protobuf:"bytes,6,opt,name=total,proto3" json:"total,omitempty"`
+	LabelPrefix string                 `protobuf:"bytes,7,opt,name=label_prefix,json=labelPrefix,proto3" json:"label_prefix,omitempty"`
+	CreatedAt   int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// When core announced the one message with every link (0: not yet).
+	DeliveredAt  int64             `protobuf:"varint,9,opt,name=delivered_at,json=deliveredAt,proto3" json:"delivered_at,omitempty"`
+	PlanNameI18N map[string]string `protobuf:"bytes,10,rep,name=plan_name_i18n,json=planNameI18n,proto3" json:"plan_name_i18n,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Services     []*BulkService    `protobuf:"bytes,11,rep,name=services,proto3" json:"services,omitempty"`
+	// CreateBulkOrder: the request had been made before, nothing was charged
+	// again.
+	Replayed      bool `protobuf:"varint,12,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BulkOrder) Reset() {
+	*x = BulkOrder{}
+	mi := &file_core_v1_core_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkOrder) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkOrder) ProtoMessage() {}
+
+func (x *BulkOrder) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkOrder.ProtoReflect.Descriptor instead.
+func (*BulkOrder) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *BulkOrder) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *BulkOrder) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *BulkOrder) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *BulkOrder) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *BulkOrder) GetUnitPrice() *v1.Money {
+	if x != nil {
+		return x.UnitPrice
+	}
+	return nil
+}
+
+func (x *BulkOrder) GetTotal() *v1.Money {
+	if x != nil {
+		return x.Total
+	}
+	return nil
+}
+
+func (x *BulkOrder) GetLabelPrefix() string {
+	if x != nil {
+		return x.LabelPrefix
+	}
+	return ""
+}
+
+func (x *BulkOrder) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *BulkOrder) GetDeliveredAt() int64 {
+	if x != nil {
+		return x.DeliveredAt
+	}
+	return 0
+}
+
+func (x *BulkOrder) GetPlanNameI18N() map[string]string {
+	if x != nil {
+		return x.PlanNameI18N
+	}
+	return nil
+}
+
+func (x *BulkOrder) GetServices() []*BulkService {
+	if x != nil {
+		return x.Services
+	}
+	return nil
+}
+
+func (x *BulkOrder) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+// BulkService is one order of a bulk purchase and the service made for it.
+type BulkService struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Index             int32                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // 1 to quantity
+	OrderId           string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	OrderStatus       string                 `protobuf:"bytes,3,opt,name=order_status,json=orderStatus,proto3" json:"order_status,omitempty"`          // paid | provisioning | provision_failed | active | cancelled
+	SubscriptionId    string                 `protobuf:"bytes,4,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"` // "" until the service exists
+	Status            string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`                                       // the service's status, "" until it exists
+	Label             string                 `protobuf:"bytes,6,opt,name=label,proto3" json:"label,omitempty"`
+	SubscriptionLink  string                 `protobuf:"bytes,7,opt,name=subscription_link,json=subscriptionLink,proto3" json:"subscription_link,omitempty"` // "" until delivered
+	ExpiresAt         int64                  `protobuf:"varint,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	TrafficTotalBytes int64                  `protobuf:"varint,9,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BulkService) Reset() {
+	*x = BulkService{}
+	mi := &file_core_v1_core_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkService) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkService) ProtoMessage() {}
+
+func (x *BulkService) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_core_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkService.ProtoReflect.Descriptor instead.
+func (*BulkService) Descriptor() ([]byte, []int) {
+	return file_core_v1_core_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *BulkService) GetIndex() int32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *BulkService) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *BulkService) GetOrderStatus() string {
+	if x != nil {
+		return x.OrderStatus
+	}
+	return ""
+}
+
+func (x *BulkService) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *BulkService) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *BulkService) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *BulkService) GetSubscriptionLink() string {
+	if x != nil {
+		return x.SubscriptionLink
+	}
+	return ""
+}
+
+func (x *BulkService) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *BulkService) GetTrafficTotalBytes() int64 {
+	if x != nil {
+		return x.TrafficTotalBytes
+	}
+	return 0
+}
+
 type GetReferralInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2856,7 +3376,7 @@ type GetReferralInfoRequest struct {
 
 func (x *GetReferralInfoRequest) Reset() {
 	*x = GetReferralInfoRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[36]
+	mi := &file_core_v1_core_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2868,7 +3388,7 @@ func (x *GetReferralInfoRequest) String() string {
 func (*GetReferralInfoRequest) ProtoMessage() {}
 
 func (x *GetReferralInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[36]
+	mi := &file_core_v1_core_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2881,7 +3401,7 @@ func (x *GetReferralInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReferralInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetReferralInfoRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{36}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetReferralInfoRequest) GetUserId() string {
@@ -2904,7 +3424,7 @@ type ReferralInfo struct {
 
 func (x *ReferralInfo) Reset() {
 	*x = ReferralInfo{}
-	mi := &file_core_v1_core_proto_msgTypes[37]
+	mi := &file_core_v1_core_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2916,7 +3436,7 @@ func (x *ReferralInfo) String() string {
 func (*ReferralInfo) ProtoMessage() {}
 
 func (x *ReferralInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[37]
+	mi := &file_core_v1_core_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2929,7 +3449,7 @@ func (x *ReferralInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReferralInfo.ProtoReflect.Descriptor instead.
 func (*ReferralInfo) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{37}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ReferralInfo) GetCode() string {
@@ -2982,7 +3502,7 @@ type Discount struct {
 
 func (x *Discount) Reset() {
 	*x = Discount{}
-	mi := &file_core_v1_core_proto_msgTypes[38]
+	mi := &file_core_v1_core_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2994,7 +3514,7 @@ func (x *Discount) String() string {
 func (*Discount) ProtoMessage() {}
 
 func (x *Discount) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[38]
+	mi := &file_core_v1_core_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3007,7 +3527,7 @@ func (x *Discount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Discount.ProtoReflect.Descriptor instead.
 func (*Discount) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{38}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *Discount) GetCode() string {
@@ -3069,7 +3589,7 @@ type AdminUpsertDiscountRequest struct {
 
 func (x *AdminUpsertDiscountRequest) Reset() {
 	*x = AdminUpsertDiscountRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[39]
+	mi := &file_core_v1_core_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3081,7 +3601,7 @@ func (x *AdminUpsertDiscountRequest) String() string {
 func (*AdminUpsertDiscountRequest) ProtoMessage() {}
 
 func (x *AdminUpsertDiscountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[39]
+	mi := &file_core_v1_core_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3094,7 +3614,7 @@ func (x *AdminUpsertDiscountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminUpsertDiscountRequest.ProtoReflect.Descriptor instead.
 func (*AdminUpsertDiscountRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{39}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *AdminUpsertDiscountRequest) GetActorTelegramId() int64 {
@@ -3120,7 +3640,7 @@ type AdminListDiscountsRequest struct {
 
 func (x *AdminListDiscountsRequest) Reset() {
 	*x = AdminListDiscountsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[40]
+	mi := &file_core_v1_core_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3132,7 +3652,7 @@ func (x *AdminListDiscountsRequest) String() string {
 func (*AdminListDiscountsRequest) ProtoMessage() {}
 
 func (x *AdminListDiscountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[40]
+	mi := &file_core_v1_core_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3145,7 +3665,7 @@ func (x *AdminListDiscountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListDiscountsRequest.ProtoReflect.Descriptor instead.
 func (*AdminListDiscountsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{40}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *AdminListDiscountsRequest) GetActorTelegramId() int64 {
@@ -3164,7 +3684,7 @@ type AdminListDiscountsResponse struct {
 
 func (x *AdminListDiscountsResponse) Reset() {
 	*x = AdminListDiscountsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[41]
+	mi := &file_core_v1_core_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3176,7 +3696,7 @@ func (x *AdminListDiscountsResponse) String() string {
 func (*AdminListDiscountsResponse) ProtoMessage() {}
 
 func (x *AdminListDiscountsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[41]
+	mi := &file_core_v1_core_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3189,7 +3709,7 @@ func (x *AdminListDiscountsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListDiscountsResponse.ProtoReflect.Descriptor instead.
 func (*AdminListDiscountsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{41}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *AdminListDiscountsResponse) GetDiscounts() []*Discount {
@@ -3208,7 +3728,7 @@ type CreateDashboardLinkRequest struct {
 
 func (x *CreateDashboardLinkRequest) Reset() {
 	*x = CreateDashboardLinkRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[42]
+	mi := &file_core_v1_core_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3220,7 +3740,7 @@ func (x *CreateDashboardLinkRequest) String() string {
 func (*CreateDashboardLinkRequest) ProtoMessage() {}
 
 func (x *CreateDashboardLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[42]
+	mi := &file_core_v1_core_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3233,7 +3753,7 @@ func (x *CreateDashboardLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDashboardLinkRequest.ProtoReflect.Descriptor instead.
 func (*CreateDashboardLinkRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{42}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CreateDashboardLinkRequest) GetActorTelegramId() int64 {
@@ -3252,7 +3772,7 @@ type ListStaffContactsRequest struct {
 
 func (x *ListStaffContactsRequest) Reset() {
 	*x = ListStaffContactsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[43]
+	mi := &file_core_v1_core_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3264,7 +3784,7 @@ func (x *ListStaffContactsRequest) String() string {
 func (*ListStaffContactsRequest) ProtoMessage() {}
 
 func (x *ListStaffContactsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[43]
+	mi := &file_core_v1_core_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3277,7 +3797,7 @@ func (x *ListStaffContactsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStaffContactsRequest.ProtoReflect.Descriptor instead.
 func (*ListStaffContactsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{43}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListStaffContactsRequest) GetIncludeSupport() bool {
@@ -3299,7 +3819,7 @@ type StaffContact struct {
 
 func (x *StaffContact) Reset() {
 	*x = StaffContact{}
-	mi := &file_core_v1_core_proto_msgTypes[44]
+	mi := &file_core_v1_core_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3311,7 +3831,7 @@ func (x *StaffContact) String() string {
 func (*StaffContact) ProtoMessage() {}
 
 func (x *StaffContact) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[44]
+	mi := &file_core_v1_core_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3324,7 +3844,7 @@ func (x *StaffContact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StaffContact.ProtoReflect.Descriptor instead.
 func (*StaffContact) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{44}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *StaffContact) GetTelegramId() int64 {
@@ -3357,7 +3877,7 @@ type ListStaffContactsResponse struct {
 
 func (x *ListStaffContactsResponse) Reset() {
 	*x = ListStaffContactsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[45]
+	mi := &file_core_v1_core_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3369,7 +3889,7 @@ func (x *ListStaffContactsResponse) String() string {
 func (*ListStaffContactsResponse) ProtoMessage() {}
 
 func (x *ListStaffContactsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[45]
+	mi := &file_core_v1_core_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3382,7 +3902,7 @@ func (x *ListStaffContactsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStaffContactsResponse.ProtoReflect.Descriptor instead.
 func (*ListStaffContactsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{45}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListStaffContactsResponse) GetItems() []*StaffContact {
@@ -3403,7 +3923,7 @@ type DashboardLink struct {
 
 func (x *DashboardLink) Reset() {
 	*x = DashboardLink{}
-	mi := &file_core_v1_core_proto_msgTypes[46]
+	mi := &file_core_v1_core_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3415,7 +3935,7 @@ func (x *DashboardLink) String() string {
 func (*DashboardLink) ProtoMessage() {}
 
 func (x *DashboardLink) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[46]
+	mi := &file_core_v1_core_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3428,7 +3948,7 @@ func (x *DashboardLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DashboardLink.ProtoReflect.Descriptor instead.
 func (*DashboardLink) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{46}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *DashboardLink) GetUrl() string {
@@ -3454,7 +3974,7 @@ type GetOrderRequest struct {
 
 func (x *GetOrderRequest) Reset() {
 	*x = GetOrderRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[47]
+	mi := &file_core_v1_core_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3466,7 +3986,7 @@ func (x *GetOrderRequest) String() string {
 func (*GetOrderRequest) ProtoMessage() {}
 
 func (x *GetOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[47]
+	mi := &file_core_v1_core_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3479,7 +3999,7 @@ func (x *GetOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrderRequest.ProtoReflect.Descriptor instead.
 func (*GetOrderRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{47}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *GetOrderRequest) GetId() string {
@@ -3499,7 +4019,7 @@ type GetWalletRequest struct {
 
 func (x *GetWalletRequest) Reset() {
 	*x = GetWalletRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[48]
+	mi := &file_core_v1_core_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3511,7 +4031,7 @@ func (x *GetWalletRequest) String() string {
 func (*GetWalletRequest) ProtoMessage() {}
 
 func (x *GetWalletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[48]
+	mi := &file_core_v1_core_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3524,7 +4044,7 @@ func (x *GetWalletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWalletRequest.ProtoReflect.Descriptor instead.
 func (*GetWalletRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{48}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *GetWalletRequest) GetUserId() string {
@@ -3551,7 +4071,7 @@ type ListLedgerEntriesRequest struct {
 
 func (x *ListLedgerEntriesRequest) Reset() {
 	*x = ListLedgerEntriesRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[49]
+	mi := &file_core_v1_core_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3563,7 +4083,7 @@ func (x *ListLedgerEntriesRequest) String() string {
 func (*ListLedgerEntriesRequest) ProtoMessage() {}
 
 func (x *ListLedgerEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[49]
+	mi := &file_core_v1_core_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3576,7 +4096,7 @@ func (x *ListLedgerEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLedgerEntriesRequest.ProtoReflect.Descriptor instead.
 func (*ListLedgerEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{49}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ListLedgerEntriesRequest) GetUserId() string {
@@ -3603,7 +4123,7 @@ type ListLedgerEntriesResponse struct {
 
 func (x *ListLedgerEntriesResponse) Reset() {
 	*x = ListLedgerEntriesResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[50]
+	mi := &file_core_v1_core_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3615,7 +4135,7 @@ func (x *ListLedgerEntriesResponse) String() string {
 func (*ListLedgerEntriesResponse) ProtoMessage() {}
 
 func (x *ListLedgerEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[50]
+	mi := &file_core_v1_core_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3628,7 +4148,7 @@ func (x *ListLedgerEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLedgerEntriesResponse.ProtoReflect.Descriptor instead.
 func (*ListLedgerEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{50}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ListLedgerEntriesResponse) GetEntries() []*LedgerEntry {
@@ -3659,7 +4179,7 @@ type ListSubscriptionsRequest struct {
 
 func (x *ListSubscriptionsRequest) Reset() {
 	*x = ListSubscriptionsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[51]
+	mi := &file_core_v1_core_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3671,7 +4191,7 @@ func (x *ListSubscriptionsRequest) String() string {
 func (*ListSubscriptionsRequest) ProtoMessage() {}
 
 func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[51]
+	mi := &file_core_v1_core_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3684,7 +4204,7 @@ func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{51}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ListSubscriptionsRequest) GetUserId() string {
@@ -3718,7 +4238,7 @@ type ListSubscriptionsResponse struct {
 
 func (x *ListSubscriptionsResponse) Reset() {
 	*x = ListSubscriptionsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[52]
+	mi := &file_core_v1_core_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3730,7 +4250,7 @@ func (x *ListSubscriptionsResponse) String() string {
 func (*ListSubscriptionsResponse) ProtoMessage() {}
 
 func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[52]
+	mi := &file_core_v1_core_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3743,7 +4263,7 @@ func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{52}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListSubscriptionsResponse) GetSubscriptions() []*Subscription {
@@ -3773,7 +4293,7 @@ type SetSubscriptionLabelRequest struct {
 
 func (x *SetSubscriptionLabelRequest) Reset() {
 	*x = SetSubscriptionLabelRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[53]
+	mi := &file_core_v1_core_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3785,7 +4305,7 @@ func (x *SetSubscriptionLabelRequest) String() string {
 func (*SetSubscriptionLabelRequest) ProtoMessage() {}
 
 func (x *SetSubscriptionLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[53]
+	mi := &file_core_v1_core_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3798,7 +4318,7 @@ func (x *SetSubscriptionLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSubscriptionLabelRequest.ProtoReflect.Descriptor instead.
 func (*SetSubscriptionLabelRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{53}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *SetSubscriptionLabelRequest) GetUserId() string {
@@ -3838,7 +4358,7 @@ type ServiceCounts struct {
 
 func (x *ServiceCounts) Reset() {
 	*x = ServiceCounts{}
-	mi := &file_core_v1_core_proto_msgTypes[54]
+	mi := &file_core_v1_core_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3850,7 +4370,7 @@ func (x *ServiceCounts) String() string {
 func (*ServiceCounts) ProtoMessage() {}
 
 func (x *ServiceCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[54]
+	mi := &file_core_v1_core_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3863,7 +4383,7 @@ func (x *ServiceCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceCounts.ProtoReflect.Descriptor instead.
 func (*ServiceCounts) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{54}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ServiceCounts) GetTotal() int64 {
@@ -3922,7 +4442,7 @@ type ListResellerServicesRequest struct {
 
 func (x *ListResellerServicesRequest) Reset() {
 	*x = ListResellerServicesRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[55]
+	mi := &file_core_v1_core_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3934,7 +4454,7 @@ func (x *ListResellerServicesRequest) String() string {
 func (*ListResellerServicesRequest) ProtoMessage() {}
 
 func (x *ListResellerServicesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[55]
+	mi := &file_core_v1_core_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3947,7 +4467,7 @@ func (x *ListResellerServicesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResellerServicesRequest.ProtoReflect.Descriptor instead.
 func (*ListResellerServicesRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{55}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListResellerServicesRequest) GetUserId() string {
@@ -3989,7 +4509,7 @@ type ListResellerServicesResponse struct {
 
 func (x *ListResellerServicesResponse) Reset() {
 	*x = ListResellerServicesResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[56]
+	mi := &file_core_v1_core_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4001,7 +4521,7 @@ func (x *ListResellerServicesResponse) String() string {
 func (*ListResellerServicesResponse) ProtoMessage() {}
 
 func (x *ListResellerServicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[56]
+	mi := &file_core_v1_core_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4014,7 +4534,7 @@ func (x *ListResellerServicesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResellerServicesResponse.ProtoReflect.Descriptor instead.
 func (*ListResellerServicesResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{56}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ListResellerServicesResponse) GetSubscriptions() []*Subscription {
@@ -4053,7 +4573,7 @@ type SetResellerServiceEnabledRequest struct {
 
 func (x *SetResellerServiceEnabledRequest) Reset() {
 	*x = SetResellerServiceEnabledRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[57]
+	mi := &file_core_v1_core_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4065,7 +4585,7 @@ func (x *SetResellerServiceEnabledRequest) String() string {
 func (*SetResellerServiceEnabledRequest) ProtoMessage() {}
 
 func (x *SetResellerServiceEnabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[57]
+	mi := &file_core_v1_core_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4078,7 +4598,7 @@ func (x *SetResellerServiceEnabledRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResellerServiceEnabledRequest.ProtoReflect.Descriptor instead.
 func (*SetResellerServiceEnabledRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{57}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *SetResellerServiceEnabledRequest) GetUserId() string {
@@ -4114,7 +4634,7 @@ type DeleteResellerServiceRequest struct {
 
 func (x *DeleteResellerServiceRequest) Reset() {
 	*x = DeleteResellerServiceRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[58]
+	mi := &file_core_v1_core_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4126,7 +4646,7 @@ func (x *DeleteResellerServiceRequest) String() string {
 func (*DeleteResellerServiceRequest) ProtoMessage() {}
 
 func (x *DeleteResellerServiceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[58]
+	mi := &file_core_v1_core_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4139,7 +4659,7 @@ func (x *DeleteResellerServiceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResellerServiceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteResellerServiceRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{58}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *DeleteResellerServiceRequest) GetUserId() string {
@@ -4164,7 +4684,7 @@ type DeleteResellerServiceResponse struct {
 
 func (x *DeleteResellerServiceResponse) Reset() {
 	*x = DeleteResellerServiceResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[59]
+	mi := &file_core_v1_core_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4176,7 +4696,7 @@ func (x *DeleteResellerServiceResponse) String() string {
 func (*DeleteResellerServiceResponse) ProtoMessage() {}
 
 func (x *DeleteResellerServiceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[59]
+	mi := &file_core_v1_core_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4189,7 +4709,7 @@ func (x *DeleteResellerServiceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResellerServiceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteResellerServiceResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{59}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{65}
 }
 
 // SetSubscriptionNoteRequest sets the private note on one of a reseller's
@@ -4205,7 +4725,7 @@ type SetSubscriptionNoteRequest struct {
 
 func (x *SetSubscriptionNoteRequest) Reset() {
 	*x = SetSubscriptionNoteRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[60]
+	mi := &file_core_v1_core_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4217,7 +4737,7 @@ func (x *SetSubscriptionNoteRequest) String() string {
 func (*SetSubscriptionNoteRequest) ProtoMessage() {}
 
 func (x *SetSubscriptionNoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[60]
+	mi := &file_core_v1_core_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4230,7 +4750,7 @@ func (x *SetSubscriptionNoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSubscriptionNoteRequest.ProtoReflect.Descriptor instead.
 func (*SetSubscriptionNoteRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{60}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *SetSubscriptionNoteRequest) GetUserId() string {
@@ -4266,7 +4786,7 @@ type ListInvitedCustomersRequest struct {
 
 func (x *ListInvitedCustomersRequest) Reset() {
 	*x = ListInvitedCustomersRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[61]
+	mi := &file_core_v1_core_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4278,7 +4798,7 @@ func (x *ListInvitedCustomersRequest) String() string {
 func (*ListInvitedCustomersRequest) ProtoMessage() {}
 
 func (x *ListInvitedCustomersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[61]
+	mi := &file_core_v1_core_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4291,7 +4811,7 @@ func (x *ListInvitedCustomersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitedCustomersRequest.ProtoReflect.Descriptor instead.
 func (*ListInvitedCustomersRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{61}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListInvitedCustomersRequest) GetUserId() string {
@@ -4323,7 +4843,7 @@ type InvitedCustomer struct {
 
 func (x *InvitedCustomer) Reset() {
 	*x = InvitedCustomer{}
-	mi := &file_core_v1_core_proto_msgTypes[62]
+	mi := &file_core_v1_core_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4335,7 +4855,7 @@ func (x *InvitedCustomer) String() string {
 func (*InvitedCustomer) ProtoMessage() {}
 
 func (x *InvitedCustomer) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[62]
+	mi := &file_core_v1_core_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4348,7 +4868,7 @@ func (x *InvitedCustomer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvitedCustomer.ProtoReflect.Descriptor instead.
 func (*InvitedCustomer) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{62}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *InvitedCustomer) GetTelegramId() int64 {
@@ -4403,7 +4923,7 @@ type ListInvitedCustomersResponse struct {
 
 func (x *ListInvitedCustomersResponse) Reset() {
 	*x = ListInvitedCustomersResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[63]
+	mi := &file_core_v1_core_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4415,7 +4935,7 @@ func (x *ListInvitedCustomersResponse) String() string {
 func (*ListInvitedCustomersResponse) ProtoMessage() {}
 
 func (x *ListInvitedCustomersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[63]
+	mi := &file_core_v1_core_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4428,7 +4948,7 @@ func (x *ListInvitedCustomersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitedCustomersResponse.ProtoReflect.Descriptor instead.
 func (*ListInvitedCustomersResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{63}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ListInvitedCustomersResponse) GetCustomers() []*InvitedCustomer {
@@ -4454,7 +4974,7 @@ type GetResellerInfoRequest struct {
 
 func (x *GetResellerInfoRequest) Reset() {
 	*x = GetResellerInfoRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[64]
+	mi := &file_core_v1_core_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4466,7 +4986,7 @@ func (x *GetResellerInfoRequest) String() string {
 func (*GetResellerInfoRequest) ProtoMessage() {}
 
 func (x *GetResellerInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[64]
+	mi := &file_core_v1_core_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4479,7 +4999,7 @@ func (x *GetResellerInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResellerInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetResellerInfoRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{64}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetResellerInfoRequest) GetUserId() string {
@@ -4501,7 +5021,7 @@ type ResellerBalance struct {
 
 func (x *ResellerBalance) Reset() {
 	*x = ResellerBalance{}
-	mi := &file_core_v1_core_proto_msgTypes[65]
+	mi := &file_core_v1_core_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4513,7 +5033,7 @@ func (x *ResellerBalance) String() string {
 func (*ResellerBalance) ProtoMessage() {}
 
 func (x *ResellerBalance) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[65]
+	mi := &file_core_v1_core_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4526,7 +5046,7 @@ func (x *ResellerBalance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResellerBalance.ProtoReflect.Descriptor instead.
 func (*ResellerBalance) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{65}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ResellerBalance) GetCurrency() string {
@@ -4573,7 +5093,7 @@ type ResellerInfo struct {
 
 func (x *ResellerInfo) Reset() {
 	*x = ResellerInfo{}
-	mi := &file_core_v1_core_proto_msgTypes[66]
+	mi := &file_core_v1_core_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4585,7 +5105,7 @@ func (x *ResellerInfo) String() string {
 func (*ResellerInfo) ProtoMessage() {}
 
 func (x *ResellerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[66]
+	mi := &file_core_v1_core_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4598,7 +5118,7 @@ func (x *ResellerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResellerInfo.ProtoReflect.Descriptor instead.
 func (*ResellerInfo) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{66}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ResellerInfo) GetTierName() string {
@@ -4661,7 +5181,7 @@ type CreateSupportTicketRequest struct {
 
 func (x *CreateSupportTicketRequest) Reset() {
 	*x = CreateSupportTicketRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[67]
+	mi := &file_core_v1_core_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4673,7 +5193,7 @@ func (x *CreateSupportTicketRequest) String() string {
 func (*CreateSupportTicketRequest) ProtoMessage() {}
 
 func (x *CreateSupportTicketRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[67]
+	mi := &file_core_v1_core_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4686,7 +5206,7 @@ func (x *CreateSupportTicketRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSupportTicketRequest.ProtoReflect.Descriptor instead.
 func (*CreateSupportTicketRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{67}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *CreateSupportTicketRequest) GetUserId() string {
@@ -4718,7 +5238,7 @@ type GetSettingsRequest struct {
 
 func (x *GetSettingsRequest) Reset() {
 	*x = GetSettingsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[68]
+	mi := &file_core_v1_core_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4730,7 +5250,7 @@ func (x *GetSettingsRequest) String() string {
 func (*GetSettingsRequest) ProtoMessage() {}
 
 func (x *GetSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[68]
+	mi := &file_core_v1_core_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4743,7 +5263,7 @@ func (x *GetSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSettingsRequest.ProtoReflect.Descriptor instead.
 func (*GetSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{68}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{74}
 }
 
 type GetBotPhotoRequest struct {
@@ -4754,7 +5274,7 @@ type GetBotPhotoRequest struct {
 
 func (x *GetBotPhotoRequest) Reset() {
 	*x = GetBotPhotoRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[69]
+	mi := &file_core_v1_core_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4766,7 +5286,7 @@ func (x *GetBotPhotoRequest) String() string {
 func (*GetBotPhotoRequest) ProtoMessage() {}
 
 func (x *GetBotPhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[69]
+	mi := &file_core_v1_core_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4779,7 +5299,7 @@ func (x *GetBotPhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBotPhotoRequest.ProtoReflect.Descriptor instead.
 func (*GetBotPhotoRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{69}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{75}
 }
 
 // BotPhoto is the bot's Telegram profile photo, a square JPEG.
@@ -4793,7 +5313,7 @@ type BotPhoto struct {
 
 func (x *BotPhoto) Reset() {
 	*x = BotPhoto{}
-	mi := &file_core_v1_core_proto_msgTypes[70]
+	mi := &file_core_v1_core_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4805,7 +5325,7 @@ func (x *BotPhoto) String() string {
 func (*BotPhoto) ProtoMessage() {}
 
 func (x *BotPhoto) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[70]
+	mi := &file_core_v1_core_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4818,7 +5338,7 @@ func (x *BotPhoto) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BotPhoto.ProtoReflect.Descriptor instead.
 func (*BotPhoto) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{70}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *BotPhoto) GetVersion() string {
@@ -4846,7 +5366,7 @@ type UpdateBrandingRequest struct {
 
 func (x *UpdateBrandingRequest) Reset() {
 	*x = UpdateBrandingRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[71]
+	mi := &file_core_v1_core_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4858,7 +5378,7 @@ func (x *UpdateBrandingRequest) String() string {
 func (*UpdateBrandingRequest) ProtoMessage() {}
 
 func (x *UpdateBrandingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[71]
+	mi := &file_core_v1_core_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4871,7 +5391,7 @@ func (x *UpdateBrandingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBrandingRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBrandingRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{71}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *UpdateBrandingRequest) GetValues() map[string]string {
@@ -4908,7 +5428,7 @@ type ReviewManualPaymentRequest struct {
 
 func (x *ReviewManualPaymentRequest) Reset() {
 	*x = ReviewManualPaymentRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[72]
+	mi := &file_core_v1_core_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4920,7 +5440,7 @@ func (x *ReviewManualPaymentRequest) String() string {
 func (*ReviewManualPaymentRequest) ProtoMessage() {}
 
 func (x *ReviewManualPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[72]
+	mi := &file_core_v1_core_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4933,7 +5453,7 @@ func (x *ReviewManualPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewManualPaymentRequest.ProtoReflect.Descriptor instead.
 func (*ReviewManualPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{72}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ReviewManualPaymentRequest) GetIntentId() string {
@@ -4994,7 +5514,7 @@ type PaymentIntentRef struct {
 
 func (x *PaymentIntentRef) Reset() {
 	*x = PaymentIntentRef{}
-	mi := &file_core_v1_core_proto_msgTypes[73]
+	mi := &file_core_v1_core_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5006,7 +5526,7 @@ func (x *PaymentIntentRef) String() string {
 func (*PaymentIntentRef) ProtoMessage() {}
 
 func (x *PaymentIntentRef) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[73]
+	mi := &file_core_v1_core_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5019,7 +5539,7 @@ func (x *PaymentIntentRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaymentIntentRef.ProtoReflect.Descriptor instead.
 func (*PaymentIntentRef) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{73}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *PaymentIntentRef) GetId() string {
@@ -5109,7 +5629,7 @@ type CheckPaymentRequest struct {
 
 func (x *CheckPaymentRequest) Reset() {
 	*x = CheckPaymentRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[74]
+	mi := &file_core_v1_core_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5121,7 +5641,7 @@ func (x *CheckPaymentRequest) String() string {
 func (*CheckPaymentRequest) ProtoMessage() {}
 
 func (x *CheckPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[74]
+	mi := &file_core_v1_core_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5134,7 +5654,7 @@ func (x *CheckPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPaymentRequest.ProtoReflect.Descriptor instead.
 func (*CheckPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{74}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *CheckPaymentRequest) GetUserId() string {
@@ -5164,7 +5684,7 @@ type StarsPreCheckoutRequest struct {
 
 func (x *StarsPreCheckoutRequest) Reset() {
 	*x = StarsPreCheckoutRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[75]
+	mi := &file_core_v1_core_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5176,7 +5696,7 @@ func (x *StarsPreCheckoutRequest) String() string {
 func (*StarsPreCheckoutRequest) ProtoMessage() {}
 
 func (x *StarsPreCheckoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[75]
+	mi := &file_core_v1_core_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5189,7 +5709,7 @@ func (x *StarsPreCheckoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StarsPreCheckoutRequest.ProtoReflect.Descriptor instead.
 func (*StarsPreCheckoutRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{75}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *StarsPreCheckoutRequest) GetUserId() string {
@@ -5234,7 +5754,7 @@ type StarsPaidRequest struct {
 
 func (x *StarsPaidRequest) Reset() {
 	*x = StarsPaidRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[76]
+	mi := &file_core_v1_core_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5246,7 +5766,7 @@ func (x *StarsPaidRequest) String() string {
 func (*StarsPaidRequest) ProtoMessage() {}
 
 func (x *StarsPaidRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[76]
+	mi := &file_core_v1_core_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5259,7 +5779,7 @@ func (x *StarsPaidRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StarsPaidRequest.ProtoReflect.Descriptor instead.
 func (*StarsPaidRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{76}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *StarsPaidRequest) GetUserId() string {
@@ -5307,7 +5827,7 @@ type ListPaymentMethodsRequest struct {
 
 func (x *ListPaymentMethodsRequest) Reset() {
 	*x = ListPaymentMethodsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[77]
+	mi := &file_core_v1_core_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5319,7 +5839,7 @@ func (x *ListPaymentMethodsRequest) String() string {
 func (*ListPaymentMethodsRequest) ProtoMessage() {}
 
 func (x *ListPaymentMethodsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[77]
+	mi := &file_core_v1_core_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5332,7 +5852,7 @@ func (x *ListPaymentMethodsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPaymentMethodsRequest.ProtoReflect.Descriptor instead.
 func (*ListPaymentMethodsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{77}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListPaymentMethodsRequest) GetCurrency() string {
@@ -5358,7 +5878,7 @@ type ListPaymentMethodsResponse struct {
 
 func (x *ListPaymentMethodsResponse) Reset() {
 	*x = ListPaymentMethodsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[78]
+	mi := &file_core_v1_core_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5370,7 +5890,7 @@ func (x *ListPaymentMethodsResponse) String() string {
 func (*ListPaymentMethodsResponse) ProtoMessage() {}
 
 func (x *ListPaymentMethodsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[78]
+	mi := &file_core_v1_core_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5383,7 +5903,7 @@ func (x *ListPaymentMethodsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPaymentMethodsResponse.ProtoReflect.Descriptor instead.
 func (*ListPaymentMethodsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{78}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListPaymentMethodsResponse) GetProviders() []string {
@@ -5409,7 +5929,7 @@ type SubmitPaymentProofRequest struct {
 
 func (x *SubmitPaymentProofRequest) Reset() {
 	*x = SubmitPaymentProofRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[79]
+	mi := &file_core_v1_core_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5421,7 +5941,7 @@ func (x *SubmitPaymentProofRequest) String() string {
 func (*SubmitPaymentProofRequest) ProtoMessage() {}
 
 func (x *SubmitPaymentProofRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[79]
+	mi := &file_core_v1_core_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5434,7 +5954,7 @@ func (x *SubmitPaymentProofRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitPaymentProofRequest.ProtoReflect.Descriptor instead.
 func (*SubmitPaymentProofRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{79}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *SubmitPaymentProofRequest) GetUserId() string {
@@ -5489,7 +6009,7 @@ type GetSubscriptionLinksRequest struct {
 
 func (x *GetSubscriptionLinksRequest) Reset() {
 	*x = GetSubscriptionLinksRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[80]
+	mi := &file_core_v1_core_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5501,7 +6021,7 @@ func (x *GetSubscriptionLinksRequest) String() string {
 func (*GetSubscriptionLinksRequest) ProtoMessage() {}
 
 func (x *GetSubscriptionLinksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[80]
+	mi := &file_core_v1_core_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5514,7 +6034,7 @@ func (x *GetSubscriptionLinksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSubscriptionLinksRequest.ProtoReflect.Descriptor instead.
 func (*GetSubscriptionLinksRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{80}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *GetSubscriptionLinksRequest) GetUserId() string {
@@ -5544,7 +6064,7 @@ type SubscriptionLinks struct {
 
 func (x *SubscriptionLinks) Reset() {
 	*x = SubscriptionLinks{}
-	mi := &file_core_v1_core_proto_msgTypes[81]
+	mi := &file_core_v1_core_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5556,7 +6076,7 @@ func (x *SubscriptionLinks) String() string {
 func (*SubscriptionLinks) ProtoMessage() {}
 
 func (x *SubscriptionLinks) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[81]
+	mi := &file_core_v1_core_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5569,7 +6089,7 @@ func (x *SubscriptionLinks) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionLinks.ProtoReflect.Descriptor instead.
 func (*SubscriptionLinks) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{81}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *SubscriptionLinks) GetSubscriptionLink() string {
@@ -5609,7 +6129,7 @@ type AdminGetStatsRequest struct {
 
 func (x *AdminGetStatsRequest) Reset() {
 	*x = AdminGetStatsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[82]
+	mi := &file_core_v1_core_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5621,7 +6141,7 @@ func (x *AdminGetStatsRequest) String() string {
 func (*AdminGetStatsRequest) ProtoMessage() {}
 
 func (x *AdminGetStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[82]
+	mi := &file_core_v1_core_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5634,7 +6154,7 @@ func (x *AdminGetStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminGetStatsRequest.ProtoReflect.Descriptor instead.
 func (*AdminGetStatsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{82}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *AdminGetStatsRequest) GetActorTelegramId() int64 {
@@ -5673,7 +6193,7 @@ type AdminStats struct {
 
 func (x *AdminStats) Reset() {
 	*x = AdminStats{}
-	mi := &file_core_v1_core_proto_msgTypes[83]
+	mi := &file_core_v1_core_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5685,7 +6205,7 @@ func (x *AdminStats) String() string {
 func (*AdminStats) ProtoMessage() {}
 
 func (x *AdminStats) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[83]
+	mi := &file_core_v1_core_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5698,7 +6218,7 @@ func (x *AdminStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminStats.ProtoReflect.Descriptor instead.
 func (*AdminStats) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{83}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *AdminStats) GetUsersTotal() int64 {
@@ -5795,7 +6315,7 @@ type AdminListPendingPaymentsRequest struct {
 
 func (x *AdminListPendingPaymentsRequest) Reset() {
 	*x = AdminListPendingPaymentsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[84]
+	mi := &file_core_v1_core_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5807,7 +6327,7 @@ func (x *AdminListPendingPaymentsRequest) String() string {
 func (*AdminListPendingPaymentsRequest) ProtoMessage() {}
 
 func (x *AdminListPendingPaymentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[84]
+	mi := &file_core_v1_core_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5820,7 +6340,7 @@ func (x *AdminListPendingPaymentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListPendingPaymentsRequest.ProtoReflect.Descriptor instead.
 func (*AdminListPendingPaymentsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{84}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *AdminListPendingPaymentsRequest) GetActorTelegramId() int64 {
@@ -5856,7 +6376,7 @@ type PendingPayment struct {
 
 func (x *PendingPayment) Reset() {
 	*x = PendingPayment{}
-	mi := &file_core_v1_core_proto_msgTypes[85]
+	mi := &file_core_v1_core_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5868,7 +6388,7 @@ func (x *PendingPayment) String() string {
 func (*PendingPayment) ProtoMessage() {}
 
 func (x *PendingPayment) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[85]
+	mi := &file_core_v1_core_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5881,7 +6401,7 @@ func (x *PendingPayment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingPayment.ProtoReflect.Descriptor instead.
 func (*PendingPayment) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{85}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PendingPayment) GetIntentId() string {
@@ -5970,7 +6490,7 @@ type AdminListPendingPaymentsResponse struct {
 
 func (x *AdminListPendingPaymentsResponse) Reset() {
 	*x = AdminListPendingPaymentsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[86]
+	mi := &file_core_v1_core_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5982,7 +6502,7 @@ func (x *AdminListPendingPaymentsResponse) String() string {
 func (*AdminListPendingPaymentsResponse) ProtoMessage() {}
 
 func (x *AdminListPendingPaymentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[86]
+	mi := &file_core_v1_core_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5995,7 +6515,7 @@ func (x *AdminListPendingPaymentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListPendingPaymentsResponse.ProtoReflect.Descriptor instead.
 func (*AdminListPendingPaymentsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{86}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *AdminListPendingPaymentsResponse) GetPayments() []*PendingPayment {
@@ -6015,7 +6535,7 @@ type AdminGetPaymentRequest struct {
 
 func (x *AdminGetPaymentRequest) Reset() {
 	*x = AdminGetPaymentRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[87]
+	mi := &file_core_v1_core_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6027,7 +6547,7 @@ func (x *AdminGetPaymentRequest) String() string {
 func (*AdminGetPaymentRequest) ProtoMessage() {}
 
 func (x *AdminGetPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[87]
+	mi := &file_core_v1_core_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6040,7 +6560,7 @@ func (x *AdminGetPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminGetPaymentRequest.ProtoReflect.Descriptor instead.
 func (*AdminGetPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{87}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *AdminGetPaymentRequest) GetActorTelegramId() int64 {
@@ -6073,7 +6593,7 @@ type AdminPaymentView struct {
 
 func (x *AdminPaymentView) Reset() {
 	*x = AdminPaymentView{}
-	mi := &file_core_v1_core_proto_msgTypes[88]
+	mi := &file_core_v1_core_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6085,7 +6605,7 @@ func (x *AdminPaymentView) String() string {
 func (*AdminPaymentView) ProtoMessage() {}
 
 func (x *AdminPaymentView) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[88]
+	mi := &file_core_v1_core_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6098,7 +6618,7 @@ func (x *AdminPaymentView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminPaymentView.ProtoReflect.Descriptor instead.
 func (*AdminPaymentView) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{88}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *AdminPaymentView) GetPayment() *PendingPayment {
@@ -6153,7 +6673,7 @@ type AdminFindUserRequest struct {
 
 func (x *AdminFindUserRequest) Reset() {
 	*x = AdminFindUserRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[89]
+	mi := &file_core_v1_core_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6165,7 +6685,7 @@ func (x *AdminFindUserRequest) String() string {
 func (*AdminFindUserRequest) ProtoMessage() {}
 
 func (x *AdminFindUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[89]
+	mi := &file_core_v1_core_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6178,7 +6698,7 @@ func (x *AdminFindUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminFindUserRequest.ProtoReflect.Descriptor instead.
 func (*AdminFindUserRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{89}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *AdminFindUserRequest) GetActorTelegramId() int64 {
@@ -6207,7 +6727,7 @@ type AdminUserView struct {
 
 func (x *AdminUserView) Reset() {
 	*x = AdminUserView{}
-	mi := &file_core_v1_core_proto_msgTypes[90]
+	mi := &file_core_v1_core_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6219,7 +6739,7 @@ func (x *AdminUserView) String() string {
 func (*AdminUserView) ProtoMessage() {}
 
 func (x *AdminUserView) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[90]
+	mi := &file_core_v1_core_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6232,7 +6752,7 @@ func (x *AdminUserView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminUserView.ProtoReflect.Descriptor instead.
 func (*AdminUserView) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{90}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *AdminUserView) GetUser() *User {
@@ -6276,7 +6796,7 @@ type AdminAdjustBalanceRequest struct {
 
 func (x *AdminAdjustBalanceRequest) Reset() {
 	*x = AdminAdjustBalanceRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[91]
+	mi := &file_core_v1_core_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6288,7 +6808,7 @@ func (x *AdminAdjustBalanceRequest) String() string {
 func (*AdminAdjustBalanceRequest) ProtoMessage() {}
 
 func (x *AdminAdjustBalanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[91]
+	mi := &file_core_v1_core_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6301,7 +6821,7 @@ func (x *AdminAdjustBalanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminAdjustBalanceRequest.ProtoReflect.Descriptor instead.
 func (*AdminAdjustBalanceRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{91}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *AdminAdjustBalanceRequest) GetActorTelegramId() int64 {
@@ -6351,7 +6871,7 @@ type AdminSetUserStatusRequest struct {
 
 func (x *AdminSetUserStatusRequest) Reset() {
 	*x = AdminSetUserStatusRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[92]
+	mi := &file_core_v1_core_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6363,7 +6883,7 @@ func (x *AdminSetUserStatusRequest) String() string {
 func (*AdminSetUserStatusRequest) ProtoMessage() {}
 
 func (x *AdminSetUserStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[92]
+	mi := &file_core_v1_core_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6376,7 +6896,7 @@ func (x *AdminSetUserStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSetUserStatusRequest.ProtoReflect.Descriptor instead.
 func (*AdminSetUserStatusRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{92}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *AdminSetUserStatusRequest) GetActorTelegramId() int64 {
@@ -6417,7 +6937,7 @@ type AdminUpsertPlanRequest struct {
 
 func (x *AdminUpsertPlanRequest) Reset() {
 	*x = AdminUpsertPlanRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[93]
+	mi := &file_core_v1_core_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6429,7 +6949,7 @@ func (x *AdminUpsertPlanRequest) String() string {
 func (*AdminUpsertPlanRequest) ProtoMessage() {}
 
 func (x *AdminUpsertPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[93]
+	mi := &file_core_v1_core_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6442,7 +6962,7 @@ func (x *AdminUpsertPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminUpsertPlanRequest.ProtoReflect.Descriptor instead.
 func (*AdminUpsertPlanRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{93}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *AdminUpsertPlanRequest) GetActorTelegramId() int64 {
@@ -6470,7 +6990,7 @@ type AdminSetSettingRequest struct {
 
 func (x *AdminSetSettingRequest) Reset() {
 	*x = AdminSetSettingRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[94]
+	mi := &file_core_v1_core_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6482,7 +7002,7 @@ func (x *AdminSetSettingRequest) String() string {
 func (*AdminSetSettingRequest) ProtoMessage() {}
 
 func (x *AdminSetSettingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[94]
+	mi := &file_core_v1_core_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6495,7 +7015,7 @@ func (x *AdminSetSettingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSetSettingRequest.ProtoReflect.Descriptor instead.
 func (*AdminSetSettingRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{94}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *AdminSetSettingRequest) GetActorTelegramId() int64 {
@@ -6532,7 +7052,7 @@ type PayOrderWithWalletRequest struct {
 
 func (x *PayOrderWithWalletRequest) Reset() {
 	*x = PayOrderWithWalletRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[95]
+	mi := &file_core_v1_core_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6544,7 +7064,7 @@ func (x *PayOrderWithWalletRequest) String() string {
 func (*PayOrderWithWalletRequest) ProtoMessage() {}
 
 func (x *PayOrderWithWalletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[95]
+	mi := &file_core_v1_core_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6557,7 +7077,7 @@ func (x *PayOrderWithWalletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PayOrderWithWalletRequest.ProtoReflect.Descriptor instead.
 func (*PayOrderWithWalletRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{95}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *PayOrderWithWalletRequest) GetOrderId() string {
@@ -6594,7 +7114,7 @@ type CreatePaymentIntentRequest struct {
 
 func (x *CreatePaymentIntentRequest) Reset() {
 	*x = CreatePaymentIntentRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[96]
+	mi := &file_core_v1_core_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6606,7 +7126,7 @@ func (x *CreatePaymentIntentRequest) String() string {
 func (*CreatePaymentIntentRequest) ProtoMessage() {}
 
 func (x *CreatePaymentIntentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[96]
+	mi := &file_core_v1_core_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6619,7 +7139,7 @@ func (x *CreatePaymentIntentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePaymentIntentRequest.ProtoReflect.Descriptor instead.
 func (*CreatePaymentIntentRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{96}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *CreatePaymentIntentRequest) GetUserId() string {
@@ -6668,7 +7188,7 @@ type StartTrialRequest struct {
 
 func (x *StartTrialRequest) Reset() {
 	*x = StartTrialRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[97]
+	mi := &file_core_v1_core_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6680,7 +7200,7 @@ func (x *StartTrialRequest) String() string {
 func (*StartTrialRequest) ProtoMessage() {}
 
 func (x *StartTrialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[97]
+	mi := &file_core_v1_core_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6693,7 +7213,7 @@ func (x *StartTrialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartTrialRequest.ProtoReflect.Descriptor instead.
 func (*StartTrialRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{97}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *StartTrialRequest) GetUserId() string {
@@ -6726,7 +7246,7 @@ type CanStartTrialRequest struct {
 
 func (x *CanStartTrialRequest) Reset() {
 	*x = CanStartTrialRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[98]
+	mi := &file_core_v1_core_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6738,7 +7258,7 @@ func (x *CanStartTrialRequest) String() string {
 func (*CanStartTrialRequest) ProtoMessage() {}
 
 func (x *CanStartTrialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[98]
+	mi := &file_core_v1_core_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6751,7 +7271,7 @@ func (x *CanStartTrialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CanStartTrialRequest.ProtoReflect.Descriptor instead.
 func (*CanStartTrialRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{98}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *CanStartTrialRequest) GetUserId() string {
@@ -6770,7 +7290,7 @@ type CanStartTrialResponse struct {
 
 func (x *CanStartTrialResponse) Reset() {
 	*x = CanStartTrialResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[99]
+	mi := &file_core_v1_core_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6782,7 +7302,7 @@ func (x *CanStartTrialResponse) String() string {
 func (*CanStartTrialResponse) ProtoMessage() {}
 
 func (x *CanStartTrialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[99]
+	mi := &file_core_v1_core_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6795,7 +7315,7 @@ func (x *CanStartTrialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CanStartTrialResponse.ProtoReflect.Descriptor instead.
 func (*CanStartTrialResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{99}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *CanStartTrialResponse) GetEligible() bool {
@@ -6814,7 +7334,7 @@ type AdminTodayStatsRequest struct {
 
 func (x *AdminTodayStatsRequest) Reset() {
 	*x = AdminTodayStatsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[100]
+	mi := &file_core_v1_core_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6826,7 +7346,7 @@ func (x *AdminTodayStatsRequest) String() string {
 func (*AdminTodayStatsRequest) ProtoMessage() {}
 
 func (x *AdminTodayStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[100]
+	mi := &file_core_v1_core_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6839,7 +7359,7 @@ func (x *AdminTodayStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminTodayStatsRequest.ProtoReflect.Descriptor instead.
 func (*AdminTodayStatsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{100}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *AdminTodayStatsRequest) GetActorTelegramId() int64 {
@@ -6863,7 +7383,7 @@ type AdminDayLine struct {
 
 func (x *AdminDayLine) Reset() {
 	*x = AdminDayLine{}
-	mi := &file_core_v1_core_proto_msgTypes[101]
+	mi := &file_core_v1_core_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6875,7 +7395,7 @@ func (x *AdminDayLine) String() string {
 func (*AdminDayLine) ProtoMessage() {}
 
 func (x *AdminDayLine) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[101]
+	mi := &file_core_v1_core_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6888,7 +7408,7 @@ func (x *AdminDayLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminDayLine.ProtoReflect.Descriptor instead.
 func (*AdminDayLine) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{101}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *AdminDayLine) GetCurrency() string {
@@ -6930,7 +7450,7 @@ type AdminDay struct {
 
 func (x *AdminDay) Reset() {
 	*x = AdminDay{}
-	mi := &file_core_v1_core_proto_msgTypes[102]
+	mi := &file_core_v1_core_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6942,7 +7462,7 @@ func (x *AdminDay) String() string {
 func (*AdminDay) ProtoMessage() {}
 
 func (x *AdminDay) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[102]
+	mi := &file_core_v1_core_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6955,7 +7475,7 @@ func (x *AdminDay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminDay.ProtoReflect.Descriptor instead.
 func (*AdminDay) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{102}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *AdminDay) GetDate() string {
@@ -6990,7 +7510,7 @@ type AdminTodayStatsResponse struct {
 
 func (x *AdminTodayStatsResponse) Reset() {
 	*x = AdminTodayStatsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[103]
+	mi := &file_core_v1_core_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7002,7 +7522,7 @@ func (x *AdminTodayStatsResponse) String() string {
 func (*AdminTodayStatsResponse) ProtoMessage() {}
 
 func (x *AdminTodayStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[103]
+	mi := &file_core_v1_core_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7015,7 +7535,7 @@ func (x *AdminTodayStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminTodayStatsResponse.ProtoReflect.Descriptor instead.
 func (*AdminTodayStatsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{103}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *AdminTodayStatsResponse) GetTz() string {
@@ -7048,7 +7568,7 @@ type AdminListSettingSpecsRequest struct {
 
 func (x *AdminListSettingSpecsRequest) Reset() {
 	*x = AdminListSettingSpecsRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[104]
+	mi := &file_core_v1_core_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7060,7 +7580,7 @@ func (x *AdminListSettingSpecsRequest) String() string {
 func (*AdminListSettingSpecsRequest) ProtoMessage() {}
 
 func (x *AdminListSettingSpecsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[104]
+	mi := &file_core_v1_core_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7073,7 +7593,7 @@ func (x *AdminListSettingSpecsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListSettingSpecsRequest.ProtoReflect.Descriptor instead.
 func (*AdminListSettingSpecsRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{104}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *AdminListSettingSpecsRequest) GetActorTelegramId() int64 {
@@ -7103,7 +7623,7 @@ type AdminSettingSpec struct {
 
 func (x *AdminSettingSpec) Reset() {
 	*x = AdminSettingSpec{}
-	mi := &file_core_v1_core_proto_msgTypes[105]
+	mi := &file_core_v1_core_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7115,7 +7635,7 @@ func (x *AdminSettingSpec) String() string {
 func (*AdminSettingSpec) ProtoMessage() {}
 
 func (x *AdminSettingSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[105]
+	mi := &file_core_v1_core_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7128,7 +7648,7 @@ func (x *AdminSettingSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSettingSpec.ProtoReflect.Descriptor instead.
 func (*AdminSettingSpec) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{105}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *AdminSettingSpec) GetKey() string {
@@ -7210,7 +7730,7 @@ type AdminListSettingSpecsResponse struct {
 
 func (x *AdminListSettingSpecsResponse) Reset() {
 	*x = AdminListSettingSpecsResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[106]
+	mi := &file_core_v1_core_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7222,7 +7742,7 @@ func (x *AdminListSettingSpecsResponse) String() string {
 func (*AdminListSettingSpecsResponse) ProtoMessage() {}
 
 func (x *AdminListSettingSpecsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[106]
+	mi := &file_core_v1_core_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7235,7 +7755,7 @@ func (x *AdminListSettingSpecsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListSettingSpecsResponse.ProtoReflect.Descriptor instead.
 func (*AdminListSettingSpecsResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{106}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *AdminListSettingSpecsResponse) GetSpecs() []*AdminSettingSpec {
@@ -7254,7 +7774,7 @@ type AdminListServersRequest struct {
 
 func (x *AdminListServersRequest) Reset() {
 	*x = AdminListServersRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[107]
+	mi := &file_core_v1_core_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7266,7 +7786,7 @@ func (x *AdminListServersRequest) String() string {
 func (*AdminListServersRequest) ProtoMessage() {}
 
 func (x *AdminListServersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[107]
+	mi := &file_core_v1_core_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7279,7 +7799,7 @@ func (x *AdminListServersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListServersRequest.ProtoReflect.Descriptor instead.
 func (*AdminListServersRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{107}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *AdminListServersRequest) GetActorTelegramId() int64 {
@@ -7306,7 +7826,7 @@ type AdminServer struct {
 
 func (x *AdminServer) Reset() {
 	*x = AdminServer{}
-	mi := &file_core_v1_core_proto_msgTypes[108]
+	mi := &file_core_v1_core_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7318,7 +7838,7 @@ func (x *AdminServer) String() string {
 func (*AdminServer) ProtoMessage() {}
 
 func (x *AdminServer) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[108]
+	mi := &file_core_v1_core_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7331,7 +7851,7 @@ func (x *AdminServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminServer.ProtoReflect.Descriptor instead.
 func (*AdminServer) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{108}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *AdminServer) GetId() string {
@@ -7406,7 +7926,7 @@ type AdminListServersResponse struct {
 
 func (x *AdminListServersResponse) Reset() {
 	*x = AdminListServersResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[109]
+	mi := &file_core_v1_core_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7418,7 +7938,7 @@ func (x *AdminListServersResponse) String() string {
 func (*AdminListServersResponse) ProtoMessage() {}
 
 func (x *AdminListServersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[109]
+	mi := &file_core_v1_core_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7431,7 +7951,7 @@ func (x *AdminListServersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListServersResponse.ProtoReflect.Descriptor instead.
 func (*AdminListServersResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{109}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *AdminListServersResponse) GetServers() []*AdminServer {
@@ -7455,7 +7975,7 @@ type AdminSetServerRequest struct {
 
 func (x *AdminSetServerRequest) Reset() {
 	*x = AdminSetServerRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[110]
+	mi := &file_core_v1_core_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7467,7 +7987,7 @@ func (x *AdminSetServerRequest) String() string {
 func (*AdminSetServerRequest) ProtoMessage() {}
 
 func (x *AdminSetServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[110]
+	mi := &file_core_v1_core_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7480,7 +8000,7 @@ func (x *AdminSetServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSetServerRequest.ProtoReflect.Descriptor instead.
 func (*AdminSetServerRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{110}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *AdminSetServerRequest) GetActorTelegramId() int64 {
@@ -7520,7 +8040,7 @@ type AdminListStaffRequest struct {
 
 func (x *AdminListStaffRequest) Reset() {
 	*x = AdminListStaffRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[111]
+	mi := &file_core_v1_core_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7532,7 +8052,7 @@ func (x *AdminListStaffRequest) String() string {
 func (*AdminListStaffRequest) ProtoMessage() {}
 
 func (x *AdminListStaffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[111]
+	mi := &file_core_v1_core_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7545,7 +8065,7 @@ func (x *AdminListStaffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListStaffRequest.ProtoReflect.Descriptor instead.
 func (*AdminListStaffRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{111}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *AdminListStaffRequest) GetActorTelegramId() int64 {
@@ -7569,7 +8089,7 @@ type AdminStaffMember struct {
 
 func (x *AdminStaffMember) Reset() {
 	*x = AdminStaffMember{}
-	mi := &file_core_v1_core_proto_msgTypes[112]
+	mi := &file_core_v1_core_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7581,7 +8101,7 @@ func (x *AdminStaffMember) String() string {
 func (*AdminStaffMember) ProtoMessage() {}
 
 func (x *AdminStaffMember) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[112]
+	mi := &file_core_v1_core_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7594,7 +8114,7 @@ func (x *AdminStaffMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminStaffMember.ProtoReflect.Descriptor instead.
 func (*AdminStaffMember) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{112}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *AdminStaffMember) GetUserId() string {
@@ -7648,7 +8168,7 @@ type AdminListStaffResponse struct {
 
 func (x *AdminListStaffResponse) Reset() {
 	*x = AdminListStaffResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[113]
+	mi := &file_core_v1_core_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7660,7 +8180,7 @@ func (x *AdminListStaffResponse) String() string {
 func (*AdminListStaffResponse) ProtoMessage() {}
 
 func (x *AdminListStaffResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[113]
+	mi := &file_core_v1_core_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7673,7 +8193,7 @@ func (x *AdminListStaffResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListStaffResponse.ProtoReflect.Descriptor instead.
 func (*AdminListStaffResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{113}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *AdminListStaffResponse) GetStaff() []*AdminStaffMember {
@@ -7697,7 +8217,7 @@ type AdminAddStaffRequest struct {
 
 func (x *AdminAddStaffRequest) Reset() {
 	*x = AdminAddStaffRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[114]
+	mi := &file_core_v1_core_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7709,7 +8229,7 @@ func (x *AdminAddStaffRequest) String() string {
 func (*AdminAddStaffRequest) ProtoMessage() {}
 
 func (x *AdminAddStaffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[114]
+	mi := &file_core_v1_core_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7722,7 +8242,7 @@ func (x *AdminAddStaffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminAddStaffRequest.ProtoReflect.Descriptor instead.
 func (*AdminAddStaffRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{114}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *AdminAddStaffRequest) GetActorTelegramId() int64 {
@@ -7764,7 +8284,7 @@ type AdminRemoveStaffRequest struct {
 
 func (x *AdminRemoveStaffRequest) Reset() {
 	*x = AdminRemoveStaffRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[115]
+	mi := &file_core_v1_core_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7776,7 +8296,7 @@ func (x *AdminRemoveStaffRequest) String() string {
 func (*AdminRemoveStaffRequest) ProtoMessage() {}
 
 func (x *AdminRemoveStaffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[115]
+	mi := &file_core_v1_core_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7789,7 +8309,7 @@ func (x *AdminRemoveStaffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminRemoveStaffRequest.ProtoReflect.Descriptor instead.
 func (*AdminRemoveStaffRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{115}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *AdminRemoveStaffRequest) GetActorTelegramId() int64 {
@@ -7821,7 +8341,7 @@ type AdminRemoveStaffResponse struct {
 
 func (x *AdminRemoveStaffResponse) Reset() {
 	*x = AdminRemoveStaffResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[116]
+	mi := &file_core_v1_core_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7833,7 +8353,7 @@ func (x *AdminRemoveStaffResponse) String() string {
 func (*AdminRemoveStaffResponse) ProtoMessage() {}
 
 func (x *AdminRemoveStaffResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[116]
+	mi := &file_core_v1_core_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7846,7 +8366,7 @@ func (x *AdminRemoveStaffResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminRemoveStaffResponse.ProtoReflect.Descriptor instead.
 func (*AdminRemoveStaffResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{116}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{122}
 }
 
 // AdminBroadcastRequest checks a broadcast (send = false: its audience and the
@@ -7866,7 +8386,7 @@ type AdminBroadcastRequest struct {
 
 func (x *AdminBroadcastRequest) Reset() {
 	*x = AdminBroadcastRequest{}
-	mi := &file_core_v1_core_proto_msgTypes[117]
+	mi := &file_core_v1_core_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7878,7 +8398,7 @@ func (x *AdminBroadcastRequest) String() string {
 func (*AdminBroadcastRequest) ProtoMessage() {}
 
 func (x *AdminBroadcastRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[117]
+	mi := &file_core_v1_core_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7891,7 +8411,7 @@ func (x *AdminBroadcastRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminBroadcastRequest.ProtoReflect.Descriptor instead.
 func (*AdminBroadcastRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{117}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *AdminBroadcastRequest) GetActorTelegramId() int64 {
@@ -7957,7 +8477,7 @@ type AdminBroadcastResponse struct {
 
 func (x *AdminBroadcastResponse) Reset() {
 	*x = AdminBroadcastResponse{}
-	mi := &file_core_v1_core_proto_msgTypes[118]
+	mi := &file_core_v1_core_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7969,7 +8489,7 @@ func (x *AdminBroadcastResponse) String() string {
 func (*AdminBroadcastResponse) ProtoMessage() {}
 
 func (x *AdminBroadcastResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_core_proto_msgTypes[118]
+	mi := &file_core_v1_core_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7982,7 +8502,7 @@ func (x *AdminBroadcastResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminBroadcastResponse.ProtoReflect.Descriptor instead.
 func (*AdminBroadcastResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_core_proto_rawDescGZIP(), []int{118}
+	return file_core_v1_core_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *AdminBroadcastResponse) GetAudience() int64 {
@@ -8298,7 +8818,57 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"list_price\x18\x01 \x01(\v2\x10.common.v1.MoneyR\tlistPrice\x12,\n" +
 	"\bdiscount\x18\x02 \x01(\v2\x10.common.v1.MoneyR\bdiscount\x12&\n" +
 	"\x05total\x18\x03 \x01(\v2\x10.common.v1.MoneyR\x05total\x12#\n" +
-	"\rdiscount_code\x18\x04 \x01(\tR\fdiscountCode\"1\n" +
+	"\rdiscount_code\x18\x04 \x01(\tR\fdiscountCode\"e\n" +
+	"\x15QuoteBulkOrderRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
+	"\aplan_id\x18\x02 \x01(\tR\x06planId\x12\x1a\n" +
+	"\bquantity\x18\x03 \x01(\x05R\bquantity\"\xa3\x01\n" +
+	"\tBulkQuote\x12\x1a\n" +
+	"\bquantity\x18\x01 \x01(\x05R\bquantity\x12/\n" +
+	"\n" +
+	"unit_price\x18\x02 \x01(\v2\x10.common.v1.MoneyR\tunitPrice\x12&\n" +
+	"\x05total\x18\x03 \x01(\v2\x10.common.v1.MoneyR\x05total\x12!\n" +
+	"\fmax_quantity\x18\x04 \x01(\x05R\vmaxQuantity\"\xeb\x01\n" +
+	"\x16CreateBulkOrderRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
+	"\aplan_id\x18\x02 \x01(\tR\x06planId\x12\x1a\n" +
+	"\bquantity\x18\x03 \x01(\x05R\bquantity\x12'\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12!\n" +
+	"\flabel_prefix\x18\x05 \x01(\tR\vlabelPrefix\x127\n" +
+	"\x0eexpected_total\x18\x06 \x01(\v2\x10.common.v1.MoneyR\rexpectedTotal\"G\n" +
+	"\x13GetBulkOrderRequest\x12\x17\n" +
+	"\abulk_id\x18\x01 \x01(\tR\x06bulkId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x82\x04\n" +
+	"\tBulkOrder\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x17\n" +
+	"\aplan_id\x18\x03 \x01(\tR\x06planId\x12\x1a\n" +
+	"\bquantity\x18\x04 \x01(\x05R\bquantity\x12/\n" +
+	"\n" +
+	"unit_price\x18\x05 \x01(\v2\x10.common.v1.MoneyR\tunitPrice\x12&\n" +
+	"\x05total\x18\x06 \x01(\v2\x10.common.v1.MoneyR\x05total\x12!\n" +
+	"\flabel_prefix\x18\a \x01(\tR\vlabelPrefix\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\b \x01(\x03R\tcreatedAt\x12!\n" +
+	"\fdelivered_at\x18\t \x01(\x03R\vdeliveredAt\x12J\n" +
+	"\x0eplan_name_i18n\x18\n" +
+	" \x03(\v2$.core.v1.BulkOrder.PlanNameI18nEntryR\fplanNameI18n\x120\n" +
+	"\bservices\x18\v \x03(\v2\x14.core.v1.BulkServiceR\bservices\x12\x1a\n" +
+	"\breplayed\x18\f \x01(\bR\breplayed\x1a?\n" +
+	"\x11PlanNameI18nEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb4\x02\n" +
+	"\vBulkService\x12\x14\n" +
+	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\x12!\n" +
+	"\forder_status\x18\x03 \x01(\tR\vorderStatus\x12'\n" +
+	"\x0fsubscription_id\x18\x04 \x01(\tR\x0esubscriptionId\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12\x14\n" +
+	"\x05label\x18\x06 \x01(\tR\x05label\x12+\n" +
+	"\x11subscription_link\x18\a \x01(\tR\x10subscriptionLink\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\b \x01(\x03R\texpiresAt\x12.\n" +
+	"\x13traffic_total_bytes\x18\t \x01(\x03R\x11trafficTotalBytes\"1\n" +
 	"\x16GetReferralInfoRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xa9\x01\n" +
 	"\fReferralInfo\x12\x12\n" +
@@ -8703,7 +9273,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x19BROADCAST_OUTCOME_BLOCKED\x10\x02\x12\x1c\n" +
 	"\x18BROADCAST_OUTCOME_FAILED\x10\x03\x12\x1d\n" +
 	"\x19BROADCAST_OUTCOME_UNKNOWN\x10\x04\x12\x1e\n" +
-	"\x1aBROADCAST_OUTCOME_RELEASED\x10\x052\xff%\n" +
+	"\x1aBROADCAST_OUTCOME_RELEASED\x10\x052\xcf'\n" +
 	"\vCoreService\x127\n" +
 	"\n" +
 	"UpsertUser\x12\x1a.core.v1.UpsertUserRequest\x1a\r.core.v1.User\x121\n" +
@@ -8738,7 +9308,10 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x0fAdminUpsertPlan\x12\x1f.core.v1.AdminUpsertPlanRequest\x1a\r.core.v1.Plan\x12E\n" +
 	"\x0fAdminSetSetting\x12\x1f.core.v1.AdminSetSettingRequest\x1a\x11.core.v1.Settings\x128\n" +
 	"\n" +
-	"QuoteOrder\x12\x1a.core.v1.QuoteOrderRequest\x1a\x0e.core.v1.Quote\x12I\n" +
+	"QuoteOrder\x12\x1a.core.v1.QuoteOrderRequest\x1a\x0e.core.v1.Quote\x12D\n" +
+	"\x0eQuoteBulkOrder\x12\x1e.core.v1.QuoteBulkOrderRequest\x1a\x12.core.v1.BulkQuote\x12F\n" +
+	"\x0fCreateBulkOrder\x12\x1f.core.v1.CreateBulkOrderRequest\x1a\x12.core.v1.BulkOrder\x12@\n" +
+	"\fGetBulkOrder\x12\x1c.core.v1.GetBulkOrderRequest\x1a\x12.core.v1.BulkOrder\x12I\n" +
 	"\x0fGetReferralInfo\x12\x1f.core.v1.GetReferralInfoRequest\x1a\x15.core.v1.ReferralInfo\x12M\n" +
 	"\x13AdminUpsertDiscount\x12#.core.v1.AdminUpsertDiscountRequest\x1a\x11.core.v1.Discount\x12]\n" +
 	"\x12AdminListDiscounts\x12\".core.v1.AdminListDiscountsRequest\x1a#.core.v1.AdminListDiscountsResponse\x12R\n" +
@@ -8783,7 +9356,7 @@ func file_core_v1_core_proto_rawDescGZIP() []byte {
 }
 
 var file_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 129)
+var file_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 136)
 var file_core_v1_core_proto_goTypes = []any{
 	(BroadcastOutcome)(0),                    // 0: core.v1.BroadcastOutcome
 	(*User)(nil),                             // 1: core.v1.User
@@ -8822,298 +9395,318 @@ var file_core_v1_core_proto_goTypes = []any{
 	(*CreateOrderRequest)(nil),               // 34: core.v1.CreateOrderRequest
 	(*QuoteOrderRequest)(nil),                // 35: core.v1.QuoteOrderRequest
 	(*Quote)(nil),                            // 36: core.v1.Quote
-	(*GetReferralInfoRequest)(nil),           // 37: core.v1.GetReferralInfoRequest
-	(*ReferralInfo)(nil),                     // 38: core.v1.ReferralInfo
-	(*Discount)(nil),                         // 39: core.v1.Discount
-	(*AdminUpsertDiscountRequest)(nil),       // 40: core.v1.AdminUpsertDiscountRequest
-	(*AdminListDiscountsRequest)(nil),        // 41: core.v1.AdminListDiscountsRequest
-	(*AdminListDiscountsResponse)(nil),       // 42: core.v1.AdminListDiscountsResponse
-	(*CreateDashboardLinkRequest)(nil),       // 43: core.v1.CreateDashboardLinkRequest
-	(*ListStaffContactsRequest)(nil),         // 44: core.v1.ListStaffContactsRequest
-	(*StaffContact)(nil),                     // 45: core.v1.StaffContact
-	(*ListStaffContactsResponse)(nil),        // 46: core.v1.ListStaffContactsResponse
-	(*DashboardLink)(nil),                    // 47: core.v1.DashboardLink
-	(*GetOrderRequest)(nil),                  // 48: core.v1.GetOrderRequest
-	(*GetWalletRequest)(nil),                 // 49: core.v1.GetWalletRequest
-	(*ListLedgerEntriesRequest)(nil),         // 50: core.v1.ListLedgerEntriesRequest
-	(*ListLedgerEntriesResponse)(nil),        // 51: core.v1.ListLedgerEntriesResponse
-	(*ListSubscriptionsRequest)(nil),         // 52: core.v1.ListSubscriptionsRequest
-	(*ListSubscriptionsResponse)(nil),        // 53: core.v1.ListSubscriptionsResponse
-	(*SetSubscriptionLabelRequest)(nil),      // 54: core.v1.SetSubscriptionLabelRequest
-	(*ServiceCounts)(nil),                    // 55: core.v1.ServiceCounts
-	(*ListResellerServicesRequest)(nil),      // 56: core.v1.ListResellerServicesRequest
-	(*ListResellerServicesResponse)(nil),     // 57: core.v1.ListResellerServicesResponse
-	(*SetResellerServiceEnabledRequest)(nil), // 58: core.v1.SetResellerServiceEnabledRequest
-	(*DeleteResellerServiceRequest)(nil),     // 59: core.v1.DeleteResellerServiceRequest
-	(*DeleteResellerServiceResponse)(nil),    // 60: core.v1.DeleteResellerServiceResponse
-	(*SetSubscriptionNoteRequest)(nil),       // 61: core.v1.SetSubscriptionNoteRequest
-	(*ListInvitedCustomersRequest)(nil),      // 62: core.v1.ListInvitedCustomersRequest
-	(*InvitedCustomer)(nil),                  // 63: core.v1.InvitedCustomer
-	(*ListInvitedCustomersResponse)(nil),     // 64: core.v1.ListInvitedCustomersResponse
-	(*GetResellerInfoRequest)(nil),           // 65: core.v1.GetResellerInfoRequest
-	(*ResellerBalance)(nil),                  // 66: core.v1.ResellerBalance
-	(*ResellerInfo)(nil),                     // 67: core.v1.ResellerInfo
-	(*CreateSupportTicketRequest)(nil),       // 68: core.v1.CreateSupportTicketRequest
-	(*GetSettingsRequest)(nil),               // 69: core.v1.GetSettingsRequest
-	(*GetBotPhotoRequest)(nil),               // 70: core.v1.GetBotPhotoRequest
-	(*BotPhoto)(nil),                         // 71: core.v1.BotPhoto
-	(*UpdateBrandingRequest)(nil),            // 72: core.v1.UpdateBrandingRequest
-	(*ReviewManualPaymentRequest)(nil),       // 73: core.v1.ReviewManualPaymentRequest
-	(*PaymentIntentRef)(nil),                 // 74: core.v1.PaymentIntentRef
-	(*CheckPaymentRequest)(nil),              // 75: core.v1.CheckPaymentRequest
-	(*StarsPreCheckoutRequest)(nil),          // 76: core.v1.StarsPreCheckoutRequest
-	(*StarsPaidRequest)(nil),                 // 77: core.v1.StarsPaidRequest
-	(*ListPaymentMethodsRequest)(nil),        // 78: core.v1.ListPaymentMethodsRequest
-	(*ListPaymentMethodsResponse)(nil),       // 79: core.v1.ListPaymentMethodsResponse
-	(*SubmitPaymentProofRequest)(nil),        // 80: core.v1.SubmitPaymentProofRequest
-	(*GetSubscriptionLinksRequest)(nil),      // 81: core.v1.GetSubscriptionLinksRequest
-	(*SubscriptionLinks)(nil),                // 82: core.v1.SubscriptionLinks
-	(*AdminGetStatsRequest)(nil),             // 83: core.v1.AdminGetStatsRequest
-	(*AdminStats)(nil),                       // 84: core.v1.AdminStats
-	(*AdminListPendingPaymentsRequest)(nil),  // 85: core.v1.AdminListPendingPaymentsRequest
-	(*PendingPayment)(nil),                   // 86: core.v1.PendingPayment
-	(*AdminListPendingPaymentsResponse)(nil), // 87: core.v1.AdminListPendingPaymentsResponse
-	(*AdminGetPaymentRequest)(nil),           // 88: core.v1.AdminGetPaymentRequest
-	(*AdminPaymentView)(nil),                 // 89: core.v1.AdminPaymentView
-	(*AdminFindUserRequest)(nil),             // 90: core.v1.AdminFindUserRequest
-	(*AdminUserView)(nil),                    // 91: core.v1.AdminUserView
-	(*AdminAdjustBalanceRequest)(nil),        // 92: core.v1.AdminAdjustBalanceRequest
-	(*AdminSetUserStatusRequest)(nil),        // 93: core.v1.AdminSetUserStatusRequest
-	(*AdminUpsertPlanRequest)(nil),           // 94: core.v1.AdminUpsertPlanRequest
-	(*AdminSetSettingRequest)(nil),           // 95: core.v1.AdminSetSettingRequest
-	(*PayOrderWithWalletRequest)(nil),        // 96: core.v1.PayOrderWithWalletRequest
-	(*CreatePaymentIntentRequest)(nil),       // 97: core.v1.CreatePaymentIntentRequest
-	(*StartTrialRequest)(nil),                // 98: core.v1.StartTrialRequest
-	(*CanStartTrialRequest)(nil),             // 99: core.v1.CanStartTrialRequest
-	(*CanStartTrialResponse)(nil),            // 100: core.v1.CanStartTrialResponse
-	(*AdminTodayStatsRequest)(nil),           // 101: core.v1.AdminTodayStatsRequest
-	(*AdminDayLine)(nil),                     // 102: core.v1.AdminDayLine
-	(*AdminDay)(nil),                         // 103: core.v1.AdminDay
-	(*AdminTodayStatsResponse)(nil),          // 104: core.v1.AdminTodayStatsResponse
-	(*AdminListSettingSpecsRequest)(nil),     // 105: core.v1.AdminListSettingSpecsRequest
-	(*AdminSettingSpec)(nil),                 // 106: core.v1.AdminSettingSpec
-	(*AdminListSettingSpecsResponse)(nil),    // 107: core.v1.AdminListSettingSpecsResponse
-	(*AdminListServersRequest)(nil),          // 108: core.v1.AdminListServersRequest
-	(*AdminServer)(nil),                      // 109: core.v1.AdminServer
-	(*AdminListServersResponse)(nil),         // 110: core.v1.AdminListServersResponse
-	(*AdminSetServerRequest)(nil),            // 111: core.v1.AdminSetServerRequest
-	(*AdminListStaffRequest)(nil),            // 112: core.v1.AdminListStaffRequest
-	(*AdminStaffMember)(nil),                 // 113: core.v1.AdminStaffMember
-	(*AdminListStaffResponse)(nil),           // 114: core.v1.AdminListStaffResponse
-	(*AdminAddStaffRequest)(nil),             // 115: core.v1.AdminAddStaffRequest
-	(*AdminRemoveStaffRequest)(nil),          // 116: core.v1.AdminRemoveStaffRequest
-	(*AdminRemoveStaffResponse)(nil),         // 117: core.v1.AdminRemoveStaffResponse
-	(*AdminBroadcastRequest)(nil),            // 118: core.v1.AdminBroadcastRequest
-	(*AdminBroadcastResponse)(nil),           // 119: core.v1.AdminBroadcastResponse
-	nil,                                      // 120: core.v1.Plan.NameI18nEntry
-	nil,                                      // 121: core.v1.BroadcastBatch.TextsEntry
-	nil,                                      // 122: core.v1.BroadcastBatch.ButtonLabelsEntry
-	nil,                                      // 123: core.v1.Settings.ValuesEntry
-	nil,                                      // 124: core.v1.UpdateBrandingRequest.ValuesEntry
-	nil,                                      // 125: core.v1.PaymentIntentRef.DetailsEntry
-	nil,                                      // 126: core.v1.AdminBroadcastRequest.TextsEntry
-	nil,                                      // 127: core.v1.AdminBroadcastRequest.ButtonLabelsEntry
-	nil,                                      // 128: core.v1.AdminBroadcastResponse.TextsEntry
-	nil,                                      // 129: core.v1.AdminBroadcastResponse.ButtonLabelsEntry
-	(*v1.Money)(nil),                         // 130: common.v1.Money
-	(*v1.Pagination)(nil),                    // 131: common.v1.Pagination
-	(*v1.PageInfo)(nil),                      // 132: common.v1.PageInfo
+	(*QuoteBulkOrderRequest)(nil),            // 37: core.v1.QuoteBulkOrderRequest
+	(*BulkQuote)(nil),                        // 38: core.v1.BulkQuote
+	(*CreateBulkOrderRequest)(nil),           // 39: core.v1.CreateBulkOrderRequest
+	(*GetBulkOrderRequest)(nil),              // 40: core.v1.GetBulkOrderRequest
+	(*BulkOrder)(nil),                        // 41: core.v1.BulkOrder
+	(*BulkService)(nil),                      // 42: core.v1.BulkService
+	(*GetReferralInfoRequest)(nil),           // 43: core.v1.GetReferralInfoRequest
+	(*ReferralInfo)(nil),                     // 44: core.v1.ReferralInfo
+	(*Discount)(nil),                         // 45: core.v1.Discount
+	(*AdminUpsertDiscountRequest)(nil),       // 46: core.v1.AdminUpsertDiscountRequest
+	(*AdminListDiscountsRequest)(nil),        // 47: core.v1.AdminListDiscountsRequest
+	(*AdminListDiscountsResponse)(nil),       // 48: core.v1.AdminListDiscountsResponse
+	(*CreateDashboardLinkRequest)(nil),       // 49: core.v1.CreateDashboardLinkRequest
+	(*ListStaffContactsRequest)(nil),         // 50: core.v1.ListStaffContactsRequest
+	(*StaffContact)(nil),                     // 51: core.v1.StaffContact
+	(*ListStaffContactsResponse)(nil),        // 52: core.v1.ListStaffContactsResponse
+	(*DashboardLink)(nil),                    // 53: core.v1.DashboardLink
+	(*GetOrderRequest)(nil),                  // 54: core.v1.GetOrderRequest
+	(*GetWalletRequest)(nil),                 // 55: core.v1.GetWalletRequest
+	(*ListLedgerEntriesRequest)(nil),         // 56: core.v1.ListLedgerEntriesRequest
+	(*ListLedgerEntriesResponse)(nil),        // 57: core.v1.ListLedgerEntriesResponse
+	(*ListSubscriptionsRequest)(nil),         // 58: core.v1.ListSubscriptionsRequest
+	(*ListSubscriptionsResponse)(nil),        // 59: core.v1.ListSubscriptionsResponse
+	(*SetSubscriptionLabelRequest)(nil),      // 60: core.v1.SetSubscriptionLabelRequest
+	(*ServiceCounts)(nil),                    // 61: core.v1.ServiceCounts
+	(*ListResellerServicesRequest)(nil),      // 62: core.v1.ListResellerServicesRequest
+	(*ListResellerServicesResponse)(nil),     // 63: core.v1.ListResellerServicesResponse
+	(*SetResellerServiceEnabledRequest)(nil), // 64: core.v1.SetResellerServiceEnabledRequest
+	(*DeleteResellerServiceRequest)(nil),     // 65: core.v1.DeleteResellerServiceRequest
+	(*DeleteResellerServiceResponse)(nil),    // 66: core.v1.DeleteResellerServiceResponse
+	(*SetSubscriptionNoteRequest)(nil),       // 67: core.v1.SetSubscriptionNoteRequest
+	(*ListInvitedCustomersRequest)(nil),      // 68: core.v1.ListInvitedCustomersRequest
+	(*InvitedCustomer)(nil),                  // 69: core.v1.InvitedCustomer
+	(*ListInvitedCustomersResponse)(nil),     // 70: core.v1.ListInvitedCustomersResponse
+	(*GetResellerInfoRequest)(nil),           // 71: core.v1.GetResellerInfoRequest
+	(*ResellerBalance)(nil),                  // 72: core.v1.ResellerBalance
+	(*ResellerInfo)(nil),                     // 73: core.v1.ResellerInfo
+	(*CreateSupportTicketRequest)(nil),       // 74: core.v1.CreateSupportTicketRequest
+	(*GetSettingsRequest)(nil),               // 75: core.v1.GetSettingsRequest
+	(*GetBotPhotoRequest)(nil),               // 76: core.v1.GetBotPhotoRequest
+	(*BotPhoto)(nil),                         // 77: core.v1.BotPhoto
+	(*UpdateBrandingRequest)(nil),            // 78: core.v1.UpdateBrandingRequest
+	(*ReviewManualPaymentRequest)(nil),       // 79: core.v1.ReviewManualPaymentRequest
+	(*PaymentIntentRef)(nil),                 // 80: core.v1.PaymentIntentRef
+	(*CheckPaymentRequest)(nil),              // 81: core.v1.CheckPaymentRequest
+	(*StarsPreCheckoutRequest)(nil),          // 82: core.v1.StarsPreCheckoutRequest
+	(*StarsPaidRequest)(nil),                 // 83: core.v1.StarsPaidRequest
+	(*ListPaymentMethodsRequest)(nil),        // 84: core.v1.ListPaymentMethodsRequest
+	(*ListPaymentMethodsResponse)(nil),       // 85: core.v1.ListPaymentMethodsResponse
+	(*SubmitPaymentProofRequest)(nil),        // 86: core.v1.SubmitPaymentProofRequest
+	(*GetSubscriptionLinksRequest)(nil),      // 87: core.v1.GetSubscriptionLinksRequest
+	(*SubscriptionLinks)(nil),                // 88: core.v1.SubscriptionLinks
+	(*AdminGetStatsRequest)(nil),             // 89: core.v1.AdminGetStatsRequest
+	(*AdminStats)(nil),                       // 90: core.v1.AdminStats
+	(*AdminListPendingPaymentsRequest)(nil),  // 91: core.v1.AdminListPendingPaymentsRequest
+	(*PendingPayment)(nil),                   // 92: core.v1.PendingPayment
+	(*AdminListPendingPaymentsResponse)(nil), // 93: core.v1.AdminListPendingPaymentsResponse
+	(*AdminGetPaymentRequest)(nil),           // 94: core.v1.AdminGetPaymentRequest
+	(*AdminPaymentView)(nil),                 // 95: core.v1.AdminPaymentView
+	(*AdminFindUserRequest)(nil),             // 96: core.v1.AdminFindUserRequest
+	(*AdminUserView)(nil),                    // 97: core.v1.AdminUserView
+	(*AdminAdjustBalanceRequest)(nil),        // 98: core.v1.AdminAdjustBalanceRequest
+	(*AdminSetUserStatusRequest)(nil),        // 99: core.v1.AdminSetUserStatusRequest
+	(*AdminUpsertPlanRequest)(nil),           // 100: core.v1.AdminUpsertPlanRequest
+	(*AdminSetSettingRequest)(nil),           // 101: core.v1.AdminSetSettingRequest
+	(*PayOrderWithWalletRequest)(nil),        // 102: core.v1.PayOrderWithWalletRequest
+	(*CreatePaymentIntentRequest)(nil),       // 103: core.v1.CreatePaymentIntentRequest
+	(*StartTrialRequest)(nil),                // 104: core.v1.StartTrialRequest
+	(*CanStartTrialRequest)(nil),             // 105: core.v1.CanStartTrialRequest
+	(*CanStartTrialResponse)(nil),            // 106: core.v1.CanStartTrialResponse
+	(*AdminTodayStatsRequest)(nil),           // 107: core.v1.AdminTodayStatsRequest
+	(*AdminDayLine)(nil),                     // 108: core.v1.AdminDayLine
+	(*AdminDay)(nil),                         // 109: core.v1.AdminDay
+	(*AdminTodayStatsResponse)(nil),          // 110: core.v1.AdminTodayStatsResponse
+	(*AdminListSettingSpecsRequest)(nil),     // 111: core.v1.AdminListSettingSpecsRequest
+	(*AdminSettingSpec)(nil),                 // 112: core.v1.AdminSettingSpec
+	(*AdminListSettingSpecsResponse)(nil),    // 113: core.v1.AdminListSettingSpecsResponse
+	(*AdminListServersRequest)(nil),          // 114: core.v1.AdminListServersRequest
+	(*AdminServer)(nil),                      // 115: core.v1.AdminServer
+	(*AdminListServersResponse)(nil),         // 116: core.v1.AdminListServersResponse
+	(*AdminSetServerRequest)(nil),            // 117: core.v1.AdminSetServerRequest
+	(*AdminListStaffRequest)(nil),            // 118: core.v1.AdminListStaffRequest
+	(*AdminStaffMember)(nil),                 // 119: core.v1.AdminStaffMember
+	(*AdminListStaffResponse)(nil),           // 120: core.v1.AdminListStaffResponse
+	(*AdminAddStaffRequest)(nil),             // 121: core.v1.AdminAddStaffRequest
+	(*AdminRemoveStaffRequest)(nil),          // 122: core.v1.AdminRemoveStaffRequest
+	(*AdminRemoveStaffResponse)(nil),         // 123: core.v1.AdminRemoveStaffResponse
+	(*AdminBroadcastRequest)(nil),            // 124: core.v1.AdminBroadcastRequest
+	(*AdminBroadcastResponse)(nil),           // 125: core.v1.AdminBroadcastResponse
+	nil,                                      // 126: core.v1.Plan.NameI18nEntry
+	nil,                                      // 127: core.v1.BroadcastBatch.TextsEntry
+	nil,                                      // 128: core.v1.BroadcastBatch.ButtonLabelsEntry
+	nil,                                      // 129: core.v1.Settings.ValuesEntry
+	nil,                                      // 130: core.v1.BulkOrder.PlanNameI18nEntry
+	nil,                                      // 131: core.v1.UpdateBrandingRequest.ValuesEntry
+	nil,                                      // 132: core.v1.PaymentIntentRef.DetailsEntry
+	nil,                                      // 133: core.v1.AdminBroadcastRequest.TextsEntry
+	nil,                                      // 134: core.v1.AdminBroadcastRequest.ButtonLabelsEntry
+	nil,                                      // 135: core.v1.AdminBroadcastResponse.TextsEntry
+	nil,                                      // 136: core.v1.AdminBroadcastResponse.ButtonLabelsEntry
+	(*v1.Money)(nil),                         // 137: common.v1.Money
+	(*v1.Pagination)(nil),                    // 138: common.v1.Pagination
+	(*v1.PageInfo)(nil),                      // 139: common.v1.PageInfo
 }
 var file_core_v1_core_proto_depIdxs = []int32{
-	120, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
-	130, // 1: core.v1.Plan.price:type_name -> common.v1.Money
-	130, // 2: core.v1.Plan.list_price:type_name -> common.v1.Money
+	126, // 0: core.v1.Plan.name_i18n:type_name -> core.v1.Plan.NameI18nEntry
+	137, // 1: core.v1.Plan.price:type_name -> common.v1.Money
+	137, // 2: core.v1.Plan.list_price:type_name -> common.v1.Money
 	3,   // 3: core.v1.Plan.inbounds:type_name -> core.v1.InboundSelection
-	130, // 4: core.v1.Order.amount:type_name -> common.v1.Money
-	130, // 5: core.v1.Order.discount:type_name -> common.v1.Money
+	137, // 4: core.v1.Order.amount:type_name -> common.v1.Money
+	137, // 5: core.v1.Order.discount:type_name -> common.v1.Money
 	8,   // 6: core.v1.AddTicketMessageResponse.ticket:type_name -> core.v1.Ticket
 	8,   // 7: core.v1.MyTickets.open:type_name -> core.v1.Ticket
 	8,   // 8: core.v1.MyTickets.recent:type_name -> core.v1.Ticket
 	8,   // 9: core.v1.TicketThread.ticket:type_name -> core.v1.Ticket
 	9,   // 10: core.v1.TicketThread.messages:type_name -> core.v1.TicketMessage
-	121, // 11: core.v1.BroadcastBatch.texts:type_name -> core.v1.BroadcastBatch.TextsEntry
-	122, // 12: core.v1.BroadcastBatch.button_labels:type_name -> core.v1.BroadcastBatch.ButtonLabelsEntry
+	127, // 11: core.v1.BroadcastBatch.texts:type_name -> core.v1.BroadcastBatch.TextsEntry
+	128, // 12: core.v1.BroadcastBatch.button_labels:type_name -> core.v1.BroadcastBatch.ButtonLabelsEntry
 	24,  // 13: core.v1.BroadcastBatch.recipients:type_name -> core.v1.BroadcastRecipient
 	0,   // 14: core.v1.BroadcastResult.outcome:type_name -> core.v1.BroadcastOutcome
 	26,  // 15: core.v1.ReportBroadcastResultsRequest.results:type_name -> core.v1.BroadcastResult
-	123, // 16: core.v1.Settings.values:type_name -> core.v1.Settings.ValuesEntry
+	129, // 16: core.v1.Settings.values:type_name -> core.v1.Settings.ValuesEntry
 	2,   // 17: core.v1.ListPlansResponse.plans:type_name -> core.v1.Plan
-	130, // 18: core.v1.Quote.list_price:type_name -> common.v1.Money
-	130, // 19: core.v1.Quote.discount:type_name -> common.v1.Money
-	130, // 20: core.v1.Quote.total:type_name -> common.v1.Money
-	130, // 21: core.v1.ReferralInfo.earned:type_name -> common.v1.Money
-	130, // 22: core.v1.Discount.amount:type_name -> common.v1.Money
-	39,  // 23: core.v1.AdminUpsertDiscountRequest.discount:type_name -> core.v1.Discount
-	39,  // 24: core.v1.AdminListDiscountsResponse.discounts:type_name -> core.v1.Discount
-	45,  // 25: core.v1.ListStaffContactsResponse.items:type_name -> core.v1.StaffContact
-	131, // 26: core.v1.ListLedgerEntriesRequest.pagination:type_name -> common.v1.Pagination
-	6,   // 27: core.v1.ListLedgerEntriesResponse.entries:type_name -> core.v1.LedgerEntry
-	132, // 28: core.v1.ListLedgerEntriesResponse.page_info:type_name -> common.v1.PageInfo
-	131, // 29: core.v1.ListSubscriptionsRequest.pagination:type_name -> common.v1.Pagination
-	7,   // 30: core.v1.ListSubscriptionsResponse.subscriptions:type_name -> core.v1.Subscription
-	132, // 31: core.v1.ListSubscriptionsResponse.page_info:type_name -> common.v1.PageInfo
-	131, // 32: core.v1.ListResellerServicesRequest.pagination:type_name -> common.v1.Pagination
-	7,   // 33: core.v1.ListResellerServicesResponse.subscriptions:type_name -> core.v1.Subscription
-	132, // 34: core.v1.ListResellerServicesResponse.page_info:type_name -> common.v1.PageInfo
-	55,  // 35: core.v1.ListResellerServicesResponse.counts:type_name -> core.v1.ServiceCounts
-	131, // 36: core.v1.ListInvitedCustomersRequest.pagination:type_name -> common.v1.Pagination
-	130, // 37: core.v1.InvitedCustomer.spent:type_name -> common.v1.Money
-	130, // 38: core.v1.InvitedCustomer.commission:type_name -> common.v1.Money
-	63,  // 39: core.v1.ListInvitedCustomersResponse.customers:type_name -> core.v1.InvitedCustomer
-	132, // 40: core.v1.ListInvitedCustomersResponse.page_info:type_name -> common.v1.PageInfo
-	66,  // 41: core.v1.ResellerInfo.balances:type_name -> core.v1.ResellerBalance
-	130, // 42: core.v1.ResellerInfo.commission_earned:type_name -> common.v1.Money
-	124, // 43: core.v1.UpdateBrandingRequest.values:type_name -> core.v1.UpdateBrandingRequest.ValuesEntry
-	130, // 44: core.v1.PaymentIntentRef.amount:type_name -> common.v1.Money
-	125, // 45: core.v1.PaymentIntentRef.details:type_name -> core.v1.PaymentIntentRef.DetailsEntry
-	130, // 46: core.v1.PaymentIntentRef.gateway_amount:type_name -> common.v1.Money
-	1,   // 47: core.v1.PendingPayment.user:type_name -> core.v1.User
-	130, // 48: core.v1.PendingPayment.amount:type_name -> common.v1.Money
-	86,  // 49: core.v1.AdminListPendingPaymentsResponse.payments:type_name -> core.v1.PendingPayment
-	86,  // 50: core.v1.AdminPaymentView.payment:type_name -> core.v1.PendingPayment
-	1,   // 51: core.v1.AdminPaymentView.reviewer:type_name -> core.v1.User
-	1,   // 52: core.v1.AdminUserView.user:type_name -> core.v1.User
-	5,   // 53: core.v1.AdminUserView.wallets:type_name -> core.v1.Wallet
-	130, // 54: core.v1.AdminAdjustBalanceRequest.delta:type_name -> common.v1.Money
-	2,   // 55: core.v1.AdminUpsertPlanRequest.plan:type_name -> core.v1.Plan
-	130, // 56: core.v1.CreatePaymentIntentRequest.amount:type_name -> common.v1.Money
-	102, // 57: core.v1.AdminDay.lines:type_name -> core.v1.AdminDayLine
-	103, // 58: core.v1.AdminTodayStatsResponse.today:type_name -> core.v1.AdminDay
-	103, // 59: core.v1.AdminTodayStatsResponse.yesterday:type_name -> core.v1.AdminDay
-	106, // 60: core.v1.AdminListSettingSpecsResponse.specs:type_name -> core.v1.AdminSettingSpec
-	109, // 61: core.v1.AdminListServersResponse.servers:type_name -> core.v1.AdminServer
-	113, // 62: core.v1.AdminListStaffResponse.staff:type_name -> core.v1.AdminStaffMember
-	126, // 63: core.v1.AdminBroadcastRequest.texts:type_name -> core.v1.AdminBroadcastRequest.TextsEntry
-	127, // 64: core.v1.AdminBroadcastRequest.button_labels:type_name -> core.v1.AdminBroadcastRequest.ButtonLabelsEntry
-	128, // 65: core.v1.AdminBroadcastResponse.texts:type_name -> core.v1.AdminBroadcastResponse.TextsEntry
-	129, // 66: core.v1.AdminBroadcastResponse.button_labels:type_name -> core.v1.AdminBroadcastResponse.ButtonLabelsEntry
-	30,  // 67: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
-	31,  // 68: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
-	32,  // 69: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
-	34,  // 70: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
-	48,  // 71: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
-	49,  // 72: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
-	50,  // 73: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
-	52,  // 74: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
-	68,  // 75: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
-	69,  // 76: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
-	72,  // 77: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
-	73,  // 78: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
-	96,  // 79: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
-	97,  // 80: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
-	98,  // 81: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
-	99,  // 82: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
-	80,  // 83: core.v1.CoreService.SubmitPaymentProof:input_type -> core.v1.SubmitPaymentProofRequest
-	75,  // 84: core.v1.CoreService.CheckPayment:input_type -> core.v1.CheckPaymentRequest
-	76,  // 85: core.v1.CoreService.StarsPreCheckout:input_type -> core.v1.StarsPreCheckoutRequest
-	77,  // 86: core.v1.CoreService.StarsPaid:input_type -> core.v1.StarsPaidRequest
-	78,  // 87: core.v1.CoreService.ListPaymentMethods:input_type -> core.v1.ListPaymentMethodsRequest
-	81,  // 88: core.v1.CoreService.GetSubscriptionLinks:input_type -> core.v1.GetSubscriptionLinksRequest
-	83,  // 89: core.v1.CoreService.AdminGetStats:input_type -> core.v1.AdminGetStatsRequest
-	85,  // 90: core.v1.CoreService.AdminListPendingPayments:input_type -> core.v1.AdminListPendingPaymentsRequest
-	88,  // 91: core.v1.CoreService.AdminGetPayment:input_type -> core.v1.AdminGetPaymentRequest
-	90,  // 92: core.v1.CoreService.AdminFindUser:input_type -> core.v1.AdminFindUserRequest
-	92,  // 93: core.v1.CoreService.AdminAdjustBalance:input_type -> core.v1.AdminAdjustBalanceRequest
-	93,  // 94: core.v1.CoreService.AdminSetUserStatus:input_type -> core.v1.AdminSetUserStatusRequest
-	94,  // 95: core.v1.CoreService.AdminUpsertPlan:input_type -> core.v1.AdminUpsertPlanRequest
-	95,  // 96: core.v1.CoreService.AdminSetSetting:input_type -> core.v1.AdminSetSettingRequest
-	35,  // 97: core.v1.CoreService.QuoteOrder:input_type -> core.v1.QuoteOrderRequest
-	37,  // 98: core.v1.CoreService.GetReferralInfo:input_type -> core.v1.GetReferralInfoRequest
-	40,  // 99: core.v1.CoreService.AdminUpsertDiscount:input_type -> core.v1.AdminUpsertDiscountRequest
-	41,  // 100: core.v1.CoreService.AdminListDiscounts:input_type -> core.v1.AdminListDiscountsRequest
-	43,  // 101: core.v1.CoreService.CreateDashboardLink:input_type -> core.v1.CreateDashboardLinkRequest
-	44,  // 102: core.v1.CoreService.ListStaffContacts:input_type -> core.v1.ListStaffContactsRequest
-	10,  // 103: core.v1.CoreService.AddTicketMessage:input_type -> core.v1.AddTicketMessageRequest
-	12,  // 104: core.v1.CoreService.GetMyTickets:input_type -> core.v1.GetMyTicketsRequest
-	14,  // 105: core.v1.CoreService.GetMyTicket:input_type -> core.v1.GetMyTicketRequest
-	16,  // 106: core.v1.CoreService.CloseMyTicket:input_type -> core.v1.CloseMyTicketRequest
-	17,  // 107: core.v1.CoreService.GetTicketMessage:input_type -> core.v1.GetTicketMessageRequest
-	19,  // 108: core.v1.CoreService.ReportTicketDelivery:input_type -> core.v1.ReportTicketDeliveryRequest
-	21,  // 109: core.v1.CoreService.SetUserBotBlocked:input_type -> core.v1.SetUserBotBlockedRequest
-	23,  // 110: core.v1.CoreService.ClaimBroadcastBatch:input_type -> core.v1.ClaimBroadcastBatchRequest
-	27,  // 111: core.v1.CoreService.ReportBroadcastResults:input_type -> core.v1.ReportBroadcastResultsRequest
-	54,  // 112: core.v1.CoreService.SetSubscriptionLabel:input_type -> core.v1.SetSubscriptionLabelRequest
-	65,  // 113: core.v1.CoreService.GetResellerInfo:input_type -> core.v1.GetResellerInfoRequest
-	56,  // 114: core.v1.CoreService.ListResellerServices:input_type -> core.v1.ListResellerServicesRequest
-	58,  // 115: core.v1.CoreService.SetResellerServiceEnabled:input_type -> core.v1.SetResellerServiceEnabledRequest
-	59,  // 116: core.v1.CoreService.DeleteResellerService:input_type -> core.v1.DeleteResellerServiceRequest
-	61,  // 117: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
-	62,  // 118: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
-	70,  // 119: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
-	101, // 120: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
-	105, // 121: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
-	108, // 122: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
-	111, // 123: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
-	112, // 124: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
-	115, // 125: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
-	116, // 126: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
-	118, // 127: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
-	1,   // 128: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
-	1,   // 129: core.v1.CoreService.GetUser:output_type -> core.v1.User
-	33,  // 130: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
-	4,   // 131: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
-	4,   // 132: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
-	5,   // 133: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
-	51,  // 134: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
-	53,  // 135: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
-	8,   // 136: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
-	29,  // 137: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
-	29,  // 138: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
-	74,  // 139: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
-	4,   // 140: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
-	74,  // 141: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
-	4,   // 142: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
-	100, // 143: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
-	74,  // 144: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
-	74,  // 145: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
-	74,  // 146: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
-	74,  // 147: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
-	79,  // 148: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
-	82,  // 149: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
-	84,  // 150: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
-	87,  // 151: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
-	89,  // 152: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
-	91,  // 153: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
-	5,   // 154: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
-	1,   // 155: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
-	2,   // 156: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
-	29,  // 157: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
-	36,  // 158: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
-	38,  // 159: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
-	39,  // 160: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
-	42,  // 161: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
-	47,  // 162: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
-	46,  // 163: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
-	11,  // 164: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
-	13,  // 165: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
-	15,  // 166: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
-	8,   // 167: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
-	18,  // 168: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
-	20,  // 169: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
-	22,  // 170: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
-	25,  // 171: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
-	28,  // 172: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
-	7,   // 173: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
-	67,  // 174: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
-	57,  // 175: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
-	7,   // 176: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
-	60,  // 177: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
-	7,   // 178: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
-	64,  // 179: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
-	71,  // 180: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
-	104, // 181: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
-	107, // 182: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
-	110, // 183: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
-	109, // 184: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
-	114, // 185: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
-	113, // 186: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
-	117, // 187: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
-	119, // 188: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
-	128, // [128:189] is the sub-list for method output_type
-	67,  // [67:128] is the sub-list for method input_type
-	67,  // [67:67] is the sub-list for extension type_name
-	67,  // [67:67] is the sub-list for extension extendee
-	0,   // [0:67] is the sub-list for field type_name
+	137, // 18: core.v1.Quote.list_price:type_name -> common.v1.Money
+	137, // 19: core.v1.Quote.discount:type_name -> common.v1.Money
+	137, // 20: core.v1.Quote.total:type_name -> common.v1.Money
+	137, // 21: core.v1.BulkQuote.unit_price:type_name -> common.v1.Money
+	137, // 22: core.v1.BulkQuote.total:type_name -> common.v1.Money
+	137, // 23: core.v1.CreateBulkOrderRequest.expected_total:type_name -> common.v1.Money
+	137, // 24: core.v1.BulkOrder.unit_price:type_name -> common.v1.Money
+	137, // 25: core.v1.BulkOrder.total:type_name -> common.v1.Money
+	130, // 26: core.v1.BulkOrder.plan_name_i18n:type_name -> core.v1.BulkOrder.PlanNameI18nEntry
+	42,  // 27: core.v1.BulkOrder.services:type_name -> core.v1.BulkService
+	137, // 28: core.v1.ReferralInfo.earned:type_name -> common.v1.Money
+	137, // 29: core.v1.Discount.amount:type_name -> common.v1.Money
+	45,  // 30: core.v1.AdminUpsertDiscountRequest.discount:type_name -> core.v1.Discount
+	45,  // 31: core.v1.AdminListDiscountsResponse.discounts:type_name -> core.v1.Discount
+	51,  // 32: core.v1.ListStaffContactsResponse.items:type_name -> core.v1.StaffContact
+	138, // 33: core.v1.ListLedgerEntriesRequest.pagination:type_name -> common.v1.Pagination
+	6,   // 34: core.v1.ListLedgerEntriesResponse.entries:type_name -> core.v1.LedgerEntry
+	139, // 35: core.v1.ListLedgerEntriesResponse.page_info:type_name -> common.v1.PageInfo
+	138, // 36: core.v1.ListSubscriptionsRequest.pagination:type_name -> common.v1.Pagination
+	7,   // 37: core.v1.ListSubscriptionsResponse.subscriptions:type_name -> core.v1.Subscription
+	139, // 38: core.v1.ListSubscriptionsResponse.page_info:type_name -> common.v1.PageInfo
+	138, // 39: core.v1.ListResellerServicesRequest.pagination:type_name -> common.v1.Pagination
+	7,   // 40: core.v1.ListResellerServicesResponse.subscriptions:type_name -> core.v1.Subscription
+	139, // 41: core.v1.ListResellerServicesResponse.page_info:type_name -> common.v1.PageInfo
+	61,  // 42: core.v1.ListResellerServicesResponse.counts:type_name -> core.v1.ServiceCounts
+	138, // 43: core.v1.ListInvitedCustomersRequest.pagination:type_name -> common.v1.Pagination
+	137, // 44: core.v1.InvitedCustomer.spent:type_name -> common.v1.Money
+	137, // 45: core.v1.InvitedCustomer.commission:type_name -> common.v1.Money
+	69,  // 46: core.v1.ListInvitedCustomersResponse.customers:type_name -> core.v1.InvitedCustomer
+	139, // 47: core.v1.ListInvitedCustomersResponse.page_info:type_name -> common.v1.PageInfo
+	72,  // 48: core.v1.ResellerInfo.balances:type_name -> core.v1.ResellerBalance
+	137, // 49: core.v1.ResellerInfo.commission_earned:type_name -> common.v1.Money
+	131, // 50: core.v1.UpdateBrandingRequest.values:type_name -> core.v1.UpdateBrandingRequest.ValuesEntry
+	137, // 51: core.v1.PaymentIntentRef.amount:type_name -> common.v1.Money
+	132, // 52: core.v1.PaymentIntentRef.details:type_name -> core.v1.PaymentIntentRef.DetailsEntry
+	137, // 53: core.v1.PaymentIntentRef.gateway_amount:type_name -> common.v1.Money
+	1,   // 54: core.v1.PendingPayment.user:type_name -> core.v1.User
+	137, // 55: core.v1.PendingPayment.amount:type_name -> common.v1.Money
+	92,  // 56: core.v1.AdminListPendingPaymentsResponse.payments:type_name -> core.v1.PendingPayment
+	92,  // 57: core.v1.AdminPaymentView.payment:type_name -> core.v1.PendingPayment
+	1,   // 58: core.v1.AdminPaymentView.reviewer:type_name -> core.v1.User
+	1,   // 59: core.v1.AdminUserView.user:type_name -> core.v1.User
+	5,   // 60: core.v1.AdminUserView.wallets:type_name -> core.v1.Wallet
+	137, // 61: core.v1.AdminAdjustBalanceRequest.delta:type_name -> common.v1.Money
+	2,   // 62: core.v1.AdminUpsertPlanRequest.plan:type_name -> core.v1.Plan
+	137, // 63: core.v1.CreatePaymentIntentRequest.amount:type_name -> common.v1.Money
+	108, // 64: core.v1.AdminDay.lines:type_name -> core.v1.AdminDayLine
+	109, // 65: core.v1.AdminTodayStatsResponse.today:type_name -> core.v1.AdminDay
+	109, // 66: core.v1.AdminTodayStatsResponse.yesterday:type_name -> core.v1.AdminDay
+	112, // 67: core.v1.AdminListSettingSpecsResponse.specs:type_name -> core.v1.AdminSettingSpec
+	115, // 68: core.v1.AdminListServersResponse.servers:type_name -> core.v1.AdminServer
+	119, // 69: core.v1.AdminListStaffResponse.staff:type_name -> core.v1.AdminStaffMember
+	133, // 70: core.v1.AdminBroadcastRequest.texts:type_name -> core.v1.AdminBroadcastRequest.TextsEntry
+	134, // 71: core.v1.AdminBroadcastRequest.button_labels:type_name -> core.v1.AdminBroadcastRequest.ButtonLabelsEntry
+	135, // 72: core.v1.AdminBroadcastResponse.texts:type_name -> core.v1.AdminBroadcastResponse.TextsEntry
+	136, // 73: core.v1.AdminBroadcastResponse.button_labels:type_name -> core.v1.AdminBroadcastResponse.ButtonLabelsEntry
+	30,  // 74: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
+	31,  // 75: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
+	32,  // 76: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
+	34,  // 77: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
+	54,  // 78: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
+	55,  // 79: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
+	56,  // 80: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
+	58,  // 81: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
+	74,  // 82: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
+	75,  // 83: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
+	78,  // 84: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
+	79,  // 85: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
+	102, // 86: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
+	103, // 87: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
+	104, // 88: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
+	105, // 89: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
+	86,  // 90: core.v1.CoreService.SubmitPaymentProof:input_type -> core.v1.SubmitPaymentProofRequest
+	81,  // 91: core.v1.CoreService.CheckPayment:input_type -> core.v1.CheckPaymentRequest
+	82,  // 92: core.v1.CoreService.StarsPreCheckout:input_type -> core.v1.StarsPreCheckoutRequest
+	83,  // 93: core.v1.CoreService.StarsPaid:input_type -> core.v1.StarsPaidRequest
+	84,  // 94: core.v1.CoreService.ListPaymentMethods:input_type -> core.v1.ListPaymentMethodsRequest
+	87,  // 95: core.v1.CoreService.GetSubscriptionLinks:input_type -> core.v1.GetSubscriptionLinksRequest
+	89,  // 96: core.v1.CoreService.AdminGetStats:input_type -> core.v1.AdminGetStatsRequest
+	91,  // 97: core.v1.CoreService.AdminListPendingPayments:input_type -> core.v1.AdminListPendingPaymentsRequest
+	94,  // 98: core.v1.CoreService.AdminGetPayment:input_type -> core.v1.AdminGetPaymentRequest
+	96,  // 99: core.v1.CoreService.AdminFindUser:input_type -> core.v1.AdminFindUserRequest
+	98,  // 100: core.v1.CoreService.AdminAdjustBalance:input_type -> core.v1.AdminAdjustBalanceRequest
+	99,  // 101: core.v1.CoreService.AdminSetUserStatus:input_type -> core.v1.AdminSetUserStatusRequest
+	100, // 102: core.v1.CoreService.AdminUpsertPlan:input_type -> core.v1.AdminUpsertPlanRequest
+	101, // 103: core.v1.CoreService.AdminSetSetting:input_type -> core.v1.AdminSetSettingRequest
+	35,  // 104: core.v1.CoreService.QuoteOrder:input_type -> core.v1.QuoteOrderRequest
+	37,  // 105: core.v1.CoreService.QuoteBulkOrder:input_type -> core.v1.QuoteBulkOrderRequest
+	39,  // 106: core.v1.CoreService.CreateBulkOrder:input_type -> core.v1.CreateBulkOrderRequest
+	40,  // 107: core.v1.CoreService.GetBulkOrder:input_type -> core.v1.GetBulkOrderRequest
+	43,  // 108: core.v1.CoreService.GetReferralInfo:input_type -> core.v1.GetReferralInfoRequest
+	46,  // 109: core.v1.CoreService.AdminUpsertDiscount:input_type -> core.v1.AdminUpsertDiscountRequest
+	47,  // 110: core.v1.CoreService.AdminListDiscounts:input_type -> core.v1.AdminListDiscountsRequest
+	49,  // 111: core.v1.CoreService.CreateDashboardLink:input_type -> core.v1.CreateDashboardLinkRequest
+	50,  // 112: core.v1.CoreService.ListStaffContacts:input_type -> core.v1.ListStaffContactsRequest
+	10,  // 113: core.v1.CoreService.AddTicketMessage:input_type -> core.v1.AddTicketMessageRequest
+	12,  // 114: core.v1.CoreService.GetMyTickets:input_type -> core.v1.GetMyTicketsRequest
+	14,  // 115: core.v1.CoreService.GetMyTicket:input_type -> core.v1.GetMyTicketRequest
+	16,  // 116: core.v1.CoreService.CloseMyTicket:input_type -> core.v1.CloseMyTicketRequest
+	17,  // 117: core.v1.CoreService.GetTicketMessage:input_type -> core.v1.GetTicketMessageRequest
+	19,  // 118: core.v1.CoreService.ReportTicketDelivery:input_type -> core.v1.ReportTicketDeliveryRequest
+	21,  // 119: core.v1.CoreService.SetUserBotBlocked:input_type -> core.v1.SetUserBotBlockedRequest
+	23,  // 120: core.v1.CoreService.ClaimBroadcastBatch:input_type -> core.v1.ClaimBroadcastBatchRequest
+	27,  // 121: core.v1.CoreService.ReportBroadcastResults:input_type -> core.v1.ReportBroadcastResultsRequest
+	60,  // 122: core.v1.CoreService.SetSubscriptionLabel:input_type -> core.v1.SetSubscriptionLabelRequest
+	71,  // 123: core.v1.CoreService.GetResellerInfo:input_type -> core.v1.GetResellerInfoRequest
+	62,  // 124: core.v1.CoreService.ListResellerServices:input_type -> core.v1.ListResellerServicesRequest
+	64,  // 125: core.v1.CoreService.SetResellerServiceEnabled:input_type -> core.v1.SetResellerServiceEnabledRequest
+	65,  // 126: core.v1.CoreService.DeleteResellerService:input_type -> core.v1.DeleteResellerServiceRequest
+	67,  // 127: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
+	68,  // 128: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
+	76,  // 129: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
+	107, // 130: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
+	111, // 131: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
+	114, // 132: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
+	117, // 133: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
+	118, // 134: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
+	121, // 135: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
+	122, // 136: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
+	124, // 137: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
+	1,   // 138: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
+	1,   // 139: core.v1.CoreService.GetUser:output_type -> core.v1.User
+	33,  // 140: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
+	4,   // 141: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
+	4,   // 142: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
+	5,   // 143: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
+	57,  // 144: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
+	59,  // 145: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
+	8,   // 146: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
+	29,  // 147: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
+	29,  // 148: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
+	80,  // 149: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
+	4,   // 150: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
+	80,  // 151: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
+	4,   // 152: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
+	106, // 153: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
+	80,  // 154: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
+	80,  // 155: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
+	80,  // 156: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
+	80,  // 157: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
+	85,  // 158: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
+	88,  // 159: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
+	90,  // 160: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
+	93,  // 161: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
+	95,  // 162: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
+	97,  // 163: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
+	5,   // 164: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
+	1,   // 165: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
+	2,   // 166: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
+	29,  // 167: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
+	36,  // 168: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
+	38,  // 169: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
+	41,  // 170: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
+	41,  // 171: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
+	44,  // 172: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
+	45,  // 173: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
+	48,  // 174: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
+	53,  // 175: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
+	52,  // 176: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
+	11,  // 177: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
+	13,  // 178: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
+	15,  // 179: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
+	8,   // 180: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
+	18,  // 181: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
+	20,  // 182: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
+	22,  // 183: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
+	25,  // 184: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
+	28,  // 185: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
+	7,   // 186: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
+	73,  // 187: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
+	63,  // 188: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
+	7,   // 189: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
+	66,  // 190: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
+	7,   // 191: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
+	70,  // 192: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
+	77,  // 193: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
+	110, // 194: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
+	113, // 195: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
+	116, // 196: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
+	115, // 197: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
+	120, // 198: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
+	119, // 199: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
+	123, // 200: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
+	125, // 201: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
+	138, // [138:202] is the sub-list for method output_type
+	74,  // [74:138] is the sub-list for method input_type
+	74,  // [74:74] is the sub-list for extension type_name
+	74,  // [74:74] is the sub-list for extension extendee
+	0,   // [0:74] is the sub-list for field type_name
 }
 
 func init() { file_core_v1_core_proto_init() }
@@ -9131,7 +9724,7 @@ func file_core_v1_core_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_core_v1_core_proto_rawDesc), len(file_core_v1_core_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   129,
+			NumMessages:   136,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
