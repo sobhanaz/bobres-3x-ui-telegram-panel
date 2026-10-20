@@ -198,6 +198,9 @@ func doctorResults(dir, domain string, offline bool) []Result {
 	o := newOps(strings.NewReader(""), io.Discard, io.Discard)
 	rs := ownGateway(runDoctor(domain, offline), caddyRunning())
 	rs = append(rs, hostTLSResults(context.Background(), o, dir, domain)...)
+	if env, ok, _ := readEnv(filepath.Join(dir, ".env")); ok && o.monitorUnits != nil {
+		rs = append(rs, monitorResult(context.Background(), o.monitorUnits, dir, env, time.Now()))
+	}
 	rs = append(rs, h.report(context.Background())...)
 	return append(rs, updaterResults(context.Background(), o, dir)...)
 }

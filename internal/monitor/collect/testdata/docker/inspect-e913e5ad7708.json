@@ -1,0 +1,23 @@
+{
+  "Id": "e913e5ad7708",
+  "Name": "/bobres-payments-1",
+  "RestartCount": 1,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 1180,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:06.296512753Z",
+    "FinishedAt": "2026-10-19T17:37:05.840969568Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "ghcr.io/sobhanaz/bobres-payments:0.2.0@sha256:5e2fcaf9b69b0cb59d551a730c4d7d4859774be03e82b720817edbd5e04020ef",
+  "Created": "2026-10-14T06:30:35.061225323Z"
+}

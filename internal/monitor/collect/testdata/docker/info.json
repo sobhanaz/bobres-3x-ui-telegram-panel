@@ -1,0 +1,18 @@
+{
+  "Name": "bot-server",
+  "ServerVersion": "29.9.0",
+  "OperatingSystem": "Ubuntu 24.04.5 LTS",
+  "KernelVersion": "7.0.14-linuxkit",
+  "NCPU": 16,
+  "MemTotal": 8320905216,
+  "DockerRootDir": "/var/lib/docker",
+  "Driver": "overlayfs",
+  "LoggingDriver": "json-file",
+  "CgroupDriver": "systemd",
+  "CgroupVersion": "2",
+  "ContainersRunning": 7,
+  "ContainersPaused": 0,
+  "ContainersStopped": 2,
+  "Architecture": "x86_64",
+  "OSType": "linux"
+}

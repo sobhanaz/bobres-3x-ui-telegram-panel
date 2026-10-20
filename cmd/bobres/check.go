@@ -134,6 +134,7 @@ func (c *checker) all(ctx context.Context, dir string, env map[string]string) []
 		rs = append(rs, o.units.report(ctx, dashboardUpdatesOff(env)))
 	}
 	rs = append(rs, checkBackupAge(listBackups(filepath.Join(dir, "backups")), now))
+	rs = append(rs, monitorResult(ctx, o.monitorUnits, dir, env, now))
 	rs = append(rs, checkReleaseExpiry(c.stateDir, now))
 	rs = append(rs, c.botResults(ctx, env)...)
 	return rs

@@ -21,9 +21,13 @@ const (
 	ChannelBeta   = "beta"
 )
 
+// Repo is the GitHub repository BOBRES is released from ("owner/name"): fixed in the build, never
+// read from a setting or a request.
+const Repo = "sobhanaz/bobres-3x-ui-telegram-panel"
+
 // APIURL lists this repository's releases, newest first (GitHub's REST API;
 // 60 requests an hour per address without a token).
-const APIURL = "https://api.github.com/repos/sobhanaz/bobres-3x-ui-telegram-panel/releases"
+const APIURL = "https://api.github.com/repos/" + Repo + "/releases"
 
 // SettingChannel is the store setting (core's settings table, read by the bot
 // with its other settings) that picks the channel from the dashboard; unset,

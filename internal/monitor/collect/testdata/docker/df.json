@@ -1,0 +1,126 @@
+{
+  "LayersSize": 1754177977,
+  "ImageUsage": {
+    "ActiveCount": 8,
+    "Reclaimable": 1038814985,
+    "TotalCount": 46,
+    "TotalSize": 1754177977
+  },
+  "ContainerUsage": {
+    "ActiveCount": 8,
+    "Reclaimable": 16384,
+    "TotalCount": 9,
+    "TotalSize": 114688
+  },
+  "VolumeUsage": {
+    "ActiveCount": 7,
+    "TotalCount": 7,
+    "TotalSize": 69687759
+  },
+  "BuildCacheUsage": {
+    "Reclaimable": 6089445242,
+    "TotalCount": 111,
+    "TotalSize": 6844421213
+  },
+  "Containers": [
+    {
+      "SizeRw": 8192
+    },
+    {
+      "SizeRw": 32768
+    },
+    {
+      "SizeRw": 8192
+    },
+    {
+      "SizeRw": 4096
+    },
+    {
+      "SizeRw": 8192
+    },
+    {
+      "SizeRw": 8192
+    },
+    {
+      "SizeRw": 16384
+    },
+    {
+      "SizeRw": 24576
+    },
+    {
+      "SizeRw": 4096
+    }
+  ],
+  "Volumes": [
+    {
+      "UsageData": {
+        "RefCount": 2,
+        "Size": 0
+      }
+    },
+    {
+      "UsageData": {
+        "RefCount": 1,
+        "Size": 3808
+      }
+    },
+    {
+      "UsageData": {
+        "RefCount": 1,
+        "Size": 3547
+      }
+    },
+    {
+      "UsageData": {
+        "RefCount": 1,
+        "Size": 69672677
+      }
+    },
+    {
+      "UsageData": {
+        "RefCount": 1,
+        "Size": 7367
+      }
+    },
+    {
+      "UsageData": {
+        "RefCount": 2,
+        "Size": 113
+      }
+    },
+    {
+      "UsageData": {
+        "RefCount": 2,
+        "Size": 247
+      }
+    }
+  ],
+  "BuildCache": [
+    {
+      "Size": 268619776,
+      "InUse": false,
+      "Shared": false
+    },
+    {
+      "Size": 18811489,
+      "InUse": false,
+      "Shared": true
+    },
+    {
+      "Size": 8863744,
+      "InUse": false,
+      "Shared": false
+    }
+  ],
+  "Images": [
+    {
+      "Size": 27098144
+    },
+    {
+      "Size": 31425456
+    },
+    {
+      "Size": 37552389
+    }
+  ]
+}

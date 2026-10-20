@@ -74,6 +74,8 @@ type installer struct {
 	units    *systemUnits
 	exe      func() (string, error)
 	stateDir string
+	// monitorUnits installs the host collector's units the same way (nil: not installed).
+	monitorUnits *systemUnits
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -97,7 +99,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		runLines:  streamDocker,
 		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
 		rcpt:  newReceiptStore(defaultStateDir()),
-		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(),
+		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(), monitorUnits: newSystemUnits(),
 	}
 	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
 		ins.logPath = p
@@ -494,6 +496,8 @@ func (ins *installer) runInstall(args []string) int {
 	}
 	// The dashboard's updater, once the store it updates is up. Never a failed install.
 	ins.ensureUpdater(ctx, *dir, env)
+	// And the host collector behind the dashboard's Monitoring section, the same way.
+	ins.ensureMonitor(ctx, *dir, env)
 	// Hardening runs by itself where it is safe (--ask-harden asks step by
 	// step instead); never from a run that cannot ask (--yes, as bobres update
 	// runs it) or a settings change from the menu (quiet).
@@ -1218,6 +1222,9 @@ func writeFiles(dir string, env map[string]string, notes, warnings io.Writer) er
 		return err
 	}
 	if err := prepareUpdateDir(dir, notes); err != nil {
+		return err
+	}
+	if err := ensureMonitorDirs(dir); err != nil {
 		return err
 	}
 	// The backup service (uid 65532 in its image) writes here; created now so

@@ -95,6 +95,11 @@ type Core struct {
 	// from it (internal/sysupdate). It is not there until the updater is
 	// installed; then updating from the dashboard is "not available yet".
 	UpdateDir string
+	// MonitorDir is where core reads the host collector's snapshot
+	// (BOBRES_MONITOR_DIR; compose mounts the install's run/monitor there,
+	// read-only). Empty: the host is not monitored (an install from before the
+	// collector, or a development run).
+	MonitorDir string
 }
 
 // LoadCore reads the core service configuration, failing closed on missing
@@ -154,6 +159,10 @@ func LoadCore() (Core, error) {
 	co.ZarinpalHost = strings.TrimSpace(getenv("BOBRES_ZARINPAL_HOST", ""))
 	co.TLSRequestDir = getenv("BOBRES_TLS_REQUEST_DIR", "/request")
 	co.TLSResultDir = getenv("BOBRES_TLS_RESULT_DIR", "/tls-result")
+	co.MonitorDir = strings.TrimSpace(getenv("BOBRES_MONITOR_DIR", ""))
+	if co.MonitorDir != "" && !strings.HasPrefix(co.MonitorDir, "/") {
+		keep(errors.New("BOBRES_MONITOR_DIR must be an absolute path like /run/bobres-monitor"))
+	}
 	co.TLSProbeAddr = getenv("BOBRES_TLS_PROBE_ADDR", "caddy:443")
 	if _, _, err := net.SplitHostPort(co.TLSProbeAddr); err != nil {
 		keep(errors.New("BOBRES_TLS_PROBE_ADDR must be host:port like caddy:443"))

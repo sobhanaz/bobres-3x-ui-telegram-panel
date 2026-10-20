@@ -84,12 +84,14 @@ type ops struct {
 	// exe is the bobres they run (nil: this one).
 	units *systemUnits
 	exe   func() (string, error)
+	// monitorUnits looks at, and removes, the host collector's units (nil: not asked).
+	monitorUnits *systemUnits
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
 	return &ops{
 		in: in, out: out, errOut: errOut,
-		units: newSystemUnits(),
+		units: newSystemUnits(), monitorUnits: newSystemUnits(),
 		run: func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
 			cmd.Dir = dir

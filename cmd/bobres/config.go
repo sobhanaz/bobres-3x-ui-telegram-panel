@@ -73,6 +73,8 @@ var configKeys = []configKey{
 		help: "stable or beta: which releases the update check and bobres update offer", check: oneOf("stable", "beta")},
 	{name: dashboardUpdatesKey, lower: true, check: oneOf("on", "off"), apply: applyDashboardUpdates,
 		help: "on or off: whether the dashboard (System > Updates) may update this server through the bobres-updater helper; off removes the helper"},
+	{name: monitorCollectorKey, lower: true, check: oneOf("on", "off"), apply: applyMonitorCollector,
+		help: "on or off: whether the host collector (bobres-monitor.timer) takes a snapshot of this server every 30 seconds for the dashboard's Monitoring section; off removes it"},
 	{name: "BOBRES_LICENSE_SERVER", services: []string{"bot"}, optional: true,
 		help: "the vendor's license server, https://... (empty: no online activation or refresh)",
 		check: func(v string) error {

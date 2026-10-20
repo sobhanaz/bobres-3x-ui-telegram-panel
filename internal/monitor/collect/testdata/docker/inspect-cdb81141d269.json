@@ -1,0 +1,20 @@
+{
+  "Id": "cdb81141d269",
+  "Name": "/bobres-caddy-1",
+  "RestartCount": 0,
+  "State": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-14T00:09:56.656252811Z",
+    "FinishedAt": "2026-10-14T23:57:30.402399336Z",
+    "Health": null
+  },
+  "Image": "caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
+  "Created": "2026-10-14T00:09:49.684018444Z"
+}

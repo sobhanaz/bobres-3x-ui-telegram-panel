@@ -1,0 +1,44 @@
+# Written by `bobres install` and `bobres update` (they replace it: do not edit it). It takes one
+# snapshot of this server for the dashboard's Monitoring section: what the machine, Docker and the
+# BOBRES units look like, written to @DIR@/run/monitor/snapshot.json, which core reads through a
+# read-only mount. Core has no Docker socket; this root helper is how it learns about the host.
+# Turn it off for good with: sudo bobres config set BOBRES_MONITOR_COLLECTOR off
+# docs/06-installer.md, "Host monitoring".
+[Unit]
+Description=BOBRES: host snapshot for the dashboard's Monitoring section
+Documentation=https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/06-installer.md
+After=docker.service
+# The install gone: skipped quietly, not failed.
+ConditionPathIsDirectory=@DIR@/run/monitor
+
+[Service]
+Type=oneshot
+User=root
+# An older bobres (a rollback) does not know `monitor`: its refusal skips the run, it does not fail it.
+ExecCondition=@EXE@ monitor supported
+ExecStart=@EXE@ monitor snapshot --dir @DIR@
+# A run takes a fraction of a second; this only stops one that hangs. It gets a slice of the
+# processor and a ceiling on memory.
+TimeoutStartSec=30
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=192M
+TasksMax=64
+UMask=0022
+# It reads the machine and the Docker socket and writes one folder: the snapshot directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=@DIR@/run/monitor
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native

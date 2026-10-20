@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -23,6 +24,10 @@ var recent = NewRing(RingSize)
 // Recent returns this process's kept warnings and errors, oldest first.
 func Recent() []Line { return recent.Lines() }
 
+// Counts is how many warnings and errors this process has logged since it started (the ring keeps
+// only the newest lines; these never wrap). The monitoring page turns them into rates.
+func Counts() (warnings, errs uint64) { return recent.Counts() }
+
 // Line is one kept log line, redacted like stdout.
 type Line struct {
 	Time  int64  `json:"time"`  // unix seconds
@@ -39,7 +44,12 @@ type Ring struct {
 	lines []Line
 	next  int
 	full  bool
+	// warns and errs count every WARN and ERROR line written, kept or not.
+	warns, errs atomic.Uint64
 }
+
+// Counts returns how many WARN and ERROR lines the ring has been written.
+func (r *Ring) Counts() (warnings, errs uint64) { return r.warns.Load(), r.errs.Load() }
 
 // NewRing keeps the newest n lines.
 func NewRing(n int) *Ring { return &Ring{lines: make([]Line, max(n, 1))} }
@@ -68,6 +78,12 @@ func (r *Ring) Write(p []byte) (int, error) {
 		l.Time = t.Unix()
 	}
 	_ = json.Unmarshal(fields[slog.LevelKey], &l.Level)
+	switch l.Level {
+	case "WARN":
+		r.warns.Add(1)
+	case "ERROR":
+		r.errs.Add(1)
+	}
 	_ = json.Unmarshal(fields[slog.MessageKey], &l.Msg)
 	l.Msg = cut(l.Msg)
 	// The service is the same on every line of a process.

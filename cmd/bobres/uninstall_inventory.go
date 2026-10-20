@@ -112,6 +112,9 @@ var hostArtifacts = []hostArtifact{
 	{ID: "update-requests", Class: classRuntime, Paths: []string{"/run/bobres-update"},
 		Made: "docker compose: <install>/run/update, mounted into core's container at this path (the dashboard's update requests)",
 		Undo: "inside the install directory, deleted with it", Marker: "-"},
+	{ID: "monitor-snapshot", Class: classRuntime, Paths: []string{"/run/bobres-monitor"},
+		Made: "docker compose: <install>/run/monitor, mounted read only into core's container at this path (the host collector's snapshot.json; its units are bobres-monitor.timer and bobres-monitor.service)",
+		Undo: "inside the install directory, deleted with it; the units are found by name like the updater's", Marker: "-"},
 	{ID: "uninstall-lock", Class: classRuntime, Paths: []string{"/run/lock/bobres-uninstall.lock"},
 		Made: "bobres uninstall", Undo: "deleted when the run ends", Marker: "the file name"},
 	// ---- read only

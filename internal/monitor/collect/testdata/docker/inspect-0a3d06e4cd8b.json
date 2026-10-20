@@ -1,0 +1,23 @@
+{
+  "Id": "0a3d06e4cd8b",
+  "Name": "/bobres-bot-1",
+  "RestartCount": 989,
+  "State": {
+    "Status": "restarting",
+    "Running": true,
+    "Paused": false,
+    "Restarting": true,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 1,
+    "StartedAt": "2026-10-20T09:52:40.574100407Z",
+    "FinishedAt": "2026-10-20T09:52:41.521886851Z",
+    "Health": {
+      "Status": "unhealthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "ghcr.io/sobhanaz/bobres-bot:0.2.0@sha256:3384685ce3b4c547f87f352237e845a8a0b6d95f5e41a5122b7a485900551af9",
+  "Created": "2026-10-14T06:30:35.768937338Z"
+}

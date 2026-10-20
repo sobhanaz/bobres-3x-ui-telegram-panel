@@ -1,0 +1,23 @@
+{
+  "Id": "858e05f51fc0",
+  "Name": "/bobres-backup-1",
+  "RestartCount": 0,
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 726,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-19T17:37:05.180454452Z",
+    "FinishedAt": "2026-10-14T23:57:30.409246405Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    }
+  },
+  "Image": "ghcr.io/sobhanaz/bobres-backup:0.2.0@sha256:f630676454b10a4f4622a25b81ef1e90a37d753029b6cc09f54a1f9c6973f72d",
+  "Created": "2026-10-14T06:30:35.125454625Z"
+}

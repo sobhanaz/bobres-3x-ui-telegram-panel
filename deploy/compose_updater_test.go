@@ -29,8 +29,13 @@ func TestComposeUpdateRequestMount(t *testing.T) {
 		if m.source == updateRequestDir {
 			continue
 		}
+		// The other host directory core reads is the monitoring snapshot, read-only
+		// (TestComposeMountsTheMonitorSnapshotIntoCoreReadOnly).
+		if m.source == "./run/monitor" && m.readOnly {
+			continue
+		}
 		if strings.HasPrefix(m.source, "/") || strings.HasPrefix(m.source, ".") {
-			t.Errorf("core mounts %s: the update directory is the only part of the host it may reach", m.source)
+			t.Errorf("core mounts %s: the update directory (and the read-only monitoring snapshot) is the only part of the host it may reach", m.source)
 		}
 	}
 	// No service mounts the Docker socket, or the install directory itself.

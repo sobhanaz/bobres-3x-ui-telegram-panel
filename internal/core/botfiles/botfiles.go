@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/cicd"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsconf"
@@ -259,6 +260,64 @@ func (c *Client) RecentLogs(ctx context.Context) ([]logging.Line, error) {
 		return nil, fmt.Errorf("botfiles: logs: %w", err)
 	}
 	return out.Lines, nil
+}
+
+// BotStats is the bot's own counters (GET /internal/stats): counters that only grow since the bot
+// started (a smaller value than before means it restarted) and gauges.
+type BotStats struct {
+	StartedAt     int64  `json:"started_at"`
+	UpdatesTotal  uint64 `json:"updates_total"`
+	UpdatesQueued int    `json:"updates_queued"`
+	WarningsTotal uint64 `json:"warnings_total"`
+	ErrorsTotal   uint64 `json:"errors_total"`
+	Goroutines    int    `json:"goroutines"`
+	HeapBytes     uint64 `json:"heap_bytes"`
+}
+
+// Stats reads the bot's counters for the Monitoring page, within 3 seconds.
+func (c *Client) Stats(ctx context.Context) (*BotStats, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var out BotStats
+	if err := c.getJSON(ctx, "/internal/stats", "stats", 4<<10, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// CI reads the repository's CI/CD facts the bot fetched from GitHub (core has no internet access),
+// for the Monitoring page. The bot caches for about 5 minutes and bounds its own look (45 seconds);
+// core waits a little longer and checks the answer again (cicd.Sanitize).
+func (c *Client) CI(ctx context.Context) (*cicd.Status, error) {
+	ctx, cancel := context.WithTimeout(ctx, 50*time.Second)
+	defer cancel()
+	var out cicd.Status
+	if err := c.getJSON(ctx, "/internal/ci", "ci", 64<<10, &out); err != nil {
+		return nil, err
+	}
+	clean := cicd.Sanitize(out)
+	return &clean, nil
+}
+
+// getJSON is an authenticated GET of one of the bot's internal JSON endpoints.
+func (c *Client) getJSON(ctx context.Context, path, what string, limit int64, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		return fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("botfiles: %s: %w", what, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("botfiles: %s: the bot answered %d", what, resp.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(out); err != nil {
+		return fmt.Errorf("botfiles: %s: %w", what, err)
+	}
+	return nil
 }
 
 // PublicIP asks the bot for this server's public IP address (core has no
