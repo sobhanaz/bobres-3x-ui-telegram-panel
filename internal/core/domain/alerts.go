@@ -112,6 +112,8 @@ type WatchdogSources struct {
 	Gateways GatewayReporter
 	Backups  BackupStatus
 	TLS      TLSWatcher
+	// Monitor evaluates the monitoring rules (nil: there are none).
+	Monitor MonitorProbe
 }
 
 // alertCheck is one check's result in a run.
@@ -207,7 +209,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls,
+		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup

@@ -167,6 +167,22 @@ var SettingSpecs = []SettingSpec{
 		Help: "Persian name of the Toman in prices (empty = تومان)"},
 	{Key: "branding.currency.en", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 16,
 		Help: "English name of the Toman in prices (empty = Toman)"},
+	// Monitoring (System > Monitoring, docs/04-dashboard.md): whether core samples the host and the stack
+	// and raises the monitoring alerts, and the thresholds of those alerts.
+	{Key: SettingMonitorEnabled, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = core records the server's and the stack's figures every 30 seconds for the Monitoring page and raises its alerts (a full disk, memory, a container that is down, unhealthy or restarting, a stopped collector, a failing CI); false = it records and alerts nothing (the history stays readable)"},
+	{Key: SettingMonitorDiskPct, Group: "monitor", Kind: KindInt, Perm: permSettings, Default: "85", Min: 50, Max: 99,
+		Help: "percent full a disk (BOBRES's or Docker's) may be before a monitoring alert is raised"},
+	{Key: SettingMonitorMemPct, Group: "monitor", Kind: KindInt, Perm: permSettings, Default: "90", Min: 50, Max: 99,
+		Help: "percent of memory in use that, for the number of minutes below, raises a monitoring alert"},
+	{Key: SettingMonitorMemMinutes, Group: "monitor", Kind: KindInt, Perm: permSettings, Default: "10", Min: 1, Max: 120,
+		Help: "minutes memory must stay above the percent before the alert is raised"},
+	{Key: SettingMonitorRestarts, Group: "monitor", Kind: KindInt, Perm: permSettings, Default: "3", Min: 2, Max: 50,
+		Help: "restarts of one container within 15 minutes that raise a monitoring alert (a crash loop)"},
+	{Key: SettingMonitorCollectorMinutes, Group: "monitor", Kind: KindInt, Perm: permSettings, Default: "5", Min: 2, Max: 60,
+		Help: "minutes without a snapshot from the host collector before a monitoring alert is raised (only where the collector is installed)"},
+	{Key: SettingMonitorCIAlert, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = a monitoring alert is raised while the latest CI run on the repository's main branch has failed (for a store built from main; off for a store that runs releases)"},
 	// The Updates tab edits it (System > Updates, the owner only); it is not on the Settings page.
 	{Key: release.SettingChannel, Group: "updates", Kind: KindEnum, Perm: permSystem, Options: []string{release.ChannelStable, release.ChannelBeta},
 		Help: "the release channel updates follow: stable = the newest stable release, beta = the newest of all releases, pre-releases included (empty = the server's BOBRES_UPDATE_CHANNEL, stable when unset)"},

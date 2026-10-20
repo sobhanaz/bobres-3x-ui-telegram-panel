@@ -142,3 +142,26 @@ func TestTrialAlerts(t *testing.T) {
 		}
 	}
 }
+
+// The monitoring alerts write a percent in the language's digits and name the mount, container or
+// workflow as a name (escaped).
+func TestMonitorAlertTexts(t *testing.T) {
+	c := MustLoad()
+	args := map[string]string{"mount": "/var/lib/docker", "percent": "91", "free": fmt.Sprint(3 << 30), "minutes": "10", "count": "4",
+		"container": "bobres-bot-1", "workflow": "CI <main>"}
+	for _, key := range []string{"alert.monitor_disk", "alert.monitor_memory", "alert.monitor_container_down", "alert.monitor_container_unhealthy",
+		"alert.monitor_container_restarting", "alert.monitor_collector_stale", "alert.monitor_ci"} {
+		for _, lang := range Languages {
+			got := c.T(lang, key, AlertArgs(lang, args, html.EscapeString)...)
+			if strings.Contains(got, "{") || strings.Contains(got, "<main>") || got == "" {
+				t.Errorf("%s %s: %q", lang, key, got)
+			}
+		}
+	}
+	if got := c.T("en", "alert.monitor_disk", AlertArgs("en", args, html.EscapeString)...); got != "The disk at /var/lib/docker is 91% full (3 GB free)." {
+		t.Errorf("en: %q", got)
+	}
+	if got := c.T("fa", "alert.monitor_memory", AlertArgs("fa", args, html.EscapeString)...); !strings.Contains(got, "۹۱") || !strings.Contains(got, "۱۰") {
+		t.Errorf("fa: %q", got)
+	}
+}

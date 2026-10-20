@@ -13,7 +13,7 @@ var limitNames = map[string]map[string]string{
 }
 
 // AlertArgs formats a system alert's values (events.SystemAlertEvent.Args)
-// for T in lang: count, days, hours, minutes and limit in the language's
+// for T in lang: count, days, hours, minutes, percent and limit in the language's
 // digits, free (bytes) as a size, date (unix seconds) as a day, and the name
 // of a license limit in words (active_services). Any other value, or one
 // that is not a number, is a name and goes through text (html.EscapeString
@@ -33,7 +33,7 @@ func AlertArgs(lang string, args map[string]string, text func(string) string) []
 			v = text(limitNames[v][lang])
 		case err != nil:
 			v = text(v)
-		case k == "count" || k == "days" || k == "hours" || k == "minutes" || k == "limit":
+		case k == "count" || k == "days" || k == "hours" || k == "minutes" || k == "limit" || k == "percent":
 			v = Number(lang, n)
 		case k == "free":
 			v = FileSize(lang, n)
