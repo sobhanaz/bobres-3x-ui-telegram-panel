@@ -306,6 +306,13 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		return n.systemUpdateEvent(ctx, m, e)
 
+	case events.SystemBackup:
+		var e events.SystemBackupEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.systemBackupEvent(ctx, m, e)
+
 	case events.DepositUnmatched:
 		var e events.DepositUnmatchedEvent
 		if err := decode(m, &e); err != nil {
@@ -491,6 +498,69 @@ func (n *Notifier) systemUpdate(lang string, e events.SystemUpdateEvent) (string
 	text := n.cat.T(lang, key, "by", html.EscapeString(truncateRunes(by, 64)), "from", version(e.From), "to", version(e.To),
 		"channel", n.cat.T(lang, channel))
 	if d := strings.TrimSpace(e.Message); d != "" && e.State != events.UpdateRequested && e.State != events.UpdateDone {
+		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
+	}
+	return text, true
+}
+
+// systemBackupEvent tells one owner about a backup downloaded from the dashboard, or a restore of
+// one asked for there and its end (core wrote one event for each owner). As an update's notice it
+// is dropped when it is too old or when the recipient is no longer an owner, a failure is returned
+// for the consumer to retry and a refusal no retry can change is permanent.
+func (n *Notifier) systemBackupEvent(ctx context.Context, m eventbus.Message, e events.SystemBackupEvent) error {
+	if age := n.now().Sub(m.CreatedAt); !m.CreatedAt.IsZero() && age > updateNoticeMaxAge {
+		n.log.Info("backup notice is too old; dropped", "kind", e.Kind, "state", e.State, "chat", e.TelegramID, "queued_hours_ago", int(age.Hours()))
+		return nil
+	}
+	if len(n.set.Staff()) > 0 {
+		if c, ok := n.set.Contact(e.TelegramID); !ok || c.Role != "owner" {
+			n.log.Info("backup notice dropped: the recipient is no longer an owner", "kind", e.Kind, "state", e.State, "chat", e.TelegramID)
+			return nil
+		}
+	}
+	text, known := n.systemBackup(i18n.Normalize(e.Language), e)
+	if !known {
+		return nil // a kind or state a newer core writes
+	}
+	err := n.send(ctx, e.TelegramID, text, nil)
+	if tg.IsRefused(err) {
+		n.log.Warn("backup notice refused by Telegram; dropped", "kind", e.Kind, "state", e.State, "chat", e.TelegramID, "err", err)
+		return eventbus.Permanent(err)
+	}
+	return err
+}
+
+// systemBackup renders a backup notice in lang. Every value is a name or text from outside, escaped;
+// known is false for a kind or state this bot has no text for.
+func (n *Notifier) systemBackup(lang string, e events.SystemBackupEvent) (string, bool) {
+	key := ""
+	switch {
+	case e.Kind == events.BackupDownload && e.State == events.BackupDownloaded:
+		key = "backup.download"
+	case e.Kind == events.BackupRestore:
+		key = map[string]string{
+			events.UpdateRequested:  "backup.restore.requested",
+			events.UpdateDone:       "backup.restore.done",
+			events.UpdateFailed:     "backup.restore.failed",
+			events.UpdateRolledBack: "backup.restore.rolled_back",
+			events.UpdateNotStarted: "backup.restore.not_started",
+		}[e.State]
+	}
+	if key == "" {
+		return "", false
+	}
+	or := func(s string) string {
+		if s = strings.TrimSpace(s); s == "" {
+			return "?"
+		}
+		return html.EscapeString(truncateRunes(s, 80))
+	}
+	source := ""
+	if e.Source == "backup" || e.Source == "upload" {
+		source = n.cat.T(lang, "backup.source_"+e.Source)
+	}
+	text := n.cat.T(lang, key, "by", or(e.By), "file", "<code>"+or(e.File)+"</code>", "size", i18n.FileSize(lang, e.Size), "source", source)
+	if d := strings.TrimSpace(e.Message); d != "" && e.Kind == events.BackupRestore && e.State != events.UpdateRequested && e.State != events.UpdateDone {
 		text += "\n<code>" + html.EscapeString(truncateRunes(d, 300)) + "</code>"
 	}
 	return text, true
