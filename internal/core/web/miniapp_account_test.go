@@ -268,8 +268,8 @@ func TestMiniAppSupport(t *testing.T) {
 	}
 }
 
-// limits.tickets_per_day counts the messages written in the last 24 hours, in
-// the bot and the app together; 0 lifts it.
+// limits.tickets_per_day counts the messages the customer wrote in the last 24
+// hours, whichever door they came through; 0 lifts it.
 func TestMiniAppSupportDailyLimit(t *testing.T) {
 	m := newMiniFixture(t, true)
 	m.setting("limits.tickets_per_day", "2")

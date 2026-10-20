@@ -83,8 +83,9 @@ These three are sections of the More tab (see "Adding a section"); each says in 
   a commission link of their own in their panel and is not offered this one.
 - **Support** (`features.support`): the bot's support, with the same rules. One conversation is open at a time, a message
   joins it or starts one, staff answers still arrive in the bot and show in the thread, and a customer's message needs
-  text (photos and files are sent from the bot and show as an attachment line). `limits.tickets_per_day` is counted from
-  the database, so it covers the bot and the app together; over it, the answer is 429 `daily_limit`.
+  text (photos and files are sent from the bot and show as an attachment line). `limits.tickets_per_day` is counted in
+  the app from the database, so it includes the messages sent through the bot (the bot keeps a count of its own, so a
+  customer who uses both can send up to the limit in each); over it, the answer is 429 `daily_limit`.
 
 The calls use the same domain functions as the bot (orders, wallet, discount codes, payments), so every rule is the
 same: price and discount are decided on the server, a wallet cannot go below zero, an order is the customer's own or

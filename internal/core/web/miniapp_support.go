@@ -98,8 +98,9 @@ func (s *Server) miniSupportSend(w http.ResponseWriter, r *http.Request) {
 		s.miniFail(w, "mini app support", errInvalid("a message needs text"))
 		return
 	}
-	// limits.tickets_per_day: what a customer may write in 24 hours, in the bot
-	// and here together (0: no limit).
+	// limits.tickets_per_day: the messages a customer may write in 24 hours (0:
+	// no limit). Here they are counted from the database, so the ones sent
+	// through the bot count too; the bot keeps a count of its own (Redis).
 	settings, err := s.cfg.Domain.Settings(ctx)
 	if err != nil {
 		s.miniFail(w, "mini app support", err)
