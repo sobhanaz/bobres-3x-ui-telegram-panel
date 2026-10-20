@@ -262,6 +262,33 @@ describe('support section', () => {
     await vi.waitFor(() => expect(el.querySelector('textarea')).not.toBeNull())
   })
 
+  it('names a reseller application by its category, in the list and in its conversation', async () => {
+    const application = ticket('open', { category: 'reseller', subject: 'I run a shop in Tehran' })
+    mockApi({
+      'GET /support': () =>
+        json(200, {
+          open: application,
+          tickets: [application, ticket('closed', { id: 't9', number: 9, category: 'general', subject: 'Old question' })],
+          categories: ['payment', 'service', 'other'],
+        }),
+      'GET /support/tickets/t1': () =>
+        json(200, { ticket: application, messages: [{ id: 'm1', kind: 'customer', body: 'I run a shop in Tehran', has_file: false, at: 1 }] }),
+    })
+    const el = mount(SupportView)
+    await seen(el, '🤝 Reseller application')
+    expect(text(el)).toContain('💬 Other') // a ticket of an older category ("general") is Other
+    button(el, 'Open the conversation')!.click()
+    await seen(el, 'I run a shop in Tehran')
+    expect(el.querySelector('.category')?.textContent).toBe('🤝 Reseller application')
+  })
+
+  it('offers only the three topics to write under, whatever core lists', async () => {
+    mockApi({ 'GET /support': () => json(200, { open: null, tickets: [], categories: ['payment', 'service', 'other', 'reseller'] }) })
+    const el = mount(SupportView)
+    await seen(el, 'You have not written to support yet.')
+    expect([...el.querySelectorAll('select option')].map((o) => o.textContent)).toEqual(['💳 Payment', '📶 Service', '💬 Other'])
+  })
+
   it('lists earlier conversations apart from the open one', async () => {
     mockApi({
       'GET /support': () =>

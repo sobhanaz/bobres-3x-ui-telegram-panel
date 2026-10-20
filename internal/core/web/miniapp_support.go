@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -58,7 +59,9 @@ func (s *Server) miniSupport(w http.ResponseWriter, r *http.Request) {
 	if open != nil {
 		openBody = miniTicketBody(open)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"open": openBody, "tickets": tickets, "categories": domain.TicketCategories})
+	// The topics to pick from: a reseller application (a ticket's category too,
+	// shown with its label) is filed from the bot's button, not picked here.
+	writeJSON(w, http.StatusOK, map[string]any{"open": openBody, "tickets": tickets, "categories": domain.SupportCategories})
 }
 
 // miniSupportTicket: GET /api/mini/v1/support/tickets/{id}, one ticket of the
@@ -121,6 +124,9 @@ func (s *Server) miniSupportSend(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusTooManyRequests, "daily_limit", "the daily limit of support messages is reached")
 			return
 		}
+	}
+	if !slices.Contains(domain.SupportCategories, in.Category) {
+		in.Category = "other" // a reseller application is not filed from here
 	}
 	res, err := s.cfg.Domain.AddCustomerMessage(ctx, domain.CustomerMessage{UserID: c.user.ID, Category: in.Category, Text: in.Text})
 	if err != nil {

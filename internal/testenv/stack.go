@@ -149,7 +149,9 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	for _, f := range opts {
 		f(&o)
 	}
-	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...)})
+	// The top-inviters board is not kept (LeaderboardTTL below 0): a test that
+	// invites someone sees them on it at once.
+	dom := coredomain.New(cs, coredomain.Config{OwnerTelegramIDs: append([]int64{ownerTelegramID}, o.extraOwners...), LeaderboardTTL: -1})
 	payConn := Dial(t, payAddr, CoreToken)
 	provClient := provisionerclient.New(provisionerv1.NewProvisionerServiceClient(Dial(t, provAddr, CoreToken)))
 	csrv := coreserver.New(cs, dom)

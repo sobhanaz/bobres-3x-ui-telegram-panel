@@ -219,6 +219,7 @@ func (h *Handler) showReferral(r *req) {
 	kb := (&tg.Keyboard{}).Row(r.linkButton("btn.share", share)).Row(r.button("btn.home", "home"))
 	r.show(r.t("ref.screen", "percent", i18n.Number(r.lang, int64(info.GetRewardPercent())), "link", esc(link),
 		"invited", i18n.Number(r.lang, int64(info.GetInvited())), "earned", earned(r, info.GetEarned())), kb)
+	h.sendPromoCard(r, link) // a card to forward, apart from this screen
 }
 
 // usageBar draws used/total as ten blocks.

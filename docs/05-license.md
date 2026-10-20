@@ -144,6 +144,7 @@ Only **new** actions are refused, and only by the effective entitlements. A refu
 | a reseller's purchase of a new service | `resellers` is off (the reseller keeps their account and what they bought) |
 | a reseller pausing, resuming or deleting a customer's service, noting it, reading their services in groups, or listing the customers who joined through their link (bot and Mini App) | `resellers` is off (refused as forbidden, never a word about licensing; the plain list of their services and each service's link still open in the bot) |
 | making a reseller | `resellers` is off |
+| a customer's reseller application (the bot's Become a reseller button: a ticket in the `reseller` category) | `resellers` is off (the button is hidden at the bot's next settings refresh, `Settings.resellers_enabled`; core refuses the application, and the bot says only "not available", never a word about licensing) |
 | adding an admin, a support member or another owner | the seats are taken (only the owner the server names takes none) |
 | switching a payment method on | it is not in `gateways`; automatic USDT also needs `crypto_watcher` |
 | white label | not a switch: "Powered by BOBRES" shows unless the effective entitlements include `white_label`, which only a valid license can grant |

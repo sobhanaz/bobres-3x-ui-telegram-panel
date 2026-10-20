@@ -968,6 +968,10 @@
         "title": "Support",
         "desc": "How support tickets are handled."
       },
+      "growth": {
+        "title": "Growth",
+        "desc": "Tools that help customers bring in more customers."
+      },
       "reports": {
         "title": "Sales summary",
         "desc": "A message in Telegram with yesterday's sales, once a day."
@@ -1091,6 +1095,14 @@
           "enabled": {
             "label": "Offer Telegram Stars",
             "help": "When off, customers do not see Stars, even with a rate set."
+          }
+        }
+      },
+      "growth": {
+        "leaderboard": {
+          "enabled": {
+            "label": "Top users board",
+            "help": "Shows customers a Top users board in the bot (a button on the main menu): the customers who invited the most people, five to a page, with each name and Telegram id masked. Staff, resellers and banned users are never on it, and it shows only while the referral program is on (Discounts & referrals → Invitations). On by default. Turned off, the button and the board are gone."
           }
         }
       },
@@ -1411,7 +1423,8 @@
     "category": {
       "payment": "Payment",
       "service": "Service",
-      "other": "Other"
+      "other": "Other",
+      "reseller": "Reseller application"
     },
     "category_label": "Category",
     "category_all": "All categories",

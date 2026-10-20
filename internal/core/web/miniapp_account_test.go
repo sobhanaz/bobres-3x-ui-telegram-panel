@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 )
 
 // features is the "features" object of the sign-in and /me answers.
@@ -306,6 +308,55 @@ func TestMiniAppSupport(t *testing.T) {
 	again, _ := out["ticket"].(map[string]any)
 	if code != http.StatusOK || out["new_ticket"] != true || again["id"] == id || again["category"] != "other" {
 		t.Fatalf("a message after closing: %d %v", code, out)
+	}
+}
+
+// A reseller application is made in the bot, not picked here: the app lists
+// only the three topics, files a message that names the reseller category as
+// "other", and shows an application the bot filed under its own category, where
+// a message written in the app joins it (one open conversation).
+func TestMiniAppSupportAndResellerApplications(t *testing.T) {
+	m := newMiniFixture(t, true)
+	ctx := context.Background()
+	tok := m.signIn("tg:3211:nadia")
+	_, out := m.call(http.MethodGet, "/api/mini/v1/support", tok, nil)
+	if cats, _ := out["categories"].([]any); fmt.Sprint(cats) != "[payment service other]" {
+		t.Fatalf("topics to pick: %v", out["categories"])
+	}
+	code, out := m.call(http.MethodPost, "/api/mini/v1/support/messages", tok, map[string]any{"text": "I want to be a reseller", "category": "reseller"})
+	filed, _ := out["ticket"].(map[string]any)
+	if code != http.StatusOK || filed["category"] != "other" {
+		t.Fatalf("a reseller application filed from the app: %d %v", code, out)
+	}
+	if code, _ := m.call(http.MethodPost, "/api/mini/v1/support/tickets/"+filed["id"].(string)+"/close", tok, map[string]any{}); code != http.StatusOK {
+		t.Fatalf("close: %d", code)
+	}
+
+	// The bot's application: its category is shown, and the app's message joins it.
+	user, err := m.st.GetUserByTelegramID(ctx, m.st.Conn(), 3211)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := m.dom.AddCustomerMessage(ctx, domain.CustomerMessage{UserID: user.ID, Category: domain.CategoryReseller, Text: "I run a shop", TGMessageID: 5})
+	if err != nil || app.Ticket.Category != "reseller" {
+		t.Fatalf("the application: %+v %v", app, err)
+	}
+	code, out = m.call(http.MethodGet, "/api/mini/v1/support", tok, nil)
+	open, _ := out["open"].(map[string]any)
+	if code != http.StatusOK || open["id"] != app.Ticket.ID || open["category"] != "reseller" {
+		t.Fatalf("the application in the list: %d %v", code, out)
+	}
+	if cats, _ := out["categories"].([]any); len(cats) != 3 {
+		t.Fatalf("topics to pick beside an application: %v", out["categories"])
+	}
+	code, out = m.call(http.MethodGet, "/api/mini/v1/support/tickets/"+app.Ticket.ID, tok, nil)
+	if tk, _ := out["ticket"].(map[string]any); code != http.StatusOK || tk["category"] != "reseller" {
+		t.Fatalf("the application's thread: %d %v", code, out)
+	}
+	code, out = m.call(http.MethodPost, "/api/mini/v1/support/messages", tok, map[string]any{"text": "My shop is on Instagram", "category": "payment"})
+	joined, _ := out["ticket"].(map[string]any)
+	if code != http.StatusOK || out["new_ticket"] != false || joined["id"] != app.Ticket.ID || joined["category"] != "reseller" {
+		t.Fatalf("a message beside the application: %d %v", code, out)
 	}
 }
 

@@ -23,7 +23,8 @@ export interface Assignee extends UserBrief {
 
 export type InboxTab = 'open' | 'answered' | 'closed' | 'all'
 export const INBOX_TABS: readonly InboxTab[] = ['open', 'answered', 'closed', 'all']
-export const CATEGORIES = ['payment', 'service', 'other'] as const
+/** The categories a ticket can have, as the inbox's filter lists them: a reseller application is a ticket the bot files from its Become a reseller button. */
+export const CATEGORIES = ['payment', 'service', 'other', 'reseller'] as const
 export const ASSIGNED = ['me', 'none'] as const
 
 /** inboxTab reads ?status= (anything unknown is the waiting tab). */
