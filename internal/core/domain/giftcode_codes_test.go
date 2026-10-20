@@ -24,7 +24,7 @@ func TestGiftAlphabet(t *testing.T) {
 		if strings.ContainsRune("01OIL", c) {
 			t.Errorf("%c looks like another character, and must not be in the alphabet", c)
 		}
-		if !(c >= 'A' && c <= 'Z' || c >= '2' && c <= '9') {
+		if (c < 'A' || c > 'Z') && (c < '2' || c > '9') {
 			t.Errorf("%c is not a capital or a digit", c)
 		}
 	}

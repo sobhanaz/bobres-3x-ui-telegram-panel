@@ -389,7 +389,7 @@ func TestGiftCodeRequestsAndWhatCoreSays(t *testing.T) {
 	outcome := func(o corev1.GiftCodeOutcome) *corev1.RedeemGiftCodeResponse {
 		return &corev1.RedeemGiftCodeResponse{Outcome: o}
 	}
-	const secret = "QWER-TYUP-ASDF"
+	const secret = "QWER-TYUP-ASDF" //nolint:gosec // a made-up code for the test, not a credential
 
 	// What is sent: the customer's id in core, the text as typed (trimmed), and a key made of the customer and
 	// the message, so the same message retried is the same request and another message another.

@@ -126,7 +126,7 @@ func TestGiftCodesAreNeverStoredInClear(t *testing.T) {
 			t.Fatalf("redeem: %s", got)
 		}
 	}
-	e.redeem(seedUser(t, e.s, 9302), "wrong-code-ABCD-9999") // a wrong one too
+	_, _ = e.redeem(seedUser(t, e.s, 9302), "wrong-code-ABCD-9999") // a wrong one too
 
 	dump := &strings.Builder{}
 	for _, q := range []string{
@@ -1086,7 +1086,7 @@ func TestGiftCodeRedemptionsListWhoAndWhen(t *testing.T) {
 
 // The largest amount times the most uses fits an int64 (checkGiftSpec checks it too, should a limit be raised).
 func TestGiftLimitsCannotOverflow(t *testing.T) {
-	if maxTopupMinor*int64(maxGiftRedemptions) > math.MaxInt64 || maxTopupMinor*int64(maxGiftRedemptions)/int64(maxGiftRedemptions) != maxTopupMinor {
+	if maxTopupMinor > math.MaxInt64/int64(maxGiftRedemptions) {
 		t.Fatalf("the largest amount times the most uses overflows an int64: update checkGiftSpec's limits together")
 	}
 }
