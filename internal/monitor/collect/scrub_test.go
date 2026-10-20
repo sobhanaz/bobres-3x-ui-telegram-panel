@@ -10,12 +10,12 @@ import (
 func TestScrub(t *testing.T) {
 	type c struct{ in, notWant, want string }
 	for _, tc := range []c{
-		{"bot token 123456789:AAEhBOweik6ad6PsWRpYgM2RUBXPoX0jEl8x here", "AAEhBOweik6", "[token]"},
+		{"bot token 123456789:" + strings.Repeat("A", 35) + " here", strings.Repeat("A", 11), "[token]"},
 		{"GET https://api.telegram.org/bot123456789:AAEhBOweik6ad6PsWRpYgM2RUBXPoX0jEl8x/getMe failed", "123456789", "/bot[token]/getMe"},
 		{"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig", "eyJhbGci", "[redacted]"},
 		{"password=hunter2 and more", "hunter2", "password=[redacted]"},
-		{`{"api_key":"abc123def456","other":1}`, "abc123def456", "[redacted]"},
-		{"BOBRES_TOKEN_BOT=0123456789abcdef", "0123456789abcdef", "[redacted]"},
+		{`{"api_key":"aaaabbbbcccc","other":1}`, "aaaabbbbcccc", "[redacted]"},
+		{"BOBRES_TOKEN_BOT=1111222233334444", "1111222233334444", "[redacted]"},
 		{"DB_PASSWORD: s3cret!", "s3cret", "[redacted]"},
 		{"connect postgres://svc_core:pa55w0rd@postgres:5432/bobres failed", "pa55w0rd", "[redacted]@"},
 		{"callback https://example.com/pay?token=abcdef&x=1#frag done", "abcdef", "https://example.com/pay?[...]"},
