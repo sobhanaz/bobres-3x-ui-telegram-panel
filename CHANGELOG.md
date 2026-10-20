@@ -6,6 +6,25 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
+### Help content: a FAQ and tutorials the owner writes
+- **The bot has a FAQ and a Tutorials menu, written by the owner in the dashboard** (Branding, "Help content" tab,
+  `branding.write`, in Persian and English). A FAQ button is the first button of the Support screen (and stays beside
+  "ticket history" while a ticket is open); a small FAQ opens as one numbered message, a large one as a numbered list
+  of questions, and every FAQ screen ends with a "Send a message to support" button. A Tutorials button on the home
+  screen and in the bottom menu lists the tutorials, each opening its text with up to 8 https URL buttons (an app's
+  download link) and a way back. Both buttons appear only while there is something enabled to show.
+- The dashboard editor adds, edits, reorders, switches on or off and deletes entries, checks them as you type and
+  previews them as the bot will show them, in either language. Every change is audited (`help.*`, entity
+  `help_entry`) and reaches the bot within seconds; an edit from an out-of-date copy is refused.
+- A new install is offered a generic FAQ and tutorials (the subscription link, then v2rayNG, Hiddify, Streisand,
+  V2Box and HAPP) once, to edit or delete; they do not come back when deleted. An empty list can be given them again.
+
+### Updating
+- `sudo bobres update` does it (core and the bot move together). One database migration (00026) adds the
+  `help_entries` table; the services' calls only gain `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings`
+  (additive: an older bot shows no help buttons, a bot on an older core simply has none to show). Nothing has to be
+  configured.
+
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## [0.6.1] — 2026-10-20
