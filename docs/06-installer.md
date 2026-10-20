@@ -171,10 +171,14 @@ Bot API server (`BOBRES_TELEGRAM_API_URL`), it must be version 9.4 or newer. The
 (`/setname`).
 
 ## Layout on server
-`/opt/bobres/{bobres.yml, .env, docker-compose.yml, caddy/, tls/, data/, backups/, logs/}`, and `.restore-point/` after
-an update (root only); state in named volumes. install.sh and `bobres update` record the last verified key list and
-release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`). `caddy/` and `tls/` are the HTTPS
-layout (see HTTPS certificates). An install made before P8 also keeps its old top-level `Caddyfile`.
+`/opt/bobres/{bobres.yml, .env, docker-compose.yml, caddy/, tls/, run/update/, data/, backups/, logs/}`, and
+`.restore-point/` after an update (root only); state in named volumes. install.sh and `bobres update` record the last
+verified key list and release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`). `caddy/` and `tls/`
+are the HTTPS layout (see HTTPS certificates). `run/update/` is where the dashboard and its updater meet (owned by uid
+65532, mode 0700: `request.json` and `status.json`; see Updating from the dashboard), `.update.lock` is the lock of
+updates, rollbacks and restores and `.updater-handled` the ids of the requests the updater ran (both root's, mode 0600).
+`/etc/systemd/system/bobres-updater.{path,service}` are the updater's units. An install made before P8 also keeps its
+old top-level `Caddyfile`.
 
 ## Status (2026-10-12)
 Implemented: `install`, the menu, `status`, `logs`, `start`, `stop`, `restart`, `uninstall [--purge]`, `doctor`,
@@ -200,18 +204,18 @@ changed with `bobres menu` ("Owners") or `bobres admin owners`, which core appli
 | `bobres check [--dir D] [--json]` | Every check of the install in one list, a line per check, `PASS`/`WARN`/`FAIL`/`SKIP`; exit 1 when one FAILs (see Check). `--json` prints `{results:[{name,status,detail}], pass, warn, fail}` |
 | `bobres logs [service] [-f]` | Tail logs |
 | `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
-| `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists (with a note when it is newer than the license's update date: the update is never refused for it) |
+| `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists (with a note when it is newer than the license's update date: the update is never refused for it). One update, rollback or restore at a time (a lock). `bobres update --from-request` is the same update for the dashboard's request, run by `bobres-updater.service`; it is not in the help and not for people (see Updating from the dashboard) |
 | `bobres rollback [--yes]` | Undo the last update with its restore point: the previous CLI, install files and version, and the database from before the update |
 | `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
 | `bobres restore <file \| s3://bucket/key> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. A backup in S3-compatible storage is downloaded into `backups/` first, with the install's S3 settings (see Off-server copies) |
-| `bobres config list / get <key> / set <key> <value>` | Show the settings (secrets masked) or change one of the safe ones: validated as install does, `.env` written in one rename (0600), only the services that read it recreated (see Settings and secrets) |
+| `bobres config list / get <key> / set <key> <value>` | Show the settings (secrets masked) or change one of the safe ones: validated as install does, `.env` written in one rename (0600), only the services that read it recreated (see Settings and secrets). `BOBRES_UPDATE_FROM_DASHBOARD on\|off` installs or removes the dashboard's updater instead of recreating a container |
 | `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. Master keys and the backup key are not rotated |
 | `bobres about [--dir D]` | The banner and everything in one place: version, commit, build date, license summary and copyright, the vendor license key's id and fingerprint (derived from the key built into this bobres), the store installed here, the links (site, docs, issues, security reports), a pointer to `THIRD_PARTY_NOTICES.md` and `LICENSE`, and the note that the license text is a draft |
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements, how it came) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container |
 | `bobres license activate [<key>] [--server URL]` | Turn a license key from the seller into this install's license, through the vendor's license server (`BOBRES_LICENSE_SERVER`, set with `bobres config set`, or `--server` for one run; https only). Run it without `<key>`: it asks for the key without echoing it, or reads it from stdin (`< key.txt`). A key given as the argument stays in the shell history and in sudo's log. Core then renews the license daily (see License activation) |
 | `bobres ssl [status] / auto / ip [--ip X] [--yes] / manual --cert FILE --key FILE` | The HTTPS certificate: show it, go back to the automatic one for the domain, add a Let's Encrypt certificate for the server's IP address, or use your own certificate and key. Each runs `/app ssl ...` in the core container (see HTTPS certificates) |
-| `bobres doctor [--dir D] [--domain X] [--offline]` | Diagnose: OS, RAM, disk, ports, Docker, DNS, the TLS certificate of every address the store serves (a crash-looping Caddy is a FAIL), and the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures). `--dir` is the install it reads `.env` and core's address list from; `--domain` defaults to its `BOBRES_DOMAIN` |
+| `bobres doctor [--dir D] [--domain X] [--offline]` | Diagnose: OS, RAM, disk, ports, Docker, DNS, the TLS certificate of every address the store serves (a crash-looping Caddy is a FAIL), the hardening state (firewall, fail2ban, security updates, swap; warnings, never failures) and the dashboard's updater (its units; a warning, never a failure). `--dir` is the install it reads `.env` and core's address list from; `--domain` defaults to its `BOBRES_DOMAIN` |
 | `bobres admin link [telegram id]` | One-time dashboard login link printed on the server, for when the bot is down (default: the owner). It skips the password and code, so it is also the way back after a lost authenticator. It needs the account to exist (the owner started the bot once); with no Telegram, use `admin password` |
 | `bobres admin owners list\|add\|remove [--dir D] [--no-restart] [telegram id]` | The store's owners (root admins), named in `BOBRES_ADMIN_TELEGRAM_ID`: list them, add one, remove one (the setting is validated like `bobres config set`, written to `.env`, and only core and the bot are recreated). Only the server can do this: the dashboard and the bot cannot make or unmake a root admin. The first is the main owner, who takes no staff seat; every other owner takes one. Removing an id never locks anyone out by itself: an account that already signed in keeps the owner role until it is demoted in the dashboard, and the command says so |
 | `bobres admin password [--dir D] [--id N]` | Reset the owner's dashboard password (the main owner's, or the owner with Telegram id N): runs `/app admin-password` in the core container, prints the login `owner` and a new random password once, and says it must be changed at first login. Creates the owner's account when the owner never sent `/start`. Running it again resets the login and ends the owner's sessions (the menu has it as "Reset admin password") |
@@ -237,6 +241,7 @@ reads the array either way).
 | 3x-ui servers | Every enabled server passed its last health check | FAIL lists each down server with the provisioner's last error; WARN when none is added yet or the provisioner did not answer (`bobres logs provisioner`) |
 | Watchdog | No open alert | WARN lists them (dashboard: Alerts) |
 | HTTPS (one line per address) | The certificate this server serves on port 443 is valid and covers the address | As in doctor and `bobres ssl status` |
+| Dashboard updates | `bobres-updater.path` is enabled and active, and the bobres its service runs is there (or the setting `BOBRES_UPDATE_FROM_DASHBOARD=off` is on and the units are gone) | WARN, never FAIL: not installed (update once with `sudo bobres update`), not enabled, not running or failed (`systemctl status bobres-updater.path`; `sudo bobres update` or `sudo bobres install` set it up again), or switched off but still installed |
 | Backup | The newest backup is under 48 hours old | WARN when older (`bobres logs backup`, `bobres backup`); FAIL when there is none: back up and keep the backup key |
 | Release signature | The release this server runs was signed with an expiry more than 14 days away | WARN/FAIL: publish or re-sign a newer release; updates and reinstalls are refused after the signed expiry. SKIP when the release manifest was not kept in the state directory (`/var/lib/bobres/checksums.txt`) |
 | Bot token | Telegram accepts the token (`getMe`; shows `@username`, through the self-hosted Bot API server when `BOBRES_TELEGRAM_API_URL` is set) | FAIL: `sudo bobres secrets rotate bot-token` |
@@ -512,6 +517,164 @@ from (install.sh installed a newer one since); a restore point without `release_
 A rollback puts back every file the restore point holds, and leaves the HTTPS layout's folders (`caddy/`, `tls/`) in
 place (see HTTPS certificates).
 
+**One update, rollback or restore at a time.** `bobres update`, `bobres rollback` and `bobres restore` (and the
+dashboard's updater, below) each take an exclusive lock on `<dir>/.update.lock` (root's file, mode 0600, made when
+first needed) and let go when they end, however they end (the system drops it with the process). One that finds the
+lock held does not wait: it says "another bobres update, rollback or restore is running on this install. Nothing was
+changed." and exits 1. `bobres update --check` takes none. `bobres install` does not either: `bobres update` runs it
+while holding the lock itself.
+
+## Updating from the dashboard
+
+The dashboard's **System → Updates** tab can update the store without anyone logging in to the server, and lets the
+owner choose between the **stable** channel (releases) and the **beta** channel (pre-releases too). Core, the container
+that serves the dashboard, never gets the Docker socket or any other power over the host (it has no internet access
+either), so it does not update anything itself. A small helper on the host does, with the code of `bobres update`:
+two systemd units that run `bobres update` when core drops a request file.
+
+```
+dashboard  ->  core  --- request.json --->  /opt/bobres/run/update/  --- (systemd path unit) --->  bobres-updater.service
+                     <--- status.json ----                                  sudo bobres update --from-request, as root
+```
+
+**The flow.**
+1. An owner presses **Update** (or **Update to X**) in the dashboard. Core refuses while an update shows as running,
+   and writes one `request.json` into `/opt/bobres/run/update`, which core sees as `/run/bobres-update`: a temp file,
+   then a rename.
+2. `bobres-updater.path` (`PathExists=/opt/bobres/run/update/request.json`) starts `bobres-updater.service`, which
+   runs `/usr/local/bin/bobres update --from-request --dir /opt/bobres` as root.
+3. That command reads the request (rules below), **deletes it**, takes the lock above (it answers "failed: another
+   update is running" when it is held), and runs exactly what `bobres update --yes --channel C [--version V]` runs: the
+   release is verified against the keys built into bobres (signed checksums, `min_version`, the key list's `seq`, the
+   channel), a release older than the install or than `release.version` is refused, then the 2 GB check, the backup and
+   restore point, the new bobres, its install, the health check and the **automatic rollback** if the store does not
+   come back. There is no separate code path to trust: `update --from-request` calls the function `bobres update` runs.
+4. It writes `status.json` at each step (and at least every 30 seconds while it runs); core reads it and the dashboard
+   shows the step, one sentence, and the last lines of the output. After a successful run it keeps
+   `BOBRES_UPDATE_CHANNEL` in `.env` equal to the channel the request named, with `bobres config set` (so
+   `sudo bobres update` and the menu follow what the owner picked, and the bot, which checks for releases, is recreated
+   with it), only when that differs.
+
+**The first update still goes over SSH.** A store that runs a release from before the helper has no units and no mount
+for core: the dashboard's Updates tab shows the command instead of a button. Run `sudo bobres update` once. The
+`bobres update` of that old version swaps in the new bobres and runs *its* install, and that install is what makes
+`run/update` (before the containers start, so that Docker does not make it as root), writes the new `docker-compose.yml`
+with core's mount, and, once the stack is healthy, installs the two units, enables the path unit and starts it, and
+writes `status.json` (`installed: true`, `state: idle`). Every later `bobres install` and `bobres update` checks the units
+against the text its own release carries (they are embedded in the binary, `deploy/systemd/`) and rewrites and reloads
+them only when that differs, so a release that changes them brings the change. `bobres install` skips them with
+`--no-start` (nothing runs), and only warns when they cannot be set up: the store never depends on the helper.
+
+**Protocol, version 1.** Core and the helper agree on exactly this; both ignore nothing and accept nothing else.
+
+| File | Written by | Read by | Rules |
+|---|---|---|---|
+| `run/update/request.json` | core (a temp file, then a rename) | the helper, once | at most 2 KiB; a regular file owned by core's uid (65532), opened without following a link and without waiting for a pipe; deleted after it is read, **whatever it held** |
+| `run/update/status.json` | the helper (a temp file, then a rename), root's file, mode 0644 | core | `installed: true` is how the dashboard knows the helper exists; a missing file means it is not installed yet |
+
+`request.json`: `{"v":1,"id":"<uuid>","action":"update","channel":"stable"|"beta","version":"","by":"<name>","at":"<RFC 3339>"}`.
+- All seven fields, no others (an unknown field, a missing one, a second JSON value or trailing text is refused); `v` is 1
+  and `action` is `update`. There is no field for a URL, a base URL, an environment variable or a flag, and none can be
+  added by sending more: the file is decoded into those fields only and anything else refuses the whole request.
+- `id` is a UUID. An id the helper handled before is **ignored** (it keeps the ids of the last day in
+  `<dir>/.updater-handled`, root's file out of core's reach), so a request file that comes back runs once.
+- `channel` is `stable` or `beta`. `version` is `""` for the newest verified release of the channel, else an exact
+  `X.Y.Z` or `X.Y.Z-label.N` (semver without `v` or build metadata, at most 64 characters: no `/`, `..`, space or
+  quote can reach a URL or a command).
+- `by` is the dashboard user's name: 1 to 64 characters, no control character, line break or right-to-left override (it
+  goes into a log).
+- `at` is an RFC 3339 time, **not older than 15 minutes and not more than a minute ahead** of this server's clock (core's
+  is the same).
+
+`status.json`: `{"v":1,"installed":true,"helper":"0.7.0","state":"idle","id":"","from":"0.6.1","to":"0.7.0","channel":"stable","step":"","message":"","started_at":null,"finished_at":null,"log":[]}`.
+- `state` is `idle` (installed or updated, nothing asked since), `running`, `done`, `failed` or `rolled_back`. A result
+  (`done`, `failed`, `rolled_back`, with its message and log) stays until the next request, or until a release with
+  another helper version is installed (then `idle` again).
+- `step` is `verify` (checking the signature, downloading the new bobres), `backup`, `pull` (the new bobres's install pulls
+  its images), `restart` (it starts the stack; told when the install prints that step), `health`, `rollback` or `done`.
+- `message` is one short sentence: "BOBRES was updated from 0.6.1 to 0.7.0.", "BOBRES already runs 0.7.0: nothing to
+  update.", "The update to 0.7.0 did not go through: BOBRES runs 0.6.1 again.", or the reason of a refusal or a failure
+  ("release 0.6.0 is older than this install (0.7.0)...", "The update request was refused: it is older than 15 minutes.",
+  "Another update, a rollback or a restore is running on this server...", "...the automatic rollback did not finish: connect
+  to the server"). `to` is known once the release is found. `helper` is the version of the bobres on disk: the new one
+  after a successful update. `started_at` and `finished_at` are RFC 3339 times in UTC, `null` while not known. `log` is
+  the last 40 lines of what the update printed (the parent's and the new bobres's install), each cut at 200 characters,
+  with the install's secret values, bot tokens, long hex strings and public IP addresses scrubbed.
+- A status that says `running` while no update runs (bobres was killed, the server went down) is told apart by whoever
+  next takes the install lock (`bobres update`, `rollback`, `restore`, the helper): it becomes `failed`, "interrupted".
+  While it really runs the file is rewritten at least every 30 seconds, so its age says whether the helper is alive.
+
+**The units** (`/etc/systemd/system/bobres-updater.path` and `.service`, from `deploy/systemd/`; `@DIR@`, `@EXE@`,
+`@EXEDIR@` and `@STATE@` are the install directory, the bobres binary, its folder and the release state directory;
+they are written only if made of letters, digits and `. _ + - /`).
+- The path unit watches the file, with `ConditionPathIsDirectory` on `run/update`; enabled by `multi-user.target`.
+- The service is `Type=oneshot`, `User=root`, `ExecStart=@EXE@ update --from-request --dir @DIR@`, with
+  `BOBRES_STATE_DIR` set as it is for install.sh, `TimeoutStartSec=3h` (an update has time limits of its own; this stops
+  one that hangs) and `TimeoutStopSec=20min` (an install that is interrupted rolls back before systemd gives up).
+  If the service ends in any way but success, `ExecStopPost` deletes `request.json`, so that a request that was
+  never read (a start that failed, an older bobres that does not know the flag after a rollback) cannot make the path
+  unit start the service for ever.
+- Sandbox: `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict` with write access only to the install directory,
+  the folder bobres is replaced in, `/etc/systemd/system` (the new bobres rewrites the units), the release state
+  directory and the install log, `ProtectHome=read-only`, the kernel, clock and cgroup protections, `RestrictNamespaces`,
+  `RestrictSUIDSGID`, `RestrictRealtime`, `LockPersonality`, and only the Unix, IPv4, IPv6 and netlink socket families.
+  Docker is reached through its socket (`docker compose` is a client), which this does not restrict: the helper is
+  root, as `sudo bobres update` is.
+
+**The directory.** `bobres install` makes `<dir>/run` (root's, mode 0755) and `<dir>/run/update` (**owned by uid 65532,
+core's user, mode 0700**), by their open descriptors and never through a link, and puts both right on every run (a
+directory Docker made as root when the host path was missing is given to 65532). Only core mounts it, read-write
+(`deploy/docker-compose.yml`, `TestComposeUpdateRequestMount`); core's root file system stays read-only, and it
+gets no other path of the host. On the host the install directory itself is root's (0750), so a process of uid 65532
+that is not in that mount cannot even reach `run/update` (tried in the lab). A run that is not root (a development or CI install) cannot give it away, so it is
+made world-writable (0777) with a note, and the helper, which is root's, would refuse such a directory.
+
+**Security.** The threat is a compromised core (or a staff account that reaches this function) asking for an update at a
+time the owner did not choose. The design lets it do **at most that**:
+- It cannot name where to download from, what to run, a base URL, an environment variable or a flag: the request has a
+  channel and a release name, both checked against a pattern. The release is the vendor's signed one, checked against the
+  keys built into bobres, with every check `sudo bobres update` makes (an older release, a replayed key list, an
+  expired signature, a release of another channel are all refused).
+- It can cause **downtime** (the stack restarts; the update backs up first and rolls back by itself when the store does
+  not come back) and one update to a signed release newer than the installed one, which may be an earlier one than the
+  newest when it names `version`. It cannot roll back, restore, change a setting other than the update channel, or run
+  anything else.
+- The helper reads a directory core controls, so it trusts none of it: the directory itself is checked first (`run/` and
+  `update/` are real directories nobody else can write to, owned by root or core), the request is opened without
+  following a link or waiting for a pipe and must be a regular file owned by uid 65532 (a hard link to a file of root's
+  is root's, not core's), its size is checked on the open descriptor and the read is capped, and a link, a pipe, a
+  directory or anything else put in its place is removed without being followed. `status.json` is written by a temp
+  file in that directory and a rename, which replaces a link instead of writing through it.
+- Core can fill the disk by writing files into `run/update` (the volume has no quota), as it already can through its
+  database. It can keep the helper busy by sending requests: systemd allows a service 5 starts in 10 seconds, and a
+  burst past that puts the path unit in the `failed` state (`unit-start-limit-hit`; tried in the lab with 14 requests in
+  4 seconds), where requests wait until `sudo systemctl reset-failed bobres-updater.path bobres-updater.service &&
+  sudo systemctl restart bobres-updater.path` or the next `bobres install` or `bobres update` (which do exactly that)
+  starts it again. `bobres check` warns about it. A run that is refused, failed or rolled back ends with exit code 1, so
+  `systemctl` lists the service as failed until the next run; `status.json` has the details.
+- The helper is root and runs `docker compose`: a flaw in `bobres update` is a flaw here too. What this adds to it is the
+  directory and its parsing, which is small (`cmd/bobres/helper_request.go`) and tested for every refusal.
+- Not covered: a host where Docker runs with user namespace remapping (container uid 65532 is not host uid 65532, as for
+  `backups/` and `tls/`), or where another program runs as host uid 65532 and can reach `/opt/bobres/run/update`.
+
+**Look at it.** `sudo bobres check` and `bobres doctor` have a line, "Dashboard updates": PASS when the path unit is
+enabled and active (and the bobres it runs exists), WARN when it is not installed, not enabled, failed or its bobres is
+gone (never FAIL: the helper is optional). `systemctl status bobres-updater.path`,
+`journalctl -u bobres-updater.service` (the whole output of each run) and `cat /opt/bobres/run/update/status.json`
+(`sudo`: the directory is core's) say the rest. `sudo bobres update` over SSH works as before and takes the same lock.
+
+**Turn it off, or remove it.** `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off` (unset or `on`: on) removes
+the units at once, writes `installed: false` to `status.json`, and keeps them away from every later `bobres install` and
+`bobres update`; `... on` installs them again (and makes `run/update`). `sudo systemctl disable --now bobres-updater.path`
+alone stops it until the next `bobres install` or `bobres update`, which turns it back on unless the setting says off.
+`sudo bobres uninstall --purge` removes the units with the install; `bobres uninstall` without `--purge` keeps them (the
+store can be started again with `bobres start`).
+
+**Limits.** The dashboard cannot roll back (`sudo bobres rollback` can; the restore point it leaves is the same). The
+helper needs Docker and systemd on the server, and root's `bobres` at the path the units name; a server without
+systemd (a container, a non-systemd distribution) has no helper, and says so on the Updates tab. A request that finds
+bobres or Docker broken ends as `failed` with the reason.
+
 ## Support bundle
 `bobres support-bundle [--dir D] [--offline]` writes `<dir>/bobres-support-<UTC stamp>.tar.gz` (mode 0600, through
 `writeAtomic`) and prints its path. It holds `README.txt` (what is inside, and what could not be collected),
@@ -618,7 +781,7 @@ The settings it changes, and the services each one recreates:
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
 | `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, core, payments, tls-agent | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it. The tls-agent is recreated with core for the same reason as for the domain |
-| `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel) |
+| `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel); the owner's choice in the dashboard (System > Updates, the `updates.channel` setting) wins for the bot's check and the dashboard's update when it is set |
 | `BOBRES_LICENSE_SERVER` | bot | an https URL without credentials, or empty (no online activation or refresh; see License activation) |
 | `BOBRES_SELLER_CONTACT` | core | any text, or empty (a Telegram handle or an address the License tab and `bobres license status` show for buying or renewing a license; empty: they say "ask the seller you got BOBRES from") |
 | `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |
@@ -874,7 +1037,9 @@ asks again after 3 hours. A failed refresh changes nothing: the token simply run
 
 ## Uninstall
 Stops services, removes containers/units; data kept unless `--purge`; prints what remains. `--purge` deletes the
-install directory, and with it every backup in `/opt/bobres/backups`: it warns first (copy them elsewhere).
+install directory, and with it every backup in `/opt/bobres/backups`: it warns first (copy them elsewhere). It also
+removes the dashboard updater's systemd units (`bobres-updater.path` and `.service`; see Updating from the dashboard):
+without `--purge` they stay with the install, which `bobres start` can bring back.
 
 - The command is `docker compose --profile '*' down --remove-orphans [--volumes]`: every profile is on, so a container
   of a service whose profile is off now (the tls-agent of a release the install went back from) is removed too, and its

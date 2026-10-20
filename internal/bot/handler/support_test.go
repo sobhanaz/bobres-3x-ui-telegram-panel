@@ -532,61 +532,75 @@ func (c *lossyCore) failures() int {
 	return c.failed
 }
 
-// Maintenance and the forced join let a customer go on with their ticket,
-// never start one.
-func TestGatesLetATicketContinue(t *testing.T) {
+// Maintenance holds a support conversation like everything else (the report:
+// Support did not show the maintenance message, and a customer could write on
+// to support while the store was closed). The required channel is gentler: it
+// lets a customer go on with their ticket, never start one.
+func TestGatesAndATicket(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
 	u := w.customer(877, "cont")
 	n := w.customer(878, "newbie")
 	u.text("/menu")
 	u.press("support")
-	u.text("before maintenance")
+	u.text("before the gates")
 	w.staffReply(877, "an answer", false)
 	u.eventuallySees("an answer")
 	staffMsg := u.last()
 	n.text("/menu")
-	n.press("support") // the prompt, open before maintenance
+	n.press("support") // the prompt, open before the gates
 
 	owner.text("/set maintenance.enabled true")
 	owner.sees("Saved")
 	u.press("tk:r:")
-	u.lastHas("Write your message for ticket")
+	u.toast("under maintenance")
 	u.text("during maintenance")
+	u.lastHas("under maintenance")
+	u.replyTo("by reply", staffMsg.id)
+	u.lastHas("under maintenance")
+	n.text("a new problem")
+	n.lastHas("under maintenance")
+	if m := len(w.ticketMessages(w.openTicket(877).ID)); m != 2 || w.hasOpenTicket(878) {
+		t.Fatalf("maintenance let support messages in: %d messages in the ticket, a new ticket: %v", m, w.hasOpenTicket(878))
+	}
+
+	owner.text("/set maintenance.enabled false")
+	owner.text("/set join.channel @testchan")
+	owner.sees("Saved")
+	u.press("tk:r:")
+	u.lastHas("Write your message for ticket")
+	u.text("outside the channel")
 	u.lastHas("Added to ticket")
 	if err := w.h.state.Clear(context.Background(), 877); err != nil {
 		t.Fatal(err)
 	}
 	u.replyTo("by reply", staffMsg.id)
 	u.lastHas("Added to ticket")
-	if n := len(w.ticketMessages(w.openTicket(877).ID)); n != 4 {
-		t.Fatalf("%d messages", n)
+	if m := len(w.ticketMessages(w.openTicket(877).ID)); m != 4 {
+		t.Fatalf("%d messages", m)
 	}
 	u.press("home")
-	u.toast("under maintenance")
+	u.lastHas("Join our channel")
 
 	n.text("a new problem")
-	n.lastHas("under maintenance")
+	n.lastHas("Join our channel")
 	if w.hasOpenTicket(878) {
-		t.Fatal("a ticket was started during maintenance")
+		t.Fatal("a ticket was started by someone outside the channel")
 	}
 
 	// Closed meanwhile: what the customer writes would start a ticket. (The
 	// reply's buttons went with [Reply]; the scene still names the ticket.)
 	w.closeTicket(877)
 	u.text("in the scene")
-	u.lastHas("under maintenance")
+	u.lastHas("Join our channel")
 	if err := w.h.state.Clear(context.Background(), 877); err != nil {
 		t.Fatal(err)
 	}
 	u.replyTo("again", staffMsg.id)
 	if w.hasOpenTicket(877) {
-		t.Fatal("a message to a closed ticket started one during maintenance")
+		t.Fatal("a message to a closed ticket started one outside the channel")
 	}
 
-	owner.text("/set maintenance.enabled false")
-	owner.text("/set join.channel @testchan")
-	owner.sees("Saved")
 	n.press("support")
 	n.lastHas("Join our channel")
 	w.tg.setMember(878, "member")

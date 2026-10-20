@@ -80,23 +80,40 @@ func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list{items, total, page, size})
 }
 
+// ledgerColumns are the columns of ledger.csv in the order they were added
+// (English names, new columns at the end). time_utc is the instant; time_local
+// the same instant on the wall clocks of the zone the tz column names. A Jalali
+// file (?calendar=jalali) has one more column, time_jalali: the local date in
+// the Jalali calendar, with Latin digits, and the time.
+var ledgerColumns = []string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id",
+	"entry_id", "time_local", "tz"}
+
+const timeJalali = "time_jalali"
+
 // exportLedger: GET /api/v1/ledger.csv with the same filters, newest first,
-// at most maxCSVRows rows. UTF-8 with a byte-order mark, so spreadsheet
-// programs show Persian names. It is an export like the reports' (streamCSV):
-// it shares their places (two at a time), their deadline and their rules for a
-// failure. Text cells go through reportText: a name that is, or after spaces
-// becomes, a spreadsheet formula is quoted.
+// at most maxCSVRows rows, and ?tz= and ?calendar= for the dates. UTF-8 with a
+// byte-order mark, so spreadsheet programs show Persian names. It is an export
+// like the reports' (streamCSV): it shares their places (two at a time), their
+// deadline and their rules for a failure and for the cells (csvcells.go).
 func (s *Server) exportLedger(w http.ResponseWriter, r *http.Request) {
 	f, ok := ledgerFilter(r)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid", "bad filter")
 		return
 	}
+	clk, ok := s.exportClock(w, r)
+	if !ok {
+		return
+	}
+	header := append([]string{}, ledgerColumns...)
+	if clk.jalali {
+		header = append(header, timeJalali)
+	}
 	s.streamCSV(w, r, csvExport{
-		name:   "ledger-" + s.now().UTC().Format("20060102-1504") + ".csv",
+		name:   exportFileName("ledger", clk, f.From, f.To, s.now()),
 		action: "export.ledger",
 		query:  r.URL.Query(),
-		header: []string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id", "entry_id"},
+		header: header,
 		each: func(ctx context.Context, row func(cells ...string) error) (bool, error) {
 			return s.cfg.Store.EachLedger(ctx, f, maxCSVRows, func(e store.LedgerRow) error {
 				ref, refType := "", ""
@@ -106,10 +123,14 @@ func (s *Server) exportLedger(w http.ResponseWriter, r *http.Request) {
 				if e.RefType != nil {
 					refType = *e.RefType
 				}
-				return row(
-					e.CreatedAt.UTC().Format(time.RFC3339), strconv.FormatInt(e.TelegramID, 10), reportText(e.Username),
-					reportText(e.Kind), decimal(e.Amount, e.Currency), reportText(e.Currency), decimal(e.BalanceAfter, e.Currency),
-					reportText(refType), reportText(ref), e.ID)
+				cells := []string{
+					clk.utc(e.CreatedAt), strconv.FormatInt(e.TelegramID, 10), textCell(e.Username),
+					textCell(e.Kind), decimal(e.Amount, e.Currency), textCell(e.Currency), decimal(e.BalanceAfter, e.Currency),
+					textCell(refType), textCell(ref), e.ID, clk.local(e.CreatedAt), clk.zone}
+				if clk.jalali {
+					cells = append(cells, clk.jalaliTime(e.CreatedAt))
+				}
+				return row(cells...)
 			})
 		},
 		moreNote: moreEntriesNote(maxCSVRows),
@@ -131,12 +152,4 @@ func decimal(amount int64, currency string) string {
 		s = strings.Repeat("0", scale-len(s)+1) + s
 	}
 	return sign + s[:len(s)-scale] + "." + s[len(s)-scale:]
-}
-
-// csvText keeps user-chosen text from running as a spreadsheet formula.
-func csvText(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
-		return "'" + s
-	}
-	return s
 }

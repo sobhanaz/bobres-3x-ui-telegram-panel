@@ -260,8 +260,12 @@ describe('update check', () => {
     expect(updateDetail(odd, updateReason(odd))).toBe('rate_limited: try later')
     const plain = upd({ latest: '', error: 'checksums.txt: no version header' })
     expect(updateDetail(plain, updateReason(plain))).toBe('checksums.txt: no version header')
+    // why GitHub could not be reached (a timeout, its hourly limit) is the bot's to say
     const away = upd({ latest: '', error: 'unreachable', detail: 'checksums.txt: dial tcp: i/o timeout' })
-    expect(updateDetail(away, updateReason(away))).toBe('')
+    expect(updateDetail(away, updateReason(away))).toBe('checksums.txt: dial tcp: i/o timeout')
+    // a code the page explains in full needs no more words
+    const none = upd({ latest: '', error: 'no_release', detail: 'checksums.txt: not found' })
+    expect(updateDetail(none, updateReason(none))).toBe('')
     expect(updateDetail(null, 'unsupported')).toBe('')
     expect(UPDATE_COMMAND).toBe('sudo bobres update')
   })
@@ -998,149 +1002,8 @@ describe('system page', () => {
     expect(document.querySelector('.license-chip')).toBeNull()
   })
 
-  it('shows a newer release with the command to install it', async () => {
-    const writeText = vi.fn(async () => {})
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    const { calls, router } = await boot('/admin/system')
-    await vi.waitFor(() => expect(rows()).toHaveLength(5))
-    btn('.tab-updates').click()
-    const card = await found('.update-available')
-    expect(router.currentRoute.value.query.tab).toBe('updates')
-    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
-    expect(document.querySelector('.current-version')?.textContent).toBe('1.4.0')
-    expect(document.querySelector('.latest-version')?.textContent).toBe('1.5.0')
-    expect(card.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.available'), { version: '\u20681.5.0\u2069' }))
-    expect(card.querySelector('.command')?.textContent).toBe('sudo bobres update')
-    expect(document.querySelector('.updates .checked')?.textContent).toContain(text('system.updates.checked_at').split('{')[0])
-    // the bot could not check the signature: said, and that the CLI will
-    expect(document.querySelector('.unverified')?.textContent?.trim()).toBe(text('system.updates.unverified'))
-    expect(document.querySelector('.up-to-date')).toBeNull()
-    expect(document.querySelector('.not-checked')).toBeNull()
-    // a bot that does not say which channel it follows: no channel shown
-    expect(document.querySelector('.channel')).toBeNull()
-    expect(document.querySelector('.channel-hint')).toBeNull()
-    expect(document.querySelector('.license-note')).toBeNull()
-    btn('button.copy-command').click()
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('sudo bobres update'))
-    // nothing is applied from the page
-    expect(calls.some((c) => !c.startsWith('GET '))).toBe(false)
-    // checks again on demand
-    btn('.updates button.refresh').click()
-    await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(3))
-  })
-
-  it('shows the channel, and a note on a release newer than the license’s update date (still offered)', async () => {
-    const reply = (updates: Partial<UpdateCheck>) => (url: string) => (url === '/api/v1/system'
-      ? json(200, { version: 'v1.5.0', services: [], updates: { current: '1.5.0', latest: '1.6.0-rc.2', newer: true, verified: true, checked_at: nowSec(), error: '', ...updates } })
-      : undefined)
-    const { calls, router } = await boot('/admin/system?tab=updates', { answer: reply({ channel: 'beta', covered: false, issued: '2027-03-01T10:04Z' }) })
-    const box = await found('.update-available')
-    // the day to compare with the license's "updates until"
-    expect(document.querySelector('.released')?.textContent).toBe('2027-03-01')
-    // advisory: offered like any update, with the command, and a note beside it
-    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
-    expect(document.querySelector('.update-state')?.classList.contains('p-tag-warn')).toBe(true)
-    expect(box.querySelector('.available-title')?.textContent).toBe(fill(text('system.updates.available'), { version: '⁨1.6.0-rc.2⁩' }))
-    expect(document.querySelector('.command')?.textContent).toBe('sudo bobres update')
-    expect(box.querySelector('.license-note')?.textContent).toContain(text('system.updates.newer_than_license'))
-    expect(document.querySelector('.not-covered')).toBeNull()
-    // the beta channel, and what going back to stable means
-    expect(document.querySelector('.channel-name')?.textContent).toBe(text('system.updates.channel_name.beta'))
-    expect(document.querySelector('.channel-hint')?.textContent).toBe(text('system.updates.channel_hint'))
-    expect(document.querySelector('.beta-note')?.textContent?.trim()).toBe(text('system.updates.beta_note'))
-    // the license's updates date is on its tab
-    expect(calls.some((c) => c.includes('/api/v1/license'))).toBe(false)
-    ;(box.querySelector('a.license-link') as HTMLAnchorElement).click()
-    await found('.license-state')
-    expect(router.currentRoute.value.query.tab).toBe('license')
-    expect(calls).toContain('GET /api/v1/license')
-
-    // stable, and no license in force: installable as before, no note
-    await boot('/admin/system?tab=updates', { answer: reply({ channel: 'stable', covered: null }) })
-    await found('.update-available')
-    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.newer'))
-    expect(document.querySelector('.channel-name')?.textContent).toBe(text('system.updates.channel_name.stable'))
-    expect(document.querySelector('.beta-note')).toBeNull()
-    expect(document.querySelector('.license-note')).toBeNull()
-    // the bot did not say when it was signed
-    expect(document.querySelector('.released')).toBeNull()
-    // covered by the license: no note
-    await boot('/admin/system?tab=updates', { answer: reply({ channel: 'stable', covered: true }) })
-    await found('.update-available')
-    expect(document.querySelector('.license-note')).toBeNull()
-    expect(document.querySelector('.command')?.textContent).toBe('sudo bobres update')
-  })
-
-  it('says when this install is up to date', async () => {
-    const { calls } = await boot('/admin/system?tab=updates', {
-      answer: (url) => (url === '/api/v1/system'
-        ? json(200, { version: 'v1.6.0', services: [], updates: { current: '1.6.0', latest: '1.6.0', newer: false, verified: true, checked_at: nowSec(), error: '' } })
-        : undefined),
-    })
-    await found('.up-to-date')
-    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.current'))
-    expect(document.querySelector('.up-to-date')?.textContent).toBe(text('system.updates.up_to_date'))
-    expect(document.querySelector('.latest-version')?.textContent).toBe('1.6.0')
-    expect(document.querySelector('.update-available')).toBeNull()
-    expect(document.querySelector('.unverified')).toBeNull()
-    expect(document.querySelector('.not-checked')).toBeNull()
-    // the health tab was never opened
-    expect(document.querySelector('.services-health')).toBeNull()
-    expect(calls.filter((c) => c === 'GET /api/v1/system')).toHaveLength(1)
-  })
-
-  it('says why updates could not be checked', async () => {
-    const reply = (updates: Partial<UpdateCheck> | null) => (url: string) => (url === '/api/v1/system'
-      ? json(200, { version: 'v1.5.0', services: [], ...(updates ? { updates: { current: '1.5.0', latest: '', newer: false, verified: false, checked_at: 0, error: '', ...updates } } : {}) })
-      : undefined)
-    const reason = () => document.querySelector('.not-checked .reason')?.textContent
-    // GitHub unreachable
-    await boot('/admin/system?tab=updates', { answer: reply({ error: 'unreachable', checked_at: nowSec() }) })
-    await found('.not-checked')
-    expect(document.querySelector('.update-state')?.textContent).toBe(text('system.updates.state.unknown'))
-    expect(document.querySelector('.reason-title')?.textContent).toBe(text('system.updates.could_not_check'))
-    expect(reason()).toBe(text('system.updates.reason.unreachable'))
-    expect(document.querySelector('.current-version')?.textContent).toBe('1.5.0')
-    expect(document.querySelector('.latest-version')?.textContent).toBe('—')
-    expect(document.querySelector('.update-available')).toBeNull()
-    expect(document.querySelector('.unverified')).toBeNull()
-    // core could not ask the bot
-    await boot('/admin/system?tab=updates', { answer: reply({ error: 'bot unreachable' }) })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.bot_unreachable')))
-    expect(document.querySelector('.updates .checked')).toBeNull()
-    // the bot's own words for anything else
-    await boot('/admin/system?tab=updates', { answer: reply({ error: 'checksums.txt: no version header' }) })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.other')))
-    expect(document.querySelector('.not-checked .error')?.textContent).toBe('checksums.txt: no version header')
-    // not checked yet: what the bot says before its first check, not a raw code
-    await boot('/admin/system?tab=updates', { answer: reply({ error: 'not_checked' }) })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.not_checked')))
-    expect(document.querySelector('.not-checked .error')).toBeNull()
-    await boot('/admin/system?tab=updates', { answer: reply({}) })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.not_checked')))
-    // no release yet, and a release that failed the signature check (with the bot's detail)
-    await boot('/admin/system?tab=updates', { answer: reply({ error: 'no_release', checked_at: nowSec(), detail: 'checksums.txt: not found' }) })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.no_release')))
-    expect(document.querySelector('.not-checked .error')).toBeNull()
-    await boot('/admin/system?tab=updates', {
-      answer: reply({ latest: '1.6.0', error: 'bad_signature', checked_at: nowSec(), detail: 'the release is not signed (no checksums.txt.sig)' }),
-    })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.bad_signature')))
-    expect(document.querySelector('.not-checked .error')?.textContent).toBe('the release is not signed (no checksums.txt.sig)')
-    expect(document.querySelector('.latest-version')?.textContent).toBe('1.6.0')
-    expect(document.querySelector('.update-available')).toBeNull()
-    expect(document.querySelector('.unverified')).toBeNull()
-    // an older core: its own version, and no check
-    await boot('/admin/system?tab=updates', { answer: reply(null) })
-    await vi.waitFor(() => expect(reason()).toBe(text('system.updates.reason.unsupported')))
-    expect(document.querySelector('.current-version')?.textContent).toBe('v1.5.0')
-    // a newer release read before the last check failed: still shown, with the failure
-    await boot('/admin/system?tab=updates', { answer: reply({ latest: '1.6.0', newer: true, verified: true, error: 'unreachable' }) })
-    await found('.update-available')
-    expect(document.querySelector('.reason-title')?.textContent).toBe(text('system.updates.last_check_failed'))
-    expect(reason()).toBe(text('system.updates.reason.unreachable'))
-    expect(document.querySelector('.unverified')).toBeNull()
-  })
+  // The Updates tab (the newest release, "Check again", the channel and "Update now") has its own
+  // component tests: updates.test.ts.
 
   // One moment for every reply, so the times a test expects match the ones
   // the page shows even when the clock passes a minute meanwhile.

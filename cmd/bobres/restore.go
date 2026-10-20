@@ -78,6 +78,13 @@ func (o *ops) restoreCmd(args []string) int {
 	if !ok {
 		return 2
 	}
+	// One restore, update or rollback at a time (the dashboard's updater takes the same lock).
+	unlock, err := o.lock(*dir)
+	if err != nil {
+		fmt.Fprintf(o.errOut, "error: %v. Nothing was changed.\n", err)
+		return 1
+	}
+	defer unlock()
 	// The safety backup is made with this install's own key, whatever opens
 	// the file: said now, before the file is read and the operator asked.
 	if len(strings.TrimSpace(env["BOBRES_BACKUP_KEY"])) < backup.MinKeyLen {

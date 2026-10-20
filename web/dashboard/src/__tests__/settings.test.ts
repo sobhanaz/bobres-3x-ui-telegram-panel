@@ -501,6 +501,49 @@ describe('settings page', () => {
     expect(input('reports.daily_summary_time').value).toBe('09:30')
   })
 
+  // The Top users board's switch: a card of its own (Growth), on by default, with its texts in
+  // the language of the page, saved as "false" when turned off.
+  const growthSwitch = item('growth.leaderboard.enabled', 'bool', { default: 'true' })
+  const growthItems = [...start, growthSwitch]
+  const growthGroups = [...groups, 'growth']
+  const growthSaved = (values: Record<string, string>) =>
+    json(200, { items: growthItems.map((i) => (i.key in values ? { ...i, value: values[i.key] } : i)), groups: growthGroups } satisfies SettingsReply)
+
+  it('has the Top users switch in a card of its own, on by default', async () => {
+    const puts = await open(growthSaved, { items: growthItems, groups: growthGroups, cards: 6 })
+    const on = input('growth.leaderboard.enabled')
+    expect(card('growth.leaderboard.enabled').querySelector('.card-title')?.textContent).toBe(text('settings.group.growth.title'))
+    expect(card('growth.leaderboard.enabled')).not.toBe(card('notify.sales'))
+    expect(on.checked).toBe(true)
+    const field = on.closest('.field') as HTMLElement
+    expect(field.querySelector('.label')?.textContent?.trim()).toBe(text('settings.field.growth.leaderboard.enabled.label'))
+    expect(field.querySelector('.help')?.textContent).toBe(text('settings.field.growth.leaderboard.enabled.help'))
+    expect(saveButton('growth.leaderboard.enabled').disabled).toBe(true)
+
+    on.click()
+    await vi.waitFor(() => expect(saveButton('growth.leaderboard.enabled').disabled).toBe(false))
+    saveButton('growth.leaderboard.enabled').click()
+    await vi.waitFor(() => expect(puts).toEqual([{ 'growth.leaderboard.enabled': 'false' }]))
+    await vi.waitFor(() => expect(saveButton('growth.leaderboard.enabled').disabled).toBe(true))
+    expect(input('growth.leaderboard.enabled').checked).toBe(false)
+  })
+
+  it('has the Top users texts in both languages', () => {
+    const get = (o: unknown, path: string) => path.split('.').reduce<unknown>((x, k) => (x as Record<string, unknown> | undefined)?.[k], o)
+    for (const [lang, catalog] of [['en', en], ['fa', fa]] as const) {
+      for (const k of [
+        'settings.group.growth.title',
+        'settings.group.growth.desc',
+        'settings.field.growth.leaderboard.enabled.label',
+        'settings.field.growth.leaderboard.enabled.help',
+        'support.category.reseller',
+      ]) {
+        const v = get(catalog, k)
+        expect(typeof v === 'string' && v.trim() !== '', `${lang} ${k}`).toBe(true)
+      }
+    }
+  })
+
   it('brings the entry a link names into view', async () => {
     const scrolled = vi.fn()
     const proto = Element.prototype as { scrollIntoView?: unknown }

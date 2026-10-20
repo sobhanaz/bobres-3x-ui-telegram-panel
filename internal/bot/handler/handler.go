@@ -106,6 +106,10 @@ type Handler struct {
 	// whiteLabel is Settings.white_label from the last refresh (false until
 	// then: the credit shows unless core says otherwise).
 	whiteLabel atomic.Bool
+	// resellersIncluded is Settings.resellers_enabled from the last refresh:
+	// the license in effect includes resellers, so customers are offered the
+	// Become a reseller button (false until then, and for an older core).
+	resellersIncluded atomic.Bool
 	// helpFAQ and helpTutorials are Settings.help_faq and help_tutorials from the
 	// last refresh: whether the owner has an enabled question and an enabled
 	// tutorial to show. The FAQ button under Support and the Tutorials button of
@@ -164,6 +168,7 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	miniApp := s.GetMiniappUrl()
 	h.miniApp.Store(&miniApp)
 	h.whiteLabel.Store(s.GetWhiteLabel())
+	h.resellersIncluded.Store(s.GetResellersEnabled())
 	h.helpFAQ.Store(s.GetHelpFaq())
 	h.helpTutorials.Store(s.GetHelpTutorials())
 	dropped := map[string]bool{}
@@ -542,6 +547,12 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.askDiscount(r, rest)
 	case "ref":
 		h.showReferral(r)
+	case "top":
+		h.showTopUsers(r, pageArg(rest))
+	case "ap":
+		h.onResellerApply(r)
+	case "renew":
+		h.showRenewServices(r)
 	case "qr":
 		h.sendQR(r, rest)
 	case "wallet":
@@ -651,6 +662,12 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		r.clearState()
 		r.send(r.t("cancelled"), nil)
 		h.showHome(r)
+	case "/new": // the buttons Buy, Renew and My services, by their own commands
+		h.onActionCommand(r, "buy")
+	case "/renew":
+		h.onActionCommand(r, "renew")
+	case "/status":
+		h.onActionCommand(r, "subs")
 	case "/paysupport":
 		h.onPaySupport(r)
 	case "/terms":
@@ -694,6 +711,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onAdminScene(r, st)
 	case sceneResellerLabel, sceneResellerFind, sceneResellerRename, sceneResellerNote:
 		h.onResellerScene(r, st)
+	case sceneResellerApply:
+		h.onResellerApplication(r)
 	default:
 		r.clearState()
 		h.showHome(r)

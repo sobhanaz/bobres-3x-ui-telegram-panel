@@ -30,6 +30,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | report.daily_summary.v1 | core (daily summary worker) | notifier(staff) | Yesterday's sales (one store-local day) for **one** staff member who holds `reports.read` and has a Telegram account; core writes one event per such member, in the transaction that claims the day (`core.daily_summary_claims`), so each recipient's blocking, refusal or failure is their own (a blocked bot is skipped; a refusal no retry changes, a 4xx other than a blocked bot, a flood limit or a refused token, is dead-lettered at once; any other failure is retried, and since a feed is applied in order the events behind it wait for it until it is sent or dead-lettered), and a member who lost the permission before the claim gets none (the bot also drops the event when it knows the person is no longer an owner or admin, and when it is sent more than a day after it was queued). Queued exactly once, delivered at least once. Only when the store turned `reports.daily_summary` on. `{telegram_id, language (fa\|en, the member's own), date ("2026-10-13"), zone (IANA), new_customers, trials, currencies: [{currency, revenue, prev_revenue (the day before, for the comparison), orders, new_orders, renewals, traffic_topups, refunds: {count, amount}, net, topups: {count, amount}, rejected: {count, amount} (by staff), gateway_failed: {count, amount}}]}`. Amounts are integers in the currency's smallest unit and are never added across currencies; `currencies` lists only those with something to report (none: a quiet day, which the bot says in one line). No names, customers, plans or order ids ([14-reports.md](14-reports.md#the-daily-summary-in-telegram)) |
 | system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`; the notice `license.limit` is sent at most every 24 h, has no 6-hour reminder and no `resolved`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes, limit are numbers, free is bytes, date is unix seconds, the rest names; name of `license.limit` is the limited thing, `active_services`), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
+| system.update.v1 | core | notifier(owners) | An update asked for in the dashboard (System > Updates > Update now) or its end, one event per owner with a Telegram account, written in the transaction that records the request or its end. `{telegram_id, language, state: requested\|done\|failed\|rolled_back\|not_started, from, to, channel, by, at (unix seconds), message?}`; `message` is the updater's own short sentence for an end that is not `done` (outside text: the bot escapes it) |
 | sales.daily_summary.v1 | core (daily-summary worker) | notifier(staff alerts) | Yesterday's sales, once a day after `notify.daily_summary_hour` when `notify.daily_summary` is on ([14-reports.md](14-reports.md)). `{date (the local day), tz, new_customers, trials, currencies: [{currency, revenue, net, orders, new_orders, renewals, refunds (count), refund_amount, topups (count), topup_amount}]}`, money in minor units, one entry per currency, never added together; an empty day has no currencies. Sent to `notify.recipients` (never support staff) |
 
 ## Purchase saga (happy path)
@@ -62,6 +63,23 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   reseller after `resellers` left the license ("domain: forbidden") and a banned one ("user is banned"); NOT_FOUND for
   an unknown user or a service that is not theirs; INVALID_ARGUMENT for an unknown status or a note or search that is
   too long. Over the Mini App the same functions answer `/api/mini/v1/reseller/...` ([17-mini-app.md](17-mini-app.md)).
+- core, growth tools (built after v0.6.1, additive; the proto stays compatible): `GetTopInviters` (a page of the board of
+  the customers who invited the most people: request `user_id` (the viewer), `page` from 1, `page_size` (0 = 5, at most 10);
+  answer `enabled` (false while `referral.reward_percent` is 0 or `growth.leaderboard.enabled` is false, nothing else
+  set), `entries` of `{rank, name, telegram_id, invited, you}`, `page`, `page_size`, `total` (at most 50), `more`,
+  `your_invited` (every user who joined through the viewer's link, as `GetReferralInfo.invited`) and `your_rank` (0: not on
+  the board); NOT_FOUND for an unknown user). Core masks `name` and `telegram_id` itself (the first and last three
+  characters around `***`; at least three always hidden; `***` for no username), so no answer holds a whole one. Only
+  active users with the plain `user` role are ranked, a tie goes to whoever joined first, and the board is kept for 30
+  seconds (`domain.Config.LeaderboardTTL`). `Settings.resellers_enabled` is true while the license in effect includes
+  resellers (a license, its grace, the trial; the free tier does not), for the bot's Become a reseller button; an older
+  core never sets it, so the button stays hidden. `AddTicketMessage` with `category` `reseller` files a reseller
+  application: a new ticket only (never an answer in another: `ticket_id` or `reply_to_tg_message_id` is INVALID_ARGUMENT),
+  from an active customer (a reseller, staff: FAILED_PRECONDITION "only a customer can apply to become a reseller"; banned:
+  PERMISSION_DENIED), while resellers are in the license (FAILED_PRECONDITION, the staff-facing refusal), and with no other
+  ticket open (FAILED_PRECONDITION "a reseller application is open already" or "another support conversation is open": the
+  bot reads them). `Ticket.category` can be `reseller`; the topics a customer picks from stay payment, service and other
+  (`domain.SupportCategories`, which is also what the Mini App lists).
 - core, payment method switches (milestone 6a, built): `ListPaymentMethods` leaves out Telegram Stars while
   `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
   turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments
@@ -196,6 +214,71 @@ The bot's `GET /internal/public-ip` (core's service token) tells core this serve
 no internet access: the bot asks `https://api.ipify.org`, then `https://ifconfig.me/ip` (5 seconds each, no redirects,
 no proxy), accepts only a 200 answer of at most 64 bytes that is a public IP address, and answers `{"ip": "..."}`.
 Core's `POST /api/v1/system/tls/detect-ip` and the Detect button of the dashboard's HTTPS tab use it.
+
+## Updating from the dashboard
+Core never holds the Docker socket. System > Updates asks the server's updater (a root systemd path unit on the host,
+`bobres-updater.path`, that runs `bobres update --from-request`) through one folder, `<install>/run/update` on the host,
+which core sees as `/run/bobres-update` (`BOBRES_UPDATE_DIR`). Protocol version 1:
+
+| File | core | updater | Content |
+|---|---|---|---|
+| `request.json` | writes (a `.request.json.tmp` file, then a rename; mode 0640; never through a link) | reads, runs, removes | `{v: 1, id, action: "update", channel: stable\|beta, version, by, at}`, one line of at most 2048 bytes |
+| `status.json` | reads (no link followed, at most 64 KB, every field cut and checked) | writes (atomic) | `{v: 1, installed, helper, state: idle\|running\|done\|failed\|rolled_back, id, from, to, channel, step: verify\|backup\|pull\|restart\|health\|rollback\|done, message, started_at, finished_at, log[]}` |
+
+- `id` is a lower-case UUID (core uses version 7); `version` is "" for the newest of the channel, else a release number
+  `X.Y.Z` or `X.Y.Z-label.N` (at most 64 characters, no leading `v`; core always names the exact release the owner
+  confirmed, never "", so a release that appears meanwhile is not installed unasked); `by` is the dashboard user, one line of at most 64
+  characters; `at` is RFC 3339 in UTC. The updater accepts a request only from the owner uid 65532, up to 15 minutes old
+  and no more than a minute in the future, and runs an id once. It verifies the release's signature itself: nothing in
+  the request is trusted.
+- Core keeps one row per request (`core.system_updates`, migration 00025) written before the file, so no request exists
+  without its row, audit entry (`system.update.requested`, and `system.update.done|failed|rolled_back|not_started` at the
+  end) and `system.update.v1` notices. At most one update is open at a time. It ends the row exactly once, when the
+  updater's status for that id says so, or as `not_started` when the updater never picked the request up. Core itself
+  restarts in the middle of an update, so the end is found again from the database and the file after the restart.
+  A status that says `running` but that the updater has not written for 10 minutes is an update that was cut off (the
+  server lost power, the helper was killed): core ends it as `failed`, tells the owners, and lets another be asked for.
+- Dashboard API (`/api/v1/system/updates...`; 503 `not_configured` when core has no update service):
+  - `GET /system/updates` (system.read): `{version, check, channel, helper, run, last, apply}`: the bot's last check
+    (with `prerelease` and `notes_url` that core builds), the channel (`setting`, `effective`, `source`), the updater
+    (`available` or the `problem`: `no_dir`, `no_status`, `not_installed`, `bad_status`, `unsupported`), the open update
+    and the last ended one, and whether an update would be accepted now (`apply.ready`, else `apply.reason`). The
+    updater's log lines go to the owner only.
+  - `GET /system/updates/progress` (system.read): `{version, helper, run, last}` only, from the folder and the database
+    (the bot is not asked), polled while an update runs and while core restarts.
+  - `POST /system/updates/check` (system.write, 10 a minute): the bot reloads its settings, looks at GitHub now and
+    answers; the state comes back with the fresh check (a failed look says why in `check.error` and `check.detail`).
+  - `PUT /system/updates/channel` `{channel}` (system.write): `stable`, `beta`, or "" for the server's setting; a change
+    makes the bot look again at once.
+  - `POST /system/updates/apply` `{version, channel, confirm, accept_prerelease, code}` (system.write, 10 a minute, CSRF):
+    nothing happens unless `confirm` is true and `version` is the release the page showed (the newest the bot has
+    verified). Answers 202 with the progress state, or `{error, code, message}`: 400 `invalid` (`confirm_required`,
+    `prerelease_unconfirmed`), 403 `code_required` and 400 `code_wrong` (the authenticator step-up), 409 `state`
+    (`helper_missing`, `already_running`, `no_release`, `not_newer`, `version_changed`, `channel_changed`, `dev_build`),
+    503 `unavailable` (`check_unavailable`, `request_failed`).
+- The bot's `POST /internal/update-check/refresh` (core's service token) reloads its settings, looks now and answers
+  with the check as `GET /internal/update-check` does; core waits at most 25 seconds.
+
+## Dashboard updates: the server's updater
+Core cannot update the store itself (no Docker socket, no internet access). The dashboard's Updates tab asks a helper
+on the host through one host directory, `<install dir>/run/update` (core sees it as `/run/bobres-update`, read-write;
+owner uid 65532, mode 0700, the only part of the host core can write; `deploy/docker-compose.yml`), and two small files
+in it, protocol version 1 (06-installer.md, "Updating from the dashboard", has the rules; 07-security.md the threat model):
+
+| File | Written by | Content |
+|---|---|---|
+| `request.json` | core: a temp file in the same folder, then a rename; at most 2 KiB | `{"v":1,"id":"<uuid>","action":"update","channel":"stable"\|"beta","version":"","by":"<user, 1-64 chars>","at":"<RFC 3339>"}`; `version` is `""` (the newest verified release of the channel) or `X.Y.Z` / `X.Y.Z-label.N`; no other field is accepted; `at` within 15 minutes before and a minute after the server's clock; an id already handled is ignored |
+| `status.json` | the helper (`bobres update --from-request`, run by `bobres-updater.service` when `bobres-updater.path` sees the request): a temp file, then a rename; root's, mode 0644 | `{"v":1,"installed":true,"helper":"0.7.0","state":"idle"\|"running"\|"done"\|"failed"\|"rolled_back","id":"","from":"0.6.1","to":"0.7.0","channel":"stable","step":"verify"\|"backup"\|"pull"\|"restart"\|"health"\|"rollback"\|"done","message":"one short sentence","started_at":null,"finished_at":null,"log":[]}` |
+
+- The helper deletes `request.json` as soon as it has read it, whatever it held, and answers under the request's `id`
+  (an `id` that could not be read is answered as `""`). `installed: true` is how core knows the helper exists; no
+  `status.json` means it is not installed (yet), `installed: false` that the owner switched it off. `started_at` and
+  `finished_at` are RFC 3339 times in UTC, `null` while unknown; `log` has at most 40 lines, secrets scrubbed. While an
+  update runs the file is rewritten at least every 30 seconds.
+- Core starts no request while `state` is `running` (it answers `already_running` itself, see "Updating from the
+  dashboard" above); the helper itself refuses (as `failed`) a request that comes while another update, rollback or
+  restore holds the install lock. A `running` status that has not been rewritten for 10 minutes (the heartbeat is
+  30 seconds) belongs to an update that was cut off, a power cut or a killed helper: core reads it as `failed`.
 
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.

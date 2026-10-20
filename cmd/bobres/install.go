@@ -66,6 +66,11 @@ type installer struct {
 	survive func()
 	// botName is the bot's username once Telegram has said it.
 	botName string
+	// units installs the dashboard updater's systemd units once the store is up (nil: it is
+	// not installed). exe is the bobres they run and stateDir the release state directory.
+	units    *systemUnits
+	exe      func() (string, error)
+	stateDir string
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -88,6 +93,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		sleep:     time.Sleep,
 		runLines:  streamDocker,
 		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
+		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(),
 	}
 	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
 		ins.logPath = p
@@ -480,6 +486,8 @@ func (ins *installer) runInstall(args []string) int {
 	if code := ins.start(ctx, *dir, env); code != 0 {
 		return code
 	}
+	// The dashboard's updater, once the store it updates is up. Never a failed install.
+	ins.ensureUpdater(ctx, *dir, env)
 	// Hardening runs by itself where it is safe (--ask-harden asks step by
 	// step instead); never from a run that cannot ask (--yes, as bobres update
 	// runs it) or a settings change from the menu (quiet).
@@ -1201,6 +1209,9 @@ func writeFiles(dir string, env map[string]string, notes, warnings io.Writer) er
 		}
 	}
 	if err := prepareTLS(dir, env, notes, warnings); err != nil {
+		return err
+	}
+	if err := prepareUpdateDir(dir, notes); err != nil {
 		return err
 	}
 	// The backup service (uid 65532 in its image) writes here; created now so

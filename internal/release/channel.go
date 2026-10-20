@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -24,6 +25,11 @@ const (
 // 60 requests an hour per address without a token).
 const APIURL = "https://api.github.com/repos/sobhanaz/bobres-3x-ui-telegram-panel/releases"
 
+// SettingChannel is the store setting (core's settings table, read by the bot
+// with its other settings) that picks the channel from the dashboard; unset,
+// BOBRES_UPDATE_CHANNEL decides (EffectiveChannel).
+const SettingChannel = "updates.channel"
+
 // ErrNotFound marks a release, a release file or a release list that is not
 // published.
 var ErrNotFound = errors.New("not found")
@@ -38,6 +44,42 @@ func ParseChannel(s string) (string, error) {
 		return ChannelBeta, nil
 	}
 	return "", fmt.Errorf("unknown update channel %q: it is stable or beta", s)
+}
+
+// EffectiveChannel is the channel a store follows: the dashboard's setting
+// (updates.channel) when it names one, else fallback (BOBRES_UPDATE_CHANNEL as
+// the bot read it; "" is stable). A setting that is not stable or beta is
+// ignored, never guessed at.
+func EffectiveChannel(setting, fallback string) string {
+	if s := strings.TrimSpace(setting); s != "" {
+		if c, err := ParseChannel(s); err == nil {
+			return c
+		}
+	}
+	c, err := ParseChannel(fallback)
+	if err != nil {
+		return ChannelStable
+	}
+	return c
+}
+
+// releaseNumberRe is a version as release tags are made: X.Y.Z with an
+// optional -label.N, nothing that could change a web address.
+var releaseNumberRe = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+
+// ValidNumber reports whether v is exactly a release number, X.Y.Z or
+// X.Y.Z-label.N (no leading v, no build metadata, at most 64 characters): the
+// only form that is put into a request for an update or a web address.
+func ValidNumber(v string) bool { return len(v) <= 64 && releaseNumberRe.MatchString(v) }
+
+// NotesURL is where a release's notes are on GitHub: its release page ("" for
+// anything that is not a release number).
+func NotesURL(version string) string {
+	v := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	if !ValidNumber(v) {
+		return ""
+	}
+	return releasesURL + "/tag/v" + v
 }
 
 // ChannelAllows reports whether an install following channel takes a
