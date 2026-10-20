@@ -441,7 +441,8 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 	} else if !fresh {
 		// A retry. An earlier attempt may have made the client before BOBRES grouped
 		// its clients, and a 3x-ui panel takes a create of a client it has (same
-		// subscription id) as a success that changes nothing, its group included.
+		// subscription id, on the inbounds it is on) as a success that changes
+		// nothing, its group included.
 		s.ensureTagged(ctx, a, email)
 	}
 	done := &store.ClientMap{

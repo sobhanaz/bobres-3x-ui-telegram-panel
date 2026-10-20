@@ -98,7 +98,8 @@ Clients page. It is a label only: links, limits and the subscription do not depe
 adapter does nothing about them. What the code relies on, as the real panels do it (the adapter's integration tests assert
 each on both versions, in CI's "3x-ui integration" job):
 - `clients/add` stores `client.group` (the OpenAPI text for it does not list the field). A create of a client the panel
-  already has under the same subscription id succeeds and changes nothing, the group included.
+  already has under the same subscription id, on the inbounds it is on, succeeds and changes nothing, the group
+  included; under another subscription id it is refused.
 - `clients/update` replaces the row and writes the group of its body, so a body without one **clears it**. `SetLimits` and
   `SetEnabled` read the stored row and send it back whole, group included. `clients/bulkAdjust` (renewal) and
   `resetTraffic` do not touch it. Attach, detach and delete leave the other clients' groups alone.

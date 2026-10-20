@@ -54,8 +54,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   - `clients/groups/bulkAdd` sets the group of the clients it is given **whatever group they have**, ignores an email it
     does not know, and counts only what changed. So the backfill lists first and sends only the clients with no group,
     at most 200 emails a call.
-  - A create of a client the panel has (same subscription id) is a success that changes nothing, group included. The
-    retry of a create that was started before this version puts the client in the group itself.
+  - A create of a client the panel has (same subscription id, on the inbounds it is on) is a success that changes
+    nothing, group included. The retry of a create that was started before this version puts the client in the group
+    itself.
   - The panel lists 200 clients a page at most, and its whole listing is about 750 bytes a client, so the backfill reads
     the paged listing (`clients/list/paged`), not `clients/list`.
   - A group made by a client's own label goes from the group list with its last client; one that `bulkAdd` made for a
