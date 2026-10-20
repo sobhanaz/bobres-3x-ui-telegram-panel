@@ -1,0 +1,34 @@
+# The vendor's public site behind the Cloudflare Tunnel: static files only, plain HTTP on the internal edge network
+# (Cloudflare terminates HTTPS; nothing here is published).
+{
+	admin off
+	auto_https off
+	servers {
+		timeouts {
+			read_body   10s
+			read_header 10s
+			write       30s
+			idle        2m
+		}
+	}
+}
+
+:8080 {
+	root * /srv
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	file_server
+
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+}

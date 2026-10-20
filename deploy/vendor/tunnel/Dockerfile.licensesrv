@@ -1,0 +1,31 @@
+# The vendor's license server, built without the dashboard and the Mini App (deploy/Dockerfile builds both for
+# every service, which a license server does not need). The runtime is the same as every BOBRES image: a static
+# binary, CA certificates, tzdata and the non-root uid 65532; no shell (the binary implements `app --healthcheck`).
+#
+#   docker build -f deploy/vendor/tunnel/Dockerfile.licensesrv --build-arg VERSION=0.8.0 -t bobres-licensesrv:0.8.0 .
+#
+# Vendor-only: never push this image to a registry.
+FROM golang:1.26-alpine AS build
+ARG VERSION=dev
+WORKDIR /src
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY . .
+RUN go build -trimpath \
+    -ldflags "-s -w -X github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version.Version=${VERSION}" \
+    -o /out/app ./cmd/licensesrv
+
+FROM alpine:3.24 AS runtime-base
+RUN apk add --no-cache ca-certificates tzdata \
+ && addgroup -S -g 65532 bobres && adduser -S -u 65532 -G bobres -H -s /sbin/nologin bobres
+
+FROM scratch
+COPY --from=runtime-base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=runtime-base /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=runtime-base /etc/passwd /etc/passwd
+COPY --from=runtime-base /etc/group /etc/group
+COPY --from=build /out/app /app
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["/app"]

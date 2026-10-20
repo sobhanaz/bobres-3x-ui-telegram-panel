@@ -1,0 +1,154 @@
+# BOBRES vendor stack behind a Cloudflare Tunnel: the license server and the public site on ONE server that
+# also runs a BOBRES store (whose Caddy owns ports 80 and 443). Nothing here publishes a port: a `cloudflared`
+# container makes an outbound connection to Cloudflare, which sends the visitors of the tunnel's hostnames
+# (license.example.com, example.com, www.example.com) through it. The standalone kit for a server of its own is
+# deploy/vendor/docker-compose.yml; the runbook is docs/runbooks/vendor-license-server.md ("One server, behind a
+# Cloudflare Tunnel").
+#
+#   cd /opt/bobres-vendor && docker compose --env-file .env up -d --build
+#
+# Networks
+#   public  : cloudflared only. It needs the internet (Cloudflare's edge, port 7844); nothing else here does.
+#   edge    : INTERNAL. cloudflared <-> licensesrv and the site. licensesrv believes X-Forwarded-For and
+#             X-Forwarded-Proto only from this network's addresses (its subnet is the trusted proxy list): the
+#             only address there that can reach it from outside is cloudflared, which forwards what Cloudflare's
+#             edge sets. licensesrv reads X-Forwarded-For from the right and takes the first address that is
+#             not one of ours: the edge appends the real client's address, so what a client forges stays on
+#             the left and is ignored.
+#   backend : INTERNAL. licensesrv <-> postgres. licensesrv never calls out.
+# Secrets are files on the host, mounted read-only (never in .env or the environment): the license signing key and
+# the tunnel's token. Both owned by uid 65532, mode 0600 (the runbook has the commands).
+# The tunnel's ingress (which hostname goes where) is kept at Cloudflare: only /v1/ of the license host reaches
+# licensesrv, everything else answers 404 there.
+
+name: bobres-vendor
+
+x-hardened: &hardened
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  cloudflared:
+    <<: *hardened
+    image: cloudflare/cloudflared:2026.10.2@sha256:0e56c13c7058fcef9c4f0e7d83372f82330548dbf8f8b366f3d8b506526d93b2
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run", "--token-file", "/run/secrets/tunnel_token"]
+    read_only: true
+    user: "65532:65532"
+    secrets: [tunnel_token]
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:2000", "ready"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 128m
+    pids_limit: 128
+    depends_on:
+      licensesrv: { condition: service_healthy }
+      site: { condition: service_healthy }
+    networks: [public, edge]
+
+  licensesrv:
+    <<: *hardened
+    # Built here from this repository (a license server needs neither the dashboard nor the Mini App).
+    # Vendor-only: do not push it.
+    image: bobres-licensesrv:${BOBRES_VERSION:-local}
+    build:
+      context: ./src
+      dockerfile: deploy/vendor/tunnel/Dockerfile.licensesrv
+      args: { VERSION: "${BOBRES_VERSION:-dev}" }
+    command: ["serve"]
+    user: "65532:65532"
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      BOBRES_ENV: prod
+      BOBRES_LOG_LEVEL: ${BOBRES_LOG_LEVEL:-info}
+      BOBRES_LOG_FORMAT: json
+      BOBRES_DATABASE_URL: postgres://licensesrv:${DB_LICENSESRV_PASSWORD:?set DB_LICENSESRV_PASSWORD}@postgres:5432/bobres_license?sslmode=disable
+      BOBRES_LICENSESRV_SIGNING_KEY_FILE: /run/secrets/signing_key
+      BOBRES_HTTP_ADDR: ":8080"
+      BOBRES_LICENSESRV_TRUSTED_PROXIES: ${LICENSE_EDGE_SUBNET:-10.213.77.0/24}
+      BOBRES_LICENSESRV_RATE_IP: ${BOBRES_LICENSESRV_RATE_IP:-120/1h}
+      BOBRES_LICENSESRV_RATE_KEY: ${BOBRES_LICENSESRV_RATE_KEY:-10/1h}
+    secrets: [signing_key]
+    healthcheck:
+      test: ["CMD", "/app", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 256m
+    pids_limit: 128
+    ulimits: { nofile: { soft: 4096, hard: 4096 } }
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [edge, backend]
+
+  site:
+    <<: *hardened
+    # The same pinned image as a BOBRES install's gateway, serving the static files of ./site/public.
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    read_only: true
+    tmpfs: [/tmp]
+    # The caddy binary carries the file capability cap_net_bind_service: with every capability dropped it
+    # cannot be executed at all ("operation not permitted"), though it listens on 8080 here.
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      XDG_DATA_HOME: /tmp
+      XDG_CONFIG_HOME: /tmp
+    volumes:
+      - ./site/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site/public:/srv:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 64m
+    pids_limit: 64
+    networks: [edge]
+
+  postgres:
+    <<: *hardened
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      DB_LICENSESRV_PASSWORD: ${DB_LICENSESRV_PASSWORD:?set DB_LICENSESRV_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    mem_limit: 512m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+secrets:
+  signing_key:
+    file: ${LICENSE_SIGNING_KEY_FILE:?set LICENSE_SIGNING_KEY_FILE}
+  tunnel_token:
+    file: ${TUNNEL_TOKEN_FILE:?set TUNNEL_TOKEN_FILE}
+
+networks:
+  public: {}
+  edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${LICENSE_EDGE_SUBNET:-10.213.77.0/24}
+  backend:
+    internal: true
+
+volumes:
+  pg_data: {}
