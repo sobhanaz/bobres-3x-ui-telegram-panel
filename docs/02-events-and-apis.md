@@ -218,7 +218,8 @@ which core sees as `/run/bobres-update` (`BOBRES_UPDATE_DIR`). Protocol version 
 | `status.json` | reads (no link followed, at most 64 KB, every field cut and checked) | writes (atomic) | `{v: 1, installed, helper, state: idle\|running\|done\|failed\|rolled_back, id, from, to, channel, step: verify\|backup\|pull\|restart\|health\|rollback\|done, message, started_at, finished_at, log[]}` |
 
 - `id` is a lower-case UUID (core uses version 7); `version` is "" for the newest of the channel, else a release number
-  `X.Y.Z` or `X.Y.Z-label.N` (at most 64 characters, no leading `v`); `by` is the dashboard user, one line of at most 64
+  `X.Y.Z` or `X.Y.Z-label.N` (at most 64 characters, no leading `v`; core always names the exact release the owner
+  confirmed, never "", so a release that appears meanwhile is not installed unasked); `by` is the dashboard user, one line of at most 64
   characters; `at` is RFC 3339 in UTC. The updater accepts a request only from the owner uid 65532, up to 15 minutes old
   and no more than a minute in the future, and runs an id once. It verifies the release's signature itself: nothing in
   the request is trusted.

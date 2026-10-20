@@ -618,7 +618,7 @@ The settings it changes, and the services each one recreates:
 | `BOBRES_BACKUP_TIME` | backup | HH:MM (`config.ParseClock`, the backup service's own rule) |
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
 | `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, core, payments, tls-agent | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it. The tls-agent is recreated with core for the same reason as for the domain |
-| `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel) |
+| `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel); the owner's choice in the dashboard (System > Updates, the `updates.channel` setting) wins for the bot's check and the dashboard's update when it is set |
 | `BOBRES_LICENSE_SERVER` | bot | an https URL without credentials, or empty (no online activation or refresh; see License activation) |
 | `BOBRES_SELLER_CONTACT` | core | any text, or empty (a Telegram handle or an address the License tab and `bobres license status` show for buying or renewing a license; empty: they say "ask the seller you got BOBRES from") |
 | `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |

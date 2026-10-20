@@ -147,9 +147,14 @@ English and can be edited like the others.
   the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
 - **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
   unset, the server's variable still decides. A pre-release needs its own confirmation.
-- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** Core had no way to make the bot
-  look again, so the page only re-read the last result. It now has `POST /api/v1/system/updates/check`, which has the bot
-  reload its settings and look at GitHub at once, and shows why a look failed.
+- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** "Check again" only re-read the
+  bot's cached answer (`GET /api/v1/system`), because core had no way to make the bot look again, so "Last checked" never
+  moved and a failed check (GitHub unreachable when the bot started) stayed for an hour. It now calls
+  `POST /api/v1/system/updates/check`, which has the bot reload its settings and look at GitHub at once, and shows when
+  it looked and why a look failed (GitHub's own words included). The update button was never one: the page only showed
+  `sudo bobres update` with a copy button that did nothing at all in a browser without a clipboard (a dashboard opened
+  over plain http), and the command ignored the channel the page showed. The command now names the channel, copying
+  falls back to the older way and says when it cannot, and there is an Update now.
 - New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
   Updating from the dashboard needs the host half of this change (the updater and the `./run/update` mount in
   `docker-compose.yml`); [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
