@@ -73,7 +73,7 @@ func (h *Handler) serviceButton(r *req, s *corev1.Subscription) string {
 	if s.GetLabel() != "" {
 		name = s.GetLabel()
 	}
-	return name + " · " + r.t("subs.item", "status", r.t("sub.status."+s.GetStatus()), "expires", h.expires(r, s.GetExpiresAt()))
+	return name + " · " + r.t("subs.item", "status", statusText(r, s.GetStatus()), "expires", h.expires(r, s.GetExpiresAt()))
 }
 
 func (h *Handler) showServices(r *req) {
@@ -113,8 +113,8 @@ func (h *Handler) showService(r *req, id string) {
 	}
 	if s.GetStatus() == "pending" || s.GetSubscriptionLink() == "" {
 		kb := backHome(r, "subs")
-		if r.isReseller() { // a name can be given before the service is ready
-			kb = (&tg.Keyboard{}).Row(r.button("btn.rename", "rs:rn:"+id)).
+		if r.isReseller() { // a name and a note can be given before the service is ready
+			kb = (&tg.Keyboard{}).Row(r.button("btn.rename", "rs:rn:"+id), r.button("btn.rs_note", "rs:nt:"+id)).
 				Row(r.button("btn.back", "subs"), r.button("btn.home", "home"))
 		}
 		r.show(r.labelled(s.GetLabel(), r.t("sub.not_ready")), kb)
@@ -131,6 +131,7 @@ func (h *Handler) showService(r *req, id string) {
 	kb.Row(extend...)
 	if r.isReseller() {
 		kb.Row(r.button("btn.qr", "qr:"+id), r.button("btn.rename", "rs:rn:"+id))
+		kb.Row(manageButtons(r, s)...)
 	} else {
 		kb.Row(r.button("btn.qr", "qr:"+id))
 	}
@@ -140,7 +141,7 @@ func (h *Handler) showService(r *req, id string) {
 		kb.Row(tg.Link(r.t("btn.open_page"), pageLink(u, r.lang)))
 	}
 	kb.Row(r.button("btn.back", "subs"), r.button("btn.home", "home"))
-	text := r.t("sub.detail", "id", shortID(id), "status", r.t("sub.status."+s.GetStatus()),
+	text := r.t("sub.detail", "id", shortID(id), "status", statusText(r, s.GetStatus()),
 		"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
 		"link", esc(s.GetSubscriptionLink()))
 	used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
@@ -149,6 +150,9 @@ func (h *Handler) showService(r *req, id string) {
 		text += "\n" + r.t("sub.usage", "used", i18n.Bytes(r.lang, used), "total", i18n.Bytes(r.lang, total), "bar", usageBar(used, total))
 	case used > 0:
 		text += "\n" + r.t("sub.usage_unlimited", "used", i18n.Bytes(r.lang, used))
+	}
+	if r.isReseller() && s.GetNote() != "" { // the reseller's private note
+		text += "\n\n" + r.t("sub.note_line", "note", esc(s.GetNote()))
 	}
 	r.show(r.labelled(s.GetLabel(), text), kb)
 }

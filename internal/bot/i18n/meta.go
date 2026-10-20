@@ -121,6 +121,19 @@ var contexts = map[string]Context{
 	"rs.label_removed":       CtxToast,
 	"wallet.debt":            CtxButtonHTML,
 
+	// A reseller's management of their services: the popups, and the words
+	// used on buttons and inside lines.
+	"rs.deleted_done":      CtxToast,
+	"rs.paused_done":       CtxToast,
+	"rs.resumed_done":      CtxToast,
+	"rs.paused_by_support": CtxToast,
+	"rs.state_blocked":     CtxToast,
+	"rs.unavailable":       CtxToast,
+	"rs.service_gone":      CtxToast,
+	"rs.note_removed":      CtxToast,
+	"rs.status_paused":     CtxButtonHTML,
+	"rs.customer_id":       CtxButtonHTML,
+
 	"pay.stars_title":     CtxInvoiceTitle,
 	"pay.topup_title":     CtxInvoiceTitle,
 	"pay.stars_desc":      CtxInvoiceDesc,
@@ -170,6 +183,7 @@ var buttonStyles = map[string]string{
 	"btn.adm_confirm":       "success",
 	"btn.adm_enable":        "success",
 	"btn.join_check":        "success",
+	"btn.rs_resume":         "success",
 
 	"btn.services":      "primary",
 	"btn.wallet":        "primary",
@@ -199,6 +213,9 @@ var buttonStyles = map[string]string{
 	"btn.reject_other":    "danger",
 	"btn.adm_ban":         "danger",
 	"btn.remove_name":     "danger",
+	"btn.rs_delete":       "danger",
+	"btn.rs_delete_yes":   "danger",
+	"btn.rs_note_clear":   "danger",
 }
 
 // ButtonStyle is the Bot API style of a button labelled with the text key:
@@ -213,6 +230,7 @@ var contextPrefixes = map[string]Context{
 	"support.status.": CtxButtonHTML,
 	"support.cat.":    CtxButtonHTML,
 	"profile.cmd.":    CtxCommand,
+	"rs.filter.":      CtxButtonHTML, // a group of services: a button's label and a word in a message
 }
 
 // markupArgs are placeholders whose values carry tags (other rendered
@@ -230,6 +248,7 @@ var markupArgs = map[string][]string{
 	"pay.rejected":         {"reason"},
 	"pay.check_failed":     {"reason"},
 	"rs.panel":             {"balances"},
+	"rs.customers_title":   {"lines"},
 	"alert.critical":       {"title"},
 	"alert.warning":        {"title"},
 	"alert.repeat":         {"title"},
