@@ -49,7 +49,7 @@ func TestSeamEveryRequestCoreWritesIsAccepted(t *testing.T) {
 		{"persian name", "stable", "0.7.0", "سبحان آذرزاده"},
 		{"name at the limit", "stable", "0.7.0", strings.Repeat("ب", maxRequestBy)},
 		{"name with spaces", "stable", "0.7.0", "  two   words  "},
-		{"name with controls and bidi", "stable", "0.7.0", "a‮b\nc\x00d⁦e"},
+		{"name with controls and bidi", "stable", "0.7.0", "a\u202eb\nc\x00d\u2066e"},
 		{"name too long", "stable", "0.7.0", strings.Repeat("x", 300)},
 		{"no name", "stable", "0.7.0", ""},
 		{"newest of the channel", "stable", "", "owner"},
@@ -70,7 +70,7 @@ func TestSeamEveryRequestCoreWritesIsAccepted(t *testing.T) {
 			if !got.At.Equal(now) {
 				t.Fatalf("the time changed on the way: %v, not %v", got.At, now)
 			}
-			if got.By == "" || strings.ContainsAny(got.By, "\n\x00‮⁦") {
+			if got.By == "" || strings.ContainsAny(got.By, "\n\x00\u202e\u2066") {
 				t.Fatalf("the name is not a plain line: %q", got.By)
 			}
 		})
