@@ -42,6 +42,41 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - A flood of messages over the bot's rate limit (`limits.bot_per_10s`, 20 in 10 seconds unless changed) stays
   unanswered, in maintenance as at any time; buttons over it get "Too many requests".
 
+### Reports: the calendar and the CSV files
+- **The Calendar switch of the Reports page changes every date, both ways.** It used to cut Jalali weeks and months
+  while the dates themselves followed the language (Jalali in Persian, Gregorian in English) and the custom range was a
+  browser date field, which is Gregorian whatever the page says. Now the days covered, the chart axes, tooltips and
+  summaries, the table, the week and month names and the **From** and **To** fields all follow the switch at once,
+  with Persian digits in Persian and Latin in English. A custom range is typed (`1405/07/22`, `14050722`, Persian or
+  Latin digits) or picked from a month grid in the calendar shown (Saturday-first in Jalali, Monday-first in Gregorian,
+  usable from the keyboard) and converted exactly to the Gregorian days the API takes: month lengths, the leap days
+  (30 Esfand 1403), the new year, and "today" in the store's time zone, never the browser's; a date the calendar does
+  not have, one outside 2000 to 2100 or an end before the start is not sent and the page says what a date looks like.
+  The choice is remembered in the browser. The six range buttons wrap on a phone instead of widening the page.
+- **CSV files, reviewed one by one** (`summary.csv`, `orders.csv`, `ledger.csv`, `audit.csv`: every CSV the product
+  makes). One set of rules now, documented in [docs/14-reports.md](docs/14-reports.md#csv-files) and tested as a
+  spreadsheet sees the files:
+  - one kind of line break: rows and line breaks inside a cell are all `\r\n` (rows were `\n` with raw `\r\n`, `\n` or
+    `\r` left in cells);
+  - dates: instants in UTC (ISO 8601, `Z`), days as Gregorian ISO in the store's zone, and a **`tz`** column on every
+    file that has local times or days (`paid_at_local` had no zone, `ledger.csv` and `audit.csv` had UTC only, so
+    `time_local` is new there); with `calendar=jalali` one more column at the end carries the Jalali date in Latin
+    digits (`period_start_jalali`, `paid_at_jalali`, `time_jalali`);
+  - `summary.csv` says what its rows are about (new last columns `group`, `calendar`, `tz`); all headers are English
+    and stable, new columns only at the end, and a test pins every one;
+  - file names carry the days covered in the file's calendar (`ledger-2026-10-14-to-2026-10-20.csv`,
+    `reports-summary-1405-08-09-to-1405-08-12-by-day-jalali.csv`) and keep to ASCII safe characters; `ledger.csv` and
+    `audit.csv` were named by a UTC time of day;
+  - formulas: the rule that quotes a text a spreadsheet could run as a formula skipped ASCII spaces, tabs and line
+    breaks only; it now looks past any Unicode space, control character and invisible mark (the right-to-left mark
+    Persian text carries, a no-break space) in front of `=`, `+`, `-` or `@`. Numbers are never quoted, so a negative
+    amount stays a number; a cell is cut at 32,000 characters (a spreadsheet moves the rest to the next row);
+  - `ledger.csv` and `audit.csv` take `tz` and `calendar` (a 400 for an unknown one); the ledger, the audit log and a
+    reseller's statement ask for the Jalali column when the Reports page is set to Jalali;
+  - checked and fine: the byte-order mark and content type, exact decimals with no thousands separator and the
+    currency on every row, who may export (owner and admin; support gets 403), streaming and the row cap, nothing secret
+    in any file, and that the rows add up to the report's totals (new tests).
+
 ## [0.6.1] — 2026-10-20
 
 Two gaps of the Mini App that the 0.6.0 notes named are closed: it now holds the store's required channel as the bot
