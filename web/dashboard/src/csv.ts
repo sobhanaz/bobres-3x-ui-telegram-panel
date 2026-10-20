@@ -1,5 +1,5 @@
 // CSV files the dashboard itself writes (the files core streams, such as
-// ledger.csv, are written in Go: reportText in internal/core/web does the same
+// ledger.csv, are written in Go: textCell in internal/core/web does the same
 // job there). One place for the two things every CSV needs: quoting, and a
 // guard against a cell a spreadsheet would run as a formula.
 

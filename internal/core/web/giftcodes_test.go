@@ -232,6 +232,54 @@ func TestGiftCodesDashboard(t *testing.T) {
 	}
 }
 
+// Both gift code files are spreadsheet files like the four of csv_files_test.go: the safe download name, the
+// byte-order mark, nothing cached or sniffed, one kind of line break (also inside a cell), numbers that stay
+// numbers, and every row as wide as the header.
+func TestGiftCodesCSVIsASpreadsheetFile(t *testing.T) {
+	f, b, _, _ := salesFixture(t)
+	code, out := b.do(http.MethodPost, "/api/v1/gift-codes", map[string]any{"amount": "2.5", "currency": "USDT", "max_redemptions": 3,
+		"code": "WINTER-GIFT-2026", "note": "one, with a \"quote\" and a +formula"})
+	if code != 200 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	id := items(out)[0]["id"].(string)
+	// somebody with a name that is a formula redeemed it
+	cust := f.customer(8803, "=cmd|' /C calc'!A0")
+	if _, err := f.dom.RedeemGiftCode(context.Background(), domain.RedeemGiftCodeParams{UserID: cust.ID, Code: "winter-gift-2026", RequestKey: "k1"}); err != nil {
+		t.Fatalf("redeem: %v", err)
+	}
+	for name, path := range map[string]string{"codes": "/api/v1/gift-codes.csv", "redemptions": "/api/v1/gift-codes/" + id + "/redemptions.csv"} {
+		code, h, body := b.get(path)
+		if code != 200 || h.Get("Content-Type") != "text/csv; charset=utf-8" || !fileName.MatchString(h.Get("Content-Disposition")) ||
+			h.Get("Cache-Control") != "no-store" || h.Get("X-Content-Type-Options") != "nosniff" {
+			t.Fatalf("%s headers: %d %v", name, code, h)
+		}
+		text := string(body[min(3, len(body)):])
+		if strings.Count(text, "\n") != strings.Count(text, "\r\n") || strings.Count(text, "\r") != strings.Count(text, "\r\n") {
+			t.Errorf("%s mixes line breaks: %q", name, text)
+		}
+		rows := parseCSV(t, body)
+		if len(rows) < 2 {
+			t.Fatalf("%s: %v", name, rows)
+		}
+		number := map[string]bool{"amount": true, "max_redemptions": true, "per_customer_limit": true, "redeemed": true,
+			"telegram_id": true, "number": true, "balance_after": true, "created_by_telegram_id": true}
+		for _, r := range rows[1:] {
+			if len(r) != len(rows[0]) {
+				t.Fatalf("%s: a row has %d cells, the header %d: %v", name, len(r), len(rows[0]), r)
+			}
+			for i, cell := range r {
+				if number[rows[0][i]] && cell != "" && !plainNumber.MatchString(cell) {
+					t.Errorf("%s.%s: %q is not a plain number", name, rows[0][i], cell)
+				}
+				if trimmed := strings.TrimLeft(cell, " \t\r\n"); trimmed != "" && strings.ContainsRune("=+@", rune(trimmed[0])) {
+					t.Errorf("%s.%s: %q could run as a formula", name, rows[0][i], cell)
+				}
+			}
+		}
+	}
+}
+
 // The files follow the rules of docs/14-reports.md for dates: UTC instants, the local wall clock and the zone, a
 // Jalali column at the very end of a Jalali file, a file name that says so, and a 400 for a calendar or a zone
 // nobody knows.

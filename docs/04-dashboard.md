@@ -32,7 +32,7 @@ Every write goes to `audit_log`; sensitive actions (balance adjust, refund, ban)
    note. **The codes are shown once**, in a dialog that copies them or downloads them as a CSV (UTF-8 with a byte-order
    mark, formulas quoted); core keeps only a keyed hash and the last four characters, so they cannot be shown again. The
    list shows the last four characters, the value, used / in all, status (active, used up, expired, switched off), the
-   expiry, the last use and the note, filters by status and searches a note or the last four characters, exports as a CSV,
+   expiry, the last use and the note, filters by status and searches a note or the last four characters, exports as a CSV (the rules of [14-reports.md](14-reports.md#csv-files): English headers, UTC and local times, a Jalali column in a Jalali file),
    and has a switch per code (what a code paid stays paid) and a list of who redeemed it and when (also a CSV). A banner
    says when customers cannot use gift codes (the setting `gift_codes.enabled`, with a button to turn it on for staff who
    may) or when core has no master key and cannot make them.

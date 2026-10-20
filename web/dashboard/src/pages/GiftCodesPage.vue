@@ -19,6 +19,7 @@ import { api, query } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
 import { date, dateTime, latinDigits, money, num, type Lang } from '../format'
+import { csvCalendar } from '../reports'
 import { severity, statuses, type Terms } from '../giftcodes'
 import { useAuth } from '../stores/auth'
 import type { GiftCodeItem, Page } from '../types'
@@ -87,7 +88,7 @@ function openRedemptions(g: GiftCodeItem) {
   redemptions.value = true
 }
 
-const csvHref = computed(() => '/api/v1/gift-codes.csv' + query({ status: list.filters.status, q: list.filters.q }))
+const csvHref = computed(() => '/api/v1/gift-codes.csv' + query({ status: list.filters.status, q: list.filters.q, calendar: csvCalendar(lang.value) }))
 </script>
 
 <template>

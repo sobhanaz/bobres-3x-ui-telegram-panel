@@ -32,8 +32,8 @@ license server is built but still has to be deployed by the owner. What is left 
 - Buy a plan (traffic-limited, time-only or both), with an optional discount code. The service arrives with its
   subscription link and a QR code.
 - My services: status, expiry and traffic used; renew, or add a traffic package, with the same link.
-- A wallet with top-ups and history, one free trial per Telegram account, and invite links that reward the inviter
-  on a friend's first paid purchase.
+- A wallet with top-ups and history, gift codes that add credit, one free trial per Telegram account, and invite
+  links that reward the inviter on a friend's first paid purchase.
 - Reminders 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - Support conversations with text, photos and PDFs; staff replies arrive in the chat.
 - Store rules: maintenance mode, a required channel, rate limits, terms and privacy links.
@@ -63,7 +63,7 @@ license server is built but still has to be deployed by the owner. What is left 
 - Log in with a one-time link from the bot, or with a password and an authenticator code. Roles: owner, admin,
   support. Persian and English, dark and light.
 - Overview, users, services, plans and packages, orders and payments with the receipt review queue, the ledger with
-  CSV export, discounts and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
+  CSV export, discounts, gift codes and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
   settings, panel servers, payment gateways, staff, the System page (health, updates, logs, backups, HTTPS
   certificates, license) and the audit log.
 - Reports: revenue per currency by day, week or month (Gregorian or Jalali), orders, new customers, renewals, churn,

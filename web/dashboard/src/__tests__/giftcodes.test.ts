@@ -314,7 +314,7 @@ describe('the Gift codes page', () => {
     expect((b.querySelector('.toggle input') as HTMLInputElement).checked).toBe(false)
     expect((a.querySelector('.toggle input') as HTMLInputElement).checked).toBe(true)
     expect(document.querySelector('.sidebar')?.textContent).toContain(text('section.giftcodes.title'))
-    expect(document.querySelector('a.export')?.getAttribute('href')).toBe('/api/v1/gift-codes.csv')
+    expect(document.querySelector('a.export')?.getAttribute('href')).toBe('/api/v1/gift-codes.csv?calendar=jalali')
     expect(document.querySelector('.no-key')).toBeNull()
     expect(document.querySelector('.is-off')).toBeNull()
   })
@@ -326,7 +326,18 @@ describe('the Gift codes page', () => {
     await vi.waitFor(() => expect(calls).toContain('GET /api/v1/gift-codes?status=used_up&page=1&size=25'))
     type(document.querySelector('input.search'), ' ' + persianDigits('1405') + ' ')
     await vi.waitFor(() => expect(calls).toContain('GET /api/v1/gift-codes?status=used_up&q=1405&page=1&size=25'))
-    expect(document.querySelector('a.export')?.getAttribute('href')).toBe('/api/v1/gift-codes.csv?status=used_up&q=1405')
+    expect(document.querySelector('a.export')?.getAttribute('href')).toBe('/api/v1/gift-codes.csv?status=used_up&q=1405&calendar=jalali')
+  })
+
+  it('asks for the files without the Jalali column when the calendar is Gregorian', async () => {
+    localStorage.setItem('bobres.reports.calendar', 'gregorian')
+    try {
+      await boot('/admin/gift-codes', ownerPerms)
+      await found('.codes .p-datatable-tbody tr')
+      expect(document.querySelector('a.export')?.getAttribute('href')).toBe('/api/v1/gift-codes.csv')
+    } finally {
+      localStorage.removeItem('bobres.reports.calendar')
+    }
   })
 
   it('switches a code off and on from its row', async () => {
@@ -543,7 +554,7 @@ describe('the Gift codes page', () => {
     expect(rows[0].textContent).toContain('۴۰٬۰۰۰ تومان')
     expect(rows[1].textContent).toContain('@dara')
     expect(d.textContent).toContain('…JKMN')
-    expect(d.querySelector('a.export')?.getAttribute('href')).toBe(`/api/v1/gift-codes/${gid(1)}/redemptions.csv`)
+    expect(d.querySelector('a.export')?.getAttribute('href')).toBe(`/api/v1/gift-codes/${gid(1)}/redemptions.csv?calendar=jalali`)
   })
 
   it('stays closed to staff without discounts.write', async () => {

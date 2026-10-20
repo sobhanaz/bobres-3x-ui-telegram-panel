@@ -9,6 +9,7 @@ import UserLink from '../UserLink.vue'
 import { api, query } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, money, num, type Lang } from '../../format'
+import { csvCalendar } from '../../reports'
 import type { GiftCodeItem, GiftRedemptionItem, Page } from '../../types'
 
 // Who redeemed one code, and when, newest first, with the file of them.
@@ -60,7 +61,7 @@ function onPage(e: { page: number; rows: number }) {
   void load()
 }
 
-const csvHref = computed(() => (props.code ? `/api/v1/gift-codes/${props.code.id}/redemptions.csv` : '#'))
+const csvHref = computed(() => (props.code ? `/api/v1/gift-codes/${props.code.id}/redemptions.csv` + query({ calendar: csvCalendar(lang.value) }) : '#'))
 </script>
 
 <template>
