@@ -60,8 +60,11 @@ Mini App   --initData-->  core  --POST /internal/miniapp/verify (Bearer core tok
 
 When the store makes customers join a channel first (`join.channel` in Settings, Join; `join.link` for a private one),
 the app holds it as the bot does ([03-bot-ux.md](03-bot-ux.md)): a customer who is not in the channel gets a screen
-that asks them to join, and nothing of the store behind it. Telegram shows a channel's members only to its
-administrators, which the bot is, and core has no bot token, so core asks the bot:
+that asks them to join, and nothing of the store behind it. The store may require **several channels and groups**
+(03-bot-ux.md, "Required chats"; the first is `join.channel`, the others `core.join_chats`, as many as the license's
+`max_join_chats` allows): the customer must be in every one, and the screen lists each they lack (below). Telegram
+shows a chat's members only to its administrators, which the bot is, and core has no bot token, so core asks the bot,
+**one chat at a time** (the endpoint below is unchanged, so an older bot works with several chats too):
 
 ```
 core  --POST /internal/miniapp/channel-member {"chat","user_id"} (Bearer core token)-->  bot  --getChatMember-->  Telegram
@@ -76,24 +79,37 @@ core  --POST /internal/miniapp/channel-member {"chat","user_id"} (Bearer core to
   opens no session. `join_url` is the address the bot's Join button opens: `join.link` when set, else a public
   channel's `https://t.me/<name>`, and empty for a private channel with no link (the settings do not allow that). It
   is never the channel's id, and an address on `telegram.me` is written `t.me`, the only host Telegram's script
-  opens inside Telegram.
+  opens inside Telegram. **When the store requires more than one chat** the answer also has
+  `"join_chats":[{"url","label"},...]`: every chat the customer still lacks, in the order they are asked, each with
+  its join address and the name to show (the store's own, else a public chat's `@name`, else empty), and `join_url`
+  is the first of them. With one required chat the answer is exactly as it was (no `join_chats`), so an app built
+  before several chats keeps working with one, and shows the first chat's button with several.
 - **Who is never asked.** Staff (owners, admins, support) and the owners the server names, whether or not they have an
   account; and nobody while the store is in maintenance (the maintenance screen comes first, and the bot asks about
   one of the two as well). A banned customer is told `banned` and nothing about the channel.
 - **Who is remembered.** A confirmed member is not asked about again for 10 minutes (as long as the bot remembers
-  one), per customer and per channel: another channel asks again. A customer outside the channel is never
-  remembered, so "I've joined" is answered at once. The table holds at most 100,000 customers.
-- **When Telegram cannot tell** (the bot is not the channel's administrator, there is no such channel, a timeout, a
-  bot too old to know the question, or no bot), the customer is let in: the bot's own gate does the same, so that a
-  channel set up wrongly cannot lock every customer out. Core logs "cannot check members of the join channel" once a
-  minute, and does not ask again about that customer for a minute, so that a channel that does not answer does not
-  make every call wait. The dashboard's check on the Settings page says whether the bot is the channel's
-  administrator.
+  one), per customer and per chat: another chat asks again, and a chat the owner adds later is the only one asked
+  about. A customer outside a chat is never remembered for it, so "I've joined" is answered at once. The table holds
+  at most 100,000 entries (a customer and a chat each).
+- **Several chats.** Core asks the bot about the chats the customer is not remembered for **4 at a time**, within 10
+  seconds in all (a chat unanswered by then counts as one Telegram could not tell about, below). The list is the
+  first chat (read with the settings at every call) and the extras the license allows (kept for 3 seconds, and
+  forgotten when the owner saves the list). When the extras cannot be read, only the first chat is held and core logs
+  it.
+- **When Telegram cannot tell** (the bot is not the chat's administrator, there is no such chat, a timeout, a
+  bot too old to know the question, or no bot), the customer is let in **for that chat**: the bot's own gate does the
+  same, so that a chat set up wrongly cannot lock every customer out, and the other chats still hold. Core logs
+  "cannot check members of the join channel" once a minute, and does not ask again about that customer and chat for a
+  minute, so that a chat that does not answer does not make every call wait. The dashboard's check on the Settings
+  page (for each row) says whether the bot is the chat's administrator.
 - **What the app shows.** A full-screen gate like the maintenance and banned ones, from the sign-in or from any
   call, wherever the customer is: the text, **Join the channel** (opens `join_url` inside Telegram; absent when there
-  is none) and **I've joined**, which signs in again, so that core asks the bot at once. It lets the customer in,
-  says they have not joined yet, or says why the check could not be made; a gate that comes up meanwhile
-  (maintenance, banned) takes the screen over. The texts are the bot's own, in Persian and English.
+  is none) and **I've joined**, which signs in again, so that core asks the bot at once. With several chats the text
+  says "the channels below" and there is a **Join <name>** button for each chat still lacking (a chat with no name is
+  "channel N", one with no link has no button); **I've joined** shows only what is still missing, with "You haven't
+  joined all of them yet". It lets the customer in, says they have not joined yet, or says why the check could not
+  be made; a gate that comes up meanwhile (maintenance, banned) takes the screen over. The texts are the bot's own, in
+  Persian and English.
 - **Not as in the bot:** the bot lets a customer outside the channel go on with a support conversation. In the app,
   support is closed to them like the rest of the store; only what a payment under way needs stays open. A customer
   outside the channel who has to sign in again cannot send a proof from the app (they can in the bot).
@@ -123,7 +139,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /payments/pending` | The customer's own manual payments that still wait for their proof, newest first, at most 10: each as `pay` answered when it was started, plus `created_at` (see "Taking a payment up again") |
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
-| `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing |
+| `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing. `categories` lists the three topics to write under (payment, service, other); a ticket's own `category` can also be `reseller`, a reseller application the bot filed, which the app shows with its label (a message named `reseller` from the app is filed as `other`: an application is made from the bot's button) |
 
 The app takes **Zarinpal, IDPay, NextPay, automatic USDT, Telegram Stars and the three manual methods**: whatever the
 store has on for the amount of the purchase (the next section).
@@ -151,8 +167,13 @@ allowed sources do not include a Mini App one, and the store is the bot's second
 While the store is in **maintenance**, the app can still sign in and read `/me`, an order and a payment check, list the
 manual payments waiting for their proof and send the proof of one already started, so that a payment in flight
 finishes: a Stars payment is settled by the bot all the same, and a customer who has paid by hand can say so, as the bot
-lets them (it takes the receipt, the bank number or the hash of a payment under way). Browsing, buying, top-up and
-starting a payment answer 503 `maintenance`.
+lets them (it takes the receipt, the bank number or the hash of a payment under way). Everything else answers 503
+`maintenance`: browsing, buying, top-up, starting a payment, the free trial, invites, support and the reseller panel.
+It is one check for every call (`miniMaintenance`, the same one that sets the flag in `/me` and in the sign-in), staff
+and the owners the server names are never held, and the bot holds the same rule ([03-bot-ux.md](03-bot-ux.md)): a
+customer in maintenance gets the maintenance text for everything but a payment under way. A test reads the app's routes
+from the source and sweeps every one of them, so a section added later is held unless it is named in the test's list
+of what a payment under way needs.
 
 ## Stars and manual payments
 
@@ -243,7 +264,7 @@ The bot's endpoints for core (the last one is the required channel's, above), al
 | `POST /internal/miniapp/invoice` | Make a Stars invoice link: `{payload, stars, lang, title, amount, currency, topup}` gives `{url}` |
 | `POST /internal/miniapp/receipt` | Send a receipt image to the customer's chat: gives `{file_id, kind}` |
 | `POST /internal/miniapp/proof-alert` | Alert the staff to a stored proof |
-| `POST /internal/miniapp/channel-member` | Is a customer in the required channel: `{chat, user_id}` gives `{ok, member}` |
+| `POST /internal/miniapp/channel-member` | Is a customer in a required channel or group: `{chat, user_id}` gives `{ok, member}` (core asks once for each chat) |
 
 Error codes of these calls, besides the general ones: `method_off`, `bad_type` (415), `too_large` (413), `empty`,
 `no_receipt`, `one_receipt`, `reference_required`, `bad_txid`, `already_submitted`, `payment_closed`, `duplicate`,
@@ -268,7 +289,9 @@ Five tabs:
   for the service (one line, at most 64 characters), then the shop's own checkout (the `label` of `POST /orders`).
   The checkout has no discount-code field for a reseller (they pay tier prices, core refuses codes), and its wallet
   button counts the credit: a reseller pays from the balance and the credit, down to the limit, through the usual
-  `pay-wallet`. Online methods work as for any order.
+  `pay-wallet`. Online methods work as for any order. **Bulk purchase is the bot's only** (its home-menu button and its
+  checkout, [03-bot-ux.md](03-bot-ux.md)): the Mini App has no screen for it, and the services it brings show in Services
+  like any other.
 - **Services:** the customers' services, 10 a page, newest first, in groups with their counts (All, Active, Ending
   soon, Ended, Paused), a search by name or number (#a1b2c3), and per service the status, time left, usage bar, the
   private note, and (opened) the subscription link to copy, the service page, **Renew** and **Add traffic** (the shop's
@@ -344,9 +367,9 @@ setting is on. `/app` redirects to `/app/`. Without a build, a short notice is s
   proxy gives a request body), so one account cannot hold every place; a customer who finds none is told to try
   again in a moment. A receipt is not stored by core and not logged or audited anywhere. The bot's five internal
   endpoints answer only to core's token, and core never holds the Telegram token.
-- **The required channel** is checked by the bot, never by the browser: the app cannot say it has joined, only ask
-  core, which asks the bot. A refusal opens no session, the answer carries the channel's public link and nothing else
-  of it (never its id), and a failed check is logged without the customer's id.
+- **The required channels** are checked by the bot, never by the browser: the app cannot say it has joined, only ask
+  core, which asks the bot. A refusal opens no session, the answer carries each chat's public link and name and
+  nothing else of it (never its id), and a failed check is logged without the customer's id.
 - The session token is held in memory by the page (no cookie, no local storage), so it is not sent by the browser on
   its own and a page of another site cannot make the app act.
 

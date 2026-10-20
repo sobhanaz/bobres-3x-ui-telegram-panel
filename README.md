@@ -12,10 +12,11 @@ it on their own server, with their own domain, bot, 3x-ui panels and brand.
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
 Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
-versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.6.1
-(the Mini App holds the store's required channel and takes a half-made manual payment up again; v0.6.0 put it on by
-default with Stars, receipts, trial, invites, support and a reseller panel, and added reseller management and the 3x-ui
-group `bobres_bot`) is the latest. They were tried in a Docker lab with two Ubuntu servers
+versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.7.0
+(the dashboard can update the server by itself, the Reports page converts every date and its CSV files were fixed,
+maintenance mode holds every option of the bot, and the bot gained Top users, account lines, a card to forward,
+`/new` `/renew` `/status` and a reseller application; v0.6.0 and v0.6.1 put the Mini App on by default and complete,
+and added reseller management and the 3x-ui group `bobres_bot`) is the latest. They were tried in a Docker lab with two Ubuntu servers
 ([docs/11-staging-run.md](docs/11-staging-run.md)); an install on a real server, with real payments and a real
 certificate, is still to do. The landing page is live at https://sobhanaz.github.io/bobres-3x-ui-telegram-panel/.
 Still open: the legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
@@ -31,11 +32,11 @@ license server is built but still has to be deployed by the owner. What is left 
 - Buy a plan (traffic-limited, time-only or both), with an optional discount code. The service arrives with its
   subscription link and a QR code.
 - My services: status, expiry and traffic used; renew, or add a traffic package, with the same link.
-- A wallet with top-ups and history, one free trial per Telegram account, and invite links that reward the inviter
-  on a friend's first paid purchase.
+- A wallet with top-ups and history, gift codes that add credit, one free trial per Telegram account, and invite
+  links that reward the inviter on a friend's first paid purchase.
 - Reminders 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - Support conversations with text, photos and PDFs; staff replies arrive in the chat.
-- Store rules: maintenance mode, a required channel, rate limits, terms and privacy links.
+- Store rules: maintenance mode, required channels and groups (one on the free tier, more with Pro), rate limits, terms and privacy links.
 - A page for each service at `/sub/<token>`, under the store's own brand: usage and days left, the subscription link
   and QR code, import buttons for v2rayNG, Hiddify, Streisand and V2Box, and a Renew button. The import links are not
   yet verified on real devices.
@@ -62,7 +63,7 @@ license server is built but still has to be deployed by the owner. What is left 
 - Log in with a one-time link from the bot, or with a password and an authenticator code. Roles: owner, admin,
   support. Persian and English, dark and light.
 - Overview, users, services, plans and packages, orders and payments with the receipt review queue, the ledger with
-  CSV export, discounts and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
+  CSV export, discounts, gift codes and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
   settings, panel servers, payment gateways, staff, the System page (health, updates, logs, backups, HTTPS
   certificates, license) and the audit log.
 - Reports: revenue per currency by day, week or month (Gregorian or Jalali), orders, new customers, renewals, churn,
@@ -92,7 +93,7 @@ license server is built but still has to be deployed by the owner. What is left 
 **Free core, paid premium**
 - No license is needed to run a store. An install without one has a free tier: 1 server, 25 active services, 2 staff
   seats, the Zarinpal, Stars and manual payment methods, and security updates always. Resellers, automatic USDT,
-  more servers, services and staff, and removing "Powered by BOBRES" come with a license.
+  more servers, services, staff and required channels, and removing "Powered by BOBRES" come with a license.
 - Every install starts with a 30-day trial that has everything but white label. When it ends, the limits stop only
   new servers, services, resellers, staff and payment methods: existing services keep working and renewing, and a
   customer never sees a word about licensing ([docs/05-license.md](docs/05-license.md)).
@@ -136,8 +137,8 @@ banner and one progress bar from 0 to 100%, keeps going if your SSH connection d
 Afterwards run `bobres` for the management menu:
 
 ```text
-   n____n   BOBRES manager  bobres v0.6.1
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.6.1
+   n____n   BOBRES manager  bobres v0.7.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.7.0
    \_||_/   Store: running (9/9 services)
   ──────────────────────────────────────────────────────────
    1. Status

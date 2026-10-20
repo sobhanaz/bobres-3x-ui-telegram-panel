@@ -81,6 +81,10 @@ func run(args []string, out, errOut io.Writer) int {
 	case "restore":
 		return newOps(stdin, out, errOut).restoreCmd(args[1:])
 	case "update":
+		// bobres-updater.service runs this one for the dashboard's request; it is not in the help.
+		if len(args) > 1 && args[1] == "--from-request" {
+			return helperRequestCmd(args[2:], stdin, out, errOut)
+		}
 		return newUpdater(newOps(stdin, out, errOut)).updateCmd(args[1:])
 	case "rollback":
 		return newUpdater(newOps(stdin, out, errOut)).rollbackCmd(args[1:])
@@ -95,7 +99,7 @@ func run(args []string, out, errOut io.Writer) int {
 	case "secrets":
 		return newRotator(newOps(stdin, out, errOut)).secretsCmd(args[1:])
 	case "monitor":
-		return monitorCmd(args[1:], out, errOut)
+		return monitorCmd(args[1:], stdin, out, errOut)
 	default:
 		fmt.Fprintf(errOut, "bobres: unknown command %q\n\n", cmd)
 		usage(errOut)

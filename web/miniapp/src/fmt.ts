@@ -44,6 +44,8 @@ export function ledgerKey(kind: string): Key {
       return 'ledger.purchase'
     case 'refund':
       return 'ledger.refund'
+    case 'gift_code':
+      return 'ledger.gift_code'
     case 'adjust':
       return 'ledger.adjustment'
     default:

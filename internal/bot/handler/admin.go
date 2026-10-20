@@ -21,7 +21,7 @@ import (
 // dashboard is down) and the store's basics. /set takes every setting core
 // knows (core checks the key and the value); the dashboard shows them all.
 var settingKeys = []string{
-	"maintenance.enabled", "join.channel", "join.link", "notify.recipients",
+	"maintenance.enabled", "join.channel", "join.link", "join.label", "notify.recipients",
 	"payments.card_number", "payments.card_holder", "payments.usdt_trc20", "payments.usdt_erc20",
 	"payments.usdt_rate", "payments.stars_rate", "payments.zarinpal_link", "referral.reward_percent",
 	"branding.name", "branding.support", "texts.fa.welcome", "texts.en.welcome",

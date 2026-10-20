@@ -200,7 +200,8 @@ func TestResellerBuysForACustomerOnCredit(t *testing.T) {
 		t.Fatalf("reseller's home: %s", labels)
 	}
 	rs.press("buy")
-	rs.lastButton("Monthly 50GB · 120,000 Toman")
+	rs.lastButton("Monthly 50GB")
+	rs.lastButton("120,000 Toman") // the tier price, on the price button
 	rs.press("plan:")
 	checkoutB := rs.shown()
 	rs.shownHas("Price: <b>120,000 Toman</b>")
@@ -219,7 +220,7 @@ func TestResellerBuysForACustomerOnCredit(t *testing.T) {
 
 	// Buy for a customer: the plans at tier prices, a name, the checkout.
 	rs.press("rs:buy")
-	rs.lastButton("Monthly 50GB · 120,000 Toman")
+	rs.lastButton("120,000 Toman") // the tier price, on the price button
 	rs.press("rs:p:")
 	rs.shownHas("Type a name for this service")
 	rs.text(strings.Repeat("x", 65))
@@ -290,7 +291,7 @@ func TestResellerBuysForACustomerOnCredit(t *testing.T) {
 	rs.shownHas("🏷 <b>Ali&#39;s &lt;phone&gt; 2</b>\n📦 <b>Service</b>")
 	rs.press("rnw:")
 	rs.shownHas("🏷 <b>Ali&#39;s &lt;phone&gt; 2</b>\n🔄 <b>Renew service #")
-	rs.lastButton("Monthly 50GB · 120,000 Toman")
+	rs.lastButton("120,000 Toman") // the tier price, on the price button
 	rs.press("rp:")
 	rs.press("pay:w:")
 	rs.shownHas("Paid from your wallet")
@@ -454,11 +455,13 @@ func TestResellerLinkCommissionStatementInPersian(t *testing.T) {
 	rs.text("/menu")
 	rs.press("rs")
 	rs.press("rs:link")
-	rs.shownHas("🔗 <b>لینک دعوت شما</b>")
-	rs.shownHas("۱۰٪ پورسانت")
-	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(rs.shown().text)
+	link := rs.lastWith("🔗 <b>لینک دعوت شما</b>") // the promo card and the line about forwarding it come after it
+	if !strings.Contains(link.text, "۱۰٪ پورسانت") {
+		t.Fatalf("the link screen: %q", link.text)
+	}
+	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(link.text)
 	if m == nil {
-		t.Fatalf("no invite link with referrals off: %q", rs.shown().text)
+		t.Fatalf("no invite link with referrals off: %q", link.text)
 	}
 
 	// Referral rewards on: a reseller's customer still pays them nothing.
@@ -469,13 +472,13 @@ func TestResellerLinkCommissionStatementInPersian(t *testing.T) {
 		t.Fatalf("reseller's home with referrals on: %v", cb)
 	}
 	rs.tap("ref") // an old Invite button: their own link
-	rs.shownHas("🔗 <b>لینک دعوت شما</b>")
+	rs.lastWith("🔗 <b>لینک دعوت شما</b>")
 	cust := w.person(1702, "custo")
 	cust.text("/start r_" + m[1])
 	cust.press("lang:en")
 	w.fund(1702, 150_000)
 	cust.press("buy")
-	cust.lastButton("Monthly 50GB · 150,000 Toman") // store prices for customers
+	cust.lastButton("150,000 Toman") // store prices for customers
 	cust.press("plan:")
 	if !hasCallback(cust.shown(), "dc:") || !slices.Contains(cust.shown().labels(), "👛 Wallet (150,000 Toman)") {
 		t.Fatalf("customer's checkout: %v", cust.shown().labels())

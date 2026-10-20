@@ -82,7 +82,22 @@ func setup(rt *app.Runtime) error {
 	cat := i18n.MustLoad()
 	h := handler.New(core, bot, state.NewRedis(rdb), cat, ratelimit.New(rdb, ""),
 		handler.Config{AdminTelegramIDs: cfg.AdminTelegramIDs, BotName: me.FirstName, BotUsername: me.Username, Location: loc}, rt.Log)
-	if err := h.RefreshSettings(rt.Ctx); err != nil {
+	// The update check follows the channel the store chose in the dashboard
+	// (the updates.channel setting, one of the settings the bot reloads; unset:
+	// BOBRES_UPDATE_CHANNEL), so every settings reload also tells it the channel.
+	// It looks at the newest release of that channel every 12 hours (an hour
+	// after a failure), when the channel changes, and when the dashboard's
+	// "Check again" asks (below).
+	updates := release.NewChecker(version.Version, cfg.UpdateChannel, rt.Log)
+	followChannel := runner.FollowUpdateChannel(updates, h.Settings().Get, cfg.UpdateChannel)
+	refreshSettings := func(ctx context.Context) error {
+		err := h.RefreshSettings(ctx)
+		if err == nil {
+			followChannel()
+		}
+		return err
+	}
+	if err := refreshSettings(rt.Ctx); err != nil {
 		rt.Log.Warn("settings not loaded yet (core unreachable?); retrying in the background", "err", err)
 	}
 	rt.Go("settings", func(ctx context.Context) error {
@@ -93,7 +108,7 @@ func setup(rt *app.Runtime) error {
 			case <-ctx.Done():
 				return nil
 			case <-t.C:
-				if err := h.RefreshSettings(ctx); err != nil {
+				if err := refreshSettings(ctx); err != nil {
 					rt.Log.Warn("settings refresh failed", "err", err)
 				}
 			}
@@ -135,15 +150,16 @@ func setup(rt *app.Runtime) error {
 		// Core asks for a reload after every settings, texts or branding change
 		// (the minute ticker above stays as the fallback), and checks a join
 		// channel for the dashboard: core has no bot token.
-		rt.Mux.Handle("POST /internal/settings/refresh", runner.Refresh(h.RefreshSettings, cfg.PeerCoreToken, rt.Log))
+		rt.Mux.Handle("POST /internal/settings/refresh", runner.Refresh(refreshSettings, cfg.PeerCoreToken, rt.Log))
 		rt.Mux.Handle("GET /internal/channel-check", runner.ChannelCheck(bot, me.ID, cfg.PeerCoreToken))
 		// "Send to me" from the broadcast composer.
 		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
 		// The Mini App store (/app on core): core has no bot token, so it asks
 		// the bot to check the init data a Mini App is opened with.
 		rt.Mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(cfg.TelegramBotToken, me.Username, cfg.PeerCoreToken, nil))
-		// The store's required channel (join.channel) holds in the app as in the
-		// bot: only the bot, the channel's admin, can ask Telegram who is in it.
+		// The store's required channels and groups (join.channel and the extra
+		// ones) hold in the app as in the bot: only the bot, the chat's admin,
+		// can ask Telegram who is in it. Core asks about one chat at a time.
 		rt.Mux.Handle("POST /internal/miniapp/channel-member", runner.MiniAppChannelMember(bot, cfg.PeerCoreToken, rt.Log))
 		// Its payments, the same reason: a Stars invoice link, a receipt sent to
 		// the customer's chat (core stores the file id Telegram gives back), and
@@ -154,14 +170,17 @@ func setup(rt *app.Runtime) error {
 			h.NotifyProofSubmitted(ctx, handler.ProofNotice{TelegramID: a.TelegramID, Username: a.Username, IntentID: a.IntentID, Amount: a.Amount, Currency: a.Currency})
 		}, cfg.PeerCoreToken))
 		// The System page's update check: the bot has internet access, core
-		// none. It reads the newest release of BOBRES_UPDATE_CHANNEL (stable:
-		// the latest release; beta: the highest version GitHub's API lists,
-		// pre-releases included) every 12 hours (an hour after a failure) and
-		// verifies its signed checksums.txt with the installer's root keys;
-		// applying an update stays `bobres update`.
-		updates := release.NewChecker(version.Version, cfg.UpdateChannel, rt.Log)
+		// none. It reads the newest release of the store's channel (stable: the
+		// latest release; beta: the highest version GitHub's API lists,
+		// pre-releases included) and verifies its signed checksums.txt with the
+		// installer's root keys. The page reads the last outcome, and its "Check
+		// again" makes the bot look now (after reloading the settings, so the
+		// channel just saved is the one it looks at). Applying an update is
+		// `bobres update`, which the server's updater runs when core asks (core
+		// never touches Docker).
 		rt.Go("update-check", updates.Run)
 		rt.Mux.Handle("GET /internal/update-check", runner.UpdateCheck(updates.Status, cfg.PeerCoreToken))
+		rt.Mux.Handle("POST /internal/update-check/refresh", runner.UpdateCheckNow(refreshSettings, updates.CheckNow, cfg.PeerCoreToken, rt.Log))
 		// The System page's logs tab (owner): this process's kept warnings
 		// and errors, already redacted.
 		rt.Mux.Handle("GET /internal/logs", runner.Logs(logging.Recent, cfg.PeerCoreToken))

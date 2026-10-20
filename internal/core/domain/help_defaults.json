@@ -1,0 +1,173 @@
+{
+  "faq": [
+    {
+      "title": {
+        "fa": "آیا آی‌پی اختصاصی دریافت می‌کنم؟",
+        "en": "Will I get my own IP address?"
+      },
+      "body": {
+        "fa": "خیر. سرویس شما از طریق سرورهای فروشگاه متصل می‌شود؛ بنابراین چند مشتری از آدرس‌های مشترک استفاده می‌کنند و ممکن است با جابه‌جایی یا تعویض سرور، آدرس تغییر کند. وب‌سایت‌ها آدرس سرور را می‌بینند، نه آدرس شما را.",
+        "en": "No. Your service connects through the store's servers, so many customers share the same addresses, and an address can change when a server is moved or replaced. Websites see the server's address, not yours."
+      }
+    },
+    {
+      "title": {
+        "fa": "چطور سرویسم را تمدید کنم؟",
+        "en": "How do I renew my service?"
+      },
+      "body": {
+        "fa": "از بخش <b>سرویس‌های من</b> سرویس خود را انتخاب کنید و دکمهٔ <b>تمدید</b> را بزنید. پس از تأیید پرداخت، مدت جدید به سرویس شما اضافه می‌شود و همان لینک اشتراک قبلی کار می‌کند. اگر فقط حجم بیشتری می‌خواهید، در همان صفحه دکمهٔ <b>افزایش حجم</b> را بزنید (در صورتی که فروشگاه آن را ارائه کرده باشد).",
+        "en": "Open <b>My services</b>, choose your service and tap <b>Renew</b>. After the payment is confirmed, the new period is added to your service and the same subscription link keeps working. If you only need more traffic, tap <b>Add traffic</b> on the same screen (when the store offers it)."
+      }
+    },
+    {
+      "title": {
+        "fa": "یک سرویس را روی چند دستگاه می‌شود استفاده کرد؟",
+        "en": "How many devices can use one service?"
+      },
+      "body": {
+        "fa": "می‌توانید همان لینک اشتراک را روی چند دستگاه اضافه کنید و همهٔ آن‌ها از حجم و زمان یک سرویس مشترک استفاده می‌کنند. لطفاً لینک خود را به دیگران ندهید؛ مصرف آن‌ها از حجم شما کم می‌شود. اگر مطمئن نیستید پلن شما محدودیتی برای تعداد دستگاه دارد یا نه، از پشتیبانی بپرسید.",
+        "en": "You can add the same subscription link to more than one device, and all of them share the traffic and the end date of that one service. Please do not share your link with other people: their use counts against your traffic. If you are not sure whether your plan limits the number of devices, ask support."
+      }
+    },
+    {
+      "title": {
+        "fa": "از کجا بفهمم چقدر حجم و زمان باقی مانده؟",
+        "en": "How can I see how much traffic and time I have left?"
+      },
+      "body": {
+        "fa": "از بخش <b>سرویس‌های من</b> سرویس خود را انتخاب کنید؛ حجم مصرف‌شده، حجم باقی‌مانده و تاریخ پایان سرویس را همان‌جا می‌بینید.",
+        "en": "Open <b>My services</b> and choose your service: it shows the traffic you have used, the traffic left and the date the service ends."
+      }
+    },
+    {
+      "title": {
+        "fa": "سرویسم وصل نمی‌شود، چه کار کنم؟",
+        "en": "My service does not connect. What can I do?"
+      },
+      "body": {
+        "fa": "این مراحل را به‌ترتیب امتحان کنید:\n<b>۱.</b> مطمئن شوید اینترنت شما بدون VPN کار می‌کند.\n<b>۲.</b> در برنامه، اشتراک را به‌روزرسانی کنید (لیست سرورها را به پایین بکشید یا دکمهٔ تازه‌سازی را بزنید) تا جدیدترین سرورها دریافت شوند.\n<b>۳.</b> سرور دیگری را از لیست امتحان کنید یا شبکهٔ دیگری (وای‌فای یا اینترنت همراه) را آزمایش کنید.\n<b>۴.</b> برنامه را به‌روز کنید و در <b>سرویس‌های من</b> ببینید که حجم یا زمان سرویس تمام نشده باشد.\n<b>۵.</b> اگر باز هم وصل نشد، برای پشتیبانی پیام بفرستید و نام برنامه، مدل گوشی و تصویر خطا را همراهش بنویسید.",
+        "en": "Try these steps in order:\n<b>1.</b> Check that your internet works without the VPN.\n<b>2.</b> In your app, update the subscription (pull the server list down or tap the refresh button) to get the newest servers.\n<b>3.</b> Try another server in the list, or another network (Wi-Fi or mobile data).\n<b>4.</b> Update the app, and check in <b>My services</b> that your service has traffic left and has not ended.\n<b>5.</b> Still stuck? Send a message to support with the name of your app, your phone model and a screenshot of the error."
+      }
+    },
+    {
+      "title": {
+        "fa": "آیا امکان بازگشت وجه وجود دارد؟",
+        "en": "Can I get my money back?"
+      },
+      "body": {
+        "fa": "اگر مشکلی در سرویس شما هست و حل نمی‌شود، به پشتیبانی بگویید چه مشکلی دارید و مربوط به کدام سرویس است. امکان بازگشت وجه به شرایط هر مورد و قوانین فروشگاه بستگی دارد و پشتیبانی آن را برایتان توضیح می‌دهد.",
+        "en": "If something is wrong with your service and it cannot be fixed, tell support what the problem is and which service it concerns. Whether a refund is possible depends on the case and on the store's terms, and support will explain it to you."
+      }
+    }
+  ],
+  "tutorials": [
+    {
+      "title": {
+        "fa": "🚀 آموزش استفاده از لینک اشتراک",
+        "en": "🚀 How to use the subscription link"
+      },
+      "body": {
+        "fa": "<b>۱.</b> یک برنامهٔ اتصال نصب کنید: یکی از آموزش‌های همین فهرست را انتخاب کنید (مثلاً v2rayNG برای اندروید، Streisand برای آیفون، یا Hiddify و Happ برای همهٔ دستگاه‌ها).\n<b>۲.</b> در همین ربات، بخش <b>سرویس‌های من</b> را باز کنید، سرویس خود را انتخاب کنید و لینک اشتراک را کپی کنید.\n<b>۳.</b> در برنامه، لینک را به‌عنوان اشتراک اضافه کنید (معمولاً با دکمهٔ <b>+</b> و سپس <b>افزودن از کلیپ‌بورد</b> یا <b>افزودن اشتراک</b>). یا صفحهٔ سرویس خود را باز کنید (دکمهٔ <b>باز کردن صفحه</b>) و همان‌جا دکمهٔ برنامهٔ خود را بزنید.\n<b>۴.</b> اگر برنامه خواست، اشتراک را به‌روزرسانی کنید، یک سرور انتخاب کنید و وصل شوید.\n\nهمین لینک را روی چند دستگاه هم می‌توانید استفاده کنید.",
+        "en": "<b>1.</b> Install a client app: pick one of the tutorials in this list (for example v2rayNG on Android, Streisand on iPhone, or Hiddify and Happ on any device).\n<b>2.</b> Open <b>My services</b> in this bot, choose your service and copy the subscription link.\n<b>3.</b> In the app, add the link as a subscription (usually <b>+</b>, then <b>Import from clipboard</b> or <b>Add subscription</b>). Or open your service's page (the <b>Open page</b> button) and tap your app's button there.\n<b>4.</b> If the app asks, update the subscription, pick a server and connect.\n\nThe same link also works on several devices."
+      },
+      "buttons": []
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود v2rayNG (اندروید)",
+        "en": "📲 Download v2rayNG (Android)"
+      },
+      "body": {
+        "fa": "<b>v2rayNG</b> برنامه‌ای برای اندروید است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را با دکمهٔ زیر دانلود و نصب کنید.\n<b>۲.</b> لینک اشتراک خود را از بخش <b>سرویس‌های من</b> کپی کنید و در تنظیمات اشتراک برنامه اضافه کنید. یا صفحهٔ سرویس خود را باز کنید (دکمهٔ <b>باز کردن صفحه</b> در <b>سرویس‌های من</b>) و همان‌جا دکمهٔ v2rayNG را بزنید.\n<b>۳.</b> اشتراک را به‌روزرسانی کنید، یک سرور انتخاب کنید و دکمهٔ اتصال را بزنید.",
+        "en": "<b>v2rayNG</b> is an app for Android that connects with your subscription link.\n\n<b>1.</b> Download and install it with the button below.\n<b>2.</b> Copy your subscription link from <b>My services</b> and add it in the app's subscription settings. Or open your service's page (the <b>Open page</b> button in <b>My services</b>) and tap the v2rayNG button there.\n<b>3.</b> Update the subscription, pick a server and tap the connect button."
+      },
+      "buttons": [
+        {
+          "url": "https://github.com/2dust/v2rayNG/releases/latest",
+          "label": { "fa": "📥 دانلود از GitHub", "en": "📥 Download from GitHub" }
+        }
+      ]
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود Hiddify (همهٔ دستگاه‌ها)",
+        "en": "📲 Download Hiddify (all devices)"
+      },
+      "body": {
+        "fa": "<b>Hiddify</b> برنامه‌ای برای اندروید، آیفون و آیپد، ویندوز و مک است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را از یکی از دکمه‌های زیر دانلود و نصب کنید.\n<b>۲.</b> صفحهٔ سرویس خود را باز کنید (دکمهٔ <b>باز کردن صفحه</b> در <b>سرویس‌های من</b>)، دکمهٔ Hiddify را بزنید و تأیید کنید. یا لینک اشتراک را کپی کنید و در برنامه از کلیپ‌بورد اضافه کنید.\n<b>۳.</b> دکمهٔ بزرگ اتصال را بزنید.",
+        "en": "<b>Hiddify</b> is an app for Android, iPhone and iPad, Windows and macOS that connects with your subscription link.\n\n<b>1.</b> Download and install it with one of the buttons below.\n<b>2.</b> Open your service's page (the <b>Open page</b> button in <b>My services</b>), tap the Hiddify button and confirm. Or copy your subscription link and add it from the clipboard in the app.\n<b>3.</b> Press the big connect button."
+      },
+      "buttons": [
+        {
+          "url": "https://hiddify.com/",
+          "label": { "fa": "🌐 صفحهٔ دانلود", "en": "🌐 Download page" }
+        },
+        {
+          "url": "https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532",
+          "label": { "fa": "📥 App Store", "en": "📥 App Store" }
+        },
+        {
+          "url": "https://github.com/hiddify/hiddify-app/releases/latest",
+          "label": { "fa": "📥 دانلود از GitHub", "en": "📥 Download from GitHub" }
+        }
+      ]
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود Streisand (آیفون)",
+        "en": "📲 Download Streisand (iPhone)"
+      },
+      "body": {
+        "fa": "<b>Streisand</b> برنامه‌ای برای آیفون و آیپد است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را از App Store نصب کنید.\n<b>۲.</b> صفحهٔ سرویس خود را باز کنید (دکمهٔ <b>باز کردن صفحه</b> در <b>سرویس‌های من</b>)، دکمهٔ Streisand را بزنید و اجازهٔ افزودن را بدهید. یا لینک اشتراک را کپی کنید و در برنامه اضافه کنید.\n<b>۳.</b> اتصال را روشن کنید.",
+        "en": "<b>Streisand</b> is an app for iPhone and iPad that connects with your subscription link.\n\n<b>1.</b> Install it from the App Store.\n<b>2.</b> Open your service's page (the <b>Open page</b> button in <b>My services</b>), tap the Streisand button and allow the import. Or copy your subscription link and add it in the app.\n<b>3.</b> Turn the connection on."
+      },
+      "buttons": [
+        {
+          "url": "https://apps.apple.com/app/streisand/id6450534064",
+          "label": { "fa": "📥 App Store", "en": "📥 App Store" }
+        }
+      ]
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود V2Box (آیفون)",
+        "en": "📲 Download V2Box (iPhone)"
+      },
+      "body": {
+        "fa": "<b>V2Box</b> برنامه‌ای برای آیفون و آیپد است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را از App Store نصب کنید.\n<b>۲.</b> صفحهٔ سرویس خود را باز کنید (دکمهٔ <b>باز کردن صفحه</b> در <b>سرویس‌های من</b>)، دکمهٔ V2Box را بزنید و اشتراک را اضافه کنید. یا لینک اشتراک را کپی کنید و در برنامه اضافه کنید.\n<b>۳.</b> یک سرور انتخاب کنید و وصل شوید.",
+        "en": "<b>V2Box</b> is an app for iPhone and iPad that connects with your subscription link.\n\n<b>1.</b> Install it from the App Store.\n<b>2.</b> Open your service's page (the <b>Open page</b> button in <b>My services</b>), tap the V2Box button and add the subscription. Or copy your subscription link and add it in the app.\n<b>3.</b> Pick a server and connect."
+      },
+      "buttons": [
+        {
+          "url": "https://apps.apple.com/app/v2box-v2ray-client/id6446814690",
+          "label": { "fa": "📥 App Store", "en": "📥 App Store" }
+        }
+      ]
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود HAPP (همهٔ دستگاه‌ها)",
+        "en": "📲 Download HAPP (all devices)"
+      },
+      "body": {
+        "fa": "<b>Happ</b> برنامه‌ای برای اندروید، آیفون و آیپد، ویندوز و مک است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را از یکی از دکمه‌های زیر دانلود و نصب کنید.\n<b>۲.</b> لینک اشتراک خود را از بخش <b>سرویس‌های من</b> کپی کنید و در برنامه با دکمهٔ <b>+</b> از کلیپ‌بورد اضافه کنید.\n<b>۳.</b> یک سرور انتخاب کنید و وصل شوید.",
+        "en": "<b>Happ</b> is an app for Android, iPhone and iPad, Windows and macOS that connects with your subscription link.\n\n<b>1.</b> Download and install it with one of the buttons below.\n<b>2.</b> Copy your subscription link from <b>My services</b> and add it in the app from the clipboard with the <b>+</b> button.\n<b>3.</b> Pick a server and connect."
+      },
+      "buttons": [
+        {
+          "url": "https://www.happ.su/main",
+          "label": { "fa": "🌐 صفحهٔ دانلود", "en": "🌐 Download page" }
+        },
+        {
+          "url": "https://apps.apple.com/app/happ-proxy-utility/id6504287215",
+          "label": { "fa": "📥 App Store", "en": "📥 App Store" }
+        },
+        {
+          "url": "https://play.google.com/store/apps/details?id=com.happproxy",
+          "label": { "fa": "📥 Google Play", "en": "📥 Google Play" }
+        }
+      ]
+    }
+  ]
+}

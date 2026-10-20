@@ -86,13 +86,17 @@
       "title": "Discounts & referrals",
       "desc": "Discount codes and their use, the referral reward and top inviters."
     },
+    "giftcodes": {
+      "title": "Gift codes",
+      "desc": "Codes that add a fixed amount of credit to a customer's wallet: make them, switch them off, see who used them."
+    },
     "resellers": {
       "title": "Resellers",
       "desc": "Reseller tiers and prices, credit limits, their customers and settlements."
     },
     "branding": {
       "title": "Branding & texts",
-      "desc": "Store name, logo, colors and every bot text in Persian and English."
+      "desc": "Store name, logo, colors, every bot text in Persian and English, and the FAQ and tutorials."
     },
     "settings": {
       "title": "Settings",
@@ -505,7 +509,8 @@
       "referral": "Invitation reward",
       "trial_grant": "Free trial",
       "commission": "Reseller commission",
-      "settlement": "Reseller payment"
+      "settlement": "Reseller payment",
+      "gift_code": "Gift code"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -552,8 +557,22 @@
       "jalali": "Jalali"
     },
     "calendar_note": {
-      "gregorian": "Weeks start on Monday and months are Gregorian calendar months.",
-      "jalali": "Weeks start on Saturday and months are Jalali (Persian calendar) months. A period is named by its first day."
+      "gregorian": "Dates are Gregorian. Weeks start on Monday and months are Gregorian calendar months.",
+      "jalali": "Dates are Jalali (Persian calendar). Weeks start on Saturday and months are Jalali months. A period is named by its first day."
+    },
+    "custom_error": {
+      "format": "Type each date as year, month and day in the {calendar} calendar, for example {example}.",
+      "range": "Reports cover the dates from {min} to {max}.",
+      "order": "The end date is before the start date.",
+      "span": "A report covers at most 400 days."
+    },
+    "date": {
+      "open": "Choose a date",
+      "prev_year": "Previous year",
+      "prev_month": "Previous month",
+      "next_month": "Next month",
+      "next_year": "Next year",
+      "today": "Today"
     },
     "export_summary": "Summary CSV",
     "export_orders": "Paid orders CSV",
@@ -684,6 +703,92 @@
     "invited": "Invited",
     "rewarded": "Rewarded purchases",
     "earned": "Earned"
+  },
+  "giftcodes": {
+    "intro": "A gift code adds a fixed amount of credit to a customer's wallet. Customers apply it from the Wallet screen of the bot, with the Apply gift code button. A code is not kept: only its last four characters stay in this list, so copy new codes when you make them.",
+    "new": "New codes",
+    "export": "Export CSV",
+    "no_key": "Gift codes need the master key of this install (BOBRES_CORE_MASTER_KEY), which core does not have: none can be made or used. Run bobres install again to add it.",
+    "off": "Gift codes are turned off: the bot hides the button and accepts no code. You can still make codes.",
+    "turn_on": "Turn on",
+    "turned_on": "Gift codes are on",
+    "all_statuses": "All statuses",
+    "status_col": "Status",
+    "status": {
+      "active": "Active",
+      "disabled": "Switched off",
+      "expired": "Ended",
+      "used_up": "Used up"
+    },
+    "search": "Search a note or the last 4 characters",
+    "none": "No gift codes yet.",
+    "code": "Code",
+    "kind_generated": "Made by BOBRES",
+    "kind_own": "Your own",
+    "value": "Worth",
+    "used": "Used",
+    "used_of": "{used} of {max}",
+    "per_customer_short": "Per customer: {n}",
+    "ends": "Ends",
+    "never": "Never",
+    "last_used": "Last used",
+    "note": "Note",
+    "made": "Made {date}",
+    "active": "Active",
+    "redemptions": "Who used it",
+    "redemptions_of": "Used by, code",
+    "redemptions_none": "Nobody has used this code yet.",
+    "credited": "Credited",
+    "number": "Time",
+    "export_redemptions": "Export CSV",
+    "mode": "What to make",
+    "mode_batch": "Generated codes",
+    "mode_own": "A code of my own",
+    "batch_intro": "BOBRES makes the codes at random, like ABCD-EFGH-JKMN. Give each one to one person or one group.",
+    "own_intro": "A word of your own for a campaign. Anyone who learns it can use it, so give it few uses and an end date.",
+    "amount": "Amount per use",
+    "uses": "Uses in all",
+    "per_customer": "Uses per customer",
+    "count": "How many codes",
+    "prefix": "Start of every code (optional)",
+    "prefix_placeholder": "Like NOWRUZ",
+    "own_code": "Your code",
+    "code_hint": "Letters and digits, 8 to 32, with dashes if you like. Customers can type it in small letters.",
+    "days": "Ends in (days)",
+    "ends_in": "in {n} day | in {n} days",
+    "note_field": "Note (only staff see it)",
+    "note_placeholder": "Why it exists",
+    "sum_codes": "Codes",
+    "sum_value": "Worth per use",
+    "sum_ends": "Ends",
+    "sum_most": "Most it can pay out",
+    "shown_once": "You see the codes once, right after you make them.",
+    "make": "Make codes",
+    "invalid": {
+      "amount": "A positive amount.",
+      "uses": "A whole number from 1 to 1,000,000.",
+      "per_customer": "A whole number from 1 to 100, and not more than the uses in all.",
+      "days": "A whole number of days, 1 to 3,650, or empty for never.",
+      "note": "One line, at most 200 characters.",
+      "count": "A whole number from 1 to 500.",
+      "prefix": "Up to 8 letters or digits.",
+      "code_chars": "Letters and digits only (dashes and spaces are fine).",
+      "code_length": "8 to 32 letters and digits.",
+      "code_easy": "Too easy to guess: use at least 5 different characters."
+    },
+    "shown_title": "{n} code, shown only now | {n} codes, shown only now",
+    "shown_warning": "Copy these codes now. They are shown only this once: BOBRES keeps no copy of a code, so they cannot be read again.",
+    "shown_codes": "The new codes",
+    "shown_hint": "One code per line. Download the CSV to keep them with their terms.",
+    "copy_all": "Copy",
+    "download": "Download CSV",
+    "done": "Done",
+    "copied": "Copied",
+    "copy_failed": "The browser did not allow copying: select the codes and copy them by hand.",
+    "unsaved_title": "Close without saving the codes?",
+    "unsaved_message": "You have not copied or downloaded them. They cannot be shown again: you would have to switch these codes off and make new ones.",
+    "close_anyway": "Close anyway",
+    "keep_open": "Keep it open"
   },
   "branding": {
     "tab_store": "Store",
@@ -838,7 +943,10 @@
       "topup": "Extra traffic",
       "admin": "Admin panel",
       "rs": "Reseller panel",
-      "profile": "Bot profile"
+      "gift": "Gift codes",
+      "bulk": "Bulk purchase",
+      "profile": "Bot profile",
+      "help": "Help screens"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -860,6 +968,102 @@
     },
     "owner_only": "Only the store owner can change the payment texts (where customers are told to send money)."
   },
+  "help": {
+    "tab": "Help content",
+    "intro": "What customers read in the bot: the FAQ under Support, and the tutorials behind the Tutorials button (how to connect, where to download the apps). Write each entry in Persian and English: a customer whose language has no translation reads the other one. A list with nothing switched on is left out of the bot. Saved changes reach the bot within a few seconds.",
+    "count": "Shown to customers: {on} of {total}",
+    "stale": "Someone changed this meanwhile. The list was loaded again.",
+    "defaults_done": "The default entries were added.",
+    "deleted": "Deleted.",
+    "shown_on": "Shown to customers.",
+    "shown_off": "Hidden from customers.",
+    "not_written": "not written",
+    "only": "{lang} only",
+    "buttons_count": "{n} button | {n} buttons",
+    "at_limit": "A store keeps at most {cap} entries of this kind.",
+    "col": {
+      "order": "Order",
+      "buttons": "Buttons",
+      "shown": "Shown"
+    },
+    "move_up": "Move “{title}” up",
+    "move_down": "Move “{title}” down",
+    "edit_named": "Edit “{title}”",
+    "delete_named": "Delete “{title}”",
+    "switch_named": "Show “{title}” to customers",
+    "delete": {
+      "title": "Delete",
+      "confirm": "Delete “{title}”? Customers will no longer see it. This cannot be undone."
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "hint": "The first thing under Support. A short FAQ is one numbered message; a long one becomes a numbered list of the questions, each opening its answer.",
+      "add": "Add a question",
+      "defaults": "Start from the default questions",
+      "empty": "No questions yet: the FAQ button is left out of the bot.",
+      "new": "New question",
+      "edit": "Edit question",
+      "title_label": "Question",
+      "body_label": "Answer"
+    },
+    "tutorial": {
+      "title": "Tutorials",
+      "hint": "The Tutorials button on the bot's home screen and bottom menu opens this list. A tutorial is a text, with link buttons if you add them (an app's download page, for example).",
+      "add": "Add a tutorial",
+      "defaults": "Start from the default tutorials",
+      "empty": "No tutorials yet: the Tutorials button is left out of the bot.",
+      "new": "New tutorial",
+      "edit": "Edit tutorial",
+      "title_label": "Title",
+      "body_label": "Text"
+    },
+    "layout": {
+      "title": "How customers read the FAQ",
+      "message": "one message",
+      "list": "a numbered list of questions",
+      "none": "nothing: the FAQ button is left out",
+      "line": "{lang}: {layout}",
+      "size": "In {lang} the questions shown take {used} of the {cap} characters one message holds (and one message holds at most {entries} questions).",
+      "rule": "Up to {entries} questions with {cap} characters in all are shown as one message; anything longer becomes a list."
+    },
+    "edit": {
+      "shown": "Shown to customers",
+      "shown_hint": "Switched off, the entry stays here but customers do not see it.",
+      "langs_hint": "Write it in at least one language. In a language you leave empty, customers read the other language's text.",
+      "state_complete": "Ready",
+      "state_half": "Incomplete",
+      "state_empty": "Not written",
+      "html_hint": "Telegram formatting works in the text: {tags}. Write the characters {chars} as {entities}. Links must start with {https}.",
+      "line_hint": "Plain text on one line.",
+      "buttons": "Link buttons",
+      "buttons_hint": "Shown under the tutorial, one to a line. Each needs an {https} address and a label in at least one language. Up to {cap}.",
+      "button_n": "Button {n}",
+      "button_url": "Link",
+      "button_label": "Label ({lang})",
+      "add_button": "Add a button",
+      "remove_button": "Remove button {n}",
+      "saved": "Saved.",
+      "created": "Added."
+    },
+    "preview": {
+      "title": "How it looks in the bot",
+      "note": "The bot's own buttons are shown with their default wording.",
+      "nothing": "Nothing to show in this language yet.",
+      "fallback": "Customers whose language is {lang} read the {other} text."
+    },
+    "problem": {
+      "pair_missing": "Write both a title and a text in this language, or leave it empty.",
+      "need_one_language": "Write the entry in at least one language.",
+      "unknown_kind": "Unknown kind of entry.",
+      "bad_url": "Not a link the bot can use. It must start with {https}, have a site name with a dot, and have no spaces or non-English letters ({arg}).",
+      "url_missing": "Add the link.",
+      "label_missing": "Give the button a label in at least one language.",
+      "too_many_buttons": "At most {arg} buttons.",
+      "buttons_not_allowed": "Only a tutorial has buttons.",
+      "bad_link": "Links in the text must start with {https} ({arg}).",
+      "lang_unused": "Only Persian and English are used."
+    }
+  },
   "settings": {
     "intro": "Each card saves on its own. Changes reach the bot within a few seconds.",
     "maintenance_on": "Maintenance mode is on: customers only see the maintenance message in the bot. Staff can still use it.",
@@ -879,6 +1083,31 @@
     "tz_default": "Server default",
     "tz_filter": "Search a region or city",
     "tz_now": "Time there now: {time}",
+    "join": {
+      "locked": "Only the store owner can change the required channels and groups.",
+      "dormant": "The first channel is empty, so customers are not asked to join anything. The chats below are saved, but do nothing until the list is saved: its first row then becomes the first channel.",
+      "count": "Required channels and groups: {used} of {limit} (allowed by your plan)",
+      "count_unlimited": "Required channels and groups: {used} · no limit",
+      "limit_note": "Your plan’s limit here is {limit}; the Pro plan has no limit.",
+      "over_note": "Your plan counts only the first rows of this list (limit: {limit}). The others stay saved but are inactive until your plan allows them. You can still reorder, edit or remove them.",
+      "empty": "No channel or group is required, so customers can use the bot without joining anything. Add one to require it.",
+      "first": "First channel or group",
+      "nth": "Channel or group {n}",
+      "inactive": "Inactive: needs Pro",
+      "inactive_hint": "Saved, but customers are not asked to join it: your plan allows fewer required chats.",
+      "move_up": "Move up: row {n}",
+      "move_down": "Move down: row {n}",
+      "remove": "Remove row {n}",
+      "add": "Add a channel or group",
+      "max": "The list holds at most {max}.",
+      "see_license": "See the license",
+      "label_example": "For example: News",
+      "field": {
+        "chat": "Channel or group",
+        "link": "Join link",
+        "label": "Name on the button"
+      }
+    },
     "maintenance_confirm": {
       "title": "Turn on maintenance mode?",
       "message": "From now on customers only see the maintenance message in the bot: they cannot buy or open their services there. Active services keep working, staff can still use the bot, and payments already under way can finish.",
@@ -892,12 +1121,14 @@
       "problem": {
         "not_found": "Telegram cannot find this channel. Check the name; for a private channel use its numeric id and make sure the bot is an admin.",
         "not_admin": "The bot is not an admin of this channel. Add it as an admin in the channel settings and check again.",
-        "not_channel": "This is not a channel (it may be a group or a user).",
+        "not_channel": "This is not a channel or a group (it may be a user).",
         "error": "Telegram returned an error. Check the name or id and try again."
       }
     },
     "invalid": {
       "channel": "A channel {'@'}username (5 to 32 English letters, digits or _, starting with a letter) or a numeric id starting with -100.",
+      "required": "Enter a channel or group, or remove this row.",
+      "duplicate": "This channel or group is already in the list.",
       "tme_link": "A link that starts with https://t.me/",
       "link_required": "A private channel (numeric id) needs an invite link.",
       "https": "A full address that starts with https://",
@@ -916,6 +1147,12 @@
       "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59)."
     },
     "option": {
+      "bot": {
+        "plan_layout": {
+          "table": "Table",
+          "list": "List"
+        }
+      },
       "notify": {
         "recipients": {
           "owner": "Only the store owner",
@@ -928,14 +1165,18 @@
         "title": "General",
         "desc": "The time zone the bot shows dates in, and the bot’s own Telegram profile."
       },
+      "shop": {
+        "title": "Plans and bulk purchase",
+        "desc": "How the bot lists plans, and buying several services at once."
+      },
       "maintenance": {
         "title": "Maintenance mode",
         "desc": "Close the bot to customers for a while, for example while you move servers."
       },
       "join": {
-        "title": "Required channel",
-        "desc": "Customers must join your channel before they can use the bot.",
-        "note": "The bot must be an administrator of the channel to check who joined. For a private channel, enter its numeric id (starting with -100) and put an invite link in “Join link”."
+        "title": "Required channels and groups",
+        "desc": "Customers must join these before they can use the bot or the Mini App. The free tier and Standard allow one; Pro and the trial any number.",
+        "note": "The bot must be an administrator of each channel or group to check who joined. For a private one, enter its numeric id (starting with -100) and put its invite link in “Join link”. The first row is the channel the bot’s /set join.channel changes; the order is the order customers are asked in. A name on the button is optional: without one, a public channel shows its {'@'}username."
       },
       "notify": {
         "title": "Staff notifications",
@@ -954,6 +1195,10 @@
         "title": "Support",
         "desc": "How support tickets are handled."
       },
+      "growth": {
+        "title": "Growth",
+        "desc": "Tools that help customers bring in more customers."
+      },
       "reports": {
         "title": "Sales summary",
         "desc": "A message in Telegram with yesterday's sales, once a day."
@@ -968,6 +1213,22 @@
         "bot_profile": {
           "label": "Keep the bot’s Telegram profile up to date",
           "help": "The bot sets its menu commands, its description (the text of an empty chat) and its short description (its profile page), in Persian and English, from its texts: edit them under Branding & texts → Bot texts → Bot profile. It also sets its profile photo from Branding & texts → Store → Telegram bot. Turned off, it takes back its Persian and English texts and the staff menus, so what you set in {'@'}BotFather shows; the photo stays. The bot’s name is always set in {'@'}BotFather."
+        }
+      },
+      "bot": {
+        "plan_layout": {
+          "label": "Plan list layout",
+          "help": "How the bot lists plans when a customer buys or renews. A table puts each plan on a row of two buttons, its name and its price, under a header row. A list has one button per plan, with the name and the price together."
+        }
+      },
+      "bulk": {
+        "enabled": {
+          "label": "Bulk purchase",
+          "help": "A Bulk purchase button on the bot’s home menu: a customer buys several services of one plan at once and pays for all of them from the wallet. Turned off, the button is gone and core refuses the purchase too."
+        },
+        "max_quantity": {
+          "label": "Most services in a bulk purchase",
+          "help": "The most services one bulk purchase may hold, from 2 to 100. Each service is an ordinary order; the whole purchase is made, or refused, together."
         }
       },
       "maintenance": {
@@ -1080,6 +1341,14 @@
           }
         }
       },
+      "growth": {
+        "leaderboard": {
+          "enabled": {
+            "label": "Top users board",
+            "help": "Shows customers a Top users board in the bot (a button on the main menu): the customers who invited the most people, five to a page, with each name and Telegram id masked. Staff, resellers and banned users are never on it, and it shows only while the referral program is on (Discounts & referrals → Invitations). On by default. Turned off, the button and the board are gone."
+          }
+        }
+      },
       "support": {
         "autoclose_days": {
           "label": "Close answered tickets after (days)",
@@ -1096,6 +1365,12 @@
         "bot_username": {
           "label": "Bot username",
           "help": "The bot’s {'@'}username (without the {'@'}), for the “Renew” button on the subscription page, which opens the bot. Empty: the page has no renew button."
+        }
+      },
+      "gift_codes": {
+        "enabled": {
+          "label": "Gift codes",
+          "help": "Customers can apply a gift code from the wallet screen in the bot: a code you made in the dashboard (Gift codes) adds a fixed amount to their wallet. Turned off, the button goes and no code is accepted; codes can still be made. Gift codes need the master key of the install."
         }
       },
       "miniapp": {
@@ -1208,6 +1483,7 @@
       "plan": "Plan",
       "payment_intent": "Payment",
       "discount": "Discount code",
+      "gift_code": "Gift code",
       "settings": "Settings",
       "text": "Bot text",
       "branding": "Branding",
@@ -1215,9 +1491,11 @@
       "dashboard": "Dashboard account",
       "ticket": "Support ticket",
       "canned_reply": "Saved reply",
+      "help_entry": "Help content",
       "broadcast": "Broadcast",
       "reseller": "Reseller",
       "reseller_tier": "Reseller tier",
+      "bulk_order": "Bulk purchase",
       "server": "Panel server",
       "gateway": "Payment gateway",
       "license": "License",
@@ -1230,6 +1508,7 @@
       "plan": "Plans",
       "setting": "Settings",
       "discount": "Discount codes",
+      "gift_code": "Gift codes",
       "subscription": "Services",
       "order": "Orders",
       "dashboard": "Dashboard",
@@ -1239,6 +1518,7 @@
       "export": "Exports",
       "ticket": "Tickets",
       "canned": "Saved replies",
+      "help": "Help content",
       "broadcast": "Broadcasts",
       "reseller": "Resellers",
       "reseller_tier": "Reseller tiers",
@@ -1266,6 +1546,13 @@
       "discount": {
         "upsert": "Discount code saved"
       },
+      "gift_code": {
+        "create": "Gift code made",
+        "enable": "Gift code switched on",
+        "disable": "Gift code switched off",
+        "redeem": "Gift code used",
+        "lock": "Gift codes closed for a customer (too many wrong codes)"
+      },
       "subscription": {
         "extend": "Service extended",
         "enable": "Service turned on",
@@ -1275,7 +1562,8 @@
       },
       "order": {
         "retry": "Order retried",
-        "refund": "Order refunded"
+        "refund": "Order refunded",
+        "bulk": "Bulk purchase made"
       },
       "dashboard": {
         "login": "Logged in",
@@ -1297,6 +1585,15 @@
         "set": "Bot text changed",
         "reset": "Bot text reset to default",
         "import": "Bot texts imported"
+      },
+      "help": {
+        "create": "Help entry added",
+        "update": "Help entry changed",
+        "enable": "Help entry shown",
+        "disable": "Help entry hidden",
+        "delete": "Help entry deleted",
+        "reorder": "Help entries reordered",
+        "defaults": "Default help entries added"
       },
       "branding": {
         "logo": {
@@ -1327,6 +1624,8 @@
       "export": {
         "ledger": "Wallet history exported",
         "audit": "Audit log exported",
+        "gift_codes": "Gift codes exported",
+        "gift_redemptions": "Uses of a gift code exported",
         "reports": "Sales report exported"
       },
       "ticket": {
@@ -1397,7 +1696,8 @@
     "category": {
       "payment": "Payment",
       "service": "Service",
-      "other": "Other"
+      "other": "Other",
+      "reseller": "Reseller application"
     },
     "category_label": "Category",
     "category_all": "All categories",
@@ -2106,26 +2406,23 @@
     "updates": {
       "title": "Version",
       "current": "This install",
-      "latest": "Latest release",
+      "latest": "Newest release",
       "released": "Released",
       "channel": "Channel",
       "channel_name": {
         "stable": "Stable",
         "beta": "Beta"
       },
-      "channel_hint": "The channel is BOBRES_UPDATE_CHANNEL (stable or beta) in the server's .env file.",
-      "beta_note": "This install follows beta releases: newer pre-releases, less tested. Going back to stable does not downgrade: the install stays on its version until a stable release is newer.",
       "checked_at": "Last checked {time}",
       "state": {
         "newer": "Update available",
         "current": "Up to date",
         "unknown": "Not known"
       },
-      "up_to_date": "This install runs the latest release.",
       "available": "Version {version} is available.",
       "newer_than_license": "This release is newer than your license's update date. It is installed all the same: security updates are never withheld.",
       "see_license": "See the license",
-      "how": "To install it, run this on the server (as root):",
+      "how": "To install it by hand, run this on the server (as root):",
       "copy_command": "Copy the update command",
       "backup_first": "It checks the release signature, backs up the database, installs the new version and rolls back on its own if the store does not come back healthy; sudo bobres rollback undoes the last update later. If bobres update stops with an error, the update and rollback runbook says what each message means and how to fix it.",
       "unverified": "The bot did not check this release's signature. bobres update checks it before installing anything.",
@@ -2140,6 +2437,122 @@
         "invalid": "The latest release's checksum file does not say which version it is.",
         "unsupported": "This version of core does not report updates.",
         "other": "The check failed:"
+      },
+      "prerelease": "Pre-release",
+      "notes": "Release notes",
+      "never_checked": "Not checked yet",
+      "checking": "Checking GitHub…",
+      "reload": "Reload",
+      "verdict": {
+        "current": "This install runs the newest release of the {channel} channel.",
+        "newer": "A newer release is available: {version}.",
+        "newer_pre": "A newer pre-release is available: {version}.",
+        "unknown": "It is not known whether a newer release is out."
+      },
+      "copy_failed": "The browser did not allow copying. Select the command and copy it by hand.",
+      "check_error": "Checking again did not work.",
+      "update": {
+        "now": "Update now",
+        "hint": "The server updates itself, as sudo bobres update does: it checks the release signature, backs up the database, installs the new version and goes back on its own if the store does not come back healthy.",
+        "not_available_title": "Updating from the dashboard is not available yet",
+        "not_available": "One normal update on the server installs the updater that makes this possible; after that, updates can be made from this page. Run it once, over SSH, as root:",
+        "helper_problem": {
+          "no_dir": "The updater's folder is not available to the dashboard.",
+          "no_status": "The updater has not reported yet.",
+          "not_installed": "The updater is not installed on this server.",
+          "bad_status": "The updater's status could not be read.",
+          "unsupported": "The updater is of another version."
+        },
+        "owner_only": "Only the store owner can update from the dashboard. Ask the owner, or run the command below on the server.",
+        "running": "An update is being made right now. Its progress is below.",
+        "server_title": "Update on the server instead"
+      },
+      "confirm": {
+        "title": "Update to {version}?",
+        "from_to": "From {from} to {to}",
+        "channel": "Channel: {channel}",
+        "prerelease_title": "This is a pre-release",
+        "prerelease": "Pre-releases are tested less than stable releases and can have bugs a stable release does not.",
+        "prerelease_check": "I understand, and I want this pre-release",
+        "downtime": "The dashboard and the bot will be unavailable for a few minutes while the services restart. Customers' VPN links keep working.",
+        "safe": "A backup of the database is made first. If the new version does not come back healthy, the update goes back to the previous version on its own.",
+        "owners": "Every owner is told on Telegram when it is asked for and when it ends.",
+        "submit": "Update now"
+      },
+      "refusal": {
+        "helper_missing": "The server's updater is not installed yet: run sudo bobres update once on the server.",
+        "already_running": "An update is already being made.",
+        "check_unavailable": "The bot, which looks for releases, did not answer. Try again in a minute.",
+        "no_release": "No release with a checked signature is known. Check again.",
+        "not_newer": "This install already runs that release or a newer one.",
+        "version_changed": "A different release is the newest now ({latest}). Close this, check again and confirm that one.",
+        "channel_changed": "The channel changed meanwhile. Close this and check again.",
+        "prerelease_unconfirmed": "Confirm that you want the pre-release.",
+        "dev_build": "This is a development build: it cannot tell what is newer.",
+        "request_failed": "The request could not be handed to the server's updater. Try again, or update on the server.",
+        "confirm_required": "Confirm the update first.",
+        "code_required": "Enter the code from your authenticator app.",
+        "code_wrong": "That code is not right. Check the time on your phone and try the next code.",
+        "locked": "Too many wrong codes. Try again in 15 minutes, or log in with a link from the bot."
+      },
+      "progress": {
+        "title": {
+          "queued": "Update requested",
+          "running": "Updating to {to}…",
+          "done": "Updated to {to}",
+          "failed": "The update failed",
+          "rolled_back": "The update was rolled back",
+          "not_started": "The update did not start",
+          "elsewhere": "An update is running on the server"
+        },
+        "asked_by": "Asked by {by} · {time}",
+        "queued": "Waiting for the server's updater to pick the request up. This normally takes a few seconds.",
+        "running": "You can leave this page: the update goes on. Every owner is told on Telegram when it ends.",
+        "elsewhere": "It was started on the server, not here. This page follows it.",
+        "step": {
+          "verify": "Checking the release signature",
+          "backup": "Backing up the database",
+          "pull": "Downloading the new version",
+          "restart": "Restarting the services",
+          "health": "Waiting until everything is healthy",
+          "rollback": "Going back to the previous version"
+        },
+        "steps": "Steps of the update",
+        "reconnecting": "Reconnecting… the dashboard restarts during the update. This page keeps trying.",
+        "done": "BOBRES now runs {version}. Reload the page to use the new dashboard.",
+        "rolled_back": "The new version did not come back healthy, so BOBRES went back to {from} on its own.",
+        "failed": "The update stopped before it finished. On the server, sudo bobres status shows what runs; the update and rollback runbook says what each message means.",
+        "not_started": "The server's updater did not pick the request up, so nothing changed. Run sudo bobres update once on the server.",
+        "reload": "Reload the page",
+        "details": "Details",
+        "dismiss": "Close",
+        "log": "The updater's log (newest lines)"
+      },
+      "channel_card": {
+        "title": "Update channel",
+        "intro": "Which releases this install is offered.",
+        "stable": "Stable",
+        "stable_hint": "Fully tested releases only. Recommended.",
+        "beta": "Beta",
+        "beta_hint": "The newest of all releases, pre-releases included: newer features, less tested.",
+        "beta_warning": "Pre-releases can have bugs a stable release does not, so update on a quiet hour. Going back from beta to stable never downgrades: the install stays on its version until a stable release is newer.",
+        "save": "Save channel",
+        "saved": "Channel saved.",
+        "save_error": "The channel was not saved.",
+        "source_setting": "Chosen here.",
+        "source_server": "From the server's settings ({name}). Choosing here overrides it.",
+        "reset": "Follow the server's setting again",
+        "owner_only": "Only the store owner can change the channel."
+      },
+      "last": {
+        "title": "Last update from the dashboard",
+        "by": "Asked by {by}",
+        "outcome": {
+          "done": "Done",
+          "failed": "Failed",
+          "rolled_back": "Rolled back",
+          "not_started": "Not started"
+        }
       }
     },
     "backups": {
@@ -2453,6 +2866,7 @@
       "resellers": "Resellers are not included here. Buy or renew a license that includes them.",
       "gateways": "This payment method is not included here. Buy or renew a license that includes it.",
       "crypto_watcher": "Automatic USDT payments are not included here. Buy or renew a license that includes them.",
+      "max_join_chats": "This plan allows only one required channel or group. Buy or renew a license (the Pro plan has no limit) to add more.",
       "other": "This is not included here. Buy or renew a license."
     },
     "reason": {
@@ -2517,6 +2931,7 @@
       "servers": "Panel servers",
       "active_services": "Active services",
       "staff_seats": "Staff seats (the store owner is not counted)",
+      "join_chats": "Required channels and groups (join to use the bot)",
       "gateways": "Payment methods",
       "resellers": "Resellers",
       "white_label": "White label (no “Powered by BOBRES”)",

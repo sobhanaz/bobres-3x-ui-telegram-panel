@@ -496,7 +496,8 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	if err != nil {
 		return nil, fail(err)
 	}
-	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx)}
+	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx),
+		ResellersEnabled: s.resellersIncluded(ctx)}
 	for k, v := range m {
 		out.Values[k] = string(v)
 	}
@@ -505,6 +506,22 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	if plain, err := s.dom.Settings(ctx); err == nil && domain.MiniAppOn(plain) {
 		out.MiniappUrl = domain.MiniAppURL(s.dashboardURL(ctx))
 	}
+	// The extra required chats the license allows. When they cannot be read the
+	// bot holds customers to the first chat alone (the floor of every license),
+	// as it does for an older core.
+	if extras, err := s.dom.EnforcedJoinExtras(ctx); err == nil {
+		for _, c := range extras {
+			out.JoinChats = append(out.JoinChats, &corev1.JoinChat{Chat: c.Chat, Link: c.Link, Label: c.Label})
+		}
+	}
+	// Whether the FAQ and the tutorials have anything to show: the bot's buttons
+	// follow. A read that fails fails the refresh, so the bot keeps what it had
+	// instead of hiding the buttons for a minute.
+	faq, tutorials, err := s.dom.HelpAvailable(ctx)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out.HelpFaq, out.HelpTutorials = faq, tutorials
 	return out, nil
 }
 
@@ -513,6 +530,14 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 func (s *Server) whiteLabel(ctx context.Context) bool {
 	eff, err := s.dom.Effective(ctx)
 	return err == nil && eff.WhiteLabel()
+}
+
+// resellersIncluded: the license in effect includes resellers, so the bot
+// offers customers the Become a reseller button. When the license cannot be
+// read it is false: no button, rather than an application core would refuse.
+func (s *Server) resellersIncluded(ctx context.Context) bool {
+	eff, err := s.dom.Effective(ctx)
+	return err == nil && eff.Entitlements.Resellers
 }
 
 // botPhotoVersion is the bot photo's version (without reading the photo): ""

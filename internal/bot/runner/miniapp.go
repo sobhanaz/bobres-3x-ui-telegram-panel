@@ -73,12 +73,13 @@ const (
 	memberTimeout = 3 * time.Second
 )
 
-// MiniAppChannelMember says whether a Telegram user is a member of the
-// channel the store requires (join.channel), for the Mini App, at POST
-// /internal/miniapp/channel-member with {"chat","user_id"}: chat is the channel
-// as core has it in the settings (an @name or a -100… id, checked here as
-// ChannelCheck does), user_id the customer's Telegram id. Core, which serves the
-// Mini App, has no bot token, and only the channel's administrators see its
+// MiniAppChannelMember says whether a Telegram user is a member of a channel
+// or group the store requires (join.channel, or one of its extra required
+// chats), for the Mini App, at POST /internal/miniapp/channel-member with
+// {"chat","user_id"}: chat is the channel as core has it (an @name or a -100…
+// id, checked here as ChannelCheck does), user_id the customer's Telegram id.
+// Core asks about one chat at a time, a few at once. Core, which serves the
+// Mini App, has no bot token, and only the chat's administrators see its
 // members, which the bot is, so core asks. It answers 200 with
 // {"ok":true,"member":true|false}, a member being anyone Telegram counts as one
 // (the rule of the bot's own gate, tg.ChatMember.Joined). When Telegram cannot

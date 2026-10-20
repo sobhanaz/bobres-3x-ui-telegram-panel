@@ -111,22 +111,36 @@ func (s *Server) auditActions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+// auditColumns are the columns of audit.csv in the order they were added
+// (English names, new columns at the end), with the date columns of ledger.csv
+// at the end: time_local, tz and, for ?calendar=jalali, time_jalali.
+var auditColumns = []string{"time_utc", "actor_telegram_id", "actor_username", "actor_role", "action", "entity", "entity_id",
+	"reason", "ip", "source", "before", "after", "entry_id", "time_local", "tz"}
+
 // exportAudit: GET /api/v1/audit.csv with the same filters, newest first, at
-// most maxAuditCSVRows rows. Like exportLedger it is an export of the reports'
-// kind (streamCSV). Its own entry (export.audit) is written when it ends, so
-// the file does not list it (the next export does).
+// most maxAuditCSVRows rows, and ?tz= and ?calendar= for the dates. Like
+// exportLedger it is an export of the reports' kind (streamCSV). Its own entry
+// (export.audit) is written when it ends, so the file does not list it (the
+// next export does).
 func (s *Server) exportAudit(w http.ResponseWriter, r *http.Request) {
 	f, ok := auditFilter(r)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid", "bad filter")
 		return
 	}
+	clk, ok := s.exportClock(w, r)
+	if !ok {
+		return
+	}
+	header := append([]string{}, auditColumns...)
+	if clk.jalali {
+		header = append(header, timeJalali)
+	}
 	s.streamCSV(w, r, csvExport{
-		name:   "audit-" + s.now().UTC().Format("20060102-1504") + ".csv",
+		name:   exportFileName("audit", clk, f.From, f.To, s.now()),
 		action: "export.audit",
 		query:  r.URL.Query(),
-		header: []string{"time_utc", "actor_telegram_id", "actor_username", "actor_role", "action", "entity", "entity_id",
-			"reason", "ip", "source", "before", "after", "entry_id"},
+		header: header,
 		each: func(ctx context.Context, row func(cells ...string) error) (bool, error) {
 			return s.cfg.Store.EachAudit(ctx, f, maxAuditCSVRows, func(a store.AuditRow) error {
 				entity := ""
@@ -137,10 +151,14 @@ func (s *Server) exportAudit(w http.ResponseWriter, r *http.Request) {
 				if a.ActorTelegramID != 0 {
 					tg = strconv.FormatInt(a.ActorTelegramID, 10)
 				}
-				return row(
-					a.CreatedAt.UTC().Format(time.RFC3339), tg, reportText(a.ActorUsername), reportText(a.ActorRole), reportText(a.Action),
-					reportText(a.Entity), reportText(entity), reportText(a.Reason), reportText(a.IP), reportText(a.Source),
-					reportText(string(a.Before)), reportText(string(a.After)), a.ID)
+				cells := []string{
+					clk.utc(a.CreatedAt), tg, textCell(a.ActorUsername), textCell(a.ActorRole), textCell(a.Action),
+					textCell(a.Entity), textCell(entity), textCell(a.Reason), textCell(a.IP), textCell(a.Source),
+					textCell(string(a.Before)), textCell(string(a.After)), a.ID, clk.local(a.CreatedAt), clk.zone}
+				if clk.jalali {
+					cells = append(cells, clk.jalaliTime(a.CreatedAt))
+				}
+				return row(cells...)
 			})
 		},
 		moreNote: moreEntriesNote(maxAuditCSVRows),

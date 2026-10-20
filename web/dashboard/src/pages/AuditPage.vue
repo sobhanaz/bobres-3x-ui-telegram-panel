@@ -13,6 +13,7 @@ import { useList } from '../composables/useList'
 import { api, query } from '../api'
 import { useAuth } from '../stores/auth'
 import { dateTime, type Lang } from '../format'
+import { csvCalendar } from '../reports'
 import { auditLink, entityIdLabel, type AuditLink } from '../staff'
 import type { AuditItem } from '../types'
 
@@ -71,7 +72,7 @@ const actionOptions = computed(() => {
   ]
 })
 const entityNames = [
-  'user', 'subscription', 'order', 'plan', 'payment_intent', 'discount', 'reseller', 'reseller_tier', 'ticket', 'canned_reply',
+  'user', 'subscription', 'order', 'plan', 'payment_intent', 'discount', 'gift_code', 'reseller', 'reseller_tier', 'ticket', 'canned_reply',
   'broadcast', 'settings', 'text', 'branding', 'server', 'gateway', 'staff', 'dashboard', 'tls',
 ]
 const entityLabel = (e: string) => (te('audit.entity.' + e) ? t('audit.entity.' + e) : e)
@@ -94,7 +95,8 @@ const periods = computed(() => [
   { label: t('ledger.period.week'), value: 'week' },
   { label: t('ledger.period.month'), value: 'month' },
 ])
-const csvHref = computed(() => '/api/v1/audit.csv' + query({ ...list.filters }))
+// The file adds a Jalali date column when the Reports page is set to that calendar.
+const csvHref = computed(() => '/api/v1/audit.csv' + query({ ...list.filters, calendar: csvCalendar(lang.value) }))
 
 // Where an entry's item lives in the dashboard, when the viewer may open it.
 function itemLink(e: AuditItem): AuditLink | null {

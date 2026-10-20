@@ -9,20 +9,48 @@ public release), v0.1.1, v0.2.0 (sales reports), v0.2.1 (the daily summary), v0.
 v0.4.0 (2026-10-17: Marzban panels, the subscription page, the Mini App, IDPay and NextPay, churn and Jalali reports,
 and the owner's tools), v0.5.0 (2026-10-20: several owners, a list of the payments to review, Marzban tested against
 a real panel), v0.6.0 (2026-10-20: the Mini App on by default with Stars, receipts, trial, invites, support and a
-reseller panel; reseller management; the 3x-ui group `bobres_bot`) and v0.6.1 (2026-10-20: the Mini App holds the
-store's required channel and takes a half-made manual payment up again).
+reseller panel; reseller management; the 3x-ui group `bobres_bot`), v0.6.1 (2026-10-20: the Mini App holds the
+store's required channel and takes a half-made manual payment up again) and v0.7.0 (2026-10-20: updating from the
+dashboard, the Reports calendar and the CSV files, maintenance mode in every option, and the growth features of the bot).
 
-## Where things stand (after v0.6.1)
+## Where things stand (after v0.7.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
 Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
-group). What is still open:
+group).
+
+Also built in v0.7.0, from the owner's requests of 2026-10-20: **updating from the dashboard** (System > Updates checks
+again for real, follows a stable or beta channel, and updates the server through a root helper on the host that runs the
+same signed `bobres update`; the first update to v0.7.0 itself is still made over SSH), the **Reports calendar** that
+converts every date and the reviewed **CSV files** ([14-reports.md](14-reports.md)), and **maintenance mode** that holds
+every option of the bot.
+
+Built in v0.7.0 (the owner picked them on 2026-10-20 from another store's bot, see
+[03-bot-ux.md](03-bot-ux.md)): the **Top users** board of the customers who invited the most people, with names and
+Telegram ids masked and an owner switch (`growth.leaderboard.enabled`); the account lines (Telegram id, number of
+services, join date) on the wallet screen; a **card to forward** in Invite friends; the commands `/new`, `/renew` and
+`/status` in the bot's command menu; and the **reseller application** (a button for customers, a ticket in a new
+"reseller" category, an alert to staff, the category in the dashboard's inbox and in the Mini App).
+
+What is still open:
 
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
   list: it is now tested against the real 0.8.4 image in CI; Marzban 1.0 is not supported yet.)
+- **Built after v0.7.0, in the next release:** the **two-column plan list** (the bot lists plans as a table of name and
+  price, or as a list, by `bot.plan_layout`), the **bulk purchase** (a home-menu button: N services of one plan paid
+  from the wallet in one transaction, all or nothing, one message with every link), **gift credit codes** (a code that
+  adds a fixed amount to a customer's wallet: made in the dashboard, shown once and kept only as a keyed hash, and
+  applied from the bot's wallet screen) and the **help center** (an owner-editable FAQ and usage tutorials in Persian
+  and English: the owner edits them on the Branding page's Help content tab, and the bot shows the FAQ under Support
+  and the tutorials from the home screen and the bottom menu, see [03-bot-ux.md](03-bot-ux.md); the Mini App does not
+  show them yet).
+- **Asked for on 2026-10-20, not in v0.7.0 (to come, in this order of size):** server monitoring in the dashboard (the
+  host, Docker, Kubernetes pods when there are any, services, CI/CD, alerts and logs, one overview); charts and a 3D
+  report view on the Reports page; a full uninstall on the server that leaves it as on day one; and downloading and
+  restoring a backup from the dashboard.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
-  (cashback, gift codes, a lottery or wheel, reseller targets); more bot languages (Arabic, Russian, Turkish); per-server
+  (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
   sign-in inside the bot; an Undo for the last change in the bot's admin menu.
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
@@ -145,7 +173,7 @@ item says where it landed.
 2. **Trust and first login: built, v0.4.0.** The owner's requests above (status screen, login at once with a password, `bobres check`, the default logo, the footer credit) and the bot's owner panel by buttons with every field explained (without the Undo).
 3. **More panels: Marzban built, v0.4.0; tested against the real 0.8.4 image in CI since.** A server has a kind, 3x-ui or Marzban; the adapter is checked against the real panel by the "Marzban integration" CI job (not a required check), which found and fixed six differences from the fake. Marzban 1.0 (beta) has another API and is not supported; flagging untested Marzban versions in the dashboard, as 3x-ui's are, is open. Then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
 4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
-5. **Growth tools: open.** Cashback, gift codes, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish).
+5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
 6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits are open.
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
 8. **Alongside:** the audit-log export is built (`audit.csv`). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), a Prometheus endpoint and an uptime page, two-factor sign-in inside the bot.

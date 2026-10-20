@@ -75,14 +75,18 @@ type ops struct {
 	// gatewayState is the state of the install's gateway container, "" when
 	// there is none (nil: caddyState, which asks Docker).
 	gatewayState func(ctx context.Context) string
-	// monitor puts the host monitoring units in place and takes them away
-	// (nil: the machine's systemd is left alone, as in tests).
-	monitor *monitorHost
+	// units looks at, and removes, the dashboard updater's systemd units (nil: not asked), and
+	// exe is the bobres they run (nil: this one).
+	units *systemUnits
+	exe   func() (string, error)
+	// monitorUnits looks at, and removes, the host collector's units (nil: not asked).
+	monitorUnits *systemUnits
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
 	return &ops{
 		in: in, out: out, errOut: errOut,
+		units: newSystemUnits(), monitorUnits: newSystemUnits(),
 		run: func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
 			cmd.Dir = dir
@@ -103,7 +107,6 @@ func newOps(in io.Reader, out, errOut io.Writer) *ops {
 		freeGB:  freeDiskGB,
 		sleep:   time.Sleep,
 		now:     time.Now,
-		monitor: newMonitorHost(),
 	}
 }
 
@@ -353,13 +356,6 @@ func (o *ops) uninstallCmd(args []string) int {
 		fmt.Fprintf(o.errOut, "error: docker compose down failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	// The collector has nothing to look at once the containers are gone, and its
-	// units point into the install directory.
-	if o.monitor != nil {
-		if _, err := o.monitor.removeUnits(ctx, *dir); err != nil {
-			fmt.Fprintf(o.errOut, "warning: the host monitoring units were not removed: %v\n", err)
-		}
-	}
 	if !*purge {
 		fmt.Fprintf(o.out, "Containers removed. Kept: the database and Redis volumes (%s_*), certificates, and %s (run `bobres install` to start again, or `bobres uninstall --purge` to delete everything).\n",
 			composeProject, *dir)
@@ -373,6 +369,17 @@ func (o *ops) uninstallCmd(args []string) int {
 	if err != nil {
 		fmt.Fprintf(o.errOut, "error: %v\nData of BOBRES is still on this server; %s is kept. Run `bobres uninstall --purge` again, or remove the volumes with docker volume rm.\n", err, *dir)
 		return 1
+	}
+	// The dashboard updater has nothing left to update, and the collector nothing left to look at.
+	if o.units != nil {
+		if res := o.units.uninstall(ctx); res.text != "" {
+			fmt.Fprintf(o.out, "Dashboard updater: %s.\n", res.text)
+		}
+	}
+	if o.monitorUnits != nil {
+		if res := o.monitorUnits.uninstallMonitor(ctx, *dir); res.text != "" {
+			fmt.Fprintf(o.out, "Host monitoring: %s.\n", res.text)
+		}
 	}
 	if err := os.RemoveAll(*dir); err != nil {
 		fmt.Fprintf(o.errOut, "error: remove %s: %v\n", *dir, err)

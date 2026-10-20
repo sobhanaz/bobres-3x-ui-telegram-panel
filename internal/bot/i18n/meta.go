@@ -116,10 +116,21 @@ var contexts = map[string]Context{
 	"admin.already_reviewed": CtxToastHTML,
 	"maintenance":            CtxToastHTML,
 	"join.not_yet":           CtxToast,
+	"join.not_yet_many":      CtxToast,
+	"join.unnamed":           CtxButtonHTML, // a chat with no name, in a button and in the popup that lists what is missing
 	"support.closed":         CtxToast,
 	"rs.forbidden":           CtxToastHTML,
 	"rs.label_removed":       CtxToast,
 	"wallet.debt":            CtxButtonHTML,
+
+	// The two buttons of the plan table's header, and the bulk purchase's
+	// popups and the caption of the file with every link.
+	"plans.head_name":    CtxButton,
+	"plans.head_price":   CtxButton,
+	"bulk.price_changed": CtxToastHTML,
+	"bulk.unavailable":   CtxToastHTML,
+	"bulk.bad_quantity":  CtxToastHTML, // a popup, or the answer to a number that will not do
+	"bulk.file_caption":  CtxPlain,
 
 	// A reseller's management of their services: the popups, and the words
 	// used on buttons and inside lines.
@@ -143,6 +154,14 @@ var contexts = map[string]Context{
 	"pay.receipt_caption": CtxPlain,
 	"ref.share_text":      CtxPlain,
 	"paysupport.in_bot":   CtxPlain,
+
+	// The Top users board and the invite promo card: the viewer's own count on
+	// a button, the popup when the board is off, and the label of the invite
+	// link in the card (a link's text: plain, safe inside HTML).
+	"ref.top_mine":        CtxButton,
+	"ref.top_off":         CtxToastHTML,
+	"ref.promo_link":      CtxButtonHTML,
+	"rs.apply_already":    CtxToastHTML,
 	"admin.status_reason": CtxInternal,
 	// A backup file's caption is sent without a parse mode.
 	"backup.caption": CtxPlain,
@@ -169,6 +188,8 @@ var contexts = map[string]Context{
 // navigation, lists to choose from, links to read.
 var buttonStyles = map[string]string{
 	"btn.buy":               "success",
+	"btn.bulk":              "success",
+	"btn.bulk_pay":          "success",
 	"btn.trial":             "success",
 	"btn.pay_wallet":        "success",
 	"btn.pay_credit":        "success",
@@ -188,25 +209,30 @@ var buttonStyles = map[string]string{
 	"btn.join_check":        "success",
 	"btn.rs_resume":         "success",
 
-	"btn.services":      "primary",
-	"btn.wallet":        "primary",
-	"btn.support":       "primary",
-	"btn.renew":         "primary",
-	"btn.add_traffic":   "primary",
-	"btn.topup":         "primary",
-	"btn.topup_and_buy": "primary",
-	"btn.check_payment": "primary",
-	"btn.try_again":     "primary",
-	"btn.rs_buy":        "primary",
-	"btn.adm_pending":   "primary",
-	"btn.store":         "primary",
-	"btn.review_now":    "primary",
-	"btn.ticket_more":   "primary",
-	"btn.ticket_reply":  "primary",
-	"btn.share":         "primary",
-	"btn.join_channel":  "primary",
-	"btn.invite":        "primary",
-	"btn.reseller":      "primary",
+	"btn.services":       "primary",
+	"btn.wallet":         "primary",
+	"btn.support":        "primary",
+	"btn.renew":          "primary",
+	"btn.add_traffic":    "primary",
+	"btn.topup":          "primary",
+	"btn.topup_and_buy":  "primary",
+	"btn.check_payment":  "primary",
+	"btn.try_again":      "primary",
+	"btn.rs_buy":         "primary",
+	"btn.adm_pending":    "primary",
+	"btn.store":          "primary",
+	"btn.review_now":     "primary",
+	"btn.ticket_more":    "primary",
+	"btn.ticket_reply":   "primary",
+	"btn.share":          "primary",
+	"btn.join_channel":   "primary",
+	"btn.join_chat":      "primary",
+	"btn.invite":         "primary",
+	"btn.reseller":       "primary",
+	"btn.top_users":      "primary",
+	"btn.reseller_apply": "primary",
+	"btn.tutorials":      "primary",
+	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
 
 	"btn.cancel":          "danger",
 	"btn.reject":          "danger",
@@ -230,6 +256,7 @@ var contextPrefixes = map[string]Context{
 	"btn.":            CtxButton,
 	"sub.status.":     CtxButtonHTML,
 	"discount.bad.":   CtxToastHTML,
+	"gift.bad.":       CtxToastHTML,
 	"support.status.": CtxButtonHTML,
 	"support.cat.":    CtxButtonHTML,
 	"profile.cmd.":    CtxCommand,
@@ -252,6 +279,10 @@ var markupArgs = map[string][]string{
 	"pay.check_failed":     {"reason"},
 	"rs.panel":             {"balances"},
 	"rs.customers_title":   {"lines"},
+	"ref.top_screen":       {"entries", "range"}, // rendered texts: the places, and the ranks of a page
+	"ref.top_entry":        {"you"},              // a rendered text
+	"ref.promo":            {"link"},             // the invite link as a text link (<a>)
+	"bulk.checkout":        {"names"},
 	"alert.critical":       {"title"},
 	"alert.warning":        {"title"},
 	"alert.repeat":         {"title"},
@@ -278,7 +309,7 @@ func groupOf(key string) string {
 		return "sub"
 	case "plans":
 		return "plan"
-	case "backup", "alert", "report": // sent to staff only, beside the admin alerts
+	case "backup", "alert", "report", "update": // sent to staff only, beside the admin alerts
 		return "admin"
 	}
 	return first

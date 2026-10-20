@@ -16,13 +16,14 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | order.created.v1 | core | payments | Order awaiting payment |
 | payment.succeeded.v1 | payments | core | Money confirmed |
 | payment.failed.v1 / payment.expired.v1 | payments | core, notifier | Payment did not complete |
-| order.paid.v1 | core | provisioner, notifier, sales reports | Provision the service. `{order_id, user_id, telegram_id, plan_id, amount, currency, source, provider}`: `source` is wallet, manual, gateway, trial or free; `provider` (optional, additive) is the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, ...), absent for wallet, trial and free orders and for events from before it was recorded |
+| order.paid.v1 | core | provisioner, notifier, sales reports | Provision the service. `{order_id, user_id, telegram_id, plan_id, amount, currency, source, provider}`: `source` is wallet, manual, gateway, trial or free; `provider` (optional, additive) is the payments provider that took the money (`zarinpal`, `stars`, `usdt_trc20_auto`, `manual_card`, ...), absent for wallet, trial and free orders and for events from before it was recorded `bulk_id`, `bulk_index` and `bulk_quantity` (optional, additive) are set when the order is one of a bulk purchase: the bulk, its place in it (from 1) and how many orders it has; the bot tells the staff about such a sale once, with the first order |
 | subscription.provision_requested.v1 | core | provisioner | Create/renew/reset command |
-| subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links |
-| subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention |
+| subscription.provisioned.v1 | provisioner | core, notifier | Service ready, carries links. `bulk_id` (optional, additive) is set while the service belongs to a bulk purchase whose one message is still to come: the bot sends nothing for it on its own. A service that is ready after that message carries none |
+| subscription.provision_failed.v1 | provisioner | core, notifier(admin) | Needs retry/attention. `bulk_id` (optional, additive) names the bulk the order belongs to: the staff are alerted as for any order, the customer is told by the bulk's own message |
+| order.bulk_ready.v1 | core (the provisioning worker's loop) | notifier | Every order of a bulk purchase is delivered, or has failed 3 times and is retried in the background. `{bulk_id, user_id, telegram_id, plan_id, quantity, ready_orders (the delivered orders, in their order in the bulk), delayed (the others still retried), amount (the whole bulk), currency}`. Announced once per bulk (`core.bulk_orders.delivered_at`, set in the same transaction); a bulk with nothing left to tell (every order refunded) is closed without an event. The bot asks `GetBulkOrder` and sends the links of `ready_orders` in one message (a few, with a text file, when it would be too long) and says which services are still being prepared |
 | subscription.usage_updated.v1 | provisioner | core | Traffic/expiry sync from 3x-ui |
 | subscription.expiring.v1 / expired.v1 | core(scheduler) | notifier | Reminder triggers |
-| wallet.credited.v1 / debited.v1 | core | notifier | Balance change. Reasons on credited: topup, order_not_payable, admin_adjust, referral, refund, commission (a reseller's commission on a customer's order; never name the customer), settlement (staff recorded a reseller's payment) |
+| wallet.credited.v1 / debited.v1 | core | notifier | Balance change. Reasons on credited: topup, order_not_payable, admin_adjust, referral, refund, commission (a reseller's commission on a customer's order; never name the customer), settlement (staff recorded a reseller's payment), gift_code (the customer applied a gift code: the bot answers in the same chat, so the notifier sends no second message) |
 | refund.requested.v1 / completed.v1 | core | payments | Refund flow |
 | ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | subscription.provisioned.v1 / extended.v1 / reminder.v1 `label` | core | notifier | The name a reseller gave the service (empty for customers), for the bot's texts |
@@ -30,6 +31,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | report.daily_summary.v1 | core (daily summary worker) | notifier(staff) | Yesterday's sales (one store-local day) for **one** staff member who holds `reports.read` and has a Telegram account; core writes one event per such member, in the transaction that claims the day (`core.daily_summary_claims`), so each recipient's blocking, refusal or failure is their own (a blocked bot is skipped; a refusal no retry changes, a 4xx other than a blocked bot, a flood limit or a refused token, is dead-lettered at once; any other failure is retried, and since a feed is applied in order the events behind it wait for it until it is sent or dead-lettered), and a member who lost the permission before the claim gets none (the bot also drops the event when it knows the person is no longer an owner or admin, and when it is sent more than a day after it was queued). Queued exactly once, delivered at least once. Only when the store turned `reports.daily_summary` on. `{telegram_id, language (fa\|en, the member's own), date ("2026-10-13"), zone (IANA), new_customers, trials, currencies: [{currency, revenue, prev_revenue (the day before, for the comparison), orders, new_orders, renewals, traffic_topups, refunds: {count, amount}, net, topups: {count, amount}, rejected: {count, amount} (by staff), gateway_failed: {count, amount}}]}`. Amounts are integers in the currency's smallest unit and are never added across currencies; `currencies` lists only those with something to report (none: a quiet day, which the bot says in one line). No names, customers, plans or order ids ([14-reports.md](14-reports.md#the-daily-summary-in-telegram)) |
 | system.alert.v1 | core (watchdog) | notifier(staff alerts) | A check went wrong (`state: problem`), was fixed (`resolved`, once it has passed for 5 minutes), or is still wrong after 6 h and then every 24 h (`problem`, `repeat: true`; the notice `license.limit` is sent at most every 24 h, has no 6-hour reminder and no `resolved`); a check back within 30 minutes of its fix is announced only if it still fails then. `{key, severity: critical\|warning, state, title_key (the bot's alert.* text), args (strings: count, days, hours, minutes, limit are numbers, free is bytes, date is unix seconds, the rest names; name of `license.limit` is the limited thing, `active_services`), detail, since, at (for resolved: when it first passed again)}`. Sent to `notify.recipients` (never support staff) unless `notify.system_alerts` is false |
+| system.update.v1 | core | notifier(owners) | An update asked for in the dashboard (System > Updates > Update now) or its end, one event per owner with a Telegram account, written in the transaction that records the request or its end. `{telegram_id, language, state: requested\|done\|failed\|rolled_back\|not_started, from, to, channel, by, at (unix seconds), message?}`; `message` is the updater's own short sentence for an end that is not `done` (outside text: the bot escapes it) |
 | sales.daily_summary.v1 | core (daily-summary worker) | notifier(staff alerts) | Yesterday's sales, once a day after `notify.daily_summary_hour` when `notify.daily_summary` is on ([14-reports.md](14-reports.md)). `{date (the local day), tz, new_customers, trials, currencies: [{currency, revenue, net, orders, new_orders, renewals, refunds (count), refund_amount, topups (count), topup_amount}]}`, money in minor units, one entry per currency, never added together; an empty day has no currencies. Sent to `notify.recipients` (never support staff) |
 
 ## Purchase saga (happy path)
@@ -39,6 +41,31 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 
 ## gRPC APIs (sketch)
 - core: `GetUser`, `UpsertUser`, `ListPlans`, `CreateOrder`, `ApplyDiscount`, `GetWallet`, `CreditWallet`, `DebitWallet`, `ListSubscriptions`, `OpenTicket`, entitlement checks `HasFeature`.
+- core, gift codes (additive; `buf breaking` stays clean): `RedeemGiftCode(user_id, code, idempotency_key)`, called by the
+  bot only. Everything a customer can get wrong is an **outcome** of the answer, not an error: `REDEEMED` (with
+  `credited`, `balance` and `replayed`), `INVALID` (unknown, switched off, expired or not a code: one answer for all, so
+  nothing tells a guesser which codes exist), `USED_UP` and `ALREADY_REDEEMED` (told only to someone who sent the whole
+  code; the customer's own count is checked first), `LOCKED` (`retry_after_seconds`) and `OFF` (the owner's switch
+  `gift_codes.enabled`, or no master key). Errors stay for a broken request, a banned customer (PERMISSION_DENIED) and
+  a key that already redeemed another code (`idempotency conflict`). It is one transaction that locks the code's row,
+  checks it, credits the wallet (ledger kind `gift_code`, key `gift:<code id>:<user id>:<n>`), records the redemption,
+  counts it, writes the audit entry `gift_code.redeem` and the `wallet.credited.v1` event (reason `gift_code`). Sent
+  again with the same `idempotency_key` it credits nothing more and answers the same with `replayed`. Five wrong codes
+  in an hour close entering codes for an hour (`gift_code.lock` in the audit log); a code is never logged or audited,
+  only its last four characters.
+- core, bulk purchase (built 2026-10-20, additive; [03-bot-ux.md](03-bot-ux.md), "Bulk purchase"): `QuoteBulkOrder`
+  (user, plan, quantity: the unit price, the total and the most the store allows now; it fails as `CreateBulkOrder` would for what
+  can be known beforehand, the license's places included), `CreateBulkOrder` (user, plan, quantity, `idempotency_key`,
+  optional `label_prefix` and `expected_total`) and `GetBulkOrder` (bulk id, optional user id: the buyer's own bulk or
+  NOT_FOUND). `CreateBulkOrder` makes N ordinary orders and pays each from the wallet in ONE transaction (all or nothing,
+  audited as `order.bulk` made in the bot) and answers the `BulkOrder` with a `BulkService` per order (order status, then
+  service id, status, name and link once delivered); a repeat with the same key answers the first purchase with
+  `replayed = true` and charges nothing. Errors: FAILED_PRECONDITION with "insufficient" (the wallet, or a reseller's balance plus
+  credit limit, cannot pay for all), "price changed" (`expected_total` is not what the price came to), "turned off"
+  (`bulk.enabled` is false), the neutral "new purchases are paused" (the license's limit for N services at once, or a reseller
+  without the feature) or "plan unavailable" (a free, switched-off or trial plan); INVALID_ARGUMENT for a quantity outside 2 to
+  `bulk.max_quantity`, a name too long for "<name> <n>" or a missing key; PERMISSION_DENIED for a banned buyer;
+  ALREADY_EXISTS when the key belongs to another purchase; NOT_FOUND for an unknown plan, buyer or bulk.
 - core, resellers (milestone 5, built): `ListPlans.user_id` answers that user's price (a reseller's tier price) with the
   store price in `Plan.list_price`; `CreateOrder.label` and `Subscription.label`; `ListSubscriptions` pages (at most 50,
   `page_info.total`) and searches (`query`: label or id suffix) when asked, else the newest 100 as before;
@@ -62,6 +89,35 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   reseller after `resellers` left the license ("domain: forbidden") and a banned one ("user is banned"); NOT_FOUND for
   an unknown user or a service that is not theirs; INVALID_ARGUMENT for an unknown status or a note or search that is
   too long. Over the Mini App the same functions answer `/api/mini/v1/reseller/...` ([17-mini-app.md](17-mini-app.md)).
+- core, growth tools (built after v0.6.1, additive; the proto stays compatible): `GetTopInviters` (a page of the board of
+  the customers who invited the most people: request `user_id` (the viewer), `page` from 1, `page_size` (0 = 5, at most 10);
+  answer `enabled` (false while `referral.reward_percent` is 0 or `growth.leaderboard.enabled` is false, nothing else
+  set), `entries` of `{rank, name, telegram_id, invited, you}`, `page`, `page_size`, `total` (at most 50), `more`,
+  `your_invited` (every user who joined through the viewer's link, as `GetReferralInfo.invited`) and `your_rank` (0: not on
+  the board); NOT_FOUND for an unknown user). Core masks `name` and `telegram_id` itself (the first and last three
+  characters around `***`; at least three always hidden; `***` for no username), so no answer holds a whole one. Only
+  active users with the plain `user` role are ranked, a tie goes to whoever joined first, and the board is kept for 30
+  seconds (`domain.Config.LeaderboardTTL`). `Settings.resellers_enabled` is true while the license in effect includes
+  resellers (a license, its grace, the trial; the free tier does not), for the bot's Become a reseller button; an older
+  core never sets it, so the button stays hidden. `AddTicketMessage` with `category` `reseller` files a reseller
+  application: a new ticket only (never an answer in another: `ticket_id` or `reply_to_tg_message_id` is INVALID_ARGUMENT),
+  from an active customer (a reseller, staff: FAILED_PRECONDITION "only a customer can apply to become a reseller"; banned:
+  PERMISSION_DENIED), while resellers are in the license (FAILED_PRECONDITION, the staff-facing refusal), and with no other
+  ticket open (FAILED_PRECONDITION "a reseller application is open already" or "another support conversation is open": the
+  bot reads them). `Ticket.category` can be `reseller`; the topics a customer picks from stay payment, service and other
+  (`domain.SupportCategories`, which is also what the Mini App lists).
+- core, required chats (built, additive; the proto stays compatible): `Settings.join_chats` (field 8, `repeated JoinChat
+  {chat, link, label}`) are the **extra** channels and groups customers must join, after the first one (the settings
+  `join.channel`, `join.link` and the new `join.label`, which stay in `Settings.values`), in the order they are asked and
+  already limited to what the license in effect allows (`max_join_chats`: the free tier and Standard 1, so none here;
+  Pro and the trial any number). It is empty while `join.channel` is empty (the requirement is off) and for an older
+  core; an older bot ignores it and holds customers to the first chat only. `AdminSetSetting` takes `join.label` like
+  the other settings. The extras are saved by the dashboard (`GET` and `PUT /api/v1/join-chats`, [04-dashboard.md](04-dashboard.md))
+  and live in the `core.join_chats` table (migration 00029); nothing else of the bot-core contract changed, and the
+  bot's `POST /internal/miniapp/channel-member` and `GET /internal/channel-check` take any channel or group, a call each
+  ([17-mini-app.md](17-mini-app.md)). The channel check accepts a group or supergroup as well as a channel. The
+  license's token has a new field `max_join_chats` ([05-license.md](05-license.md)), and `GET /api/v1/license` lists
+  it among the entitlements with the chats saved as its use.
 - core, payment method switches (milestone 6a, built): `ListPaymentMethods` leaves out Telegram Stars while
   `payments.stars.enabled` is false, and `CreatePaymentIntent` refuses (FAILED_PRECONDITION `this payment method is
   turned off`) a manual method or Stars whose `payments.<method>.enabled` is false. Unset counts as on. Payments
@@ -71,6 +127,14 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   `GetBotPhoto` returns `{version, jpeg}` (a square JPEG of at most 3 MB) or NOT_FOUND. The bot reads the version
   with every settings refresh and fetches the photo only when it changes. An older core sends no version and
   answers UNIMPLEMENTED; an older bot ignores the field.
+- core, help content (built, additive): `ListHelpEntries(user_id, kind, language)` returns the enabled FAQ questions or
+  tutorials in the owner's order, each in the customer's language (the other one where that translation is missing,
+  `HelpEntry.language` says which), and `GetHelpEntry(user_id, id, language)` one of them; a banned customer is
+  PERMISSION_DENIED, an unknown one NOT_FOUND, and an entry that is gone or switched off NOT_FOUND. Titles are plain
+  text, bodies Telegram's HTML subset checked by core, tutorial buttons https only. `Settings.help_faq` and
+  `help_tutorials` say whether there is anything to show (false from an older core, which answers UNIMPLEMENTED: the
+  bot then shows no help buttons). The owner writes the entries over the dashboard's `/api/v1/help` endpoints
+  ([04-dashboard.md](04-dashboard.md)); each change is audited and tells the bot to reload its settings.
 - payments: `CreateIntent`, `GetIntent`, `SubmitReceipt`, `ReviewReceipt`, `ListProviders`; HTTP webhooks per provider behind the gateway.
 - payments, gateway settings (milestone 6a, built; core's token only): `ListGatewayConfigs` (provider, enabled,
   configured, offered, sandbox, merchant_hint = last 4, proxy_set, key_missing, from_env, problem, updated_at/by;
@@ -144,6 +208,13 @@ existed.
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".
   P8 adds the HTTPS manager's `/api/v1/system/tls` (below).
+  Gift codes (discounts.write): `GET /api/v1/gift-codes?status=&q=&page=&size=` (newest first; besides the page it says
+  `enabled`, the owner's switch, and `available`, whether core has the master key to make codes), `POST /api/v1/gift-codes`
+  (`{code}` for one code of the owner's own words, or `{count, prefix}` for a batch of generated ones, with
+  `{amount, currency, max_redemptions, per_customer_limit, expires_at, note}`; the answer holds the codes and is the
+  only place they can ever be read), `GET /api/v1/gift-codes.csv`, `PUT /api/v1/gift-codes/{id}/enabled` (nothing paid is
+  taken back), `GET /api/v1/gift-codes/{id}/redemptions` and `.../redemptions.csv`. Audit actions: `gift_code.create`,
+  `gift_code.enable`, `gift_code.disable`, `gift_code.redeem`, `gift_code.lock`, and the CSV exports like the other exports.
 
 ## HTTPS manager (P8)
 Core never writes Caddy's files or reaches its admin socket. It asks the `tls-agent` (no network) through two small
@@ -188,6 +259,71 @@ The bot's `GET /internal/public-ip` (core's service token) tells core this serve
 no internet access: the bot asks `https://api.ipify.org`, then `https://ifconfig.me/ip` (5 seconds each, no redirects,
 no proxy), accepts only a 200 answer of at most 64 bytes that is a public IP address, and answers `{"ip": "..."}`.
 Core's `POST /api/v1/system/tls/detect-ip` and the Detect button of the dashboard's HTTPS tab use it.
+
+## Updating from the dashboard
+Core never holds the Docker socket. System > Updates asks the server's updater (a root systemd path unit on the host,
+`bobres-updater.path`, that runs `bobres update --from-request`) through one folder, `<install>/run/update` on the host,
+which core sees as `/run/bobres-update` (`BOBRES_UPDATE_DIR`). Protocol version 1:
+
+| File | core | updater | Content |
+|---|---|---|---|
+| `request.json` | writes (a `.request.json.tmp` file, then a rename; mode 0640; never through a link) | reads, runs, removes | `{v: 1, id, action: "update", channel: stable\|beta, version, by, at}`, one line of at most 2048 bytes |
+| `status.json` | reads (no link followed, at most 64 KB, every field cut and checked) | writes (atomic) | `{v: 1, installed, helper, state: idle\|running\|done\|failed\|rolled_back, id, from, to, channel, step: verify\|backup\|pull\|restart\|health\|rollback\|done, message, started_at, finished_at, log[]}` |
+
+- `id` is a lower-case UUID (core uses version 7); `version` is "" for the newest of the channel, else a release number
+  `X.Y.Z` or `X.Y.Z-label.N` (at most 64 characters, no leading `v`; core always names the exact release the owner
+  confirmed, never "", so a release that appears meanwhile is not installed unasked); `by` is the dashboard user, one line of at most 64
+  characters; `at` is RFC 3339 in UTC. The updater accepts a request only from the owner uid 65532, up to 15 minutes old
+  and no more than a minute in the future, and runs an id once. It verifies the release's signature itself: nothing in
+  the request is trusted.
+- Core keeps one row per request (`core.system_updates`, migration 00025) written before the file, so no request exists
+  without its row, audit entry (`system.update.requested`, and `system.update.done|failed|rolled_back|not_started` at the
+  end) and `system.update.v1` notices. At most one update is open at a time. It ends the row exactly once, when the
+  updater's status for that id says so, or as `not_started` when the updater never picked the request up. Core itself
+  restarts in the middle of an update, so the end is found again from the database and the file after the restart.
+  A status that says `running` but that the updater has not written for 10 minutes is an update that was cut off (the
+  server lost power, the helper was killed): core ends it as `failed`, tells the owners, and lets another be asked for.
+- Dashboard API (`/api/v1/system/updates...`; 503 `not_configured` when core has no update service):
+  - `GET /system/updates` (system.read): `{version, check, channel, helper, run, last, apply}`: the bot's last check
+    (with `prerelease` and `notes_url` that core builds), the channel (`setting`, `effective`, `source`), the updater
+    (`available` or the `problem`: `no_dir`, `no_status`, `not_installed`, `bad_status`, `unsupported`), the open update
+    and the last ended one, and whether an update would be accepted now (`apply.ready`, else `apply.reason`). The
+    updater's log lines go to the owner only.
+  - `GET /system/updates/progress` (system.read): `{version, helper, run, last}` only, from the folder and the database
+    (the bot is not asked), polled while an update runs and while core restarts.
+  - `POST /system/updates/check` (system.write, 10 a minute): the bot reloads its settings, looks at GitHub now and
+    answers; the state comes back with the fresh check (a failed look says why in `check.error` and `check.detail`).
+  - `PUT /system/updates/channel` `{channel}` (system.write): `stable`, `beta`, or "" for the server's setting; a change
+    makes the bot look again at once.
+  - `POST /system/updates/apply` `{version, channel, confirm, accept_prerelease, code}` (system.write, 10 a minute, CSRF):
+    nothing happens unless `confirm` is true and `version` is the release the page showed (the newest the bot has
+    verified). Answers 202 with the progress state, or `{error, code, message}`: 400 `invalid` (`confirm_required`,
+    `prerelease_unconfirmed`), 403 `code_required` and 400 `code_wrong` (the authenticator step-up), 409 `state`
+    (`helper_missing`, `already_running`, `no_release`, `not_newer`, `version_changed`, `channel_changed`, `dev_build`),
+    503 `unavailable` (`check_unavailable`, `request_failed`).
+- The bot's `POST /internal/update-check/refresh` (core's service token) reloads its settings, looks now and answers
+  with the check as `GET /internal/update-check` does; core waits at most 25 seconds.
+
+## Dashboard updates: the server's updater
+Core cannot update the store itself (no Docker socket, no internet access). The dashboard's Updates tab asks a helper
+on the host through one host directory, `<install dir>/run/update` (core sees it as `/run/bobres-update`, read-write;
+owner uid 65532, mode 0700, the only part of the host core can write; `deploy/docker-compose.yml`), and two small files
+in it, protocol version 1 (06-installer.md, "Updating from the dashboard", has the rules; 07-security.md the threat model):
+
+| File | Written by | Content |
+|---|---|---|
+| `request.json` | core: a temp file in the same folder, then a rename; at most 2 KiB | `{"v":1,"id":"<uuid>","action":"update","channel":"stable"\|"beta","version":"","by":"<user, 1-64 chars>","at":"<RFC 3339>"}`; `version` is `""` (the newest verified release of the channel) or `X.Y.Z` / `X.Y.Z-label.N`; no other field is accepted; `at` within 15 minutes before and a minute after the server's clock; an id already handled is ignored |
+| `status.json` | the helper (`bobres update --from-request`, run by `bobres-updater.service` when `bobres-updater.path` sees the request): a temp file, then a rename; root's, mode 0644 | `{"v":1,"installed":true,"helper":"0.7.0","state":"idle"\|"running"\|"done"\|"failed"\|"rolled_back","id":"","from":"0.6.1","to":"0.7.0","channel":"stable","step":"verify"\|"backup"\|"pull"\|"restart"\|"health"\|"rollback"\|"done","message":"one short sentence","started_at":null,"finished_at":null,"log":[]}` |
+
+- The helper deletes `request.json` as soon as it has read it, whatever it held, and answers under the request's `id`
+  (an `id` that could not be read is answered as `""`). `installed: true` is how core knows the helper exists; no
+  `status.json` means it is not installed (yet), `installed: false` that the owner switched it off. `started_at` and
+  `finished_at` are RFC 3339 times in UTC, `null` while unknown; `log` has at most 40 lines, secrets scrubbed. While an
+  update runs the file is rewritten at least every 30 seconds.
+- Core starts no request while `state` is `running` (it answers `already_running` itself, see "Updating from the
+  dashboard" above); the helper itself refuses (as `failed`) a request that comes while another update, rollback or
+  restore holds the install lock. A `running` status that has not been rewritten for 10 minutes (the heartbeat is
+  30 seconds) belongs to an update that was cut off, a power cut or a killed helper: core reads it as `failed`.
 
 ## Open points
 - DECIDED (2026-10-03): outbox + gRPC pull feed with per-consumer cursors (replaces LISTEN/NOTIFY); NATS only if load requires it.

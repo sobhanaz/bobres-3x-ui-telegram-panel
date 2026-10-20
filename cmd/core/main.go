@@ -29,6 +29,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/sysupdate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/web/dashboard"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/web/miniapp"
@@ -136,7 +137,14 @@ func setup(rt *app.Runtime) error {
 	rt.OnClose(st.Close)
 	rt.Health.AddCheck("db", func(c context.Context) error { return st.DB().Ping(c) })
 
-	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, Timezone: cfg.Timezone, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}})
+	// Core's master key seals the dashboard's authenticator secrets and the
+	// private key of the store's own HTTPS certificate, and keys the hashes
+	// gift codes are stored as.
+	secrets, err := masterKey(cfg)
+	if err != nil {
+		return fmt.Errorf("master key: %w", err)
+	}
+	dom := domain.New(st, domain.Config{OwnerTelegramIDs: cfg.AdminTelegramIDs, Timezone: cfg.Timezone, License: domain.LicenseConfig{Domain: cfg.Domain, SellerContact: cfg.SellerContact}, Secrets: secrets})
 	// A new owner set with bobres menu gets the role now, not at their next /start.
 	if err := dom.EnsureOwner(rt.Ctx); err != nil {
 		rt.Log.Warn("owner role", "err", err)
@@ -148,14 +156,17 @@ func setup(rt *app.Runtime) error {
 	} else if applied {
 		rt.Log.Info("default bot photo set (replace it in the dashboard: Branding)")
 	}
-	// Core's master key seals the dashboard's authenticator secrets and the
-	// private key of the store's own HTTPS certificate.
-	secrets, err := masterKey(cfg)
-	if err != nil {
-		return fmt.Errorf("master key: %w", err)
+	// A new store (or an update that brings this feature) gets a generic FAQ and
+	// the tutorials for the VPN apps, once, for the owner to edit or switch off in
+	// the dashboard (Branding, Help content); what the owner changes or deletes
+	// is never put back.
+	if applied, err := dom.EnsureDefaultHelp(rt.Ctx); err != nil {
+		rt.Log.Warn("default help content", "err", err)
+	} else if applied {
+		rt.Log.Info("default FAQ and tutorials added (edit them in the dashboard: Branding, Help content)")
 	}
 	if secrets == nil {
-		rt.Log.Warn("no master key: dashboard password logins and your own HTTPS certificate are off (login links from the bot still work)")
+		rt.Log.Warn("no master key: dashboard password logins, your own HTTPS certificate and gift codes are off (login links from the bot still work)")
 	}
 
 	// HTTPS: core asks the tls-agent (its own service, the only one that
@@ -205,12 +216,13 @@ func setup(rt *app.Runtime) error {
 		miniAuth web.MiniAppVerifier
 		miniBot  web.MiniAppBot
 		miniJoin web.MiniAppMembers
+		releases domain.UpdateSource
 	)
 	// The System page's logs tab: core reads its own buffer, asks the others.
 	logs := map[string]web.LogSource{"payments": pay, "provisioner": prov}
 	if cfg.BotURL != "" {
 		peer := botfiles.New(cfg.BotURL, cfg.BotInternalToken)
-		files, bot, licSrv, publicIP, miniAuth, miniBot, miniJoin = peer, peer, peer, peer, peer, peer, peer
+		files, bot, licSrv, publicIP, miniAuth, miniBot, miniJoin, releases = peer, peer, peer, peer, peer, peer, peer, peer
 		logs["bot"] = peer
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
@@ -235,8 +247,17 @@ func setup(rt *app.Runtime) error {
 	default:
 		backups = backupclient.New(cfg.BackupURL, cfg.BackupToken)
 	}
+	// "Update now" (System > Updates): the bot, which has internet access,
+	// finds and verifies the newest release; the request goes to the server's
+	// updater (a root service on the host that runs the same verified `bobres
+	// update`) through the folder core shares with it (BOBRES_UPDATE_DIR); core
+	// holds no Docker socket and no power over the host. The worker ends an open
+	// update when the updater says it is over, also after core has been
+	// restarted by it, and tells every owner on Telegram.
+	updates := dom.NewUpdates(domain.UpdatesConfig{Source: releases, Helper: sysupdate.NewDir(cfg.UpdateDir), Log: rt.Log})
+	rt.Go("updates", updates.Run)
 	web.New(web.Config{Store: st, Domain: dom, Payments: pay, Provisioner: prov, Servers: prov, Gateways: pay,
-		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups,
+		Env: cfg.Env, Secrets: secrets, Files: files, Bot: bot, System: system, Logs: logs, Backups: backups, Updates: updates,
 		LicenseServer: licSrv, TLS: tlsMgr, PublicIP: publicIP, Dashboard: dashboard.Handler(), MiniApp: miniapp.Handler(), MiniAppVerify: miniAuth, MiniAppBot: miniBot, MiniAppMembers: miniJoin, Log: rt.Log}).Register(rt.Mux)
 	// An activated license is renewed once a day through the bot (core has
 	// no internet access); a pasted or imported one is left alone.

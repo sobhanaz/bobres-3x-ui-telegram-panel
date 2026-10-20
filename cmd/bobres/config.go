@@ -30,6 +30,9 @@ type configKey struct {
 	lower bool
 	help  string
 	check func(v string) error
+	// apply, when set, puts the new value into effect on the host instead of recreating
+	// containers (it gets the install's new .env); its result is the command's exit code.
+	apply func(o *ops, dir string, env map[string]string) int
 }
 
 // logServices are the services that read the log settings.
@@ -68,6 +71,10 @@ var configKeys = []configKey{
 		help: "https://host registered with Zarinpal for the pay page (empty: https://<domain>)"},
 	{name: "BOBRES_UPDATE_CHANNEL", services: []string{"bot"}, lower: true,
 		help: "stable or beta: which releases the update check and bobres update offer", check: oneOf("stable", "beta")},
+	{name: dashboardUpdatesKey, lower: true, check: oneOf("on", "off"), apply: applyDashboardUpdates,
+		help: "on or off: whether the dashboard (System > Updates) may update this server through the bobres-updater helper; off removes the helper"},
+	{name: monitorCollectorKey, lower: true, check: oneOf("on", "off"), apply: applyMonitorCollector,
+		help: "on or off: whether the host collector (bobres-monitor.timer) takes a snapshot of this server every 30 seconds for the dashboard's Monitoring section; off removes it"},
 	{name: "BOBRES_LICENSE_SERVER", services: []string{"bot"}, optional: true,
 		help: "the vendor's license server, https://... (empty: no online activation or refresh)",
 		check: func(v string) error {
@@ -366,6 +373,9 @@ func (o *ops) configSet(dir, name, value string, noRestart bool) int {
 		fmt.Fprintln(o.out, "A certificate of your own must cover the new domain, or HTTPS falls back to the automatic one (bobres ssl status).")
 	}
 
+	if key.apply != nil {
+		return key.apply(o, dir, next)
+	}
 	services := installedOnly(dir, key.services, next)
 	switch {
 	case len(services) == 0:

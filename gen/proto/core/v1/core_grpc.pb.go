@@ -50,7 +50,11 @@ const (
 	CoreService_AdminUpsertPlan_FullMethodName           = "/core.v1.CoreService/AdminUpsertPlan"
 	CoreService_AdminSetSetting_FullMethodName           = "/core.v1.CoreService/AdminSetSetting"
 	CoreService_QuoteOrder_FullMethodName                = "/core.v1.CoreService/QuoteOrder"
+	CoreService_QuoteBulkOrder_FullMethodName            = "/core.v1.CoreService/QuoteBulkOrder"
+	CoreService_CreateBulkOrder_FullMethodName           = "/core.v1.CoreService/CreateBulkOrder"
+	CoreService_GetBulkOrder_FullMethodName              = "/core.v1.CoreService/GetBulkOrder"
 	CoreService_GetReferralInfo_FullMethodName           = "/core.v1.CoreService/GetReferralInfo"
+	CoreService_GetTopInviters_FullMethodName            = "/core.v1.CoreService/GetTopInviters"
 	CoreService_AdminUpsertDiscount_FullMethodName       = "/core.v1.CoreService/AdminUpsertDiscount"
 	CoreService_AdminListDiscounts_FullMethodName        = "/core.v1.CoreService/AdminListDiscounts"
 	CoreService_CreateDashboardLink_FullMethodName       = "/core.v1.CoreService/CreateDashboardLink"
@@ -72,6 +76,8 @@ const (
 	CoreService_SetSubscriptionNote_FullMethodName       = "/core.v1.CoreService/SetSubscriptionNote"
 	CoreService_ListInvitedCustomers_FullMethodName      = "/core.v1.CoreService/ListInvitedCustomers"
 	CoreService_GetBotPhoto_FullMethodName               = "/core.v1.CoreService/GetBotPhoto"
+	CoreService_ListHelpEntries_FullMethodName           = "/core.v1.CoreService/ListHelpEntries"
+	CoreService_GetHelpEntry_FullMethodName              = "/core.v1.CoreService/GetHelpEntry"
 	CoreService_AdminTodayStats_FullMethodName           = "/core.v1.CoreService/AdminTodayStats"
 	CoreService_AdminListSettingSpecs_FullMethodName     = "/core.v1.CoreService/AdminListSettingSpecs"
 	CoreService_AdminListServers_FullMethodName          = "/core.v1.CoreService/AdminListServers"
@@ -80,6 +86,7 @@ const (
 	CoreService_AdminAddStaff_FullMethodName             = "/core.v1.CoreService/AdminAddStaff"
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
+	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -126,7 +133,17 @@ type CoreServiceClient interface {
 	AdminUpsertPlan(ctx context.Context, in *AdminUpsertPlanRequest, opts ...grpc.CallOption) (*Plan, error)
 	AdminSetSetting(ctx context.Context, in *AdminSetSettingRequest, opts ...grpc.CallOption) (*Settings, error)
 	QuoteOrder(ctx context.Context, in *QuoteOrderRequest, opts ...grpc.CallOption) (*Quote, error)
+	// Bulk purchase: N services of one plan paid from the wallet in one
+	// transaction (all or nothing, idempotent by the request key), then
+	// provisioned like any order. GetBulkOrder gives the services of one, with
+	// their links once they are delivered (for the bot's one message).
+	QuoteBulkOrder(ctx context.Context, in *QuoteBulkOrderRequest, opts ...grpc.CallOption) (*BulkQuote, error)
+	CreateBulkOrder(ctx context.Context, in *CreateBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error)
+	GetBulkOrder(ctx context.Context, in *GetBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error)
 	GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error)
+	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
+	// enabled is false while the board is off. NOT_FOUND for an unknown user.
+	GetTopInviters(ctx context.Context, in *GetTopInvitersRequest, opts ...grpc.CallOption) (*TopInviters, error)
 	AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error)
 	AdminListDiscounts(ctx context.Context, in *AdminListDiscountsRequest, opts ...grpc.CallOption) (*AdminListDiscountsResponse, error)
 	CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error)
@@ -160,6 +177,13 @@ type CoreServiceClient interface {
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(ctx context.Context, in *GetBotPhotoRequest, opts ...grpc.CallOption) (*BotPhoto, error)
+	// Help content (help.proto): the enabled questions or tutorials of a kind in
+	// the customer's language (the other one where a translation is missing), in
+	// the owner's order, and one of them. PERMISSION_DENIED for a banned
+	// customer, NOT_FOUND for an unknown customer, and for an entry that is gone
+	// or switched off (GetHelpEntry).
+	ListHelpEntries(ctx context.Context, in *ListHelpEntriesRequest, opts ...grpc.CallOption) (*ListHelpEntriesResponse, error)
+	GetHelpEntry(ctx context.Context, in *GetHelpEntryRequest, opts ...grpc.CallOption) (*HelpEntry, error)
 	// The bot's button-driven admin menu (WP-D). Every call is the actor's own:
 	// core checks the role again and audits each change like the dashboard does.
 	AdminTodayStats(ctx context.Context, in *AdminTodayStatsRequest, opts ...grpc.CallOption) (*AdminTodayStatsResponse, error)
@@ -170,6 +194,10 @@ type CoreServiceClient interface {
 	AdminAddStaff(ctx context.Context, in *AdminAddStaffRequest, opts ...grpc.CallOption) (*AdminStaffMember, error)
 	AdminRemoveStaff(ctx context.Context, in *AdminRemoveStaffRequest, opts ...grpc.CallOption) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(ctx context.Context, in *AdminBroadcastRequest, opts ...grpc.CallOption) (*AdminBroadcastResponse, error)
+	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
+	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
+	// What a customer can get wrong is an outcome of the answer, not an error.
+	RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error)
 }
 
 type coreServiceClient struct {
@@ -491,10 +519,50 @@ func (c *coreServiceClient) QuoteOrder(ctx context.Context, in *QuoteOrderReques
 	return out, nil
 }
 
+func (c *coreServiceClient) QuoteBulkOrder(ctx context.Context, in *QuoteBulkOrderRequest, opts ...grpc.CallOption) (*BulkQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkQuote)
+	err := c.cc.Invoke(ctx, CoreService_QuoteBulkOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) CreateBulkOrder(ctx context.Context, in *CreateBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkOrder)
+	err := c.cc.Invoke(ctx, CoreService_CreateBulkOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetBulkOrder(ctx context.Context, in *GetBulkOrderRequest, opts ...grpc.CallOption) (*BulkOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkOrder)
+	err := c.cc.Invoke(ctx, CoreService_GetBulkOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) GetReferralInfo(ctx context.Context, in *GetReferralInfoRequest, opts ...grpc.CallOption) (*ReferralInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReferralInfo)
 	err := c.cc.Invoke(ctx, CoreService_GetReferralInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetTopInviters(ctx context.Context, in *GetTopInvitersRequest, opts ...grpc.CallOption) (*TopInviters, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TopInviters)
+	err := c.cc.Invoke(ctx, CoreService_GetTopInviters_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -711,6 +779,26 @@ func (c *coreServiceClient) GetBotPhoto(ctx context.Context, in *GetBotPhotoRequ
 	return out, nil
 }
 
+func (c *coreServiceClient) ListHelpEntries(ctx context.Context, in *ListHelpEntriesRequest, opts ...grpc.CallOption) (*ListHelpEntriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHelpEntriesResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListHelpEntries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetHelpEntry(ctx context.Context, in *GetHelpEntryRequest, opts ...grpc.CallOption) (*HelpEntry, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HelpEntry)
+	err := c.cc.Invoke(ctx, CoreService_GetHelpEntry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) AdminTodayStats(ctx context.Context, in *AdminTodayStatsRequest, opts ...grpc.CallOption) (*AdminTodayStatsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AdminTodayStatsResponse)
@@ -791,6 +879,16 @@ func (c *coreServiceClient) AdminBroadcast(ctx context.Context, in *AdminBroadca
 	return out, nil
 }
 
+func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RedeemGiftCodeResponse)
+	err := c.cc.Invoke(ctx, CoreService_RedeemGiftCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -835,7 +933,17 @@ type CoreServiceServer interface {
 	AdminUpsertPlan(context.Context, *AdminUpsertPlanRequest) (*Plan, error)
 	AdminSetSetting(context.Context, *AdminSetSettingRequest) (*Settings, error)
 	QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error)
+	// Bulk purchase: N services of one plan paid from the wallet in one
+	// transaction (all or nothing, idempotent by the request key), then
+	// provisioned like any order. GetBulkOrder gives the services of one, with
+	// their links once they are delivered (for the bot's one message).
+	QuoteBulkOrder(context.Context, *QuoteBulkOrderRequest) (*BulkQuote, error)
+	CreateBulkOrder(context.Context, *CreateBulkOrderRequest) (*BulkOrder, error)
+	GetBulkOrder(context.Context, *GetBulkOrderRequest) (*BulkOrder, error)
 	GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error)
+	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
+	// enabled is false while the board is off. NOT_FOUND for an unknown user.
+	GetTopInviters(context.Context, *GetTopInvitersRequest) (*TopInviters, error)
 	AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error)
 	AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error)
 	CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error)
@@ -869,6 +977,13 @@ type CoreServiceServer interface {
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
 	GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error)
+	// Help content (help.proto): the enabled questions or tutorials of a kind in
+	// the customer's language (the other one where a translation is missing), in
+	// the owner's order, and one of them. PERMISSION_DENIED for a banned
+	// customer, NOT_FOUND for an unknown customer, and for an entry that is gone
+	// or switched off (GetHelpEntry).
+	ListHelpEntries(context.Context, *ListHelpEntriesRequest) (*ListHelpEntriesResponse, error)
+	GetHelpEntry(context.Context, *GetHelpEntryRequest) (*HelpEntry, error)
 	// The bot's button-driven admin menu (WP-D). Every call is the actor's own:
 	// core checks the role again and audits each change like the dashboard does.
 	AdminTodayStats(context.Context, *AdminTodayStatsRequest) (*AdminTodayStatsResponse, error)
@@ -879,6 +994,10 @@ type CoreServiceServer interface {
 	AdminAddStaff(context.Context, *AdminAddStaffRequest) (*AdminStaffMember, error)
 	AdminRemoveStaff(context.Context, *AdminRemoveStaffRequest) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error)
+	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
+	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
+	// What a customer can get wrong is an outcome of the answer, not an error.
+	RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -982,8 +1101,20 @@ func (UnimplementedCoreServiceServer) AdminSetSetting(context.Context, *AdminSet
 func (UnimplementedCoreServiceServer) QuoteOrder(context.Context, *QuoteOrderRequest) (*Quote, error) {
 	return nil, status.Error(codes.Unimplemented, "method QuoteOrder not implemented")
 }
+func (UnimplementedCoreServiceServer) QuoteBulkOrder(context.Context, *QuoteBulkOrderRequest) (*BulkQuote, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuoteBulkOrder not implemented")
+}
+func (UnimplementedCoreServiceServer) CreateBulkOrder(context.Context, *CreateBulkOrderRequest) (*BulkOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBulkOrder not implemented")
+}
+func (UnimplementedCoreServiceServer) GetBulkOrder(context.Context, *GetBulkOrderRequest) (*BulkOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBulkOrder not implemented")
+}
 func (UnimplementedCoreServiceServer) GetReferralInfo(context.Context, *GetReferralInfoRequest) (*ReferralInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetReferralInfo not implemented")
+}
+func (UnimplementedCoreServiceServer) GetTopInviters(context.Context, *GetTopInvitersRequest) (*TopInviters, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTopInviters not implemented")
 }
 func (UnimplementedCoreServiceServer) AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminUpsertDiscount not implemented")
@@ -1048,6 +1179,12 @@ func (UnimplementedCoreServiceServer) ListInvitedCustomers(context.Context, *Lis
 func (UnimplementedCoreServiceServer) GetBotPhoto(context.Context, *GetBotPhotoRequest) (*BotPhoto, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBotPhoto not implemented")
 }
+func (UnimplementedCoreServiceServer) ListHelpEntries(context.Context, *ListHelpEntriesRequest) (*ListHelpEntriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHelpEntries not implemented")
+}
+func (UnimplementedCoreServiceServer) GetHelpEntry(context.Context, *GetHelpEntryRequest) (*HelpEntry, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHelpEntry not implemented")
+}
 func (UnimplementedCoreServiceServer) AdminTodayStats(context.Context, *AdminTodayStatsRequest) (*AdminTodayStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminTodayStats not implemented")
 }
@@ -1071,6 +1208,9 @@ func (UnimplementedCoreServiceServer) AdminRemoveStaff(context.Context, *AdminRe
 }
 func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminBroadcast not implemented")
+}
+func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -1651,6 +1791,60 @@ func _CoreService_QuoteOrder_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_QuoteBulkOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteBulkOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).QuoteBulkOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_QuoteBulkOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).QuoteBulkOrder(ctx, req.(*QuoteBulkOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_CreateBulkOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBulkOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CreateBulkOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CreateBulkOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CreateBulkOrder(ctx, req.(*CreateBulkOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetBulkOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBulkOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetBulkOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetBulkOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetBulkOrder(ctx, req.(*GetBulkOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_GetReferralInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetReferralInfoRequest)
 	if err := dec(in); err != nil {
@@ -1665,6 +1859,24 @@ func _CoreService_GetReferralInfo_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).GetReferralInfo(ctx, req.(*GetReferralInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetTopInviters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTopInvitersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetTopInviters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetTopInviters_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetTopInviters(ctx, req.(*GetTopInvitersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2047,6 +2259,42 @@ func _CoreService_GetBotPhoto_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListHelpEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHelpEntriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListHelpEntries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListHelpEntries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListHelpEntries(ctx, req.(*ListHelpEntriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetHelpEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHelpEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetHelpEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetHelpEntry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetHelpEntry(ctx, req.(*GetHelpEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_AdminTodayStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AdminTodayStatsRequest)
 	if err := dec(in); err != nil {
@@ -2191,6 +2439,24 @@ func _CoreService_AdminBroadcast_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RedeemGiftCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).RedeemGiftCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_RedeemGiftCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).RedeemGiftCode(ctx, req.(*RedeemGiftCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2323,8 +2589,24 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CoreService_QuoteOrder_Handler,
 		},
 		{
+			MethodName: "QuoteBulkOrder",
+			Handler:    _CoreService_QuoteBulkOrder_Handler,
+		},
+		{
+			MethodName: "CreateBulkOrder",
+			Handler:    _CoreService_CreateBulkOrder_Handler,
+		},
+		{
+			MethodName: "GetBulkOrder",
+			Handler:    _CoreService_GetBulkOrder_Handler,
+		},
+		{
 			MethodName: "GetReferralInfo",
 			Handler:    _CoreService_GetReferralInfo_Handler,
+		},
+		{
+			MethodName: "GetTopInviters",
+			Handler:    _CoreService_GetTopInviters_Handler,
 		},
 		{
 			MethodName: "AdminUpsertDiscount",
@@ -2411,6 +2693,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CoreService_GetBotPhoto_Handler,
 		},
 		{
+			MethodName: "ListHelpEntries",
+			Handler:    _CoreService_ListHelpEntries_Handler,
+		},
+		{
+			MethodName: "GetHelpEntry",
+			Handler:    _CoreService_GetHelpEntry_Handler,
+		},
+		{
 			MethodName: "AdminTodayStats",
 			Handler:    _CoreService_AdminTodayStats_Handler,
 		},
@@ -2441,6 +2731,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminBroadcast",
 			Handler:    _CoreService_AdminBroadcast_Handler,
+		},
+		{
+			MethodName: "RedeemGiftCode",
+			Handler:    _CoreService_RedeemGiftCode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

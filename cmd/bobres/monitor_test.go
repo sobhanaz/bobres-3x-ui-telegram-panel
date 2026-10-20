@@ -12,65 +12,83 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/deploy"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/monitor/collect"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/monitor/snapshot"
 )
 
 var monitorNow = time.Unix(1_760_000_000, 0)
 
-// fakeUnits plays systemd and the unit directory: the files in it, the
-// systemctl calls in order, and what the timer's state is.
-type fakeUnits struct {
+const testExe = "/usr/local/bin/bobres"
+
+// fakeMonitorSystem plays a server's systemd for the collector's units: the unit files, what systemctl
+// says of the timer, and every program run, in order. Nothing touches this machine.
+type fakeMonitorSystem struct {
 	files     map[string]string
 	modes     map[string]os.FileMode
 	cmds      []string
 	root      bool
 	systemd   bool
-	exe       string
 	enabled   bool
-	active    bool
-	fail      map[string]error // a systemctl command line prefix -> its error
+	active    string // active, inactive or failed
+	fail      map[string]error
 	writeErr  error
 	lastState string
 }
 
-func newFakeUnits() *fakeUnits {
-	return &fakeUnits{files: map[string]string{}, modes: map[string]os.FileMode{}, root: true, systemd: true,
-		exe: "/usr/local/bin/bobres", fail: map[string]error{}, lastState: "success"}
+func newFakeMonitorSystem() *fakeMonitorSystem {
+	return &fakeMonitorSystem{files: map[string]string{}, modes: map[string]os.FileMode{}, root: true, systemd: true, active: "inactive",
+		fail: map[string]error{}, lastState: "success"}
 }
 
-func (f *fakeUnits) host() *monitorHost {
-	return &monitorHost{
-		unitDir: "/etc/systemd/system",
-		run: func(_ context.Context, name string, args ...string) ([]byte, error) {
-			line := name + " " + strings.Join(args, " ")
-			f.cmds = append(f.cmds, line)
-			for p, err := range f.fail {
-				if strings.HasPrefix(line, p) {
-					return []byte("Failed to " + line + "\nsecond line"), err
-				}
-			}
-			switch line {
-			case "systemctl is-enabled " + monitorTimer:
-				if !f.enabled {
-					return []byte("disabled\n"), errors.New("exit status 1")
-				}
-			case "systemctl is-active " + monitorTimer:
-				if !f.active {
-					return []byte("inactive\n"), errors.New("exit status 3")
-				}
-			case "systemctl enable --now " + monitorTimer:
-				f.enabled, f.active = true, true
-			case "systemctl disable --now " + monitorTimer, "systemctl stop " + monitorService:
-				f.enabled, f.active = false, false
-			case "systemctl show -p Result --value " + monitorService:
-				return []byte(f.lastState + "\n"), nil
-			}
-			return nil, nil
-		},
+func (f *fakeMonitorSystem) run(_ context.Context, name string, args ...string) ([]byte, error) {
+	line := strings.TrimSpace(name + " " + strings.Join(args, " "))
+	f.cmds = append(f.cmds, line)
+	for prefix, err := range f.fail {
+		if strings.HasPrefix(line, prefix) {
+			return []byte("Failed: " + line + "\nmore"), err
+		}
+	}
+	_, installed := f.files[systemUnitDir+"/"+monitorTimerUnit]
+	switch {
+	case line == "systemctl enable "+monitorTimerUnit:
+		if !installed {
+			return []byte("Failed to enable unit: Unit file does not exist."), errors.New("exit status 1")
+		}
+		f.enabled = true
+	case line == "systemctl start "+monitorTimerUnit, line == "systemctl restart "+monitorTimerUnit:
+		f.active = "active"
+	case line == "systemctl disable --now "+monitorTimerUnit:
+		f.enabled, f.active = false, "inactive"
+	case strings.HasPrefix(line, "systemctl reset-failed"):
+		if f.active == "failed" {
+			f.active = "inactive"
+		}
+	case line == "systemctl is-enabled "+monitorTimerUnit:
+		switch {
+		case !installed:
+			return []byte("Failed to get unit file state\n"), errors.New("exit status 1")
+		case f.enabled:
+			return []byte("enabled\n"), nil
+		}
+		return []byte("disabled\n"), errors.New("exit status 1")
+	case line == "systemctl is-active "+monitorTimerUnit:
+		if f.active == "active" {
+			return []byte("active\n"), nil
+		}
+		return []byte(f.active + "\n"), errors.New("exit status 3")
+	case line == "systemctl show -p Result --value "+monitorServiceUnit:
+		return []byte(f.lastState + "\n"), nil
+	}
+	return nil, nil
+}
+
+func (f *fakeMonitorSystem) units() *systemUnits {
+	return &systemUnits{
+		run: f.run,
 		readFile: func(p string) ([]byte, error) {
-			if s, ok := f.files[p]; ok {
-				return []byte(s), nil
+			if v, ok := f.files[p]; ok {
+				return []byte(v), nil
 			}
 			return nil, os.ErrNotExist
 		},
@@ -81,20 +99,32 @@ func (f *fakeUnits) host() *monitorHost {
 			f.files[p], f.modes[p] = string(b), mode
 			return nil
 		},
-		remove: func(p string) error { delete(f.files, p); return nil },
-		exists: func(p string) bool { _, ok := f.files[p]; return ok },
+		remove: func(p string) error {
+			if _, ok := f.files[p]; !ok {
+				return os.ErrNotExist
+			}
+			delete(f.files, p)
+			return nil
+		},
+		exists: func(p string) bool {
+			if p == systemdRunDir {
+				return f.systemd
+			}
+			_, ok := f.files[p]
+			return ok
+		},
+		lookPath: func(string) (string, error) { return "/usr/bin/systemctl", nil },
 		euid: func() int {
 			if f.root {
 				return 0
 			}
 			return 1000
 		},
-		systemd: func() bool { return f.systemd },
-		exe:     func() (string, error) { return f.exe, nil },
+		goos: "linux", unitDir: systemUnitDir, runDir: systemdRunDir,
 	}
 }
 
-func (f *fakeUnits) ran(prefix string) int {
+func (f *fakeMonitorSystem) ran(prefix string) int {
 	n := 0
 	for _, c := range f.cmds {
 		if strings.HasPrefix(c, prefix) {
@@ -104,243 +134,335 @@ func (f *fakeUnits) ran(prefix string) int {
 	return n
 }
 
-const unitService = "/etc/systemd/system/" + monitorService
-const unitTimer = "/etc/systemd/system/" + monitorTimer
+var testMonitorOpts = monitorOptions{dir: "/opt/bobres", exe: testExe}
 
-func TestMonitorServiceUnit(t *testing.T) {
-	got, err := renderMonitorService("/usr/local/bin/bobres", "/opt/bobres")
+const (
+	unitServicePath = systemUnitDir + "/" + monitorServiceUnit
+	unitTimerPath   = systemUnitDir + "/" + monitorTimerUnit
+)
+
+func TestRenderMonitorUnits(t *testing.T) {
+	service, timer, err := renderMonitorUnits(testMonitorOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"\nUser=root\n",
-		"\nType=oneshot\n",
+		"\nUser=root\n", "\nType=oneshot\n",
 		"\nExecStart=/usr/local/bin/bobres monitor snapshot --dir /opt/bobres\n",
-		// An older bobres (a rollback) does not know the command: its refusal skips the run, it does not fail.
+		// An older bobres (a rollback) does not know the command: its refusal skips the run, it does not fail it.
 		"\nExecCondition=/usr/local/bin/bobres monitor supported\n",
 		// The install gone: skipped quietly.
 		"\nConditionPathIsDirectory=/opt/bobres/run/monitor\n",
 		// It may write the snapshot directory and nothing else.
 		"\nProtectSystem=strict\n", "\nReadWritePaths=/opt/bobres/run/monitor\n", "\nNoNewPrivileges=yes\n", "\nPrivateTmp=yes\n",
 		"\nProtectHome=read-only\n", "\nCPUQuota=25%\n", "\nMemoryMax=192M\n", "\nTimeoutStartSec=30\n", "\nUMask=0022\n",
-		"\nRestrictSUIDSGID=yes\n", "\nLockPersonality=yes\n",
+		"\nRestrictSUIDSGID=yes\n", "\nLockPersonality=yes\n", "\nProtectKernelTunables=yes\n",
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the service lacks %q:\n%s", want, got)
+		if !strings.Contains(service, want) {
+			t.Errorf("the service lacks %q:\n%s", want, service)
 		}
 	}
-	// Nothing in it is a secret or the install's .env.
-	if strings.Contains(got, ".env") || strings.Contains(got, "Environment") || strings.Contains(got, "EnvironmentFile") {
-		t.Errorf("the unit reads the environment:\n%s", got)
+	for _, want := range []string{"\nOnUnitActiveSec=30s\n", "\nOnBootSec=20s\n", "\nUnit=bobres-monitor.service\n", "\nWantedBy=timers.target\n"} {
+		if !strings.Contains(timer, want) {
+			t.Errorf("the timer lacks %q:\n%s", want, timer)
+		}
 	}
-	if !strings.Contains(monitorTimerUnit, "OnUnitActiveSec=30s") || !strings.Contains(monitorTimerUnit, "WantedBy=timers.target") ||
-		!strings.Contains(monitorTimerUnit, "OnBootSec=20s") {
-		t.Errorf("the timer:\n%s", monitorTimerUnit)
+	for _, text := range []string{service, timer} {
+		for _, ph := range []string{"@DIR@", "@EXE@"} {
+			if strings.Contains(text, ph) {
+				t.Errorf("%s was left:\n%s", ph, text)
+			}
+		}
+		// The unit reads no environment and no .env: nothing secret can reach it.
+		if strings.Contains(text, "EnvironmentFile") || strings.Contains(text, "\nEnvironment=") || strings.Contains(text, "/.env") {
+			t.Errorf("the unit reads the environment:\n%s", text)
+		}
+	}
+	// It runs nothing but bobres, and writes only the snapshot directory.
+	if strings.Count(service, "ReadWritePaths=") != 1 || strings.Count(service, "ExecStart=") != 1 {
+		t.Errorf("service:\n%s", service)
+	}
+	// An install elsewhere, and a bobres elsewhere.
+	other, _, err := renderMonitorUnits(monitorOptions{dir: "/srv/bob-res_1.0", exe: "/opt/bin/bobres"})
+	if err != nil || !strings.Contains(other, "ExecStart=/opt/bin/bobres monitor snapshot --dir /srv/bob-res_1.0") ||
+		!strings.Contains(other, "ReadWritePaths=/srv/bob-res_1.0/run/monitor") {
+		t.Errorf("another place: %v\n%s", err, other)
+	}
+	// A path systemd could read as something else is refused, not escaped.
+	for _, bad := range []monitorOptions{{dir: "/srv/my store", exe: testExe}, {dir: "/opt/bobres", exe: "/opt/my tools/bobres"},
+		{dir: "relative", exe: testExe}, {dir: "/opt/bobres", exe: "/usr/bin/bob%res"}, {dir: "/opt/$HOME", exe: testExe}, {dir: "", exe: testExe}} {
+		if _, _, err := renderMonitorUnits(bad); err == nil {
+			t.Errorf("%+v was accepted", bad)
+		}
+	}
+	// The templates are the files in deploy/systemd, embedded.
+	if len(deploy.MonitorServiceUnit) == 0 || len(deploy.MonitorTimerUnit) == 0 {
+		t.Error("the unit templates are not embedded")
 	}
 }
 
-func TestUnitArgumentsAreQuotedForSystemd(t *testing.T) {
-	for in, want := range map[string]string{
-		"/opt/bobres":          "/opt/bobres",
-		"/srv/my store":        `"/srv/my store"`,
-		`/srv/we"ird`:          `"/srv/we\"ird"`,
-		"/srv/50%":             `"/srv/50%%"`,
-		"/srv/$HOME":           `"/srv/$$HOME"`,
-		`/srv/back\slash`:      `"/srv/back\\slash"`,
-		"/srv/it's":            `"/srv/it's"`,
-		"":                     `""`,
-	} {
-		got, err := unitArg(in)
-		if err != nil || got != want {
-			t.Errorf("unitArg(%q) = %q, %v, want %q", in, got, err, want)
-		}
+func TestEnsureMonitorPutsTheUnitsInPlace(t *testing.T) {
+	f := newFakeMonitorSystem()
+	res := f.units().ensureMonitor(context.Background(), testMonitorOpts)
+	if res.kind != markOK || !res.changed || !strings.Contains(res.text, monitorTimerUnit+" is on") {
+		t.Fatalf("%+v", res)
 	}
-	for _, bad := range []string{"/srv/a\nb", "/srv/a\x00b", "/srv/a\rb"} {
-		if _, err := unitArg(bad); err == nil {
-			t.Errorf("unitArg(%q) was accepted", bad)
-		}
-		if _, err := unitPath(bad); err == nil {
-			t.Errorf("unitPath(%q) was accepted", bad)
-		}
-	}
-	if got, err := unitPath("/srv/my 100% store"); err != nil || got != `/srv/my\x20100%%\x20store` {
-		t.Errorf("unitPath: %q %v", got, err)
-	}
-	if _, err := unitPath("relative"); err == nil {
-		t.Error("a relative path")
-	}
-	if _, err := renderMonitorService("/usr/local/bin/bobres", "relative"); err == nil {
-		t.Error("a relative install directory")
-	}
-	svc, err := renderMonitorService("/opt/my tools/bobres", "/srv/my store")
-	if err != nil || !strings.Contains(svc, `ExecStart="/opt/my tools/bobres" monitor snapshot --dir "/srv/my store"`) ||
-		!strings.Contains(svc, `ReadWritePaths=/srv/my\x20store/run/monitor`) {
-		t.Errorf("%v\n%s", err, svc)
-	}
-}
-
-func TestEnsureMakesTheDirectoryAndPutsTheUnitsInPlace(t *testing.T) {
-	dir := t.TempDir()
-	f := newFakeUnits()
-	got := f.host().ensure(context.Background(), dir, map[string]string{})
-	if got.State != "installed" || got.Err != nil {
-		t.Fatalf("%+v", got)
-	}
-	st, err := os.Stat(monitorDir(dir))
-	if err != nil || !st.IsDir() || st.Mode().Perm() != 0o755 {
-		t.Fatalf("the snapshot directory: %v %v", st, err)
-	}
-	if st, _ := os.Stat(filepath.Join(dir, "run")); st == nil || st.Mode().Perm() != 0o755 {
-		t.Errorf("run/: %v", st)
-	}
-	svc, _ := renderMonitorService(f.exe, dir)
-	if f.files[unitService] != svc || f.files[unitTimer] != monitorTimerUnit || f.modes[unitService] != 0o644 || f.modes[unitTimer] != 0o644 {
+	service, timer, _ := renderMonitorUnits(testMonitorOpts)
+	if f.files[unitServicePath] != service || f.files[unitTimerPath] != timer || f.modes[unitServicePath] != 0o644 || f.modes[unitTimerPath] != 0o644 {
 		t.Errorf("unit files: %v %v", f.files, f.modes)
 	}
+	if !f.enabled || f.active != "active" {
+		t.Errorf("enabled %v, active %s", f.enabled, f.active)
+	}
 	want := []string{
-		"systemctl daemon-reload", "systemctl is-enabled " + monitorTimer, "systemctl is-active " + monitorTimer,
-		"systemctl enable --now " + monitorTimer, "systemctl start --no-block " + monitorService,
+		"systemctl daemon-reload", "systemctl is-active " + monitorTimerUnit, "systemctl is-enabled " + monitorTimerUnit,
+		"systemctl enable " + monitorTimerUnit, "systemctl start " + monitorTimerUnit, "systemctl start --no-block " + monitorServiceUnit,
+		"systemctl is-enabled " + monitorTimerUnit, "systemctl is-active " + monitorTimerUnit,
 	}
 	if strings.Join(f.cmds, "\n") != strings.Join(want, "\n") {
 		t.Errorf("systemctl calls:\n%s\nwant\n%s", strings.Join(f.cmds, "\n"), strings.Join(want, "\n"))
 	}
 }
 
-func TestEnsureTwiceChangesNothingTheSecondTime(t *testing.T) {
-	dir := t.TempDir()
-	f := newFakeUnits()
-	h := f.host()
-	h.ensure(context.Background(), dir, nil)
+func TestEnsureMonitorTwiceChangesNothingTheSecondTime(t *testing.T) {
+	f := newFakeMonitorSystem()
+	u := f.units()
+	u.ensureMonitor(context.Background(), testMonitorOpts)
 	f.cmds = nil
 	writes := 0
-	inner := h.writeFile
-	h.writeFile = func(p string, b []byte, m os.FileMode) error { writes++; return inner(p, b, m) }
-	got := h.ensure(context.Background(), dir, nil)
-	if got.State != "unchanged" || writes != 0 {
-		t.Fatalf("%+v, %d writes", got, writes)
+	inner := u.writeFile
+	u.writeFile = func(p string, b []byte, m os.FileMode) error { writes++; return inner(p, b, m) }
+	res := u.ensureMonitor(context.Background(), testMonitorOpts)
+	if res.kind != markOK || res.changed || res.text != "" || writes != 0 {
+		t.Fatalf("%+v, %d writes", res, writes)
 	}
-	// Only the two questions: nothing is reloaded, enabled, restarted or started.
-	if len(f.cmds) != 2 || f.ran("systemctl is-enabled") != 1 || f.ran("systemctl is-active") != 1 {
-		t.Errorf("calls: %v", f.cmds)
+	// Only the questions: nothing is reloaded, enabled, restarted or started.
+	for _, c := range f.cmds {
+		if !strings.HasPrefix(c, "systemctl is-") {
+			t.Errorf("a second run did %q", c)
+		}
 	}
 }
 
-func TestEnsureFollowsAMovedBinaryAndRestartsTheTimer(t *testing.T) {
-	dir := t.TempDir()
-	f := newFakeUnits()
-	h := f.host()
-	h.ensure(context.Background(), dir, nil)
+func TestEnsureMonitorFollowsAMovedBinaryAndRestartsTheTimer(t *testing.T) {
+	f := newFakeMonitorSystem()
+	u := f.units()
+	u.ensureMonitor(context.Background(), testMonitorOpts)
 	f.cmds = nil
-	f.exe = "/opt/bobres-bin/bobres"
-	got := h.ensure(context.Background(), dir, nil)
-	if got.State != "updated" || !strings.Contains(f.files[unitService], "ExecStart=/opt/bobres-bin/bobres monitor snapshot") {
-		t.Fatalf("%+v\n%s", got, f.files[unitService])
+	res := u.ensureMonitor(context.Background(), monitorOptions{dir: "/opt/bobres", exe: "/opt/bin/bobres"})
+	if res.kind != markOK || !res.changed || !strings.Contains(f.files[unitServicePath], "ExecStart=/opt/bin/bobres monitor snapshot") {
+		t.Fatalf("%+v\n%s", res, f.files[unitServicePath])
 	}
-	// Only the service changed; the timer's text is as it was.
-	if f.ran("systemctl daemon-reload") != 1 || f.ran("systemctl restart "+monitorTimer) != 1 || f.ran("systemctl start --no-block") != 1 {
+	if f.ran("systemctl daemon-reload") != 1 || f.ran("systemctl restart "+monitorTimerUnit) != 1 || f.ran("systemctl start --no-block") != 1 {
 		t.Errorf("calls: %v", f.cmds)
 	}
 }
 
-func TestEnsureTurnsAStoppedTimerBackOn(t *testing.T) {
-	dir := t.TempDir()
-	f := newFakeUnits()
-	h := f.host()
-	h.ensure(context.Background(), dir, nil)
-	f.cmds, f.enabled, f.active = nil, false, false // someone ran systemctl disable --now
-	got := h.ensure(context.Background(), dir, nil)
-	if got.State != "unchanged" || f.ran("systemctl enable --now "+monitorTimer) != 1 || f.ran("systemctl daemon-reload") != 0 || !f.enabled || !f.active {
-		t.Errorf("%+v %v", got, f.cmds)
+func TestEnsureMonitorTurnsAStoppedOrFailedTimerBackOn(t *testing.T) {
+	for _, state := range []string{"inactive", "failed"} {
+		f := newFakeMonitorSystem()
+		u := f.units()
+		u.ensureMonitor(context.Background(), testMonitorOpts)
+		f.cmds, f.enabled, f.active = nil, false, state // someone ran systemctl disable --now, or a start limit was hit
+		res := u.ensureMonitor(context.Background(), testMonitorOpts)
+		if res.kind != markOK || f.ran("systemctl enable "+monitorTimerUnit) != 1 || f.ran("systemctl daemon-reload") != 0 || !f.enabled || f.active != "active" {
+			t.Errorf("%s: %+v %v", state, res, f.cmds)
+		}
+		if state == "failed" && f.ran("systemctl reset-failed") != 1 {
+			t.Errorf("a failed timer was not reset: %v", f.cmds)
+		}
 	}
 }
 
-func TestEnsureNeedsRootAndSystemdButStillMakesTheDirectory(t *testing.T) {
-	for name, tc := range map[string]func(*fakeUnits){
-		"not root":   func(f *fakeUnits) { f.root = false },
-		"no systemd": func(f *fakeUnits) { f.systemd = false },
+func TestEnsureMonitorNeedsRootAndSystemd(t *testing.T) {
+	for name, tc := range map[string]func(*fakeMonitorSystem, *systemUnits){
+		"not root":   func(f *fakeMonitorSystem, _ *systemUnits) { f.root = false },
+		"no systemd": func(f *fakeMonitorSystem, _ *systemUnits) { f.systemd = false },
+		"not linux":  func(_ *fakeMonitorSystem, u *systemUnits) { u.goos = "darwin" },
 	} {
-		dir := t.TempDir()
-		f := newFakeUnits()
-		tc(f)
-		got := f.host().ensure(context.Background(), dir, nil)
-		if got.State != "skipped" || got.Why == "" || got.Err != nil || len(f.cmds) != 0 || len(f.files) != 0 {
-			t.Errorf("%s: %+v %v %v", name, got, f.cmds, f.files)
-		}
-		if _, err := os.Stat(monitorDir(dir)); err != nil {
-			t.Errorf("%s: the directory core mounts was not made: %v", name, err)
+		f := newFakeMonitorSystem()
+		u := f.units()
+		tc(f, u)
+		res := u.ensureMonitor(context.Background(), testMonitorOpts)
+		if res.kind != markSkip || !strings.HasPrefix(res.text, "not set up: ") || len(f.cmds) != 0 || len(f.files) != 0 {
+			t.Errorf("%s: %+v %v %v", name, res, f.cmds, f.files)
 		}
 	}
 }
 
-func TestEnsureWhenTurnedOffTakesTheUnitsAway(t *testing.T) {
+func TestEnsureMonitorWhenTurnedOffTakesTheUnitsAndTheSnapshotAway(t *testing.T) {
 	dir := t.TempDir()
-	f := newFakeUnits()
-	h := f.host()
-	h.ensure(context.Background(), dir, nil)
+	if err := ensureMonitorDirs(dir); err != nil {
+		t.Fatal(err)
+	}
+	f := newFakeMonitorSystem()
+	u := f.units()
+	opts := monitorOptions{dir: dir, exe: testExe}
+	u.ensureMonitor(context.Background(), opts)
 	if err := snapshot.Write(monitorDir(dir), &snapshot.Snapshot{Schema: 1, GeneratedAt: monitorNow.Unix(), GeneratedMS: monitorNow.UnixMilli()}); err != nil {
 		t.Fatal(err)
 	}
 	f.cmds = nil
-	off := map[string]string{monitorCollectorKey: "OFF"}
-	got := h.ensure(context.Background(), dir, off)
-	if got.State != "removed" || len(f.files) != 0 || snapshot.Exists(monitorDir(dir)) {
-		t.Fatalf("%+v files %v", got, f.files)
+	opts.off = true
+	res := u.ensureMonitor(context.Background(), opts)
+	if res.kind != markOK || !res.changed || len(f.files) != 0 || snapshot.Exists(monitorDir(dir)) || f.enabled {
+		t.Fatalf("%+v files %v", res, f.files)
 	}
-	want := []string{"systemctl disable --now " + monitorTimer, "systemctl stop " + monitorService, "systemctl daemon-reload"}
-	if strings.Join(f.cmds, "|") != strings.Join(want, "|") {
+	if f.ran("systemctl disable --now "+monitorTimerUnit) != 1 || f.ran("systemctl daemon-reload") != 1 {
 		t.Errorf("calls: %v", f.cmds)
 	}
 	// Again: nothing left to do, nothing run.
 	f.cmds = nil
-	if got := h.ensure(context.Background(), dir, off); got.State != "off" || len(f.cmds) != 0 {
-		t.Errorf("%+v %v", got, f.cmds)
+	if res := u.ensureMonitor(context.Background(), opts); res.changed || len(f.cmds) != 0 {
+		t.Errorf("%+v %v", res, f.cmds)
 	}
 	if _, err := os.Stat(monitorDir(dir)); err != nil {
 		t.Errorf("the directory core mounts must stay: %v", err)
 	}
+	// The uninstall says nothing when there is nothing to remove, and the same when it removes.
+	u.ensureMonitor(context.Background(), monitorOptions{dir: dir, exe: testExe})
+	if res := u.uninstallMonitor(context.Background(), dir); !res.changed || len(f.files) != 0 {
+		t.Errorf("uninstall: %+v %v", res, f.files)
+	}
+	if res := u.uninstallMonitor(context.Background(), dir); res.text != "" || res.changed {
+		t.Errorf("uninstall again: %+v", res)
+	}
 }
 
-func TestEnsureReportsWhatSystemdRefuses(t *testing.T) {
-	dir := t.TempDir()
-	f := newFakeUnits()
-	f.fail["systemctl daemon-reload"] = errors.New("exit status 1")
-	got := newFakeUnitsHost(f).ensure(context.Background(), dir, nil)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "daemon-reload") || !strings.Contains(got.Err.Error(), "Failed to systemctl daemon-reload") ||
-		strings.Contains(got.Err.Error(), "second line") {
-		t.Errorf("%+v", got)
+func TestEnsureMonitorReportsWhatSystemdRefuses(t *testing.T) {
+	for name, tc := range map[string]struct {
+		prefix string
+		kind   markKind
+		want   string
+	}{
+		"daemon-reload": {"systemctl daemon-reload", markWarn, "daemon-reload"},
+		"enable":        {"systemctl enable", markWarn, "systemctl enable"},
+		"start":         {"systemctl start bobres-monitor.timer", markWarn, "installed, but"},
+	} {
+		f := newFakeMonitorSystem()
+		f.fail[tc.prefix] = errors.New("exit status 1")
+		res := f.units().ensureMonitor(context.Background(), testMonitorOpts)
+		if res.kind != tc.kind || !strings.Contains(res.text, tc.want) || strings.Contains(res.text, "more") {
+			t.Errorf("%s: %+v", name, res)
+		}
 	}
-	f = newFakeUnits()
-	f.fail["systemctl enable"] = errors.New("exit status 1")
-	if got := f.host().ensure(context.Background(), t.TempDir(), nil); got.Err == nil || !strings.Contains(got.Err.Error(), "enable --now") {
-		t.Errorf("enable: %+v", got)
-	}
-	f = newFakeUnits()
+	f := newFakeMonitorSystem()
 	f.writeErr = errors.New("read-only file system")
-	if got := f.host().ensure(context.Background(), t.TempDir(), nil); got.Err == nil || !strings.Contains(got.Err.Error(), "read-only") {
-		t.Errorf("write: %+v", got)
+	if res := f.units().ensureMonitor(context.Background(), testMonitorOpts); res.kind != markWarn || !strings.Contains(res.text, "read-only") {
+		t.Errorf("write: %+v", res)
+	}
+	f = newFakeMonitorSystem()
+	if res := f.units().ensureMonitor(context.Background(), monitorOptions{dir: "/srv/my store", exe: testExe}); res.kind != markWarn || len(f.files) != 0 {
+		t.Errorf("an unsafe path: %+v", res)
 	}
 }
 
-func newFakeUnitsHost(f *fakeUnits) *monitorHost { return f.host() }
-
-func TestEnsureRefusesALinkedRunDirectory(t *testing.T) {
+func TestEnsureMonitorDirs(t *testing.T) {
 	dir := t.TempDir()
-	elsewhere := t.TempDir()
-	if err := os.Symlink(elsewhere, filepath.Join(dir, "run")); err != nil {
+	if err := ensureMonitorDirs(dir); err != nil {
 		t.Fatal(err)
 	}
-	got := newFakeUnits().host().ensure(context.Background(), dir, nil)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "symbolic link") {
-		t.Fatalf("%+v", got)
+	for _, p := range []string{"run", "run/monitor"} {
+		if st, err := os.Stat(filepath.Join(dir, p)); err != nil || !st.IsDir() || st.Mode().Perm() != 0o755 {
+			t.Errorf("%s: %v %v", p, st, err)
+		}
+	}
+	// Again is fine, and puts a mode that drifted right.
+	if err := os.Chmod(monitorDir(dir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureMonitorDirs(dir); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(monitorDir(dir)); st.Mode().Perm() != 0o755 {
+		t.Errorf("mode %v", st.Mode())
+	}
+	// Never through a link.
+	linked := t.TempDir()
+	elsewhere := t.TempDir()
+	if err := os.Symlink(elsewhere, filepath.Join(linked, "run")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureMonitorDirs(linked); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Errorf("a linked run/: %v", err)
 	}
 	if entries, _ := os.ReadDir(elsewhere); len(entries) != 0 {
-		t.Errorf("something was written through the link: %v", entries)
+		t.Errorf("something was made through the link: %v", entries)
+	}
+	linked2 := t.TempDir()
+	if err := os.Mkdir(filepath.Join(linked2, "run"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(linked2, "run", "monitor")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureMonitorDirs(linked2); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Errorf("a linked run/monitor: %v", err)
+	}
+}
+
+// The helper looks at the directory before it writes or reads there, and reads back only its own file.
+func TestTheHelperDistrustsAStrangersDirectory(t *testing.T) {
+	good := func(t *testing.T) string {
+		dir := t.TempDir()
+		if err := ensureMonitorDirs(dir); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	dir := good(t)
+	if err := checkMonitorDir(dir); err != nil {
+		t.Fatalf("a good directory: %v", err)
+	}
+	prev := &snapshot.Snapshot{Schema: 1, GeneratedAt: monitorNow.Unix(), GeneratedMS: monitorNow.UnixMilli()}
+	if err := snapshot.Write(monitorDir(dir), prev); err != nil {
+		t.Fatal(err)
+	}
+	if readPrevious(dir, monitorNow) == nil {
+		t.Fatal("its own snapshot was not read back")
+	}
+	for name, mutate := range map[string]func(string){
+		"others can write the directory": func(d string) { _ = os.Chmod(monitorDir(d), 0o777) },
+		"others can write run/":          func(d string) { _ = os.Chmod(filepath.Join(d, "run"), 0o775) },
+		"the file is world-writable": func(d string) {
+			_ = os.Chmod(filepath.Join(monitorDir(d), snapshot.FileName), 0o666)
+		},
+		"the file is a link": func(d string) {
+			p := filepath.Join(monitorDir(d), snapshot.FileName)
+			_ = os.Remove(p)
+			_ = os.Symlink("/etc/hostname", p)
+		},
+	} {
+		d := good(t)
+		if err := snapshot.Write(monitorDir(d), prev); err != nil {
+			t.Fatal(err)
+		}
+		mutate(d)
+		if name != "the file is world-writable" && name != "the file is a link" && checkMonitorDir(d) == nil {
+			t.Errorf("%s: the directory was accepted", name)
+		}
+		if readPrevious(d, monitorNow) != nil {
+			t.Errorf("%s: the previous snapshot was used", name)
+		}
+	}
+	// A directory that is another user's.
+	f := withFakeRoot(t)
+	d := good(t)
+	f.owners["run"], f.owners["monitor"] = os.Geteuid(), 4242
+	if err := checkMonitorDir(d); err == nil || !strings.Contains(err.Error(), "belongs to uid 4242") {
+		t.Errorf("a foreign directory: %v", err)
+	}
+	// A link in place of the directory, and a missing one.
+	l := t.TempDir()
+	_ = os.Symlink(t.TempDir(), filepath.Join(l, "run"))
+	if checkMonitorDir(l) == nil || checkMonitorDir(t.TempDir()) == nil {
+		t.Error("a linked or missing directory was accepted")
 	}
 }
 
 func TestMonitorVerdict(t *testing.T) {
 	fresh := &snapshot.Snapshot{GeneratedAt: monitorNow.Add(-12 * time.Second).Unix(), Docker: &snapshot.Docker{OK: true, Version: "29.9.0",
-		Containers: make([]snapshot.Container, 9)}}
+		Containers: containers(9)}}
 	stale := &snapshot.Snapshot{GeneratedAt: monitorNow.Add(-14 * time.Minute).Unix()}
 	withErrors := &snapshot.Snapshot{GeneratedAt: monitorNow.Add(-5 * time.Second).Unix(), Errors: []string{"docker: permission denied on the docker socket"}}
 	up := &monitorUnitState{Installed: true, Enabled: true, Active: true}
@@ -362,7 +484,7 @@ func TestMonitorVerdict(t *testing.T) {
 	} {
 		tc.f.now = monitorNow
 		r := monitorVerdict(tc.f)
-		if r.Name != "Host monitor" || r.Status != tc.status || !strings.Contains(r.Detail, tc.want) {
+		if r.Name != monitorLabel || r.Status != tc.status || !strings.Contains(r.Detail, tc.want) {
 			t.Errorf("%s: %+v, want %s containing %q", name, r, tc.status, tc.want)
 		}
 		if r.Status == Fail {
@@ -371,8 +493,7 @@ func TestMonitorVerdict(t *testing.T) {
 	}
 }
 
-// collectorFor gives the snapshot command a machine of its own: a few /proc
-// files and no engine, no systemd.
+// collectorFor gives the snapshot command a machine of its own: a few /proc files and no engine, no systemd.
 func collectorFor(statLine string, now func() time.Time) func(string, map[string]string) *collect.Collector {
 	return func(dir string, env map[string]string) *collect.Collector {
 		fs := fakeProc{
@@ -400,19 +521,19 @@ func (f fakeProc) ReadFile(name string) ([]byte, error) {
 	return nil, os.ErrNotExist
 }
 
-func newTestMonitorCLI(dir string, f *fakeUnits, stat string, now func() time.Time) (*monitorCLI, *bytes.Buffer, *bytes.Buffer) {
-	var out, errOut bytes.Buffer
-	return &monitorCLI{out: &out, errOut: &errOut, host: f.host(), now: now, collector: collectorFor(stat, now)}, &out, &errOut
+func newTestMonitorCLI(f *fakeMonitorSystem, stat string, now func() time.Time) (*monitorCLI, *bytes.Buffer, *bytes.Buffer) {
+	o, out, errOut := testOps("", &fakeOps{})
+	o.monitorUnits = f.units()
+	o.exe = func() (string, error) { return testExe, nil }
+	o.sleep = func(time.Duration) {}
+	return &monitorCLI{o: o, now: now, collector: collectorFor(stat, now)}, out, errOut
 }
 
 func TestMonitorSnapshotWritesTheFileAndComputesTheCPUShare(t *testing.T) {
 	dir := installDir(t)
-	if err := ensureMonitorDirs(dir); err != nil {
-		t.Fatal(err)
-	}
 	clock := monitorNow
 	now := func() time.Time { return clock }
-	m, out, errOut := newTestMonitorCLI(dir, newFakeUnits(), "cpu  100 0 100 800 0 0 0 0 0 0", now)
+	m, out, errOut := newTestMonitorCLI(newFakeMonitorSystem(), "cpu  100 0 100 800 0 0 0 0 0 0", now)
 	if code := m.run([]string{"snapshot", "--dir", dir}); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errOut)
 	}
@@ -434,7 +555,7 @@ func TestMonitorSnapshotWritesTheFileAndComputesTheCPUShare(t *testing.T) {
 
 	// 30 seconds and 50 busy jiffies of 100 later: half the processor.
 	clock = clock.Add(30 * time.Second)
-	m, _, _ = newTestMonitorCLI(dir, newFakeUnits(), "cpu  125 0 125 850 0 0 0 0 0 0", now)
+	m, _, _ = newTestMonitorCLI(newFakeMonitorSystem(), "cpu  125 0 125 850 0 0 0 0 0 0", now)
 	if code := m.run([]string{"snapshot", "--dir", dir}); code != 0 {
 		t.Fatalf("second run exit %d", code)
 	}
@@ -444,10 +565,43 @@ func TestMonitorSnapshotWritesTheFileAndComputesTheCPUShare(t *testing.T) {
 	}
 }
 
+func TestMonitorSnapshotRefusesAnUntrustworthyDirectory(t *testing.T) {
+	dir := installDir(t)
+	if err := ensureMonitorDirs(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(monitorDir(dir), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	m, _, errOut := newTestMonitorCLI(newFakeMonitorSystem(), "cpu  1 1 1 1 1 1 1 1 1 1", func() time.Time { return monitorNow })
+	if code := m.run([]string{"snapshot", "--dir", dir}); code != 0 {
+		// ensureMonitorDirs puts the mode right first, so the run goes on.
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if st, _ := os.Stat(monitorDir(dir)); st.Mode().Perm() != 0o755 {
+		t.Errorf("mode %v", st.Mode())
+	}
+	// A link in place of run/monitor is not followed.
+	dir2 := installDir(t)
+	if err := os.Mkdir(filepath.Join(dir2, "run"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	if err := os.Symlink(target, monitorDir(dir2)); err != nil {
+		t.Fatal(err)
+	}
+	if code := m.run([]string{"snapshot", "--dir", dir2}); code != 1 || !strings.Contains(errOut.String(), "symbolic link") {
+		t.Errorf("a link: exit %d %s", code, errOut)
+	}
+	if entries, _ := os.ReadDir(target); len(entries) != 0 {
+		t.Errorf("a snapshot was written through the link: %v", entries)
+	}
+}
+
 func TestMonitorSnapshotPrintAndOut(t *testing.T) {
 	dir := installDir(t)
 	now := func() time.Time { return monitorNow }
-	m, out, _ := newTestMonitorCLI(dir, newFakeUnits(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
+	m, out, _ := newTestMonitorCLI(newFakeMonitorSystem(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
 	if code := m.run([]string{"snapshot", "--dir", dir, "--print"}); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -459,17 +613,17 @@ func TestMonitorSnapshotPrintAndOut(t *testing.T) {
 		t.Error("--print wrote the file")
 	}
 	custom := t.TempDir()
-	m, _, _ = newTestMonitorCLI(dir, newFakeUnits(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
+	m, _, _ = newTestMonitorCLI(newFakeMonitorSystem(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
 	if code := m.run([]string{"snapshot", "--dir", dir, "--out", custom}); code != 0 || !snapshot.Exists(custom) {
 		t.Fatalf("--out: exit %d", code)
 	}
 	// A directory that does not exist is an error, not a reason to make one somewhere unexpected.
-	m, _, errOut := newTestMonitorCLI(dir, newFakeUnits(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
+	m, _, errOut := newTestMonitorCLI(newFakeMonitorSystem(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
 	if code := m.run([]string{"snapshot", "--dir", dir, "--out", filepath.Join(custom, "missing", "deeper")}); code != 1 || errOut.Len() == 0 {
 		t.Errorf("a missing output directory: exit %d %q", code, errOut)
 	}
 	for _, args := range [][]string{{"snapshot", "--bogus"}, {"snapshot", "extra"}, {"snapshot", "--timeout", "0s"}} {
-		m, _, _ = newTestMonitorCLI(dir, newFakeUnits(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
+		m, _, _ = newTestMonitorCLI(newFakeMonitorSystem(), "cpu  1 1 1 1 1 1 1 1 1 1", now)
 		if code := m.run(args); code != 2 {
 			t.Errorf("%v: exit %d", args, code)
 		}
@@ -478,14 +632,16 @@ func TestMonitorSnapshotPrintAndOut(t *testing.T) {
 
 func TestMonitorEnableAndDisableFollowTheEnvFile(t *testing.T) {
 	dir := t.TempDir()
+	writeInstalledCompose(t, dir)
 	env := checkEnvMap()
 	env["OPERATOR_NOTE"] = "keep me"
 	if err := os.WriteFile(filepath.Join(dir, ".env"), renderEnv(env), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	f := newFakeUnits()
-	m, out, errOut := newTestMonitorCLI(dir, f, "cpu 1 1 1 1 1 1 1 1", func() time.Time { return monitorNow })
-	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || f.files[unitTimer] == "" {
+	f := newFakeMonitorSystem()
+	m, out, errOut := newTestMonitorCLI(f, "cpu 1 1 1 1 1 1 1 1", func() time.Time { return monitorNow })
+	// On is the default: enable puts the units in place and writes nothing to .env.
+	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || f.files[unitTimerPath] == "" {
 		t.Fatalf("enable: exit %d %s %s", code, out, errOut)
 	}
 	if !strings.Contains(out.String(), "Host monitoring is on") || !strings.Contains(out.String(), "sudo bobres monitor disable") {
@@ -495,7 +651,7 @@ func TestMonitorEnableAndDisableFollowTheEnvFile(t *testing.T) {
 	if code := m.run([]string{"disable", "--dir", dir}); code != 0 || len(f.files) != 0 {
 		t.Fatalf("disable: exit %d %s %s", code, out, errOut)
 	}
-	if !strings.Contains(out.String(), "Host monitoring is off") {
+	if !strings.Contains(out.String(), "Saved "+monitorCollectorKey+"=off") || !strings.Contains(out.String(), "Host monitoring is off") {
 		t.Errorf("disable output: %s", out)
 	}
 	got, _, _ := readEnv(filepath.Join(dir, ".env"))
@@ -506,38 +662,65 @@ func TestMonitorEnableAndDisableFollowTheEnvFile(t *testing.T) {
 		t.Errorf(".env mode: %v", st)
 	}
 	// It stays off through an install or update, which run the same step.
-	if o := f.host().ensure(context.Background(), dir, got); o.State != "off" || len(f.files) != 0 {
-		t.Errorf("ensure after disable: %+v", o)
+	if res := f.units().ensureMonitor(context.Background(), monitorOptions{dir: dir, exe: testExe, off: monitorOff(got)}); res.changed || len(f.files) != 0 {
+		t.Errorf("ensure after disable: %+v", res)
 	}
 	out.Reset()
-	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || f.files[unitService] == "" {
-		t.Fatalf("enable again: exit %d", code)
+	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || f.files[unitServicePath] == "" {
+		t.Fatalf("enable again: exit %d %s", code, out)
 	}
-	again, _, _ := readEnv(filepath.Join(dir, ".env"))
-	if _, ok := again[monitorCollectorKey]; ok {
-		t.Errorf("enable left %s in .env", monitorCollectorKey)
+	if again, _, _ := readEnv(filepath.Join(dir, ".env")); again[monitorCollectorKey] != "on" {
+		t.Errorf("enable left %q in .env", again[monitorCollectorKey])
+	}
+	// Units that went missing while the .env says on come back with enable.
+	f.files = map[string]string{}
+	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || f.files[unitServicePath] == "" {
+		t.Fatalf("enable after the units were lost: exit %d", code)
+	}
+	// The setting is also one of bobres config's.
+	out.Reset()
+	o, out2, _ := testOps("", &fakeOps{})
+	o.monitorUnits, o.exe = f.units(), func() (string, error) { return testExe, nil }
+	if code := o.configCmd([]string{"set", monitorCollectorKey, "off", "--dir", dir}); code != 0 || len(f.files) != 0 || !strings.Contains(out2.String(), "Host monitoring is off") {
+		t.Errorf("config set: exit %d files %v\n%s", code, f.files, out2)
+	}
+	if code := o.configCmd([]string{"set", monitorCollectorKey, "maybe", "--dir", dir}); code != 1 {
+		t.Errorf("a bad value: exit %d", code)
 	}
 	// No install, and a machine that cannot run the units.
 	if code := m.run([]string{"enable", "--dir", t.TempDir()}); code != 2 {
 		t.Errorf("no install: exit %d", code)
 	}
 	f.root = false
-	if code := m.run([]string{"enable", "--dir", dir}); code != 1 || !strings.Contains(out.String(), "not put in place") {
+	out.Reset()
+	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || !strings.Contains(out.String(), "not set up here") {
 		t.Errorf("not root: exit %d %s", code, out)
+	}
+}
+
+func TestMonitorEnableWithoutUnitsToChange(t *testing.T) {
+	dir := installDir(t)
+	m, out, _ := newTestMonitorCLI(newFakeMonitorSystem(), "cpu 1 1 1 1 1 1 1 1", func() time.Time { return monitorNow })
+	m.o.monitorUnits = nil
+	if code := m.run([]string{"enable", "--dir", dir}); code != 0 || !strings.Contains(out.String(), "next sudo bobres install") {
+		t.Errorf("exit %d %s", code, out)
 	}
 }
 
 func TestMonitorStatus(t *testing.T) {
 	dir := installDir(t)
 	now := func() time.Time { return monitorNow }
-	f := newFakeUnits()
-	m, out, _ := newTestMonitorCLI(dir, f, "cpu 1 1 1 1 1 1 1 1", now)
+	f := newFakeMonitorSystem()
+	m, out, _ := newTestMonitorCLI(f, "cpu 1 1 1 1 1 1 1 1", now)
 	// Nothing installed.
 	if code := m.run([]string{"status", "--dir", dir}); code != 1 || !strings.Contains(out.String(), "WARN") || !strings.Contains(out.String(), "not installed") {
 		t.Fatalf("not installed: exit %d %s", code, out)
 	}
 	// Installed and running with a fresh snapshot.
-	m.host.ensure(context.Background(), dir, nil)
+	if err := ensureMonitorDirs(dir); err != nil {
+		t.Fatal(err)
+	}
+	m.o.monitorUnits.ensureMonitor(context.Background(), monitorOptions{dir: dir, exe: testExe})
 	if err := snapshot.Write(monitorDir(dir), &snapshot.Snapshot{Schema: 1, GeneratedAt: monitorNow.Add(-10 * time.Second).Unix(),
 		GeneratedMS: monitorNow.Add(-10 * time.Second).UnixMilli(), Docker: &snapshot.Docker{OK: true, Version: "29.9.0"}}); err != nil {
 		t.Fatal(err)
@@ -573,7 +756,7 @@ func TestMonitorStatus(t *testing.T) {
 }
 
 func TestMonitorUsageAndSupported(t *testing.T) {
-	m, out, errOut := newTestMonitorCLI(t.TempDir(), newFakeUnits(), "cpu 1 1 1 1 1 1 1 1", time.Now)
+	m, out, errOut := newTestMonitorCLI(newFakeMonitorSystem(), "cpu 1 1 1 1 1 1 1 1", time.Now)
 	if code := m.run(nil); code != 2 || !strings.Contains(errOut.String(), "usage: bobres monitor") {
 		t.Errorf("no arguments: %d %s", code, errOut)
 	}
@@ -591,52 +774,74 @@ func TestMonitorUsageAndSupported(t *testing.T) {
 	}
 }
 
-// The install step puts the collector in place and says so; a failure there
-// is a warning, never a reason to stop.
+// updaterAndMonitorInstall is an installer with the collector's units on a fake systemd (the updater's
+// are left out: its own tests cover them).
+func monitorInstall(t *testing.T, f *fakeMonitorSystem) (*installer, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	ins, out, errOut := testInstaller("", secrets, &fakeDocker{health: []string{allHealthy}})
+	ins.monitorUnits = f.units()
+	ins.exe = func() (string, error) { return testExe, nil }
+	return ins, out, errOut
+}
+
+// The install makes the snapshot directory before the stack starts (Docker would make it as root) and
+// puts the collector in place once the stack is up; a second run changes nothing, and a refusing
+// systemd is a warning, never a failed install.
 func TestInstallPutsHostMonitoringInPlace(t *testing.T) {
 	dir := t.TempDir()
-	f := newFakeUnits()
-	ins, out, errOut := testInstaller("", secrets, &fakeDocker{health: []string{
-		`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`}})
-	ins.monitor = f.host()
+	f := newFakeMonitorSystem()
+	ins, out, errOut := monitorInstall(t, f)
 	if code := ins.install(append(baseArgs(dir), "--no-harden")); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if f.files[unitService] == "" || f.files[unitTimer] == "" {
+	if f.files[unitServicePath] == "" || f.files[unitTimerPath] == "" || !f.enabled {
 		t.Fatalf("units: %v", f.files)
+	}
+	if !strings.Contains(f.files[unitServicePath], "ExecStart="+testExe+" monitor snapshot --dir "+dir) {
+		t.Errorf("the service:\n%s", f.files[unitServicePath])
 	}
 	if st, err := os.Stat(monitorDir(dir)); err != nil || st.Mode().Perm() != 0o755 {
 		t.Errorf("snapshot directory: %v %v", st, err)
 	}
-	if !strings.Contains(out.String(), "Host monitoring: the snapshot timer installed") || !strings.Contains(out.String(), "sudo bobres monitor disable") {
+	if !strings.Contains(out.String(), monitorLabel) {
 		t.Errorf("the install does not say it:\n%s", out)
 	}
-	// The directory exists before the stack starts: Docker would make it as root otherwise.
-	// A second run changes nothing and says nothing.
-	out.Reset()
+
+	// Once more: changes nothing and says nothing.
 	f.cmds = nil
-	ins2, out2, errOut2 := testInstaller("", secrets, &fakeDocker{health: []string{`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`}})
-	ins2.monitor = f.host()
+	ins2, out2, errOut2 := monitorInstall(t, f)
 	if code := ins2.install(append(baseArgs(dir), "--no-harden")); code != 0 {
 		t.Fatalf("second run exit %d: %s", code, errOut2)
 	}
-	if strings.Contains(out2.String(), "Host monitoring") || f.ran("systemctl daemon-reload") != 0 || f.ran("systemctl enable") != 0 {
+	if strings.Contains(out2.String(), monitorLabel) || f.ran("systemctl daemon-reload") != 0 || f.ran("systemctl enable") != 0 {
 		t.Errorf("a second install changed it: %v\n%s", f.cmds, out2)
 	}
 
 	// systemd refusing is a warning; the install still finishes.
-	dir3 := t.TempDir()
-	bad := newFakeUnits()
+	bad := newFakeMonitorSystem()
 	bad.fail["systemctl daemon-reload"] = errors.New("exit status 1")
-	ins3, _, errOut3 := testInstaller("", secrets, &fakeDocker{health: []string{`[{"Service":"core","Health":"healthy"},{"Service":"payments","Health":"healthy"},{"Service":"provisioner","Health":"healthy"},{"Service":"bot","Health":"healthy"},{"Service":"tls-agent","Health":"healthy"},{"Service":"backup","Health":"healthy"}]`}})
-	ins3.monitor = bad.host()
-	if code := ins3.install(append(baseArgs(dir3), "--no-harden")); code != 0 || !strings.Contains(errOut3.String(), "warning: host monitoring was not put in place") {
+	ins3, _, errOut3 := monitorInstall(t, bad)
+	if code := ins3.install(append(baseArgs(t.TempDir()), "--no-harden")); code != 0 || !strings.Contains(errOut3.String(), "warning: host monitoring: not set up") {
 		t.Errorf("a refusing systemd: exit %d\n%s", code, errOut3)
+	}
+
+	// The owner switched it off in .env: the install takes the units away and does not put them back.
+	env, _, _ := readEnv(filepath.Join(dir, ".env"))
+	env[monitorCollectorKey] = "off"
+	if err := writeEnv(filepath.Join(dir, ".env"), env); err != nil {
+		t.Fatal(err)
+	}
+	ins4, _, errOut4 := monitorInstall(t, f)
+	if code := ins4.install(append(baseArgs(dir), "--no-harden", "--quiet", "--yes", "--skip-checks", "--offline")); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut4)
+	}
+	if len(f.files) != 0 || f.enabled {
+		t.Errorf("units left: %v", f.files)
 	}
 }
 
-// With no host to change (the tests', or a machine that is not the server) the
-// install still makes the directory core mounts, so Docker does not.
+// Without a host to change (the installer of a test, or a machine that is not the server) the install
+// still makes the directory core mounts, and writes the compose file that mounts it.
 func TestInstallWithoutAHostStillMakesTheSnapshotDirectory(t *testing.T) {
 	dir := t.TempDir()
 	ins, _, errOut := testInstaller("", secrets, nil)
@@ -655,7 +860,7 @@ func TestInstallWithoutAHostStillMakesTheSnapshotDirectory(t *testing.T) {
 func TestCheckHasAHostMonitorLine(t *testing.T) {
 	c, out, _, dir, sc := newCheckTest(t)
 	sc.check = coreAllGood
-	// A recent backup, so the Backup line does not fail the whole check.
+	// A backup, so that the only line that could fail is not the one under test.
 	if err := os.MkdirAll(filepath.Join(dir, "backups"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -665,46 +870,54 @@ func TestCheckHasAHostMonitorLine(t *testing.T) {
 	if code := c.run([]string{"--dir", dir}); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
-	// Nothing installed: a warning (not a failure), saying what to do.
-	if !strings.Contains(out.String(), "WARN  Host monitor") && !strings.Contains(out.String(), "SKIP  Host monitor") {
+	// Nothing installed (and no systemd here): a line, never a failure.
+	if !strings.Contains(out.String(), "SKIP  "+monitorLabel) {
 		t.Fatalf("no Host monitor line:\n%s", out)
+	}
+	out.Reset()
+	f := newFakeMonitorSystem()
+	c.o.monitorUnits = f.units()
+	if code := c.run([]string{"--dir", dir}); code != 0 || !strings.Contains(out.String(), "WARN  "+monitorLabel) || !strings.Contains(out.String(), "not installed") {
+		t.Fatalf("units missing: exit %d\n%s", code, out)
 	}
 	out.Reset()
 	if err := ensureMonitorDirs(dir); err != nil {
 		t.Fatal(err)
 	}
+	f.files[unitServicePath], f.files[unitTimerPath] = "x", "x"
 	now := c.o.clock()
-	// Containers that pass the snapshot's own checks (a 12 hex id and a name); anything else is dropped on write.
-	var cs []snapshot.Container
-	for i := 0; i < 7; i++ {
-		cs = append(cs, snapshot.Container{ID: fmt.Sprintf("%012x", i+1), Name: fmt.Sprintf("bobres-svc-%d", i)})
-	}
 	if err := snapshot.Write(monitorDir(dir), &snapshot.Snapshot{Schema: 1, GeneratedAt: now.Add(-3 * time.Second).Unix(), GeneratedMS: now.Add(-3 * time.Second).UnixMilli(),
-		Docker: &snapshot.Docker{OK: true, Version: "29.9.0", Containers: cs}}); err != nil {
+		Docker: &snapshot.Docker{OK: true, Version: "29.9.0", Containers: containers(7)}}); err != nil {
 		t.Fatal(err)
 	}
 	if code := c.run([]string{"--dir", dir}); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
-	if !strings.Contains(out.String(), "PASS  Host monitor") || !strings.Contains(out.String(), "docker 29.9.0 with 7 containers") {
+	if !strings.Contains(out.String(), "PASS  "+monitorLabel) || !strings.Contains(out.String(), "docker 29.9.0 with 7 containers") {
 		t.Errorf("a fresh snapshot is not passed:\n%s", out)
 	}
 }
 
+// containers makes n valid container entries.
+func containers(n int) []snapshot.Container {
+	out := make([]snapshot.Container, n)
+	for i := range out {
+		out[i] = snapshot.Container{ID: fmt.Sprintf("%012x", i+1), Name: fmt.Sprintf("c%d", i), State: snapshot.StateRunning, Health: snapshot.HealthNone}
+	}
+	return out
+}
+
 func TestUninstallTakesTheMonitoringUnitsAway(t *testing.T) {
 	dir := installDir(t)
-	f := newFakeUnits()
-	h := f.host()
-	h.ensure(context.Background(), dir, nil)
-	o, _, errOut := testOps("y\n", &fakeOps{})
-	o.monitor = h
-	if code := o.uninstallCmd([]string{"--dir", dir}); code != 0 {
+	f := newFakeMonitorSystem()
+	u := f.units()
+	u.ensureMonitor(context.Background(), monitorOptions{dir: dir, exe: testExe})
+	o, out, errOut := testOps("y\n", &fakeOps{})
+	o.monitorUnits = u
+	if code := o.uninstallCmd([]string{"--dir", dir, "--purge", "--yes"}); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if len(f.files) != 0 || f.ran("systemctl disable --now") != 1 {
-		t.Errorf("units left: %v, calls %v", f.files, f.cmds)
-	}
-	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-		t.Errorf("uninstall without --purge must keep the install directory: %v", err)
+	if len(f.files) != 0 || f.ran("systemctl disable --now") != 1 || !strings.Contains(out.String(), "Host monitoring: host monitoring is off") {
+		t.Errorf("units left: %v, calls %v\n%s", f.files, f.cmds, out)
 	}
 }

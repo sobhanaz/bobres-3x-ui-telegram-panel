@@ -106,6 +106,27 @@ type Handler struct {
 	// whiteLabel is Settings.white_label from the last refresh (false until
 	// then: the credit shows unless core says otherwise).
 	whiteLabel atomic.Bool
+	// resellersIncluded is Settings.resellers_enabled from the last refresh:
+	// the license in effect includes resellers, so customers are offered the
+	// Become a reseller button (false until then, and for an older core).
+	resellersIncluded atomic.Bool
+	// joinExtras is Settings.join_chats from the last refresh: the required
+	// channels and groups after the first one (the setting join.channel), as
+	// far as the license allows (joinchats.go). Nil before the first refresh,
+	// and for an older core.
+	joinExtras atomic.Pointer[[]joinReq]
+	// joinSem bounds the membership lookups in flight for all customers at
+	// once, and joinMissTTL is how long a chat a customer has not joined is
+	// not asked about again by an ordinary update (the "I've joined" button
+	// always asks); a field so that a test can switch it off.
+	joinSem     chan struct{}
+	joinMissTTL time.Duration
+	// helpFAQ and helpTutorials are Settings.help_faq and help_tutorials from the
+	// last refresh: whether the owner has an enabled question and an enabled
+	// tutorial to show. The FAQ button under Support and the Tutorials button of
+	// the menus show only while they are true (false until the first refresh).
+	helpFAQ       atomic.Bool
+	helpTutorials atomic.Bool
 }
 
 // New builds a Handler. limiter may be nil.
@@ -118,7 +139,7 @@ func New(core corev1.CoreServiceClient, t Telegram, st state.Store, cat *i18n.Ca
 	}
 	h := &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
 		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}, checkWait: defaultCheckWait,
-		profileKick: make(chan struct{}, 1)}
+		profileKick: make(chan struct{}, 1), joinSem: make(chan struct{}, joinParallelAll), joinMissTTL: joinMissCacheTTL}
 	h.loadMenuLabels() // a tap is known as such before settings ever load
 	return h
 }
@@ -158,6 +179,16 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	miniApp := s.GetMiniappUrl()
 	h.miniApp.Store(&miniApp)
 	h.whiteLabel.Store(s.GetWhiteLabel())
+	h.resellersIncluded.Store(s.GetResellersEnabled())
+	extras := make([]joinReq, 0, len(s.GetJoinChats()))
+	for _, c := range s.GetJoinChats() {
+		if c.GetChat() != "" {
+			extras = append(extras, joinReq{Chat: c.GetChat(), Link: c.GetLink(), Label: c.GetLabel()})
+		}
+	}
+	h.joinExtras.Store(&extras)
+	h.helpFAQ.Store(s.GetHelpFaq())
+	h.helpTutorials.Store(s.GetHelpTutorials())
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
@@ -246,6 +277,9 @@ type req struct {
 	// gated: a gate let the update through only to continue a ticket; what
 	// turns out to be anything else gets the gate's answer (answerGate).
 	gated bool
+	// joinMissing: the required chats the user has not joined, as the gate
+	// found them when it let a ticket through (answerGate asks about those).
+	joinMissing []joinReq
 	// held: a gate is in force for the user and let the update through only
 	// for what it is (an exempt command, a payment under way, a ticket), so
 	// it gets no bottom menu.
@@ -516,6 +550,9 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showHome(r)
 	case "buy":
 		h.showPlans(r)
+	case "nop": // a plan table's header button: nothing to do, the tap is only answered
+	case "bk":
+		h.routeBulk(r, rest)
 	case "plan":
 		h.showPlan(r, rest)
 	case "pay":
@@ -534,6 +571,12 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.askDiscount(r, rest)
 	case "ref":
 		h.showReferral(r)
+	case "top":
+		h.showTopUsers(r, pageArg(rest))
+	case "ap":
+		h.onResellerApply(r)
+	case "renew":
+		h.showRenewServices(r)
 	case "qr":
 		h.sendQR(r, rest)
 	case "wallet":
@@ -551,6 +594,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		r.show(r.t("wallet.enter_amount", "min", r.money(minTopup, "IRT"), "max", r.money(maxTopup, "IRT")), cancelKeyboard(r))
 	case "whist":
 		h.showHistory(r)
+	case "gift":
+		h.askGiftCode(r)
 	case "trial":
 		h.onTrial(r)
 	case "store":
@@ -560,6 +605,10 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onSupport(r)
 	case "tk":
 		h.onTicketButton(r, rest)
+	case "faq": // the FAQ under Support (help.go)
+		h.onFAQ(r, rest)
+	case "tut": // the Tutorials menu
+		h.onTutorials(r, rest)
 	case "dash":
 		if !r.isTeam() {
 			r.toast, r.alert = r.t("admin.forbidden"), true
@@ -639,6 +688,12 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		r.clearState()
 		r.send(r.t("cancelled"), nil)
 		h.showHome(r)
+	case "/new": // the buttons Buy, Renew and My services, by their own commands
+		h.onActionCommand(r, "buy")
+	case "/renew":
+		h.onActionCommand(r, "renew")
+	case "/status":
+		h.onActionCommand(r, "subs")
 	case "/paysupport":
 		h.onPaySupport(r)
 	case "/terms":
@@ -678,10 +733,16 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onTicket(r, st)
 	case sceneDiscount:
 		h.onDiscountCode(r, st)
+	case sceneGiftCode:
+		h.onGiftCode(r)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:
 		h.onAdminScene(r, st)
 	case sceneResellerLabel, sceneResellerFind, sceneResellerRename, sceneResellerNote:
 		h.onResellerScene(r, st)
+	case sceneResellerApply:
+		h.onResellerApplication(r)
+	case sceneBulkQuantity, sceneBulkName:
+		h.onBulkScene(r, st)
 	default:
 		r.clearState()
 		h.showHome(r)
@@ -705,6 +766,9 @@ const (
 	sceneResellerFind   = "rs_find"
 	sceneResellerRename = "rs_rename"
 	sceneResellerNote   = "rs_note"
+	// A bulk purchase: the number of services typed, and the name they share.
+	sceneBulkQuantity = "bulk_qty"
+	sceneBulkName     = "bulk_name"
 )
 
 // nonce makes each rendered payment menu unique: a double tap on one button

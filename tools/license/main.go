@@ -385,7 +385,7 @@ func tiers(args []string, out, errOut io.Writer) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "TIER\tSERVERS\tACTIVE SERVICES\tSTAFF SEATS\tRESELLERS\tAUTO USDT\tWHITE LABEL\tLENGTH\tGRACE\tPRICE")
+	fmt.Fprintln(tw, "TIER\tSERVERS\tACTIVE SERVICES\tSTAFF SEATS\tJOIN CHATS\tRESELLERS\tAUTO USDT\tWHITE LABEL\tLENGTH\tGRACE\tPRICE")
 	unset := false
 	for _, name := range p.Names() {
 		t, _ := p.Get(name)
@@ -398,8 +398,8 @@ func tiers(args []string, out, errOut io.Writer) error {
 			price = fmt.Sprintf("%s/month, %s/year (%s)", t.Price.Monthly, t.Price.Yearly, t.Price.Currency)
 			unset = unset || !t.Price.IsSet()
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d days\t%s\n", name, limitText(e.MaxServers), limitText(e.MaxActiveServices),
-			limitText(e.DashboardStaffSeat), yesNo(e.Resellers), yesNo(e.CryptoWatcher && e.HasGateway("usdt_trc20_auto")),
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d days\t%s\n", name, limitText(e.MaxServers), limitText(e.MaxActiveServices),
+			limitText(e.DashboardStaffSeat), limitText(e.MaxJoinChats), yesNo(e.Resellers), yesNo(e.CryptoWatcher && e.HasGateway("usdt_trc20_auto")),
 			yesNo(e.WhiteLabel), length, t.GraceDays, price)
 	}
 	if err := tw.Flush(); err != nil {

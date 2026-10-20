@@ -100,9 +100,11 @@ func TestChannelCheck(t *testing.T) {
 			"-1009876543210": {ID: -1009876543210, Type: "channel", Title: "Private"},
 			"@hidden":        {ID: -1002, Type: "channel", Title: "Hidden"},
 			"@friends":       {ID: -1003, Type: "supergroup", Title: "Friends"},
+			"@teamchat":      {ID: -1005, Type: "group", Title: "Team"},
+			"@somebody":      {ID: 77, Type: "private", Title: "A user"},
 			"@readers":       {ID: -1004, Type: "channel", Title: "Readers"},
 		},
-		status: map[string]string{"@mynews": "administrator", "-1009876543210": "creator", "@readers": "member"},
+		status: map[string]string{"@mynews": "administrator", "-1009876543210": "creator", "@readers": "member", "@friends": "administrator", "@teamchat": "creator"},
 	}
 	h := ChannelCheck(bot, 42, coreTok)
 	check := func(chat string) map[string]any {
@@ -124,11 +126,18 @@ func TestChannelCheck(t *testing.T) {
 	if got := check("-1009876543210"); got["ok"] != true || got["title"] != "Private" {
 		t.Fatalf("private channel by id: %v", got)
 	}
+	// A group is a required chat like a channel.
+	if got := check("@friends"); got["ok"] != true || got["title"] != "Friends" || got["bot_admin"] != true {
+		t.Fatalf("a supergroup the bot administers: %v", got)
+	}
+	if got := check("@teamchat"); got["ok"] != true || got["title"] != "Team" {
+		t.Fatalf("a group the bot administers: %v", got)
+	}
 	for chat, problem := range map[string]string{
 		"@nosuchchan": ProblemNotFound,
-		"@hidden":     ProblemNotAdmin, // Telegram hides members from non-admins
-		"@readers":    ProblemNotAdmin, // a plain member
-		"@friends":    ProblemNotChannel,
+		"@hidden":     ProblemNotAdmin,   // Telegram hides members from non-admins
+		"@readers":    ProblemNotAdmin,   // a plain member
+		"@somebody":   ProblemNotChannel, // a user, not a chat to join
 	} {
 		got := check(chat)
 		if got["ok"] != false || got["problem"] != problem || got["detail"] == "" || len(got) != 3 {

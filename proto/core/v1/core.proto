@@ -3,6 +3,7 @@ syntax = "proto3";
 package core.v1;
 
 import "common/v1/types.proto";
+import "core/v1/help.proto";
 
 option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
 
@@ -79,7 +80,7 @@ message LedgerEntry {
   string user_id = 2;
   string currency = 3;
   int64 amount = 4;
-  string kind = 5; // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement
+  string kind = 5; // topup | purchase | refund | adjust | trial_grant | referral | commission | settlement | gift_code
   string ref_type = 6;
   string ref_id = 7;
   string idempotency_key = 8;
@@ -279,6 +280,32 @@ message Settings {
   // "" otherwise (and for an older core). The bot then puts a Store button in
   // its menu and sets Telegram's menu button to it.
   string miniapp_url = 4;
+  // True when the license in effect (a license, its grace period or the trial;
+  // not the free tier) includes resellers: the bot then offers customers the
+  // "Become a reseller" button. False when it does not, and for an older core
+  // that never sets it, so a missing answer hides the button.
+  bool resellers_enabled = 5;
+  // Whether the help screens have anything to show: at least one enabled FAQ
+  // question and at least one enabled tutorial that a customer can read in some
+  // language. The bot shows its FAQ button (under Support) and its Tutorials
+  // button only while these are true. Both are false for an older core, which
+  // never sets them.
+  bool help_faq = 6;
+  bool help_tutorials = 7;
+  // The extra channels and groups customers must join, after the first one (the
+  // settings join.channel, join.link and join.label, in values), in the order
+  // customers are asked, limited to what the license in effect allows
+  // (max_join_chats): the chats the bot is to enforce, not the ones merely
+  // saved. Empty while the first one is not set, and for an older core, which
+  // never sets it: the bot then holds customers to the first chat only.
+  repeated JoinChat join_chats = 8;
+}
+
+// A required channel or group.
+message JoinChat {
+  string chat = 1;  // a public chat's @name, or a private chat's -100… id
+  string link = 2;  // the https://t.me/… link of the Join button; "" = the chat's t.me page
+  string label = 3; // the short name on the button; "" = the chat's @name
 }
 
 // --- Request/response messages ---
@@ -336,6 +363,76 @@ message Quote {
   string discount_code = 4; // normalized (upper case)
 }
 
+// QuoteBulkOrderRequest prices a bulk purchase before it is made; it fails as
+// CreateBulkOrder would for what can be known beforehand.
+message QuoteBulkOrderRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  int32 quantity = 3;
+}
+
+message BulkQuote {
+  int32 quantity = 1;
+  common.v1.Money unit_price = 2; // what this user pays for one service
+  common.v1.Money total = 3; // unit_price x quantity
+  int32 max_quantity = 4; // the most the store allows in one purchase now
+}
+
+// CreateBulkOrderRequest buys quantity services of one plan and pays for them
+// all from the wallet, all or nothing (docs/03-bot-ux.md, "Bulk purchase").
+message CreateBulkOrderRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  int32 quantity = 3;
+  // Required: a repeat of the request (a double tap, a retry) returns the
+  // first result and charges nothing more.
+  string idempotency_key = 4;
+  // Names the services "<prefix> 1" .. "<prefix> N" (optional, one line, at
+  // most 64 characters with the number).
+  string label_prefix = 5;
+  // The total the buyer was shown (optional): the purchase is refused
+  // (FAILED_PRECONDITION "price changed") when it comes to anything else.
+  common.v1.Money expected_total = 6;
+}
+
+message GetBulkOrderRequest {
+  string bulk_id = 1;
+  string user_id = 2; // when set, must be the buyer (NOT_FOUND otherwise)
+}
+
+// BulkOrder is a bulk purchase: its orders are ordinary orders, one per
+// service, in the order they were made.
+message BulkOrder {
+  string id = 1;
+  string user_id = 2;
+  string plan_id = 3;
+  int32 quantity = 4;
+  common.v1.Money unit_price = 5;
+  common.v1.Money total = 6;
+  string label_prefix = 7;
+  int64 created_at = 8;
+  // When core announced the one message with every link (0: not yet).
+  int64 delivered_at = 9;
+  map<string, string> plan_name_i18n = 10;
+  repeated BulkService services = 11;
+  // CreateBulkOrder: the request had been made before, nothing was charged
+  // again.
+  bool replayed = 12;
+}
+
+// BulkService is one order of a bulk purchase and the service made for it.
+message BulkService {
+  int32 index = 1; // 1 to quantity
+  string order_id = 2;
+  string order_status = 3; // paid | provisioning | provision_failed | active | cancelled
+  string subscription_id = 4; // "" until the service exists
+  string status = 5; // the service's status, "" until it exists
+  string label = 6;
+  string subscription_link = 7; // "" until delivered
+  int64 expires_at = 8;
+  int64 traffic_total_bytes = 9;
+}
+
 message GetReferralInfoRequest {
   string user_id = 1;
 }
@@ -346,6 +443,41 @@ message ReferralInfo {
   int32 rewarded = 3; // invited users whose first purchase paid a reward
   repeated common.v1.Money earned = 4; // per currency
   int32 reward_percent = 5; // of an invited user's first purchase; 0 = referrals are off
+}
+
+// GetTopInvitersRequest asks for one page of the top-inviters board, for the
+// customer who is looking at it.
+message GetTopInvitersRequest {
+  string user_id = 1; // who is looking: their own invite count and place come with the page
+  int32 page = 2; // 1-based; 0 = the first
+  int32 page_size = 3; // places per page; 0 = 5, at most 10
+}
+
+// TopInviter is one place on the board. Nothing in it identifies a person
+// whole: core masks the name and the Telegram id and never sends either in full.
+message TopInviter {
+  int32 rank = 1; // 1-based, in the board's order (a tie goes to whoever joined the bot first)
+  string name = 2; // the @username without the @, masked: its first and last characters around ***; "***" when there is none or it is too short to show any
+  string telegram_id = 3; // the Telegram id, masked the same way
+  int32 invited = 4; // users who joined through this customer's invite link
+  bool you = 5; // this place is the customer who asked
+}
+
+// TopInviters is a page of the board of the customers who invited the most
+// people: customers only (never staff, resellers or banned users), at most 50
+// places, each with at least one invited user.
+message TopInviters {
+  // False when the board is off (the owner switched growth.leaderboard.enabled
+  // off, or the referral program is off, referral.reward_percent 0): nothing
+  // else is set.
+  bool enabled = 1;
+  repeated TopInviter entries = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 total = 5; // places on the board, at most 50
+  bool more = 6; // another page follows
+  int32 your_invited = 7; // users who joined through the asking customer's link, on the board or not
+  int32 your_rank = 8; // the asking customer's place on the board; 0 = not on it
 }
 
 message Discount {
@@ -808,7 +940,17 @@ service CoreService {
   rpc AdminUpsertPlan(AdminUpsertPlanRequest) returns (Plan);
   rpc AdminSetSetting(AdminSetSettingRequest) returns (Settings);
   rpc QuoteOrder(QuoteOrderRequest) returns (Quote);
+  // Bulk purchase: N services of one plan paid from the wallet in one
+  // transaction (all or nothing, idempotent by the request key), then
+  // provisioned like any order. GetBulkOrder gives the services of one, with
+  // their links once they are delivered (for the bot's one message).
+  rpc QuoteBulkOrder(QuoteBulkOrderRequest) returns (BulkQuote);
+  rpc CreateBulkOrder(CreateBulkOrderRequest) returns (BulkOrder);
+  rpc GetBulkOrder(GetBulkOrderRequest) returns (BulkOrder);
   rpc GetReferralInfo(GetReferralInfoRequest) returns (ReferralInfo);
+  // GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
+  // enabled is false while the board is off. NOT_FOUND for an unknown user.
+  rpc GetTopInviters(GetTopInvitersRequest) returns (TopInviters);
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
   rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);
@@ -842,6 +984,13 @@ service CoreService {
   // GetBotPhoto returns the bot photo, for the bot to set in Telegram when
   // Settings.bot_photo_version changes; NOT_FOUND when there is none.
   rpc GetBotPhoto(GetBotPhotoRequest) returns (BotPhoto);
+  // Help content (help.proto): the enabled questions or tutorials of a kind in
+  // the customer's language (the other one where a translation is missing), in
+  // the owner's order, and one of them. PERMISSION_DENIED for a banned
+  // customer, NOT_FOUND for an unknown customer, and for an entry that is gone
+  // or switched off (GetHelpEntry).
+  rpc ListHelpEntries(ListHelpEntriesRequest) returns (ListHelpEntriesResponse);
+  rpc GetHelpEntry(GetHelpEntryRequest) returns (HelpEntry);
   // The bot's button-driven admin menu (WP-D). Every call is the actor's own:
   // core checks the role again and audits each change like the dashboard does.
   rpc AdminTodayStats(AdminTodayStatsRequest) returns (AdminTodayStatsResponse);
@@ -852,6 +1001,10 @@ service CoreService {
   rpc AdminAddStaff(AdminAddStaffRequest) returns (AdminStaffMember);
   rpc AdminRemoveStaff(AdminRemoveStaffRequest) returns (AdminRemoveStaffResponse);
   rpc AdminBroadcast(AdminBroadcastRequest) returns (AdminBroadcastResponse);
+  // RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
+  // an active account only (a banned one is PERMISSION_DENIED "user is banned").
+  // What a customer can get wrong is an outcome of the answer, not an error.
+  rpc RedeemGiftCode(RedeemGiftCodeRequest) returns (RedeemGiftCodeResponse);
 }
 
 message CanStartTrialRequest {
@@ -994,4 +1147,36 @@ message AdminBroadcastResponse {
   map<string, string> texts = 4; // normalised
   map<string, string> button_labels = 5;
   string broadcast_id = 6; // set once sent
+}
+
+// How a gift code request ended. Everything a customer can get wrong is an
+// outcome, so the bot answers in their words; an error stays for a broken
+// request, a banned customer (PERMISSION_DENIED) and a backend that is down.
+enum GiftCodeOutcome {
+  GIFT_CODE_OUTCOME_UNSPECIFIED = 0;
+  GIFT_CODE_OUTCOME_REDEEMED = 1; // credited, or (replayed) credited by this very request before
+  // Unknown, switched off or expired, or not a code at all: one answer for all
+  // of them, so nothing tells a guesser which codes exist. Each counts as a
+  // wrong code (five in an hour close entering codes for an hour).
+  GIFT_CODE_OUTCOME_INVALID = 2;
+  GIFT_CODE_OUTCOME_USED_UP = 3; // told only to someone who sent the whole code
+  GIFT_CODE_OUTCOME_ALREADY_REDEEMED = 4; // this customer used the code as often as they may
+  GIFT_CODE_OUTCOME_LOCKED = 5; // too many wrong codes: retry_after_seconds
+  GIFT_CODE_OUTCOME_OFF = 6; // the owner switched gift codes off (or core cannot key them)
+}
+
+message RedeemGiftCodeRequest {
+  string user_id = 1;
+  string code = 2; // as the customer typed it: core reads capitals, digits and separators any way they are written
+  // Identifies the request (the bot uses the customer's message): sent again
+  // with the same key, it credits nothing more and answers the same.
+  string idempotency_key = 3;
+}
+
+message RedeemGiftCodeResponse {
+  GiftCodeOutcome outcome = 1;
+  common.v1.Money credited = 2; // REDEEMED: what was added to the wallet
+  common.v1.Money balance = 3; // REDEEMED: the wallet's balance now
+  int64 retry_after_seconds = 4; // LOCKED: how long entering codes stays closed
+  bool replayed = 5; // REDEEMED: this request was served before; nothing was credited this time
 }

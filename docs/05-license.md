@@ -43,6 +43,7 @@ the repository: the private half stays with the vendor, outside it.
     "gateways": ["zarinpal", "idpay", "nextpay", "stars", "manual_card", "manual_crypto", "manual_zarinpal"],
     "crypto_watcher": false,
     "dashboard_staff_seats": 3,
+    "max_join_chats": 1,
     "updates_until": "2027-09-30"
   }
 }
@@ -55,6 +56,12 @@ the repository: the private half stays with the vendor, outside it.
   25 services. `tools/license sign` and `licensesrv key create|update` print a WARNING ("max_active_services is 0 or
   missing: the install will floor it at the free tier's 25") when they make such a license, and still make it.
 - `grace_days` is 0..90; `expires_at` must be after `issued_at`; `issued_at` gets 5 minutes of clock skew.
+- `max_join_chats` is how many channels and groups customers must join to use the bot and the Mini App (the store's
+  required chats, [03-bot-ux.md](03-bot-ux.md)): `-1` is unlimited, and a token that omits it, or says 0, gets the
+  free tier's 1. **A token signed before this field existed carries none**, so it counts 1 until the
+  seller re-applies the tier (`licensesrv key update lic_… -tier pro -reason "required chats"` for a Pro license, which stores the preset's
+  numbers and reaches the install at its next daily renewal; a hand-signed token needs signing again). Nothing that
+  exists is lost meanwhile: the extra chats only start to count, and there are none before this version.
 - Gateway names: `zarinpal`, `idpay`, `nextpay`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
   wallet is always allowed. Automatic USDT (`usdt_trc20_auto`, Phase 6a) also needs the `crypto_watcher` feature.
 - `updates_until` (YYYY-MM-DD) is the end of the updates the license was sold with, and it is **advisory**. The
@@ -110,7 +117,7 @@ was set back, a restore), so it never has more than 30 days left, and core write
 
 ### The free tier
 `license.FreeEntitlements()` holds the numbers in one place, as constants the owner may tune
-(`FreeMaxServers`, `FreeMaxActiveServices`, `FreeStaffSeats`).
+(`FreeMaxServers`, `FreeMaxActiveServices`, `FreeStaffSeats`, `FreeMaxJoinChats`).
 
 | Entitlement | Free tier |
 |---|---|
@@ -119,6 +126,7 @@ was set back, a restore), so it never has more than 30 days left, and core write
 | `resellers` | no |
 | `white_label` | no: "Powered by BOBRES" is shown |
 | `crypto_watcher` | no: no automatic USDT |
+| `max_join_chats` | 1: one channel or group customers must join; more need Pro (Standard has 1 too) or the trial |
 | `dashboard_staff_seats` | 2 (the main owner, the first id in `BOBRES_ADMIN_TELEGRAM_ID`, takes none; every other staff member takes one, an owner too, a second owner named in the same setting included) |
 | `gateways` | `zarinpal`, `idpay`, `nextpay`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`; the wallet is always allowed |
 | `updates_until` | none: security updates are never withheld |
@@ -127,7 +135,7 @@ was set back, a restore), so it never has more than 30 days left, and core write
 Every install has **30 days** (`license.TrialDays`) from the first start of a version with this policy. A fresh install
 and an upgraded one are treated alike: migration `00017` writes `core.install.trial_started_at` once, when it first
 runs, and nothing updates it afterwards. The trial's entitlements (`license.TrialEntitlements()`): unlimited servers
-and services, resellers, every payment method including automatic USDT (`crypto_watcher`), 5 staff seats. It does
+and services and required chats, resellers, every payment method including automatic USDT (`crypto_watcher`), 5 staff seats. It does
 **not** include white label, so the "Powered by BOBRES" mark stays during the trial. The trial is not tied to a
 Telegram or email identity: a store is its install. When it ends nothing is deleted or switched off; the free tier's
 limits start to apply to new actions. The CI and end-to-end installs have no license and run in their trial.
@@ -144,11 +152,13 @@ Only **new** actions are refused, and only by the effective entitlements. A refu
 | a reseller's purchase of a new service | `resellers` is off (the reseller keeps their account and what they bought) |
 | a reseller pausing, resuming or deleting a customer's service, noting it, reading their services in groups, or listing the customers who joined through their link (bot and Mini App) | `resellers` is off (refused as forbidden, never a word about licensing; the plain list of their services and each service's link still open in the bot) |
 | making a reseller | `resellers` is off |
+| a customer's reseller application (the bot's Become a reseller button: a ticket in the `reseller` category) | `resellers` is off (the button is hidden at the bot's next settings refresh, `Settings.resellers_enabled`; core refuses the application, and the bot says only "not available", never a word about licensing) |
+| adding a required channel or group (the dashboard's Settings, Required channels and groups) | the list would be longer than `max_join_chats` **and** longer than what is saved now (the saved chats stay: see below) |
 | adding an admin, a support member or another owner | the seats are taken (only the owner the server names takes none) |
 | switching a payment method on | it is not in `gateways`; automatic USDT also needs `crypto_watcher` |
 | white label | not a switch: "Powered by BOBRES" shows unless the effective entitlements include `white_label`, which only a valid license can grant |
 
-Never gated, over any limit: every customer's existing service (it keeps working, **renewing and topping up**), an
+Never gated, over any limit: the required channels and groups already saved (they only stop counting, above), every customer's existing service (it keeps working, **renewing and topping up**), an
 order made before the limit was reached and paid after it (the money is already in), staff who are already over the
 seats (they keep their access, and may change roles without taking a new seat), existing resellers (their account, and
 what they already bought; the new powers over it need `resellers`, see the table), servers and payment methods (they
@@ -186,6 +196,16 @@ servers". The dashboard shows a sentence per gate in its language, with core's w
 - `dashboard_staff_seats`: adding an admin, a support member or another owner beyond the seats. Every staff member but
   the owner the server names takes a seat (an owner too: promoting the two seat holders to owner leaves the count at
   two), and changing role between the three takes or frees none. Nobody is removed over a limit;
+- `max_join_chats`: saving a list of required channels and groups (`PUT /api/v1/join-chats`) that is longer than the
+  limit and longer than the list saved: 409 with license `max_join_chats` and a message such as "the free tier allows 1
+  required chat (channels and groups customers must join; the Pro plan has no limit): buy or renew a license to add
+  more required channels and groups". The first chat (the setting `join.channel`) is the free tier's one and is never
+  refused. **When the limit drops** (a license ends, the trial is over) nothing is deleted: the first N chats of the
+  list, the first one always, are enforced (the bot gets that list with its settings, the Mini App reads it at every
+  call), the dashboard marks the others "Inactive: needs Pro" and the License tab counts all saved against the limit
+  ("3 of 1"); a list not longer than the saved one is always accepted, so the owner can still remove, edit and
+  reorder, but not add. They count again when the limit allows. When the extras cannot be read, only the first chat is
+  held, the floor of every license.
 - `gateways`: switching a payment method on (Zarinpal, IDPay, NextPay or automatic USDT in Payment gateways, or a manual
   method's or Stars' switch from off to on) that the effective entitlements do not name;
 - `crypto_watcher`: switching automatic USDT on without the `crypto_watcher` feature.

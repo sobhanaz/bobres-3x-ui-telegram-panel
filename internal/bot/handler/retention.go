@@ -100,10 +100,7 @@ func (h *Handler) showPicker(r *req, c state.Checkout, ps []*corev1.Plan, title 
 		return
 	}
 	kb := &tg.Keyboard{}
-	for _, p := range ps {
-		kb.Row(tg.CB(r.t("plan.button", "name", planName(r, p), "price", r.money(p.GetPrice().GetAmount(), p.GetPrice().GetCurrency())),
-			"rp:"+n+":"+p.GetId()))
-	}
+	h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "rp:" + n + ":" + p.GetId() })
 	kb.Row(r.button("btn.back", "sub:"+c.SubscriptionID), r.button("btn.home", "home"))
 	r.show(title, kb)
 }
@@ -219,6 +216,7 @@ func (h *Handler) showReferral(r *req) {
 	kb := (&tg.Keyboard{}).Row(r.linkButton("btn.share", share)).Row(r.button("btn.home", "home"))
 	r.show(r.t("ref.screen", "percent", i18n.Number(r.lang, int64(info.GetRewardPercent())), "link", esc(link),
 		"invited", i18n.Number(r.lang, int64(info.GetInvited())), "earned", earned(r, info.GetEarned())), kb)
+	h.sendPromoCard(r, link) // a card to forward, apart from this screen
 }
 
 // usageBar draws used/total as ten blocks.

@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
 )
 
 // Setting kinds: how a value is checked and stored.
@@ -37,9 +38,24 @@ const (
 const (
 	permSettings  = "settings.write"
 	permGateways  = "gateways.write" // owner only: where customers' money goes
+	permSystem    = "system.write"   // owner only: how the server itself runs (its updates)
 	permBranding  = "branding.write"
 	permDiscounts = "discounts.write"
 )
+
+// The layouts of the bot's plan lists (SettingPlanLayout): a table puts each
+// plan on a row of two buttons (its name and its price) under a header row;
+// a list has one button per plan.
+const (
+	SettingPlanLayout = "bot.plan_layout"
+	PlanLayoutTable   = "table"
+	PlanLayoutList    = "list"
+)
+
+// ownerOnlyPerm reports whether a setting's permission is held by the owner
+// alone (the web package's ownerOnly: gateways.write and system.write), so an
+// admin neither sees nor changes it, in the dashboard or the bot.
+func ownerOnlyPerm(perm string) bool { return perm == permGateways || perm == permSystem }
 
 // SettingSpec describes one setting: where it is edited, who may change it
 // and what values it takes. Every value is stored as a JSON string; "" (or
@@ -71,12 +87,16 @@ var SettingSpecs = []SettingSpec{
 		Help: "the bot's @username: the renew button of the subscription page opens https://t.me/<username> (empty = no renew button)"},
 	{Key: "miniapp.enabled", Group: "general", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the Telegram Mini App store is open at /app/ (the whole store inside Telegram: plans, buying, renewing, wallet, support, invites and the reseller panel) and the bot opens it from a Store button and Telegram's menu button; false = /app/ and its API answer 404 and the buttons go. It needs the store's public HTTPS address, see docs/17-mini-app.md"},
+	{Key: SettingGiftCodes, Group: "general", Kind: KindBool, Perm: permDiscounts, Default: "true",
+		Help: "true = customers can apply a gift code (a code the store made, worth a fixed amount of wallet credit) from the wallet screen in the bot; false = that button goes and no code is accepted (codes can still be made in the dashboard). Needs the master key"},
 	{Key: "maintenance.enabled", Group: "maintenance", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = customers only get the maintenance message; staff and payments in progress still work"},
 	{Key: "join.channel", Group: "join", Kind: KindChannel, Perm: permSettings,
-		Help: "channel customers must join to use the bot: @name or -100… id (the bot must be its admin; empty = off)"},
+		Help: "the first channel or group customers must join to use the bot: @name or -100… id (the bot must be its admin; empty = off, the extra required chats too)"},
 	{Key: "join.link", Group: "join", Kind: KindURL, Perm: permSettings,
 		Help: "https://t.me/… link of the join button (needed for a private channel)"},
+	{Key: "join.label", Group: "join", Kind: KindText, Perm: permSettings, MaxLen: JoinLabelMax,
+		Help: "short name of this channel on the join button when customers must join several (empty = its @name)"},
 	{Key: "notify.new_payment", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "message staff when a payment needs review"},
 	{Key: "notify.new_ticket", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
@@ -93,6 +113,12 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = every day at the time below, the bot messages yesterday's sales (revenue per currency, paid orders, refunds, top-ups, new customers, free trials) to every owner and admin; off by default"},
 	{Key: SettingDailySummaryTime, Group: "reports", Kind: KindTime, Perm: permSettings, Default: DefaultDailySummaryTime,
 		Help: "time of day (HH:MM, 24-hour) in the store's time zone at which the daily sales summary is sent"},
+	{Key: SettingPlanLayout, Group: "shop", Kind: KindEnum, Perm: permSettings, Default: PlanLayoutTable, Options: []string{PlanLayoutTable, PlanLayoutList},
+		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
+	{Key: SettingBulkEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = the bot's home menu has a Bulk purchase button: a customer buys several services of one plan at once and pays from the wallet; false = no button, and core refuses bulk purchases"},
+	{Key: SettingBulkMax, Group: "shop", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultBulkMax), Min: MinBulkQuantity, Max: MaxBulkQuantity,
+		Help: "the most services one bulk purchase may hold (2 to 100)"},
 	{Key: "support.autoclose_days", Group: "support", Kind: KindInt, Perm: permSettings, Default: "7", Min: 0, Max: 90,
 		Help: "close a ticket this many days after staff answered, when the customer does not write back (0 = never)"},
 	{Key: "limits.bot_per_10s", Group: "limits", Kind: KindInt, Perm: permSettings, Default: "20", Min: 5, Max: 200,
@@ -125,6 +151,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "your Zarinpal payment link (https://zarinp.al/...); customers pay there and send the receipt screenshot for approval"},
 	{Key: "referral.reward_percent", Group: "referral", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: 100,
 		Help: "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)"},
+	{Key: SettingLeaderboard, Group: "growth", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = while the referral program is on, customers see a Top users board in the bot: the customers who invited the most people, with their names and Telegram ids masked (never staff, resellers or banned users); false = the Top users button and the board are gone"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
@@ -139,6 +167,9 @@ var SettingSpecs = []SettingSpec{
 		Help: "Persian name of the Toman in prices (empty = تومان)"},
 	{Key: "branding.currency.en", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 16,
 		Help: "English name of the Toman in prices (empty = Toman)"},
+	// The Updates tab edits it (System > Updates, the owner only); it is not on the Settings page.
+	{Key: release.SettingChannel, Group: "updates", Kind: KindEnum, Perm: permSystem, Options: []string{release.ChannelStable, release.ChannelBeta},
+		Help: "the release channel updates follow: stable = the newest stable release, beta = the newest of all releases, pre-releases included (empty = the server's BOBRES_UPDATE_CHANNEL, stable when unset)"},
 }
 
 // SettingKeys maps each setting to its help text (the bot's /set list).
@@ -400,8 +431,11 @@ func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, ke
 	if err != nil {
 		return err
 	}
-	if SettingPerm(key) == permGateways && actor.Role != "owner" {
-		return &FieldError{key, "only the store owner can change payment details"}
+	if perm := SettingPerm(key); ownerOnlyPerm(perm) && actor.Role != "owner" {
+		if perm == permGateways {
+			return &FieldError{key, "only the store owner can change payment details"}
+		}
+		return &FieldError{key, "only the store owner can change how the server runs (its updates)"}
 	}
 	return s.SetSetting(ctx, actor, key, value)
 }
@@ -471,24 +505,7 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 			if before[k] == norm[k] {
 				continue
 			}
-			if norm[k] == "" {
-				err = s.st.DeleteSetting(ctx, tx, k)
-			} else {
-				raw, _ := json.Marshal(norm[k])
-				err = s.st.SetSetting(ctx, tx, k, raw)
-			}
-			if err != nil {
-				return err
-			}
-			action, entity, entityID := "setting.set", "settings", k
-			if lang, tk, ok := i18n.SplitTextKey(k); ok {
-				action, entity, entityID = "text.set", "text", lang+"."+tk
-				if norm[k] == "" {
-					action = "text.reset"
-				}
-			}
-			if err := s.auditChange(ctx, tx, actor, action, entity, entityID,
-				map[string]string{"value": before[k]}, map[string]string{"value": norm[k]}, ""); err != nil {
+			if err := s.writeSetting(ctx, tx, actor, k, before[k], norm[k]); err != nil {
 				return err
 			}
 			changes = append(changes, SettingChange{Key: k, Before: before[k], After: norm[k]})
@@ -499,6 +516,31 @@ func (s *Service) SetSettings(ctx context.Context, actor *store.User, values map
 		return nil, err
 	}
 	return changes, nil
+}
+
+// writeSetting stores one changed, already checked setting inside a
+// transaction ("" removes it, so its default applies) with its audit entry
+// (the value before and after).
+func (s *Service) writeSetting(ctx context.Context, tx pgx.Tx, actor *store.User, key, before, after string) error {
+	var err error
+	if after == "" {
+		err = s.st.DeleteSetting(ctx, tx, key)
+	} else {
+		raw, _ := json.Marshal(after)
+		err = s.st.SetSetting(ctx, tx, key, raw)
+	}
+	if err != nil {
+		return err
+	}
+	action, entity, entityID := "setting.set", "settings", key
+	if lang, tk, ok := i18n.SplitTextKey(key); ok {
+		action, entity, entityID = "text.set", "text", lang+"."+tk
+		if after == "" {
+			action = "text.reset"
+		}
+	}
+	return s.auditChange(ctx, tx, actor, action, entity, entityID,
+		map[string]string{"value": before}, map[string]string{"value": after}, "")
 }
 
 // ImportTexts replaces the overrides of many texts of one language at once:

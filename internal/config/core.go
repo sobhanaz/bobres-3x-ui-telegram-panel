@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"strings"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/sysupdate"
 )
 
 // Core is the core service configuration.
@@ -86,6 +89,12 @@ type Core struct {
 	// the HTTPS status and alerts: BOBRES_TLS_PROBE_ADDR (default caddy:443,
 	// over the edge network).
 	TLSProbeAddr string
+	// UpdateDir is the folder core shares with the server's updater, as core
+	// sees it: BOBRES_UPDATE_DIR (default /run/bobres-update). "Update now" in
+	// the dashboard writes its request there and reads the updater's status
+	// from it (internal/sysupdate). It is not there until the updater is
+	// installed; then updating from the dashboard is "not available yet".
+	UpdateDir string
 	// MonitorDir is where core reads the host collector's snapshot
 	// (BOBRES_MONITOR_DIR; compose mounts the install's run/monitor there,
 	// read-only). Empty: the host is not monitored (an install from before the
@@ -158,7 +167,22 @@ func LoadCore() (Core, error) {
 	if _, _, err := net.SplitHostPort(co.TLSProbeAddr); err != nil {
 		keep(errors.New("BOBRES_TLS_PROBE_ADDR must be host:port like caddy:443"))
 	}
+	co.UpdateDir, err = updateDir()
+	keep(err)
 	return co, errors.Join(errs...)
+}
+
+// updateDir reads BOBRES_UPDATE_DIR: an absolute path, /run/bobres-update when
+// unset.
+func updateDir() (string, error) {
+	v := strings.TrimSpace(getenv("BOBRES_UPDATE_DIR", ""))
+	if v == "" {
+		return sysupdate.DefaultDir, nil
+	}
+	if !filepath.IsAbs(v) || strings.ContainsRune(v, 0) {
+		return "", errors.New("BOBRES_UPDATE_DIR must be an absolute path like /run/bobres-update")
+	}
+	return filepath.Clean(v), nil
 }
 
 // peerURL reads another service's internal address (def when unset): an

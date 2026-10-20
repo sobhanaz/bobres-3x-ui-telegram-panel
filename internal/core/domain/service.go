@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
@@ -39,6 +41,13 @@ type Config struct {
 	Log *slog.Logger
 	// License is what a license token is checked against.
 	License LicenseConfig
+	// Secrets (core's master key) keys the hashes gift codes are stored as, so
+	// a copy of the database cannot be read back into codes. Nil: no gift
+	// code can be made or redeemed (core says so; nothing is stored in clear).
+	Secrets *bcrypto.Envelope
+	// LeaderboardTTL is how long the top-inviters board is kept before it is
+	// read again (0: 30 seconds; below 0: never kept, every call reads it).
+	LeaderboardTTL time.Duration
 }
 
 // Service composes the store with business rules.
@@ -52,6 +61,8 @@ type Service struct {
 	// embedded is the license key ring built into core, read once.
 	keysOnce sync.Once
 	embedded license.KeyRing
+	// boards keeps the top-inviters board for a short time (Config.LeaderboardTTL).
+	boards boardCache
 }
 
 // New builds a Service publishing to core's outbox.
@@ -255,13 +266,23 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 // paid, after the effects of paying (discount use, referral reward). provider
 // is who took the money for a payment, "" for wallet, trial and free orders.
 func (s *Service) publishOrderPaid(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source, provider string) error {
+	return s.publishOrderPaidIn(ctx, tx, o, telegramID, source, provider, 0)
+}
+
+// publishOrderPaidIn is publishOrderPaid for an order that may be one of a
+// bulk purchase of bulkQuantity orders (0: it is not).
+func (s *Service) publishOrderPaidIn(ctx context.Context, tx pgx.Tx, o *store.Order, telegramID int64, source, provider string, bulkQuantity int) error {
 	if err := s.orderPaidEffects(ctx, tx, o, source); err != nil {
 		return err
 	}
-	return s.publish(ctx, tx, events.OrderPaid, events.OrderPaidEvent{
+	e := events.OrderPaidEvent{
 		OrderID: o.ID, UserID: o.UserID, TelegramID: telegramID, PlanID: o.PlanID,
 		Amount: o.Amount, Currency: o.Currency, Source: source, Provider: provider,
-	})
+	}
+	if o.BulkID != nil && o.BulkIndex != nil {
+		e.BulkID, e.BulkIndex, e.BulkQuantity = *o.BulkID, int(*o.BulkIndex), bulkQuantity
+	}
+	return s.publish(ctx, tx, events.OrderPaid, e)
 }
 
 // PayOrderWithWallet debits the buyer's wallet and marks the order paid in one

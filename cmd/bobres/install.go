@@ -66,8 +66,13 @@ type installer struct {
 	survive func()
 	// botName is the bot's username once Telegram has said it.
 	botName string
-	// monitor puts the host monitoring collector in place (nil: the real machine).
-	monitor *monitorHost
+	// units installs the dashboard updater's systemd units once the store is up (nil: it is
+	// not installed). exe is the bobres they run and stateDir the release state directory.
+	units    *systemUnits
+	exe      func() (string, error)
+	stateDir string
+	// monitorUnits installs the host collector's units the same way (nil: not installed).
+	monitorUnits *systemUnits
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -90,7 +95,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		sleep:     time.Sleep,
 		runLines:  streamDocker,
 		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
-		monitor: newMonitorHost(),
+		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(), monitorUnits: newSystemUnits(),
 	}
 	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
 		ins.logPath = p
@@ -473,7 +478,6 @@ func (ins *installer) runInstall(args []string) int {
 		return 1
 	}
 	fmt.Fprintf(ins.out, "Wrote %s (.env is readable by root only).\n", *dir)
-	ins.ensureMonitor(ctx, *dir, env, notes)
 	if *noStart {
 		for _, k := range []string{stepPull, stepStart, stepHealthy, stepHarden} {
 			ins.prog.Skip(k, "--no-start")
@@ -484,6 +488,10 @@ func (ins *installer) runInstall(args []string) int {
 	if code := ins.start(ctx, *dir, env); code != 0 {
 		return code
 	}
+	// The dashboard's updater, once the store it updates is up. Never a failed install.
+	ins.ensureUpdater(ctx, *dir, env)
+	// And the host collector behind the dashboard's Monitoring section, the same way.
+	ins.ensureMonitor(ctx, *dir, env)
 	// Hardening runs by itself where it is safe (--ask-harden asks step by
 	// step instead); never from a run that cannot ask (--yes, as bobres update
 	// runs it) or a settings change from the menu (quiet).
@@ -518,30 +526,6 @@ func (ins *installer) runInstall(args []string) int {
 		ins.summary(env, *dir)
 	}
 	return 0
-}
-
-// ensureMonitor makes the install ready for host monitoring: the snapshot
-// directory core mounts, and the collector's two systemd units where the
-// machine can run them. It never stops an install: what cannot be done is a
-// warning (or a note), and `sudo bobres monitor enable` does it later.
-func (ins *installer) ensureMonitor(ctx context.Context, dir string, env map[string]string, notes io.Writer) {
-	h := ins.monitor
-	if h == nil {
-		// No host to change (a test): the directory core mounts is still made.
-		if err := ensureMonitorDirs(dir); err != nil {
-			fmt.Fprintf(ins.errOut, "warning: the monitoring directory was not made: %v\n", err)
-		}
-		return
-	}
-	o := h.ensure(ctx, dir, env)
-	switch {
-	case o.Err != nil:
-		fmt.Fprintf(ins.errOut, "warning: host monitoring was not put in place (%v): the install goes on; sudo bobres monitor enable tries again.\n", o.Err)
-	case o.State == "installed" || o.State == "updated":
-		fmt.Fprintf(notes, "Host monitoring: the snapshot timer %s (%s, every 30 seconds). Turn it off for good: sudo bobres monitor disable\n", o.State, monitorTimer)
-	case o.State == "skipped":
-		fmt.Fprintf(notes, "Host monitoring was not put in place: %s.\n", o.Why)
-	}
 }
 
 // ownerLogin is the owner's one-time dashboard login (see core's
@@ -1229,6 +1213,12 @@ func writeFiles(dir string, env map[string]string, notes, warnings io.Writer) er
 		}
 	}
 	if err := prepareTLS(dir, env, notes, warnings); err != nil {
+		return err
+	}
+	if err := prepareUpdateDir(dir, notes); err != nil {
+		return err
+	}
+	if err := ensureMonitorDirs(dir); err != nil {
 		return err
 	}
 	// The backup service (uid 65532 in its image) writes here; created now so

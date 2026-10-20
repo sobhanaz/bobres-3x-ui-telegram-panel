@@ -6,7 +6,346 @@ All notable changes to BOBRES are written here. The format follows
 
 ## [Unreleased]
 
+More of the requests of 2026-10-20: the owner writes a **FAQ and tutorials** that the bot shows, the bot lists
+plans as a **two-column table**, a customer can **buy several services at once** (Bulk purchase), **gift codes**
+add a fixed amount of credit to a customer's wallet, and the store can require **more than one channel or group** to
+join (one on the free tier and Standard, any number on Pro).
+
+### Updating
+- Three database migrations (00026: the table `core.bulk_orders` and two columns on `core.orders`; 00027: gift codes;
+  00028: the help content table, below); `sudo bobres update` runs them. They only add, so a rollback keeps every order.
+  Nothing to configure.
+- Core and the bot move together (three new gRPC calls, one new event, and a `bulk_id` on three events):
+  update both, as `sudo bobres update` does. Every change to the contract is additive.
+- After the update the bot lists plans as a table (a header row, then each plan as a row of two buttons, its name and
+  its price). `bot.plan_layout` = `list` in Settings > Plans and bulk purchase brings back one button per plan.
+- A new green Bulk purchase button appears on every customer's home menu. `bulk.enabled` = off hides it.
+- Gift codes add one more database migration (00027): the gift code tables and a new wallet ledger kind, `gift_code`.
+  Core and the bot move together here too (core has a new call the bot makes).
+- Gift codes need core's master key (`BOBRES_CORE_MASTER_KEY`, which every install made by the installer has); a
+  store without it can still run, and the dashboard says it cannot make codes. They are on for customers by default;
+  the owner's switch is the setting `gift_codes.enabled`.
+- Rolling the gift code migration back drops its three tables but keeps the ledger's new kind: the ledger is
+  append-only, so credits already paid stay.
+- Help content adds one more database migration (00028, the `help_entries` table), and the services' calls only gain
+  `ListHelpEntries`, `GetHelpEntry` and two flags of `Settings` (additive: an older bot shows no help buttons, a bot
+  on an older core simply has none to show). Nothing has to be configured.
+
+- Required channels and groups add one more database migration (00029, the `join_chats` table, empty at first: the
+  store's present required channel stays the setting `join.channel`, untouched). Nothing to configure. **A license
+  signed before this version has no `max_join_chats`, so it counts 1 required chat** until the seller re-applies its
+  tier (`licensesrv key update <id> -tier pro -reason "..."`, then the install's next daily renewal); nothing that exists
+  is lost, there are no extra chats before this version.
+
+### Known limits
+- Required channels and groups have not been seen in a real Telegram: the Join buttons of many chats, the popup that
+  names the missing ones, the Mini App's join screen, the group check and the Persian texts want a real look, and so does
+  how Telegram answers many `getChatMember` calls in a row.
+- Nothing of this has been seen in a real Telegram: the table's look on phones, the one message with many links, the
+  text file that comes with a long list and the Persian texts (a first draft) want a real look.
+- A bulk purchase is paid **from the wallet only** (a customer with too little in it is taken to the top-up and comes
+  back), takes **no discount code**, buys **a paid plan only** (not a free plan, a trial or a traffic package) and is in
+  the **bot only**: the Mini App has no screen for it.
+- The help screens (the FAQ and the tutorials) have not been seen in a real Telegram either, and the default texts and
+  the Persian of the help content are a first draft that wants a native review. The Mini App does not show them.
+
+### Help content: a FAQ and tutorials the owner writes
+- **The bot has a FAQ and a Tutorials menu, written by the owner in the dashboard** (Branding, "Help content" tab,
+  `branding.write`, in Persian and English). A FAQ button is the first button of the Support screen (and stays beside
+  "ticket history" while a ticket is open); a small FAQ opens as one numbered message, a large one as a numbered list
+  of questions, and every FAQ screen ends with a "Send a message to support" button. A Tutorials button on the home
+  screen and in the bottom menu lists the tutorials, each opening its text with up to 8 https URL buttons (an app's
+  download link) and a way back. Both buttons appear only while there is something enabled to show.
+- The dashboard editor adds, edits, reorders, switches on or off and deletes entries, checks them as you type and
+  previews them as the bot will show them, in either language. Every change is audited (`help.*`, entity
+  `help_entry`) and reaches the bot within seconds; an edit from an out-of-date copy is refused.
+- A new install is offered a generic FAQ and tutorials (the subscription link, then v2rayNG, Hiddify, Streisand,
+  V2Box and HAPP) once, to edit or delete; they do not come back when deleted. An empty list can be given them again.
+
+### Bulk purchase
+- **New: Bulk purchase on the home menu.** The customer picks a plan, how many services (2, 3, 5 or 10 by a button, or
+  any number typed, up to `bulk.max_quantity`, 20 by default and at most 100), may give them a name (`Name 1`,
+  `Name 2`, ... as the services are labelled) and sees the unit price, the total and the wallet beside it before
+  paying.
+- **All or nothing.** A bulk purchase is N ordinary orders, each with its own wallet debit, made in **one database
+  transaction**: either every service is paid for or the wallet is untouched. A new table, `core.bulk_orders`, holds
+  the purchase with its **request key** (unique), so a retry, a double tap or a second open checkout returns the first
+  result and never charges twice; two taps at the same instant make one purchase. The price is checked against the one
+  the customer saw (a changed price asks again), a reseller's balance may use their credit limit for the whole total, and
+  the license's limit is checked for all N services at once (a store that fits 3 more services refuses 5 with the
+  usual "new purchases are paused", never half).
+- **One message for the whole purchase.** The provisioner works on the services as it does for any order; when all
+  are ready, or the last ones have failed three times and are retried in the background, the customer gets one message
+  with every link (split in a few, with a text file of `name<TAB>link` lines, when it would not fit) and a line for each
+  service still being prepared; a service that is ready later is sent on its own, as for any order. A failed service
+  uses the ordinary `provision_failed` path: staff are alerted and can retry or refund, and no paid order is lost.
+- **The rest is ordinary.** Commissions, the referral reward, revenue, the daily summary and the reports see N orders
+  (each with its own purchase entry); staff get one sale alert per bulk, not N. The audit log has one `order.bulk` entry.
+  A banned customer, maintenance mode and the required channel stop it as they stop any purchase.
+- New settings (Settings > Plans and bulk purchase): `bulk.enabled` (on) and `bulk.max_quantity` (20).
+- New gRPC calls (additive): `QuoteBulkOrder`, `CreateBulkOrder`, `GetBulkOrder`. New event `order.bulk_ready.v1`; a
+  `bulk_id` (and, on `order.paid.v1`, `bulk_index` and `bulk_quantity`) on three events. See
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) and [docs/03-bot-ux.md](docs/03-bot-ux.md).
+
+### Two-column plan list
+- **The plan lists of the bot are a table**: a header row, then each plan as a row of two buttons, its name and its
+  price, both opening the plan. It is the same in Buy, a reseller's Buy for a customer, and the renewal and traffic
+  package pickers. A long name is cut with an ellipsis, and a store with so many plans that a table would not fit
+  Telegram's limits (100 buttons, 8 to a row) falls back to one button per plan. `bot.plan_layout` = `list` is the old
+  look.
+
+### Gift codes
+- **A gift code adds a fixed amount of credit to a customer's wallet.** The customer taps **Apply gift code** on the
+  bot's wallet screen and sends the code, written any way (small letters, Persian digits, spaces or dashes). Unlike a
+  discount code, which takes money off a purchase, this is money in the wallet; resellers may use them too.
+- **Staff make them in the dashboard** (page **Gift codes**, permission `discounts.write` as for discounts): one code of
+  their own words, or a batch of up to 500 generated ones with a prefix such as `NOWRUZ`, with an amount and currency,
+  uses in all, uses per customer, an optional expiry and a note. Generated codes are 12 characters from `crypto/rand`
+  (about 59 bits) in an alphabet with no 0, O, 1, I or L, shown as `ABCD-EFGH-JKMN`. They are listed with their last four
+  characters, the value, used / in all and status, and can be switched off (what a code paid stays paid), exported as a CSV
+  and traced to who redeemed them and when.
+- **A code is never stored.** Core keeps an HMAC-SHA256 of it under a key derived from the master key, and its last four
+  characters; a copy of the database cannot be read back into codes or tried offline. **The codes are shown once**, when
+  they are made, in a dialog that copies them or downloads them as a CSV; no log, audit entry or export holds one.
+- **Built for money:** one transaction locks the code's row and the wallet, so the last use of a code has exactly one
+  winner, a customer's limit holds under any number of taps at once, and a code never pays above its limit (the database
+  refuses it as well). A request sent again (Telegram redelivering the message) credits once. Each redemption writes one
+  ledger entry (`gift_code`) and one record that names it, and sends the audit entries `gift_code.create`, `.enable`,
+  `.disable` and `.redeem`.
+- **Guessing is limited per customer:** five wrong codes in an hour close entering codes for an hour (`gift_code.lock` in
+  the audit log); only wrong codes count and a success does not reset them. Unknown, switched-off and expired codes get
+  one answer, so nothing tells a guesser which codes exist.
+- The two CSV files (the list, and a code's redemptions) follow the CSV rules of
+  [docs/14-reports.md](docs/14-reports.md): English headers, UTC and local times with the zone, a Jalali column when the
+  page's calendar is Jalali, formulas quoted. The Mini App's wallet history names the credit "Gift code".
+- API (additive): the `RedeemGiftCode` call (the bot only) and `/api/v1/gift-codes*` in the dashboard's API
+  ([docs/02-events-and-apis.md](docs/02-events-and-apis.md)). Tables are in [docs/01-database.md](docs/01-database.md),
+  the bot's flow in [docs/03-bot-ux.md](docs/03-bot-ux.md), the page in [docs/04-dashboard.md](docs/04-dashboard.md).
+
+### Required channels and groups: more than one, and any number on Pro
+- **The owner can now require several channels and groups** before customers use the bot or the Mini App, not just
+  one. Settings has a new card, **Required channels and groups**: a list where each row has the channel or group
+  (a public one's `@name` or a private one's `-100…` id), its join link (required for a private one), an optional
+  name for the button and a **Check channel** button; add, remove and reorder rows, and the first row stays first. The
+  card counts the rows against the license (**"2 of 1"** when more are saved than the plan counts) and marks the rows
+  the plan does not count "Inactive: needs Pro". Only the owner changes the list; an admin sees it.
+- **The limit is a new license entitlement, `max_join_chats`: the free tier and Standard 1, Pro and the 30-day trial
+  any number** (a technical bound of 50 whatever the license says). A second chat on the free tier or Standard is
+  refused with a message naming the limit and the Pro plan. The prices are not touched. When a license ends, nothing is
+  deleted: the first chat stays enforced, the others stay saved but inactive, and can still be edited, reordered and
+  removed, but not added to; they count again when the limit allows.
+- **The bot's join message lists every chat the customer has not joined, each with its own Join button** (the name,
+  else the `@name`, else "channel N"; never a private chat's id), and one "I've joined". The check asks about all of
+  them again and its popup names the ones still missing. With one required chat everything reads and works as before.
+  A chat the bot cannot check (it is not its administrator) lets the customer in for that chat only, as the single
+  channel always did, and is logged once a minute; the others still hold. Telegram is asked as little as can be: members
+  are remembered per chat for 10 minutes (a member of the whole list costs one cache read), a chat not joined is not
+  asked about again by an ordinary update for 2 seconds, and the lookups run 4 at a time for a customer and 8 at a time
+  for all of them, each with a timeout. Maintenance still comes before the join message.
+- **The Mini App holds the same list.** Its 403 `join_required` answer keeps `join_url` and, when more than one chat is
+  required, adds `join_chats` (each chat still lacking, with its link and name); its join screen shows a Join button
+  for each and **I've joined** shows only what is still missing. The check endpoint of the bot is unchanged, so core
+  asks about one chat at a time, four at once.
+- The channel check now accepts a **group** or supergroup as well as a channel, since a required chat can be either.
+- API (additive): `Settings.join_chats` (field 8) in the gRPC contract, `GET` and `PUT /api/v1/join-chats` in the
+  dashboard's API (`join.write`, owner only), a new setting `join.label` (the first chat's name), and the entitlement
+  `max_join_chats` in a license token and in `GET /api/v1/license`. `join.channel` and `join.link` stay the first
+  chat, so the bot's `/set`, an older bot and an older Mini App keep working.
+
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+
+## [0.7.0] — 2026-10-20
+
+The owner's next batch of 2026-10-20, sent with twelve screenshots of another store's bot: **the dashboard can now
+update the server by itself** (System > Updates: a Check again that checks, a stable or beta channel, and Update now),
+the **Reports page changes every date** with its Calendar switch and the **CSV files were reviewed** and fixed,
+**maintenance mode holds every option** of the bot (Support included), and five features from the other bot arrive:
+Top users, account lines, a card to forward, `/new` `/renew` `/status`, and a reseller application. The rest of that batch
+(gift codes, bulk purchase, a help center, server monitoring, a full uninstall, backup download and restore in the
+dashboard) comes in later releases.
+
+### Updating
+- `sudo bobres update --check` shows it and `sudo bobres update` does it. **This update must still be made over SSH**:
+  the new `bobres` it installs is what sets up the helper that lets the dashboard update the server. From the next
+  release on, System > Updates can do it (owner only).
+- One database migration (00025, the table `system_updates`) and one new mount in `docker-compose.yml` (`./run/update`);
+  `bobres update` does both. Nothing to configure. `sudo bobres check` has a new line, Dashboard updates.
+- Two systemd units are added on the host (`bobres-updater.path` and `bobres-updater.service`); `sudo bobres config set
+  BOBRES_UPDATE_FROM_DASHBOARD off` removes them.
+- After the update every customer gets a new bottom menu once, with their next message (a new row: Become a reseller,
+  and Top users while the referral program is on).
+- The CSV files of the reports, the ledger and the audit log have new columns at the end and `\r\n` line ends; a script
+  that reads them by column name keeps working.
+- Core and the bot move together (the bot asks core a new question and reads a new field of the settings): update both,
+  as `sudo bobres update` does.
+
+### Known limits
+- **Updating from the dashboard has not run end to end.** The server's updater was tried on a lab server with a real
+  systemd and Docker (Ubuntu 24.04), with core's half emulated; core's half was tried against the updater's protocol and a
+  fake folder, and the two meet in a test of the protocol. If System > Updates does not work for you, `sudo bobres update`
+  over SSH always does. Ubuntu 22.04, Debian 12 and arm64 are untried, and a rollback that restores the database is
+  covered by unit tests only.
+- Nothing of the bot's new features, the Mini App or the dashboard changes has been seen in a real Telegram. The Persian
+  texts of the new features are a first draft and want a native read (every one can be edited).
+- Top users shows the customers' names and Telegram ids only masked, and there is no board in the Mini App.
+- A customer with another open conversation with support must close it before applying to be a reseller (a customer has
+  one open ticket at a time).
+- A flood of messages over the bot's rate limit (`limits.bot_per_10s`) stays unanswered, in maintenance as at any time.
+- The CSV files were checked as files (byte by byte and with Go's reader), not opened in Excel or LibreOffice.
+
+### Updating from the dashboard: System > Updates
+- **System > Updates can now update the install**: the owner confirms and core asks the server's updater (a root systemd
+  path unit installed by `bobres install` and `bobres update`) to run the same signed, backed-up, self-rolling-back
+  `bobres update`. Core never gets the Docker socket. The page shows the steps, the updater's sentence and (to the owner)
+  its log, copes with core restarting in the middle, and offers a reload when the new version is up. A request, its
+  outcome and a Telegram notice to every owner are recorded (`system.update.requested` and `system.update.<outcome>` in
+  the audit log, a new `system.update.v1` event). An install without the updater keeps the `sudo bobres update` command.
+- **The update channel is a setting** (stable or beta, owner only, `updates.channel`) instead of only `BOBRES_UPDATE_CHANNEL`;
+  unset, the server's variable still decides. A pre-release needs its own confirmation.
+- **An update that was cut off does not block the next one.** If the server loses power in the middle of an update, the
+  updater's status keeps saying "running"; the dashboard now takes a status the updater has not rewritten for 10
+  minutes (it does every 30 seconds) for an interrupted update, records it as failed, tells the owners and lets another
+  be asked for. Without it the page would wait for ever and only `sudo bobres update` on the server could clear it.
+- **Fixed: "Check again" and the update buttons on System > Updates did nothing useful.** "Check again" only re-read the
+  bot's cached answer (`GET /api/v1/system`), because core had no way to make the bot look again, so "Last checked" never
+  moved and a failed check (GitHub unreachable when the bot started) stayed for an hour. It now calls
+  `POST /api/v1/system/updates/check`, which has the bot reload its settings and look at GitHub at once, and shows when
+  it looked and why a look failed (GitHub's own words included). The update button was never one: the page only showed
+  `sudo bobres update` with a copy button that did nothing at all in a browser without a clipboard (a dashboard opened
+  over plain http), and the command ignored the channel the page showed. The command now names the channel, copying
+  falls back to the older way and says when it cannot, and there is an Update now.
+- New core settings and files: `BOBRES_UPDATE_DIR` (default `/run/bobres-update`), migration 00025 (`system_updates`).
+  Updating from the dashboard needs the server's updater (below) and the `./run/update` mount in `docker-compose.yml`;
+  [docs/02-events-and-apis.md](docs/02-events-and-apis.md) has the protocol.
+
+### Updating from the dashboard: the server's updater
+- **A server can now be updated without logging in to it.** `bobres install` (so every `bobres update`) sets up two
+  systemd units, `bobres-updater.path` and `bobres-updater.service`, and `bobres update --from-request` (not in the
+  help) is what the service runs: it reads the one request the dashboard dropped into `/opt/bobres/run/update`,
+  deletes it, takes the same install lock as `update`, `rollback` and `restore`, and runs exactly what
+  `bobres update --yes --channel C [--version V]` runs (signed release, backup, restore point, install, health check,
+  automatic rollback). It reports each step in `run/update/status.json`, which the dashboard shows.
+- **The request carries only a channel (`stable` or `beta`) and a release name** and is checked as strictly as it can
+  be: the file is opened without following a link, must be a regular file of core's user of 2 KiB at most, has exactly
+  the protocol's fields, is dated within 15 minutes, and an id seen before is ignored. A compromised dashboard can at
+  worst start an update to a release the vendor signed, at a time the owner did not choose.
+- **The channel chosen in the dashboard is kept**: after a successful run `BOBRES_UPDATE_CHANNEL` in `.env` follows the
+  request's channel, so `sudo bobres update` and the menu agree with it.
+- Core's container gets one new mount, `run/update` (read-write), and no other power over the host; `bobres install`
+  makes the directory (owned by core's user, mode 0700).
+- `sudo bobres check` and `bobres doctor` have a "Dashboard updates" line (WARN, never FAIL). `sudo bobres config set
+  BOBRES_UPDATE_FROM_DASHBOARD off` removes the units, `on` installs them, and `bobres uninstall --purge` removes them
+  with the install.
+- `bobres update`, `bobres rollback` and `bobres restore` now take one lock (`/opt/bobres/.update.lock`): a second one
+  that starts while another runs says so and changes nothing.
+
+### Reports: the calendar and the CSV files
+- **The Calendar switch of the Reports page changes every date, both ways.** It used to cut Jalali weeks and months
+  while the dates themselves followed the language (Jalali in Persian, Gregorian in English) and the custom range was a
+  browser date field, which is Gregorian whatever the page says. Now the days covered, the chart axes, tooltips and
+  summaries, the table, the week and month names and the **From** and **To** fields all follow the switch at once,
+  with Persian digits in Persian and Latin in English. A custom range is typed (`1405/07/22`, `14050722`, Persian or
+  Latin digits) or picked from a month grid in the calendar shown (Saturday-first in Jalali, Monday-first in Gregorian,
+  usable from the keyboard) and converted exactly to the Gregorian days the API takes: month lengths, the leap days
+  (30 Esfand 1403), the new year, and "today" in the store's time zone, never the browser's; a date the calendar does
+  not have, one outside 2000 to 2100 or an end before the start is not sent and the page says what a date looks like.
+  The choice is remembered in the browser. The six range buttons wrap on a phone instead of widening the page.
+- **CSV files, reviewed one by one** (`summary.csv`, `orders.csv`, `ledger.csv`, `audit.csv`: every CSV the product
+  makes). One set of rules now, documented in [docs/14-reports.md](docs/14-reports.md#csv-files) and tested as a
+  spreadsheet sees the files:
+  - one kind of line break: rows and line breaks inside a cell are all `\r\n` (rows were `\n` with raw `\r\n`, `\n` or
+    `\r` left in cells);
+  - dates: instants in UTC (ISO 8601, `Z`), days as Gregorian ISO in the store's zone, and a **`tz`** column on every
+    file that has local times or days (`paid_at_local` had no zone, `ledger.csv` and `audit.csv` had UTC only, so
+    `time_local` is new there); with `calendar=jalali` one more column at the end carries the Jalali date in Latin
+    digits (`period_start_jalali`, `paid_at_jalali`, `time_jalali`);
+  - `summary.csv` says what its rows are about (new last columns `group`, `calendar`, `tz`); all headers are English
+    and stable, new columns only at the end, and a test pins every one;
+  - file names carry the days covered in the file's calendar (`ledger-2026-10-14-to-2026-10-20.csv`,
+    `reports-summary-1405-08-09-to-1405-08-12-by-day-jalali.csv`) and keep to ASCII safe characters; `ledger.csv` and
+    `audit.csv` were named by a UTC time of day;
+  - formulas: the rule that quotes a text a spreadsheet could run as a formula skipped ASCII spaces, tabs and line
+    breaks only; it now looks past any Unicode space, control character and invisible mark (the right-to-left mark
+    Persian text carries, a no-break space) in front of `=`, `+`, `-` or `@`. Numbers are never quoted, so a negative
+    amount stays a number; a cell is cut at 32,000 characters (a spreadsheet moves the rest to the next row);
+  - `ledger.csv` and `audit.csv` take `tz` and `calendar` (a 400 for an unknown one); the ledger, the audit log and a
+    reseller's statement ask for the Jalali column when the Reports page is set to Jalali;
+  - checked and fine: the byte-order mark and content type, exact decimals with no thousands separator and the
+    currency on every row, who may export (owner and admin; support gets 403), streaming and the row cap, nothing secret
+    in any file, and that the rows add up to the report's totals (new tests).
+
+### The bot holds maintenance mode in every option
+- **Maintenance mode now holds the whole bot.** With `maintenance.enabled` on, the maintenance text did not come from
+  every option, Support among them (the owner reported it). Three things let a customer past it: the text was sent at
+  most once a minute per customer, so the second tap on the bottom menu within a minute got no answer at all; a
+  customer who had written to support went on with their ticket (Support in the bottom menu showed it, and their
+  messages, photos, files, voice messages and albums, their Telegram replies to a staff answer, and the Reply, Close
+  and history buttons all worked); and the language buttons opened the picker, switched the language and brought back
+  the home menu and the bottom menu. Now one decision (`maintenancePasses` in `internal/bot/handler/gates.go`), made
+  before any command, button, scene or conversation sees the update, answers every update of a customer with the
+  maintenance text, every time: a popup for a button, a message for anything typed or sent (an album, which Telegram
+  delivers a part at a time, gets one). The owner's own text for the message ("maintenance" under Branding and texts)
+  is used when set. What still works is a short list and nothing else: staff and the owners the server names (also
+  before they have an account), `/paysupport`, a payment already under way (its receipt, bank reference or TXID, its
+  Check button, a Stars invoice already sent) and a newcomer's `/start` and language choice. Maintenance still comes
+  before the required channel, and switching either on or off takes hold at the bot's next settings reload (at once
+  for a change in the dashboard or by `/set`), never at a restart.
+- **A customer can no longer write to support while maintenance is on**, or answer a staff reply: they are told the
+  bot is under maintenance, and what they sent is not saved. Staff answers to open tickets still reach them. The
+  required channel is not changed: it still lets a customer go on with a ticket they have (starting one asks them to
+  join first) and still lets anyone's language picker through.
+- Tests: every command, button verb, bottom-menu item and scene is sent to the bot in maintenance, twice in a row,
+  from the state a customer would have been in, and a test reads the handler's source and fails when one is missing
+  from its tables. The Mini App, which already held the same rule, got the same treatment: its routes are read from the
+  source and swept for a customer, for each staff role and for an owner the server names; its three copies of the rule
+  are one function now. No change of behavior there, and nothing for the dashboard (staff only) or a service's own
+  page (`/sub/<token>`, which keeps working) to change.
+
+### The bot: growth and account features
+Picked by the owner from another store's bot: a Top users board, account lines on the wallet screen, a card to forward in
+Invite friends, the commands `/new`, `/renew` and `/status`, and a reseller application. Every text is in Persian and
+English and can be edited like the others.
+
+#### Telegram bot
+- **Top users.** A button on the home screen and in the bottom menu opens the board of the customers who invited the most
+  people, five to a page (Others pages on, to rank 50), each place with the rank, a masked name and Telegram id (the first
+  and last three characters around `***`: `Par***mad (181***314)`; `***` for no username; a short name shows less, so that
+  at least three characters always stay hidden) and the number of invites, the viewer's own count on a button (which
+  opens their Invite friends screen) and their place marked when it is on the page. Core masks the name and the id, so
+  the bot never holds a whole one. Staff, resellers (their invites are their commission link) and banned users are never
+  on it; a tie goes to whoever joined first. It is shown only while the referral program is on
+  (`referral.reward_percent` above 0), and the owner can switch it off with **`growth.leaderboard.enabled`** (Settings,
+  Growth; on by default). New core call `GetTopInviters`: one query for every customer, kept for 30 seconds.
+- **Account lines on the wallet screen**: the customer's numeric Telegram id, how many services they have and the day
+  they joined the bot (Jalali for Persian, Gregorian for English), above the balance and the buttons.
+- **A card to forward in Invite friends** (and a reseller's My link): besides its screen, a message of its own with the
+  store's promo text ("get safe, fast services without interruption through the bot") ending in the customer's own invite
+  link as a text link, then a line telling them to forward it to their friends. The promo text, the link's label and the
+  line are texts the owner can edit (`ref.promo`, `ref.promo_link`, `ref.promo_hint`). The Share button stays.
+- **`/new`, `/renew` and `/status`**: Buy, a list of the services that can be renewed (each opens its plans), and My
+  services, in the command menu with Persian and English descriptions. They pass the gates as the buttons do (maintenance,
+  the required channel, the language not chosen yet), and a command is never taken as the answer to an open question (a
+  ticket message, a discount code, a bank reference): it closes the question and does what it says.
+- **Become a reseller.** A button for customers who are not resellers or staff, shown while the license includes
+  resellers, asks for one message about the applicant and files it as a support ticket in a new **reseller** category.
+  Staff get the usual new-ticket alert, worded as an application, with the applicant and a button that opens the ticket
+  (the `notify.new_ticket` switch applies); the customer is told its number and to wait for an admin, who answers from the
+  dashboard. One open application per customer, and one open ticket at a time: another open conversation is named and
+  asked to be closed first. Core refuses an application from a reseller, staff, a banned customer or while the license has
+  no resellers, and a customer is never told about licensing. Making the applicant a reseller stays the Resellers page.
+- Core: `Settings.resellers_enabled`, `GetTopInviters` and `AddTicketMessage` with category `reseller` are additive
+  (`buf breaking` is clean).
+
+#### Dashboard
+- The support inbox lists and filters by the new category **Reseller application**, and the ticket page names it, in
+  Persian and English.
+- Settings has a **Growth** card with the Top users switch.
+
+#### Telegram Mini App
+- A ticket's category is shown on its card and in its conversation, **Reseller application** included. The topics to write
+  under stay Payment, Service and Other: an application is made from the bot's button, and a message from the app that
+  names the reseller category is filed as Other.
 
 ## [0.6.1] — 2026-10-20
 

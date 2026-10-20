@@ -19,12 +19,21 @@ const category = ref('other')
 const busy = ref(false)
 const error = ref('')
 
-const categoryKeys: Record<string, Key> = { payment: 'support.cat.payment', service: 'support.cat.service', other: 'support.cat.other' }
+// The label of every category a ticket can have. A customer picks one of the first three when they
+// write; a reseller application (the fourth) is filed from the bot's "Become a reseller" button and
+// only shows its label here, on the ticket.
+const categoryKeys: Record<string, Key> = {
+  payment: 'support.cat.payment',
+  service: 'support.cat.service',
+  other: 'support.cat.other',
+  reseller: 'support.cat.reseller',
+}
+const pickable = ['payment', 'service', 'other']
 const statusKeys: Record<Ticket['status'], Key> = { open: 'support.status.open', answered: 'support.status.answered', closed: 'support.status.closed' }
 const categoryOf = (c: string): Key => categoryKeys[c] ?? 'support.cat.other'
 const statusOf = (s: Ticket['status']): Key => statusKeys[s] ?? 'support.status.open'
 
-const categories = computed(() => (overview.value?.categories ?? []).filter((c) => c in categoryKeys))
+const categories = computed(() => (overview.value?.categories ?? []).filter((c) => pickable.includes(c)))
 const earlier = computed(() => (overview.value?.tickets ?? []).filter((t) => t.id !== overview.value?.open?.id))
 const canWrite = computed(() => !!text.value.trim() && !busy.value)
 
@@ -110,6 +119,7 @@ async function close() {
             <strong>#{{ fmtNum(overview.open.number) }}</strong>
             <span class="badge">{{ tr(statusOf(overview.open.status)) }}</span>
           </div>
+          <p class="muted small category">{{ tr(categoryOf(overview.open.category)) }}</p>
           <p class="subject" dir="auto">{{ overview.open.subject }}</p>
           <button class="btn" type="button" :disabled="busy" @click="show(overview.open.id)">{{ tr('support.open') }}</button>
         </section>
@@ -132,6 +142,7 @@ async function close() {
               <button class="card row between" type="button" :disabled="busy" @click="show(t.id)">
                 <span>
                   <strong>#{{ fmtNum(t.number) }}</strong>
+                  <span class="muted small block category">{{ tr(categoryOf(t.category)) }}</span>
                   <span class="muted small block subject" dir="auto">{{ t.subject }}</span>
                 </span>
                 <span class="badge">{{ tr(statusOf(t.status)) }}</span>
@@ -150,6 +161,7 @@ async function close() {
         <h1>#{{ fmtNum(ticket.number) }}</h1>
         <span class="badge">{{ tr(statusOf(ticket.status)) }}</span>
       </div>
+      <p class="muted small category">{{ tr(categoryOf(ticket.category)) }}</p>
       <p class="muted subject" dir="auto">{{ ticket.subject }}</p>
 
       <ul class="list">

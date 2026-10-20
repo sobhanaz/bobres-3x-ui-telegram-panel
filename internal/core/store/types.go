@@ -74,9 +74,31 @@ type Order struct {
 	CreatedBy          *string
 	RefundedAt         *time.Time
 	RefundAmount       *int64
-	Label              *string // a reseller's name for the service it creates
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	Label              *string // a reseller's name for the service it creates, or a bulk purchase's "<prefix> <n>"
+	// BulkID and BulkIndex: the bulk purchase the order belongs to and its
+	// place in it (1 to the quantity); both nil for every other order.
+	BulkID    *string
+	BulkIndex *int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Bulk mirrors core.bulk_orders: a purchase of Quantity services of one plan
+// paid for together (the orders of it carry its id).
+type Bulk struct {
+	ID             string
+	UserID         string
+	PlanID         string
+	Quantity       int32
+	UnitAmount     int64
+	Amount         int64 // UnitAmount x Quantity
+	Currency       string
+	LabelPrefix    *string
+	IdempotencyKey string
+	CreatedAt      time.Time
+	// DeliveredAt: when core announced the one message with every link (nil
+	// until then); a service that is ready after it is delivered on its own.
+	DeliveredAt *time.Time
 }
 
 // Wallet mirrors core.wallets. A reseller's balance may go down to

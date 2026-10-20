@@ -22,6 +22,13 @@
 #   service that can), makes Caddy load them through its admin socket (volume caddy_admin: only
 #   caddy and the agent mount it) and answers in a result file (volume tls_result, the agent writes,
 #   core reads). Caddy reads ./caddy (its main Caddyfile) and ./tls read-only.
+# Updating from the dashboard (System > Updates)
+#   Core never gets the Docker socket or any other power over the host. It drops a small request file
+#   (a channel and a version, nothing else) into ./run/update, a host directory only it can write
+#   (core mounts it at /run/bobres-update), and a systemd path unit on the host (bobres-updater.path,
+#   installed by `bobres install` and `bobres update`) runs the same `bobres update` an operator would,
+#   which verifies the signed release, backs up, updates and rolls back on its own if the store does
+#   not come back healthy. It reports its progress in ./run/update/status.json, which core reads.
 # Host monitoring (the dashboard's Monitoring section, `bobres monitor`)
 #   A root helper on the host writes <install>/run/monitor/snapshot.json every 30 seconds (two systemd
 #   units that `bobres install` and `bobres update` put in place). Core mounts that directory read-only
@@ -205,6 +212,12 @@ services:
       # nothing of Caddy's: neither the admin socket nor the TLS files.
       - tls_request:/request
       - tls_result:/tls-result:ro
+      # The dashboard's update requests (System > Updates): core drops request.json here and reads
+      # status.json, which the bobres-updater helper on the host writes. The directory is made by
+      # `bobres install` (owner 65532, core's user; mode 0700), so that only core can put a file in it.
+      # It is the only part of the host core can write: core has no Docker socket and no other power
+      # over the host. docs/06-installer.md, "Updating from the dashboard".
+      - ./run/update:/run/bobres-update
       # The host monitoring snapshot, READ-ONLY. `bobres monitor snapshot`, a root helper that a systemd
       # timer runs every 30 seconds (docs/06-installer.md, "Host monitoring"), writes snapshot.json there.
       # It is all core knows of the machine and of Docker: core has no Docker socket and never gets one.

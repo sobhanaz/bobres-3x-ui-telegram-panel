@@ -9,13 +9,14 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import StoreTab from '../components/branding/StoreTab.vue'
 import TextsTab from '../components/branding/TextsTab.vue'
+import HelpTab from '../components/help/HelpTab.vue'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-// The tab is in the address (?tab=store|texts); each tab loads when first shown.
-const tabs = ['store', 'texts']
+// The tab is in the address (?tab=store|texts|help); each tab loads when first shown.
+const tabs = ['store', 'texts', 'help']
 const initial = String(route.query.tab ?? 'store')
 const tab = ref(tabs.includes(initial) ? initial : 'store')
 watch(tab, (v) => void router.replace({ query: { ...route.query, tab: v } }))
@@ -32,6 +33,7 @@ function showTab(v: string | number) {
     <TabList>
       <Tab value="store">{{ t('branding.tab_store') }}</Tab>
       <Tab value="texts">{{ t('texts.tab') }}</Tab>
+      <Tab value="help">{{ t('help.tab') }}</Tab>
     </TabList>
     <TabPanels>
       <TabPanel value="store">
@@ -39,6 +41,9 @@ function showTab(v: string | number) {
       </TabPanel>
       <TabPanel value="texts">
         <TextsTab :active="tab === 'texts'" />
+      </TabPanel>
+      <TabPanel value="help">
+        <HelpTab :active="tab === 'help'" />
       </TabPanel>
     </TabPanels>
   </Tabs>

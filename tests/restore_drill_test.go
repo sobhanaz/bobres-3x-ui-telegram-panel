@@ -23,6 +23,7 @@ import (
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backup"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backupsvc"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testenv"
@@ -60,7 +61,7 @@ func TestRestoreDrill(t *testing.T) {
 	}
 	src := snapshot(ctx, t, dsn)
 	for _, table := range []string{"core.users", "core.wallets", "core.plans", "core.orders", "core.subscriptions", "core.ledger_entries",
-		"core.tickets", "core.audit_log", "payments.payment_intents", "payments.manual_receipts", "payments.ledger_entries",
+		"core.tickets", "core.audit_log", "core.join_chats", "payments.payment_intents", "payments.manual_receipts", "payments.ledger_entries",
 		"provisioner.xui_servers", "provisioner.client_map"} {
 		if v := src.tables[table]; v == "" || strings.HasPrefix(v, "0 rows") {
 			t.Errorf("%s is empty after seeding: the drill would prove nothing about it", table)
@@ -158,6 +159,15 @@ func seedStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := c.AdminSetSetting(ctx, &corev1.AdminSetSettingRequest{ActorTelegramId: ownerTG, Key: "payments.card_number", Value: "6037-0000-1111-2222"}); err != nil {
+		t.Fatal(err)
+	}
+	// Required channels and groups: the first is a setting, the extra ones a table of their own
+	// (core.join_chats), which must come back with its rows and their order like any other.
+	if _, err := s.Domain.SetJoinChats(ctx, nil, []domain.JoinChat{
+		{Chat: "@drill_news", Label: "News"},
+		{Chat: "-1001234567890", Link: "https://t.me/+DrillInvite1", Label: "VIP"},
+		{Chat: "@drill_group"},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	u, err := c.UpsertUser(ctx, &corev1.UpsertUserRequest{TelegramId: 1001, Language: "en"})

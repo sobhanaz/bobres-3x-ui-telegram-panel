@@ -51,6 +51,15 @@ type fakeTG struct {
 	members     map[int64]string
 	memberCalls int
 	memberErr   error
+	// Per chat, for several required chats: a user's status in one chat (the
+	// user's status above when the chat has none), an error for one chat, the
+	// chats asked about in order, and how many lookups ran at once at most.
+	chatMembers map[string]map[int64]string
+	chatErr     map[string]error
+	asked       []string
+	memberDelay time.Duration
+	running     int
+	peak        int
 
 	// down: chats whose messages fail (Telegram unreachable for them);
 	// blocked: users who blocked the bot (403).
@@ -70,31 +79,78 @@ type precheckAnswer struct {
 func newFakeTG() *fakeTG {
 	return &fakeTG{chats: map[int64][]*msg{}, toasts: map[int64][]string{}, cbFrom: map[string]int64{},
 		invoices: map[int64][]tg.Invoice{}, answers: map[string]precheckAnswer{}, docs: map[string]bool{},
-		members: map[int64]string{}, shown: map[int64]*msg{}}
+		members: map[int64]string{}, shown: map[int64]*msg{}, chatMembers: map[string]map[int64]string{}, chatErr: map[string]error{}}
 }
 
 func (f *fakeTG) GetChat(_ context.Context, chat string) (*tg.Chat, error) {
 	return &tg.Chat{ID: -1001234567890, Type: "channel", Title: "Test channel", Username: strings.TrimPrefix(chat, "@")}, nil
 }
 
-func (f *fakeTG) GetChatMember(_ context.Context, _ string, userID int64) (*tg.ChatMember, error) {
+func (f *fakeTG) GetChatMember(ctx context.Context, chat string, userID int64) (*tg.ChatMember, error) {
+	f.mu.Lock()
+	f.running++
+	f.peak = max(f.peak, f.running)
+	delay := f.memberDelay
+	f.mu.Unlock()
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			f.mu.Lock()
+			f.running--
+			f.mu.Unlock()
+			return nil, ctx.Err()
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.running--
 	f.memberCalls++
+	f.asked = append(f.asked, chat)
 	if f.memberErr != nil {
 		return nil, f.memberErr
 	}
-	st := f.members[userID]
+	if err := f.chatErr[chat]; err != nil {
+		return nil, err
+	}
+	st, ok := f.chatMembers[chat][userID]
+	if !ok {
+		st = f.members[userID]
+	}
 	if st == "" {
 		st = "left"
 	}
 	return &tg.ChatMember{Status: st, User: tg.User{ID: userID}}, nil
 }
 
+// setMember sets a user's status in every required chat that has none of its own.
 func (f *fakeTG) setMember(userID int64, status string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.members[userID] = status
+}
+
+// setChatMember sets a user's status in one chat.
+func (f *fakeTG) setChatMember(chat string, userID int64, status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.chatMembers[chat] == nil {
+		f.chatMembers[chat] = map[int64]string{}
+	}
+	f.chatMembers[chat][userID] = status
+}
+
+// askedOf is how often the bot asked about one chat.
+func (f *fakeTG) askedOf(chat string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, c := range f.asked {
+		if c == chat {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *fakeTG) checks() int {
@@ -296,6 +352,10 @@ func newWorldOwners(t *testing.T, owners ...int64) *world {
 	ftg := newFakeTG()
 	cat := i18n.MustLoad()
 	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramIDs: owners, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
+	// A chat a user has not joined is asked about again at every update here (production waits a
+	// couple of seconds, TestRequiredChatsAreNotAskedInAStorm), so a test that changes who is in a
+	// chat sees it at once.
+	h.joinMissTTL = 0
 	n := notify.New(stack.Core, ftg, cat, h.Settings(), owners, nil)
 	feed, err := eventbus.NewConsumer(eventbus.ConsumerConfig{
 		Source:     eventbus.NewGRPCSource(stack.Feed),
@@ -527,7 +587,8 @@ func TestCardPurchaseReviewedByAdminAndDelivered(t *testing.T) {
 	buyer.text("/start")
 	buyer.press("lang:en")
 	buyer.press("buy")
-	buyer.sees("Monthly 50GB · 150,000 Toman")
+	buyer.sees("Monthly 50GB")
+	buyer.sees("150,000 Toman") // a plan is a row of two buttons, its name and its price
 	buyer.press("plan:")
 	buyer.sees("⏳ 30 days")
 	buyer.sees("📶 50 GB")
@@ -1049,9 +1110,10 @@ func TestInviteLinkRewardsTheInviter(t *testing.T) {
 	inviter.press("lang:en")
 	inviter.press("ref")
 	inviter.sees("Invite friends")
-	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(inviter.last().text)
+	screen := inviter.lastWith("Invite friends").text // the promo card and the line about forwarding it come after it
+	m := regexp.MustCompile(`https://t\.me/test_vpn_bot\?start=r_([a-z0-9]+)`).FindStringSubmatch(screen)
 	if m == nil {
-		t.Fatalf("no invite link: %q", inviter.last().text)
+		t.Fatalf("no invite link: %q", screen)
 	}
 
 	friend := w.person(722, "fred")

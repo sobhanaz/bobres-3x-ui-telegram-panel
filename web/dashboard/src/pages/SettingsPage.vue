@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
+import JoinChatsCard from '../components/settings/JoinChatsCard.vue'
 import SettingsCard from '../components/settings/SettingsCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
@@ -56,7 +57,13 @@ const groups = computed(() => {
   return [...listed, ...Object.keys(byGroup.value).filter((g) => !listed.includes(g))]
 })
 
-const wide = computed(() => wideGroups(groups.value.map((g) => ({ group: g, count: byGroup.value[g].length }))))
+// The required channels and groups are one list with its own card (the join
+// group's settings are the list's first row); it takes the page's full width.
+const JOIN = 'join'
+const wide = computed(() => [
+  ...wideGroups(groups.value.filter((g) => g !== JOIN).map((g) => ({ group: g, count: byGroup.value[g].length }))),
+  JOIN,
+])
 
 const maintenanceOn = computed(() => {
   const m = reply.value?.items.find((i) => i.key === 'maintenance.enabled')
@@ -93,14 +100,10 @@ function saved(r: SettingsReply) {
     <Skeleton v-for="n in 4" :key="n" height="14rem" border-radius="var(--app-radius)" />
   </div>
   <div v-else-if="reply" class="cards">
-    <SettingsCard
-      v-for="g in groups"
-      :key="g"
-      :group="g"
-      :items="byGroup[g]"
-      :class="{ wide: wide.includes(g) }"
-      @saved="saved"
-    />
+    <template v-for="g in groups" :key="g">
+      <JoinChatsCard v-if="g === JOIN" class="wide" />
+      <SettingsCard v-else :group="g" :items="byGroup[g]" :class="{ wide: wide.includes(g) }" @saved="saved" />
+    </template>
     <p v-if="!groups.length" class="app-muted">{{ t('settings.empty') }}</p>
   </div>
 </template>

@@ -66,6 +66,11 @@ type Config struct {
 	// Backups lists and starts backups (nil: the backup service is not
 	// installed).
 	Backups Backups
+	// Updates is "Update now" and the channel setting of the System > Updates
+	// tab: the bot's check, the server's updater (core shares a folder with
+	// it, never the Docker socket) and the record of each request (nil: those
+	// endpoints answer 503).
+	Updates *domain.Updates
 	// LicenseServer reaches the vendor's license server through the bot, to
 	// activate a license key (nil: no bot, activation answers 503).
 	LicenseServer domain.LicenseServer
@@ -189,6 +194,12 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
 	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
+	s.route(api, "GET /api/v1/gift-codes", PermDiscountsWrite, s.listGiftCodes)
+	s.route(api, "POST /api/v1/gift-codes", PermDiscountsWrite, s.createGiftCodes)
+	s.route(api, "GET /api/v1/gift-codes.csv", PermDiscountsWrite, s.exportGiftCodes)
+	s.route(api, "PUT /api/v1/gift-codes/{id}/enabled", PermDiscountsWrite, s.setGiftCodeEnabled)
+	s.route(api, "GET /api/v1/gift-codes/{id}/redemptions", PermDiscountsWrite, s.listGiftRedemptions)
+	s.route(api, "GET /api/v1/gift-codes/{id}/redemptions.csv", PermDiscountsWrite, s.exportGiftRedemptions)
 	s.route(api, "GET /api/v1/referrals", PermDiscountsWrite, s.getReferrals)
 	s.route(api, "PUT /api/v1/referrals", PermDiscountsWrite, s.setReferralReward)
 
@@ -244,9 +255,22 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "PUT /api/v1/texts", PermBrandingWrite, s.putText)
 	s.route(api, "GET /api/v1/texts.json", PermBrandingWrite, s.exportTexts)
 	s.route(api, "POST /api/v1/texts/import", PermBrandingWrite, s.importTexts)
+	// Help content: the FAQ and the tutorials the bot shows (Branding, Help content).
+	s.route(api, "GET /api/v1/help", PermBrandingWrite, s.listHelp)
+	s.route(api, "POST /api/v1/help", PermBrandingWrite, s.createHelp)
+	s.route(api, "POST /api/v1/help/check", PermBrandingWrite, s.checkHelp)
+	s.route(api, "POST /api/v1/help/order", PermBrandingWrite, s.orderHelp)
+	s.route(api, "POST /api/v1/help/defaults", PermBrandingWrite, s.defaultHelp)
+	s.route(api, "PUT /api/v1/help/{id}", PermBrandingWrite, s.updateHelp)
+	s.route(api, "PUT /api/v1/help/{id}/enabled", PermBrandingWrite, s.setHelpEnabled)
+	s.route(api, "DELETE /api/v1/help/{id}", PermBrandingWrite, s.deleteHelp)
 	s.route(api, "GET /api/v1/settings", PermSettingsWrite, s.getSettings)
 	s.route(api, "PUT /api/v1/settings", PermSettingsWrite, s.putSettings)
 	s.route(api, "POST /api/v1/settings/channel-check", PermSettingsWrite, s.checkChannel)
+	// The required channels and groups: the Settings page's Join card (seen by
+	// owner and admin, changed by the owner).
+	s.route(api, "GET /api/v1/join-chats", PermSettingsWrite, s.getJoinChats)
+	s.route(api, "PUT /api/v1/join-chats", PermJoinWrite, s.putJoinChats)
 
 	// Infrastructure: 3x-ui servers (owner and admin), payment gateways (owner).
 	s.route(api, "GET /api/v1/servers", PermServersWrite, s.listServers)
@@ -271,6 +295,13 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// Backups: the list for owner and admin, "back up now" for the owner.
 	s.route(api, "GET /api/v1/system/backups", PermSystemRead, s.systemBackups)
 	s.route(api, "POST /api/v1/system/backups/run", PermSystemWrite, s.runBackup)
+	// Updates: the state (the bot's check, the updater's progress) for owner
+	// and admin; checking again, the channel and "Update now" for the owner.
+	s.route(api, "GET /api/v1/system/updates", PermSystemRead, s.getUpdates)
+	s.route(api, "GET /api/v1/system/updates/progress", PermSystemRead, s.updateProgress)
+	s.route(api, "POST /api/v1/system/updates/check", PermSystemWrite, s.checkUpdatesNow)
+	s.route(api, "PUT /api/v1/system/updates/channel", PermSystemWrite, s.putUpdateChannel)
+	s.route(api, "POST /api/v1/system/updates/apply", PermSystemWrite, s.applyUpdate)
 	// HTTPS: the state for owner and admin, changes and detecting the
 	// server's IP address (through the bot) by the owner.
 	s.route(api, "GET /api/v1/system/tls", PermSystemRead, s.getTLS)

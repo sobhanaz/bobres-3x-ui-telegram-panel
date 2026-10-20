@@ -1,0 +1,15 @@
+# Written by `bobres install` and `bobres update` (they replace it: do not edit it). It starts
+# bobres-monitor.service, the host snapshot for the dashboard's Monitoring section, 20 seconds after
+# boot and then every 30 seconds. docs/06-installer.md, "Host monitoring".
+[Unit]
+Description=BOBRES: take the host snapshot every 30 seconds
+Documentation=https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/06-installer.md
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=30s
+AccuracySec=1s
+Unit=bobres-monitor.service
+
+[Install]
+WantedBy=timers.target

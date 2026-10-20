@@ -1,0 +1,13 @@
+# Written by `bobres install` and `bobres update` (they replace it: do not edit it). It starts
+# bobres-updater.service when the dashboard drops an update request into the install's
+# run/update directory. docs/06-installer.md, "Updating from the dashboard".
+[Unit]
+Description=BOBRES: update requests from the dashboard
+ConditionPathIsDirectory=@DIR@/run/update
+
+[Path]
+PathExists=@DIR@/run/update/request.json
+Unit=bobres-updater.service
+
+[Install]
+WantedBy=multi-user.target

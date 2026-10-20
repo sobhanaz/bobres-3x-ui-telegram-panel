@@ -17,6 +17,10 @@ const (
 	ProvisionFailed         = "subscription.provision_failed.v1"
 	SubscriptionExtended    = "subscription.extended.v1"
 	SubscriptionReminder    = "subscription.reminder.v1"
+	// BulkReady: the services of a bulk purchase are delivered (or are the
+	// provisioning machinery's to retry): the bot sends the customer every
+	// link in one message (BulkReadyEvent).
+	BulkReady = "order.bulk_ready.v1"
 	// Support tickets: ids only (the outbox is kept for ever, bodies are not
 	// put in it); the bot fetches a message with GetTicketMessage.
 	TicketOpened          = "ticket.opened.v1"
@@ -28,6 +32,10 @@ const (
 	// DailySummary: yesterday's sales for one staff member who may read the
 	// reports (DailySummaryEvent).
 	DailySummary = "report.daily_summary.v1"
+	// SystemUpdate: an update of the install was asked for in the dashboard
+	// (System > Updates > Update now), or one ended; one event for each owner
+	// (SystemUpdateEvent), so an update nobody asked for is noticed.
+	SystemUpdate = "system.update.v1"
 	// DepositUnmatched: USDT reached the store's TRON address but matched no
 	// automatic payment (DepositUnmatchedEvent); staff credit it by hand.
 	DepositUnmatched = "payment.deposit_unmatched.v1"
@@ -148,6 +156,13 @@ type OrderPaidEvent struct {
 	// usdt_auto, manual_card, ...); empty for wallet, trial and free orders,
 	// and for events published before it was recorded.
 	Provider string `json:"provider,omitempty"`
+	// BulkID, BulkIndex and BulkQuantity are set when the order is one of a
+	// bulk purchase: the bulk it belongs to, its place in it (1 to the
+	// quantity) and how many orders the bulk has. The bot announces such a
+	// purchase to the staff once (with the first order), not once per order.
+	BulkID       string `json:"bulk_id,omitempty"`
+	BulkIndex    int    `json:"bulk_index,omitempty"`
+	BulkQuantity int    `json:"bulk_quantity,omitempty"`
 }
 
 // Reasons on wallet.credited.v1.
@@ -173,6 +188,9 @@ const (
 	CreditCommission = "commission"
 	// CreditSettlement: staff recorded a payment the reseller made to the store.
 	CreditSettlement = "settlement"
+	// CreditGiftCode: the customer applied a gift code (docs/03-bot-ux.md). They asked for it in the bot, which
+	// answered with the amount and the new balance in the same chat, so the notifier sends no second message.
+	CreditGiftCode = "gift_code"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
@@ -213,6 +231,11 @@ type SubscriptionProvisionedEvent struct {
 	ExpiresAt        int64  `json:"expires_at,omitempty"` // unix seconds, 0 = no expiry
 	TrafficBytes     int64  `json:"traffic_bytes,omitempty"`
 	Label            string `json:"label,omitempty"` // the name a reseller gave the service
+	// BulkID is set when the service belongs to a bulk purchase whose one
+	// message with every link has not been announced yet (BulkReady): the
+	// bot sends nothing for this service on its own. A service that is ready
+	// after that message carries no BulkID and is delivered like any other.
+	BulkID string `json:"bulk_id,omitempty"`
 }
 
 // ProvisionFailedEvent: provisioning keeps failing; an admin should look.
@@ -222,6 +245,32 @@ type ProvisionFailedEvent struct {
 	TelegramID int64  `json:"telegram_id"`
 	Attempts   int    `json:"attempts"`
 	Error      string `json:"error"`
+	// BulkID is set when the order belongs to a bulk purchase: the staff are
+	// told about it as for any order, and the customer is told by the bulk's
+	// own message (BulkReady) instead of one "delayed" note per service.
+	BulkID string `json:"bulk_id,omitempty"`
+}
+
+// BulkReadyEvent: every order of a bulk purchase is delivered or has failed
+// enough times for the provisioning machinery to keep retrying it. The bot
+// asks core for the services (GetBulkOrder) and sends the customer the links
+// of the ones in ReadyOrders in one message (or a few, with a text file when
+// there are many), and says which are still being prepared. Announced once
+// per bulk; a service that becomes ready after it comes as an ordinary
+// SubscriptionProvisionedEvent (so it is never in both).
+type BulkReadyEvent struct {
+	BulkID     string `json:"bulk_id"`
+	UserID     string `json:"user_id"`
+	TelegramID int64  `json:"telegram_id"`
+	PlanID     string `json:"plan_id"`
+	Quantity   int    `json:"quantity"`
+	// ReadyOrders are the orders delivered when the bulk was announced, in
+	// their order in the bulk; Delayed is how many of the others are still
+	// being retried.
+	ReadyOrders []string `json:"ready_orders"`
+	Delayed     int      `json:"delayed"`
+	Amount      int64    `json:"amount"` // what the whole bulk cost
+	Currency    string   `json:"currency"`
 }
 
 // SubscriptionExtendedEvent: a renewal or traffic top-up was applied.
@@ -330,6 +379,43 @@ type SystemAlertEvent struct {
 	// lasted).
 	At     int64 `json:"at"`
 	Repeat bool  `json:"repeat,omitempty"`
+}
+
+// States of a SystemUpdateEvent.
+const (
+	// UpdateRequested: an owner asked for the update (the dashboard wrote its
+	// request for the server's updater).
+	UpdateRequested = "requested"
+	// UpdateDone: the install runs the new version.
+	UpdateDone = "done"
+	// UpdateFailed: the update did not finish.
+	UpdateFailed = "failed"
+	// UpdateRolledBack: the new version did not come up healthy and the
+	// install went back to the old one on its own.
+	UpdateRolledBack = "rolled_back"
+	// UpdateNotStarted: the updater never picked the request up; nothing changed.
+	UpdateNotStarted = "not_started"
+)
+
+// SystemUpdateEvent: an owner asked for an update in the dashboard, or the
+// update ended. Core writes one event for each owner who has a Telegram
+// account, in the transaction that records the request (or its end), so a
+// crash neither loses nor repeats the message. The bot sends it as it is to
+// that owner (TelegramID), in their language; versions are release numbers
+// core checked, and By is the dashboard user's name as core cut it. Message
+// is the server updater's own short sentence for an end that is not done (it
+// is text from outside core: the bot escapes it).
+type SystemUpdateEvent struct {
+	TelegramID int64  `json:"telegram_id"`
+	Language   string `json:"language"` // fa or en: the owner's own
+	State      string `json:"state"`
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Channel    string `json:"channel"` // stable or beta
+	By         string `json:"by"`
+	// At is when it was asked (requested) or ended, in unix seconds.
+	At      int64  `json:"at"`
+	Message string `json:"message,omitempty"`
 }
 
 // DailySummaryFlow is how many things happened and the money they carried

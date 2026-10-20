@@ -1,12 +1,14 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tgauth"
 )
 
@@ -57,4 +59,40 @@ func TestMiniAppHoldsTheRequiredChannelThroughTheBotAndTelegram(t *testing.T) {
 	w.set("join.channel", "@hiddenchannel")
 	w.set("join.link", "")
 	w.open(5003, "lee")
+}
+
+// Several required chats, end to end: core asks the bot about each one, the bot asks the fake Telegram,
+// and the customer is told only the chats they still lack.
+func TestMiniAppHoldsSeveralRequiredChatsThroughTheBotAndTelegram(t *testing.T) {
+	w := newMiniWorld(t)
+	for _, c := range []string{"@mynews", "-1001234567890", "@team_group"} {
+		w.fake.AddChannel(c)
+	}
+	owner, err := w.stack.Store.GetUserByTelegramID(context.Background(), w.stack.Store.Conn(), ownerTG)
+	if err != nil {
+		owner = nil // the audit entry then has no actor; the gate is what is tested
+	}
+	if _, err := w.stack.Domain.SetJoinChats(context.Background(), owner, []domain.JoinChat{
+		{Chat: "@mynews", Label: "News"},
+		{Chat: "-1001234567890", Link: "https://t.me/+AbCdEfGhIjKlMnOp", Label: "VIP"},
+		{Chat: "@team_group"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out := w.signIn(5101, "sam")
+	chats, _ := out["join_chats"].([]any)
+	if code != http.StatusForbidden || out["error"] != "join_required" || len(chats) != 3 || strings.Contains(fmt.Sprint(out), "1234567890") {
+		t.Fatalf("a customer outside all three: %d %v", code, out)
+	}
+	w.fake.SetMember("@mynews", 5101, "member")
+	w.fake.SetMember("@team_group", 5101, "member")
+	code, out = w.signIn(5101, "sam")
+	chats, _ = out["join_chats"].([]any)
+	if code != http.StatusForbidden || len(chats) != 1 || out["join_url"] != "https://t.me/+AbCdEfGhIjKlMnOp" {
+		t.Fatalf("a customer lacking the private chat: %d %v", code, out)
+	}
+	w.fake.SetMember("-1001234567890", 5101, "administrator")
+	w.open(5101, "sam").must(http.MethodGet, "/api/mini/v1/plans", nil)
+	w.open(ownerTG, "owner") // staff are not asked
 }

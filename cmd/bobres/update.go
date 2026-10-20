@@ -124,6 +124,62 @@ type updater struct {
 	// childEnv is added to the environment of the install runCLI starts: the
 	// share of the progress bar it covers.
 	childEnv []string
+	// event, when set, is told how far an update has got; the dashboard's
+	// helper (bobres update --from-request, helper.go) turns it into
+	// status.json. outcome is how the update ended, for the same reader.
+	event   func(updateEvent)
+	outcome updateOutcome
+	// locked says the caller holds the install's lock already (the helper
+	// does); otherwise the update takes it.
+	locked bool
+}
+
+// updateEvent is one stage of an update as the dashboard shows it: the step
+// (verify, backup, pull, restart, health or rollback), a sentence about it
+// and the release once it is known. A field left empty changes nothing.
+type updateEvent struct{ Step, Message, To string }
+
+// rollbackResult is how an automatic rollback ended.
+type rollbackResult int
+
+const (
+	noRollback         rollbackResult = iota
+	rolledBack                        // the previous release runs again
+	rollbackIncomplete                // it did not finish: the server needs a person
+)
+
+// updateOutcome is how an update ended, besides the exit code.
+type updateOutcome struct {
+	// applied: the new release is installed and healthy (to is its version).
+	applied bool
+	to      string
+	// nothing is why there was nothing to update ("" when there was something).
+	nothing  string
+	rollback rollbackResult
+}
+
+// emit tells the helper (when there is one) how the update goes.
+func (u *updater) emit(ev updateEvent) {
+	if u.event != nil {
+		u.event(ev)
+	}
+}
+
+// begin starts a step of the progress, and tells the helper which step of the dashboard's it is.
+func (u *updater) begin(key string) {
+	u.prog.Begin(key)
+	switch key {
+	case stepUpVerify:
+		u.emit(updateEvent{Step: stepVerifying, Message: "Checking the release signature."})
+	case stepUpDownload:
+		u.emit(updateEvent{Step: stepVerifying, Message: "Downloading the new bobres."})
+	case stepUpBackup:
+		u.emit(updateEvent{Step: stepBackingUp, Message: "Backing up the database."})
+	case stepUpInstall:
+		u.emit(updateEvent{Step: stepPulling, Message: "Installing the new release: pulling its images."})
+	case stepUpWait:
+		u.emit(updateEvent{Step: stepWaiting, Message: "Waiting for the services to be healthy."})
+	}
 }
 
 func newUpdater(o *ops) *updater {
@@ -132,14 +188,8 @@ func newUpdater(o *ops) *updater {
 		latestURL: release.DefaultBaseURL, apiURL: release.APIURL, versionURL: release.DownloadURL,
 		hc:    &http.Client{}, // fetch sets each download's time limit
 		roots: release.Roots, platform: runtime.GOOS + "_" + runtime.GOARCH,
-		stateDir: defaultStateDir(),
-		exe: func() (string, error) {
-			p, err := os.Executable()
-			if err != nil {
-				return "", err
-			}
-			return filepath.EvalSymlinks(p)
-		},
+		stateDir:       defaultStateDir(),
+		exe:            selfExe,
 		installTimeout: installLimit,
 		interrupts: func() (<-chan os.Signal, func()) {
 			c := make(chan os.Signal, 1)
@@ -181,6 +231,15 @@ func runInGroupEnv(ctx context.Context, out, errOut io.Writer, env []string, exe
 	// A killed group can leave the output pipe open in a stray process.
 	cmd.WaitDelay = 10 * time.Second
 	return cmd.Run()
+}
+
+// selfExe is the running bobres binary, symlinks resolved.
+func selfExe() (string, error) {
+	p, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(p)
 }
 
 // defaultStateDir is install.sh's state directory: $BOBRES_STATE_DIR, else
@@ -252,6 +311,16 @@ func (u *updater) updateSteps(args []string) int {
 	if !ok {
 		return 2
 	}
+	// One update, rollback or restore at a time, whoever starts it (the dashboard's helper holds
+	// the lock itself and says so).
+	if !u.locked {
+		unlock, err := u.lock(*dir)
+		if err != nil {
+			fmt.Fprintf(u.errOut, "error: %v. Nothing was changed.\n", err)
+			return 1
+		}
+		defer unlock()
+	}
 	channel, err := channelOf(*channelFlag, env)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v\n", err)
@@ -269,18 +338,20 @@ func (u *updater) updateSteps(args []string) int {
 		printBanner(u.out, ui)
 	}
 	u.startProgress(ui)
-	u.prog.Begin(stepUpVerify)
+	u.begin(stepUpVerify)
 	fmt.Fprintln(u.out, "Checking the release signature...")
 	t, err := u.find(ctx, channel, want)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v. Nothing was changed.\n", err)
 		return 1
 	}
+	u.emit(updateEvent{To: t.Version})
 	// Back on stable after a beta: nothing to do until stable passes it
 	// (going back is rollback's, and the floor below refuses it anyway).
 	if want == "" && channel == release.ChannelStable && release.Prerelease(from) && release.Compare(t.Version, from) < 0 {
 		fmt.Fprintf(u.out, "BOBRES runs the pre-release %s, newer than the latest stable release (%s): it stays on it until a stable release is newer.\n"+
 			"To update on the beta channel instead: sudo bobres update --channel beta\n", from, t.Version)
+		u.outcome.nothing = fmt.Sprintf("BOBRES runs the pre-release %s, newer than the latest stable release (%s): it stays on it until a stable release is newer.", from, t.Version)
 		u.prog.Abort()
 		return 0
 	}
@@ -304,6 +375,7 @@ func (u *updater) updateSteps(args []string) int {
 	case c == 0:
 		u.prog.Abort()
 		fmt.Fprintf(u.out, "BOBRES already runs %s: nothing to update.\n", from)
+		u.outcome.nothing = fmt.Sprintf("BOBRES already runs %s: nothing to update.", from)
 		return 0
 	}
 	// A license in force may carry an end to its updates (updates_until). It
@@ -339,7 +411,7 @@ func (u *updater) updateSteps(args []string) int {
 		fmt.Fprintln(u.out, "Cancelled. Nothing was changed.")
 		return 1
 	}
-	u.prog.Begin(stepUpDownload)
+	u.begin(stepUpDownload)
 	fmt.Fprintf(u.out, "Downloading bobres %s...\n", t.Version)
 	bin, err := u.downloadCLI(ctx, t)
 	if err != nil {
@@ -788,7 +860,7 @@ func (u *updater) downloadCLI(ctx context.Context, t *target) ([]byte, error) {
 // yes: restore point (staged), CLI swap, restore point in place, install,
 // health; a rollback when the install or the health check fails.
 func (u *updater) apply(ctx context.Context, dir string, env map[string]string, from string, t *target, exe string, bin []byte) int {
-	u.prog.Begin(stepUpBackup)
+	u.begin(stepUpBackup)
 	rp, err := u.stageRestorePoint(ctx, dir, env, from, t.Version, exe)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v. Nothing was changed.\n", err)
@@ -821,7 +893,7 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	// GB free, RAM, ports), and its online checks (the bot token with
 	// Telegram, a plain-http panel's address) are of values this store
 	// already runs with: an update does not depend on Telegram answering.
-	u.prog.Begin(stepUpInstall)
+	u.begin(stepUpInstall)
 	u.childEnv = u.prog.handoffEnv(stepUpInstall)
 	err = u.install(ctx, exe, dir, t.Version)
 	u.childEnv = nil
@@ -832,7 +904,7 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	if err != nil {
 		return u.autoRollback(ctx, dir, rp, fmt.Sprintf("read .env: %v", err))
 	}
-	u.prog.Begin(stepUpWait)
+	u.begin(stepUpWait)
 	if waitHealthyProgress(ctx, u.run, u.sleep, dir, appServices(dir, newEnv), u.out, u.errOut,
 		func(healthy, total int) {
 			u.prog.Fraction(healthy, total, fmt.Sprintf("%d/%d healthy", healthy, total))
@@ -849,6 +921,7 @@ func (u *updater) apply(ctx context.Context, dir string, env map[string]string, 
 	}
 	fmt.Fprintf(u.out, "\nBOBRES is updated to %s.\nIf something is wrong with it: sudo bobres rollback   (back to %s, with the database as of %s)\n",
 		t.Version, from, rp.CreatedAt.Format("2006-01-02 15:04 MST"))
+	u.outcome.applied, u.outcome.to = true, t.Version
 	u.prog.Complete()
 	return 0
 }
@@ -1029,8 +1102,13 @@ func (u *updater) migrated(ctx context.Context, dir string, rp *restorePoint) bo
 func (u *updater) autoRollback(ctx context.Context, dir string, rp *restorePoint, why string) int {
 	u.prog.Fail("rolling back")
 	fmt.Fprintf(u.errOut, "\nerror: %s. Rolling back to %s...\n", why, rp.FromVersion)
+	u.emit(updateEvent{Step: stepRollingBk, Message: fmt.Sprintf("The update to %s did not hold: rolling back to %s.", rp.ToVersion, rp.FromVersion)})
 	restoreDB := u.migrated(ctx, dir, rp)
 	code, settled := u.rollbackTo(ctx, dir, rp, restoreDB, "made by bobres update before it rolled back the update to "+rp.ToVersion)
+	u.outcome.rollback = rollbackIncomplete
+	if code == 0 {
+		u.outcome.rollback = rolledBack
+	}
 	switch {
 	case code != 0 && settled:
 		fmt.Fprintf(u.errOut, "\nThe automatic rollback put back the install files and the data of %s, but the store did not start (see above).\n"+
@@ -1211,6 +1289,12 @@ func (u *updater) rollbackCmd(args []string) int {
 	if _, ok := u.requireInstall(*dir); !ok {
 		return 2
 	}
+	unlock, err := u.lock(*dir)
+	if err != nil {
+		fmt.Fprintf(u.errOut, "error: %v. Nothing was changed.\n", err)
+		return 1
+	}
+	defer unlock()
 	rp, err := readRestorePoint(*dir)
 	if err != nil {
 		fmt.Fprintf(u.errOut, "error: %v\n", err)

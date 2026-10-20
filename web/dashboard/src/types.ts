@@ -166,6 +166,37 @@ export interface DiscountItem {
   enabled: boolean
 }
 
+/** A gift code in the list: never the code itself, only its last four
+ * characters (core keeps a keyed hash of it). */
+export interface GiftCodeItem {
+  id: string
+  tail: string
+  /** made by BOBRES (true) or typed by staff (false) */
+  generated: boolean
+  amount: Money
+  max_redemptions: number
+  per_customer_limit: number
+  redeemed: number
+  expires_at: number | null
+  enabled: boolean
+  status: 'active' | 'disabled' | 'expired' | 'used_up'
+  note: string
+  created_at: number
+  created_by: UserBrief | null
+  last_redeemed_at: number | null
+}
+
+/** One customer's use of a gift code. */
+export interface GiftRedemptionItem {
+  id: string
+  user: UserBrief
+  /** the customer's n-th redemption of this code */
+  seq: number
+  amount: Money
+  balance_after: Money
+  created_at: number
+}
+
 export interface ReferrerItem {
   user: UserBrief
   invited: number
@@ -203,6 +234,33 @@ export interface SettingItem {
 export interface SettingsReply {
   items: SettingItem[]
   groups: string[]
+}
+
+/** A required channel or group (GET and PUT /join-chats). The first row is the
+ * setting join.channel; the others are the extra chats. */
+export interface JoinChatRow {
+  chat: string
+  link: string
+  label: string
+  primary: boolean
+  /** customers are asked to join it under the license in effect */
+  active: boolean
+}
+
+export interface JoinChatsReply {
+  chats: JoinChatRow[]
+  /** the first chat is set, so customers must join */
+  on: boolean
+  /** how many the license allows; -1 = no limit */
+  limit: number
+  used: number
+  /** the most the list can hold, whatever the license says */
+  max: number
+  basis: string
+  /** free, trial, standard or pro */
+  tier: string
+  /** this role may change the list (the owner) */
+  editable: boolean
 }
 
 export interface ChannelCheck {
@@ -258,6 +316,72 @@ export interface TextCheck {
   problems: TextProblem[]
   length: number
   max: number
+}
+
+/** The two kinds of help content: the questions under Support and the tutorials. */
+export type HelpKind = 'faq' | 'tutorial'
+
+/** A tutorial's URL button: an https address and a label per language. */
+export interface HelpButton {
+  url: string
+  label: LangPair
+}
+
+/** One question or tutorial, as core stores it (GET /help). */
+export interface HelpItem {
+  id: string
+  kind: HelpKind
+  /** the question, or the tutorial's title: plain text on one line */
+  title: LangPair
+  /** the answer, or the tutorial's text: the limited HTML the bot's texts allow */
+  body: LangPair
+  buttons: HelpButton[]
+  sort: number
+  enabled: boolean
+  /** the version read: sent back with an edit, so one made from an old copy is refused */
+  version: number
+  updated_at: number
+}
+
+/** What an entry is checked against, from core (the same numbers the bot applies). */
+export interface HelpLimits {
+  max_faq: number
+  max_tutorials: number
+  question: number
+  tutorial_title: number
+  body: number
+  buttons: number
+  button_label: number
+  url: number
+  one_message_entries: number
+  one_message_units: number
+}
+
+/** How the bot shows the enabled FAQ in a language ("" when there is none). */
+export type HelpLayout = '' | 'message' | 'list'
+
+export interface HelpPage {
+  faq: HelpItem[]
+  tutorials: HelpItem[]
+  faq_layout: Record<keyof LangPair, HelpLayout>
+  limits: HelpLimits
+  languages: string[]
+}
+
+/** Why core cannot save an entry: the field ("title.fa", "body.en", "buttons.0.url", "buttons.1.label.fa", "buttons"; "" for the whole entry), a code, and what it names. */
+export interface HelpProblem {
+  field: string
+  code: string
+  arg: string
+}
+
+/** What is written in the editor (and sent to core). */
+export interface HelpDraft {
+  kind: HelpKind
+  enabled: boolean
+  title: LangPair
+  body: LangPair
+  buttons: HelpButton[]
 }
 
 export interface StaffItem {
@@ -702,6 +826,80 @@ export interface UpdateCheck {
    * all the same (security updates are never withheld). null when no license
    * is in force or the date is not known, absent from older cores */
   covered?: boolean | null
+  /** latest is a pre-release (1.5.0-rc.1); core says so from the version it
+   * checked (GET /system/updates only) */
+  prerelease?: boolean
+  /** where latest's notes are on GitHub, built by core from a release number
+   * (GET /system/updates only; absent when latest is not one) */
+  notes_url?: string
+}
+
+/** The server's updater: the root service on the host that runs the same
+ * verified `bobres update` when core asks (docs/04-dashboard.md). Every
+ * text in it comes from the updater and is shown as text, never as markup. */
+export interface UpdateHelper {
+  /** installed, and its status could be read */
+  available: boolean
+  /** why not: no_dir | no_status | not_installed | bad_status | unsupported; '' when available */
+  problem: string
+  /** the updater's own version */
+  version: string
+  /** idle | running | done | failed | rolled_back; '' when unknown */
+  state: string
+  /** the request being run, or the last one run */
+  id: string
+  from: string
+  to: string
+  channel: string
+  /** verify | backup | pull | restart | health | rollback | done; '' when none */
+  step: string
+  /** one short sentence from the updater */
+  message: string
+  started_at: number | null
+  finished_at: number | null
+  /** the newest lines of the update's log: the owner's only */
+  log?: string[]
+}
+
+/** An update asked for in the dashboard (core.system_updates). */
+export interface UpdateRun {
+  id: string
+  /** the dashboard user who asked */
+  by: string
+  from: string
+  to: string
+  channel: string
+  requested_at: number
+  /** '' while it is open; then done | failed | rolled_back | not_started */
+  outcome: string
+  outcome_at: number | null
+  message: string
+  /** while open: queued (the updater has not taken it up) | running | done |
+   * failed | rolled_back (the updater finished, core has not recorded it yet) */
+  phase?: string
+}
+
+/** GET /system/updates/progress: the light state the page polls while an
+ * update runs, and while core restarts in the middle of it. */
+export interface UpdatesProgress {
+  /** the version core runs */
+  version: string
+  helper: UpdateHelper
+  run: UpdateRun | null
+  last: UpdateRun | null
+}
+
+/** GET /system/updates: everything the Updates tab shows. */
+export interface UpdatesState extends UpdatesProgress {
+  check: UpdateCheck
+  /** setting: what the owner chose here ('' none: the server's .env decides);
+   * effective: the channel the bot follows now; source: setting | server */
+  channel: { setting: string; effective: string; source: string }
+  /** would an update be accepted now: allowed (this role may), ready (it
+   * would), reason (why not: helper_missing | already_running |
+   * check_unavailable | no_release | not_newer | dev_build), target (the release it
+   * would install) */
+  apply: { allowed: boolean; ready: boolean; reason: string; target: string }
 }
 
 /** One kept log line: a warning or an error, already redacted. */
@@ -816,6 +1014,8 @@ export interface LicenseEntitlements {
   max_active_services: LicenseLimit
   /** staff besides the owner */
   dashboard_staff_seats: LicenseLimit
+  /** the required channels and groups customers must join (absent from an older core) */
+  max_join_chats?: LicenseLimit
   /** the payment methods it names, and those turned on now (the wallet,
    * always allowed, left out) */
   gateways: { licensed: string[]; enabled: string[] }

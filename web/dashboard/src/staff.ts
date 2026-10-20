@@ -139,10 +139,13 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
       return { name: 'plans' }
     case 'discount':
       return { name: 'discounts' }
+    case 'gift_code':
+      return { name: 'giftcodes' }
     case 'settings':
       // Branding and the referral reward are settings edited on other pages.
       if (id.startsWith('branding.')) return { name: 'branding' }
       if (id.startsWith('referral.')) return { name: 'discounts' }
+      if (id.startsWith('gift_codes.')) return { name: 'giftcodes' }
       // The payment details and switches are on the Payment gateways page.
       if (id.startsWith('payments.')) return { name: 'gateways' }
       return { name: 'settings' }
@@ -150,6 +153,9 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
       return { name: 'branding', query: { tab: 'texts' } }
     case 'branding':
       return { name: 'branding' }
+    case 'help_entry':
+      // The FAQ and the tutorials are a tab of the Branding page.
+      return { name: 'branding', query: { tab: 'help' } }
     case 'dashboard':
       return e.actor ? { name: 'audit', query: { actor: e.actor.id } } : null
     case 'ticket':
