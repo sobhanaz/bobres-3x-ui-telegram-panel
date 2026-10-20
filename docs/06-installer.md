@@ -57,7 +57,8 @@ live logs, start, stop, restart, show settings (secrets masked), change the bot 
 ID or the first 3x-ui panel, back up now, show the backup key (after a confirmation), restore a backup (the newest 15
 in `backups/` by number, or any file by path with an optional key file), update (the `--check` output, then
 `bobres update` when a newer release exists), roll back the last update, check the server (`bobres doctor`), check
-everything (`bobres check`), the HTTPS certificate (a submenu, see HTTPS certificates), uninstall. Restore, update
+everything (`bobres check`), the HTTPS certificate (a submenu, see HTTPS certificates), uninstall (a submenu: the
+containers only, everything, or the leftover scan; "everything" asks what the command asks). Restore, update
 and rollback run the commands' own code, confirmation included; after an update or a rollback the menu ends, because
 the `bobres` running it was replaced (run `bobres` again). Settings changes re-run the installer with the one new
 value, so they are validated the same way (bot token and panel checked online) and only the affected
@@ -173,7 +174,8 @@ Bot API server (`BOBRES_TELEGRAM_API_URL`), it must be version 9.4 or newer. The
 ## Layout on server
 `/opt/bobres/{bobres.yml, .env, docker-compose.yml, caddy/, tls/, run/update/, data/, backups/, logs/}`, and
 `.restore-point/` after an update (root only); state in named volumes. install.sh and `bobres update` record the last
-verified key list and release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`). `caddy/` and `tls/`
+verified key list and release in `/var/lib/bobres/{keys.seq,release.version}` (`$BOBRES_STATE_DIR`), and `bobres install` and
+`bobres harden` keep the install receipt there (`install-receipt.json`; see Uninstall). `caddy/` and `tls/`
 are the HTTPS layout (see HTTPS certificates). `run/update/` is where the dashboard and its updater meet (owned by uid
 65532, mode 0700: `request.json` and `status.json`; see Updating from the dashboard), `.update.lock` is the lock of
 updates, rollbacks and restores and `.updater-handled` the ids of the requests the updater ran (both root's, mode 0600).
@@ -199,7 +201,8 @@ changed with `bobres menu` ("Owners") or `bobres admin owners`, which core appli
 | Command | Purpose |
 |---|---|
 | `bobres` / `bobres menu` | Management menu (terminal only) |
-| `bobres install / uninstall` | Set up / remove (uninstall keeps data unless `--purge`) |
+| `bobres install` | Set up (and record what it did in the install receipt) |
+| `bobres uninstall [--purge] [--dry-run] [--verify] [--backup-to F] [--no-backup] [--keep-backups] [--yes --confirm T] [--remove-docker] [--remove-packages] [--disable-firewall]` | Remove the containers (data kept); `--purge` removes everything BOBRES put on the server, as on day one, after a plan, an optional verified final backup and a typed confirmation; `--verify` scans for what is left (see Uninstall) |
 | `bobres status [--json]` | Services (state and health), version, domain, free disk; exit 1 when a service is not healthy. `--json` prints the menu header's dashboard as one object instead: `installed`, `dir`, `domain`, `version`, `dashboard_url`, `services` (`state`: `running`, `partly running`, `stopped`, `unknown`; `up`, `total`, `down`), `license` (`known`, `basis`, `tier`, `state`, `days_left`), `https` (`mode`, `cert_days_left`), `backup` (`enabled`, `newest`, `age_hours`, `size_bytes`) and `disk_free_gb`; a value that could not be read is `null`/`known: false`. Same exit codes |
 | `bobres check [--dir D] [--json]` | Every check of the install in one list, a line per check, `PASS`/`WARN`/`FAIL`/`SKIP`; exit 1 when one FAILs (see Check). `--json` prints `{results:[{name,status,detail}], pass, warn, fail}` |
 | `bobres logs [service] [-f]` | Tail logs |
@@ -1035,24 +1038,179 @@ An activated license is then renewed once a day through the bot (`/internal/lice
 asks again after 3 hours. A failed refresh changes nothing: the token simply runs into its grace and expiry. See
 05-license.md, "Activation and daily refresh".
 
-## Uninstall
-Stops services, removes containers/units; data kept unless `--purge`; prints what remains. `--purge` deletes the
-install directory, and with it every backup in `/opt/bobres/backups`: it warns first (copy them elsewhere). It also
-removes the dashboard updater's systemd units (`bobres-updater.path` and `.service`; see Updating from the dashboard):
-without `--purge` they stay with the install, which `bobres start` can bring back.
+## What installing BOBRES changes on a server
 
-- The command is `docker compose --profile '*' down --remove-orphans [--volumes]`: every profile is on, so a container
-  of a service whose profile is off now (the tls-agent of a release the install went back from) is removed too, and its
-  network and volumes with it. Without the `*` such a container stays running and `down` leaves its volume and network
-  behind ("Resource is still in use") while exiting 0.
-- `--purge` then removes **every volume that carries the label `com.docker.compose.project=bobres`**, whether or not
-  the install's compose file declares it (`docker volume ls -q --filter label=...`, then `docker volume rm`). `down
-  --volumes` removes only the volumes the file on disk declares, and after a rollback to a release from before the HTTPS
-  manager that file lacks `tls_request` (it holds `tls.json`, which carries the private key of an own certificate in
-  clear while one is being applied), `tls_result` and `caddy_admin`. The command lists the ones it had to remove itself
-  ("Also removed volumes of this install that docker compose down left ...") and says "Nothing of BOBRES remains" only
-  after all of them are gone. When a volume cannot be removed it exits 1, says data is still on the server, and keeps the
-  install directory (so the command can run again).
+The complete list, so that nothing BOBRES does to a server is a surprise, and so that `bobres uninstall --purge`
+(see Uninstall) can undo all of it. It is kept in one place in the code, `hostArtifacts` in
+`cmd/bobres/uninstall_inventory.go`; `TestHostArtifactsAreKnown` fails when an installer step, a unit file or a path
+literal appears that is not listed there, and `TestInventoryIsDocumented` fails when this section and that list
+differ. Each row names the artifact (`id`), what makes it, what the uninstall does with it and what proves it is
+BOBRES's. Where an older release left no record, the markers it wrote (a header comment, a file name, a label) are the
+proof, and the uninstall takes the conservative choice wherever a marker cannot prove ownership.
+
+### Created by BOBRES only (safe to delete)
+
+| `id` | Path or object | Made by | Uninstall | Proof it is BOBRES's |
+|---|---|---|---|---|
+| `install-dir` | `/opt/bobres` (`--dir`, `$BOBRES_DIR`): `.env` (the secrets and the backup key), `docker-compose.yml`, `caddy/`, `tls/`, `backups/`, `.restore-point/`, support bundles, and the updater's `run/update/` (uid 65532), `.update.lock`, `.updater-handled` | `bobres install`, `bobres update`, `bobres support-bundle` | deleted, backups included (`--keep-backups` leaves `backups/`) | a `.env` with BOBRES's keys beside a `docker-compose.yml` that names BOBRES's images, both regular files; never a symbolic link, never a system directory |
+| `cli` | `/usr/local/bin/bobres` (or `$BOBRES_BIN_DIR`), `/usr/local/bin/bobres.prev`, `/usr/local/bin/.bobres*` (half-written files) | `install.sh`, `bobres update` | deleted last; the copy that is running is deleted only when it is one of these | the name, in a bin directory the receipt or `install.sh` recorded |
+| `state-dir` | `/var/lib/bobres`: `keys.seq`, `release.version`, `checksums.txt`, `install-receipt.json`, `installed/` | `install.sh`, `bobres install`, `bobres harden` | deleted after everything else, the receipt with it | the known file names |
+| `install-log` | `/var/log/bobres-install.log` | `install.sh`, `bobres install` | deleted | the name |
+| `uninstall-log` | `/var/log/bobres-uninstall.log` | `bobres uninstall` | **kept**: it is the record of the uninstall | the name |
+| `units` | `/etc/systemd/system/bobres*` (units, `*.d` drop-ins, `*.wants/` and `*.requires/` links), `/etc/systemd/user/bobres*` and `/run/systemd/system/bobres*`: today `bobres-updater.path` and `bobres-updater.service` (templates in `deploy/systemd`) | `bobres install` | found **by name** (`bobres-*`, `bobres.*`, `bobres@*`), not from a list, so a unit a later release adds is covered: stopped, disabled, deleted | the unit name, in a directory only an administrator writes |
+| `docker-objects` | project `bobres`: containers `bobres-*-1`, volumes `bobres_pg_data`, `bobres_redis_data`, `bobres_caddy_data`, `bobres_caddy_config`, `bobres_caddy_admin`, `bobres_tls_request`, `bobres_tls_result`, networks `bobres_public/edge/backend/egress/offline`, images `ghcr.io/sobhanaz/bobres-*` and the ones the install pulled (`caddy`, `postgres`, `redis`) | `docker compose` | removed; an image another container uses stays (`docker rmi` without `-f`), and so does one the receipt says was on the server before | the label `com.docker.compose.project=bobres` **and** the `bobres_` name; images by their repository, the receipt and what the project's containers run |
+| `fail2ban-jail` | `/etc/fail2ban/jail.d/bobres-sshd.local` | `bobres harden` | deleted, then fail2ban reloads | the header `Written by bobres harden` |
+| `security-only` | `/etc/apt/apt.conf.d/51bobres-security-only` | `bobres harden` | deleted | the header `Written by bobres harden` |
+| `swap-file` | `/swapfile` | `bobres harden` (under 2 GB of RAM, no swap) | swapped off and deleted, only when the receipt says BOBRES made it and the size is the one it made | the receipt (an install made before it keeps the file: nothing proves it is BOBRES's) |
+
+### Changed in a shared file (reverted precisely)
+
+| `id` | Path or object | Made by | Uninstall | Proof |
+|---|---|---|---|---|
+| `auto-upgrades` | `/etc/apt/apt.conf.d/20auto-upgrades` (also written by the distribution's `unattended-upgrades`) | `bobres harden` | the original the receipt recorded is put back; deleted when the file did not exist; without a receipt only BOBRES's header line is taken out and the settings stay; a file changed since is kept | the header `Written by bobres harden`, and the checksum of what BOBRES wrote |
+| `fstab` | `/etc/fstab`: one line, `/swapfile none swap sw 0 0` | `bobres harden` | that line taken out, nothing else, only when the receipt says BOBRES added it | the receipt |
+| `ufw-rules` | ufw allow rules whose comment starts with `bobres ` | `bobres harden` | the web (`80`, `443`, `443/udp`) and container rules are deleted by their exact form (`ufw --force delete allow ...`). **The SSH rule (`bobres SSH`) and the 3x-ui rules are never touched**, nor is any rule without BOBRES's comment, nor one that was there before BOBRES. ufw stays on (turning it off could open ports a service of yours relied on it to close): `--disable-firewall` turns it off where the receipt says BOBRES turned it on | the ufw comment, the exact rule form, and the receipt |
+
+### Installed software (removed only with a flag)
+
+| `id` | Path or object | Made by | Uninstall | Proof |
+|---|---|---|---|---|
+| `docker-engine` | the packages Docker's installer added (`docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`, `docker-compose-plugin` and the dependencies it brought), `/etc/apt/sources.list.d/docker.list`, `/etc/apt/keyrings/docker.asc` (or `/etc/apt/keyrings/docker.gpg`), `/var/lib/apt/lists/download.docker.com_*`, `/var/lib/docker`, `/var/lib/containerd`, `/opt/containerd`, `/etc/docker`, `/etc/containerd`, `/run/docker`, `/run/docker.sock`, `/run/containerd`, the `docker` group | `install.sh`, through https://get.docker.com, only when Docker was missing | with `--remove-docker`, and only when Docker holds nothing but BOBRES's objects, apt says no other package needs the ones to go (the `docker` group is deleted unless someone is in it) | the record `install.sh` keeps in `/var/lib/bobres/installed/docker` (what appeared between a list of packages and files before and after) |
+| `openssl` | the `openssl` package | `install.sh`, only when it was missing | with `--remove-packages`, same conditions | the record `install.sh` keeps |
+| `hardening-packages` | `ufw`, `fail2ban`, `python3-systemd` (on Debian 12 and other systems without `/var/log/auth.log`) and `unattended-upgrades`, with the dependencies they brought | `bobres harden` | with `--remove-packages`, same conditions; ufw is kept while it holds a rule that is not BOBRES's | the receipt |
+
+Package removal is exact. The receipt keeps every package that was new after each `apt-get install`; the uninstall
+purges the ones that were asked for by name, and the dependencies only while apt still counts them as installed
+automatically (one you installed on purpose since is yours). `apt-get -s purge` must show nothing leaving but those; a
+package that something else needs is kept, with the reason.
+
+### Not changed, only read
+
+`/etc/os-release`, `/proc/meminfo`, `/proc/swaps`, `/var/log/auth.log` and the SSH port from `sshd -T` and
+`/etc/ssh/sshd_config` (read to keep the firewall from cutting the session; `TestHardeningNeverTouchesSSHSettings`
+fails if any code writes it); apt's `/etc/apt/sources.list.d`, `/etc/apt/keyrings`, `/etc/apt/trusted.gpg.d` and
+`/usr/share/keyrings` (listed by `install.sh` before and after Docker's installer).
+
+### Not undone, by design
+
+What the package manager and the kernel keep for their own reasons: the package lists apt downloaded
+(`/var/lib/apt/lists`), apt's and dpkg's logs and `ucf`'s bookkeeping (`/var/lib/ucf`), a package that apt upgraded to
+satisfy a dependency of Docker (it stays upgraded, with the `*.dpkg-old` file its upgrade may leave), the system's
+`/etc/group-` and `/etc/gshadow-` backups, journald's records, and, until the next reboot, Docker's iptables chains and
+lock files in `/run`. None of it is BOBRES's; none of it is read by anything once Docker is gone. (ufw's chains are
+flushed with ufw's own script when its package goes; Docker has no such script, and a firewall chain is not something an
+uninstall should guess at.)
+
+## Uninstall
+Two commands. **`bobres uninstall`** stops the services and removes the containers; the data (database, Redis,
+certificates), the install directory and the updater's units stay, and `bobres start` brings the store back.
+**`bobres uninstall --purge`** is the day-one command: it removes everything installing BOBRES put on this server
+(What installing BOBRES changes on a server, above), data and backups included, so that the server is as it was before.
+Run it as root. A runbook for the whole job, with the restore on a new server, is
+[runbooks/uninstall.md](runbooks/uninstall.md).
+
+```
+bobres uninstall [--dir D] [--yes]            containers only, data kept
+bobres uninstall --purge [--dir D] [--dry-run] [--backup-to FILE | --no-backup] [--keep-backups]
+                         [--yes --confirm TOKEN] [--remove-docker] [--remove-packages] [--disable-firewall]
+bobres uninstall --verify [--dir D]           scan the server for what is left of BOBRES
+```
+
+| Flag | Meaning |
+|---|---|
+| `--dry-run` | print the plan and change nothing (also works without `--purge`); needs no root |
+| `--backup-to FILE` | write a verified backup of the database to `FILE` (or into that directory, named `bobres-final-<time>.bkp`) before anything is deleted; it must be a new file outside the install directory, the state directory and Docker's; when it fails, nothing is deleted |
+| `--no-backup` | no final backup, and no question about one |
+| `--keep-backups` | keep `<dir>/backups` (everything else in the install directory goes, `.env` and the backup key with it, so keep the key too) |
+| `--yes --confirm TOKEN` | for scripts: no question, but `--confirm` must be exactly the token a person would type, and `--backup-to` or `--no-backup` must say what to do about the backup |
+| `--remove-docker` | also remove Docker, when `install.sh` installed it, nothing but BOBRES's objects is in it and nothing needs its packages |
+| `--remove-packages` | also remove the packages `bobres harden` and `install.sh` installed (ufw, fail2ban, unattended-upgrades, openssl), under the same conditions |
+| `--disable-firewall` | turn ufw off again, when the receipt says BOBRES turned it on (by default ufw stays on) |
+| `--verify` | the leftover scan alone; exit 1 when anything of BOBRES is left |
+
+**The plan, the question, the token.** `--purge` first prints the exact plan: the install directory with its size and
+file count and the backups in it, then each step with what it will do (the units, the Docker objects with counts and
+sizes, the firewall rules it deletes and the ones it keeps, the files it deletes or puts back, the swap file, the
+packages, the state and the command), and what is never touched. Then it asks: first, unless `--backup-to` or
+`--no-backup` answered it, whether to make a final backup (Enter: into the home directory of the user who runs it; or a
+path; or `no`); then it asks for the **token** typed in full, case-exact: the install's domain (the host name when the
+install has none, a fixed phrase when neither is known). Anything else, or the end of input, cancels with nothing
+changed (exit 1). The menu's "Uninstall" has the same questions: it runs this command.
+
+**The final backup.** It is made with the install's own code (`pg_dump` streamed through the backup encryption, the
+same file `bobres backup` makes), written beside nothing that is deleted, synced, and then every part of it is read back
+and checked with the install's key. It opens only with that key, which is deleted with `.env`: on a terminal the key
+is shown once after the backup, and never written to the log. Keep it with the file. On a new server: install BOBRES
+(`install.sh`, the same bot token), then `sudo bobres restore FILE --key-file <file with the key>`.
+
+**The order**, each step looking at what is there now, so that the command can be run again after an interruption and
+finishes the job:
+1. the units named `bobres*` (the dashboard updater, the monitor...): stopped, disabled, deleted, with their drop-ins
+   and links; `systemctl daemon-reload`. One that is busy running an update stops the uninstall before anything else;
+2. Docker: `docker compose --profile '*' down --remove-orphans --volumes` (every profile is on, so a container of a
+   service whose profile is off now goes too), then what `down` left: containers, **every volume that carries the label
+   `com.docker.compose.project=bobres` and the name prefix `bobres_`** (after a rollback to a release from before the
+   HTTPS manager the compose file lacks `tls_request`, `tls_result` and `caddy_admin`, which `down --volumes` leaves),
+   networks, and the images BOBRES pulled. A container, volume, network or image that is not the project's is not
+   looked at; when the compose project's containers were started from another directory than `--dir`, the uninstall
+   refuses (exit 2) rather than remove a stack that is not the one named;
+3. the firewall rules, the fail2ban jail, the security-updates files, `/etc/apt/apt.conf.d/20auto-upgrades`, the swap
+   file and its fstab line, as the inventory says;
+4. with the flags, the packages and Docker;
+5. the install directory, deleted from inside a root that cannot leave it (a symbolic link is removed, never followed;
+   a mount point inside is kept); the marker files, `docker-compose.yml` and `.env`, go last;
+6. `/var/log/bobres-install.log` and BOBRES's state files;
+7. the bobres command (`/usr/local/bin/bobres`, `bobres.prev`) and last the receipt and `/var/lib/bobres`. Steps 6 and 7
+   run only when everything before them succeeded, so the receipt and the command are still there to finish the job.
+
+A step that stops the run (the units, Docker) leaves the install directory in place; the others are reported and the run
+goes on. Each failure names itself and the command to run again.
+
+**What it will not do.** It deletes only what it can prove is BOBRES's: a directory only when its real path is no
+system directory (`/`, `/usr`, `/etc`, `/var`, `/opt`, `/home`, a home directory... and nothing shallower than two
+levels), is no symbolic link, and holds BOBRES's marker files; Docker objects by label and name; units by name; files
+by their header or the receipt. It never changes SSH settings or the SSH firewall rule (the `bobres SSH` rule), DNS, other
+users' data, other Docker workloads or anything else. A path under the state directory or the log is refused as an
+install directory (they must survive the wipe). Without root it prints the plan and stops with an error (a dry run needs no root).
+
+**The receipt.** `bobres install` (so `bobres update` and the menu) and `bobres harden` write
+`/var/lib/bobres/install-receipt.json` (`$BOBRES_STATE_DIR`; root only, 0600), outside the install directory so that
+the uninstall can read it at the end: where the install is, the domain, the packages that were new after each apt run
+(Docker's and openssl's from the record `install.sh` keeps in `/var/lib/bobres/installed/`), whether ufw was on before
+and whether BOBRES turned it on, the ufw rules BOBRES added (and any that were already there), each file the hardening
+wrote with the original it replaced, the swap file and its size, and the image references the install pulled and which of
+them were on the server before. It is additive: a key a newer bobres writes is kept, a file that cannot be read is
+treated as absent, and writing it never fails an install (a non-root run leaves none). **An install made by an older
+release has no receipt.** The uninstall then uses the markers the installer wrote and takes the conservative choice: it
+removes what carries BOBRES's header or label, strips only the header line from `20auto-upgrades`, keeps `/swapfile`,
+refuses `--remove-docker` and `--remove-packages` (nothing proves BOBRES installed them), keeps the third-party images
+no container of BOBRES's runs, and leaves ufw on. Running `sudo bobres update` or `sudo bobres install` once on such a
+server writes a receipt for what can still be known.
+
+**The record and the scan.** Everything it prints is also written, without colors, to `/var/log/bobres-uninstall.log`
+(root only), which stays: it is the record of the run (the backup key is never in it, and the value of `--confirm` is replaced by `<token>`). The run ends with a
+scan of the server: "Nothing of BOBRES is left on this server." (exit 0), or the list of what is left and why (exit 1),
+and always what was kept on purpose (the SSH rule, ufw if it is on, the log, Docker and the packages without their
+flags, a file you changed, an image another container uses). `bobres uninstall --verify` is that scan alone, for later.
+Exit codes: 0 done, 1 cancelled, failed or something left, 2 refused or a wrong flag (nothing was changed).
+Running the command twice is harmless: the second run finds nothing, says so, and changes nothing.
+
+**Proven on the lab.** `deploy/lab/` is an Ubuntu 24.04 server with systemd, and `deploy/lab/uninstall-proof/` takes
+the snapshots (files with their checksums, systemd units, packages, users, groups, ufw, iptables, Docker, mounts,
+processes) that [deploy/lab/README.md](../deploy/lab/README.md) ("Proving the uninstall") compares. The run that proved
+the command used the real `install.sh` (which installed Docker 29), `bobres install` (the whole stack, healthy),
+`bobres harden --yes` (ufw with a container rule, fail2ban, unattended-upgrades), a stand-in `bobres-monitor.timer` and
+a decoy container, volume, network and image. `--verify`, `--dry-run` and a wrong typed token left the snapshot identical
+(only `/var/log/bobres-uninstall.log` appeared). The purge with `--remove-docker --remove-packages` removed everything
+except Docker, which it refused to remove while the decoy was there (exit 1, the command and the receipt still in place);
+with the decoy gone the typed run finished (exit 0); a third run found nothing and changed nothing. Against the first
+snapshot the same files, units, users, groups, ufw state, fstab, swap, cron and installed package set remain; what
+differs is the list under "Not undone, by design" (10 packages that apt upgraded, apt's package lists, `ucf`'s
+bookkeeping, `/etc/group-`, the uninstall log, Docker's empty firewall tables and `/run` locks). Not tried there: the
+swap file (the lab's host has plenty of RAM, so the hardening makes none; the unit tests cover it), Debian, Ubuntu 22.04,
+and a restore of the final backup on a second server (`bobres restore` is not new). The unit tests run the same command
+on a server made of a temporary directory and fakes (`cmd/bobres/uninstall_lab_test.go`), including every refusal, an
+interrupted run, an install without a receipt and the second run.
 
 ## Owner login without Telegram
 The owner can open the dashboard without the bot and without `/start` (the bot may be blocked, or the owner may not

@@ -171,6 +171,21 @@ Afterwards run `bobres` for the management menu:
 
 Every item is also a command: `bobres status`, `bobres logs -f`, `bobres backup`, `bobres update`, ... (`bobres help`).
 
+### Uninstall
+
+| Command | What it does |
+|---|---|
+| `sudo bobres uninstall` | Stops and removes the containers; the data, the certificates and `/opt/bobres` stay (`bobres start` brings the store back) |
+| `sudo bobres uninstall --purge --dry-run` | Prints exactly what would be removed, with sizes, and changes nothing |
+| `sudo bobres uninstall --purge` | **Day one:** removes everything BOBRES put on the server (data, secrets, backups, containers, volumes, images, systemd units, firewall rules, the files the hardening wrote, the `bobres` command), so that the server is as it was. Asks for a verified final backup, then for the domain typed in full |
+| `sudo bobres uninstall --purge --backup-to FILE` | The same, with a final backup written outside the install directory and read back before anything is deleted |
+| `sudo bobres uninstall --purge --remove-docker --remove-packages` | Also removes Docker and the packages BOBRES installed, when nothing else uses them |
+| `sudo bobres uninstall --verify` | Scans the server for what is left of BOBRES |
+
+It touches only what it can prove is BOBRES's, never SSH settings or the SSH firewall rule, and can be run again after an
+interruption. What installing BOBRES changes on a server, flag by flag, and how to restore the final backup on a new
+server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstall.md](docs/runbooks/uninstall.md).
+
 ## Docs
 
 - [Docs index](docs/README.md): every document, with what it covers.

@@ -128,6 +128,27 @@ bobres install --version 0.1.0-lab.1 --domain bobres.localhost --no-harden ...
 If a build stops at `go mod download` with `EOF` (the inner Docker's network), run it again with
 `docker build --network host ...`.
 
+## Proving the uninstall
+
+`sudo bobres uninstall --purge` is proved on a lab server by looking at the server before and after
+([docs/06-installer.md](../../docs/06-installer.md), "Uninstall"). Use a server of your own (a copy of this folder's
+compose file with another project name, container name, network and volumes), never a lab server that holds something
+you want to keep. In the server, outside the folders it scans (`/snapshots` here):
+
+1. `bash snapshot.sh /snapshots/day0` on the fresh server (twice: the two must be identical).
+2. Install: the real `install.sh` (Docker comes with it), `bobres install`, `bobres harden --yes`, and anything else the
+   server will have, such as a `bobres-*` unit and a workload that is not BOBRES's (a container, a volume, a network, an
+   image), which the uninstall must leave alone and which makes `--remove-docker` refuse until it is gone.
+3. `bobres uninstall --verify`, `--purge --dry-run`, and `--purge` with a wrong typed token: `bash snapshot.sh` before
+   and after, and `bash compare.sh before after` must show nothing changed.
+4. `bobres uninstall --purge --yes --confirm <domain> --backup-to /snapshots/final.bkp --remove-docker --remove-packages`
+   (it stops at Docker while the decoy is there and says so), then again without the decoy, then once more.
+5. `bash snapshot.sh /snapshots/after` and `bash compare.sh day0 after -v`. What may differ is what
+   [docs/06-installer.md](../../docs/06-installer.md) lists under "Not undone, by design": package lists, upgraded
+   packages, `ucf` and `/etc/group-` bookkeeping, runtime files and Docker's empty firewall tables.
+
+`/tmp` of a lab server is a tmpfs: `docker cp` into it does not show in the server, so put files under `/snapshots`.
+
 ## How it works
 
 - `privileged: true` on both: systemd as PID 1 needs it, and so does running Docker inside
