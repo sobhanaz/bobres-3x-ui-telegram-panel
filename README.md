@@ -41,9 +41,12 @@ license server is built but still has to be deployed by the owner. What is left 
   button. Plans, buying, services, renewals, the wallet, the free trial, invites and support. Stars and card to card
   stay in the bot for now; it is not yet checked against a real Telegram.
 
-**Resellers, in the bot**
+**Resellers, in the bot and the Mini App**
 - A reseller panel: buy for customers at the tier's prices, on credit up to a limit; name and find their services;
   a statement; an invite link that earns a commission on their customers' purchases.
+- Manage their customers' services: pause and resume, delete (after a confirmation), a private note, the list in
+  groups (active, ending soon, ended, paused) with counts, and the customers who joined through their link with what
+  they bought. Nothing that gives free days or traffic.
 
 **Staff**
 - In the bot: `/admin` (stats, find a user, adjust a balance, ban, a list of the payments to review with their receipts),

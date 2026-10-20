@@ -134,13 +134,15 @@ limits start to apply to new actions. The CI and end-to-end installs have no lic
 
 ### What is gated, and what never is
 Only **new** actions are refused, and only by the effective entitlements. A refusal is the same 409 as a valid license's
-(next section).
+(next section), except a reseller's management of the services they already have, which is refused as a plain
+"forbidden" (see "Managing customers' services is not a gate", below).
 
 | New action | Refused when |
 |---|---|
 | adding a 3x-ui server | the servers would pass `max_servers` |
 | a new service: a new order, a free trial, a reseller's purchase | the active services, counting those on their way, are at `max_active_services` |
 | a reseller's purchase of a new service | `resellers` is off (the reseller keeps their account and what they bought) |
+| a reseller pausing, resuming or deleting a customer's service, noting it, reading their services in groups, or listing the customers who joined through their link (bot and Mini App) | `resellers` is off (refused as forbidden, never a word about licensing; the plain list of their services and each service's link still open in the bot) |
 | making a reseller | `resellers` is off |
 | adding an admin, a support member or another owner | the seats are taken (only the owner the server names takes none) |
 | switching a payment method on | it is not in `gateways`; automatic USDT also needs `crypto_watcher` |
@@ -149,8 +151,9 @@ Only **new** actions are refused, and only by the effective entitlements. A refu
 Never gated, over any limit: every customer's existing service (it keeps working, **renewing and topping up**), an
 order made before the limit was reached and paid after it (the money is already in), staff who are already over the
 seats (they keep their access, and may change roles without taking a new seat), existing resellers (their account, and
-what they already bought), servers and payment methods (they keep working; one switched off cannot be switched on
-again unless it is allowed), staff extensions of a service, backups, updates and security fixes.
+what they already bought; the new powers over it need `resellers`, see the table), servers and payment methods (they
+keep working; one switched off cannot be switched on again unless it is allowed), staff extensions of a service,
+backups, updates and security fixes.
 
 **The services on their way count.** The active-services gate runs before payment, so counting only delivered
 services would let many orders made together overshoot the limit once they are paid. `store.CountActiveServices`
@@ -186,6 +189,14 @@ servers". The dashboard shows a sentence per gate in its language, with core's w
 - `gateways`: switching a payment method on (Zarinpal, IDPay, NextPay or automatic USDT in Payment gateways, or a manual
   method's or Stars' switch from off to on) that the effective entitlements do not name;
 - `crypto_watcher`: switching automatic USDT on without the `crypto_watcher` feature.
+
+**Managing customers' services is not a gate.** Pausing, resuming and deleting a service, its note, the list in groups
+and the customers who joined through the link are part of the `resellers` feature, and core checks it on every call
+(`domain.ResellerAccess`): an active reseller on an install whose effective entitlements include `resellers`. Anyone
+else, and a reseller once the feature is gone, gets PERMISSION_DENIED from gRPC and 403 from the Mini App with the plain
+word "forbidden" (no gate, no 409, no license text), and nothing changes. The Mini App's reseller section is hidden then
+(`features.reseller` is false in `/me`). The reseller's account, their services, their links, renewals and the plain
+list in the bot are untouched.
 
 **What a customer sees.** A customer never sees licensing text. When a new purchase or a free trial is refused for
 `max_active_services` (or a reseller's purchase for `reseller_purchase`), the gRPC answer to the bot is `FailedPrecondition` with the neutral message "new purchases are

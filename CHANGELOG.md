@@ -63,6 +63,30 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
     new name stays, empty. Attaching and detaching a client leaves its group.
 - The in-memory 3x-ui fake used by the tests (`internal/xuifake`) follows all of this now, with its own tests.
 
+### Reseller management
+- Resellers manage their customers' services, in the bot and in the Telegram Mini App (a new **Reseller panel** section
+  in its More tab, Persian first and English). A reseller can **pause and resume** a service (the customer's link stops
+  and starts again), **delete** one after an explicit confirmation (no refund), keep a private **note** next to the
+  name, filter the list by group (all, active, ending soon, ended, paused) with a count on each group, and see the
+  **customers who joined through their invite link** (their @username or Telegram id, the day they joined, paid orders,
+  what they spent and the commission it paid, newest first). A reseller still cannot reset a service's traffic or give
+  free days or free traffic: those stay with staff, and a service **support** paused cannot be resumed by its reseller.
+- The Mini App's reseller section: the panel (tier, discount, commission, balance with credit and what can be spent,
+  the invite link with a Share button), buying for a customer (plans at the reseller's price, a name for the service,
+  then the shop's checkout with the credit counted in the wallet button and no discount-code field), the customers'
+  services with renew, add traffic, rename, note, pause, resume and delete, the customers from the link, and the
+  statement. `POST /api/mini/v1/orders` takes an optional `label` (a reseller's name for the new service; ignored for
+  anyone else), and the wallets in `/me` and `/wallet` carry `credit_limit`.
+- Every call is the reseller's own and is checked by core each time: an active reseller on an install whose license
+  includes resellers, a service that is theirs (anything else is 404 and changes nothing), no price or amount from the
+  client, the shared Mini App rate limits. A reseller after `resellers` left the license keeps their account and their
+  services, renewals and the plain list in the bot, but the new powers answer 403 (the Mini App section is hidden) with
+  no word about licensing. Pausing and deleting are in the audit log under the reseller's name, source `bot`.
+- Updating: one database migration, 00024 (a nullable `note` column on `subscriptions`, with a down migration), and
+  additive gRPC calls (`ListResellerServices`, `SetResellerServiceEnabled`, `DeleteResellerService`,
+  `SetSubscriptionNote`, `ListInvitedCustomers`, `Subscription.note`): update core and the bot together with
+  `sudo bobres update`. An older bot keeps working; a newer bot against an older core shows the plain list.
+
 ## [0.5.0] — 2026-10-20
 
 Several owners, a list of the payments waiting for review, and Marzban tested against a real panel.
