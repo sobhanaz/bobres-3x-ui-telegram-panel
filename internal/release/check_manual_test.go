@@ -307,7 +307,7 @@ func TestSetChannel(t *testing.T) {
 		gate := make(chan struct{})
 		slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			<-gate
-			http.Redirect(w, r, f.srv.URL+r.URL.Path, http.StatusFound)
+			http.Redirect(w, r, f.srv.URL+r.URL.Path, http.StatusFound) //nolint:gosec // a fake GitHub that answers slowly, for the test
 		}))
 		defer slow.Close()
 		c := newChannelChecker("1.4.0", ChannelStable, slow.URL, root.pub)

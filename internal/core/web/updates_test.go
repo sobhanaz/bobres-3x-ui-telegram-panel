@@ -250,12 +250,12 @@ func TestUpdatesStateFollowsTheBot(t *testing.T) {
 
 	// what the bot says about a release is never taken as a link or as markup
 	u.src.check = domain.UpdateCheck{Current: "0.6.1", Latest: "0.7.0\"><script>", Channel: "stable", Verified: true, CheckedAt: 1760000000,
-		Error: "bad_signature", Detail: "line\none‮\x00 " + strings.Repeat("d", 500)}
+		Error: "bad_signature", Detail: "line\none\u202e\x00 " + strings.Repeat("d", 500)}
 	c := obj(get()["check"])
 	if c["notes_url"] != nil || c["prerelease"] != false {
 		t.Fatalf("a link from a latest that is no release: %v", c)
 	}
-	if d, _ := c["detail"].(string); len([]rune(d)) > 300 || strings.ContainsAny(d, "\n\x00‮") {
+	if d, _ := c["detail"].(string); len([]rune(d)) > 300 || strings.ContainsAny(d, "\n\x00\u202e") {
 		t.Fatalf("detail: %q", d)
 	}
 

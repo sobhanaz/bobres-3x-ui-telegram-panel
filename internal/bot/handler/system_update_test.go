@@ -67,7 +67,7 @@ func TestUpdateFromTheDashboardReachesEveryOwner(t *testing.T) {
 	}
 	w.drain()
 	owner.eventuallySees("🔄 <b>Update requested</b>\nboss asked in the dashboard to update BOBRES from 0.6.1 to 0.7.0 (stable channel).")
-	second.eventuallySees("🔄 <b>درخواست به‌روزرسانی</b>\nboss در داشبورد درخواست کرد")
+	second.eventuallySees("🔄 <b>درخواست به\u200cروزرسانی</b>\nboss در داشبورد درخواست کرد")
 
 	status(map[string]any{"state": "done", "id": run.ID, "from": "0.6.1", "to": "0.7.0", "channel": "stable", "step": "done",
 		"started_at": time.Now().UTC().Format(time.RFC3339), "finished_at": time.Now().UTC().Format(time.RFC3339)})
@@ -78,10 +78,10 @@ func TestUpdateFromTheDashboardReachesEveryOwner(t *testing.T) {
 	}
 	w.drain()
 	owner.eventuallySees("✅ <b>Update finished</b>\nBOBRES now runs 0.7.0 (it was 0.6.1). Asked by boss.")
-	second.eventuallySees("✅ <b>به‌روزرسانی انجام شد</b>")
+	second.eventuallySees("✅ <b>به\u200cروزرسانی انجام شد</b>")
 	w.drain()
-	if owner.count("Update finished") != 1 || owner.count("Update requested") != 1 || second.count("به‌روزرسانی انجام شد") != 1 {
-		t.Fatalf("owner: %d finished, %d requested; second owner: %d finished", owner.count("Update finished"), owner.count("Update requested"), second.count("به‌روزرسانی انجام شد"))
+	if owner.count("Update finished") != 1 || owner.count("Update requested") != 1 || second.count("به\u200cروزرسانی انجام شد") != 1 {
+		t.Fatalf("owner: %d finished, %d requested; second owner: %d finished", owner.count("Update finished"), owner.count("Update requested"), second.count("به\u200cروزرسانی انجام شد"))
 	}
 	// an admin is not an owner: nothing about it
 	if adm.count("pdate") != 0 {

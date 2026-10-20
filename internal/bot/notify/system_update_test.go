@@ -100,7 +100,7 @@ func TestSystemUpdateNoticesInPersian(t *testing.T) {
 		if err := handleUpdate(t, n, updateEvent(events.UpdateDone, lang), time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		if got := tgf.take(); len(got) != 1 || !strings.Contains(got[0].text, "به‌روزرسانی انجام شد") {
+		if got := tgf.take(); len(got) != 1 || !strings.Contains(got[0].text, "به\u200cروزرسانی انجام شد") {
 			t.Errorf("language %q: %+v", lang, got)
 		}
 	}
