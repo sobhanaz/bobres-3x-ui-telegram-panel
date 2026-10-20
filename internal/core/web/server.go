@@ -87,7 +87,10 @@ type Config struct {
 	// through the bot, which alone holds the Telegram token (nil: the Mini App
 	// offers no Stars and no manual payment).
 	MiniAppBot MiniAppBot
-	Log        *slog.Logger
+	// MiniAppMembers asks the bot whether a customer is in the store's required
+	// channel (nil: no bot; the app then lets everyone in).
+	MiniAppMembers MiniAppMembers
+	Log            *slog.Logger
 }
 
 // Server is the dashboard API.
