@@ -36,6 +36,11 @@ const (
 	// (System > Updates > Update now), or one ended; one event for each owner
 	// (SystemUpdateEvent), so an update nobody asked for is noticed.
 	SystemUpdate = "system.update.v1"
+	// SystemBackup: a backup was downloaded from the dashboard, or a restore of a backup was
+	// asked for there (System > Backups), or one ended; one event for each owner
+	// (SystemBackupEvent), so a copy of the store's data taken, or the data replaced, by
+	// someone nobody expected is noticed.
+	SystemBackup = "system.backup.v1"
 	// DepositUnmatched: USDT reached the store's TRON address but matched no
 	// automatic payment (DepositUnmatchedEvent); staff credit it by hand.
 	DepositUnmatched = "payment.deposit_unmatched.v1"
@@ -415,6 +420,38 @@ type SystemUpdateEvent struct {
 	By         string `json:"by"`
 	// At is when it was asked (requested) or ended, in unix seconds.
 	At      int64  `json:"at"`
+	Message string `json:"message,omitempty"`
+}
+
+// Kinds and states of a SystemBackupEvent. A download has the one state "downloaded"; a restore
+// goes through the states of an update (requested, then done, failed, rolled_back or not_started:
+// the Update* constants above).
+const (
+	BackupDownload = "download"
+	BackupRestore  = "restore"
+
+	BackupDownloaded = "downloaded"
+)
+
+// SystemBackupEvent: an owner downloaded a backup from the dashboard (Kind download), or asked
+// for a restore of one there and the restore ended (Kind restore). Core writes one event for each
+// owner who has a Telegram account, in the transaction that records it, so a crash neither loses
+// nor repeats the message. The bot sends it as it is to that owner (TelegramID), in their language.
+// File is the backup (its file name, or the name an uploaded one had) and Source where a restore's
+// backup came from (backup or upload); By is the dashboard user's name as core cut it. Message
+// is the updater's own short sentence for a restore that did not end well (outside text: the bot
+// escapes it). Size is a download's size in bytes.
+type SystemBackupEvent struct {
+	TelegramID int64  `json:"telegram_id"`
+	Language   string `json:"language"` // fa or en: the owner's own
+	Kind       string `json:"kind"`     // download or restore
+	State      string `json:"state"`
+	File       string `json:"file"`
+	Source     string `json:"source,omitempty"`
+	By         string `json:"by"`
+	// At is when it happened, in unix seconds.
+	At      int64  `json:"at"`
+	Size    int64  `json:"size,omitempty"`
 	Message string `json:"message,omitempty"`
 }
 

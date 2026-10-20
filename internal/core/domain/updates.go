@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -74,6 +75,11 @@ type UpdateHelper interface {
 	WriteRequest(r sysupdate.Request) error
 	ReadRequest() (*sysupdate.Request, error)
 	RemoveRequest(id string) (bool, error)
+	// The dashboard's restore (restores.go): the request, and the uploads that go with it.
+	WriteRestoreRequest(r sysupdate.RestoreRequest) error
+	StageUpload(id string, r io.Reader, max int64) (sysupdate.Upload, error)
+	RemoveUpload(id string) error
+	PurgeUploads(keep map[string]bool, olderThan time.Duration, now time.Time) (int, error)
 }
 
 // Why an update is refused (UpdateError.Code); the dashboard translates them.
@@ -180,6 +186,10 @@ type Updates struct {
 	Every time.Duration
 
 	lastErr string // the last Step failure logged, so one that repeats is one line
+
+	// The dashboard's restore (restores.go).
+	storeDomain string
+	restoreState
 }
 
 // UpdatesConfig wires Updates.
@@ -191,7 +201,10 @@ type UpdatesConfig struct {
 	Helper UpdateHelper
 	// Version is core's own version (default: this binary's).
 	Version string
-	Log     *slog.Logger
+	// Domain is the store's domain (BOBRES_DOMAIN): what an owner types to confirm a restore.
+	// Empty: restoring from the dashboard is refused (there is nothing to confirm with).
+	Domain string
+	Log    *slog.Logger
 }
 
 // NewUpdates builds the update service.
@@ -203,7 +216,8 @@ func (s *Service) NewUpdates(cfg UpdatesConfig) *Updates {
 		cfg.Version = version.Version
 	}
 	return &Updates{s: s, src: cfg.Source, helper: cfg.Helper, version: cfg.Version, log: cfg.Log.With("worker", "updates"), now: time.Now,
-		PickupWait: 15 * time.Minute, StuckAfter: 60 * time.Minute, StatusStale: 10 * time.Minute, Every: 5 * time.Second}
+		PickupWait: 15 * time.Minute, StuckAfter: 60 * time.Minute, StatusStale: 10 * time.Minute, Every: 5 * time.Second,
+		storeDomain: strings.ToLower(strings.TrimSpace(cfg.Domain))}
 }
 
 // Version is the version core runs.
@@ -307,8 +321,8 @@ type UpdateProgress struct {
 	// until the updater takes it up, then running.
 	Run   *store.SystemUpdate
 	Phase string
-	// Last is the update that ended last (nil when none did).
-	Last *store.SystemUpdate
+	// Last is the update that ended last (nil when none did), LastRestore the restore.
+	Last, LastRestore *store.SystemUpdate
 }
 
 // Progress reads the updater's status and core's records. It asks nobody
@@ -335,6 +349,13 @@ func (u *Updates) Progress(ctx context.Context) (*UpdateProgress, error) {
 	switch {
 	case err == nil:
 		p.Last = last
+	case !errors.Is(err, store.ErrNotFound):
+		return nil, err
+	}
+	lastRestore, err := u.s.st.LastSystemRestore(ctx, u.s.st.Conn())
+	switch {
+	case err == nil:
+		p.LastRestore = lastRestore
 	case !errors.Is(err, store.ErrNotFound):
 		return nil, err
 	}
@@ -489,6 +510,10 @@ func requesterName(u *store.User) string {
 // tellOwners writes one SystemUpdate event for each owner who has a Telegram
 // account, in tx, in the owner's own language. at is when it was asked or ended.
 func (u *Updates) tellOwners(ctx context.Context, tx pgx.Tx, run *store.SystemUpdate, state, message string, at time.Time) error {
+	if run.Action == store.ActionRestore {
+		return u.tellOwnersBackup(ctx, tx, events.SystemBackupEvent{Kind: events.BackupRestore, State: state, File: run.Subject, Source: run.Source,
+			By: run.RequestedByName, At: at.Unix(), Message: message})
+	}
 	staff, err := u.s.st.ListStaffContacts(ctx, tx, false)
 	if err != nil {
 		return err
@@ -520,8 +545,7 @@ func (u *Updates) end(ctx context.Context, run *store.SystemUpdate, outcome, mes
 			return err
 		}
 		ended = true
-		if err := u.s.auditChange(ctx, tx, nil, "system.update."+outcome, "system_update", run.ID, nil,
-			map[string]any{"from": run.From, "to": run.To, "channel": run.Channel, "by": run.RequestedByName, "message": message}, ""); err != nil {
+		if err := u.s.auditChange(ctx, tx, nil, "system."+runKind(run)+"."+outcome, "system_update", run.ID, nil, endDetail(run, message), ""); err != nil {
 			return err
 		}
 		return u.tellOwners(ctx, tx, run, outcome, message, u.now())
@@ -530,9 +554,25 @@ func (u *Updates) end(ctx context.Context, run *store.SystemUpdate, outcome, mes
 		return false, err
 	}
 	if ended {
-		u.log.Info("update ended", "id", run.ID, "outcome", outcome, "from", run.From, "to", run.To)
+		u.log.Info(runKind(run)+" ended", "id", run.ID, "outcome", outcome, "from", run.From, "to", run.To, "backup", run.Subject)
 	}
 	return ended, nil
+}
+
+// runKind is what a row is: update or restore.
+func runKind(run *store.SystemUpdate) string {
+	if run.Action == store.ActionRestore {
+		return store.ActionRestore
+	}
+	return store.ActionUpdate
+}
+
+// endDetail is what the audit entry of the end of a request records.
+func endDetail(run *store.SystemUpdate, message string) map[string]any {
+	if run.Action == store.ActionRestore {
+		return map[string]any{"backup": run.Subject, "source": run.Source, "by": run.RequestedByName, "requested_at": run.RequestedAt.Unix(), "message": message}
+	}
+	return map[string]any{"from": run.From, "to": run.To, "channel": run.Channel, "by": run.RequestedByName, "message": message}
 }
 
 // Step looks once at the open update (if there is one) and ends it when it is
@@ -544,7 +584,10 @@ func (u *Updates) end(ctx context.Context, run *store.SystemUpdate, outcome, mes
 func (u *Updates) Step(ctx context.Context) error {
 	run, err := u.s.st.OpenSystemUpdate(ctx, u.s.st.Conn())
 	if errors.Is(err, store.ErrNotFound) {
-		return nil
+		// Nothing is open. A restore that replaced this very database with a backup's is not in it:
+		// its end is recorded from the updater's status (restores.go).
+		u.purgeUploads()
+		return u.adoptRestore(ctx)
 	}
 	if err != nil {
 		return err
@@ -558,8 +601,9 @@ func (u *Updates) Step(ctx context.Context) error {
 		return nil
 	}
 	// This very version runs: the update is done, whatever the status says
-	// (it is lost when the updater clears it, or cannot be read).
-	if release.Valid(u.version) && run.To == u.version {
+	// (it is lost when the updater clears it, or cannot be read). A restore runs the same
+	// version before and after, so this says nothing of it.
+	if run.Action != store.ActionRestore && release.Valid(u.version) && run.To == u.version {
 		if _, err := u.end(ctx, run, events.UpdateDone, "core now runs "+run.To); err != nil {
 			return err
 		}
@@ -569,8 +613,12 @@ func (u *Updates) Step(ctx context.Context) error {
 	age := u.now().Sub(run.RequestedAt)
 	switch {
 	case h.Available && h.Status.ID == run.ID && h.Status.State == sysupdate.StateRunning:
-		if started := h.Status.StartedAt; started != nil && u.now().Sub(*started) > u.StuckAfter {
-			if _, err := u.end(ctx, run, events.UpdateFailed, "the updater has said it is running for over "+strconv.Itoa(int(u.StuckAfter.Minutes()))+" minutes: look at the server (sudo bobres status)"); err != nil {
+		limit := u.StuckAfter
+		if run.Action == store.ActionRestore {
+			limit = u.restoreStuckAfter()
+		}
+		if started := h.Status.StartedAt; started != nil && u.now().Sub(*started) > limit {
+			if _, err := u.end(ctx, run, events.UpdateFailed, "the updater has said it is running for over "+strconv.Itoa(int(limit.Minutes()))+" minutes: look at the server (sudo bobres status)"); err != nil {
 				return err
 			}
 		}
