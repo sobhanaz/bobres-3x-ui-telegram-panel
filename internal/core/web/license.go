@@ -203,11 +203,13 @@ func (s *Server) licenseView(ctx context.Context, st *domain.LicenseStatus, eff 
 	}
 	staff := usage.StaffSeats
 	active := usage.ActiveServices
+	joinChats := usage.JoinChats
 	out["entitlements"] = map[string]any{
 		"white_label": e.WhiteLabel, "resellers": e.Resellers, "crypto_watcher": e.CryptoWatcher,
 		"max_servers":           limitView(e.MaxServers, usage.Servers),
 		"max_active_services":   limitView(e.MaxActiveServices, &active),
 		"dashboard_staff_seats": limitView(e.DashboardStaffSeat, &staff),
+		"max_join_chats":        limitView(e.MaxJoinChats, &joinChats),
 		"gateways":              map[string]any{"licensed": licensed, "enabled": usage.Gateways},
 		"updates_until":         e.UpdatesUntil,
 	}

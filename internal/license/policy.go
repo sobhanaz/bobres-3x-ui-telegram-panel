@@ -51,6 +51,10 @@ const (
 	// main owner the server names (the first id in BOBRES_ADMIN_TELEGRAM_ID),
 	// who takes none.
 	FreeStaffSeats = 2
+	// FreeMaxJoinChats: channels and groups customers must join to use the
+	// bot (the required chats). The first one is the free tier's; more
+	// than one is a paid feature.
+	FreeMaxJoinChats = 1
 )
 
 // FreeEntitlements is what an install without a license (and without a
@@ -67,6 +71,7 @@ func FreeEntitlements() Entitlements {
 		Gateways:           []string{GatewayZarinpal, GatewayIDPay, GatewayNextPay, GatewayStars, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal},
 		CryptoWatcher:      false,
 		DashboardStaffSeat: FreeStaffSeats,
+		MaxJoinChats:       FreeMaxJoinChats,
 	}
 }
 
@@ -80,8 +85,8 @@ const (
 	TrialStaffSeats = 5
 )
 
-// TrialEntitlements is what a running trial allows: unlimited servers and
-// services, resellers, every payment method and the automatic USDT watcher,
+// TrialEntitlements is what a running trial allows: unlimited servers,
+// services and required chats, resellers, every payment method and the automatic USDT watcher,
 // five staff seats. White label is not part of it: the "Powered by BOBRES"
 // mark stays on during the trial.
 func TrialEntitlements() Entitlements {
@@ -93,6 +98,7 @@ func TrialEntitlements() Entitlements {
 		Gateways:           AllGateways(),
 		CryptoWatcher:      true,
 		DashboardStaffSeat: TrialStaffSeats,
+		MaxJoinChats:       Unlimited,
 	}
 }
 

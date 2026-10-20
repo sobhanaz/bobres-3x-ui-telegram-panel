@@ -298,6 +298,8 @@ func printLicense(w io.Writer, eff *domain.EffectiveLicense, usage *domain.Licen
 	active, seats := usage.ActiveServices, usage.StaffSeats
 	row("Services", limitUse(e.MaxActiveServices, &active))
 	row("Staff seats", limitUse(e.DashboardStaffSeat, &seats))
+	joinChats := usage.JoinChats
+	row("Required chats", limitUse(e.MaxJoinChats, &joinChats))
 	row("Gateways", orNone(strings.Join(e.Gateways, ", ")))
 	row("Features", orNone(strings.Join(features(e), ", ")))
 	// The end of the updates the license in effect covers: none on the free

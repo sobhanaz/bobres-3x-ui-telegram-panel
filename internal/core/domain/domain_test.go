@@ -39,7 +39,7 @@ func testService(t *testing.T) (*Service, *store.Store) {
 	if err := testdb.Truncate(ctx, s.DB(), `core.ledger_entries, core.wallets, core.subscriptions, core.orders,
 		core.discount_redemptions, core.discount_codes, core.audit_log,
 		core.plans, core.users, core.settings, core.inbox_core, core.dead_letters, core.outbox_core,
-		core.outbox_core_cursors, payments.outbox_payments, payments.outbox_payments_cursors, core.reseller_tiers`); err != nil {
+		core.outbox_core_cursors, payments.outbox_payments, payments.outbox_payments_cursors, core.reseller_tiers, core.join_chats`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// Every test starts on the first day of the implicit trial, with no

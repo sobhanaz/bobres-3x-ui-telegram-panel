@@ -44,7 +44,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	if err := testdb.Truncate(ctx, st.DB(), `core.web_sessions, core.login_links, core.staff_credentials, core.audit_log, core.users, core.reseller_tiers`); err != nil {
+	if err := testdb.Truncate(ctx, st.DB(), `core.web_sessions, core.login_links, core.staff_credentials, core.audit_log, core.users, core.reseller_tiers, core.join_chats`); err != nil {
 		t.Fatal(err)
 	}
 	env, err := bcrypto.NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))

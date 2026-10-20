@@ -110,6 +110,17 @@ type Handler struct {
 	// the license in effect includes resellers, so customers are offered the
 	// Become a reseller button (false until then, and for an older core).
 	resellersIncluded atomic.Bool
+	// joinExtras is Settings.join_chats from the last refresh: the required
+	// channels and groups after the first one (the setting join.channel), as
+	// far as the license allows (joinchats.go). Nil before the first refresh,
+	// and for an older core.
+	joinExtras atomic.Pointer[[]joinReq]
+	// joinSem bounds the membership lookups in flight for all customers at
+	// once, and joinMissTTL is how long a chat a customer has not joined is
+	// not asked about again by an ordinary update (the "I've joined" button
+	// always asks); a field so that a test can switch it off.
+	joinSem     chan struct{}
+	joinMissTTL time.Duration
 }
 
 // New builds a Handler. limiter may be nil.
@@ -122,7 +133,7 @@ func New(core corev1.CoreServiceClient, t Telegram, st state.Store, cat *i18n.Ca
 	}
 	h := &Handler{core: core, tg: t, state: st, cat: cat, limiter: limiter, cfg: cfg, log: log,
 		set: settings.New(), dropped: map[string]bool{}, gwMethods: map[string]methodsEntry{}, checkWait: defaultCheckWait,
-		profileKick: make(chan struct{}, 1)}
+		profileKick: make(chan struct{}, 1), joinSem: make(chan struct{}, joinParallelAll), joinMissTTL: joinMissCacheTTL}
 	h.loadMenuLabels() // a tap is known as such before settings ever load
 	return h
 }
@@ -163,6 +174,13 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	h.miniApp.Store(&miniApp)
 	h.whiteLabel.Store(s.GetWhiteLabel())
 	h.resellersIncluded.Store(s.GetResellersEnabled())
+	extras := make([]joinReq, 0, len(s.GetJoinChats()))
+	for _, c := range s.GetJoinChats() {
+		if c.GetChat() != "" {
+			extras = append(extras, joinReq{Chat: c.GetChat(), Link: c.GetLink(), Label: c.GetLabel()})
+		}
+	}
+	h.joinExtras.Store(&extras)
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
@@ -251,6 +269,9 @@ type req struct {
 	// gated: a gate let the update through only to continue a ticket; what
 	// turns out to be anything else gets the gate's answer (answerGate).
 	gated bool
+	// joinMissing: the required chats the user has not joined, as the gate
+	// found them when it let a ticket through (answerGate asks about those).
+	joinMissing []joinReq
 	// held: a gate is in force for the user and let the update through only
 	// for what it is (an exempt command, a payment under way, a ticket), so
 	// it gets no bottom menu.

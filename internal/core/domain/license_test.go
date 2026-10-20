@@ -282,6 +282,7 @@ func TestEffectiveEntitlements(t *testing.T) {
 	// What a license in force gives: its own, joined to the free tier's
 	// payment methods (it never leaves less than the free tier).
 	inForce := func(e license.Entitlements) license.Entitlements {
+		e.MaxJoinChats = max(e.MaxJoinChats, license.FreeMaxJoinChats)
 		e.Gateways = append(slices.Clone(e.Gateways), "zarinpal", "idpay", "nextpay", "manual_card", "manual_crypto", "manual_zarinpal")
 		return e
 	}

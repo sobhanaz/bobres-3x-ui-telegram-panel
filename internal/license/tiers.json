@@ -8,9 +8,9 @@
     "PRICES are placeholders: every \"SET ME\" is the owner's to fill (a plain number as text, e.g. \"9\"). The tools never read prices; they are for you and docs/pricing.md.",
     "",
     "THE FREE TIER is not in this file: it is code (license.FreeEntitlements, internal/license/policy.go), and it applies to an install with no license once its trial is over. Its numbers:",
-    "  1 server, 25 active services, 2 dashboard staff seats (the owner the install names takes none); the gateways zarinpal, idpay, nextpay, stars, manual_card, manual_crypto and manual_zarinpal, and the wallet;",
+    "  1 server, 25 active services, 2 dashboard staff seats (the owner the install names takes none), 1 required channel or group (join to use the bot); the gateways zarinpal, idpay, nextpay, stars, manual_card, manual_crypto and manual_zarinpal, and the wallet;",
     "  no resellers, no white label (\"Powered by BOBRES\" is shown), no automatic USDT. There is no update limit: every release reaches every install.",
-    "THE TRIAL: every install gets 30 days from the first start of a version with the policy: unlimited servers and services, resellers, every gateway, 5 staff seats, no white label.",
+    "THE TRIAL: every install gets 30 days from the first start of a version with the policy: unlimited servers and services, resellers, every gateway, 5 staff seats, as many required channels and groups as the store likes, no white label.",
     "  The trial preset below is the same, issued as a token (a test pins that). An install that has a license uses the license; one whose license ended uses the trial while it runs, then the free tier.",
     "",
     "A license is never below the free tier: the install raises each limit a license sets or omits to the free tier's. The standard and pro presets name every gateway and grant at least the free tier (a test pins that).",
@@ -29,7 +29,8 @@
         "resellers": true,
         "gateways": ["zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"],
         "crypto_watcher": true,
-        "dashboard_staff_seats": 5
+        "dashboard_staff_seats": 5,
+        "max_join_chats": 1
       }
     },
     "pro": {
@@ -43,7 +44,8 @@
         "resellers": true,
         "gateways": ["zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"],
         "crypto_watcher": true,
-        "dashboard_staff_seats": -1
+        "dashboard_staff_seats": -1,
+        "max_join_chats": -1
       }
     },
     "trial": {
@@ -57,7 +59,8 @@
         "resellers": true,
         "gateways": ["zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"],
         "crypto_watcher": true,
-        "dashboard_staff_seats": 5
+        "dashboard_staff_seats": 5,
+        "max_join_chats": -1
       }
     }
   }

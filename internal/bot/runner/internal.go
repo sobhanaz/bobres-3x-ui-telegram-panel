@@ -46,8 +46,8 @@ type ChatChecker interface {
 	GetChatMember(ctx context.Context, chat string, userID int64) (*tg.ChatMember, error)
 }
 
-// channelRe is a join.channel value, as core checks it: a public channel's
-// @name or a private channel's -100… id.
+// channelRe is a required chat as core checks it (join.channel and the extra
+// chats): a public channel or group's @name, or a private one's -100… id.
 var channelRe = regexp.MustCompile(`^(@[A-Za-z][A-Za-z0-9_]{4,31}|-100[0-9]{5,15})$`)
 
 // Problems ChannelCheck reports.
@@ -59,8 +59,8 @@ const (
 )
 
 // ChannelCheck tells the dashboard whether the bot can enforce joining a
-// channel, at GET /internal/channel-check?chat=<@name|-100id>: the channel
-// exists and the bot is one of its administrators (Telegram shows other
+// channel or group, at GET /internal/channel-check?chat=<@name|-100id>: the
+// chat exists and the bot is one of its administrators (Telegram shows other
 // members to admins only). It answers 200 with {"ok":true,"title","bot_admin"}
 // or {"ok":false,"problem","detail"}.
 func ChannelCheck(bot ChatChecker, botID int64, coreToken string) http.Handler {
@@ -97,8 +97,9 @@ func checkChannel(ctx context.Context, bot ChatChecker, botID int64, chat string
 			return fail(ProblemError, detail)
 		}
 	}
-	if ch.Type != "channel" {
-		return fail(ProblemNotChannel, "this chat is a "+ch.Type+", not a channel")
+	// A required chat is a channel or a group (a supergroup is a group).
+	if ch.Type != "channel" && ch.Type != "supergroup" && ch.Type != "group" {
+		return fail(ProblemNotChannel, "this chat is a "+ch.Type+", not a channel or a group")
 	}
 	m, err := bot.GetChatMember(ctx, chat, botID)
 	if err != nil {
