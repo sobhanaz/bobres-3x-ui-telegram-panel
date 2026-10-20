@@ -8,14 +8,39 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.6.0] — 2026-10-20
+
+The Telegram Mini App is on by default and now reaches most of what the bot does (the free trial, invites, support,
+Telegram Stars, card to card with receipts, and a reseller panel); resellers can manage their own customers' services;
+and every client the bot makes in a 3x-ui panel is put in the group `bobres_bot`.
+
+### Updating
+- `sudo bobres update` does it: all the services move together (the bot and core call each other through new
+  endpoints, so they must not be left on different versions). Two small database
+  migrations run by themselves after the update's backup: core 00024 (a `note` column on services) and provisioner
+  00005 (a `group_backfilled_at` column on the 3x-ui servers). `sudo bobres rollback` undoes the update with the
+  database from before it. Nothing has to be configured.
+- **Every store has the Mini App after the update**: it was off until switched on, and is on now. It opens from a Store
+  button on the bot's home screen, a Store item in its bottom menu and Telegram's menu button, which the bot adds by
+  itself, and only when the store's address is a public HTTPS one. Customers get the new bottom menu once, with their
+  next message. To keep the app closed, turn off Settings, General, "Telegram Mini App store": the buttons go within a
+  minute and `/app/` answers "not found".
+- The provisioner puts the clients the bot made before into the 3x-ui group `bobres_bot` in the background after it
+  starts. Its log has a line per 3x-ui server when it is done
+  (`3x-ui groups: backfill finished`). Nobody is disconnected, and a client you moved to another group by hand stays there.
+- After updating, open the bot on a phone and walk through the Mini App checks (the last section of
+  [docs/17-mini-app.md](docs/17-mini-app.md) and item 34 of [docs/launch-checklist.md](docs/launch-checklist.md)): the
+  Store buttons, the screens, a Stars payment and a receipt upload have not been tried in a real Telegram.
+
 ### Telegram Mini App
 - The Mini App store is **on by default**, for every store: `miniapp.enabled` used to be off until set, and is now on
   unless the owner switches it off, so a store that never touched it has the app after `bobres update`. The bot opens
   it from a **Store** button on its home screen, a **Store** item in its bottom menu (it answers with the button that
   opens the app: Telegram gives a Mini App opened from a reply keyboard button no sign-in data) and Telegram's own
-  menu button, and sets them itself: there is nothing to configure in @BotFather. They appear only when the store has a public HTTPS address (not an IP
-  address, `localhost` or a private name, where Telegram could not open the page) and go again when the app is
-  switched off (the bot only takes back a menu button it set itself).
+  menu button, and sets them itself: there is nothing to configure in @BotFather. They appear only when the store's
+  address is a public HTTPS one (a domain, or a public IP address; not plain http, `localhost` or a private name,
+  which Telegram could not open) and go again when the app is switched off (the bot only takes back a menu button it
+  set itself).
 - New in the app: the **free trial** (the bot's trial: one per account, whichever door it was taken through),
   **invite friends** (the customer's own link, how many joined and bought, what it earned) and **support** (write to
   staff, follow the conversation, close it; the same inbox as the bot and the same daily limit, which the app counts
@@ -25,6 +50,66 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   older than core simply shows no button. The other way round, the bot tells core its own @username with every sign-in
   check, so the app's invite link and "open the bot" button work without `branding.bot_username` (which still wins
   when set).
+
+### Mini App payments
+- The Mini App store now takes **Telegram Stars** and the **manual payment methods** (card to card, USDT by hand, a
+  Zarinpal payment link, each with a receipt), besides Zarinpal, IDPay, NextPay and automatic USDT. `GET /api/mini/v1/methods`
+  lists exactly what the store offers for the amount and currency, by the bot's own rule (`payments.*` settings and
+  switches), and `pay` and `topup` accept each of them, creating the payment as the bot does (the same keys and
+  statuses, so a payment started in the bot goes on in the app and the other way round).
+- **Stars:** the bot has a new internal endpoint, `POST /internal/miniapp/invoice`, that makes an invoice link with the
+  Bot API's `createInvoiceLink` (the same title, description, payload and XTR price as the bot's invoice message; new
+  `CreateInvoiceLink` in `internal/bot/tg`). The app opens it with `Telegram.WebApp.openInvoice`; the bot's existing
+  pre-checkout and successful-payment handlers settle it, and a test shows they do for a link (no message of the bot's
+  needed). `internal/tgfake` makes invoice links and can play a customer paying one.
+- **Manual payments:** the app shows the card, the USDT addresses and the exact amount in USDT, or the Zarinpal link,
+  with the payment reference and a copy button for each, and `POST /api/mini/v1/payments/{id}/proof` takes the proof
+  once: a receipt image (JPEG, PNG or WebP by its bytes, 8 MB at most) with the bank's tracking number, or a
+  transaction hash. It ends in the same domain call the bot's proof flow ends in, so the review list, the possible
+  duplicate warning and the admin card with the receipt work unchanged. Core keeps no file and holds no Telegram
+  token: the bot (`POST /internal/miniapp/receipt`) sends the image to the customer's own chat and core stores the
+  Telegram file id, like the bot's own receipts. A third endpoint, `POST /internal/miniapp/proof-alert`, has the bot
+  tell the staff (every owner) about a proof, as it does for one that comes in its chat. The app shrinks big phone
+  photos before sending them.
+- Limits and care: every call acts on the customer's own order and payment (another's is a 404, also for the
+  payment check, which used to answer 500, as it did for an id that is not a payment id), prices come from the order, a
+  payment starts only by a method on offer, a proof is accepted once (also in maintenance, so that a customer who has
+  paid can say so, as in the bot), a receipt is no more than 8 MB and 40 megapixels (read from the header, WebP
+  included), uploads are limited to 6 in 10 minutes and one at a time for a customer on top of the write limit (4 in
+  all), and no receipt or file id is ever logged or audited. See [docs/17-mini-app.md](docs/17-mini-app.md) for the
+  API, the new error codes and what only a real Telegram can prove.
+- Fixed: the Mini App showed the amount of an automatic USDT payment rounded to cents ("Send exactly 2.5 USDT" for a
+  payment of 2.500731, whose last digits are what tells it from the others, so it was not matched and waited for the
+  staff); it shows every decimal now, as the bot does. The bot's "payment received" message for a top-up paid by Stars
+  says the wallet was credited (it said a service is being prepared), and the pre-checkout refusal no longer sends a
+  Mini App customer "to the bot".
+- Updating: no migration and no change to the gRPC API. The new bot endpoints (`/internal/miniapp/invoice`, `/receipt`,
+  `/proof-alert`) are called by core, so update core and the bot together with `sudo bobres update`; a core newer than
+  its bot would list Stars and the manual methods and answer "Telegram could not be reached" when one is picked.
+
+### Reseller management
+- Resellers manage their customers' services, in the bot and in the Telegram Mini App (a new **Reseller panel** section
+  in its More tab, Persian first and English). A reseller can **pause and resume** a service (the customer's link stops
+  and starts again), **delete** one after an explicit confirmation (no refund), keep a private **note** next to the
+  name, filter the list by group (all, active, ending soon, ended, paused) with a count on each group, and see the
+  **customers who joined through their invite link** (their @username or Telegram id, the day they joined, paid orders,
+  what they spent and the commission it paid, newest first). A reseller still cannot reset a service's traffic or give
+  free days or free traffic: those stay with staff, and a service **support** paused cannot be resumed by its reseller.
+- The Mini App's reseller section: the panel (tier, discount, commission, balance with credit and what can be spent,
+  the invite link with a Share button), buying for a customer (plans at the reseller's price, a name for the service,
+  then the shop's checkout with the credit counted in the wallet button and no discount-code field), the customers'
+  services with renew, add traffic, rename, note, pause, resume and delete, the customers from the link, and the
+  statement. `POST /api/mini/v1/orders` takes an optional `label` (a reseller's name for the new service; ignored for
+  anyone else), and the wallets in `/me` and `/wallet` carry `credit_limit`.
+- Every call is the reseller's own and is checked by core each time: an active reseller on an install whose license
+  includes resellers, a service that is theirs (anything else is 404 and changes nothing), no price or amount from the
+  client, the shared Mini App rate limits. A reseller after `resellers` left the license keeps their account and their
+  services, renewals and the plain list in the bot, but the new powers answer 403 (the Mini App section is hidden) with
+  no word about licensing. Pausing and deleting are in the audit log under the reseller's name, source `bot`.
+- Updating: one database migration, 00024 (a nullable `note` column on `subscriptions`, with a down migration), and
+  additive gRPC calls (`ListResellerServices`, `SetResellerServiceEnabled`, `DeleteResellerService`,
+  `SetSubscriptionNote`, `ListInvitedCustomers`, `Subscription.note`): update core and the bot together with
+  `sudo bobres update`. An older bot keeps working; a newer bot against an older core shows the plain list.
 
 ### 3x-ui groups
 - Every client the bot makes in a 3x-ui panel is now in the panel's client group **`bobres_bot`** (3x-ui v3.8.5 and
@@ -63,65 +148,15 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
     new name stays, empty. Attaching and detaching a client leaves its group.
 - The in-memory 3x-ui fake used by the tests (`internal/xuifake`) follows all of this now, with its own tests.
 
-### Reseller management
-- Resellers manage their customers' services, in the bot and in the Telegram Mini App (a new **Reseller panel** section
-  in its More tab, Persian first and English). A reseller can **pause and resume** a service (the customer's link stops
-  and starts again), **delete** one after an explicit confirmation (no refund), keep a private **note** next to the
-  name, filter the list by group (all, active, ending soon, ended, paused) with a count on each group, and see the
-  **customers who joined through their invite link** (their @username or Telegram id, the day they joined, paid orders,
-  what they spent and the commission it paid, newest first). A reseller still cannot reset a service's traffic or give
-  free days or free traffic: those stay with staff, and a service **support** paused cannot be resumed by its reseller.
-- The Mini App's reseller section: the panel (tier, discount, commission, balance with credit and what can be spent,
-  the invite link with a Share button), buying for a customer (plans at the reseller's price, a name for the service,
-  then the shop's checkout with the credit counted in the wallet button and no discount-code field), the customers'
-  services with renew, add traffic, rename, note, pause, resume and delete, the customers from the link, and the
-  statement. `POST /api/mini/v1/orders` takes an optional `label` (a reseller's name for the new service; ignored for
-  anyone else), and the wallets in `/me` and `/wallet` carry `credit_limit`.
-- Every call is the reseller's own and is checked by core each time: an active reseller on an install whose license
-  includes resellers, a service that is theirs (anything else is 404 and changes nothing), no price or amount from the
-  client, the shared Mini App rate limits. A reseller after `resellers` left the license keeps their account and their
-  services, renewals and the plain list in the bot, but the new powers answer 403 (the Mini App section is hidden) with
-  no word about licensing. Pausing and deleting are in the audit log under the reseller's name, source `bot`.
-- Updating: one database migration, 00024 (a nullable `note` column on `subscriptions`, with a down migration), and
-  additive gRPC calls (`ListResellerServices`, `SetResellerServiceEnabled`, `DeleteResellerService`,
-  `SetSubscriptionNote`, `ListInvitedCustomers`, `Subscription.note`): update core and the bot together with
-  `sudo bobres update`. An older bot keeps working; a newer bot against an older core shows the plain list.
-
-### Mini App payments
-- The Mini App store now takes **Telegram Stars** and the **manual payment methods** (card to card, USDT by hand, a
-  Zarinpal payment link, each with a receipt), besides Zarinpal, IDPay, NextPay and automatic USDT. `GET /api/mini/v1/methods`
-  lists exactly what the store offers for the amount and currency, by the bot's own rule (`payments.*` settings and
-  switches), and `pay` and `topup` accept each of them, creating the payment as the bot does (the same keys and
-  statuses, so a payment started in the bot goes on in the app and the other way round).
-- **Stars:** the bot has a new internal endpoint, `POST /internal/miniapp/invoice`, that makes an invoice link with the
-  Bot API's `createInvoiceLink` (the same title, description, payload and XTR price as the bot's invoice message; new
-  `CreateInvoiceLink` in `internal/bot/tg`). The app opens it with `Telegram.WebApp.openInvoice`; the bot's existing
-  pre-checkout and successful-payment handlers settle it, and a test shows they do for a link (no message of the bot's
-  needed). `internal/tgfake` makes invoice links and can play a customer paying one.
-- **Manual payments:** the app shows the card, the USDT addresses and the exact amount in USDT, or the Zarinpal link,
-  with the payment reference and a copy button for each, and `POST /api/mini/v1/payments/{id}/proof` takes the proof
-  once: a receipt image (JPEG, PNG or WebP by its bytes, 8 MB at most) with the bank's tracking number, or a
-  transaction hash. It ends in the same domain call the bot's proof flow ends in, so the review list, the possible
-  duplicate warning and the admin card with the receipt work unchanged. Core keeps no file and holds no Telegram
-  token: the bot (`POST /internal/miniapp/receipt`) sends the image to the customer's own chat and core stores the
-  Telegram file id, like the bot's own receipts. A third endpoint, `POST /internal/miniapp/proof-alert`, has the bot
-  tell the staff (every owner) about a proof, as it does for one that comes in its chat. The app shrinks big phone
-  photos before sending them.
-- Limits and care: every call acts on the customer's own order and payment (another's is a 404, also for the
-  payment check, which used to answer 500, as it did for an id that is not a payment id), prices come from the order, a
-  payment starts only by a method on offer, a proof is accepted once (also in maintenance, so that a customer who has
-  paid can say so, as in the bot), a receipt is no more than 8 MB and 40 megapixels (read from the header, WebP
-  included), uploads are limited to 6 in 10 minutes and one at a time for a customer on top of the write limit (4 in
-  all), and no receipt or file id is ever logged or audited. See [docs/17-mini-app.md](docs/17-mini-app.md) for the
-  API, the new error codes and what only a real Telegram can prove.
-- Fixed: the Mini App showed the amount of an automatic USDT payment rounded to cents ("Send exactly 2.5 USDT" for a
-  payment of 2.500731, whose last digits are what tells it from the others, so it was not matched and waited for the
-  staff); it shows every decimal now, as the bot does. The bot's "payment received" message for a top-up paid by Stars
-  says the wallet was credited (it said a service is being prepared), and the pre-checkout refusal no longer sends a
-  Mini App customer "to the bot".
-- Updating: no migration and no change to the gRPC API. The new bot endpoints (`/internal/miniapp/invoice`, `/receipt`,
-  `/proof-alert`) are called by core, so update core and the bot together with `sudo bobres update`; a core newer than
-  its bot would list Stars and the manual methods and answer "Telegram could not be reached" when one is picked.
+### Known limits
+- Nothing of the Mini App has been tried in a real Telegram yet: the sign-in with a real bot token, the Store buttons,
+  the Stars payment sheet (and that Telegram reports a payment made through an invoice link to the bot as it does for an
+  invoice message), receipt uploads over a mobile network, the layout in Telegram's own WebView. Tests play Telegram
+  with a fake ([17-mini-app.md](docs/17-mini-app.md), "Check by hand with a real Telegram").
+- The Mini App does not enforce the store's required channel (`join.channel`) that the bot enforces.
+- A manual payment cannot be taken up again once its screen was left (Telegram reloading the app between paying at the
+  bank and sending the receipt): the customer starts a new order and support finds the old payment by its reference.
+- If support pauses a service its reseller had already paused, nothing is recorded, so the reseller can still resume it.
 
 ## [0.5.0] — 2026-10-20
 

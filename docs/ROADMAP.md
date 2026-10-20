@@ -7,13 +7,15 @@ owner's picks (2026-10-14) and the effort: the cheaper pieces that help selling 
 Nothing here is promised for a date. Released so far ([CHANGELOG.md](../CHANGELOG.md)): v0.1.0 (2026-10-14, the first
 public release), v0.1.1, v0.2.0 (sales reports), v0.2.1 (the daily summary), v0.3.0 (the installer and the command line),
 v0.4.0 (2026-10-17: Marzban panels, the subscription page, the Mini App, IDPay and NextPay, churn and Jalali reports,
-and the owner's tools) and v0.5.0 (2026-10-20: several owners, a list of the payments to review, Marzban tested against
-a real panel).
+and the owner's tools), v0.5.0 (2026-10-20: several owners, a list of the payments to review, Marzban tested against
+a real panel) and v0.6.0 (2026-10-20: the Mini App on by default with Stars, receipts, trial, invites, support and a
+reseller panel; reseller management; the 3x-ui group `bobres_bot`).
 
-## Where things stand (after v0.5.0)
+## Where things stand (after v0.6.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
-Undo, noted in the list). What is still open:
+Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
+group). What is still open:
 
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
   review); the subscription page's app links on real devices; the Mini App in a real Telegram. (Marzban was on this
@@ -21,8 +23,8 @@ Undo, noted in the list). What is still open:
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, gift codes, a lottery or wheel, reseller targets); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
-  sign-in inside the bot; an Undo for the last change in the bot's admin menu; picking up a manual payment again in the
-  Mini App after its screen was left.
+  sign-in inside the bot; an Undo for the last change in the bot's admin menu; in the Mini App, picking up a manual
+  payment again after its screen was left and enforcing the store's required channel (the bot does).
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 
@@ -146,7 +148,7 @@ item says where it landed.
 4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
 5. **Growth tools: open.** Cashback, gift codes, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish).
 6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits are open.
-7. **The Telegram Mini App: built, v0.4.0** (item 4 of the picks above), not yet checked in a real Telegram.
+7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
 8. **Alongside:** the audit-log export is built (`audit.csv`). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), a Prometheus endpoint and an uptime page, two-factor sign-in inside the bot.
 9. **The business track (the owner's, not code):** the lawyer's review, the prices, the license server, the first customers ([launch-checklist.md](launch-checklist.md)).
 

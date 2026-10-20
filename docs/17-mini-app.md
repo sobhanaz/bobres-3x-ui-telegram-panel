@@ -12,15 +12,17 @@ answers 404.
 
 ## Set up
 
-1. The store needs a public HTTPS address (the dashboard's domain): the app lives at `https://<domain>/app/`. Nothing
-   else is required. With an IP address, `localhost`, a private or `.local` name or plain http, Telegram could not open
-   the page, so the bot adds no button (the app itself is still served).
+1. The store needs a public HTTPS address (the dashboard's: a domain, or the server's public IP address with its
+   certificate): the app lives at `https://<address>/app/`. Nothing else is required. With plain http, or an address
+   that is `localhost`, private, link-local or a `.local` name, Telegram could not open the page, so the bot adds no
+   button (the app itself is still served).
 2. Core tells the bot that address with its settings, and the bot (which reloads them every minute and at once on a
    change in the dashboard) sets the menu button, titled "Store" / "فروشگاه", puts a Store button first on its home
    screen and a Store item first in its bottom menu. The menu button is set for all chats, once (and again when the
    address or the title changes), replacing a button set by hand in @BotFather before; Telegram's default button is
-   given back when the app is switched off or the address is lost, but only if the bot had set the button.
-   An inline Web App button with the same URL works anywhere else too.
+   given back when the app is switched off or the address is lost, but only if the bot had set the button. While it
+   opens the app, Telegram's default button (the list of the bot's commands) is not shown there; the commands still
+   work when typed. An inline Web App button with the same URL works anywhere else too.
 
    **Why the bottom menu holds a text item and not the app button itself:** Telegram gives a Mini App opened from a
    *reply keyboard* button no sign-in data (`WebAppInitData` is empty; such a Mini App can only `sendData` back), so
@@ -310,8 +312,8 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
 1. The init data signature with the real bot token: open the app from the menu button on a phone and a desktop client;
    it must show the plans, not "open from Telegram".
 2. The Store item in the bot's bottom menu, the Store button on its home screen and Telegram's menu button, a minute
-   after an update or a change of `miniapp.enabled`: all three appear on, all three go off, and a store with only an IP
-   address gets none. Each must open the app signed in (the bottom menu's after one more tap, on the bot's answer).
+   after an update or a change of `miniapp.enabled`: all three appear on, all three go off, and a store whose address is
+   not a public HTTPS one (`localhost`, a private name) gets none. Each must open the app signed in (the bottom menu's after one more tap, on the bot's answer).
 3. The CSP and framing in Telegram's web clients (web.telegram.org) and the mobile apps; nothing blocked in the console.
 4. Theme colours, dark and light, safe-area (notch) and Telegram's Back button inside a purchase.
 5. A payment page opening from the app (Zarinpal, IDPay, NextPay) and coming back; the automatic USDT address, exact
