@@ -167,7 +167,9 @@ func (rt *restoreTest) request(sum string, size int64, mods ...func(map[string]a
 	return id
 }
 
-func (rt *restoreTest) backupPath() string { return filepath.Join(rt.dir, "backups", restoreBackupName) }
+func (rt *restoreTest) backupPath() string {
+	return filepath.Join(rt.dir, "backups", restoreBackupName)
+}
 
 func (rt *restoreTest) uploadDir() string {
 	rt.tb.Helper()

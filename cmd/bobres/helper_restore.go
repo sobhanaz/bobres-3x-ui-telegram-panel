@@ -28,13 +28,13 @@ import (
 // line does not make: when the restored data does not come up healthy, it goes back to the backup of
 // the data from before on its own. Protocol version 1, request.json for a restore:
 //
-//	{"v":1, "id":"<uuid>", "action":"restore", "source":"backup|upload", "file":"<name>", "upload":"<uuid>|",
-//	 "sha256":"<hex>", "size":<bytes>, "by":"<name>", "at":"<RFC 3339>"}
+//		{"v":1, "id":"<uuid>", "action":"restore", "source":"backup|upload", "file":"<name>", "upload":"<uuid>|",
+//		 "sha256":"<hex>", "size":<bytes>, "by":"<name>", "at":"<RFC 3339>"}
 //
-//   - source "backup": file is a backup core's backup service lists (bobres-<time>[-tag].bkp), which the
-//     helper reads from <install dir>/backups; upload is "".
-//   - source "upload": the owner uploaded a backup; core wrote it as <install dir>/run/update/upload/<upload>.bkp
-//     (a folder only core can write) and file is the name it had when it was uploaded, for the messages.
+//	  - source "backup": file is a backup core's backup service lists (bobres-<time>[-tag].bkp), which the
+//	    helper reads from <install dir>/backups; upload is "".
+//	  - source "upload": the owner uploaded a backup; core wrote it as <install dir>/run/update/upload/<upload>.bkp
+//	    (a folder only core can write) and file is the name it had when it was uploaded, for the messages.
 //
 // Core's sha256 and size are what it saw; the helper copies the file into a file of its own (root's,
 // mode 0600, in a folder of its own) while it hashes it, and compares: whatever core does to the

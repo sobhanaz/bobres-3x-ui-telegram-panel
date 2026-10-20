@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/backup"
@@ -52,6 +56,50 @@ func Start(r *Runner, coreToken string) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"started": true})
+	})
+}
+
+// downloadWindow bounds how long one download may take to write: backups are large and the
+// server's usual write limit (30 seconds) is for small answers.
+const downloadWindow = time.Hour
+
+// Download answers GET /internal/backups/file?name=bobres-<time>[-tag].bkp for core, which streams
+// it on to the owner (System > Backups > Download): the file as it is on disk, encrypted, in the
+// order of the disk, never read into memory. Only a name that is a backup file name and nothing else
+// is served (no path, no sidecar, no temporary file), and only a plain file: the folder is opened
+// without following a link, and a pipe or a directory is not read. The key that opens a backup is not
+// here and not sent: it is BOBRES_BACKUP_KEY on the server.
+func Download(r *Runner, coreToken string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if !authorized(req, coreToken) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		name := req.URL.Query().Get("name")
+		if !backup.ValidFileName(name) {
+			http.Error(w, "not a backup file name", http.StatusBadRequest)
+			return
+		}
+		f, err := os.OpenFile(filepath.Join(r.o.Dir, name), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_NOCTTY, 0) //nolint:gosec // a name checked by backup.ValidFileName, opened without following a link
+		if err != nil {
+			http.Error(w, "no such backup", http.StatusNotFound)
+			return
+		}
+		defer f.Close() //nolint:errcheck // read-only
+		fi, err := f.Stat()
+		if err != nil || !fi.Mode().IsRegular() {
+			http.Error(w, "no such backup", http.StatusNotFound)
+			return
+		}
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(downloadWindow))
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.WriteHeader(http.StatusOK)
+		// A client that goes away ends the copy; a short copy ends the response short, which the
+		// receiver sees as a body shorter than Content-Length.
+		_, _ = io.Copy(w, io.LimitReader(f, fi.Size()))
 	})
 }
 

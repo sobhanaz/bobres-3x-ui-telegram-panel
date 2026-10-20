@@ -22,14 +22,14 @@ import (
 // same way it asks for an update: one small request.json, dropped into the folder the updater
 // watches. A restore request names the backup to restore and nothing else:
 //
-//	{"v":1, "id":"<uuid>", "action":"restore", "source":"backup|upload", "file":"<name>", "upload":"<uuid>|",
-//	 "sha256":"<hex>", "size":<bytes>, "by":"<name>", "at":"<RFC 3339>"}
+//		{"v":1, "id":"<uuid>", "action":"restore", "source":"backup|upload", "file":"<name>", "upload":"<uuid>|",
+//		 "sha256":"<hex>", "size":<bytes>, "by":"<name>", "at":"<RFC 3339>"}
 //
-//   - source "backup": file is a backup the backup service lists (bobres-<time>[-tag].bkp); the updater
-//     reads it from the install's backups folder, which core cannot reach. upload is "".
-//   - source "upload": the owner uploaded a backup. Core streams it into upload/<upload>.bkp in this folder
-//     (StageUpload: a file of its own, mode 0600, never through a link, never more than MaxUpload
-//     bytes), and file is the name it had, for the messages (it is never used as a path).
+//	  - source "backup": file is a backup the backup service lists (bobres-<time>[-tag].bkp); the updater
+//	    reads it from the install's backups folder, which core cannot reach. upload is "".
+//	  - source "upload": the owner uploaded a backup. Core streams it into upload/<upload>.bkp in this folder
+//	    (StageUpload: a file of its own, mode 0600, never through a link, never more than MaxUpload
+//	    bytes), and file is the name it had, for the messages (it is never used as a path).
 //
 // The sha256 and the size are what core measured. The updater copies the file into one of its own
 // while it hashes it, and refuses a file that differs: whatever core does to the upload afterwards
