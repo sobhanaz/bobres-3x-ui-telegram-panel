@@ -317,3 +317,47 @@ valid, and the store runs on its trial or the free tier. Nothing is deleted and 
   is not this key's public half. Never edit a `.pub` to make it start: find out which key file is the right one.
 - Customers report `bad_signature` on tokens you just issued: the key on the server is not the one their
   BOBRES version trusts. Compare fingerprints: `go run ./tools/license fingerprint internal/license/keys/<kid>.pub`.
+
+## 8. One server, behind a Cloudflare Tunnel
+
+When the license server and the public site share a server with a BOBRES store (whose Caddy owns ports 80 and 443), run
+the tunnel kit instead of the standalone one: `deploy/vendor/tunnel/`. Nothing in it publishes a port. A `cloudflared`
+container makes an outbound connection to Cloudflare, which sends the visitors of the tunnel's hostnames through it:
+
+| Hostname | Goes to | Notes |
+|---|---|---|
+| `license.example.com` | `licensesrv:8080`, only `/v1/` | every other path answers 404 at Cloudflare |
+| `example.com`, `www.example.com` | `site:8080` | the static files of `deploy/vendor/tunnel/site` and `site/public` |
+
+**At Cloudflare** (Zero Trust, Networks, Tunnels; or the API): make a remotely managed tunnel (for example `bobres-vendor`),
+keep its token, proxy these names to it with CNAME records to `<tunnel id>.cfargotunnel.com` (the license name, `www`, and
+the apex), and set the tunnel's public hostnames (ingress): `license.example.com` with path `^/v1/` to
+`http://licensesrv:8080`, then `license.example.com` to `http_status:404`, then `example.com` and `www.example.com` to
+`http://site:8080`, then `http_status:404`. SSL mode Full (strict) and Always Use HTTPS are the safe settings for the zone.
+
+**On the server** (`/opt/bobres-vendor`):
+
+1. Copy in `deploy/vendor/tunnel/docker-compose.yml`, `deploy/vendor/tunnel/site/Caddyfile` as `site/Caddyfile`, the static
+   files as `site/public/`, `deploy/vendor/postgres-init.sh`, and the source the image is built from as `src/`:
+   `tar -czf vendor-src.tgz go.mod go.sum cmd internal gen deploy/vendor/tunnel` (on your computer, in a checkout of the
+   release), unpacked into `src/`.
+2. The two secrets are files, not values: `/etc/bobres-vendor/vendor-v1-2026.key` (the signing key, section 1) and
+   `/etc/bobres-vendor/tunnel-token` (the tunnel's token), each owned by uid 65532, mode 0600, the directory 0700.
+3. `.env` (mode 0600), from `deploy/vendor/tunnel/.env.example`: the two file paths and two random database passwords.
+4. `docker compose --env-file .env up -d --build`. All four containers (`cloudflared`, `licensesrv`, `site`, `postgres`)
+   must be healthy, and the tunnel `healthy` at Cloudflare.
+
+**Check:** `https://license.example.com/` answers 404, a POST of `{}` to `/v1/activate` answers 400 with the JSON message
+that the key is not in the `BOBRES-XXXX-...` form (the server is reached), and `https://example.com/` shows the site.
+
+**The client address.** licensesrv believes `X-Forwarded-For` only from the `edge` network (cloudflared is the one
+address there that outsiders can use), and reads it from the right: Cloudflare appends the real client's address, so
+whatever a client forges stays to the left of it and is ignored. The per-address rate limit therefore counts real
+clients, not the tunnel.
+
+**Backups.** The standalone kit's database dump applies unchanged: a daily `pg_dump bobres_license` through
+`docker compose exec -T postgres`, kept off the server too. The signing key and the tunnel token are backed up offline.
+
+**After a release:** make a new `vendor-src.tgz` from the release's checkout, unpack it into `src/`, set `BOBRES_VERSION` in
+`.env`, and `docker compose --env-file .env up -d --build`. Migrations run at start; the database and the key stay.
+
