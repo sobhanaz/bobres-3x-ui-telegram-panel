@@ -302,7 +302,7 @@ func gatedCases() []gatedCase {
 	for _, data := range []string{
 		"lang", "lang:fa", "lang:en", "home", "cancel",
 		"buy", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
-		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "whist", "trial", "store",
+		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "whist", "gift", "trial", "store",
 		"top", "top:2", "ap", "renew",
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
 		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1",
@@ -353,6 +353,7 @@ func gatedCases() []gatedCase {
 	// had maintenance not come in between.
 	add(
 		sceneCase(sceneTopupAmount, nil, "", "an amount", textIn("50000")),
+		sceneCase(sceneGiftCode, nil, "", "a gift code", textIn("SPRING-AAAA-BBBB-CCCC")),
 		sceneCase(sceneDiscount, map[string]string{"co": "n1"}, "", "a discount code", textIn("SPRING20")),
 		sceneCase(sceneTicket, nil, "", "a first message to support", textIn("my vpn is slow")),
 		sceneCase(sceneTicket, nil, "", "a photo for support", func(p *person) { p.photo("shot-3", "see") }),
