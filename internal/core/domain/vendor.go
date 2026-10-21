@@ -130,7 +130,7 @@ func parseMinor(s, currency string) (int64, error) {
 // and the activation keys.
 func (s *Service) VendorAvailable() bool { return s.cfg.Secrets != nil }
 
-// VendorOn reports whether licence sales are on: the owner switched them on and set the license server and its key.
+// VendorOn reports whether license sales are on: the owner switched them on and set the admin key.
 func (s *Service) VendorOn(ctx context.Context) bool {
 	if !s.VendorAvailable() || s.setting(ctx, SettingVendorEnabled) != "true" {
 		return false
@@ -139,15 +139,12 @@ func (s *Service) VendorOn(ctx context.Context) bool {
 	return err == nil
 }
 
-// SetVendorConfig stores the license server's address and the admin private key (base64, from `licensesrv
-// adminkey`), encrypted. It is write-only: nothing returns the key. The audit says who changed it, never the key.
-func (s *Service) SetVendorConfig(ctx context.Context, actor *store.User, url, privateKey string) error {
+// SetVendorConfig stores the admin private key (base64, from `licensesrv adminkey`), encrypted. It is write-only:
+// nothing returns the key. The audit says who changed it, never the key. The requests it signs go through the bot to
+// the license server the bot is configured for.
+func (s *Service) SetVendorConfig(ctx context.Context, actor *store.User, privateKey string) error {
 	if s.cfg.Secrets == nil {
 		return stateErr("core has no master key, so it cannot keep the admin key")
-	}
-	url = strings.TrimRight(strings.TrimSpace(url), "/")
-	if !strings.HasPrefix(url, "https://") || len(url) > 200 || strings.ContainsAny(url, " \t\r\n") {
-		return &FieldError{"admin_url", "an https address, like https://license.example.com"}
 	}
 	if _, err := license.ParseAdminPrivateKey(privateKey); err != nil {
 		return &FieldError{"admin_key", "not an admin private key (32 bytes of base64, from licensesrv adminkey)"}
@@ -157,14 +154,14 @@ func (s *Service) SetVendorConfig(ctx context.Context, actor *store.User, url, p
 		return err
 	}
 	return s.st.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := s.st.SetVendorConfig(ctx, tx, url, enc); err != nil {
+		if err := s.st.SetVendorConfig(ctx, tx, enc); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actor, "vendor.config", "vendor", "config", map[string]any{"admin_url": url}, "")
+		return s.audit(ctx, tx, actor, "vendor.config", "vendor", "config", map[string]any{"admin_key": "changed"}, "")
 	})
 }
 
-// vendorClient builds the client for the stored address and key.
+// vendorClient builds the client for the stored key.
 func (s *Service) vendorClient(ctx context.Context) (VendorClient, error) {
 	if s.cfg.Secrets == nil {
 		return nil, stateErr("core has no master key")
@@ -184,7 +181,10 @@ func (s *Service) vendorClient(ctx context.Context) (VendorClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newVendorClient(c.AdminURL, key, s.cfg.VendorHTTP, s.cfg.vendorNow), nil
+	if s.cfg.VendorTransport == nil {
+		return nil, stateErr("core has no way to reach the license server (the bot)")
+	}
+	return newVendorClient(s.cfg.VendorTransport, key, s.cfg.vendorNow), nil
 }
 
 // VendorBuyParams carries the inputs of BuyVendorLicense.
@@ -225,6 +225,9 @@ func vendorCustomer(u *store.User) string {
 func (s *Service) BuyVendorLicense(ctx context.Context, p VendorBuyParams) (*VendorPurchase, error) {
 	if !s.VendorOn(ctx) {
 		return nil, stateErr("licenses are not for sale")
+	}
+	if s.cfg.VendorTransport == nil {
+		return nil, stateErr("core has no way to reach the license server, so it sells nothing") // before any money moves
 	}
 	if p.IdempotencyKey == "" || len(p.IdempotencyKey) > 180 {
 		return nil, invalid("an idempotency key is required (at most 180 characters)")

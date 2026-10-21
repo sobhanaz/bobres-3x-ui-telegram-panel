@@ -8,8 +8,8 @@ import (
 )
 
 // License sales in the dashboard (docs/13-license-server.md, "The signed admin API"): the owner of the store that
-// sells BOBRES licenses sets where the license server is and the key that signs the requests to it (write-only: no
-// answer ever carries the key), sees the licenses sold, gives months for nothing, and revokes one. Staff with
+// sells BOBRES licenses sets the key that signs the requests to the license server (write-only: no answer ever
+// carries the key; the requests go through the bot to the server it is configured for), sees the licenses sold, gives months for nothing, and revokes one. Staff with
 // license.write (the owner) only. The switch itself is the vendor.enabled setting.
 
 type vendorTierJSON struct {
@@ -30,21 +30,20 @@ func (s *Server) getVendor(w http.ResponseWriter, r *http.Request) {
 		tiers = append(tiers, vendorTierJSON{Name: t.Name, Monthly: money{t.Monthly, t.Currency}, Yearly: money{t.Yearly, t.Currency}})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"available": st.Available, "on": st.On, "configured": st.Configured, "admin_url": st.AdminURL, "tiers": tiers,
+		"available": st.Available, "on": st.On, "configured": st.Configured, "tiers": tiers,
 	})
 }
 
-// putVendorConfig: PUT /api/v1/vendor/config {admin_url, admin_key}. The key is kept encrypted and never read back.
+// putVendorConfig: PUT /api/v1/vendor/config {admin_key}. The key is kept encrypted and never read back.
 func (s *Server) putVendorConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		AdminURL string `json:"admin_url"`
 		AdminKey string `json:"admin_key"`
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if err := s.cfg.Domain.SetVendorConfig(r.Context(), actor(r), req.AdminURL, req.AdminKey); err != nil {
-		s.fail(w, "set the license server", err)
+	if err := s.cfg.Domain.SetVendorConfig(r.Context(), actor(r), req.AdminKey); err != nil {
+		s.fail(w, "set the admin key", err)
 		return
 	}
 	s.getVendor(w, r)

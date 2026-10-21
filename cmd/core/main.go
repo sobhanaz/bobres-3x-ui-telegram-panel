@@ -227,6 +227,7 @@ func setup(rt *app.Runtime) error {
 		files, bot, licSrv, publicIP, miniAuth, miniBot, miniJoin, releases = peer, peer, peer, peer, peer, peer, peer, peer
 		logs["bot"] = peer
 		monBot = peer
+		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}

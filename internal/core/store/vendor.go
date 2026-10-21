@@ -13,9 +13,8 @@ import (
 // Selling BOBRES licenses from the owner's own store (migration 00032): where the license server is, the licenses a
 // customer bought, and the purchases and renewals that make them. Only the owner's install has rows here.
 
-// VendorConfig is where the license server is and the (encrypted) key that signs requests to it.
+// VendorConfig is the (encrypted) key that signs requests to the license server's admin API.
 type VendorConfig struct {
-	AdminURL    string
 	AdminKeyEnc []byte
 	UpdatedAt   time.Time
 }
@@ -52,10 +51,10 @@ type VendorOrder struct {
 	UpdatedAt       time.Time
 }
 
-// GetVendorConfig returns the license server's address and key, or ErrNotFound when none is set.
+// GetVendorConfig returns the admin key, or ErrNotFound when none is set.
 func (s *Store) GetVendorConfig(ctx context.Context, q querier) (*VendorConfig, error) {
 	var c VendorConfig
-	err := q.QueryRow(ctx, `SELECT admin_url, admin_key_enc, updated_at FROM core.vendor_config WHERE id`).Scan(&c.AdminURL, &c.AdminKeyEnc, &c.UpdatedAt)
+	err := q.QueryRow(ctx, `SELECT admin_key_enc, updated_at FROM core.vendor_config WHERE id`).Scan(&c.AdminKeyEnc, &c.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -65,12 +64,12 @@ func (s *Store) GetVendorConfig(ctx context.Context, q querier) (*VendorConfig, 
 	return &c, nil
 }
 
-// SetVendorConfig stores the address and the encrypted key (replacing any before).
-func (s *Store) SetVendorConfig(ctx context.Context, q querier, url string, keyEnc []byte) error {
+// SetVendorConfig stores the encrypted key (replacing any before).
+func (s *Store) SetVendorConfig(ctx context.Context, q querier, keyEnc []byte) error {
 	_, err := q.Exec(ctx, `
-		INSERT INTO core.vendor_config (id, admin_url, admin_key_enc) VALUES (true, $1, $2)
-		ON CONFLICT (id) DO UPDATE SET admin_url = EXCLUDED.admin_url, admin_key_enc = EXCLUDED.admin_key_enc, updated_at = now()`,
-		url, keyEnc)
+		INSERT INTO core.vendor_config (id, admin_key_enc) VALUES (true, $1)
+		ON CONFLICT (id) DO UPDATE SET admin_key_enc = EXCLUDED.admin_key_enc, updated_at = now()`,
+		keyEnc)
 	if err != nil {
 		return fmt.Errorf("set vendor config: %w", err)
 	}

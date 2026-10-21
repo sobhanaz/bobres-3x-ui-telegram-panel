@@ -843,14 +843,13 @@
     "earned": "Earned"
   },
   "licenses": {
-    "intro": "Your bot sells BOBRES licenses (Standard and Pro, one month or a year) for USDT from the buyer's wallet. Set where your license server is and the key that signs the requests to it, turn sales on, and manage what was sold here. The prices come from the tier file (internal/license/tiers.json).",
+    "intro": "Your bot sells BOBRES licenses (Standard and Pro, one month or a year) for USDT from the buyer's wallet. Set the key that signs the requests to your license server, turn sales on, and manage what was sold here. The requests go through your bot to the license server it is configured for (BOBRES_LICENSE_SERVER). The prices come from the tier file (internal/license/tiers.json).",
     "no_key": "License sales need the master key of this install (BOBRES_CORE_MASTER_KEY), which core does not have.",
     "server": "License server",
-    "configured": "Set. Requests go to",
-    "not_configured": "Not set up yet. On the license server run: licensesrv adminkey. Put the public key in the file BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE names, then paste the address and the private key here.",
-    "url": "License server address",
+    "configured": "The admin key is set.",
+    "not_configured": "Not set up yet. On the license server run: licensesrv adminkey. Put the public key in the file BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE names, then paste the private key here.",
     "key": "Admin private key",
-    "key_help": "Shown only now: it is kept encrypted and never displayed again. Leave it empty to keep the one stored.",
+    "key_help": "Shown only now: it is kept encrypted and never displayed again.",
     "save": "Save",
     "saved": "License server saved",
     "turn_on": "Turn sales on",

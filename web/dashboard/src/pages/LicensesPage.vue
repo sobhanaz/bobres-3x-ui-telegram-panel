@@ -5,7 +5,6 @@ import { useToast } from 'primevue/usetoast'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
@@ -16,14 +15,14 @@ import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
 import { date, money, type Lang } from '../format'
-import { addressOk, grantMonths, keyOk, licenseStatuses, requestId, statusSeverity, type SoldLicense, type VendorStatus } from '../vendor'
+import { grantMonths, keyOk, licenseStatuses, requestId, statusSeverity, type SoldLicense, type VendorStatus } from '../vendor'
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const toast = useToast()
 
 // Where the license server is and whether the bot sells now.
-const status = ref<VendorStatus>({ available: true, on: false, configured: false, admin_url: '', tiers: [] })
+const status = ref<VendorStatus>({ available: true, on: false, configured: false, tiers: [] })
 const loaded = ref(false)
 async function loadStatus() {
   try {
@@ -34,14 +33,13 @@ async function loadStatus() {
   }
 }
 
-const url = ref('')
 const key = ref('')
 const saving = ref(false)
-const formOk = computed(() => addressOk(url.value) && keyOk(key.value))
+const formOk = computed(() => keyOk(key.value))
 async function saveConfig() {
   saving.value = true
   try {
-    status.value = await api<VendorStatus>('PUT', '/vendor/config', { admin_url: url.value.trim(), admin_key: key.value.trim() })
+    status.value = await api<VendorStatus>('PUT', '/vendor/config', { admin_key: key.value.trim() })
     key.value = '' // write-only: it is never shown again
     toast.add({ severity: 'success', summary: t('licenses.saved'), life: 3000 })
   } catch (e) {
@@ -130,15 +128,9 @@ async function revoke() {
 
   <section v-if="loaded" class="card" aria-labelledby="lic-server">
     <h2 id="lic-server" class="card-title">{{ t('licenses.server') }}</h2>
-    <p v-if="status.configured" class="app-muted">
-      {{ t('licenses.configured') }} <bdi class="app-ltr app-mono">{{ status.admin_url }}</bdi>
-    </p>
+    <p v-if="status.configured" class="app-muted">{{ t('licenses.configured') }}</p>
     <p v-else class="app-muted">{{ t('licenses.not_configured') }}</p>
     <form class="form" autocomplete="off" @submit.prevent="saveConfig">
-      <label class="field">
-        <span>{{ t('licenses.url') }}</span>
-        <InputText v-model="url" class="app-ltr" type="url" placeholder="https://license.example.com" :invalid="url !== '' && !addressOk(url)" />
-      </label>
       <label class="field">
         <span>{{ t('licenses.key') }}</span>
         <Password v-model="key" class="app-ltr" input-class="key-input" :feedback="false" toggle-mask autocomplete="off" :invalid="key !== '' && !keyOk(key)" />

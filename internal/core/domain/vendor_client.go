@@ -62,27 +62,60 @@ type VendorClient interface {
 	List(ctx context.Context, status string) ([]VendorLicenseInfo, error)
 }
 
-type vendorHTTP struct {
-	base string
-	key  ed25519.PrivateKey
-	hc   *http.Client
-	now  func() time.Time
+// VendorTransport carries one signed admin request to the license server and brings back its status and body. In
+// production it is the bot (core has no internet access; botfiles.Client): the bot posts to the one license server
+// it is configured for, whatever the request names. The path is an admin API path ("/admin/v1/licenses/create").
+type VendorTransport interface {
+	PostVendorAdmin(ctx context.Context, path, ts, nonce, sig string, body []byte) (status int, answer []byte, err error)
 }
 
-// NewVendorClient builds the signed client for the license server at base (an https address).
-func NewVendorClient(base string, key ed25519.PrivateKey, hc *http.Client) VendorClient {
-	return newVendorClient(base, key, hc, time.Now)
-}
-
-func newVendorClient(base string, key ed25519.PrivateKey, hc *http.Client, now func() time.Time) VendorClient {
+// DirectVendorTransport posts straight to the license server at base (an https address). It is for tests and for a
+// core that does have internet access; it follows no redirect.
+func DirectVendorTransport(base string, hc *http.Client) VendorTransport {
 	if hc == nil {
-		hc = &http.Client{
-			Timeout: 20 * time.Second,
-			// A redirect would carry a signed request somewhere the owner did not name.
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		}
+		hc = &http.Client{Timeout: 20 * time.Second}
 	}
-	return &vendorHTTP{base: strings.TrimRight(base, "/"), key: key, hc: hc, now: now}
+	c := *hc
+	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return directVendor{base: strings.TrimRight(base, "/"), hc: &c}
+}
+
+type directVendor struct {
+	base string
+	hc   *http.Client
+}
+
+func (d directVendor) PostVendorAdmin(ctx context.Context, path, ts, nonce, sig string, body []byte) (int, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.base+path, bytes.NewReader(body))
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(license.AdminHeaderTS, ts)
+	req.Header.Set(license.AdminHeaderNonce, nonce)
+	req.Header.Set(license.AdminHeaderSig, sig)
+	resp, err := d.hc.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing to do about a failed close
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxVendorAnswer))
+	return resp.StatusCode, data, err
+}
+
+// NewVendorClient builds the signed client of the license server's admin API that reaches it through tr.
+func NewVendorClient(tr VendorTransport, key ed25519.PrivateKey) VendorClient {
+	return newVendorClient(tr, key, time.Now)
+}
+
+func newVendorClient(tr VendorTransport, key ed25519.PrivateKey, now func() time.Time) VendorClient {
+	return &vendorHTTP{tr: tr, key: key, now: now}
+}
+
+type vendorHTTP struct {
+	tr  VendorTransport
+	key ed25519.PrivateKey
+	now func() time.Time
 }
 
 type vendorBody struct {
@@ -103,29 +136,16 @@ func (c *vendorHTTP) do(ctx context.Context, path string, body vendorBody, out a
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, bytes.NewReader(raw))
+	ts, nonce, sig, err := license.AdminSign(c.key, http.MethodPost, path, raw, c.now())
 	if err != nil {
 		return err
 	}
-	ts, nonce, sig, err := license.AdminSign(c.key, http.MethodPost, req.URL.RequestURI(), raw, c.now())
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(license.AdminHeaderTS, ts)
-	req.Header.Set(license.AdminHeaderNonce, nonce)
-	req.Header.Set(license.AdminHeaderSig, sig)
-	resp, err := c.hc.Do(req)
+	status, data, err := c.tr.PostVendorAdmin(ctx, path, ts, nonce, sig, raw)
 	if err != nil {
 		return fmt.Errorf("license server: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck // nothing to do about a failed close
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxVendorAnswer))
-	if err != nil {
-		return fmt.Errorf("license server: reading the answer: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		e := &VendorError{Status: resp.StatusCode}
+	if status != http.StatusOK {
+		e := &VendorError{Status: status}
 		var body struct{ Error, Message string }
 		if json.Unmarshal(data, &body) == nil {
 			e.Code, e.Message = body.Error, body.Message

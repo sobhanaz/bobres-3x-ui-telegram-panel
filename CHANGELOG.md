@@ -15,8 +15,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   down leaves the order paid and a worker asks again with a growing wait; a refusal for good (any 4xx but 408 and 429)
   gives the money back. The activation key is stored encrypted with core's master key so its owner can be shown it
   again. Migration 00032 (the ledger kinds `license_purchase` and `license_refund`, `vendor_config`, `vendor_licenses`,
-  `vendor_orders`). Off by default (`vendor.enabled`) and inert without the license server's address and admin key.
-  Prices come from internal/license/tiers.json.
+  `vendor_orders`). Off by default (`vendor.enabled`) and inert without the admin key. Core has no internet access, so it
+  signs each request and the bot passes it to the license server it is configured for (`BOBRES_LICENSE_SERVER`),
+  at the new `POST /internal/vendor/admin`. Prices come from internal/license/tiers.json.
 
 ### The owner's bot sells BOBRES licenses (bot; off unless `vendor.enabled`)
 - A **BOBRES licenses** button on the home menu of the owner's own store: Standard and Pro, one month or twelve, at the
@@ -24,7 +25,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   automatic TRC20 USDT or a manual USDT payment for exactly that (the bot's top-up now works in any currency, not only
   Toman). The key is in the same message, and again under **My licenses**, which also renews. The license server being
   down leaves the purchase paid and pending; the key shows up in My licenses when core's worker gets an answer.
-- **Dashboard > Licenses** (owner only): where the license server is and the admin key that signs the requests to it (kept
+- **Dashboard > Licenses** (owner only): the admin key that signs the requests to the license server (kept
   encrypted, never shown again), the switch for sales, the licenses sold, months as a gift, and revoking one (the audit
   names who did it).
 - Core RPCs `ListVendorOffers`, `BuyVendorLicense`, `ListMyVendorLicenses`, `GetVendorLicenseKey`. The sales texts are

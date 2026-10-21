@@ -413,6 +413,35 @@ func (c *Client) license(ctx context.Context, call string, body any) (string, er
 		Message: fmt.Sprintf("the bot answered %d", resp.StatusCode)}
 }
 
+// maxVendorAnswer bounds what the bot passes back from the license server's admin API (a list of 500 licenses).
+const maxVendorAnswer = 1 << 20
+
+// PostVendorAdmin sends one signed request for the license server's admin API through the bot
+// (domain.VendorTransport): the bot posts it to the one license server it is configured for and passes back the
+// status and body. Core signs; the bot sees the request, never the admin key.
+func (c *Client) PostVendorAdmin(ctx context.Context, path, ts, nonce, sig string, body []byte) (int, []byte, error) {
+	data, err := json.Marshal(map[string]string{"path": path, "ts": ts, "nonce": nonce, "sig": sig, "body": string(body)})
+	if err != nil {
+		return 0, nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/vendor/admin", bytes.NewReader(data))
+	if err != nil {
+		return 0, nil, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return 0, nil, errors.New("the bot did not answer")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	answer, err := io.ReadAll(io.LimitReader(resp.Body, maxVendorAnswer+1))
+	if err != nil || len(answer) > maxVendorAnswer {
+		return 0, nil, errors.New("the bot's answer is unreadable")
+	}
+	return resp.StatusCode, answer, nil
+}
+
 // clip cuts s to at most n bytes on a rune boundary.
 func clip(s string, n int) string {
 	if len(s) <= n {

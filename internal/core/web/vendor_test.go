@@ -49,15 +49,12 @@ func TestVendorEndpointsAreTheOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code, out = b.do(http.MethodPut, "/api/v1/vendor/config", map[string]any{"admin_url": "http://x.example", "admin_key": priv}); code != 400 || out["field"] != "admin_url" {
-		t.Fatalf("http address: %d %v", code, out)
-	}
-	if code, out = b.do(http.MethodPut, "/api/v1/vendor/config", map[string]any{"admin_url": "https://license.example.com", "admin_key": "nope"}); code != 400 || out["field"] != "admin_key" {
+	if code, out = b.do(http.MethodPut, "/api/v1/vendor/config", map[string]any{"admin_key": "nope"}); code != 400 || out["field"] != "admin_key" {
 		t.Fatalf("bad key: %d %v", code, out)
 	}
 	// A good one: configured, and the key is nowhere in the answers.
-	code, out = b.do(http.MethodPut, "/api/v1/vendor/config", map[string]any{"admin_url": "https://license.example.com/", "admin_key": priv})
-	if code != http.StatusOK || out["configured"] != true || out["admin_url"] != "https://license.example.com" {
+	code, out = b.do(http.MethodPut, "/api/v1/vendor/config", map[string]any{"admin_key": priv})
+	if code != http.StatusOK || out["configured"] != true {
 		t.Fatalf("set: %d %v", code, out)
 	}
 	_, _, raw := b.get("/api/v1/vendor")
