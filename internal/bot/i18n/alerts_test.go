@@ -75,6 +75,17 @@ func TestLicenseLimitAlert(t *testing.T) {
 // old بسته رایگان).
 var licensingWords = []string{"licen", "free tier", "مجوز", "پروانه", "لایسنس", "سطح رایگان", "بسته رایگان"}
 
+// sellsLicenses: the keys of the owner's own bot selling BOBRES licenses as a product (license sales are a feature of
+// that one store, not a limit a customer meets): the menu button, the sales screens, their ledger lines and settings.
+func sellsLicenses(key string) bool {
+	for _, p := range []string{"lic.", "btn.lic", "ledger.license_", "setting.vendor."} {
+		if strings.HasPrefix(key, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // speaksOfLicensing: text mentions licensing (case aside).
 func speaksOfLicensing(text string) bool {
 	text = strings.ToLower(text)
@@ -102,7 +113,7 @@ func TestOnlyStaffAlertsMentionLicensing(t *testing.T) {
 			t.Errorf("%s: the detector misses a staff alert about licensing", lang)
 		}
 		for _, key := range c.Keys(lang) {
-			if speaksOfLicensing(c.T(lang, key)) && !strings.HasPrefix(key, "alert.") {
+			if speaksOfLicensing(c.T(lang, key)) && !strings.HasPrefix(key, "alert.") && !sellsLicenses(key) {
 				t.Errorf("%s %s speaks of licensing to a customer: %s", lang, key, c.T(lang, key))
 			}
 		}

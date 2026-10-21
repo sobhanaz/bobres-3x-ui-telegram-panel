@@ -369,12 +369,17 @@ func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order 
 // startManual creates (or reuses) a manual intent for an order, or a top-up
 // when order is nil, and asks for the proof.
 func (h *Handler) startManual(r *req, order *corev1.Order, provider, key string, topup int64) {
+	h.startManualIn(r, order, provider, key, topup, "IRT")
+}
+
+// startManualIn is startManual for a top-up in any currency.
+func (h *Handler) startManualIn(r *req, order *corev1.Order, provider, key string, topup int64, topupCurrency string) {
 	in := &corev1.CreatePaymentIntentRequest{UserId: r.user.GetId(), Provider: provider}
 	if order != nil {
 		in.OrderId = order.GetId()
 		in.IdempotencyKey = "int:" + order.GetId() + ":" + provider
 	} else {
-		in.Amount = &commonv1.Money{Amount: topup, Currency: "IRT"}
+		in.Amount = &commonv1.Money{Amount: topup, Currency: topupCurrency}
 		in.IdempotencyKey = key
 	}
 	intent, err := h.core.CreatePaymentIntent(r.ctx, in)

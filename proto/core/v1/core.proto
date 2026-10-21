@@ -1005,6 +1005,14 @@ service CoreService {
   // an active account only (a banned one is PERMISSION_DENIED "user is banned").
   // What a customer can get wrong is an outcome of the answer, not an error.
   rpc RedeemGiftCode(RedeemGiftCodeRequest) returns (RedeemGiftCodeResponse);
+
+  // License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
+  // USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
+  // once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
+  rpc ListVendorOffers(ListVendorOffersRequest) returns (ListVendorOffersResponse);
+  rpc BuyVendorLicense(BuyVendorLicenseRequest) returns (BuyVendorLicenseResponse);
+  rpc ListMyVendorLicenses(ListMyVendorLicensesRequest) returns (ListMyVendorLicensesResponse);
+  rpc GetVendorLicenseKey(GetVendorLicenseKeyRequest) returns (GetVendorLicenseKeyResponse);
 }
 
 message CanStartTrialRequest {
@@ -1179,4 +1187,69 @@ message RedeemGiftCodeResponse {
   common.v1.Money balance = 3; // REDEEMED: the wallet's balance now
   int64 retry_after_seconds = 4; // LOCKED: how long entering codes stays closed
   bool replayed = 5; // REDEEMED: this request was served before; nothing was credited this time
+}
+
+// One thing the owner's bot sells: a tier for a term, and what it costs.
+message VendorOffer {
+  string tier = 1; // standard or pro
+  int32 months = 2; // 1 or 12
+  common.v1.Money price = 3;
+}
+
+message ListVendorOffersRequest {
+  string user_id = 1;
+}
+
+message ListVendorOffersResponse {
+  bool on = 1; // license sales are on in this store
+  repeated VendorOffer offers = 2;
+  common.v1.Money balance = 3; // the buyer's wallet in the offers' currency
+}
+
+// BuyVendorLicenseRequest buys a new license, or (license_id set) renews one the buyer owns for months more.
+message BuyVendorLicenseRequest {
+  string user_id = 1;
+  string tier = 2; // a new license's tier (a renewal keeps its own)
+  int32 months = 3;
+  string license_id = 4; // a renewal: the id of a VendorLicense of this buyer
+  // Required: a repeat of the request (a double tap) returns the first result and charges nothing more.
+  string idempotency_key = 5;
+  // The price the buyer was shown (optional): refused as FAILED_PRECONDITION "price changed" if it came to another.
+  common.v1.Money expected_price = 6;
+}
+
+message VendorLicense {
+  string id = 1;
+  string tier = 2;
+  int64 ends_at = 3; // unix seconds; 0 = no end date
+  string status = 4; // active or revoked
+}
+
+message BuyVendorLicenseResponse {
+  // done: the license exists (or was renewed). paid: the buyer has paid and the license server has not answered yet;
+  // the key arrives in a message when it does. refunded: the license server refused for good and the money went back.
+  string order_status = 1;
+  VendorLicense license = 2; // done
+  string key = 3; // done, a new license: its activation key
+  common.v1.Money price = 4;
+  bool replayed = 5;
+  string failure = 6; // refunded: why
+}
+
+message ListMyVendorLicensesRequest {
+  string user_id = 1;
+}
+
+message ListMyVendorLicensesResponse {
+  repeated VendorLicense licenses = 1;
+}
+
+message GetVendorLicenseKeyRequest {
+  string user_id = 1;
+  string license_id = 2;
+}
+
+message GetVendorLicenseKeyResponse {
+  VendorLicense license = 1;
+  string key = 2;
 }

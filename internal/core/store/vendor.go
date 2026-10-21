@@ -228,3 +228,49 @@ func (s *Store) DeferVendorOrder(ctx context.Context, q querier, id string, next
 	}
 	return nil
 }
+
+// VendorLicenseRow is a sold license with who bought it, for the dashboard.
+type VendorLicenseRow struct {
+	VendorLicense
+	TelegramID int64
+	Username   string
+}
+
+// ListVendorLicenses lists every sold license, newest first, with the number of matches; status filters when not "".
+func (s *Store) ListVendorLicenses(ctx context.Context, q querier, status string, p Page) ([]VendorLicenseRow, int64, error) {
+	p = p.clamp()
+	rows, err := q.Query(ctx, `
+		SELECT l.id, l.user_id, coalesce(l.license_id, ''), l.tier, l.ends_at, l.status, l.key_enc, l.created_at, l.updated_at,
+		       u.telegram_id, coalesce(u.username, ''), count(*) OVER ()
+		FROM core.vendor_licenses l JOIN core.users u ON u.id = l.user_id
+		WHERE $1 = '' OR l.status = $1
+		ORDER BY l.created_at DESC, l.id DESC LIMIT $2 OFFSET $3`, status, p.Limit, p.Offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list vendor licenses: %w", err)
+	}
+	defer rows.Close()
+	var out []VendorLicenseRow
+	var total int64
+	for rows.Next() {
+		var r VendorLicenseRow
+		if err := rows.Scan(&r.ID, &r.UserID, &r.LicenseID, &r.Tier, &r.EndsAt, &r.Status, &r.KeyEnc, &r.CreatedAt, &r.UpdatedAt,
+			&r.TelegramID, &r.Username, &total); err != nil {
+			return nil, 0, err
+		}
+		r.KeyEnc = nil // a list never carries the key
+		out = append(out, r)
+	}
+	return out, total, rows.Err()
+}
+
+// SetVendorLicenseStatus marks a sold license active or revoked.
+func (s *Store) SetVendorLicenseStatus(ctx context.Context, q querier, id, status string) error {
+	tag, err := q.Exec(ctx, `UPDATE core.vendor_licenses SET status = $2, updated_at = now() WHERE id = $1`, id, status)
+	if err != nil {
+		return fmt.Errorf("set vendor license status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

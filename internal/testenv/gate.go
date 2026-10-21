@@ -2,6 +2,7 @@ package testenv
 
 import (
 	"context"
+	coredomain "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"io"
 	"net"
 	"net/http"
@@ -23,6 +24,7 @@ type Option func(*options)
 type options struct {
 	gates       bool
 	extraOwners []int64
+	domain      func(*coredomain.Config)
 }
 
 // WithOwners names more owners than the one Start is given: the server's
@@ -31,6 +33,10 @@ type options struct {
 func WithOwners(ids ...int64) Option {
 	return func(o *options) { o.extraOwners = append(o.extraOwners, ids...) }
 }
+
+// WithDomainConfig lets a test adjust core's domain configuration before the domain is built (for example the HTTP
+// client of the license sales' calls).
+func WithDomainConfig(f func(*coredomain.Config)) Option { return func(o *options) { o.domain = f } }
 
 // WithGates puts a Gate in front of Postgres, the provisioner and core, so a
 // failure drill can switch each of them off and on (Stack.Gates).

@@ -90,6 +90,10 @@
       "title": "Gift codes",
       "desc": "Codes that add a fixed amount of credit to a customer's wallet: make them, switch them off, see who used them."
     },
+    "licenses": {
+      "title": "BOBRES licenses",
+      "desc": "Sell BOBRES licenses from your own bot: where the license server is, the licenses sold, months as a gift, revoking."
+    },
     "resellers": {
       "title": "Resellers",
       "desc": "Reseller tiers and prices, credit limits, their customers and settlements."
@@ -837,6 +841,45 @@
     "invited": "Invited",
     "rewarded": "Rewarded purchases",
     "earned": "Earned"
+  },
+  "licenses": {
+    "intro": "Your bot sells BOBRES licenses (Standard and Pro, one month or a year) for USDT from the buyer's wallet. Set where your license server is and the key that signs the requests to it, turn sales on, and manage what was sold here. The prices come from the tier file (internal/license/tiers.json).",
+    "no_key": "License sales need the master key of this install (BOBRES_CORE_MASTER_KEY), which core does not have.",
+    "server": "License server",
+    "configured": "Set. Requests go to",
+    "not_configured": "Not set up yet. On the license server run: licensesrv adminkey. Put the public key in the file BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE names, then paste the address and the private key here.",
+    "url": "License server address",
+    "key": "Admin private key",
+    "key_help": "Shown only now: it is kept encrypted and never displayed again. Leave it empty to keep the one stored.",
+    "save": "Save",
+    "saved": "License server saved",
+    "turn_on": "Turn sales on",
+    "turn_off": "Turn sales off",
+    "turned_on": "License sales are on",
+    "turned_off": "License sales are off",
+    "on": "Sales on",
+    "off": "Sales off",
+    "tier": { "standard": "Standard", "pro": "Pro" },
+    "month": "month",
+    "year": "year",
+    "all": "All statuses",
+    "status_col": "Status",
+    "status": { "active": "Active", "revoked": "Revoked" },
+    "none": "No licenses sold yet.",
+    "buyer": "Buyer",
+    "tier_col": "Tier",
+    "ends": "Ends",
+    "no_end": "No end date",
+    "sold": "Sold",
+    "actions": "Actions",
+    "give": "Give months",
+    "give_help": "Adds months to this license for nothing. The license server renews it and the buyer's install picks it up at its next daily refresh.",
+    "months": "{n} month | {n} months",
+    "granted": "Months added",
+    "revoke": "Revoke",
+    "revoke_help": "The license can no longer be activated or refreshed; its install keeps its last token until that ends, then new actions are gated. Nothing is deleted and no money moves.",
+    "reason": "Why (kept in the audit)",
+    "revoked": "License revoked"
   },
   "giftcodes": {
     "intro": "A gift code adds a fixed amount of credit to a customer's wallet. Customers apply it from the Wallet screen of the bot, with the Apply gift code button. A code is not kept: only its last four characters stay in this list, so copy new codes when you make them.",

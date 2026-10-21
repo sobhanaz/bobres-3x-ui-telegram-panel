@@ -4,9 +4,9 @@ import fa from '../locales/fa.json'
 import en from '../locales/en.json'
 
 describe('sections', () => {
-  it('lists all 19 dashboard sections once', () => {
-    expect(sections).toHaveLength(19)
-    expect(new Set(sections.map((s) => s.key)).size).toBe(19)
+  it('lists all 20 dashboard sections once', () => {
+    expect(sections).toHaveLength(20)
+    expect(new Set(sections.map((s) => s.key)).size).toBe(20)
   })
   it('puts Gift codes beside Discounts, for the staff who hold discounts.write', () => {
     expect(sections.find((s) => s.key === 'giftcodes')).toMatchObject({ path: 'gift-codes', perm: 'discounts.write', group: 'sales' })

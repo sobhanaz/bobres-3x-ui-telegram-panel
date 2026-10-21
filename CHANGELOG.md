@@ -18,6 +18,18 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   `vendor_orders`). Off by default (`vendor.enabled`) and inert without the license server's address and admin key.
   Prices come from internal/license/tiers.json.
 
+### The owner's bot sells BOBRES licenses (bot; off unless `vendor.enabled`)
+- A **BOBRES licenses** button on the home menu of the owner's own store: Standard and Pro, one month or twelve, at the
+  prices in the tier file, paid from the wallet in USDT. A buyer short of money is told how much to top up and offered
+  automatic TRC20 USDT or a manual USDT payment for exactly that (the bot's top-up now works in any currency, not only
+  Toman). The key is in the same message, and again under **My licenses**, which also renews. The license server being
+  down leaves the purchase paid and pending; the key shows up in My licenses when core's worker gets an answer.
+- **Dashboard > Licenses** (owner only): where the license server is and the admin key that signs the requests to it (kept
+  encrypted, never shown again), the switch for sales, the licenses sold, months as a gift, and revoking one (the audit
+  names who did it).
+- Core RPCs `ListVendorOffers`, `BuyVendorLicense`, `ListMyVendorLicenses`, `GetVendorLicenseKey`. The sales texts are
+  exempt from the rule that a customer never reads about licensing (they are the product).
+
 ### License server: a signed admin API (off by default)
 - `licensesrv` can serve `/admin/v1/licenses/{create,extend,tier,revoke,rekey,get,list}` for a program that sells
   licenses. It is on only when `BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE` names an Ed25519 public key (`licensesrv adminkey`
