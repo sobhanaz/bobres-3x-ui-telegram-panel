@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -48,6 +49,17 @@ type Config struct {
 	// LeaderboardTTL is how long the top-inviters board is kept before it is
 	// read again (0: 30 seconds; below 0: never kept, every call reads it).
 	LeaderboardTTL time.Duration
+	// VendorHTTP is the HTTP client of the license sales' calls to the license server (nil: a client with a 20 second
+	// timeout that follows no redirect). VendorNow is their clock (nil: time.Now). Both are for tests.
+	VendorHTTP *http.Client
+	VendorNow  func() time.Time
+}
+
+func (c Config) vendorNow() time.Time {
+	if c.VendorNow != nil {
+		return c.VendorNow()
+	}
+	return time.Now()
 }
 
 // Service composes the store with business rules.

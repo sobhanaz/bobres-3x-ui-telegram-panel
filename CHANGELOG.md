@@ -8,6 +8,16 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Selling BOBRES licenses from the owner's own store (core; the bot and dashboard parts follow)
+- A buyer pays from the wallet (any top-up method fills it, automatic USDT TRC20 included) and core asks the license
+  server's signed admin API for a key. One transaction takes the money and writes the order; the server is asked
+  outside it with a ref made from the order, so a retry never makes a second license or extends twice; a server that is
+  down leaves the order paid and a worker asks again with a growing wait; a refusal for good (any 4xx but 408 and 429)
+  gives the money back. The activation key is stored encrypted with core's master key so its owner can be shown it
+  again. Migration 00032 (the ledger kinds `license_purchase` and `license_refund`, `vendor_config`, `vendor_licenses`,
+  `vendor_orders`). Off by default (`vendor.enabled`) and inert without the license server's address and admin key.
+  Prices come from internal/license/tiers.json.
+
 ### License server: a signed admin API (off by default)
 - `licensesrv` can serve `/admin/v1/licenses/{create,extend,tier,revoke,rekey,get,list}` for a program that sells
   licenses. It is on only when `BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE` names an Ed25519 public key (`licensesrv adminkey`

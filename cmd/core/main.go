@@ -281,6 +281,9 @@ func setup(rt *app.Runtime) error {
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)
 	rt.Go("usage-sync", dom.NewUsageWorker(prov, rt.Log).Run)
+	// The owner's own store sells BOBRES licenses: a paid order whose license server did not answer is asked again
+	// here. It does nothing on a store that has no license server set up.
+	rt.Go("license-sales", func(ctx context.Context) error { dom.RunVendorWorker(ctx); return nil })
 	// Stored subscription links follow a server's new address.
 	rt.Go("sub-links", dom.NewSubLinkWorker(prov, prov, rt.Log).Run)
 	// Support tickets nobody answered back close themselves; broadcasts start on time.

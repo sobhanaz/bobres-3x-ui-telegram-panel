@@ -115,6 +115,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "time of day (HH:MM, 24-hour) in the store's time zone at which the daily sales summary is sent"},
 	{Key: SettingPlanLayout, Group: "shop", Kind: KindEnum, Perm: permSettings, Default: PlanLayoutTable, Options: []string{PlanLayoutTable, PlanLayoutList},
 		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
+	{Key: SettingVendorEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = the bot sells BOBRES licenses (the owner's own store only: it needs the license server's address and admin key, set in the dashboard); false = it does not"},
 	{Key: SettingBulkEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the bot's home menu has a Bulk purchase button: a customer buys several services of one plan at once and pays from the wallet; false = no button, and core refuses bulk purchases"},
 	{Key: SettingBulkMax, Group: "shop", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultBulkMax), Min: MinBulkQuantity, Max: MaxBulkQuantity,
