@@ -442,6 +442,32 @@ func (c *Client) PostVendorAdmin(ctx context.Context, path, ts, nonce, sig strin
 	return resp.StatusCode, answer, nil
 }
 
+// PostSupplier makes one call to the supplier through the bot (domain.SupplierTransport): the bot calls the one supplier
+// address it is configured for with the API key, and passes back the status and the JSON body. The key is in the request
+// to the bot only, never in an error.
+func (c *Client) PostSupplier(ctx context.Context, action, apiKey string, body []byte) (int, []byte, error) {
+	data, err := json.Marshal(map[string]string{"action": action, "key": apiKey, "body": string(body)})
+	if err != nil {
+		return 0, nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/supplier", bytes.NewReader(data))
+	if err != nil {
+		return 0, nil, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return 0, nil, errors.New("the bot did not answer")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	answer, err := io.ReadAll(io.LimitReader(resp.Body, maxVendorAnswer+1))
+	if err != nil || len(answer) > maxVendorAnswer {
+		return 0, nil, errors.New("the bot's answer is unreadable")
+	}
+	return resp.StatusCode, answer, nil
+}
+
 // clip cuts s to at most n bytes on a rune boundary.
 func clip(s string, n int) string {
 	if len(s) <= n {

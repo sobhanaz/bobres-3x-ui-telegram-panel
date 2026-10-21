@@ -555,6 +555,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.routeBulk(r, rest)
 	case "lic":
 		h.onLicense(r, rest)
+	case "sup":
+		h.onSupplier(r, rest)
 	case "lpay":
 		h.onLicenseTopup(r, rest)
 	case "plan":

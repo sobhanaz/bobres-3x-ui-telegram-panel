@@ -24,6 +24,7 @@ export const sections: Section[] = [
   { key: 'discounts', path: 'discounts', icon: 'pi pi-percentage', perm: 'discounts.write', group: 'sales', milestone: 2 },
   { key: 'giftcodes', path: 'gift-codes', icon: 'pi pi-gift', perm: 'discounts.write', group: 'sales', milestone: 8 },
   { key: 'licenses', path: 'licenses', icon: 'pi pi-key', perm: 'license.write', group: 'sales', milestone: 8 },
+  { key: 'supplier', path: 'supplier', icon: 'pi pi-shopping-bag', perm: 'gateways.write', group: 'sales', milestone: 8 },
   { key: 'resellers', path: 'resellers', icon: 'pi pi-sitemap', perm: 'resellers.write', group: 'sales', milestone: 5 },
   { key: 'branding', path: 'branding', icon: 'pi pi-palette', perm: 'branding.write', group: 'setup', milestone: 3 },
   { key: 'settings', path: 'settings', icon: 'pi pi-cog', perm: 'settings.write', group: 'setup', milestone: 3 },

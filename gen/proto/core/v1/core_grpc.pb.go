@@ -91,6 +91,10 @@ const (
 	CoreService_BuyVendorLicense_FullMethodName          = "/core.v1.CoreService/BuyVendorLicense"
 	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
 	CoreService_GetVendorLicenseKey_FullMethodName       = "/core.v1.CoreService/GetVendorLicenseKey"
+	CoreService_ListSupplierOffers_FullMethodName        = "/core.v1.CoreService/ListSupplierOffers"
+	CoreService_BuySupplierProduct_FullMethodName        = "/core.v1.CoreService/BuySupplierProduct"
+	CoreService_ListMySupplierOrders_FullMethodName      = "/core.v1.CoreService/ListMySupplierOrders"
+	CoreService_GetSupplierDelivery_FullMethodName       = "/core.v1.CoreService/GetSupplierDelivery"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -209,6 +213,14 @@ type CoreServiceClient interface {
 	BuyVendorLicense(ctx context.Context, in *BuyVendorLicenseRequest, opts ...grpc.CallOption) (*BuyVendorLicenseResponse, error)
 	ListMyVendorLicenses(ctx context.Context, in *ListMyVendorLicensesRequest, opts ...grpc.CallOption) (*ListMyVendorLicensesResponse, error)
 	GetVendorLicenseKey(ctx context.Context, in *GetVendorLicenseKeyRequest, opts ...grpc.CallOption) (*GetVendorLicenseKeyResponse, error)
+	// Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
+	// (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
+	// Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
+	// shows it again to its buyer only.
+	ListSupplierOffers(ctx context.Context, in *ListSupplierOffersRequest, opts ...grpc.CallOption) (*ListSupplierOffersResponse, error)
+	BuySupplierProduct(ctx context.Context, in *BuySupplierProductRequest, opts ...grpc.CallOption) (*BuySupplierProductResponse, error)
+	ListMySupplierOrders(ctx context.Context, in *ListMySupplierOrdersRequest, opts ...grpc.CallOption) (*ListMySupplierOrdersResponse, error)
+	GetSupplierDelivery(ctx context.Context, in *GetSupplierDeliveryRequest, opts ...grpc.CallOption) (*GetSupplierDeliveryResponse, error)
 }
 
 type coreServiceClient struct {
@@ -940,6 +952,46 @@ func (c *coreServiceClient) GetVendorLicenseKey(ctx context.Context, in *GetVend
 	return out, nil
 }
 
+func (c *coreServiceClient) ListSupplierOffers(ctx context.Context, in *ListSupplierOffersRequest, opts ...grpc.CallOption) (*ListSupplierOffersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSupplierOffersResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListSupplierOffers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) BuySupplierProduct(ctx context.Context, in *BuySupplierProductRequest, opts ...grpc.CallOption) (*BuySupplierProductResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuySupplierProductResponse)
+	err := c.cc.Invoke(ctx, CoreService_BuySupplierProduct_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ListMySupplierOrders(ctx context.Context, in *ListMySupplierOrdersRequest, opts ...grpc.CallOption) (*ListMySupplierOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMySupplierOrdersResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListMySupplierOrders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetSupplierDelivery(ctx context.Context, in *GetSupplierDeliveryRequest, opts ...grpc.CallOption) (*GetSupplierDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSupplierDeliveryResponse)
+	err := c.cc.Invoke(ctx, CoreService_GetSupplierDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -1056,6 +1108,14 @@ type CoreServiceServer interface {
 	BuyVendorLicense(context.Context, *BuyVendorLicenseRequest) (*BuyVendorLicenseResponse, error)
 	ListMyVendorLicenses(context.Context, *ListMyVendorLicensesRequest) (*ListMyVendorLicensesResponse, error)
 	GetVendorLicenseKey(context.Context, *GetVendorLicenseKeyRequest) (*GetVendorLicenseKeyResponse, error)
+	// Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
+	// (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
+	// Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
+	// shows it again to its buyer only.
+	ListSupplierOffers(context.Context, *ListSupplierOffersRequest) (*ListSupplierOffersResponse, error)
+	BuySupplierProduct(context.Context, *BuySupplierProductRequest) (*BuySupplierProductResponse, error)
+	ListMySupplierOrders(context.Context, *ListMySupplierOrdersRequest) (*ListMySupplierOrdersResponse, error)
+	GetSupplierDelivery(context.Context, *GetSupplierDeliveryRequest) (*GetSupplierDeliveryResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -1281,6 +1341,18 @@ func (UnimplementedCoreServiceServer) ListMyVendorLicenses(context.Context, *Lis
 }
 func (UnimplementedCoreServiceServer) GetVendorLicenseKey(context.Context, *GetVendorLicenseKeyRequest) (*GetVendorLicenseKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetVendorLicenseKey not implemented")
+}
+func (UnimplementedCoreServiceServer) ListSupplierOffers(context.Context, *ListSupplierOffersRequest) (*ListSupplierOffersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSupplierOffers not implemented")
+}
+func (UnimplementedCoreServiceServer) BuySupplierProduct(context.Context, *BuySupplierProductRequest) (*BuySupplierProductResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuySupplierProduct not implemented")
+}
+func (UnimplementedCoreServiceServer) ListMySupplierOrders(context.Context, *ListMySupplierOrdersRequest) (*ListMySupplierOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMySupplierOrders not implemented")
+}
+func (UnimplementedCoreServiceServer) GetSupplierDelivery(context.Context, *GetSupplierDeliveryRequest) (*GetSupplierDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSupplierDelivery not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -2599,6 +2671,78 @@ func _CoreService_GetVendorLicenseKey_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListSupplierOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSupplierOffersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListSupplierOffers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListSupplierOffers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListSupplierOffers(ctx, req.(*ListSupplierOffersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_BuySupplierProduct_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuySupplierProductRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).BuySupplierProduct(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_BuySupplierProduct_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).BuySupplierProduct(ctx, req.(*BuySupplierProductRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ListMySupplierOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMySupplierOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListMySupplierOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListMySupplierOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListMySupplierOrders(ctx, req.(*ListMySupplierOrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetSupplierDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSupplierDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetSupplierDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetSupplierDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetSupplierDelivery(ctx, req.(*GetSupplierDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2893,6 +3037,22 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVendorLicenseKey",
 			Handler:    _CoreService_GetVendorLicenseKey_Handler,
+		},
+		{
+			MethodName: "ListSupplierOffers",
+			Handler:    _CoreService_ListSupplierOffers_Handler,
+		},
+		{
+			MethodName: "BuySupplierProduct",
+			Handler:    _CoreService_BuySupplierProduct_Handler,
+		},
+		{
+			MethodName: "ListMySupplierOrders",
+			Handler:    _CoreService_ListMySupplierOrders_Handler,
+		},
+		{
+			MethodName: "GetSupplierDelivery",
+			Handler:    _CoreService_GetSupplierDelivery_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

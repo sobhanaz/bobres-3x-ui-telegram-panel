@@ -228,6 +228,7 @@ func setup(rt *app.Runtime) error {
 		logs["bot"] = peer
 		monBot = peer
 		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
+		dom.SetSupplierTransport(peer)
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
@@ -285,6 +286,9 @@ func setup(rt *app.Runtime) error {
 	// The owner's own store sells BOBRES licenses: a paid order whose license server did not answer is asked again
 	// here. It does nothing on a store that has no license server set up.
 	rt.Go("license-sales", func(ctx context.Context) error { dom.RunVendorWorker(ctx); return nil })
+	// The same store resells a supplier's digital accounts: a paid order the supplier did not deliver is asked again, and the
+	// catalog is read every half hour. It does nothing on a store that has no supplier key.
+	rt.Go("supplier", func(ctx context.Context) error { dom.RunSupplierWorker(ctx); return nil })
 	// Stored subscription links follow a server's new address.
 	rt.Go("sub-links", dom.NewSubLinkWorker(prov, prov, rt.Log).Run)
 	// Support tickets nobody answered back close themselves; broadcasts start on time.

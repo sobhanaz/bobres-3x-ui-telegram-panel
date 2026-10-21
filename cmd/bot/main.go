@@ -200,6 +200,13 @@ func setup(rt *app.Runtime) error {
 		// The owner's own store asks the license server's signed admin API for keys the same way (core signs, the bot
 		// passes the request on to the one server above and the answer back).
 		rt.Mux.Handle("POST /internal/vendor/admin", lic.VendorAdminHandler())
+		// The owner's own store resells a supplier's digital accounts: core signs nothing here, it brings the supplier's
+		// API key per call and the bot calls the one supplier address it is configured for.
+		supplierURL := os.Getenv("BOBRES_SUPPLIER_URL")
+		if supplierURL == "" {
+			supplierURL = runner.DefaultSupplierURL
+		}
+		rt.Mux.Handle("POST /internal/supplier", runner.SupplierProxy{URL: supplierURL, CoreToken: cfg.PeerCoreToken, Log: rt.Log}.Handler())
 		// The dashboard's HTTPS page detects the server's public IP address
 		// (for ip mode) through the bot: core has no internet access.
 		rt.Mux.Handle("GET /internal/public-ip", runner.PublicIP(runner.IPLookup{}.Lookup, cfg.PeerCoreToken, rt.Log))

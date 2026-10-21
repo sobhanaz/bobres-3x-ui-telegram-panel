@@ -91,6 +91,9 @@ func (h *Handler) showHome(r *req) {
 	if h.bulkOn() { // a second green button under Buy
 		kb.Row(r.button("btn.bulk", "bk"))
 	}
+	if h.suppliersOn() { // the owner's own bot resells a supplier's digital accounts
+		kb.Row(r.button("btn.supplier", "sup"))
+	}
 	if h.licensesOn() { // the owner's own bot sells BOBRES licenses
 		kb.Row(r.button("btn.licenses", "lic"))
 	}
