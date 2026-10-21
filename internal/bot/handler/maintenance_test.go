@@ -318,6 +318,9 @@ func gatedCases() []gatedCase {
 	}
 	// The owner's own bot sells BOBRES licenses: the home, an offer, Pay, my licenses, a key, a renewal, and the USDT
 	// top-up for a shortfall.
+	for _, data := range []string{"sup", "sup:p:abcdefghij", "sup:y:abcdefghij:n1", "sup:my", "sup:o:00000000-0000-0000-0000-000000000000"} {
+		add(buttonCase(data))
+	}
 	for _, data := range []string{"lic", "lic:b:standard:1", "lic:y:standard:1:n1", "lic:my", "lic:k:l1", "lic:r:l1:1", "lic:ry:l1:1:n1", "lpay:u:4000000:n1", "lpay:x:4000000:n1"} {
 		add(buttonCase(data))
 	}

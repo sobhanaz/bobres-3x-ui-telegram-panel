@@ -117,6 +117,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
 	{Key: SettingVendorEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = the bot sells BOBRES licenses (the owner's own store only: it needs the license server's address and admin key, set in the dashboard); false = it does not"},
+	{Key: SettingSupplierEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = the bot has a Digital accounts button: the owner's own store resells a supplier's accounts, paid from the wallet in Toman (it needs the supplier's API key and the products switched on in the dashboard); false = no button, and core refuses the purchase"},
 	{Key: SettingBulkEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the bot's home menu has a Bulk purchase button: a customer buys several services of one plan at once and pays from the wallet; false = no button, and core refuses bulk purchases"},
 	{Key: SettingBulkMax, Group: "shop", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultBulkMax), Min: MinBulkQuantity, Max: MaxBulkQuantity,

@@ -97,6 +97,18 @@ POST /v1/refresh   {"token": "<the install's current token>", "version": "0.2.0"
 An install should keep its current token on any refusal, so it decays through grace and never drops at once.
 `/healthz` and `/readyz` answer on the same listener for the local health check. The proxy should not expose them.
 
+## The vendor's own features and the `private_features` entitlement
+
+Selling licenses from a bot, managing this server from the dashboard and reselling a supplier's accounts are the vendor's own and are
+not for sale. They are part of every BOBRES build but locked: a store's license must carry the entitlement `"private_features": true`
+(`internal/license`, `Entitlements.PrivateFeatures`), which no tier preset has. Give it to the vendor's own store only:
+
+```bash
+docker compose --env-file .env exec -T licensesrv /app key update LICENSE_ID -reason "own store: private features" -entitlements - < ent.json
+```
+
+with the license's entitlements plus `"private_features": true`. The store picks it up at its next daily refresh.
+
 ## The signed admin API (optional, off by default)
 
 `licensesrv key ...` is the admin tool. For a program that sells licenses (the owner's own BOBRES store), the same

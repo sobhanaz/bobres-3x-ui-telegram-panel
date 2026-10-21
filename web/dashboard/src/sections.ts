@@ -7,6 +7,9 @@ export interface Section {
   path: string
   icon: string
   perm: string
+  /** A second need besides the permission: the vendor's own features (selling licenses, the supplier resale) appear only for an
+   * owner whose store's license grants them (core adds `private.features` to the permission list then). */
+  needs?: string
   group: 'store' | 'customers' | 'sales' | 'setup' | 'admin'
   milestone: number
 }
@@ -23,7 +26,8 @@ export const sections: Section[] = [
   { key: 'reports', path: 'reports', icon: 'pi pi-chart-line', perm: 'reports.read', group: 'sales', milestone: 7 },
   { key: 'discounts', path: 'discounts', icon: 'pi pi-percentage', perm: 'discounts.write', group: 'sales', milestone: 2 },
   { key: 'giftcodes', path: 'gift-codes', icon: 'pi pi-gift', perm: 'discounts.write', group: 'sales', milestone: 8 },
-  { key: 'licenses', path: 'licenses', icon: 'pi pi-key', perm: 'license.write', group: 'sales', milestone: 8 },
+  { key: 'licenses', path: 'licenses', icon: 'pi pi-key', perm: 'license.write', needs: 'private.features', group: 'sales', milestone: 8 },
+  { key: 'supplier', path: 'supplier', icon: 'pi pi-shopping-bag', perm: 'gateways.write', needs: 'private.features', group: 'sales', milestone: 8 },
   { key: 'resellers', path: 'resellers', icon: 'pi pi-sitemap', perm: 'resellers.write', group: 'sales', milestone: 5 },
   { key: 'branding', path: 'branding', icon: 'pi pi-palette', perm: 'branding.write', group: 'setup', milestone: 3 },
   { key: 'settings', path: 'settings', icon: 'pi pi-cog', perm: 'settings.write', group: 'setup', milestone: 3 },
@@ -38,5 +42,5 @@ export const groups: Section['group'][] = ['store', 'customers', 'sales', 'setup
 
 /** visibleSections are the sections a staff member's permissions open. */
 export function visibleSections(perms: readonly string[]): Section[] {
-  return sections.filter((s) => perms.includes(s.perm))
+  return sections.filter((s) => perms.includes(s.perm) && (!s.needs || perms.includes(s.needs)))
 }

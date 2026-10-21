@@ -19,7 +19,7 @@ func TestVendorEndpointsAreTheOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env})
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env, PrivateFeaturesOverride: &granted})
 	f.api.cfg.Domain = f.dom
 
 	f.staffUser(8911, "admin")
@@ -97,7 +97,7 @@ func TestVendorServerLicensesEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env})
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env, PrivateFeaturesOverride: &granted})
 	f.api.cfg.Domain = f.dom
 	stub := &stubVendor{}
 	f.dom.SetVendorTransport(stub)
@@ -186,5 +186,47 @@ func TestVendorServerLicensesEndpoints(t *testing.T) {
 	_, _, raw := b.get("/api/v1/vendor/server-licenses")
 	if strings.Contains(string(raw), priv) {
 		t.Fatal("the admin key is in an answer")
+	}
+}
+
+// granted switches the vendor's own features on in a test (Config.PrivateFeaturesOverride).
+var granted = true
+
+// A store whose license does not grant the vendor's own features: every path of them is a 404, the dashboard is not told to
+// show them, and the bot's switches read off. An owner of a store that has them is told, and the bot's switches are as set.
+func TestPrivateFeaturesAreLockedWithoutTheLicense(t *testing.T) {
+	f, b, _, _ := salesFixture(t)
+	env, err := bcrypto.NewEnvelope([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env}) // a plain license: no override
+	f.api.cfg.Domain = f.dom
+	for _, c := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/vendor"}, {http.MethodPut, "/api/v1/vendor/config"}, {http.MethodGet, "/api/v1/vendor/licenses"},
+		{http.MethodGet, "/api/v1/vendor/server-licenses"}, {http.MethodPost, "/api/v1/vendor/server-licenses"},
+		{http.MethodGet, "/api/v1/supplier"}, {http.MethodPut, "/api/v1/supplier/config"}, {http.MethodPost, "/api/v1/supplier/sync"},
+		{http.MethodGet, "/api/v1/supplier/products"}, {http.MethodGet, "/api/v1/supplier/orders"},
+	} {
+		if code, _ := b.do(c.method, c.path, map[string]any{}); code != http.StatusNotFound {
+			t.Errorf("owner %s %s: %d, want 404 without the license's private features", c.method, c.path, code)
+		}
+	}
+	if f.dom.PrivateFeatures(context.Background()) {
+		t.Fatal("a plain license grants the private features")
+	}
+	if err := f.dom.SetVendorConfig(context.Background(), nil, "x"); err == nil {
+		t.Fatal("core took an admin key without the feature")
+	}
+	_, _, raw := b.get("/api/v1/me")
+	if strings.Contains(string(raw), "private.features") {
+		t.Fatalf("the dashboard is told to show the private features: %s", raw)
+	}
+	// With the feature granted, the owner is told (and only the owner).
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env, PrivateFeaturesOverride: &granted})
+	f.api.cfg.Domain = f.dom
+	_, _, raw = b.get("/api/v1/me")
+	if !strings.Contains(string(raw), "private.features") {
+		t.Fatalf("an owner with the feature is not told: %s", raw)
 	}
 }

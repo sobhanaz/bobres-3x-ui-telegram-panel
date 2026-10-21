@@ -264,7 +264,7 @@ func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"user": map[string]any{"id": u.ID, "telegram_id": u.TelegramID, "username": u.Username,
 			"role": u.Role, "language": u.Language},
-		"permissions": Permissions(u.Role),
+		"permissions": s.permissionsFor(r.Context(), u.Role),
 		"csrf":        st.session.CSRFToken,
 		"session":     map[string]any{"method": st.session.Method, "expires_at": st.session.ExpiresAt.Unix()},
 		"password":    password,

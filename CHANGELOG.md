@@ -8,6 +8,25 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### The vendor's own features are locked behind the license
+- A new entitlement, **`private_features`**, unlocks the features that are the vendor's own and not for sale: selling BOBRES licenses,
+  managing the license server from the dashboard, and reselling a supplier's accounts. Only a license the vendor signs for its own
+  store carries it (no tier preset does). **Without it** the dashboard does not show those pages, core answers 404 to their paths,
+  refuses to keep their keys, the bot's switches read off whatever they were set to, and nothing is sold. Pending orders and what
+  customers already bought keep settling and stay readable. A license signed before this version has none of it, as it should.
+
+### The owner's own bot resells a supplier's digital accounts (off unless set up)
+- **Digital accounts**: the store reads a supplier's catalog (the reseller API of ssondigitalworks.online: products, balance, order),
+  imports every product **off and unpriced**, and the owner writes the **price in Toman** and the Persian and English texts and
+  switches each on. A customer pays from the wallet and gets the account in the bot (and again under My purchases). One
+  transaction takes the money and writes the order; the supplier is asked with the order id (so it never charges twice); the
+  delivery is stored encrypted; a supplier that does not answer leaves the order paid and a worker asks again; a refusal for good
+  refunds. The owner can retry or refund an order the supplier never delivers.
+- **Core has no internet access**: it calls the supplier through the bot's new `POST /internal/supplier`, which talks to the one
+  supplier address the bot is configured for (`BOBRES_SUPPLIER_URL`).
+- Dashboard > **Digital accounts** (owner only): the API key (encrypted, write-only), the supplier balance, the products (cost, stock,
+  price, texts, order, switch) and the orders. Migration 00033, the setting `supplier.enabled`, four core RPCs. docs/supplier.md.
+
 ## [0.9.1] — 2026-10-21
 
 The owner's own store can now **manage every license of the license server from the dashboard**, not only the ones the

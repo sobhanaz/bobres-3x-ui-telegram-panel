@@ -202,17 +202,26 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
 	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
-	s.route(api, "GET /api/v1/vendor", PermLicenseWrite, s.getVendor)
-	s.route(api, "PUT /api/v1/vendor/config", PermLicenseWrite, s.putVendorConfig)
-	s.route(api, "GET /api/v1/vendor/licenses", PermLicenseWrite, s.listSoldLicenses)
-	s.route(api, "POST /api/v1/vendor/licenses/{id}/grant", PermLicenseWrite, s.grantSoldLicense)
-	s.route(api, "GET /api/v1/vendor/server-licenses", PermLicenseWrite, s.listServerLicenses)
-	s.route(api, "POST /api/v1/vendor/server-licenses", PermLicenseWrite, s.createServerLicense)
-	s.route(api, "GET /api/v1/vendor/server-licenses/{id}", PermLicenseWrite, s.getServerLicense)
-	s.route(api, "PUT /api/v1/vendor/server-licenses/{id}", PermLicenseWrite, s.updateServerLicense)
-	s.route(api, "POST /api/v1/vendor/server-licenses/{id}/revoke", PermLicenseWrite, s.revokeServerLicense)
-	s.route(api, "POST /api/v1/vendor/server-licenses/{id}/rekey", PermLicenseWrite, s.rekeyServerLicense)
-	s.route(api, "POST /api/v1/vendor/licenses/{id}/revoke", PermLicenseWrite, s.revokeSoldLicense)
+	s.privateRoute(api, "GET /api/v1/supplier", PermGatewaysWrite, s.getSupplier)
+	s.privateRoute(api, "PUT /api/v1/supplier/config", PermGatewaysWrite, s.putSupplierConfig)
+	s.privateRoute(api, "GET /api/v1/supplier/balance", PermGatewaysWrite, s.getSupplierBalance)
+	s.privateRoute(api, "POST /api/v1/supplier/sync", PermGatewaysWrite, s.syncSupplier)
+	s.privateRoute(api, "GET /api/v1/supplier/products", PermGatewaysWrite, s.listSupplierProducts)
+	s.privateRoute(api, "PUT /api/v1/supplier/products/{id}", PermGatewaysWrite, s.updateSupplierProduct)
+	s.privateRoute(api, "GET /api/v1/supplier/orders", PermGatewaysWrite, s.listSupplierOrders)
+	s.privateRoute(api, "POST /api/v1/supplier/orders/{id}/retry", PermGatewaysWrite, s.retrySupplierOrder)
+	s.privateRoute(api, "POST /api/v1/supplier/orders/{id}/refund", PermGatewaysWrite, s.refundSupplierOrder)
+	s.privateRoute(api, "GET /api/v1/vendor", PermLicenseWrite, s.getVendor)
+	s.privateRoute(api, "PUT /api/v1/vendor/config", PermLicenseWrite, s.putVendorConfig)
+	s.privateRoute(api, "GET /api/v1/vendor/licenses", PermLicenseWrite, s.listSoldLicenses)
+	s.privateRoute(api, "POST /api/v1/vendor/licenses/{id}/grant", PermLicenseWrite, s.grantSoldLicense)
+	s.privateRoute(api, "GET /api/v1/vendor/server-licenses", PermLicenseWrite, s.listServerLicenses)
+	s.privateRoute(api, "POST /api/v1/vendor/server-licenses", PermLicenseWrite, s.createServerLicense)
+	s.privateRoute(api, "GET /api/v1/vendor/server-licenses/{id}", PermLicenseWrite, s.getServerLicense)
+	s.privateRoute(api, "PUT /api/v1/vendor/server-licenses/{id}", PermLicenseWrite, s.updateServerLicense)
+	s.privateRoute(api, "POST /api/v1/vendor/server-licenses/{id}/revoke", PermLicenseWrite, s.revokeServerLicense)
+	s.privateRoute(api, "POST /api/v1/vendor/server-licenses/{id}/rekey", PermLicenseWrite, s.rekeyServerLicense)
+	s.privateRoute(api, "POST /api/v1/vendor/licenses/{id}/revoke", PermLicenseWrite, s.revokeSoldLicense)
 	s.route(api, "GET /api/v1/gift-codes", PermDiscountsWrite, s.listGiftCodes)
 	s.route(api, "POST /api/v1/gift-codes", PermDiscountsWrite, s.createGiftCodes)
 	s.route(api, "GET /api/v1/gift-codes.csv", PermDiscountsWrite, s.exportGiftCodes)
@@ -381,6 +390,18 @@ func (s *Server) Register(mux *http.ServeMux) {
 // route mounts a staff endpoint: a live session, then the permission.
 func (s *Server) route(mux *http.ServeMux, pattern, perm string, h http.HandlerFunc) {
 	mux.HandleFunc(pattern, s.session(s.require(perm, h)))
+}
+
+// privateRoute is route for the vendor's own features (selling licenses, the license server, the supplier resale): a store whose
+// license does not grant them answers as if the path did not exist.
+func (s *Server) privateRoute(mux *http.ServeMux, pattern, perm string, h http.HandlerFunc) {
+	s.route(mux, pattern, perm, func(w http.ResponseWriter, r *http.Request) {
+		if !s.cfg.Domain.PrivateFeatures(r.Context()) {
+			writeError(w, http.StatusNotFound, "not_found", "no such page")
+			return
+		}
+		h(w, r)
+	})
 }
 
 func apiHeaders(next http.Handler) http.Handler { return apiHeadersLimit(next, maxBody) }

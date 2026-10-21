@@ -1013,6 +1013,15 @@ service CoreService {
   rpc BuyVendorLicense(BuyVendorLicenseRequest) returns (BuyVendorLicenseResponse);
   rpc ListMyVendorLicenses(ListMyVendorLicensesRequest) returns (ListMyVendorLicensesResponse);
   rpc GetVendorLicenseKey(GetVendorLicenseKeyRequest) returns (GetVendorLicenseKeyResponse);
+
+  // Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
+  // (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
+  // Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
+  // shows it again to its buyer only.
+  rpc ListSupplierOffers(ListSupplierOffersRequest) returns (ListSupplierOffersResponse);
+  rpc BuySupplierProduct(BuySupplierProductRequest) returns (BuySupplierProductResponse);
+  rpc ListMySupplierOrders(ListMySupplierOrdersRequest) returns (ListMySupplierOrdersResponse);
+  rpc GetSupplierDelivery(GetSupplierDeliveryRequest) returns (GetSupplierDeliveryResponse);
 }
 
 message CanStartTrialRequest {
@@ -1252,4 +1261,71 @@ message GetVendorLicenseKeyRequest {
 message GetVendorLicenseKeyResponse {
   VendorLicense license = 1;
   string key = 2;
+}
+
+// A product the owner sells from the supplier. sid is a short id the bot puts in its buttons (core finds the product by it).
+message SupplierOffer {
+  string sid = 1;
+  string name = 2; // in the customer's language when the owner wrote one
+  string description = 3;
+  common.v1.Money price = 4;
+}
+
+message ListSupplierOffersRequest {
+  string user_id = 1;
+  string language = 2; // fa or en
+}
+
+message ListSupplierOffersResponse {
+  bool on = 1; // the owner sells digital accounts in this store
+  repeated SupplierOffer offers = 2;
+  common.v1.Money balance = 3; // the buyer's wallet
+}
+
+message BuySupplierProductRequest {
+  string user_id = 1;
+  string sid = 2;
+  int32 quantity = 3;
+  string idempotency_key = 4; // required: a repeat returns the first result and charges nothing more
+  common.v1.Money expected_total = 5; // the total the buyer was shown (optional): refused as "price changed" otherwise
+}
+
+message BuySupplierProductResponse {
+  // done: delivered. paid: the buyer has paid and the supplier has not delivered yet (it arrives under My purchases).
+  // refunded: the supplier refused for good and the money went back.
+  string order_status = 1;
+  string order_id = 2;
+  string delivery = 3; // done: what the customer receives
+  common.v1.Money total = 4;
+  bool replayed = 5;
+  string failure = 6;
+}
+
+message SupplierOrderSummary {
+  string id = 1;
+  string product_name = 2;
+  int32 quantity = 3;
+  common.v1.Money total = 4;
+  string status = 5; // paid, done or refunded
+  int64 created_at = 6;
+}
+
+message ListMySupplierOrdersRequest {
+  string user_id = 1;
+  string language = 2;
+}
+
+message ListMySupplierOrdersResponse {
+  repeated SupplierOrderSummary orders = 1;
+}
+
+message GetSupplierDeliveryRequest {
+  string user_id = 1;
+  string order_id = 2;
+  string language = 3;
+}
+
+message GetSupplierDeliveryResponse {
+  SupplierOrderSummary order = 1;
+  string delivery = 2;
 }
