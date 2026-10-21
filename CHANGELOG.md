@@ -8,7 +8,36 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-### Selling BOBRES licenses from the owner's own store (core; the bot and dashboard parts follow)
+## [0.9.0] — 2026-10-21
+
+**Selling BOBRES licenses from the owner's own bot**: Standard and Pro, one month or a year, paid from the wallet in USDT,
+the key delivered in the chat, a Licenses page in the dashboard, and a signed admin API on the license server behind
+it. It is **off on every install unless the owner sets it up**: a customer's bot, dashboard and license are unchanged.
+
+### Updating
+- **From the dashboard:** System > Updates > Update now (owner only), or `sudo bobres update` over SSH. Core and the bot
+  move together.
+- One database migration, additive (so a rollback keeps every order and credit): 00032 (the ledger kinds `license_purchase`
+  and `license_refund`, and the tables `vendor_config`, `vendor_licenses` and `vendor_orders`, empty on every install
+  that does not sell licenses). Nothing to configure, and no new service or systemd unit.
+- After the update **nothing changes in the bot or the dashboard** except a **Licenses** section for the owner in the
+  dashboard's menu, which says sales are off. To sell licenses the owner makes an admin key pair on the license server
+  (`licensesrv adminkey`), turns the signed admin API on there (`BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE`) and serves
+  `/admin/v1/` next to `/v1/`, pastes the private key in Licenses, and switches sales on (docs/13-license-server.md).
+  The requests go through the bot to the server it is configured for (`BOBRES_LICENSE_SERVER`): core has no internet.
+- The bot's top-up helpers now take a currency; every existing call still tops up in Toman.
+
+### Known limits
+- **Nothing of this has been seen in a real Telegram:** the licenses screens, the USDT top-up for a shortfall and the
+  Persian texts (a first draft that wants a native read). The flow is covered by tests against a fake license server
+  that verifies every signature, and the signed API against a real Postgres.
+- A buyer needs a **USDT wallet**: a short wallet is offered a top-up of exactly the shortfall (automatic TRC20 or a
+  manual USDT payment); after paying they come back and tap Pay. One screen that does both is not built.
+- A key lost between the license server making it and core storing it is replaced by a new one (possible only while
+  nobody has activated the license); if even that fails an operator re-keys it by hand.
+- Refunds of a sold license are the owner's call: revoking does not move money.
+
+### Selling BOBRES licenses from the owner's own store (core)
 - A buyer pays from the wallet (any top-up method fills it, automatic USDT TRC20 included) and core asks the license
   server's signed admin API for a key. One transaction takes the money and writes the order; the server is asked
   outside it with a ref made from the order, so a retry never makes a second license or extends twice; a server that is
