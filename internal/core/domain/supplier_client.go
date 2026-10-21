@@ -240,20 +240,6 @@ func (c supplierCall) Order(ctx context.Context, productID string, quantity int,
 // ---- tolerant reading of the supplier's JSON
 
 // firstObject is v if it is an object, else the first object in a list.
-func firstObject(v any) map[string]any {
-	switch x := v.(type) {
-	case map[string]any:
-		return x
-	case []any:
-		for _, e := range x {
-			if m, ok := e.(map[string]any); ok {
-				return m
-			}
-		}
-	}
-	return map[string]any{}
-}
-
 func strFrom(m map[string]any, keys ...string) string {
 	for _, k := range keys {
 		switch v := m[k].(type) {
