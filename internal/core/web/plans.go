@@ -24,6 +24,8 @@ type planJSON struct {
 	// Inbounds is its choice of panel inbounds per server ([] = every
 	// attachable inbound of whichever server it goes to).
 	Inbounds []store.PlanInbound `json:"inbounds"`
+	// GroupID is the plan group it is listed under (null: none).
+	GroupID *string `json:"group_id"`
 }
 
 func planOf(p *store.Plan, sales int64) planJSON {
@@ -40,7 +42,7 @@ func planOf(p *store.Plan, sales int64) planJSON {
 	}
 	return planJSON{ID: p.ID, Name: p.NameI18n, Kind: p.Kind, DurationDays: p.DurationDays, TrafficBytes: p.TrafficBytes,
 		Price: money{p.Price, p.Currency}, Enabled: p.Enabled, IsTrial: p.IsTrial, IsTopup: p.IsTopup, Sort: p.Sort, Sales: sales,
-		ServerIDs: ids, Inbounds: inbounds}
+		ServerIDs: ids, Inbounds: inbounds, GroupID: p.GroupID}
 }
 
 // listPlans: GET /api/v1/plans, every plan (also turned off) with its sales.
@@ -79,6 +81,8 @@ type planBody struct {
 	ServerIDs *[]string `json:"server_ids"`
 	// Inbounds: absent keeps the plan's choice (a new plan: none); [] clears it.
 	Inbounds *[]store.PlanInbound `json:"inbounds"`
+	// GroupID: absent keeps the plan's group (a new plan: none); "" takes it out of its group.
+	GroupID *string `json:"group_id"`
 }
 
 func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
@@ -117,6 +121,7 @@ func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
 	if b.Inbounds != nil {
 		p.Inbounds = append([]store.PlanInbound{}, *b.Inbounds...)
 	}
+	p.GroupID = b.GroupID
 	return p, true
 }
 

@@ -44,20 +44,20 @@ func planLimits(r *req, p *corev1.Plan) string {
 	return strings.Join(lines, "\n")
 }
 
-// plans returns the enabled, non-trial plans (regular plans and traffic
+// catalog returns the enabled, non-trial plans (regular plans and traffic
 // packages) at the user's own prices (a reseller's tier prices), or all plans
-// including disabled ones at store prices for admins.
-func (h *Handler) plans(r *req, all bool) ([]*corev1.Plan, error) {
+// including disabled ones at store prices for admins, and the plan groups.
+func (h *Handler) catalog(r *req, all bool) ([]*corev1.Plan, []*corev1.PlanGroup, error) {
 	in := &corev1.ListPlansRequest{IncludeDisabled: all}
 	if !all {
 		in.UserId = r.user.GetId()
 	}
 	resp, err := h.core.ListPlans(r.ctx, in)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if all {
-		return resp.GetPlans(), nil
+		return resp.GetPlans(), resp.GetGroups(), nil
 	}
 	var out []*corev1.Plan
 	for _, p := range resp.GetPlans() {
@@ -65,7 +65,13 @@ func (h *Handler) plans(r *req, all bool) ([]*corev1.Plan, error) {
 			out = append(out, p)
 		}
 	}
-	return out, nil
+	return out, resp.GetGroups(), nil
+}
+
+// plans is the catalog's plans (see catalog).
+func (h *Handler) plans(r *req, all bool) ([]*corev1.Plan, error) {
+	ps, _, err := h.catalog(r, all)
+	return ps, err
 }
 
 func (h *Handler) findPlan(r *req, id string, all bool) (*corev1.Plan, error) {
@@ -81,12 +87,13 @@ func (h *Handler) findPlan(r *req, id string, all bool) (*corev1.Plan, error) {
 	return nil, status.Error(codes.NotFound, "plan not found")
 }
 
-// regularPlans are the plans sold as a new service or a renewal (not the
-// traffic packages, which are sold from a subscription's page).
-func (h *Handler) regularPlans(r *req) ([]*corev1.Plan, error) {
-	ps, err := h.plans(r, false)
+// regularCatalog is the plans sold as a new service or a renewal (not the
+// traffic packages, which are sold from a subscription's page) and the plan
+// groups.
+func (h *Handler) regularCatalog(r *req) ([]*corev1.Plan, []*corev1.PlanGroup, error) {
+	ps, groups, err := h.catalog(r, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := ps[:0:0]
 	for _, p := range ps {
@@ -94,11 +101,21 @@ func (h *Handler) regularPlans(r *req) ([]*corev1.Plan, error) {
 			out = append(out, p)
 		}
 	}
-	return out, nil
+	return out, groups, nil
 }
 
+// regularPlans are the regular plans without their groups (the renewal, bulk
+// and reseller pickers list them flat).
+func (h *Handler) regularPlans(r *req) ([]*corev1.Plan, error) {
+	ps, _, err := h.regularCatalog(r)
+	return ps, err
+}
+
+// showPlans handles "buy": the plans. A store with plan groups shows the groups
+// first (a customer reads a group's text, then picks a plan of it); a store
+// without any shows the plans, as it always did.
 func (h *Handler) showPlans(r *req) {
-	ps, err := h.regularPlans(r)
+	ps, groups, err := h.regularCatalog(r)
 	if err != nil {
 		r.fail(err)
 		return
@@ -107,10 +124,60 @@ func (h *Handler) showPlans(r *req) {
 		r.show(r.t("plans.empty"), homeKeyboard(r))
 		return
 	}
+	sec := sectionPlans(ps, groups)
 	kb := &tg.Keyboard{}
-	h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "plan:" + p.GetId() })
+	if len(sec.groups) == 0 {
+		h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "plan:" + p.GetId() })
+		kb.Row(r.button("btn.home", "home"))
+		r.show(r.t("plans.title"), kb)
+		return
+	}
+	for _, g := range sec.groups {
+		kb.Row(tg.CB(r.t("plans.group_button", "name", ellipsize(groupName(r, g), groupButtonWidth)), "pg:"+g.GetId()))
+	}
+	if len(sec.other) > 0 {
+		kb.Row(r.button("plans.other_button", "pg:"+planGroupOther))
+	}
 	kb.Row(r.button("btn.home", "home"))
-	r.show(r.t("plans.title"), kb)
+	r.show(r.t("plans.group_title"), kb)
+}
+
+// showPlanGroup handles "pg:<group id>" ("pg:-": the plans with no group): the
+// group's text and its plans. A group that is gone or has nothing on sale
+// sends the customer back to the list.
+func (h *Handler) showPlanGroup(r *req, id string) {
+	ps, groups, err := h.regularCatalog(r)
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	sec := sectionPlans(ps, groups)
+	var (
+		in   []*corev1.Plan
+		head string
+	)
+	if id == planGroupOther {
+		in, head = sec.other, r.t("plans.other_head")
+	} else {
+		for _, g := range sec.groups {
+			if g.GetId() != id {
+				continue
+			}
+			in = sec.of[id]
+			head = r.t("plans.group_head", "name", esc(groupName(r, g)))
+			if text := groupText(r, g); text != "" {
+				head += "\n\n" + esc(text)
+			}
+		}
+	}
+	if len(in) == 0 {
+		h.showPlans(r)
+		return
+	}
+	kb := &tg.Keyboard{}
+	h.addPlans(r, kb, in, func(p *corev1.Plan) string { return "plan:" + p.GetId() })
+	kb.Row(r.button("btn.back", "buy"), r.button("btn.home", "home"))
+	r.show(head+"\n\n"+r.t("plans.pick"), kb)
 }
 
 func (h *Handler) usdtRate() int64 {
@@ -235,7 +302,11 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	if !reseller && c.DiscountCode == "" && price > 0 {
 		kb.Row(r.button("btn.discount", "dc:"+n))
 	}
-	kb.Row(r.button("btn.back", checkoutBack(c)), r.button("btn.home", "home"))
+	back := checkoutBack(c)
+	if back == "buy" && p.GetGroupId() != "" { // a new service: back to the group it was chosen from
+		back = "pg:" + p.GetGroupId()
+	}
+	kb.Row(r.button("btn.back", back), r.button("btn.home", "home"))
 	var text string
 	switch c.Type {
 	case "renew":

@@ -559,6 +559,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onSupplier(r, rest)
 	case "lpay":
 		h.onLicenseTopup(r, rest)
+	case "pg":
+		h.showPlanGroup(r, rest)
 	case "plan":
 		h.showPlan(r, rest)
 	case "pay":
