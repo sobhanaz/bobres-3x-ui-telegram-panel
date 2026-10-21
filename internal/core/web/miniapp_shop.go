@@ -53,12 +53,27 @@ func (s *Server) miniPlans(w http.ResponseWriter, r *http.Request) {
 		if p.TrafficBytes != nil {
 			traffic = *p.TrafficBytes
 		}
+		var group any // the plan group it is listed under (null: none)
+		if p.GroupID != nil {
+			group = *p.GroupID
+		}
 		out = append(out, map[string]any{
 			"id": p.ID, "names": p.NameI18n, "kind": p.Kind, "days": days, "traffic_bytes": traffic,
 			"price": prices[i], "list_price": p.Price, "currency": p.Currency, "scale": bmoney.Scale(p.Currency), "topup": p.IsTopup,
+			"group": group,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"plans": out})
+	// The groups, in the order customers see them: a customer reads a group's text before choosing one of its plans.
+	groups, err := s.cfg.Domain.ListPlanGroups(ctx)
+	if err != nil {
+		s.miniFail(w, "mini app plan groups", err)
+		return
+	}
+	gout := make([]map[string]any, 0, len(groups))
+	for _, g := range groups {
+		gout = append(gout, map[string]any{"id": g.ID, "names": g.NameI18n, "texts": g.DescriptionI18n})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plans": out, "groups": gout})
 }
 
 // miniServices: GET /api/mini/v1/services, the customer's services newest

@@ -55,6 +55,14 @@ export interface Plan {
   currency: string
   scale: number
   topup: boolean
+  /** the plan group it is listed under (null or absent: none) */
+  group?: string | null
+}
+/** A named group of plans with a text the customer reads before choosing one of its plans. */
+export interface PlanGroup {
+  id: string
+  names: Record<string, string>
+  texts: Record<string, string>
 }
 export interface Service {
   id: string
@@ -183,6 +191,9 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
 export const api = {
   me: () => call<Me>('GET', '/me'),
   plans: () => call<{ plans: Plan[] }>('GET', '/plans').then((r) => r.plans),
+  /** the plans with the plan groups (an older core sends none) */
+  catalog: () =>
+    call<{ plans: Plan[]; groups?: PlanGroup[] }>('GET', '/plans').then((r) => ({ plans: r.plans, groups: r.groups ?? [] })),
   services: () => call<{ services: Service[] }>('GET', '/services').then((r) => r.services),
   wallet: () => call<{ wallets: Wallet[]; ledger: LedgerEntry[] }>('GET', '/wallet'),
   methods: (currency: string, amount: number) =>

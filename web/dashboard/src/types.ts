@@ -148,6 +148,18 @@ export interface PlanItem {
   /** the panel inbounds a new service gets, per server; a server without an
    * entry gets every attachable inbound (the default). Older cores leave it out. */
   inbounds?: PlanInbound[]
+  /** the plan group it is listed under (null: none). Older cores leave it out. */
+  group_id?: string | null
+}
+
+/** A named group of plans with a text the customer reads before choosing one of its plans. */
+export interface PlanGroupItem {
+  id: string
+  name: Names
+  description: Names
+  sort: number
+  /** how many plans are in it */
+  plans: number
 }
 
 /** A plan's choice of inbounds on one server (panel inbound ids). */

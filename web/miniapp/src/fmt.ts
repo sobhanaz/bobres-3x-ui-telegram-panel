@@ -1,7 +1,7 @@
 // Formatting in the current language, for templates.
 import { lang, planName as pickName, tr, type Key } from './i18n'
 import { ago, bytes, date, dateTime, exactMoney, money, num } from './format'
-import type { Plan } from './api'
+import type { Plan, PlanGroup } from './api'
 
 export const fmtMoney = (amount: number, currency: string, scale: number) => money(amount, currency, scale, lang.value)
 /** fmtExact is an amount to send, with every decimal (fmtMoney keeps two). */
@@ -13,6 +13,9 @@ export const fmtNum = (n: number) => num(n, lang.value)
 /** fmtAgo is how long ago a time was (unix seconds), by the device's clock. */
 export const fmtAgo = (unix: number) => ago(unix, Date.now(), lang.value)
 export const nameOf = (p: Plan) => pickName(p.names, lang.value)
+/** A plan group's name and its text in the language (the text is empty when the store wrote none). */
+export const groupNameOf = (g: PlanGroup) => pickName(g.names, lang.value)
+export const groupTextOf = (g: PlanGroup) => pickName(g.texts, lang.value)
 
 /** planFacts: "30 days · 50 GB" for a plan. */
 export function planFacts(p: Plan): string {

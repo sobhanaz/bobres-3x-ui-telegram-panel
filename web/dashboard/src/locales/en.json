@@ -409,6 +409,25 @@
     "done_page_regenerate": "Page link replaced: the old address no longer works"
   },
   "plan": {
+    "groups_title": "Plan groups",
+    "groups_intro": "Put plans in groups with a text for each: in the bot a customer first picks a group, reads its text, then picks a plan of it. Plans with no group are under “Other plans”. With no group at all, plans are listed as before.",
+    "groups_none": "No groups yet. Add one to let customers choose a group before a plan.",
+    "group_new": "New group",
+    "group_edit": "Edit group",
+    "group_name": "Group",
+    "group_plans": "Plans",
+    "group_saved": "Group saved",
+    "group_deleted": "Group deleted",
+    "group_delete": "Delete group",
+    "group_delete_confirm": "Delete the group {name}? Its plans stay on sale, without a group.",
+    "group_name_fa": "Group name in Persian",
+    "group_name_en": "Group name in English",
+    "group_text_fa": "Text in Persian",
+    "group_text_en": "Text in English",
+    "group_text_help": "Customers read this before they pick a plan of the group. A language left empty shows the other one.",
+    "group": "Group",
+    "group_none": "No group (under “Other plans”)",
+    "group_help": "Customers pick the group first and read its text.",
     "intro": "Plans are what customers buy in the bot. Traffic packages add traffic to a running service; the free trial is a plan marked as a trial.",
     "new": "New plan",
     "edit": "Edit plan",
@@ -1849,6 +1868,10 @@
       },
       "plan": {
         "upsert": "Plan saved"
+      },
+      "plan_group": {
+        "upsert": "Plan group saved",
+        "delete": "Plan group deleted"
       },
       "setting": {
         "set": "Setting changed"
