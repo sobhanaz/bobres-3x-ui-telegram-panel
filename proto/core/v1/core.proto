@@ -42,6 +42,19 @@ message Plan {
   // servers of a plan (which this message does not carry); the dashboard's
   // plan editor is where a selection is cleared.
   repeated InboundSelection inbounds = 12;
+  // The plan group it is listed under (empty: none). AdminUpsertPlan keeps the
+  // stored group when this is empty: the bot's plan editor never changes it,
+  // the dashboard is where plans are grouped.
+  string group_id = 13;
+}
+
+// PlanGroup is a named group of plans with a text the customer reads before
+// choosing one of them. A plan with no group is listed under "other plans".
+message PlanGroup {
+  string id = 1; // uuid
+  map<string, string> name_i18n = 2; // lang -> name
+  map<string, string> description_i18n = 3; // lang -> text
+  int32 sort = 4;
 }
 
 // InboundSelection names the inbounds (their ids in that panel) of one 3x-ui
@@ -332,6 +345,8 @@ message ListPlansRequest {
 
 message ListPlansResponse {
   repeated Plan plans = 1;
+  // Every plan group, in the order customers see them (an older core sends none).
+  repeated PlanGroup groups = 2;
 }
 
 message CreateOrderRequest {

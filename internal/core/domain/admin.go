@@ -437,7 +437,8 @@ func (s *Service) AdminUpsertPlan(ctx context.Context, actorTelegramID int64, p 
 // UpsertPlan is AdminUpsertPlan for an actor the caller has checked. A nil
 // p.ServerIDs keeps the plan's servers (the bot never sends them); a nil
 // p.Inbounds keeps its inbound choice (an older client does not send it; an
-// empty list clears it, so every attachable inbound is used again).
+// empty list clears it, so every attachable inbound is used again); a nil
+// p.GroupID keeps its group, a pointer to "" takes it out of its group.
 func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Plan) (*store.Plan, error) {
 	if err := validatePlan(p); err != nil {
 		return nil, err
@@ -455,9 +456,10 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 	var (
 		before any // nil for a new plan
 		oldCur string
+		old    *store.Plan
 	)
 	if p.ID != "" {
-		old, err := s.st.GetPlan(ctx, s.st.Conn(), p.ID)
+		old, err = s.st.GetPlan(ctx, s.st.Conn(), p.ID)
 		if err != nil {
 			return nil, err // editing a plan that does not exist
 		}
@@ -486,6 +488,9 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 		}
 	}
 	if err := checkInboundServers(p.Inbounds, p.ServerIDs); err != nil {
+		return nil, err
+	}
+	if err := s.planGroupOf(ctx, p, old); err != nil {
 		return nil, err
 	}
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
