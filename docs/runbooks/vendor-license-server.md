@@ -361,3 +361,27 @@ clients, not the tunnel.
 **After a release:** make a new `vendor-src.tgz` from the release's checkout, unpack it into `src/`, set `BOBRES_VERSION` in
 `.env`, and `docker compose --env-file .env up -d --build`. Migrations run at start; the database and the key stay.
 
+### The signed admin API (selling licenses from the owner's own bot)
+
+The owner's own store sells licenses by asking this server for keys (`licensesrv`'s `/admin/v1/`, docs/13-license-server.md).
+With this kit:
+
+1. Make the key pair on the server, without showing the private key on the screen:
+
+   ```bash
+   cd /opt/bobres-vendor && umask 077
+   docker compose --env-file .env run --rm -T --no-deps licensesrv adminkey > /root/.adminkey.out 2>/dev/null </dev/null
+   sed -n 's/^public: //p'  /root/.adminkey.out > /etc/bobres-vendor/admin.pub && chown 65532:65532 /etc/bobres-vendor/admin.pub
+   sed -n 's/^private: //p' /root/.adminkey.out > /root/vendor-admin-key
+   shred -u /root/.adminkey.out
+   echo 'ADMIN_PUBKEY_FILE=/etc/bobres-vendor/admin.pub' >> .env
+   docker compose --env-file .env up -d licensesrv
+   ```
+
+2. Serve the path through the tunnel: in Cloudflare Zero Trust > Networks > Tunnels > the tunnel > Public hostnames, add for
+   the license host a rule with the path `/admin/v1/*` to the same service as `/v1/*` (`http://licensesrv:8080`).
+3. In the owner's dashboard (Licenses) paste the private key from `/root/vendor-admin-key`, then `shred -u` that file. Core has
+   no internet access: it signs the requests and its bot passes them to the server it is configured for.
+4. A request without a valid signature is a 401 (`docker compose exec site wget -S -q -O- --header 'X-Forwarded-Proto: https'
+   --post-data='{}' http://licensesrv:8080/admin/v1/licenses/list` shows it from inside the network); from outside it is a 404 until
+   step 2 is done.
