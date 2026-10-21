@@ -103,12 +103,18 @@ func TestPlanGroupsEndpoints(t *testing.T) {
 		t.Fatalf("delete twice: %d", code)
 	}
 	code, out = b.do(http.MethodGet, "/api/v1/plans", nil)
+	var after map[string]any // other tests of the package leave plans in the store: find this one
 	items, _ := out["items"].([]any)
-	if code != 200 || len(items) != 1 || items[0].(map[string]any)["group_id"] != nil || items[0].(map[string]any)["enabled"] != true {
-		t.Fatalf("the plan after its group was deleted: %v", out)
+	for _, it := range items {
+		if m, _ := it.(map[string]any); m["id"] == planID {
+			after = m
+		}
+	}
+	if code != 200 || after == nil || after["group_id"] != nil || after["enabled"] != true {
+		t.Fatalf("the plan after its group was deleted: %v", after)
 	}
 	var n int
-	if err := f.st.DB().QueryRow(t.Context(), `SELECT count(*) FROM core.audit_log WHERE action IN ('plan_group.upsert', 'plan_group.delete')`).Scan(&n); err != nil || n != 3 {
+	if err := f.st.DB().QueryRow(t.Context(), `SELECT count(*) FROM core.audit_log WHERE entity_id = $1 AND action IN ('plan_group.upsert', 'plan_group.delete')`, gid).Scan(&n); err != nil || n != 3 {
 		t.Fatalf("audit entries %d %v", n, err)
 	}
 }
