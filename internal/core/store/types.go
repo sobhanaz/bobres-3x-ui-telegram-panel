@@ -41,6 +41,10 @@ type Plan struct {
 	// and inbound; UpsertPlan leaves the stored selection alone when it is
 	// nil, and an empty non-nil list clears it.
 	Inbounds []PlanInbound
+	// GroupID is the plan group it is listed under (plan_groups; nil: none).
+	// Reads fill it; UpsertPlan writes what it is given, so a caller that does
+	// not know the group (the bot's plan editor) must read it first.
+	GroupID *string
 }
 
 // PlanInbound is a plan's choice of inbounds on one server.

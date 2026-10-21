@@ -124,7 +124,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 |---|---|
 | `POST /auth` `{init_data}` | Verify, start a session. Returns `me` and `token`, `expires_in`; 403 `banned`, or `join_required` for a customer outside the store's required channel. Public, 20 a minute per client address |
 | `GET /me`, `POST /logout` | The customer, wallets (a reseller's carry their `credit_limit`), branding, maintenance flag, top-up bounds, `features` (what the sections show, for example `reseller`); end the session |
-| `GET /plans` | Plans on sale (enabled, not a trial) with the customer's price (reseller prices apply), `topup` marks traffic packages |
+| `GET /plans` | Plans on sale (enabled, not a trial) with the customer's price (reseller prices apply), `topup` marks traffic packages, `group` is a plan's plan group id (or null); `groups` lists the plan groups in order (`id`, `names`, `texts`): a new purchase shows the groups first, a group's text, then its plans (Other plans for those with no group); renewals and traffic packages stay flat |
 | `GET /services` | The customer's own services: label, status, expiry, traffic, link, page address, `can_renew`, `can_topup` |
 | `GET /wallet` | Balances and the last 20 ledger entries |
 | `GET /methods?currency=&amount=` | The payment methods the store offers for that amount and currency, as the bot offers them: the online ones, `stars`, and `manual_card`, `manual_crypto`, `manual_zarinpal` |

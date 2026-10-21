@@ -126,6 +126,8 @@ var contexts = map[string]Context{
 	// The two buttons of the plan table's header, and the bulk purchase's
 	// popups and the caption of the file with every link.
 	"plans.head_name":    CtxButton,
+	"plans.group_button": CtxButton,
+	"plans.other_button": CtxButton,
 	"plans.head_price":   CtxButton,
 	"bulk.price_changed": CtxToastHTML,
 	"bulk.unavailable":   CtxToastHTML,

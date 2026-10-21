@@ -301,7 +301,7 @@ func gatedCases() []gatedCase {
 	// Every verb of the buttons, and the ones a stale or crafted button has.
 	for _, data := range []string{
 		"lang", "lang:fa", "lang:en", "home", "cancel",
-		"buy", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
+		"buy", "pg:g1", "pg:-", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
 		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "whist", "gift", "trial", "store",
 		"top", "top:2", "ap", "renew",
 		"faq", "faq:p:2", "faq:q:1:f1", "tut", "tut:p:2", "tut:v:1:t1", // the FAQ under Support and the tutorials (help.go)

@@ -150,6 +150,10 @@ func (s *Server) AdminUpsertPlan(ctx context.Context, req *corev1.AdminUpsertPla
 	if b := in.GetTrafficBytes(); b > 0 {
 		p.TrafficBytes = &b
 	}
+	// No group keeps the stored one: the bot never regroups a plan.
+	if g := in.GetGroupId(); g != "" {
+		p.GroupID = &g
+	}
 	// An empty inbound choice keeps the stored one (a nil list), as the
 	// plan's servers are kept: the bot never clears it.
 	if len(in.GetInbounds()) > 0 {

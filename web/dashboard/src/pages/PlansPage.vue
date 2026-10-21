@@ -18,7 +18,8 @@ import { errorText } from '../errors'
 import { asciiNumber, bytes, currencies, decimalOf, gbOf, money, num, validAmount, type Lang } from '../format'
 import { choiceOf, goneInbounds, inboundOptions, inboundsBody, noUsableServer, serverNames, serverOptions, type InboundChoice } from '../servers'
 import { useAuth } from '../stores/auth'
-import type { InboundItem, PlanItem, ServerItem } from '../types'
+import PlanGroups from '../components/plans/PlanGroups.vue'
+import type { InboundItem, PlanGroupItem, PlanItem, ServerItem } from '../types'
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
@@ -39,7 +40,27 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
+// The plan groups: a customer picks a group and reads its text before choosing one of its plans.
+const groups = ref<PlanGroupItem[]>([])
+const groupsReady = ref(false)
+async function loadGroups() {
+  try {
+    groups.value = (await api<{ items: PlanGroupItem[] }>('GET', '/plan-groups')).items
+    groupsReady.value = true
+  } catch {
+    // an older core has no groups: the plan editor then leaves the group alone
+  }
+  await load() // the plans' group names and the groups' counts move together
+}
+onMounted(() => void loadGroups())
+const groupName = (id: string | null | undefined) => {
+  const g = groups.value.find((x) => x.id === id)
+  return g ? g.name[lang.value] || g.name.en || g.name.fa || '' : ''
+}
+const groupOptions = computed(() => [
+  { value: '', label: t('plan.group_none') },
+  ...groups.value.map((g) => ({ value: g.id, label: g.name[lang.value] || g.name.en || g.name.fa || '' })),
+])
 
 // The 3x-ui servers, for the plan's server choice (those who manage servers).
 const canServers = computed(() => auth.can('servers.write'))
@@ -82,6 +103,8 @@ interface Form {
   is_trial: boolean
   is_topup: boolean
   sort: string
+  /** the plan group's id; empty = none */
+  group_id: string
   /** empty = any server */
   server_ids: string[]
   /** the plan came with its servers (core knows them): they go back on save */
@@ -92,7 +115,7 @@ interface Form {
   has_inbounds: boolean
 }
 const blank = (): Form => ({ id: '', name_fa: '', name_en: '', kind: 'both', days: '30', gb: '', price: '', currency: 'IRT',
-  enabled: true, is_trial: false, is_topup: false, sort: '0', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
+  enabled: true, is_trial: false, is_topup: false, sort: '0', group_id: '', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
 const form = ref<Form>(blank())
 const editing = ref(false)
 const busy = ref(false)
@@ -109,7 +132,7 @@ function edit(p?: PlanItem) {
       id: p.id, name_fa: p.name.fa ?? '', name_en: p.name.en ?? '', kind: p.kind,
       days: p.duration_days ? String(p.duration_days) : '', gb: p.traffic_bytes ? gbOf(p.traffic_bytes) : '',
       price: decimalOf(p.price), currency: p.price.currency, enabled: p.enabled, is_trial: p.is_trial,
-      is_topup: p.is_topup, sort: String(p.sort), server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
+      is_topup: p.is_topup, sort: String(p.sort), group_id: p.group_id ?? '', server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
       inbounds: choiceOf(p.inbounds), has_inbounds: Array.isArray(p.inbounds),
     }
   }
@@ -212,6 +235,8 @@ async function save() {
     is_trial: f.is_trial,
     is_topup: f.is_topup,
     sort: Number(asciiNumber(f.sort)) || 0,
+    // a trial and a traffic package are never sold from a group; an older core does not know groups at all
+    ...(groupsReady.value ? { group_id: f.is_trial || f.is_topup ? '' : f.group_id } : {}),
     ...(sendServers.value ? { server_ids: f.server_ids } : {}),
     ...(showInbounds.value ? { inbounds: inboundsBody(f.inbounds, f.server_ids) } : {}),
   }
@@ -253,6 +278,8 @@ async function toggle(p: PlanItem, enabled: boolean) {
   <Message v-if="loadError" severity="error" :closable="false">{{ loadError }}</Message>
   <p class="app-muted intro">{{ t('plan.intro') }}</p>
 
+  <PlanGroups v-if="groupsReady" :groups="groups" @changed="loadGroups" />
+
   <DataTable :value="plans" :loading="loading" data-key="id" size="small" scrollable row-hover>
     <template #empty>{{ t('plan.none') }}</template>
     <Column :header="t('plan.name')">
@@ -262,6 +289,12 @@ async function toggle(p: PlanItem, enabled: boolean) {
           <Tag v-if="p.is_trial" :value="t('plan.trial')" severity="info" />
           <Tag v-if="p.is_topup" :value="t('plan.topup')" severity="secondary" />
         </div>
+      </template>
+    </Column>
+    <Column v-if="groupsReady && groups.length" :header="t('plan.group')">
+      <template #body="{ data: p }">
+        <span v-if="!p.is_trial && !p.is_topup && groupName(p.group_id)"><bdi>{{ groupName(p.group_id) }}</bdi></span>
+        <span v-else class="app-muted">—</span>
       </template>
     </Column>
     <Column :header="t('plan.duration')">
@@ -318,6 +351,11 @@ async function toggle(p: PlanItem, enabled: boolean) {
       <label v-if="!form.is_topup">
         <span>{{ t('plan.kind_label') }}</span>
         <Select v-model="form.kind" :options="kinds" option-label="label" option-value="value" />
+      </label>
+      <label v-if="groupsReady && groups.length && !form.is_topup && !form.is_trial">
+        <span>{{ t('plan.group') }}</span>
+        <Select v-model="form.group_id" :options="groupOptions" option-label="label" option-value="value" />
+        <small class="app-muted">{{ t('plan.group_help') }}</small>
       </label>
       <div class="app-row">
         <label v-if="needsDays">

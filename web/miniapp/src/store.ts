@@ -1,7 +1,7 @@
 // What the app shows, loaded from core and kept here: one small reactive
 // object (no state library).
 import { reactive } from 'vue'
-import { api, ApiError, type JoinChatLink, type LedgerEntry, type Me, type Plan, type Service, type Wallet } from './api'
+import { api, ApiError, type JoinChatLink, type LedgerEntry, type Me, type Plan, type PlanGroup, type Service, type Wallet } from './api'
 import { errorKey, gateFor, type Gate } from './errors'
 import { signIn } from './api'
 import { initData, telegramLanguage } from './telegram'
@@ -16,6 +16,7 @@ export const state = reactive({
   joinChats: [] as JoinChatLink[],
   me: null as Me | null,
   plans: null as Plan[] | null,
+  groups: [] as PlanGroup[],
   services: null as Service[] | null,
   wallets: [] as Wallet[],
   ledger: [] as LedgerEntry[],
@@ -82,7 +83,9 @@ export async function recheckJoin(): Promise<Key | ''> {
 
 export async function loadPlans(force = false): Promise<void> {
   if (state.plans && !force) return
-  state.plans = await api.plans()
+  const c = await api.catalog()
+  state.plans = c.plans
+  state.groups = c.groups
 }
 
 export async function loadServices(): Promise<void> {

@@ -42,6 +42,13 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Key flows
 **Buy:** plan list -> plan detail (price, GB, days) -> discount code (optional) -> payment method
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).
+**Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
+group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
+button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the
+group has; the text is escaped, never HTML) and then its plans in the store's layout. Picking a plan opens the usual payment menu,
+whose Back returns to that group. A group with nothing on sale is not listed, a stale button shows the group list again, and a
+store with no group lists its plans exactly as before. Only Buy is grouped: Renew, Add traffic, a reseller's Buy for a customer
+and the Bulk purchase list the plans flat. A free trial and a traffic package are never in a group.
 **The plan list (built 2026-10-20):** Buy, a reseller's Buy for a customer, the Renew and Add traffic pickers and the
 Bulk purchase's plan step all draw their plans with one helper, in the layout the owner chose (setting `bot.plan_layout`:
 Settings, "Plans and bulk purchase" in the dashboard and in the bot's admin menu; `table` until it is set):

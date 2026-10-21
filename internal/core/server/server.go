@@ -200,6 +200,10 @@ func (s *Server) ListPlans(ctx context.Context, req *corev1.ListPlansRequest) (*
 			return nil, fail(err)
 		}
 	}
+	groups, err := s.st.ListPlanGroups(ctx, s.st.Conn())
+	if err != nil {
+		return nil, fail(err)
+	}
 	out := &corev1.ListPlansResponse{}
 	for i := range plans {
 		pp := planToProto(&plans[i])
@@ -207,6 +211,10 @@ func (s *Server) ListPlans(ctx context.Context, req *corev1.ListPlansRequest) (*
 			pp.Price = &commonv1.Money{Amount: prices[i], Currency: plans[i].Currency}
 		}
 		out.Plans = append(out.Plans, pp)
+	}
+	for i := range groups {
+		out.Groups = append(out.Groups, &corev1.PlanGroup{Id: groups[i].ID, NameI18N: groups[i].NameI18n,
+			DescriptionI18N: groups[i].DescriptionI18n, Sort: groups[i].Sort})
 	}
 	return out, nil
 }
@@ -231,6 +239,9 @@ func planToProto(p *store.Plan) *corev1.Plan {
 	}
 	for _, sel := range p.Inbounds {
 		pp.Inbounds = append(pp.Inbounds, &corev1.InboundSelection{ServerId: sel.ServerID, InboundIds: sel.InboundIDs})
+	}
+	if p.GroupID != nil {
+		pp.GroupId = *p.GroupID
 	}
 	return pp
 }
