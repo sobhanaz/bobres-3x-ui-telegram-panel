@@ -24,6 +24,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
   automatic TRC20 USDT or a manual USDT payment for exactly that (the bot's top-up now works in any currency, not only
   Toman). The key is in the same message, and again under **My licenses**, which also renews. The license server being
   down leaves the purchase paid and pending; the key shows up in My licenses when core's worker gets an answer.
+- **Dashboard > Licenses** (owner only): where the license server is and the admin key that signs the requests to it (kept
+  encrypted, never shown again), the switch for sales, the licenses sold, months as a gift, and revoking one (the audit
+  names who did it).
 - Core RPCs `ListVendorOffers`, `BuyVendorLicense`, `ListMyVendorLicenses`, `GetVendorLicenseKey`. The sales texts are
   exempt from the rule that a customer never reads about licensing (they are the product).
 

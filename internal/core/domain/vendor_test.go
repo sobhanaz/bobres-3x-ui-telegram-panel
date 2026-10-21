@@ -104,6 +104,15 @@ func (f *fakeVendor) serve(w http.ResponseWriter, r *http.Request) {
 		l.EndsAt = &ends
 		v = *l
 		v.Key = ""
+	case strings.HasSuffix(r.URL.Path, "/revoke"):
+		l := f.licenses[req.ID]
+		if l == nil {
+			http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+			return
+		}
+		l.Status = "revoked"
+		v = *l
+		v.Key = ""
 	case strings.HasSuffix(r.URL.Path, "/rekey"):
 		l := f.licenses[req.ID]
 		if l == nil {
@@ -571,5 +580,67 @@ func TestVendorConfigIsWriteOnlyAndChecked(t *testing.T) {
 	}
 	if strings.Contains(details, priv) {
 		t.Fatalf("the audit holds the key: %s", details)
+	}
+}
+
+func TestVendorOwnerGrantsAndRevokes(t *testing.T) {
+	e := newVendorEnv(t)
+	ctx := context.Background()
+	buyer := seedUser(t, e.s, 9481)
+	e.fund(buyer, 20*usdt)
+	p, err := e.buy(buyer, "standard", VendorMonth, "adm-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, total, err := e.svc.ListSoldLicenses(ctx, "", store.Page{Limit: 10})
+	if err != nil || total != 1 || len(rows) != 1 || rows[0].TelegramID != buyer.TelegramID || len(rows[0].KeyEnc) != 0 {
+		t.Fatalf("list: %v %d %+v", err, total, rows)
+	}
+	// A gift of months extends the end once per request id.
+	end1 := *p.License.EndsAt
+	g, err := e.svc.GrantVendorMonths(ctx, e.owner, p.License.ID, 2, "click-0001")
+	if err != nil || !g.EndsAt.Equal(license.AddMonths(end1, 2)) {
+		t.Fatalf("grant: %v %+v", err, g)
+	}
+	if again, err := e.svc.GrantVendorMonths(ctx, e.owner, p.License.ID, 2, "click-0001"); err != nil || !again.EndsAt.Equal(g.EndsAt.UTC()) && !again.EndsAt.Equal(*g.EndsAt) {
+		t.Fatalf("a repeated click moved the end: %v %+v", err, again)
+	}
+	for _, bad := range []struct {
+		months int
+		id     string
+	}{{0, "click-0002"}, {37, "click-0002"}, {1, "x"}} {
+		if _, err := e.svc.GrantVendorMonths(ctx, e.owner, p.License.ID, bad.months, bad.id); !errors.Is(err, ErrInvalid) {
+			t.Errorf("grant %+v: %v", bad, err)
+		}
+	}
+	// Revoke: the server and the store both say revoked, a reason is required, a repeat is fine, a revoked license
+	// cannot be renewed or given months.
+	if _, err := e.svc.RevokeVendorLicense(ctx, e.owner, p.License.ID, " "); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("revoke without a reason: %v", err)
+	}
+	r, err := e.svc.RevokeVendorLicense(ctx, e.owner, p.License.ID, "chargeback")
+	if err != nil || r.Status != "revoked" {
+		t.Fatalf("revoke: %v %+v", err, r)
+	}
+	if _, err := e.svc.RevokeVendorLicense(ctx, e.owner, p.License.ID, "again"); err != nil {
+		t.Fatalf("a second revoke: %v", err)
+	}
+	if _, err := e.svc.GrantVendorMonths(ctx, e.owner, p.License.ID, 1, "click-0003"); !errors.Is(err, ErrState) {
+		t.Fatalf("grant on a revoked license: %v", err)
+	}
+	renew := VendorBuyParams{UserID: buyer.ID, Months: VendorMonth, IdempotencyKey: "adm-renew", LicenseID: p.License.ID}
+	if _, err := e.svc.BuyVendorLicense(ctx, renew); !errors.Is(err, ErrState) {
+		t.Fatalf("renewing a revoked license: %v", err)
+	}
+	if got := e.balance(buyer); got != 16*usdt {
+		t.Fatalf("a revoked renewal cost money: %d", got)
+	}
+	revoked, total, err := e.svc.ListSoldLicenses(ctx, "revoked", store.Page{Limit: 10})
+	if err != nil || total != 1 || len(revoked) != 1 {
+		t.Fatalf("revoked list: %v %d", err, total)
+	}
+	st, err := e.svc.VendorStatus(ctx)
+	if err != nil || !st.On || !st.Configured || len(st.Tiers) != 2 || strings.Contains(st.AdminURL, "key") {
+		t.Fatalf("status: %v %+v", err, st)
 	}
 }
