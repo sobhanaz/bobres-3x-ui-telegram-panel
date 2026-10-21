@@ -16,9 +16,10 @@ v0.8.0 (2026-10-20: server monitoring, charts and a 3D report, backup download a
 uninstall, the help center, the plan table, bulk purchase, gift codes and several required channels)
 and v0.9.0 (2026-10-21: selling BOBRES licenses from the owner's own bot, the signed admin API of the license server and the
 Licenses page of the dashboard)
-and v0.9.1 (2026-10-21: every license of the license server managed from the dashboard).
+and v0.9.1 (2026-10-21: every license of the license server managed from the dashboard)
+and v0.10.0 (2026-10-21: reselling a supplier's accounts, and the lock on the vendor's own features).
 
-## Where things stand (after v0.9.1)
+## Where things stand (after v0.10.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
 Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
