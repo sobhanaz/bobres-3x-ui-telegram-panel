@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sync"
 	"time"
 
@@ -49,10 +48,10 @@ type Config struct {
 	// LeaderboardTTL is how long the top-inviters board is kept before it is
 	// read again (0: 30 seconds; below 0: never kept, every call reads it).
 	LeaderboardTTL time.Duration
-	// VendorHTTP is the HTTP client of the license sales' calls to the license server (nil: a client with a 20 second
-	// timeout that follows no redirect). VendorNow is their clock (nil: time.Now). Both are for tests.
-	VendorHTTP *http.Client
-	VendorNow  func() time.Time
+	// VendorTransport carries the license sales' signed calls to the license server (the bot does, in production: core
+	// has no internet access; nil until SetVendorTransport). VendorNow is their clock (nil: time.Now), for tests.
+	VendorTransport VendorTransport
+	VendorNow       func() time.Time
 }
 
 func (c Config) vendorNow() time.Time {
@@ -61,6 +60,9 @@ func (c Config) vendorNow() time.Time {
 	}
 	return time.Now()
 }
+
+// SetVendorTransport sets the way to the license server (the bot, in cmd/core).
+func (s *Service) SetVendorTransport(tr VendorTransport) { s.cfg.VendorTransport = tr }
 
 // Service composes the store with business rules.
 type Service struct {

@@ -167,10 +167,10 @@ func newVendorEnv(t *testing.T) *vendorEnv {
 	e := &vendorEnv{t: t, svc: svc, s: s, owner: staffMember(t, s, 9400, "owner"), clock: &now}
 	var priv string
 	e.fake, priv = newFakeVendor(t, func() time.Time { return *e.clock })
-	svc.cfg.VendorHTTP = e.fake.srv.Client()
+	svc.SetVendorTransport(DirectVendorTransport(e.fake.srv.URL, e.fake.srv.Client()))
 	svc.cfg.VendorNow = func() time.Time { return *e.clock }
 	ctx := context.Background()
-	if err := svc.SetVendorConfig(ctx, e.owner, e.fake.srv.URL, priv); err != nil {
+	if err := svc.SetVendorConfig(ctx, e.owner, priv); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.SetSetting(ctx, e.owner, SettingVendorEnabled, "true"); err != nil {
@@ -552,23 +552,17 @@ func TestVendorConfigIsWriteOnlyAndChecked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, c := range map[string][2]string{
-		"http address": {"http://license.example.com", priv},
-		"no address":   {"", priv},
-		"a space":      {"https://license example.com", priv},
-		"not a key":    {"https://license.example.com", "nope"},
-		"a public key": {"https://license.example.com", priv + priv},
-	} {
-		if err := svc.SetVendorConfig(ctx, owner, c[0], c[1]); err == nil {
+	for name, key := range map[string]string{"empty": "", "not a key": "nope", "a doubled key": priv + priv} {
+		if err := svc.SetVendorConfig(ctx, owner, key); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
 	}
-	if err := svc.SetVendorConfig(ctx, owner, "https://license.example.com/", priv); err != nil {
+	if err := svc.SetVendorConfig(ctx, owner, priv); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := s.GetVendorConfig(ctx, s.Conn())
-	if err != nil || cfg.AdminURL != "https://license.example.com" {
-		t.Fatalf("config: %+v %v", cfg, err)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if strings.Contains(string(cfg.AdminKeyEnc), priv) || len(cfg.AdminKeyEnc) == 0 {
 		t.Fatal("the admin key is stored in clear")
@@ -580,6 +574,19 @@ func TestVendorConfigIsWriteOnlyAndChecked(t *testing.T) {
 	}
 	if strings.Contains(details, priv) {
 		t.Fatalf("the audit holds the key: %s", details)
+	}
+	// Without a way to reach the license server (the bot) a purchase is refused before it takes any money.
+	if err := svc.SetSetting(ctx, owner, SettingVendorEnabled, "true"); err != nil {
+		t.Fatal(err)
+	}
+	buyer := seedUser(t, s, 9472)
+	e := &vendorEnv{t: t, svc: svc, s: s}
+	e.fund(buyer, 10*usdt)
+	if _, err := e.buy(buyer, "standard", VendorMonth, "no-bot"); !errors.Is(err, ErrState) {
+		t.Fatalf("without a way to the license server: %v", err)
+	}
+	if got := e.balance(buyer); got != 10*usdt {
+		t.Fatalf("a refused purchase cost money: %d", got)
 	}
 }
 
@@ -640,7 +647,7 @@ func TestVendorOwnerGrantsAndRevokes(t *testing.T) {
 		t.Fatalf("revoked list: %v %d", err, total)
 	}
 	st, err := e.svc.VendorStatus(ctx)
-	if err != nil || !st.On || !st.Configured || len(st.Tiers) != 2 || strings.Contains(st.AdminURL, "key") {
+	if err != nil || !st.On || !st.Configured || len(st.Tiers) != 2 || false {
 		t.Fatalf("status: %v %+v", err, st)
 	}
 }

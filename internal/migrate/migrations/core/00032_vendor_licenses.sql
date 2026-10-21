@@ -10,11 +10,11 @@ ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_kind_check
     CHECK (kind IN ('topup','purchase','refund','adjust','trial_grant','referral','commission','settlement','gift_code',
                     'license_purchase','license_refund'));
 
--- Where the license server is and the key that signs the requests to it. One row. The private key is encrypted with
--- core's master key (the same envelope as the other secrets); it is write-only: no read path returns it.
+-- The key that signs the requests to the license server's admin API. One row. Core has no internet access, so the
+-- requests go through the bot to the license server the bot is configured for (BOBRES_LICENSE_SERVER). The private key
+-- is encrypted with core's master key (the same envelope as the other secrets); it is write-only: no read path returns it.
 CREATE TABLE vendor_config (
     id            boolean PRIMARY KEY DEFAULT true CHECK (id),
-    admin_url     text NOT NULL CHECK (admin_url ~ '^https://[^/ ]+(/.*)?$' AND char_length(admin_url) <= 200),
     admin_key_enc bytea NOT NULL,
     updated_at    timestamptz NOT NULL DEFAULT now()
 );

@@ -91,10 +91,12 @@ func (ls *licenseServer) made() int { ls.mu.Lock(); defer ls.mu.Unlock(); return
 func licenseWorld(t *testing.T) (*world, *licenseServer, *person) {
 	t.Helper()
 	ls, priv := newLicenseServer(t)
-	w := newWorldOpts(t, []int64{ownerID}, testenv.WithDomainConfig(func(c *coredomain.Config) { c.VendorHTTP = ls.srv.Client() }))
+	w := newWorldOpts(t, []int64{ownerID}, testenv.WithDomainConfig(func(c *coredomain.Config) {
+		c.VendorTransport = coredomain.DirectVendorTransport(ls.srv.URL, ls.srv.Client())
+	}))
 	owner := w.customer(ownerID, "owner")
 	ctx := context.Background()
-	if err := w.stack.Domain.SetVendorConfig(ctx, w.storeUser(ownerID), ls.srv.URL, priv); err != nil {
+	if err := w.stack.Domain.SetVendorConfig(ctx, w.storeUser(ownerID), priv); err != nil {
 		t.Fatal(err)
 	}
 	return w, ls, owner

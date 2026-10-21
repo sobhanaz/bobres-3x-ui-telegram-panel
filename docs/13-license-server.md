@@ -123,8 +123,13 @@ POST /admin/v1/licenses/list     {"status": "" | "active" | "revoked"}      at m
   A refused request (404, 409, 400) leaves its `ref` free. A key is in the answer to `create` (and `rekey`) only.
 - It is rate limited per client address (`BOBRES_LICENSESRV_RATE_ADMIN`, default `60/1m`), answers only over HTTPS
   through a trusted proxy like `/v1`, and every change is in the audit with the actor `api:admin` and the address.
-- Reaching it is the operator's choice: through the tunnel or proxy that serves `/v1/`, route `/admin/v1/` too
-  (leave it unrouted and the API is local only).
+- **Who calls it:** the owner's own store. Its core has no internet access, so core signs each request with the admin
+  private key (dashboard > Licenses; stored encrypted, write-only) and the bot passes it, unchanged, to the one license
+  server the bot is configured for (`BOBRES_LICENSE_SERVER`; the bot's `POST /internal/vendor/admin`, core's service
+  token). The bot never holds the admin key and cannot be told to call another address.
+- **Reaching it:** the tunnel or proxy that serves `/v1/` must also serve `/admin/v1/` (with the Cloudflare Tunnel kit:
+  add a public hostname rule for the license host with the path `/admin/v1/*` to the same service; leave it out and the
+  API answers locally only).
 
 ## Set up the server
 

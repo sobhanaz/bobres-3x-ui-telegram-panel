@@ -5,7 +5,6 @@ export interface VendorStatus {
   available: boolean
   on: boolean
   configured: boolean
-  admin_url: string
   tiers: { name: string; monthly: Money; yearly: Money }[]
 }
 
@@ -33,12 +32,6 @@ export function requestId(): string {
   const b = new Uint8Array(12)
   crypto.getRandomValues(b)
   return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
-}
-
-/** addressOk: the license server's address as core takes it. */
-export function addressOk(s: string): boolean {
-  const v = s.trim()
-  return /^https:\/\/[^/\s]+(\/\S*)?$/.test(v) && v.length <= 200
 }
 
 /** keyOk: an admin private key (licensesrv adminkey): 32 bytes of base64 (43 characters without padding). */

@@ -22,7 +22,6 @@ type VendorStatus struct {
 	Available  bool
 	On         bool
 	Configured bool
-	AdminURL   string
 	Tiers      []VendorTier
 }
 
@@ -34,8 +33,8 @@ func (s *Service) VendorStatus(ctx context.Context) (*VendorStatus, error) {
 		return nil, err
 	}
 	st.Tiers = tiers
-	if c, err := s.st.GetVendorConfig(ctx, s.st.Conn()); err == nil {
-		st.Configured, st.AdminURL = true, c.AdminURL
+	if _, err := s.st.GetVendorConfig(ctx, s.st.Conn()); err == nil {
+		st.Configured = true
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
