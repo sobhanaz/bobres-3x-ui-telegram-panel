@@ -22,6 +22,11 @@ bot, dashboard and wallet are unchanged.
   does not answer leaves the order **paid and waiting** (a worker asks again with a growing wait); one that refuses for good
   (a 4xx other than 408 and 429, or a failure in its answer) gives the money back at once. An order the supplier never
   delivers can be retried or refunded from the dashboard (refund it only when the supplier did not charge for it).
+- **The balance** at the supplier is on the Digital accounts page and on the Overview (owner only), read when the page opens and
+  every two minutes while it is open; core keeps a balance it read for a minute (`GET /api/v1/supplier/balance`, `?fresh=1`
+  asks the supplier). It is read from a number or a text like "5.53 USDT" under any key that names a balance. When the answer
+  cannot be understood the page shows it (the API key is taken out), so the reading can be taught.
+- The supplier's texts are cleaned of Telegram custom-emoji placeholders (`{pe:123...}`); the raw product keeps them.
 - The supplier's answers are read tolerantly (the product list may be under `products`, `data`, `items`...; the delivery under
   `delivery`, `accounts`, `credentials`...). What is not understood stays in the product's raw JSON.
 

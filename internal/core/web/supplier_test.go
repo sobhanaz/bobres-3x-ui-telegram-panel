@@ -123,7 +123,7 @@ func TestSupplierEndpointsAreTheOwners(t *testing.T) {
 		want   int
 	}{"a wrong key": {401, `{"error":"bad key"}`, 409}, "a refusal": {402, `{"error":"x","message":"no money"}`, 409}, "a server error": {503, `{}`, 502}} {
 		stub.status, stub.body = c.status, c.body
-		if code, out = b.do(http.MethodGet, "/api/v1/supplier/balance", nil); code != c.want {
+		if code, out = b.do(http.MethodGet, "/api/v1/supplier/balance?fresh=1", nil); code != c.want {
 			t.Errorf("%s: %d %v, want %d", name, code, out, c.want)
 		}
 	}

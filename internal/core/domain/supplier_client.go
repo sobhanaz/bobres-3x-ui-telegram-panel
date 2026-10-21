@@ -324,8 +324,8 @@ func parseSupplierCatalog(raw json.RawMessage) ([]SupplierProductInfo, error) {
 			continue
 		}
 		seen[id] = true
-		p := SupplierProductInfo{ID: id, Name: clipStr(strFrom(m, "name", "title", "product_name"), 300),
-			Description: clipStr(strFrom(m, "description", "desc", "details", "about"), 4000), CostCurrency: "USDT"}
+		p := SupplierProductInfo{ID: id, Name: clipStr(cleanSupplierText(strFrom(m, "name", "title", "product_name")), 300),
+			Description: clipStr(cleanSupplierText(strFrom(m, "description", "desc", "details", "about")), 4000), CostCurrency: "USDT"}
 		if f, ok := numFrom(m, "price", "cost", "wholesale_price", "wholesale", "amount", "unit_price"); ok && f >= 0 && f < 1e9 {
 			micro := int64(math.Round(f * 1e6))
 			p.CostMicro = &micro
@@ -356,6 +356,17 @@ func parseSupplierCatalog(raw json.RawMessage) ([]SupplierProductInfo, error) {
 		return nil, errors.New("supplier: the catalog has no usable product")
 	}
 	return out, nil
+}
+
+// premiumEmojiRe matches the placeholders of Telegram's custom (premium) emoji, "{pe:5244675575502628242}", which the
+// supplier's texts carry from its own bot and which mean nothing anywhere else.
+var premiumEmojiRe = regexp.MustCompile(`\{pe:\d+\}[ \t]*`)
+
+// cleanSupplierText is a supplier text as people read it: without the custom-emoji placeholders, with plain line breaks.
+func cleanSupplierText(s string) string {
+	s = premiumEmojiRe.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.TrimSpace(s)
 }
 
 // deliveryKeys are where an order's answer keeps what the customer receives, most specific first.

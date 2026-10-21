@@ -234,7 +234,7 @@ func TestSupplierCatalogIsImportedOffAndKeepsTheOwnersChoices(t *testing.T) {
 	if _, err := e.svc.SyncSupplierCatalog(ctx); err == nil {
 		t.Fatal("an unreadable catalog was accepted")
 	}
-	if b, err := e.svc.SupplierBalance(ctx); err != nil || b.Amount != "0.40" || b.Currency != "USDT" || b.Raw != "" {
+	if b, err := e.svc.SupplierBalance(ctx, true); err != nil || b.Amount != "0.40" || b.Currency != "USDT" || b.Raw != "" {
 		t.Fatalf("balance: %+v %v", b, err)
 	}
 }
@@ -554,5 +554,57 @@ func TestSupplierParsersAreTolerantAndNeverTrustTheAnswer(t *testing.T) {
 	}
 	if !(&SupplierError{Status: 402}).Final() {
 		t.Error("a 402 is not final")
+	}
+}
+
+// The supplier's texts carry Telegram custom-emoji placeholders ("{pe:123}") and Windows line breaks: they are read without them
+// (the raw product keeps them).
+func TestSupplierCatalogTextIsCleaned(t *testing.T) {
+	raw := `{"products":[{"id":19,"name":"{pe:5244675575502628242} GitHub Student","description":"{pe:5447644880824181073}⚠️ Use it\r\n\r\n{pe:1}✔️ Personal only","price":10,"stock":1}]}`
+	got, err := parseSupplierCatalog([]byte(raw))
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%v %v", got, err)
+	}
+	if got[0].Name != "GitHub Student" || got[0].Description != "⚠️ Use it\n\n✔️ Personal only" {
+		t.Fatalf("%q %q", got[0].Name, got[0].Description)
+	}
+	if !strings.Contains(string(got[0].Raw), "{pe:5244675575502628242}") {
+		t.Fatal("the raw product was changed")
+	}
+}
+
+// A balance read a moment ago is shown again; fresh asks the supplier; a new key forgets it.
+func TestSupplierBalanceIsKeptForAMinute(t *testing.T) {
+	e := newSupplierEnv(t)
+	ctx := context.Background()
+	read := func(fresh bool) SupplierBalance {
+		b, err := e.svc.SupplierBalance(ctx, fresh)
+		if err != nil || b.Amount != "0.40" {
+			t.Fatalf("balance %+v %v", b, err)
+		}
+		return b
+	}
+	read(false)
+	read(false)
+	if n := e.fake.count("balance"); n != 1 {
+		t.Fatalf("%d calls for two reads", n)
+	}
+	read(true)
+	if n := e.fake.count("balance"); n != 2 {
+		t.Fatalf("a fresh read made %d calls in all", n)
+	}
+	e.svc.supplierBal.mu.Lock()
+	e.svc.supplierBal.at = time.Now().Add(-2 * supplierBalanceTTL)
+	e.svc.supplierBal.mu.Unlock()
+	read(false)
+	if n := e.fake.count("balance"); n != 3 {
+		t.Fatalf("an old balance was shown again: %d calls", n)
+	}
+	if err := e.svc.SetSupplierKey(ctx, e.owner, supplierTestKey); err != nil {
+		t.Fatal(err)
+	}
+	read(false)
+	if n := e.fake.count("balance"); n != 4 {
+		t.Fatalf("a new key kept the old balance: %d calls", n)
 	}
 }

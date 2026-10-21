@@ -14,6 +14,7 @@ import { useAuth } from '../stores/auth'
 import { dateTime, money, num, type Money, type Lang } from '../format'
 import { duration } from '../support'
 import { serverSummary } from '../servers'
+import SupplierBalance from '../components/supplier/SupplierBalance.vue'
 import { overviewGatewaySeverity, overviewGatewayState } from '../gateways'
 import type { OverviewGateway, OverviewServer } from '../types'
 
@@ -101,6 +102,8 @@ const serverClientsText = computed(() => {
     servers: t('overview.servers_n', { n: num(serverCount, lang.value) }, serverCount),
   })
 })
+// The owner's balance at the supplier, when the store resells digital accounts.
+const showSupplier = computed(() => auth.can('private.features') && auth.can('gateways.write'))
 const gateways = computed(() => (data.value?.gateways?.length ? data.value.gateways : null))
 // A card opens its page for those who may use it; for others it is just a card.
 function linkTo(perm: string, name: string) {
@@ -141,6 +144,7 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
+    <SupplierBalance v-if="showSupplier" quiet />
     <Card v-if="showRevenue" class="stat revenue-day">
       <template #subtitle>{{ t('overview.revenue_day') }}</template>
       <template #content>

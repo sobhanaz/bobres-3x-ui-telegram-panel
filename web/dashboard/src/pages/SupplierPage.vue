@@ -18,6 +18,7 @@ import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import ProductDialog from '../components/supplier/ProductDialog.vue'
+import SupplierBalance from '../components/supplier/SupplierBalance.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
@@ -65,23 +66,6 @@ async function setSales(on: boolean) {
     await loadStatus()
   } catch (e) {
     fail(e)
-  }
-}
-
-const balance = ref('')
-// the supplier's answer when the balance could not be read from it (it has no key in it)
-const balanceRaw = ref('')
-const checking = ref(false)
-async function checkBalance() {
-  checking.value = true
-  try {
-    const b = await api<{ amount: string; currency: string; raw?: string }>('GET', '/supplier/balance')
-    balance.value = b.amount ? `${b.amount} ${b.currency}` : t('supplier.balance_unknown')
-    balanceRaw.value = b.amount ? '' : (b.raw ?? '')
-  } catch (e) {
-    fail(e)
-  } finally {
-    checking.value = false
   }
 }
 
@@ -190,6 +174,8 @@ onMounted(() => {
   <p class="app-muted intro">{{ t('supplier.intro') }}</p>
   <Message v-if="loaded && !status.available" severity="warn" :closable="false">{{ t('supplier.no_key') }}</Message>
 
+  <div v-if="loaded && status.configured" class="balance"><SupplierBalance /></div>
+
   <section v-if="loaded" class="card">
     <h2 class="card-title">{{ t('supplier.connection') }}</h2>
     <p class="app-muted">{{ status.configured ? t('supplier.configured') : t('supplier.not_configured') }}</p>
@@ -201,13 +187,7 @@ onMounted(() => {
       </label>
       <div class="row">
         <Button type="submit" :label="t('licenses.save')" :loading="saving" :disabled="!keyOk || !status.available" />
-        <Button v-if="status.configured" type="button" outlined :label="t('supplier.check_balance')" :loading="checking" @click="checkBalance" />
-        <span v-if="balance" class="app-ltr app-mono">{{ balance }}</span>
       </div>
-      <p v-if="balanceRaw" class="app-muted">
-        {{ t('supplier.balance_raw') }}
-        <code class="app-ltr app-mono raw">{{ balanceRaw }}</code>
-      </p>
     </form>
     <div class="row">
       <Button v-if="status.configured && !status.on" severity="success" :label="t('supplier.turn_on')" @click="setSales(true)" />
@@ -323,11 +303,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.raw {
-  display: block;
-  margin-block-start: 0.25rem;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+.balance {
+  max-inline-size: 22rem;
+  margin-block-end: 1rem;
 }
 .intro {
   margin-block: 0 0.75rem;

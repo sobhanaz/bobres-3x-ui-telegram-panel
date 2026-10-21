@@ -83,6 +83,9 @@ type Service struct {
 	embedded license.KeyRing
 	// boards keeps the top-inviters board for a short time (Config.LeaderboardTTL).
 	boards boardCache
+	// supplierBal keeps the supplier balance for a minute, so the dashboard showing it everywhere does not ask the
+	// supplier at every page view.
+	supplierBal supplierBalanceCache
 }
 
 // New builds a Service publishing to core's outbox.
