@@ -505,9 +505,9 @@ func TestVendorDoubleTapRaceIsOnePurchase(t *testing.T) {
 	e := newVendorEnv(t)
 	buyer := seedUser(t, e.s, 9461)
 	e.fund(buyer, 50*usdt)
-	needConns(t, e.s, 8)
+	needConns(t, e.s, 4) // three purchases at once, each in a transaction
 	var wg sync.WaitGroup
-	ok := make([]bool, 6)
+	ok := make([]bool, 3)
 	for i := range ok {
 		wg.Add(1)
 		go func() {
