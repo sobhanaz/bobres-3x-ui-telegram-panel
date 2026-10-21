@@ -82,12 +82,17 @@ func truncRunes(s string, n int) string {
 // Telegram Stars invoice or shows where to send automatic USDT, for an order
 // or a wallet top-up.
 func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key string, topup int64) {
+	h.startGatewayIn(r, order, provider, title, key, topup, "IRT")
+}
+
+// startGatewayIn is startGateway for a top-up in any currency (an order's own currency comes from the order).
+func (h *Handler) startGatewayIn(r *req, order *corev1.Order, provider, title, key string, topup int64, topupCurrency string) {
 	in := &corev1.CreatePaymentIntentRequest{UserId: r.user.GetId(), Provider: provider}
 	if order != nil {
 		in.OrderId = order.GetId()
 		in.IdempotencyKey = "int:" + order.GetId() + ":" + provider
 	} else {
-		in.Amount = &commonv1.Money{Amount: topup, Currency: "IRT"}
+		in.Amount = &commonv1.Money{Amount: topup, Currency: topupCurrency}
 		in.IdempotencyKey = key
 	}
 	intent, err := h.core.CreatePaymentIntent(r.ctx, in)

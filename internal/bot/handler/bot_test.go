@@ -346,9 +346,12 @@ func newWorld(t *testing.T) *world { return newWorldOwners(t, ownerID) }
 
 // newWorldOwners is newWorld for a server that names several owners (root
 // admins) in its settings, the first the main one.
-func newWorldOwners(t *testing.T, owners ...int64) *world {
+func newWorldOwners(t *testing.T, owners ...int64) *world { return newWorldOpts(t, owners) }
+
+// newWorldOpts is newWorldOwners with more options for the backend.
+func newWorldOpts(t *testing.T, owners []int64, opts ...testenv.Option) *world {
 	t.Helper()
-	stack := testenv.Start(t, owners[0], testenv.WithOwners(owners[1:]...))
+	stack := testenv.Start(t, owners[0], append([]testenv.Option{testenv.WithOwners(owners[1:]...)}, opts...)...)
 	ftg := newFakeTG()
 	cat := i18n.MustLoad()
 	h := New(stack.Core, ftg, state.NewMemory(), cat, nil, Config{AdminTelegramIDs: owners, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)

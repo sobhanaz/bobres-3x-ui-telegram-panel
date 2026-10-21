@@ -87,6 +87,10 @@ const (
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
+	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
+	CoreService_BuyVendorLicense_FullMethodName          = "/core.v1.CoreService/BuyVendorLicense"
+	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
+	CoreService_GetVendorLicenseKey_FullMethodName       = "/core.v1.CoreService/GetVendorLicenseKey"
 )
 
 // CoreServiceClient is the client API for CoreService service.
@@ -198,6 +202,13 @@ type CoreServiceClient interface {
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
 	RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error)
+	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
+	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
+	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
+	ListVendorOffers(ctx context.Context, in *ListVendorOffersRequest, opts ...grpc.CallOption) (*ListVendorOffersResponse, error)
+	BuyVendorLicense(ctx context.Context, in *BuyVendorLicenseRequest, opts ...grpc.CallOption) (*BuyVendorLicenseResponse, error)
+	ListMyVendorLicenses(ctx context.Context, in *ListMyVendorLicensesRequest, opts ...grpc.CallOption) (*ListMyVendorLicensesResponse, error)
+	GetVendorLicenseKey(ctx context.Context, in *GetVendorLicenseKeyRequest, opts ...grpc.CallOption) (*GetVendorLicenseKeyResponse, error)
 }
 
 type coreServiceClient struct {
@@ -889,6 +900,46 @@ func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCo
 	return out, nil
 }
 
+func (c *coreServiceClient) ListVendorOffers(ctx context.Context, in *ListVendorOffersRequest, opts ...grpc.CallOption) (*ListVendorOffersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVendorOffersResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListVendorOffers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) BuyVendorLicense(ctx context.Context, in *BuyVendorLicenseRequest, opts ...grpc.CallOption) (*BuyVendorLicenseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuyVendorLicenseResponse)
+	err := c.cc.Invoke(ctx, CoreService_BuyVendorLicense_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ListMyVendorLicenses(ctx context.Context, in *ListMyVendorLicensesRequest, opts ...grpc.CallOption) (*ListMyVendorLicensesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMyVendorLicensesResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListMyVendorLicenses_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetVendorLicenseKey(ctx context.Context, in *GetVendorLicenseKeyRequest, opts ...grpc.CallOption) (*GetVendorLicenseKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetVendorLicenseKeyResponse)
+	err := c.cc.Invoke(ctx, CoreService_GetVendorLicenseKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoreServiceServer is the server API for CoreService service.
 // All implementations must embed UnimplementedCoreServiceServer
 // for forward compatibility.
@@ -998,6 +1049,13 @@ type CoreServiceServer interface {
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
 	RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error)
+	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
+	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
+	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
+	ListVendorOffers(context.Context, *ListVendorOffersRequest) (*ListVendorOffersResponse, error)
+	BuyVendorLicense(context.Context, *BuyVendorLicenseRequest) (*BuyVendorLicenseResponse, error)
+	ListMyVendorLicenses(context.Context, *ListMyVendorLicensesRequest) (*ListMyVendorLicensesResponse, error)
+	GetVendorLicenseKey(context.Context, *GetVendorLicenseKeyRequest) (*GetVendorLicenseKeyResponse, error)
 	mustEmbedUnimplementedCoreServiceServer()
 }
 
@@ -1211,6 +1269,18 @@ func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroa
 }
 func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
+}
+func (UnimplementedCoreServiceServer) ListVendorOffers(context.Context, *ListVendorOffersRequest) (*ListVendorOffersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVendorOffers not implemented")
+}
+func (UnimplementedCoreServiceServer) BuyVendorLicense(context.Context, *BuyVendorLicenseRequest) (*BuyVendorLicenseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuyVendorLicense not implemented")
+}
+func (UnimplementedCoreServiceServer) ListMyVendorLicenses(context.Context, *ListMyVendorLicensesRequest) (*ListMyVendorLicensesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMyVendorLicenses not implemented")
+}
+func (UnimplementedCoreServiceServer) GetVendorLicenseKey(context.Context, *GetVendorLicenseKeyRequest) (*GetVendorLicenseKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetVendorLicenseKey not implemented")
 }
 func (UnimplementedCoreServiceServer) mustEmbedUnimplementedCoreServiceServer() {}
 func (UnimplementedCoreServiceServer) testEmbeddedByValue()                     {}
@@ -2457,6 +2527,78 @@ func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListVendorOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVendorOffersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListVendorOffers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListVendorOffers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListVendorOffers(ctx, req.(*ListVendorOffersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_BuyVendorLicense_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuyVendorLicenseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).BuyVendorLicense(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_BuyVendorLicense_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).BuyVendorLicense(ctx, req.(*BuyVendorLicenseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ListMyVendorLicenses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMyVendorLicensesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListMyVendorLicenses(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListMyVendorLicenses_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListMyVendorLicenses(ctx, req.(*ListMyVendorLicensesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetVendorLicenseKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVendorLicenseKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetVendorLicenseKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetVendorLicenseKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetVendorLicenseKey(ctx, req.(*GetVendorLicenseKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CoreService_ServiceDesc is the grpc.ServiceDesc for CoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2735,6 +2877,22 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RedeemGiftCode",
 			Handler:    _CoreService_RedeemGiftCode_Handler,
+		},
+		{
+			MethodName: "ListVendorOffers",
+			Handler:    _CoreService_ListVendorOffers_Handler,
+		},
+		{
+			MethodName: "BuyVendorLicense",
+			Handler:    _CoreService_BuyVendorLicense_Handler,
+		},
+		{
+			MethodName: "ListMyVendorLicenses",
+			Handler:    _CoreService_ListMyVendorLicenses_Handler,
+		},
+		{
+			MethodName: "GetVendorLicenseKey",
+			Handler:    _CoreService_GetVendorLicenseKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

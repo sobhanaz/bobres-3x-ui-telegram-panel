@@ -553,6 +553,10 @@ func (h *Handler) dispatch(r *req, data string) {
 	case "nop": // a plan table's header button: nothing to do, the tap is only answered
 	case "bk":
 		h.routeBulk(r, rest)
+	case "lic":
+		h.onLicense(r, rest)
+	case "lpay":
+		h.onLicenseTopup(r, rest)
 	case "plan":
 		h.showPlan(r, rest)
 	case "pay":

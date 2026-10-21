@@ -91,6 +91,9 @@ func (h *Handler) showHome(r *req) {
 	if h.bulkOn() { // a second green button under Buy
 		kb.Row(r.button("btn.bulk", "bk"))
 	}
+	if h.licensesOn() { // the owner's own bot sells BOBRES licenses
+		kb.Row(r.button("btn.licenses", "lic"))
+	}
 	kb.Row(r.button("btn.wallet", "wallet"), r.button("btn.trial", "trial")).
 		Row(r.button("btn.support", "support"), r.button("btn.language", "lang"))
 	if h.helpTutorials.Load() { // only while the owner has an enabled tutorial (help.go)
