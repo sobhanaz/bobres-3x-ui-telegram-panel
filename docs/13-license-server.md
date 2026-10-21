@@ -105,12 +105,14 @@ the admin public key**. The key is not the license signing key: make a pair with
 both once). The public key stays on this server; the private key goes only into the store that sells.
 
 ```text
-POST /admin/v1/licenses/create   {"ref", "customer", "tier": "standard|pro", "months": 1..120}  -> the license and its key, once
+POST /admin/v1/licenses/create   {"ref", "customer", "tier": "trial|standard|pro", and one of "months": 1..120, "ends_at": "YYYY-MM-DD" (or RFC3339,
+                                 at most 10 years away) or "no_end": true; a trial may give none: its preset's 30 days}  -> the license and its key, once
 POST /admin/v1/licenses/extend   {"ref", "id", "months"}     renews: adds months to the end (or to now, when it has passed)
-POST /admin/v1/licenses/tier     {"ref", "id", "tier"}       the new tier's preset entitlements
+POST /admin/v1/licenses/update   {"ref", "id", and any of "customer", "tier", "ends_at" or "no_end"}   a new tier takes its preset entitlements
+POST /admin/v1/licenses/tier     {"ref", "id", "tier"}       standard or pro: the new tier's preset entitlements
 POST /admin/v1/licenses/revoke   {"ref", "id", "reason"}
 POST /admin/v1/licenses/rekey    {"ref", "id"}               a new key, only while nobody has activated the license
-POST /admin/v1/licenses/get      {"id"}
+POST /admin/v1/licenses/get      {"id"}                      with its entitlements, where it ran (30 rows) and its audit (30 rows)
 POST /admin/v1/licenses/list     {"status": "" | "active" | "revoked"}      at most 500, newest first
 ```
 

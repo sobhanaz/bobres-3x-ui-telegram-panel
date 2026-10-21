@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	vendorPathRe  = regexp.MustCompile(`^/admin/v1/licenses/(create|extend|tier|revoke|rekey|get|list)$`)
+	vendorPathRe  = regexp.MustCompile(`^/admin/v1/licenses/(create|extend|update|tier|revoke|rekey|get|list)$`)
 	vendorTSRe    = regexp.MustCompile(`^[0-9]{9,12}$`)
 	vendorNonceRe = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 	vendorSigRe   = regexp.MustCompile(`^[A-Za-z0-9_-]{80,100}$`)

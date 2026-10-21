@@ -94,7 +94,7 @@ func (s *Server) grantSoldLicense(w http.ResponseWriter, r *http.Request) {
 	}
 	l, err := s.cfg.Domain.GrantVendorMonths(r.Context(), actor(r), id, req.Months, req.RequestID)
 	if err != nil {
-		s.fail(w, "grant months", err)
+		s.vendorFail(w, "grant months", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, soldLicenseOf(l, nil))
@@ -114,7 +114,7 @@ func (s *Server) revokeSoldLicense(w http.ResponseWriter, r *http.Request) {
 	}
 	l, err := s.cfg.Domain.RevokeVendorLicense(r.Context(), actor(r), id, req.Reason)
 	if err != nil {
-		s.fail(w, "revoke a license", err)
+		s.vendorFail(w, "revoke a license", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, soldLicenseOf(l, nil))

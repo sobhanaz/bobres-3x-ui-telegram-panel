@@ -273,3 +273,15 @@ func (s *Store) SetVendorLicenseStatus(ctx context.Context, q querier, id, statu
 	}
 	return nil
 }
+
+// SyncVendorLicense mirrors a change made on the license server (by the owner, from the dashboard) into the sold
+// license with that server id, if the store sold one: its tier, end and status. It changes nothing when there is none.
+func (s *Store) SyncVendorLicense(ctx context.Context, q querier, licenseID, tier string, ends *time.Time, status string) error {
+	_, err := q.Exec(ctx, `
+		UPDATE core.vendor_licenses SET tier = $2, ends_at = $3, status = $4, updated_at = now()
+		WHERE license_id = $1 AND tier IN ('standard', 'pro') AND $2 IN ('standard', 'pro')`, licenseID, tier, ends, status)
+	if err != nil {
+		return fmt.Errorf("sync vendor license: %w", err)
+	}
+	return nil
+}

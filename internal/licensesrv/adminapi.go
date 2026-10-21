@@ -28,17 +28,20 @@ import (
 // chosen `ref`, and a ref works once: a retry gets the first answer back and changes nothing again (admin_ops).
 // A license key is returned once, by create (and rekey), and never stored or logged; only its hash is kept.
 //
-//	POST /admin/v1/licenses/create   {ref, customer, tier, months}     tier standard|pro, months 1..120
+//	POST /admin/v1/licenses/create   {ref, customer, tier, months | ends_at | no_end}   tier trial|standard|pro (a trial may
+//	                                                                   leave the end out: its preset's days); months 1..120
 //	POST /admin/v1/licenses/extend   {ref, id, months}                 renews: adds months to the end (or to now)
+//	POST /admin/v1/licenses/update   {ref, id, customer, tier, ends_at | no_end}   any of them; a new tier takes its preset
 //	POST /admin/v1/licenses/tier     {ref, id, tier}                   takes the new tier's preset entitlements
 //	POST /admin/v1/licenses/revoke   {ref, id, reason}
 //	POST /admin/v1/licenses/rekey    {ref, id}                         a new key for a license nobody activated yet
-//	POST /admin/v1/licenses/get      {id}
+//	POST /admin/v1/licenses/get      {id}                              with its entitlements, activations and audit
 //	POST /admin/v1/licenses/list     {status}                          "", active or revoked; at most 500, newest first
 const (
 	adminMaxBody    = 16 << 10
 	adminMaxMonths  = 120
 	adminListLimit  = 500
+	adminDetailRows = 30 // activations and audit rows `get` returns
 	adminActor      = "api:admin"
 	adminDefaultMin = 1
 )
@@ -93,6 +96,7 @@ func NewAdminAPI(api *API, st *Store, o AdminAPIOptions) (*AdminAPI, error) {
 func (a *AdminAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/v1/licenses/create", a.handle(a.create))
 	mux.HandleFunc("POST /admin/v1/licenses/extend", a.handle(a.extend))
+	mux.HandleFunc("POST /admin/v1/licenses/update", a.handle(a.update))
 	mux.HandleFunc("POST /admin/v1/licenses/tier", a.handle(a.setTier))
 	mux.HandleFunc("POST /admin/v1/licenses/revoke", a.handle(a.revoke))
 	mux.HandleFunc("POST /admin/v1/licenses/rekey", a.handle(a.rekey))
@@ -109,6 +113,10 @@ type AdminRequest struct {
 	Months   int    `json:"months,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	Status   string `json:"status,omitempty"`
+	// EndsAt is a date (YYYY-MM-DD, the end of that day in UTC is 00:00 of it, as `licensesrv key` reads it) or an RFC3339
+	// time; NoEnd means no end date. Only one of Months, EndsAt and NoEnd may be given to create.
+	EndsAt string `json:"ends_at,omitempty"`
+	NoEnd  bool   `json:"no_end,omitempty"`
 }
 
 // AdminLicense is a license as the admin API shows it. Key is set only in the answer that made it.
@@ -122,13 +130,40 @@ type AdminLicense struct {
 	Reason       string     `json:"reason,omitempty"`
 	ActiveDomain string     `json:"active_domain,omitempty"`
 	LastSeenAt   *time.Time `json:"last_seen_at,omitempty"`
+	GraceDays    int        `json:"grace_days,omitempty"`
+	Moves        int        `json:"moves,omitempty"` // counted re-activations in the last year
 	Key          string     `json:"key,omitempty"`
+	// get only:
+	Entitlements *license.Entitlements `json:"entitlements,omitempty"`
+	Activations  []AdminActivation     `json:"activations,omitempty"`
+	Audit        []AdminAudit          `json:"audit,omitempty"`
 	// Replayed: the ref had been used; nothing changed this time.
 	Replayed bool `json:"replayed,omitempty"`
 }
 
+// AdminActivation is where a license ran (or runs).
+type AdminActivation struct {
+	InstallID     string     `json:"install_id"`
+	Domain        string     `json:"domain"`
+	Counted       bool       `json:"counted"`
+	ActivatedAt   time.Time  `json:"activated_at"`
+	LastSeenAt    time.Time  `json:"last_seen_at"`
+	Version       string     `json:"version,omitempty"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+}
+
+// AdminAudit is one entry of a license's audit trail (never a key or a token).
+type AdminAudit struct {
+	At      time.Time      `json:"at"`
+	Actor   string         `json:"actor"`
+	Action  string         `json:"action"`
+	IP      string         `json:"ip,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
 func viewOf(l License) AdminLicense {
-	return AdminLicense{ID: l.ID, Customer: l.Customer, Tier: l.Tier, Status: l.Status, EndsAt: l.EndsAt, CreatedAt: l.CreatedAt, Reason: l.Reason}
+	return AdminLicense{ID: l.ID, Customer: l.Customer, Tier: l.Tier, Status: l.Status, EndsAt: l.EndsAt, CreatedAt: l.CreatedAt,
+		Reason: l.Reason, GraceDays: l.GraceDays}
 }
 
 type adminCall struct {
@@ -287,6 +322,68 @@ func months(n int) *Error {
 	return nil
 }
 
+// anyTier is a tier a license can be made of, by hand (the trial included).
+func anyTier(name string) (license.Preset, *Error) {
+	presets, err := license.LoadPresets()
+	if err != nil {
+		return license.Preset{}, invalid("the tiers could not be read")
+	}
+	p, ok := presets.Get(name)
+	if !ok {
+		return license.Preset{}, invalid("tier is trial, standard or pro")
+	}
+	return p, nil
+}
+
+// parseEnd reads an end date: YYYY-MM-DD (00:00 UTC that day) or RFC3339.
+func parseEnd(s string) (time.Time, *Error) {
+	if t, err := time.Parse(time.DateOnly, s); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Time{}, invalid("ends_at is YYYY-MM-DD or an RFC3339 time")
+}
+
+// maxEndYears bounds an end date from now: a typo of a year is refused, "no_end" is the way to ask for none.
+const maxEndYears = 10
+
+// createEnd is a new license's end from months, ends_at or no_end (exactly one; a trial may give none: its preset's days).
+func createEnd(req AdminRequest, preset license.Preset, now time.Time) (*time.Time, *Error) {
+	given := 0
+	for _, b := range []bool{req.Months != 0, req.EndsAt != "", req.NoEnd} {
+		if b {
+			given++
+		}
+	}
+	switch {
+	case given > 1:
+		return nil, invalid("give only one of months, ends_at and no_end")
+	case req.NoEnd:
+		return nil, nil
+	case req.EndsAt != "":
+		t, aerr := parseEnd(req.EndsAt)
+		if aerr != nil {
+			return nil, aerr
+		}
+		if t.After(now.AddDate(maxEndYears, 0, 0)) {
+			return nil, invalid("ends_at is more than 10 years away: use no_end for a license without an end")
+		}
+		return &t, nil
+	case req.Months != 0:
+		if aerr := months(req.Months); aerr != nil {
+			return nil, aerr
+		}
+		t := license.AddMonths(now, req.Months)
+		return &t, nil
+	case preset.Days > 0:
+		t := now.AddDate(0, 0, preset.Days)
+		return &t, nil
+	}
+	return nil, invalid("give months, ends_at or no_end")
+}
+
 // paidTier is a tier the API sells: the trial is the install's own.
 func paidTier(name string) (license.Preset, *Error) {
 	presets, err := license.LoadPresets()
@@ -312,15 +409,15 @@ func (a *AdminAPI) create(ctx context.Context, c adminCall) (any, *Error, error)
 	case customer == "" || len(customer) > 200 || strings.ContainsFunc(customer, func(r rune) bool { return r < ' ' || r == 0x7f }):
 		return nil, invalid("customer is required (at most 200 characters, no control characters)"), nil
 	}
-	if aerr := months(req.Months); aerr != nil {
-		return nil, aerr, nil
-	}
-	preset, aerr := paidTier(req.Tier)
+	preset, aerr := anyTier(req.Tier)
 	if aerr != nil {
 		return nil, aerr, nil
 	}
-	ends := license.AddMonths(c.now, req.Months)
-	l := License{Customer: customer, Tier: req.Tier, Entitlements: preset.Entitlements, EndsAt: &ends,
+	ends, aerr := createEnd(req, preset, c.now)
+	if aerr != nil {
+		return nil, aerr, nil
+	}
+	l := License{Customer: customer, Tier: req.Tier, Entitlements: preset.Entitlements, EndsAt: ends,
 		GraceDays: preset.GraceDays, Status: StatusActive, CreatedAt: c.now, UpdatedAt: c.now}
 	if err := checkLicense(l, c.now, true); err != nil {
 		return nil, invalid(err.Error()), nil
@@ -478,6 +575,69 @@ func (a *AdminAPI) setTier(ctx context.Context, c adminCall) (any, *Error, error
 	})
 }
 
+// update changes a license's customer, tier (taking the new tier's preset) and end (a date, or none). A change of
+// months is `extend`. At least one field must be given.
+func (a *AdminAPI) update(ctx context.Context, c adminCall) (any, *Error, error) {
+	req, aerr := decodeAdmin(c.body)
+	if aerr != nil {
+		return nil, aerr, nil
+	}
+	customer := strings.TrimSpace(req.Customer)
+	if req.Customer != "" && (customer == "" || len(customer) > 200 || strings.ContainsFunc(customer, func(r rune) bool { return r < ' ' || r == 0x7f })) {
+		return nil, invalid("customer is at most 200 characters, no control characters"), nil
+	}
+	if req.Customer == "" && req.Tier == "" && req.EndsAt == "" && !req.NoEnd {
+		return nil, invalid("give customer, tier, ends_at or no_end"), nil
+	}
+	if req.EndsAt != "" && req.NoEnd {
+		return nil, invalid("give only one of ends_at and no_end"), nil
+	}
+	var preset license.Preset
+	if req.Tier != "" {
+		if preset, aerr = anyTier(req.Tier); aerr != nil {
+			return nil, aerr, nil
+		}
+	}
+	var end *time.Time
+	if req.EndsAt != "" {
+		t, aerr := parseEnd(req.EndsAt)
+		if aerr != nil {
+			return nil, aerr, nil
+		}
+		if t.After(c.now.AddDate(maxEndYears, 0, 0)) {
+			return nil, invalid("ends_at is more than 10 years away: use no_end for a license without an end"), nil
+		}
+		end = &t
+	}
+	return a.change(ctx, c, "update", req, func(tx pgx.Tx, l *License) (License, string, map[string]any, *Error, error) {
+		if l.Status == StatusRevoked {
+			return License{}, "", nil, conflict("revoked", "a revoked license does not change"), nil
+		}
+		after := *l
+		if req.Customer != "" {
+			after.Customer = customer
+		}
+		if req.Tier != "" && req.Tier != l.Tier {
+			after.Tier, after.Entitlements = req.Tier, preset.Entitlements
+		}
+		endChanged := false
+		switch {
+		case req.NoEnd:
+			after.EndsAt, endChanged = nil, true
+		case end != nil:
+			after.EndsAt, endChanged = end, true
+		}
+		after.UpdatedAt = c.now
+		if err := checkLicense(after, c.now, endChanged && after.EndsAt != nil); err != nil {
+			return License{}, "", nil, invalid(err.Error()), nil
+		}
+		if err := a.st.UpdateLicense(ctx, tx, after); err != nil {
+			return License{}, "", nil, nil, err
+		}
+		return after, "license.update", map[string]any{"via": "api", "before": licenseDetails(*l), "after": licenseDetails(after)}, nil, nil
+	})
+}
+
 func (a *AdminAPI) revoke(ctx context.Context, c adminCall) (any, *Error, error) {
 	req, aerr := decodeAdmin(c.body)
 	if aerr != nil {
@@ -550,8 +710,27 @@ func (a *AdminAPI) get(ctx context.Context, c adminCall) (any, *Error, error) {
 		return nil, nil, err
 	}
 	v := viewOf(*l)
-	if act, err := a.st.ActiveActivation(ctx, a.st.db, l.ID); err == nil && act != nil {
-		v.ActiveDomain, v.LastSeenAt = act.Domain, &act.LastSeenAt
+	ent := l.Entitlements
+	v.Entitlements = &ent
+	acts, err := a.st.Activations(ctx, a.st.db, l.ID, adminDetailRows)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, act := range acts {
+		v.Activations = append(v.Activations, AdminActivation{InstallID: act.InstallID, Domain: act.Domain, Counted: act.Counted,
+			ActivatedAt: act.ActivatedAt, LastSeenAt: act.LastSeenAt, Version: act.LastVersion, DeactivatedAt: act.DeactivatedAt})
+		if act.DeactivatedAt == nil {
+			v.ActiveDomain = act.Domain
+			seen := act.LastSeenAt
+			v.LastSeenAt = &seen
+		}
+	}
+	trail, err := a.st.Audit(ctx, a.st.db, l.ID, adminDetailRows)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, e := range trail {
+		v.Audit = append(v.Audit, AdminAudit{At: e.At, Actor: e.Actor, Action: e.Action, IP: e.IP, Details: e.Details})
 	}
 	return v, nil, nil
 }
@@ -564,7 +743,7 @@ func (a *AdminAPI) list(ctx context.Context, c adminCall) (any, *Error, error) {
 	if req.Status != "" && req.Status != StatusActive && req.Status != StatusRevoked {
 		return nil, invalid("status is empty, active or revoked"), nil
 	}
-	rows, err := a.st.ListLicenses(ctx, a.st.db, req.Status, c.now.AddDate(0, 0, -30))
+	rows, err := a.st.ListLicenses(ctx, a.st.db, req.Status, c.now.AddDate(-1, 0, 0))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -574,7 +753,7 @@ func (a *AdminAPI) list(ctx context.Context, c adminCall) (any, *Error, error) {
 	out := make([]AdminLicense, 0, len(rows))
 	for _, r := range rows {
 		v := viewOf(r.License)
-		v.ActiveDomain, v.LastSeenAt = r.ActiveDomain, r.LastSeenAt
+		v.ActiveDomain, v.LastSeenAt, v.Moves = r.ActiveDomain, r.LastSeenAt, r.Moves
 		out = append(out, v)
 	}
 	return map[string]any{"licenses": out}, nil, nil

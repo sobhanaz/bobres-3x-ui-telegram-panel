@@ -31,8 +31,52 @@ type VendorLicenseInfo struct {
 	Reason       string     `json:"reason,omitempty"`
 	ActiveDomain string     `json:"active_domain,omitempty"`
 	LastSeenAt   *time.Time `json:"last_seen_at,omitempty"`
+	GraceDays    int        `json:"grace_days,omitempty"`
+	Moves        int        `json:"moves,omitempty"`
 	Key          string     `json:"key,omitempty"`
 	Replayed     bool       `json:"replayed,omitempty"`
+	// Detail (Get only): what the license grants, where it ran, and its audit trail.
+	Entitlements json.RawMessage    `json:"entitlements,omitempty"`
+	Activations  []VendorActivation `json:"activations,omitempty"`
+	Audit        []VendorAudit      `json:"audit,omitempty"`
+}
+
+// VendorActivation is where a license ran (or runs).
+type VendorActivation struct {
+	InstallID     string     `json:"install_id"`
+	Domain        string     `json:"domain"`
+	Counted       bool       `json:"counted"`
+	ActivatedAt   time.Time  `json:"activated_at"`
+	LastSeenAt    time.Time  `json:"last_seen_at"`
+	Version       string     `json:"version,omitempty"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+}
+
+// VendorAudit is one entry of a license's audit trail on the license server.
+type VendorAudit struct {
+	At      time.Time      `json:"at"`
+	Actor   string         `json:"actor"`
+	Action  string         `json:"action"`
+	IP      string         `json:"ip,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+// VendorCreate is a license made by hand: Tier trial, standard or pro; the end is Months, EndsAt (YYYY-MM-DD) or NoEnd
+// (a trial may give none: its preset's days).
+type VendorCreate struct {
+	Customer string
+	Tier     string
+	Months   int
+	EndsAt   string
+	NoEnd    bool
+}
+
+// VendorUpdate changes a license: any of the customer, the tier (taking its preset) and the end (a date, or none).
+type VendorUpdate struct {
+	Customer string
+	Tier     string
+	EndsAt   string
+	NoEnd    bool
 }
 
 // VendorError is an answer of the license server that is not a success. A 4xx other than 408 and 429 is final: the
@@ -47,6 +91,9 @@ func (e *VendorError) Error() string {
 	return fmt.Sprintf("license server: %d %s: %s", e.Status, e.Code, e.Message)
 }
 
+// asVendorError reports whether err is a *VendorError and sets *out to it.
+func asVendorError(err error, out **VendorError) bool { return errors.As(err, out) }
+
 // Final reports whether retrying the same request can never succeed.
 func (e *VendorError) Final() bool {
 	return e.Status >= 400 && e.Status < 500 && e.Status != http.StatusRequestTimeout && e.Status != http.StatusTooManyRequests
@@ -55,6 +102,8 @@ func (e *VendorError) Final() bool {
 // VendorClient is what core needs from the license server.
 type VendorClient interface {
 	Create(ctx context.Context, ref, customer, tier string, months int) (*VendorLicenseInfo, error)
+	CreateCustom(ctx context.Context, ref string, in VendorCreate) (*VendorLicenseInfo, error)
+	Update(ctx context.Context, ref, id string, in VendorUpdate) (*VendorLicenseInfo, error)
 	Extend(ctx context.Context, ref, id string, months int) (*VendorLicenseInfo, error)
 	Rekey(ctx context.Context, ref, id string) (*VendorLicenseInfo, error)
 	Revoke(ctx context.Context, ref, id, reason string) (*VendorLicenseInfo, error)
@@ -126,6 +175,8 @@ type vendorBody struct {
 	Months   int    `json:"months,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	Status   string `json:"status,omitempty"`
+	EndsAt   string `json:"ends_at,omitempty"`
+	NoEnd    bool   `json:"no_end,omitempty"`
 }
 
 // maxVendorAnswer bounds what a license server's answer may be (a list of 500 licenses is far below it).
@@ -171,6 +222,14 @@ func (c *vendorHTTP) one(ctx context.Context, path string, b vendorBody) (*Vendo
 
 func (c *vendorHTTP) Create(ctx context.Context, ref, customer, tier string, months int) (*VendorLicenseInfo, error) {
 	return c.one(ctx, "/admin/v1/licenses/create", vendorBody{Ref: ref, Customer: customer, Tier: tier, Months: months})
+}
+
+func (c *vendorHTTP) CreateCustom(ctx context.Context, ref string, in VendorCreate) (*VendorLicenseInfo, error) {
+	return c.one(ctx, "/admin/v1/licenses/create", vendorBody{Ref: ref, Customer: in.Customer, Tier: in.Tier, Months: in.Months, EndsAt: in.EndsAt, NoEnd: in.NoEnd})
+}
+
+func (c *vendorHTTP) Update(ctx context.Context, ref, id string, in VendorUpdate) (*VendorLicenseInfo, error) {
+	return c.one(ctx, "/admin/v1/licenses/update", vendorBody{Ref: ref, ID: id, Customer: in.Customer, Tier: in.Tier, EndsAt: in.EndsAt, NoEnd: in.NoEnd})
 }
 
 func (c *vendorHTTP) Extend(ctx context.Context, ref, id string, months int) (*VendorLicenseInfo, error) {
