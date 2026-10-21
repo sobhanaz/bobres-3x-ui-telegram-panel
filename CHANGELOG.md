@@ -8,6 +8,16 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### License server: a signed admin API (off by default)
+- `licensesrv` can serve `/admin/v1/licenses/{create,extend,tier,revoke,rekey,get,list}` for a program that sells
+  licenses. It is on only when `BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE` names an Ed25519 public key (`licensesrv adminkey`
+  makes the pair). Every request is signed (method, URI, timestamp, one-time nonce, body hash); every failure to
+  authenticate is the same 401; every change takes a `ref` that works once, so a retry changes nothing twice. A key
+  is returned once and only its hash is kept. Migration 00002 of the license database adds `admin_ops` and
+  `admin_nonces`. Customer installs are not affected. See docs/13-license-server.md.
+- The tier file carries the owner's prices (Standard 4, Pro 12 USDT a month; a year at ten months).
+- The landing page shows them and sends buyers to the owner's bot instead of the GitHub issue tracker.
+
 ## [0.8.0] — 2026-10-20
 
 The rest of the owner's requests of 2026-10-20, and one more: **server monitoring** in the dashboard, **charts and a

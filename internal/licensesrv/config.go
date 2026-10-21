@@ -27,6 +27,9 @@ type Config struct {
 	IPRate         Rate
 	KeyRate        Rate
 	AllowHTTP      bool
+	// AdminPubKeyFile holds the public key that verifies the signed admin API (/admin/v1); empty: the API is off.
+	AdminPubKeyFile string
+	AdminRate       Rate
 }
 
 // LoadConfig reads the environment. needKey is false for the admin
@@ -52,6 +55,10 @@ func LoadConfig(needKey bool) (Config, error) {
 	}
 	if c.KeyRate, err = ParseRate(getenv("BOBRES_LICENSESRV_RATE_KEY", DefaultKeyRate)); err != nil {
 		errs = append(errs, fmt.Errorf("BOBRES_LICENSESRV_RATE_KEY: %w", err))
+	}
+	c.AdminPubKeyFile = os.Getenv("BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE")
+	if c.AdminRate, err = ParseRate(getenv("BOBRES_LICENSESRV_RATE_ADMIN", DefaultAdminRate)); err != nil {
+		errs = append(errs, fmt.Errorf("BOBRES_LICENSESRV_RATE_ADMIN: %w", err))
 	}
 	switch v := os.Getenv("BOBRES_LICENSESRV_ALLOW_HTTP"); v {
 	case "", "false", "0":

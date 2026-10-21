@@ -4,11 +4,12 @@
 //	licensesrv serve      the API: POST /v1/activate and POST /v1/refresh
 //	licensesrv migrate    apply its database migrations
 //	licensesrv key ...    create, revoke, list, show and update licenses
+//	licensesrv adminkey   make the key pair of the signed admin API (/admin/v1)
 //
 // Environment: BOBRES_DATABASE_URL (or _FILE), BOBRES_LICENSESRV_SIGNING_KEY_FILE
 // (serve), BOBRES_HTTP_ADDR (default 127.0.0.1:8080, behind an HTTPS proxy),
 // BOBRES_LICENSESRV_TRUSTED_PROXIES, BOBRES_LICENSESRV_RATE_IP and
-// BOBRES_LICENSESRV_RATE_KEY.
+// BOBRES_LICENSESRV_RATE_KEY. BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE turns the signed admin API on.
 package main
 
 import (
@@ -31,6 +32,7 @@ const usage = `usage:
   licensesrv serve       run the API (BOBRES_HTTP_ADDR, default 127.0.0.1:8080)
   licensesrv migrate     apply the database migrations
   licensesrv key ...     manage licenses (licensesrv key for help)
+  licensesrv adminkey    make a key pair for the signed admin API; prints both keys once
   licensesrv version
 `
 
@@ -55,6 +57,17 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		return app.Run("licensesrv", args, nil)
 	case "version", "--version":
 		fmt.Fprintln(out, "licensesrv", version.Version)
+		return 0
+	case "adminkey":
+		priv, pub, err := license.NewAdminKey()
+		if err != nil {
+			fmt.Fprintln(errOut, "error:", err)
+			return 1
+		}
+		fmt.Fprintln(errOut, "The private key signs the requests (it goes into the store that sells licenses: its dashboard setting);")
+		fmt.Fprintln(errOut, "the public key goes into the file BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE names, on this server. It is shown only now.")
+		fmt.Fprintln(out, "private:", priv)
+		fmt.Fprintln(out, "public:", pub)
 		return 0
 	case "migrate", "key":
 	default:
@@ -142,6 +155,22 @@ func setup(rt *app.Runtime) error {
 		return err
 	}
 	api.Register(rt.Mux)
+	if cfg.AdminPubKeyFile != "" {
+		raw, err := os.ReadFile(cfg.AdminPubKeyFile)
+		if err != nil {
+			return fmt.Errorf("BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE: %w", err)
+		}
+		pub, err := license.ParseAdminPublicKey(string(raw))
+		if err != nil {
+			return fmt.Errorf("BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE: %w", err)
+		}
+		admin, err := licensesrv.NewAdminAPI(api, st, licensesrv.AdminAPIOptions{PublicKey: pub, Rate: cfg.AdminRate, Log: rt.Log})
+		if err != nil {
+			return err
+		}
+		admin.Register(rt.Mux)
+		rt.Log.Info("signed admin API on", "rate", cfg.AdminRate.String())
+	}
 	rt.Log.Info("license server ready", "kid", signer.KeyID, "rate_ip", cfg.IPRate.String(), "rate_key", cfg.KeyRate.String(),
 		"trusted_proxies", len(cfg.TrustedProxies), "allow_http", cfg.AllowHTTP)
 	return nil

@@ -97,6 +97,35 @@ POST /v1/refresh   {"token": "<the install's current token>", "version": "0.2.0"
 An install should keep its current token on any refusal, so it decays through grace and never drops at once.
 `/healthz` and `/readyz` answer on the same listener for the local health check. The proxy should not expose them.
 
+## The signed admin API (optional, off by default)
+
+`licensesrv key ...` is the admin tool. For a program that sells licenses (the owner's own BOBRES store), the same
+changes are available as a signed HTTP API, **off unless `BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE` names a file with
+the admin public key**. The key is not the license signing key: make a pair with `licensesrv adminkey` (it prints
+both once). The public key stays on this server; the private key goes only into the store that sells.
+
+```text
+POST /admin/v1/licenses/create   {"ref", "customer", "tier": "standard|pro", "months": 1..120}  -> the license and its key, once
+POST /admin/v1/licenses/extend   {"ref", "id", "months"}     renews: adds months to the end (or to now, when it has passed)
+POST /admin/v1/licenses/tier     {"ref", "id", "tier"}       the new tier's preset entitlements
+POST /admin/v1/licenses/revoke   {"ref", "id", "reason"}
+POST /admin/v1/licenses/rekey    {"ref", "id"}               a new key, only while nobody has activated the license
+POST /admin/v1/licenses/get      {"id"}
+POST /admin/v1/licenses/list     {"status": "" | "active" | "revoked"}      at most 500, newest first
+```
+
+- Every request carries `X-Bobres-Ts`, `X-Bobres-Nonce` and `X-Bobres-Sig`: an Ed25519 signature over the method,
+  the request URI, the timestamp, the nonce and the SHA-256 of the body (`internal/license/adminsig.go`, one
+  implementation for the client and the server). The timestamp must be within two minutes of the server's clock, and
+  a nonce works once (kept ten minutes). **Every authentication failure is the same `401 unauthorized`.**
+- `ref` (8 to 100 characters of `A-Za-z0-9._:-`) makes a change happen once: a retry with the same `ref` returns the
+  first answer with `"replayed": true` and changes nothing; the same `ref` for another action is `409 ref_reused`.
+  A refused request (404, 409, 400) leaves its `ref` free. A key is in the answer to `create` (and `rekey`) only.
+- It is rate limited per client address (`BOBRES_LICENSESRV_RATE_ADMIN`, default `60/1m`), answers only over HTTPS
+  through a trusted proxy like `/v1`, and every change is in the audit with the actor `api:admin` and the address.
+- Reaching it is the operator's choice: through the tunnel or proxy that serves `/v1/`, route `/admin/v1/` too
+  (leave it unrouted and the API is local only).
+
 ## Set up the server
 
 The examples use the host name `license.example.com`, the system user `licensesrv`, and the directory
@@ -168,6 +197,8 @@ BOBRES_LOG_FORMAT=json
 | `BOBRES_LICENSESRV_TRUSTED_PROXIES` | `127.0.0.1/32,::1/128` | Proxies whose `X-Forwarded-For` / `X-Forwarded-Proto` are believed (CIDRs or addresses) |
 | `BOBRES_LICENSESRV_RATE_IP` | `120/1h` | Requests per client address (an IPv6 /64 counts as one) |
 | `BOBRES_LICENSESRV_RATE_KEY` | `10/1h` | Requests per license: activations with its key and refreshes of its tokens together |
+| `BOBRES_LICENSESRV_ADMIN_PUBKEY_FILE` | (empty: off) | The admin public key file, which turns the signed admin API on |
+| `BOBRES_LICENSESRV_RATE_ADMIN` | `60/1m` | Requests per client address to the admin API |
 | `BOBRES_LICENSESRV_ALLOW_HTTP` | `false` | Accept requests that did not come over HTTPS: local testing only |
 | `BOBRES_LOG_LEVEL`, `BOBRES_LOG_FORMAT`, `BOBRES_SHUTDOWN_WAIT` | as every service | Logging and shutdown |
 
