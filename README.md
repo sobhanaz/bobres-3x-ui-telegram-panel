@@ -30,6 +30,9 @@ license server is built but still has to be deployed by the owner. What is left 
 - Persian and English, in the operator's own name, texts and links.
 - Buy a plan (traffic-limited, time-only or both), with an optional discount code. The service arrives with its
   subscription link and a QR code.
+- Plan groups: the operator can put plans in named groups with a text for each (what the group is for, who it suits,
+  what it does not include). In the bot and the Mini App the customer first picks a group, reads its text, then picks
+  a plan of it; a store with no group lists its plans as before.
 - My services: status, expiry and traffic used; renew, or add a traffic package, with the same link.
 - A wallet with top-ups and history, gift codes that add credit, one free trial per Telegram account, and invite
   links that reward the inviter on a friend's first paid purchase.
@@ -61,7 +64,7 @@ license server is built but still has to be deployed by the owner. What is left 
 **Web dashboard** at `https://<domain>/admin`
 - Log in with a one-time link from the bot, or with a password and an authenticator code. Roles: owner, admin,
   support. Persian and English, dark and light.
-- Overview, users, services, plans and packages, orders and payments with the receipt review queue, the ledger with
+- Overview, users, services, plans, plan groups and packages, orders and payments with the receipt review queue, the ledger with
   CSV export, discounts, gift codes and referrals, resellers, the support inbox, broadcasts, branding and every bot text,
   settings, panel servers, payment gateways, staff, the System page (health, updates, logs, backups, HTTPS
   certificates, license) and the audit log.
