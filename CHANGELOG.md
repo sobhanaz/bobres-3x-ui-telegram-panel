@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.9.1] — 2026-10-21
+
+The owner's own store can now **manage every license of the license server from the dashboard**, not only the ones the
+bot sold: the **All licenses** tab, with making one by hand, changing, renewing, revoking, re-keying and the details.
+Nothing changes in a customer's bot, dashboard or license.
+
+### Updating
+- **Update the license server first** (it is built from this repository on the vendor server: its admin API gained `update`,
+  a custom end on create and a detailed `get`), **then the store**: `sudo bobres update` or System > Updates > Update now.
+  A store that is ahead of its license server gets a 'no such path' from the new buttons, and nothing else.
+- No database migration, no new service, nothing to configure.
+
 ### Dashboard > Licenses: manage every license of the license server
 - The Licenses page gets an **All licenses** tab that reads the license server itself (through the signed admin API, by way of the
   bot): the store's own license, the ones made by hand with `licensesrv key` and the ones the bot sold, each with the domain it
