@@ -8,6 +8,17 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Digital accounts: the balance at the supplier, always in view
+- **The owner's balance at the supplier is shown all the time**: a card at the top of the Digital accounts page and on the Overview
+  (owner only, when the store resells), read when the page opens and every two minutes while it is open, with a button to read it
+  now. Core keeps a balance it read for a minute, so a busy dashboard is not a call to the supplier at every page view.
+- The balance is read from more answer shapes (a number or a text like "5.53 USDT", at the top of the answer or inside `data`, under
+  any key that names a balance). When the supplier's answer still cannot be understood the page **shows the answer itself** (the API key
+  is taken out of it), so the reading can be fixed without guessing.
+- The supplier's product names and texts no longer carry Telegram custom-emoji placeholders (`{pe:5244675575502628242}`) or Windows line
+  breaks; the product's raw JSON is kept as it came.
+- No migration, nothing to configure.
+
 ## [0.10.0] — 2026-10-21
 
 The owner's own bot can now **resell a supplier's digital accounts** (the Digital accounts button, a dashboard page for the

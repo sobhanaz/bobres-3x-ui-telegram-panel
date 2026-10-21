@@ -72,14 +72,16 @@ func (s *Server) putSupplierConfig(w http.ResponseWriter, r *http.Request) {
 	s.getSupplier(w, r)
 }
 
-// getSupplierBalance: GET /api/v1/supplier/balance: the balance of the API account at the supplier.
+// getSupplierBalance: GET /api/v1/supplier/balance: the balance of the API account at the supplier (one read less than
+// a minute ago is shown again; ?fresh=1 asks the supplier).
 func (s *Server) getSupplierBalance(w http.ResponseWriter, r *http.Request) {
-	amount, cur, err := s.cfg.Domain.SupplierBalance(r.Context())
+	b, err := s.cfg.Domain.SupplierBalance(r.Context(), r.URL.Query().Get("fresh") != "")
 	if err != nil {
 		s.supplierFail(w, "read the supplier balance", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"amount": amount, "currency": cur})
+	// raw: the supplier's answer when the amount could not be read from it (empty otherwise).
+	writeJSON(w, http.StatusOK, map[string]any{"amount": b.Amount, "currency": b.Currency, "raw": b.Raw})
 }
 
 // syncSupplier: POST /api/v1/supplier/sync: read the catalog now.

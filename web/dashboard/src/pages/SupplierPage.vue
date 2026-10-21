@@ -18,6 +18,7 @@ import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import ProductDialog from '../components/supplier/ProductDialog.vue'
+import SupplierBalance from '../components/supplier/SupplierBalance.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
@@ -65,20 +66,6 @@ async function setSales(on: boolean) {
     await loadStatus()
   } catch (e) {
     fail(e)
-  }
-}
-
-const balance = ref('')
-const checking = ref(false)
-async function checkBalance() {
-  checking.value = true
-  try {
-    const b = await api<{ amount: string; currency: string }>('GET', '/supplier/balance')
-    balance.value = b.amount ? `${b.amount} ${b.currency}` : t('supplier.balance_unknown')
-  } catch (e) {
-    fail(e)
-  } finally {
-    checking.value = false
   }
 }
 
@@ -187,6 +174,8 @@ onMounted(() => {
   <p class="app-muted intro">{{ t('supplier.intro') }}</p>
   <Message v-if="loaded && !status.available" severity="warn" :closable="false">{{ t('supplier.no_key') }}</Message>
 
+  <div v-if="loaded && status.configured" class="balance"><SupplierBalance /></div>
+
   <section v-if="loaded" class="card">
     <h2 class="card-title">{{ t('supplier.connection') }}</h2>
     <p class="app-muted">{{ status.configured ? t('supplier.configured') : t('supplier.not_configured') }}</p>
@@ -198,8 +187,6 @@ onMounted(() => {
       </label>
       <div class="row">
         <Button type="submit" :label="t('licenses.save')" :loading="saving" :disabled="!keyOk || !status.available" />
-        <Button v-if="status.configured" type="button" outlined :label="t('supplier.check_balance')" :loading="checking" @click="checkBalance" />
-        <span v-if="balance" class="app-ltr app-mono">{{ balance }}</span>
       </div>
     </form>
     <div class="row">
@@ -316,6 +303,10 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.balance {
+  max-inline-size: 22rem;
+  margin-block-end: 1rem;
+}
 .intro {
   margin-block: 0 0.75rem;
   font-size: 0.9rem;

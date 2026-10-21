@@ -36,6 +36,21 @@ export interface SupplierOrder {
   buyer: { id: string; telegram_id: number; username: string } | null
 }
 
+/** GET /supplier/balance: the balance at the supplier; `raw` is its answer when no amount could be read from it. */
+export interface SupplierBalanceAnswer {
+  amount: string
+  currency: string
+  raw?: string
+}
+
+/** The balance as one line ("5.53 USDT"); empty when it could not be read. */
+export function balanceLine(b: SupplierBalanceAnswer | null): string {
+  return b && b.amount ? `${b.amount} ${b.currency}` : ''
+}
+
+/** How often an open page reads the balance again. */
+export const balanceRefreshMs = 120_000
+
 /** The most core takes for a price in Toman. */
 export const maxPrice = 1_000_000_000_000
 

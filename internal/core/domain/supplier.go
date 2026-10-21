@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -79,12 +80,18 @@ func (s *Service) SetSupplierKey(ctx context.Context, actor *store.User, apiKey 
 	if err != nil {
 		return err
 	}
-	return s.st.WithTx(ctx, func(tx pgx.Tx) error {
+	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.SetSupplierKey(ctx, tx, enc); err != nil {
 			return err
 		}
 		return s.audit(ctx, tx, actor, "supplier.config", "supplier", "config", map[string]any{"api_key": "changed"}, "")
 	})
+	if err == nil { // a balance read with the old key is not this account's
+		s.supplierBal.mu.Lock()
+		s.supplierBal.val = SupplierBalance{}
+		s.supplierBal.mu.Unlock()
+	}
+	return err
 }
 
 func (s *Service) supplierClient(ctx context.Context) (SupplierClient, error) {
@@ -108,13 +115,39 @@ func (s *Service) supplierClient(ctx context.Context) (SupplierClient, error) {
 	return NewSupplierClient(s.cfg.SupplierTransport, string(raw)), nil
 }
 
-// SupplierBalance is the balance of the API account at the supplier, as the supplier writes it.
-func (s *Service) SupplierBalance(ctx context.Context) (amount, currency string, err error) {
+// supplierBalanceTTL is how long a balance that was read is shown again without asking the supplier.
+const supplierBalanceTTL = time.Minute
+
+// supplierBalanceCache is the last balance read from the supplier and when.
+type supplierBalanceCache struct {
+	mu  sync.Mutex
+	val SupplierBalance
+	at  time.Time
+}
+
+// SupplierBalance is the balance of the API account at the supplier, as the supplier writes it. A balance read less
+// than a minute ago is returned as it was unless fresh asks for a new one.
+func (s *Service) SupplierBalance(ctx context.Context, fresh bool) (SupplierBalance, error) {
+	c := &s.supplierBal
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !fresh && c.val.Amount != "" && time.Since(c.at) < supplierBalanceTTL {
+		return c.val, nil
+	}
 	cl, err := s.supplierClient(ctx)
 	if err != nil {
-		return "", "", err
+		return SupplierBalance{}, err
 	}
-	return cl.Balance(ctx)
+	b, err := cl.Balance(ctx)
+	if err != nil {
+		return SupplierBalance{}, err
+	}
+	if b.Amount != "" {
+		c.val, c.at = b, time.Now()
+	} else {
+		c.val = SupplierBalance{}
+	}
+	return b, nil
 }
 
 // SyncSupplierCatalog reads the supplier's catalog into the store (new products come in OFF) and returns how many

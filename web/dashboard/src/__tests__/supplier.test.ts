@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { costText, maxPrice, orderSeverity, parsePrice, sellableProblem } from '../supplier'
+import { balanceLine, balanceRefreshMs, costText, maxPrice, orderSeverity, parsePrice, sellableProblem } from '../supplier'
 import { keyPattern } from '../supplierkey'
 import fa from '../locales/fa.json'
 import en from '../locales/en.json'
@@ -36,6 +36,18 @@ describe('the Digital accounts page rules', () => {
       for (const k of keys) expect(cat.supplier[k], k).toBeTruthy()
       for (const s of ['paid', 'done', 'refunded']) expect(cat.supplier.order_status[s], s).toBeTruthy()
       expect(cat.section.supplier.title && cat.section.supplier.desc).toBeTruthy()
+    }
+  })
+  it('writes the balance at the supplier, or nothing when it could not be read', () => {
+    expect(balanceLine({ amount: '5.53', currency: 'USDT' })).toBe('5.53 USDT')
+    expect(balanceLine({ amount: '', currency: '', raw: '{"status":"ok"}' })).toBe('')
+    expect(balanceLine(null)).toBe('')
+    // read again every couple of minutes while a page is open, never in a tight loop
+    expect(balanceRefreshMs).toBeGreaterThanOrEqual(60_000)
+  })
+  it('has the balance card\'s texts in both languages', () => {
+    for (const cat of [fa, en] as Record<string, any>[]) {
+      for (const k of ['balance_title', 'balance_at', 'balance_refresh', 'balance_unknown', 'balance_raw']) expect(cat.supplier[k], k).toBeTruthy()
     }
   })
 })

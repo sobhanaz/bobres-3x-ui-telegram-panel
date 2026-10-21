@@ -234,9 +234,54 @@ func TestSupplierCatalogIsImportedOffAndKeepsTheOwnersChoices(t *testing.T) {
 	if _, err := e.svc.SyncSupplierCatalog(ctx); err == nil {
 		t.Fatal("an unreadable catalog was accepted")
 	}
-	if bal, cur, err := e.svc.SupplierBalance(ctx); err != nil || bal != "0.40" || cur != "USDT" {
-		t.Fatalf("balance: %q %q %v", bal, cur, err)
+	if b, err := e.svc.SupplierBalance(ctx, true); err != nil || b.Amount != "0.40" || b.Currency != "USDT" || b.Raw != "" {
+		t.Fatalf("balance: %+v %v", b, err)
 	}
+}
+
+// The supplier's balance answer is read in the shapes such APIs use; what is not understood is shown as it came.
+func TestFindBalance(t *testing.T) {
+	for name, tc := range map[string]struct{ in, amount, cur string }{
+		"a number":          {`{"balance":5.53}`, "5.53", "USDT"},
+		"a string":          {`{"balance":"5.53","currency":"usdt"}`, "5.53", "USDT"},
+		"text with unit":    {`{"api_balance":"5.53 USDT"}`, "5.53", "USDT"},
+		"a decimal comma":   {`{"balance":"5,53"}`, "5.53", "USDT"},
+		"wrapped in data":   {`{"status":"ok","data":{"balance":5.53,"currency":"USD"}}`, "5.53", "USD"},
+		"a balance object":  {`{"success":true,"balance":{"amount":"5.53","currency":"USDT"}}`, "5.53", "USDT"},
+		"another name":      {`{"ok":true,"usdt_balance":5.53}`, "5.53", "USDT"},
+		"capital letters":   {`{"Balance":5.53}`, "5.53", "USDT"},
+		"zero is a balance": {`{"balance":0}`, "0", "USDT"},
+		"dollar sign":       {`{"balance":"$5.53"}`, "5.53", "USDT"},
+		"nothing about it":  {`{"status":"ok","orders":3}`, "", ""},
+		"a bool":            {`{"balance":true}`, "", ""},
+		"deeper than three": {`{"a":{"b":{"c":{"d":{"balance":1}}}}}`, "", ""},
+	} {
+		var v any
+		if err := json.Unmarshal([]byte(tc.in), &v); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if amount, cur := findBalance(v); amount != tc.amount || cur != tc.cur {
+			t.Errorf("%s: %q %q, want %q %q", name, amount, cur, tc.amount, tc.cur)
+		}
+	}
+}
+
+// An answer that cannot be read comes back as it is, without the key, so the owner can see what the supplier says.
+func TestSupplierBalanceUnreadable(t *testing.T) {
+	tr := supplierTransportFunc(func(action, key string) (int, []byte) {
+		return 200, []byte(`{"status":"ok","note":"key ` + key + ` is active"}`)
+	})
+	b, err := NewSupplierClient(tr, "supkey-xxxxxxxxxxxxxxxx").Balance(context.Background())
+	if err != nil || b.Amount != "" || !strings.Contains(b.Raw, `"status":"ok"`) || strings.Contains(b.Raw, "supkey") {
+		t.Fatalf("%+v %v", b, err)
+	}
+}
+
+type supplierTransportFunc func(action, key string) (int, []byte)
+
+func (f supplierTransportFunc) PostSupplier(_ context.Context, action, key string, _ []byte) (int, []byte, error) {
+	status, body := f(action, key)
+	return status, body, nil
 }
 
 func ptr64(n int64) *int64 { return &n }
@@ -509,5 +554,57 @@ func TestSupplierParsersAreTolerantAndNeverTrustTheAnswer(t *testing.T) {
 	}
 	if !(&SupplierError{Status: 402}).Final() {
 		t.Error("a 402 is not final")
+	}
+}
+
+// The supplier's texts carry Telegram custom-emoji placeholders ("{pe:123}") and Windows line breaks: they are read without them
+// (the raw product keeps them).
+func TestSupplierCatalogTextIsCleaned(t *testing.T) {
+	raw := `{"products":[{"id":19,"name":"{pe:5244675575502628242} GitHub Student","description":"{pe:5447644880824181073}⚠️ Use it\r\n\r\n{pe:1}✔️ Personal only","price":10,"stock":1}]}`
+	got, err := parseSupplierCatalog([]byte(raw))
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%v %v", got, err)
+	}
+	if got[0].Name != "GitHub Student" || got[0].Description != "⚠️ Use it\n\n✔️ Personal only" {
+		t.Fatalf("%q %q", got[0].Name, got[0].Description)
+	}
+	if !strings.Contains(string(got[0].Raw), "{pe:5244675575502628242}") {
+		t.Fatal("the raw product was changed")
+	}
+}
+
+// A balance read a moment ago is shown again; fresh asks the supplier; a new key forgets it.
+func TestSupplierBalanceIsKeptForAMinute(t *testing.T) {
+	e := newSupplierEnv(t)
+	ctx := context.Background()
+	read := func(fresh bool) SupplierBalance {
+		b, err := e.svc.SupplierBalance(ctx, fresh)
+		if err != nil || b.Amount != "0.40" {
+			t.Fatalf("balance %+v %v", b, err)
+		}
+		return b
+	}
+	read(false)
+	read(false)
+	if n := e.fake.count("balance"); n != 1 {
+		t.Fatalf("%d calls for two reads", n)
+	}
+	read(true)
+	if n := e.fake.count("balance"); n != 2 {
+		t.Fatalf("a fresh read made %d calls in all", n)
+	}
+	e.svc.supplierBal.mu.Lock()
+	e.svc.supplierBal.at = time.Now().Add(-2 * supplierBalanceTTL)
+	e.svc.supplierBal.mu.Unlock()
+	read(false)
+	if n := e.fake.count("balance"); n != 3 {
+		t.Fatalf("an old balance was shown again: %d calls", n)
+	}
+	if err := e.svc.SetSupplierKey(ctx, e.owner, supplierTestKey); err != nil {
+		t.Fatal(err)
+	}
+	read(false)
+	if n := e.fake.count("balance"); n != 4 {
+		t.Fatalf("a new key kept the old balance: %d calls", n)
 	}
 }
