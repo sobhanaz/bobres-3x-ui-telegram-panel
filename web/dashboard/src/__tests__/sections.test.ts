@@ -26,6 +26,14 @@ describe('sections', () => {
     expect(visibleSections([...support, 'reports.read']).map((s) => s.key)).toContain('reports')
     expect(sections.find((s) => s.key === 'reports')?.perm).toBe('reports.read')
   })
+  it('shows the vendor\'s own sections only to an owner whose license grants them', () => {
+    const owner = ['overview.read', 'license.write', 'gateways.write', 'discounts.write']
+    expect(visibleSections(owner).map((s) => s.key)).not.toContain('licenses')
+    expect(visibleSections(owner).map((s) => s.key)).not.toContain('supplier')
+    expect(visibleSections([...owner, 'private.features']).map((s) => s.key)).toEqual(expect.arrayContaining(['licenses', 'supplier']))
+    // the feature without the permission opens nothing
+    expect(visibleSections(['overview.read', 'private.features']).map((s) => s.key)).not.toContain('licenses')
+  })
   it('has a title and description in both languages', () => {
     for (const s of sections) {
       for (const cat of [fa, en] as Record<string, any>[]) {

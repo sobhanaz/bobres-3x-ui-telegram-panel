@@ -126,13 +126,31 @@ func parseMinor(s, currency string) (int64, error) {
 	return w*unit + f, nil
 }
 
+// PrivateFeatures reports whether this install's license grants the vendor's own features (selling licenses, managing the
+// license server, reselling a supplier's accounts). Everything of those features asks it: without it they are hidden in the
+// dashboard and the bot and refused by core, whatever the settings say.
+func (s *Service) PrivateFeatures(ctx context.Context) bool {
+	if s.cfg.PrivateFeaturesOverride != nil {
+		return *s.cfg.PrivateFeaturesOverride
+	}
+	eff, err := s.Effective(ctx)
+	return err == nil && eff.Entitlements.PrivateFeatures
+}
+
+func (s *Service) requirePrivate(ctx context.Context) error {
+	if !s.PrivateFeatures(ctx) {
+		return stateErr("this feature is not part of this store's license")
+	}
+	return nil
+}
+
 // VendorAvailable reports whether core can sell licenses at all: it has the master key that protects the admin key
 // and the activation keys.
 func (s *Service) VendorAvailable() bool { return s.cfg.Secrets != nil }
 
 // VendorOn reports whether license sales are on: the owner switched them on and set the admin key.
 func (s *Service) VendorOn(ctx context.Context) bool {
-	if !s.VendorAvailable() || s.setting(ctx, SettingVendorEnabled) != "true" {
+	if !s.VendorAvailable() || !s.PrivateFeatures(ctx) || s.setting(ctx, SettingVendorEnabled) != "true" {
 		return false
 	}
 	_, err := s.st.GetVendorConfig(ctx, s.st.Conn())
@@ -143,6 +161,9 @@ func (s *Service) VendorOn(ctx context.Context) bool {
 // nothing returns the key. The audit says who changed it, never the key. The requests it signs go through the bot to
 // the license server the bot is configured for.
 func (s *Service) SetVendorConfig(ctx context.Context, actor *store.User, privateKey string) error {
+	if err := s.requirePrivate(ctx); err != nil {
+		return err
+	}
 	if s.cfg.Secrets == nil {
 		return stateErr("core has no master key, so it cannot keep the admin key")
 	}

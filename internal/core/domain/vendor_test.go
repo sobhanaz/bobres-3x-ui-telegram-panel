@@ -232,6 +232,7 @@ type vendorEnv struct {
 func newVendorEnv(t *testing.T) *vendorEnv {
 	t.Helper()
 	svc, s := testService(t)
+	grant(svc)
 	now := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	e := &vendorEnv{t: t, svc: svc, s: s, owner: staffMember(t, s, 9400, "owner"), clock: &now}
 	var priv string
@@ -274,6 +275,8 @@ func (e *vendorEnv) buy(u *store.User, tier string, months int, key string) (*Ve
 }
 
 const usdt = 1_000_000
+
+func grant(s *Service) { v := true; s.cfg.PrivateFeaturesOverride = &v }
 
 func TestVendorPricesComeFromTheTierFile(t *testing.T) {
 	svc, _ := testService(t)
@@ -615,6 +618,7 @@ func TestVendorDoubleTapRaceIsOnePurchase(t *testing.T) {
 
 func TestVendorConfigIsWriteOnlyAndChecked(t *testing.T) {
 	svc, s := testService(t)
+	grant(svc)
 	owner := staffMember(t, s, 9471, "owner")
 	ctx := context.Background()
 	priv, _, err := license.NewAdminKey()

@@ -54,7 +54,11 @@ func (s *testSupplier) made() int { s.mu.Lock(); defer s.mu.Unlock(); return s.n
 func supplierWorld(t *testing.T) (*world, *testSupplier, *person) {
 	t.Helper()
 	sup := &testSupplier{orders: map[string]string{}}
-	w := newWorldOpts(t, []int64{ownerID}, testenv.WithDomainConfig(func(c *coredomain.Config) { c.SupplierTransport = sup }))
+	w := newWorldOpts(t, []int64{ownerID}, testenv.WithDomainConfig(func(c *coredomain.Config) {
+		c.SupplierTransport = sup
+		yes := true
+		c.PrivateFeaturesOverride = &yes
+	}))
 	owner := w.customer(ownerID, "owner")
 	ctx := context.Background()
 	o := w.storeUser(ownerID)

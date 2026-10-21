@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### The vendor's own features are locked behind the license
+- A new entitlement, **`private_features`**, unlocks the features that are the vendor's own and not for sale: selling BOBRES licenses,
+  managing the license server from the dashboard, and reselling a supplier's accounts. Only a license the vendor signs for its own
+  store carries it (no tier preset does). **Without it** the dashboard does not show those pages, core answers 404 to their paths,
+  refuses to keep their keys, the bot's switches read off whatever they were set to, and nothing is sold. Pending orders and what
+  customers already bought keep settling and stay readable. A license signed before this version has none of it, as it should.
+
 ### The owner's own bot resells a supplier's digital accounts (off unless set up)
 - **Digital accounts**: the store reads a supplier's catalog (the reseller API of ssondigitalworks.online: products, balance, order),
   imports every product **off and unpriced**, and the owner writes the **price in Toman** and the Persian and English texts and

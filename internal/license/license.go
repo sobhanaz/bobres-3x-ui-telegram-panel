@@ -49,6 +49,10 @@ type Entitlements struct {
 	// the free tier's 1.
 	MaxJoinChats int    `json:"max_join_chats"`
 	UpdatesUntil string `json:"updates_until,omitempty"` // YYYY-MM-DD
+	// PrivateFeatures unlocks the features that are the vendor's own and not for sale: selling BOBRES licenses, managing
+	// the license server from the dashboard, and reselling a supplier's accounts. Only a license the vendor signs for its
+	// own store carries it (no tier preset does); without it those features are hidden and refused.
+	PrivateFeatures bool `json:"private_features,omitempty"`
 }
 
 // Token is the signed payload.

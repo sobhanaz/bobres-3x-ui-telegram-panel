@@ -38,7 +38,7 @@ func TestSupplierEndpointsAreTheOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env})
+	f.dom = domain.New(f.st, domain.Config{OwnerTelegramIDs: []int64{ownerTG}, Secrets: env, PrivateFeaturesOverride: &granted})
 	f.api.cfg.Domain = f.dom
 	stub := &stubSupplier{}
 	f.dom.SetSupplierTransport(stub)

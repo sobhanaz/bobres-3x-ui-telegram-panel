@@ -501,6 +501,11 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	for k, v := range m {
 		out.Values[k] = string(v)
 	}
+	// The vendor's own features are switched off for a store whose license does not grant them, whatever the switches say.
+	if !s.dom.PrivateFeatures(ctx) {
+		out.Values[domain.SettingVendorEnabled] = "false"
+		out.Values[domain.SettingSupplierEnabled] = "false"
+	}
 	// Where the Mini App opens from: only while it is on and the store has a
 	// public HTTPS address Telegram can reach.
 	if plain, err := s.dom.Settings(ctx); err == nil && domain.MiniAppOn(plain) {

@@ -103,6 +103,7 @@ type supplierEnv struct {
 func newSupplierEnv(t *testing.T) *supplierEnv {
 	t.Helper()
 	svc, s := testService(t)
+	grant(svc)
 	now := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	e := &supplierEnv{t: t, svc: svc, s: s, owner: staffMember(t, s, 9500, "owner"), clock: &now, fake: newFakeSupplier()}
 	svc.cfg.VendorNow = func() time.Time { return *e.clock }
@@ -432,6 +433,7 @@ func TestSupplierLostAnswerDoesNotChargeTwice(t *testing.T) {
 
 func TestSupplierKeyIsWriteOnlyAndCoreNeedsABot(t *testing.T) {
 	svc, s := testService(t)
+	grant(svc)
 	owner := staffMember(t, s, 9541, "owner")
 	ctx := context.Background()
 	for name, key := range map[string]string{"empty": "", "short": "abc", "a space": "sk live 0123456789", "a newline": "supkey-0123456789\nX: y"} {

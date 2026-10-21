@@ -93,6 +93,8 @@ func licenseWorld(t *testing.T) (*world, *licenseServer, *person) {
 	ls, priv := newLicenseServer(t)
 	w := newWorldOpts(t, []int64{ownerID}, testenv.WithDomainConfig(func(c *coredomain.Config) {
 		c.VendorTransport = coredomain.DirectVendorTransport(ls.srv.URL, ls.srv.Client())
+		yes := true
+		c.PrivateFeaturesOverride = &yes
 	}))
 	owner := w.customer(ownerID, "owner")
 	ctx := context.Background()

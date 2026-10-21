@@ -59,12 +59,15 @@ func (s *Service) SupplierConfigured(ctx context.Context) bool {
 
 // SupplierOn reports whether the resale is on: the owner switched it on and set the API key.
 func (s *Service) SupplierOn(ctx context.Context) bool {
-	return s.SupplierAvailable() && s.setting(ctx, SettingSupplierEnabled) == "true" && s.SupplierConfigured(ctx)
+	return s.SupplierAvailable() && s.PrivateFeatures(ctx) && s.setting(ctx, SettingSupplierEnabled) == "true" && s.SupplierConfigured(ctx)
 }
 
 // SetSupplierKey stores the supplier's API key, encrypted. It is write-only: nothing returns it. The audit says who
 // changed it, never the key.
 func (s *Service) SetSupplierKey(ctx context.Context, actor *store.User, apiKey string) error {
+	if err := s.requirePrivate(ctx); err != nil {
+		return err
+	}
 	if s.cfg.Secrets == nil {
 		return stateErr("core has no master key, so it cannot keep the API key")
 	}
@@ -117,6 +120,9 @@ func (s *Service) SupplierBalance(ctx context.Context) (amount, currency string,
 // SyncSupplierCatalog reads the supplier's catalog into the store (new products come in OFF) and returns how many
 // products it listed.
 func (s *Service) SyncSupplierCatalog(ctx context.Context) (int, error) {
+	if !s.PrivateFeatures(ctx) {
+		return 0, nil // the worker's half-hourly read does nothing on a store without the feature
+	}
 	cl, err := s.supplierClient(ctx)
 	if err != nil {
 		return 0, err

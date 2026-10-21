@@ -1,5 +1,7 @@
 package web
 
+import "context"
+
 import "sort"
 
 // Permission flags. A role grants a set; handlers check one flag each, so
@@ -85,4 +87,16 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// PermPrivate is not a staff permission: it is added to the dashboard's list for an owner whose store's license grants the
+// vendor's own features (Entitlements.PrivateFeatures), and the menu entries of those features need it.
+const PermPrivate = "private.features"
+
+func (s *Server) permissionsFor(ctx context.Context, role string) []string {
+	perms := Permissions(role)
+	if role == "owner" && s.cfg.Domain.PrivateFeatures(ctx) {
+		perms = append(perms, PermPrivate)
+	}
+	return perms
 }
