@@ -8,7 +8,20 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-### Digital accounts: the balance at the supplier, always in view
+## [0.10.1] — 2026-10-21
+
+A patch for the owner's **Digital accounts**: the supplier's balance is now **always in view** (on the page and on the Overview),
+and it is read from more shapes of the supplier's answer. Nothing changes in a customer's bot, dashboard or license.
+
+### Updating
+- No database migration, no new service, nothing to configure.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. No license change is needed.
+
+### Known limits
+- The balance is read from the supplier's answer by the names such APIs use; when the answer is not understood the page shows it
+  as it came, so the reading can be taught in a later patch.
+
+### Changed
 - **The owner's balance at the supplier is shown all the time**: a card at the top of the Digital accounts page and on the Overview
   (owner only, when the store resells), read when the page opens and every two minutes while it is open, with a button to read it
   now. Core keeps a balance it read for a minute, so a busy dashboard is not a call to the supplier at every page view.
