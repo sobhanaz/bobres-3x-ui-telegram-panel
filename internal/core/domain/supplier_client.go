@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -89,11 +91,20 @@ func clipStr(s string, n int) string {
 	return s[:n]
 }
 
+// SupplierBalance is the API account's balance at the supplier. Raw is the supplier's answer (clipped, the key taken out)
+// and is set only when the amount could not be read from it.
+type SupplierBalance struct {
+	Amount   string
+	Currency string
+	Raw      string
+}
+
 // SupplierClient is what core needs from the supplier.
 type SupplierClient interface {
 	Products(ctx context.Context) ([]SupplierProductInfo, error)
-	// Balance is the supplier balance as the supplier writes it (a number and its currency), "" when it cannot be read.
-	Balance(ctx context.Context) (amount string, currency string, err error)
+	// Balance is the supplier balance as the supplier writes it (a number and its currency); when the answer is not
+	// understood only Raw is set.
+	Balance(ctx context.Context) (SupplierBalance, error)
 	// Order buys quantity of a product with a unique external id; asking again with the same id returns the same order.
 	Order(ctx context.Context, productID string, quantity int, externalID string) (*SupplierDelivery, error)
 }
@@ -111,22 +122,107 @@ func (c supplierCall) Products(ctx context.Context) ([]SupplierProductInfo, erro
 	return parseSupplierCatalog(raw)
 }
 
-func (c supplierCall) Balance(ctx context.Context) (string, string, error) {
+func (c supplierCall) Balance(ctx context.Context) (SupplierBalance, error) {
 	raw, err := c.do(ctx, "balance", nil)
 	if err != nil {
-		return "", "", err
+		return SupplierBalance{}, err
 	}
 	var v any
-	if json.Unmarshal(raw, &v) != nil {
-		return "", "", nil
+	if json.Unmarshal(raw, &v) == nil {
+		if amount, cur := findBalance(v); amount != "" {
+			return SupplierBalance{Amount: amount, Currency: cur}, nil
+		}
 	}
-	m := firstObject(v)
-	amount := strFrom(m, "balance", "api_balance", "amount", "available")
-	cur := strings.ToUpper(strFrom(m, "currency", "currency_code"))
-	if cur == "" {
-		cur = "USDT"
+	// Not understood: the answer itself (it carries no key; the key is taken out anyway) so the owner can see what the
+	// supplier says and the parser can be taught.
+	shown := string(raw)
+	if c.key != "" {
+		shown = strings.ReplaceAll(shown, c.key, "***")
 	}
-	return amount, cur, nil
+	return SupplierBalance{Raw: clipStr(shown, 400)}, nil
+}
+
+// findBalance reads the balance out of the supplier's answer: a number or a text like "5.53 USDT" under a key that
+// names a balance, at the top or up to three levels down ({"data":{"balance":...}}). The currency is the answer's own
+// ("currency", or the letters after the number) and USDT when it names none.
+func findBalance(v any) (amount, currency string) {
+	exact := []string{"balance", "api_balance", "apibalance", "available_balance", "credit", "credits", "funds", "available", "amount"}
+	level := []map[string]any{}
+	if m, ok := v.(map[string]any); ok {
+		level = append(level, m)
+	}
+	for depth := 0; depth < 4 && len(level) > 0; depth++ {
+		var next []map[string]any
+		for _, m := range level {
+			// A key that is exactly a balance name first, then any key that mentions a balance.
+			keys := append([]string{}, exact...)
+			var rest []string
+			for k := range m {
+				if lk := strings.ToLower(k); strings.Contains(lk, "balance") && !slices.Contains(exact, lk) {
+					rest = append(rest, k)
+				}
+			}
+			sort.Strings(rest)
+			for _, k := range append(keys, rest...) {
+				mk := matchKey(m, k)
+				if mk == "" {
+					continue
+				}
+				switch x := m[mk].(type) {
+				case float64:
+					return strconv.FormatFloat(x, 'f', -1, 64), balanceCurrency(m, "")
+				case string:
+					if n, cur := splitAmount(x); n != "" {
+						return n, balanceCurrency(m, cur)
+					}
+				case map[string]any:
+					next = append(next, x)
+				}
+			}
+			for _, k := range []string{"data", "result", "account", "api", "reseller", "wallet"} {
+				if inner, ok := m[k].(map[string]any); ok {
+					next = append(next, inner)
+				}
+			}
+		}
+		level = next
+	}
+	return "", ""
+}
+
+// matchKey is the key of m that equals k ignoring case ("" when none).
+func matchKey(m map[string]any, k string) string {
+	if _, ok := m[k]; ok {
+		return k
+	}
+	for mk := range m {
+		if strings.EqualFold(mk, k) {
+			return mk
+		}
+	}
+	return ""
+}
+
+var amountRe = regexp.MustCompile(`^\s*[$€£]?\s*(-?\d+(?:[.,]\d+)?)\s*([A-Za-z]{3,5})?\s*$`)
+
+// splitAmount reads "5.53", "5.53 USDT" or "$5.53" (the number, and the currency letters when there are some).
+func splitAmount(s string) (number, currency string) {
+	m := amountRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", ""
+	}
+	return strings.ReplaceAll(m[1], ",", "."), strings.ToUpper(m[2])
+}
+
+// balanceCurrency is the currency named next to the balance, else the one found in the number's text, else USDT.
+func balanceCurrency(m map[string]any, fromText string) string {
+	if c := strings.ToUpper(strFrom(m, "currency", "currency_code", "unit")); c != "" {
+		return c
+	}
+	if fromText != "" {
+		return fromText
+	}
+	return "USDT"
 }
 
 func (c supplierCall) Order(ctx context.Context, productID string, quantity int, externalID string) (*SupplierDelivery, error) {

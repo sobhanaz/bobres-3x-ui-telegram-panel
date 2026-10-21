@@ -941,6 +941,7 @@
     "key_saved": "API key saved",
     "check_balance": "Check the supplier balance",
     "balance_unknown": "(not readable)",
+    "balance_raw": "The supplier answered, but the balance was not found in it. Its answer:",
     "turn_on": "Turn on the Digital accounts button",
     "turn_off": "Turn it off",
     "turned_on": "Digital accounts are on",

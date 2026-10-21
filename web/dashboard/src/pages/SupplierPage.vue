@@ -69,12 +69,15 @@ async function setSales(on: boolean) {
 }
 
 const balance = ref('')
+// the supplier's answer when the balance could not be read from it (it has no key in it)
+const balanceRaw = ref('')
 const checking = ref(false)
 async function checkBalance() {
   checking.value = true
   try {
-    const b = await api<{ amount: string; currency: string }>('GET', '/supplier/balance')
+    const b = await api<{ amount: string; currency: string; raw?: string }>('GET', '/supplier/balance')
     balance.value = b.amount ? `${b.amount} ${b.currency}` : t('supplier.balance_unknown')
+    balanceRaw.value = b.amount ? '' : (b.raw ?? '')
   } catch (e) {
     fail(e)
   } finally {
@@ -201,6 +204,10 @@ onMounted(() => {
         <Button v-if="status.configured" type="button" outlined :label="t('supplier.check_balance')" :loading="checking" @click="checkBalance" />
         <span v-if="balance" class="app-ltr app-mono">{{ balance }}</span>
       </div>
+      <p v-if="balanceRaw" class="app-muted">
+        {{ t('supplier.balance_raw') }}
+        <code class="app-ltr app-mono raw">{{ balanceRaw }}</code>
+      </p>
     </form>
     <div class="row">
       <Button v-if="status.configured && !status.on" severity="success" :label="t('supplier.turn_on')" @click="setSales(true)" />
@@ -316,6 +323,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.raw {
+  display: block;
+  margin-block-start: 0.25rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .intro {
   margin-block: 0 0.75rem;
   font-size: 0.9rem;

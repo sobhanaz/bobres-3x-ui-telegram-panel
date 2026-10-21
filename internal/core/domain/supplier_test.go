@@ -234,9 +234,54 @@ func TestSupplierCatalogIsImportedOffAndKeepsTheOwnersChoices(t *testing.T) {
 	if _, err := e.svc.SyncSupplierCatalog(ctx); err == nil {
 		t.Fatal("an unreadable catalog was accepted")
 	}
-	if bal, cur, err := e.svc.SupplierBalance(ctx); err != nil || bal != "0.40" || cur != "USDT" {
-		t.Fatalf("balance: %q %q %v", bal, cur, err)
+	if b, err := e.svc.SupplierBalance(ctx); err != nil || b.Amount != "0.40" || b.Currency != "USDT" || b.Raw != "" {
+		t.Fatalf("balance: %+v %v", b, err)
 	}
+}
+
+// The supplier's balance answer is read in the shapes such APIs use; what is not understood is shown as it came.
+func TestFindBalance(t *testing.T) {
+	for name, tc := range map[string]struct{ in, amount, cur string }{
+		"a number":          {`{"balance":5.53}`, "5.53", "USDT"},
+		"a string":          {`{"balance":"5.53","currency":"usdt"}`, "5.53", "USDT"},
+		"text with unit":    {`{"api_balance":"5.53 USDT"}`, "5.53", "USDT"},
+		"a decimal comma":   {`{"balance":"5,53"}`, "5.53", "USDT"},
+		"wrapped in data":   {`{"status":"ok","data":{"balance":5.53,"currency":"USD"}}`, "5.53", "USD"},
+		"a balance object":  {`{"success":true,"balance":{"amount":"5.53","currency":"USDT"}}`, "5.53", "USDT"},
+		"another name":      {`{"ok":true,"usdt_balance":5.53}`, "5.53", "USDT"},
+		"capital letters":   {`{"Balance":5.53}`, "5.53", "USDT"},
+		"zero is a balance": {`{"balance":0}`, "0", "USDT"},
+		"dollar sign":       {`{"balance":"$5.53"}`, "5.53", "USDT"},
+		"nothing about it":  {`{"status":"ok","orders":3}`, "", ""},
+		"a bool":            {`{"balance":true}`, "", ""},
+		"deeper than three": {`{"a":{"b":{"c":{"d":{"balance":1}}}}}`, "", ""},
+	} {
+		var v any
+		if err := json.Unmarshal([]byte(tc.in), &v); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if amount, cur := findBalance(v); amount != tc.amount || cur != tc.cur {
+			t.Errorf("%s: %q %q, want %q %q", name, amount, cur, tc.amount, tc.cur)
+		}
+	}
+}
+
+// An answer that cannot be read comes back as it is, without the key, so the owner can see what the supplier says.
+func TestSupplierBalanceUnreadable(t *testing.T) {
+	tr := supplierTransportFunc(func(action, key string) (int, []byte) {
+		return 200, []byte(`{"status":"ok","note":"key ` + key + ` is active"}`)
+	})
+	b, err := NewSupplierClient(tr, "supkey-xxxxxxxxxxxxxxxx").Balance(context.Background())
+	if err != nil || b.Amount != "" || !strings.Contains(b.Raw, `"status":"ok"`) || strings.Contains(b.Raw, "supkey") {
+		t.Fatalf("%+v %v", b, err)
+	}
+}
+
+type supplierTransportFunc func(action, key string) (int, []byte)
+
+func (f supplierTransportFunc) PostSupplier(_ context.Context, action, key string, _ []byte) (int, []byte, error) {
+	status, body := f(action, key)
+	return status, body, nil
 }
 
 func ptr64(n int64) *int64 { return &n }

@@ -109,10 +109,10 @@ func (s *Service) supplierClient(ctx context.Context) (SupplierClient, error) {
 }
 
 // SupplierBalance is the balance of the API account at the supplier, as the supplier writes it.
-func (s *Service) SupplierBalance(ctx context.Context) (amount, currency string, err error) {
+func (s *Service) SupplierBalance(ctx context.Context) (SupplierBalance, error) {
 	cl, err := s.supplierClient(ctx)
 	if err != nil {
-		return "", "", err
+		return SupplierBalance{}, err
 	}
 	return cl.Balance(ctx)
 }
