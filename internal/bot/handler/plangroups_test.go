@@ -16,7 +16,7 @@ func TestPlanGroupsStepBeforeThePlans(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
 	owner.text("/plan_add 99000 IRT 7 20 Weekly 20GB | هفتگی ۲۰ گیگ")
-	owner.text("/plan_add 250000 IRT 90 200 Quarterly 200GB | سه‌ماهه ۲۰۰ گیگ")
+	owner.text("/plan_add 250000 IRT 90 200 Quarterly 200GB | سه ماهه ۲۰۰ گیگ")
 	ctx := context.Background()
 	actor := w.storeUser(ownerID)
 
@@ -111,7 +111,7 @@ func TestPlanGroupsStepBeforeThePlans(t *testing.T) {
 	fa.press("lang:fa")
 	fa.tap("buy")
 	fa.lastButton("📂 شروع")
-	fa.lastButton("📦 سایر پلن‌ها")
+	fa.lastButton("📦 سایر پلن\u200cها")
 	fa.tap("pg:" + g.ID)
 	fa.shownHas("برای مصرف سبک")
 
