@@ -8,6 +8,28 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.10.0] — 2026-10-21
+
+The owner's own bot can now **resell a supplier's digital accounts** (the Digital accounts button, a dashboard page for the
+supplier's key, products, prices and orders), and the features that are the vendor's own (selling licenses, managing the
+license server, this resale) are **locked behind a license entitlement, `private_features`**: a customer's install does not
+show them, refuses them and has them off. Nothing changes in a customer's bot, dashboard or license.
+
+### Updating
+- One database migration, additive (so a rollback keeps every order and credit): 00033 (the ledger kinds `supplier_purchase` and
+  `supplier_refund` and the tables `supplier_config`, `supplier_products` and `supplier_orders`, empty on every install that
+  does not resell). No new service, nothing to configure.
+- **The vendor's own store** needs a license that carries `private_features` to keep its Licenses page and to use Digital accounts:
+  rebuild the license server first (it must know the new field), give the license the entitlement (docs/13-license-server.md), then
+  update the store; the store takes the entitlement at its next daily refresh. Without it those pages are hidden.
+- Update from the dashboard (System > Updates) or `sudo bobres update`.
+
+### Known limits
+- **Nothing of the resale has met a real supplier yet:** the catalog and order answers are read tolerantly and each product's raw
+  JSON is kept, but the first real catalog read and a first real (cheap) order will show how the delivery reads.
+- The lock hides and refuses the features; it does not hide their code, which is in every build. A separate private build is on the list.
+- Prices of resold accounts are in Toman only; the bot buys one at a time.
+
 ### The vendor's own features are locked behind the license
 - A new entitlement, **`private_features`**, unlocks the features that are the vendor's own and not for sale: selling BOBRES licenses,
   managing the license server from the dashboard, and reselling a supplier's accounts. Only a license the vendor signs for its own

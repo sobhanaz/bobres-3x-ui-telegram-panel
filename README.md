@@ -12,9 +12,10 @@ it on their own server, with their own domain, bot, 3x-ui panels and brand.
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
 Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
-versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.9.1
-(managing every license of the license server from the dashboard; v0.9.0 added selling BOBRES licenses from the
-owner's own bot with a signed admin API on the license server and a Licenses page) is the latest. They were tried in a Docker lab with two Ubuntu servers
+versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.10.0
+(reselling a supplier's digital accounts from the owner's own bot, and the lock that keeps the vendor's own features out of
+customers' installs; v0.9.1 added managing every license of the license server from the dashboard, and v0.9.0 selling BOBRES licenses
+from the owner's own bot) is the latest. They were tried in a Docker lab with two Ubuntu servers
 ([docs/11-staging-run.md](docs/11-staging-run.md)); an install on a real server, with real payments and a real
 certificate, is still to do. The landing page is live at https://sobhanaz.github.io/bobres-3x-ui-telegram-panel/.
 Still open: the legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
@@ -135,8 +136,8 @@ banner and one progress bar from 0 to 100%, keeps going if your SSH connection d
 Afterwards run `bobres` for the management menu:
 
 ```text
-   n____n   BOBRES manager  bobres v0.9.1
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.9.1
+   n____n   BOBRES manager  bobres v0.10.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.10.0
    \_||_/   Store: running (9/9 services)
   ──────────────────────────────────────────────────────────
    1. Status
