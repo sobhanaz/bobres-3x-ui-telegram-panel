@@ -12,10 +12,12 @@ a real panel), v0.6.0 (2026-10-20: the Mini App on by default with Stars, receip
 reseller panel; reseller management; the 3x-ui group `bobres_bot`), v0.6.1 (2026-10-20: the Mini App holds the
 store's required channel and takes a half-made manual payment up again) v0.7.0 (2026-10-20: updating from the
 dashboard, the Reports calendar and the CSV files, maintenance mode in every option, and the growth features of the bot)
-and v0.8.0 (2026-10-20: server monitoring, charts and a 3D report, backup download and restore from the dashboard, a full
-uninstall, the help center, the plan table, bulk purchase, gift codes and several required channels).
+v0.8.0 (2026-10-20: server monitoring, charts and a 3D report, backup download and restore from the dashboard, a full
+uninstall, the help center, the plan table, bulk purchase, gift codes and several required channels)
+and v0.9.0 (2026-10-21: selling BOBRES licenses from the owner's own bot, the signed admin API of the license server and the
+Licenses page of the dashboard).
 
-## Where things stand (after v0.8.0)
+## Where things stand (after v0.9.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
 Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
