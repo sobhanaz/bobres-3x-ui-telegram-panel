@@ -61,8 +61,10 @@ func (f *fakeVendor) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Ref, ID, Customer, Tier string
-		Months                  int
+		Ref, ID, Customer, Tier, Reason string
+		EndsAt                          string `json:"ends_at"`
+		Months                          int
+		NoEnd                           bool `json:"no_end"`
 	}
 	_ = json.Unmarshal(body, &req)
 	f.mu.Lock()
@@ -71,6 +73,32 @@ func (f *fakeVendor) serve(w http.ResponseWriter, r *http.Request) {
 	if f.failWith != 0 {
 		w.WriteHeader(f.failWith)
 		_, _ = w.Write([]byte(`{"error":"nope","message":"refused"}`))
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/list") {
+		all := make([]VendorLicenseInfo, 0, len(f.licenses))
+		for i := f.seq; i >= 1; i-- {
+			if l := f.licenses[fmt.Sprintf("lic_fake%04d", i)]; l != nil {
+				c := *l
+				c.Key = ""
+				all = append(all, c)
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"licenses": all})
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/get") {
+		l := f.licenses[req.ID]
+		if l == nil {
+			http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+			return
+		}
+		c := *l
+		c.Key = ""
+		c.Entitlements = json.RawMessage(`{"max_servers":-1}`)
+		c.Activations = []VendorActivation{{InstallID: "i1", Domain: "shop.example", ActivatedAt: f.now(), LastSeenAt: f.now()}}
+		c.Audit = []VendorAudit{{At: f.now(), Actor: "api:admin", Action: "license.create"}}
+		_ = json.NewEncoder(w).Encode(c)
 		return
 	}
 	reply := func(v VendorLicenseInfo) {
@@ -86,10 +114,47 @@ func (f *fakeVendor) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/create"):
 		f.seq++
-		ends := license.AddMonths(f.now(), req.Months)
-		v = VendorLicenseInfo{ID: fmt.Sprintf("lic_fake%04d", f.seq), Customer: req.Customer, Tier: req.Tier, Status: "active", EndsAt: &ends,
+		var ends *time.Time
+		switch {
+		case req.NoEnd:
+		case req.EndsAt != "":
+			d, err := time.Parse(time.DateOnly, req.EndsAt)
+			if err != nil {
+				http.Error(w, `{"error":"invalid","message":"bad date"}`, http.StatusBadRequest)
+				return
+			}
+			ends = &d
+		default:
+			e := license.AddMonths(f.now(), req.Months)
+			ends = &e
+		}
+		v = VendorLicenseInfo{ID: fmt.Sprintf("lic_fake%04d", f.seq), Customer: req.Customer, Tier: req.Tier, Status: "active", EndsAt: ends,
 			Key: fmt.Sprintf("BOBRES-FAKE-%04d", f.seq)}
 		f.licenses[v.ID] = &v
+	case strings.HasSuffix(r.URL.Path, "/update"):
+		l := f.licenses[req.ID]
+		if l == nil {
+			http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+			return
+		}
+		if l.Status == "revoked" {
+			http.Error(w, `{"error":"revoked","message":"a revoked license does not change"}`, http.StatusConflict)
+			return
+		}
+		if req.Customer != "" {
+			l.Customer = req.Customer
+		}
+		if req.Tier != "" {
+			l.Tier = req.Tier
+		}
+		if req.NoEnd {
+			l.EndsAt = nil
+		} else if req.EndsAt != "" {
+			d, _ := time.Parse(time.DateOnly, req.EndsAt)
+			l.EndsAt = &d
+		}
+		v = *l
+		v.Key = ""
 	case strings.HasSuffix(r.URL.Path, "/extend"):
 		l := f.licenses[req.ID]
 		if l == nil {
@@ -108,6 +173,10 @@ func (f *fakeVendor) serve(w http.ResponseWriter, r *http.Request) {
 		l := f.licenses[req.ID]
 		if l == nil {
 			http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+			return
+		}
+		if l.Status == "revoked" {
+			http.Error(w, `{"error":"revoked","message":"already revoked"}`, http.StatusConflict)
 			return
 		}
 		l.Status = "revoked"
@@ -649,5 +718,111 @@ func TestVendorOwnerGrantsAndRevokes(t *testing.T) {
 	st, err := e.svc.VendorStatus(ctx)
 	if err != nil || !st.On || !st.Configured || len(st.Tiers) != 2 || false {
 		t.Fatalf("status: %v %+v", err, st)
+	}
+}
+
+func TestVendorServerWideManagement(t *testing.T) {
+	e := newVendorEnv(t)
+	ctx := context.Background()
+	buyer := seedUser(t, e.s, 9491)
+	e.fund(buyer, 20*usdt)
+	sold, err := e.buy(buyer, "standard", VendorMonth, "mgmt-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A license made by hand: a key once, a repeat of the same click is the same license, the audit says who.
+	in := ServerLicenseCreate{Customer: " Gift Co ", Tier: "pro", EndsAt: "2027-06-30", RequestID: "click-create-1"}
+	made, err := e.svc.CreateServerLicense(ctx, e.owner, in)
+	if err != nil || made.Key == "" || made.Customer != "Gift Co" || made.EndsAt == nil || made.EndsAt.Year() != 2027 {
+		t.Fatalf("create: %v %+v", err, made)
+	}
+	again, err := e.svc.CreateServerLicense(ctx, e.owner, in)
+	if err != nil || !again.Replayed || again.Key != "" || again.ID != made.ID {
+		t.Fatalf("a repeated click: %v %+v", err, again)
+	}
+	forever, err := e.svc.CreateServerLicense(ctx, e.owner, ServerLicenseCreate{Customer: "Forever", Tier: "standard", NoEnd: true, RequestID: "click-create-2"})
+	if err != nil || forever.EndsAt != nil {
+		t.Fatalf("no end: %v %+v", err, forever)
+	}
+	for name, bad := range map[string]ServerLicenseCreate{
+		"no customer":         {Tier: "pro", Months: 1, RequestID: "click-bad-001"},
+		"no request id":       {Customer: "x", Tier: "pro", Months: 1},
+		"a short request id":  {Customer: "x", Tier: "pro", Months: 1, RequestID: "abc"},
+		"a control character": {Customer: "a\nb", Tier: "pro", Months: 1, RequestID: "click-bad-002"},
+	} {
+		if _, err := e.svc.CreateServerLicense(ctx, e.owner, bad); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+
+	// All of them are listed, the sold one included, and one can be read with where it runs.
+	all, err := e.svc.ListServerLicenses(ctx, "")
+	if err != nil || len(all) != 3 {
+		t.Fatalf("list: %v %d", err, len(all))
+	}
+	if _, err := e.svc.ListServerLicenses(ctx, "gone"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a bad filter: %v", err)
+	}
+	d, err := e.svc.GetServerLicense(ctx, sold.License.LicenseID)
+	if err != nil || len(d.Activations) != 1 || d.Activations[0].Domain != "shop.example" || len(d.Audit) != 1 || len(d.Entitlements) == 0 {
+		t.Fatalf("detail: %v %+v", err, d)
+	}
+	for _, bad := range []string{"", "x", "lic_UPPER", "lic_" + strings.Repeat("a", 60), "../x"} {
+		if _, err := e.svc.GetServerLicense(ctx, bad); !errors.Is(err, ErrInvalid) {
+			t.Errorf("id %q: %v", bad, err)
+		}
+	}
+
+	// Changing a SOLD license keeps the store's copy in step.
+	up, err := e.svc.UpdateServerLicense(ctx, e.owner, sold.License.LicenseID, ServerLicenseUpdate{Tier: "pro", EndsAt: "2030-01-01", RequestID: "click-upd-001"})
+	if err != nil || up.Tier != "pro" {
+		t.Fatalf("update: %v %+v", err, up)
+	}
+	mirror, _ := e.s.GetVendorLicense(ctx, e.s.Conn(), sold.License.ID, false)
+	if mirror.Tier != "pro" || mirror.EndsAt == nil || mirror.EndsAt.Year() != 2030 {
+		t.Fatalf("the sold copy was not kept in step: %+v", mirror)
+	}
+	if _, err := e.svc.UpdateServerLicense(ctx, e.owner, sold.License.LicenseID, ServerLicenseUpdate{ExtendMonths: 2, Customer: "x", RequestID: "click-upd-002"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("extend with other fields: %v", err)
+	}
+	ext, err := e.svc.UpdateServerLicense(ctx, e.owner, made.ID, ServerLicenseUpdate{ExtendMonths: 3, RequestID: "click-upd-003"})
+	if err != nil || ext.EndsAt == nil || !ext.EndsAt.Equal(license.AddMonths(*made.EndsAt, 3)) {
+		t.Fatalf("extend: %v %+v", err, ext)
+	}
+
+	// Revoke: both sides say revoked; a repeat, and a revoke done on the server meanwhile, are fine; a reason is required.
+	if _, err := e.svc.RevokeServerLicense(ctx, e.owner, sold.License.LicenseID, " "); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("revoke without a reason: %v", err)
+	}
+	rv, err := e.svc.RevokeServerLicense(ctx, e.owner, sold.License.LicenseID, "chargeback")
+	if err != nil || rv.Status != "revoked" {
+		t.Fatalf("revoke: %v %+v", err, rv)
+	}
+	mirror, _ = e.s.GetVendorLicense(ctx, e.s.Conn(), sold.License.ID, false)
+	if mirror.Status != "revoked" {
+		t.Fatalf("the sold copy is still %s", mirror.Status)
+	}
+	if _, err := e.svc.RevokeServerLicense(ctx, e.owner, sold.License.LicenseID, "again"); err != nil {
+		t.Fatalf("a repeated revoke: %v", err)
+	}
+	if _, err := e.svc.UpdateServerLicense(ctx, e.owner, sold.License.LicenseID, ServerLicenseUpdate{Customer: "x", RequestID: "click-upd-004"}); err == nil {
+		t.Fatal("a revoked license changed")
+	}
+
+	// A new key for a license nobody activated.
+	rk, err := e.svc.RekeyServerLicense(ctx, e.owner, forever.ID, "click-key-001")
+	if err != nil || !strings.HasPrefix(rk.Key, "BOBRES-REKEY-") {
+		t.Fatalf("rekey: %v %+v", err, rk)
+	}
+
+	// The audit names every change and holds no key.
+	var n int
+	if err := e.s.DB().QueryRow(ctx, `SELECT count(*) FROM core.audit_log WHERE action LIKE 'vendor.license.%'`).Scan(&n); err != nil || n < 6 {
+		t.Fatalf("audit rows: %d %v", n, err)
+	}
+	var leaked int
+	if err := e.s.DB().QueryRow(ctx, `SELECT count(*) FROM core.audit_log WHERE coalesce(after::text, '') LIKE '%BOBRES-%'`).Scan(&leaked); err != nil || leaked != 0 {
+		t.Fatalf("a key is in the audit: %d %v", leaked, err)
 	}
 }

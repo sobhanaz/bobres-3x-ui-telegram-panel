@@ -8,6 +8,17 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Dashboard > Licenses: manage every license of the license server
+- The Licenses page gets an **All licenses** tab that reads the license server itself (through the signed admin API, by way of the
+  bot): the store's own license, the ones made by hand with `licensesrv key` and the ones the bot sold, each with the domain it
+  runs on, when it was last seen and its moves. The owner can **make a license by hand** (a trial, a gift, a customer who paid
+  outside the bot: Standard, Pro or a trial, ending after some months, on a date, or never; the key is shown once), **change** one
+  (customer, tier, end date, or renew by some months), **revoke** one, **issue a new key** for one nobody activated, and open its
+  **details** (what it grants, where it ran, its history). What the bot sold stays in step with a change made here.
+- The license server's admin API gains `update`, creating with an end date or no end (and a trial), and a `get` with entitlements,
+  activations and audit. The bot's pass-through endpoint allows the new path. Every change carries a ref, so a double click is one
+  change; the audit names who did it and holds no key.
+
 ## [0.9.0] — 2026-10-21
 
 **Selling BOBRES licenses from the owner's own bot**: Standard and Pro, one month or a year, paid from the wallet in USDT,

@@ -286,7 +286,12 @@ func TestAdminRateLimit(t *testing.T) {
 func TestAdminValidation(t *testing.T) {
 	a := newAdminEnv(t, Rate{})
 	bad := map[string]AdminRequest{
-		"trial is not sold":   {Ref: ref(t), Customer: "x", Tier: "trial", Months: 1},
+		"an unknown tier":     {Ref: ref(t), Customer: "x", Tier: "gold", Months: 1},
+		"two ends":            {Ref: ref(t), Customer: "x", Tier: "pro", Months: 1, NoEnd: true},
+		"an end and months":   {Ref: ref(t), Customer: "x", Tier: "pro", Months: 1, EndsAt: "2030-01-01"},
+		"a bad date":          {Ref: ref(t), Customer: "x", Tier: "pro", EndsAt: "next year"},
+		"an end in the past":  {Ref: ref(t), Customer: "x", Tier: "pro", EndsAt: "2020-01-01"},
+		"an end far away":     {Ref: ref(t), Customer: "x", Tier: "pro", EndsAt: "2090-01-01"},
 		"no tier":             {Ref: ref(t), Customer: "x", Months: 1},
 		"zero months":         {Ref: ref(t), Customer: "x", Tier: "pro"},
 		"too many months":     {Ref: ref(t), Customer: "x", Tier: "pro", Months: 121},
@@ -371,5 +376,91 @@ func TestAdminCreateIsOnceUnderRace(t *testing.T) {
 	}
 	if keys != 1 || replays != 3 || len(ids) != 1 {
 		t.Fatalf("keys=%d replays=%d ids=%v, want one key, three replays, one license", keys, replays, ids)
+	}
+}
+
+func TestAdminManualCreateAndUpdate(t *testing.T) {
+	a := newAdminEnv(t, Rate{})
+	now := a.clock.Now()
+	call := func(path string, req AdminRequest) answer {
+		a.t.Helper()
+		if req.Ref == "" && path != "/admin/v1/licenses/get" && path != "/admin/v1/licenses/list" {
+			req.Ref = ref(a.t)
+		}
+		return a.call(path, req)
+	}
+
+	// An end date, no end, and a trial's own days: three ways to make a license by hand.
+	dated := call("/admin/v1/licenses/create", AdminRequest{Customer: "Gift Co", Tier: "pro", EndsAt: "2027-03-01"})
+	if dated.Code != http.StatusOK || dated.EndsAt == nil || !dated.EndsAt.Equal(time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)) || dated.Key == "" {
+		t.Fatalf("dated: %+v", dated)
+	}
+	forever := call("/admin/v1/licenses/create", AdminRequest{Customer: "Forever Co", Tier: "standard", NoEnd: true})
+	if forever.Code != http.StatusOK || forever.EndsAt != nil {
+		t.Fatalf("no end: %+v", forever)
+	}
+	trial := call("/admin/v1/licenses/create", AdminRequest{Customer: "Trial Co", Tier: "trial"})
+	if trial.Code != http.StatusOK || trial.EndsAt == nil || !trial.EndsAt.Equal(now.AddDate(0, 0, 30)) {
+		t.Fatalf("trial: %+v", trial)
+	}
+	// What was made by hand activates like any other.
+	if r := a.activate(dated.Key, newInstall(), "gift.example"); r.Status != http.StatusOK {
+		t.Fatalf("activate: %d %s", r.Status, r.Error)
+	}
+
+	// update: the customer, the tier (with its preset) and the end, each alone or together; an empty update is refused.
+	up := call("/admin/v1/licenses/update", AdminRequest{ID: forever.ID, Customer: "  Renamed Co  ", Tier: "pro", EndsAt: "2028-01-01"})
+	if up.Code != http.StatusOK || up.Customer != "Renamed Co" || up.Tier != "pro" || up.EndsAt == nil || up.EndsAt.Year() != 2028 {
+		t.Fatalf("update: %+v", up)
+	}
+	got, _ := a.st.LicenseByID(context.Background(), a.st.db, forever.ID, false)
+	if !got.Entitlements.WhiteLabel || got.Entitlements.MaxJoinChats != license.Unlimited {
+		t.Fatalf("the new tier's preset was not applied: %+v", got.Entitlements)
+	}
+	noEnd := call("/admin/v1/licenses/update", AdminRequest{ID: forever.ID, NoEnd: true})
+	if noEnd.Code != http.StatusOK || noEnd.EndsAt != nil {
+		t.Fatalf("no end again: %+v", noEnd)
+	}
+	for name, bad := range map[string]AdminRequest{
+		"nothing to change": {ID: forever.ID},
+		"two ends":          {ID: forever.ID, EndsAt: "2028-01-01", NoEnd: true},
+		"a past end":        {ID: forever.ID, EndsAt: "2020-01-01"},
+		"a bad tier":        {ID: forever.ID, Tier: "gold"},
+		"a control char":    {ID: forever.ID, Customer: "a\nb"},
+	} {
+		if r := call("/admin/v1/licenses/update", bad); r.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d %s", name, r.Code, r.Error)
+		}
+	}
+	if r := call("/admin/v1/licenses/update", AdminRequest{ID: "lic_nosuchlicense000", Customer: "x"}); r.Code != http.StatusNotFound {
+		t.Errorf("unknown: %d", r.Code)
+	}
+	// A repeat of the same ref changes nothing.
+	r1 := ref(t)
+	first := a.call("/admin/v1/licenses/update", AdminRequest{Ref: r1, ID: dated.ID, Customer: "Once"})
+	second := a.call("/admin/v1/licenses/update", AdminRequest{Ref: r1, ID: dated.ID, Customer: "Once"})
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || !second.Replayed {
+		t.Fatalf("repeat: %+v %+v", first, second)
+	}
+	// A revoked license does not change.
+	if r := call("/admin/v1/licenses/revoke", AdminRequest{ID: trial.ID, Reason: "test"}); r.Code != http.StatusOK {
+		t.Fatalf("revoke: %+v", r)
+	}
+	if r := call("/admin/v1/licenses/update", AdminRequest{ID: trial.ID, Customer: "x"}); r.Code != http.StatusConflict {
+		t.Fatalf("update after revoke: %d", r.Code)
+	}
+
+	// get: entitlements, where it ran, and its audit.
+	g := call("/admin/v1/licenses/get", AdminRequest{ID: dated.ID})
+	if g.Code != http.StatusOK || g.Entitlements == nil || !g.Entitlements.WhiteLabel || len(g.Activations) != 1 || g.Activations[0].Domain != "gift.example" ||
+		g.ActiveDomain != "gift.example" || g.LastSeenAt == nil || g.GraceDays == 0 {
+		t.Fatalf("get: %+v", g)
+	}
+	actions := map[string]bool{}
+	for _, e := range g.Audit {
+		actions[e.Action] = true
+	}
+	if !actions["license.create"] || !actions["license.update"] || !actions["activation.create"] {
+		t.Fatalf("audit actions: %v", actions)
 	}
 }

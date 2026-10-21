@@ -11,6 +11,12 @@ import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
 import Message from 'primevue/message'
+import Tab from 'primevue/tab'
+import TabList from 'primevue/tablist'
+import TabPanel from 'primevue/tabpanel'
+import TabPanels from 'primevue/tabpanels'
+import Tabs from 'primevue/tabs'
+import AllLicenses from '../components/licenses/AllLicenses.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
@@ -33,6 +39,7 @@ async function loadStatus() {
   }
 }
 
+const tab = ref('all')
 const key = ref('')
 const saving = ref(false)
 const formOk = computed(() => keyOk(key.value))
@@ -158,6 +165,17 @@ async function revoke() {
     <Tag v-else severity="secondary" :value="t('licenses.off')" />
   </section>
 
+  <Tabs v-model:value="tab" class="tabs">
+    <TabList>
+      <Tab value="all">{{ t('licenses.tab_all') }}</Tab>
+      <Tab value="sold">{{ t('licenses.tab_sold') }}</Tab>
+    </TabList>
+    <TabPanels>
+      <TabPanel value="all">
+        <AllLicenses v-if="status.configured" />
+        <Message v-else severity="info" :closable="false">{{ t('licenses.need_key') }}</Message>
+      </TabPanel>
+      <TabPanel value="sold">
   <div class="app-toolbar">
     <Select v-model="list.filters.status" class="status-filter" :options="statusOptions" option-label="label" option-value="value" :aria-label="t('licenses.status_col')" />
     <Button v-if="list.loading.value" text loading :aria-label="t('app.loading')" />
@@ -213,6 +231,9 @@ async function revoke() {
       </template>
     </Column>
   </DataTable>
+      </TabPanel>
+    </TabPanels>
+  </Tabs>
 
   <Dialog :visible="granting !== null" modal :header="t('licenses.give')" :style="{ width: '24rem' }" @update:visible="(v: boolean) => !v && (granting = null)">
     <p class="app-muted">{{ t('licenses.give_help') }}</p>
