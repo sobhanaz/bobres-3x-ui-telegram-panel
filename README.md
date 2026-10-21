@@ -12,10 +12,10 @@ it on their own server, with their own domain, bot, 3x-ui panels and brand.
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
 Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and adapters for older 3x-ui
-versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.8.0
-(server monitoring, charts and a 3D report, backup download and restore from the dashboard, a full uninstall, a FAQ
-and tutorials in the bot, a two-column plan list, bulk purchase, gift codes and more than one required channel;
-v0.7.0 added updating from the dashboard, the Reports calendar and the growth features of the bot) is the latest. They were tried in a Docker lab with two Ubuntu servers
+versions (built only when a customer needs one). The first public release, v0.1.0, came out on 2026-10-14; v0.9.0
+(selling BOBRES licenses from the owner's own bot, with a signed admin API on the license server and a Licenses page;
+v0.8.0 added server monitoring, charts and a 3D report, backup download and restore from the dashboard, a full uninstall,
+a FAQ and tutorials in the bot, a two-column plan list, bulk purchase, gift codes and more than one required channel) is the latest. They were tried in a Docker lab with two Ubuntu servers
 ([docs/11-staging-run.md](docs/11-staging-run.md)); an install on a real server, with real payments and a real
 certificate, is still to do. The landing page is live at https://sobhanaz.github.io/bobres-3x-ui-telegram-panel/.
 Still open: the legal review, the brand checks (domain, bot name, trademark) and the prices. The business model is decided: a free core
@@ -136,8 +136,8 @@ banner and one progress bar from 0 to 100%, keeps going if your SSH connection d
 Afterwards run `bobres` for the management menu:
 
 ```text
-   n____n   BOBRES manager  bobres v0.8.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.8.0
+   n____n   BOBRES manager  bobres v0.9.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.9.0
    \_||_/   Store: running (9/9 services)
   ──────────────────────────────────────────────────────────
    1. Status
