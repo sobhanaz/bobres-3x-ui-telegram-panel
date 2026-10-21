@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Plan groups
+- **Plans can be put in named groups with a text for each**, and the customer picks a group first, reads its text, then picks a plan of
+  it: in the bot (Buy shows the groups, a group's screen shows its text and its plans, Back from the payment menu returns to the group,
+  plans with no group are under "Other plans") and in the Mini App. A store with no group lists its plans exactly as before.
+- The dashboard's Plans page has a groups table (a name and a text in Persian and English, an order; deleting a group keeps its plans
+  on sale, ungrouped) and a Group field in the plan editor. The audit log names `plan_group.upsert` and `plan_group.delete`.
+- Core: `plan_groups` and `plans.group_id` (migration 00034, additive), `/api/v1/plan-groups`, `group_id` on a plan (absent keeps the
+  group, `""` clears it, so the bot's plan editor never loses it), `Plan.group_id` and `ListPlansResponse.groups` in the proto, and
+  `group` and `groups` in the Mini App's plans. A group has a name of at most 60 characters and a text of at most 1500 in each language,
+  a store has at most 50 groups, and a free trial or a traffic package is never in a group.
+- Renew, Add traffic, a reseller's Buy for a customer and the Bulk purchase still list the plans flat.
+
 ## [0.10.1] — 2026-10-21
 
 A patch for the owner's **Digital accounts**: the supplier's balance is now **always in view** (on the page and on the Overview),
