@@ -481,7 +481,7 @@ func TestListServers(t *testing.T) {
 	fakeB.SetPanelVersion("3.7.2")
 	f.srv.CheckHealth(ctx)
 	list, err := f.client.ListServers(ctx, &provisionerv1.ListServersRequest{})
-	if err != nil || len(list.GetServers()) != 2 || list.GetTestedMinVersion() != "v3.8.5" || list.GetTestedMaxVersion() != "v3.9.0" {
+	if err != nil || len(list.GetServers()) != 2 || list.GetTestedMinVersion() != "v3.8.5" || list.GetTestedMaxVersion() != "v3.10.2" {
 		t.Fatalf("list: %v %+v", err, list)
 	}
 	raw, _ := proto.Marshal(list)
@@ -841,7 +841,7 @@ func TestHealthLoop(t *testing.T) {
 		untested bool
 	}{
 		"3.8.5": {"v3.8.5", false}, "3.9.0": {"v3.9.0", false}, "3.8.4": {"v3.8.4", true},
-		"3.10.0": {"v3.10.0", true}, "": {"v3.x", false}, "dev+1a2b3c4d": {"dev+1a2b3c4d", true},
+		"3.10.0": {"v3.10.0", false}, "3.10.2": {"v3.10.2", false}, "3.10.3": {"v3.10.3", true}, "": {"v3.x", false}, "dev+1a2b3c4d": {"dev+1a2b3c4d", true},
 	} {
 		f.fake.SetPanelVersion(v)
 		f.srv.CheckHealth(ctx)
