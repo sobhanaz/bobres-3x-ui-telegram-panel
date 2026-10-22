@@ -42,6 +42,12 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Key flows
 **Buy:** plan list -> plan detail (price, GB, days) -> discount code (optional) -> payment method
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).
+**Reward codes:** the owner marks a plan with a percent in the dashboard (the plan's **Reward code after a purchase**). A paid purchase or renewal of it
+by a customer (not a reseller, not a free order, not a traffic package, not one service of a bulk purchase) makes a discount code for the buyer's
+next purchase of **the same plan**: `THX-` and eight characters, bound to the buyer (for anyone else it is "not valid"), to the plan (another plan:
+"This code is for another plan."), one use, 30 days. The bot sends it in its own message (`reward.code`: the plan, the code, the percent, the
+date, "only for you, once") with a Buy button; the buyer enters it at the payment menu's **Discount code** as any code. Each purchase brings a
+new code. A code staff made is unchanged (the dashboard's Discounts list shows reward codes too).
 **Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
 group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
 button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the

@@ -46,6 +46,9 @@ message Plan {
   // stored group when this is empty: the bot's plan editor never changes it,
   // the dashboard is where plans are grouped.
   string group_id = 13;
+  // The percent of the discount code a paid purchase of this plan gives its buyer for their next purchase of it (0: none).
+  // AdminUpsertPlan keeps the stored value when this is 0: the bot's plan editor never changes it, the dashboard does.
+  int32 reward_percent = 14;
 }
 
 // PlanGroup is a named group of plans with a text the customer reads before

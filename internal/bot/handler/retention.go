@@ -183,7 +183,7 @@ func discountKey(err error) string {
 		return "error.generic"
 	}
 	switch reason {
-	case "expired", "used_up", "already_used", "currency", "reseller":
+	case "expired", "used_up", "already_used", "currency", "reseller", "plan":
 		return "discount.bad." + reason
 	}
 	return "discount.bad.unknown"

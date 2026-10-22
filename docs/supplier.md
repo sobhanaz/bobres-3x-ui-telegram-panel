@@ -26,6 +26,10 @@ bot, dashboard and wallet are unchanged.
   every two minutes while it is open; core keeps a balance it read for a minute (`GET /api/v1/supplier/balance`, `?fresh=1`
   asks the supplier). It is read from a number or a text like "5.53 USDT" under any key that names a balance. When the answer
   cannot be understood the page shows it (the API key is taken out), so the reading can be taught.
+- **A product that is out of stock is still shown** (switched on and priced): its button says "Sold out", its description can be read, and it cannot be bought
+  (also not with an old button). The same for a product the supplier no longer lists. While anything on the shelf is sold out the catalog is read every
+  five minutes (else every half hour), so a restock is offered within minutes. The bot's **bottom menu** has the Digital accounts button (and the
+  BOBRES licenses one), each while it is on.
 - The supplier's texts are cleaned of Telegram custom-emoji placeholders (`{pe:123...}`); the raw product keeps them.
 - The supplier's answers are read tolerantly (the product list may be under `products`, `data`, `items`...; the delivery under
   `delivery`, `accounts`, `credentials`...). What is not understood stays in the product's raw JSON.

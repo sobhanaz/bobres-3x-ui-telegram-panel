@@ -15,7 +15,7 @@ const planCols = `id, name_i18n, kind, duration_days, traffic_bytes, price, curr
 	COALESCE((SELECT json_agg(json_build_object('server_id', g.server_id, 'inbound_ids', g.ids) ORDER BY g.server_id)
 		FROM (SELECT pi.server_id::text AS server_id, array_agg(pi.inbound_id ORDER BY pi.inbound_id) AS ids
 			FROM core.plan_inbounds pi WHERE pi.plan_id = plans.id GROUP BY pi.server_id) g), '[]'::json),
-	group_id::text`
+	group_id::text, reward_percent`
 
 func scanPlan(row pgx.Row) (*Plan, error) {
 	var (
@@ -24,7 +24,7 @@ func scanPlan(row pgx.Row) (*Plan, error) {
 		inbounds []byte
 	)
 	err := row.Scan(&p.ID, &name, &p.Kind, &p.DurationDays, &p.TrafficBytes,
-		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup, &p.ServerIDs, &inbounds, &p.GroupID)
+		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup, &p.ServerIDs, &inbounds, &p.GroupID, &p.RewardPercent)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -91,16 +91,16 @@ func (s *Store) UpsertPlan(ctx context.Context, q querier, p *Plan) error {
 		return fmt.Errorf("plan name_i18n: %w", err)
 	}
 	_, err = q.Exec(ctx, `
-		INSERT INTO core.plans (id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup, group_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid)
+		INSERT INTO core.plans (id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup, group_id, reward_percent)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid, $13)
 		ON CONFLICT (id) DO UPDATE SET
 			name_i18n = EXCLUDED.name_i18n, kind = EXCLUDED.kind,
 			duration_days = EXCLUDED.duration_days, traffic_bytes = EXCLUDED.traffic_bytes,
 			price = EXCLUDED.price, currency = EXCLUDED.currency, enabled = EXCLUDED.enabled,
 			is_trial = EXCLUDED.is_trial, sort = EXCLUDED.sort, is_topup = EXCLUDED.is_topup, group_id = EXCLUDED.group_id,
-			updated_at = now()`,
+			reward_percent = EXCLUDED.reward_percent, updated_at = now()`,
 		p.ID, name, p.Kind, p.DurationDays, p.TrafficBytes,
-		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort, p.IsTopup, p.GroupID)
+		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort, p.IsTopup, p.GroupID, p.RewardPercent)
 	if err != nil {
 		return fmt.Errorf("upsert plan: %w", err)
 	}

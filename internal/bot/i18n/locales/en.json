@@ -280,6 +280,8 @@
   "discount.bad.expired": "This discount code has expired.",
   "discount.bad.used_up": "This discount code has been used up.",
   "discount.bad.already_used": "You have already used this discount code.",
+  "reward.code": "🎁 <b>Thank you for your purchase!</b>\\nHere is a discount code for your next purchase of <b>{plan}</b>:\\n\\n<code>{code}</code>\\n\\n{percent}% off · valid until {date} · only for you, once. Enter it before you pay.",
+  "discount.bad.plan": "This code is for another plan.",
   "discount.bad.currency": "This discount code does not apply to this plan's currency.",
   "discount.bad.reseller": "Discount codes are not for resellers: you already pay your own prices.",
   "error.menu_expired": "This menu has expired. Please open it again.",

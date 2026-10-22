@@ -287,7 +287,10 @@ type Plan struct {
 	// The plan group it is listed under (empty: none). AdminUpsertPlan keeps the
 	// stored group when this is empty: the bot's plan editor never changes it,
 	// the dashboard is where plans are grouped.
-	GroupId       string `protobuf:"bytes,13,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	GroupId string `protobuf:"bytes,13,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// The percent of the discount code a paid purchase of this plan gives its buyer for their next purchase of it (0: none).
+	// AdminUpsertPlan keeps the stored value when this is 0: the bot's plan editor never changes it, the dashboard does.
+	RewardPercent int32 `protobuf:"varint,14,opt,name=reward_percent,json=rewardPercent,proto3" json:"reward_percent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -411,6 +414,13 @@ func (x *Plan) GetGroupId() string {
 		return x.GroupId
 	}
 	return ""
+}
+
+func (x *Plan) GetRewardPercent() int32 {
+	if x != nil {
+		return x.RewardPercent
+	}
+	return 0
 }
 
 // PlanGroup is a named group of plans with a text the customer reads before
@@ -10533,7 +10543,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"updated_at\x18\t \x01(\x03R\tupdatedAt\x12\x1f\n" +
 	"\vbot_blocked\x18\n" +
 	" \x01(\bR\n" +
-	"botBlocked\"\xfa\x03\n" +
+	"botBlocked\"\xa1\x04\n" +
 	"\x04Plan\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\tname_i18n\x18\x02 \x03(\v2\x1b.core.v1.Plan.NameI18nEntryR\bnameI18n\x12\x12\n" +
@@ -10549,7 +10559,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\n" +
 	"list_price\x18\v \x01(\v2\x10.common.v1.MoneyR\tlistPrice\x125\n" +
 	"\binbounds\x18\f \x03(\v2\x19.core.v1.InboundSelectionR\binbounds\x12\x19\n" +
-	"\bgroup_id\x18\r \x01(\tR\agroupId\x1a;\n" +
+	"\bgroup_id\x18\r \x01(\tR\agroupId\x12%\n" +
+	"\x0ereward_percent\x18\x0e \x01(\x05R\rrewardPercent\x1a;\n" +
 	"\rNameI18nEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc3\x02\n" +

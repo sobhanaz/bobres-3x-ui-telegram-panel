@@ -215,7 +215,7 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	if err != nil {
 		return nil, err
 	}
-	off, code, err := s.discountFor(ctx, u, price, plan.Currency, p.DiscountCode)
+	off, code, err := s.discountFor(ctx, u, plan.ID, price, plan.Currency, p.DiscountCode)
 	if err != nil {
 		return nil, err
 	}

@@ -105,6 +105,8 @@ interface Form {
   sort: string
   /** the plan group's id; empty = none */
   group_id: string
+  /** the reward discount code's percent as typed; empty = none */
+  reward: string
   /** empty = any server */
   server_ids: string[]
   /** the plan came with its servers (core knows them): they go back on save */
@@ -115,7 +117,7 @@ interface Form {
   has_inbounds: boolean
 }
 const blank = (): Form => ({ id: '', name_fa: '', name_en: '', kind: 'both', days: '30', gb: '', price: '', currency: 'IRT',
-  enabled: true, is_trial: false, is_topup: false, sort: '0', group_id: '', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
+  enabled: true, is_trial: false, is_topup: false, sort: '0', group_id: '', reward: '', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
 const form = ref<Form>(blank())
 const editing = ref(false)
 const busy = ref(false)
@@ -132,7 +134,7 @@ function edit(p?: PlanItem) {
       id: p.id, name_fa: p.name.fa ?? '', name_en: p.name.en ?? '', kind: p.kind,
       days: p.duration_days ? String(p.duration_days) : '', gb: p.traffic_bytes ? gbOf(p.traffic_bytes) : '',
       price: decimalOf(p.price), currency: p.price.currency, enabled: p.enabled, is_trial: p.is_trial,
-      is_topup: p.is_topup, sort: String(p.sort), group_id: p.group_id ?? '', server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
+      is_topup: p.is_topup, sort: String(p.sort), group_id: p.group_id ?? '', reward: p.reward_percent ? String(p.reward_percent) : '', server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
       inbounds: choiceOf(p.inbounds), has_inbounds: Array.isArray(p.inbounds),
     }
   }
@@ -208,10 +210,16 @@ const kinds = computed(() => [
 ])
 const needsDays = computed(() => form.value.kind !== 'traffic' && !form.value.is_topup)
 const needsGB = computed(() => form.value.kind !== 'time' || form.value.is_topup)
+// A reward is a whole percent from 1 to 90 (empty: none); a trial and a traffic package give none.
+const rewardOk = computed(() => {
+  const r = asciiNumber(form.value.reward).trim()
+  return r === '' || (/^\d{1,2}$/.test(r) && Number(r) >= 1 && Number(r) <= 90)
+})
 const valid = computed(() => {
   const f = form.value
   const price = asciiNumber(f.price)
   return (
+    rewardOk.value &&
     (f.name_fa.trim() || f.name_en.trim()) &&
     validAmount(price || '0', f.currency) &&
     (!f.is_trial || Number(price || 0) === 0) &&
@@ -237,6 +245,8 @@ async function save() {
     sort: Number(asciiNumber(f.sort)) || 0,
     // a trial and a traffic package are never sold from a group; an older core does not know groups at all
     ...(groupsReady.value ? { group_id: f.is_trial || f.is_topup ? '' : f.group_id } : {}),
+    // a whole percent from 1 to 90, or 0 to take the reward away; a trial and a traffic package give none
+    reward_percent: f.is_trial || f.is_topup ? 0 : Number(asciiNumber(f.reward).trim() || 0),
     ...(sendServers.value ? { server_ids: f.server_ids } : {}),
     ...(showInbounds.value ? { inbounds: inboundsBody(f.inbounds, f.server_ids) } : {}),
   }
@@ -288,6 +298,7 @@ async function toggle(p: PlanItem, enabled: boolean) {
         <div class="tags">
           <Tag v-if="p.is_trial" :value="t('plan.trial')" severity="info" />
           <Tag v-if="p.is_topup" :value="t('plan.topup')" severity="secondary" />
+          <Tag v-if="p.reward_percent" :value="t('plan.reward_tag', { n: num(p.reward_percent, lang) })" severity="success" />
         </div>
       </template>
     </Column>
@@ -351,6 +362,11 @@ async function toggle(p: PlanItem, enabled: boolean) {
       <label v-if="!form.is_topup">
         <span>{{ t('plan.kind_label') }}</span>
         <Select v-model="form.kind" :options="kinds" option-label="label" option-value="value" />
+      </label>
+      <label v-if="!form.is_topup && !form.is_trial" class="reward">
+        <span>{{ t('plan.reward') }}</span>
+        <InputText v-model="form.reward" inputmode="numeric" dir="ltr" maxlength="2" :invalid="!rewardOk" :placeholder="t('plan.reward_none')" />
+        <small :class="rewardOk ? 'app-muted' : 'app-error'">{{ rewardOk ? t('plan.reward_hint') : t('plan.reward_rule') }}</small>
       </label>
       <label v-if="groupsReady && groups.length && !form.is_topup && !form.is_trial">
         <span>{{ t('plan.group') }}</span>

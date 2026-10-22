@@ -30,6 +30,8 @@ license server is built but still has to be deployed by the owner. What is left 
 
 **Telegram bot, for customers**
 - Persian and English, in the operator's own name, texts and links.
+- Reward codes: the operator can mark a plan (say the unlimited one) so that each paid purchase of it gives the buyer a discount code for their next
+  purchase of the same plan: for them only, one use, 30 days.
 - Buy a plan (traffic-limited, time-only or both), with an optional discount code. The service arrives with its
   subscription link and a QR code.
 - Plan groups: the operator can put plans in named groups with a text for each (what the group is for, who it suits,

@@ -150,6 +150,8 @@ export interface PlanItem {
   inbounds?: PlanInbound[]
   /** the plan group it is listed under (null: none). Older cores leave it out. */
   group_id?: string | null
+  /** the percent of the discount code a paid purchase gives its buyer for their next purchase of the plan (null: none) */
+  reward_percent?: number | null
 }
 
 /** A named group of plans with a text the customer reads before choosing one of its plans. */

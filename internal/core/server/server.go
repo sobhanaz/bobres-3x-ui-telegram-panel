@@ -243,6 +243,9 @@ func planToProto(p *store.Plan) *corev1.Plan {
 	if p.GroupID != nil {
 		pp.GroupId = *p.GroupID
 	}
+	if p.RewardPercent != nil {
+		pp.RewardPercent = *p.RewardPercent
+	}
 	return pp
 }
 
