@@ -76,7 +76,7 @@ func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID, lin
 		return nil, nil, err
 	}
 	// A service is its owner's; anyone else may renew it (not add traffic to it) with its link's secret.
-	if sub.UserID != userID && !(typ == OrderRenew && holdsLink(sub, linkSecret)) {
+	if sub.UserID != userID && (typ != OrderRenew || !holdsLink(sub, linkSecret)) {
 		return nil, nil, ErrForbidden
 	}
 	switch {

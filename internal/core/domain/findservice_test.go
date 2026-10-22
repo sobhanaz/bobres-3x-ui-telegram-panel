@@ -22,7 +22,7 @@ func TestLinkSecretReadsALink(t *testing.T) {
 			t.Errorf("LinkSecret(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	for _, bad := range []string{"", "short", "https://sub.example.com/sub/", "vless://uuid@host:443?security=tls#name", "has space in it 12345", "نماینده‌ام", "https://x/sub/" + string(make([]byte, 70))} {
+	for _, bad := range []string{"", "short", "https://sub.example.com/sub/", "vless://uuid@host:443?security=tls#name", "has space in it 12345", "نماینده", "https://x/sub/" + string(make([]byte, 70))} {
 		if _, err := LinkSecret(bad); !errors.Is(err, ErrInvalid) {
 			t.Errorf("LinkSecret(%q): %v", bad, err)
 		}
