@@ -9869,11 +9869,14 @@ func (x *GetVendorLicenseKeyResponse) GetKey() string {
 
 // A product the owner sells from the supplier. sid is a short id the bot puts in its buttons (core finds the product by it).
 type SupplierOffer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sid           string                 `protobuf:"bytes,1,opt,name=sid,proto3" json:"sid,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // in the customer's language when the owner wrote one
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Price         *v1.Money              `protobuf:"bytes,4,opt,name=price,proto3" json:"price,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Sid         string                 `protobuf:"bytes,1,opt,name=sid,proto3" json:"sid,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // in the customer's language when the owner wrote one
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Price       *v1.Money              `protobuf:"bytes,4,opt,name=price,proto3" json:"price,omitempty"`
+	// false: sold out right now (no stock, or the supplier no longer lists it); the description can still be read, it cannot be bought.
+	// An older core never sends it (the bot then treats the offer as available).
+	SoldOut       bool `protobuf:"varint,5,opt,name=sold_out,json=soldOut,proto3" json:"sold_out,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9934,6 +9937,13 @@ func (x *SupplierOffer) GetPrice() *v1.Money {
 		return x.Price
 	}
 	return nil
+}
+
+func (x *SupplierOffer) GetSoldOut() bool {
+	if x != nil {
+		return x.SoldOut
+	}
+	return false
 }
 
 type ListSupplierOffersRequest struct {
@@ -11321,12 +11331,13 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"license_id\x18\x02 \x01(\tR\tlicenseId\"a\n" +
 	"\x1bGetVendorLicenseKeyResponse\x120\n" +
 	"\alicense\x18\x01 \x01(\v2\x16.core.v1.VendorLicenseR\alicense\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\"\x7f\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"\x9a\x01\n" +
 	"\rSupplierOffer\x12\x10\n" +
 	"\x03sid\x18\x01 \x01(\tR\x03sid\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12&\n" +
-	"\x05price\x18\x04 \x01(\v2\x10.common.v1.MoneyR\x05price\"P\n" +
+	"\x05price\x18\x04 \x01(\v2\x10.common.v1.MoneyR\x05price\x12\x19\n" +
+	"\bsold_out\x18\x05 \x01(\bR\asoldOut\"P\n" +
 	"\x19ListSupplierOffersRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
 	"\blanguage\x18\x02 \x01(\tR\blanguage\"\x88\x01\n" +

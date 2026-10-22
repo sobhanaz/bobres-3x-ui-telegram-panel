@@ -262,6 +262,32 @@ func (s *Service) SupplierOffers(ctx context.Context) ([]store.SupplierProduct, 
 	return s.st.ListSupplierOffers(ctx, s.st.Conn())
 }
 
+// SupplierShelf is what customers see: the products on sale, the sold-out ones too (store.SupplierProduct.Available says which can be bought).
+func (s *Service) SupplierShelf(ctx context.Context) ([]store.SupplierProduct, error) {
+	if !s.SupplierOn(ctx) {
+		return nil, nil
+	}
+	return s.st.ListSupplierShelf(ctx, s.st.Conn())
+}
+
+// supplierSoldOutSyncInterval is how often the catalog is read while a product on the shelf is sold out, so that a restock is
+// offered within minutes (the usual interval is supplierSyncInterval).
+const supplierSoldOutSyncInterval = 5 * time.Minute
+
+// supplierSyncEvery is how long the worker waits between catalog reads now.
+func (s *Service) supplierSyncEvery(ctx context.Context) time.Duration {
+	shelf, err := s.SupplierShelf(ctx)
+	if err != nil {
+		return supplierSyncInterval
+	}
+	for i := range shelf {
+		if !shelf[i].Available() {
+			return supplierSoldOutSyncInterval
+		}
+	}
+	return supplierSyncInterval
+}
+
 // SupplierBuyParams carries the inputs of BuySupplierProduct.
 type SupplierBuyParams struct {
 	UserID, ProductID string
@@ -549,7 +575,7 @@ func (s *Service) RunSupplierWorker(ctx context.Context) {
 			if _, err := s.SettleSupplierOrders(ctx); err != nil && ctx.Err() == nil {
 				s.cfg.Log.Warn("supplier orders", "err", err)
 			}
-			if s.SupplierOn(ctx) && time.Since(lastSync) >= supplierSyncInterval {
+			if s.SupplierOn(ctx) && time.Since(lastSync) >= s.supplierSyncEvery(ctx) {
 				lastSync = time.Now()
 				if _, err := s.SyncSupplierCatalog(ctx); err != nil && ctx.Err() == nil {
 					s.cfg.Log.Warn("supplier catalog", "err", err)

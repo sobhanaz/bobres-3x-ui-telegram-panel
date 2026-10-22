@@ -1299,6 +1299,9 @@ message SupplierOffer {
   string name = 2; // in the customer's language when the owner wrote one
   string description = 3;
   common.v1.Money price = 4;
+  // false: sold out right now (no stock, or the supplier no longer lists it); the description can still be read, it cannot be bought.
+  // An older core never sends it (the bot then treats the offer as available).
+  bool sold_out = 5;
 }
 
 message ListSupplierOffersRequest {

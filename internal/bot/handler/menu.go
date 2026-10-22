@@ -125,6 +125,7 @@ var menuItems = []struct{ key, data string }{
 	{"btn.support", "support"}, {"btn.reseller", "rs"}, {"btn.invite", "ref"}, {"btn.language", "lang"},
 	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"}, {"btn.tutorials", "tut"},
 	{"btn.admin", "adm"}, {"btn.dashboard", "dash"},
+	{"btn.supplier", "sup"}, {"btn.licenses", "lic"}, // the owner's own store: digital accounts and BOBRES licenses
 }
 
 // onStore answers a tap on the bottom menu's Store item with the button that
@@ -171,8 +172,16 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		// opens the app: a reply keyboard button could not give the app its sign-in data.
 		m.Row(item("btn.store"))
 	}
-	m.Row(item("btn.buy")).
-		Row(item("btn.services"), item("btn.wallet")).
+	m.Row(item("btn.buy"))
+	var own []tg.MenuButton // the owner's own store, as on the home screen: digital accounts and BOBRES licenses, each while it is on
+	if h.suppliersOn() {
+		own = append(own, item("btn.supplier"))
+	}
+	if h.licensesOn() {
+		own = append(own, item("btn.licenses"))
+	}
+	m.Row(own...)
+	m.Row(item("btn.services"), item("btn.wallet")).
 		Row(item("btn.trial"), item("btn.support"))
 	if h.helpTutorials.Load() { // as on the home screen
 		m.Row(item("btn.tutorials"))

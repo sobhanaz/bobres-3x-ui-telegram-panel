@@ -608,3 +608,51 @@ func TestSupplierBalanceIsKeptForAMinute(t *testing.T) {
 		t.Fatalf("a new key kept the old balance: %d calls", n)
 	}
 }
+
+// The shelf shows a product that is switched on and priced even when it is sold out or the supplier no longer lists it; only an
+// available one can be bought; the catalog is read every five minutes while something on the shelf is sold out, else every half hour.
+func TestSupplierShelfShowsSoldOutProducts(t *testing.T) {
+	e := newSupplierEnv(t)
+	ctx := context.Background()
+	e.sync()
+	e.sell("gem-1m", 450_000)  // 5 in stock
+	e.sell("chat-1m", 300_000) // none in stock
+	shelf, err := e.svc.SupplierShelf(ctx)
+	if err != nil || len(shelf) != 2 {
+		t.Fatalf("shelf: %d %v", len(shelf), err)
+	}
+	byID := map[string]store.SupplierProduct{}
+	for _, p := range shelf {
+		byID[p.ID] = p
+	}
+	if !byID["gem-1m"].Available() || byID["chat-1m"].Available() {
+		t.Fatalf("availability: gem %v chat %v", byID["gem-1m"].Available(), byID["chat-1m"].Available())
+	}
+	offers, err := e.svc.SupplierOffers(ctx)
+	if err != nil || len(offers) != 1 || offers[0].ID != "gem-1m" {
+		t.Fatalf("offers (what can be bought): %v %v", offers, err)
+	}
+	if _, err := e.svc.SupplierProductBySID(ctx, SupplierSID("chat-1m")); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a sold-out product found to buy: %v", err)
+	}
+	if got := e.svc.supplierSyncEvery(ctx); got != supplierSoldOutSyncInterval {
+		t.Fatalf("interval with a sold-out product: %v", got)
+	}
+	// A product that is off or has no price is not on the shelf at all.
+	if _, err := e.s.DB().Exec(ctx, `UPDATE core.supplier_products SET enabled = false, sell_price = NULL WHERE id = 'chat-1m'`); err != nil {
+		t.Fatal(err)
+	}
+	if shelf, _ = e.svc.SupplierShelf(ctx); len(shelf) != 1 {
+		t.Fatalf("shelf with a product off: %d", len(shelf))
+	}
+	if got := e.svc.supplierSyncEvery(ctx); got != supplierSyncInterval {
+		t.Fatalf("interval with everything in stock: %v", got)
+	}
+	// The supplier stops listing the one in stock: sold out again.
+	if _, err := e.s.DB().Exec(ctx, `UPDATE core.supplier_products SET listed = false WHERE id = 'gem-1m'`); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.svc.supplierSyncEvery(ctx); got != supplierSoldOutSyncInterval {
+		t.Fatalf("interval with an unlisted product: %v", got)
+	}
+}

@@ -68,6 +68,9 @@ func (h *Handler) showSupplier(r *req) {
 	kb := &tg.Keyboard{}
 	for _, o := range resp.GetOffers() {
 		label := r.t("sup.offer_btn", "name", truncRunes(o.GetName(), 40), "price", r.money(o.GetPrice().GetAmount(), o.GetPrice().GetCurrency()))
+		if o.GetSoldOut() { // shown, with its description, but not for sale now
+			label = r.t("sup.offer_btn_out", "name", truncRunes(o.GetName(), 40))
+		}
 		kb.Row(tg.CB(label, "sup:p:"+o.GetSid()))
 	}
 	kb.Row(r.button("btn.sup_my", "sup:my"), r.button("btn.home", "home"))
@@ -104,9 +107,12 @@ func (h *Handler) showSupplierProduct(r *req, sid string) {
 		text = r.t("sup.product_desc", "name", esc(o.GetName()), "description", esc(d), "price", r.money(price, cur), "balance", r.balance(bal, cur))
 	}
 	kb := &tg.Keyboard{}
-	if bal >= price {
+	switch {
+	case o.GetSoldOut():
+		text += "\n\n" + r.t("sup.sold_out")
+	case bal >= price:
 		kb.Row(tg.CB(r.t("btn.sup_pay", "price", r.money(price, cur)), fmt.Sprintf("sup:y:%s:%s", sid, nonce())))
-	} else {
+	default:
 		text += "\n\n" + r.t("sup.insufficient")
 		kb.Row(r.button("btn.sup_topup", "wtop"))
 	}

@@ -129,6 +129,15 @@ func (s *Store) ListSupplierProducts(ctx context.Context, q querier) ([]Supplier
 	return s.supplierProducts(ctx, q, ``)
 }
 
+// Available reports whether the product can be bought now: the supplier still lists it and has stock (or does not say).
+func (p SupplierProduct) Available() bool { return p.Listed && (p.Stock == nil || *p.Stock > 0) }
+
+// ListSupplierShelf lists what customers see: every product that is switched on and priced, also one that is out of stock or that the
+// supplier no longer lists (shown as sold out: its description can be read, it cannot be bought).
+func (s *Store) ListSupplierShelf(ctx context.Context, q querier) ([]SupplierProduct, error) {
+	return s.supplierProducts(ctx, q, `WHERE enabled AND sell_price IS NOT NULL`)
+}
+
 // ListSupplierOffers lists what customers may buy now: switched on, still listed, in stock (or stock unknown), priced.
 func (s *Store) ListSupplierOffers(ctx context.Context, q querier) ([]SupplierProduct, error) {
 	return s.supplierProducts(ctx, q, `WHERE enabled AND listed AND sell_price IS NOT NULL AND (stock IS NULL OR stock > 0)`)

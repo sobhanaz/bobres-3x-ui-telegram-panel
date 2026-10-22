@@ -854,6 +854,8 @@
   "sup.title": "🛍 <b>Digital accounts</b>\nPick a product. You pay from your wallet and get it here at once.\n\nWallet: <b>{balance}</b>",
   "sup.empty": "Nothing is for sale right now.",
   "sup.offer_btn": "{name} · {price}",
+  "sup.offer_btn_out": "{name} · ⛔ Sold out",
+  "sup.sold_out": "⛔ <b>Sold out right now.</b> You can read the description; it will be offered again when it is back in stock.",
   "sup.product": "🛍 <b>{name}</b>\nPrice: <b>{price}</b>\nYour wallet: {balance}",
   "sup.product_desc": "🛍 <b>{name}</b>\n{description}\n\nPrice: <b>{price}</b>\nYour wallet: {balance}",
   "sup.insufficient": "Your wallet is short: top up, then come back and tap Pay.",
