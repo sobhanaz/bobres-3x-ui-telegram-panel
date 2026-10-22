@@ -120,7 +120,7 @@ func TestVersions(t *testing.T) {
 	}
 	for v, want := range map[string]bool{
 		TestedMinVersion: false, TestedMaxVersion: false, "v3.8.9": false, UnknownVersion: false, "": false,
-		"v3.8.4": true, "v3.9.1": true, "v3.10.0": true, "v2.9.9": true, "v4.0.0": true, "dev+1a2b3c4d": true,
+		"v3.9.1": false, "v3.10.0": false, "v3.8.4": true, "v3.10.3": true, "v3.11.0": true, "v2.9.9": true, "v4.0.0": true, "dev+1a2b3c4d": true,
 	} {
 		if got := Untested(v); got != want {
 			t.Errorf("Untested(%q) = %v, want %v", v, got, want)

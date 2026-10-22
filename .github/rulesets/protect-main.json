@@ -78,6 +78,14 @@
           {
             "context": "3x-ui integration (v3.9.0)",
             "integration_id": 15368
+          },
+          {
+            "context": "3x-ui integration (v3.10.0)",
+            "integration_id": 15368
+          },
+          {
+            "context": "3x-ui integration (v3.10.2)",
+            "integration_id": 15368
           }
         ]
       }

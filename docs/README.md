@@ -64,6 +64,6 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 
 The docs describe what is built as of 2026-10-12. Open points are listed at the end of each file.
 Known unverified items: Zarinpal's server-location rules, BOBRES trademark and domain availability, 3x-ui versions
-outside v3.8.5 to v3.9.0. Before v0.1.0: the first install on a real server (11-staging-run.md), and a native
+outside v3.8.5 to v3.10.2. Before v0.1.0: the first install on a real server (11-staging-run.md), and a native
 speaker's review of the Persian texts (08-brand.md). Before selling: the owner's steps in
 [launch-checklist.md](launch-checklist.md), including a lawyer's review of the [LICENSE](../LICENSE) and of the legal drafts.

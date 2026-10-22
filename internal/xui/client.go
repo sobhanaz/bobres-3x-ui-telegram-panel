@@ -8,7 +8,7 @@
 //   - a client has a "group" label (a first-class group in the panel). clients/add
 //     stores it, clients/update replaces the row and so CLEARS it when the body has
 //     none, and clients/groups/bulkAdd sets it for many clients, overriding any group
-//     they have. Checked against real v3.8.5 and v3.9.0 panels.
+//     they have. Checked against real v3.8.5, v3.9.0, v3.10.0 and v3.10.2 panels.
 //
 // Only the provisioner service may hold the panel API token and use this package.
 package xui
