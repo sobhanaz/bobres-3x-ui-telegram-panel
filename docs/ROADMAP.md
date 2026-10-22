@@ -20,9 +20,10 @@ and v0.9.1 (2026-10-21: every license of the license server managed from the das
 v0.10.0 (2026-10-21: reselling a supplier's accounts, and the lock on the vendor's own features)
 v0.10.1 (2026-10-21: the supplier balance always in view)
 and v0.11.0 (2026-10-21: plan groups with a text each)
-and v0.12.0 (2026-10-22: a reseller's group and prefix in the 3x-ui panel, and 3x-ui v3.10 tested).
+v0.12.0 (2026-10-22: a reseller's group and prefix in the 3x-ui panel, and 3x-ui v3.10 tested)
+and v0.13.0 (2026-10-22: reward codes, sold-out digital accounts, the owner's menu buttons and find a service by its link).
 
-## Where things stand (after v0.12.0)
+## Where things stand (after v0.13.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
 Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui

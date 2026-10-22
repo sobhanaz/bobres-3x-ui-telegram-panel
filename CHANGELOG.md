@@ -8,6 +8,25 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.13.0] — 2026-10-22
+
+**Reward codes, sold-out digital accounts, the owner's buttons in the bottom menu, and finding a service by its link.** The owner marks a plan and
+each paid purchase of it gives the buyer a discount code for their next purchase of the same plan (for them only, one use, 30 days); a digital
+account that is out of stock is shown as sold out instead of hidden; the bot's bottom menu has the licenses and digital accounts buttons; and a
+customer can look a service up by its subscription link in My services and renew it.
+
+### Updating
+- One database migration, additive (a rollback keeps every order and credit): core 00036 (`plans.reward_percent`, and three columns on `discount_codes`).
+  No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together.
+- **Nothing changes for customers** until the owner marks a plan with a reward (dashboard, Plans, the plan's editor). The sold-out display, the menu
+  buttons and Find by link are on as soon as the update is in.
+
+### Known limits
+- A reward code is sent in a message; the customer's own list of codes is not built (staff see every code in Discounts).
+- Find by link finds the services BOBRES made (it knows their links); it renews, it does not add traffic.
+- The Persian and English texts of the new screens are a first draft that wants a native read; nothing of this has been seen in a real Telegram.
+
 ### Reward codes, sold-out digital accounts and the owner's buttons in the bottom menu
 - **A reward code for the unlimited plan (or any plan the owner marks)**: in the dashboard a plan has **Reward code after a purchase** (1 to 90 %). A paid
   purchase or renewal of it by a customer gives the buyer a discount code for their next purchase of **the same plan**: bound to them (for anyone
