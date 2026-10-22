@@ -28,7 +28,7 @@ never asks, and a URL needs its token (and a token its URL). A panel that is new
 anything is written**, with the client and calls the provisioner uses (the inbound listing, which needs the token, and
 the version): reachable (the reason is said when it is not: the name does not resolve, nothing listens on the port, no
 answer in time, the certificate is not trusted, plain http where https is expected, a wrong web base path), a
-and the API token accepted (a version outside v3.8.5 to v3.9.0 is noted, not refused: the provisioner and the dashboard only warn about it). A refused token prints "In 3x-ui open Settings, then API
+and the API token accepted (a version outside v3.8.5 to v3.10.2 is noted, not refused: the provisioner and the dashboard only warn about it). A refused token prints "In 3x-ui open Settings, then API
 tokens (Security), create a token and paste it here." and is asked again, three more times at most; Enter skips the
 panel (add the server later in the dashboard); with `--yes` or no terminal it is an error, never a silent accept, and
 nothing has been written. The check runs from this server, while the provisioner runs in a container and reaches a
