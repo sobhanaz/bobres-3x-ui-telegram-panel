@@ -166,6 +166,12 @@ func setup(rt *app.Runtime) error {
 	} else if applied {
 		rt.Log.Info("default FAQ and tutorials added (edit them in the dashboard: Branding, Help content)")
 	}
+	// A store that already uses the tutorials gets the ones that came later (Karing, NPV Tunnel), once.
+	if added, err := dom.EnsureExtraTutorials(rt.Ctx); err != nil {
+		rt.Log.Warn("extra default tutorials", "err", err)
+	} else if added > 0 {
+		rt.Log.Info("tutorials for newer apps added (edit them in the dashboard: Branding, Help content)", "added", added)
+	}
 	if secrets == nil {
 		rt.Log.Warn("no master key: dashboard password logins, your own HTTPS certificate and gift codes are off (login links from the bot still work)")
 	}
@@ -229,6 +235,7 @@ func setup(rt *app.Runtime) error {
 		monBot = peer
 		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
 		dom.SetSupplierTransport(peer)
+		dom.SetRateTransport(peer) // the live USDT price is read by the bot: core has no internet access
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
@@ -291,6 +298,7 @@ func setup(rt *app.Runtime) error {
 	// The same store resells a supplier's digital accounts: a paid order the supplier did not deliver is asked again, and the
 	// catalog is read every half hour. It does nothing on a store that has no supplier key.
 	rt.Go("supplier", func(ctx context.Context) error { dom.RunSupplierWorker(ctx); return nil })
+	rt.Go("usdt-rate", func(ctx context.Context) error { dom.RunUsdtRateWorker(ctx); return nil })
 	// Stored subscription links follow a server's new address.
 	rt.Go("sub-links", dom.NewSubLinkWorker(prov, prov, rt.Log).Run)
 	// Support tickets nobody answered back close themselves; broadcasts start on time.

@@ -3,10 +3,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	commonv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/common/v1"
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -546,12 +548,29 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx),
 		ResellersEnabled: s.resellersIncluded(ctx)}
 	for k, v := range m {
+		if strings.HasPrefix(k, "legal.") { // the pages' texts are core's to show; the bot needs none of them
+			continue
+		}
 		out.Values[k] = string(v)
+	}
+	// The USDT rate the bot shows and the store charges: the live price (plus the owner's margin) while it is fresh, else the rate the owner typed.
+	if raw := s.dom.UsdtSettingRaw(ctx); raw != "" {
+		out.Values["payments.usdt_rate"] = raw
 	}
 	// The vendor's own features are switched off for a store whose license does not grant them, whatever the switches say.
 	if !s.dom.PrivateFeatures(ctx) {
 		out.Values[domain.SettingVendorEnabled] = "false"
 		out.Values[domain.SettingSupplierEnabled] = "false"
+	}
+	// The store's own Terms and Privacy pages answer where the owner has set no address of their own, so the bot's buttons and /terms work
+	// from the first day (needs the store's public HTTPS address).
+	if origin := strings.TrimRight(s.dashboardURL(ctx), "/"); strings.HasPrefix(origin, "https://") {
+		for key, path := range map[string]string{"branding.terms_url": "/terms", "branding.privacy_url": "/privacy"} {
+			if v := strings.TrimSpace(out.Values[key]); v == "" || v == `""` || v == "null" {
+				b, _ := json.Marshal(origin + path)
+				out.Values[key] = string(b)
+			}
+		}
 	}
 	// Where the Mini App opens from: only while it is on and the store has a
 	// public HTTPS address Telegram can reach.

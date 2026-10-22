@@ -79,7 +79,7 @@ footer a{color:var(--muted);margin:0 .5rem}
 {{- range .Apps}}
 <details>
 <summary>{{.Name}}</summary>
-<a class="btn" href="{{.URL}}">{{$.T.AddTo}} {{.Name}}</a>
+{{if .URL}}<a class="btn" href="{{.URL}}">{{$.T.AddTo}} {{.Name}}</a>{{end}}
 <p>{{.Guide}}</p>
 </details>
 {{- end}}

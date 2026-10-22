@@ -258,3 +258,16 @@ func TestValidateMessageAndLabel(t *testing.T) {
 		}
 	}
 }
+
+// A line break in a text is a real one: a backslash followed by an n would reach the customer as those two characters (four texts did,
+// before this test).
+func TestNoLiteralBackslashN(t *testing.T) {
+	c := MustLoad()
+	for _, info := range c.Infos() {
+		for _, lang := range info.Langs {
+			if def := c.Default(lang, info.Key); strings.Contains(def, `\n`) {
+				t.Errorf("%s/%s has a literal \\n instead of a line break", lang, info.Key)
+			}
+		}
+	}
+}

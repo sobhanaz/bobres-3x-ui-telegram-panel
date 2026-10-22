@@ -143,6 +143,7 @@ func (s *Server) AdminUpsertPlan(ctx context.Context, req *corev1.AdminUpsertPla
 		ID: in.GetId(), NameI18n: in.GetNameI18N(), Kind: in.GetKind(),
 		Price: in.GetPrice().GetAmount(), Currency: in.GetPrice().GetCurrency(),
 		Enabled: in.GetEnabled(), IsTrial: in.GetIsTrial(), Sort: in.GetSort(), IsTopup: in.GetIsTopup(),
+		KeepReward: true, // the bot's plan editor never sets a reward
 	}
 	if d := in.GetDurationDays(); d > 0 {
 		p.DurationDays = &d

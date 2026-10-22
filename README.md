@@ -176,8 +176,8 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
 - **My services:** status, expiry and traffic used; renew, or add a traffic package, with the same link. A service that is
   not in the list is **found by its subscription link** (its state, and Renew, paid by the customer who holds the link).
 - A **wallet** with top-ups and history, **gift codes** that add credit, **reward codes** (mark a plan, say the unlimited
-  one: each paid purchase gives the buyer a discount code for their next purchase of that plan, for them only, one use,
-  30 days), **one free trial** per Telegram account, **bulk purchase**, and invite links that reward the inviter on a
+  one: each paid purchase gives the buyer a discount code, a percent or a fixed amount, for any plan they buy next, for
+  them only, one use, for the days you set, with your own text), **one free trial** per Telegram account, **bulk purchase**, and invite links that reward the inviter on a
   friend's first paid purchase, with a Top users board.
 - **Reminders** 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - **Support** conversations with text, photos and PDFs; staff replies arrive in the chat. A **help center** (FAQ and

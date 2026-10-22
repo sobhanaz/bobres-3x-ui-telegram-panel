@@ -59,6 +59,13 @@ const (
 // it.
 const helpDefaultMark = "state.help.default_applied"
 
+// helpExtrasMark records that the tutorials added to the defaults after the first release (Karing, NPV Tunnel) were offered once to a
+// store that already had its own.
+const helpExtrasMark = "state.help.extra_tutorials_1"
+
+// extraTutorialWords name the default tutorials that came later, by a word of their English title.
+var extraTutorialWords = []string{"karing", "npv tunnel"}
+
 // HelpInput is what the owner writes for one entry.
 type HelpInput struct {
 	Kind string
@@ -688,4 +695,64 @@ func (s *Service) EnsureDefaultHelp(ctx context.Context) (applied bool, err erro
 		return s.st.SetSetting(ctx, tx, helpDefaultMark, raw)
 	})
 	return applied && err == nil, err
+}
+
+// EnsureExtraTutorials gives a store that already uses the tutorials the default ones that came later (Karing and NPV Tunnel), once, at the
+// end of its list, unless a tutorial for that app is there already. A store with no tutorials gets nothing (the owner emptied the list or
+// never used it: AddDefaultHelp gives them all), and what the owner deletes afterwards is never put back. added is how many were stored.
+func (s *Service) EnsureExtraTutorials(ctx context.Context) (added int, err error) {
+	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		added = 0
+		cur, err := s.st.LockSettings(ctx, tx, []string{helpExtrasMark})
+		if err != nil {
+			return err
+		}
+		if _, done := cur[helpExtrasMark]; done {
+			return nil
+		}
+		existing, err := s.st.ListHelp(ctx, tx, helpcontent.KindTutorial, false)
+		if err != nil {
+			return err
+		}
+		if len(existing) > 0 {
+			has := func(word string) bool {
+				for _, e := range existing {
+					for _, title := range e.Title {
+						if strings.Contains(strings.ToLower(title), word) {
+							return true
+						}
+					}
+				}
+				return false
+			}
+			for _, in := range DefaultHelp(helpcontent.KindTutorial) {
+				word := ""
+				for _, w := range extraTutorialWords {
+					if strings.Contains(strings.ToLower(in.Title["en"]), w) {
+						word = w
+					}
+				}
+				if word == "" || has(word) {
+					continue
+				}
+				norm, probs := NormalizeHelp(in)
+				if len(probs) > 0 {
+					return fmt.Errorf("domain: the default tutorial %q is not valid: %w", in.Title["en"], &HelpError{probs})
+				}
+				e := store.HelpEntry{Kind: helpcontent.KindTutorial, Title: norm.Title, Body: norm.Body, Buttons: norm.Buttons, Enabled: true}
+				if err := s.st.InsertHelp(ctx, tx, &e); err != nil {
+					return err
+				}
+				added++
+			}
+			if added > 0 {
+				if err := s.audit(ctx, tx, nil, "help.defaults", "help_entry", "tutorial", map[string]any{"kind": "tutorial", "entries": added, "extra": true}, ""); err != nil {
+					return err
+				}
+			}
+		}
+		raw, _ := json.Marshal("1")
+		return s.st.SetSetting(ctx, tx, helpExtrasMark, raw)
+	})
+	return added, err
 }

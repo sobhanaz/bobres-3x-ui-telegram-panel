@@ -207,6 +207,8 @@ func setup(rt *app.Runtime) error {
 			supplierURL = runner.DefaultSupplierURL
 		}
 		rt.Mux.Handle("POST /internal/supplier", runner.SupplierProxy{URL: supplierURL, CoreToken: cfg.PeerCoreToken, Log: rt.Log}.Handler())
+		// The live price of one USDT in Toman, for crypto payments: core asks, the bot reads a few fixed public price pages.
+		rt.Mux.Handle("POST /internal/usdt-rate", runner.RateProxy{CoreToken: cfg.PeerCoreToken, Log: rt.Log}.Handler())
 		// The dashboard's HTTPS page detects the server's public IP address
 		// (for ip mode) through the bot: core has no internet access.
 		rt.Mux.Handle("GET /internal/public-ip", runner.PublicIP(runner.IPLookup{}.Lookup, cfg.PeerCoreToken, rt.Log))

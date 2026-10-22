@@ -53,7 +53,7 @@ func (s *Service) ManualMethods(ctx context.Context, currency string) ([]string,
 		out = append(out, ManualCard)
 	}
 	hasAddress := s.setting(ctx, "payments.usdt_trc20") != "" || s.setting(ctx, "payments.usdt_erc20") != ""
-	if hasAddress && (currency == "USDT" || (currency == "IRT" && s.settingInt(ctx, "payments.usdt_rate") > 0)) && on(ManualCrypto) {
+	if hasAddress && (currency == "USDT" || (currency == "IRT" && s.UsdtRate(ctx) > 0)) && on(ManualCrypto) {
 		out = append(out, ManualCrypto)
 	}
 	if currency == "IRT" && s.setting(ctx, "payments.zarinpal_link") != "" && on(ManualZarinpal) {
@@ -81,7 +81,7 @@ func (s *Service) OfferedMethods(ctx context.Context, pay PaymentsClient, curren
 
 // ManualCryptoAmount is what a customer sends for a price when they pay by
 // manual crypto, in micro-USDT (scale 6): a USDT price as it is, a Toman price
-// at payments.usdt_rate (Toman per USDT) rounded up to a whole cent, which is
+// at the store's USDT rate (UsdtRate: the live price, or payments.usdt_rate) rounded up to a whole cent, which is
 // how the bot words it. ok is false when the price cannot be turned into
 // USDT: no rate, another currency, or a price too large to compute.
 func (s *Service) ManualCryptoAmount(ctx context.Context, amount int64, currency string) (micro int64, ok bool) {
@@ -93,7 +93,7 @@ func (s *Service) ManualCryptoAmount(ctx context.Context, amount int64, currency
 	case currency != "IRT":
 		return 0, false
 	}
-	rate := s.settingInt(ctx, "payments.usdt_rate")
+	rate := s.UsdtRate(ctx)
 	if rate <= 0 || amount > (math.MaxInt64-rate)/100 {
 		return 0, false
 	}

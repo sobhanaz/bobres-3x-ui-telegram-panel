@@ -25,3 +25,30 @@ describe('plan groups texts', () => {
     }
   })
 })
+
+// The reward code form and deleting a plan: every text is in both catalogs, and the audit entry of a delete has a name.
+describe('plan reward and delete texts', () => {
+  it('exist in Persian and English', () => {
+    for (const cat of [fa, en] as Record<string, any>[]) {
+      for (const k of ['reward', 'reward_kind_percent', 'reward_kind_amount', 'reward_value_percent', 'reward_value_amount', 'reward_days', 'reward_text_fa',
+        'reward_text_en', 'reward_hint', 'reward_rule', 'reward_tag', 'reward_tag_amount', 'delete', 'delete_confirm', 'deleted']) {
+        expect(typeof cat.plan[k], k).toBe('string')
+      }
+      expect(cat.audit.action.plan.delete).toBeTruthy()
+    }
+  })
+})
+
+// The Terms and Privacy pages editor on the Branding page: every text is in both catalogs, and the placeholders {store} and {contact} are
+// written as literal braces (a bare {store} would be read as a parameter of the message).
+describe('branding legal pages texts', () => {
+  it('exist in Persian and English, with literal braces', () => {
+    for (const cat of [fa, en] as Record<string, any>[]) {
+      for (const k of ['legal_default_hint', 'pages', 'pages_hint', 'page_terms', 'page_privacy', 'page_lang_fa', 'page_lang_en', 'use_default_text']) {
+        expect(typeof cat.branding[k], k).toBe('string')
+      }
+      expect(cat.branding.pages_hint).toContain("{'{'}store{'}'}")
+      expect(cat.branding.pages_hint).toContain("{'{'}contact{'}'}")
+    }
+  })
+})

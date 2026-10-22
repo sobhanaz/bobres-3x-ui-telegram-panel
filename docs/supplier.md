@@ -14,8 +14,10 @@ bot, dashboard and wallet are unchanged.
   the address above). Core names an action, never an address.
 - **The catalog** is read every half hour (and with "Read the catalog now") into `supplier_products`. A new product comes in
   **switched off and unpriced**; the owner writes the **price in Toman** and the names and descriptions (Persian and English)
-  and switches it on. A product the supplier no longer lists, or has no stock of, is not offered. The supplier's own text is
-  for the owner only: customers see the owner's.
+  and switches it on. A product the supplier no longer lists, or has no stock of, is shown as sold out. A customer reads the owner's description (in their
+  language, else the other language's), and when the owner wrote none, the supplier's own text; **Copy the supplier's name and text** in the product's
+  editor starts an edit from it. The Digital accounts page can **Export texts** (every product's name and text as a JSON file) and **Import texts** (a file
+  made by it comes back, with the Persian texts filled in by a translator, and only the texts it gives are changed; prices and switches are not).
 - **A purchase** is paid from the customer's wallet in Toman (the bot's ordinary top-up fills it). ONE transaction takes the
   money and writes the order; the supplier is asked outside it with the order id; the answer (the account) is stored
   encrypted with core's master key and handed to the customer in the bot, and again under "My purchases". A supplier that
@@ -26,6 +28,12 @@ bot, dashboard and wallet are unchanged.
   every two minutes while it is open; core keeps a balance it read for a minute (`GET /api/v1/supplier/balance`, `?fresh=1`
   asks the supplier). It is read from a number or a text like "5.53 USDT" under any key that names a balance. When the answer
   cannot be understood the page shows it (the API key is taken out), so the reading can be taught.
+- **In the bot** the screens follow the supplier's own: the **home** is the supplier's **categories** (the `category` of each product, two to a row, an icon
+  by a word in its name, red when nothing in one is in stock; "Other" holds the products with none; with at most one category the products are listed
+  directly), a **category** lists its products (green, red with "(out of stock)" when sold out, a red Back), a **product page** shows the description, the unit
+  price and the stock with **Buy now**, **how many** (1, 2, 3, 5, 10, 15, 20, 25, no more than the stock, or a typed number), an **order summary** (the price,
+  the total, the wallet and what is left after) and **Pay with wallet** (green; a short wallet shows how much is missing and a top-up button). The callbacks:
+  `sup`, `sup:c:<key>`, `sup:p:<sid>`, `sup:q:<sid>`, `sup:n:<sid>`, `sup:s:<sid>:<qty>`, `sup:y:<sid>:<qty>:<nonce>`.
 - **A product that is out of stock is still shown** (switched on and priced): its button says "Sold out", its description can be read, and it cannot be bought
   (also not with an old button). The same for a product the supplier no longer lists. While anything on the shelf is sold out the catalog is read every
   five minutes (else every half hour), so a restock is offered within minutes. The bot's **bottom menu** has the Digital accounts button (and the
@@ -43,6 +51,6 @@ bot, dashboard and wallet are unchanged.
 
 ## Limits
 
-- Prices are in Toman only. Quantity in the bot is 1 (core takes up to 10).
+- Prices are in Toman only. A purchase takes 1 to 25 at once (the supplier's own limit is not known; one answer carries all the accounts).
 - The supplier's stock figure is trusted as read (every half hour).
 - What a delivery looks like depends on the supplier's answer: it is shown as text; check the first real order.

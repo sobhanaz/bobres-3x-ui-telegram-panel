@@ -246,15 +246,20 @@ type SubscriptionProvisionedEvent struct {
 	BulkID string `json:"bulk_id,omitempty"`
 }
 
-// RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them and the plan, one use.
+// RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them, one use, for any plan. It is a percent
+// (Percent) or an amount (Amount, in Currency's minor units), good for Days days, with the owner's Text (language -> text) to read.
 type RewardCodeIssuedEvent struct {
 	OrderID    string            `json:"order_id"`
 	UserID     string            `json:"user_id"`
 	TelegramID int64             `json:"telegram_id"`
 	Code       string            `json:"code"`
 	Percent    int32             `json:"percent"`
+	Amount     int64             `json:"amount,omitempty"`
+	Currency   string            `json:"currency,omitempty"`
+	Days       int32             `json:"days,omitempty"`
+	Text       map[string]string `json:"text,omitempty"`
 	PlanID     string            `json:"plan_id"`
-	PlanNames  map[string]string `json:"plan_names"` // lang -> the plan's name
+	PlanNames  map[string]string `json:"plan_names"` // lang -> the name of the plan that earned it
 	ExpiresAt  int64             `json:"expires_at"` // unix seconds
 }
 

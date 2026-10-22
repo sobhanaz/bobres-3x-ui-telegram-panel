@@ -35,6 +35,13 @@ watch(
   },
   { immediate: true },
 )
+// The supplier's own name and text as a start for the owner's: copied into the English fields, to be edited (and translated).
+function copySupplierText() {
+  const p = props.product
+  if (!p) return
+  if (p.name) titleEn.value = p.name
+  if (p.description) descEn.value = p.description.slice(0, 3000)
+}
 const parsed = computed(() => (price.value.trim() === '' ? 0 : parsePrice(price.value)))
 const problem = computed(() => {
   if (parsed.value === null) return 'price'
@@ -62,7 +69,9 @@ function save() {
         <span v-if="product.cost_micro !== null">{{ t('supplier.cost') }}: <bdi class="app-ltr">{{ costText(product.cost_micro, product.cost_currency) }}</bdi></span>
         <span v-if="product.stock !== null"> · {{ t('supplier.stock') }}: {{ product.stock }}</span>
       </p>
+      <p v-if="product.category" class="app-muted small">{{ t('supplier.category') }}: <bdi>{{ product.category }}</bdi></p>
       <p v-if="product.description" class="app-muted small"><bdi>{{ product.description }}</bdi></p>
+      <Button v-if="product.description || product.name" type="button" outlined size="small" icon="pi pi-copy" :label="t('supplier.copy_text')" @click="copySupplierText" />
       <label class="field">
         <span>{{ t('supplier.price') }}</span>
         <InputText v-model="price" class="app-ltr" inputmode="numeric" :invalid="problem === 'price' || problem === 'need_price'" />
@@ -75,8 +84,10 @@ function save() {
       <small v-if="problem === 'need_price'" class="app-muted">{{ t('supplier.need_price') }}</small>
       <label class="field"><span>{{ t('supplier.title_fa') }}</span><InputText v-model="titleFa" maxlength="200" /></label>
       <label class="field"><span>{{ t('supplier.title_en') }}</span><InputText v-model="titleEn" class="app-ltr" maxlength="200" /></label>
-      <label class="field"><span>{{ t('supplier.desc_fa') }}</span><Textarea v-model="descFa" rows="3" maxlength="2000" /></label>
-      <label class="field"><span>{{ t('supplier.desc_en') }}</span><Textarea v-model="descEn" rows="3" class="app-ltr" maxlength="2000" /></label>
+      <label class="field"><span>{{ t('supplier.desc_fa') }}</span><Textarea v-model="descFa" rows="5" maxlength="3000" /></label>
+      <label class="field"><span>{{ t('supplier.desc_en') }}</span><Textarea v-model="descEn" rows="5" class="app-ltr" maxlength="3000" />
+        <small class="app-muted">{{ t('supplier.desc_help') }}</small>
+      </label>
       <label class="field">
         <span>{{ t('supplier.sort') }}</span>
         <InputText v-model="sort" class="app-ltr" inputmode="numeric" :invalid="problem === 'sort'" />

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
 import ColorPicker from 'primevue/colorpicker'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
@@ -37,17 +38,31 @@ interface Form {
   privacy_url: string
   'currency.fa': string
   'currency.en': string
+  // the text of the store's own Terms and Privacy pages: what is shown now (the owner's, or the default to start from)
+  'legal.terms.fa': string
+  'legal.terms.en': string
+  'legal.privacy.fa': string
+  'legal.privacy.en': string
 }
 type Field = keyof Form
-const fields: Field[] = ['name', 'support', 'color', 'terms_url', 'privacy_url', 'currency.fa', 'currency.en']
+const fields: Field[] = ['name', 'support', 'color', 'terms_url', 'privacy_url', 'currency.fa', 'currency.en', 'legal.terms.fa', 'legal.terms.en', 'legal.privacy.fa', 'legal.privacy.en']
+type PageKind = 'terms' | 'privacy'
+const pages: PageKind[] = ['terms', 'privacy']
+const pageLangs = ['fa', 'en'] as const
+const legalField = (kind: PageKind, l: 'fa' | 'en') => `legal.${kind}.${l}` as Field
+// The addresses of the store's own pages, which the bot and the subscription page use while the fields above are empty.
+const origin = window.location.origin
 const legalFields = [{ field: 'terms_url' }, { field: 'privacy_url' }] as const
-const urlPlaceholder = 'https://'
+const defaultUrl = (field: 'terms_url' | 'privacy_url') => origin + (field === 'terms_url' ? '/terms' : '/privacy')
 const currencyFields = [
   { lang: 'fa', field: 'currency.fa' },
   { lang: 'en', field: 'currency.en' },
 ] as const
 
-const blank = (): Form => ({ name: '', support: '', color: '', terms_url: '', privacy_url: '', 'currency.fa': '', 'currency.en': '' })
+const blank = (): Form => ({
+  name: '', support: '', color: '', terms_url: '', privacy_url: '', 'currency.fa': '', 'currency.en': '',
+  'legal.terms.fa': '', 'legal.terms.en': '', 'legal.privacy.fa': '', 'legal.privacy.en': '',
+})
 const formOf = (b: BrandingInfo): Form => ({
   name: b.name ?? '',
   support: b.support ?? '',
@@ -56,7 +71,15 @@ const formOf = (b: BrandingInfo): Form => ({
   privacy_url: b.privacy_url ?? '',
   'currency.fa': b.currency?.fa ?? '',
   'currency.en': b.currency?.en ?? '',
+  'legal.terms.fa': legalShown(b, 'terms', 'fa'),
+  'legal.terms.en': legalShown(b, 'terms', 'en'),
+  'legal.privacy.fa': legalShown(b, 'privacy', 'fa'),
+  'legal.privacy.en': legalShown(b, 'privacy', 'en'),
 })
+// A page shows the owner's own text, or the default to start from.
+function legalShown(b: BrandingInfo, kind: PageKind, l: 'fa' | 'en'): string {
+  return (b.legal?.[kind]?.[l] || b.legal_defaults?.[kind]?.[l] || '').toString()
+}
 const trimmed = (f: Form): Form => {
   const out = { ...f }
   for (const k of fields) out[k] = out[k].trim()
@@ -166,6 +189,8 @@ async function save() {
       terms_url: f.terms_url,
       privacy_url: f.privacy_url,
       currency: { fa: f['currency.fa'], en: f['currency.en'] },
+      // a text equal to the default is saved as "" so that it keeps following the default; an older server knows no pages
+      ...(info.value?.legal_defaults ? { legal: legalBody(f) } : {}),
     })
     setInfo(res)
     toast.add({ severity: 'success', summary: t('branding.saved'), life: 3000 })
@@ -182,6 +207,21 @@ async function save() {
   } finally {
     busy.value = false
   }
+}
+function legalBody(f: Form): Record<PageKind, { fa: string; en: string }> {
+  const def = info.value?.legal_defaults
+  const own = (kind: PageKind, l: 'fa' | 'en') => {
+    const v = f[legalField(kind, l)].trim()
+    return v === (def?.[kind]?.[l] ?? '').trim() ? '' : v
+  }
+  return {
+    terms: { fa: own('terms', 'fa'), en: own('terms', 'en') },
+    privacy: { fa: own('privacy', 'fa'), en: own('privacy', 'en') },
+  }
+}
+// Back to the default text of a page in a language.
+function useDefaultText(kind: PageKind, l: 'fa' | 'en') {
+  form.value[legalField(kind, l)] = info.value?.legal_defaults?.[kind]?.[l] ?? ''
 }
 function discard() {
   form.value = { ...saved.value }
@@ -308,6 +348,7 @@ const errorOf = (f: Field) => clientErrors.value[f] ?? ''
         <template #content>
           <div class="fields">
             <p class="app-muted note">{{ t('branding.legal_hint') }}</p>
+            <p class="app-muted note">{{ t('branding.legal_default_hint') }}</p>
             <div v-for="lf in legalFields" :key="lf.field" class="app-field">
               <label :for="id(lf.field)">{{ t('branding.' + lf.field) }}</label>
               <InputText
@@ -318,7 +359,7 @@ const errorOf = (f: Field) => clientErrors.value[f] ?? ''
                 dir="ltr"
                 maxlength="1000"
                 autocomplete="off"
-                :placeholder="urlPlaceholder"
+                :placeholder="defaultUrl(lf.field)"
                 :invalid="!!errorOf(lf.field) || !!serverErrors[lf.field]"
                 fluid
               />
@@ -327,6 +368,28 @@ const errorOf = (f: Field) => clientErrors.value[f] ?? ''
                 {{ t('branding.not_accepted') }} <span class="app-ltr">{{ serverErrors[lf.field] }}</span>
               </Message>
             </div>
+          </div>
+        </template>
+      </Card>
+
+      <Card v-if="info.legal_defaults" class="wide-card">
+        <template #title>{{ t('branding.pages') }}</template>
+        <template #content>
+          <div class="fields">
+            <p class="app-muted note">{{ t('branding.pages_hint') }}</p>
+            <section v-for="kind in pages" :key="kind" class="page">
+              <div class="page-head">
+                <h3>{{ t('branding.page_' + kind) }}</h3>
+                <a class="app-ltr page-link" :href="origin + '/' + kind" target="_blank" rel="noopener">{{ origin + '/' + kind }}</a>
+              </div>
+              <div v-for="l in pageLangs" :key="l" class="app-field">
+                <div class="page-lang">
+                  <label :for="id(legalField(kind, l))">{{ t('branding.page_lang_' + l) }}</label>
+                  <Button type="button" text size="small" :label="t('branding.use_default_text')" @click="useDefaultText(kind, l)" />
+                </div>
+                <Textarea :id="id(legalField(kind, l))" v-model="form[legalField(kind, l)]" :dir="l === 'fa' ? 'rtl' : 'ltr'" rows="10" maxlength="30000" auto-resize fluid />
+              </div>
+            </section>
           </div>
         </template>
       </Card>
@@ -401,6 +464,37 @@ const errorOf = (f: Field) => clientErrors.value[f] ?? ''
 .note {
   margin: 0;
   font-size: 0.875rem;
+}
+.wide-card {
+  grid-column: 1 / -1;
+}
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--p-content-border-color);
+}
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.page-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.page-link {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.page-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 .save-bar {
   position: sticky;

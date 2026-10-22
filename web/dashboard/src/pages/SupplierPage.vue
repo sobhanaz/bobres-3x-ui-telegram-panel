@@ -23,7 +23,7 @@ import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
 import { dateTime, money, num, type Lang } from '../format'
-import { costText, orderSeverity, orderStatuses, type SupplierOrder, type SupplierProduct, type SupplierStatus } from '../supplier'
+import { costText, exportTexts, orderSeverity, orderStatuses, parseTextImport, type SupplierOrder, type SupplierProduct, type SupplierStatus } from '../supplier'
 import { keyPattern } from '../supplierkey'
 
 // The owner's own store resells a supplier's digital accounts: the API key, the catalog, the price and texts of each
@@ -93,6 +93,46 @@ async function sync() {
     fail(e)
   } finally {
     syncing.value = false
+  }
+}
+// The texts of every product in one file: hand it to a translator (the Persian texts go in "fa"), bring it back, and it fills them in.
+function downloadTexts() {
+  const url = URL.createObjectURL(new Blob([exportTexts(products.value)], { type: 'application/json' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'bobres-digital-accounts-texts.json'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+const importing = ref(false)
+async function importTexts(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  const parsed = parseTextImport(await file.text(), new Set(products.value.map((p) => p.id)))
+  if ('error' in parsed) {
+    toast.add({ severity: 'error', summary: t('supplier.import_bad'), life: 6000 })
+    return
+  }
+  importing.value = true
+  let done = 0
+  try {
+    for (const e of parsed.edits) {
+      const cur = products.value.find((p) => p.id === e.id)
+      if (!cur) continue
+      const body: Record<string, unknown> = {}
+      if (e.title) body.title = { ...cur.title, ...e.title }
+      if (e.desc) body.desc = { ...cur.desc, ...e.desc }
+      await api('PUT', `/supplier/products/${encodeURIComponent(e.id)}`, body)
+      done++
+    }
+    toast.add({ severity: 'success', summary: t('supplier.import_done', { n: num(done, lang.value), skipped: num(parsed.skipped, lang.value) }, done), life: 5000 })
+  } catch (e) {
+    fail(e)
+  } finally {
+    importing.value = false
+    await loadProducts()
   }
 }
 const editing = ref<SupplierProduct | null>(null)
@@ -206,9 +246,15 @@ onMounted(() => {
       <TabPanel value="products">
         <div class="app-toolbar">
           <Button icon="pi pi-refresh" outlined :label="t('supplier.sync')" :loading="syncing" :disabled="!status.configured" @click="sync" />
+          <Button icon="pi pi-download" outlined :label="t('supplier.export_texts')" :disabled="!products.length" @click="downloadTexts" />
+          <label class="import">
+            <Button as="span" icon="pi pi-upload" outlined :label="t('supplier.import_texts')" :loading="importing" :disabled="!products.length" />
+            <input type="file" accept="application/json,.json" class="file" :disabled="importing || !products.length" @change="importTexts" />
+          </label>
           <Button v-if="loadingProducts" text loading :aria-label="t('app.loading')" />
         </div>
         <p class="app-muted small">{{ t('supplier.products_help') }}</p>
+        <p class="app-muted small">{{ t('supplier.texts_help') }}</p>
         <DataTable :value="products" data-key="id" size="small" scrollable paginator :rows="25" :loading="loadingProducts">
           <template #empty>{{ t('supplier.no_products') }}</template>
           <Column :header="t('supplier.product')">
@@ -350,5 +396,15 @@ onMounted(() => {
 }
 .reason {
   inline-size: 100%;
+}
+.import {
+  position: relative;
+  display: inline-block;
+}
+.file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 </style>

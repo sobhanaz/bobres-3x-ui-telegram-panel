@@ -279,6 +279,8 @@ describe('English texts that count something', () => {
     'reseller.discount_short': '"{n} off": a percentage, "off" is not a counted noun',
     'reseller.commission_short': '"{n} commission": a percentage, "commission" is not counted',
     'reseller.discount_off': '"{n} off store prices": a percentage',
+    'usdtrate.per_usdt': '"{n} Toman per USDT": Toman is the currency, not a counted noun',
+    'usdtrate.live_line': '"{n} Toman": the currency, not a counted noun',
     'gateway.open_count': '"{n} open": an adjective, the noun is left out',
     'gateway.check_errors.more': '"The newest {shown} of {total} are shown": "are" is a verb, the noun is left out',
     'gateway.usdt.unmatched_more': '"The newest {shown} of {n} are listed": "are" is a verb, the noun is left out',

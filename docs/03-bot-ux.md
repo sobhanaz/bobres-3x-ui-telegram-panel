@@ -50,12 +50,14 @@ shows**: status, expiry, traffic and usage (no owner, e-mail, name or note) with
 and the order is the **holder's own** (their wallet or gateway, their discount codes) for that service: core accepts a renewal (never a traffic
 top-up) of a service that is not the buyer's only with the link's secret (`CreateOrder.link_secret`, kept in the saved checkout, never in a
 button), compared in constant time, and checks it again at the quote and at the order. Back from the plans returns to the search.
-**Reward codes:** the owner marks a plan with a percent in the dashboard (the plan's **Reward code after a purchase**). A paid purchase or renewal of it
+**Reward codes:** the owner marks a plan in the dashboard (the plan's **Reward code after a purchase**: a percent from 1 to 90, or a fixed amount
+in the plan's currency, the days it lasts (default 10, up to 365) and a text in Persian and English for the buyer). A paid purchase or renewal of it
 by a customer (not a reseller, not a free order, not a traffic package, not one service of a bulk purchase) makes a discount code for the buyer's
-next purchase of **the same plan**: `THX-` and eight characters, bound to the buyer (for anyone else it is "not valid"), to the plan (another plan:
-"This code is for another plan."), one use, 30 days. The bot sends it in its own message (`reward.code`: the plan, the code, the percent, the
-date, "only for you, once") with a Buy button; the buyer enters it at the payment menu's **Discount code** as any code. Each purchase brings a
-new code. A code staff made is unchanged (the dashboard's Discounts list shows reward codes too).
+next purchase of **any plan**: `THX-` and eight characters, bound to the buyer (for anyone else it is "not valid"), one use, the days the plan says.
+An amount code takes that amount off, never more than the price (the rest is lost) and only on a plan in its currency. The bot sends it in its own
+message (`reward.code`: the code, the percent or the amount, the days and the date, the owner's text, "only for you, once") with a Buy button; the
+buyer enters it at the payment menu's **Discount code** as any code. Each purchase brings a new code. A code staff made is unchanged (the
+dashboard's Discounts list shows reward codes too). A free plan (the trial) takes no code.
 **Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
 group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
 button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the

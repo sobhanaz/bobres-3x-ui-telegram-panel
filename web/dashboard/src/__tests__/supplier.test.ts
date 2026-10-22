@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { balanceLine, balanceRefreshMs, costText, maxPrice, orderSeverity, parsePrice, sellableProblem } from '../supplier'
+import { balanceLine, balanceRefreshMs, costText, exportTexts, maxPrice, orderSeverity, parsePrice, parseTextImport, sellableProblem, type SupplierProduct } from '../supplier'
 import { keyPattern } from '../supplierkey'
 import fa from '../locales/fa.json'
 import en from '../locales/en.json'
@@ -48,6 +48,39 @@ describe('the Digital accounts page rules', () => {
   it('has the balance card\'s texts in both languages', () => {
     for (const cat of [fa, en] as Record<string, any>[]) {
       for (const k of ['balance_title', 'balance_at', 'balance_refresh', 'balance_unknown', 'balance_raw']) expect(cat.supplier[k], k).toBeTruthy()
+    }
+  })
+})
+
+describe('exporting and importing the product texts', () => {
+  const product = (id: string, over: Partial<SupplierProduct> = {}): SupplierProduct => ({
+    id, name: 'Muse AI', description: 'A ready-made account', category: 'Muse AI', cost_micro: 250000, cost_currency: 'USDT', stock: 88,
+    listed: true, enabled: true, sell_price: 90000, title: {}, desc: {}, sort: 0, synced_at: null, ...over,
+  })
+  it('writes every product with its names and texts, for a translator', () => {
+    const rows = JSON.parse(exportTexts([product('a'), product('b', { title: { en: 'B' }, desc: { fa: 'ب' } })])).products
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ id: 'a', category: 'Muse AI', name: 'Muse AI', supplier_description: 'A ready-made account', title: { fa: '', en: '' } })
+    expect(rows[1]).toMatchObject({ title: { fa: '', en: 'B' }, desc: { fa: 'ب', en: '' } })
+  })
+  it('reads the file back: only the texts that were given, only known products', () => {
+    const text = JSON.stringify({
+      products: [
+        { id: 'a', title: { fa: ' موز ', en: '' }, desc: { fa: 'توضیح' } },
+        { id: 'b', title: { fa: '', en: '' }, desc: { fa: '', en: '' } },
+        { id: 'zzz', title: { fa: 'x' } },
+        { nope: 1 },
+      ],
+    })
+    expect(parseTextImport(text, new Set(['a', 'b']))).toEqual({ edits: [{ id: 'a', title: { fa: 'موز' }, desc: { fa: 'توضیح' } }], skipped: 3 })
+  })
+  it('refuses what Export did not make', () => {
+    expect(parseTextImport('not json', new Set())).toEqual({ error: 'json' })
+    expect(parseTextImport('{"items":[]}', new Set())).toEqual({ error: 'shape' })
+  })
+  it('has its texts in both catalogs', () => {
+    for (const cat of [fa, en] as Record<string, any>[]) {
+      for (const k of ['category', 'copy_text', 'desc_help', 'export_texts', 'import_texts', 'texts_help', 'import_bad', 'import_done']) expect(typeof cat.supplier[k], k).toBe('string')
     }
   })
 })

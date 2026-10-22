@@ -1322,6 +1322,12 @@ message SupplierOffer {
   // false: sold out right now (no stock, or the supplier no longer lists it); the description can still be read, it cannot be bought.
   // An older core never sends it (the bot then treats the offer as available).
   bool sold_out = 5;
+  // The supplier's own category of the product ("Telegram Premium", "VPN"...), without custom-emoji placeholders; empty when the supplier names
+  // none. The bot groups the offers by it. An older core never sends it (the bot then lists the offers flat).
+  string category = 6;
+  // How many the supplier has: set when the supplier says (stock_known), so the bot can show it and offer no more than that.
+  int32 stock = 7;
+  bool stock_known = 8;
 }
 
 message ListSupplierOffersRequest {

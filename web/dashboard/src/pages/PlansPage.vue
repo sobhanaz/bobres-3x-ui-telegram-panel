@@ -8,6 +8,8 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import Textarea from 'primevue/textarea'
+import { useConfirm } from 'primevue/useconfirm'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Checkbox from 'primevue/checkbox'
 import MultiSelect from 'primevue/multiselect'
@@ -15,7 +17,7 @@ import Tag from 'primevue/tag'
 import Message from 'primevue/message'
 import { api } from '../api'
 import { errorText } from '../errors'
-import { asciiNumber, bytes, currencies, decimalOf, gbOf, money, num, validAmount, type Lang } from '../format'
+import { asciiNumber, bytes, currencies, decimalOf, gbOf, isolate, money, num, validAmount, type Lang } from '../format'
 import { choiceOf, goneInbounds, inboundOptions, inboundsBody, noUsableServer, serverNames, serverOptions, type InboundChoice } from '../servers'
 import { useAuth } from '../stores/auth'
 import PlanGroups from '../components/plans/PlanGroups.vue'
@@ -24,6 +26,7 @@ import type { InboundItem, PlanGroupItem, PlanItem, ServerItem } from '../types'
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const toast = useToast()
+const confirm = useConfirm()
 const auth = useAuth()
 
 const plans = ref<PlanItem[]>([])
@@ -64,6 +67,8 @@ const groupOptions = computed(() => [
 
 // The 3x-ui servers, for the plan's server choice (those who manage servers).
 const canServers = computed(() => auth.can('servers.write'))
+// Only the owner deletes a plan, and only with this button: nothing deletes one by itself.
+const canDelete = computed(() => auth.can('plans.delete'))
 const servers = ref<ServerItem[]>([])
 const serversReady = ref(false)
 const serversError = ref('')
@@ -105,8 +110,12 @@ interface Form {
   sort: string
   /** the plan group's id; empty = none */
   group_id: string
-  /** the reward discount code's percent as typed; empty = none */
-  reward: string
+  /** the reward code a purchase gives: none, a percent or an amount; the value as typed, the days it lasts, the text for the buyer */
+  reward_kind: 'none' | 'percent' | 'amount'
+  reward_value: string
+  reward_days: string
+  reward_text_fa: string
+  reward_text_en: string
   /** empty = any server */
   server_ids: string[]
   /** the plan came with its servers (core knows them): they go back on save */
@@ -117,12 +126,26 @@ interface Form {
   has_inbounds: boolean
 }
 const blank = (): Form => ({ id: '', name_fa: '', name_en: '', kind: 'both', days: '30', gb: '', price: '', currency: 'IRT',
-  enabled: true, is_trial: false, is_topup: false, sort: '0', group_id: '', reward: '', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
+  enabled: true, is_trial: false, is_topup: false, sort: '0', group_id: '',
+  reward_kind: 'none', reward_value: '', reward_days: '10', reward_text_fa: '', reward_text_en: '', server_ids: [], has_servers: false, inbounds: {}, has_inbounds: false })
 const form = ref<Form>(blank())
 const editing = ref(false)
 const busy = ref(false)
 const formError = ref('')
 const formDetail = ref('')
+
+// The reward part of the form for a plan: what it gives now (a plan that gives none shows the defaults).
+function rewardForm(p: PlanItem): Pick<Form, 'reward_kind' | 'reward_value' | 'reward_days' | 'reward_text_fa' | 'reward_text_en'> {
+  const r = p.reward
+  if (!r) return { reward_kind: 'none', reward_value: '', reward_days: '10', reward_text_fa: '', reward_text_en: '' }
+  return {
+    reward_kind: r.kind,
+    reward_value: r.kind === 'percent' ? String(r.percent ?? '') : r.amount ? decimalOf(r.amount) : '',
+    reward_days: String(r.days),
+    reward_text_fa: r.text?.fa ?? '',
+    reward_text_en: r.text?.en ?? '',
+  }
+}
 
 function edit(p?: PlanItem) {
   formError.value = ''
@@ -134,7 +157,8 @@ function edit(p?: PlanItem) {
       id: p.id, name_fa: p.name.fa ?? '', name_en: p.name.en ?? '', kind: p.kind,
       days: p.duration_days ? String(p.duration_days) : '', gb: p.traffic_bytes ? gbOf(p.traffic_bytes) : '',
       price: decimalOf(p.price), currency: p.price.currency, enabled: p.enabled, is_trial: p.is_trial,
-      is_topup: p.is_topup, sort: String(p.sort), group_id: p.group_id ?? '', reward: p.reward_percent ? String(p.reward_percent) : '', server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
+      is_topup: p.is_topup, sort: String(p.sort), group_id: p.group_id ?? '',
+      ...rewardForm(p), server_ids: [...(p.server_ids ?? [])], has_servers: Array.isArray(p.server_ids),
       inbounds: choiceOf(p.inbounds), has_inbounds: Array.isArray(p.inbounds),
     }
   }
@@ -210,11 +234,25 @@ const kinds = computed(() => [
 ])
 const needsDays = computed(() => form.value.kind !== 'traffic' && !form.value.is_topup)
 const needsGB = computed(() => form.value.kind !== 'time' || form.value.is_topup)
-// A reward is a whole percent from 1 to 90 (empty: none); a trial and a traffic package give none.
-const rewardOk = computed(() => {
-  const r = asciiNumber(form.value.reward).trim()
-  return r === '' || (/^\d{1,2}$/.test(r) && Number(r) >= 1 && Number(r) <= 90)
+// A reward is nothing, a whole percent from 1 to 90, or an amount in the plan's currency, lasting 1 to 365 days; a trial and a traffic
+// package give none.
+const rewardValueOk = computed(() => {
+  const f = form.value
+  const v = asciiNumber(f.reward_value).trim()
+  if (f.reward_kind === 'percent') return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 90
+  if (f.reward_kind === 'amount') return v !== '' && validAmount(v, f.currency) && Number(v) > 0
+  return true
 })
+const rewardDaysOk = computed(() => {
+  const d = asciiNumber(form.value.reward_days).trim()
+  return form.value.reward_kind === 'none' || (/^\d{1,3}$/.test(d) && Number(d) >= 1 && Number(d) <= 365)
+})
+const rewardOk = computed(() => rewardValueOk.value && rewardDaysOk.value)
+const rewardKinds = computed(() => [
+  { label: t('plan.reward_kind_none'), value: 'none' },
+  { label: t('plan.reward_kind_percent'), value: 'percent' },
+  { label: t('plan.reward_kind_amount'), value: 'amount' },
+])
 const valid = computed(() => {
   const f = form.value
   const price = asciiNumber(f.price)
@@ -245,8 +283,15 @@ async function save() {
     sort: Number(asciiNumber(f.sort)) || 0,
     // a trial and a traffic package are never sold from a group; an older core does not know groups at all
     ...(groupsReady.value ? { group_id: f.is_trial || f.is_topup ? '' : f.group_id } : {}),
-    // a whole percent from 1 to 90, or 0 to take the reward away; a trial and a traffic package give none
-    reward_percent: f.is_trial || f.is_topup ? 0 : Number(asciiNumber(f.reward).trim() || 0),
+    // a trial and a traffic package give no reward; an older core does not know the form of it
+    reward: f.is_trial || f.is_topup || f.reward_kind === 'none'
+      ? { kind: 'none' }
+      : {
+          kind: f.reward_kind,
+          value: asciiNumber(f.reward_value).trim(),
+          days: Number(asciiNumber(f.reward_days).trim()),
+          text: { fa: f.reward_text_fa.trim(), en: f.reward_text_en.trim() },
+        },
     ...(sendServers.value ? { server_ids: f.server_ids } : {}),
     ...(showInbounds.value ? { inbounds: inboundsBody(f.inbounds, f.server_ids) } : {}),
   }
@@ -262,6 +307,25 @@ async function save() {
   } finally {
     busy.value = false
   }
+}
+
+// Deleting a plan takes it off sale and out of every list; it is never erased (its orders, reports and refunds keep it).
+function remove(p: PlanItem) {
+  confirm.require({
+    header: t('plan.delete'),
+    message: t('plan.delete_confirm', { name: isolate(p.name[lang.value] || p.name.en || p.name.fa || '') }),
+    acceptProps: { label: t('plan.delete'), severity: 'danger' },
+    rejectProps: { label: t('app.cancel'), severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await api('DELETE', `/plans/${p.id}`)
+        toast.add({ severity: 'success', summary: t('plan.deleted'), life: 5000 })
+      } catch (e) {
+        toast.add({ severity: 'error', summary: errorText(e, t).text, life: 6000 })
+      }
+      await load()
+    },
+  })
 }
 
 // Turning a plan on or off keeps everything else.
@@ -298,7 +362,8 @@ async function toggle(p: PlanItem, enabled: boolean) {
         <div class="tags">
           <Tag v-if="p.is_trial" :value="t('plan.trial')" severity="info" />
           <Tag v-if="p.is_topup" :value="t('plan.topup')" severity="secondary" />
-          <Tag v-if="p.reward_percent" :value="t('plan.reward_tag', { n: num(p.reward_percent, lang) })" severity="success" />
+          <Tag v-if="p.reward?.kind === 'percent'" :value="t('plan.reward_tag', { n: num(p.reward.percent ?? 0, lang) })" severity="success" />
+          <Tag v-else-if="p.reward?.kind === 'amount' && p.reward.amount" :value="t('plan.reward_tag_amount', { amount: money(p.reward.amount, lang) })" severity="success" />
         </div>
       </template>
     </Column>
@@ -339,6 +404,7 @@ async function toggle(p: PlanItem, enabled: boolean) {
     <Column>
       <template #body="{ data: p }">
         <Button icon="pi pi-pencil" text rounded :aria-label="t('common.edit')" @click="edit(p)" />
+        <Button v-if="canDelete" icon="pi pi-trash" text rounded severity="danger" :aria-label="t('plan.delete')" @click="remove(p)" />
       </template>
     </Column>
   </DataTable>
@@ -363,11 +429,35 @@ async function toggle(p: PlanItem, enabled: boolean) {
         <span>{{ t('plan.kind_label') }}</span>
         <Select v-model="form.kind" :options="kinds" option-label="label" option-value="value" />
       </label>
-      <label v-if="!form.is_topup && !form.is_trial" class="reward">
-        <span>{{ t('plan.reward') }}</span>
-        <InputText v-model="form.reward" inputmode="numeric" dir="ltr" maxlength="2" :invalid="!rewardOk" :placeholder="t('plan.reward_none')" />
-        <small :class="rewardOk ? 'app-muted' : 'app-error'">{{ rewardOk ? t('plan.reward_hint') : t('plan.reward_rule') }}</small>
-      </label>
+      <fieldset v-if="!form.is_topup && !form.is_trial" class="reward">
+        <legend>{{ t('plan.reward') }}</legend>
+        <small class="app-muted">{{ t('plan.reward_hint') }}</small>
+        <div class="app-row">
+          <label>
+            <span>{{ t('plan.reward_kind') }}</span>
+            <Select v-model="form.reward_kind" :options="rewardKinds" option-label="label" option-value="value" />
+          </label>
+          <label v-if="form.reward_kind !== 'none'">
+            <span>{{ form.reward_kind === 'percent' ? t('plan.reward_value_percent') : t('plan.reward_value_amount', { currency: t('currency.' + form.currency) }) }}</span>
+            <InputText v-model="form.reward_value" inputmode="decimal" dir="ltr" :invalid="!rewardValueOk" />
+          </label>
+          <label v-if="form.reward_kind !== 'none'">
+            <span>{{ t('plan.reward_days') }}</span>
+            <InputText v-model="form.reward_days" inputmode="numeric" dir="ltr" maxlength="3" :invalid="!rewardDaysOk" />
+          </label>
+        </div>
+        <small v-if="!rewardOk" class="app-error">{{ t('plan.reward_rule') }}</small>
+        <template v-if="form.reward_kind !== 'none'">
+          <label>
+            <span>{{ t('plan.reward_text_fa') }}</span>
+            <Textarea v-model="form.reward_text_fa" dir="rtl" rows="2" maxlength="500" auto-resize />
+          </label>
+          <label>
+            <span>{{ t('plan.reward_text_en') }}</span>
+            <Textarea v-model="form.reward_text_en" dir="ltr" rows="2" maxlength="500" auto-resize />
+          </label>
+        </template>
+      </fieldset>
       <label v-if="groupsReady && groups.length && !form.is_topup && !form.is_trial">
         <span>{{ t('plan.group') }}</span>
         <Select v-model="form.group_id" :options="groupOptions" option-label="label" option-value="value" />
@@ -469,6 +559,18 @@ async function toggle(p: PlanItem, enabled: boolean) {
 <style scoped>
 .intro {
   margin-block: 0 var(--app-gap);
+}
+.reward {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--p-content-border-color, rgba(128, 128, 128, 0.3));
+  border-radius: 8px;
+}
+.reward legend {
+  padding-inline: 0.35rem;
+  font-weight: 600;
 }
 .tags {
   display: flex;

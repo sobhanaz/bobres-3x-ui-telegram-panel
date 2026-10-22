@@ -34,8 +34,10 @@ const SettingSupplierEnabled = "supplier.enabled"
 const SupplierCurrency = "IRT"
 
 const (
-	supplierMaxPrice     = 1_000_000_000_000
-	supplierMaxQuantity  = 10
+	supplierMaxPrice    = 1_000_000_000_000
+	supplierMaxQuantity = 25
+	// supplierTextMax is the longest description (characters) the owner may write for a product.
+	supplierTextMax      = 3000
 	supplierSettleBatch  = 20
 	supplierFirstWait    = 30 * time.Second
 	supplierMaxWait      = time.Hour
@@ -221,7 +223,7 @@ func (s *Service) UpdateSupplierProduct(ctx context.Context, actor *store.User, 
 	if err != nil {
 		return nil, err
 	}
-	desc, err := cleanI18n(e.Desc, 2000)
+	desc, err := cleanI18n(e.Desc, supplierTextMax)
 	if err != nil {
 		return nil, err
 	}
@@ -620,14 +622,40 @@ func SupplierName(p *store.SupplierProduct, lang string) string {
 	return p.ID
 }
 
-// SupplierDescription is a product's description for a language: the owner's text only (the supplier's own text is for the
-// owner to read, not for customers).
-func SupplierDescription(p *store.SupplierProduct, lang string) string {
-	if v := p.Desc[lang]; v != "" {
-		return v
+// SupplierCategory is the supplier's own category of a product, read from the answer the catalog was made of: a text (or an object with a
+// name) under "category", "category_name" or "category_title", without the custom-emoji placeholders. "" when the supplier names none (a
+// number alone is an id, not a name).
+func SupplierCategory(p *store.SupplierProduct) string {
+	var m map[string]any
+	if len(p.Raw) == 0 || json.Unmarshal(p.Raw, &m) != nil {
+		return ""
 	}
-	if lang != "en" {
-		return p.Desc["fa"]
+	for _, k := range []string{"category", "category_name", "category_title"} {
+		switch v := m[k].(type) {
+		case string:
+			if c := clipStr(cleanSupplierText(strings.TrimSpace(v)), 60); c != "" {
+				return c
+			}
+		case map[string]any:
+			for _, nk := range []string{"name", "title", "label"} {
+				if n, ok := v[nk].(string); ok {
+					if c := clipStr(cleanSupplierText(strings.TrimSpace(n)), 60); c != "" {
+						return c
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// SupplierDescription is a product's description for a language: the owner's text in that language, else the owner's text in the other
+// language, else the supplier's own text (without its custom-emoji placeholders), which the owner can copy and edit.
+func SupplierDescription(p *store.SupplierProduct, lang string) string {
+	for _, v := range []string{p.Desc[lang], p.Desc["fa"], p.Desc["en"], p.Description} {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
 	}
 	return ""
 }

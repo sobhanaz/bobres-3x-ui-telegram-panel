@@ -193,9 +193,20 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		}
 		lang := n.lang(ctx, e.TelegramID)
 		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.buy", "buy"))
-		return n.send(ctx, e.TelegramID, n.cat.T(lang, "reward.code", "plan", html.EscapeString(rewardPlanName(e.PlanNames, lang)),
-			"code", html.EscapeString(e.Code), "percent", i18n.Number(lang, int64(e.Percent)),
-			"date", i18n.Date(lang, time.Unix(e.ExpiresAt, 0))), kb)
+		value := n.cat.T(lang, "reward.percent", "n", i18n.Number(lang, int64(e.Percent)))
+		if e.Amount > 0 {
+			value = i18n.Money(lang, e.Amount, e.Currency)
+		}
+		days := int64(e.Days)
+		if days <= 0 { // an event from before the days were in it
+			days = int64(max(1, (e.ExpiresAt-time.Now().Unix()+86399)/86400))
+		}
+		text := ""
+		if t := rewardText(e.Text, lang); t != "" {
+			text = "\n\n" + html.EscapeString(t)
+		}
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "reward.code", "code", html.EscapeString(e.Code), "value", value,
+			"days", i18n.Number(lang, days), "date", i18n.Date(lang, time.Unix(e.ExpiresAt, 0)), "text", text), kb)
 
 	case events.WalletCredited:
 		var e events.WalletCreditedEvent
@@ -1134,18 +1145,12 @@ func truncateRunes(s string, n int) string {
 	return s
 }
 
-// rewardPlanName is a plan's name in the customer's language, else English, else any it has.
-func rewardPlanName(names map[string]string, lang string) string {
-	if n := names[lang]; n != "" {
-		return n
-	}
-	if n := names["en"]; n != "" {
-		return n
-	}
-	for _, n := range names {
-		if n != "" {
-			return n
+// rewardText is the owner's text for a reward in the customer's language, else English, else Persian ("" when there is none).
+func rewardText(texts map[string]string, lang string) string {
+	for _, l := range []string{lang, "en", "fa"} {
+		if t := strings.TrimSpace(texts[l]); t != "" {
+			return t
 		}
 	}
-	return "-"
+	return ""
 }

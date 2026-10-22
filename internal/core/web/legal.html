@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="{{.Lang}}" dir="{{.Dir}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}} · {{.Brand}}</title>
+<style>
+:root{--brand:{{.Color}};--bg:#f5f7f8;--card:#fff;--text:#14202b;--muted:#5b6b78;--line:#dfe5ea}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1519;--card:#18212a;--text:#e8eef2;--muted:#9aabb8;--line:#2a3743}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.85 system-ui,-apple-system,"Segoe UI",Roboto,Tahoma,"Vazirmatn",sans-serif}
+main{max-width:44rem;margin:0 auto;padding:1rem 1rem 2.5rem}
+header.brand{display:flex;align-items:center;gap:.75rem;padding:1rem 0 .5rem}
+header.brand img{width:2.75rem;height:2.75rem;border-radius:.6rem;object-fit:contain;background:var(--card)}
+header.brand .name{font-size:1.25rem;font-weight:700;flex:1}
+nav a{color:var(--muted);font-size:.9rem;text-decoration:none;border:1px solid var(--line);border-radius:.5rem;padding:.2rem .6rem;margin-inline-start:.4rem}
+nav a[aria-current]{color:var(--text);border-color:var(--brand)}
+article{background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:1.1rem 1.3rem;margin:.9rem 0}
+article h1{font-size:1.5rem;margin:.2rem 0 .8rem;border-block-end:3px solid var(--brand);padding-block-end:.5rem}
+article h2{font-size:1.1rem;margin:1.4rem 0 .3rem}
+article h3{font-size:1rem;margin:1.1rem 0 .2rem}
+article p{margin:.4rem 0}
+article ul{margin:.4rem 0;padding-inline-start:1.4rem}
+article li{margin:.25rem 0}
+article a{color:var(--brand)}
+footer{text-align:center;color:var(--muted);font-size:.88rem;margin-top:1.5rem}
+footer a{color:var(--muted);margin:0 .5rem}
+</style>
+</head>
+<body>
+<main>
+<header class="brand">
+{{- if .Logo}}<img src="{{.Logo}}" alt="" width="44" height="44">{{end}}
+<span class="name">{{.Brand}}</span>
+<nav>
+{{- range .Nav}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+<a href="{{.OtherLangHref}}" hreflang="{{.OtherLang}}" lang="{{.OtherLang}}">{{.OtherLangName}}</a>
+</nav>
+</header>
+<article>
+{{.Body}}
+</article>
+<footer>
+{{- if .SupportURL}}<a href="{{.SupportURL}}" rel="noopener noreferrer">{{.SupportLabel}}</a>{{else if .Support}}<span>{{.SupportLabel}}: <bdi>{{.Support}}</bdi></span>{{end}}
+{{- if .PoweredBy}}<p>Powered by BOBRES</p>{{end}}
+</footer>
+</main>
+</body>
+</html>

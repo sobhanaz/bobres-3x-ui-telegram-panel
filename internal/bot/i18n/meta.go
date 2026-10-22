@@ -173,6 +173,8 @@ var contexts = map[string]Context{
 	"subpage.guide.hiddify":   CtxPlain,
 	"subpage.guide.streisand": CtxPlain,
 	"subpage.guide.v2box":     CtxPlain,
+	"subpage.guide.karing":    CtxPlain,
+	"subpage.guide.npv":       CtxPlain,
 
 	"sub.qr_caption":     CtxCaption,
 	"admin.pending_item": CtxCaption,
@@ -190,6 +192,8 @@ var contexts = map[string]Context{
 // navigation, lists to choose from, links to read.
 var buttonStyles = map[string]string{
 	"btn.buy":               "success",
+	"btn.sup_buy":           "success",
+	"btn.sup_pay":           "success",
 	"btn.bulk":              "success",
 	"btn.bulk_pay":          "success",
 	"btn.trial":             "success",
@@ -269,6 +273,8 @@ var contextPrefixes = map[string]Context{
 // texts), so a text must not put them where tags are not allowed.
 var markupArgs = map[string][]string{
 	"plan.detail":          {"limits"},
+	"sup.product":          {"stock"},
+	"sup.product_desc":     {"stock"},
 	"renew.detail":         {"limits"},
 	"pay.crypto":           {"addresses"},
 	"admin.pending_item":   {"proof", "dup", "method"},

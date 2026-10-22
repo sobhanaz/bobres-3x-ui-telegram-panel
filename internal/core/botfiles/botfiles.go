@@ -468,6 +468,26 @@ func (c *Client) PostSupplier(ctx context.Context, action, apiKey string, body [
 	return resp.StatusCode, answer, nil
 }
 
+// PostUSDTRate asks the bot for the live Toman price of one USDT (domain.RateTransport): the bot reads a few fixed public price pages and
+// answers {"rate", "sources", "at"}, or an error with a message.
+func (c *Client) PostUSDTRate(ctx context.Context) (int, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/usdt-rate", nil)
+	if err != nil {
+		return 0, nil, fmt.Errorf("botfiles: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return 0, nil, errors.New("the bot did not answer")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	answer, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return 0, nil, errors.New("the bot's answer is unreadable")
+	}
+	return resp.StatusCode, answer, nil
+}
+
 // clip cuts s to at most n bytes on a rune boundary.
 func clip(s string, n int) string {
 	if len(s) <= n {

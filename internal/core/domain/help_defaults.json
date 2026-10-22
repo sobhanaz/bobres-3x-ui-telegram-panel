@@ -168,6 +168,50 @@
           "label": { "fa": "📥 Google Play", "en": "📥 Google Play" }
         }
       ]
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود Karing (همهٔ دستگاه‌ها)",
+        "en": "📲 Download Karing (all devices)"
+      },
+      "body": {
+        "fa": "<b>Karing</b> برنامه‌ای برای اندروید، آیفون و آیپد، ویندوز و مک است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را از یکی از دکمه‌های زیر دانلود و نصب کنید.\n<b>۲.</b> صفحهٔ سرویس خود را باز کنید (دکمهٔ <b>باز کردن صفحه</b> در <b>سرویس‌های من</b>)، دکمهٔ Karing را بزنید و افزودن را تأیید کنید. یا لینک اشتراک را کپی کنید و در برنامه از کلیپ‌بورد به‌عنوان پروفایل اضافه کنید.\n<b>۳.</b> یک سرور انتخاب کنید و وصل شوید.",
+        "en": "<b>Karing</b> is an app for Android, iPhone and iPad, Windows and macOS that connects with your subscription link.\n\n<b>1.</b> Download and install it with one of the buttons below.\n<b>2.</b> Open your service's page (the <b>Open page</b> button in <b>My services</b>), tap the Karing button and confirm the import. Or copy your subscription link and add it in the app from the clipboard as a profile.\n<b>3.</b> Pick a server and connect."
+      },
+      "buttons": [
+        {
+          "url": "https://karing.app/",
+          "label": { "fa": "🌐 صفحهٔ دانلود", "en": "🌐 Download page" }
+        },
+        {
+          "url": "https://apps.apple.com/app/karing/id6472431552",
+          "label": { "fa": "📥 App Store", "en": "📥 App Store" }
+        },
+        {
+          "url": "https://github.com/KaringX/karing/releases/latest",
+          "label": { "fa": "📥 دانلود از GitHub", "en": "📥 Download from GitHub" }
+        }
+      ]
+    },
+    {
+      "title": {
+        "fa": "📲 دانلود NPV Tunnel (اندروید و آیفون)",
+        "en": "📲 Download NPV Tunnel (Android and iPhone)"
+      },
+      "body": {
+        "fa": "<b>NPV Tunnel</b> برنامه‌ای برای اندروید و آیفون است که با لینک اشتراک شما وصل می‌شود.\n\n<b>۱.</b> آن را از یکی از دکمه‌های زیر دانلود و نصب کنید.\n<b>۲.</b> لینک اشتراک خود را از بخش <b>سرویس‌های من</b> کپی کنید. در برنامه، لینک را به‌عنوان اشتراک اضافه کنید (با دکمهٔ <b>+</b> یا از منوی برنامه، سپس لینک را جای‌گذاری کنید) و آن را به‌روزرسانی کنید.\n<b>۳.</b> یک سرور انتخاب کنید و وصل شوید.",
+        "en": "<b>NPV Tunnel</b> is an app for Android and iPhone that connects with your subscription link.\n\n<b>1.</b> Download and install it with one of the buttons below.\n<b>2.</b> Copy your subscription link from <b>My services</b>. In the app, add the link as a subscription (the <b>+</b> button or the app's menu, then paste the link) and update it.\n<b>3.</b> Pick a server and connect."
+      },
+      "buttons": [
+        {
+          "url": "https://play.google.com/store/apps/details?id=com.napsternetlabs.napsternetv",
+          "label": { "fa": "📥 Google Play", "en": "📥 Google Play" }
+        },
+        {
+          "url": "https://apps.apple.com/app/id1629465476",
+          "label": { "fa": "📥 App Store", "en": "📥 App Store" }
+        }
+      ]
     }
   ]
 }

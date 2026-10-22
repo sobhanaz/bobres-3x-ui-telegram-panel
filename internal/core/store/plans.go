@@ -15,16 +15,17 @@ const planCols = `id, name_i18n, kind, duration_days, traffic_bytes, price, curr
 	COALESCE((SELECT json_agg(json_build_object('server_id', g.server_id, 'inbound_ids', g.ids) ORDER BY g.server_id)
 		FROM (SELECT pi.server_id::text AS server_id, array_agg(pi.inbound_id ORDER BY pi.inbound_id) AS ids
 			FROM core.plan_inbounds pi WHERE pi.plan_id = plans.id GROUP BY pi.server_id) g), '[]'::json),
-	group_id::text, reward_percent`
+	group_id::text, reward_percent, reward_amount, reward_days, reward_text_i18n, deleted_at`
 
 func scanPlan(row pgx.Row) (*Plan, error) {
 	var (
 		p        Plan
 		name     []byte
 		inbounds []byte
+		text     []byte
 	)
 	err := row.Scan(&p.ID, &name, &p.Kind, &p.DurationDays, &p.TrafficBytes,
-		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup, &p.ServerIDs, &inbounds, &p.GroupID, &p.RewardPercent)
+		&p.Price, &p.Currency, &p.Enabled, &p.IsTrial, &p.Sort, &p.IsTopup, &p.ServerIDs, &inbounds, &p.GroupID, &p.RewardPercent, &p.RewardAmount, &p.RewardDays, &text, &p.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -37,6 +38,9 @@ func scanPlan(row pgx.Row) (*Plan, error) {
 	if err := json.Unmarshal(name, &p.NameI18n); err != nil {
 		return nil, fmt.Errorf("plan name_i18n: %w", err)
 	}
+	if err := json.Unmarshal(text, &p.RewardTextI18n); err != nil {
+		return nil, fmt.Errorf("plan reward_text_i18n: %w", err)
+	}
 	if err := json.Unmarshal(inbounds, &p.Inbounds); err != nil {
 		return nil, fmt.Errorf("plan inbounds: %w", err)
 	}
@@ -46,11 +50,12 @@ func scanPlan(row pgx.Row) (*Plan, error) {
 	return &p, nil
 }
 
-// ListPlans returns enabled plans (or all when includeDisabled), sorted.
+// ListPlans returns enabled plans (or all when includeDisabled), sorted. A deleted plan that is only kept for the orders that point to
+// it is never listed.
 func (s *Store) ListPlans(ctx context.Context, q querier, includeDisabled bool) ([]Plan, error) {
-	where := ""
+	where := "WHERE deleted_at IS NULL"
 	if !includeDisabled {
-		where = "WHERE enabled"
+		where += " AND enabled"
 	}
 	rows, err := q.Query(ctx,
 		`SELECT `+planCols+` FROM core.plans `+where+` ORDER BY sort, price`)
@@ -90,17 +95,30 @@ func (s *Store) UpsertPlan(ctx context.Context, q querier, p *Plan) error {
 	if err != nil {
 		return fmt.Errorf("plan name_i18n: %w", err)
 	}
+	text, err := json.Marshal(p.RewardTextI18n)
+	if err != nil {
+		return fmt.Errorf("plan reward_text_i18n: %w", err)
+	}
+	if p.RewardTextI18n == nil {
+		text = []byte("{}")
+	}
+	days := p.RewardDays
+	if days == 0 { // a caller that knows no reward (a test, a seed): the column's default
+		days = 10
+	}
 	_, err = q.Exec(ctx, `
-		INSERT INTO core.plans (id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup, group_id, reward_percent)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid, $13)
+		INSERT INTO core.plans (id, name_i18n, kind, duration_days, traffic_bytes, price, currency, enabled, is_trial, sort, is_topup, group_id,
+			reward_percent, reward_amount, reward_days, reward_text_i18n)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid, $13, $14, $15, $16)
 		ON CONFLICT (id) DO UPDATE SET
 			name_i18n = EXCLUDED.name_i18n, kind = EXCLUDED.kind,
 			duration_days = EXCLUDED.duration_days, traffic_bytes = EXCLUDED.traffic_bytes,
 			price = EXCLUDED.price, currency = EXCLUDED.currency, enabled = EXCLUDED.enabled,
 			is_trial = EXCLUDED.is_trial, sort = EXCLUDED.sort, is_topup = EXCLUDED.is_topup, group_id = EXCLUDED.group_id,
-			reward_percent = EXCLUDED.reward_percent, updated_at = now()`,
+			reward_percent = EXCLUDED.reward_percent, reward_amount = EXCLUDED.reward_amount, reward_days = EXCLUDED.reward_days,
+			reward_text_i18n = EXCLUDED.reward_text_i18n, updated_at = now()`,
 		p.ID, name, p.Kind, p.DurationDays, p.TrafficBytes,
-		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort, p.IsTopup, p.GroupID, p.RewardPercent)
+		p.Price, p.Currency, p.Enabled, p.IsTrial, p.Sort, p.IsTopup, p.GroupID, p.RewardPercent, p.RewardAmount, days, text)
 	if err != nil {
 		return fmt.Errorf("upsert plan: %w", err)
 	}
@@ -150,4 +168,16 @@ func (s *Store) DeletePlanInboundsOfServer(ctx context.Context, q querier, serve
 		return 0, fmt.Errorf("delete plan inbounds: %w", err)
 	}
 	return n, nil
+}
+
+// ArchivePlan takes a plan off sale and out of every list (and out of its group) but keeps the row: a plan is never erased.
+func (s *Store) ArchivePlan(ctx context.Context, q querier, id string) error {
+	tag, err := q.Exec(ctx, `UPDATE core.plans SET deleted_at = now(), enabled = false, group_id = NULL, updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, id)
+	if err != nil {
+		return fmt.Errorf("archive plan: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

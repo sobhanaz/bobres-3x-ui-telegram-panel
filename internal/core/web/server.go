@@ -181,6 +181,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/plans", PermPlansWrite, s.listPlans)
 	s.route(api, "POST /api/v1/plans", PermPlansWrite, s.createPlan)
 	s.route(api, "PUT /api/v1/plans/{id}", PermPlansWrite, s.updatePlan)
+	s.route(api, "DELETE /api/v1/plans/{id}", PermPlansDelete, s.deletePlan)
 	s.route(api, "GET /api/v1/plan-groups", PermPlansWrite, s.listPlanGroups)
 	s.route(api, "POST /api/v1/plan-groups", PermPlansWrite, s.createPlanGroup)
 	s.route(api, "PUT /api/v1/plan-groups/{id}", PermPlansWrite, s.updatePlanGroup)
@@ -206,6 +207,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/discounts", PermDiscountsWrite, s.listDiscounts)
 	s.route(api, "POST /api/v1/discounts", PermDiscountsWrite, s.saveDiscount)
 	s.route(api, "PUT /api/v1/discounts/{code}/enabled", PermDiscountsWrite, s.setDiscountEnabled)
+	s.route(api, "GET /api/v1/usdt-rate", PermGatewaysWrite, s.getUsdtRate)
+	s.route(api, "POST /api/v1/usdt-rate/refresh", PermGatewaysWrite, s.refreshUsdtRate)
 	s.privateRoute(api, "GET /api/v1/supplier", PermGatewaysWrite, s.getSupplier)
 	s.privateRoute(api, "PUT /api/v1/supplier/config", PermGatewaysWrite, s.putSupplierConfig)
 	s.privateRoute(api, "GET /api/v1/supplier/balance", PermGatewaysWrite, s.getSupplierBalance)
@@ -383,6 +386,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// The branded service page: public, the token in the address is the
 	// credential. Every other path under /sub/ gets the same generic 404.
 	mux.HandleFunc("GET /sub/{token}", s.subPage)
+	// The store's own Terms and Privacy pages (docs/legal/README.md): public, default text the owner can edit.
+	mux.HandleFunc("GET /terms", s.termsPage)
+	mux.HandleFunc("GET /privacy", s.privacyPage)
 	mux.HandleFunc("/sub/", s.pageNotFound)
 	s.registerMiniApp(mux)
 	if s.cfg.Dashboard != nil {

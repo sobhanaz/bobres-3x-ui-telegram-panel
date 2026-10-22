@@ -316,9 +316,10 @@ func gatedCases() []gatedCase {
 	for _, data := range []string{"nop", "bk", "bk:p:p1", "bk:q:n1:3", "bk:o:n1", "bk:c:n1", "bk:n:n1", "bk:nc:n1", "bk:y:n1"} {
 		add(buttonCase(data))
 	}
-	// The owner's own bot sells BOBRES licenses: the home, an offer, Pay, my licenses, a key, a renewal, and the USDT
-	// top-up for a shortfall.
-	for _, data := range []string{"sup", "sup:p:abcdefghij", "sup:y:abcdefghij:n1", "sup:my", "sup:o:00000000-0000-0000-0000-000000000000"} {
+	// The owner's own bot sells digital accounts: the home, a category, a product, how many, a typed number, the summary, Pay (with a
+	// quantity, and the old form without), my purchases and one purchase.
+	for _, data := range []string{"sup", "sup:c:abcdef12", "sup:p:abcdefghij", "sup:q:abcdefghij", "sup:n:abcdefghij", "sup:s:abcdefghij:3",
+		"sup:y:abcdefghij:3:n1", "sup:y:abcdefghij:n1", "sup:my", "sup:o:00000000-0000-0000-0000-000000000000"} {
 		add(buttonCase(data))
 	}
 	for _, data := range []string{"lic", "lic:b:standard:1", "lic:y:standard:1:n1", "lic:my", "lic:k:l1", "lic:r:l1:1", "lic:ry:l1:1:n1", "lpay:u:4000000:n1", "lpay:x:4000000:n1"} {
@@ -368,6 +369,7 @@ func gatedCases() []gatedCase {
 	add(
 		sceneCase(sceneTopupAmount, nil, "", "an amount", textIn("50000")),
 		sceneCase(sceneGiftCode, nil, "", "a gift code", textIn("SPRING-AAAA-BBBB-CCCC")),
+		sceneCase(sceneSupplierQuantity, map[string]string{"sid": "abcdefghij"}, "", "a number of digital accounts", textIn("3")),
 		sceneCase(sceneDiscount, map[string]string{"co": "n1"}, "", "a discount code", textIn("SPRING20")),
 		sceneCase(sceneTicket, nil, "", "a first message to support", textIn("my vpn is slow")),
 		sceneCase(sceneTicket, nil, "", "a photo for support", func(p *person) { p.photo("shot-3", "see") }),

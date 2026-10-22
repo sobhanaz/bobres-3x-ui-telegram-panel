@@ -98,6 +98,7 @@ type supplierProductJSON struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
 	Description  string            `json:"description"`
+	Category     string            `json:"category"`
 	CostMicro    *int64            `json:"cost_micro"`
 	CostCurrency string            `json:"cost_currency"`
 	Stock        *int32            `json:"stock"`
@@ -111,7 +112,7 @@ type supplierProductJSON struct {
 }
 
 func supplierProductOf(p *store.SupplierProduct) supplierProductJSON {
-	return supplierProductJSON{ID: p.ID, Name: p.Name, Description: p.Description, CostMicro: p.CostMicro, CostCurrency: p.CostCurrency, Stock: p.Stock,
+	return supplierProductJSON{ID: p.ID, Name: p.Name, Description: p.Description, Category: domain.SupplierCategory(p), CostMicro: p.CostMicro, CostCurrency: p.CostCurrency, Stock: p.Stock,
 		Listed: p.Listed, Enabled: p.Enabled, SellPrice: p.SellPrice, Title: p.Title, Desc: p.Desc, Sort: p.Sort, SyncedAt: unix(p.SyncedAt)}
 }
 
