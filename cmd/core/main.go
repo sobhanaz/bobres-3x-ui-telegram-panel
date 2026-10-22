@@ -282,6 +282,8 @@ func setup(rt *app.Runtime) error {
 
 	// Paid orders become VPN accounts here (retried with backoff, alerting once).
 	rt.Go("provisioning", dom.NewProvisionWorker(prov, rt.Log).Run)
+	// A reseller's clients made before they had a group move into it, in the background.
+	rt.Go("reseller-groups", dom.NewResellerGroupSync(prov, rt.Log).Run)
 	rt.Go("usage-sync", dom.NewUsageWorker(prov, rt.Log).Run)
 	// The owner's own store sells BOBRES licenses: a paid order whose license server did not answer is asked again
 	// here. It does nothing on a store that has no license server set up.

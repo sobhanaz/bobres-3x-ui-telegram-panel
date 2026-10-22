@@ -494,7 +494,7 @@ func (s *Server) SetClientGroups(ctx context.Context, req *provisionerv1.SetClie
 	if n > 0 {
 		s.kickGroupBackfill()
 	}
-	return &provisionerv1.SetClientGroupsResponse{Updated: int32(n)}, nil
+	return &provisionerv1.SetClientGroupsResponse{Updated: int32(n)}, nil //nolint:gosec // n <= maxClientGroupsPerCall
 }
 
 // release drops a reservation so a retry picks a server again.
