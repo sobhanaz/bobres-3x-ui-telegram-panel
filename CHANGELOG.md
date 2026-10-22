@@ -8,7 +8,26 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-### Plan groups
+## [0.11.0] — 2026-10-21
+
+**Plan groups**: the operator puts plans in named groups with a text for each, and the customer picks a group first, reads its
+text, then picks a plan of it, in the bot and in the Mini App. A store that makes no group lists its plans exactly as before.
+
+### Updating
+- One database migration, additive (so a rollback keeps every plan and order): 00034 (the table `plan_groups` and the column
+  `plans.group_id`, null for every plan that exists). No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together; a bot that does not know
+  groups lists plans flat, so a half-updated install keeps selling.
+- After the update **nothing changes for customers** until the operator makes a group (Plans > Plan groups in the dashboard).
+
+### Known limits
+- Only Buy and the Mini App's new purchase are grouped. Renew, Add traffic, a reseller's Buy for a customer and the Bulk purchase
+  list the plans flat.
+- The bot's own plan editor does not change a plan's group (the dashboard does).
+- The Persian and English texts of the new screens are a first draft that wants a native read. Nothing of this has been seen in a
+  real Telegram yet: the flow is covered by tests that drive the bot end to end.
+
+### Added
 - **Plans can be put in named groups with a text for each**, and the customer picks a group first, reads its text, then picks a plan of
   it: in the bot (Buy shows the groups, a group's screen shows its text and its plans, Back from the payment menu returns to the group,
   plans with no group are under "Other plans") and in the Mini App. A store with no group lists its plans exactly as before.
