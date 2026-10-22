@@ -4,7 +4,7 @@ package adapter
 
 // Client groups against a REAL 3x-ui panel, with the variables of the other
 // real-panel tests (XUI_TEST_URL, XUI_TEST_TOKEN, XUI_TEST_ALLOW_PRIVATE=1,
-// XUI_TEST_REQUIRE=1). CI runs them against v3.8.5 and v3.9.0:
+// XUI_TEST_REQUIRE=1). CI runs them against v3.8.5, v3.9.0, v3.10.0 and v3.10.2:
 //
 //	go test -tags integration -run Integration ./internal/provisioner/adapter/
 //

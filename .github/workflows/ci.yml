@@ -380,6 +380,10 @@ jobs:
             digest: sha256:e0f90c10902e0e74f947d5a9efe017b273804477430233bbfc4918542ffe366c
           - xui: v3.9.0
             digest: sha256:93a7a68e3d0a65be1b02d2bfc1f3ca02d0e800516a403e103cea2d7c7090855d
+          - xui: v3.10.0
+            digest: sha256:ef90d07ea00cf3b76bcd37e7c5025d73788dc188894c6a741c22776a83c2c556
+          - xui: v3.10.2
+            digest: sha256:6c7e73c5bc4b6d7d70866616f78d6c9866b4904defad3077c1e2b5c1c89c2ec1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

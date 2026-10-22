@@ -8,6 +8,11 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Changed
+- **3x-ui v3.10.0 and v3.10.2 are tested**: CI runs the adapter and provisioner integration suite (including the `bobres_bot` group tests) against real
+  panels of both, next to v3.8.5 and v3.9.0, and the tested range is now **v3.8.5 to v3.10.2**. A panel in that range is no longer marked
+  "untested" on the Servers page. No code change was needed for the new panels.
+
 ## [0.11.0] — 2026-10-21
 
 **Plan groups**: the operator puts plans in named groups with a text for each, and the customer picks a group first, reads its

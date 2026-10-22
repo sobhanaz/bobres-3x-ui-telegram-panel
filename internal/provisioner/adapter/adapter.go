@@ -43,7 +43,7 @@ type PanelAdapter interface {
 }
 
 // GroupTagger is implemented by adapters whose panel has client groups (3x-ui,
-// as tested from v3.8.5 to v3.9.0; Marzban has none). The group is a label the panel shows and
+// as tested from v3.8.5 to v3.10.2; Marzban has none). The group is a label the panel shows and
 // filters on, nothing more: the adapter puts every client it creates in the bot
 // group (xui.BotGroup), and these calls bring the clients made before that into
 // it. An adapter that is not a GroupTagger has nothing to tag.
@@ -76,7 +76,7 @@ const UnknownVersion = "v3.x"
 // job xui), both inclusive. Move them with that matrix.
 const (
 	TestedMinVersion = "v3.8.5"
-	TestedMaxVersion = "v3.9.0"
+	TestedMaxVersion = "v3.10.2"
 )
 
 var semver = regexp.MustCompile(`^v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})$`)

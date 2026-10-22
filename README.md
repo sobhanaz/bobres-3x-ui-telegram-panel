@@ -121,7 +121,7 @@ You need:
   disk, ports 80 and 443 free, and root access.
 - A domain whose A record points to the server.
 - A new Telegram bot from @BotFather, and your numeric Telegram ID.
-- A 3x-ui panel (v3.8.5 to v3.9.0 are tested) with an API token. You can also add panels later in the dashboard.
+- A 3x-ui panel (v3.8.5 to v3.10.2 are tested) with an API token. You can also add panels later in the dashboard.
 
 As root on the server:
 
