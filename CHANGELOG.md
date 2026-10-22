@@ -8,6 +8,20 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Reseller groups and prefixes in the 3x-ui panel
+- **The default 3x-ui client group is now `BOBRES`** (it was `bobres_bot`). After the update the provisioner moves the clients that are in the old
+  group (or in none) to it, once per panel; a group an operator chose is never touched.
+- **A reseller's configs are in a group of their own, `BOBRES-<NAME>`**: the owner writes NAME when making the reseller (dashboard Resellers, or
+  later in the reseller's page, **Panel names**); capitals, digits and `_`, 2 to 24, unique. New configs are made in it; the reseller's existing
+  configs move into it in the background (and again with **Move the existing configs**). A client is in one group, so they are no longer in `BOBRES`.
+- **A reseller's configs are named with their own prefix**: `<prefix>-u<id>-<random>`. The reseller chooses the prefix **once** in the bot (reseller
+  panel, **Config prefix**, with a confirmation) or the Mini App (2 to 10 of a-z and 0-9, unique); afterwards only the owner changes it in the
+  dashboard. It applies to the configs made after it.
+- Core: migration 00035 (`resellers.config_prefix`, `panel_group`, `groups_synced_at`), `ResellerInfo` carries them, `SetResellerConfigPrefix` in the
+  proto, the dashboard API `PUT /resellers/{id}/naming` and `POST /resellers/{id}/group-sync`, the Mini App's `POST /reseller/prefix`. Provisioner:
+  migration 00006, `CreateClient.group`, `SetClientGroups`, and a backfill that converges the panel to each client's group.
+- A reseller with no group name or prefix is as before (the usual names, in `BOBRES`).
+
 ### Changed
 - **3x-ui v3.10.0 and v3.10.2 are tested**: CI runs the adapter and provisioner integration suite (including the `bobres_bot` group tests) against real
   panels of both, next to v3.8.5 and v3.9.0, and the tested range is now **v3.8.5 to v3.10.2**. A panel in that range is no longer marked

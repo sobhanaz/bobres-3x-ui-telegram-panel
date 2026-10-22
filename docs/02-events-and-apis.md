@@ -171,10 +171,21 @@ A health loop checks every enabled server each 60 s and reads the panel version 
 `ListServers` flags versions outside the tested range (v3.8.5 to v3.9.0, the CI matrix). Per-client mutex because
 `clients/update` replaces the row.
 
-**Client group `bobres_bot`.** 3x-ui (v3.8.5 and v3.9.0) has client groups, and every client the 3x-ui adapter creates is put
-in the group named by `xui.BotGroup`, `bobres_bot`, so an operator can filter on everything the bot made in the panel's
-Clients page. It is a label only: links, limits and the subscription do not depend on it. Marzban 0.8 has no groups; its
-adapter does nothing about them. What the code relies on, as the real panels do it (the adapter's integration tests assert
+**Client groups `BOBRES` and `BOBRES-<NAME>`.** 3x-ui (v3.8.5 to v3.10.2) has client groups, and every client the 3x-ui adapter
+creates is put in a group, so an operator can filter on what the bot made in the panel's Clients page: `xui.BotGroup`, `BOBRES`
+(called `bobres_bot` up to v0.11.0, `xui.LegacyBotGroup`), for a customer's client, and `BOBRES-<NAME>` for a reseller who has a
+group name (the owner writes NAME when making the reseller: capitals, digits and `_`, 2 to 24; unique). A client is in ONE group,
+so a reseller's clients are in their own group and not in `BOBRES`. Core sends the group with `CreateClient` (`group`, "" is the
+default); the provisioner keeps it in `client_map.panel_group` and makes the client in it. It is a label only: links, limits and
+the subscription do not depend on it. Marzban 0.8 has no groups; its adapter ignores them. A reseller's configs are also **named**
+`<prefix>-u<telegram id>-<8 random>` when the reseller has a config prefix (chosen once by the reseller in the bot or the Mini App,
+2 to 10 of a-z and 0-9, unique, not the look of `u123`; afterwards only the owner changes it): the name is made once, when the
+service is created, and stays through a later change. The group backfill (`RunGroupBackfill`, at start, when a server is added or
+answers again, and whenever core calls `SetClientGroups`) converges a 3x-ui panel to each client's group: it moves a client only when
+its panel group is one BOBRES owns (none, `BOBRES`, `bobres_bot` or any `BOBRES-...`, `xui.IsBotGroup`), so a group an operator chose
+is never touched, and a pass that began before a `SetClientGroups` never records the server as done (`group_reset_at`). Core hands the
+provisioner a reseller's existing clients (`ResellerGroupSync`, a worker that looks every minute) after the owner gives or changes the
+group name, or asks "Move the existing configs". What the code relies on, as the real panels do it (the adapter's integration tests assert
 each on both versions, in CI's "3x-ui integration" job):
 - `clients/add` stores `client.group` (the OpenAPI text for it does not list the field). A create of a client the panel
   already has under the same subscription id, on the inbounds it is on, succeeds and changes nothing, the group
