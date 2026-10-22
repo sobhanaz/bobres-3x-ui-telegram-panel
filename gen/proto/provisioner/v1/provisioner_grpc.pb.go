@@ -30,6 +30,7 @@ const (
 	ProvisionerService_GetLinks_FullMethodName         = "/provisioner.v1.ProvisionerService/GetLinks"
 	ProvisionerService_ListInbounds_FullMethodName     = "/provisioner.v1.ProvisionerService/ListInbounds"
 	ProvisionerService_SetInboundAttach_FullMethodName = "/provisioner.v1.ProvisionerService/SetInboundAttach"
+	ProvisionerService_SetClientGroups_FullMethodName  = "/provisioner.v1.ProvisionerService/SetClientGroups"
 	ProvisionerService_AddServer_FullMethodName        = "/provisioner.v1.ProvisionerService/AddServer"
 	ProvisionerService_ListServers_FullMethodName      = "/provisioner.v1.ProvisionerService/ListServers"
 	ProvisionerService_UpdateServer_FullMethodName     = "/provisioner.v1.ProvisionerService/UpdateServer"
@@ -56,6 +57,9 @@ type ProvisionerServiceClient interface {
 	GetLinks(ctx context.Context, in *GetLinksRequest, opts ...grpc.CallOption) (*Links, error)
 	ListInbounds(ctx context.Context, in *ListInboundsRequest, opts ...grpc.CallOption) (*ListInboundsResponse, error)
 	SetInboundAttach(ctx context.Context, in *SetInboundAttachRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// SetClientGroups changes the 3x-ui group clients should be in (a reseller's
+	// existing clients move to the reseller's group); see SetClientGroupsRequest.
+	SetClientGroups(ctx context.Context, in *SetClientGroupsRequest, opts ...grpc.CallOption) (*SetClientGroupsResponse, error)
 	AddServer(ctx context.Context, in *AddServerRequest, opts ...grpc.CallOption) (*XUIServer, error)
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
 	UpdateServer(ctx context.Context, in *UpdateServerRequest, opts ...grpc.CallOption) (*XUIServer, error)
@@ -176,6 +180,16 @@ func (c *provisionerServiceClient) SetInboundAttach(ctx context.Context, in *Set
 	return out, nil
 }
 
+func (c *provisionerServiceClient) SetClientGroups(ctx context.Context, in *SetClientGroupsRequest, opts ...grpc.CallOption) (*SetClientGroupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetClientGroupsResponse)
+	err := c.cc.Invoke(ctx, ProvisionerService_SetClientGroups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *provisionerServiceClient) AddServer(ctx context.Context, in *AddServerRequest, opts ...grpc.CallOption) (*XUIServer, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(XUIServer)
@@ -263,6 +277,9 @@ type ProvisionerServiceServer interface {
 	GetLinks(context.Context, *GetLinksRequest) (*Links, error)
 	ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error)
 	SetInboundAttach(context.Context, *SetInboundAttachRequest) (*emptypb.Empty, error)
+	// SetClientGroups changes the 3x-ui group clients should be in (a reseller's
+	// existing clients move to the reseller's group); see SetClientGroupsRequest.
+	SetClientGroups(context.Context, *SetClientGroupsRequest) (*SetClientGroupsResponse, error)
 	AddServer(context.Context, *AddServerRequest) (*XUIServer, error)
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
 	UpdateServer(context.Context, *UpdateServerRequest) (*XUIServer, error)
@@ -312,6 +329,9 @@ func (UnimplementedProvisionerServiceServer) ListInbounds(context.Context, *List
 }
 func (UnimplementedProvisionerServiceServer) SetInboundAttach(context.Context, *SetInboundAttachRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetInboundAttach not implemented")
+}
+func (UnimplementedProvisionerServiceServer) SetClientGroups(context.Context, *SetClientGroupsRequest) (*SetClientGroupsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetClientGroups not implemented")
 }
 func (UnimplementedProvisionerServiceServer) AddServer(context.Context, *AddServerRequest) (*XUIServer, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddServer not implemented")
@@ -535,6 +555,24 @@ func _ProvisionerService_SetInboundAttach_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProvisionerService_SetClientGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetClientGroupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).SetClientGroups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_SetClientGroups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).SetClientGroups(ctx, req.(*SetClientGroupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProvisionerService_AddServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddServerRequest)
 	if err := dec(in); err != nil {
@@ -707,6 +745,10 @@ var ProvisionerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetInboundAttach",
 			Handler:    _ProvisionerService_SetInboundAttach_Handler,
+		},
+		{
+			MethodName: "SetClientGroups",
+			Handler:    _ProvisionerService_SetClientGroups_Handler,
 		},
 		{
 			MethodName: "AddServer",

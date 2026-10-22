@@ -109,6 +109,9 @@ type ClientMap struct {
 	// Pending: reserved before the panel was called; the panel may or may
 	// not have the client yet.
 	Pending bool
+	// PanelGroup is the group the client should be in on a 3x-ui panel ("" is
+	// the default group, "BOBRES").
+	PanelGroup string
 }
 
 // New opens the pool and keeps the envelope for token encryption.
@@ -444,13 +447,13 @@ func (s *Store) ReleaseReservation(ctx context.Context, subscriptionID string) e
 // panel has (no longer pending).
 func (s *Store) PutClientMap(ctx context.Context, cm *ClientMap) error {
 	_, err := s.db.Exec(ctx, `
-		INSERT INTO provisioner.client_map (subscription_id, server_id, email, xui_sub_id, inbound_ids, pending)
-		VALUES ($1, $2, $3, $4, $5, false)
+		INSERT INTO provisioner.client_map (subscription_id, server_id, email, xui_sub_id, inbound_ids, pending, panel_group)
+		VALUES ($1, $2, $3, $4, $5, false, NULLIF($6, ''))
 		ON CONFLICT (subscription_id) DO UPDATE SET
 			server_id = EXCLUDED.server_id, email = EXCLUDED.email,
 			xui_sub_id = EXCLUDED.xui_sub_id,
-			inbound_ids = EXCLUDED.inbound_ids, pending = false`,
-		cm.SubscriptionID, cm.ServerID, cm.Email, cm.XUISubID, cm.InboundIDs)
+			inbound_ids = EXCLUDED.inbound_ids, pending = false, panel_group = EXCLUDED.panel_group`,
+		cm.SubscriptionID, cm.ServerID, cm.Email, cm.XUISubID, cm.InboundIDs, cm.PanelGroup)
 	if err != nil {
 		return fmt.Errorf("put client map: %w", err)
 	}
@@ -462,9 +465,9 @@ func (s *Store) PutClientMap(ctx context.Context, cm *ClientMap) error {
 func (s *Store) GetClientMap(ctx context.Context, subscriptionID string) (*ClientMap, error) {
 	var cm ClientMap
 	err := s.db.QueryRow(ctx, `
-		SELECT subscription_id, server_id, email, xui_sub_id, inbound_ids, pending
+		SELECT subscription_id, server_id, email, xui_sub_id, inbound_ids, pending, coalesce(panel_group, '')
 		FROM provisioner.client_map WHERE subscription_id = $1`, subscriptionID).
-		Scan(&cm.SubscriptionID, &cm.ServerID, &cm.Email, &cm.XUISubID, &cm.InboundIDs, &cm.Pending)
+		Scan(&cm.SubscriptionID, &cm.ServerID, &cm.Email, &cm.XUISubID, &cm.InboundIDs, &cm.Pending, &cm.PanelGroup)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -479,13 +482,15 @@ func (s *Store) GetClientMap(ctx context.Context, subscriptionID string) (*Clien
 type MappedClient struct {
 	Email    string
 	XUISubID string
+	// Group is the group it should be in ("" is the default group).
+	Group string
 }
 
 // ServerClients lists the clients mapped to a server, reservations included (a
 // reserved client may already be on the panel).
 func (s *Store) ServerClients(ctx context.Context, serverID string) ([]MappedClient, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT email, coalesce(xui_sub_id, '') FROM provisioner.client_map WHERE server_id = $1 ORDER BY email`, serverID)
+		SELECT email, coalesce(xui_sub_id, ''), coalesce(panel_group, '') FROM provisioner.client_map WHERE server_id = $1 ORDER BY email`, serverID)
 	if err != nil {
 		return nil, fmt.Errorf("server clients: %w", err)
 	}
@@ -493,7 +498,7 @@ func (s *Store) ServerClients(ctx context.Context, serverID string) ([]MappedCli
 	var out []MappedClient
 	for rows.Next() {
 		var c MappedClient
-		if err := rows.Scan(&c.Email, &c.XUISubID); err != nil {
+		if err := rows.Scan(&c.Email, &c.XUISubID, &c.Group); err != nil {
 			return nil, fmt.Errorf("server clients: %w", err)
 		}
 		out = append(out, c)
@@ -536,14 +541,65 @@ func (s *Store) GroupBackfillPending(ctx context.Context) ([]ServerRef, error) {
 }
 
 // MarkGroupBackfilled records that every client BOBRES made on the server is
-// in a group. updated_at does not move, so the cached panel client stays.
-func (s *Store) MarkGroupBackfilled(ctx context.Context, serverID string) error {
+// where it should be, for a pass that began at since: not when something asked
+// for another pass after that (SetClientGroups), so a change made during a pass is
+// never lost. updated_at does not move, so the cached panel client stays.
+func (s *Store) MarkGroupBackfilled(ctx context.Context, serverID string, since time.Time) error {
 	if _, err := s.db.Exec(ctx, `
 		UPDATE provisioner.xui_servers SET group_backfilled_at = now()
-		WHERE id = $1 AND group_backfilled_at IS NULL`, serverID); err != nil {
+		WHERE id = $1 AND group_backfilled_at IS NULL AND (group_reset_at IS NULL OR group_reset_at < $2)`, serverID, since); err != nil {
 		return fmt.Errorf("mark group backfilled: %w", err)
 	}
 	return nil
+}
+
+// GroupAssignment is the group a subscription's client should be in ("" is the default group).
+type GroupAssignment struct {
+	SubscriptionID string
+	Group          string
+}
+
+// SetClientGroups records the group each client should be in and makes every 3x-ui
+// server that holds one of them go through the group backfill again, which moves the
+// clients on the panel (only those in a group BOBRES owns). It returns how many
+// subscriptions it knew; the others are skipped.
+func (s *Store) SetClientGroups(ctx context.Context, items []GroupAssignment) (int, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("set client groups: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // nothing to keep after a failure
+	servers := map[string]bool{}
+	known := 0
+	for _, it := range items {
+		var server string
+		err := tx.QueryRow(ctx, `
+			UPDATE provisioner.client_map SET panel_group = NULLIF($2, '')
+			WHERE subscription_id = $1 RETURNING server_id`, it.SubscriptionID, it.Group).Scan(&server)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return 0, fmt.Errorf("set client groups: %w", err)
+		}
+		known++
+		servers[server] = true
+	}
+	if len(servers) > 0 {
+		ids := make([]string, 0, len(servers))
+		for id := range servers {
+			ids = append(ids, id)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE provisioner.xui_servers SET group_backfilled_at = NULL, group_reset_at = clock_timestamp()
+			WHERE kind = 'xui' AND id = ANY($1::uuid[])`, ids); err != nil {
+			return 0, fmt.Errorf("set client groups: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("set client groups: %w", err)
+	}
+	return known, nil
 }
 
 // DeleteClientMap removes the mapping (after panel delete).

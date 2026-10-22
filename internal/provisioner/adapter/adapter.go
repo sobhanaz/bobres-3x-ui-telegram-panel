@@ -60,6 +60,36 @@ type GroupTagger interface {
 	EnsureTagged(ctx context.Context, email string) error
 }
 
+// GroupWant is the group a client BOBRES made should be in, and the subscription
+// id it was made under ("" for any), as Regroup takes them.
+type GroupWant struct {
+	SubID string
+	Group string // "" is the default group, xui.BotGroup
+}
+
+// GroupRegrouper is implemented by adapters that can move the clients BOBRES
+// made between groups. It is what the backfill uses: the default group's name
+// changed once (bobres_bot to BOBRES) and a reseller's clients have a group of
+// their own ("BOBRES-NAME").
+type GroupRegrouper interface {
+	// Regroup puts each client of want that is on the panel under that
+	// subscription id into the group wanted for it, but only when it is in a
+	// group BOBRES owns (none, xui.BotGroup, its old name, or "BOBRES-NAME": see
+	// xui.IsBotGroup): a group an operator chose is left alone, as is a client
+	// BOBRES does not hold, so a repeat changes nothing. Like TagUngrouped it
+	// lists the panel again after moving and reports Converged when nothing is
+	// left to move.
+	Regroup(ctx context.Context, want map[string]GroupWant) (TagResult, error)
+	// EnsureGroup puts one client in the group unless it is in some group.
+	EnsureGroup(ctx context.Context, email, group string) error
+}
+
+// GroupedCreator is implemented by adapters that can create a client in a
+// group other than the default one. group "" is the default.
+type GroupedCreator interface {
+	CreateClientInGroup(ctx context.Context, group, email, subID string, expiryMs, trafficBytes int64, inboundIDs []int) error
+}
+
 // TagResult says what TagUngrouped found and did.
 type TagResult struct {
 	Managed   int  // clients asked about

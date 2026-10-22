@@ -297,6 +297,9 @@ func (s *Server) CreateClient(ctx context.Context, req *provisionerv1.CreateClie
 			}
 		}
 	}
+	if g := req.GetGroup(); g != "" && xui.ValidateGroup(g) != nil {
+		return nil, status.Error(codes.InvalidArgument, "group is not a valid client group name")
+	}
 	fresh := false
 	cm, err := s.st.GetClientMap(ctx, req.GetSubscriptionId())
 	switch {
@@ -416,7 +419,14 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 	if d := req.GetDurationDays(); d > 0 {
 		expiryMs = time.Now().Add(time.Duration(d) * 24 * time.Hour).UnixMilli()
 	}
-	if err := a.CreateClient(ctx, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs); err != nil {
+	group := req.GetGroup()
+	var createErr error
+	if gc, ok := a.(adapter.GroupedCreator); ok {
+		createErr = gc.CreateClientInGroup(ctx, group, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs)
+	} else {
+		createErr = a.CreateClient(ctx, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs) // Marzban: no groups
+	}
+	if err := createErr; err != nil {
 		existing, lookupErr := a.ClientSubID(ctx, email)
 		switch {
 		case noSuchClient(lookupErr) && answered(err):
@@ -437,22 +447,54 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 		if st, err := a.Status(ctx, email); err == nil {
 			expiryMs = max(st.ExpiryMs, 0)
 		}
-		s.ensureTagged(ctx, a, email)
+		s.ensureTagged(ctx, a, email, group)
 	} else if !fresh {
 		// A retry. An earlier attempt may have made the client before BOBRES grouped
 		// its clients, and a 3x-ui panel takes a create of a client it has (same
 		// subscription id, on the inbounds it is on) as a success that changes
 		// nothing, its group included.
-		s.ensureTagged(ctx, a, email)
+		s.ensureTagged(ctx, a, email, group)
 	}
 	done := &store.ClientMap{
 		SubscriptionID: cm.SubscriptionID, ServerID: cm.ServerID, Email: email,
-		XUISubID: &subID, InboundIDs: toInt32s(inboundIDs),
+		XUISubID: &subID, InboundIDs: toInt32s(inboundIDs), PanelGroup: group,
 	}
 	if err := s.st.PutClientMap(ctx, done); err != nil {
 		return nil, status.Error(codes.Internal, "client map persist failed")
 	}
 	return clientProto(done, expiryMs/1000, req.GetTrafficBytes()), nil
+}
+
+// maxClientGroupsPerCall bounds SetClientGroups.
+const maxClientGroupsPerCall = 500
+
+// SetClientGroups records the group each client should be in and wakes the group
+// backfill, which brings the panels in line (see store.SetClientGroups): a reseller's
+// clients made before the reseller had a group move into it. Subscriptions the
+// provisioner does not hold are skipped.
+func (s *Server) SetClientGroups(ctx context.Context, req *provisionerv1.SetClientGroupsRequest) (*provisionerv1.SetClientGroupsResponse, error) {
+	items := req.GetClients()
+	if len(items) > maxClientGroupsPerCall {
+		return nil, status.Errorf(codes.InvalidArgument, "at most %d clients a call", maxClientGroupsPerCall)
+	}
+	assign := make([]store.GroupAssignment, 0, len(items))
+	for _, it := range items {
+		if it.GetSubscriptionId() == "" {
+			return nil, status.Error(codes.InvalidArgument, "a subscription_id is required")
+		}
+		if g := it.GetGroup(); g != "" && xui.ValidateGroup(g) != nil {
+			return nil, status.Error(codes.InvalidArgument, "group is not a valid client group name")
+		}
+		assign = append(assign, store.GroupAssignment{SubscriptionID: it.GetSubscriptionId(), Group: it.GetGroup()})
+	}
+	n, err := s.st.SetClientGroups(ctx, assign)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "recording the groups failed")
+	}
+	if n > 0 {
+		s.kickGroupBackfill()
+	}
+	return &provisionerv1.SetClientGroupsResponse{Updated: int32(n)}, nil
 }
 
 // release drops a reservation so a retry picks a server again.

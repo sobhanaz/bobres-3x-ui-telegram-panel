@@ -48,9 +48,9 @@ func (s *Server) kickGroupBackfill() {
 	}
 }
 
-// RunGroupBackfill puts the clients BOBRES made on a 3x-ui panel before it
-// grouped them into the panel's bot group (xui.BotGroup), once per server,
-// until ctx ends. It runs at start, when a server is added or answers again
+// RunGroupBackfill puts the clients BOBRES made on a 3x-ui panel into the group
+// each should be in (the default group xui.BotGroup, or a reseller's), once per
+// server and again whenever SetClientGroups asks, until ctx ends. It runs at start, when a server is added or answers again
 // (those wake it), and every interval for a server it could not finish (the
 // panel was down): see BackfillGroups.
 func (s *Server) RunGroupBackfill(ctx context.Context, interval time.Duration) error {
@@ -92,6 +92,7 @@ func (s *Server) BackfillGroups(ctx context.Context) {
 func (s *Server) backfillServer(ctx context.Context, ref store.ServerRef) {
 	ctx, cancel := context.WithTimeout(ctx, groupBackfillTimeout)
 	defer cancel()
+	started := time.Now()
 	res, err := s.tagServer(ctx, ref.ID)
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, store.ErrNotFound):
@@ -100,7 +101,7 @@ func (s *Server) backfillServer(ctx context.Context, ref store.ServerRef) {
 		s.groupFillFailed(ref, err)
 		return
 	}
-	if err := s.st.MarkGroupBackfilled(ctx, ref.ID); err != nil {
+	if err := s.st.MarkGroupBackfilled(ctx, ref.ID, started); err != nil {
 		if ctx.Err() == nil {
 			s.log.Warn("3x-ui groups: recording the backfill failed", "server", ref.Name, "err", err)
 		}
@@ -125,7 +126,7 @@ func (s *Server) tagServer(ctx context.Context, id string) (adapter.TagResult, e
 	if err != nil {
 		return adapter.TagResult{}, errBadConfig
 	}
-	tagger, ok := a.(adapter.GroupTagger)
+	regrouper, ok := a.(adapter.GroupRegrouper)
 	if !ok {
 		return adapter.TagResult{}, errNoGroups
 	}
@@ -133,11 +134,11 @@ func (s *Server) tagServer(ctx context.Context, id string) (adapter.TagResult, e
 	if err != nil {
 		return adapter.TagResult{}, err
 	}
-	managed := make(map[string]string, len(clients))
+	want := make(map[string]adapter.GroupWant, len(clients))
 	for _, c := range clients {
-		managed[c.Email] = c.XUISubID
+		want[c.Email] = adapter.GroupWant{SubID: c.XUISubID, Group: c.Group}
 	}
-	res, err := tagger.TagUngrouped(ctx, managed)
+	res, err := regrouper.Regroup(ctx, want)
 	if err != nil {
 		return res, err
 	}
@@ -172,12 +173,12 @@ func (s *Server) groupFillFailed(ref store.ServerRef, err error) {
 // create that is the retry of an earlier attempt, made before BOBRES grouped
 // its clients, whose answer was lost (the client may be on the panel already).
 // A group an operator chose is kept. Best effort: the client works without the label.
-func (s *Server) ensureTagged(ctx context.Context, a adapter.PanelAdapter, email string) {
-	t, ok := a.(adapter.GroupTagger)
+func (s *Server) ensureTagged(ctx context.Context, a adapter.PanelAdapter, email, group string) {
+	t, ok := a.(adapter.GroupRegrouper)
 	if !ok {
 		return
 	}
-	if err := t.EnsureTagged(ctx, email); err != nil && ctx.Err() == nil {
+	if err := t.EnsureGroup(ctx, email, group); err != nil && ctx.Err() == nil {
 		s.log.Warn("3x-ui groups: could not group an adopted client", "detail", panelDetail(err))
 	}
 }

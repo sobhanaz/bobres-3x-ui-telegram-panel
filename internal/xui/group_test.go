@@ -16,9 +16,26 @@ import (
 )
 
 func TestBotGroupName(t *testing.T) {
-	// The owner-facing name: it is on every panel BOBRES has served, and in the docs.
-	if xui.BotGroup != "bobres_bot" {
-		t.Fatalf("BotGroup = %q", xui.BotGroup)
+	// The owner-facing names: they are on every panel BOBRES has served, and in the docs.
+	if xui.BotGroup != "BOBRES" || xui.LegacyBotGroup != "bobres_bot" || xui.ResellerGroupPrefix != "BOBRES-" {
+		t.Fatalf("BotGroup = %q, LegacyBotGroup = %q, ResellerGroupPrefix = %q", xui.BotGroup, xui.LegacyBotGroup, xui.ResellerGroupPrefix)
+	}
+}
+
+// The groups BOBRES owns (the backfill may move a client out of them) and the ones an operator chose (it never does).
+func TestIsBotGroup(t *testing.T) {
+	for g, want := range map[string]bool{
+		"": true, "BOBRES": true, "bobres_bot": true, "BOBRES-SOBHANADMIN": true, "BOBRES-A": true,
+		"vip": false, "bobres": false, "Bobres-x": false, "BOBRES2": false, "my BOBRES": false, "BOBRES ": false,
+	} {
+		if got := xui.IsBotGroup(g); got != want {
+			t.Errorf("IsBotGroup(%q) = %v, want %v", g, got, want)
+		}
+	}
+	for g, ok := range map[string]bool{"BOBRES-SOBHANADMIN": true, "BOBRES": true, "": false, " x": false, "x\n": false} {
+		if err := xui.ValidateGroup(g); (err == nil) != ok {
+			t.Errorf("ValidateGroup(%q) = %v", g, err)
+		}
 	}
 }
 

@@ -64,10 +64,30 @@ var ErrBlockedAddress = errors.New("xui: panel address is not allowed (private, 
 // is (empty, padded with spaces, control characters, or too long).
 var ErrInvalidGroup = errors.New("xui: invalid group name")
 
-// BotGroup is the group every client BOBRES creates in a 3x-ui panel is put in,
-// so an operator sees (and can filter on) everything the bot made. It is only a
-// label: it changes neither the client's links nor how the panel serves it.
-const BotGroup = "bobres_bot"
+// BotGroup is the group every client BOBRES creates in a 3x-ui panel is put in
+// (unless a reseller has a group of their own, "BOBRES-<NAME>"), so an operator
+// sees (and can filter on) everything the bot made. It is only a label: it
+// changes neither the client's links nor how the panel serves it.
+const BotGroup = "BOBRES"
+
+// LegacyBotGroup is what BotGroup was called up to v0.11.0 ("bobres_bot"): the
+// clients made then are moved to BotGroup once, by the provisioner's backfill.
+const LegacyBotGroup = "bobres_bot"
+
+// ResellerGroupPrefix starts the group of a reseller's clients: "BOBRES-NAME".
+const ResellerGroupPrefix = BotGroup + "-"
+
+// IsBotGroup reports whether a client's group is one BOBRES owns: none, the
+// default group, its old name, or a reseller's "BOBRES-NAME". The backfill moves
+// only clients in such a group, so a group an operator chose is never touched.
+func IsBotGroup(g string) bool {
+	return g == "" || g == BotGroup || g == LegacyBotGroup || strings.HasPrefix(g, ResellerGroupPrefix)
+}
+
+// ValidateGroup reports whether s can be used as a client group name (what the
+// panel takes as it is: not empty, not padded, no control characters, at most
+// 64 characters).
+func ValidateGroup(s string) error { return validGroup(s) }
 
 // MaxGroupBatch is the most emails one clients/groups/bulkAdd call carries;
 // AddToGroup splits longer lists.
