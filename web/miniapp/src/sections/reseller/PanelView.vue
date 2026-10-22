@@ -9,6 +9,7 @@ import { tr } from '../../i18n'
 import { fail } from '../../store'
 import { copyText, openTelegram } from '../../telegram'
 import { errText, resellerApi, type Filter, type Money, type Panel } from './api'
+import { ApiError } from '../../api'
 
 const emit = defineEmits<{ buy: []; services: [filter: Filter]; customers: [] }>()
 const panel = ref<Panel | null>(null)
@@ -39,6 +40,34 @@ const groups = computed(() => {
     { filter: 'paused' as Filter, n: c.paused },
   ]
 })
+
+// The config prefix: chosen once (asked about before it is final), then only the owner changes it.
+const prefixRe = /^[a-z0-9]{2,10}$/
+const prefixInput = ref('')
+const prefixAsk = ref(false) // the confirmation is showing
+const prefixError = ref('')
+const prefixBusy = ref(false)
+const prefixWord = computed(() => prefixInput.value.trim().toLowerCase())
+const prefixOk = computed(() => prefixRe.test(prefixWord.value))
+async function savePrefix() {
+  prefixBusy.value = true
+  prefixError.value = ''
+  try {
+    panel.value = await resellerApi.setPrefix(prefixWord.value)
+    prefixAsk.value = false
+  } catch (e) {
+    prefixAsk.value = false
+    if (e instanceof ApiError && (e.code === 'invalid' || e.code === 'state')) {
+      // taken, a shape only core knows, or already set (an old screen): read the panel again
+      prefixError.value = e.code === 'state' ? '' : tr('reseller.err.prefix_bad')
+      if (e.code === 'state') await load()
+    } else if (!fail(e)) {
+      prefixError.value = errText(e)
+    }
+  } finally {
+    prefixBusy.value = false
+  }
+}
 
 async function copy() {
   try {
@@ -104,6 +133,30 @@ function share() {
           <span class="muted">{{ tr('reseller.panel.earned') }}</span>
           <strong>{{ moneyList(panel.commission_earned) }}</strong>
         </div>
+      </section>
+
+      <section class="card" data-prefix>
+        <strong>{{ tr('reseller.panel.prefix') }}</strong>
+        <template v-if="panel.config_prefix">
+          <p class="mono" dir="ltr">{{ isolate(panel.config_prefix) }}-…</p>
+          <p class="muted small">{{ tr('reseller.panel.prefix_locked') }}</p>
+        </template>
+        <template v-else>
+          <p class="muted small">{{ tr('reseller.panel.prefix_hint') }}</p>
+          <template v-if="!prefixAsk">
+            <input v-model="prefixInput" class="input" dir="ltr" maxlength="10" autocapitalize="none" autocomplete="off" spellcheck="false" :aria-label="tr('reseller.panel.prefix')" />
+            <p class="muted small">{{ tr('reseller.panel.prefix_rule') }}</p>
+            <button class="btn" type="button" :disabled="!prefixOk" @click="prefixAsk = true">{{ tr('reseller.panel.prefix_set') }}</button>
+          </template>
+          <template v-else>
+            <p>{{ tr('reseller.panel.prefix_confirm', { prefix: isolate(prefixWord) }) }}</p>
+            <div class="row wrap">
+              <button class="btn" type="button" :disabled="prefixBusy" @click="savePrefix">{{ tr('reseller.panel.prefix_yes') }}</button>
+              <button class="btn secondary" type="button" :disabled="prefixBusy" @click="prefixAsk = false">{{ tr('reseller.action.cancel') }}</button>
+            </div>
+          </template>
+          <p v-if="prefixError" class="error" role="alert">{{ prefixError }}</p>
+        </template>
       </section>
 
       <section class="card">

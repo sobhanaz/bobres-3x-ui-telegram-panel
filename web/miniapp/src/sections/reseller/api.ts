@@ -23,6 +23,9 @@ export interface Panel {
   ref_code: string
   invite_link: string
   counts: ServiceCounts
+  /** the prefix of the names of their configs in the panel ("" until they choose it), and the NAME of their panel group */
+  config_prefix: string
+  panel_group: string
 }
 
 /** ResellerService is a customer's service as the section shows it: the shop's Service plus what only a reseller has. */
@@ -64,6 +67,8 @@ function query(params: Record<string, string | number | undefined>): string {
 
 export const resellerApi = {
   panel: () => call<Panel>('GET', base),
+  /** setPrefix chooses the reseller's config prefix: once; core refuses a second try and another reseller's prefix. */
+  setPrefix: (prefix: string) => call<Panel>('POST', `${base}/prefix`, { prefix }),
   services: (p: { status?: Filter; q?: string; page?: number; size?: number } = {}) =>
     call<ServicePage>('GET', `${base}/services${query({ status: p.status, q: p.q, page: p.page, size: p.size })}`),
   pause: (id: string) => call<{ service: ResellerService }>('POST', `${base}/services/${id}/pause`, {}).then((r) => r.service),
