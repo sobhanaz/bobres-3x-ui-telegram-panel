@@ -54,6 +54,9 @@ license server is built but still has to be deployed by the owner. What is left 
 - Manage their customers' services: pause and resume, delete (after a confirmation), a private note, the list in
   groups (active, ending soon, ended, paused) with counts, and the customers who joined through their link with what
   they bought. Nothing that gives free days or traffic.
+- In the 3x-ui panel a reseller's configs are named with the reseller's own prefix (`sob-u123-...`, chosen once in the bot or
+  the Mini App) and are in a group of their own, `BOBRES-<NAME>` (the name the owner gives), so it is clear which reseller
+  made them; every other client the bot makes is in the group `BOBRES`.
 
 **Staff**
 - In the bot: `/admin` (stats, find a user, adjust a balance, ban, a list of the payments to review with their receipts),

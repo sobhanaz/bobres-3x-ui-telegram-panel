@@ -35,9 +35,10 @@ nothing has been written. The check runs from this server, while the provisioner
 panel on this server as `host.docker.internal`: the check goes to `127.0.0.1` there and says so. `--offline` skips it. The provisioner registers that panel only while
 it has no server; after that servers are added and changed in the dashboard (Servers), and `.env` edits of
 `BOBRES_XUI_*` change nothing. Without a panel the summary says to add a server in the dashboard before selling.
-Every client BOBRES makes in a 3x-ui panel is put in the panel's client group `bobres_bot` (filter on it in the panel's
-Clients page to see what the bot made; clients made by an earlier version are put in it once after the update). A client
-you move to another group by hand keeps it. Marzban has no groups.
+Every client BOBRES makes in a 3x-ui panel is put in the panel's client group `BOBRES` (a reseller's in `BOBRES-<NAME>`, the
+name the owner gives them; filter on a group in the panel's Clients page to see what the bot made; clients made by an earlier version,
+in `bobres_bot` or in none, are moved once after the update to v0.12.0). A client you move to another group by hand keeps it. Marzban
+has no groups.
 Off-server copies of the backups in S3-compatible storage are not offered by the wizard (they are off by default):
 the summary ends with the one-line way to turn them on (see Backups, "Off-server copies").
 

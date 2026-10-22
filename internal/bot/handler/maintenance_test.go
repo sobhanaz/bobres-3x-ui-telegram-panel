@@ -306,7 +306,7 @@ func gatedCases() []gatedCase {
 		"top", "top:2", "ap", "renew",
 		"faq", "faq:p:2", "faq:q:1:f1", "tut", "tut:p:2", "tut:v:1:t1", // the FAQ under Support and the tutorials (help.go)
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
-		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1",
+		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1", "rs:pfx", "rs:pfy:ab",
 		"jn", "nope", "x",
 	} {
 		add(buttonCase(data))
@@ -380,6 +380,7 @@ func gatedCases() []gatedCase {
 		sceneCase(sceneResellerFind, nil, "reseller", "a search", textIn("Ali")),
 		sceneCase(sceneResellerRename, map[string]string{"id": "s1"}, "reseller", "a new name", textIn("Ali")),
 		sceneCase(sceneResellerNote, map[string]string{"id": "s1"}, "reseller", "a note", textIn("pays late")),
+		sceneCase(sceneResellerPrefix, nil, "reseller", "a config prefix", textIn("sob")),
 	)
 	// A bulk purchase's open questions: how many, and what to call them.
 	add(

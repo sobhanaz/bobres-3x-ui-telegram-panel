@@ -23,6 +23,7 @@ import UsersTable from '../components/UsersTable.vue'
 import BalanceText from '../components/resellers/BalanceText.vue'
 import PaymentDialog from '../components/resellers/PaymentDialog.vue'
 import TermsDialog from '../components/resellers/TermsDialog.vue'
+import NamingDialog from '../components/resellers/NamingDialog.vue'
 import { api, ApiError, query } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
@@ -112,6 +113,9 @@ function balanceWords(m: Money): string {
 }
 
 const terming = ref(false)
+// The owner gives the group name and changes the prefix (an admin sees them).
+const isOwner = computed(() => auth.me?.user.role === 'owner')
+const naming = ref(false)
 function termsSaved(item: ResellerDetail | undefined) {
   take(item)
   toast.add({ severity: 'success', summary: t('reseller.terms_saved'), life: 4000 })
@@ -167,6 +171,7 @@ async function remove(reason: string) {
       </RouterLink>
       <Button :label="t('reseller.record_payment')" icon="pi pi-wallet" class="pay" @click="paying = true" />
       <Button :label="t('reseller.change_terms')" icon="pi pi-sliders-h" outlined class="terms" @click="terming = true" />
+      <Button v-if="isOwner" :label="t('reseller.naming')" icon="pi pi-tag" outlined class="naming" @click="naming = true" />
       <span v-tooltip.bottom="reseller.canRemove ? undefined : t('reseller.remove_blocked')" class="remove-wrap">
         <Button
           :label="t('reseller.remove')"
@@ -254,6 +259,17 @@ async function remove(reason: string) {
           <dd><StatusTag kind="user" :status="reseller.user.status" /></dd>
           <dt>{{ t('reseller.since') }}</dt>
           <dd>{{ date(reseller.createdAt, lang) }}</dd>
+          <dt>{{ t('reseller.panel_group') }}</dt>
+          <dd class="panel-group">
+            <bdi v-if="reseller.panelGroupFull" class="app-ltr app-mono">{{ reseller.panelGroupFull }}</bdi>
+            <span v-else class="app-muted">{{ t('reseller.panel_group_none') }}</span>
+            <span v-if="reseller.panelGroup && !reseller.groupsSynced" class="app-muted"> · {{ t('reseller.group_moving') }}</span>
+          </dd>
+          <dt>{{ t('reseller.config_prefix') }}</dt>
+          <dd class="config-prefix">
+            <bdi v-if="reseller.configPrefix" class="app-ltr app-mono">{{ reseller.configPrefix }}-…</bdi>
+            <span v-else class="app-muted">{{ t('reseller.config_prefix_none') }}</span>
+          </dd>
           <dt>{{ t('reseller.note') }}</dt>
           <dd>
             <bdi v-if="reseller.note" class="note">{{ reseller.note }}</bdi>
@@ -323,6 +339,7 @@ async function remove(reason: string) {
   <template v-if="reseller">
     <PaymentDialog v-model:visible="paying" :reseller="reseller" @paid="paid" />
     <TermsDialog v-model:visible="terming" :reseller="reseller" @saved="termsSaved" @stale="load" />
+    <NamingDialog v-if="isOwner" v-model:visible="naming" :reseller="reseller" @saved="take" />
     <ReasonDialog
       v-model:visible="removing"
       :title="t('reseller.remove')"

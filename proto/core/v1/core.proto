@@ -679,6 +679,18 @@ message ResellerInfo {
   int64 customers = 5; // users who joined through their link
   repeated common.v1.Money commission_earned = 6; // per currency
   string ref_code = 7; // the invite code (created on first request)
+  // The prefix of the names of the reseller's configs in the 3x-ui panel ("" until
+  // they choose it), and the NAME of the panel group "BOBRES-NAME" their configs are
+  // in ("" until the owner gives one).
+  string config_prefix = 8;
+  string panel_group = 9;
+}
+
+// SetResellerConfigPrefixRequest sets the reseller's own config prefix: once (the
+// owner changes it after that). The answer is their ResellerInfo.
+message SetResellerConfigPrefixRequest {
+  string user_id = 1;
+  string prefix = 2;
 }
 
 message CreateSupportTicketRequest {
@@ -985,6 +997,9 @@ service CoreService {
   // Resellers (milestone 5).
   rpc SetSubscriptionLabel(SetSubscriptionLabelRequest) returns (Subscription);
   rpc GetResellerInfo(GetResellerInfoRequest) returns (ResellerInfo);
+  // SetResellerConfigPrefix: InvalidArgument for a prefix core refuses (the shape, or
+  // another reseller has it), FailedPrecondition when the reseller set theirs already.
+  rpc SetResellerConfigPrefix(SetResellerConfigPrefixRequest) returns (ResellerInfo);
   // Reseller management: a reseller's own services (list with status filters
   // and counts, pause and resume, delete, a private note) and the customers
   // who joined through their invite link. Every call is the reseller's own:

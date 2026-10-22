@@ -31,6 +31,12 @@ type fakeProvisioner struct {
 	// "delete"), and an error to return from them.
 	ops    []string
 	opsErr error
+	// groups of the CreateClient calls, in order; assigned is what SetClientGroups was
+	// told by subscription id (assignCalls calls), groupErr an error to return from it.
+	groups      []string
+	assigned    map[string]string
+	assignCalls int
+	groupErr    error
 }
 
 func (f *fakeProvisioner) op(subscriptionID, what string) error {
@@ -99,16 +105,34 @@ func (f *fakeProvisioner) setUsage(subscriptionID string, u Usage) {
 	f.usage[subscriptionID] = u
 }
 
+// SetClientGroups records what core asks for: the groups by subscription.
+func (f *fakeProvisioner) SetClientGroups(_ context.Context, items []ClientGroup) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.groupErr != nil {
+		return 0, f.groupErr
+	}
+	if f.assigned == nil {
+		f.assigned = map[string]string{}
+	}
+	for _, it := range items {
+		f.assigned[it.SubscriptionID] = it.Group
+	}
+	f.assignCalls++
+	return len(items), nil
+}
+
 func (f *fakeProvisioner) limitsFor(subscriptionID string) []limitsCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]limitsCall(nil), f.limits[subscriptionID]...)
 }
 
-func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64, candidates []string, inbounds []store.PlanInbound) (ProvisionedClient, error) {
+func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64, candidates []string, inbounds []store.PlanInbound, group string) (ProvisionedClient, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, subscriptionID+"|"+email)
+	f.groups = append(f.groups, group)
 	f.days, f.traffic = days, traffic
 	f.candidates = append([]string(nil), candidates...)
 	f.inbounds = append([]store.PlanInbound(nil), inbounds...)

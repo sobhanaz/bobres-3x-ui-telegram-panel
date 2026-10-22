@@ -745,7 +745,7 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onGiftCode(r)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:
 		h.onAdminScene(r, st)
-	case sceneResellerLabel, sceneResellerFind, sceneResellerRename, sceneResellerNote:
+	case sceneResellerLabel, sceneResellerFind, sceneResellerRename, sceneResellerNote, sceneResellerPrefix:
 		h.onResellerScene(r, st)
 	case sceneResellerApply:
 		h.onResellerApplication(r)

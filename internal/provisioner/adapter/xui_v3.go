@@ -3,6 +3,8 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 )
@@ -31,13 +33,21 @@ func NewXUIv3(baseURL, apiToken string, opts ...xui.Option) (*XUIv3, error) {
 // to it keep the group: SetLimits and SetEnabled send the stored row back with
 // its group, and the panel's own bulkAdjust and resetTraffic leave it.
 func (a *XUIv3) CreateClient(ctx context.Context, email, subID string, expiryMs, trafficBytes int64, inboundIDs []int) error {
+	return a.CreateClientInGroup(ctx, "", email, subID, expiryMs, trafficBytes, inboundIDs)
+}
+
+// CreateClientInGroup is CreateClient in the named group ("" is xui.BotGroup).
+func (a *XUIv3) CreateClientInGroup(ctx context.Context, group, email, subID string, expiryMs, trafficBytes int64, inboundIDs []int) error {
+	if group == "" {
+		group = xui.BotGroup
+	}
 	spec := xui.ClientSpec{
 		Email:      email,
 		SubID:      subID,
 		ExpiryTime: expiryMs,
 		TotalGB:    trafficBytes,
 		Enable:     true,
-		Group:      xui.BotGroup,
+		Group:      group,
 	}
 	return a.c.AddClient(ctx, spec, inboundIDs)
 }
@@ -90,8 +100,67 @@ func (a *XUIv3) TagUngrouped(ctx context.Context, managed map[string]string) (Ta
 }
 
 func (a *XUIv3) EnsureTagged(ctx context.Context, email string) error {
-	_, err := a.c.AddToGroupIfNone(ctx, email, xui.BotGroup)
+	return a.EnsureGroup(ctx, email, xui.BotGroup)
+}
+
+func (a *XUIv3) EnsureGroup(ctx context.Context, email, group string) error {
+	if group == "" {
+		group = xui.BotGroup
+	}
+	_, err := a.c.AddToGroupIfNone(ctx, email, group)
 	return err
+}
+
+// Regroup: see GroupRegrouper.
+func (a *XUIv3) Regroup(ctx context.Context, want map[string]GroupWant) (TagResult, error) {
+	res := TagResult{Managed: len(want)}
+	if len(want) == 0 {
+		res.Converged = true
+		return res, nil
+	}
+	target := func(email string) string {
+		if g := want[email].Group; g != "" && xui.ValidateGroup(g) == nil {
+			return g
+		}
+		return xui.BotGroup
+	}
+	for pass := 0; pass < tagPasses; pass++ {
+		rows, err := a.c.ListClients(ctx)
+		if err != nil {
+			return res, err
+		}
+		seen, left := map[string]bool{}, 0
+		todo := map[string][]string{} // group wanted -> the emails to move there
+		for _, r := range rows {
+			w, ok := want[r.Email]
+			if !ok || seen[r.Email] || (w.SubID != "" && r.SubID != w.SubID) {
+				continue
+			}
+			seen[r.Email] = true
+			switch g := target(r.Email); {
+			case r.Group == g, !xui.IsBotGroup(r.Group):
+				left++ // already there, or a group an operator chose
+			case xui.ValidateIdentifier(r.Email) == nil:
+				todo[g] = append(todo[g], r.Email)
+			}
+		}
+		if pass == 0 {
+			res.Grouped = left
+		}
+		res.Missing = len(want) - len(seen)
+		if len(todo) == 0 {
+			res.Converged = true
+			return res, nil
+		}
+		for _, g := range slices.Sorted(maps.Keys(todo)) {
+			n, err := a.c.AddToGroup(ctx, todo[g], g)
+			res.Tagged += n
+			if err != nil {
+				return res, err
+			}
+		}
+	}
+	return res, nil
 }
 
 func (a *XUIv3) Renew(ctx context.Context, email string, addDays, addBytes int64) error {

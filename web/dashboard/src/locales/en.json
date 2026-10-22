@@ -1988,7 +1988,10 @@
         "add": "Made a reseller",
         "terms": "Reseller terms changed",
         "payment": "Reseller payment recorded",
-        "remove": "Reseller removed"
+        "remove": "Reseller removed",
+        "panel_group": "Reseller panel group changed",
+        "config_prefix": "Reseller config prefix changed",
+        "group_sync": "Reseller configs moved into their group again"
       },
       "reseller_tier": {
         "upsert": "Reseller tier saved",
@@ -2368,7 +2371,23 @@
     "remove": "Remove reseller",
     "remove_intro": "They become a regular customer again: store prices, no credit and no commission. Their services and the customers they brought stay as they are.",
     "remove_blocked": "A reseller who owes money cannot be removed: record their payment first.",
-    "removed": "No longer a reseller"
+    "removed": "No longer a reseller",
+    "naming": "Panel names",
+    "naming_title": "Names in the 3x-ui panel",
+    "naming_intro": "A reseller's configs are put in the group BOBRES-<name> in the 3x-ui panel, and their names start with the reseller's prefix. The reseller chooses the prefix once in the bot; only you change it after that.",
+    "naming_saved": "Saved",
+    "naming_move": "Move the existing configs",
+    "naming_moving": "The reseller's existing configs will move into {group} in a few minutes.",
+    "panel_group": "Group in the panel",
+    "panel_group_none": "None yet (their configs are in BOBRES)",
+    "panel_group_hint": "The name after BOBRES-: letters, digits and _, 2 to 24. New configs go in this group; the existing ones move after you save or press the button.",
+    "panel_group_make_hint": "Optional now. The name after BOBRES-: letters, digits and _, 2 to 24. Their configs go in this group in the 3x-ui panel.",
+    "panel_group_rule": "2 to 24 letters, digits or _ (A-Z, 0-9), and not used by another reseller.",
+    "group_moving": "existing configs are moving",
+    "config_prefix": "Config prefix",
+    "config_prefix_none": "Not chosen yet (the usual names)",
+    "config_prefix_hint": "New configs are named <prefix>-u<id>-…; leave empty to let the reseller choose it in the bot. Clearing it lets them choose again.",
+    "config_prefix_rule": "2 to 10 letters or digits (a-z, 0-9), not like u123, and not used by another reseller."
   },
   "tier": {
     "intro": "A tier sets what its resellers pay: a percentage off store prices, or a fixed price for a plan. The commission is the share of each purchase by a customer who joined through a reseller's link.",

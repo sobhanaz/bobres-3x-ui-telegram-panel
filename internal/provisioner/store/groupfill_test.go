@@ -74,14 +74,14 @@ func TestGroupBackfillBookkeeping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkGroupBackfilled(ctx, a.ID); err != nil {
+	if err := s.MarkGroupBackfilled(ctx, a.ID, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	var first, second time.Time
 	if err := s.DB().QueryRow(ctx, `SELECT group_backfilled_at FROM provisioner.xui_servers WHERE id = $1`, a.ID).Scan(&first); err != nil || first.IsZero() {
 		t.Fatalf("not recorded: %v %v", first, err)
 	}
-	if err := s.MarkGroupBackfilled(ctx, a.ID); err != nil {
+	if err := s.MarkGroupBackfilled(ctx, a.ID, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DB().QueryRow(ctx, `SELECT group_backfilled_at FROM provisioner.xui_servers WHERE id = $1`, a.ID).Scan(&second); err != nil || !first.Equal(second) {
@@ -94,7 +94,41 @@ func TestGroupBackfillBookkeeping(t *testing.T) {
 	if got := names(); !slices.Equal(got, []string{"b"}) {
 		t.Fatalf("pending after a is done: %v", got)
 	}
-	if err := s.MarkGroupBackfilled(ctx, "00000000-0000-7000-8000-0000000006ff"); err != nil {
+	if err := s.MarkGroupBackfilled(ctx, "00000000-0000-7000-8000-0000000006ff", time.Now()); err != nil {
 		t.Fatalf("a server that is gone: %v", err)
+	}
+}
+
+// A pass that began before SetClientGroups asked for another one must not record the server as done: the change would be lost.
+func TestBackfillMarkIsNotLostToAChangeMadeDuringAPass(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a, err := s.AddServer(ctx, &Server{Name: "race", BaseURL: "https://race.test", Token: "tok-race", Enabled: true}) //gitleaks:allow test fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	xid := s.SubIDFor("00000000-0000-7000-8000-0000000007a1")
+	if err := s.PutClientMap(ctx, &ClientMap{SubscriptionID: "00000000-0000-7000-8000-0000000007a1", ServerID: a.ID, Email: "u1-race", XUISubID: &xid, InboundIDs: []int32{1}}); err != nil {
+		t.Fatal(err)
+	}
+	pass := time.Now() // a pass begins
+	if n, err := s.SetClientGroups(ctx, []GroupAssignment{{SubscriptionID: "00000000-0000-7000-8000-0000000007a1", Group: "BOBRES-X"}}); err != nil || n != 1 {
+		t.Fatalf("SetClientGroups: %d %v", n, err)
+	}
+	if err := s.MarkGroupBackfilled(ctx, a.ID, pass); err != nil { // ...and ends after the change
+		t.Fatal(err)
+	}
+	if refs, _ := s.GroupBackfillPending(ctx); len(refs) != 1 {
+		t.Fatalf("the change was lost: %d servers pending", len(refs))
+	}
+	if err := s.MarkGroupBackfilled(ctx, a.ID, time.Now()); err != nil { // a pass that began after it
+		t.Fatal(err)
+	}
+	if refs, _ := s.GroupBackfillPending(ctx); len(refs) != 0 {
+		t.Fatalf("pending after a later pass: %d", len(refs))
+	}
+	cm, err := s.GetClientMap(ctx, "00000000-0000-7000-8000-0000000007a1")
+	if err != nil || cm.PanelGroup != "BOBRES-X" {
+		t.Fatalf("%+v %v", cm, err)
 	}
 }

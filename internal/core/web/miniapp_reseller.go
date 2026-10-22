@@ -31,6 +31,7 @@ func init() {
 
 func (s *Server) miniResellerRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/mini/v1/reseller", s.miniSession(false, s.miniResellerPanel))
+	api.HandleFunc("POST /api/mini/v1/reseller/prefix", s.miniSession(false, s.miniResellerPrefix))
 	api.HandleFunc("GET /api/mini/v1/reseller/services", s.miniSession(false, s.miniResellerServices))
 	api.HandleFunc("POST /api/mini/v1/reseller/services/{id}/pause", s.miniSession(false, s.miniResellerPause(true)))
 	api.HandleFunc("POST /api/mini/v1/reseller/services/{id}/resume", s.miniSession(false, s.miniResellerPause(false)))
@@ -135,11 +136,39 @@ func (s *Server) miniResellerPanel(w http.ResponseWriter, r *http.Request) {
 			link = "https://t.me/" + bot + "?start=r_" + info.RefCode
 		}
 	}
+	naming, err := s.cfg.Domain.ResellerNaming(ctx, c.user.ID)
+	if err != nil {
+		s.miniResellerFail(w, "mini app reseller", err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tier": info.Terms.TierName, "discount_percent": info.Terms.DiscountPercent, "commission_percent": info.Terms.CommissionPercent,
 		"balances": balances, "customers": info.Customers, "commission_earned": miniMoneyList(info.Earned),
 		"ref_code": info.RefCode, "invite_link": link, "counts": miniServiceCounts(counts),
+		// What their configs are called and grouped as in the 3x-ui panel ("" until chosen or given).
+		"config_prefix": naming.ConfigPrefix, "panel_group": naming.PanelGroup,
 	})
+}
+
+// miniResellerPrefix: POST /api/mini/v1/reseller/prefix {prefix} sets the reseller's own config prefix, once (the owner changes it
+// after that); the answer is the panel again.
+func (s *Server) miniResellerPrefix(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Prefix string `json:"prefix"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	ctx, c := r.Context(), miniFrom(r.Context())
+	if _, err := s.cfg.Domain.ResellerAccess(ctx, c.user.ID); err != nil {
+		s.miniResellerFail(w, "mini app reseller prefix", err)
+		return
+	}
+	if err := s.cfg.Domain.SetResellerConfigPrefix(ctx, c.user, c.user.ID, in.Prefix); err != nil {
+		s.miniResellerFail(w, "mini app reseller prefix", err)
+		return
+	}
+	s.miniResellerPanel(w, r)
 }
 
 func miniServiceCounts(c store.ServiceCounts) map[string]any {

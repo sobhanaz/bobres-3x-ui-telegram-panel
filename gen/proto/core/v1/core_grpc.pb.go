@@ -70,6 +70,7 @@ const (
 	CoreService_ReportBroadcastResults_FullMethodName    = "/core.v1.CoreService/ReportBroadcastResults"
 	CoreService_SetSubscriptionLabel_FullMethodName      = "/core.v1.CoreService/SetSubscriptionLabel"
 	CoreService_GetResellerInfo_FullMethodName           = "/core.v1.CoreService/GetResellerInfo"
+	CoreService_SetResellerConfigPrefix_FullMethodName   = "/core.v1.CoreService/SetResellerConfigPrefix"
 	CoreService_ListResellerServices_FullMethodName      = "/core.v1.CoreService/ListResellerServices"
 	CoreService_SetResellerServiceEnabled_FullMethodName = "/core.v1.CoreService/SetResellerServiceEnabled"
 	CoreService_DeleteResellerService_FullMethodName     = "/core.v1.CoreService/DeleteResellerService"
@@ -171,6 +172,9 @@ type CoreServiceClient interface {
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error)
 	GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
+	// SetResellerConfigPrefix: InvalidArgument for a prefix core refuses (the shape, or
+	// another reseller has it), FailedPrecondition when the reseller set theirs already.
+	SetResellerConfigPrefix(ctx context.Context, in *SetResellerConfigPrefixRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
 	// Reseller management: a reseller's own services (list with status filters
 	// and counts, pause and resume, delete, a private note) and the customers
 	// who joined through their invite link. Every call is the reseller's own:
@@ -742,6 +746,16 @@ func (c *coreServiceClient) GetResellerInfo(ctx context.Context, in *GetReseller
 	return out, nil
 }
 
+func (c *coreServiceClient) SetResellerConfigPrefix(ctx context.Context, in *SetResellerConfigPrefixRequest, opts ...grpc.CallOption) (*ResellerInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResellerInfo)
+	err := c.cc.Invoke(ctx, CoreService_SetResellerConfigPrefix_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListResellerServices(ctx context.Context, in *ListResellerServicesRequest, opts ...grpc.CallOption) (*ListResellerServicesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListResellerServicesResponse)
@@ -1066,6 +1080,9 @@ type CoreServiceServer interface {
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error)
 	GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error)
+	// SetResellerConfigPrefix: InvalidArgument for a prefix core refuses (the shape, or
+	// another reseller has it), FailedPrecondition when the reseller set theirs already.
+	SetResellerConfigPrefix(context.Context, *SetResellerConfigPrefixRequest) (*ResellerInfo, error)
 	// Reseller management: a reseller's own services (list with status filters
 	// and counts, pause and resume, delete, a private note) and the customers
 	// who joined through their invite link. Every call is the reseller's own:
@@ -1278,6 +1295,9 @@ func (UnimplementedCoreServiceServer) SetSubscriptionLabel(context.Context, *Set
 }
 func (UnimplementedCoreServiceServer) GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetResellerInfo not implemented")
+}
+func (UnimplementedCoreServiceServer) SetResellerConfigPrefix(context.Context, *SetResellerConfigPrefixRequest) (*ResellerInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetResellerConfigPrefix not implemented")
 }
 func (UnimplementedCoreServiceServer) ListResellerServices(context.Context, *ListResellerServicesRequest) (*ListResellerServicesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListResellerServices not implemented")
@@ -2293,6 +2313,24 @@ func _CoreService_GetResellerInfo_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_SetResellerConfigPrefix_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResellerConfigPrefixRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetResellerConfigPrefix(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetResellerConfigPrefix_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetResellerConfigPrefix(ctx, req.(*SetResellerConfigPrefixRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListResellerServices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListResellerServicesRequest)
 	if err := dec(in); err != nil {
@@ -2953,6 +2991,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetResellerInfo",
 			Handler:    _CoreService_GetResellerInfo_Handler,
+		},
+		{
+			MethodName: "SetResellerConfigPrefix",
+			Handler:    _CoreService_SetResellerConfigPrefix_Handler,
 		},
 		{
 			MethodName: "ListResellerServices",

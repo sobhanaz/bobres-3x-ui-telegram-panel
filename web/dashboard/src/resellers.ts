@@ -83,6 +83,12 @@ export interface Reseller {
   note: string
   version: number
   canRemove: boolean
+  /** the prefix of the names of their configs in the 3x-ui panel ("" until they choose it) */
+  configPrefix: string
+  /** the NAME of their panel group, the group itself ("BOBRES-NAME") and whether their earlier configs were moved into it */
+  panelGroup: string
+  panelGroupFull: string
+  groupsSynced: boolean
 }
 
 /** resellerOf reads a row or item answer from core. */
@@ -105,7 +111,30 @@ export function resellerOf(r: ResellerItem | ResellerDetail): Reseller {
     version: d.version ?? 0,
     // Older answers leave it out: allowed unless they owe money (core checks again).
     canRemove: typeof d.can_remove === 'boolean' ? d.can_remove : debts(wallets).length === 0,
+    configPrefix: d.config_prefix ?? '',
+    panelGroup: d.panel_group ?? '',
+    panelGroupFull: d.panel_group_full ?? '',
+    groupsSynced: d.groups_synced ?? false,
   }
+}
+
+// ---- Names in the 3x-ui panel
+
+/** The group of a reseller's configs is "BOBRES-" and a name the owner writes. */
+export const PANEL_GROUP_PREFIX = 'BOBRES-'
+
+/** panelGroupName is a typed group name as core stores it: capitals, with a leading "BOBRES-" dropped;
+ * '' when it is not 2 to 24 of A-Z, 0-9 and _ (what core takes). */
+export function panelGroupName(s: string): string {
+  const n = s.trim().toUpperCase().replace(/^BOBRES-/, '')
+  return /^[A-Z0-9_]{2,24}$/.test(n) ? n : ''
+}
+
+/** configPrefix is a typed prefix as core stores it (lowercase, 2 to 10 of a-z and 0-9, not the look of the usual
+ * names, a u and digits); '' when it is not one. */
+export function configPrefix(s: string): string {
+  const p = s.trim().toLowerCase()
+  return /^[a-z0-9]{2,10}$/.test(p) && !/^u[0-9]*$/.test(p) ? p : ''
 }
 
 /** percentOf reads a typed whole percent from 0 to max ("۲۰", "20%");

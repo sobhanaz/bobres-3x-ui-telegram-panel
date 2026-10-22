@@ -891,3 +891,40 @@ func TestMiniResellerBuysForACustomer(t *testing.T) {
 		t.Fatalf("a reseller's purchase after the license: %d %v", code, lout)
 	}
 }
+
+// A reseller chooses their config prefix from the Mini App, once; the panel shows it; another reseller cannot take it, a bad one is
+// refused, a second try is a conflict, and a customer who is not a reseller has no such call.
+func TestMiniResellerChoosesAConfigPrefixOnce(t *testing.T) {
+	m := newMiniReseller(t)
+	tok, _ := m.reseller("pfx1", 0)
+	tok2, _ := m.reseller("pfx2", 0)
+	cust := m.signIn("tg:61950:plain")
+	post := func(token, prefix string) (int, map[string]any) {
+		return m.call(http.MethodPost, "/api/mini/v1/reseller/prefix", token, map[string]any{"prefix": prefix})
+	}
+
+	if code, out := m.call(http.MethodGet, "/api/mini/v1/reseller", tok, nil); code != http.StatusOK || out["config_prefix"] != "" || out["panel_group"] != "" {
+		t.Fatalf("the panel before: %d %v", code, out)
+	}
+	for _, bad := range []string{"", "x", "has-dash", "u12", "waytoolongprefix"} {
+		if code, out := post(tok, bad); code != http.StatusBadRequest {
+			t.Errorf("prefix %q: %d %v", bad, code, out)
+		}
+	}
+	code, out := post(tok, " Sob ")
+	if code != http.StatusOK || out["config_prefix"] != "sob" {
+		t.Fatalf("set: %d %v", code, out)
+	}
+	if code, out := post(tok, "other"); code != http.StatusConflict || out["error"] != "state" {
+		t.Errorf("a second try: %d %v", code, out)
+	}
+	if code, out := post(tok2, "sob"); code != http.StatusBadRequest {
+		t.Errorf("another reseller's prefix: %d %v", code, out)
+	}
+	if code, out := m.call(http.MethodGet, "/api/mini/v1/reseller", tok, nil); code != http.StatusOK || out["config_prefix"] != "sob" {
+		t.Errorf("the panel after: %d %v", code, out)
+	}
+	if code, _ := post(cust, "mine"); code == http.StatusOK {
+		t.Errorf("a customer set a reseller prefix")
+	}
+}

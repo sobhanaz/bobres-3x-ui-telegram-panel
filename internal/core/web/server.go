@@ -240,6 +240,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/resellers", PermResellersWrite, s.createReseller)
 	s.route(api, "GET /api/v1/resellers/{id}", PermResellersWrite, s.getReseller)
 	s.route(api, "PUT /api/v1/resellers/{id}", PermResellersWrite, s.updateReseller)
+	s.route(api, "PUT /api/v1/resellers/{id}/naming", PermResellersWrite, s.updateResellerNaming)
+	s.route(api, "POST /api/v1/resellers/{id}/group-sync", PermResellersWrite, s.resellerGroupSync)
 	s.route(api, "POST /api/v1/resellers/{id}/payments", PermResellersWrite, s.resellerPayment)
 	s.route(api, "POST /api/v1/resellers/{id}/remove", PermResellersWrite, s.removeReseller)
 	s.route(api, "GET /api/v1/reseller-tiers", PermResellersWrite, s.listTiers)

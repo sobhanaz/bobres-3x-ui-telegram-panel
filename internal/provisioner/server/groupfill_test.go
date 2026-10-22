@@ -120,7 +120,7 @@ func TestBackfillGroupsTagsHeldClients(t *testing.T) {
 			line = l
 		}
 	}
-	for _, want := range []string{"server=fake", "group=bobres_bot", "managed=7", "tagged=3", "already_in_a_group=2", "missing=2"} {
+	for _, want := range []string{"server=fake", "group=BOBRES", "managed=7", "tagged=3", "already_in_a_group=2", "missing=2"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("summary line lacks %q: %s", want, line)
 		}

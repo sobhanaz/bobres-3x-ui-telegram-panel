@@ -21,15 +21,28 @@ type Client struct {
 func New(rpc provisionerv1.ProvisionerServiceClient) *Client { return &Client{rpc: rpc} }
 
 // CreateClient implements domain.Provisioner.
-func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound) (domain.ProvisionedClient, error) {
+func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound, group string) (domain.ProvisionedClient, error) {
 	cl, err := c.rpc.CreateClient(ctx, &provisionerv1.CreateClientRequest{
 		SubscriptionId: subscriptionID, Email: email, DurationDays: durationDays, TrafficBytes: trafficBytes,
-		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds),
+		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds), Group: group,
 	})
 	if err != nil {
 		return domain.ProvisionedClient{}, fmt.Errorf("provisioner.CreateClient: %w", err)
 	}
 	return domain.ProvisionedClient{ServerID: cl.GetServerId(), XUISubID: cl.GetXuiSubId(), ExpiresAt: cl.GetExpiresAt()}, nil
+}
+
+// SetClientGroups implements domain.Provisioner.
+func (c *Client) SetClientGroups(ctx context.Context, items []domain.ClientGroup) (int, error) {
+	req := &provisionerv1.SetClientGroupsRequest{Clients: make([]*provisionerv1.ClientGroup, 0, len(items))}
+	for _, it := range items {
+		req.Clients = append(req.Clients, &provisionerv1.ClientGroup{SubscriptionId: it.SubscriptionID, Group: it.Group})
+	}
+	resp, err := c.rpc.SetClientGroups(ctx, req)
+	if err != nil {
+		return 0, fmt.Errorf("provisioner.SetClientGroups: %w", err)
+	}
+	return int(resp.GetUpdated()), nil
 }
 
 // inboundSelections maps a plan's inbound choice to the request's.

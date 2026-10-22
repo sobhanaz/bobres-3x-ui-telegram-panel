@@ -375,6 +375,12 @@ payments in the dashboard. Customers see none of this.
   service's name when it has one.
 - **Statement** (also their wallet History): 10 transactions a page, commissions and payments to the store included.
 - **My link:** their invite link and commission %, even when the store's referral reward is 0.
+- **Config prefix** (`rs:pfx`, `rs:pfy:<prefix>`): the prefix of the names of their configs in the 3x-ui panel (`sob` makes
+  `sob-u<id>-...`). Chosen once: the question takes a message (2 to 10 of a-z and 0-9, case ignored; a bad shape is asked again at once), asks
+  "Use <prefix> for all your configs? You cannot change it yourself afterwards" and saves on the confirm; core refuses a prefix another
+  reseller has or one that looks like `u123` (asked again), and an old confirm button after the prefix is set shows the one they have. After
+  that only the owner changes it (dashboard). The panel's text shows "Config prefix: <b>..</b>" once set. Their group in the 3x-ui panel
+  (`BOBRES-<NAME>`) is the owner's to give and is not shown to them.
 - **Notifications:** a commission ("from a customer's purchase", never naming the customer) and a payment the staff
   recorded, each with the balance after.
 - Resellers are gated like customers (maintenance, required channel); a banned reseller loses the panel.

@@ -19,6 +19,8 @@ const panel = {
   ref_code: 'abcd2345',
   invite_link: 'https://t.me/acme_bot?start=r_abcd2345',
   counts: counts(),
+  config_prefix: '',
+  panel_group: '',
 }
 
 const page = (services: unknown[], over: Record<string, unknown> = {}) => ({ services, total: services.length, page: 1, size: 10, counts: counts(), ...over })
@@ -67,6 +69,9 @@ describe('the section in the More tab', () => {
   })
 })
 
+// the app wraps a name in direction isolates; a reader does not see them
+const plain = (el: ParentNode) => text(el).replace(/[\u2066-\u2069]/g, '')
+
 describe('the panel', () => {
   it('shows the tier, the balance as a debt with its credit and what can be spent, the counts and the link', async () => {
     fakeCore(() => panel)
@@ -100,6 +105,62 @@ describe('the panel', () => {
     )
     await tap(el, 'Copy')
     expect(writeText).toHaveBeenCalledWith(panel.invite_link)
+    unmount()
+  })
+
+  it('lets the reseller choose their config prefix once, after asking, and shows it as locked afterwards', async () => {
+    let prefix = ''
+    const calls = fakeCore((c) => {
+      if (c.method === 'POST' && c.path === '/reseller/prefix') {
+        prefix = (c.body as { prefix: string }).prefix
+      }
+      return { ...panel, config_prefix: prefix, panel_group: 'SOBHANADMIN' }
+    })
+    const { el, unmount } = mount(ResellerSection)
+    await settle()
+    expect(text(el)).toContain('Config prefix')
+    const set = need<HTMLButtonElement>(el, 'button', 'Set the prefix')
+    expect(set.disabled).toBe(true) // nothing typed yet
+    const input = need<HTMLInputElement>(el, '[data-prefix] input')
+    await type(input, 'x')
+    expect(need<HTMLButtonElement>(el, 'button', 'Set the prefix').disabled).toBe(true) // too short
+    await type(input, 'has-dash')
+    expect(need<HTMLButtonElement>(el, 'button', 'Set the prefix').disabled).toBe(true)
+    await type(input, ' Sob ')
+    await tap(el, 'Set the prefix')
+    // asked first, and nothing is sent until it is confirmed
+    expect(plain(el)).toContain('Use sob for all your configs? You cannot change it yourself afterwards.')
+    expect(calls.some((c) => c.path === '/reseller/prefix')).toBe(false)
+    await tap(el, 'Yes, use it')
+    expect(calls.filter((c) => c.path === '/reseller/prefix')).toEqual([{ method: 'POST', path: '/reseller/prefix', body: { prefix: 'sob' } }])
+    expect(plain(el)).toContain('sob-…')
+    expect(text(el)).toContain('Only the owner can change it.')
+    expect(find(el, '[data-prefix] input')).toBeNull() // locked
+    unmount()
+  })
+
+  it('tells a prefix core refuses, and reads the panel again when it was set already', async () => {
+    let state: 'bad' | 'set' = 'bad'
+    fakeCore((c) => {
+      if (c.method === 'POST' && c.path === '/reseller/prefix') {
+        return state === 'bad'
+          ? new Response(JSON.stringify({ error: 'invalid', message: 'another reseller has this prefix' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+          : new Response(JSON.stringify({ error: 'state', message: 'the prefix was set already' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+      }
+      return { ...panel, config_prefix: state === 'set' ? 'abc' : '' }
+    })
+    const { el, unmount } = mount(ResellerSection)
+    await settle()
+    await type(need<HTMLInputElement>(el, '[data-prefix] input'), 'taken')
+    await tap(el, 'Set the prefix')
+    await tap(el, 'Yes, use it')
+    expect(text(el)).toContain('That prefix is not possible')
+    expect(find(el, '[data-prefix] input')).not.toBeNull() // asked again
+    state = 'set'
+    await tap(el, 'Set the prefix')
+    await tap(el, 'Yes, use it')
+    expect(plain(el)).toContain('abc-…')
+    expect(find(el, '[data-prefix] input')).toBeNull()
     unmount()
   })
 

@@ -94,6 +94,27 @@ message CreateClientRequest {
   // inbound, as before. Only a fresh reservation reads it: a retry attaches
   // the same way again.
   repeated InboundSelection inbounds = 7;
+  // The 3x-ui client group the client is put in ("" is the default group,
+  // "BOBRES"; a reseller's clients are in "BOBRES-<NAME>"). Marzban has no
+  // groups and ignores it. An older provisioner ignores the field too.
+  string group = 8;
+}
+
+// SetClientGroupsRequest records the group each client should be in; a 3x-ui
+// panel is then brought in line in the background, moving only the clients that
+// are in a group BOBRES owns (none, "BOBRES", "bobres_bot" or "BOBRES-<NAME>"),
+// never one an operator chose.
+message SetClientGroupsRequest {
+  repeated ClientGroup clients = 1; // at most 500 a call
+}
+
+message ClientGroup {
+  string subscription_id = 1;
+  string group = 2; // "" is the default group
+}
+
+message SetClientGroupsResponse {
+  int32 updated = 1; // the subscriptions the provisioner holds; the others are skipped
 }
 
 // InboundSelection names the panel inbounds (their ids in that panel) a
@@ -266,6 +287,9 @@ service ProvisionerService {
   rpc GetLinks(GetLinksRequest) returns (Links);
   rpc ListInbounds(ListInboundsRequest) returns (ListInboundsResponse);
   rpc SetInboundAttach(SetInboundAttachRequest) returns (google.protobuf.Empty);
+  // SetClientGroups changes the 3x-ui group clients should be in (a reseller's
+  // existing clients move to the reseller's group); see SetClientGroupsRequest.
+  rpc SetClientGroups(SetClientGroupsRequest) returns (SetClientGroupsResponse);
   rpc AddServer(AddServerRequest) returns (XUIServer);
   rpc ListServers(ListServersRequest) returns (ListServersResponse);
   rpc UpdateServer(UpdateServerRequest) returns (XUIServer);

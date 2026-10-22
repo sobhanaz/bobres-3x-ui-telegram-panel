@@ -476,14 +476,32 @@ func (s *Server) GetResellerInfo(ctx context.Context, req *corev1.GetResellerInf
 	if err != nil {
 		return nil, fail(err)
 	}
+	naming, err := s.dom.ResellerNaming(ctx, req.GetUserId())
+	if err != nil {
+		return nil, fail(err)
+	}
 	out := &corev1.ResellerInfo{TierName: ri.Terms.TierName, DiscountPercent: ri.Terms.DiscountPercent,
-		CommissionPercent: ri.Terms.CommissionPercent, Customers: ri.Customers, RefCode: ri.RefCode}
+		CommissionPercent: ri.Terms.CommissionPercent, Customers: ri.Customers, RefCode: ri.RefCode,
+		ConfigPrefix: naming.ConfigPrefix, PanelGroup: naming.PanelGroup}
 	for _, w := range ri.Wallets {
 		out.Balances = append(out.Balances, &corev1.ResellerBalance{Currency: w.Currency, Balance: w.Balance,
 			CreditLimit: w.CreditLimit, Available: w.Balance + w.CreditLimit})
 	}
 	out.CommissionEarned = moneyList(ri.Earned)
 	return out, nil
+}
+
+// SetResellerConfigPrefix sets the reseller's own prefix for the names of their configs in the 3x-ui panel (once:
+// after that only the owner changes it, from the dashboard).
+func (s *Server) SetResellerConfigPrefix(ctx context.Context, req *corev1.SetResellerConfigPrefixRequest) (*corev1.ResellerInfo, error) {
+	u, err := s.st.GetUser(ctx, s.st.Conn(), req.GetUserId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	if err := s.dom.SetResellerConfigPrefix(ctx, u, u.ID, req.GetPrefix()); err != nil {
+		return nil, fail(err)
+	}
+	return s.GetResellerInfo(ctx, &corev1.GetResellerInfoRequest{UserId: u.ID})
 }
 
 // moneyList is amounts per currency, sorted by currency.

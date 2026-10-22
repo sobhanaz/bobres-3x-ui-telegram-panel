@@ -20,8 +20,13 @@ type Provisioner interface {
 	// server the first attempt picked. candidates are the servers it may go
 	// to (a plan's servers; empty = any enabled server). inbounds are the
 	// plan's choice of panel inbounds per server (empty = the provisioner's
-	// default for the server it picks).
-	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound) (ProvisionedClient, error)
+	// default for the server it picks). group is the 3x-ui client group the
+	// client is put in ("" is the default group, "BOBRES").
+	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound, group string) (ProvisionedClient, error)
+	// SetClientGroups changes the group clients should be in ("" is the default
+	// group): a reseller's clients made before they had a group move into it. It
+	// returns how many subscriptions the provisioner held.
+	SetClientGroups(ctx context.Context, items []ClientGroup) (int, error)
 	GetLinks(ctx context.Context, subscriptionID string) (Links, error)
 	Health(ctx context.Context) (healthy bool, detail string, err error)
 	// SetLimits sets absolute limits (unix seconds, bytes; 0 = unlimited) and
@@ -35,6 +40,12 @@ type Provisioner interface {
 	ResetTraffic(ctx context.Context, subscriptionID string) error
 	// Delete removes the client from the panel; deleting it again is fine.
 	Delete(ctx context.Context, subscriptionID string) error
+}
+
+// ClientGroup is the group a subscription's client should be in.
+type ClientGroup struct {
+	SubscriptionID string
+	Group          string // "" is the default group
 }
 
 // Usage is a subscription's traffic and limits as the panel holds them.
@@ -138,6 +149,7 @@ type provisionJob struct {
 	sub     *store.Subscription
 	attempt int    // this run's attempt number
 	blocked string // why the order cannot be applied now (no panel call)
+	group   string // the 3x-ui client group a new client goes in ("" is the default)
 }
 
 // ProvisionNext handles at most one order. It reports whether there was one.
@@ -160,7 +172,10 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		if err != nil {
 			return err
 		}
-		var sub *store.Subscription
+		var (
+			sub   *store.Subscription
+			group string // the panel group a new client goes in
+		)
 		if o.SubscriptionID != nil {
 			// A renewal or top-up: its limits are computed once, from the
 			// subscription as it was when first claimed, and kept for retries.
@@ -186,10 +201,20 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 				}
 			}
 		} else {
+			// A reseller's configs carry their prefix and go in their group (the owner's rules for 3x-ui); a customer's
+			// are named as ever and go in the default group.
+			naming, err := st.GetResellerNaming(ctx, tx, o.UserID)
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
+				return err
+			}
+			if naming == nil {
+				naming = &store.ResellerNaming{}
+			}
+			group = PanelGroupOf(naming.PanelGroup)
 			sub, err = st.SubscriptionByOrder(ctx, tx, o.ID)
 			if errors.Is(err, store.ErrNotFound) {
 				sub, err = st.CreateSubscription(ctx, tx, &store.Subscription{
-					UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmail(u.TelegramID), Label: o.Label,
+					UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmailFor(naming.ConfigPrefix, u.TelegramID), Label: o.Label,
 				})
 			}
 			if err != nil {
@@ -200,7 +225,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		if err != nil {
 			return err
 		}
-		job = &provisionJob{order: o, user: u, plan: plan, sub: sub, attempt: attempt}
+		job = &provisionJob{order: o, user: u, plan: plan, sub: sub, attempt: attempt, group: group}
 		return nil
 	})
 	if err != nil || job == nil {
@@ -214,7 +239,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return true, w.extend(ctx, job)
 	}
 	days, traffic := planLimits(job.plan)
-	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs, job.plan.Inbounds)
+	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs, job.plan.Inbounds, job.group)
 	var links Links
 	if err == nil {
 		links, err = w.prov.GetLinks(ctx, job.sub.ID)
