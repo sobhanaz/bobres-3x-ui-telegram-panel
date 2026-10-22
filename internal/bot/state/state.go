@@ -73,6 +73,8 @@ type Checkout struct {
 	PlanID         string `json:"plan,omitempty"`
 	SubscriptionID string `json:"sub,omitempty"`
 	DiscountCode   string `json:"code,omitempty"`
+	// LinkSecret is the secret of the link of a service that is not the buyer's own, found by its link (a renewal carries it).
+	LinkSecret string `json:"ls,omitempty"`
 	// A reseller buying for a customer (the panel's Buy for a customer), and
 	// the name they gave the new service ("" = none).
 	ForCustomer bool   `json:"fc,omitempty"`

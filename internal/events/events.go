@@ -16,7 +16,10 @@ const (
 	SubscriptionProvisioned = "subscription.provisioned.v1"
 	ProvisionFailed         = "subscription.provision_failed.v1"
 	SubscriptionExtended    = "subscription.extended.v1"
-	SubscriptionReminder    = "subscription.reminder.v1"
+	// RewardCodeIssued: a plan's reward for a paid purchase, a discount code for the buyer's next purchase of the plan
+	// (RewardCodeIssuedEvent): the bot sends it to them.
+	RewardCodeIssued     = "reward.code.v1"
+	SubscriptionReminder = "subscription.reminder.v1"
 	// BulkReady: the services of a bulk purchase are delivered (or are the
 	// provisioning machinery's to retry): the bot sends the customer every
 	// link in one message (BulkReadyEvent).
@@ -241,6 +244,18 @@ type SubscriptionProvisionedEvent struct {
 	// bot sends nothing for this service on its own. A service that is ready
 	// after that message carries no BulkID and is delivered like any other.
 	BulkID string `json:"bulk_id,omitempty"`
+}
+
+// RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them and the plan, one use.
+type RewardCodeIssuedEvent struct {
+	OrderID    string            `json:"order_id"`
+	UserID     string            `json:"user_id"`
+	TelegramID int64             `json:"telegram_id"`
+	Code       string            `json:"code"`
+	Percent    int32             `json:"percent"`
+	PlanID     string            `json:"plan_id"`
+	PlanNames  map[string]string `json:"plan_names"` // lang -> the plan's name
+	ExpiresAt  int64             `json:"expires_at"` // unix seconds
 }
 
 // ProvisionFailedEvent: provisioning keeps failing; an admin should look.

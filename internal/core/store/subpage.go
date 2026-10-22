@@ -46,6 +46,16 @@ func (s *Store) SubscriptionByPageToken(ctx context.Context, q querier, token st
 	return sc, nil
 }
 
+// SubscriptionByLinkSecret returns the service whose subscription id (the end of its subscription link) or page token (the end of its
+// branded page's address) is secret (ErrNotFound when none is).
+func (s *Store) SubscriptionByLinkSecret(ctx context.Context, q querier, secret string) (*Subscription, error) {
+	sc, err := scanSubscription(q.QueryRow(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions WHERE sub_id = $1 OR page_token = $1 LIMIT 1`, secret))
+	if err != nil {
+		return nil, fmt.Errorf("subscription by link secret: %w", err)
+	}
+	return sc, nil
+}
+
 // RegeneratePageToken replaces a service's page token with a new one and
 // returns it; the old URL stops working at once.
 func (s *Store) RegeneratePageToken(ctx context.Context, q querier, id string) (string, error) {

@@ -27,7 +27,7 @@ func (s *Server) ListSupplierOffers(ctx context.Context, req *corev1.ListSupplie
 	if !s.dom.SupplierOn(ctx) {
 		return resp, nil
 	}
-	offers, err := s.dom.SupplierOffers(ctx)
+	offers, err := s.dom.SupplierShelf(ctx)
 	if err != nil {
 		return nil, fail(err)
 	}
@@ -35,7 +35,8 @@ func (s *Server) ListSupplierOffers(ctx context.Context, req *corev1.ListSupplie
 	for i := range offers {
 		p := &offers[i]
 		resp.Offers = append(resp.Offers, &corev1.SupplierOffer{Sid: domain.SupplierSID(p.ID), Name: domain.SupplierName(p, lang),
-			Description: domain.SupplierDescription(p, lang), Price: &commonv1.Money{Amount: *p.SellPrice, Currency: domain.SupplierCurrency}})
+			Description: domain.SupplierDescription(p, lang), Price: &commonv1.Money{Amount: *p.SellPrice, Currency: domain.SupplierCurrency},
+			SoldOut: !p.Available()})
 	}
 	w, err := s.st.GetWallet(ctx, s.st.Conn(), req.GetUserId(), domain.SupplierCurrency)
 	if err != nil {

@@ -243,7 +243,24 @@ func planToProto(p *store.Plan) *corev1.Plan {
 	if p.GroupID != nil {
 		pp.GroupId = *p.GroupID
 	}
+	if p.RewardPercent != nil {
+		pp.RewardPercent = *p.RewardPercent
+	}
 	return pp
+}
+
+// FindServiceByLink finds a service by its link (see domain.FindServiceByLink).
+func (s *Server) FindServiceByLink(ctx context.Context, req *corev1.FindServiceByLinkRequest) (*corev1.FoundService, error) {
+	sub, secret, err := s.dom.FindServiceByLink(ctx, req.GetUserId(), req.GetLink())
+	if err != nil {
+		return nil, fail(err)
+	}
+	mine := sub.UserID == req.GetUserId()
+	pb := subscriptionToProto(sub, s.pageLinks(ctx))
+	if !mine { // only what the link already shows
+		pb.UserId, pb.OrderId, pb.ServerId, pb.ClientEmail, pb.Label, pb.Note = "", "", "", "", "", ""
+	}
+	return &corev1.FoundService{Service: pb, Mine: mine, Secret: secret}, nil
 }
 
 // CreateOrder inserts an order (idempotent).
@@ -256,6 +273,7 @@ func (s *Server) CreateOrder(ctx context.Context, req *corev1.CreateOrderRequest
 		SubscriptionID: req.GetSubscriptionId(),
 		DiscountCode:   req.GetDiscountCode(),
 		Label:          req.GetLabel(),
+		LinkSecret:     req.GetLinkSecret(),
 	})
 	if err != nil {
 		return nil, fail(err)
@@ -292,7 +310,7 @@ func orderToProto(o *store.Order) *corev1.Order {
 func (s *Server) QuoteOrder(ctx context.Context, req *corev1.QuoteOrderRequest) (*corev1.Quote, error) {
 	q, err := s.dom.QuoteOrder(ctx, domain.QuoteParams{
 		UserID: req.GetUserId(), PlanID: req.GetPlanId(), Type: req.GetType(),
-		SubscriptionID: req.GetSubscriptionId(), DiscountCode: req.GetDiscountCode(),
+		SubscriptionID: req.GetSubscriptionId(), DiscountCode: req.GetDiscountCode(), LinkSecret: req.GetLinkSecret(),
 	})
 	if err != nil {
 		return nil, fail(err)

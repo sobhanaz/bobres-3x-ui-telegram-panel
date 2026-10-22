@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Reward codes, sold-out digital accounts and the owner's buttons in the bottom menu
+- **A reward code for the unlimited plan (or any plan the owner marks)**: in the dashboard a plan has **Reward code after a purchase** (1 to 90 %). A paid
+  purchase or renewal of it by a customer gives the buyer a discount code for their next purchase of **the same plan**: bound to them (for anyone
+  else it is not valid), to the plan, one use, 30 days; the bot sends it in its own message. A reseller, a free order, a traffic package and one service of
+  a bulk purchase give none. Migration 00036 (`plans.reward_percent`, and on `discount_codes` the buyer, the plan and the purchase that gave it).
+- **Digital accounts that are out of stock are shown**, marked Sold out, with their description (they cannot be bought); a product the supplier no longer
+  lists is shown the same way. While one is sold out the catalog is read every five minutes (it was every half hour).
+- **My services has Find by link**: a customer sends a subscription link (or the address of its page) and the bot finds the service, shows its state
+  (only what the link already shows) and offers **Renew**, paid from the customer's own account. A renewal of a service that is not the buyer's needs the
+  link's secret, which core checks at the quote and at the order; traffic packages stay the owner's.
+- **The bottom menu has the BOBRES licenses and Digital accounts buttons** (each while it is on), under Buy.
+
 ## [0.12.0] — 2026-10-22
 
 **Resellers get their own names in the 3x-ui panel.** A reseller's configs are in a group of their own, `BOBRES-<NAME>` (the owner gives the

@@ -45,6 +45,9 @@ type Plan struct {
 	// Reads fill it; UpsertPlan writes what it is given, so a caller that does
 	// not know the group (the bot's plan editor) must read it first.
 	GroupID *string
+	// RewardPercent: a paid purchase of this plan gives the buyer a discount code for their next purchase of it
+	// (nil: none). Reads fill it; UpsertPlan writes what it is given, so a caller that does not know it reads first.
+	RewardPercent *int32
 }
 
 // PlanInbound is a plan's choice of inbounds on one server.
@@ -167,6 +170,11 @@ type Discount struct {
 	Used      int32
 	ExpiresAt *time.Time
 	Enabled   bool
+	// A reward code (a plan's reward for a purchase) is bound to the buyer and the plan, and remembers the purchase that gave it;
+	// all nil for a code staff made.
+	UserID        *string
+	PlanID        *string
+	SourceOrderID *string
 }
 
 // Ticket mirrors core.tickets.

@@ -26,6 +26,8 @@ type planJSON struct {
 	Inbounds []store.PlanInbound `json:"inbounds"`
 	// GroupID is the plan group it is listed under (null: none).
 	GroupID *string `json:"group_id"`
+	// RewardPercent: a paid purchase gives the buyer a discount code of this percent for their next purchase of the plan (null: none).
+	RewardPercent *int32 `json:"reward_percent"`
 }
 
 func planOf(p *store.Plan, sales int64) planJSON {
@@ -42,7 +44,7 @@ func planOf(p *store.Plan, sales int64) planJSON {
 	}
 	return planJSON{ID: p.ID, Name: p.NameI18n, Kind: p.Kind, DurationDays: p.DurationDays, TrafficBytes: p.TrafficBytes,
 		Price: money{p.Price, p.Currency}, Enabled: p.Enabled, IsTrial: p.IsTrial, IsTopup: p.IsTopup, Sort: p.Sort, Sales: sales,
-		ServerIDs: ids, Inbounds: inbounds, GroupID: p.GroupID}
+		ServerIDs: ids, Inbounds: inbounds, GroupID: p.GroupID, RewardPercent: p.RewardPercent}
 }
 
 // listPlans: GET /api/v1/plans, every plan (also turned off) with its sales.
@@ -83,6 +85,8 @@ type planBody struct {
 	Inbounds *[]store.PlanInbound `json:"inbounds"`
 	// GroupID: absent keeps the plan's group (a new plan: none); "" takes it out of its group.
 	GroupID *string `json:"group_id"`
+	// RewardPercent: absent keeps the plan's reward; 0 takes it away.
+	RewardPercent *int32 `json:"reward_percent"`
 }
 
 func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
@@ -122,6 +126,7 @@ func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
 		p.Inbounds = append([]store.PlanInbound{}, *b.Inbounds...)
 	}
 	p.GroupID = b.GroupID
+	p.RewardPercent = b.RewardPercent
 	return p, true
 }
 

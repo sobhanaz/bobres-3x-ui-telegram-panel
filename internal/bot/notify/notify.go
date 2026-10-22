@@ -186,6 +186,17 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, "pay.rejected",
 			"amount", i18n.Money(lang, e.Amount, e.Currency), "reason", n.reason(lang, e.Reason)), kb)
 
+	case events.RewardCodeIssued:
+		var e events.RewardCodeIssuedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		lang := n.lang(ctx, e.TelegramID)
+		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.buy", "buy"))
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "reward.code", "plan", html.EscapeString(rewardPlanName(e.PlanNames, lang)),
+			"code", html.EscapeString(e.Code), "percent", i18n.Number(lang, int64(e.Percent)),
+			"date", i18n.Date(lang, time.Unix(e.ExpiresAt, 0))), kb)
+
 	case events.WalletCredited:
 		var e events.WalletCreditedEvent
 		if err := decode(m, &e); err != nil {
@@ -1121,4 +1132,20 @@ func truncateRunes(s string, n int) string {
 		return string(r[:n]) + "…"
 	}
 	return s
+}
+
+// rewardPlanName is a plan's name in the customer's language, else English, else any it has.
+func rewardPlanName(names map[string]string, lang string) string {
+	if n := names[lang]; n != "" {
+		return n
+	}
+	if n := names["en"]; n != "" {
+		return n
+	}
+	for _, n := range names {
+		if n != "" {
+			return n
+		}
+	}
+	return "-"
 }

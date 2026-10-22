@@ -180,3 +180,109 @@ func TestSupplierDownLeavesTheOrderWaitingAndTheWorkerDelivers(t *testing.T) {
 	buyer.press("sup:o:")
 	buyer.shownHas("acc1@example.com")
 }
+
+// A product that is switched on shows even when it is out of stock or the supplier no longer lists it: marked sold out, its description can
+// be read, and it cannot be bought (not even with a crafted button); when it is back in stock it is for sale again at once.
+func TestSupplierSoldOutProductsAreShownButNotSold(t *testing.T) {
+	w, sup, owner := supplierWorld(t)
+	owner.text("/set supplier.enabled true")
+	ctx := context.Background()
+	o := w.storeUser(ownerID)
+	on, price := true, int64(300_000)
+	if _, err := w.stack.Domain.UpdateSupplierProduct(ctx, o, "chat", coredomain.SupplierEdit{Enabled: &on, SellPrice: &price,
+		Title: map[string]string{"en": "Chat Plus"}, Desc: map[string]string{"en": "Read <this> first"}}); err != nil {
+		t.Fatal(err)
+	}
+	buyer := w.customer(7211, "buyer")
+	w.fund(7211, 2_000_000)
+
+	// Chat has no stock: listed, marked, with its description, and no way to pay.
+	buyer.text("/menu")
+	buyer.tap("sup")
+	buyer.lastButton("Gemini Pro 1 month · ")
+	buyer.lastButton("Chat Plus · ⛔ Sold out")
+	var chat string
+	for _, b := range buttons(buyer.shown()) {
+		if strings.HasPrefix(b.Text, "Chat Plus") {
+			chat = b.CallbackData
+		}
+	}
+	buyer.tap(chat)
+	buyer.shownHas("Read &lt;this&gt; first")
+	buyer.shownHas("Sold out right now")
+	if hasButton(buyer.shown(), "sup:y") {
+		t.Fatalf("a Pay button for a sold-out product: %v", callbacks(buyer.shown()))
+	}
+	// A crafted Pay button for it buys nothing and charges nothing.
+	buyer.tap(strings.Replace(chat, "sup:p:", "sup:y:", 1) + ":n1")
+	if sup.made() != 0 || w.balanceOf(7211) != 2_000_000 {
+		t.Fatalf("a sold-out product was bought: %d orders, balance %d", sup.made(), w.balanceOf(7211))
+	}
+
+	// The supplier no longer lists Gemini: it is shown as sold out too.
+	if err := w.stack.Store.DB().QueryRow(ctx, `UPDATE core.supplier_products SET listed = false WHERE name = 'Gemini Pro' RETURNING 1`).Scan(new(int)); err != nil {
+		t.Fatal(err)
+	}
+	buyer.tap("sup")
+	buyer.lastButton("Gemini Pro 1 month · ⛔ Sold out")
+
+	// Back in stock: for sale again.
+	if _, err := w.stack.Store.DB().Exec(ctx, `UPDATE core.supplier_products SET listed = true, stock = 3 WHERE name IN ('Gemini Pro', 'Chat')`); err != nil {
+		t.Fatal(err)
+	}
+	buyer.tap("sup")
+	if strings.Contains(strings.Join(buyer.shown().labels(), "|"), "Sold out") {
+		t.Fatalf("a restocked product is still sold out: %v", buyer.shown().labels())
+	}
+	buyer.tap(chat)
+	buyer.press("sup:y:")
+	buyer.shownHas("acc1@example.com")
+}
+
+// The owner's own store has its two buttons in the bottom menu too, each while it is on, and a tap opens the screen.
+func TestBottomMenuHasTheOwnersStoreButtons(t *testing.T) {
+	w, _, owner := supplierWorld(t)
+	cat := w.h.cat
+	u := w.customer(7221, "menu_user")
+	u.text("/menu")
+	texts := func() string {
+		var all []string
+		for _, row := range u.lastMenu().Keyboard {
+			for _, b := range row {
+				all = append(all, b.Text)
+			}
+		}
+		return strings.Join(all, "|")
+	}
+	if got := texts(); strings.Contains(got, cat.T("en", "btn.supplier")) || strings.Contains(got, cat.T("en", "btn.licenses")) {
+		t.Fatalf("buttons of a store that sells neither: %s", got)
+	}
+	owner.text("/set supplier.enabled true")
+	owner.text("/set vendor.enabled true")
+	u.text("/menu")
+	got := texts()
+	if !strings.Contains(got, cat.T("en", "btn.supplier")) || !strings.Contains(got, cat.T("en", "btn.licenses")) {
+		t.Fatalf("the bottom menu lacks the owner's buttons: %s", got)
+	}
+	// They sit right under Buy, side by side.
+	var buyRow int
+	for i, row := range u.lastMenu().Keyboard {
+		if len(row) == 1 && row[0].Text == cat.T("en", "btn.buy") {
+			buyRow = i
+		}
+	}
+	if next := u.lastMenu().Keyboard[buyRow+1]; len(next) != 2 || next[0].Text != cat.T("en", "btn.supplier") || next[1].Text != cat.T("en", "btn.licenses") {
+		t.Fatalf("the row under Buy: %+v", next)
+	}
+	// A tap opens the screen.
+	u.tapMenu("en", "btn.supplier")
+	u.shownHas("Digital")
+	u.tapMenu("en", "btn.licenses")
+	u.shownHas("Licenses") // the screen opens (this world has no license server, so it says licenses are not for sale)
+	// One at a time, alone in its row.
+	owner.text("/set vendor.enabled false")
+	u.text("/menu")
+	if next := u.lastMenu().Keyboard[buyRow+1]; len(next) != 1 || next[0].Text != cat.T("en", "btn.supplier") {
+		t.Fatalf("the row with only digital accounts: %+v", next)
+	}
+}

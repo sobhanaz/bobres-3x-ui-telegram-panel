@@ -30,7 +30,7 @@ var (
 )
 
 // DiscountError says why a code cannot be used: unknown, expired, used_up,
-// already_used, currency or reseller (resellers get tier prices instead).
+// already_used, currency, plan (a reward code is for one plan) or reseller (resellers get tier prices instead).
 // Its message is "discount: <reason>", which the bot reads back.
 type DiscountError struct{ Reason string }
 
@@ -43,7 +43,7 @@ var discountCodeRe = regexp.MustCompile(`^[A-Z0-9_-]{3,32}$`)
 // renewal takes a regular plan for one of the user's delivered subscriptions;
 // a top-up takes a traffic package for a delivered, running subscription that
 // has a traffic limit.
-func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID string) (*store.Plan, *store.Subscription, error) {
+func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID, linkSecret string) (*store.Plan, *store.Subscription, error) {
 	switch typ {
 	case OrderNew, OrderRenew, OrderTrafficTopup:
 	default:
@@ -75,7 +75,8 @@ func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID stri
 	if err != nil {
 		return nil, nil, err
 	}
-	if sub.UserID != userID {
+	// A service is its owner's; anyone else may renew it (not add traffic to it) with its link's secret.
+	if sub.UserID != userID && (typ != OrderRenew || !holdsLink(sub, linkSecret)) {
 		return nil, nil, ErrForbidden
 	}
 	switch {
@@ -106,7 +107,7 @@ func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID stri
 // discountFor applies a discount code to a user's price for a plan (in the
 // plan's currency) and returns the amount taken off and the normalized code
 // ("" when code is empty). Resellers cannot use codes.
-func (s *Service) discountFor(ctx context.Context, u *store.User, price int64, currency, code string) (int64, string, error) {
+func (s *Service) discountFor(ctx context.Context, u *store.User, planID string, price int64, currency, code string) (int64, string, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return 0, "", nil
@@ -127,10 +128,14 @@ func (s *Service) discountFor(ctx context.Context, u *store.User, price int64, c
 	switch {
 	case !d.Enabled:
 		return 0, "", &DiscountError{"unknown"}
+	case d.UserID != nil && *d.UserID != u.ID:
+		return 0, "", &DiscountError{"unknown"} // a reward code is its buyer's: for anyone else it does not exist
 	case d.ExpiresAt != nil && !time.Now().Before(*d.ExpiresAt):
 		return 0, "", &DiscountError{"expired"}
 	case d.MaxUses != nil && d.Used >= *d.MaxUses:
 		return 0, "", &DiscountError{"used_up"}
+	case d.PlanID != nil && *d.PlanID != planID:
+		return 0, "", &DiscountError{"plan"}
 	}
 	used, err := s.st.HasRedeemed(ctx, s.st.Conn(), code, u.ID)
 	if err != nil {
@@ -155,6 +160,8 @@ func (s *Service) discountFor(ctx context.Context, u *store.User, price int64, c
 // QuoteParams describes an order to price.
 type QuoteParams struct {
 	UserID, PlanID, Type, SubscriptionID, DiscountCode string
+	// LinkSecret is the secret of the link of a service that is not the user's own (see FindServiceByLink): a renewal needs it.
+	LinkSecret string
 }
 
 // Quote is an order's price before it is created.
@@ -175,7 +182,7 @@ func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error)
 	if err != nil {
 		return nil, err
 	}
-	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID)
+	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID, p.LinkSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +190,7 @@ func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error)
 	if err != nil {
 		return nil, err
 	}
-	off, code, err := s.discountFor(ctx, u, price, plan.Currency, p.DiscountCode)
+	off, code, err := s.discountFor(ctx, u, plan.ID, price, plan.Currency, p.DiscountCode)
 	if err != nil {
 		return nil, err
 	}
@@ -263,6 +270,10 @@ func (s *Service) checkDiscount(ctx context.Context, tx pgx.Tx, o *store.Order, 
 		return err
 	}
 	switch {
+	case d.UserID != nil && *d.UserID != o.UserID:
+		return &DiscountError{"unknown"}
+	case d.PlanID != nil && *d.PlanID != o.PlanID:
+		return &DiscountError{"plan"}
 	case used:
 		return &DiscountError{"already_used"}
 	case d.MaxUses != nil && d.Used >= *d.MaxUses:

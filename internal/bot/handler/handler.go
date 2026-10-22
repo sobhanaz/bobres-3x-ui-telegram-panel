@@ -567,6 +567,10 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onPay(r, rest)
 	case "subs":
 		h.showServices(r)
+	case "fl":
+		h.askFindLink(r)
+	case "fr":
+		h.onFoundRenew(r, rest)
 	case "sub":
 		h.showService(r, rest)
 	case "rnw":
@@ -749,6 +753,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onResellerScene(r, st)
 	case sceneResellerApply:
 		h.onResellerApplication(r)
+	case sceneFindLink:
+		h.onFindLink(r)
 	case sceneBulkQuantity, sceneBulkName:
 		h.onBulkScene(r, st)
 	default:
@@ -759,6 +765,7 @@ func (h *Handler) onScene(r *req, st state.State) {
 
 // Scenes: what the user is expected to send next.
 const (
+	sceneFindLink    = "find_link" // a subscription link to look a service up by
 	sceneReceipt     = "receipt"   // photo of a card receipt
 	sceneReference   = "reference" // bank reference after a photo without caption
 	sceneTXID        = "txid"      // crypto transaction hash

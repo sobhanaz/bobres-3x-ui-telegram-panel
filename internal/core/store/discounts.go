@@ -9,11 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-const discountCols = `code, percent, amount, currency, max_uses, used_count, expires_at, enabled`
+const discountCols = `code, percent, amount, currency, max_uses, used_count, expires_at, enabled, user_id::text, plan_id::text, source_order_id::text`
 
 func scanDiscount(row pgx.Row) (*Discount, error) {
 	var d Discount
-	err := row.Scan(&d.Code, &d.Percent, &d.Amount, &d.Currency, &d.MaxUses, &d.Used, &d.ExpiresAt, &d.Enabled)
+	err := row.Scan(&d.Code, &d.Percent, &d.Amount, &d.Currency, &d.MaxUses, &d.Used, &d.ExpiresAt, &d.Enabled, &d.UserID, &d.PlanID, &d.SourceOrderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -52,6 +52,28 @@ func (s *Store) UpsertDiscount(ctx context.Context, q querier, d *Discount) (*Di
 		return nil, fmt.Errorf("upsert discount: %w", err)
 	}
 	return got, nil
+}
+
+// InsertRewardCode records a reward code (d.UserID, d.PlanID and d.SourceOrderID are set) for the purchase that gave it. It reports
+// whether a code was made: false when that purchase has one already (a retried delivery), or the code text is taken (the caller
+// tries another).
+func (s *Store) InsertRewardCode(ctx context.Context, q querier, d *Discount) (bool, error) {
+	tag, err := q.Exec(ctx, `INSERT INTO core.discount_codes (code, percent, max_uses, expires_at, enabled, user_id, plan_id, source_order_id)
+		VALUES ($1, $2, 1, $3, true, $4::uuid, $5::uuid, $6::uuid) ON CONFLICT DO NOTHING`,
+		d.Code, d.Percent, d.ExpiresAt, d.UserID, d.PlanID, d.SourceOrderID)
+	if err != nil {
+		return false, fmt.Errorf("insert reward code: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// RewardCodeOfOrder returns the reward code a purchase gave (ErrNotFound when it gave none).
+func (s *Store) RewardCodeOfOrder(ctx context.Context, q querier, orderID string) (*Discount, error) {
+	d, err := scanDiscount(q.QueryRow(ctx, `SELECT `+discountCols+` FROM core.discount_codes WHERE source_order_id = $1`, orderID))
+	if err != nil {
+		return nil, fmt.Errorf("reward code of order: %w", err)
+	}
+	return d, nil
 }
 
 // ListDiscounts returns every code, newest first.

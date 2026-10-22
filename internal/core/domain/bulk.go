@@ -164,7 +164,7 @@ func (s *Service) prepareBulk(ctx context.Context, u *store.User, planID string,
 	if quantity < MinBulkQuantity || quantity > maxQty {
 		return nil, 0, invalid("a bulk purchase is %d to %d services", MinBulkQuantity, maxQty)
 	}
-	plan, _, err := s.orderPlan(ctx, u.ID, planID, OrderNew, "")
+	plan, _, err := s.orderPlan(ctx, u.ID, planID, OrderNew, "", "")
 	if err != nil {
 		return nil, 0, err
 	}

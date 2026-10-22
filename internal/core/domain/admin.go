@@ -493,6 +493,7 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 	if err := s.planGroupOf(ctx, p, old); err != nil {
 		return nil, err
 	}
+	planRewardOf(p, old)
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.st.UpsertPlan(ctx, tx, p); err != nil {
 			return err
@@ -649,6 +650,9 @@ func validatePlan(p *store.Plan) error {
 	}
 	if p.DurationDays != nil && (*p.DurationDays < 0 || *p.DurationDays > 3650) {
 		return invalid("duration out of range")
+	}
+	if r := p.RewardPercent; r != nil && (*r < 0 || *r > MaxRewardPercent) {
+		return &FieldError{"reward_percent", fmt.Sprintf("0 (none) to %d", MaxRewardPercent)}
 	}
 	if p.TrafficBytes != nil && *p.TrafficBytes < 0 {
 		return invalid("traffic out of range")

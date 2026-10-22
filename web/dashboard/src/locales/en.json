@@ -471,7 +471,12 @@
     "inbounds_error": "The inbounds could not be loaded:",
     "inbound_off": "{name} (off in the panel)",
     "inbound_gone_id": "Inbound #{id} (gone from the panel)",
-    "inbounds_gone": "Gone from the panel or turned off: inbound {ids}. Gone ones are skipped; if none is left, orders for this plan on this server fail until you change the choice."
+    "inbounds_gone": "Gone from the panel or turned off: inbound {ids}. Gone ones are skipped; if none is left, orders for this plan on this server fail until you change the choice.",
+    "reward": "Reward code after a purchase (%)",
+    "reward_none": "No reward",
+    "reward_hint": "A paid purchase or renewal of this plan gives the buyer a discount code of this percent for their next purchase of the same plan: only for them, one use, 30 days. Leave empty for none.",
+    "reward_rule": "A whole percent from 1 to 90, or empty.",
+    "reward_tag": "Reward {n}%"
   },
   "payment": {
     "queue": "Review queue",
