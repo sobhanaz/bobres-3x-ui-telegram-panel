@@ -530,6 +530,14 @@ export interface ResellerDetail extends ResellerItem {
   note: string
   version: number
   can_remove: boolean
+  /** what their configs are called and grouped as in the 3x-ui panel: the prefix of the names
+   * ("" until the reseller chooses it), the NAME of the group "BOBRES-NAME" and the group itself
+   * ("" until the owner gives one), and whether the configs made before the group were moved into it.
+   * Older cores leave them out. */
+  config_prefix?: string
+  panel_group?: string
+  panel_group_full?: string
+  groups_synced?: boolean
 }
 
 /** A reseller tier: a discount off store prices, or a fixed price per plan

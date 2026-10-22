@@ -12,7 +12,8 @@ import { api, query } from '../../api'
 import { errorText } from '../../errors'
 import { isolate, latinDigits, type Lang } from '../../format'
 import { addable } from '../../staff'
-import { blankTerms, percent, termsBody, termsProblems } from '../../resellers'
+import { blankTerms, PANEL_GROUP_PREFIX, panelGroupName, percent, termsBody, termsProblems } from '../../resellers'
+import { useAuth } from '../../stores/auth'
 import type { Page, TierItem, UserBrief, UserItem } from '../../types'
 
 // Make a customer a reseller: their tier, a credit limit in Toman, and a
@@ -23,6 +24,12 @@ const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ made: [id: string] }>()
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
+const auth = useAuth()
+// The group name in the panel is the owner's to give (an admin makes the reseller and the owner gives the group later).
+const isOwner = computed(() => auth.me?.user.role === 'owner')
+const group = ref('')
+const wantedGroup = computed(() => (group.value.trim() ? panelGroupName(group.value) : ''))
+const groupBad = computed(() => !!group.value.trim() && !wantedGroup.value)
 
 const tiers = ref<TierItem[]>([])
 const tiersLoaded = ref(false)
@@ -41,6 +48,7 @@ const userId = computed(() => props.user?.id ?? picked.value)
 watch(visible, (v) => {
   if (!v) return
   form.value = blankTerms()
+  group.value = ''
   error.value = ''
   detail.value = ''
   q.value = ''
@@ -111,7 +119,7 @@ async function make(reason: string) {
   error.value = ''
   detail.value = ''
   try {
-    await api('POST', '/resellers', { user_id: userId.value, ...termsBody(form.value, reason) })
+    await api('POST', '/resellers', { user_id: userId.value, ...termsBody(form.value, reason), ...(isOwner.value && wantedGroup.value ? { panel_group: wantedGroup.value } : {}) })
     visible.value = false
     emit('made', userId.value)
   } catch (e) {
@@ -133,7 +141,7 @@ async function make(reason: string) {
     :busy="busy"
     :error="error"
     :detail="detail"
-    :can-confirm="!!userId && problems.length === 0"
+    :can-confirm="!!userId && problems.length === 0 && !groupBad"
     class="make-reseller"
     @confirm="make"
   >
@@ -195,6 +203,14 @@ async function make(reason: string) {
         />
         <small class="app-muted">{{ t('reseller.limit_hint') }}</small>
       </label>
+      <label v-if="isOwner">
+        <span>{{ t('reseller.panel_group') }}</span>
+        <span class="group-row">
+          <span class="app-ltr app-mono lead">{{ PANEL_GROUP_PREFIX }}</span>
+          <InputText v-model="group" dir="ltr" maxlength="30" autocomplete="off" :invalid="groupBad" class="group-name" />
+        </span>
+        <small :class="groupBad ? 'app-error' : 'app-muted'">{{ groupBad ? t('reseller.panel_group_rule') : t('reseller.panel_group_make_hint') }}</small>
+      </label>
     </div>
   </ReasonDialog>
 </template>
@@ -210,5 +226,13 @@ async function make(reason: string) {
 }
 .no-tiers a {
   margin-inline-start: 0.35rem;
+}
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.group-name {
+  flex: 1;
 }
 </style>
