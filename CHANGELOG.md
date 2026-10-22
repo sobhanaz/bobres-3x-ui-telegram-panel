@@ -8,6 +8,26 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.12.0] — 2026-10-22
+
+**Resellers get their own names in the 3x-ui panel.** A reseller's configs are in a group of their own, `BOBRES-<NAME>` (the owner gives the
+name), and are named with the reseller's own prefix (`sob-u123-...`, chosen once in the bot or the Mini App); every other client is in the
+group `BOBRES` (renamed from `bobres_bot`). 3x-ui v3.10.0 and v3.10.2 are tested too (the range is now v3.8.5 to v3.10.2).
+
+### Updating
+- Two database migrations, both additive (a rollback keeps every order and credit): core 00035 (three columns on `resellers`) and provisioner 00006
+  (a column on `client_map` and one on `xui_servers`). No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core, the bot and the provisioner move together.
+- After the update the provisioner goes through every 3x-ui panel once: the clients in the group `bobres_bot` (or in none) move to `BOBRES`. A
+  group someone chose by hand is never touched.
+- **Nothing changes for a reseller until the owner gives them a group name** (dashboard, Resellers, the reseller's page, Panel names): until then
+  their configs are named as ever and are in `BOBRES`. Once named, their existing configs move into `BOBRES-<NAME>` in the background.
+
+### Known limits
+- A 3x-ui client is in one group, so a reseller's clients are not in `BOBRES` any more: filter on the reseller's group to see them.
+- A prefix applies to the configs made after it; the names of existing configs are not changed.
+- The Persian and English texts of the new screens are a first draft that wants a native read; nothing of this has been seen in a real Telegram.
+
 ### Reseller groups and prefixes in the 3x-ui panel
 - **The default 3x-ui client group is now `BOBRES`** (it was `bobres_bot`). After the update the provisioner moves the clients that are in the old
   group (or in none) to it, once per panel; a group an operator chose is never touched.
