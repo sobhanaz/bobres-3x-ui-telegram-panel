@@ -236,6 +236,9 @@ type ResellerInput struct {
 	CreditLimits      map[string]int64
 	CommissionPercent *int32 // nil: the tier's
 	Note              string
+	// PanelGroup is the NAME of the reseller's 3x-ui group ("BOBRES-NAME"), written by the owner when
+	// making the reseller; "" gives none yet. Only MakeReseller reads it (SetResellerPanelGroup changes it later).
+	PanelGroup string
 }
 
 func (in *ResellerInput) normalize() error {
@@ -298,6 +301,16 @@ func (s *Service) MakeReseller(ctx context.Context, actor *store.User, userID st
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(in.PanelGroup) != "" {
+		if err := requireOwner(actor); err != nil {
+			return nil, err // the group name is the owner's to give
+		}
+		if in.PanelGroup, err = NormalizePanelGroupName(in.PanelGroup); err != nil {
+			return nil, err
+		}
+	} else {
+		in.PanelGroup = ""
+	}
 	if err := s.requireResellers(ctx); err != nil {
 		return nil, err
 	}
@@ -329,13 +342,24 @@ func (s *Service) MakeReseller(ctx context.Context, actor *store.User, userID st
 		if err := s.st.InsertReseller(ctx, tx, r); err != nil {
 			return err
 		}
+		if in.PanelGroup != "" {
+			if err := s.st.SetResellerPanelGroup(ctx, tx, t.ID, in.PanelGroup); errors.Is(err, store.ErrNameTaken) {
+				return &FieldError{"panel_group", "another reseller has this group name"}
+			} else if err != nil {
+				return err
+			}
+		}
 		for cur, lim := range in.CreditLimits {
 			if err := s.st.SetCreditLimit(ctx, tx, t.ID, cur, lim); err != nil {
 				return err
 			}
 		}
+		audit := resellerAudit(r, tier.Name, in.CreditLimits)
+		if in.PanelGroup != "" {
+			audit["panel_group"] = in.PanelGroup
+		}
 		return s.auditChange(ctx, tx, actor, "reseller.add", "reseller", t.ID,
-			map[string]string{"role": "user"}, resellerAudit(r, tier.Name, in.CreditLimits), reason)
+			map[string]string{"role": "user"}, audit, reason)
 	})
 	if err != nil {
 		return nil, err

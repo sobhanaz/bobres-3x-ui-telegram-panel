@@ -50,6 +50,13 @@ type resellerDetail struct {
 	Note      string `json:"note"`
 	Version   int    `json:"version"`
 	CanRemove bool   `json:"can_remove"` // nothing owed
+	// What their configs are called and grouped as in the 3x-ui panel: the prefix of the names (""
+	// until the reseller chooses it), the NAME of the group "BOBRES-NAME" ("" until the owner gives
+	// one) and the group itself, and whether the configs made before the group were moved into it.
+	ConfigPrefix   string `json:"config_prefix"`
+	PanelGroup     string `json:"panel_group"`
+	PanelGroupFull string `json:"panel_group_full"`
+	GroupsSynced   bool   `json:"groups_synced"`
 }
 
 func resellerOf(r *store.ResellerRow) resellerJSON {
@@ -69,8 +76,12 @@ func resellerOf(r *store.ResellerRow) resellerJSON {
 	return out
 }
 
-func resellerDetailOf(r *store.ResellerRow) resellerDetail {
+func resellerDetailOf(r *store.ResellerRow, naming *store.ResellerNaming) resellerDetail {
 	d := resellerDetail{resellerJSON: resellerOf(r), Note: r.Reseller.Note, Version: r.Reseller.Version, CanRemove: true}
+	if naming != nil {
+		d.ConfigPrefix, d.PanelGroup, d.PanelGroupFull = naming.ConfigPrefix, naming.PanelGroup, domain.PanelGroupOf(naming.PanelGroup)
+		d.GroupsSynced = naming.PanelGroup != "" && naming.GroupsSyncedAt != nil
+	}
 	for _, w := range r.Wallets {
 		if w.Balance < 0 {
 			d.CanRemove = false
@@ -109,7 +120,12 @@ func (s *Server) writeReseller(w http.ResponseWriter, r *http.Request, status in
 		s.fail(w, "load reseller", err)
 		return
 	}
-	writeJSON(w, status, map[string]any{"item": resellerDetailOf(row)})
+	naming, err := s.cfg.Store.GetResellerNaming(r.Context(), s.cfg.Store.Conn(), id)
+	if err != nil {
+		s.fail(w, "load reseller naming", err)
+		return
+	}
+	writeJSON(w, status, map[string]any{"item": resellerDetailOf(row, naming)})
 }
 
 // getReseller: GET /api/v1/resellers/{id}; their services, customers,
@@ -135,12 +151,14 @@ type resellerBody struct {
 	CommissionPercent *int32            `json:"commission_percent"`
 	Note              string            `json:"note"`
 	Reason            string            `json:"reason"`
+	// PanelGroup (a new reseller only, the owner's): the NAME of their 3x-ui group "BOBRES-NAME".
+	PanelGroup string `json:"panel_group"`
 }
 
 // input reads the terms; false after answering a field error.
 func (b *resellerBody) input(w http.ResponseWriter) (domain.ResellerInput, bool) {
 	in := domain.ResellerInput{TierID: strings.ToLower(strings.TrimSpace(b.TierID)), CreditLimits: map[string]int64{},
-		CommissionPercent: b.CommissionPercent, Note: b.Note}
+		CommissionPercent: b.CommissionPercent, Note: b.Note, PanelGroup: b.PanelGroup}
 	if !uuidRe.MatchString(in.TierID) {
 		writeFieldError(w, "tier_id", "pick a tier")
 		return in, false
@@ -225,6 +243,56 @@ func (s *Server) updateReseller(w http.ResponseWriter, r *http.Request) {
 	s.writeReseller(w, r, http.StatusOK, id)
 }
 
+// resellerNamingBody changes what a reseller's configs are called and grouped as: a field left out stays.
+type resellerNamingBody struct {
+	PanelGroup   *string `json:"panel_group"`   // the NAME of "BOBRES-NAME"; "" takes it away
+	ConfigPrefix *string `json:"config_prefix"` // "" takes it away
+}
+
+// updateResellerNaming: PUT /api/v1/resellers/{id}/naming {panel_group, config_prefix}: the owner's. A new group name
+// moves the reseller's earlier configs into it in the background; a new prefix is for the configs made after it.
+func (s *Server) updateResellerNaming(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req resellerNamingBody
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.PanelGroup == nil && req.ConfigPrefix == nil {
+		writeFieldError(w, "panel_group", "give a group name or a prefix")
+		return
+	}
+	if req.PanelGroup != nil {
+		if err := s.cfg.Domain.SetResellerPanelGroup(r.Context(), actor(r), id, *req.PanelGroup); err != nil {
+			s.fail(w, "set the reseller's group", err)
+			return
+		}
+	}
+	if req.ConfigPrefix != nil {
+		if err := s.cfg.Domain.SetResellerConfigPrefix(r.Context(), actor(r), id, *req.ConfigPrefix); err != nil {
+			s.fail(w, "set the reseller's prefix", err)
+			return
+		}
+	}
+	s.writeReseller(w, r, http.StatusOK, id)
+}
+
+// resellerGroupSync: POST /api/v1/resellers/{id}/group-sync: the owner has the reseller's existing configs moved
+// into their group again (they were made before the group, or the group has a new name).
+func (s *Server) resellerGroupSync(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := s.cfg.Domain.RequestResellerGroupSync(r.Context(), actor(r), id); err != nil {
+		s.fail(w, "move the reseller's configs", err)
+		return
+	}
+	s.writeReseller(w, r, http.StatusOK, id)
+}
+
 // resellerPayment: POST /api/v1/resellers/{id}/payments {amount, currency,
 // reason, key}: money the reseller paid the store. A replay with the same key
 // answers the first entry.
@@ -263,8 +331,13 @@ func (s *Server) resellerPayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "load reseller", err)
 		return
 	}
+	naming, err := s.cfg.Store.GetResellerNaming(ctx, s.cfg.Store.Conn(), id)
+	if err != nil {
+		s.fail(w, "load reseller naming", err)
+		return
+	}
 	entry := ledgerOf(&store.LedgerRow{LedgerEntry: *e, TelegramID: row.User.TelegramID, Username: row.User.Username})
-	writeJSON(w, http.StatusOK, map[string]any{"item": resellerDetailOf(row), "entry": entry})
+	writeJSON(w, http.StatusOK, map[string]any{"item": resellerDetailOf(row, naming), "entry": entry})
 }
 
 // removeReseller: POST /api/v1/resellers/{id}/remove {reason}: a customer

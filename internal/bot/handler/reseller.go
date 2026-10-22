@@ -89,6 +89,10 @@ func (h *Handler) routeReseller(r *req, rest string) {
 		h.showStatement(r, pageArg(arg))
 	case "link":
 		h.showResellerLink(r)
+	case "pfx":
+		h.showPrefix(r)
+	case "pfy":
+		h.setPrefix(r, arg)
 	default:
 		h.showResellerPanel(r)
 	}
@@ -174,13 +178,17 @@ func (h *Handler) showResellerPanel(r *req) {
 	kb := (&tg.Keyboard{}).
 		Row(r.button("btn.rs_buy", "rs:buy"), r.button("btn.rs_services", "rs:subs:1")).
 		Row(r.button("btn.rs_customers", "rs:cu:1"), r.button("btn.rs_statement", "rs:st:1")).
-		Row(r.button("btn.rs_link", "rs:link")).
+		Row(r.button("btn.rs_link", "rs:link"), r.button("btn.rs_prefix", "rs:pfx")).
 		Row(r.button("btn.home", "home"))
-	r.show(r.t("rs.panel", "tier", esc(info.GetTierName()),
+	text := r.t("rs.panel", "tier", esc(info.GetTierName()),
 		"discount", i18n.Number(r.lang, int64(info.GetDiscountPercent())),
 		"commission", i18n.Number(r.lang, int64(info.GetCommissionPercent())),
 		"balances", strings.Join(blocks, "\n\n"), "customers", i18n.Number(r.lang, info.GetCustomers()),
-		"earned", earned(r, info.GetCommissionEarned())), kb)
+		"earned", earned(r, info.GetCommissionEarned()))
+	if p := info.GetConfigPrefix(); p != "" {
+		text += "\n\n" + r.t("rs.prefix_line", "prefix", esc(p))
+	}
+	r.show(text, kb)
 }
 
 // showResellerPlans handles "rs:buy": the plans at the reseller's prices,
@@ -257,6 +265,8 @@ func (h *Handler) onResellerScene(r *req, st state.State) {
 	}
 	bad := r.t("rs.label_bad", "max", i18n.Number(r.lang, maxLabel))
 	switch st.Scene {
+	case sceneResellerPrefix:
+		h.onPrefixText(r)
 	case sceneResellerLabel:
 		label, ok := cleanLabel(r.msg.Text)
 		if !ok {
