@@ -380,6 +380,7 @@ func gatedCases() []gatedCase {
 		sceneCase(sceneResellerFind, nil, "reseller", "a search", textIn("Ali")),
 		sceneCase(sceneResellerRename, map[string]string{"id": "s1"}, "reseller", "a new name", textIn("Ali")),
 		sceneCase(sceneResellerNote, map[string]string{"id": "s1"}, "reseller", "a note", textIn("pays late")),
+		sceneCase(sceneResellerPrefix, nil, "reseller", "a config prefix", textIn("sob")),
 	)
 	// A bulk purchase's open questions: how many, and what to call them.
 	add(
