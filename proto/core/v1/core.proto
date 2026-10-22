@@ -126,6 +126,17 @@ message Subscription {
   string note = 15;
 }
 
+message FindServiceByLinkRequest {
+  string user_id = 1;
+  string link = 2; // a subscription link, the branded page's address, or the end of one
+}
+
+message FoundService {
+  Subscription service = 1; // for another person's service: no owner, order, server, e-mail, name or note
+  bool mine = 2; // the service is the caller's own
+  string secret = 3; // what a renewal of it carries (CreateOrderRequest.link_secret)
+}
+
 message Ticket {
   string id = 1;
   string user_id = 2;
@@ -362,6 +373,8 @@ message CreateOrderRequest {
   // A reseller's name for the new service, at most 64 characters; ignored
   // for anyone else and on renewals and top-ups.
   string label = 7;
+  // The secret of the link of a service that is not the buyer's own (FindServiceByLink): a renewal of it needs it.
+  string link_secret = 8;
 }
 
 // QuoteOrderRequest prices an order before it is created, e.g. to show the
@@ -372,6 +385,7 @@ message QuoteOrderRequest {
   string type = 3;
   string subscription_id = 4;
   string discount_code = 5;
+  string link_secret = 6; // as CreateOrderRequest.link_secret
 }
 
 message Quote {
@@ -940,6 +954,9 @@ service CoreService {
   rpc GetWallet(GetWalletRequest) returns (Wallet);
   rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
   rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+  // FindServiceByLink finds the service a subscription link (or the branded page's address) belongs to: NotFound when none does,
+  // InvalidArgument when the text is not a link. For a service that is not the caller's, only what the link already shows is returned.
+  rpc FindServiceByLink(FindServiceByLinkRequest) returns (FoundService);
   rpc CreateSupportTicket(CreateSupportTicketRequest) returns (Ticket);
   rpc GetSettings(GetSettingsRequest) returns (Settings);
   // UpdateBranding is not served (Unimplemented): branding is changed with

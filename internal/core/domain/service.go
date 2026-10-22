@@ -175,6 +175,8 @@ type CreateOrderParams struct {
 	// Label is the name a reseller gives the service they buy for a
 	// customer; kept on a reseller's new order only (ignored otherwise).
 	Label string
+	// LinkSecret is the secret of the link of a service that is not the buyer's own (see FindServiceByLink): a renewal of it needs it.
+	LinkSecret string
 }
 
 // CreateOrder validates the plan (and, for a renewal or top-up, the
@@ -194,7 +196,7 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 	if err != nil {
 		return nil, err
 	}
-	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID)
+	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID, p.LinkSecret)
 	if err != nil {
 		return nil, err
 	}

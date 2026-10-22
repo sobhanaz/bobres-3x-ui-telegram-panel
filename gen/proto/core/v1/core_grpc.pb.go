@@ -27,6 +27,7 @@ const (
 	CoreService_GetWallet_FullMethodName                 = "/core.v1.CoreService/GetWallet"
 	CoreService_ListLedgerEntries_FullMethodName         = "/core.v1.CoreService/ListLedgerEntries"
 	CoreService_ListSubscriptions_FullMethodName         = "/core.v1.CoreService/ListSubscriptions"
+	CoreService_FindServiceByLink_FullMethodName         = "/core.v1.CoreService/FindServiceByLink"
 	CoreService_CreateSupportTicket_FullMethodName       = "/core.v1.CoreService/CreateSupportTicket"
 	CoreService_GetSettings_FullMethodName               = "/core.v1.CoreService/GetSettings"
 	CoreService_UpdateBranding_FullMethodName            = "/core.v1.CoreService/UpdateBranding"
@@ -113,6 +114,9 @@ type CoreServiceClient interface {
 	GetWallet(ctx context.Context, in *GetWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	ListLedgerEntries(ctx context.Context, in *ListLedgerEntriesRequest, opts ...grpc.CallOption) (*ListLedgerEntriesResponse, error)
 	ListSubscriptions(ctx context.Context, in *ListSubscriptionsRequest, opts ...grpc.CallOption) (*ListSubscriptionsResponse, error)
+	// FindServiceByLink finds the service a subscription link (or the branded page's address) belongs to: NotFound when none does,
+	// InvalidArgument when the text is not a link. For a service that is not the caller's, only what the link already shows is returned.
+	FindServiceByLink(ctx context.Context, in *FindServiceByLinkRequest, opts ...grpc.CallOption) (*FoundService, error)
 	CreateSupportTicket(ctx context.Context, in *CreateSupportTicketRequest, opts ...grpc.CallOption) (*Ticket, error)
 	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*Settings, error)
 	// Deprecated: Do not use.
@@ -309,6 +313,16 @@ func (c *coreServiceClient) ListSubscriptions(ctx context.Context, in *ListSubsc
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSubscriptionsResponse)
 	err := c.cc.Invoke(ctx, CoreService_ListSubscriptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) FindServiceByLink(ctx context.Context, in *FindServiceByLinkRequest, opts ...grpc.CallOption) (*FoundService, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FoundService)
+	err := c.cc.Invoke(ctx, CoreService_FindServiceByLink_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1021,6 +1035,9 @@ type CoreServiceServer interface {
 	GetWallet(context.Context, *GetWalletRequest) (*Wallet, error)
 	ListLedgerEntries(context.Context, *ListLedgerEntriesRequest) (*ListLedgerEntriesResponse, error)
 	ListSubscriptions(context.Context, *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error)
+	// FindServiceByLink finds the service a subscription link (or the branded page's address) belongs to: NotFound when none does,
+	// InvalidArgument when the text is not a link. For a service that is not the caller's, only what the link already shows is returned.
+	FindServiceByLink(context.Context, *FindServiceByLinkRequest) (*FoundService, error)
 	CreateSupportTicket(context.Context, *CreateSupportTicketRequest) (*Ticket, error)
 	GetSettings(context.Context, *GetSettingsRequest) (*Settings, error)
 	// Deprecated: Do not use.
@@ -1166,6 +1183,9 @@ func (UnimplementedCoreServiceServer) ListLedgerEntries(context.Context, *ListLe
 }
 func (UnimplementedCoreServiceServer) ListSubscriptions(context.Context, *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSubscriptions not implemented")
+}
+func (UnimplementedCoreServiceServer) FindServiceByLink(context.Context, *FindServiceByLinkRequest) (*FoundService, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindServiceByLink not implemented")
 }
 func (UnimplementedCoreServiceServer) CreateSupportTicket(context.Context, *CreateSupportTicketRequest) (*Ticket, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSupportTicket not implemented")
@@ -1535,6 +1555,24 @@ func _CoreService_ListSubscriptions_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).ListSubscriptions(ctx, req.(*ListSubscriptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_FindServiceByLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FindServiceByLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).FindServiceByLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_FindServiceByLink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).FindServiceByLink(ctx, req.(*FindServiceByLinkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2819,6 +2857,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSubscriptions",
 			Handler:    _CoreService_ListSubscriptions_Handler,
+		},
+		{
+			MethodName: "FindServiceByLink",
+			Handler:    _CoreService_FindServiceByLink_Handler,
 		},
 		{
 			MethodName: "CreateSupportTicket",

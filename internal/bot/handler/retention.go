@@ -101,7 +101,11 @@ func (h *Handler) showPicker(r *req, c state.Checkout, ps []*corev1.Plan, title 
 	}
 	kb := &tg.Keyboard{}
 	h.addPlans(r, kb, ps, func(p *corev1.Plan) string { return "rp:" + n + ":" + p.GetId() })
-	kb.Row(r.button("btn.back", "sub:"+c.SubscriptionID), r.button("btn.home", "home"))
+	back := "sub:" + c.SubscriptionID
+	if c.LinkSecret != "" {
+		back = "fl"
+	}
+	kb.Row(r.button("btn.back", back), r.button("btn.home", "home"))
 	r.show(title, kb)
 }
 
@@ -160,7 +164,7 @@ func (h *Handler) onDiscountCode(r *req, st state.State) {
 		return
 	}
 	q, err := h.core.QuoteOrder(r.ctx, &corev1.QuoteOrderRequest{UserId: r.user.GetId(), PlanId: c.PlanID,
-		Type: c.Type, SubscriptionId: c.SubscriptionID, DiscountCode: strings.TrimSpace(r.msg.Text)})
+		Type: c.Type, SubscriptionId: c.SubscriptionID, DiscountCode: strings.TrimSpace(r.msg.Text), LinkSecret: c.LinkSecret})
 	if err != nil {
 		if key := discountKey(err); key != "error.generic" {
 			r.send(r.t(key), cancelKeyboard(r))

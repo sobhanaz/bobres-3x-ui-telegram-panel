@@ -37,7 +37,8 @@ license server is built but still has to be deployed by the owner. What is left 
 - Plan groups: the operator can put plans in named groups with a text for each (what the group is for, who it suits,
   what it does not include). In the bot and the Mini App the customer first picks a group, reads its text, then picks
   a plan of it; a store with no group lists its plans as before.
-- My services: status, expiry and traffic used; renew, or add a traffic package, with the same link.
+- My services: status, expiry and traffic used; renew, or add a traffic package, with the same link. A service that is not in the list is found by
+  its subscription link (status, renew, paid by the customer who holds the link).
 - A wallet with top-ups and history, gift codes that add credit, one free trial per Telegram account, and invite
   links that reward the inviter on a friend's first paid purchase.
 - Reminders 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.

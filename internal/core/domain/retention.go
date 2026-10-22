@@ -43,7 +43,7 @@ var discountCodeRe = regexp.MustCompile(`^[A-Z0-9_-]{3,32}$`)
 // renewal takes a regular plan for one of the user's delivered subscriptions;
 // a top-up takes a traffic package for a delivered, running subscription that
 // has a traffic limit.
-func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID string) (*store.Plan, *store.Subscription, error) {
+func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID, linkSecret string) (*store.Plan, *store.Subscription, error) {
 	switch typ {
 	case OrderNew, OrderRenew, OrderTrafficTopup:
 	default:
@@ -75,7 +75,8 @@ func (s *Service) orderPlan(ctx context.Context, userID, planID, typ, subID stri
 	if err != nil {
 		return nil, nil, err
 	}
-	if sub.UserID != userID {
+	// A service is its owner's; anyone else may renew it (not add traffic to it) with its link's secret.
+	if sub.UserID != userID && !(typ == OrderRenew && holdsLink(sub, linkSecret)) {
 		return nil, nil, ErrForbidden
 	}
 	switch {
@@ -159,6 +160,8 @@ func (s *Service) discountFor(ctx context.Context, u *store.User, planID string,
 // QuoteParams describes an order to price.
 type QuoteParams struct {
 	UserID, PlanID, Type, SubscriptionID, DiscountCode string
+	// LinkSecret is the secret of the link of a service that is not the user's own (see FindServiceByLink): a renewal needs it.
+	LinkSecret string
 }
 
 // Quote is an order's price before it is created.
@@ -179,7 +182,7 @@ func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error)
 	if err != nil {
 		return nil, err
 	}
-	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID)
+	plan, _, err := s.orderPlan(ctx, p.UserID, p.PlanID, p.Type, p.SubscriptionID, p.LinkSecret)
 	if err != nil {
 		return nil, err
 	}

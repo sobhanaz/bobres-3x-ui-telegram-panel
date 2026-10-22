@@ -246,6 +246,8 @@ func (h *Handler) payButtons(r *req, kb *tg.Keyboard, cur string, amount int64, 
 // checkoutBack is where a payment menu's Back button leads.
 func checkoutBack(c state.Checkout) string {
 	switch {
+	case c.LinkSecret != "": // a service found by its link is not in the list: back to the search
+		return "fl"
 	case c.SubscriptionID != "":
 		return "sub:" + c.SubscriptionID
 	case c.ForCustomer:
@@ -270,7 +272,7 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	var off int64
 	if c.DiscountCode != "" {
 		q, err := h.core.QuoteOrder(r.ctx, &corev1.QuoteOrderRequest{UserId: r.user.GetId(), PlanId: c.PlanID,
-			Type: c.Type, SubscriptionId: c.SubscriptionID, DiscountCode: c.DiscountCode})
+			Type: c.Type, SubscriptionId: c.SubscriptionID, DiscountCode: c.DiscountCode, LinkSecret: c.LinkSecret})
 		if err != nil { // the code stopped working since it was entered
 			r.send(r.t(discountKey(err)), nil)
 			c.DiscountCode = ""
@@ -369,7 +371,8 @@ func (h *Handler) onPay(r *req, rest string) {
 	order, err := h.core.CreateOrder(r.ctx, &corev1.CreateOrderRequest{
 		UserId: r.user.GetId(), PlanId: c.PlanID, Type: c.Type, SubscriptionId: c.SubscriptionID,
 		DiscountCode: c.DiscountCode, IdempotencyKey: fmt.Sprintf("ord:%d:%s:%s", r.from.ID, c.PlanID, n),
-		Label: c.Label, // kept by core for a reseller's new service only
+		Label:      c.Label, // kept by core for a reseller's new service only
+		LinkSecret: c.LinkSecret,
 	})
 	if err != nil {
 		r.fail(err)

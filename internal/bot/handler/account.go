@@ -87,7 +87,7 @@ func (h *Handler) showServices(r *req) {
 		return
 	}
 	if len(subs) == 0 {
-		r.show(r.t("subs.empty"), (&tg.Keyboard{}).Row(r.button("btn.buy", "buy")).Row(r.button("btn.home", "home")))
+		r.show(r.t("subs.empty"), (&tg.Keyboard{}).Row(r.button("btn.buy", "buy")).Row(r.button("btn.find_link", "fl")).Row(r.button("btn.home", "home")))
 		return
 	}
 	kb := &tg.Keyboard{}
@@ -97,6 +97,7 @@ func (h *Handler) showServices(r *req) {
 		}
 		kb.Row(tg.CB(h.serviceButton(r, s), "sub:"+s.GetId()))
 	}
+	kb.Row(r.button("btn.find_link", "fl"))
 	kb.Row(r.button("btn.home", "home"))
 	r.show(r.t("subs.title"), kb)
 }
