@@ -977,6 +977,7 @@
   "supplier": {
     "category": "Category",
     "copy_text": "Copy the supplier's name and text",
+    "supplier_text": "Supplier's text",
     "desc_help": "Customers read this on the product page. Empty: they see the supplier's own text.",
     "export_texts": "Export texts",
     "import_texts": "Import texts",

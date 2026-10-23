@@ -70,7 +70,10 @@ function save() {
         <span v-if="product.stock !== null"> · {{ t('supplier.stock') }}: {{ product.stock }}</span>
       </p>
       <p v-if="product.category" class="app-muted small">{{ t('supplier.category') }}: <bdi>{{ product.category }}</bdi></p>
-      <p v-if="product.description" class="app-muted small"><bdi>{{ product.description }}</bdi></p>
+      <div v-if="product.description" class="supplier-text">
+        <span class="app-muted small">{{ t('supplier.supplier_text') }}</span>
+        <div class="supplier-body" dir="auto" tabindex="0">{{ product.description }}</div>
+      </div>
       <Button v-if="product.description || product.name" type="button" outlined size="small" icon="pi pi-copy" :label="t('supplier.copy_text')" @click="copySupplierText" />
       <label class="field">
         <span>{{ t('supplier.price') }}</span>
@@ -84,8 +87,8 @@ function save() {
       <small v-if="problem === 'need_price'" class="app-muted">{{ t('supplier.need_price') }}</small>
       <label class="field"><span>{{ t('supplier.title_fa') }}</span><InputText v-model="titleFa" maxlength="200" /></label>
       <label class="field"><span>{{ t('supplier.title_en') }}</span><InputText v-model="titleEn" class="app-ltr" maxlength="200" /></label>
-      <label class="field"><span>{{ t('supplier.desc_fa') }}</span><Textarea v-model="descFa" rows="5" maxlength="3000" /></label>
-      <label class="field"><span>{{ t('supplier.desc_en') }}</span><Textarea v-model="descEn" rows="5" class="app-ltr" maxlength="3000" />
+      <label class="field"><span>{{ t('supplier.desc_fa') }}</span><Textarea v-model="descFa" rows="8" maxlength="3000" /></label>
+      <label class="field"><span>{{ t('supplier.desc_en') }}</span><Textarea v-model="descEn" rows="8" class="app-ltr" maxlength="3000" />
         <small class="app-muted">{{ t('supplier.desc_help') }}</small>
       </label>
       <label class="field">
@@ -101,13 +104,41 @@ function save() {
 </template>
 
 <style scoped>
+/* One column that may shrink: a long word or link in the supplier's text must not stretch the form past the dialog. */
 .form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 .field {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
+}
+.field :deep(input),
+.field :deep(textarea) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.supplier-text {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+/* The supplier's text as it was written: its own line breaks, in its own direction, in a box that scrolls. */
+.supplier-body {
+  max-height: 9rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 0.5rem;
+  background: var(--p-content-hover-background, transparent);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  text-align: start;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .switch {
   display: flex;
