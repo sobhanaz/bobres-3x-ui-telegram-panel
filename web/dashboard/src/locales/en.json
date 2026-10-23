@@ -603,6 +603,18 @@
     "no_data": "No data"
   },
   "reports": {
+    "start": {
+      "all": "The reports count every sale so far.",
+      "since": "Counting from {when}. Earlier sales are kept but not counted.",
+      "action": "Start from zero",
+      "restart": "Start from zero again",
+      "clear": "Count everything again",
+      "confirm_title": "Start the reports from zero?",
+      "confirm": "From now on the reports and the overview count only what is sold from this moment. Nothing is deleted: orders, payments, wallets and the ledger stay as they are, and you can count everything again later.",
+      "clear_confirm": "The reports and the overview will count every sale again, including the ones before the last start.",
+      "done": "The reports now count from zero.",
+      "cleared": "The reports count everything again."
+    },
     "hint": "Sales read from the ledger and the orders, in the store's time zone. Every currency is counted on its own: amounts in different currencies are never added together.",
     "period_label": "Period",
     "range": {
@@ -653,6 +665,8 @@
       "net": "After refunds: {amount}",
       "orders": "{n} paid order | {n} paid orders",
       "split": "New {new} · Renewals {renew} · Traffic {traffic}",
+      "licenses": "Licenses sold: {n} · {amount}",
+      "digital": "Digital accounts sold: {n} · {amount}",
       "topups": "Wallet top-ups",
       "refunds": "Refunds",
       "rejected": "Rejected by staff",
@@ -694,7 +708,9 @@
       "type": {
         "new": "New",
         "renew": "Renewals",
-        "traffic": "Traffic"
+        "traffic": "Traffic",
+        "license": "Licenses",
+        "digital": "Digital accounts"
       }
     },
     "period": {
@@ -1921,6 +1937,10 @@
         "upsert": "Plan saved",
         "delete": "Plan deleted",
         "restore": "Plan restored"
+      },
+      "reports": {
+        "reset": "Reports started from zero",
+        "reset_clear": "Reports count everything again"
       },
       "plan_group": {
         "upsert": "Plan group saved",

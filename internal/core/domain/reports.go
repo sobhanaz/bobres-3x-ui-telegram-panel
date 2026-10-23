@@ -2,11 +2,14 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
@@ -491,7 +494,7 @@ func addCell(a, b *store.ReportCell) {
 	a.NewOrders += b.NewOrders
 	a.Renewals += b.Renewals
 	a.TrafficTopups += b.TrafficTopups
-	for _, p := range [][2]*store.ReportFlow{{&a.Topups, &b.Topups}, {&a.Refunds, &b.Refunds}, {&a.Rejected, &b.Rejected}, {&a.GatewayFailed, &b.GatewayFailed}, {&a.Cancelled, &b.Cancelled}} {
+	for _, p := range [][2]*store.ReportFlow{{&a.Topups, &b.Topups}, {&a.Refunds, &b.Refunds}, {&a.Rejected, &b.Rejected}, {&a.GatewayFailed, &b.GatewayFailed}, {&a.Cancelled, &b.Cancelled}, {&a.Licenses, &b.Licenses}, {&a.Digital, &b.Digital}} {
 		p[0].Count += p[1].Count
 		p[0].Amount += p[1].Amount
 	}
@@ -682,4 +685,54 @@ func reportError(err error) error {
 		return fmt.Errorf("%w: choose a shorter range", ErrReportTimeout)
 	}
 	return err
+}
+
+// ReportsSince is the instant the reports and the overview's revenue count from; nil when they count everything.
+func (s *Service) ReportsSince(ctx context.Context) (*time.Time, error) {
+	t, ok, err := s.st.ReportsSince(ctx, s.st.Conn())
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// ResetReports starts the reports from zero: from this moment on they count only what happens next. Nothing is deleted: orders, payments,
+// wallets, the ledger and the audit log stay as they are, and ClearReportsReset brings every earlier sale back into the reports. It is for the
+// day the store goes live after tests, so it is the owner's (the web layer checks the permission) and it is audited.
+func (s *Service) ResetReports(ctx context.Context, actor *store.User) (time.Time, error) {
+	now := time.Now().UTC().Truncate(time.Second)
+	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		before, hadBefore, err := s.st.ReportsSince(ctx, tx)
+		if err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(now.Format(time.RFC3339))
+		if err := s.st.SetSetting(ctx, tx, store.ReportsSinceKey, raw); err != nil {
+			return err
+		}
+		var was any
+		if hadBefore {
+			was = map[string]string{"since": before.UTC().Format(time.RFC3339)}
+		}
+		return s.auditChange(ctx, tx, actor, "reports.reset", "settings", store.ReportsSinceKey, was, map[string]string{"since": now.Format(time.RFC3339)}, "")
+	})
+	return now, err
+}
+
+// ClearReportsReset makes the reports count everything again (what ResetReports hid is still there).
+func (s *Service) ClearReportsReset(ctx context.Context, actor *store.User) error {
+	return s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		before, hadBefore, err := s.st.ReportsSince(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if !hadBefore {
+			return nil
+		}
+		if err := s.st.DeleteSetting(ctx, tx, store.ReportsSinceKey); err != nil {
+			return err
+		}
+		return s.auditChange(ctx, tx, actor, "reports.reset_clear", "settings", store.ReportsSinceKey,
+			map[string]string{"since": before.UTC().Format(time.RFC3339)}, nil, "")
+	})
 }

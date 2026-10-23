@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -81,16 +82,50 @@ type ReportQuery struct {
 // instant bounds before it only let the index narrow the scan: they are a day
 // wider on each side than the dates, so they can never cut a row the date test
 // would keep.
+//
+// The range also stops at the instant the owner started the reports from zero (ReportsSinceKey): nothing before it is counted, whatever
+// dates were asked for. readOnly hands that instant to the transaction ("bobres.reports_since"; unset: no cutoff).
 func rangeOf(col string) string {
 	return col + ` >= ($1::date - 1)::timestamp AT TIME ZONE $3::text
 		AND ` + col + ` < ($2::date + 2)::timestamp AT TIME ZONE $3::text
-		AND (` + col + ` AT TIME ZONE $3::text)::date BETWEEN $1::date AND $2::date`
+		AND (` + col + ` AT TIME ZONE $3::text)::date BETWEEN $1::date AND $2::date
+		AND ` + col + ` >= COALESCE(NULLIF(current_setting('bobres.reports_since', true), '')::timestamptz, '-infinity'::timestamptz)`
+}
+
+// ReportsSinceKey is the setting that holds the instant (RFC 3339, UTC) the reports and the overview count from. The owner sets it with
+// "start from zero" when the sales so far were tests; nothing is deleted, the orders, payments, wallets and the ledger stay as they are.
+const ReportsSinceKey = "reports.since"
+
+// ReportsSince is the instant the reports count from; false when they count everything.
+func (s *Store) ReportsSince(ctx context.Context, q querier) (time.Time, bool, error) {
+	var v *string
+	if err := q.QueryRow(ctx, `SELECT value #>> '{}' FROM core.settings WHERE key = $1`, ReportsSinceKey).Scan(&v); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, fmt.Errorf("reports since: %w", err)
+	}
+	if v == nil || *v == "" {
+		return time.Time{}, false, nil
+	}
+	t, err := time.Parse(time.RFC3339, *v)
+	if err != nil {
+		return time.Time{}, false, nil // an unreadable value counts as none rather than hiding every sale
+	}
+	return t, true, nil
 }
 
 // bucketOf is the local start date of the bucket an instant falls in.
 func bucketOf(col string) string {
 	return `to_char(date_trunc($4::text, ` + col + ` AT TIME ZONE $3::text), 'YYYY-MM-DD')`
 }
+
+// The ledger entries that are sales, and the ones that give a sale back: the orders for VPN services, the licenses the store sells and the
+// digital accounts it resells all take money from a customer's wallet, and every one of them is revenue.
+const (
+	purchaseKinds = `('purchase', 'license_purchase', 'supplier_purchase')`
+	refundKinds   = `('refund', 'license_refund', 'supplier_refund')`
+)
 
 // ReportFlow is how many things happened and the money they carried.
 type ReportFlow struct {
@@ -100,14 +135,19 @@ type ReportFlow struct {
 
 // ReportCell is one bucket's numbers in one currency.
 type ReportCell struct {
-	// Revenue is what customers paid for orders: the sum of the ledger's
-	// purchase entries. Orders counts them; NewOrders, Renewals and
-	// TrafficTopups split Orders by the order's type.
+	// Revenue is what customers paid: the sum of the ledger's purchase
+	// entries, which are the orders for VPN services, the licenses the store
+	// sells and the digital accounts it resells (PurchaseKinds). Orders counts
+	// them; NewOrders, Renewals and TrafficTopups split the VPN orders by the
+	// order's type, and Licenses and Digital say how much of Orders and Revenue
+	// the other two made.
 	Revenue       int64
 	Orders        int64
 	NewOrders     int64
 	Renewals      int64
 	TrafficTopups int64
+	Licenses      ReportFlow
+	Digital       ReportFlow
 	// Topups is the money of payments that stayed in a wallet (the part no
 	// order took at the moment it arrived); Refunds are orders credited back to
 	// a wallet; Rejected are manual payments a reviewer rejected;
@@ -171,6 +211,16 @@ func (s *Store) readOnly(ctx context.Context, timeout time.Duration, fn func(tx 
 	if _, err := tx.Exec(ctx, fmt.Sprintf(`SET LOCAL statement_timeout = %d`, timeout.Milliseconds())); err != nil {
 		return fmt.Errorf("report timeout: %w", err)
 	}
+	// The instant the reports count from, for rangeOf (an unset or unreadable value: all of time).
+	since := ""
+	if t, ok, err := s.ReportsSince(ctx, tx); err != nil {
+		return err
+	} else if ok {
+		since = t.UTC().Format(time.RFC3339Nano)
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('bobres.reports_since', $1, true)`, since); err != nil {
+		return fmt.Errorf("report start: %w", err)
+	}
 	return fn(tx)
 }
 
@@ -200,17 +250,21 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 		if err := each(ctx, tx, `
 			SELECT `+bucketOf("e.created_at")+`, e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint,
 				count(*) FILTER (WHERE o.type = 'new'), count(*) FILTER (WHERE o.type = 'renew'),
-				count(*) FILTER (WHERE o.type = 'traffic_topup')
+				count(*) FILTER (WHERE o.type = 'traffic_topup'),
+				count(*) FILTER (WHERE e.kind = 'license_purchase'), COALESCE(sum(-e.amount) FILTER (WHERE e.kind = 'license_purchase'), 0)::bigint,
+				count(*) FILTER (WHERE e.kind = 'supplier_purchase'), COALESCE(sum(-e.amount) FILTER (WHERE e.kind = 'supplier_purchase'), 0)::bigint
 			FROM core.ledger_entries e LEFT JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
-			WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
+			WHERE e.kind IN `+purchaseKinds+` AND `+rangeOf("e.created_at")+`
 			GROUP BY 1, 2`, args, func(r pgx.Rows) error {
 			var b, cur string
 			var o, rev, newO, ren, tt int64
-			if err := r.Scan(&b, &cur, &o, &rev, &newO, &ren, &tt); err != nil {
+			var lic, dig ReportFlow
+			if err := r.Scan(&b, &cur, &o, &rev, &newO, &ren, &tt, &lic.Count, &lic.Amount, &dig.Count, &dig.Amount); err != nil {
 				return err
 			}
 			c := d.cell(b, cur)
 			c.Orders, c.Revenue, c.NewOrders, c.Renewals, c.TrafficTopups = o, rev, newO, ren, tt
+			c.Licenses, c.Digital = lic, dig
 			return nil
 		}); err != nil {
 			return reportErr("report purchases", err)
@@ -278,7 +332,7 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 		}
 		if err := flow(`
 			SELECT `+bucketOf("e.created_at")+`, e.currency, count(*), COALESCE(sum(e.amount), 0)::bigint
-			FROM core.ledger_entries e WHERE e.kind = 'refund' AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
+			FROM core.ledger_entries e WHERE e.kind IN `+refundKinds+` AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
 			func(c *ReportCell) *ReportFlow { return &c.Refunds }); err != nil {
 			return reportErr("report refunds", err)
 		}
@@ -454,7 +508,7 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 		total := map[string]*MethodRow{}
 		if err := each(ctx, tx, `
 			SELECT e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
-			FROM core.ledger_entries e WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
+			FROM core.ledger_entries e WHERE e.kind IN `+purchaseKinds+` AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
 			var m MethodRow
 			if err := r.Scan(&m.Currency, &m.Orders, &m.Revenue); err != nil {
 				return err
@@ -483,6 +537,29 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 			return nil
 		}); err != nil {
 			return reportErr("report methods", err)
+		}
+		// Licenses and digital accounts are always paid from the wallet and publish no order.paid event: they are wallet sales.
+		if err := each(ctx, tx, `
+			SELECT e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
+			FROM core.ledger_entries e WHERE e.kind IN ('license_purchase', 'supplier_purchase') AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
+			var m MethodRow
+			if err := r.Scan(&m.Currency, &m.Orders, &m.Revenue); err != nil {
+				return err
+			}
+			m.Method = "wallet"
+			if i := slices.IndexFunc(out, func(x MethodRow) bool { return x.Method == "wallet" && x.Provider == "" && x.Currency == m.Currency }); i >= 0 {
+				out[i].Orders += m.Orders
+				out[i].Revenue += m.Revenue
+			} else {
+				out = append(out, m)
+			}
+			if t := total[m.Currency]; t != nil {
+				t.Orders -= m.Orders
+				t.Revenue -= m.Revenue
+			}
+			return nil
+		}); err != nil {
+			return reportErr("report methods: wallet sales", err)
 		}
 		for _, t := range total {
 			if t.Orders != 0 || t.Revenue != 0 {
@@ -615,7 +692,7 @@ func (s *Store) SalesHours(ctx context.Context, q ReportQuery) ([]HourRow, error
 			SELECT extract(isodow FROM e.created_at AT TIME ZONE $3::text)::int, extract(hour FROM e.created_at AT TIME ZONE $3::text)::int,
 				e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
 			FROM core.ledger_entries e
-			WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
+			WHERE e.kind IN `+purchaseKinds+` AND `+rangeOf("e.created_at")+`
 			GROUP BY 1, 2, 3
 			ORDER BY 3, 1, 2`, args, func(r pgx.Rows) error {
 			var h HourRow
@@ -655,18 +732,45 @@ type PaidOrderRow struct {
 // once the range held about 100,000 orders. $1-$3 are the range, $4 the most
 // rows wanted.
 func paidOrdersSQL() string {
+	local := `to_char(e.created_at AT TIME ZONE $3::text, 'YYYY-MM-DD HH24:MI:SS')`
 	return `
-	SELECT e.created_at, to_char(e.created_at AT TIME ZONE $3::text, 'YYYY-MM-DD HH24:MI:SS'), e.ref_id::text, o.type,
-		u.telegram_id, COALESCE(u.username, ''), p.name_i18n, e.currency, -e.amount, COALESCE(ev.method, ''),
-		COALESCE(o.refund_amount, 0), COALESCE(ev.provider, '')
-	FROM core.ledger_entries e
-	JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
-	JOIN core.users u ON u.id = e.user_id
-	JOIN core.plans p ON p.id = o.plan_id
-	LEFT JOIN LATERAL (SELECT x.payload->>'source' AS method, x.payload->>'provider' AS provider FROM core.outbox_core x
-		WHERE x.topic = 'order.paid.v1' AND x.payload->>'order_id' = e.ref_id::text LIMIT 1) ev ON true
-	WHERE e.kind = 'purchase' AND ` + rangeOf("e.created_at") + `
-	ORDER BY e.created_at, e.id
+	SELECT created_at, local, order_id, type, telegram_id, username, name_i18n, currency, amount, method, refunded, provider FROM (
+		SELECT e.created_at, e.id AS eid, ` + local + ` AS local, e.ref_id::text AS order_id, o.type AS type,
+			u.telegram_id, COALESCE(u.username, '') AS username, p.name_i18n, e.currency, -e.amount AS amount, COALESCE(ev.method, '') AS method,
+			COALESCE(o.refund_amount, 0) AS refunded, COALESCE(ev.provider, '') AS provider
+		FROM core.ledger_entries e
+		JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
+		JOIN core.users u ON u.id = e.user_id
+		JOIN core.plans p ON p.id = o.plan_id
+		LEFT JOIN LATERAL (SELECT x.payload->>'source' AS method, x.payload->>'provider' AS provider FROM core.outbox_core x
+			WHERE x.topic = 'order.paid.v1' AND x.payload->>'order_id' = e.ref_id::text LIMIT 1) ev ON true
+		WHERE e.kind = 'purchase' AND ` + rangeOf("e.created_at") + `
+		UNION ALL
+		-- a license the store sold, paid from the wallet
+		SELECT e.created_at, e.id, ` + local + `, e.ref_id::text, 'license',
+			u.telegram_id, COALESCE(u.username, ''),
+			jsonb_build_object('en', 'BOBRES license (' || v.tier || ', ' || v.months || ' months)',
+				'fa', 'لایسنس BOBRES (' || CASE v.tier WHEN 'standard' THEN 'استاندارد' WHEN 'pro' THEN 'حرفه' || chr(8204) || 'ای' ELSE v.tier END || '، ' || v.months || ' ماه)'),
+			e.currency, -e.amount, 'wallet', CASE WHEN v.status = 'refunded' THEN v.amount ELSE 0 END, ''
+		FROM core.ledger_entries e
+		JOIN core.vendor_orders v ON e.ref_type = 'vendor_order' AND v.id = e.ref_id
+		JOIN core.users u ON u.id = e.user_id
+		WHERE e.kind = 'license_purchase' AND ` + rangeOf("e.created_at") + `
+		UNION ALL
+		-- digital accounts the store resold, paid from the wallet
+		SELECT e.created_at, e.id, ` + local + `, e.ref_id::text, 'digital',
+			u.telegram_id, COALESCE(u.username, ''),
+			jsonb_build_object(
+				'en', COALESCE(NULLIF(sp.title_i18n->>'en', ''), sp.name, so.product_id) || ' x ' || so.quantity,
+				'fa', COALESCE(NULLIF(sp.title_i18n->>'fa', ''), NULLIF(sp.title_i18n->>'en', ''), sp.name, so.product_id) || ' × ' || so.quantity),
+			e.currency, -e.amount, 'wallet', CASE WHEN so.status = 'refunded' THEN so.amount ELSE 0 END, ''
+		FROM core.ledger_entries e
+		JOIN core.supplier_orders so ON e.ref_type = 'supplier_order' AND so.id = e.ref_id
+		JOIN core.users u ON u.id = e.user_id
+		LEFT JOIN core.supplier_products sp ON sp.id = so.product_id
+		WHERE e.kind = 'supplier_purchase' AND ` + rangeOf("e.created_at") + `
+	) t
+	ORDER BY created_at, eid
 	LIMIT $4`
 }
 

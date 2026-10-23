@@ -33,10 +33,11 @@ var csvKinds = []struct {
 		[]string{"period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders", "renewals",
 			"traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount", "gateway_failed_count",
 			"gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials", "churned_services",
-			"churned_customers", "at_risk_services", "group", "calendar", "tz"},
+			"churned_customers", "at_risk_services", "group", "calendar", "tz", "license_orders", "license_revenue", "digital_orders", "digital_revenue"},
 		[]string{"revenue", "refund_amount", "net", "paid_orders", "new_orders", "renewals", "traffic_topups", "topup_count", "topup_amount",
 			"refund_count", "rejected_count", "rejected_amount", "gateway_failed_count", "gateway_failed_amount", "cancelled_count",
-			"cancelled_amount", "new_customers", "free_trials", "churned_services", "churned_customers", "at_risk_services"},
+			"cancelled_amount", "new_customers", "free_trials", "churned_services", "churned_customers", "at_risk_services",
+			"license_orders", "license_revenue", "digital_orders", "digital_revenue"},
 	},
 	{
 		"orders", "/api/v1/reports/orders.csv" + reportQuery,
@@ -208,12 +209,12 @@ func TestCSVDatesFollowOneRule(t *testing.T) {
 	for i, name := range rows[0] {
 		col[name] = i
 	}
-	if len(rows[0]) != 28 || rows[0][27] != "period_start_jalali" || col["calendar"] != 25 {
+	if len(rows[0]) != 32 || rows[0][27] != "period_start_jalali" || rows[0][28] != "license_orders" || col["calendar"] != 25 {
 		t.Fatalf("Jalali summary header: %v", rows[0])
 	}
 	days := map[string]string{}
 	for _, r := range rows[1:] {
-		if len(r) != 28 || r[col["calendar"]] != "jalali" || r[col["group"]] != "day" || r[col["tz"]] != "Asia/Tehran" {
+		if len(r) != 32 || r[col["calendar"]] != "jalali" || r[col["group"]] != "day" || r[col["tz"]] != "Asia/Tehran" {
 			t.Fatalf("a Jalali summary row: %v", r)
 		}
 		days[r[0]] = r[27]
@@ -229,7 +230,7 @@ func TestCSVDatesFollowOneRule(t *testing.T) {
 	}
 	// a Gregorian file has no Jalali column, and the same machine columns
 	_, _, body = b.get("/api/v1/reports/summary.csv" + reportQuery)
-	if rows = parseCSV(t, body); len(rows[0]) != 27 || rows[1][26] != "Asia/Tehran" {
+	if rows = parseCSV(t, body); len(rows[0]) != 31 || rows[1][26] != "Asia/Tehran" {
 		t.Errorf("Gregorian summary: %v", rows[0])
 	}
 }

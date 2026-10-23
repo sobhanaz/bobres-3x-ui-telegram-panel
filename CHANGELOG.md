@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **Start the reports from zero.** After the tests, the owner presses **Start from zero** on the Reports page (owner only, with a confirmation): the reports, the CSV files, the daily summary and the Overview's revenue then count only what is sold from that moment. Nothing is deleted (orders, payments, wallets and the ledger stay), the page says "Counting from ...", and **Count everything again** brings the earlier sales back. `reports.reset` is audited.
+- **The reports count every sale.** The licenses the store sells and the digital accounts it resells are now revenue, paid orders, hours of the week and the payment methods (as wallet sales) like the VPN orders, with their own lines (`licenses`, `digital`) on the Reports page, in the charts, in the daily summary message and in the CSV files (four new columns at the end of `summary.csv`; `orders.csv` has rows of type `license` and `digital`). A refund of either is a refund.
+
+### Changed
+- **Renewal rule.** Renewing a service with a plan now **adds the plan's traffic to the service's current traffic and starts the plan's days again from now**: the days that were left are dropped, so a service never lasts longer than one plan period after its last renewal (before, the days were added to the time left). The customer is told so before choosing the plan and again at the checkout (the bot's Renew picker, the find-by-link renewal and the checkout, and the Mini App's plan list and checkout). Traffic packages and a staff member's "add N days" are unchanged. A renewal already paid but not yet applied when you update uses the new rule.
+
 ### Fixed
 - A reseller's **My services** search (the bot and the Mini App) finds a service by its **subscription link**, its page address or its **client config** (vless://, vmess://, trojan://, ss:// pasted whole, found by the email in its name), as well as by name and number. The bot used to cut a search to 40 bytes, so a link never matched; a pasted link or config is now read whole, and the search also matches the client's email.
 

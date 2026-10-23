@@ -339,6 +339,7 @@ func summaryEvent(day, zone string, rep *SalesReport) (events.DailySummaryEvent,
 		e.Currencies = append(e.Currencies, events.DailySummaryCurrency{
 			Currency: cur, Revenue: c.Revenue, PrevRevenue: prev.Revenue,
 			Orders: c.Orders, NewOrders: c.NewOrders, Renewals: c.Renewals, TrafficTopups: c.TrafficTopups,
+			Licenses: events.DailySummaryFlow(c.Licenses), Digital: events.DailySummaryFlow(c.Digital),
 			Refunds: events.DailySummaryFlow(c.Refunds), Net: Net(c), Topups: events.DailySummaryFlow(c.Topups),
 			Rejected: events.DailySummaryFlow(c.Rejected), GatewayFailed: events.DailySummaryFlow(c.GatewayFailed),
 		})

@@ -663,10 +663,16 @@ func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string 
 			revenue += " (" + vs + ")"
 		}
 		out = append(out, "", t("report.daily_currency", "currency", html.EscapeString(i18n.CurrencyName(lang, c.Currency))), revenue,
-			t("report.daily_orders", "n", num(c.Orders), "new", num(c.NewOrders), "renew", num(c.Renewals), "traffic", num(c.TrafficTopups)),
+			t("report.daily_orders", "n", num(c.Orders-c.Licenses.Count-c.Digital.Count), "new", num(c.NewOrders), "renew", num(c.Renewals), "traffic", num(c.TrafficTopups)),
 			t("report.daily_refunds", "n", num(c.Refunds.Count), "amount", money(c.Refunds.Amount, c.Currency)),
 			t("report.daily_net", "amount", money(c.Net, c.Currency)),
 			t("report.daily_topups", "n", num(c.Topups.Count), "amount", money(c.Topups.Amount, c.Currency)))
+		if c.Licenses.Count > 0 {
+			out = append(out, t("report.daily_licenses", "n", num(c.Licenses.Count), "amount", money(c.Licenses.Amount, c.Currency)))
+		}
+		if c.Digital.Count > 0 {
+			out = append(out, t("report.daily_digital", "n", num(c.Digital.Count), "amount", money(c.Digital.Amount, c.Currency)))
+		}
 		if c.Rejected.Count > 0 {
 			out = append(out, t("report.daily_rejected", "n", num(c.Rejected.Count), "amount", money(c.Rejected.Amount, c.Currency)))
 		}
