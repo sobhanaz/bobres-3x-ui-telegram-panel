@@ -183,16 +183,17 @@ func TestMarzbanRealPanelPurchaseLoop(t *testing.T) {
 	}
 
 	// 6. Renewal: the customer renews with the wallet, the staff add traffic,
-	// and the panel holds the new absolute limits. The client keeps its
-	// identity: the same share links.
+	// and the panel holds the new absolute limits: the plan's traffic is added
+	// and its days start again from now. The client keeps its identity: the
+	// same share links.
 	buy("o2", &corev1.CreateOrderRequest{PlanId: plan.ID, Type: "renew", SubscriptionId: sub.GetId()})
 	after, err := panel.GetUser(ctx, email)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Status != marzban.StatusActive || after.DataLimitBytes() != 2*gb50 || after.ExpireSeconds() <= pu.ExpireSeconds()+29*86400 ||
+	if after.Status != marzban.StatusActive || after.DataLimitBytes() != 2*gb50 || after.ExpireSeconds() < pu.ExpireSeconds()-60 || after.ExpireSeconds() > pu.ExpireSeconds()+3600 ||
 		strings.Join(after.Links, "\n") != strings.Join(pu.Links, "\n") {
-		t.Fatalf("after the renewal the panel user is %+v, want 100 GB, about 60 days and the same links", after)
+		t.Fatalf("after the renewal the panel user is %+v, want 100 GB, the 30 days started again from now (not 60) and the same links", after)
 	}
 	buy("o3", &corev1.CreateOrderRequest{PlanId: topup.ID, Type: "traffic_topup", SubscriptionId: sub.GetId()})
 	if got, err := panel.GetUser(ctx, email); err != nil || got.DataLimitBytes() != 2*gb50+gb10 {
