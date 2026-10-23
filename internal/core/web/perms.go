@@ -19,7 +19,8 @@ const (
 	PermPaymentsRead   = "payments.read"
 	PermPaymentsReview = "payments.review"
 	PermLedgerRead     = "ledger.read"
-	PermReportsRead    = "reports.read" // sales reports and their CSV: revenue, so owner and admin only
+	PermReportsRead    = "reports.read"  // sales reports and their CSV: revenue, so owner and admin only
+	PermReportsReset   = "reports.reset" // starting the reports from zero (hides every earlier sale from them): only the owner
 	PermDiscountsWrite = "discounts.write"
 	PermBrandingWrite  = "branding.write"
 	PermSettingsWrite  = "settings.write"
@@ -40,7 +41,7 @@ const (
 
 var allPerms = []string{
 	PermOverviewRead, PermUsersRead, PermUsersWrite, PermWalletAdjust, PermServicesRead, PermServicesExtend,
-	PermServicesWrite, PermPlansWrite, PermPlansDelete, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermDiscountsWrite,
+	PermServicesWrite, PermPlansWrite, PermPlansDelete, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermReportsReset, PermDiscountsWrite,
 	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
 	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite, PermJoinWrite, PermMonitorRead,
 }
@@ -48,7 +49,7 @@ var allPerms = []string{
 // ownerOnly: staff accounts, the license, gateway secrets, system actions
 // (backups) and the list of required channels and groups stay with the owner.
 var ownerOnly = map[string]bool{
-	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true, PermJoinWrite: true, PermPlansDelete: true,
+	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true, PermJoinWrite: true, PermPlansDelete: true, PermReportsReset: true,
 }
 
 var supportPerms = map[string]bool{

@@ -19,7 +19,14 @@ type Overview struct {
 func (s *Store) OverviewStats(ctx context.Context, q querier, now time.Time) (*Overview, error) {
 	o := &Overview{Revenue24h: map[string]int64{}, Revenue30d: map[string]int64{}}
 	day, week, month := now.Add(-24*time.Hour), now.Add(-7*24*time.Hour), now.Add(-30*24*time.Hour)
-	err := q.QueryRow(ctx, `SELECT
+	sinceOrZero, hasSince, err := s.ReportsSince(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	if !hasSince {
+		sinceOrZero = time.Time{}
+	}
+	err = q.QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM core.users),
 		(SELECT count(*) FROM core.users WHERE created_at >= $1),
 		(SELECT count(*) FROM core.users WHERE created_at >= $2),
@@ -28,14 +35,15 @@ func (s *Store) OverviewStats(ctx context.Context, q querier, now time.Time) (*O
 		(SELECT count(*) FROM core.subscriptions WHERE status IN ('expired', 'depleted')),
 		(SELECT count(*) FROM core.orders WHERE status = 'provision_failed'),
 		(SELECT count(*) FROM core.orders WHERE status IN ('paid', 'provisioning', 'active', 'provision_failed')
-			AND updated_at >= $1 AND amount > 0)`, day, week).
+			AND updated_at >= $1 AND updated_at >= $3 AND amount > 0)`, day, week, sinceOrZero).
 		Scan(&o.UsersTotal, &o.UsersNew24h, &o.UsersNew7d, &o.ServicesActive, &o.ServicesExpiring, &o.ServicesEnded,
 			&o.ProvisionFailed, &o.OrdersPaid24h)
 	if err != nil {
 		return nil, fmt.Errorf("overview: %w", err)
 	}
+	// Revenue is every sale (VPN orders, licenses, digital accounts), from the moment the owner started the reports from zero.
 	rows, err := q.Query(ctx, `SELECT currency, -sum(amount) FILTER (WHERE created_at >= $1), -sum(amount)
-		FROM core.ledger_entries WHERE kind = 'purchase' AND created_at >= $2 GROUP BY currency`, day, month)
+		FROM core.ledger_entries WHERE kind IN `+purchaseKinds+` AND created_at >= $2 AND created_at >= $3 GROUP BY currency`, day, month, sinceOrZero)
 	if err != nil {
 		return nil, fmt.Errorf("overview revenue: %w", err)
 	}

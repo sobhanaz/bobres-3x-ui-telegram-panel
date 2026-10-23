@@ -23,9 +23,9 @@ A payment at 23:59 and one at 00:01 local time fall on different days. A period 
 
 | Number | Meaning |
 |---|---|
-| Revenue | What customers were charged, from the purchase entries of the ledger. Free orders are not in it |
-| Paid orders | New orders, renewals and traffic packages. A bulk purchase of N services counts N orders |
-| Refunds | Orders refunded to a wallet, by the day of the refund. **Net** is revenue less refunds, before payouts |
+| Revenue | What customers were charged, from the sales entries of the ledger: VPN orders, and on the vendor's own store the BOBRES licenses and the digital accounts it sells. Free orders are not in it |
+| Paid orders | New orders, renewals and traffic packages, plus the licenses and digital accounts sold (each has its own line). A bulk purchase of N services counts N orders |
+| Refunds | Orders, licenses and digital accounts refunded to a wallet, by the day of the refund. **Net** is revenue less refunds, before payouts |
 | New customers | People whose first purchase falls in the period |
 | Free trials | Trials started |
 | Services lost (churn) | Services whose final expiry fell in the period and ended more than the grace period ago (7 days by default). Trials, unlimited services and services with a paid renewal waiting are not counted |
@@ -36,6 +36,10 @@ A payment at 23:59 and one at 00:01 local time fall on different days. A period 
 | Paid with | Wallet, manually approved payments, or gateways, split again by provider (Zarinpal, Stars, automatic USDT, card to card) |
 
 Commissions and referral rewards are not subtracted from net. Churn is read as of now, not stored as a history, so a customer who comes back leaves the period they were counted in. There is no churn rate and no revenue-by-customer view. Orders paid before the provider was recorded show "provider not recorded".
+
+## Starting from zero
+
+If the sales so far were tests, the **owner** can press **Start from zero** at the top of the Reports page (it asks first). From that moment the reports, the CSV files, the daily summary and the Overview's revenue count only what is sold next, and the page says "Counting from ...". **Nothing is deleted**: orders, payments, wallets and the ledger stay as they are, so wallet balances are still right. **Count everything again** brings the earlier sales back. Admins can see the start but not change it, and every change is in the audit log. Services lost (churn) are not cut by it.
 
 ## Charts and the professional report
 

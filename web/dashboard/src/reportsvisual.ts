@@ -93,14 +93,34 @@ export function revenueSeries(s: ReportSummary, currency: string): { revenue: nu
 }
 
 /** orderSeries are a currency's paid orders per bucket, split by what they were. */
-export function orderSeries(s: ReportSummary, currency: string): { new: number[]; renew: number[]; traffic: number[]; total: number } {
+export function orderSeries(
+  s: ReportSummary,
+  currency: string,
+): { new: number[]; renew: number[]; traffic: number[]; license: number[]; digital: number[]; total: number } {
   const cells = s.buckets.map((b) => cellOf(b, currency))
   return {
     new: cells.map((c) => c.new_orders),
     renew: cells.map((c) => c.renewals),
     traffic: cells.map((c) => c.traffic_topups),
+    license: cells.map((c) => c.licenses?.count ?? 0),
+    digital: cells.map((c) => c.digital?.count ?? 0),
     total: cells.reduce((n, c) => n + c.orders, 0),
   }
+}
+
+/** orderBars are the stacked bars of the paid orders: new, renewals and traffic, and the licenses and digital accounts only when the range sold some. */
+export function orderBars(
+  o: ReturnType<typeof orderSeries>,
+  label: (type: 'new' | 'renew' | 'traffic' | 'license' | 'digital') => string,
+): { key: string; label: string; values: number[]; slot: number }[] {
+  const bars = [
+    { key: 'new', label: label('new'), values: o.new, slot: 0 },
+    { key: 'renew', label: label('renew'), values: o.renew, slot: 1 },
+    { key: 'traffic', label: label('traffic'), values: o.traffic, slot: 2 },
+  ]
+  if (o.license.some((v) => v > 0)) bars.push({ key: 'license', label: label('license'), values: o.license, slot: 3 })
+  if (o.digital.some((v) => v > 0)) bars.push({ key: 'digital', label: label('digital'), values: o.digital, slot: 4 })
+  return bars
 }
 
 /** peopleSeries are the counts of people per bucket (they have no currency). */

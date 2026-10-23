@@ -24,6 +24,9 @@ export interface ReportCell {
   new_orders: number
   renewals: number
   traffic_topups: number
+  /** the licenses the store sold and the digital accounts it resold: part of `orders` and `revenue`, not of new, renewals and traffic (absent from an older core) */
+  licenses?: ReportFlow
+  digital?: ReportFlow
   topups: ReportFlow
   /** manual payments a reviewer rejected */
   rejected: ReportFlow
