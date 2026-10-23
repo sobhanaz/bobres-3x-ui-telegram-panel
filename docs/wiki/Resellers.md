@@ -29,7 +29,7 @@ In the bot and in the Mini App's **More** section, a reseller has a panel with:
 
 - **Buy for a customer:** the plans at their prices. They can name each service ("Ali's phone"). The wallet button shows only when the balance plus the credit limit covers the price. They cannot use discount codes.
 - **Bulk purchase:** several services at once, with names "name 1", "name 2" and so on.
-- **Customer services:** a list of their services in groups (All, Active, Ending soon, Ended, Paused) with a search.
+- **Customer services:** a list of their services in groups (All, Active, Ending soon, Ended, Paused) with a search by name, number, subscription link, page address or a client config (vless://, vmess://, trojan://) pasted whole.
 - **Per service:** Renew, Add traffic, QR code, Rename, **Pause** and **Resume**, a private **Note**, and **Delete** (after a confirmation, with no refund). A service that support paused cannot be resumed by the reseller.
 - **Customers:** the people who joined through their link, with what they bought.
 - **Statement** and **My link**, their invite link and commission rate.

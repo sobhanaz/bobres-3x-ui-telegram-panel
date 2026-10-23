@@ -8,6 +8,22 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.17.0] — 2026-10-23
+
+**One wallet per customer, a renewal that restarts the days, reports that count every sale and can start from zero, and the reseller's search by link.** The USDT and Toman wallets are merged into one wallet in Toman: customers top up in Toman or in USDT, a USDT top-up is credited as Toman at the live rate, the licenses (priced in USDT) are charged in Toman, and the wallet is shown everywhere with its equivalent in USDT and the live rate. Renewing a service with a plan adds the plan's traffic to the service and starts the plan's days again from today, and the customer is told so before renewing. The reports now count the licenses and the digital accounts the store sells, and the owner can start them from zero for the day the store goes live. A reseller finds a service by its subscription link or its client config.
+
+### Updating
+- One database migration, additive (core 00039: the `wallet_convert` ledger kind and the list price and rate a license order records). No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together.
+- **After the update, on the Reports page, press "Start from zero"** (owner only) if the sales so far were tests: the reports, the CSV files, the daily summary and the Overview's revenue then count only what is sold from that moment. Nothing is deleted.
+- Money still held in USDT wallets is converted to Toman by core within seconds, once, at the live rate. The **live USDT rate** must be on (it is by default) or a rate typed in Gateways; without any rate the licenses are not offered.
+
+### Known limits
+- A renewal already paid but not yet applied when you update uses the new renewal rule.
+- A plan priced in USDT is paid directly by crypto, not from the wallet. The USDT top-up is in the bot; the Mini App shows the USDT equivalent and the rate but tops up in Toman only.
+- Start from zero does not cut the lost-services (churn) counts, which are read from the services' expiry dates.
+- The owner's margin applies when something priced in USDT is charged, not when USDT is credited: a customer who tops up in USDT gets the live price without the margin.
+
 ### Added
 - **Start the reports from zero.** After the tests, the owner presses **Start from zero** on the Reports page (owner only, with a confirmation): the reports, the CSV files, the daily summary and the Overview's revenue then count only what is sold from that moment. Nothing is deleted (orders, payments, wallets and the ledger stay), the page says "Counting from ...", and **Count everything again** brings the earlier sales back. `reports.reset` is audited.
 - **The reports count every sale.** The licenses the store sells and the digital accounts it resells are now revenue, paid orders, hours of the week and the payment methods (as wallet sales) like the VPN orders, with their own lines (`licenses`, `digital`) on the Reports page, in the charts, in the daily summary message and in the CSV files (four new columns at the end of `summary.csv`; `orders.csv` has rows of type `license` and `digital`). A refund of either is a refund.
