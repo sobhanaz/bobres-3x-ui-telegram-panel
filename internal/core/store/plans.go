@@ -74,6 +74,36 @@ func (s *Store) ListPlans(ctx context.Context, q querier, includeDisabled bool) 
 	return out, rows.Err()
 }
 
+// ListDeletedPlans returns the plans that were deleted (taken off sale and out of every list, never erased), the newest deletion first.
+func (s *Store) ListDeletedPlans(ctx context.Context, q querier) ([]Plan, error) {
+	rows, err := q.Query(ctx, `SELECT `+planCols+` FROM core.plans WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list deleted plans: %w", err)
+	}
+	defer rows.Close()
+	var out []Plan
+	for rows.Next() {
+		p, err := scanPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	return out, rows.Err()
+}
+
+// RestorePlan brings a deleted plan back into the lists, off sale (the owner turns it on when they want it).
+func (s *Store) RestorePlan(ctx context.Context, q querier, id string) error {
+	tag, err := q.Exec(ctx, `UPDATE core.plans SET deleted_at = NULL, enabled = false, updated_at = now() WHERE id = $1 AND deleted_at IS NOT NULL`, id)
+	if err != nil {
+		return fmt.Errorf("restore plan: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // GetPlan returns one plan by id.
 func (s *Store) GetPlan(ctx context.Context, q querier, id string) (*Plan, error) {
 	row := q.QueryRow(ctx, `SELECT `+planCols+` FROM core.plans WHERE id = $1`, id)

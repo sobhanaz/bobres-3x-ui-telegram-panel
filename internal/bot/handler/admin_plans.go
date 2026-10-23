@@ -117,6 +117,7 @@ func (h *Handler) showPlanCard(r *req, id string) {
 		back = "adm:tup"
 	}
 	kb.Row(r.button("btn.back", back))
+	h.addUndo(r, kb)
 	r.show(text, kb)
 }
 
@@ -126,11 +127,13 @@ func (h *Handler) togglePlan(r *req, id string) {
 		r.fail(err)
 		return
 	}
-	p.Enabled = !p.GetEnabled()
+	was := p.GetEnabled()
+	p.Enabled = !was
 	if _, err := h.core.AdminUpsertPlan(r.ctx, &corev1.AdminUpsertPlanRequest{ActorTelegramId: h.actor(r), Plan: p}); err != nil {
 		r.fail(err)
 		return
 	}
+	h.rememberUndo(r, "plan", id, strconv.FormatBool(was), planName(r, p))
 	h.showPlanCard(r, id)
 }
 

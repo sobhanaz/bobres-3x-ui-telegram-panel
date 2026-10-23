@@ -242,6 +242,12 @@ says "Step n of m", what is wanted, the allowed range and an example; a refused 
 prompt; Back and Cancel are on every step; a last screen shows everything to check before it is saved. Cancel leaves
 nothing behind. Callbacks are `adm:<verb>:<arg>`, at most 64 bytes (tested).
 
+**Undo.** The last change made in the admin menu (a setting, a plan switched on or off or repriced, a discount code switched on
+or off) can be taken back: the screen that shows the change has an **Undo** button, and so does the confirmation after `/set`.
+The old value is kept for one hour per admin (in the same short-lived store as the confirm screens, nonce `undo`), only the
+**last** change is kept, and Undo goes through the same core call as the change itself, so the audit log records it like any other
+change. After the hour, or after another change, the button answers that there is nothing to undo. If the value was changed again by someone else after yours, Undo refuses ("changed again") and changes nothing, so it never undoes another person's work.
+
 **Roles:** the bot hides what a role may not do and answers politely when a button is tapped by hand; core enforces
 the role on every call, so a crafted callback cannot do more than the dashboard allows.
 

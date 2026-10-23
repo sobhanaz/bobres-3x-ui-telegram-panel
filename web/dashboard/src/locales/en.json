@@ -489,7 +489,14 @@
     "reward_tag_amount": "Reward {amount}",
     "delete": "Delete plan",
     "delete_confirm": "Delete the plan {name}? It is taken off sale and out of every list. It is not erased: its orders and reports keep it, and services already made from it keep working.",
-    "deleted": "Plan deleted (taken off sale and out of the lists)"
+    "deleted": "Plan deleted (taken off sale and out of the lists)",
+    "deleted_show": "Show deleted plans",
+    "deleted_hide": "Hide deleted plans",
+    "deleted_intro": "Deleted plans are off sale and out of every list, but kept with their orders. Restoring one brings it back into the table above, off sale: turn it on when you want it.",
+    "deleted_none": "No deleted plans.",
+    "deleted_on": "Deleted",
+    "restore": "Restore",
+    "restored": "Plan restored. It is off sale: turn it on in the table when you want it."
   },
   "payment": {
     "queue": "Review queue",
@@ -1911,7 +1918,8 @@
       },
       "plan": {
         "upsert": "Plan saved",
-        "delete": "Plan deleted"
+        "delete": "Plan deleted",
+        "restore": "Plan restored"
       },
       "plan_group": {
         "upsert": "Plan group saved",

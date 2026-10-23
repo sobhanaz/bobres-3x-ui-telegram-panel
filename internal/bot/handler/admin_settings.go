@@ -141,6 +141,7 @@ func (h *Handler) showGroup(r *req, group string) {
 		kb.Row(tg.CB("✏️ "+label, "adm:sk:"+sp.GetKey()))
 	}
 	kb.Row(r.button("btn.back", "adm:set"), r.button("btn.adm_menu", "adm"))
+	h.addUndo(r, kb)
 	text := r.t("admin.group_title", "group", r.groupTitle(group))
 	switch {
 	case len(kb.InlineKeyboard) == 1:
@@ -178,6 +179,7 @@ func (h *Handler) showKey(r *req, key string) {
 		kb.Row(r.button("btn.adm_reset", "adm:sr:"+key))
 	}
 	kb.Row(r.button("btn.back", "adm:sg:"+sp.GetGroup()))
+	h.addUndo(r, kb)
 	def := ""
 	if sp.GetDefaultValue() != "" {
 		def = r.defaultLine(r.specDefault(sp))
@@ -217,10 +219,14 @@ func (h *Handler) saveSetting(r *req, key, value string) {
 		r.fail(err)
 		return
 	}
+	old := sp.GetValue()
 	if bad := h.setSetting(r, key, value); bad != "" {
 		r.toast, r.alert = r.t("admin.refused_short"), true
 		h.showKey(r, key)
 		return
+	}
+	if value != old {
+		h.rememberUndo(r, "set", key, old, r.settingLabel(key))
 	}
 	r.toast = r.t("admin.saved")
 	h.showGroup(r, sp.GetGroup())
@@ -291,8 +297,15 @@ func settingWizard() *wizard {
 			},
 		}},
 		save: func(r *req, d map[string]string) string {
+			old := ""
+			if sp, err := r.h.settingSpec(r, d["key"]); err == nil {
+				old = sp.GetValue()
+			}
 			if bad := r.h.setSetting(r, d["key"], d["v"]); bad != "" {
 				return bad
+			}
+			if d["v"] != old {
+				r.h.rememberUndo(r, "set", d["key"], old, r.settingLabel(d["key"]))
 			}
 			r.toast = r.t("admin.saved")
 			r.h.showKey(r, d["key"])
@@ -309,6 +322,10 @@ func (h *Handler) onSetCommand(r *req, args string) {
 	if key == "" {
 		h.showSettings(r) // no arguments: the buttons
 		return
+	}
+	old, known := "", false
+	if sp, err := h.settingSpec(r, key); err == nil {
+		old, known = sp.GetValue(), true
 	}
 	if _, err := h.core.AdminSetSetting(r.ctx, &corev1.AdminSetSettingRequest{
 		ActorTelegramId: h.actor(r), Key: key, Value: strings.TrimSpace(value),
@@ -329,5 +346,11 @@ func (h *Handler) onSetCommand(r *req, args string) {
 		return
 	}
 	_ = h.RefreshSettings(r.ctx)
-	r.send(r.t("admin.setting_saved", "key", esc(key)), nil)
+	var kb *tg.Keyboard
+	if known && strings.TrimSpace(value) != old {
+		h.rememberUndo(r, "set", key, old, r.settingLabel(key))
+		kb = &tg.Keyboard{}
+		h.addUndo(r, kb)
+	}
+	r.send(r.t("admin.setting_saved", "key", esc(key)), kb)
 }

@@ -69,6 +69,16 @@ func (s *Server) BuyVendorLicense(ctx context.Context, req *corev1.BuyVendorLice
 	}, nil
 }
 
+// SetVendorIntent records what a customer meant to buy when they tapped a payment method for the shortfall; core buys it by itself once the
+// payment lands and the wallet covers it.
+func (s *Server) SetVendorIntent(ctx context.Context, req *corev1.SetVendorIntentRequest) (*corev1.SetVendorIntentResponse, error) {
+	ctx = fromBot(ctx)
+	if err := s.dom.SetVendorIntent(ctx, req.GetUserId(), req.GetTier(), int(req.GetMonths()), req.GetLicenseId()); err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.SetVendorIntentResponse{}, nil
+}
+
 // ListMyVendorLicenses lists the licenses a customer bought (never their keys).
 func (s *Server) ListMyVendorLicenses(ctx context.Context, req *corev1.ListMyVendorLicensesRequest) (*corev1.ListMyVendorLicensesResponse, error) {
 	ls, err := s.dom.MyVendorLicenses(ctx, req.GetUserId())

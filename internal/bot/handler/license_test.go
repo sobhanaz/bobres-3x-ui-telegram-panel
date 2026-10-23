@@ -262,3 +262,40 @@ func TestLicensesAreOffInAStoreThatDoesNotSellThem(t *testing.T) {
 
 // usdtUnit is one USDT in minor units.
 const usdtUnit = 1_000_000
+
+// A buyer short of money taps a payment method for the shortfall: the bot tells them the license will be bought by itself when the payment
+// lands, core records the intent, and when the money arrives the license is bought and its key sent, with no second visit.
+func TestLicenseIsBoughtByItselfAfterTheTopup(t *testing.T) {
+	w, ls, owner := licenseWorld(t)
+	owner.text("/set vendor.enabled true")
+	owner.text("/set payments.usdt_trc20 TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL")
+	buyer := w.customer(7111, "intent_buyer")
+	ctx := context.Background()
+
+	buyer.tap("lic:b:standard:1")
+	buyer.shownHas("short")
+	buyer.tap(callbackWithPrefix(buyer.shown(), "lpay:x:"))
+	buyer.sees("I will buy")
+	buyer.sees("TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL") // the payment instructions follow
+	u := w.storeUser(7111)
+	var n int
+	if err := w.stack.Store.DB().QueryRow(ctx, `SELECT count(*) FROM core.vendor_intents WHERE user_id = $1 AND tier = 'standard' AND months = 1`, u.ID).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("the intent: %d %v", n, err)
+	}
+	if ls.made() != 0 {
+		t.Fatal("bought before the payment landed")
+	}
+
+	// The payment lands (a staff approval credits the wallet): the next look of the worker buys, and the key arrives in the chat.
+	w.fundUSDT(7111, 4*usdtUnit)
+	if made, err := w.stack.Domain.SettleVendorIntents(ctx); err != nil || made != 1 {
+		t.Fatalf("settle: %d %v", made, err)
+	}
+	buyer.eventuallySees("Your Standard license is ready")
+	if !strings.Contains(buyer.lastWith("Your Standard license is ready").text, "BOBRES-BOT-KEY-0001") {
+		t.Fatalf("no key in %q", buyer.lastWith("Your Standard license is ready").text)
+	}
+	if got := w.usdtBalance(7111); got != 0 || ls.made() != 1 {
+		t.Fatalf("balance %d, licenses %d", got, ls.made())
+	}
+}

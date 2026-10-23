@@ -30,6 +30,8 @@ type planJSON struct {
 	GroupID *string `json:"group_id"`
 	// Reward: a paid purchase gives the buyer a discount code for any plan (null: none).
 	Reward *rewardJSON `json:"reward"`
+	// DeletedAt (unix seconds) is set only on a deleted plan, in the list of deleted plans.
+	DeletedAt *int64 `json:"deleted_at,omitempty"`
 }
 
 // rewardJSON is a plan's reward as the dashboard reads it: a percent or an amount in the plan's currency, the days the code lasts and the
@@ -250,4 +252,34 @@ func (s *Server) deletePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"result": "deleted"})
+}
+
+// listDeletedPlans: GET /api/v1/plans/deleted, the plans that were deleted (the owner's: they can restore them).
+func (s *Server) listDeletedPlans(w http.ResponseWriter, r *http.Request) {
+	plans, err := s.cfg.Domain.DeletedPlans(r.Context())
+	if err != nil {
+		s.fail(w, "list deleted plans", err)
+		return
+	}
+	items := make([]planJSON, 0, len(plans))
+	for i := range plans {
+		it := planOf(&plans[i], 0)
+		it.DeletedAt = unix(plans[i].DeletedAt)
+		items = append(items, it)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// restorePlan: POST /api/v1/plans/{id}/restore brings a deleted plan back, off sale.
+func (s *Server) restorePlan(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	p, err := s.cfg.Domain.RestorePlan(r.Context(), actor(r), id)
+	if err != nil {
+		s.fail(w, "restore plan", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plan": planOf(p, 0)})
 }

@@ -52,3 +52,13 @@ describe('branding legal pages texts', () => {
     }
   })
 })
+
+// Restoring a deleted plan: its texts are in both catalogs and the audit entry has a name.
+describe('deleted plans texts', () => {
+  it('exist in Persian and English', () => {
+    for (const cat of [fa, en] as Record<string, any>[]) {
+      for (const k of ['deleted_show', 'deleted_hide', 'deleted_intro', 'deleted_none', 'deleted_on', 'restore', 'restored']) expect(typeof cat.plan[k], k).toBe('string')
+      expect(cat.audit.action.plan.restore).toBeTruthy()
+    }
+  })
+})

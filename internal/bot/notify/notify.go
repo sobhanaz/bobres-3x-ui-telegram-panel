@@ -208,6 +208,13 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, "reward.code", "code", html.EscapeString(e.Code), "value", value,
 			"days", i18n.Number(lang, days), "date", i18n.Date(lang, time.Unix(e.ExpiresAt, 0)), "text", text), kb)
 
+	case events.VendorOrderSettled:
+		var e events.VendorOrderSettledEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		return n.vendorSettled(ctx, e)
+
 	case events.WalletCredited:
 		var e events.WalletCreditedEvent
 		if err := decode(m, &e); err != nil {
@@ -1153,4 +1160,32 @@ func rewardText(texts map[string]string, lang string) string {
 		}
 	}
 	return ""
+}
+
+// vendorSettled tells a customer that the license they asked for before topping up was bought (with its key, or the new end of a renewal) or
+// refunded. The key is fetched here, never carried by the event.
+func (n *Notifier) vendorSettled(ctx context.Context, e events.VendorOrderSettledEvent) error {
+	lang := n.lang(ctx, e.TelegramID)
+	kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.lic_my", "lic:my"), n.button(lang, "btn.home", "home"))
+	tier := e.Tier
+	if tier == "standard" || tier == "pro" {
+		tier = n.cat.T(lang, "lic.tier."+tier)
+	}
+	end := n.cat.T(lang, "lic.no_end")
+	if e.EndsAt != 0 {
+		end = i18n.Date(lang, time.Unix(e.EndsAt, 0))
+	}
+	switch {
+	case e.Status != "done":
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "lic.refunded"), kb)
+	case e.Kind == "renew":
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "lic.renewed", "tier", tier, "end", end), kb)
+	}
+	key, err := n.core.GetVendorLicenseKey(ctx, &corev1.GetVendorLicenseKeyRequest{UserId: e.UserID, LicenseId: e.LicenseID})
+	if err != nil {
+		// The license is bought; the key is in My licenses. Say so instead of failing the event for ever.
+		n.log.Warn("license key for a settled intent", "err", err)
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "lic.pending"), kb)
+	}
+	return n.send(ctx, e.TelegramID, n.cat.T(lang, "lic.bought", "tier", tier, "end", end, "key", html.EscapeString(key.GetKey())), kb)
 }

@@ -21,6 +21,7 @@ import { asciiNumber, bytes, currencies, decimalOf, gbOf, isolate, money, num, v
 import { choiceOf, goneInbounds, inboundOptions, inboundsBody, noUsableServer, serverNames, serverOptions, type InboundChoice } from '../servers'
 import { useAuth } from '../stores/auth'
 import PlanGroups from '../components/plans/PlanGroups.vue'
+import DeletedPlans from '../components/plans/DeletedPlans.vue'
 import type { InboundItem, PlanGroupItem, PlanItem, ServerItem } from '../types'
 
 const { t, locale } = useI18n()
@@ -408,6 +409,8 @@ async function toggle(p: PlanItem, enabled: boolean) {
       </template>
     </Column>
   </DataTable>
+
+  <DeletedPlans v-if="canDelete" @restored="load" />
 
   <Dialog v-model:visible="editing" :header="form.id ? t('plan.edit') : t('plan.new')" modal :style="{ inlineSize: 'min(36rem, 94vw)' }" :draggable="false">
     <form class="app-form" @submit.prevent="save">

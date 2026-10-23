@@ -285,3 +285,70 @@ func (s *Store) SyncVendorLicense(ctx context.Context, q querier, licenseID, tie
 	}
 	return nil
 }
+
+// VendorIntent is what a customer meant to buy when they tapped a payment method for the shortfall: a license of a tier for a number of
+// months, or the renewal of one of theirs. At most one per customer.
+type VendorIntent struct {
+	UserID    string
+	Tier      string
+	Months    int
+	LicenseID *string // a vendor_licenses id: a renewal; nil: a new license
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// SetVendorIntent records (or replaces) a customer's intent.
+func (s *Store) SetVendorIntent(ctx context.Context, q querier, in *VendorIntent) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO core.vendor_intents (user_id, tier, months, license_id, expires_at) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE SET tier = EXCLUDED.tier, months = EXCLUDED.months, license_id = EXCLUDED.license_id,
+			created_at = now(), expires_at = EXCLUDED.expires_at`, in.UserID, in.Tier, in.Months, in.LicenseID, in.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("set vendor intent: %w", err)
+	}
+	return nil
+}
+
+// DeleteVendorIntent forgets a customer's intent (no error when there is none).
+func (s *Store) DeleteVendorIntent(ctx context.Context, q querier, userID string) error {
+	if _, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("delete vendor intent: %w", err)
+	}
+	return nil
+}
+
+// ClaimVendorIntent forgets the intent of a customer that was made at createdAt and says whether it was still there. A purchase made from an
+// intent calls it in the same transaction as the debit, so an intent that was replaced, bought by hand or already used is not bought again.
+func (s *Store) ClaimVendorIntent(ctx context.Context, q querier, userID string, createdAt time.Time) (bool, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE user_id = $1 AND created_at = $2`, userID, createdAt)
+	if err != nil {
+		return false, fmt.Errorf("claim vendor intent: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// LiveVendorIntents lists the intents that have not expired and whose customer has had a top-up credited since they made them (an intent
+// whose payment has not landed is not looked at), oldest first, and forgets the ones that have expired.
+func (s *Store) LiveVendorIntents(ctx context.Context, q querier, now time.Time, limit int) ([]VendorIntent, error) {
+	if _, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE expires_at <= $1`, now); err != nil {
+		return nil, fmt.Errorf("expire vendor intents: %w", err)
+	}
+	rows, err := q.Query(ctx, `SELECT i.user_id::text, i.tier, i.months, i.license_id::text, i.created_at, i.expires_at
+		FROM core.vendor_intents i
+		WHERE EXISTS (SELECT 1 FROM core.ledger_entries l
+			WHERE l.user_id = i.user_id AND l.kind = 'topup' AND l.amount > 0 AND l.created_at > i.created_at)
+		ORDER BY i.created_at LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list vendor intents: %w", err)
+	}
+	defer rows.Close()
+	var out []VendorIntent
+	for rows.Next() {
+		var in VendorIntent
+		if err := rows.Scan(&in.UserID, &in.Tier, &in.Months, &in.LicenseID, &in.CreatedAt, &in.ExpiresAt); err != nil {
+			return nil, err
+		}
+		out = append(out, in)
+	}
+	return out, rows.Err()
+}

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -408,5 +410,97 @@ func TestAdminFrontDoorOffersTheButtons(t *testing.T) {
 		if !strings.Contains(labels, want) {
 			t.Errorf("the admin menu lacks %q: %s", want, labels)
 		}
+	}
+}
+
+// Undo: the last change made with the menu's buttons (a setting, a plan or a code switched on or off) is kept and an Undo button puts it back; a
+// new change replaces it, and a used one is gone.
+func TestAdminUndoTheLastChange(t *testing.T) {
+	w, owner := adminWorld(t)
+	state := func(key string) string { return w.h.setting(key) }
+
+	// A switch: flip it, see the Undo button, press it, it is as before; the button is gone.
+	owner.press("adm:set")
+	owner.press("adm:sg:notify")
+	before := state("notify.sales")
+	owner.press("adm:st:notify.sales")
+	if state("notify.sales") == before {
+		t.Fatal("the switch did not flip")
+	}
+	owner.sees("Undo: ")
+	owner.press("adm:undo")
+	owner.toast("Undone")
+	if got := state("notify.sales"); got != before {
+		t.Fatalf("after Undo %q, want %q", got, before)
+	}
+	if hasButton(owner.shown(), "adm:undo") {
+		t.Fatalf("Undo is still offered after it was used: %v", owner.shown().labels())
+	}
+	owner.tap("adm:undo") // an old button: nothing to undo, nothing breaks
+	owner.toast("nothing to undo")
+
+	// A typed value, and the one before it comes back (an unset value goes back to unset).
+	owner.text("/admin")
+	owner.press("adm:pays")
+	owner.press("adm:sk:payments.card_holder")
+	owner.press("adm:se:payments.card_holder")
+	owner.text("Ali Rezaei")
+	owner.sees("Undo: ")
+	owner.press("adm:undo")
+	if got := state("payments.card_holder"); got != "" {
+		t.Fatalf("a typed value was not undone: %q", got)
+	}
+	// /set offers it too.
+	owner.text("/set payments.card_holder Sara Ahmadi")
+	owner.sees("Undo: ")
+	owner.press("adm:undo")
+	if got := state("payments.card_holder"); got != "" {
+		t.Fatalf("/set was not undone: %q", got)
+	}
+
+	// A plan switched off comes back on; a discount code the same.
+	owner.text("/plan_add 150000 IRT 30 50 Monthly | ماهانه")
+	owner.press("adm:plans")
+	owner.press("adm:pl:")
+	owner.press("adm:pt:")
+	owner.sees("Undo: Monthly")
+	owner.press("adm:undo")
+	owner.toast("Undone")
+	owner.text("/discount_add SPRING20 20%")
+	owner.press("adm:disc")
+	owner.press("adm:dt:SPRING20")
+	owner.sees("Undo: SPRING20")
+	owner.press("adm:undo")
+	owner.toast("Undone")
+
+	// A change someone else made to the same value after yours is not undone by yours: Undo refuses and changes nothing.
+	owner.press("adm:set")
+	owner.press("adm:sg:notify")
+	owner.press("adm:st:notify.sales")
+	mine := state("notify.sales")
+	w.setInCore("notify.sales", strconv.FormatBool(mine != "true")) // another admin flips it back, outside this chat
+	_ = w.h.RefreshSettings(context.Background())
+	owner.press("adm:undo")
+	owner.toast("changed again")
+	if got := state("notify.sales"); got != strconv.FormatBool(mine != "true") {
+		t.Fatalf("a stale Undo overwrote the newer value: %q", got)
+	}
+	if hasButton(owner.shown(), "adm:undo") {
+		t.Fatalf("a refused Undo is still offered: %v", owner.shown().labels())
+	}
+
+	// A new change replaces the last: only the newest is undone.
+	owner.press("adm:set")
+	owner.press("adm:sg:notify")
+	owner.press("adm:st:notify.sales")
+	ticketBefore := state("notify.new_ticket")
+	salesNow := state("notify.sales")
+	owner.press("adm:st:notify.new_ticket")
+	owner.press("adm:undo")
+	if got := state("notify.new_ticket"); got != ticketBefore {
+		t.Fatalf("the newest change was not undone: %q, want %q", got, ticketBefore)
+	}
+	if got := state("notify.sales"); got != salesNow {
+		t.Fatalf("the older change was undone too: %q, want %q", got, salesNow)
 	}
 }

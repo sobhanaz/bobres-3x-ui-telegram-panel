@@ -33,3 +33,35 @@ func (s *Service) DeletePlan(ctx context.Context, actor *store.User, id string) 
 		return s.auditChange(ctx, tx, actor, "plan.delete", "plan", id, old, nil, "")
 	})
 }
+
+// DeletedPlans lists the plans that were deleted, newest deletion first.
+func (s *Service) DeletedPlans(ctx context.Context) ([]store.Plan, error) {
+	return s.st.ListDeletedPlans(ctx, s.st.Conn())
+}
+
+// RestorePlan brings a deleted plan back into the lists. It comes back off sale: the owner turns it on when they want it. It is the owner's, as
+// deleting is.
+func (s *Service) RestorePlan(ctx context.Context, actor *store.User, id string) (*store.Plan, error) {
+	u, err := buuid.Parse(strings.TrimSpace(id))
+	if err != nil {
+		return nil, store.ErrNotFound
+	}
+	id = u.String()
+	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
+		old, err := s.st.GetPlan(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if old.DeletedAt == nil {
+			return store.ErrNotFound
+		}
+		if err := s.st.RestorePlan(ctx, tx, id); err != nil {
+			return err
+		}
+		return s.auditChange(ctx, tx, actor, "plan.restore", "plan", id, old, nil, "")
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.st.GetPlan(ctx, s.st.Conn(), id)
+}
