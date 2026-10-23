@@ -8,6 +8,12 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **Digital accounts in the Mini App.** On the store that has the vendor's own features, **More > Digital accounts** is the bot's shop in the app: the supplier's categories, a category's products, a product page with its text and stock, a quantity (1 to 25, no more than the supplier has), an order summary with the wallet balance, and the wallet pays. The account is shown to its buyer and kept in **My purchases**; a purchase the supplier has not delivered yet is followed every 3 seconds, and a short wallet is sent to the Wallet tab. It is the same shelf, wallet and idempotent purchase as the bot (`/api/mini/v1/digital`, `/digital/buy`, `/digital/orders`). No database migration.
+
+### Changed
+- Paying a Toman price with manual USDT in the Mini App now shows the rate the USDT amount was worked out at (the live price when the store follows it); the payment answer carries it as `usdt_rate`.
+
 ## [0.15.0] — 2026-10-23
 
 **Buy a license in one screen, bring back a deleted plan, Undo in the bot's admin menu, a project wiki, and a native read of the newest Persian texts.** When a customer's wallet is short for a license, the bot now says how much is missing and, after the top-up lands, buys the license by itself and sends the key; the owner can bring a deleted plan back from the Plans page (off sale, so nothing is sold by accident); the last change made in the bot's admin menu can be taken back with one tap for an hour; the project has a GitHub Wiki in English and Persian, kept in `docs/wiki/` and published after every merge; the Persian wording of the newest texts was read as a native speaker would read it; and two flaky tests that failed the v0.14.0 release gate are fixed.

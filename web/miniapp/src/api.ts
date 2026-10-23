@@ -118,6 +118,8 @@ export interface Intent {
   stars?: number
   /** manual USDT: what to send, in micro-USDT (6 decimals) */
   usdt_amount?: number
+  /** manual USDT of a Toman price: the Toman price of one USDT that amount was worked out at */
+  usdt_rate?: number
 }
 /**
  * PendingPayment is one of the customer's manual payments that still waits for its receipt (GET /payments/pending): what

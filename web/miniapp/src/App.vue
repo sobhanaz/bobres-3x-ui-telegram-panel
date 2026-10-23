@@ -64,6 +64,13 @@ function inServices() {
   section.value = null
   tab.value = 'services'
 }
+// a section (the digital accounts) sends the customer to the wallet to top it up
+function inWallet() {
+  buying.value = null
+  choosing.value = null
+  section.value = null
+  tab.value = 'wallet'
+}
 function home() {
   buying.value = null
   choosing.value = null
@@ -124,6 +131,7 @@ onMounted(boot)
         :is="section.component"
         @close="section = null"
         @services="inServices"
+        @wallet="inWallet"
         @buy="startBuying"
         @renew="(s: Service) => startChoosing('renew', s)"
         @topup="(s: Service) => startChoosing('traffic_topup', s)"

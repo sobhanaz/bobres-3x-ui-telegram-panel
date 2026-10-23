@@ -31,6 +31,7 @@ const amount = computed(() =>
     : fmtMoney(props.intent.amount, props.intent.currency, props.intent.scale),
 )
 const usdt = computed(() => (props.intent.usdt_amount ? fmtExact(props.intent.usdt_amount, 'USDT', 6) : ''))
+const rate = computed(() => (props.intent.usdt_rate ? fmtMoney(props.intent.usdt_rate, 'IRT', 0) : ''))
 const networks = computed(() => networksOf(d.value))
 // Only a web address is opened (core checks it too).
 const payLink = computed(() => (/^https?:\/\//i.test(d.value.zarinpal_link ?? '') ? (d.value.zarinpal_link ?? '') : ''))
@@ -123,6 +124,7 @@ async function send() {
     <template v-else-if="provider === 'manual_crypto'">
       <p v-if="usdt && intent.currency === 'IRT'">{{ tr('manual.crypto_send_equiv', { amount: usdt, price: amount }) }}</p>
       <p v-else>{{ tr('manual.crypto_send', { amount: usdt || amount }) }}</p>
+      <p v-if="rate && intent.currency === 'IRT'" class="muted small">{{ tr('manual.crypto_rate', { rate }) }}</p>
       <CopyField v-if="usdt" :label="tr('manual.amount')" :value="usdt" :copy="plainAmount(intent.usdt_amount ?? 0, 6)" :code="false" />
       <CopyField v-if="d.usdt_trc20" :label="tr('manual.network', { network: 'TRC20' })" :value="d.usdt_trc20" />
       <CopyField v-if="d.usdt_erc20" :label="tr('manual.network', { network: 'ERC20' })" :value="d.usdt_erc20" />

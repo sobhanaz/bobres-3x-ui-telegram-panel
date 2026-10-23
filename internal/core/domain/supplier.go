@@ -33,6 +33,9 @@ const SettingSupplierEnabled = "supplier.enabled"
 // SupplierCurrency is what a supplier product is sold for: Toman, the wallet's own currency.
 const SupplierCurrency = "IRT"
 
+// SupplierMaxQuantity is the most one purchase may take (the bot and the Mini App offer no more).
+const SupplierMaxQuantity = supplierMaxQuantity
+
 const (
 	supplierMaxPrice    = 1_000_000_000_000
 	supplierMaxQuantity = 25

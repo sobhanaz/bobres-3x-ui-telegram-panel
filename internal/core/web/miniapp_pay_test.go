@@ -775,7 +775,7 @@ func TestMiniAppManualPaymentsShowWhatTheBotShows(t *testing.T) {
 	id, res = p.payOK(tok, order, "manual_crypto")
 	d, _ = res["details"].(map[string]any)
 	if res["provider"] != "manual_crypto" || d["usdt_trc20"] != "TS3xQSYkuSNpuUzmCprGpTHHKq9XVTgu3r" || d["usdt_erc20"] != "0x0000000000000000000000000000000000000001" ||
-		d["reference"] != domain.PaymentReference(id) || res["usdt_amount"] != float64(2_500_000) || res["amount"] != float64(150_000) || res["currency"] != "IRT" {
+		d["reference"] != domain.PaymentReference(id) || res["usdt_amount"] != float64(2_500_000) || res["usdt_rate"] != float64(60_000) || res["amount"] != float64(150_000) || res["currency"] != "IRT" {
 		t.Fatalf("crypto: %v", res)
 	}
 	if d["card_number"] != nil {
@@ -806,7 +806,7 @@ func TestMiniAppManualPaymentsShowWhatTheBotShows(t *testing.T) {
 	if code, out := p.pay(tok, uorder, "manual_card"); code != 400 || out["error"] != "method_off" {
 		t.Errorf("card for a USDT order: %d %v", code, out)
 	}
-	if _, res = p.payOK(tok, uorder, "manual_crypto"); res["usdt_amount"] != float64(5_000_000) || res["currency"] != "USDT" {
+	if _, res = p.payOK(tok, uorder, "manual_crypto"); res["usdt_amount"] != float64(5_000_000) || res["currency"] != "USDT" || res["usdt_rate"] != nil {
 		t.Errorf("USDT order: %v", res)
 	}
 }
