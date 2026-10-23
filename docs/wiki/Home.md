@@ -4,7 +4,7 @@
 
 BOBRES sells and manages VPN subscriptions on [3x-ui](https://github.com/MHSanaei/3x-ui) (Xray) panels and on Marzban. Your customers buy, pay, renew and ask for help in a Telegram bot or its Mini App. You run the store from a web dashboard. One `bobres` command on your server installs, updates, backs up and repairs everything. Each store is single-tenant and white-label: it runs on your own server, with your own domain, bot, panels and brand, and your customers' data stays on that server.
 
-**As of v0.16.0, 2026-10-23.**
+**As of v0.17.0, 2026-10-23.**
 
 ## Install in one command
 
