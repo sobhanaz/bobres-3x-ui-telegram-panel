@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // A customer who does not see a service in My services finds it by its link, sees its state and renews it, paying from their own account;
@@ -64,8 +65,10 @@ func TestFindAServiceByItsLinkAndRenewIt(t *testing.T) {
 	holder.eventuallySees("renewed")
 
 	after, err := w.stack.Store.GetSubscription(ctx, w.stack.Store.Conn(), sub.ID)
-	if err != nil || after.ExpiresAt == nil || before == nil || !after.ExpiresAt.After(*before) {
-		t.Fatalf("the service was not extended: before %v after %v (%v)", before, after.ExpiresAt, err)
+	// The renewal adds the plan's traffic and starts its 30 days again from now (the first period began a moment ago).
+	if err != nil || after.ExpiresAt == nil || before == nil || after.ExpiresAt.Before(before.Add(-time.Second)) || after.ExpiresAt.After(before.Add(2*time.Minute)) ||
+		after.TrafficTotal == nil || sub.TrafficTotal == nil || *after.TrafficTotal <= *sub.TrafficTotal {
+		t.Fatalf("the service was not renewed: before %v after %v (%v)", before, after.ExpiresAt, err)
 	}
 	if got := w.balanceOf(742); got != 250_000 {
 		t.Fatalf("the holder's balance %d, want 250000", got)

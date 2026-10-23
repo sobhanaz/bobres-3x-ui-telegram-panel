@@ -34,6 +34,10 @@ Only Buy is grouped. Renew, Add traffic, a reseller's Buy for a customer and Bul
 
 `bot.plan_layout` chooses between a **table** (the default: a header row, then each plan as a row of two buttons with its name and its price) and a **list** (one button per plan). A table with more than 46 plans is drawn as a list.
 
+## How renewal works
+
+When a customer renews a service with a plan, the plan's **traffic is added** to the traffic the service has now, but the **time starts over**: the days that were left are dropped, and the plan's days count from the day of the renewal. A 30-day plan always means 30 days from the renewal, never more. The customer is told this before choosing a plan to renew with and again at the checkout, in the bot and in the Mini App. A traffic package adds traffic only and does not touch the time. When your staff add days to a service from the dashboard, those days are still added to the time left.
+
 ## Deleting a plan
 
 Only the owner can delete a plan (permission `plans.delete`). The trash button asks for a confirmation. The plan is taken off sale and out of every list, but it is never erased. Its orders, reports and refunds keep it, and services already made from it keep working.

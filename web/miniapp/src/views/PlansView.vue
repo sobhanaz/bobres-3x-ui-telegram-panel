@@ -52,6 +52,7 @@ const plans = computed(() => (sections.value ? (current.value?.plans ?? []) : sh
 <template>
   <section>
     <h2 v-if="mode && mode !== 'new'">{{ tr('services.choose_plan') }}</h2>
+    <p v-if="mode === 'renew'" class="muted small" role="note">{{ tr('renew.note') }}</p>
     <p v-if="error" class="error" role="alert">{{ error }} <button class="link" type="button" @click="load">{{ tr('common.retry') }}</button></p>
     <p v-else-if="state.plans === null" class="muted">{{ tr('common.loading') }}</p>
     <p v-else-if="!shown().length" class="muted">{{ mode && mode !== 'new' ? tr('services.no_plans') : tr('plans.empty') }}</p>
