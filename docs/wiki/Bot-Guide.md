@@ -67,6 +67,8 @@ Owners and admins send `/admin` and get a menu made of buttons. Support staff ge
 
 `/set` opens the settings screen. The dashboard remains the full tool.
 
+**Undo.** The last change you made in this menu (a setting, a plan switched on or off, a discount code switched on or off) has an **Undo** button on the screen that shows it, and after `/set`. It puts the old value back through the same call, so the audit log records it. Only the last change of each admin is kept, for one hour.
+
 Staff get alerts in Telegram for payments to review, new tickets, failed deliveries, sales (optional) and system problems. Every owner also receives the daily backup file.
 
 ## Rules the bot applies

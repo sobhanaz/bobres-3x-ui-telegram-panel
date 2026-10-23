@@ -8,6 +8,21 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.15.0] — 2026-10-23
+
+**Buy a license in one screen, bring back a deleted plan, Undo in the bot's admin menu, a project wiki, and a native read of the newest Persian texts.** When a customer's wallet is short for a license, the bot now says how much is missing and, after the top-up lands, buys the license by itself and sends the key; the owner can bring a deleted plan back from the Plans page (off sale, so nothing is sold by accident); the last change made in the bot's admin menu can be taken back with one tap for an hour; the project has a GitHub Wiki in English and Persian, kept in `docs/wiki/` and published after every merge; the Persian wording of the newest texts was read as a native speaker would read it; and two flaky tests that failed the v0.14.0 release gate are fixed.
+
+### Updating
+- One database migration, additive (a rollback keeps every order and credit): core 00038 (`vendor_intents`). No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together.
+- The license purchase by itself only exists on the owner's own store (the one that sells BOBRES licenses); on every other store nothing changes.
+
+### Known limits
+- A wish to buy a license is kept 48 hours and is carried out only by a top-up that arrives after it; a top-up that arrives later, a gift code or a staff adjustment buys nothing.
+- Undo keeps only the last change of each admin, for one hour, and only for the bot's admin menu (a setting, a plan switched on or off, a discount code switched on or off).
+- A restored plan comes back off sale and in no group: switch it on and group it again.
+- The wiki pages say what has not been tried on real devices; the Mini App still has no digital accounts (they are in the bot only).
+
 ### Added
 - **Licenses: pay and top up in one screen.** When a customer's USDT wallet is short, the confirm screen says how much is missing; tapping the top-up saves what they wanted (tier and months, 48 hours) and, when the payment lands, the store buys the license by itself and sends the key. A manual buy, a refusal or a refund clears the wish, so nothing is bought twice. One database migration, additive (core 00038, `vendor_intents`). Only on the owner's store (`private_features`).
 - **Restore a deleted plan.** The Plans page lists the deleted plans under the table, with a Restore button for the owner; the plan comes back off sale and ungrouped, so the owner decides when to sell it again (`plan.restore` in the audit log).
