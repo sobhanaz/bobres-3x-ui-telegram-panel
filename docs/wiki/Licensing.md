@@ -69,7 +69,7 @@ Your customers see only "New purchases are temporarily unavailable. Please conta
 - **Updates are never withheld.** A license may carry an update date, but it is advisory: `bobres update` prints a note for a newer release and installs it anyway.
 - **What is sent to the vendor.** Activation sends the license key, the install ID, the domain and the version. The daily renewal sends the installed token and the version. Both happen only when `BOBRES_LICENSE_SERVER` is set, and the license server sees the request's IP address. Your customers' data is not sent.
 - **The vendor's own features** (selling BOBRES licenses, reselling a supplier's accounts) are in no tier. See [Digital Accounts](Digital-Accounts).
-- **Terms.** The source license and the legal texts are drafts under review. Copying or redistributing the code, hosting it for others, reselling it and white-labelling it need a paid license from the owner. See the [LICENSE](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/LICENSE).
+- **Terms.** The source license and the legal texts are drafts, and the lawyer's review is still open. Copying or redistributing the code, hosting it for others, reselling it and white-labelling it need a paid license from the owner. See the [LICENSE](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/LICENSE).
 
 ## Reading the License tab
 
