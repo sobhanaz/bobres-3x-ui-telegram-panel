@@ -688,14 +688,16 @@ func (x *Order) GetLabel() string {
 }
 
 type Wallet struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Currency      string                 `protobuf:"bytes,2,opt,name=currency,proto3" json:"currency,omitempty"`
-	Balance       int64                  `protobuf:"varint,3,opt,name=balance,proto3" json:"balance,omitempty"` // a reseller's may be negative: what they owe
-	UpdatedAt     int64                  `protobuf:"varint,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	CreditLimit   int64                  `protobuf:"varint,5,opt,name=credit_limit,json=creditLimit,proto3" json:"credit_limit,omitempty"` // resellers: the balance may go down to -credit_limit (0 for everyone else)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	UserId         string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Currency       string                 `protobuf:"bytes,2,opt,name=currency,proto3" json:"currency,omitempty"`
+	Balance        int64                  `protobuf:"varint,3,opt,name=balance,proto3" json:"balance,omitempty"` // a reseller's may be negative: what they owe
+	UpdatedAt      int64                  `protobuf:"varint,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CreditLimit    int64                  `protobuf:"varint,5,opt,name=credit_limit,json=creditLimit,proto3" json:"credit_limit,omitempty"`          // resellers: the balance may go down to -credit_limit (0 for everyone else)
+	UsdtEquivalent int64                  `protobuf:"varint,6,opt,name=usdt_equivalent,json=usdtEquivalent,proto3" json:"usdt_equivalent,omitempty"` // the Toman balance in USDT at the live price, minor units (0: no rate, or not a Toman wallet)
+	UsdtRate       int64                  `protobuf:"varint,7,opt,name=usdt_rate,json=usdtRate,proto3" json:"usdt_rate,omitempty"`                   // the live Toman price of one USDT (0: none)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Wallet) Reset() {
@@ -759,6 +761,20 @@ func (x *Wallet) GetUpdatedAt() int64 {
 func (x *Wallet) GetCreditLimit() int64 {
 	if x != nil {
 		return x.CreditLimit
+	}
+	return 0
+}
+
+func (x *Wallet) GetUsdtEquivalent() int64 {
+	if x != nil {
+		return x.UsdtEquivalent
+	}
+	return 0
+}
+
+func (x *Wallet) GetUsdtRate() int64 {
+	if x != nil {
+		return x.UsdtRate
 	}
 	return 0
 }
@@ -9411,9 +9427,10 @@ func (x *RedeemGiftCodeResponse) GetReplayed() bool {
 // One thing the owner's bot sells: a tier for a term, and what it costs.
 type VendorOffer struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Tier          string                 `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`      // standard or pro
-	Months        int32                  `protobuf:"varint,2,opt,name=months,proto3" json:"months,omitempty"` // 1 or 12
-	Price         *v1.Money              `protobuf:"bytes,3,opt,name=price,proto3" json:"price,omitempty"`
+	Tier          string                 `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`                            // standard or pro
+	Months        int32                  `protobuf:"varint,2,opt,name=months,proto3" json:"months,omitempty"`                       // 1 or 12
+	Price         *v1.Money              `protobuf:"bytes,3,opt,name=price,proto3" json:"price,omitempty"`                          // what the buyer pays: Toman, worked out at the store's USDT rate now
+	ListPrice     *v1.Money              `protobuf:"bytes,4,opt,name=list_price,json=listPrice,proto3" json:"list_price,omitempty"` // the price list: USDT (the same as price when the tier is priced in Toman)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9469,6 +9486,13 @@ func (x *VendorOffer) GetPrice() *v1.Money {
 	return nil
 }
 
+func (x *VendorOffer) GetListPrice() *v1.Money {
+	if x != nil {
+		return x.ListPrice
+	}
+	return nil
+}
+
 type ListVendorOffersRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -9517,7 +9541,9 @@ type ListVendorOffersResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	On            bool                   `protobuf:"varint,1,opt,name=on,proto3" json:"on,omitempty"` // license sales are on in this store
 	Offers        []*VendorOffer         `protobuf:"bytes,2,rep,name=offers,proto3" json:"offers,omitempty"`
-	Balance       *v1.Money              `protobuf:"bytes,3,opt,name=balance,proto3" json:"balance,omitempty"` // the buyer's wallet in the offers' currency
+	Balance       *v1.Money              `protobuf:"bytes,3,opt,name=balance,proto3" json:"balance,omitempty"`                             // the buyer's wallet: Toman, like the prices
+	Rate          int64                  `protobuf:"varint,4,opt,name=rate,proto3" json:"rate,omitempty"`                                  // the Toman per USDT the prices were worked out at (0: none)
+	BalanceUsdt   int64                  `protobuf:"varint,5,opt,name=balance_usdt,json=balanceUsdt,proto3" json:"balance_usdt,omitempty"` // the balance in USDT at the live price, minor units (0: no rate)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9571,6 +9597,20 @@ func (x *ListVendorOffersResponse) GetBalance() *v1.Money {
 		return x.Balance
 	}
 	return nil
+}
+
+func (x *ListVendorOffersResponse) GetRate() int64 {
+	if x != nil {
+		return x.Rate
+	}
+	return 0
+}
+
+func (x *ListVendorOffersResponse) GetBalanceUsdt() int64 {
+	if x != nil {
+		return x.BalanceUsdt
+	}
+	return 0
 }
 
 // BuyVendorLicenseRequest buys a new license, or (license_id set) renews one the buyer owns for months more.
@@ -10855,14 +10895,16 @@ const file_core_v1_core_proto_rawDesc = "" +
 	" \x01(\tR\x0esubscriptionId\x12#\n" +
 	"\rdiscount_code\x18\v \x01(\tR\fdiscountCode\x12,\n" +
 	"\bdiscount\x18\f \x01(\v2\x10.common.v1.MoneyR\bdiscount\x12\x14\n" +
-	"\x05label\x18\r \x01(\tR\x05label\"\x99\x01\n" +
+	"\x05label\x18\r \x01(\tR\x05label\"\xdf\x01\n" +
 	"\x06Wallet\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
 	"\bcurrency\x18\x02 \x01(\tR\bcurrency\x12\x18\n" +
 	"\abalance\x18\x03 \x01(\x03R\abalance\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x04 \x01(\x03R\tupdatedAt\x12!\n" +
-	"\fcredit_limit\x18\x05 \x01(\x03R\vcreditLimit\"\x9d\x02\n" +
+	"\fcredit_limit\x18\x05 \x01(\x03R\vcreditLimit\x12'\n" +
+	"\x0fusdt_equivalent\x18\x06 \x01(\x03R\x0eusdtEquivalent\x12\x1b\n" +
+	"\tusdt_rate\x18\a \x01(\x03R\busdtRate\"\x9d\x02\n" +
 	"\vLedgerEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +
@@ -11572,17 +11614,21 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\bcredited\x18\x02 \x01(\v2\x10.common.v1.MoneyR\bcredited\x12*\n" +
 	"\abalance\x18\x03 \x01(\v2\x10.common.v1.MoneyR\abalance\x12.\n" +
 	"\x13retry_after_seconds\x18\x04 \x01(\x03R\x11retryAfterSeconds\x12\x1a\n" +
-	"\breplayed\x18\x05 \x01(\bR\breplayed\"a\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed\"\x92\x01\n" +
 	"\vVendorOffer\x12\x12\n" +
 	"\x04tier\x18\x01 \x01(\tR\x04tier\x12\x16\n" +
 	"\x06months\x18\x02 \x01(\x05R\x06months\x12&\n" +
-	"\x05price\x18\x03 \x01(\v2\x10.common.v1.MoneyR\x05price\"2\n" +
+	"\x05price\x18\x03 \x01(\v2\x10.common.v1.MoneyR\x05price\x12/\n" +
+	"\n" +
+	"list_price\x18\x04 \x01(\v2\x10.common.v1.MoneyR\tlistPrice\"2\n" +
 	"\x17ListVendorOffersRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x84\x01\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xbb\x01\n" +
 	"\x18ListVendorOffersResponse\x12\x0e\n" +
 	"\x02on\x18\x01 \x01(\bR\x02on\x12,\n" +
 	"\x06offers\x18\x02 \x03(\v2\x14.core.v1.VendorOfferR\x06offers\x12*\n" +
-	"\abalance\x18\x03 \x01(\v2\x10.common.v1.MoneyR\abalance\"\xdf\x01\n" +
+	"\abalance\x18\x03 \x01(\v2\x10.common.v1.MoneyR\abalance\x12\x12\n" +
+	"\x04rate\x18\x04 \x01(\x03R\x04rate\x12!\n" +
+	"\fbalance_usdt\x18\x05 \x01(\x03R\vbalanceUsdt\"\xdf\x01\n" +
 	"\x17BuyVendorLicenseRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04tier\x18\x02 \x01(\tR\x04tier\x12\x16\n" +
@@ -12050,184 +12096,185 @@ var file_core_v1_core_proto_depIdxs = []int32{
 	172, // 81: core.v1.RedeemGiftCodeResponse.credited:type_name -> common.v1.Money
 	172, // 82: core.v1.RedeemGiftCodeResponse.balance:type_name -> common.v1.Money
 	172, // 83: core.v1.VendorOffer.price:type_name -> common.v1.Money
-	137, // 84: core.v1.ListVendorOffersResponse.offers:type_name -> core.v1.VendorOffer
-	172, // 85: core.v1.ListVendorOffersResponse.balance:type_name -> common.v1.Money
-	172, // 86: core.v1.BuyVendorLicenseRequest.expected_price:type_name -> common.v1.Money
-	141, // 87: core.v1.BuyVendorLicenseResponse.license:type_name -> core.v1.VendorLicense
-	172, // 88: core.v1.BuyVendorLicenseResponse.price:type_name -> common.v1.Money
-	141, // 89: core.v1.ListMyVendorLicensesResponse.licenses:type_name -> core.v1.VendorLicense
-	141, // 90: core.v1.GetVendorLicenseKeyResponse.license:type_name -> core.v1.VendorLicense
-	172, // 91: core.v1.SupplierOffer.price:type_name -> common.v1.Money
-	149, // 92: core.v1.ListSupplierOffersResponse.offers:type_name -> core.v1.SupplierOffer
-	172, // 93: core.v1.ListSupplierOffersResponse.balance:type_name -> common.v1.Money
-	172, // 94: core.v1.BuySupplierProductRequest.expected_total:type_name -> common.v1.Money
-	172, // 95: core.v1.BuySupplierProductResponse.total:type_name -> common.v1.Money
-	172, // 96: core.v1.SupplierOrderSummary.total:type_name -> common.v1.Money
-	154, // 97: core.v1.ListMySupplierOrdersResponse.orders:type_name -> core.v1.SupplierOrderSummary
-	154, // 98: core.v1.GetSupplierDeliveryResponse.order:type_name -> core.v1.SupplierOrderSummary
-	35,  // 99: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
-	36,  // 100: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
-	37,  // 101: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
-	39,  // 102: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
-	62,  // 103: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
-	63,  // 104: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
-	64,  // 105: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
-	66,  // 106: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
-	10,  // 107: core.v1.CoreService.FindServiceByLink:input_type -> core.v1.FindServiceByLinkRequest
-	83,  // 108: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
-	84,  // 109: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
-	87,  // 110: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
-	88,  // 111: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
-	111, // 112: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
-	112, // 113: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
-	113, // 114: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
-	114, // 115: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
-	95,  // 116: core.v1.CoreService.SubmitPaymentProof:input_type -> core.v1.SubmitPaymentProofRequest
-	90,  // 117: core.v1.CoreService.CheckPayment:input_type -> core.v1.CheckPaymentRequest
-	91,  // 118: core.v1.CoreService.StarsPreCheckout:input_type -> core.v1.StarsPreCheckoutRequest
-	92,  // 119: core.v1.CoreService.StarsPaid:input_type -> core.v1.StarsPaidRequest
-	93,  // 120: core.v1.CoreService.ListPaymentMethods:input_type -> core.v1.ListPaymentMethodsRequest
-	96,  // 121: core.v1.CoreService.GetSubscriptionLinks:input_type -> core.v1.GetSubscriptionLinksRequest
-	98,  // 122: core.v1.CoreService.AdminGetStats:input_type -> core.v1.AdminGetStatsRequest
-	100, // 123: core.v1.CoreService.AdminListPendingPayments:input_type -> core.v1.AdminListPendingPaymentsRequest
-	103, // 124: core.v1.CoreService.AdminGetPayment:input_type -> core.v1.AdminGetPaymentRequest
-	105, // 125: core.v1.CoreService.AdminFindUser:input_type -> core.v1.AdminFindUserRequest
-	107, // 126: core.v1.CoreService.AdminAdjustBalance:input_type -> core.v1.AdminAdjustBalanceRequest
-	108, // 127: core.v1.CoreService.AdminSetUserStatus:input_type -> core.v1.AdminSetUserStatusRequest
-	109, // 128: core.v1.CoreService.AdminUpsertPlan:input_type -> core.v1.AdminUpsertPlanRequest
-	110, // 129: core.v1.CoreService.AdminSetSetting:input_type -> core.v1.AdminSetSettingRequest
-	40,  // 130: core.v1.CoreService.QuoteOrder:input_type -> core.v1.QuoteOrderRequest
-	42,  // 131: core.v1.CoreService.QuoteBulkOrder:input_type -> core.v1.QuoteBulkOrderRequest
-	44,  // 132: core.v1.CoreService.CreateBulkOrder:input_type -> core.v1.CreateBulkOrderRequest
-	45,  // 133: core.v1.CoreService.GetBulkOrder:input_type -> core.v1.GetBulkOrderRequest
-	48,  // 134: core.v1.CoreService.GetReferralInfo:input_type -> core.v1.GetReferralInfoRequest
-	50,  // 135: core.v1.CoreService.GetTopInviters:input_type -> core.v1.GetTopInvitersRequest
-	54,  // 136: core.v1.CoreService.AdminUpsertDiscount:input_type -> core.v1.AdminUpsertDiscountRequest
-	55,  // 137: core.v1.CoreService.AdminListDiscounts:input_type -> core.v1.AdminListDiscountsRequest
-	57,  // 138: core.v1.CoreService.CreateDashboardLink:input_type -> core.v1.CreateDashboardLinkRequest
-	58,  // 139: core.v1.CoreService.ListStaffContacts:input_type -> core.v1.ListStaffContactsRequest
-	14,  // 140: core.v1.CoreService.AddTicketMessage:input_type -> core.v1.AddTicketMessageRequest
-	16,  // 141: core.v1.CoreService.GetMyTickets:input_type -> core.v1.GetMyTicketsRequest
-	18,  // 142: core.v1.CoreService.GetMyTicket:input_type -> core.v1.GetMyTicketRequest
-	20,  // 143: core.v1.CoreService.CloseMyTicket:input_type -> core.v1.CloseMyTicketRequest
-	21,  // 144: core.v1.CoreService.GetTicketMessage:input_type -> core.v1.GetTicketMessageRequest
-	23,  // 145: core.v1.CoreService.ReportTicketDelivery:input_type -> core.v1.ReportTicketDeliveryRequest
-	25,  // 146: core.v1.CoreService.SetUserBotBlocked:input_type -> core.v1.SetUserBotBlockedRequest
-	27,  // 147: core.v1.CoreService.ClaimBroadcastBatch:input_type -> core.v1.ClaimBroadcastBatchRequest
-	31,  // 148: core.v1.CoreService.ReportBroadcastResults:input_type -> core.v1.ReportBroadcastResultsRequest
-	68,  // 149: core.v1.CoreService.SetSubscriptionLabel:input_type -> core.v1.SetSubscriptionLabelRequest
-	79,  // 150: core.v1.CoreService.GetResellerInfo:input_type -> core.v1.GetResellerInfoRequest
-	82,  // 151: core.v1.CoreService.SetResellerConfigPrefix:input_type -> core.v1.SetResellerConfigPrefixRequest
-	70,  // 152: core.v1.CoreService.ListResellerServices:input_type -> core.v1.ListResellerServicesRequest
-	72,  // 153: core.v1.CoreService.SetResellerServiceEnabled:input_type -> core.v1.SetResellerServiceEnabledRequest
-	73,  // 154: core.v1.CoreService.DeleteResellerService:input_type -> core.v1.DeleteResellerServiceRequest
-	75,  // 155: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
-	76,  // 156: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
-	85,  // 157: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
-	175, // 158: core.v1.CoreService.ListHelpEntries:input_type -> core.v1.ListHelpEntriesRequest
-	176, // 159: core.v1.CoreService.GetHelpEntry:input_type -> core.v1.GetHelpEntryRequest
-	116, // 160: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
-	120, // 161: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
-	123, // 162: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
-	126, // 163: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
-	127, // 164: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
-	130, // 165: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
-	131, // 166: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
-	133, // 167: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
-	135, // 168: core.v1.CoreService.RedeemGiftCode:input_type -> core.v1.RedeemGiftCodeRequest
-	138, // 169: core.v1.CoreService.ListVendorOffers:input_type -> core.v1.ListVendorOffersRequest
-	140, // 170: core.v1.CoreService.BuyVendorLicense:input_type -> core.v1.BuyVendorLicenseRequest
-	143, // 171: core.v1.CoreService.ListMyVendorLicenses:input_type -> core.v1.ListMyVendorLicensesRequest
-	147, // 172: core.v1.CoreService.GetVendorLicenseKey:input_type -> core.v1.GetVendorLicenseKeyRequest
-	145, // 173: core.v1.CoreService.SetVendorIntent:input_type -> core.v1.SetVendorIntentRequest
-	150, // 174: core.v1.CoreService.ListSupplierOffers:input_type -> core.v1.ListSupplierOffersRequest
-	152, // 175: core.v1.CoreService.BuySupplierProduct:input_type -> core.v1.BuySupplierProductRequest
-	155, // 176: core.v1.CoreService.ListMySupplierOrders:input_type -> core.v1.ListMySupplierOrdersRequest
-	157, // 177: core.v1.CoreService.GetSupplierDelivery:input_type -> core.v1.GetSupplierDeliveryRequest
-	2,   // 178: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
-	2,   // 179: core.v1.CoreService.GetUser:output_type -> core.v1.User
-	38,  // 180: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
-	6,   // 181: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
-	6,   // 182: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
-	7,   // 183: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
-	65,  // 184: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
-	67,  // 185: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
-	11,  // 186: core.v1.CoreService.FindServiceByLink:output_type -> core.v1.FoundService
-	12,  // 187: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
-	33,  // 188: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
-	33,  // 189: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
-	89,  // 190: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
-	6,   // 191: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
-	89,  // 192: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
-	6,   // 193: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
-	115, // 194: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
-	89,  // 195: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
-	89,  // 196: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
-	89,  // 197: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
-	89,  // 198: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
-	94,  // 199: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
-	97,  // 200: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
-	99,  // 201: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
-	102, // 202: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
-	104, // 203: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
-	106, // 204: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
-	7,   // 205: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
-	2,   // 206: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
-	3,   // 207: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
-	33,  // 208: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
-	41,  // 209: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
-	43,  // 210: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
-	46,  // 211: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
-	46,  // 212: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
-	49,  // 213: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
-	52,  // 214: core.v1.CoreService.GetTopInviters:output_type -> core.v1.TopInviters
-	53,  // 215: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
-	56,  // 216: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
-	61,  // 217: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
-	60,  // 218: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
-	15,  // 219: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
-	17,  // 220: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
-	19,  // 221: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
-	12,  // 222: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
-	22,  // 223: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
-	24,  // 224: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
-	26,  // 225: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
-	29,  // 226: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
-	32,  // 227: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
-	9,   // 228: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
-	81,  // 229: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
-	81,  // 230: core.v1.CoreService.SetResellerConfigPrefix:output_type -> core.v1.ResellerInfo
-	71,  // 231: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
-	9,   // 232: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
-	74,  // 233: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
-	9,   // 234: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
-	78,  // 235: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
-	86,  // 236: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
-	177, // 237: core.v1.CoreService.ListHelpEntries:output_type -> core.v1.ListHelpEntriesResponse
-	178, // 238: core.v1.CoreService.GetHelpEntry:output_type -> core.v1.HelpEntry
-	119, // 239: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
-	122, // 240: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
-	125, // 241: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
-	124, // 242: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
-	129, // 243: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
-	128, // 244: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
-	132, // 245: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
-	134, // 246: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
-	136, // 247: core.v1.CoreService.RedeemGiftCode:output_type -> core.v1.RedeemGiftCodeResponse
-	139, // 248: core.v1.CoreService.ListVendorOffers:output_type -> core.v1.ListVendorOffersResponse
-	142, // 249: core.v1.CoreService.BuyVendorLicense:output_type -> core.v1.BuyVendorLicenseResponse
-	144, // 250: core.v1.CoreService.ListMyVendorLicenses:output_type -> core.v1.ListMyVendorLicensesResponse
-	148, // 251: core.v1.CoreService.GetVendorLicenseKey:output_type -> core.v1.GetVendorLicenseKeyResponse
-	146, // 252: core.v1.CoreService.SetVendorIntent:output_type -> core.v1.SetVendorIntentResponse
-	151, // 253: core.v1.CoreService.ListSupplierOffers:output_type -> core.v1.ListSupplierOffersResponse
-	153, // 254: core.v1.CoreService.BuySupplierProduct:output_type -> core.v1.BuySupplierProductResponse
-	156, // 255: core.v1.CoreService.ListMySupplierOrders:output_type -> core.v1.ListMySupplierOrdersResponse
-	158, // 256: core.v1.CoreService.GetSupplierDelivery:output_type -> core.v1.GetSupplierDeliveryResponse
-	178, // [178:257] is the sub-list for method output_type
-	99,  // [99:178] is the sub-list for method input_type
-	99,  // [99:99] is the sub-list for extension type_name
-	99,  // [99:99] is the sub-list for extension extendee
-	0,   // [0:99] is the sub-list for field type_name
+	172, // 84: core.v1.VendorOffer.list_price:type_name -> common.v1.Money
+	137, // 85: core.v1.ListVendorOffersResponse.offers:type_name -> core.v1.VendorOffer
+	172, // 86: core.v1.ListVendorOffersResponse.balance:type_name -> common.v1.Money
+	172, // 87: core.v1.BuyVendorLicenseRequest.expected_price:type_name -> common.v1.Money
+	141, // 88: core.v1.BuyVendorLicenseResponse.license:type_name -> core.v1.VendorLicense
+	172, // 89: core.v1.BuyVendorLicenseResponse.price:type_name -> common.v1.Money
+	141, // 90: core.v1.ListMyVendorLicensesResponse.licenses:type_name -> core.v1.VendorLicense
+	141, // 91: core.v1.GetVendorLicenseKeyResponse.license:type_name -> core.v1.VendorLicense
+	172, // 92: core.v1.SupplierOffer.price:type_name -> common.v1.Money
+	149, // 93: core.v1.ListSupplierOffersResponse.offers:type_name -> core.v1.SupplierOffer
+	172, // 94: core.v1.ListSupplierOffersResponse.balance:type_name -> common.v1.Money
+	172, // 95: core.v1.BuySupplierProductRequest.expected_total:type_name -> common.v1.Money
+	172, // 96: core.v1.BuySupplierProductResponse.total:type_name -> common.v1.Money
+	172, // 97: core.v1.SupplierOrderSummary.total:type_name -> common.v1.Money
+	154, // 98: core.v1.ListMySupplierOrdersResponse.orders:type_name -> core.v1.SupplierOrderSummary
+	154, // 99: core.v1.GetSupplierDeliveryResponse.order:type_name -> core.v1.SupplierOrderSummary
+	35,  // 100: core.v1.CoreService.UpsertUser:input_type -> core.v1.UpsertUserRequest
+	36,  // 101: core.v1.CoreService.GetUser:input_type -> core.v1.GetUserRequest
+	37,  // 102: core.v1.CoreService.ListPlans:input_type -> core.v1.ListPlansRequest
+	39,  // 103: core.v1.CoreService.CreateOrder:input_type -> core.v1.CreateOrderRequest
+	62,  // 104: core.v1.CoreService.GetOrder:input_type -> core.v1.GetOrderRequest
+	63,  // 105: core.v1.CoreService.GetWallet:input_type -> core.v1.GetWalletRequest
+	64,  // 106: core.v1.CoreService.ListLedgerEntries:input_type -> core.v1.ListLedgerEntriesRequest
+	66,  // 107: core.v1.CoreService.ListSubscriptions:input_type -> core.v1.ListSubscriptionsRequest
+	10,  // 108: core.v1.CoreService.FindServiceByLink:input_type -> core.v1.FindServiceByLinkRequest
+	83,  // 109: core.v1.CoreService.CreateSupportTicket:input_type -> core.v1.CreateSupportTicketRequest
+	84,  // 110: core.v1.CoreService.GetSettings:input_type -> core.v1.GetSettingsRequest
+	87,  // 111: core.v1.CoreService.UpdateBranding:input_type -> core.v1.UpdateBrandingRequest
+	88,  // 112: core.v1.CoreService.ReviewManualPayment:input_type -> core.v1.ReviewManualPaymentRequest
+	111, // 113: core.v1.CoreService.PayOrderWithWallet:input_type -> core.v1.PayOrderWithWalletRequest
+	112, // 114: core.v1.CoreService.CreatePaymentIntent:input_type -> core.v1.CreatePaymentIntentRequest
+	113, // 115: core.v1.CoreService.StartTrial:input_type -> core.v1.StartTrialRequest
+	114, // 116: core.v1.CoreService.CanStartTrial:input_type -> core.v1.CanStartTrialRequest
+	95,  // 117: core.v1.CoreService.SubmitPaymentProof:input_type -> core.v1.SubmitPaymentProofRequest
+	90,  // 118: core.v1.CoreService.CheckPayment:input_type -> core.v1.CheckPaymentRequest
+	91,  // 119: core.v1.CoreService.StarsPreCheckout:input_type -> core.v1.StarsPreCheckoutRequest
+	92,  // 120: core.v1.CoreService.StarsPaid:input_type -> core.v1.StarsPaidRequest
+	93,  // 121: core.v1.CoreService.ListPaymentMethods:input_type -> core.v1.ListPaymentMethodsRequest
+	96,  // 122: core.v1.CoreService.GetSubscriptionLinks:input_type -> core.v1.GetSubscriptionLinksRequest
+	98,  // 123: core.v1.CoreService.AdminGetStats:input_type -> core.v1.AdminGetStatsRequest
+	100, // 124: core.v1.CoreService.AdminListPendingPayments:input_type -> core.v1.AdminListPendingPaymentsRequest
+	103, // 125: core.v1.CoreService.AdminGetPayment:input_type -> core.v1.AdminGetPaymentRequest
+	105, // 126: core.v1.CoreService.AdminFindUser:input_type -> core.v1.AdminFindUserRequest
+	107, // 127: core.v1.CoreService.AdminAdjustBalance:input_type -> core.v1.AdminAdjustBalanceRequest
+	108, // 128: core.v1.CoreService.AdminSetUserStatus:input_type -> core.v1.AdminSetUserStatusRequest
+	109, // 129: core.v1.CoreService.AdminUpsertPlan:input_type -> core.v1.AdminUpsertPlanRequest
+	110, // 130: core.v1.CoreService.AdminSetSetting:input_type -> core.v1.AdminSetSettingRequest
+	40,  // 131: core.v1.CoreService.QuoteOrder:input_type -> core.v1.QuoteOrderRequest
+	42,  // 132: core.v1.CoreService.QuoteBulkOrder:input_type -> core.v1.QuoteBulkOrderRequest
+	44,  // 133: core.v1.CoreService.CreateBulkOrder:input_type -> core.v1.CreateBulkOrderRequest
+	45,  // 134: core.v1.CoreService.GetBulkOrder:input_type -> core.v1.GetBulkOrderRequest
+	48,  // 135: core.v1.CoreService.GetReferralInfo:input_type -> core.v1.GetReferralInfoRequest
+	50,  // 136: core.v1.CoreService.GetTopInviters:input_type -> core.v1.GetTopInvitersRequest
+	54,  // 137: core.v1.CoreService.AdminUpsertDiscount:input_type -> core.v1.AdminUpsertDiscountRequest
+	55,  // 138: core.v1.CoreService.AdminListDiscounts:input_type -> core.v1.AdminListDiscountsRequest
+	57,  // 139: core.v1.CoreService.CreateDashboardLink:input_type -> core.v1.CreateDashboardLinkRequest
+	58,  // 140: core.v1.CoreService.ListStaffContacts:input_type -> core.v1.ListStaffContactsRequest
+	14,  // 141: core.v1.CoreService.AddTicketMessage:input_type -> core.v1.AddTicketMessageRequest
+	16,  // 142: core.v1.CoreService.GetMyTickets:input_type -> core.v1.GetMyTicketsRequest
+	18,  // 143: core.v1.CoreService.GetMyTicket:input_type -> core.v1.GetMyTicketRequest
+	20,  // 144: core.v1.CoreService.CloseMyTicket:input_type -> core.v1.CloseMyTicketRequest
+	21,  // 145: core.v1.CoreService.GetTicketMessage:input_type -> core.v1.GetTicketMessageRequest
+	23,  // 146: core.v1.CoreService.ReportTicketDelivery:input_type -> core.v1.ReportTicketDeliveryRequest
+	25,  // 147: core.v1.CoreService.SetUserBotBlocked:input_type -> core.v1.SetUserBotBlockedRequest
+	27,  // 148: core.v1.CoreService.ClaimBroadcastBatch:input_type -> core.v1.ClaimBroadcastBatchRequest
+	31,  // 149: core.v1.CoreService.ReportBroadcastResults:input_type -> core.v1.ReportBroadcastResultsRequest
+	68,  // 150: core.v1.CoreService.SetSubscriptionLabel:input_type -> core.v1.SetSubscriptionLabelRequest
+	79,  // 151: core.v1.CoreService.GetResellerInfo:input_type -> core.v1.GetResellerInfoRequest
+	82,  // 152: core.v1.CoreService.SetResellerConfigPrefix:input_type -> core.v1.SetResellerConfigPrefixRequest
+	70,  // 153: core.v1.CoreService.ListResellerServices:input_type -> core.v1.ListResellerServicesRequest
+	72,  // 154: core.v1.CoreService.SetResellerServiceEnabled:input_type -> core.v1.SetResellerServiceEnabledRequest
+	73,  // 155: core.v1.CoreService.DeleteResellerService:input_type -> core.v1.DeleteResellerServiceRequest
+	75,  // 156: core.v1.CoreService.SetSubscriptionNote:input_type -> core.v1.SetSubscriptionNoteRequest
+	76,  // 157: core.v1.CoreService.ListInvitedCustomers:input_type -> core.v1.ListInvitedCustomersRequest
+	85,  // 158: core.v1.CoreService.GetBotPhoto:input_type -> core.v1.GetBotPhotoRequest
+	175, // 159: core.v1.CoreService.ListHelpEntries:input_type -> core.v1.ListHelpEntriesRequest
+	176, // 160: core.v1.CoreService.GetHelpEntry:input_type -> core.v1.GetHelpEntryRequest
+	116, // 161: core.v1.CoreService.AdminTodayStats:input_type -> core.v1.AdminTodayStatsRequest
+	120, // 162: core.v1.CoreService.AdminListSettingSpecs:input_type -> core.v1.AdminListSettingSpecsRequest
+	123, // 163: core.v1.CoreService.AdminListServers:input_type -> core.v1.AdminListServersRequest
+	126, // 164: core.v1.CoreService.AdminSetServer:input_type -> core.v1.AdminSetServerRequest
+	127, // 165: core.v1.CoreService.AdminListStaff:input_type -> core.v1.AdminListStaffRequest
+	130, // 166: core.v1.CoreService.AdminAddStaff:input_type -> core.v1.AdminAddStaffRequest
+	131, // 167: core.v1.CoreService.AdminRemoveStaff:input_type -> core.v1.AdminRemoveStaffRequest
+	133, // 168: core.v1.CoreService.AdminBroadcast:input_type -> core.v1.AdminBroadcastRequest
+	135, // 169: core.v1.CoreService.RedeemGiftCode:input_type -> core.v1.RedeemGiftCodeRequest
+	138, // 170: core.v1.CoreService.ListVendorOffers:input_type -> core.v1.ListVendorOffersRequest
+	140, // 171: core.v1.CoreService.BuyVendorLicense:input_type -> core.v1.BuyVendorLicenseRequest
+	143, // 172: core.v1.CoreService.ListMyVendorLicenses:input_type -> core.v1.ListMyVendorLicensesRequest
+	147, // 173: core.v1.CoreService.GetVendorLicenseKey:input_type -> core.v1.GetVendorLicenseKeyRequest
+	145, // 174: core.v1.CoreService.SetVendorIntent:input_type -> core.v1.SetVendorIntentRequest
+	150, // 175: core.v1.CoreService.ListSupplierOffers:input_type -> core.v1.ListSupplierOffersRequest
+	152, // 176: core.v1.CoreService.BuySupplierProduct:input_type -> core.v1.BuySupplierProductRequest
+	155, // 177: core.v1.CoreService.ListMySupplierOrders:input_type -> core.v1.ListMySupplierOrdersRequest
+	157, // 178: core.v1.CoreService.GetSupplierDelivery:input_type -> core.v1.GetSupplierDeliveryRequest
+	2,   // 179: core.v1.CoreService.UpsertUser:output_type -> core.v1.User
+	2,   // 180: core.v1.CoreService.GetUser:output_type -> core.v1.User
+	38,  // 181: core.v1.CoreService.ListPlans:output_type -> core.v1.ListPlansResponse
+	6,   // 182: core.v1.CoreService.CreateOrder:output_type -> core.v1.Order
+	6,   // 183: core.v1.CoreService.GetOrder:output_type -> core.v1.Order
+	7,   // 184: core.v1.CoreService.GetWallet:output_type -> core.v1.Wallet
+	65,  // 185: core.v1.CoreService.ListLedgerEntries:output_type -> core.v1.ListLedgerEntriesResponse
+	67,  // 186: core.v1.CoreService.ListSubscriptions:output_type -> core.v1.ListSubscriptionsResponse
+	11,  // 187: core.v1.CoreService.FindServiceByLink:output_type -> core.v1.FoundService
+	12,  // 188: core.v1.CoreService.CreateSupportTicket:output_type -> core.v1.Ticket
+	33,  // 189: core.v1.CoreService.GetSettings:output_type -> core.v1.Settings
+	33,  // 190: core.v1.CoreService.UpdateBranding:output_type -> core.v1.Settings
+	89,  // 191: core.v1.CoreService.ReviewManualPayment:output_type -> core.v1.PaymentIntentRef
+	6,   // 192: core.v1.CoreService.PayOrderWithWallet:output_type -> core.v1.Order
+	89,  // 193: core.v1.CoreService.CreatePaymentIntent:output_type -> core.v1.PaymentIntentRef
+	6,   // 194: core.v1.CoreService.StartTrial:output_type -> core.v1.Order
+	115, // 195: core.v1.CoreService.CanStartTrial:output_type -> core.v1.CanStartTrialResponse
+	89,  // 196: core.v1.CoreService.SubmitPaymentProof:output_type -> core.v1.PaymentIntentRef
+	89,  // 197: core.v1.CoreService.CheckPayment:output_type -> core.v1.PaymentIntentRef
+	89,  // 198: core.v1.CoreService.StarsPreCheckout:output_type -> core.v1.PaymentIntentRef
+	89,  // 199: core.v1.CoreService.StarsPaid:output_type -> core.v1.PaymentIntentRef
+	94,  // 200: core.v1.CoreService.ListPaymentMethods:output_type -> core.v1.ListPaymentMethodsResponse
+	97,  // 201: core.v1.CoreService.GetSubscriptionLinks:output_type -> core.v1.SubscriptionLinks
+	99,  // 202: core.v1.CoreService.AdminGetStats:output_type -> core.v1.AdminStats
+	102, // 203: core.v1.CoreService.AdminListPendingPayments:output_type -> core.v1.AdminListPendingPaymentsResponse
+	104, // 204: core.v1.CoreService.AdminGetPayment:output_type -> core.v1.AdminPaymentView
+	106, // 205: core.v1.CoreService.AdminFindUser:output_type -> core.v1.AdminUserView
+	7,   // 206: core.v1.CoreService.AdminAdjustBalance:output_type -> core.v1.Wallet
+	2,   // 207: core.v1.CoreService.AdminSetUserStatus:output_type -> core.v1.User
+	3,   // 208: core.v1.CoreService.AdminUpsertPlan:output_type -> core.v1.Plan
+	33,  // 209: core.v1.CoreService.AdminSetSetting:output_type -> core.v1.Settings
+	41,  // 210: core.v1.CoreService.QuoteOrder:output_type -> core.v1.Quote
+	43,  // 211: core.v1.CoreService.QuoteBulkOrder:output_type -> core.v1.BulkQuote
+	46,  // 212: core.v1.CoreService.CreateBulkOrder:output_type -> core.v1.BulkOrder
+	46,  // 213: core.v1.CoreService.GetBulkOrder:output_type -> core.v1.BulkOrder
+	49,  // 214: core.v1.CoreService.GetReferralInfo:output_type -> core.v1.ReferralInfo
+	52,  // 215: core.v1.CoreService.GetTopInviters:output_type -> core.v1.TopInviters
+	53,  // 216: core.v1.CoreService.AdminUpsertDiscount:output_type -> core.v1.Discount
+	56,  // 217: core.v1.CoreService.AdminListDiscounts:output_type -> core.v1.AdminListDiscountsResponse
+	61,  // 218: core.v1.CoreService.CreateDashboardLink:output_type -> core.v1.DashboardLink
+	60,  // 219: core.v1.CoreService.ListStaffContacts:output_type -> core.v1.ListStaffContactsResponse
+	15,  // 220: core.v1.CoreService.AddTicketMessage:output_type -> core.v1.AddTicketMessageResponse
+	17,  // 221: core.v1.CoreService.GetMyTickets:output_type -> core.v1.MyTickets
+	19,  // 222: core.v1.CoreService.GetMyTicket:output_type -> core.v1.TicketThread
+	12,  // 223: core.v1.CoreService.CloseMyTicket:output_type -> core.v1.Ticket
+	22,  // 224: core.v1.CoreService.GetTicketMessage:output_type -> core.v1.TicketMessageView
+	24,  // 225: core.v1.CoreService.ReportTicketDelivery:output_type -> core.v1.ReportTicketDeliveryResponse
+	26,  // 226: core.v1.CoreService.SetUserBotBlocked:output_type -> core.v1.SetUserBotBlockedResponse
+	29,  // 227: core.v1.CoreService.ClaimBroadcastBatch:output_type -> core.v1.BroadcastBatch
+	32,  // 228: core.v1.CoreService.ReportBroadcastResults:output_type -> core.v1.BroadcastState
+	9,   // 229: core.v1.CoreService.SetSubscriptionLabel:output_type -> core.v1.Subscription
+	81,  // 230: core.v1.CoreService.GetResellerInfo:output_type -> core.v1.ResellerInfo
+	81,  // 231: core.v1.CoreService.SetResellerConfigPrefix:output_type -> core.v1.ResellerInfo
+	71,  // 232: core.v1.CoreService.ListResellerServices:output_type -> core.v1.ListResellerServicesResponse
+	9,   // 233: core.v1.CoreService.SetResellerServiceEnabled:output_type -> core.v1.Subscription
+	74,  // 234: core.v1.CoreService.DeleteResellerService:output_type -> core.v1.DeleteResellerServiceResponse
+	9,   // 235: core.v1.CoreService.SetSubscriptionNote:output_type -> core.v1.Subscription
+	78,  // 236: core.v1.CoreService.ListInvitedCustomers:output_type -> core.v1.ListInvitedCustomersResponse
+	86,  // 237: core.v1.CoreService.GetBotPhoto:output_type -> core.v1.BotPhoto
+	177, // 238: core.v1.CoreService.ListHelpEntries:output_type -> core.v1.ListHelpEntriesResponse
+	178, // 239: core.v1.CoreService.GetHelpEntry:output_type -> core.v1.HelpEntry
+	119, // 240: core.v1.CoreService.AdminTodayStats:output_type -> core.v1.AdminTodayStatsResponse
+	122, // 241: core.v1.CoreService.AdminListSettingSpecs:output_type -> core.v1.AdminListSettingSpecsResponse
+	125, // 242: core.v1.CoreService.AdminListServers:output_type -> core.v1.AdminListServersResponse
+	124, // 243: core.v1.CoreService.AdminSetServer:output_type -> core.v1.AdminServer
+	129, // 244: core.v1.CoreService.AdminListStaff:output_type -> core.v1.AdminListStaffResponse
+	128, // 245: core.v1.CoreService.AdminAddStaff:output_type -> core.v1.AdminStaffMember
+	132, // 246: core.v1.CoreService.AdminRemoveStaff:output_type -> core.v1.AdminRemoveStaffResponse
+	134, // 247: core.v1.CoreService.AdminBroadcast:output_type -> core.v1.AdminBroadcastResponse
+	136, // 248: core.v1.CoreService.RedeemGiftCode:output_type -> core.v1.RedeemGiftCodeResponse
+	139, // 249: core.v1.CoreService.ListVendorOffers:output_type -> core.v1.ListVendorOffersResponse
+	142, // 250: core.v1.CoreService.BuyVendorLicense:output_type -> core.v1.BuyVendorLicenseResponse
+	144, // 251: core.v1.CoreService.ListMyVendorLicenses:output_type -> core.v1.ListMyVendorLicensesResponse
+	148, // 252: core.v1.CoreService.GetVendorLicenseKey:output_type -> core.v1.GetVendorLicenseKeyResponse
+	146, // 253: core.v1.CoreService.SetVendorIntent:output_type -> core.v1.SetVendorIntentResponse
+	151, // 254: core.v1.CoreService.ListSupplierOffers:output_type -> core.v1.ListSupplierOffersResponse
+	153, // 255: core.v1.CoreService.BuySupplierProduct:output_type -> core.v1.BuySupplierProductResponse
+	156, // 256: core.v1.CoreService.ListMySupplierOrders:output_type -> core.v1.ListMySupplierOrdersResponse
+	158, // 257: core.v1.CoreService.GetSupplierDelivery:output_type -> core.v1.GetSupplierDeliveryResponse
+	179, // [179:258] is the sub-list for method output_type
+	100, // [100:179] is the sub-list for method input_type
+	100, // [100:100] is the sub-list for extension type_name
+	100, // [100:100] is the sub-list for extension extendee
+	0,   // [0:100] is the sub-list for field type_name
 }
 
 func init() { file_core_v1_core_proto_init() }

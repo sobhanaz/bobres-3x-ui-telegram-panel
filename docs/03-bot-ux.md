@@ -139,6 +139,15 @@ the chain. A different amount is an unmatched deposit: staff are told and credit
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
 
 **How a renewal works (2026-10-23).** A renewal bought with a plan **adds the plan's traffic to the service's current quota and starts the plan's days again from now**: the days that were left are dropped, so a service never lasts longer than one plan period after its last renewal (a 30-day plan: 30 days from the day of the renewal, whatever was left). The customer is told this **before** choosing the plan (the Renew picker, also when the service was found by its link) and again at the checkout (`renew.pick`, `find.renew_pick` and `renew.detail` in the bot, `renew.note` in the Mini App). A traffic package adds traffic only and leaves the time alone. A staff member's "add N days" in the dashboard is another thing and still adds the days to the time left. A service with no expiry or no traffic limit keeps it that way.
+
+**One wallet, in Toman (2026-10-23).** A customer has one wallet, in Toman. It is shown with its equivalent in USDT at the live price and the live
+USDT rate (`wallet.usdt_line`; also in the Mini App's Wallet tab). **Top up** takes Toman by any method, or **💲 Top up in USDT** (a whole number of
+USDT, paid by automatic TRC20 or by hand): the money is credited as Toman at the live price (without the owner's margin, rounded down) as two
+`wallet_convert` ledger entries, and the customer is told how much and at which rate (`wallet.credited_converted`). What is priced in USDT (the
+licenses) is charged in Toman at the store's rate (with the margin, rounded up). Money that still sits in a USDT wallet (an old balance, a USDT gift
+code, a top-up made while no rate was known) is converted by core's sweeper every 15 seconds as soon as a rate is known, once however many run.
+Plans priced in USDT are paid directly (crypto), not from the wallet.
+
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
 **Gift code:** Wallet -> Apply gift code (the button is absent while the owner has the setting `gift_codes.enabled` off) -> the
 customer sends the code (any way it is written: small or capital letters, Persian digits, spaces or dashes; Cancel is under

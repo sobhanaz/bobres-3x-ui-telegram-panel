@@ -179,6 +179,9 @@ function back() {
       <div v-for="w in state.wallets" :key="w.currency" class="card">
         <span class="muted">{{ tr('wallet.balance') }}</span>
         <strong class="big">{{ fmtMoney(w.balance, w.currency, w.scale) }}</strong>
+        <span v-if="w.usdt_rate" class="muted small usdt-line">
+          {{ tr('wallet.usdt', { usdt: fmtMoney(w.usdt_equivalent ?? 0, 'USDT', 6), rate: fmtMoney(w.usdt_rate, 'IRT', 0) }) }}
+        </span>
       </div>
       <p v-if="note" class="ok" role="status">{{ note }}</p>
 

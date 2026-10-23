@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -248,13 +249,21 @@ func newVendorEnv(t *testing.T) *vendorEnv {
 	if err := svc.SetSetting(ctx, e.owner, SettingVendorEnabled, "true"); err != nil {
 		t.Fatal(err)
 	}
+	// One wallet, in Toman: the licenses are priced in USDT and charged at the store's rate (the owner's own, with no live price), 100,000 Toman a USDT.
+	if err := svc.SetSetting(ctx, e.owner, "payments.usdt_rate", strconv.Itoa(testUsdtRate)); err != nil {
+		t.Fatal(err)
+	}
 	return e
 }
 
+// testUsdtRate is the Toman per USDT of the vendor tests: a price or a balance written in USDT units is the Toman wallet at this rate.
+const testUsdtRate = 100_000
+
+// fund tops the buyer's Toman wallet up with what amount USDT is worth at the test rate (amount is in USDT minor units, like the prices).
 func (e *vendorEnv) fund(u *store.User, amount int64) {
 	e.t.Helper()
 	err := e.s.WithTx(context.Background(), func(tx pgx.Tx) error {
-		_, err := e.s.Credit(context.Background(), tx, u.ID, "USDT", amount,
+		_, err := e.s.Credit(context.Background(), tx, u.ID, "IRT", amount*testUsdtRate/usdt,
 			&store.LedgerEntry{Kind: "topup", IdempotencyKey: fmt.Sprintf("fundu-%s-%d-%d", u.ID, amount, time.Now().UnixNano())})
 		return err
 	})
@@ -263,13 +272,14 @@ func (e *vendorEnv) fund(u *store.User, amount int64) {
 	}
 }
 
+// balance is the buyer's Toman wallet written in USDT minor units at the test rate.
 func (e *vendorEnv) balance(u *store.User) int64 {
 	e.t.Helper()
-	w, err := e.s.GetWallet(context.Background(), e.s.Conn(), u.ID, "USDT")
+	w, err := e.s.GetWallet(context.Background(), e.s.Conn(), u.ID, "IRT")
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return w.Balance
+	return w.Balance * usdt / testUsdtRate
 }
 
 func (e *vendorEnv) buy(u *store.User, tier string, months int, key string) (*VendorPurchase, error) {
@@ -519,7 +529,7 @@ func TestVendorRenewExtendsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Order.Kind != "renew" || r.Order.Status != "done" || r.Order.Amount != 40*usdt || r.License == nil {
+	if r.Order.Kind != "renew" || r.Order.Status != "done" || r.Order.Amount != 40*testUsdtRate || r.Order.Currency != "IRT" || r.License == nil { // 40 USDT at the test rate, charged in Toman
 		t.Fatalf("renewal: %+v", r.Order)
 	}
 	if want := license.AddMonths(end1, 12); !r.License.EndsAt.Equal(want) {

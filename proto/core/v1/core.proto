@@ -89,6 +89,8 @@ message Wallet {
   int64 balance = 3; // a reseller's may be negative: what they owe
   int64 updated_at = 4;
   int64 credit_limit = 5; // resellers: the balance may go down to -credit_limit (0 for everyone else)
+  int64 usdt_equivalent = 6; // the Toman balance in USDT at the live price, minor units (0: no rate, or not a Toman wallet)
+  int64 usdt_rate = 7; // the live Toman price of one USDT (0: none)
 }
 
 message LedgerEntry {
@@ -1255,7 +1257,8 @@ message RedeemGiftCodeResponse {
 message VendorOffer {
   string tier = 1; // standard or pro
   int32 months = 2; // 1 or 12
-  common.v1.Money price = 3;
+  common.v1.Money price = 3; // what the buyer pays: Toman, worked out at the store's USDT rate now
+  common.v1.Money list_price = 4; // the price list: USDT (the same as price when the tier is priced in Toman)
 }
 
 message ListVendorOffersRequest {
@@ -1265,7 +1268,9 @@ message ListVendorOffersRequest {
 message ListVendorOffersResponse {
   bool on = 1; // license sales are on in this store
   repeated VendorOffer offers = 2;
-  common.v1.Money balance = 3; // the buyer's wallet in the offers' currency
+  common.v1.Money balance = 3; // the buyer's wallet: Toman, like the prices
+  int64 rate = 4; // the Toman per USDT the prices were worked out at (0: none)
+  int64 balance_usdt = 5; // the balance in USDT at the live price, minor units (0: no rate)
 }
 
 // BuyVendorLicenseRequest buys a new license, or (license_id set) renews one the buyer owns for months more.

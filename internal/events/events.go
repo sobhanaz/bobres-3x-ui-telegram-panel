@@ -214,6 +214,11 @@ type WalletCreditedEvent struct {
 	Currency   string `json:"currency"`
 	Balance    int64  `json:"balance"`
 	Reason     string `json:"reason"`
+	// FromAmount and FromCurrency say what Amount was converted from (a USDT top-up, credited as Toman), and Rate the Toman per USDT it was converted at;
+	// absent when nothing was converted.
+	FromAmount   int64  `json:"from_amount,omitempty"`
+	FromCurrency string `json:"from_currency,omitempty"`
+	Rate         int64  `json:"rate,omitempty"`
 }
 
 // PaymentRejectedEvent: a payment did not go through: a reviewer rejected a

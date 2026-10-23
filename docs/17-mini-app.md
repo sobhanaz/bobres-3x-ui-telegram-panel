@@ -126,7 +126,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /me`, `POST /logout` | The customer, wallets (a reseller's carry their `credit_limit`), branding, maintenance flag, top-up bounds, `features` (what the sections show, for example `reseller`); end the session |
 | `GET /plans` | Plans on sale (enabled, not a trial) with the customer's price (reseller prices apply), `topup` marks traffic packages, `group` is a plan's plan group id (or null); `groups` lists the plan groups in order (`id`, `names`, `texts`): a new purchase shows the groups first, a group's text, then its plans (Other plans for those with no group); renewals and traffic packages stay flat |
 | `GET /services` | The customer's own services: label, status, expiry, traffic, link, page address, `can_renew`, `can_topup` |
-| `GET /wallet` | Balances and the last 20 ledger entries |
+| `GET /wallet` | Balances and the last 20 ledger entries. One wallet, in Toman: its entry also carries `usdt_equivalent` (the balance in USDT at the live price, 6 decimals) and `usdt_rate` (the live Toman price of one USDT), shown beside the balance; 0 when no rate is known |
 | `GET /methods?currency=&amount=` | The payment methods the store offers for that amount and currency, as the bot offers them: the online ones, `stars`, and `manual_card`, `manual_crypto`, `manual_zarinpal` |
 | `POST /quote` | Price with a discount code, without making an order |
 | `POST /orders` | New order (`new`, `renew`, `traffic_topup`) with a request `key`; the same key returns the same order. A reseller may add a `label` (the name of the new service they buy for a customer, at most 64 characters, one line); core ignores it for anyone else and on a renewal or top-up |

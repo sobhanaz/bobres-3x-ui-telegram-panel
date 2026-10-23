@@ -562,7 +562,12 @@
       "trial_grant": "تست رایگان",
       "commission": "پورسانت نمایندگی",
       "settlement": "پرداخت نماینده",
-      "gift_code": "کد هدیه"
+      "gift_code": "کد هدیه",
+      "license_purchase": "لایسنس BOBRES",
+      "license_refund": "بازگشت وجه لایسنس",
+      "supplier_purchase": "حساب دیجیتال",
+      "supplier_refund": "بازگشت وجه حساب دیجیتال",
+      "wallet_convert": "تبدیل تتر به تومان"
     },
     "balance_after": "موجودی بعد",
     "reference": "بابت",

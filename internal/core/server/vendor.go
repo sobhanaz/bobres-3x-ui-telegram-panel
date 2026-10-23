@@ -31,23 +31,29 @@ func (s *Server) ListVendorOffers(ctx context.Context, req *corev1.ListVendorOff
 	if err != nil {
 		return nil, fail(err)
 	}
-	cur := ""
 	for _, t := range tiers {
 		for _, m := range []int{domain.VendorMonth, domain.VendorYear} {
+			list := t.Price(m)
+			price, rate, err := s.dom.VendorToman(ctx, &t, list)
+			if err != nil {
+				continue // no USDT rate now: the offer is not shown (nothing could be priced)
+			}
+			resp.Rate = rate
 			resp.Offers = append(resp.Offers, &corev1.VendorOffer{Tier: t.Name, Months: int32(m), //nolint:gosec // 1 or 12
-				Price: &commonv1.Money{Amount: t.Price(m), Currency: t.Currency}})
+				Price:     &commonv1.Money{Amount: price, Currency: domain.WalletCurrency},
+				ListPrice: &commonv1.Money{Amount: list, Currency: t.Currency}})
 		}
-		cur = t.Currency
 	}
 	if len(resp.Offers) == 0 {
 		return resp, nil
 	}
-	w, err := s.st.GetWallet(ctx, s.st.Conn(), req.GetUserId(), cur)
+	w, err := s.st.GetWallet(ctx, s.st.Conn(), req.GetUserId(), domain.WalletCurrency)
 	if err != nil {
 		return nil, fail(err)
 	}
 	resp.On = true
-	resp.Balance = &commonv1.Money{Amount: w.Balance, Currency: cur}
+	resp.Balance = &commonv1.Money{Amount: w.Balance, Currency: domain.WalletCurrency}
+	resp.BalanceUsdt = s.dom.UsdtEquivalent(ctx, w.Balance)
 	return resp, nil
 }
 

@@ -23,6 +23,10 @@ Rules that hold for every method:
 
 On the free tier you can use Zarinpal, IDPay, NextPay, Stars and the manual methods. Automatic USDT needs a paid license or the trial. See [Licensing](Licensing).
 
+## One wallet, in Toman
+
+Every customer has **one wallet, in Toman**. It is shown with its equivalent in USDT at the live price and the live USDT rate, in the bot and in the Mini App. A customer can top it up in Toman by any method, or in **USDT** (a whole number of USDT, automatic or by hand): a USDT top-up is credited as Toman at the live price (without your margin, rounded down), and the customer is told the amount and the rate. What is priced in USDT, such as a BOBRES license, is charged from the same wallet in Toman at your store's USDT rate (the live price plus your margin, rounded up). Money that still sits in a USDT wallet (an old balance, or a top-up made while no rate was known) is converted automatically as soon as a rate is known. A plan priced in USDT is paid directly by crypto, not from the wallet. In the reports everything is one currency, Toman.
+
 ## Manual payments and the review queue
 
 Open **Orders & payments** and the **Review queue** tab. Each payment shows the receipt, the bank reference and the amount. **Seen before** means another receipt has the same reference, so look at the photo with care. **Approve** pays the order and delivers it. **Reject** asks for a reason, which the customer sees in the bot.

@@ -32,7 +32,16 @@ function joinChatsOf(v: unknown): JoinChatLink[] {
 }
 
 /** credit_limit is a reseller's: the balance may go down to minus it (0, or absent, for everyone else). */
-export interface Wallet { currency: string; balance: number; scale: number; credit_limit?: number }
+export interface Wallet {
+  currency: string
+  balance: number
+  scale: number
+  credit_limit?: number
+  /** the Toman balance in USDT at the live price, 6 decimals (0 or absent: no rate known) */
+  usdt_equivalent?: number
+  /** the live Toman price of one USDT (0 or absent: none) */
+  usdt_rate?: number
+}
 /** Features are what the sections of the app say about this customer (core's miniFeature.me); a section reads its own keys. */
 export type Features = Record<string, boolean | number | string | undefined>
 

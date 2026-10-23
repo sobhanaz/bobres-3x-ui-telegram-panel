@@ -599,6 +599,15 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showTopupMethods(r, rest)
 	case "wpay":
 		h.onTopupPay(r, rest)
+	case "wusdt":
+		h.showTopupUsdt(r)
+	case "wusa":
+		h.showTopupUsdtMethods(r, rest)
+	case "wpu":
+		h.onTopupUsdtPay(r, rest)
+	case "wusc":
+		r.setState(sceneTopupUsdt, nil)
+		r.show(r.t("wallet.usdt_enter", "min", fmt.Sprint(minTopupUsdt), "max", i18n.Number(r.lang, maxTopupUsdt)), cancelKeyboard(r))
 	case "chk":
 		h.onCheckPayment(r, rest)
 	case "wcustom":
@@ -741,6 +750,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onProof(r, st)
 	case sceneTopupAmount:
 		h.onTopupAmount(r)
+	case sceneTopupUsdt:
+		h.onTopupUsdtAmount(r)
 	case sceneTicket:
 		h.onTicket(r, st)
 	case sceneDiscount:
@@ -772,6 +783,7 @@ const (
 	sceneReference   = "reference" // bank reference after a photo without caption
 	sceneTXID        = "txid"      // crypto transaction hash
 	sceneTopupAmount = "topup_amount"
+	sceneTopupUsdt   = "topup_usdt"
 	sceneTicket      = "ticket"
 	sceneDiscount    = "discount" // a discount code for a payment menu
 	sceneAdminFind   = "adm_find"

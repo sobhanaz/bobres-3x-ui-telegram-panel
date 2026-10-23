@@ -562,7 +562,12 @@
       "trial_grant": "Free trial",
       "commission": "Reseller commission",
       "settlement": "Reseller payment",
-      "gift_code": "Gift code"
+      "gift_code": "Gift code",
+      "license_purchase": "BOBRES license",
+      "license_refund": "License refund",
+      "supplier_purchase": "Digital account",
+      "supplier_refund": "Digital account refund",
+      "wallet_convert": "USDT converted to Toman"
     },
     "balance_after": "Balance after",
     "reference": "For",

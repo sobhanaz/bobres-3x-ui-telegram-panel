@@ -109,7 +109,14 @@ docker compose --env-file .env exec -T licensesrv /app key update LICENSE_ID -re
 
 with the license's entitlements plus `"private_features": true`. The store picks it up at its next daily refresh.
 
-**One screen to pay and top up.** When a buyer's USDT wallet is short, the bot's confirm screen says how much is missing and
+**One wallet, in Toman.** A license is priced in USDT (the tier presets) and charged from the buyer's **Toman** wallet at the store's USDT rate
+(`UsdtRate`: the live price plus the owner's margin, or the owner's own rate), rounded up to a whole Toman; the order (`vendor_orders`) records the
+Toman charged (`amount`, `currency` IRT), the USDT list price (`list_amount`, `list_currency`) and the rate (`rate`). Without any rate nothing is
+sold (`ListVendorOffers` lists no offer). `ListVendorOffers` answers the Toman price, the USDT list price, the rate and the balance with its USDT
+equivalent. The ledger keeps `license_purchase` (and `license_refund`, which credits back the Toman that was charged) in Toman, so licenses are
+revenue in the same currency as everything else.
+
+**One screen to pay and top up.** When a buyer's wallet is short, the bot's confirm screen says how much Toman is missing and
 offers the top-up. Tapping it saves the buyer's *intent* (a row in `core.vendor_intents`: the tier, 1 or 12 months, the
 license it is for; one per buyer, kept 48 hours, dropped by a manual buy) and opens the payment. When a top-up (a ledger entry of kind
 `topup`) is credited **after** the intent was made and the wallet covers the price, core's worker (`vendor-intents`, every 30 s)

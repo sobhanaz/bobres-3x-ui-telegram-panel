@@ -43,12 +43,17 @@ type VendorOrder struct {
 	Amount          int64
 	Currency        string
 	Status          string // paid, done, refunded
-	IdempotencyKey  string
-	Attempts        int
-	NextAttemptAt   time.Time
-	LastError       string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// ListAmount, ListCurrency and Rate, when the order was charged in another currency than its list price (a license is priced in USDT and
+	// charged from the Toman wallet): the list price and the Toman per USDT it was charged at. Kept for the records, not read back.
+	ListAmount     int64
+	ListCurrency   string
+	Rate           int64
+	IdempotencyKey string
+	Attempts       int
+	NextAttemptAt  time.Time
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // GetVendorConfig returns the admin key, or ErrNotFound when none is set.
@@ -158,11 +163,13 @@ func (s *Store) CreateVendorOrder(ctx context.Context, q querier, o *VendorOrder
 	o.ID = buuid.MustV7().String()
 	var inserted bool
 	row := q.QueryRow(ctx, `
-		INSERT INTO core.vendor_orders (id, user_id, vendor_license_id, kind, tier, months, amount, currency, idempotency_key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO core.vendor_orders (id, user_id, vendor_license_id, kind, tier, months, amount, currency, idempotency_key,
+			list_amount, list_currency, rate)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10::bigint, 0), NULLIF($11::text, ''), NULLIF($12::bigint, 0))
 		ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
 		RETURNING `+vendorOrderCols+`, (xmax = 0)`,
-		o.ID, o.UserID, o.VendorLicenseID, o.Kind, o.Tier, o.Months, o.Amount, o.Currency, o.IdempotencyKey)
+		o.ID, o.UserID, o.VendorLicenseID, o.Kind, o.Tier, o.Months, o.Amount, o.Currency, o.IdempotencyKey,
+		o.ListAmount, o.ListCurrency, o.Rate)
 	var got VendorOrder
 	err := row.Scan(&got.ID, &got.UserID, &got.VendorLicenseID, &got.Kind, &got.Tier, &got.Months, &got.Amount, &got.Currency,
 		&got.Status, &got.IdempotencyKey, &got.Attempts, &got.NextAttemptAt, &got.LastError, &got.CreatedAt, &got.UpdatedAt, &inserted)

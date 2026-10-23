@@ -245,3 +245,28 @@ func collectWallets(rows pgx.Rows) ([]Wallet, error) {
 	}
 	return out, rows.Err()
 }
+
+// ForeignBalance is a wallet that holds money in a currency other than Toman.
+type ForeignBalance struct {
+	UserID, Currency string
+	Balance          int64
+}
+
+// ForeignBalances lists wallets (other than Toman) that hold money, oldest update first, at most limit: what the sweeper converts to Toman.
+func (s *Store) ForeignBalances(ctx context.Context, q querier, limit int) ([]ForeignBalance, error) {
+	rows, err := q.Query(ctx, `SELECT user_id::text, currency, balance FROM core.wallets
+		WHERE currency <> 'IRT' AND balance > 0 ORDER BY updated_at, user_id LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("foreign balances: %w", err)
+	}
+	defer rows.Close()
+	var out []ForeignBalance
+	for rows.Next() {
+		var b ForeignBalance
+		if err := rows.Scan(&b.UserID, &b.Currency, &b.Balance); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}

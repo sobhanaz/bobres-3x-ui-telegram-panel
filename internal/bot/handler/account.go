@@ -19,6 +19,14 @@ const (
 
 var topupPresets = []int64{100_000, 200_000, 500_000, 1_000_000}
 
+// A top-up in USDT (whole USDT): the money is added to the one wallet, in Toman, at the live rate.
+const (
+	minTopupUsdt = 1
+	maxTopupUsdt = 10_000
+)
+
+var topupUsdtPresets = []int64{5, 10, 25, 50, 100}
+
 func shortID(id string) string {
 	id = strings.ReplaceAll(id, "-", "")
 	if len(id) > 6 {
@@ -180,6 +188,10 @@ func (h *Handler) showWallet(r *req) {
 		Row(h.giftButton(r)...).
 		Row(r.button("btn.home", "home"))
 	text := h.accountInfo(r) + "\n\n" + r.t("wallet.title", "balance", r.balance(w.GetBalance(), "IRT"))
+	if w.GetUsdtRate() > 0 {
+		// the same money in USDT at the live price, and the price itself: always beside the Toman balance
+		text += "\n" + r.t("wallet.usdt_line", "usdt", r.money(w.GetUsdtEquivalent(), "USDT"), "rate", r.money(w.GetUsdtRate(), "IRT"))
+	}
 	if r.isReseller() {
 		text += "\n" + r.t("rs.wallet_credit", "limit", r.money(w.GetCreditLimit(), "IRT"),
 			"available", r.money(w.GetBalance()+w.GetCreditLimit(), "IRT"))
@@ -196,8 +208,84 @@ func (h *Handler) showTopupAmounts(r *req) {
 		}
 		kb.Row(row...)
 	}
-	kb.Row(r.button("btn.custom_amount", "wcustom")).Row(r.button("btn.back", "wallet"), r.button("btn.home", "home"))
+	kb.Row(r.button("btn.custom_amount", "wcustom"))
+	if h.cryptoEnabled("USDT") {
+		kb.Row(r.button("btn.topup_usdt", "wusdt"))
+	}
+	kb.Row(r.button("btn.back", "wallet"), r.button("btn.home", "home"))
 	r.show(r.t("wallet.choose_amount"), kb)
+}
+
+// showTopupUsdt asks how many USDT to top up with (presets or a typed whole number).
+func (h *Handler) showTopupUsdt(r *req) {
+	kb := &tg.Keyboard{}
+	for i := 0; i < len(topupUsdtPresets); i += 3 {
+		var row []tg.Button
+		for _, a := range topupUsdtPresets[i:min(i+3, len(topupUsdtPresets))] {
+			row = append(row, tg.CB(r.money(a*1_000_000, "USDT"), fmt.Sprintf("wusa:%d", a)))
+		}
+		kb.Row(row...)
+	}
+	kb.Row(r.button("btn.custom_amount", "wusc")).Row(r.button("btn.back", "wtop"), r.button("btn.home", "home"))
+	r.show(r.t("wallet.usdt_choose"), kb)
+}
+
+// showTopupUsdtMethods offers the ways to pay an amount of USDT (USDT only: automatic TRC20, or by hand).
+func (h *Handler) showTopupUsdtMethods(r *req, raw string) {
+	amount, ok := i18n.ParseNumber(raw)
+	if !ok || amount < minTopupUsdt || amount > maxTopupUsdt || !h.cryptoEnabled("USDT") {
+		h.showTopupAmounts(r)
+		return
+	}
+	n := nonce()
+	var methods []tg.Button
+	methods = append(methods, r.button("btn.pay_crypto", fmt.Sprintf("wpu:x:%d:%s", amount, n)))
+	gw := h.gatewayButtons(r, "USDT", amount*1_000_000, "wpu", fmt.Sprint(amount), n)
+	kb := &tg.Keyboard{}
+	rows(kb, gw, 2)
+	kb.Row(methods...)
+	kb.Row(r.button("btn.back", "wusdt"), r.button("btn.home", "home"))
+	text := r.t("wallet.usdt_method", "usdt", r.money(amount*1_000_000, "USDT"))
+	if rate := h.usdtRate(); rate > 0 {
+		text += "\n" + r.t("wallet.usdt_method_rate", "toman", r.money(amount*rate, "IRT"), "rate", r.money(rate, "IRT"))
+	}
+	r.show(text, kb)
+}
+
+// onTopupUsdtPay handles "wpu:<x|u>:<usdt>:<nonce>": the payment of a top-up in USDT.
+func (h *Handler) onTopupUsdtPay(r *req, rest string) {
+	parts := strings.Split(rest, ":")
+	if len(parts) != 3 {
+		h.showTopupAmounts(r)
+		return
+	}
+	amount, ok := i18n.ParseNumber(parts[1])
+	if !ok || amount < minTopupUsdt || amount > maxTopupUsdt {
+		h.showTopupAmounts(r)
+		return
+	}
+	provider := map[string]string{"x": "manual_crypto", "u": usdtAuto}[parts[0]]
+	if provider == "" {
+		h.showWallet(r)
+		return
+	}
+	micro := amount * 1_000_000
+	key := fmt.Sprintf("topu:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
+	if provider == usdtAuto {
+		h.startGatewayIn(r, nil, provider, r.t("pay.topup_title"), key, micro, "USDT")
+		return
+	}
+	h.startManualIn(r, nil, provider, key, micro, "USDT")
+}
+
+func (h *Handler) onTopupUsdtAmount(r *req) {
+	amount, ok := i18n.ParseNumber(r.msg.Text)
+	if !ok || amount < minTopupUsdt || amount > maxTopupUsdt {
+		r.send(r.t("wallet.bad_usdt", "min", fmt.Sprint(minTopupUsdt), "max", i18n.Number(r.lang, maxTopupUsdt)), cancelKeyboard(r))
+		return
+	}
+	r.clearState()
+	h.showTopupUsdtMethods(r, fmt.Sprint(amount))
 }
 
 func (h *Handler) showTopupMethods(r *req, raw string) {
