@@ -8,6 +8,24 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.14.0] — 2026-10-23
+
+**A reward you can set as an amount, deleting a plan, digital accounts by category, the live price of USDT, your own Terms and Privacy pages, and Karing and NPV Tunnel.** A plan can give its buyer a discount code of a fixed amount or a percent, for any plan, for the days and with the text you choose; the owner can delete a plan (it is taken off sale and never erased); the digital accounts in the bot follow the supplier's categories with a product page, a quantity and an order summary; crypto payments are priced at the live Toman price of USDT; every store serves its own Terms and Privacy pages; and Karing and NPV Tunnel join the apps with guides and tutorials.
+
+### Updating
+- One database migration, additive (a rollback keeps every order and credit): core 00037 (`plans.reward_amount`, `reward_days`, `reward_text_i18n`, `deleted_at`, and a looser reward-code constraint). No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together. The update also brings the new Caddyfile route for `/terms` and `/privacy`.
+- **Check two things after the update.** (1) The USDT rate: **Live USDT rate** is on by default, so a store that had typed its own **Toman per USDT** now charges the live price (plus the margin you set); turn it off in Gateways to keep only your own rate. (2) Your Terms and Privacy pages at `https://<domain>/terms` and `/privacy`: read them and edit them in Branding.
+- A store that already uses the tutorials gets the Karing and NPV Tunnel ones once, at the end of the list.
+
+### Known limits
+- A deleted plan cannot be brought back from the dashboard yet.
+- The reward code is still sent in a message; the customer's own list of codes is not built.
+- The Karing import link, like the other app links, has not been tried on a real device; NPV Tunnel has no import link, only steps.
+- The supplier's category is read from its `category` field; a product with none is listed under "Other".
+- The digital accounts and the live rate are in the bot only (the Mini App does not have them yet).
+- The Persian and English texts of the new screens are a first draft that wants a native read; nothing of this has been seen in every Telegram client.
+
 ### Reward codes as a fixed amount for any plan, and deleting a plan
 - **A reward can be an amount**, not only a percent: in a plan's editor, **Reward code after a purchase** has a kind (none, a percent, a fixed amount in
   the plan's currency), **Valid for (days)** (1 to 365, default 10; the plans already marked keep 30) and a **text for the buyer** in Persian and English that
