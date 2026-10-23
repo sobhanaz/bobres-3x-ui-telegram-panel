@@ -14,11 +14,15 @@ It does not do bulk purchase, and it does not reset traffic or give free days. T
 
 ### Payment methods
 
-The wallet, an online gateway (Zarinpal, IDPay, NextPay), Telegram Stars, automatic USDT, and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments).
+The wallet, an online gateway (Zarinpal, IDPay, NextPay), Telegram Stars, automatic USDT, and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
 
 ### Resellers
 
 A reseller sees an extra section under **More**: the reseller panel, buying for customers, the services they manage (pause, resume, delete, note, rename), their customers, the statement, and their invite link. It disappears when resellers leave the license. See [Resellers](Resellers).
+
+### Digital accounts
+
+On the vendor's own store only (see [Digital Accounts](Digital-Accounts)), a **Digital accounts** section appears under **More**: the supplier's categories, a category's products, a product page with its text and stock, a quantity, an order summary, and the wallet pays. The account is shown to its buyer, and every purchase is kept in **My purchases**. When the supplier has not delivered yet the app asks again every few seconds, and a short wallet is sent to the Wallet tab to top up. It is the same shelf, wallet and purchase as the bot.
 
 ## It is on by default
 

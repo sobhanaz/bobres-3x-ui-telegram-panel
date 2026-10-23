@@ -8,6 +8,20 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.16.0] — 2026-10-23
+
+**Digital accounts in the Mini App, and the rate behind a USDT amount.** The Mini App now has the bot's digital-accounts shop for the owner's own store: the supplier's categories, a product page with its text and stock, a quantity, an order summary, and the wallet pays; the account is shown to its buyer and kept in My purchases. Paying a Toman price with manual USDT now also says the rate the amount was worked out at (the live price of USDT plus your margin when the store follows it).
+
+### Updating
+- No database migration, no new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together; the Mini App is served by core.
+- The digital-accounts section exists only on the store that has the vendor's own features (the owner's own store); every other store shows no new section.
+
+### Known limits
+- The Mini App has not been tried in a real Telegram client on iOS, Android and Desktop; the accounts are shown as text and copied with one button.
+- A purchase the supplier has not delivered yet shows as "being delivered" and the app asks again every 3 seconds for about four minutes; after that it points to My purchases and support.
+- The rate shown is the one in force when the payment screen was drawn; a customer who pays much later should read the amount on the screen, not the rate.
+
 ### Added
 - **Digital accounts in the Mini App.** On the store that has the vendor's own features, **More > Digital accounts** is the bot's shop in the app: the supplier's categories, a category's products, a product page with its text and stock, a quantity (1 to 25, no more than the supplier has), an order summary with the wallet balance, and the wallet pays. The account is shown to its buyer and kept in **My purchases**; a purchase the supplier has not delivered yet is followed every 3 seconds, and a short wallet is sent to the Wallet tab. It is the same shelf, wallet and idempotent purchase as the bot (`/api/mini/v1/digital`, `/digital/buy`, `/digital/orders`). No database migration.
 
