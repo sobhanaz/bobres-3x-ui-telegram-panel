@@ -359,3 +359,64 @@ func TestDeletePlan(t *testing.T) {
 		t.Fatalf("the order of the deleted plan: %v %v", back, err)
 	}
 }
+
+// A deleted plan is listed apart and can be restored by the owner: it comes back into the lists, off sale, with its orders and servers as they were.
+func TestRestoreADeletedPlan(t *testing.T) {
+	e := newRewardEnv(t)
+	ctx := context.Background()
+	buyer := seedUser(t, e.s, 9941)
+	fund(t, e.s, buyer.ID, 100_000)
+	o, err := e.buyPlan(buyer, e.reward, "rest-1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.svc.DeletedPlans(ctx); len(got) != 0 {
+		t.Fatalf("deleted before deleting: %d", len(got))
+	}
+	if _, err := e.svc.RestorePlan(ctx, e.owner, e.reward.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("restoring a plan that was not deleted: %v", err)
+	}
+	if err := e.svc.DeletePlan(ctx, e.owner, e.reward.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.svc.DeletedPlans(ctx)
+	if err != nil || len(got) != 1 || got[0].ID != e.reward.ID || got[0].DeletedAt == nil {
+		t.Fatalf("deleted plans: %+v %v", got, err)
+	}
+	back, err := e.svc.RestorePlan(ctx, e.owner, e.reward.ID)
+	if err != nil || back.DeletedAt != nil || back.Enabled || back.RewardPercent == nil {
+		t.Fatalf("restored: %+v %v", back, err)
+	}
+	plans, _ := e.s.ListPlans(ctx, e.s.Conn(), true)
+	found := false
+	for _, p := range plans {
+		found = found || p.ID == e.reward.ID
+	}
+	if !found {
+		t.Error("the restored plan is not in the list")
+	}
+	if left, _ := e.svc.DeletedPlans(ctx); len(left) != 0 {
+		t.Errorf("still listed as deleted: %d", len(left))
+	}
+	// Off sale until the owner turns it on; the order made before is still its own.
+	if _, err := e.svc.CreateOrder(ctx, CreateOrderParams{UserID: buyer.ID, PlanID: e.reward.ID, IdempotencyKey: "rest-2"}); err == nil {
+		t.Error("a restored plan sold while off")
+	}
+	on := *back
+	on.Enabled, on.KeepReward = true, true
+	if _, err := e.svc.UpsertPlan(ctx, e.owner, &on); err != nil {
+		t.Fatalf("editing a restored plan: %v", err)
+	}
+	if _, err := e.svc.CreateOrder(ctx, CreateOrderParams{UserID: buyer.ID, PlanID: e.reward.ID, IdempotencyKey: "rest-3"}); err != nil {
+		t.Errorf("a restored plan turned on: %v", err)
+	}
+	if bo, err := e.s.GetOrder(ctx, e.s.Conn(), o.ID); err != nil || bo.PlanID != e.reward.ID {
+		t.Fatalf("the old order: %v %v", bo, err)
+	}
+	if err := e.svc.DeletePlan(ctx, e.owner, e.reward.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.RestorePlan(ctx, e.owner, "not an id"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a bad id: %v", err)
+	}
+}

@@ -141,3 +141,48 @@ func TestOnlyTheOwnerDeletesAPlan(t *testing.T) {
 	}
 	_ = f
 }
+
+// The owner lists the deleted plans and restores one; an admin may do neither.
+func TestRestoreAPI(t *testing.T) {
+	f, owner, _, _ := salesFixture(t)
+	f.staffUser(9302, "admin")
+	ab := f.browser()
+	if code := ab.loginWithLink(9302); code != 200 {
+		t.Fatalf("admin login: %d", code)
+	}
+	body := map[string]any{"name": map[string]string{"en": "Bring me back"}, "kind": "time", "duration_days": 30, "price": "1,000", "currency": "IRT", "enabled": true}
+	_, out := owner.do(http.MethodPost, "/api/v1/plans", body)
+	id := out["plan"].(map[string]any)["id"].(string)
+	if code, _ := owner.do(http.MethodDelete, "/api/v1/plans/"+id, nil); code != http.StatusOK {
+		t.Fatalf("delete: %d", code)
+	}
+	code, out := owner.do(http.MethodGet, "/api/v1/plans/deleted", nil)
+	items, _ := out["items"].([]any)
+	if code != http.StatusOK || len(items) < 1 || items[0].(map[string]any)["id"] != id || items[0].(map[string]any)["deleted_at"] == nil {
+		t.Fatalf("deleted list: %d %v", code, out)
+	}
+	if code, _ := ab.do(http.MethodGet, "/api/v1/plans/deleted", nil); code != http.StatusForbidden {
+		t.Errorf("an admin listed the deleted plans: %d", code)
+	}
+	if code, _ := ab.do(http.MethodPost, "/api/v1/plans/"+id+"/restore", nil); code != http.StatusForbidden {
+		t.Errorf("an admin restored a plan: %d", code)
+	}
+	code, out = owner.do(http.MethodPost, "/api/v1/plans/"+id+"/restore", nil)
+	if code != http.StatusOK || out["plan"].(map[string]any)["enabled"] != false {
+		t.Fatalf("restore: %d %v", code, out)
+	}
+	if code, _ = owner.do(http.MethodPost, "/api/v1/plans/"+id+"/restore", nil); code != http.StatusNotFound {
+		t.Errorf("restoring twice: %d", code)
+	}
+	if code, out := owner.do(http.MethodGet, "/api/v1/plans", nil); code != http.StatusOK {
+		t.Fatalf("list: %d", code)
+	} else {
+		found := false
+		for _, it := range out["items"].([]any) {
+			found = found || it.(map[string]any)["id"] == id
+		}
+		if !found {
+			t.Error("the restored plan is not in the plans list")
+		}
+	}
+}

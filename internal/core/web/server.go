@@ -182,6 +182,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/plans", PermPlansWrite, s.createPlan)
 	s.route(api, "PUT /api/v1/plans/{id}", PermPlansWrite, s.updatePlan)
 	s.route(api, "DELETE /api/v1/plans/{id}", PermPlansDelete, s.deletePlan)
+	s.route(api, "GET /api/v1/plans/deleted", PermPlansDelete, s.listDeletedPlans)
+	s.route(api, "POST /api/v1/plans/{id}/restore", PermPlansDelete, s.restorePlan)
 	s.route(api, "GET /api/v1/plan-groups", PermPlansWrite, s.listPlanGroups)
 	s.route(api, "POST /api/v1/plan-groups", PermPlansWrite, s.createPlanGroup)
 	s.route(api, "PUT /api/v1/plan-groups/{id}", PermPlansWrite, s.updatePlanGroup)
