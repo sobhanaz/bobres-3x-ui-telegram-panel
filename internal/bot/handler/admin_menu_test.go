@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -470,6 +472,22 @@ func TestAdminUndoTheLastChange(t *testing.T) {
 	owner.sees("Undo: SPRING20")
 	owner.press("adm:undo")
 	owner.toast("Undone")
+
+	// A change someone else made to the same value after yours is not undone by yours: Undo refuses and changes nothing.
+	owner.press("adm:set")
+	owner.press("adm:sg:notify")
+	owner.press("adm:st:notify.sales")
+	mine := state("notify.sales")
+	w.setInCore("notify.sales", strconv.FormatBool(mine != "true")) // another admin flips it back, outside this chat
+	_ = w.h.RefreshSettings(context.Background())
+	owner.press("adm:undo")
+	owner.toast("changed again")
+	if got := state("notify.sales"); got != strconv.FormatBool(mine != "true") {
+		t.Fatalf("a stale Undo overwrote the newer value: %q", got)
+	}
+	if hasButton(owner.shown(), "adm:undo") {
+		t.Fatalf("a refused Undo is still offered: %v", owner.shown().labels())
+	}
 
 	// A new change replaces the last: only the newest is undone.
 	owner.press("adm:set")
