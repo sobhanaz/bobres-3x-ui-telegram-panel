@@ -72,6 +72,10 @@ type cellJSON struct {
 	NewOrders     int64    `json:"new_orders"`
 	Renewals      int64    `json:"renewals"`
 	TrafficTopups int64    `json:"traffic_topups"`
+	// Licenses and Digital are the part of Revenue and Orders that the licenses the store sells and the digital accounts it resells made;
+	// NewOrders, Renewals and TrafficTopups split the rest (the VPN services).
+	Licenses      flowJSON `json:"licenses"`
+	Digital       flowJSON `json:"digital"`
 	Topups        flowJSON `json:"topups"`
 	Rejected      flowJSON `json:"rejected"`       // manual payments a reviewer rejected
 	GatewayFailed flowJSON `json:"gateway_failed"` // gateway payments that failed or expired
@@ -81,7 +85,7 @@ type cellJSON struct {
 func cellOf(c *store.ReportCell) cellJSON {
 	return cellJSON{
 		Revenue: c.Revenue, Refunds: flowJSON(c.Refunds), Net: domain.Net(c), Orders: c.Orders, NewOrders: c.NewOrders,
-		Renewals: c.Renewals, TrafficTopups: c.TrafficTopups, Topups: flowJSON(c.Topups),
+		Renewals: c.Renewals, TrafficTopups: c.TrafficTopups, Licenses: flowJSON(c.Licenses), Digital: flowJSON(c.Digital), Topups: flowJSON(c.Topups),
 		Rejected: flowJSON(c.Rejected), GatewayFailed: flowJSON(c.GatewayFailed), Cancelled: flowJSON(c.Cancelled),
 	}
 }
@@ -140,6 +144,53 @@ func (s *Server) reportDailySummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": st.Enabled, "time": st.Time, "tz": st.Zone})
+}
+
+// reportSince: GET /api/v1/reports/since, the instant (unix seconds) the reports and the overview count from, null when they count everything.
+func (s *Server) reportSince(w http.ResponseWriter, r *http.Request) {
+	t, err := s.cfg.Domain.ReportsSince(r.Context())
+	if err != nil {
+		s.fail(w, "reports since", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sinceJSON(t))
+}
+
+func sinceJSON(t *time.Time) map[string]any {
+	if t == nil {
+		return map[string]any{"since": nil}
+	}
+	return map[string]any{"since": t.Unix()}
+}
+
+// reportReset: POST /api/v1/reports/reset {"confirm": true}, the owner starts the reports from zero: they count only what happens from now on.
+// Nothing is deleted. Without the confirmation it does nothing.
+func (s *Server) reportReset(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Confirm bool `json:"confirm"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if !in.Confirm {
+		writeError(w, http.StatusBadRequest, "invalid", "send {\"confirm\": true} to start the reports from zero")
+		return
+	}
+	t, err := s.cfg.Domain.ResetReports(r.Context(), actor(r))
+	if err != nil {
+		s.fail(w, "reset reports", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sinceJSON(&t))
+}
+
+// reportResetClear: DELETE /api/v1/reports/reset, the reports count everything again.
+func (s *Server) reportResetClear(w http.ResponseWriter, r *http.Request) {
+	if err := s.cfg.Domain.ClearReportsReset(r.Context(), actor(r)); err != nil {
+		s.fail(w, "clear reports reset", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sinceJSON(nil))
 }
 
 // reportPlans: GET /api/v1/reports/plans, the best-selling plans per currency.
@@ -315,13 +366,18 @@ func (s *Server) auditExport(r *http.Request, kind string, rng *domain.ReportRan
 // column goes at the end, so the earlier ones keep their positions. The last
 // three say what the rows are about, the same on every row of a file: the size
 // of a period, the calendar its weeks and months were cut by and the time zone
-// of its days. A Jalali file has one more column after them (summaryJalali).
+// of its days. A Jalali file has one more column after them (summaryJalali),
+// and the four columns of summarySales come after that, whatever the calendar.
 var summaryColumns = []string{
 	"period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders",
 	"renewals", "traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount",
 	"gateway_failed_count", "gateway_failed_amount", "cancelled_count", "cancelled_amount", "new_customers", "free_trials",
 	"churned_services", "churned_customers", "at_risk_services", "group", "calendar", "tz",
 }
+
+// summarySales are the columns added after the first release of the file, at its very end so no earlier column moves: how many licenses
+// and digital accounts were sold and what they brought (both are already in paid_orders and revenue).
+var summarySales = []string{"license_orders", "license_revenue", "digital_orders", "digital_revenue"}
 
 // summaryMoney is how many columns of summary.csv are numbers about money or
 // people (period_start to at_risk_services); the context columns follow.
@@ -362,6 +418,7 @@ func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 	if jalali {
 		header = append(append([]string{}, header...), summaryJalali)
 	}
+	header = append(append([]string{}, header...), summarySales...)
 	_ = f.write(header...)
 	n := func(v int64) string { return strconv.FormatInt(v, 10) }
 	// What every row says about itself, after the numbers.
@@ -380,14 +437,15 @@ func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 		row[0], row[1] = b.Date, partial
 		row[summaryMoney-5], row[summaryMoney-4] = n(b.NewCustomers), n(b.Trials)
 		row[summaryMoney-3], row[summaryMoney-2], row[summaryMoney-1] = n(b.ChurnedServices), n(b.ChurnedCustomers), n(b.AtRisk)
-		_ = f.data(append(row, tail(b.Date)...)...)
+		_ = f.data(append(append(row, tail(b.Date)...), "", "", "", "")...)
 		for _, cur := range rep.Currencies {
 			c := b.Currencies[cur]
 			row := []string{b.Date, partial, textCell(cur), decimal(c.Revenue, cur), decimal(c.Refunds.Amount, cur), decimal(domain.Net(c), cur),
 				n(c.Orders), n(c.NewOrders), n(c.Renewals), n(c.TrafficTopups), n(c.Topups.Count), decimal(c.Topups.Amount, cur),
 				n(c.Refunds.Count), n(c.Rejected.Count), decimal(c.Rejected.Amount, cur), n(c.GatewayFailed.Count), decimal(c.GatewayFailed.Amount, cur),
 				n(c.Cancelled.Count), decimal(c.Cancelled.Amount, cur), "", "", "", "", ""}
-			_ = f.data(append(row, tail(b.Date)...)...)
+			sales := []string{n(c.Licenses.Count), decimal(c.Licenses.Amount, cur), n(c.Digital.Count), decimal(c.Digital.Amount, cur)}
+			_ = f.data(append(append(row, tail(b.Date)...), sales...)...)
 		}
 	}
 	f.flush()

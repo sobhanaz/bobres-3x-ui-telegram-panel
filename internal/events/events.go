@@ -507,14 +507,18 @@ type DailySummaryCurrency struct {
 	Revenue  int64  `json:"revenue"`
 	// PrevRevenue is the same currency's revenue the day before (0: none), for
 	// the comparison line.
-	PrevRevenue   int64            `json:"prev_revenue"`
-	Orders        int64            `json:"orders"` // paid orders; the three below split them
-	NewOrders     int64            `json:"new_orders"`
-	Renewals      int64            `json:"renewals"`
-	TrafficTopups int64            `json:"traffic_topups"`
-	Refunds       DailySummaryFlow `json:"refunds"`
-	Net           int64            `json:"net"` // revenue less refunds
-	Topups        DailySummaryFlow `json:"topups"`
+	PrevRevenue   int64 `json:"prev_revenue"`
+	Orders        int64 `json:"orders"` // paid orders and sales: the three below split the VPN orders, Licenses and Digital the rest
+	NewOrders     int64 `json:"new_orders"`
+	Renewals      int64 `json:"renewals"`
+	TrafficTopups int64 `json:"traffic_topups"`
+	// Licenses and Digital are the licenses the store sold and the digital accounts it resold that day (the part of Orders and Revenue
+	// they made); absent in an event from before they were counted.
+	Licenses DailySummaryFlow `json:"licenses"`
+	Digital  DailySummaryFlow `json:"digital"`
+	Refunds  DailySummaryFlow `json:"refunds"`
+	Net      int64            `json:"net"` // revenue less refunds
+	Topups   DailySummaryFlow `json:"topups"`
 	// Rejected is payments staff rejected; GatewayFailed payments an automated
 	// gateway failed or let expire. The bot shows them only when they are not 0.
 	Rejected      DailySummaryFlow `json:"rejected"`

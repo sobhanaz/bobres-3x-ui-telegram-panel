@@ -76,9 +76,10 @@ func TestLicenseLimitAlert(t *testing.T) {
 var licensingWords = []string{"licen", "free tier", "مجوز", "پروانه", "لایسنس", "سطح رایگان", "بسته رایگان"}
 
 // sellsLicenses: the keys of the owner's own bot selling BOBRES licenses as a product (license sales are a feature of
-// that one store, not a limit a customer meets): the menu button, the sales screens, their ledger lines and settings.
+// that one store, not a limit a customer meets): the menu button, the sales screens, their ledger lines and settings, and the line of the
+// staff's daily sales summary that counts them.
 func sellsLicenses(key string) bool {
-	for _, p := range []string{"lic.", "btn.lic", "ledger.license_", "setting.vendor."} {
+	for _, p := range []string{"lic.", "btn.lic", "ledger.license_", "setting.vendor.", "report.daily_licenses"} {
 		if strings.HasPrefix(key, p) {
 			return true
 		}

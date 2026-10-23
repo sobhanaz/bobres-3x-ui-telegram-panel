@@ -12,6 +12,7 @@ import SelectButton from 'primevue/selectbutton'
 import Skeleton from 'primevue/skeleton'
 import { BarChart, DonutChart, Heatmap, LineChart, Sparkline } from '../components/charts'
 import DateField from '../components/reports/DateField.vue'
+import ReportsStart from '../components/reports/ReportsStart.vue'
 import { api, query } from '../api'
 import { DATE_MAX, DATE_MIN, digits, formatInput, todayIn, weekdayName } from '../calendar'
 import { fieldId } from '../settings'
@@ -46,6 +47,7 @@ import {
   hourLabel,
   isoToJs,
   methodSlices,
+  orderBars,
   orderSeries,
   partialFlags,
   peopleSeries,
@@ -307,12 +309,7 @@ const revenueSummary = computed(() => {
 })
 const orderChart = computed(() => {
   if (!summary.value || !cur.value) return []
-  const o = orderSeries(summary.value, cur.value)
-  return [
-    { key: 'new', label: t('reports.chart.type.new'), values: o.new, slot: 0 },
-    { key: 'renew', label: t('reports.chart.type.renew'), values: o.renew, slot: 1 },
-    { key: 'traffic', label: t('reports.chart.type.traffic'), values: o.traffic, slot: 2 },
-  ]
+  return orderBars(orderSeries(summary.value, cur.value), (k) => t('reports.chart.type.' + k))
 })
 const planNameOf = (p: { name: Record<string, string> }) => planName(p.name, lang.value)
 const planStackChart = computed(() => {
@@ -373,6 +370,7 @@ const sparkLabel = (what: string, values: number[]) => t('reports.spark.' + tren
     </div>
   </div>
   <p class="app-muted hint app-no-print">{{ t('reports.hint') }}</p>
+  <ReportsStart @changed="load" />
   <p v-if="daily" class="app-muted hint daily-summary app-no-print" :class="daily.enabled ? 'is-on' : 'is-off'">
     {{ daily.enabled ? t('reports.daily.on', { time: isolate(daily.time), tz: isolate(daily.tz) }) : t('reports.daily.off') }}
     <RouterLink v-if="auth.can('settings.write')" :to="dailyLink" class="daily-link">{{ t('reports.daily.link') }}</RouterLink>
@@ -475,6 +473,12 @@ const sparkLabel = (what: string, values: number[]) => t('reports.spark.' + tren
                 <div class="line orders">{{ t('reports.kpi.orders', { n: num(totals(c)!.orders, lang) }, totals(c)!.orders) }}</div>
                 <div class="app-muted small split">
                   {{ t('reports.kpi.split', { new: num(totals(c)!.new_orders, lang), renew: num(totals(c)!.renewals, lang), traffic: num(totals(c)!.traffic_topups, lang) }) }}
+                </div>
+                <div v-if="totals(c)!.licenses?.count" class="app-muted small sales licenses">
+                  {{ t('reports.kpi.licenses', { n: num(totals(c)!.licenses!.count, lang), amount: m(totals(c)!.licenses!.amount, c) }) }}
+                </div>
+                <div v-if="totals(c)!.digital?.count" class="app-muted small sales digital">
+                  {{ t('reports.kpi.digital', { n: num(totals(c)!.digital!.count, lang), amount: m(totals(c)!.digital!.amount, c) }) }}
                 </div>
                 <dl class="flows">
                   <template v-for="f in flows" :key="f">

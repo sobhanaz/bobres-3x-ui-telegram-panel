@@ -12,6 +12,7 @@ import {
   hourLabel,
   isoToJs,
   methodSlices,
+  orderBars,
   orderSeries,
   peopleKpis,
   peopleSeries,
@@ -138,9 +139,27 @@ describe('series for the charts', () => {
 
   it('lines up revenue, orders by type and people over the buckets, with zeros where nothing happened', () => {
     expect(revenueSeries(s, 'IRT')).toEqual({ revenue: [100, 0, 50], net: [90, 0, 50] })
-    expect(orderSeries(s, 'IRT')).toEqual({ new: [2, 0, 0], renew: [1, 0, 0], traffic: [0, 0, 1], total: 4 })
+    expect(orderSeries(s, 'IRT')).toEqual({ new: [2, 0, 0], renew: [1, 0, 0], traffic: [0, 0, 1], license: [0, 0, 0], digital: [0, 0, 0], total: 4 })
     expect(peopleSeries(s)).toEqual({ newCustomers: [2, 0, 1], trials: [1, 0, 0], lost: [4, 0, 0], atRisk: [1, 0, 0] })
     expect(revenueSeries(s, 'USDT')).toEqual({ revenue: [0, 0, 0], net: [0, 0, 0] }) // a currency the report lacks is flat, never NaN
+  })
+
+  it('stacks licenses and digital accounts only when the range sold some', () => {
+    const label = (k: string) => k
+    expect(orderBars(orderSeries(s, 'IRT'), label).map((b) => b.key)).toEqual(['new', 'renew', 'traffic'])
+    const withSales = {
+      ...s,
+      buckets: s.buckets.map((b, i) => ({
+        ...b,
+        currencies: { ...b.currencies, IRT: { ...b.currencies.IRT, licenses: { count: i === 0 ? 1 : 0, amount: 4 }, digital: { count: i === 2 ? 3 : 0, amount: 9 } } },
+      })),
+    }
+    const o = orderSeries(withSales, 'IRT')
+    expect(o.license).toEqual([1, 0, 0])
+    expect(o.digital).toEqual([0, 0, 3])
+    const bars = orderBars(o, label)
+    expect(bars.map((b) => b.key)).toEqual(['new', 'renew', 'traffic', 'license', 'digital'])
+    expect(bars.map((b) => b.slot)).toEqual([0, 1, 2, 3, 4])
   })
 
   it('writes the axis labels in the calendar the page is set to', () => {

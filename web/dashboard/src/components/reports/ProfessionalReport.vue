@@ -17,6 +17,7 @@ import {
   hourLabel,
   isoToJs,
   methodSlices,
+  orderBars as orderBarsOf,
   orderSeries,
   partialFlags,
   peopleKpis,
@@ -223,12 +224,7 @@ function revenueLines(c: string) {
   ]
 }
 function orderBars(c: string) {
-  const o = orderSeries(s.value, c)
-  return [
-    { key: 'new', label: t('reports.chart.type.new'), values: o.new, slot: 0 },
-    { key: 'renew', label: t('reports.chart.type.renew'), values: o.renew, slot: 1 },
-    { key: 'traffic', label: t('reports.chart.type.traffic'), values: o.traffic, slot: 2 },
-  ]
+  return orderBarsOf(orderSeries(s.value, c), (k) => t('reports.chart.type.' + k))
 }
 function planBars(c: string) {
   if (!props.planSeries) return []

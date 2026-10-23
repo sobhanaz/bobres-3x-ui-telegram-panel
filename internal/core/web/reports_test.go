@@ -498,7 +498,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	// 4 days: one people row and one row per currency (IRT, USDT) each.
-	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 27 {
+	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 31 {
 		t.Fatalf("%d rows: %v", len(rows), rows)
 	}
 	col := map[string]int{}
@@ -507,7 +507,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	byKey := map[string][]string{}
 	for _, r := range rows[1:] {
-		if len(r) != 27 {
+		if len(r) != 31 {
 			t.Fatalf("a row has %d cells: %v", len(r), r)
 		}
 		// what every row says about itself: the size of a period, the calendar that cut it, the zone of its days
@@ -975,5 +975,84 @@ func TestReportsChurn(t *testing.T) {
 	}
 	if people == nil || people[col["churned_services"]] != "1" || people[col["churned_customers"]] != "1" || people[col["at_risk_services"]] != "1" {
 		t.Errorf("people row: %v", people)
+	}
+}
+
+// The owner starts the reports from zero when the sales so far were tests: from that moment the summary, the CSV and the overview count only what
+// comes next, nothing is deleted, an admin may read the start but not change it, and every change is audited.
+func TestReportsStartFromZero(t *testing.T) {
+	f, b, _ := reportFixture(t)
+	f.staffUser(8941, "admin")
+	adm := f.browser()
+	adm.loginWithLink(8941)
+
+	if code, out := b.do(http.MethodGet, "/api/v1/reports/since", nil); code != 200 || out["since"] != nil {
+		t.Fatalf("a fresh store counts everything: %d %v", code, out)
+	}
+	if code, out := adm.do(http.MethodGet, "/api/v1/reports/since", nil); code != 200 || out["since"] != nil {
+		t.Fatalf("an admin reads the start: %d %v", code, out)
+	}
+	_, before := b.do(http.MethodGet, "/api/v1/reports/summary"+reportQuery, nil)
+	if num(before["totals"].(map[string]any)["currencies"].(map[string]any)["IRT"].(map[string]any)["revenue"]) != 350_000 {
+		t.Fatalf("the seeded sales: %v", before["totals"])
+	}
+
+	// An admin cannot change it, and without the confirmation nothing happens.
+	for _, c := range []struct{ method, body string }{{http.MethodPost, `{"confirm":true}`}, {http.MethodDelete, ""}} {
+		var body any
+		if c.body != "" {
+			body = map[string]any{"confirm": true}
+		}
+		if code, _ := adm.do(c.method, "/api/v1/reports/reset", body); code != http.StatusForbidden {
+			t.Errorf("admin %s: %d, want 403", c.method, code)
+		}
+	}
+	if code, _ := b.do(http.MethodPost, "/api/v1/reports/reset", map[string]any{}); code != http.StatusBadRequest {
+		t.Errorf("without the confirmation: %d, want 400", code)
+	}
+	if _, out := b.do(http.MethodGet, "/api/v1/reports/since", nil); out["since"] != nil {
+		t.Fatalf("an unconfirmed request started the reports: %v", out)
+	}
+
+	// The owner starts them from now: every report is empty (the seeded sales are all in the past), and the data is still there.
+	code, out := b.do(http.MethodPost, "/api/v1/reports/reset", map[string]any{"confirm": true})
+	since := num(out["since"])
+	if code != 200 || since < float64(time.Now().Add(-time.Minute).Unix()) {
+		t.Fatalf("reset: %d %v", code, out)
+	}
+	if _, got := adm.do(http.MethodGet, "/api/v1/reports/since", nil); num(got["since"]) != since {
+		t.Fatalf("the start an admin reads: %v", got)
+	}
+	// The seeded sales are dated after today (the fixture's calendar is fixed), so move the start past them to see the reports empty.
+	if _, err := f.st.DB().Exec(context.Background(), `UPDATE core.settings SET value = to_jsonb('2027-01-01T00:00:00Z'::text) WHERE key = 'reports.since'`); err != nil {
+		t.Fatal(err)
+	}
+	_, after := b.do(http.MethodGet, "/api/v1/reports/summary"+reportQuery, nil)
+	if cur, _ := after["currencies"].([]any); len(cur) != 0 {
+		t.Fatalf("the summary after the start: %v", after["currencies"])
+	}
+	_, _, body := b.get("/api/v1/reports/orders.csv" + reportQuery)
+	if rows := parseCSV(t, body); len(rows) != 1 {
+		t.Fatalf("orders.csv after the start: %v", rows)
+	}
+	var n int
+	if err := f.st.DB().QueryRow(context.Background(), `SELECT count(*) FROM core.ledger_entries WHERE kind = 'purchase'`).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("the ledger lost sales: %d %v", n, err)
+	}
+	var actions int
+	if err := f.st.DB().QueryRow(context.Background(), `SELECT count(*) FROM core.audit_log WHERE action = 'reports.reset'`).Scan(&actions); err != nil || actions != 1 {
+		t.Fatalf("audit: %d %v", actions, err)
+	}
+
+	// Counting everything again brings the sales back.
+	if code, out := b.do(http.MethodDelete, "/api/v1/reports/reset", nil); code != 200 || out["since"] != nil {
+		t.Fatalf("clear: %d %v", code, out)
+	}
+	_, again := b.do(http.MethodGet, "/api/v1/reports/summary"+reportQuery, nil)
+	if num(again["totals"].(map[string]any)["currencies"].(map[string]any)["IRT"].(map[string]any)["revenue"]) != 350_000 {
+		t.Fatalf("counting everything again: %v", again["totals"])
+	}
+	if err := f.st.DB().QueryRow(context.Background(), `SELECT count(*) FROM core.audit_log WHERE action = 'reports.reset_clear'`).Scan(&actions); err != nil || actions != 1 {
+		t.Fatalf("audit of the clear: %d %v", actions, err)
 	}
 }
