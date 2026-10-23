@@ -14,3 +14,9 @@ updates:
       # The Go toolchain is bumped deliberately together with go.mod and CI
       # (go-version in the workflows), not by image tag.
       - dependency-name: golang
+      # A new major version of the database or of Node is a deliberate project (a data migration with a restore drill; a Node LTS line), not a
+      # weekly bump: postgres 16 to 18 and node 25 (not an LTS) were opened by Dependabot and closed on purpose.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
