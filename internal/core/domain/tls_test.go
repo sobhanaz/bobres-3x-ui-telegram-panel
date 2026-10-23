@@ -110,13 +110,7 @@ func (f *fakeAdmin) stop() {
 	}
 }
 
-func (f *fakeAdmin) answer(status int, msg string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.status, f.msg = status, msg
-}
-
-// answerOnce answers the next load as told and the ones after it as answer set.
+// answerOnce answers the next load as told; the ones after it are answered 200 again.
 func (f *fakeAdmin) answerOnce(status int, msg string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
