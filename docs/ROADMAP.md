@@ -26,8 +26,7 @@ and v0.14.0 (2026-10-23: reward amounts, deleting a plan, digital accounts by ca
 
 ## Where things stand (after v0.14.0)
 
-Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 (bar one
-Undo, noted in the list) and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
+Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
 
 Also built in v0.7.0, from the owner's requests of 2026-10-20: **updating from the dashboard** (System > Updates checks
@@ -58,7 +57,7 @@ What is still open:
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
-  sign-in inside the bot; an Undo for the last change in the bot's admin menu.
+  sign-in inside the bot.
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 

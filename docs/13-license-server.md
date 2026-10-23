@@ -109,6 +109,13 @@ docker compose --env-file .env exec -T licensesrv /app key update LICENSE_ID -re
 
 with the license's entitlements plus `"private_features": true`. The store picks it up at its next daily refresh.
 
+**One screen to pay and top up.** When a buyer's USDT wallet is short, the bot's confirm screen says how much is missing and
+offers the top-up. Tapping it saves the buyer's *intent* (a row in `core.vendor_intents`: the tier, 1 or 12 months, the
+license it is for; one per buyer, kept 12 hours, dropped by a manual buy) and opens the payment. When the top-up lands, core's
+worker (`vendor-intents`, every 30 s) buys the license by itself through the same wallet-debit and `vendor_orders` path as a
+manual purchase, and publishes `license.order_settled.v1`; the bot then sends the key (it fetches the key from core, the event
+carries none). A refused or refunded order clears the intent, so nothing is bought twice or against the buyer's will.
+
 ## The signed admin API (optional, off by default)
 
 `licensesrv key ...` is the admin tool. For a program that sells licenses (the owner's own BOBRES store), the same
