@@ -46,6 +46,7 @@ func (h *Handler) showDiscountMenu(r *req) {
 	}
 	kb.Row(r.button("btn.adm_new_discount", "adm:dn"))
 	kb.Row(r.button("btn.back", "adm"))
+	h.addUndo(r, kb)
 	r.show(strings.Join(lines, "\n")+"\n\n"+r.t("admin.discounts_hint"), kb)
 }
 
@@ -58,11 +59,13 @@ func (h *Handler) toggleDiscount(r *req, code string) {
 	}
 	for _, d := range list {
 		if d.GetCode() == code {
-			d.Enabled = !d.GetEnabled()
+			was := d.GetEnabled()
+			d.Enabled = !was
 			if _, err := h.core.AdminUpsertDiscount(r.ctx, &corev1.AdminUpsertDiscountRequest{ActorTelegramId: h.actor(r), Discount: d}); err != nil {
 				r.fail(err)
 				return
 			}
+			h.rememberUndo(r, "disc", code, strconv.FormatBool(was), code)
 			break
 		}
 	}

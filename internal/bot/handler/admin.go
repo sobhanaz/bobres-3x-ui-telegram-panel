@@ -42,6 +42,8 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 	switch verb {
 	case "":
 		h.showAdmin(r)
+	case "undo":
+		h.onUndo(r)
 	case "pend":
 		h.showPending(r, arg)
 	case "pi":
