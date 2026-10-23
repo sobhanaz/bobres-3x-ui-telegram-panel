@@ -18,6 +18,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Fixed
 - A flaky test, `TestTLSSetRefusedByCaddy`, which made the v0.14.0 Release gate fail on a slow runner: the fake Caddy now refuses once and answers normally after that.
+- The HTTPS watcher no longer asks the bot for the server's address twice in a minute (in ip mode it asks first, once, and the view reuses the answer); a flaky test, `TestTLSWatchRefreshesTheDetection`, came from this.
 
 ### Documentation
 - **A project wiki**: 24 English pages and 13 Persian ones (`docs/wiki/`) for the people who run a store: install, the dashboard, the bot and Mini App, plans, payments, panels, resellers, licensing, HTTPS, updates and backups, security, troubleshooting, a FAQ and the architecture. A new workflow (`wiki.yml`) publishes them to the GitHub Wiki after each merge, so the pages are reviewed like code.
