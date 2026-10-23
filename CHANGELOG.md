@@ -8,6 +8,9 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Fixed
+- The product dialog of the supplier page (Digital accounts) no longer spills out of the screen on a phone: a long link in the supplier's text stretched the form past the dialog and cut the fields off. The supplier's text now has its own scrolling box with its line breaks and its own direction, and the description fields are taller.
+
 ## [0.16.0] — 2026-10-23
 
 **Digital accounts in the Mini App, and the rate behind a USDT amount.** The Mini App now has the bot's digital-accounts shop for the owner's own store: the supplier's categories, a product page with its text and stock, a quantity, an order summary, and the wallet pays; the account is shown to its buyer and kept in My purchases. Paying a Toman price with manual USDT now also says the rate the amount was worked out at (the live price of USDT plus your margin when the store follows it).
