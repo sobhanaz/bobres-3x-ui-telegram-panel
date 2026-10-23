@@ -257,7 +257,7 @@ function revokeOthers() {
           <p><span class="app-ltr secret">{{ setup.secret }}</span></p>
           <p>{{ t('account.confirm_code') }}</p>
           <form class="form" @submit.prevent="confirmCode">
-            <InputOtp v-model="code" :length="6" integer-only dir="ltr" />
+            <InputOtp v-model="code" :length="6" integer-only dir="ltr" class="otp" />
             <Button type="submit" :label="t('account.confirm')" :loading="busy" :disabled="code.length !== 6" />
           </form>
         </template>
@@ -346,6 +346,24 @@ function revokeOthers() {
 </template>
 
 <style scoped>
+/* The six boxes of the code share the row evenly, as on the sign-in page. */
+.otp {
+  inline-size: 100%;
+}
+.otp :deep(.p-inputotp) {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  direction: ltr;
+}
+.otp :deep(.p-inputotp-input) {
+  inline-size: 100%;
+  min-inline-size: 0;
+  aspect-ratio: 1 / 1.1;
+  text-align: center;
+  font-size: 1.25rem;
+  padding: 0;
+}
 .cols {
   display: grid;
   gap: var(--app-gap);

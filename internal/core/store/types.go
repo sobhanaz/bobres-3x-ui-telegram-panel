@@ -45,9 +45,18 @@ type Plan struct {
 	// Reads fill it; UpsertPlan writes what it is given, so a caller that does
 	// not know the group (the bot's plan editor) must read it first.
 	GroupID *string
-	// RewardPercent: a paid purchase of this plan gives the buyer a discount code for their next purchase of it
-	// (nil: none). Reads fill it; UpsertPlan writes what it is given, so a caller that does not know it reads first.
-	RewardPercent *int32
+	// RewardPercent or RewardAmount (at most one; both nil: none): a paid purchase of this plan gives the buyer a discount code, of this
+	// percent or of this amount in the plan's currency, for any plan, for RewardDays days (1 to 365), with RewardTextI18n for them to
+	// read. Reads fill them; UpsertPlan writes what it is given, so a caller that does not know them reads first (or sets KeepReward).
+	RewardPercent  *int32
+	RewardAmount   *int64
+	RewardDays     int32
+	RewardTextI18n map[string]string
+	// KeepReward is not stored: it asks the domain to keep the stored reward (the bot's plan editor and a plan switched on or off never
+	// send one).
+	KeepReward bool
+	// DeletedAt is set on a plan that was deleted but is kept because orders point to it; reads leave such plans out of the lists.
+	DeletedAt *time.Time
 }
 
 // PlanInbound is a plan's choice of inbounds on one server.

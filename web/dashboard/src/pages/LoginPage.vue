@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, watchEffect } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { I18nT, useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -141,17 +141,24 @@ async function submit() {
             </label>
             <div class="code">
               <span>{{ t('login.code_optional') }}</span>
-              <InputOtp v-model="code" :length="6" integer-only dir="ltr" />
-              <small class="app-muted">{{ t('login.code_hint') }}</small>
+              <InputOtp v-model="code" :length="6" integer-only dir="ltr" class="otp" />
+              <I18nT keypath="login.code_hint" tag="small" class="app-muted hint">
+                <template #cmd><code class="cmd" dir="ltr">bobres admin password</code></template>
+              </I18nT>
             </div>
             <Button type="submit" :label="t('login.submit')" :loading="busy" :disabled="!username || !password || (code.length > 0 && code.length !== 6)" />
           </form>
-          <p class="app-muted small">{{ t('login.initial_hint') }}</p>
+          <I18nT keypath="login.initial_hint" tag="p" class="app-muted small hint">
+            <template #cmd><code class="cmd" dir="ltr">bobres admin password</code></template>
+          </I18nT>
 
           <Divider />
 
           <h3>{{ t('login.link_title') }}</h3>
-          <p class="app-muted">{{ t('login.link_hint') }}</p>
+          <I18nT keypath="login.link_hint" tag="p" class="app-muted hint">
+            <template #dashboard><code class="cmd" dir="ltr">/dashboard</code></template>
+            <template #admin><code class="cmd" dir="ltr">/admin</code></template>
+          </I18nT>
           <p class="app-muted small">{{ t('login.no_password_yet') }}</p>
         </template>
       </Card>
@@ -256,6 +263,38 @@ h3 {
 .small {
   font-size: 0.85rem;
   margin-block-end: 0;
+}
+/* Help texts: roomy lines, and a command or a path is a small LTR chip so the right-to-left sentence around it never scrambles it. */
+.hint {
+  line-height: 1.9;
+}
+.cmd {
+  display: inline-block;
+  unicode-bidi: isolate;
+  direction: ltr;
+  padding: 0 0.4em;
+  border-radius: 0.35rem;
+  font-size: 0.9em;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  white-space: nowrap;
+}
+/* The six boxes of the code share the row evenly (left to right, as the digits are typed) instead of huddling at one side. */
+.otp {
+  inline-size: 100%;
+}
+.otp :deep(.p-inputotp) {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  direction: ltr;
+}
+.otp :deep(.p-inputotp-input) {
+  inline-size: 100%;
+  min-inline-size: 0;
+  aspect-ratio: 1 / 1.1;
+  text-align: center;
+  font-size: 1.25rem;
+  padding: 0;
 }
 .attribution {
   display: flex;

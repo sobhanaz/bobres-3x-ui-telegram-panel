@@ -51,7 +51,7 @@ changed. The bot shows an "Open page" button on the service page and sends the n
 | `branding.bot_username` | The bot's username (`@my_vpn_bot` or `my_vpn_bot`). The "Renew" button opens `https://t.me/<username>`; with no username the button is not shown. |
 
 The name, colour, logo, support and terms link are the existing Branding settings. The guide under each app is an
-editable bot text: `subpage.guide.v2rayng`, `.hiddify`, `.streisand` and `.v2box`, in both languages (Branding page,
+editable bot text: `subpage.guide.v2rayng`, `.hiddify`, `.streisand`, `.v2box`, `.karing` and `.npv`, in both languages (Branding page,
 Texts; plain text only, it is escaped on the page).
 
 ## Limits and headers
@@ -73,6 +73,8 @@ Each button is a deep link that asks the app to import the subscription:
 | Hiddify | `hiddify://import/<link>` |
 | Streisand | `streisand://import/<link>` |
 | V2Box | `v2box://install-sub?url=<encoded link>` |
+| Karing | `karing://install-config?url=<encoded link>` |
+| NPV Tunnel | none: it documents no import link, so its entry is the steps only (copy the link above, add it as a subscription in the app) |
 
 **These are the schemes commonly used for each app, written from memory of their documentation. They have not been tried on real devices**, and apps change
 them between versions. Try each on a phone before you rely on it; the link and the QR code are always there to copy or

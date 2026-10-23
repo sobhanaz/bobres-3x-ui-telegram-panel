@@ -716,7 +716,7 @@ func TestCryptoTXIDFlow(t *testing.T) {
 	u.press("buy")
 	u.press("plan:")
 	u.press("pay:x:")
-	u.sees("2.5 USDT (≈ 150,000 Toman)") // 150000 / 60000, rounded up to cents
+	u.sees("2.5 USDT (≈ 150,000 Toman · 1 USDT = 60,000 Toman)") // 150000 / 60000, rounded up to cents, with the rate
 	if strings.Contains(u.last().text, "USDT USDT") {
 		t.Fatalf("currency printed twice: %q", u.last().text)
 	}

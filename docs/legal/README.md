@@ -22,6 +22,10 @@ The source license is the top-level [LICENSE](../../LICENSE) (a draft too), and 
 The four public texts (not the operator template) are also built as draft web pages in `site/legal/`, with a draft banner and `noindex`:
 after you change a draft, run `go run ./tools/sitelegal` (a test fails if the pages are out of date).
 
+**Every store also serves its own Terms and Privacy pages** at `https://<domain>/terms` and `/privacy`, with a general default text (in
+`internal/core/web/legal/`, Persian and English) that puts in the store's name and support contact. The owner edits either text on the Branding page, or
+sets the two addresses of their own pages. The default is a starting point, not legal advice: the owner should read it and make it fit the store.
+
 Before the launch: fill in every `[OWNER: ...]`, have the lawyer settle every `[LAWYER: ...]`, publish the final
 texts on the vendor's website, and link the Terms and the Privacy Policy from the place where operators get a license
 ([launch-checklist.md](../launch-checklist.md)).

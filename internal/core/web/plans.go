@@ -2,8 +2,10 @@ package web
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
 
@@ -26,8 +28,32 @@ type planJSON struct {
 	Inbounds []store.PlanInbound `json:"inbounds"`
 	// GroupID is the plan group it is listed under (null: none).
 	GroupID *string `json:"group_id"`
-	// RewardPercent: a paid purchase gives the buyer a discount code of this percent for their next purchase of the plan (null: none).
-	RewardPercent *int32 `json:"reward_percent"`
+	// Reward: a paid purchase gives the buyer a discount code for any plan (null: none).
+	Reward *rewardJSON `json:"reward"`
+}
+
+// rewardJSON is a plan's reward as the dashboard reads it: a percent or an amount in the plan's currency, the days the code lasts and the
+// text the buyer reads with it.
+type rewardJSON struct {
+	Kind    string            `json:"kind"` // percent | amount
+	Percent *int32            `json:"percent,omitempty"`
+	Amount  *money            `json:"amount,omitempty"`
+	Days    int32             `json:"days"`
+	Text    map[string]string `json:"text"`
+}
+
+func rewardOf(p *store.Plan) *rewardJSON {
+	text := p.RewardTextI18n
+	if text == nil {
+		text = map[string]string{}
+	}
+	switch {
+	case p.RewardPercent != nil:
+		return &rewardJSON{Kind: "percent", Percent: p.RewardPercent, Days: p.RewardDays, Text: text}
+	case p.RewardAmount != nil:
+		return &rewardJSON{Kind: "amount", Amount: &money{*p.RewardAmount, p.Currency}, Days: p.RewardDays, Text: text}
+	}
+	return nil
 }
 
 func planOf(p *store.Plan, sales int64) planJSON {
@@ -44,7 +70,7 @@ func planOf(p *store.Plan, sales int64) planJSON {
 	}
 	return planJSON{ID: p.ID, Name: p.NameI18n, Kind: p.Kind, DurationDays: p.DurationDays, TrafficBytes: p.TrafficBytes,
 		Price: money{p.Price, p.Currency}, Enabled: p.Enabled, IsTrial: p.IsTrial, IsTopup: p.IsTopup, Sort: p.Sort, Sales: sales,
-		ServerIDs: ids, Inbounds: inbounds, GroupID: p.GroupID, RewardPercent: p.RewardPercent}
+		ServerIDs: ids, Inbounds: inbounds, GroupID: p.GroupID, Reward: rewardOf(p)}
 }
 
 // listPlans: GET /api/v1/plans, every plan (also turned off) with its sales.
@@ -85,8 +111,16 @@ type planBody struct {
 	Inbounds *[]store.PlanInbound `json:"inbounds"`
 	// GroupID: absent keeps the plan's group (a new plan: none); "" takes it out of its group.
 	GroupID *string `json:"group_id"`
-	// RewardPercent: absent keeps the plan's reward; 0 takes it away.
-	RewardPercent *int32 `json:"reward_percent"`
+	// Reward: absent keeps the plan's reward; kind "none" takes it away.
+	Reward *rewardBody `json:"reward"`
+}
+
+// rewardBody is a reward as the dashboard sends it: Value is a whole percent (1 to 90) or an amount in major units of the plan's currency.
+type rewardBody struct {
+	Kind  string            `json:"kind"` // none | percent | amount
+	Value string            `json:"value"`
+	Days  int32             `json:"days"`
+	Text  map[string]string `json:"text"`
 }
 
 func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
@@ -126,8 +160,42 @@ func (b *planBody) plan(w http.ResponseWriter) (*store.Plan, bool) {
 		p.Inbounds = append([]store.PlanInbound{}, *b.Inbounds...)
 	}
 	p.GroupID = b.GroupID
-	p.RewardPercent = b.RewardPercent
+	if !b.reward(w, p) {
+		return nil, false
+	}
 	return p, true
+}
+
+// reward copies a plan body's reward onto the plan: absent keeps the stored one, "none" takes it away.
+func (b *planBody) reward(w http.ResponseWriter, p *store.Plan) bool {
+	if b.Reward == nil {
+		p.KeepReward = true
+		return true
+	}
+	r := b.Reward
+	p.RewardDays, p.RewardTextI18n = r.Days, r.Text
+	switch r.Kind {
+	case "", "none":
+	case "percent":
+		n, err := strconv.Atoi(strings.TrimSpace(r.Value))
+		if err != nil || n < 1 || n > domain.MaxRewardPercent {
+			writeError(w, http.StatusBadRequest, "invalid", "the reward percent must be a whole number from 1 to "+strconv.Itoa(domain.MaxRewardPercent))
+			return false
+		}
+		pct := int32(n) //nolint:gosec // 1 to 90
+		p.RewardPercent = &pct
+	case "amount":
+		amt, ok := parseAmount(r.Value, p.Currency, false)
+		if !ok || amt <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid", "the reward amount must be a number in the plan's currency")
+			return false
+		}
+		p.RewardAmount = &amt
+	default:
+		writeError(w, http.StatusBadRequest, "invalid", "the reward must be none, a percent or an amount")
+		return false
+	}
+	return true
 }
 
 // createPlan: POST /api/v1/plans
@@ -168,4 +236,18 @@ func (s *Server) savePlan(w http.ResponseWriter, r *http.Request, p *store.Plan)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"plan": planOf(saved, 0)})
+}
+
+// deletePlan: DELETE /api/v1/plans/{id}. The plan is taken off sale and out of every list; it is never erased (its orders, reports and refunds
+// need it). The answer is {"result": "deleted"}.
+func (s *Server) deletePlan(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := s.cfg.Domain.DeletePlan(r.Context(), actor(r), id); err != nil {
+		s.fail(w, "delete plan", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"result": "deleted"})
 }

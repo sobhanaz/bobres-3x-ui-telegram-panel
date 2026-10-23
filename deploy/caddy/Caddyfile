@@ -133,8 +133,8 @@
 		}
 	}
 
-	# JSON API and public subscription pages.
-	@core path /api/* /sub/*
+	# JSON API, public subscription pages, and the store's own Terms and Privacy pages.
+	@core path /api/* /sub/* /terms /privacy
 	handle @core {
 		request_body {
 			max_size 10MB

@@ -36,7 +36,7 @@ func (s *Server) ListSupplierOffers(ctx context.Context, req *corev1.ListSupplie
 		p := &offers[i]
 		resp.Offers = append(resp.Offers, &corev1.SupplierOffer{Sid: domain.SupplierSID(p.ID), Name: domain.SupplierName(p, lang),
 			Description: domain.SupplierDescription(p, lang), Price: &commonv1.Money{Amount: *p.SellPrice, Currency: domain.SupplierCurrency},
-			SoldOut: !p.Available()})
+			SoldOut: !p.Available(), Category: domain.SupplierCategory(p), Stock: stockOf(p), StockKnown: p.Stock != nil})
 	}
 	w, err := s.st.GetWallet(ctx, s.st.Conn(), req.GetUserId(), domain.SupplierCurrency)
 	if err != nil {
@@ -93,4 +93,12 @@ func (s *Server) GetSupplierDelivery(ctx context.Context, req *corev1.GetSupplie
 		name = domain.SupplierName(prod, langOf(req.GetLanguage()))
 	}
 	return &corev1.GetSupplierDeliveryResponse{Order: supplierOrderMsg(&p.Order, name), Delivery: p.Delivery}, nil
+}
+
+// stockOf is how many a supplier product has (0 when the supplier does not say).
+func stockOf(p *store.SupplierProduct) int32 {
+	if p.Stock == nil {
+		return 0
+	}
+	return *p.Stock
 }

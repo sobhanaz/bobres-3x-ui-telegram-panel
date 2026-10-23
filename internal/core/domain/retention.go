@@ -118,6 +118,9 @@ func (s *Service) discountFor(ctx context.Context, u *store.User, planID string,
 	if !discountCodeRe.MatchString(code) {
 		return 0, "", &DiscountError{"unknown"}
 	}
+	if price <= 0 {
+		return 0, "", &DiscountError{"plan"} // a free plan (the trial) takes no code: it would be used up for nothing
+	}
 	d, err := s.st.GetDiscount(ctx, s.st.Conn(), code)
 	if errors.Is(err, store.ErrNotFound) {
 		return 0, "", &DiscountError{"unknown"}

@@ -10,6 +10,7 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
@@ -78,10 +79,13 @@ func (s *Server) getBranding(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": v["branding.name"], "support": v["branding.support"], "color": v["branding.color"],
 		"terms_url": v["branding.terms_url"], "privacy_url": v["branding.privacy_url"],
-		"currency":  langPair{v["branding.currency.fa"], v["branding.currency.en"]},
-		"logo":      logo,
-		"bot_photo": botPhoto,
-		"defaults":  map[string]any{"name": defaultBrand, "color": defaultColor, "currency": langPair{"تومان", "Toman"}},
+		"currency": langPair{v["branding.currency.fa"], v["branding.currency.en"]},
+		// The store's own Terms and Privacy pages: the owner's own text per language ("" = the default), and the defaults to start from.
+		"legal":          legalPairs(func(kind, lang string) string { return v[legalKey(kind, lang)] }),
+		"legal_defaults": legalPairs(legalDefault),
+		"logo":           logo,
+		"bot_photo":      botPhoto,
+		"defaults":       map[string]any{"name": defaultBrand, "color": defaultColor, "currency": langPair{"تومان", "Toman"}},
 	})
 }
 
@@ -94,6 +98,8 @@ func (s *Server) putBranding(w http.ResponseWriter, r *http.Request) {
 		TermsURL   string   `json:"terms_url"`
 		PrivacyURL string   `json:"privacy_url"`
 		Currency   langPair `json:"currency"`
+		// Legal: the owner's text of the Terms and Privacy pages; absent keeps them, "" for a language goes back to the default.
+		Legal map[string]langPair `json:"legal"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -102,6 +108,13 @@ func (s *Server) putBranding(w http.ResponseWriter, r *http.Request) {
 		brandingKeys["name"]: req.Name, brandingKeys["support"]: req.Support, brandingKeys["color"]: req.Color,
 		brandingKeys["terms_url"]: req.TermsURL, brandingKeys["privacy_url"]: req.PrivacyURL,
 		brandingKeys["currency.fa"]: req.Currency.FA, brandingKeys["currency.en"]: req.Currency.EN,
+	}
+	for kind, pair := range req.Legal {
+		if !slices.Contains(legalKinds, kind) {
+			writeFieldError(w, "legal", "unknown page "+kind)
+			return
+		}
+		values[legalKey(kind, "fa")], values[legalKey(kind, "en")] = pair.FA, pair.EN
 	}
 	if _, err := s.cfg.Domain.SetSettings(r.Context(), actor(r), values); err != nil {
 		var fe *domain.FieldError
@@ -241,4 +254,13 @@ func webpSize(b []byte) (w, h int, ok bool) {
 		return w + 1, h + 1, true
 	}
 	return 0, 0, false
+}
+
+// legalPairs is the Persian and English text of each legal page, as text(kind, lang) gives it.
+func legalPairs(text func(kind, lang string) string) map[string]langPair {
+	out := map[string]langPair{}
+	for _, kind := range legalKinds {
+		out[kind] = langPair{FA: text(kind, "fa"), EN: text(kind, "en")}
+	}
+	return out
 }

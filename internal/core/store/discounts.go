@@ -54,13 +54,13 @@ func (s *Store) UpsertDiscount(ctx context.Context, q querier, d *Discount) (*Di
 	return got, nil
 }
 
-// InsertRewardCode records a reward code (d.UserID, d.PlanID and d.SourceOrderID are set) for the purchase that gave it. It reports
-// whether a code was made: false when that purchase has one already (a retried delivery), or the code text is taken (the caller
-// tries another).
+// InsertRewardCode records a reward code (d.UserID and d.SourceOrderID are set; d.PlanID only on a code made before reward codes were
+// for any plan) for the purchase that gave it. It reports whether a code was made: false when that purchase has one already (a retried
+// delivery), or the code text is taken (the caller tries another).
 func (s *Store) InsertRewardCode(ctx context.Context, q querier, d *Discount) (bool, error) {
-	tag, err := q.Exec(ctx, `INSERT INTO core.discount_codes (code, percent, max_uses, expires_at, enabled, user_id, plan_id, source_order_id)
-		VALUES ($1, $2, 1, $3, true, $4::uuid, $5::uuid, $6::uuid) ON CONFLICT DO NOTHING`,
-		d.Code, d.Percent, d.ExpiresAt, d.UserID, d.PlanID, d.SourceOrderID)
+	tag, err := q.Exec(ctx, `INSERT INTO core.discount_codes (code, percent, amount, currency, max_uses, expires_at, enabled, user_id, plan_id, source_order_id)
+		VALUES ($1, $2, $3, $4, 1, $5, true, $6::uuid, $7::uuid, $8::uuid) ON CONFLICT DO NOTHING`,
+		d.Code, d.Percent, d.Amount, d.Currency, d.ExpiresAt, d.UserID, d.PlanID, d.SourceOrderID)
 	if err != nil {
 		return false, fmt.Errorf("insert reward code: %w", err)
 	}

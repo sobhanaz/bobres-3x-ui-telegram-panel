@@ -57,6 +57,9 @@ const (
 // admin neither sees nor changes it, in the dashboard or the bot.
 func ownerOnlyPerm(perm string) bool { return perm == permGateways || perm == permSystem }
 
+// LegalTextMax is the longest text (characters) the owner may write for a Terms or Privacy page.
+const LegalTextMax = 30000
+
 // SettingSpec describes one setting: where it is edited, who may change it
 // and what values it takes. Every value is stored as a JSON string; "" (or
 // no row) means the default.
@@ -70,7 +73,9 @@ type SettingSpec struct {
 	Max     int64 // KindInt
 	Options []string
 	MaxLen  int // KindText, in characters
-	Help    string
+	// Multiline lets a KindText hold line breaks and tabs (a page's text); its limit in bytes is MaxLen * 4. Line breaks are kept as \n.
+	Multiline bool
+	Help      string
 }
 
 // SettingSpecs lists every setting in the order the dashboard shows them.
@@ -143,6 +148,10 @@ var SettingSpecs = []SettingSpec{
 		Help: "USDT TRC20 deposit address"},
 	{Key: "payments.usdt_erc20", Group: "payments", Kind: KindText, Perm: permGateways, MaxLen: 42,
 		Help: "USDT ERC20 deposit address"},
+	{Key: SettingUSDTAuto, Group: "payments", Kind: KindBool, Perm: permGateways, Default: "true",
+		Help: "true = the Toman price of one USDT is read live (every couple of minutes) and Toman prices are turned into USDT at that rate, so a crypto payment is always priced at the moment; the rate below is the fallback when the live price cannot be read; false = only the rate below is used"},
+	{Key: SettingUSDTMargin, Group: "payments", Kind: KindInt, Perm: permGateways, Min: 0, Max: MaxUSDTMargin,
+		Help: "percent added on top of the live USDT rate (0 to 30), to cover the exchange's spread and fees (empty or 0 = none)"},
 	{Key: "payments.usdt_rate", Group: "payments", Kind: KindInt, Perm: permGateways, Min: 1, Max: 1_000_000_000_000,
 		Help: "Toman per 1 USDT, to quote Toman prices in USDT"},
 	{Key: "payments.stars.enabled", Group: "payments", Kind: KindBool, Perm: permGateways, Default: "true",
@@ -167,6 +176,14 @@ var SettingSpecs = []SettingSpec{
 		Help: "https link to the store's terms"},
 	{Key: "branding.privacy_url", Group: "branding", Kind: KindURL, Perm: permBranding,
 		Help: "https link to the store's privacy policy"},
+	{Key: "legal.terms.fa", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: LegalTextMax, Multiline: true,
+		Help: "your own Persian text of the store's terms page (/terms); empty = the default text"},
+	{Key: "legal.terms.en", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: LegalTextMax, Multiline: true,
+		Help: "your own English text of the store's terms page (/terms); empty = the default text"},
+	{Key: "legal.privacy.fa", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: LegalTextMax, Multiline: true,
+		Help: "your own Persian text of the store's privacy page (/privacy); empty = the default text"},
+	{Key: "legal.privacy.en", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: LegalTextMax, Multiline: true,
+		Help: "your own English text of the store's privacy page (/privacy); empty = the default text"},
 	{Key: "branding.currency.fa", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 16,
 		Help: "Persian name of the Toman in prices (empty = تومان)"},
 	{Key: "branding.currency.en", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 16,
@@ -312,16 +329,23 @@ func NormalizeSetting(key, value string) (string, error) {
 	if !ok {
 		return "", &FieldError{key, "unknown setting"}
 	}
+	if sp.Multiline {
+		value = strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
+	}
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "", nil
 	}
 	bad := func(msg string) (string, error) { return "", &FieldError{key, msg} }
-	if !utf8.ValidString(value) || len(value) > maxSettingLen {
+	limit := maxSettingLen
+	if sp.Multiline {
+		limit = sp.MaxLen * 4
+	}
+	if !utf8.ValidString(value) || len(value) > limit {
 		return bad("too long")
 	}
 	for _, r := range value {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) && (!sp.Multiline || (r != '\n' && r != '\t')) {
 			return bad("must be one line of text")
 		}
 	}
@@ -330,7 +354,19 @@ func NormalizeSetting(key, value string) (string, error) {
 		if utf8.RuneCountInString(value) > sp.MaxLen {
 			return bad("at most " + strconv.Itoa(sp.MaxLen) + " characters")
 		}
-		value = strings.Join(strings.Fields(value), " ")
+		if sp.Multiline {
+			// Line breaks stay; each line is trimmed and runs of blank lines become one.
+			lines := strings.Split(value, "\n")
+			for i, l := range lines {
+				lines[i] = strings.TrimRight(l, " \t")
+			}
+			value = strings.TrimSpace(strings.Join(lines, "\n"))
+			for strings.Contains(value, "\n\n\n") {
+				value = strings.ReplaceAll(value, "\n\n\n", "\n\n")
+			}
+		} else {
+			value = strings.Join(strings.Fields(value), " ")
+		}
 		switch key {
 		case "branding.currency.fa", "branding.currency.en":
 			// It goes into every price, also inside HTML messages and buttons.

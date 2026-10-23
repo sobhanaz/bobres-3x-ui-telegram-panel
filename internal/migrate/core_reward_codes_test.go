@@ -7,7 +7,7 @@ import (
 )
 
 // 00036 on a store from before: every plan gives no reward, every discount code is staff's (bound to no one), a reward percent is 1 to 90,
-// a code made for a buyer is bound to a plan, one purchase has one code, and Down drops the columns.
+// one purchase has one code, and Down drops the columns. (A code for a buyer was bound to a plan until 00037, which lets it be for any.)
 func TestRewardCodesMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
@@ -59,15 +59,15 @@ func TestRewardCodesMigration(t *testing.T) {
 			t.Errorf("reward %s was accepted", bad)
 		}
 	}
-	// A reward code: bound to the buyer and the plan, one per purchase; a code for a buyer needs a plan.
+	// A reward code: bound to the buyer and the plan, one per purchase.
 	if err := exec(`INSERT INTO core.discount_codes (code, percent, max_uses, user_id, plan_id, source_order_id) VALUES ('THX-AAAAAAAA', 20, 1, $1, $2, $3)`, user, plan, order); err != nil {
 		t.Fatalf("a reward code: %v", err)
 	}
 	if err := exec(`INSERT INTO core.discount_codes (code, percent, max_uses, user_id, plan_id, source_order_id) VALUES ('THX-BBBBBBBB', 20, 1, $1, $2, $3)`, user, plan, order); err == nil {
 		t.Error("two codes for one purchase")
 	}
-	if err := exec(`INSERT INTO core.discount_codes (code, percent, user_id) VALUES ('THX-CCCCCCCC', 20, $1)`, user); err == nil {
-		t.Error("a code for a buyer without a plan")
+	if err := exec(`INSERT INTO core.discount_codes (code, percent, user_id) VALUES ('THX-CCCCCCCC', 20, $1)`, user); err != nil {
+		t.Errorf("a code for a buyer, for any plan (00037): %v", err)
 	}
 	// Deleting the plan takes its codes along.
 	if err := exec(`DELETE FROM core.orders WHERE id = $1`, order); err == nil {

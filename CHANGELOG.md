@@ -8,6 +8,41 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Reward codes as a fixed amount for any plan, and deleting a plan
+- **A reward can be an amount**, not only a percent: in a plan's editor, **Reward code after a purchase** has a kind (none, a percent, a fixed amount in
+  the plan's currency), **Valid for (days)** (1 to 365, default 10; the plans already marked keep 30) and a **text for the buyer** in Persian and English that
+  comes with the code. The code is **for any plan** the buyer buys next (before, only the plan that gave it), one use, for them only. An amount takes that
+  amount off and never more than the price (the rest is lost), and only on a plan in its currency. A free plan (the trial) takes no code. Codes made
+  before keep the plan they were bound to. Migration 00037.
+- **Delete a plan** (the trash button on the Plans page, with a confirmation, **owner only**: permission `plans.delete`; nothing deletes a plan by itself): the plan is taken off sale and out of every list. It is
+  **never erased**, with orders or without: its orders, reports and refunds keep it, and services already made from it keep working. Migration 00037
+  (`plans.deleted_at`).
+- **The live price of USDT for crypto payments**: the Toman price of one USDT is read live (the bot reads Tetherland's and Wallex's public pages every couple of minutes; core
+  has no internet) and every Toman price is turned into USDT at it, so a crypto payment is priced at the moment and the amount the customer must send is
+  worked out by itself. Settings **Live USDT rate** (on by default) and **Margin on the live rate (%)** (0 to 30, for the exchange's spread and fees); your own
+  **Toman per USDT** stays as the fallback when the live price cannot be read or is older than 30 minutes, and is used alone when the live rate is off.
+  The Gateways page shows what is charged now, where it comes from and a **Read it now** button; the bot's crypto screen shows "1 USDT = N Toman".
+  No migration. This changes what a store that had set its own rate charges: turn **Live USDT rate** off to keep using only your own.
+- **Karing and NPV Tunnel** next to v2rayNG, Hiddify, Streisand and V2Box: on the subscription page Karing has its **Add to Karing** button (`karing://install-config?url=...`,
+  not yet tried on a device, like the others) and NPV Tunnel has its steps (it documents no import link, so there is no button); the help center gets a
+  **Download Karing** and a **Download NPV Tunnel** tutorial, with their store and download buttons. A store that already uses its tutorials gets the two once, at the end
+  of the list (unless it has one for that app); what the owner deletes is not put back. Streisand was there already: its button, its guide and its tutorial.
+- **The store's own Terms and Privacy pages**: every store serves `https://<domain>/terms` and `/privacy` (Persian and English, `?l=en`), with a general default text that puts
+  in the store's name and support contact. The bot's Terms and Privacy buttons, `/terms` and the subscription page's footer use them while the owner has set no address of
+  their own. The owner edits either text per language on the Branding page (Your Terms and Privacy pages), or goes back to the default; `{store}` and `{contact}`
+  are filled in. The text is a small markdown, escaped before it is shown. Caddy routes `/terms` and `/privacy` to core.
+- **The sign-in page on a phone**: the six boxes of the authenticator code share the row evenly, and a command in a Persian sentence (`bobres admin password`, `/dashboard`) is a
+  small left-to-right chip that no longer scrambles the sentence. The same boxes on the Account page.
+- **Digital accounts in the bot, like the supplier's own**: the home lists the supplier's **categories** in a grid (two to a row, red when nothing in one is in
+  stock), a category lists its products (green; red and "(out of stock)" when sold out; a red Back), a **product page** shows the description, the unit price
+  and the stock with **Buy now**, then **how many** (buttons or a typed number, no more than the stock) and an **order summary** with **Pay with wallet**.
+  A purchase takes up to 25 (it was 1 in the bot). The category comes from the supplier's own `category`; no migration.
+- **A product's description comes from the supplier** when the owner wrote none (it was hidden from customers); the owner edits it per language, and **Copy the
+  supplier's name and text** starts from it. **Export texts / Import texts** on the Digital accounts page move every name and text through a file, so they can
+  be translated to Persian in one go; prices are changed as before in each product's editor.
+- **Fixed: four bot texts showed a literal `\n`** instead of a line break (the reward code message, Find by link's service details and the reseller prefix
+  screens); a test now keeps a backslash-n out of every text.
+
 ## [0.13.0] — 2026-10-22
 
 **Reward codes, sold-out digital accounts, the owner's buttons in the bottom menu, and finding a service by its link.** The owner marks a plan and

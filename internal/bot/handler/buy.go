@@ -514,7 +514,7 @@ func (h *Handler) instructions(r *req, in *corev1.PaymentIntentRef) (string, boo
 				return "", false
 			}
 			cents := (amount*100 + rate - 1) / rate // round up to 0.01 USDT
-			shown = r.t("pay.crypto_equiv", "usdt", i18n.Money(r.lang, cents*10_000, "USDT"), "amount", shown)
+			shown = r.t("pay.crypto_equiv", "usdt", i18n.Money(r.lang, cents*10_000, "USDT"), "amount", shown, "rate", r.money(rate, "IRT"))
 		}
 		return r.t("pay.crypto", "amount", shown, "addresses", strings.Join(addrs, "\n"), "ref", esc(d["reference"])), true
 	case "manual_zarinpal":

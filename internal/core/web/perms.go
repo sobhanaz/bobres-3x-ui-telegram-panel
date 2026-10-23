@@ -15,6 +15,7 @@ const (
 	PermServicesExtend = "services.extend"
 	PermServicesWrite  = "services.write"
 	PermPlansWrite     = "plans.write"
+	PermPlansDelete    = "plans.delete" // deleting a plan: only the owner, only by pressing the button
 	PermPaymentsRead   = "payments.read"
 	PermPaymentsReview = "payments.review"
 	PermLedgerRead     = "ledger.read"
@@ -39,7 +40,7 @@ const (
 
 var allPerms = []string{
 	PermOverviewRead, PermUsersRead, PermUsersWrite, PermWalletAdjust, PermServicesRead, PermServicesExtend,
-	PermServicesWrite, PermPlansWrite, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermDiscountsWrite,
+	PermServicesWrite, PermPlansWrite, PermPlansDelete, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermDiscountsWrite,
 	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
 	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite, PermJoinWrite, PermMonitorRead,
 }
@@ -47,7 +48,7 @@ var allPerms = []string{
 // ownerOnly: staff accounts, the license, gateway secrets, system actions
 // (backups) and the list of required channels and groups stay with the owner.
 var ownerOnly = map[string]bool{
-	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true, PermJoinWrite: true,
+	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true, PermJoinWrite: true, PermPlansDelete: true,
 }
 
 var supportPerms = map[string]bool{

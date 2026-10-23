@@ -139,7 +139,7 @@
     "title": "Log in",
     "subtitle": "Staff dashboard of {brand}",
     "link_title": "With the bot",
-    "link_hint": "In the Telegram bot, send /dashboard (or tap Dashboard in /admin). You get a link that logs you in once, within 2 minutes.",
+    "link_hint": "In the Telegram bot, send {dashboard} (or tap Dashboard in {admin}). You get a link that logs you in once, within 2 minutes.",
     "link_working": "Logging you in…",
     "link_invalid": "This login link was used already or has expired. Ask the bot for a new one.",
     "password_title": "With a password",
@@ -153,8 +153,8 @@
     "not_configured": "Password logins are off on this install. Use a link from the bot.",
     "no_password_yet": "After your first login, add or change your password in My account.",
     "code_optional": "Authenticator code (if you have set one up)",
-    "code_hint": "Leave it empty when you sign in with the initial password from the installer or from bobres admin password.",
-    "initial_hint": "No Telegram? Sign in with the initial password the installer showed, or get a new one on the server with: bobres admin password. You will choose your own password and set up two-factor authentication right after."
+    "code_hint": "Leave it empty when you sign in with the initial password from the installer or from {cmd}.",
+    "initial_hint": "No Telegram? Sign in with the initial password the installer showed, or get a new one on the server with {cmd}. You will choose your own password and set up two-factor authentication right after."
   },
   "overview": {
     "users": "Users",
@@ -472,11 +472,24 @@
     "inbound_off": "{name} (off in the panel)",
     "inbound_gone_id": "Inbound #{id} (gone from the panel)",
     "inbounds_gone": "Gone from the panel or turned off: inbound {ids}. Gone ones are skipped; if none is left, orders for this plan on this server fail until you change the choice.",
-    "reward": "Reward code after a purchase (%)",
+    "reward": "Reward code after a purchase",
     "reward_none": "No reward",
-    "reward_hint": "A paid purchase or renewal of this plan gives the buyer a discount code of this percent for their next purchase of the same plan: only for them, one use, 30 days. Leave empty for none.",
-    "reward_rule": "A whole percent from 1 to 90, or empty.",
-    "reward_tag": "Reward {n}%"
+    "reward_kind": "Kind",
+    "reward_kind_none": "No reward",
+    "reward_kind_percent": "A percent off",
+    "reward_kind_amount": "A fixed amount off",
+    "reward_value_percent": "Percent (1 to 90)",
+    "reward_value_amount": "Amount ({currency})",
+    "reward_days": "Valid for (days)",
+    "reward_text_fa": "Text for the buyer (Persian)",
+    "reward_text_en": "Text for the buyer (English)",
+    "reward_hint": "A paid purchase or renewal of this plan gives the buyer a discount code for any plan they buy next: only for them, one use, for the days you set. It comes in a message with your text. A discount never goes below zero: if the code is worth more than the plan, the rest is lost.",
+    "reward_rule": "A percent is a whole number from 1 to 90; an amount is a number in the plan's currency; the days are 1 to 365.",
+    "reward_tag": "Reward {n}%",
+    "reward_tag_amount": "Reward {amount}",
+    "delete": "Delete plan",
+    "delete_confirm": "Delete the plan {name}? It is taken off sale and out of every list. It is not erased: its orders and reports keep it, and services already made from it keep working.",
+    "deleted": "Plan deleted (taken off sale and out of the lists)"
   },
   "payment": {
     "queue": "Review queue",
@@ -955,6 +968,14 @@
     "edit": {"title": "Change a license", "keep": "Keep the end", "tier_help": "A new tier takes that tier's limits and features.", "extend": "Or renew by", "extend_go": "Renew"}
   },
   "supplier": {
+    "category": "Category",
+    "copy_text": "Copy the supplier's name and text",
+    "desc_help": "Customers read this on the product page. Empty: they see the supplier's own text.",
+    "export_texts": "Export texts",
+    "import_texts": "Import texts",
+    "texts_help": "Export writes every product's name and text to a file; give it to a translator (the Persian texts go in \"fa\"), then Import brings it back and fills them in. Only the texts given are changed; prices and switches are not.",
+    "import_bad": "That is not a file made by Export texts.",
+    "import_done": "Texts updated for {n} product ({skipped} skipped). | Texts updated for {n} products ({skipped} skipped).",
     "intro": "Your bot resells a supplier's digital accounts. The products are read from the supplier and come in switched OFF: you write the price (in Toman) and the texts and switch each one on. A customer pays from the wallet and gets the account in the bot; if the supplier cannot deliver, the money goes back to the wallet.",
     "no_key": "Reselling needs the master key of this install (BOBRES_CORE_MASTER_KEY), which core does not have.",
     "connection": "Connection",
@@ -1091,6 +1112,14 @@
     "keep_open": "Keep it open"
   },
   "branding": {
+    "legal_default_hint": "Empty: the bot, the support screen and the subscription page use the store's own pages below (the addresses shown in grey).",
+    "pages": "Your Terms and Privacy pages",
+    "pages_hint": "Every store has these two pages at its own address, with a default text in Persian and English that you can edit. Write {'{'}store{'}'} for your store name and {'{'}contact{'}'} for your support contact; the page puts them in. A line starting with # is a heading, with - a list item; **bold** works. The default is a general starting point: read it and make it fit your store.",
+    "page_terms": "Terms of service",
+    "page_privacy": "Privacy policy",
+    "page_lang_fa": "Persian text",
+    "page_lang_en": "English text",
+    "use_default_text": "Use the default text",
     "tab_store": "Store",
     "doc_title": "{brand} · Dashboard",
     "intro": "Your store's name, look and links. Saved changes reach the bot within a few seconds.",
@@ -1608,6 +1637,14 @@
           "label": "USDT address (ERC20)",
           "help": "Your Ethereum wallet address for USDT payments; it starts with 0x. Empty means this network is not offered."
         },
+        "usdt_rate_auto": {
+          "label": "Live USDT rate",
+          "help": "On: the Toman price of one USDT is read live every couple of minutes, and Toman prices are turned into USDT at that rate, so a crypto payment is priced at the moment. If the live price cannot be read, the rate below is used. Off: only the rate below."
+        },
+        "usdt_rate_margin": {
+          "label": "Margin on the live rate (%)",
+          "help": "Added on top of the live USDT price, to cover the exchange's spread and fees. 0 to 30; empty means none."
+        },
         "usdt_rate": {
           "label": "Toman per USDT",
           "help": "At this rate, Toman-priced plans can also be paid in USDT. Empty means USDT only for plans priced in USDT."
@@ -1873,7 +1910,8 @@
         "status": "Banned or unbanned"
       },
       "plan": {
-        "upsert": "Plan saved"
+        "upsert": "Plan saved",
+        "delete": "Plan deleted"
       },
       "plan_group": {
         "upsert": "Plan group saved",
@@ -3792,5 +3830,23 @@
       "refresh": "renewed by the license server"
     },
     "refreshed_at": "Last renewed from the license server {time}"
+  },
+  "usdtrate": {
+    "title": "Price of one USDT",
+    "per_usdt": "{n} Toman per USDT",
+    "none": "No rate yet",
+    "refresh": "Read it now",
+    "refreshed": "The live price was read",
+    "refresh_failed": "The live price could not be read: {why}",
+    "live_line": "Live price: {n} Toman · read {when} · from {sources}",
+    "stale": "too old to use",
+    "margin_line": "{n}% margin is added on top of the live price.",
+    "off_line": "The live rate is off: only your own rate is used.",
+    "not_read": "No live price has been read yet. It is read every couple of minutes while an USDT address is set.",
+    "source": {
+      "live": "Live",
+      "manual": "Your own rate",
+      "none": "None"
+    }
   }
 }

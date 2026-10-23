@@ -877,7 +877,7 @@ func TestHelpFAQDefaultContentIsOneMessage(t *testing.T) {
 		who.press("home")
 		who.press("tut")
 		list := who.shown()
-		if n := len(buttons(list)); n != 7 { // six tutorials and Home
+		if n := len(buttons(list)); n != len(coredomain.DefaultHelp("tutorial"))+1 { // every default tutorial and Home
 			t.Errorf("%s: %d buttons in the tutorials list", lang, n)
 		}
 		for _, d := range callbacks(list) {

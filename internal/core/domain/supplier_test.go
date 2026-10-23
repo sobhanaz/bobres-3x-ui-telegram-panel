@@ -656,3 +656,36 @@ func TestSupplierShelfShowsSoldOutProducts(t *testing.T) {
 		t.Fatalf("interval with an unlisted product: %v", got)
 	}
 }
+
+// The supplier's category is read from the answer the product was made of (a text, an object with a name, without custom-emoji placeholders),
+// and a customer reads the owner's text, else the supplier's own.
+func TestSupplierCategoryAndDescriptionFallback(t *testing.T) {
+	raw := func(s string) store.SupplierProduct { return store.SupplierProduct{Raw: json.RawMessage(s)} }
+	for name, tc := range map[string]struct{ raw, want string }{
+		"a text":                {`{"category":"Telegram Premium"}`, "Telegram Premium"},
+		"with an emoji":         {`{"category":"{pe:5244675575502628242} Claude"}`, "Claude"},
+		"an object":             {`{"category":{"id":4,"name":"VPN"}}`, "VPN"},
+		"another key":           {`{"category_name":"Email"}`, "Email"},
+		"a number alone":        {`{"category":12}`, ""},
+		"none":                  {`{"name":"x"}`, ""},
+		"not JSON":              {`nope`, ""},
+		"a long one is clipped": {`{"category":"` + strings.Repeat("a", 100) + `"}`, strings.Repeat("a", 60)},
+	} {
+		p := raw(tc.raw)
+		if got := SupplierCategory(&p); got != tc.want {
+			t.Errorf("%s: %q, want %q", name, got, tc.want)
+		}
+	}
+	p := store.SupplierProduct{Description: "The supplier's text", Desc: map[string]string{}}
+	if got := SupplierDescription(&p, "fa"); got != "The supplier's text" {
+		t.Errorf("the supplier's own text: %q", got)
+	}
+	p.Desc = map[string]string{"en": "Owner English"}
+	if got := SupplierDescription(&p, "fa"); got != "Owner English" {
+		t.Errorf("a Persian customer with only an English text: %q", got)
+	}
+	p.Desc["fa"] = "متن فارسی"
+	if got, en := SupplierDescription(&p, "fa"), SupplierDescription(&p, "en"); got != "متن فارسی" || en != "Owner English" {
+		t.Errorf("each language its own: %q %q", got, en)
+	}
+}

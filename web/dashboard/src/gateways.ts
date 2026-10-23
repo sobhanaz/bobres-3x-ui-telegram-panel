@@ -320,7 +320,7 @@ export const methods: Method[] = [
   {
     key: 'manual_crypto',
     toggle: 'payments.manual_crypto.enabled',
-    fields: ['payments.usdt_trc20', 'payments.usdt_erc20', 'payments.usdt_rate'],
+    fields: ['payments.usdt_trc20', 'payments.usdt_erc20', 'payments.usdt_rate_auto', 'payments.usdt_rate_margin', 'payments.usdt_rate'],
     needs: ['payments.usdt_trc20', 'payments.usdt_erc20'],
   },
   { key: 'manual_zarinpal', toggle: 'payments.manual_zarinpal.enabled', fields: ['payments.zarinpal_link'], needs: ['payments.zarinpal_link'] },

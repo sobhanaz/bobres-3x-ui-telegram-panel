@@ -463,6 +463,9 @@ func (s *Service) UpsertPlan(ctx context.Context, actor *store.User, p *store.Pl
 		if err != nil {
 			return nil, err // editing a plan that does not exist
 		}
+		if old.DeletedAt != nil {
+			return nil, store.ErrNotFound // a deleted plan is only kept for its orders
+		}
 		before, oldCur = old, old.Currency
 		if p.ServerIDs == nil {
 			p.ServerIDs = old.ServerIDs
@@ -651,8 +654,8 @@ func validatePlan(p *store.Plan) error {
 	if p.DurationDays != nil && (*p.DurationDays < 0 || *p.DurationDays > 3650) {
 		return invalid("duration out of range")
 	}
-	if r := p.RewardPercent; r != nil && (*r < 0 || *r > MaxRewardPercent) {
-		return &FieldError{"reward_percent", fmt.Sprintf("0 (none) to %d", MaxRewardPercent)}
+	if err := validateReward(p); err != nil {
+		return err
 	}
 	if p.TrafficBytes != nil && *p.TrafficBytes < 0 {
 		return invalid("traffic out of range")

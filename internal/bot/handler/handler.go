@@ -757,6 +757,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onFindLink(r)
 	case sceneBulkQuantity, sceneBulkName:
 		h.onBulkScene(r, st)
+	case sceneSupplierQuantity:
+		h.onSupplierQuantity(r, st)
 	default:
 		r.clearState()
 		h.showHome(r)
@@ -784,6 +786,8 @@ const (
 	// A bulk purchase: the number of services typed, and the name they share.
 	sceneBulkQuantity = "bulk_qty"
 	sceneBulkName     = "bulk_name"
+	// A digital account: the number of codes typed.
+	sceneSupplierQuantity = "sup_qty"
 )
 
 // nonce makes each rendered payment menu unique: a double tap on one button

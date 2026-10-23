@@ -143,7 +143,7 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 }
 
 // usdtCharge is what automatic USDT asks before payments makes it unique: a
-// USDT price as it is; a Toman price at payments.usdt_rate (Toman per USDT,
+// USDT price as it is; a Toman price at the store's USDT rate (UsdtRate, Toman per USDT,
 // the rate manual USDT uses too) in whole cents, rounded up so a payment
 // never falls short: ceil(amount*100/rate) * 10,000 micro-USDT.
 func (s *Service) usdtCharge(ctx context.Context, amount int64, currency string) (int64, string, error) {
@@ -152,9 +152,9 @@ func (s *Service) usdtCharge(ctx context.Context, amount int64, currency string)
 	case "USDT":
 		base = amount
 	case "IRT":
-		rate := s.settingInt(ctx, "payments.usdt_rate")
+		rate := s.UsdtRate(ctx)
 		if rate <= 0 {
-			return 0, "", invalid("automatic USDT is not set up for this price (payments.usdt_rate)")
+			return 0, "", invalid("automatic USDT is not set up for this price (no USDT rate: the live rate is off or unreachable, and payments.usdt_rate is empty)")
 		}
 		if amount > (math.MaxInt64-rate)/100 { // amount*100 + rate - 1 must fit
 			return 0, "", invalid("automatic USDT takes at most 1,000,000 USDT per payment")

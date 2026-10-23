@@ -211,7 +211,7 @@ func (s *Server) pageData(r *http.Request, settings map[string]string, conf doma
 		Lang: lang, Dir: dir, OtherLang: other, OtherLangName: otherName, T: t,
 		Brand: brandName(settings), Color: color, OnColor: onColor(color), Logo: s.logoURL(ctx),
 		Link: sub.SubLink, PoweredBy: s.poweredBy(ctx),
-		TermsURL: settings["branding.terms_url"], PrivacyURL: settings["branding.privacy_url"],
+		TermsURL: orDefault(settings["branding.terms_url"], "/terms"), PrivacyURL: orDefault(settings["branding.privacy_url"], "/privacy"),
 	}
 	d.Title = t.Title
 	d.Support, d.SupportURL = supportContact(settings["branding.support"])
@@ -290,6 +290,9 @@ func (s *Server) pageData(r *http.Request, settings map[string]string, conf doma
 		{"Hiddify", template.URL("hiddify://import/" + sub.SubLink), guide("subpage.guide.hiddify")},       //nolint:gosec // fixed scheme prefix, so never a javascript: URL
 		{"Streisand", template.URL("streisand://import/" + sub.SubLink), guide("subpage.guide.streisand")}, //nolint:gosec // fixed scheme prefix, so never a javascript: URL
 		{"V2Box", template.URL("v2box://install-sub?url=" + enc), guide("subpage.guide.v2box")},            //nolint:gosec // fixed scheme, the link is query-escaped
+		{"Karing", template.URL("karing://install-config?url=" + enc), guide("subpage.guide.karing")},      //nolint:gosec // fixed scheme, the link is query-escaped
+		// NPV Tunnel documents no import link: its entry has no button, only the steps (the link above is copied by hand).
+		{"NPV Tunnel", "", guide("subpage.guide.npv")},
 	}
 	return d, nil
 }
@@ -401,4 +404,12 @@ func portOf(u *url.URL) string {
 		return "80"
 	}
 	return "443"
+}
+
+// orDefault is v, or def when v is empty (the store's own pages answer where the owner has set no address).
+func orDefault(v, def string) string {
+	if strings.TrimSpace(v) == "" {
+		return def
+	}
+	return v
 }

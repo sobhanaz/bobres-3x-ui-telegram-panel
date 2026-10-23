@@ -55,6 +55,8 @@ type Config struct {
 	// SupplierTransport carries the supplier calls of the owner's resale (the bot, in production; nil until
 	// SetSupplierTransport).
 	SupplierTransport SupplierTransport
+	// RateTransport carries the live USDT rate from the bot (nil until SetRateTransport).
+	RateTransport RateTransport
 	// PrivateFeaturesOverride, when set, decides PrivateFeatures instead of the license. It exists for tests of the vendor's
 	// own features; nothing sets it in a running install.
 	PrivateFeaturesOverride *bool

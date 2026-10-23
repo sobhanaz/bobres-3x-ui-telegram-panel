@@ -9,6 +9,7 @@ import SettingsCard from '../components/settings/SettingsCard.vue'
 import ZarinpalCard from '../components/gateways/ZarinpalCard.vue'
 import KeyedGatewayCard from '../components/gateways/KeyedGatewayCard.vue'
 import UsdtAutoCard from '../components/gateways/UsdtAutoCard.vue'
+import UsdtRateCard from '../components/gateways/UsdtRateCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { isKeyedProvider, methodCards, stateSeverity, usdtAuto } from '../gateways'
@@ -69,6 +70,7 @@ const text = (key: string) => (te(key) ? t(key) : '')
   <div v-else-if="reply" class="cards">
     <ZarinpalCard v-if="zarinpal" :config="zarinpal" class="wide" @saved="load" />
     <KeyedGatewayCard v-for="k in keyed" :key="k.provider" :config="k" class="wide" @saved="load" />
+    <UsdtRateCard class="wide" />
     <UsdtAutoCard v-if="usdt" :config="usdt" class="wide" @saved="load" />
     <SettingsCard
       v-for="c in cards"

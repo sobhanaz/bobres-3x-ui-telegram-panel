@@ -72,6 +72,18 @@ func (f *fixture) pageFrom(path, ip, method string) (int, http.Header, string) {
 	return resp.StatusCode, resp.Header, string(body)
 }
 
+// NPV Tunnel documents no import link: its entry is a guide with no button, and no empty link is made.
+func TestSubPageNPVHasAGuideAndNoButton(t *testing.T) {
+	f := newPageFixture(t)
+	_, _, body := f.page("/sub/" + f.token + "?l=en")
+	if !strings.Contains(body, "<summary>NPV Tunnel</summary>") || strings.Contains(body, "Add to NPV Tunnel") || strings.Contains(body, `href=""`) {
+		t.Errorf("the NPV Tunnel entry: %s", body)
+	}
+	if !strings.Contains(body, "Add to Karing") {
+		t.Error("no Karing button")
+	}
+}
+
 func TestSubPageRendersInBothLanguages(t *testing.T) {
 	f := newPageFixture(t)
 	if _, err := f.dom.SetSettings(context.Background(), actor0(f.fixture), map[string]string{
@@ -87,7 +99,7 @@ func TestSubPageRendersInBothLanguages(t *testing.T) {
 	}
 	for _, want := range []string{`lang="fa"`, `dir="rtl"`, "Acme VPN", "#aa3355", "https://t.me/acme_bot", "https://t.me/acme_help",
 		"https://acme.example/terms", "فعال", "۲۰ روز", "data:image/png;base64,", `readonly dir="ltr"`,
-		"v2rayng://install-config?url=" + url.QueryEscape(f.link), "hiddify://import/", "streisand://import/", "v2box://install-sub?url="} {
+		"v2rayng://install-config?url=" + url.QueryEscape(f.link), "hiddify://import/", "streisand://import/", "v2box://install-sub?url=", "karing://install-config?url=" + url.QueryEscape(f.link), "NPV Tunnel"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("fa page lacks %q", want)
 		}

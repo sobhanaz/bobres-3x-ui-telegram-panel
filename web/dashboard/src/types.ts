@@ -150,8 +150,17 @@ export interface PlanItem {
   inbounds?: PlanInbound[]
   /** the plan group it is listed under (null: none). Older cores leave it out. */
   group_id?: string | null
-  /** the percent of the discount code a paid purchase gives its buyer for their next purchase of the plan (null: none) */
-  reward_percent?: number | null
+  /** the discount code a paid purchase gives its buyer for any plan they buy next (null: none). Older cores leave it out. */
+  reward?: PlanReward | null
+}
+
+/** A plan's reward: a percent or an amount in the plan's currency, the days the code lasts and the text the buyer reads with it. */
+export interface PlanReward {
+  kind: 'percent' | 'amount'
+  percent?: number
+  amount?: Money
+  days: number
+  text: Names
 }
 
 /** A named group of plans with a text the customer reads before choosing one of its plans. */
@@ -297,6 +306,10 @@ export interface BrandingInfo {
   terms_url: string
   privacy_url: string
   currency: LangPair
+  /** The owner's own text of the store's Terms and Privacy pages ("" = the default); older servers leave it out. */
+  legal?: Record<'terms' | 'privacy', LangPair>
+  /** The default text of each page, to start from. */
+  legal_defaults?: Record<'terms' | 'privacy', LangPair>
   logo: { url: string; type: string; size: number; updated_at: number } | null
   /** The bot's Telegram profile photo (a square JPEG); older servers leave it out. */
   bot_photo?: { url: string; size: number; updated_at: number } | null
@@ -1253,4 +1266,14 @@ export interface TlsView {
   warnings?: TlsNote[]
   /** PUT only: Caddy was not running; it loads the setting when it starts */
   pending?: boolean
+}
+
+/** What the store charges for one USDT now (GET /usdt-rate): Toman per USDT, where it comes from, and the last live price read. */
+export interface UsdtRate {
+  auto: boolean
+  margin: number
+  manual: number
+  rate: number
+  source: 'live' | 'manual' | ''
+  live: { rate: number; at: number; sources: string[]; fresh: boolean } | null
 }

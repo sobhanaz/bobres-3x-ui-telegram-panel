@@ -787,3 +787,72 @@ func TestHelpStoredShape(t *testing.T) {
 		t.Fatalf("stored: %s %s", title, buttons)
 	}
 }
+
+// A store that already uses the tutorials gets the ones that came later (Karing, NPV Tunnel) once, at the end, unless it has one for that app;
+// a store with no tutorials gets none; the owner's deletions are never undone.
+func TestExtraTutorialsAreAddedOnceToAStoreThatUsesThem(t *testing.T) {
+	svc, s, owner := helpService(t)
+	ctx := context.Background()
+	reset := func() {
+		if _, err := s.DB().Exec(ctx, `DELETE FROM core.settings WHERE key = $1`, helpExtrasMark); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func() []string {
+		all, _ := svc.HelpEntries(ctx)
+		var out []string
+		for _, e := range all {
+			if e.Kind == helpcontent.KindTutorial {
+				out = append(out, e.Title["en"])
+			}
+		}
+		return out
+	}
+	// No tutorials: nothing is added, and the marker is set.
+	reset()
+	if n, err := svc.EnsureExtraTutorials(ctx); err != nil || n != 0 {
+		t.Fatalf("an empty store: %d %v", n, err)
+	}
+	if _, err := svc.CreateHelp(ctx, owner, tutorialInput("My own app", "Steps")); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.EnsureExtraTutorials(ctx); err != nil || n != 0 {
+		t.Fatalf("a second start: %d %v", n, err)
+	}
+	// A store with a tutorial gets both, at the end.
+	reset()
+	if n, err := svc.EnsureExtraTutorials(ctx); err != nil || n != 2 {
+		t.Fatalf("a store with a tutorial: %d %v", n, err)
+	}
+	got := titles()
+	if len(got) != 3 || got[0] != "My own app" || !strings.Contains(got[1], "Karing") || !strings.Contains(got[2], "NPV Tunnel") {
+		t.Fatalf("tutorials: %v", got)
+	}
+	if n, err := svc.EnsureExtraTutorials(ctx); err != nil || n != 0 {
+		t.Fatalf("again: %d %v", n, err)
+	}
+	// The owner deletes one; it does not come back. With a Karing tutorial of their own, only NPV Tunnel is added.
+	all, _ := svc.HelpEntries(ctx)
+	for _, e := range all {
+		if strings.Contains(e.Title["en"], "NPV") {
+			if err := svc.DeleteHelp(ctx, owner, e.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n, err := svc.EnsureExtraTutorials(ctx); err != nil || n != 0 || len(titles()) != 2 {
+		t.Fatalf("a deleted one came back: %d %v %v", n, err, titles())
+	}
+	reset()
+	if n, err := svc.EnsureExtraTutorials(ctx); err != nil || n != 1 || !strings.Contains(titles()[2], "NPV Tunnel") {
+		t.Fatalf("only the missing one: %d %v %v", n, err, titles())
+	}
+	// The defaults for a new store include them.
+	var words []string
+	for _, in := range DefaultHelp(helpcontent.KindTutorial) {
+		words = append(words, in.Title["en"])
+	}
+	if joined := strings.Join(words, "|"); !strings.Contains(joined, "Karing") || !strings.Contains(joined, "NPV Tunnel") || !strings.Contains(joined, "Streisand") {
+		t.Fatalf("the default tutorials: %v", words)
+	}
+}
