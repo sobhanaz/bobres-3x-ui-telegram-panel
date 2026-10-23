@@ -93,6 +93,7 @@ const (
 	CoreService_BuyVendorLicense_FullMethodName          = "/core.v1.CoreService/BuyVendorLicense"
 	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
 	CoreService_GetVendorLicenseKey_FullMethodName       = "/core.v1.CoreService/GetVendorLicenseKey"
+	CoreService_SetVendorIntent_FullMethodName           = "/core.v1.CoreService/SetVendorIntent"
 	CoreService_ListSupplierOffers_FullMethodName        = "/core.v1.CoreService/ListSupplierOffers"
 	CoreService_BuySupplierProduct_FullMethodName        = "/core.v1.CoreService/BuySupplierProduct"
 	CoreService_ListMySupplierOrders_FullMethodName      = "/core.v1.CoreService/ListMySupplierOrders"
@@ -221,6 +222,9 @@ type CoreServiceClient interface {
 	BuyVendorLicense(ctx context.Context, in *BuyVendorLicenseRequest, opts ...grpc.CallOption) (*BuyVendorLicenseResponse, error)
 	ListMyVendorLicenses(ctx context.Context, in *ListMyVendorLicensesRequest, opts ...grpc.CallOption) (*ListMyVendorLicensesResponse, error)
 	GetVendorLicenseKey(ctx context.Context, in *GetVendorLicenseKeyRequest, opts ...grpc.CallOption) (*GetVendorLicenseKeyResponse, error)
+	// A customer short of money taps a payment method for the shortfall: this records what they meant to buy, and when the payment lands and the
+	// wallet covers it core buys it by itself (and the bot is told by license.order_settled.v1). One intent per customer; it lasts 12 hours.
+	SetVendorIntent(ctx context.Context, in *SetVendorIntentRequest, opts ...grpc.CallOption) (*SetVendorIntentResponse, error)
 	// Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
 	// (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
 	// Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
@@ -980,6 +984,16 @@ func (c *coreServiceClient) GetVendorLicenseKey(ctx context.Context, in *GetVend
 	return out, nil
 }
 
+func (c *coreServiceClient) SetVendorIntent(ctx context.Context, in *SetVendorIntentRequest, opts ...grpc.CallOption) (*SetVendorIntentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetVendorIntentResponse)
+	err := c.cc.Invoke(ctx, CoreService_SetVendorIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListSupplierOffers(ctx context.Context, in *ListSupplierOffersRequest, opts ...grpc.CallOption) (*ListSupplierOffersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSupplierOffersResponse)
@@ -1142,6 +1156,9 @@ type CoreServiceServer interface {
 	BuyVendorLicense(context.Context, *BuyVendorLicenseRequest) (*BuyVendorLicenseResponse, error)
 	ListMyVendorLicenses(context.Context, *ListMyVendorLicensesRequest) (*ListMyVendorLicensesResponse, error)
 	GetVendorLicenseKey(context.Context, *GetVendorLicenseKeyRequest) (*GetVendorLicenseKeyResponse, error)
+	// A customer short of money taps a payment method for the shortfall: this records what they meant to buy, and when the payment lands and the
+	// wallet covers it core buys it by itself (and the bot is told by license.order_settled.v1). One intent per customer; it lasts 12 hours.
+	SetVendorIntent(context.Context, *SetVendorIntentRequest) (*SetVendorIntentResponse, error)
 	// Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
 	// (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
 	// Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
@@ -1381,6 +1398,9 @@ func (UnimplementedCoreServiceServer) ListMyVendorLicenses(context.Context, *Lis
 }
 func (UnimplementedCoreServiceServer) GetVendorLicenseKey(context.Context, *GetVendorLicenseKeyRequest) (*GetVendorLicenseKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetVendorLicenseKey not implemented")
+}
+func (UnimplementedCoreServiceServer) SetVendorIntent(context.Context, *SetVendorIntentRequest) (*SetVendorIntentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetVendorIntent not implemented")
 }
 func (UnimplementedCoreServiceServer) ListSupplierOffers(context.Context, *ListSupplierOffersRequest) (*ListSupplierOffersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSupplierOffers not implemented")
@@ -2747,6 +2767,24 @@ func _CoreService_GetVendorLicenseKey_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_SetVendorIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetVendorIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetVendorIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetVendorIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetVendorIntent(ctx, req.(*SetVendorIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListSupplierOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSupplierOffersRequest)
 	if err := dec(in); err != nil {
@@ -3121,6 +3159,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVendorLicenseKey",
 			Handler:    _CoreService_GetVendorLicenseKey_Handler,
+		},
+		{
+			MethodName: "SetVendorIntent",
+			Handler:    _CoreService_SetVendorIntent_Handler,
 		},
 		{
 			MethodName: "ListSupplierOffers",

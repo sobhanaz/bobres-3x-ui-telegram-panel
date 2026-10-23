@@ -18,7 +18,10 @@ const (
 	SubscriptionExtended    = "subscription.extended.v1"
 	// RewardCodeIssued: a plan's reward for a paid purchase, a discount code for the buyer's next purchase of the plan
 	// (RewardCodeIssuedEvent): the bot sends it to them.
-	RewardCodeIssued     = "reward.code.v1"
+	RewardCodeIssued = "reward.code.v1"
+	// VendorOrderSettled: a license purchase that was made by itself after a top-up (a customer's intent, VendorOrderSettledEvent) is done or was
+	// refunded: the bot tells the customer (the key stays in the bot's "My licenses" and is fetched there).
+	VendorOrderSettled   = "license.order_settled.v1"
 	SubscriptionReminder = "subscription.reminder.v1"
 	// BulkReady: the services of a bulk purchase are delivered (or are the
 	// provisioning machinery's to retry): the bot sends the customer every
@@ -261,6 +264,20 @@ type RewardCodeIssuedEvent struct {
 	PlanID     string            `json:"plan_id"`
 	PlanNames  map[string]string `json:"plan_names"` // lang -> the name of the plan that earned it
 	ExpiresAt  int64             `json:"expires_at"` // unix seconds
+}
+
+// VendorOrderSettledEvent: the purchase a customer asked for before topping up was made (Status "done") or refunded ("refunded"). Kind is
+// "new" or "renew"; LicenseID is the id in "My licenses"; EndsAt is the license's end in unix seconds (0: none).
+type VendorOrderSettledEvent struct {
+	OrderID    string `json:"order_id"`
+	UserID     string `json:"user_id"`
+	TelegramID int64  `json:"telegram_id"`
+	Kind       string `json:"kind"`
+	Tier       string `json:"tier"`
+	Months     int    `json:"months"`
+	Status     string `json:"status"`
+	LicenseID  string `json:"license_id,omitempty"`
+	EndsAt     int64  `json:"ends_at,omitempty"`
 }
 
 // ProvisionFailedEvent: provisioning keeps failing; an admin should look.

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/money"
 )
@@ -311,6 +312,12 @@ func (s *Service) BuyVendorLicense(ctx context.Context, p VendorBuyParams) (*Ven
 		if got, inserted, err = s.st.CreateVendorOrder(ctx, tx, order); err != nil || !inserted {
 			return err
 		}
+		if !strings.HasPrefix(p.IdempotencyKey, vendorIntentKeyBase) {
+			// The customer bought by hand: what they meant to buy after a top-up is no longer a thing to do by itself.
+			if err := s.st.DeleteVendorIntent(ctx, tx, u.ID); err != nil {
+				return err
+			}
+		}
 		_, err = s.st.Debit(ctx, tx, u.ID, got.Currency, got.Amount, &store.LedgerEntry{
 			Kind: "license_purchase", RefType: strptr("vendor_order"), RefID: strptr(got.ID), IdempotencyKey: "license_purchase:" + got.ID,
 		})
@@ -481,7 +488,7 @@ func (s *Service) finishVendorOrder(ctx context.Context, orderID string, info *V
 			return err
 		}
 		o.Status = "done"
-		return nil
+		return s.publishVendorSettled(ctx, tx, o, info.EndsAt)
 	})
 	return out, err
 }
@@ -510,7 +517,7 @@ func (s *Service) refundVendorOrder(ctx context.Context, o *store.VendorOrder, w
 			return err
 		}
 		cur.Status, cur.LastError = "refunded", why
-		return nil
+		return s.publishVendorSettled(ctx, tx, cur, nil)
 	})
 	return out, err
 }
@@ -552,4 +559,144 @@ func (s *Service) RunVendorWorker(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// ---- Buying after a top-up, in one flow
+
+const (
+	// vendorIntentKeyBase starts the idempotency key of a purchase made from an intent (the order's key is "vendor:" + this + ...).
+	vendorIntentKeyBase = "intent:"
+	// vendorIntentTTL is how long an intent waits for the payment to land.
+	vendorIntentTTL = 12 * time.Hour
+	// vendorIntentEvery is how often the worker looks at the intents.
+	vendorIntentEvery = 30 * time.Second
+	vendorIntentBatch = 100
+)
+
+// SetVendorIntent records what a customer meant to buy when they tapped a payment method for the shortfall of a license: a new license of a
+// tier for months, or (licenseID) the renewal of one of theirs. When the payment lands and the wallet covers the price the worker makes the
+// purchase by itself and the bot tells them. A new intent replaces the last one; buying by hand forgets it.
+func (s *Service) SetVendorIntent(ctx context.Context, userID, tier string, months int, licenseID string) error {
+	if !s.VendorOn(ctx) {
+		return stateErr("licenses are not for sale")
+	}
+	if months != VendorMonth && months != VendorYear {
+		return invalid("months is %d or %d", VendorMonth, VendorYear)
+	}
+	u, err := s.st.GetUser(ctx, s.st.Conn(), userID)
+	if err != nil {
+		return err
+	}
+	if u.Status == "banned" {
+		return ErrUserBanned
+	}
+	in := &store.VendorIntent{UserID: u.ID, Tier: tier, Months: months, ExpiresAt: s.cfg.vendorNow().Add(vendorIntentTTL)}
+	if licenseID != "" {
+		lic, err := s.st.GetVendorLicense(ctx, s.st.Conn(), licenseID, false)
+		if err != nil {
+			return err
+		}
+		if lic.UserID != u.ID {
+			return ErrForbidden
+		}
+		if lic.Status != "active" {
+			return stateErr("this license is not active, so it cannot be renewed")
+		}
+		in.Tier, in.LicenseID = lic.Tier, &lic.ID
+	}
+	tiers, err := s.VendorTiers()
+	if err != nil {
+		return err
+	}
+	var price int64
+	for _, t := range tiers {
+		if t.Name == in.Tier {
+			price = t.Price(months)
+		}
+	}
+	if price <= 0 {
+		return invalid("that tier and term are not for sale")
+	}
+	return s.st.SetVendorIntent(ctx, s.st.Conn(), in)
+}
+
+// SettleVendorIntents makes the purchases whose payment has landed: for each live intent whose customer's wallet covers the price. It returns how
+// many it made. An intent that cannot be bought (the customer is banned, the license ended) is forgotten.
+func (s *Service) SettleVendorIntents(ctx context.Context) (int, error) {
+	if !s.VendorOn(ctx) || s.cfg.Secrets == nil {
+		return 0, nil
+	}
+	intents, err := s.st.LiveVendorIntents(ctx, s.st.Conn(), s.cfg.vendorNow(), vendorIntentBatch)
+	if err != nil || len(intents) == 0 {
+		return 0, err
+	}
+	tiers, err := s.VendorTiers()
+	if err != nil {
+		return 0, err
+	}
+	made := 0
+	for _, in := range intents {
+		var tier *VendorTier
+		for i := range tiers {
+			if tiers[i].Name == in.Tier {
+				tier = &tiers[i]
+			}
+		}
+		if tier == nil || tier.Price(in.Months) <= 0 {
+			_ = s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID)
+			continue
+		}
+		w, err := s.st.GetWallet(ctx, s.st.Conn(), in.UserID, tier.Currency)
+		if err != nil || w.Balance < tier.Price(in.Months) {
+			continue // the payment has not landed yet
+		}
+		p := VendorBuyParams{UserID: in.UserID, Tier: in.Tier, Months: in.Months, IdempotencyKey: fmt.Sprintf("%s%s:%d", vendorIntentKeyBase, in.UserID, in.CreatedAt.Unix())}
+		if in.LicenseID != nil {
+			p.LicenseID = *in.LicenseID
+		}
+		_, err = s.BuyVendorLicense(ctx, p)
+		if derr := s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID); derr != nil {
+			s.cfg.Log.Warn("license intent: forgetting it", "err", derr)
+		}
+		if err != nil {
+			s.cfg.Log.Warn("license intent not bought", "user", in.UserID, "err", err)
+			continue
+		}
+		made++
+	}
+	return made, nil
+}
+
+// RunVendorIntentWorker keeps looking at the intents while the store sells licenses.
+func (s *Service) RunVendorIntentWorker(ctx context.Context) {
+	t := time.NewTicker(vendorIntentEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if _, err := s.SettleVendorIntents(ctx); err != nil && ctx.Err() == nil {
+				s.cfg.Log.Warn("license intents", "err", err)
+			}
+		}
+	}
+}
+
+// publishVendorSettled queues the message that tells a customer their by-itself purchase is done or was refunded. Orders bought by hand
+// answer in the chat that asked, so they publish nothing.
+func (s *Service) publishVendorSettled(ctx context.Context, tx pgx.Tx, o *store.VendorOrder, endsAt *time.Time) error {
+	if !strings.HasPrefix(o.IdempotencyKey, "vendor:"+vendorIntentKeyBase) {
+		return nil
+	}
+	u, err := s.st.GetUser(ctx, tx, o.UserID)
+	if err != nil {
+		return err
+	}
+	ev := events.VendorOrderSettledEvent{OrderID: o.ID, UserID: o.UserID, TelegramID: u.TelegramID, Kind: o.Kind, Tier: o.Tier, Months: o.Months,
+		Status: o.Status, LicenseID: derefStr(o.VendorLicenseID)}
+	if endsAt != nil {
+		ev.EndsAt = endsAt.Unix()
+	}
+	return s.publish(ctx, tx, events.VendorOrderSettled, ev)
 }

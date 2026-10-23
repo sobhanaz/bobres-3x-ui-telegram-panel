@@ -299,6 +299,7 @@ func setup(rt *app.Runtime) error {
 	// catalog is read every half hour. It does nothing on a store that has no supplier key.
 	rt.Go("supplier", func(ctx context.Context) error { dom.RunSupplierWorker(ctx); return nil })
 	rt.Go("usdt-rate", func(ctx context.Context) error { dom.RunUsdtRateWorker(ctx); return nil })
+	rt.Go("vendor-intents", func(ctx context.Context) error { dom.RunVendorIntentWorker(ctx); return nil })
 	// Stored subscription links follow a server's new address.
 	rt.Go("sub-links", dom.NewSubLinkWorker(prov, prov, rt.Log).Run)
 	// Support tickets nobody answered back close themselves; broadcasts start on time.

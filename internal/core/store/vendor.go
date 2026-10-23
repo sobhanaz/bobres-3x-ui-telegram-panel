@@ -285,3 +285,56 @@ func (s *Store) SyncVendorLicense(ctx context.Context, q querier, licenseID, tie
 	}
 	return nil
 }
+
+// VendorIntent is what a customer meant to buy when they tapped a payment method for the shortfall: a license of a tier for a number of
+// months, or the renewal of one of theirs. At most one per customer.
+type VendorIntent struct {
+	UserID    string
+	Tier      string
+	Months    int
+	LicenseID *string // a vendor_licenses id: a renewal; nil: a new license
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// SetVendorIntent records (or replaces) a customer's intent.
+func (s *Store) SetVendorIntent(ctx context.Context, q querier, in *VendorIntent) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO core.vendor_intents (user_id, tier, months, license_id, expires_at) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE SET tier = EXCLUDED.tier, months = EXCLUDED.months, license_id = EXCLUDED.license_id,
+			created_at = now(), expires_at = EXCLUDED.expires_at`, in.UserID, in.Tier, in.Months, in.LicenseID, in.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("set vendor intent: %w", err)
+	}
+	return nil
+}
+
+// DeleteVendorIntent forgets a customer's intent (no error when there is none).
+func (s *Store) DeleteVendorIntent(ctx context.Context, q querier, userID string) error {
+	if _, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("delete vendor intent: %w", err)
+	}
+	return nil
+}
+
+// LiveVendorIntents lists the intents that have not expired, oldest first, and forgets the ones that have.
+func (s *Store) LiveVendorIntents(ctx context.Context, q querier, now time.Time, limit int) ([]VendorIntent, error) {
+	if _, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE expires_at <= $1`, now); err != nil {
+		return nil, fmt.Errorf("expire vendor intents: %w", err)
+	}
+	rows, err := q.Query(ctx, `SELECT user_id::text, tier, months, license_id::text, created_at, expires_at
+		FROM core.vendor_intents ORDER BY created_at LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list vendor intents: %w", err)
+	}
+	defer rows.Close()
+	var out []VendorIntent
+	for rows.Next() {
+		var in VendorIntent
+		if err := rows.Scan(&in.UserID, &in.Tier, &in.Months, &in.LicenseID, &in.CreatedAt, &in.ExpiresAt); err != nil {
+			return nil, err
+		}
+		out = append(out, in)
+	}
+	return out, rows.Err()
+}

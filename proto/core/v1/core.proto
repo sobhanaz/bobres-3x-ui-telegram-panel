@@ -1063,6 +1063,9 @@ service CoreService {
   rpc BuyVendorLicense(BuyVendorLicenseRequest) returns (BuyVendorLicenseResponse);
   rpc ListMyVendorLicenses(ListMyVendorLicensesRequest) returns (ListMyVendorLicensesResponse);
   rpc GetVendorLicenseKey(GetVendorLicenseKeyRequest) returns (GetVendorLicenseKeyResponse);
+  // A customer short of money taps a payment method for the shortfall: this records what they meant to buy, and when the payment lands and the
+  // wallet covers it core buys it by itself (and the bot is told by license.order_settled.v1). One intent per customer; it lasts 12 hours.
+  rpc SetVendorIntent(SetVendorIntentRequest) returns (SetVendorIntentResponse);
 
   // Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
   // (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
@@ -1302,6 +1305,15 @@ message ListMyVendorLicensesRequest {
 message ListMyVendorLicensesResponse {
   repeated VendorLicense licenses = 1;
 }
+
+message SetVendorIntentRequest {
+  string user_id = 1;
+  string tier = 2;         // standard or pro (for a new license)
+  int32 months = 3;        // 1 or 12
+  string license_id = 4;   // a renewal of this license of theirs (its tier is kept); empty: a new license
+}
+
+message SetVendorIntentResponse {}
 
 message GetVendorLicenseKeyRequest {
   string user_id = 1;
