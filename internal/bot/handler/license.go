@@ -8,6 +8,7 @@ import (
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -170,6 +171,8 @@ func (h *Handler) confirmLicense(r *req, tier, licenseID, monthsArg string) {
 	} else {
 		missing := (price - bal + licenseTopupStep - 1) / licenseTopupStep * licenseTopupStep
 		text += "\n\n" + r.t("lic.insufficient", "missing", r.money(missing, cur))
+		// What this screen was about, kept under the nonce of its payment buttons: the tap on one of them says the customer means to buy it.
+		_ = h.state.SaveCheckout(r.ctx, r.from.ID, n, state.Checkout{Type: "license", PlanID: tier, SubscriptionID: licenseID, Quantity: months})
 		var methods []tg.Button
 		if h.cryptoEnabled(cur) {
 			methods = append(methods, r.button("btn.pay_crypto", fmt.Sprintf("lpay:x:%d:%s", missing, n)))
@@ -282,10 +285,27 @@ func (h *Handler) onLicenseTopup(r *req, rest string) {
 		h.showLicenses(r)
 		return
 	}
+	// The customer chose to pay the shortfall: the purchase this screen showed is made by itself when the payment lands.
+	if c, ok, err := h.state.LoadCheckout(r.ctx, r.from.ID, parts[2]); err == nil && ok && c.Type == "license" {
+		if h.setLicenseIntent(r, c) {
+			r.send(r.t("lic.autobuy_note", "tier", tierName(r, c.PlanID), "term", termName(r, c.Quantity)), nil)
+		}
+	}
 	key := fmt.Sprintf("ltop:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
 	if provider == usdtAuto {
 		h.startGatewayIn(r, nil, provider, r.t("pay.topup_title"), key, amount, "USDT")
 		return
 	}
 	h.startManualIn(r, nil, provider, key, amount, "USDT")
+}
+
+// setLicenseIntent tells core what the customer means to buy with the payment they are about to make (core buys it when the wallet covers it).
+// It reports whether core took it; a customer whose intent was not taken just pays and buys by hand, as before.
+func (h *Handler) setLicenseIntent(r *req, c state.Checkout) bool {
+	_, err := h.core.SetVendorIntent(r.ctx, &corev1.SetVendorIntentRequest{UserId: r.user.GetId(), Tier: c.PlanID, Months: c.Quantity, LicenseId: c.SubscriptionID})
+	if err != nil {
+		h.log.Warn("license intent not recorded", "err", err)
+		return false
+	}
+	return true
 }
