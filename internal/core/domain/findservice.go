@@ -3,9 +3,6 @@ package domain
 import (
 	"context"
 	"crypto/subtle"
-	"net/url"
-	"regexp"
-	"strings"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 )
@@ -15,30 +12,13 @@ import (
 // the service's state and renew it, paying from their own account. It is the link's secret that is checked, again at every order: a
 // guessed id finds nothing, and a renewal of a service that is not the buyer's needs it.
 
-// linkSecretRe is what the end of a link looks like: letters, digits, "." "_" "-", 8 to 64 of them.
-var linkSecretRe = regexp.MustCompile(`^[A-Za-z0-9._-]{8,64}$`)
-
 // LinkSecret reads the secret out of what a customer sent: a whole link (a query or a fragment after it is ignored, a closing "/"
 // too), the end of one, or the secret itself. ErrInvalid when it is none of them.
 func LinkSecret(input string) (string, error) {
-	s := strings.TrimSpace(input)
-	if strings.Contains(s, "://") {
-		u, err := url.Parse(s)
-		if err != nil {
-			return "", invalid("not a subscription link")
-		}
-		s = u.Path
-	} else if i := strings.IndexAny(s, "?#"); i >= 0 {
-		s = s[:i]
+	if secret, ok := store.ParseLinkSecret(input); ok {
+		return secret, nil
 	}
-	s = strings.TrimRight(s, "/")
-	if i := strings.LastIndex(s, "/"); i >= 0 {
-		s = s[i+1:]
-	}
-	if !linkSecretRe.MatchString(s) {
-		return "", invalid("not a subscription link")
-	}
-	return s, nil
+	return "", invalid("not a subscription link")
 }
 
 // FindServiceByLink finds the service a link belongs to. It returns the service and the secret that proves the link (what a renewal of

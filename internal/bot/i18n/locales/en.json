@@ -414,7 +414,7 @@
   "rs.services_found": "🔎 Services matching <b>{query}</b> ({total})\nPage {page} of {pages}.",
   "rs.services_none_found": "🔎 No service matches <b>{query}</b>.",
   "rs.services_empty": "You have not bought any services for customers yet.",
-  "rs.search_ask": "🔎 Send part of a service's name, or its number (like #a1b2c3).",
+  "rs.search_ask": "🔎 Send part of a service's name, its number (like #a1b2c3), its subscription link or its config.",
   "rs.rename_ask": "✏️ Send the new name for service #{id} (at most {max} characters).",
   "rs.label_removed": "Name removed.",
   "btn.rs_customers": "👥 Customers",

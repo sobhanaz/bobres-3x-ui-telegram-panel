@@ -46,7 +46,7 @@ const fa = {
   'reseller.buy.continue': 'ادامه به پرداخت',
 
   'reseller.services.title': 'سرویس‌های مشتریان',
-  'reseller.services.search': 'نام یا شماره سرویس',
+  'reseller.services.search': 'نام، شماره، لینک ساب یا کانفیگ',
   'reseller.services.search_go': 'جستجو',
   'reseller.services.clear': 'پاک کردن جستجو',
   'reseller.services.empty': 'هنوز برای مشتریان سرویسی نخریده‌اید.',
@@ -147,7 +147,7 @@ const en: Record<keyof typeof fa, string> = {
   'reseller.buy.continue': 'Continue to payment',
 
   'reseller.services.title': 'Customer services',
-  'reseller.services.search': 'Service name or number',
+  'reseller.services.search': 'Name, number, subscription link or config',
   'reseller.services.search_go': 'Search',
   'reseller.services.clear': 'Clear the search',
   'reseller.services.empty': 'You have not bought any services for customers yet.',

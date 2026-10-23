@@ -665,7 +665,7 @@ func TestListResellerServices(t *testing.T) {
 	if _, err := w.svc.ListResellerServices(ctx, r.ID, ResellerServiceFilter{Status: "bogus"}, store.Page{}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("unknown status: %v", err)
 	}
-	if _, err := w.svc.ListResellerServices(ctx, r.ID, ResellerServiceFilter{Query: strings.Repeat("ج", 101)}, store.Page{}); !errors.Is(err, ErrInvalid) {
+	if _, err := w.svc.ListResellerServices(ctx, r.ID, ResellerServiceFilter{Query: strings.Repeat("ج", 2001)}, store.Page{}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("long search: %v", err)
 	}
 	// The other reseller sees theirs only.

@@ -302,7 +302,7 @@ Five tabs:
   checkout, [03-bot-ux.md](03-bot-ux.md)): the Mini App has no screen for it, and the services it brings show in Services
   like any other.
 - **Services:** the customers' services, 10 a page, newest first, in groups with their counts (All, Active, Ending
-  soon, Ended, Paused), a search by name or number (#a1b2c3), and per service the status, time left, usage bar, the
+  soon, Ended, Paused), a search by name, number (#a1b2c3), subscription link, page address or client config (a vless://, vmess://, trojan:// link pasted whole: it is found by the email in its name), and per service the status, time left, usage bar, the
   private note, and (opened) the subscription link to copy, the service page, **Renew** and **Add traffic** (the shop's
   checkout, `choosing` a plan like the "My services" tab does), **Rename**, **Note**, **Pause / Resume** and **Delete**.
   Delete asks first ("removed from the server for good, the link stops working at once, nothing is refunded") and the

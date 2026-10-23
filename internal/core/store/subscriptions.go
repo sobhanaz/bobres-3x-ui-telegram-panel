@@ -126,20 +126,28 @@ func (s *Store) ListUserServices(ctx context.Context, q querier, userID, query, 
 
 // userSubscriptionsWhere selects a user's services (not the deleted ones) that
 // match a search and, when the status array is not empty, one of its statuses.
+//
+// A search is a name (part of the label, or of the client's email when it is 8 characters or more: a short one would match random letters), the end of the service number, a subscription link or page address
+// ($6 is its secret: the subscription id or the page token) or a client config ($7 is its name, which holds the client's email).
 const userSubscriptionsWhere = `WHERE user_id = $1 AND status <> 'deleted'
-	  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR ($4 <> '' AND replace(id::text, '-', '') LIKE '%' || $4))
+	  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR (length($2) >= 8 AND lower(client_email) LIKE $3 ESCAPE '\')
+	       OR ($4 <> '' AND replace(id::text, '-', '') LIKE '%' || $4)
+	       OR ($6 <> '' AND (sub_id = $6 OR page_token = $6
+	            OR (COALESCE(sub_link, '') <> '' AND right(sub_link, length($6) + 1) = '/' || $6)))
+	       OR ($7 <> '' AND client_email <> '' AND position(lower(client_email) in $7) > 0))
 	  AND (cardinality($5::text[]) = 0 OR status = ANY($5::text[]))`
 
 func (s *Store) listUserSubscriptions(ctx context.Context, q querier, userID, query string, statuses []string, p Page) ([]Subscription, int64, error) {
 	p = p.clamp()
 	query = strings.TrimPrefix(strings.TrimSpace(query), "#")
+	secret, remark := serviceLinkTerms(query)
 	_, _, like := search(query)
 	if statuses == nil {
 		statuses = []string{}
 	}
 	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+`, count(*) OVER () FROM core.subscriptions `+userSubscriptionsWhere+`
 		ORDER BY created_at DESC, id DESC
-		LIMIT $6 OFFSET $7`, userID, query, like, idPart(query), statuses, p.Limit, p.Offset)
+		LIMIT $8 OFFSET $9`, userID, query, like, idPart(query), statuses, secret, remark, p.Limit, p.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list user subscriptions: %w", err)
 	}
@@ -161,7 +169,7 @@ func (s *Store) listUserSubscriptions(ctx context.Context, q querier, userID, qu
 	rows.Close()
 	if len(out) == 0 && p.Offset > 0 { // a page past the end: the total is still what matches
 		if err := q.QueryRow(ctx, `SELECT count(*) FROM core.subscriptions `+userSubscriptionsWhere,
-			userID, query, like, idPart(query), statuses).Scan(&total); err != nil {
+			userID, query, like, idPart(query), statuses, secret, remark).Scan(&total); err != nil {
 			return nil, 0, fmt.Errorf("count user subscriptions: %w", err)
 		}
 	}

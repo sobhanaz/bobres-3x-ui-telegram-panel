@@ -414,7 +414,7 @@
   "rs.services_found": "🔎 سرویس‌های مطابق با <b>{query}</b> ({total})\nصفحه {page} از {pages}.",
   "rs.services_none_found": "🔎 سرویسی با <b>{query}</b> پیدا نشد.",
   "rs.services_empty": "هنوز برای مشتریان سرویسی نخریده‌اید.",
-  "rs.search_ask": "🔎 بخشی از نام سرویس یا شماره آن (مثلاً #a1b2c3) را بفرستید.",
+  "rs.search_ask": "🔎 بخشی از نام سرویس، شمارهٔ آن (مثلاً #a1b2c3)، لینک ساب یا کانفیگ آن را بفرستید.",
   "rs.rename_ask": "✏️ نام تازه سرویس #{id} را بفرستید (حداکثر {max} حرف).",
   "rs.label_removed": "نام حذف شد.",
   "btn.rs_customers": "👥 مشتریان",
