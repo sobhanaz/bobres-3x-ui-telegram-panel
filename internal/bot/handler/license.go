@@ -16,7 +16,8 @@ import (
 
 // BOBRES licenses sold in the owner's own bot (docs/13-license-server.md). The bot holds no rule: core prices the
 // offers, takes the money from the wallet and asks the license server for the key. A buyer short of money tops the
-// wallet up in USDT (automatic TRC20, or by hand) and comes back. The menu button exists only while the owner has
+// wallet up (in Toman by any method, or in USDT: automatic TRC20 or by hand) and comes back. There is one wallet, in Toman: the licenses are priced in
+// USDT and core charges the Toman they cost at the store's rate, and shows the USDT beside them. The menu button exists only while the owner has
 // `vendor.enabled` on, and core refuses everything while it is off.
 //
 // The callbacks are "lic" (home), "lic:b:<tier>:<months>" (confirm a new license), "lic:y:<tier>:<months>:<nonce>"
@@ -26,8 +27,21 @@ import (
 // licensesOn is the owner's switch (vendor.enabled, off unless it is true).
 func (h *Handler) licensesOn() bool { return h.setting("vendor.enabled") == "true" }
 
-// licenseTopupStep is the least a USDT top-up asks for (0.01 USDT in minor units): the shortfall is rounded up to it.
-const licenseTopupStep = 10_000
+// licenseTopupStep is the least a top-up asks for, in the minor units of its currency (1,000 Toman; 0.01 USDT): the shortfall is rounded up to it.
+func licenseTopupStep(currency string) int64 {
+	if currency == "USDT" {
+		return 10_000
+	}
+	return 1_000
+}
+
+// usdtNote is a price or a balance in USDT beside its Toman ("≈ 4 USDT"): "" when there is none to show.
+func (r *req) usdtNote(micro int64) string {
+	if micro <= 0 {
+		return ""
+	}
+	return " ≈ " + r.money(micro, "USDT")
+}
 
 func (h *Handler) onLicense(r *req, rest string) {
 	if !h.licensesOn() {
@@ -121,7 +135,8 @@ func (h *Handler) showLicenses(r *req) {
 	}
 	kb.Row(r.button("btn.lic_my", "lic:my"), r.button("btn.home", "home"))
 	bal := resp.GetBalance()
-	r.show(r.t("lic.title", "balance", r.balance(bal.GetAmount(), bal.GetCurrency())), kb)
+	r.show(r.t("lic.title", "balance", r.balance(bal.GetAmount(), bal.GetCurrency())+r.usdtNote(resp.GetBalanceUsdt()),
+		"rate", r.money(resp.GetRate(), "IRT")), kb)
 }
 
 // confirmLicense shows what a purchase costs and either pays it or offers to top up the shortfall. A new license
@@ -159,8 +174,9 @@ func (h *Handler) confirmLicense(r *req, tier, licenseID, monthsArg string) {
 	price, cur := o.GetPrice().GetAmount(), o.GetPrice().GetCurrency()
 	bal := resp.GetBalance().GetAmount()
 	n := nonce()
-	text := r.t("lic.confirm", "tier", tierName(r, tier), "term", termName(r, months), "price", r.money(price, cur),
-		"balance", r.balance(bal, cur))
+	text := r.t("lic.confirm", "tier", tierName(r, tier), "term", termName(r, months),
+		"price", r.money(price, cur)+r.usdtNote(o.GetListPrice().GetAmount()), "balance", r.balance(bal, cur)+r.usdtNote(resp.GetBalanceUsdt()),
+		"rate", r.money(resp.GetRate(), "IRT"))
 	kb := &tg.Keyboard{}
 	if bal >= price {
 		data := fmt.Sprintf("lic:y:%s:%d:%s", tier, months, n)
@@ -169,7 +185,8 @@ func (h *Handler) confirmLicense(r *req, tier, licenseID, monthsArg string) {
 		}
 		kb.Row(tg.CB(r.t("btn.lic_pay", "price", r.money(price, cur)), data))
 	} else {
-		missing := (price - bal + licenseTopupStep - 1) / licenseTopupStep * licenseTopupStep
+		step := licenseTopupStep(cur)
+		missing := (price - bal + step - 1) / step * step
 		text += "\n\n" + r.t("lic.insufficient", "missing", r.money(missing, cur))
 		// What this screen was about, kept under the nonce of its payment buttons: the tap on one of them says the customer means to buy it.
 		_ = h.state.SaveCheckout(r.ctx, r.from.ID, n, state.Checkout{Type: "license", PlanID: tier, SubscriptionID: licenseID, Quantity: months})
@@ -268,6 +285,9 @@ func (h *Handler) showLicenseKey(r *req, id string) {
 	r.show(r.t("lic.key", "tier", tierName(r, resp.GetLicense().GetTier()), "key", esc(resp.GetKey())), kb)
 }
 
+// walletCurrency is the currency of the one wallet (Toman).
+const walletCurrency = "IRT"
+
 // onLicenseTopup handles "lpay:<x|u>:<amount>:<nonce>": a USDT top-up for the shortfall of a license.
 func (h *Handler) onLicenseTopup(r *req, rest string) {
 	parts := strings.Split(rest, ":")
@@ -294,10 +314,10 @@ func (h *Handler) onLicenseTopup(r *req, rest string) {
 	}
 	key := fmt.Sprintf("ltop:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
 	if provider == usdtAuto {
-		h.startGatewayIn(r, nil, provider, r.t("pay.topup_title"), key, amount, "USDT")
+		h.startGatewayIn(r, nil, provider, r.t("pay.topup_title"), key, amount, walletCurrency)
 		return
 	}
-	h.startManualIn(r, nil, provider, key, amount, "USDT")
+	h.startManualIn(r, nil, provider, key, amount, walletCurrency)
 }
 
 // setLicenseIntent tells core what the customer means to buy with the payment they are about to make (core buys it when the wallet covers it).

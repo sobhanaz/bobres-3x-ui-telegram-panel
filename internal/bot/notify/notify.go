@@ -241,6 +241,12 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			key = "wallet.credited"
 		}
 		lang := n.lang(ctx, e.TelegramID)
+		if e.FromCurrency != "" && e.Reason == events.CreditTopup {
+			// a USDT top-up, credited in Toman at the live rate
+			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_converted", "from", i18n.Money(lang, e.FromAmount, e.FromCurrency),
+				"rate", i18n.Money(lang, e.Rate, "IRT"), "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		}
 		return n.send(ctx, e.TelegramID, n.cat.T(lang, key,
 			"amount", i18n.Money(lang, e.Amount, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
 

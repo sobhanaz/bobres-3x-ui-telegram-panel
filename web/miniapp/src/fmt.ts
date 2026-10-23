@@ -51,6 +51,14 @@ export function ledgerKey(kind: string): Key {
       return 'ledger.gift_code'
     case 'adjust':
       return 'ledger.adjustment'
+    case 'license_purchase':
+    case 'license_refund':
+      return 'ledger.license'
+    case 'supplier_purchase':
+    case 'supplier_refund':
+      return 'ledger.digital'
+    case 'wallet_convert':
+      return 'ledger.convert'
     default:
       return 'ledger.other'
   }

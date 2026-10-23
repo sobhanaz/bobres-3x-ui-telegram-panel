@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -101,14 +102,21 @@ func licenseWorld(t *testing.T) (*world, *licenseServer, *person) {
 	if err := w.stack.Domain.SetVendorConfig(ctx, w.storeUser(ownerID), priv); err != nil {
 		t.Fatal(err)
 	}
+	// One wallet, in Toman: the licenses are priced in USDT and charged at the store's rate (the owner's own: 100,000 Toman a USDT).
+	if err := w.stack.Domain.SetSetting(ctx, w.storeUser(ownerID), "payments.usdt_rate", strconv.Itoa(licenseTestRate)); err != nil {
+		t.Fatal(err)
+	}
 	return w, ls, owner
 }
+
+// licenseTestRate is the Toman per USDT of the license tests: fundUSDT and usdtBalance write the Toman wallet in USDT units at this rate.
+const licenseTestRate = 100_000
 
 func (w *world) fundUSDT(telegramID, amount int64) {
 	w.t.Helper()
 	u := w.storeUser(telegramID)
 	err := w.stack.Store.WithTx(context.Background(), func(tx pgx.Tx) error {
-		_, err := w.stack.Store.Credit(context.Background(), tx, u.ID, "USDT", amount,
+		_, err := w.stack.Store.Credit(context.Background(), tx, u.ID, "IRT", amount*licenseTestRate/1_000_000,
 			&corestore.LedgerEntry{Kind: "topup", IdempotencyKey: fmt.Sprintf("fundusdt-%d-%d", telegramID, time.Now().UnixNano())})
 		return err
 	})
@@ -120,11 +128,11 @@ func (w *world) fundUSDT(telegramID, amount int64) {
 func (w *world) usdtBalance(telegramID int64) int64 {
 	w.t.Helper()
 	u := w.storeUser(telegramID)
-	wl, err := w.stack.Store.GetWallet(context.Background(), w.stack.Store.Conn(), u.ID, "USDT")
+	wl, err := w.stack.Store.GetWallet(context.Background(), w.stack.Store.Conn(), u.ID, "IRT")
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	return wl.Balance
+	return wl.Balance * 1_000_000 / licenseTestRate
 }
 
 func callbackWithPrefix(m *msg, prefix string) string {
@@ -298,4 +306,53 @@ func TestLicenseIsBoughtByItselfAfterTheTopup(t *testing.T) {
 	if got := w.usdtBalance(7111); got != 0 || ls.made() != 1 {
 		t.Fatalf("balance %d, licenses %d", got, ls.made())
 	}
+}
+
+// One wallet, in Toman: the wallet screen shows the balance with its USDT equivalent and the live rate, a top-up can be asked in USDT (it is
+// added in Toman at the rate), the license screens show Toman with the USDT beside it, and a USDT payment that arrives is credited as Toman.
+func TestOneWalletInTomanWithUsdtBesideIt(t *testing.T) {
+	w, _, owner := licenseWorld(t)
+	owner.text("/set vendor.enabled true")
+	owner.text("/set payments.usdt_trc20 TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL")
+	buyer := w.customer(7131, "one_wallet")
+	ctx := context.Background()
+
+	// 4 USDT at 100,000 Toman: 400,000 Toman; the wallet shows the Toman balance, its USDT and the rate.
+	w.fundUSDT(7131, 4*usdtUnit)
+	buyer.tap("wallet")
+	buyer.shownHas("400,000")
+	buyer.shownHas("USDT rate now")
+	buyer.shownHas("100,000")
+	buyer.shownHas("4 USDT")
+
+	// The licenses are priced in Toman at today's rate, with the USDT price beside it and the rate in the title.
+	buyer.tap("lic")
+	buyer.shownHas("100,000")
+	buyer.tap("lic:b:pro:1")
+	buyer.shownHas("1,200,000") // 12 USDT
+	buyer.shownHas("≈ 12 USDT")
+	buyer.shownHas("short")
+
+	// A top-up in USDT: amounts, then the ways to pay in USDT; the Toman it makes is told before paying.
+	buyer.tap("wtop")
+	buyer.tap("wusdt")
+	buyer.shownHas("Top up in USDT")
+	buyer.tap("wusa:10")
+	buyer.shownHas("1,000,000") // 10 USDT at 100,000
+	buyer.tap(callbackWithPrefix(buyer.shown(), "wpu:x:10:"))
+	buyer.sees("TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL")
+	var amount, cur string
+	if err := w.stack.Store.DB().QueryRow(ctx, `SELECT amount::text, currency FROM payments.intents ORDER BY created_at DESC LIMIT 1`).Scan(&amount, &cur); err == nil {
+		if amount != "10000000" || cur != "USDT" {
+			t.Fatalf("the payment: %s %s", amount, cur)
+		}
+	}
+	// A custom amount, refused out of range, accepted inside it.
+	buyer.tap("wtop")
+	buyer.tap("wusdt")
+	buyer.tap("wusc")
+	buyer.text("0")
+	buyer.sees("whole number of USDT")
+	buyer.text("25")
+	buyer.shownHas("25 USDT")
 }

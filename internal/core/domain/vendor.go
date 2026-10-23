@@ -298,16 +298,21 @@ func (s *Service) BuyVendorLicense(ctx context.Context, p VendorBuyParams) (*Ven
 	if tier == nil {
 		return nil, invalid("tier is not for sale")
 	}
-	amount := tier.Price(p.Months)
-	if amount <= 0 {
+	list := tier.Price(p.Months)
+	if list <= 0 {
 		return nil, invalid("that term is not for sale")
+	}
+	// The license is priced in USDT and charged from the Toman wallet at the store's rate.
+	amount, rate, err := s.VendorToman(ctx, tier, list)
+	if err != nil {
+		return nil, err
 	}
 	if p.ExpectedAmount > 0 && p.ExpectedAmount != amount {
 		return nil, stateErr("the price changed: look at it again")
 	}
 
 	order := &store.VendorOrder{UserID: u.ID, Kind: kind, Tier: tier.Name, Months: p.Months, Amount: amount,
-		Currency: tier.Currency, IdempotencyKey: "vendor:" + p.IdempotencyKey}
+		Currency: tomanCurrency, ListAmount: list, ListCurrency: tier.Currency, Rate: rate, IdempotencyKey: "vendor:" + p.IdempotencyKey}
 	if lic != nil {
 		order.VendorLicenseID = &lic.ID
 	}
@@ -348,6 +353,22 @@ func (s *Service) BuyVendorLicense(ctx context.Context, p VendorBuyParams) (*Ven
 		}
 	}
 	return s.vendorPurchase(ctx, got, !inserted)
+}
+
+// vendorToman is what a license's list price costs in Toman now, and the rate it was worked out at. A tier priced in Toman (not today's
+// presets) costs its own price. Without a USDT rate nothing is sold: refused before any money moves.
+func (s *Service) VendorToman(ctx context.Context, tier *VendorTier, list int64) (toman, rate int64, err error) {
+	if tier.Currency == tomanCurrency {
+		return list, 0, nil
+	}
+	if tier.Currency != "USDT" {
+		return 0, 0, invalid("tier is priced in an unknown currency")
+	}
+	toman, rate, err = s.TomanForUsdt(ctx, list)
+	if errors.Is(err, ErrNoUsdtRate) {
+		return 0, 0, stateErr("the USDT rate is not known, so licenses cannot be priced now")
+	}
+	return toman, rate, err
 }
 
 // vendorPurchase describes order's state, with its license and key once it is done.
@@ -667,8 +688,12 @@ func (s *Service) SettleVendorIntents(ctx context.Context) (int, error) {
 			_ = s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID)
 			continue
 		}
-		w, err := s.st.GetWallet(ctx, s.st.Conn(), in.UserID, tier.Currency)
-		if err != nil || w.Balance < tier.Price(in.Months) {
+		price, _, perr := s.VendorToman(ctx, tier, tier.Price(in.Months))
+		if perr != nil {
+			continue // no rate now: it waits
+		}
+		w, err := s.st.GetWallet(ctx, s.st.Conn(), in.UserID, tomanCurrency)
+		if err != nil || w.Balance < price {
 			continue // the payment has not landed yet
 		}
 		created := in.CreatedAt

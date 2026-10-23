@@ -474,7 +474,12 @@ func (s *Server) miniWallets(ctx context.Context, userID string) ([]map[string]a
 		if w.Currency == "IRT" || w.Balance != 0 {
 			// credit_limit is a reseller's: the balance may go down to minus
 			// that (0 for everyone else), so what they can pay with is the two.
-			out = append(out, map[string]any{"currency": w.Currency, "balance": w.Balance, "credit_limit": w.CreditLimit, "scale": bmoney.Scale(w.Currency)})
+			m := map[string]any{"currency": w.Currency, "balance": w.Balance, "credit_limit": w.CreditLimit, "scale": bmoney.Scale(w.Currency)}
+			if w.Currency == domain.WalletCurrency {
+				// One wallet, in Toman: the same money in USDT at the live price, and the price, always beside it (0: no rate known).
+				m["usdt_equivalent"], m["usdt_rate"] = s.cfg.Domain.UsdtEquivalent(ctx, w.Balance), s.cfg.Domain.UsdtBaseRate(ctx)
+			}
+			out = append(out, m)
 		}
 	}
 	if !hasIRT { // a customer without a wallet yet sees an empty one

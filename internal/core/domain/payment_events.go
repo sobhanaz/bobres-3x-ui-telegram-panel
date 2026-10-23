@@ -105,6 +105,15 @@ func (s *Service) paymentReceived(ctx context.Context, tx pgx.Tx, p events.Payme
 		Amount: p.Amount, Currency: p.Currency, Balance: w.Balance, Reason: events.CreditTopup,
 	}
 	if p.OrderID == "" {
+		// One wallet, in Toman: money that arrived in USDT is converted at the live rate now (when no rate is known the sweeper does it later).
+		if p.Currency != tomanCurrency {
+			if toman, balance, rate, err := s.convertToToman(ctx, tx, p.UserID, p.Currency, s.usdtBaseRateIn(ctx, tx)); err != nil {
+				return err
+			} else if toman > 0 {
+				credited.FromAmount, credited.FromCurrency, credited.Rate = p.Amount, p.Currency, rate
+				credited.Amount, credited.Currency, credited.Balance = toman, tomanCurrency, balance
+			}
+		}
 		return s.publish(ctx, tx, events.WalletCredited, credited)
 	}
 
