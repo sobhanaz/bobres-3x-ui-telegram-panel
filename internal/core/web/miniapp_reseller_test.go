@@ -323,7 +323,7 @@ func TestMiniResellerServices(t *testing.T) {
 
 	// Bad input.
 	for _, q := range []string{"status=deleted", "status=bogus", "page=0", "page=x", "page=100001", "size=0", "size=51", "size=-1",
-		"q=" + strings.Repeat("x", 101)} {
+		"q=" + strings.Repeat("x", 2001)} {
 		if code, out := m.call(http.MethodGet, "/api/mini/v1/reseller/services?"+q, tok, nil); code != http.StatusBadRequest || out["error"] != "invalid" {
 			t.Errorf("?%s: %d %v", q, code, out)
 		}

@@ -162,7 +162,7 @@ func TestResellerManagementOverGRPC(t *testing.T) {
 	if _, err := list(r.GetId(), "deleted", "", nil); status.Code(err) != codes.InvalidArgument {
 		t.Errorf("status deleted: %v", err)
 	}
-	if _, err := list(r.GetId(), "", strings.Repeat("x", 101), nil); status.Code(err) != codes.InvalidArgument {
+	if _, err := list(r.GetId(), "", strings.Repeat("x", 2001), nil); status.Code(err) != codes.InvalidArgument {
 		t.Errorf("a long search: %v", err)
 	}
 	if got, err := list(r2.GetId(), "", "", nil); err != nil || len(got.GetSubscriptions()) != 1 || got.GetSubscriptions()[0].GetId() != theirs {

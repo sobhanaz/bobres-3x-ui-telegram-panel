@@ -127,10 +127,10 @@ func (s *Store) ListUserServices(ctx context.Context, q querier, userID, query, 
 // userSubscriptionsWhere selects a user's services (not the deleted ones) that
 // match a search and, when the status array is not empty, one of its statuses.
 //
-// A search is a name (part of the label or of the client's email), the end of the service number, a subscription link or page address
+// A search is a name (part of the label, or of the client's email when it is 8 characters or more: a short one would match random letters), the end of the service number, a subscription link or page address
 // ($6 is its secret: the subscription id or the page token) or a client config ($7 is its name, which holds the client's email).
 const userSubscriptionsWhere = `WHERE user_id = $1 AND status <> 'deleted'
-	  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR lower(client_email) LIKE $3 ESCAPE '\'
+	  AND ($2 = '' OR lower(label) LIKE $3 ESCAPE '\' OR (length($2) >= 8 AND lower(client_email) LIKE $3 ESCAPE '\')
 	       OR ($4 <> '' AND replace(id::text, '-', '') LIKE '%' || $4)
 	       OR ($6 <> '' AND (sub_id = $6 OR page_token = $6
 	            OR (COALESCE(sub_link, '') <> '' AND right(sub_link, length($6) + 1) = '/' || $6)))
