@@ -1096,13 +1096,13 @@ func (t *TLS) Watch(ctx context.Context) (*TLSWatchReport, error) {
 		return &TLSWatchReport{}, nil
 	}
 	// In ip mode the links depend on the bot's detection of the server's
-	// address (PublicURL): it is renewed every minute here, beside the
-	// probes, so it is never old when a link is made.
-	var wg sync.WaitGroup
+	// address (PublicURL): it is renewed every minute here, before the
+	// probes, so it is never old when a link is made. It is asked first and
+	// not beside the probes: the view would otherwise find it stale and ask
+	// the bot a second time.
 	if row, err := t.s.st.GetTLS(ctx, t.s.st.Conn()); err == nil && row.Mode == string(tlsconf.ModeIP) && t.cfg.DetectIP != nil {
-		wg.Go(func() { t.detectEgress(ctx) })
+		t.detectEgress(ctx)
 	}
-	defer wg.Wait()
 	v, err := t.View(ctx, true)
 	if err != nil {
 		return nil, err
