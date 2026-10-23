@@ -38,6 +38,8 @@ The owner can use **Export texts** to download every product's name and text as 
 
 The lock is enforced in core, not only hidden in the menu: the dashboard section is not shown and the calls are refused unless the install's license grants the vendor's own features. A customer's bot, dashboard and wallet stay as they are.
 
+The shop is in the bot and in the Mini App (More > Digital accounts), with the same categories, product pages, quantities and wallet payment.
+
 **Buying a license in one screen.** A customer pays for a BOBRES license from their USDT wallet. When the wallet is short, the confirm screen says how much is missing and offers the top-up. Tapping it saves what they wanted (the tier and 1 or 12 months) for 48 hours, and when the payment lands the store buys the license by itself and sends the key. A manual purchase, a refusal or a refund clears the wish, so nothing is bought twice.
 
 The design notes are in [docs/supplier.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/supplier.md). The tiers and what they include are in [Licensing](Licensing).

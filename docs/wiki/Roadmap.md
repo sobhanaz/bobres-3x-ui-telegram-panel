@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.15.0, 2026-10-23.
+As of v0.16.0, 2026-10-23.
 
 ## Shipped
 
@@ -22,6 +22,7 @@ As of v0.15.0, 2026-10-23.
 | v0.13.0 | 2026-10-22 | Reward codes, sold-out digital accounts, the owner's menu buttons, find a service by its link |
 | v0.14.0 | 2026-10-23 | Reward codes as an amount, deleting a plan, digital accounts by category, the live USDT price, your own Terms and Privacy pages, Karing and NPV Tunnel |
 | v0.15.0 | 2026-10-23 | Buying a license in one screen, restoring a deleted plan, Undo in the bot's admin menu, this wiki |
+| v0.16.0 | 2026-10-23 | Digital accounts in the Mini App, and the rate shown beside a USDT amount |
 
 ## Still open
 
