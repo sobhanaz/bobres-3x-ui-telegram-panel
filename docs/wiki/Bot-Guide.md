@@ -1,6 +1,6 @@
 # Bot Guide
 
-The Telegram bot is your shop window. It speaks Persian and English, uses your name, texts and links, and every message can be edited in the dashboard (Branding & texts). The customer picks a language on the first `/start` and can change it in Settings.
+The Telegram bot is where customers buy and get help. It speaks Persian and English, uses your name, texts and links, and every message can be edited in the dashboard (Branding & texts). The customer picks a language on the first `/start` and can change it in Settings.
 
 ## For customers
 

@@ -67,4 +67,4 @@ Open the order and choose **Refund to wallet**. The order's amount goes to the c
 
 ## When a payment is stuck
 
-Start with the [payment-stuck runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/payment-stuck.md) and [Troubleshooting](Troubleshooting). Zarinpal payments that are not confirmed expire after their window, but are still settled for 48 hours if Zarinpal confirms them.
+Start with the [payment-stuck runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/payment-stuck.md) and [Troubleshooting](Troubleshooting). An unconfirmed Zarinpal payment expires, but for 48 hours after it started it is still settled if Zarinpal confirms it, when the customer taps "I paid, check" or returns from the bank page.

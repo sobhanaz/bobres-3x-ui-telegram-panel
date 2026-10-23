@@ -43,16 +43,17 @@ The install ends with a **"BOBRES is ready"** card. It shows your dashboard addr
 
 ## Step 2: log in
 
-You have three ways in:
+You have three ways in.
 
-- Open your bot in Telegram and send `/start`. As the owner you see **Admin** and **Dashboard** buttons. `/dashboard` gives a one-time login link to `https://shop.example.com/admin`.
-- On the server, print a one-time link:
+**From the bot.** Open your bot in Telegram and send `/start`. As the owner you see **Admin** and **Dashboard** buttons. `/dashboard` gives a one-time login link to `https://shop.example.com/admin`.
+
+**From the server.** Print a one-time link:
 
 ```bash
 sudo bobres admin link
 ```
 
-- Use the initial owner password. A fresh install prints it once, with the login `owner`. The first sign-in only lets you choose a new password and set up an authenticator app. If you lost it:
+**With the initial owner password.** A fresh install prints it once, with the login `owner`. The first sign-in only lets you choose a new password and set up an authenticator app. If you lost it, make a new one:
 
 ```bash
 sudo bobres admin password

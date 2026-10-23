@@ -1,6 +1,6 @@
 # Mini App
 
-The Mini App is your store as a web app inside Telegram. It is the same store as the bot, in a nicer screen: the same plans, prices, discount codes, wallet, orders and support inbox, and the same rules for bans, maintenance mode and the required channel.
+The Mini App is your store as a web app inside Telegram. It is the same store as the bot, on a web screen instead of chat buttons: the same plans, prices, discount codes, wallet, orders and support inbox, and the same rules for bans, maintenance mode and the required channel.
 
 ## What customers can do
 
