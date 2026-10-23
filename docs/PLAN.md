@@ -42,8 +42,9 @@ Still open:
   providers' rules on VPN sales, the refund and tax rules, and the wording of the source license.
 - **Brand checks.** BOBRES and the beaver are chosen. The domain, the Telegram bot @username, a GitHub org and
   trademark conflicts are not checked. Do it before the public launch ([launch-checklist.md](launch-checklist.md)).
-- **Prices.** The numbers are the owner's: monthly and yearly, per tier, in one currency. They are placeholders ("SET ME")
-  in `internal/license/tiers.json` and in [pricing.md](pricing.md) until the owner sets them. The model is decided (below).
+- **Prices.** The numbers are the owner's: monthly and yearly, per tier, in one currency. The owner set them on 2026-10-20:
+  Standard 4 and Pro 12 USDT a month, a year at ten months (40 and 120), in `internal/license/tiers.json` and
+  [pricing.md](pricing.md). Only the Support rows are still "SET ME". The model is decided (below).
 
 Decided:
 - Free core, paid premium: DECIDED (2026-10-14), replacing the owner's earlier policy under which a missing or invalid
@@ -211,7 +212,7 @@ The plan as written, with what was built under each heading ("Built").
   keeps a restore point, swaps in the new CLI, installs the new version and rolls back on its own. Images are pulled
   by tag: their cosign signatures are not checked on the server. The license server and online activation are built
   (13-license-server.md). The vendor key `vendor-v1-2026` exists and its public key is built into BOBRES; the server
-  is not deployed yet (a deployment kit is in `deploy/vendor/`, the owner's step). Telemetry: none. Only
+  has run at `license.bobresai.cv` since 2026-10-21 (its kit is in `deploy/vendor/`). Telemetry: none. Only
   activation and the daily license refresh call the vendor, and only when `BOBRES_LICENSE_SERVER` is set. Each
   panel's version is read and flagged outside the tested range.
 
@@ -252,7 +253,7 @@ No shared multi-tenant SaaS in v1 (simpler security, no cross-customer data risk
 - Customer docs site, changelog, support channel.
 - Optional opt-in telemetry (version, health only, never user data).
 - Built: the license server (13-license-server.md) with its deployment kit (`deploy/vendor/`) and runbook
-  (runbooks/vendor-license-server.md); not deployed yet, the owner's step. The release channel is this repository's GitHub
+  (runbooks/vendor-license-server.md); deployed at `license.bobresai.cv` since 2026-10-21. The release channel is this repository's GitHub
   releases (signed CLI, checksums and key list; stable and beta). The docs live in `docs/` and the changelog in
   CHANGELOG.md; no docs site or support channel yet. No telemetry.
 

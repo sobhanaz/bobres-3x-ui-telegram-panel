@@ -8,6 +8,15 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Changed
+- Persian wording of the newest texts, read as a native speaker would: the reward code message, the reseller prefix errors, the reward and Terms/Privacy hints, the supplier text import messages, and the USDT rate help and stale warning (bot and dashboard).
+
+### Fixed
+- A flaky test, `TestTLSSetRefusedByCaddy`, which made the v0.14.0 Release gate fail on a slow runner: the fake Caddy now refuses once and answers normally after that.
+
+### Documentation
+- The launch checklist (English and Persian) and `docs/PLAN.md` say what is done: the prices (Standard 4 and Pro 12 USDT a month), the license server at `license.bobresai.cv`, the owner's own Pro license and the landing pages with prices.
+
 ## [0.14.0] — 2026-10-23
 
 **A reward you can set as an amount, deleting a plan, digital accounts by category, the live price of USDT, your own Terms and Privacy pages, and Karing and NPV Tunnel.** A plan can give its buyer a discount code of a fixed amount or a percent, for any plan, for the days and with the text you choose; the owner can delete a plan (it is taken off sale and never erased); the digital accounts in the bot follow the supplier's categories with a product page, a quantity and an order summary; crypto payments are priced at the live Toman price of USDT; every store serves its own Terms and Privacy pages; and Karing and NPV Tunnel join the apps with guides and tutorials.
