@@ -1,0 +1,47 @@
+name: Wiki
+
+# Publishes docs/wiki/ to the repository's GitHub Wiki. The pages are written and reviewed here, in pull requests;
+# this file copies them to the wiki's own git repository after a merge to main, so the wiki never drifts from the docs.
+# The wiki must exist (one first page created in the web UI, once) and "Wikis" must be on in the repository settings:
+# this file changes no setting. Pages deleted from docs/wiki/ are deleted from the wiki too.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/wiki/**"
+      - ".github/workflows/wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One publication at a time; a running one is finished, not cancelled.
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish docs/wiki/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Copy the pages to the wiki repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git" "$RUNNER_TEMP/wiki"
+          rsync -a --delete --exclude '.git' docs/wiki/ "$RUNNER_TEMP/wiki/"
+          cd "$RUNNER_TEMP/wiki"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "The wiki is already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit --quiet -m "Wiki: sync from docs/wiki at ${GITHUB_SHA::7}"
+          git push --quiet origin HEAD

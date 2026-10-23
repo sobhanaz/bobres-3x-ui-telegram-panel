@@ -7,6 +7,7 @@ status of each phase, and the [CHANGELOG](../CHANGELOG.md) for what the first re
 
 | Doc | Topic |
 |---|---|
+| [wiki/](wiki/) | The GitHub Wiki's pages, in English and Persian (`FA-*`): guides for the people who run a store. A workflow publishes them to the wiki after each merge to `main` |
 | [PLAN.md](PLAN.md) | Master plan: decisions, architecture, 3x-ui integration, DevOps, white-label model, phases and their status |
 | [ROADMAP.md](ROADMAP.md) | What comes after v0.1.0, in order: the checks a real server needs, then sales reports, the subscription page, more gateways and the Mini App store |
 | [01-database.md](01-database.md) | Postgres schemas, money rules, ledger, state machines |

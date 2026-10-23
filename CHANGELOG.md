@@ -15,6 +15,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - A flaky test, `TestTLSSetRefusedByCaddy`, which made the v0.14.0 Release gate fail on a slow runner: the fake Caddy now refuses once and answers normally after that.
 
 ### Documentation
+- **A project wiki**: 24 English pages and 13 Persian ones (`docs/wiki/`) for the people who run a store: install, the dashboard, the bot and Mini App, plans, payments, panels, resellers, licensing, HTTPS, updates and backups, security, troubleshooting, a FAQ and the architecture. A new workflow (`wiki.yml`) publishes them to the GitHub Wiki after each merge, so the pages are reviewed like code.
 - The launch checklist (English and Persian) and `docs/PLAN.md` say what is done: the prices (Standard 4 and Pro 12 USDT a month), the license server at `license.bobresai.cv`, the owner's own Pro license and the landing pages with prices.
 
 ## [0.14.0] — 2026-10-23

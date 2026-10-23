@@ -288,6 +288,7 @@ Telegram ⇄ bot ⇄ core ⇄ provisioner ⇄ 3x-ui / Marzban panels
 ## Docs
 
 - [Docs index](docs/README.md): every document, with what it covers.
+- [Wiki](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/wiki): guides for the people who run a store, in English and Persian (فارسی). The pages are in [`docs/wiki/`](docs/wiki/) and are published to the wiki after each merge.
 - [Project plan](docs/PLAN.md): decisions, architecture and the status of each phase.
 - [Roadmap](docs/ROADMAP.md): what comes next, in order.
 - [Installer and CLI](docs/06-installer.md), [bot flows](docs/03-bot-ux.md), [dashboard](docs/04-dashboard.md), [Mini App](docs/17-mini-app.md).
