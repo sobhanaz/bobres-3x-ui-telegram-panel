@@ -38,6 +38,10 @@ Only Buy is grouped. Renew, Add traffic, a reseller's Buy for a customer and Bul
 
 Only the owner can delete a plan (permission `plans.delete`). The trash button asks for a confirmation. The plan is taken off sale and out of every list, but it is never erased. Its orders, reports and refunds keep it, and services already made from it keep working.
 
+## Restoring a deleted plan
+
+Under the plans table, **Deleted plans** lists what was deleted. The owner (the same permission, `plans.delete`) can press **Restore**. The plan comes back **off sale** and in no group, so nothing is sold by accident: switch it on and group it again when you are ready.
+
 ## Discounts and codes
 
 | Code | What it does | Where |

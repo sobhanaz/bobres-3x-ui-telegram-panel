@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.14.0, 2026-10-23.
+As of v0.15.0, 2026-10-23.
 
 ## Shipped
 
@@ -20,15 +20,8 @@ As of v0.14.0, 2026-10-23.
 | v0.11.0 | 2026-10-21 | Plan groups with a text each |
 | v0.12.0 | 2026-10-22 | A reseller's group and prefix in the 3x-ui panel, and 3x-ui v3.10 tested |
 | v0.13.0 | 2026-10-22 | Reward codes, sold-out digital accounts, the owner's menu buttons, find a service by its link |
-
-Built since v0.13.0 (listed under "Unreleased" in the changelog when this page was written):
-
-- Reward codes as a fixed amount, valid for any plan, with a chosen number of days and a text.
-- Deleting a plan (owner only, never erased).
-- The live USDT price from Tetherland and Wallex, with a margin.
-- Karing and NPV Tunnel on the subscription page and in the help center.
-- Your store's own Terms and Privacy pages.
-- The digital accounts screens in the vendor's bot, and a phone-friendly sign-in code.
+| v0.14.0 | 2026-10-23 | Reward codes as an amount, deleting a plan, digital accounts by category, the live USDT price, your own Terms and Privacy pages, Karing and NPV Tunnel |
+| v0.15.0 | 2026-10-23 | Buying a license in one screen, restoring a deleted plan, Undo in the bot's admin menu, this wiki |
 
 ## Still open
 
@@ -41,7 +34,6 @@ These are not built:
 - **Per-server capacity limits** beyond today's weights.
 - **A Prometheus endpoint** and an uptime page.
 - **Two-factor sign-in inside the bot.**
-- **An Undo** for the last change in the bot's admin menu.
 - Re-encrypting data when a **master key** changes (the keys are not rotated today).
 - TON payments, and more crypto networks if a route that works from Iran exists.
 - A hosted offering, and an affiliate program for BOBRES itself.
