@@ -417,6 +417,33 @@ func TestResellerServicesPagingSearchAndRename(t *testing.T) {
 		t.Fatalf("naming someone else's service: %v", err)
 	}
 
+	// A service is found by its subscription link or by its client config, pasted whole (they are longer than a name's limit), and the
+	// buttons stay within Telegram's 64 bytes.
+	link := testenv.SubBase + ids["cust-06"]
+	rs.text("/menu")
+	rs.press("subs")
+	rs.press("rs:find")
+	rs.text(link)
+	if !hasLabel(rs, "cust-06") {
+		t.Fatalf("the link did not find the service: %v", rs.last().labels())
+	}
+	rs.shownHas("(1)")
+	for _, d := range callbacks(rs.shown()) {
+		if len(d) > 64 {
+			t.Fatalf("callback data over 64 bytes after a link search: %q", d)
+		}
+	}
+	rs.press("rs:find")
+	rs.text("vless://11111111-2222-3333-4444-555555555555@h.example.com:443?type=ws&security=tls&sni=example.com&path=%2Fws#Germany-seed-" + w.subscription(ids["cust-06"]).OrderID)
+	if !hasLabel(rs, "cust-06") {
+		t.Fatalf("the config did not find the service: %v", rs.last().labels())
+	}
+	for _, d := range callbacks(rs.shown()) {
+		if len(d) > 64 {
+			t.Fatalf("callback data over 64 bytes after a config search: %q", d)
+		}
+	}
+
 	// A long search is cut to fit the paging buttons in Telegram's 64 bytes.
 	long := strings.Repeat("ج", 25)
 	for i := 1; i <= 9; i++ {

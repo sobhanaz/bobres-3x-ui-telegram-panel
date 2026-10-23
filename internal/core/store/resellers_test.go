@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -498,5 +499,72 @@ func TestHoldReseller(t *testing.T) {
 	}
 	if err := lockForUpdate(); err != nil {
 		t.Fatalf("locked for update after the hold: %v", err)
+	}
+}
+
+// A service is found by what a reseller pastes: its subscription link, its page address, a client config that carries its email in the name
+// (vless, trojan, vmess), or the email itself. Another customer's service is never found, whatever is pasted.
+func TestServicesAreFoundByLinkOrConfig(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u, _ := s.UpsertUser(ctx, s.Conn(), 321, "shop2", "", "")
+	other, _ := s.UpsertUser(ctx, s.Conn(), 322, "other2", "", "")
+	p := seedSalePlan(t, s, 100)
+	mk := func(owner *User, key, email, subID string) *Subscription {
+		o, _, err := s.CreateOrder(ctx, s.Conn(), &Order{UserID: owner.ID, PlanID: p.ID, Type: "new", Status: "paid", Amount: 100, Currency: "IRT", IdempotencyKey: key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub, err := s.CreateSubscription(ctx, s.Conn(), &Subscription{UserID: owner.ID, OrderID: o.ID, ClientEmail: email})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.DB().Exec(ctx, `UPDATE core.subscriptions SET sub_id = $2 WHERE id = $1`, sub.ID, subID); err != nil {
+			t.Fatal(err)
+		}
+		return sub
+	}
+	mine := mk(u, "lnk-1", "bobres-k3x9a7q2", "AbCdEf0123456789")
+	_ = mk(u, "lnk-2", "bobres-zz11yy22", "ZyXwVu9876543210")
+	theirs := mk(other, "lnk-3", "bobres-q8w7e6r5", "OtherSubId123456")
+
+	vmess := `{"v":"2","ps":"Germany-bobres-k3x9a7q2","add":"h.example.com","port":"443","id":"11111111-2222-3333-4444-555555555555"}`
+	cases := map[string]string{
+		"https://sub.example.com:2096/sub/AbCdEf0123456789":                                              mine.ID,
+		"https://sub.example.com:2096/sub/AbCdEf0123456789/":                                             mine.ID,
+		"https://sub.example.com/sub/AbCdEf0123456789?name=x#frag":                                       mine.ID,
+		"  https://sub.example.com/sub/AbCdEf0123456789  ":                                               mine.ID,
+		"https://shop.example.com/s/" + mine.PageToken:                                                   mine.ID,
+		"vless://11111111-2222-3333-4444-555555555555@h.example.com:443?type=ws#Germany-bobres-k3x9a7q2": mine.ID,
+		"trojan://pw@h.example.com:443#Germany%2Dbobres-k3x9a7q2":                                        mine.ID,
+		"vmess://" + base64.StdEncoding.EncodeToString([]byte(vmess)):                                    mine.ID,
+		"bobres-k3x9a7q2": mine.ID,
+		"K3X9A7Q2":        mine.ID,
+	}
+	for query, want := range cases {
+		got, total, err := s.ListUserServices(ctx, s.Conn(), u.ID, query, "", Page{Limit: 10})
+		if err != nil || total != 1 || len(got) != 1 || got[0].ID != want {
+			t.Errorf("%q: %v total=%d %+v", query, err, total, got)
+		}
+	}
+	// Someone else's link or config, an unknown link, and text that only looks like one find nothing.
+	for _, query := range []string{
+		"https://sub.example.com/sub/OtherSubId123456",
+		"vless://x@h:443#Germany-bobres-q8w7e6r5",
+		"https://sub.example.com/sub/NoSuchSubId99999",
+		"vless://x@h:443#nobody",
+		"https://example.com/",
+		"vless://no-name-at-all@h:443",
+	} {
+		if got, total, err := s.ListUserServices(ctx, s.Conn(), u.ID, query, "", Page{Limit: 10}); err != nil || total != 0 || len(got) != 0 {
+			t.Errorf("%q found something: %v total=%d %+v", query, err, total, got)
+		}
+	}
+	if got, total, _ := s.ListUserServices(ctx, s.Conn(), other.ID, "https://sub.example.com/sub/OtherSubId123456", "", Page{Limit: 10}); total != 1 || got[0].ID != theirs.ID {
+		t.Errorf("the owner of the other service: %d %+v", total, got)
+	}
+	// The status filter still applies to a link.
+	if _, total, _ := s.ListUserServices(ctx, s.Conn(), u.ID, "https://sub.example.com/sub/AbCdEf0123456789", "expired", Page{Limit: 10}); total != 0 {
+		t.Errorf("a link ignored the status filter: %d", total)
 	}
 }

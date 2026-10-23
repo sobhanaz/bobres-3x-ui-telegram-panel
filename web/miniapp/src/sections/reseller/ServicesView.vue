@@ -94,7 +94,7 @@ const pages = () => Math.max(1, Math.ceil((data.value?.total ?? 0) / (data.value
     </div>
 
     <form class="row" role="search" @submit.prevent="search">
-      <input v-model="draft" class="rs-search" type="search" maxlength="100" autocomplete="off" enterkeyhint="search" :aria-label="tr('reseller.services.search')" :placeholder="tr('reseller.services.search')" />
+      <input v-model="draft" class="rs-search" type="search" maxlength="2000" autocomplete="off" enterkeyhint="search" :aria-label="tr('reseller.services.search')" :placeholder="tr('reseller.services.search')" />
       <button class="btn secondary" type="submit">{{ tr('reseller.services.search_go') }}</button>
     </form>
     <p v-if="ui.query" class="muted small">

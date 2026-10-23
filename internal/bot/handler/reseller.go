@@ -33,9 +33,12 @@ const (
 	servicesPage  = 8
 	statementPage = 10
 	customersPage = 10
-	// maxSearch is the longest search, in bytes: the paging buttons carry it
+	// maxSearch is the longest search of a name or a number, in bytes: the paging buttons carry it
 	// within Telegram's 64 bytes of callback data.
 	maxSearch = 40
+	// maxLinkSearch is the longest search that is a link or a client config (found by what it says, not by paging): a config
+	// pasted whole is a few hundred bytes.
+	maxLinkSearch = 1500
 	// maxPage bounds a page number read from a button.
 	maxPage = 100_000
 )
@@ -240,8 +243,19 @@ func cleanLabel(s string) (string, bool) {
 	return s, true
 }
 
+// shortSearch is a search shortened for the text that repeats it (a link or a config is long).
+func shortSearch(q string) string {
+	const most = 60
+	if utf8.RuneCountInString(q) <= most {
+		return q
+	}
+	r := []rune(q)
+	return string(r[:most]) + "…"
+}
+
 // searchText is a search as typed, on one line, cut to maxSearch bytes
-// (whole characters).
+// (whole characters). A link (a subscription link, a page address or a client config such as vless://...) is not cut that short: it
+// is found by what it says, and its paging buttons carry no search (see serviceListData).
 func searchText(s string) string {
 	s = strings.Join(strings.Fields(strings.Map(func(c rune) rune {
 		if unicode.IsControl(c) && !unicode.IsSpace(c) {
@@ -249,7 +263,11 @@ func searchText(s string) string {
 		}
 		return c
 	}, s)), " ")
-	for len(s) > maxSearch {
+	limit := maxSearch
+	if strings.Contains(s, "://") {
+		limit = maxLinkSearch
+	}
+	for len(s) > limit {
 		_, size := utf8.DecodeLastRuneInString(s)
 		s = s[:len(s)-size]
 	}
@@ -368,6 +386,9 @@ func (h *Handler) onServiceFilter(r *req, arg string) {
 // filter (bucket "" = all) and a search.
 func serviceListData(bucket, query string, page int32) string {
 	p := strconv.Itoa(int(page))
+	if len(query) > maxSearch {
+		query = "" // a pasted link is too long for a button, and it names one service: the buttons list them all
+	}
 	switch {
 	case bucket == "" && query == "":
 		return "rs:subs:" + p
@@ -408,6 +429,7 @@ func (h *Handler) showResellerServices(r *req, page int32, query, bucket string)
 		return
 	}
 	num := func(n int64) string { return i18n.Number(r.lang, n) }
+	shown := shortSearch(query) // what the text says it searched for: a pasted config is not echoed whole
 	kb := &tg.Keyboard{}
 	for _, s := range resp.GetSubscriptions() {
 		kb.Row(tg.CB(h.serviceButton(r, s), "sub:"+s.GetId()))
@@ -442,19 +464,19 @@ func (h *Handler) showResellerServices(r *req, page int32, query, bucket string)
 	}
 	switch {
 	case total == 0 && bucket == "":
-		text = r.t("rs.services_none_found", "query", esc(query))
+		text = r.t("rs.services_none_found", "query", esc(shown))
 	case total == 0 && query == "":
 		text = r.t("rs.services_filtered_none", "filter", filterName)
 	case total == 0:
-		text = r.t("rs.services_filtered_found_none", "filter", filterName, "query", esc(query))
+		text = r.t("rs.services_filtered_found_none", "filter", filterName, "query", esc(shown))
 	case bucket == "" && query == "":
 		text = r.t("rs.services_title", "total", num(total), "page", num(int64(page)), "pages", num(pages))
 	case bucket == "":
-		text = r.t("rs.services_found", "query", esc(query), "total", num(total), "page", num(int64(page)), "pages", num(pages))
+		text = r.t("rs.services_found", "query", esc(shown), "total", num(total), "page", num(int64(page)), "pages", num(pages))
 	case query == "":
 		text = r.t("rs.services_filtered", "filter", filterName, "total", num(total), "page", num(int64(page)), "pages", num(pages))
 	default:
-		text = r.t("rs.services_filtered_found", "filter", filterName, "query", esc(query), "total", num(total), "page", num(int64(page)), "pages", num(pages))
+		text = r.t("rs.services_filtered_found", "filter", filterName, "query", esc(shown), "total", num(total), "page", num(int64(page)), "pages", num(pages))
 	}
 	r.show(text, kb)
 }
@@ -498,9 +520,9 @@ func (h *Handler) showPlainServices(r *req, page int32, query string) {
 	var text string
 	switch {
 	case total == 0:
-		text = r.t("rs.services_none_found", "query", esc(query))
+		text = r.t("rs.services_none_found", "query", esc(shortSearch(query)))
 	case query != "":
-		text = r.t("rs.services_found", "query", esc(query), "total", num(total), "page", num(int64(page)), "pages", num(pages))
+		text = r.t("rs.services_found", "query", esc(shortSearch(query)), "total", num(total), "page", num(int64(page)), "pages", num(pages))
 	default:
 		text = r.t("rs.services_title", "total", num(total), "page", num(int64(page)), "pages", num(pages))
 	}

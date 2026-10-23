@@ -8,6 +8,9 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Fixed
+- A reseller's **My services** search (the bot and the Mini App) finds a service by its **subscription link**, its page address or its **client config** (vless://, vmess://, trojan://, ss:// pasted whole, found by the email in its name), as well as by name and number. The bot used to cut a search to 40 bytes, so a link never matched; a pasted link or config is now read whole, and the search also matches the client's email.
+
 ## [0.16.1] — 2026-10-23
 
 **The supplier's product dialog fits a phone.** A long link in the supplier's text used to stretch the dialog of a digital-accounts product past the screen and cut its fields off; the form now stays inside the dialog and the supplier's text has its own scrolling box.

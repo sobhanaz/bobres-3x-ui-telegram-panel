@@ -28,8 +28,8 @@ import (
 // MaxNote is the longest private note on a service, in characters.
 const MaxNote = 200
 
-// maxServiceQuery is the longest search of a reseller's services, in characters.
-const maxServiceQuery = 100
+// maxServiceQuery is the longest search of a reseller's services, in characters: a client config pasted whole is a few hundred.
+const maxServiceQuery = 2000
 
 // Reasons the audit log records for what a reseller does.
 const (

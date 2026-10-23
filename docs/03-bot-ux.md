@@ -368,7 +368,7 @@ payments in the dashboard. Customers see none of this.
   limit covers the price, with the amount they can spend; other payment methods stay. Past the limit they see what
   they can still spend, the other methods and a Panel button.
 - **Customer services** (also their "My services"): 8 a page with Previous/Next, each the name or #short id, status
-  and expiry; a search by part of the name or the #number, paged with the search. Under the list the services are
+  and expiry; a search by part of the name, the #number, the subscription link or page address, or a client config pasted whole (a link or config is found by what it says, so its paging buttons carry no search: it names one service), paged with the search. Under the list the services are
   grouped, each group a button with its count: All, Active, Ending soon, Ended (the time or the traffic ran out) and
   Paused. The group shown is ticked; a search started inside a group stays inside it and its pages keep both. Every
   service is in exactly one group, so the counts add up, and the counts do not follow the group or the search. A
