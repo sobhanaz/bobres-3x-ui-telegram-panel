@@ -900,7 +900,7 @@ func TestVendorIntentBuysAfterTheTopup(t *testing.T) {
 		t.Fatal("buying by hand left the intent")
 	}
 	_ = e.svc.SetVendorIntent(ctx, buyer.ID, "standard", VendorMonth, "")
-	*e.clock = e.clock.Add(13 * time.Hour)
+	*e.clock = e.clock.Add(49 * time.Hour)
 	if n, _ := e.svc.SettleVendorIntents(ctx); n != 0 || intents() != 0 {
 		t.Fatalf("an old intent: bought %d, kept %d", n, intents())
 	}
@@ -938,6 +938,7 @@ func TestVendorIntentRulesAndRefund(t *testing.T) {
 	if err := e.svc.SetVendorIntent(ctx, other.ID, "", VendorMonth, p.License.ID); err != nil {
 		t.Fatal(err)
 	}
+	e.fund(other, 1*usdt) // the payment lands after the intent
 	if n, err := e.svc.SettleVendorIntents(ctx); err != nil || n != 1 {
 		t.Fatalf("renewal: %d %v", n, err)
 	}
@@ -949,10 +950,11 @@ func TestVendorIntentRulesAndRefund(t *testing.T) {
 	// The license server refuses for good: the money goes back and the event says so.
 	e.fake.set(func() { e.fake.failWith = http.StatusForbidden })
 	_ = e.svc.SetVendorIntent(ctx, buyer.ID, "standard", VendorMonth, "")
+	e.fund(buyer, 1*usdt)
 	if n, _ := e.svc.SettleVendorIntents(ctx); n != 1 {
 		t.Fatalf("refused purchase: %d", n)
 	}
-	if got := e.balance(buyer); got != 10*usdt {
+	if got := e.balance(buyer); got != 11*usdt {
 		t.Fatalf("balance %d, want the money back", got)
 	}
 	evs = outboxEvents(t, e.s, events.VendorOrderSettled)
@@ -966,5 +968,83 @@ func TestVendorIntentRulesAndRefund(t *testing.T) {
 	}
 	if got := outboxEvents(t, e.s, events.VendorOrderSettled); len(got) != 2 {
 		t.Fatalf("a hand purchase published: %d", len(got))
+	}
+}
+
+// An intent is only carried out by a top-up that came after it: a wallet that already had the money, or a credit that is not a top-up (a
+// gift code, a staff adjustment), buys nothing by itself.
+func TestVendorIntentNeedsATopupAfterIt(t *testing.T) {
+	e := newVendorEnv(t)
+	ctx := context.Background()
+	buyer := seedUser(t, e.s, 9821)
+	e.fund(buyer, 10*usdt) // the money was there before the intent
+	if err := e.svc.SetVendorIntent(ctx, buyer.ID, "standard", VendorMonth, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.svc.SettleVendorIntents(ctx); err != nil || n != 0 {
+		t.Fatalf("money from before the intent bought: %d %v", n, err)
+	}
+	err := e.s.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := e.s.Credit(ctx, tx, buyer.ID, "USDT", 1*usdt, &store.LedgerEntry{Kind: "adjust", IdempotencyKey: "adj-" + buyer.ID})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := e.svc.SettleVendorIntents(ctx); n != 0 {
+		t.Fatalf("a staff adjustment bought: %d", n)
+	}
+	e.fund(buyer, 1*usdt)
+	if n, err := e.svc.SettleVendorIntents(ctx); err != nil || n != 1 {
+		t.Fatalf("a top-up after the intent did not buy: %d %v", n, err)
+	}
+}
+
+// An intent that cannot be carried out yet stays until it expires; one that never can is forgotten; one that was used or replaced meanwhile
+// is not carried out a second time.
+func TestVendorIntentSurvivesTroubleAndIsClaimedOnce(t *testing.T) {
+	e := newVendorEnv(t)
+	ctx := context.Background()
+	buyer := seedUser(t, e.s, 9831)
+	intents := func() int {
+		var n int
+		if err := e.s.DB().QueryRow(ctx, `SELECT count(*) FROM core.vendor_intents WHERE user_id = $1`, buyer.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if err := e.svc.SetVendorIntent(ctx, buyer.ID, "standard", VendorMonth, ""); err != nil {
+		t.Fatal(err)
+	}
+	e.fund(buyer, 5*usdt)
+
+	// The way to the license server is down: nothing is taken and the intent waits for the next look.
+	transport := e.svc.cfg.VendorTransport
+	e.svc.cfg.VendorTransport = nil
+	if n, _ := e.svc.SettleVendorIntents(ctx); n != 0 || intents() != 1 || e.balance(buyer) != 5*usdt {
+		t.Fatalf("trouble: bought %d, intents %d, balance %d", n, intents(), e.balance(buyer))
+	}
+	e.svc.cfg.VendorTransport = transport
+	if n, err := e.svc.SettleVendorIntents(ctx); err != nil || n != 1 || intents() != 0 {
+		t.Fatalf("after the trouble: %d %v intents %d", n, err, intents())
+	}
+
+	// A purchase that claims an intent that is not there (replaced, bought by hand, taken by another worker) takes no money.
+	e.fund(buyer, 5*usdt)
+	before := e.balance(buyer)
+	gone := e.clock.Add(-time.Hour)
+	_, err := e.svc.BuyVendorLicense(ctx, VendorBuyParams{UserID: buyer.ID, Tier: "standard", Months: VendorMonth, IdempotencyKey: "intent:gone", ClaimIntent: &gone})
+	if !errors.Is(err, errVendorIntentGone) || e.balance(buyer) != before {
+		t.Fatalf("a claim of a missing intent: %v, balance %d -> %d", err, before, e.balance(buyer))
+	}
+
+	// A banned customer's intent can never be bought: it is forgotten.
+	if err := e.svc.SetVendorIntent(ctx, buyer.ID, "standard", VendorMonth, ""); err != nil {
+		t.Fatal(err)
+	}
+	e.fund(buyer, 1*usdt)
+	e.sql(`UPDATE core.users SET status = 'banned' WHERE id = $1`, buyer.ID)
+	if n, _ := e.svc.SettleVendorIntents(ctx); n != 0 || intents() != 0 {
+		t.Fatalf("a banned customer's intent: bought %d, kept %d", n, intents())
 	}
 }

@@ -317,13 +317,27 @@ func (s *Store) DeleteVendorIntent(ctx context.Context, q querier, userID string
 	return nil
 }
 
-// LiveVendorIntents lists the intents that have not expired, oldest first, and forgets the ones that have.
+// ClaimVendorIntent forgets the intent of a customer that was made at createdAt and says whether it was still there. A purchase made from an
+// intent calls it in the same transaction as the debit, so an intent that was replaced, bought by hand or already used is not bought again.
+func (s *Store) ClaimVendorIntent(ctx context.Context, q querier, userID string, createdAt time.Time) (bool, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE user_id = $1 AND created_at = $2`, userID, createdAt)
+	if err != nil {
+		return false, fmt.Errorf("claim vendor intent: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// LiveVendorIntents lists the intents that have not expired and whose customer has had a top-up credited since they made them (an intent
+// whose payment has not landed is not looked at), oldest first, and forgets the ones that have expired.
 func (s *Store) LiveVendorIntents(ctx context.Context, q querier, now time.Time, limit int) ([]VendorIntent, error) {
 	if _, err := q.Exec(ctx, `DELETE FROM core.vendor_intents WHERE expires_at <= $1`, now); err != nil {
 		return nil, fmt.Errorf("expire vendor intents: %w", err)
 	}
-	rows, err := q.Query(ctx, `SELECT user_id::text, tier, months, license_id::text, created_at, expires_at
-		FROM core.vendor_intents ORDER BY created_at LIMIT $1`, limit)
+	rows, err := q.Query(ctx, `SELECT i.user_id::text, i.tier, i.months, i.license_id::text, i.created_at, i.expires_at
+		FROM core.vendor_intents i
+		WHERE EXISTS (SELECT 1 FROM core.ledger_entries l
+			WHERE l.user_id = i.user_id AND l.kind = 'topup' AND l.amount > 0 AND l.created_at > i.created_at)
+		ORDER BY i.created_at LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list vendor intents: %w", err)
 	}

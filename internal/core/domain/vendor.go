@@ -220,7 +220,13 @@ type VendorBuyParams struct {
 	IdempotencyKey string
 	// ExpectedAmount, when positive, is the price the buyer was shown: the purchase is refused if it came to another.
 	ExpectedAmount int64
+	// ClaimIntent, when set, is the creation time of the customer's intent this purchase carries out: the intent is forgotten in the same
+	// transaction as the debit, and the purchase is not made (errVendorIntentGone) when it was replaced or used meanwhile.
+	ClaimIntent *time.Time
 }
+
+// errVendorIntentGone: the intent a purchase was to carry out is no longer there (bought by hand, replaced or used by another worker).
+var errVendorIntentGone = errors.New("domain: the license intent is gone")
 
 // VendorPurchase is the state of a purchase after BuyVendorLicense.
 type VendorPurchase struct {
@@ -312,7 +318,16 @@ func (s *Service) BuyVendorLicense(ctx context.Context, p VendorBuyParams) (*Ven
 		if got, inserted, err = s.st.CreateVendorOrder(ctx, tx, order); err != nil || !inserted {
 			return err
 		}
-		if !strings.HasPrefix(p.IdempotencyKey, vendorIntentKeyBase) {
+		switch {
+		case p.ClaimIntent != nil:
+			ok, err := s.st.ClaimVendorIntent(ctx, tx, u.ID, *p.ClaimIntent)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return errVendorIntentGone
+			}
+		case !strings.HasPrefix(p.IdempotencyKey, vendorIntentKeyBase):
 			// The customer bought by hand: what they meant to buy after a top-up is no longer a thing to do by itself.
 			if err := s.st.DeleteVendorIntent(ctx, tx, u.ID); err != nil {
 				return err
@@ -566,8 +581,8 @@ func (s *Service) RunVendorWorker(ctx context.Context) {
 const (
 	// vendorIntentKeyBase starts the idempotency key of a purchase made from an intent (the order's key is "vendor:" + this + ...).
 	vendorIntentKeyBase = "intent:"
-	// vendorIntentTTL is how long an intent waits for the payment to land.
-	vendorIntentTTL = 12 * time.Hour
+	// vendorIntentTTL is how long an intent waits for the payment to land (a manual payment can wait a night for its review).
+	vendorIntentTTL = 48 * time.Hour
 	// vendorIntentEvery is how often the worker looks at the intents.
 	vendorIntentEvery = 30 * time.Second
 	vendorIntentBatch = 100
@@ -620,8 +635,10 @@ func (s *Service) SetVendorIntent(ctx context.Context, userID, tier string, mont
 	return s.st.SetVendorIntent(ctx, s.st.Conn(), in)
 }
 
-// SettleVendorIntents makes the purchases whose payment has landed: for each live intent whose customer's wallet covers the price. It returns how
-// many it made. An intent that cannot be bought (the customer is banned, the license ended) is forgotten.
+// SettleVendorIntents makes the purchases whose payment has landed: for each live intent that has a top-up credited after it was made and
+// whose customer's wallet covers the price. It returns how many it made. An intent that can never be bought (the customer is banned, the
+// license ended or is not theirs) is forgotten; one that failed for a reason that may pass (the database, a balance that moved) is kept
+// until it expires. Each purchase forgets its intent in the transaction that takes the money.
 func (s *Service) SettleVendorIntents(ctx context.Context) (int, error) {
 	if !s.VendorOn(ctx) || s.cfg.Secrets == nil {
 		return 0, nil
@@ -646,25 +663,52 @@ func (s *Service) SettleVendorIntents(ctx context.Context) (int, error) {
 			_ = s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID)
 			continue
 		}
+		if s.vendorIntentIsDead(ctx, &in) {
+			_ = s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID)
+			continue
+		}
 		w, err := s.st.GetWallet(ctx, s.st.Conn(), in.UserID, tier.Currency)
 		if err != nil || w.Balance < tier.Price(in.Months) {
 			continue // the payment has not landed yet
 		}
-		p := VendorBuyParams{UserID: in.UserID, Tier: in.Tier, Months: in.Months, IdempotencyKey: fmt.Sprintf("%s%s:%d", vendorIntentKeyBase, in.UserID, in.CreatedAt.Unix())}
+		created := in.CreatedAt
+		p := VendorBuyParams{UserID: in.UserID, Tier: in.Tier, Months: in.Months, ClaimIntent: &created,
+			IdempotencyKey: fmt.Sprintf("%s%s:%d", vendorIntentKeyBase, in.UserID, in.CreatedAt.UnixMicro())}
 		if in.LicenseID != nil {
 			p.LicenseID = *in.LicenseID
 		}
-		_, err = s.BuyVendorLicense(ctx, p)
-		if derr := s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID); derr != nil {
-			s.cfg.Log.Warn("license intent: forgetting it", "err", derr)
+		switch _, err = s.BuyVendorLicense(ctx, p); {
+		case err == nil:
+			made++
+		case errors.Is(err, errVendorIntentGone):
+			// bought by hand, replaced or taken by another worker meanwhile: nothing to do
+		case errors.Is(err, ErrUserBanned), errors.Is(err, ErrForbidden), errors.Is(err, ErrInvalid):
+			s.cfg.Log.Warn("license intent can never be bought: forgotten", "user", in.UserID, "err", err)
+			_ = s.st.DeleteVendorIntent(ctx, s.st.Conn(), in.UserID)
+		default:
+			s.cfg.Log.Warn("license intent not bought yet", "user", in.UserID, "err", err)
 		}
-		if err != nil {
-			s.cfg.Log.Warn("license intent not bought", "user", in.UserID, "err", err)
-			continue
-		}
-		made++
 	}
 	return made, nil
+}
+
+// vendorIntentIsDead says an intent can never be bought: its customer is banned or gone, or the license it renews is not theirs or not active.
+func (s *Service) vendorIntentIsDead(ctx context.Context, in *store.VendorIntent) bool {
+	u, err := s.st.GetUser(ctx, s.st.Conn(), in.UserID)
+	if err != nil {
+		return errors.Is(err, store.ErrNotFound)
+	}
+	if u.Status == "banned" {
+		return true
+	}
+	if in.LicenseID == nil {
+		return false
+	}
+	lic, err := s.st.GetVendorLicense(ctx, s.st.Conn(), *in.LicenseID, false)
+	if err != nil {
+		return errors.Is(err, store.ErrNotFound)
+	}
+	return lic.UserID != u.ID || lic.Status != "active"
 }
 
 // RunVendorIntentWorker keeps looking at the intents while the store sells licenses.

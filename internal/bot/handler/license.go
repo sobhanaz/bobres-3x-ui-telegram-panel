@@ -286,10 +286,11 @@ func (h *Handler) onLicenseTopup(r *req, rest string) {
 		return
 	}
 	// The customer chose to pay the shortfall: the purchase this screen showed is made by itself when the payment lands.
-	if c, ok, err := h.state.LoadCheckout(r.ctx, r.from.ID, parts[2]); err == nil && ok && c.Type == "license" {
-		if h.setLicenseIntent(r, c) {
-			r.send(r.t("lic.autobuy_note", "tier", tierName(r, c.PlanID), "term", termName(r, c.Quantity)), nil)
-		}
+	if c, ok, err := h.state.LoadCheckout(r.ctx, r.from.ID, parts[2]); err == nil && ok && c.Type == "license" && h.setLicenseIntent(r, c) {
+		r.send(r.t("lic.autobuy_note", "tier", tierName(r, c.PlanID), "term", termName(r, c.Quantity)), nil)
+	} else {
+		// The screen expired or core did not take the wish: the payment still starts, and the customer buys by hand once it lands.
+		r.send(r.t("lic.autobuy_off"), nil)
 	}
 	key := fmt.Sprintf("ltop:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
 	if provider == usdtAuto {

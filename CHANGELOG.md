@@ -9,7 +9,7 @@ All notable changes to BOBRES are written here. The format follows
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Added
-- **Licenses: pay and top up in one screen.** When a customer's USDT wallet is short, the confirm screen says how much is missing; tapping the top-up saves what they wanted (tier and months, 12 hours) and, when the payment lands, the store buys the license by itself and sends the key. A manual buy, a refusal or a refund clears the wish, so nothing is bought twice. One database migration, additive (core 00038, `vendor_intents`). Only on the owner's store (`private_features`).
+- **Licenses: pay and top up in one screen.** When a customer's USDT wallet is short, the confirm screen says how much is missing; tapping the top-up saves what they wanted (tier and months, 48 hours) and, when the payment lands, the store buys the license by itself and sends the key. A manual buy, a refusal or a refund clears the wish, so nothing is bought twice. One database migration, additive (core 00038, `vendor_intents`). Only on the owner's store (`private_features`).
 - **Restore a deleted plan.** The Plans page lists the deleted plans under the table, with a Restore button for the owner; the plan comes back off sale and ungrouped, so the owner decides when to sell it again (`plan.restore` in the audit log).
 - **Undo in the bot's admin menu.** The last setting, plan or discount-code change made with the menu's buttons (or `/set`) can be taken back for an hour with one tap.
 
