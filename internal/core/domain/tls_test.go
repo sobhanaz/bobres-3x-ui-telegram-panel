@@ -46,8 +46,16 @@ type fakeAdmin struct {
 	// status answers a load (200 when 0); msg is the body.
 	status int
 	msg    string
-	loads  int
-	srv    *http.Server
+	// once holds answers given before the standing one, one per load: a refusal followed at once by the rollback's
+	// load must not see the refusal twice.
+	once  []fakeAnswer
+	loads int
+	srv   *http.Server
+}
+
+type fakeAnswer struct {
+	status int
+	msg    string
 }
 
 func newFakeAdmin(t *testing.T) *fakeAdmin {
@@ -79,6 +87,10 @@ func (f *fakeAdmin) start() {
 		f.mu.Lock()
 		f.loads++
 		status, msg := f.status, f.msg
+		if len(f.once) > 0 {
+			status, msg = f.once[0].status, f.once[0].msg
+			f.once = f.once[1:]
+		}
 		f.mu.Unlock()
 		if status == 0 {
 			status = http.StatusOK
@@ -98,10 +110,11 @@ func (f *fakeAdmin) stop() {
 	}
 }
 
-func (f *fakeAdmin) answer(status int, msg string) {
+// answerOnce answers the next load as told; the ones after it are answered 200 again.
+func (f *fakeAdmin) answerOnce(status int, msg string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.status, f.msg = status, msg
+	f.once = append(f.once, fakeAnswer{status, msg})
 }
 
 // tlsWorld is the HTTPS manager on a fresh core schema, with the agent's
@@ -544,7 +557,7 @@ func TestTLSSetRefusedByCaddy(t *testing.T) {
 	w := newTLSWorld(t)
 	admin := w.runAgent()
 	ctx := context.Background()
-	admin.answer(http.StatusBadRequest, `{"error":"loading new config: tls: unknown issuer"}`)
+	admin.answerOnce(http.StatusBadRequest, `{"error":"loading new config: tls: unknown issuer"}`)
 	_, err := w.tls.Set(ctx, nil, TLSChange{Mode: tlsconf.ModeIP, IP: tlsIP, ConfirmIP: true})
 	var te *TLSError
 	if !errors.As(err, &te) || te.Code != TLSErrRefused || !strings.Contains(te.Message, "tls: unknown issuer") {
@@ -561,7 +574,6 @@ func TestTLSSetRefusedByCaddy(t *testing.T) {
 	if err := w.st.DB().QueryRow(ctx, `SELECT count(*) FROM core.audit_log WHERE action = 'system.tls.set'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("audited: %d %v", n, err)
 	}
-	admin.answer(0, "")
 	if res := w.waitAnswer(2); !res.OK {
 		t.Fatalf("the rollback: %+v", res)
 	}
