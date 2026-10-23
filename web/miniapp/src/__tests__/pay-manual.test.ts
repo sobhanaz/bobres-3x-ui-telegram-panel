@@ -278,6 +278,21 @@ describe('ManualPay: USDT', () => {
     m.unmount()
   })
 
+  it('tells the rate the amount was worked out at, for a Toman price only', async () => {
+    const m = mount(ManualPay, props(crypto({ usdt_rate: 271_600 })), [])
+    await settle(5)
+    expect(m.text()).toContain('Rate now: 271,600 Toman per USDT')
+    m.unmount()
+    const noRate = mount(ManualPay, props(crypto()), [])
+    await settle(5)
+    expect(noRate.text()).not.toContain('Rate now')
+    noRate.unmount()
+    const inUsdt = mount(ManualPay, props(crypto({ currency: 'USDT', scale: 6, amount: 5_000_000, usdt_amount: 5_000_000, usdt_rate: 271_600 })), [])
+    await settle(5)
+    expect(inUsdt.text()).not.toContain('Rate now')
+    inUsdt.unmount()
+  })
+
   it('says the price as it is for an order priced in USDT', async () => {
     const m = mount(ManualPay, props(crypto({ currency: 'USDT', scale: 6, amount: 5_000_000, usdt_amount: 5_000_000 })), [])
     await settle(5)

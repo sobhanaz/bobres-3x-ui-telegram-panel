@@ -137,6 +137,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `POST /payments/{id}/check` | The status of the customer's own payment, asking the gateway where there is one ("I have paid"); also how a Stars or manual payment is followed |
 | `POST /payments/{id}/proof` | The proof of the customer's own manual payment, once: `multipart/form-data` with `receipt` (an image) and `reference` (the bank's tracking number), or JSON `{txid, network}` for a crypto payment |
 | `GET /payments/pending` | The customer's own manual payments that still wait for their proof, newest first, at most 10: each as `pay` answered when it was started, plus `created_at` (see "Taking a payment up again") |
+| `GET /digital`, `POST /digital/buy` `{sid, quantity, expected_total, key}`, `GET /digital/orders`, `GET /digital/orders/{id}` | Digital accounts (the owner's own store, `features.digital`): the shelf (the supplier's products the owner priced and switched on, names and texts in both languages, `category`, `price`, `sold_out`, `stock`, `max_quantity`) with the customer's Toman wallet; buying (the wallet pays; the same `key` again returns the first result and charges nothing; 409 `state` when the price or the stock moved, 409 `insufficient_funds`); the customer's purchases (no account in the list) and one of them with its account (`delivery`, "" until the supplier delivers; another customer's order is a 404) |
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `POST /reseller/prefix` `{prefix}` | A reseller chooses the prefix of the names of their configs in the 3x-ui panel, once (409 `state` afterwards: only the owner changes it; 400 for a shape core refuses or another reseller's prefix); the answer is the panel (`GET /reseller` carries `config_prefix` and `panel_group`). The section asks "Use <prefix> for all your configs?" before it sends |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
@@ -147,11 +148,18 @@ store has on for the amount of the purchase (the next section).
 
 ### Account sections
 
-These three are sections of the More tab (see "Adding a section"); each says in `features` whether this customer sees it.
+These are sections of the More tab (see "Adding a section"); each says in `features` whether this customer sees it.
 
 - **Free trial** (`features.trial`): shown while the store has an enabled trial plan and the customer has never ordered a
   trial. It is the bot's trial: the same domain call and the same request key (`trial:<telegram id>`), so a trial taken
   in either place is used in both, and a second tap or a second device gets 409 `trial_used`.
+- **Digital accounts** (`features.digital`, only on the owner's own store, where `private_features` is granted and the supplier
+  has a product on sale): the bot's flow in the app. Categories (the supplier's), a category's products, a product page with its
+  text and stock, a quantity (1 to 25, and no more than the supplier has), an order summary with the wallet balance, and
+  the wallet pays. It is the same domain call, the same wallet debit and the same idempotency as the bot (the request key is
+  `mini:<user id>:<key>`), so a purchase is one kind of order in both places and shows in the bot's list too. When the supplier
+  has not delivered yet the order is `paid` and the app asks for it every 3 seconds (the account also arrives in the bot);
+  a short wallet is sent to the Wallet tab to top up. The account is shown to its buyer only and is in no list.
 - **Invite friends** (`features.invite`): the link is `https://t.me/<bot>?start=r_<code>`, as in the bot. A reseller has
   a commission link of their own in their panel and is not offered this one.
 - **Support** (`features.support`): the bot's support, with the same rules. One conversation is open at a time, a message
@@ -202,7 +210,7 @@ and the currency, so a payment is refused for another customer, for another amou
 
 **Manual payments.** The same call (`pay`, or `topup`) makes the payment as the bot does (`int:<order id>:<method>`) and
 answers what the bot shows: `details.card_number` and `card_holder`, the TRC20 and ERC20 addresses and the amount to
-send in USDT (`usdt_amount`, 6 decimals: a Toman price at the store's rate, rounded up to a cent, or the USDT price),
+send in USDT (`usdt_amount`, 6 decimals: a Toman price at the store's rate, rounded up to a cent, or the USDT price; for a Toman price `usdt_rate` is that rate, the live price of USDT plus the margin when the store follows it, and the screen tells it),
 the Zarinpal link, the payment `reference` and the exact amount. The customer pays outside the store and then sends the
 proof to `POST /payments/{id}/proof`, which stores it with the domain function the bot's proof flow ends in
 (`SubmitPaymentProof`), so the review list, the staff alert, the possible-duplicate warning and the admin card with the

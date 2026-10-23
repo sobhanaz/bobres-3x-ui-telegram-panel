@@ -178,6 +178,10 @@ func (s *Server) miniPaymentExtras(ctx context.Context, u *store.User, res *doma
 				return errMethodOff
 			}
 			body["usdt_amount"] = micro
+			if res.Currency == "IRT" {
+				// the Toman price of one USDT this amount was worked out at (the live price when the store follows it)
+				body["usdt_rate"] = s.cfg.Domain.UsdtRate(ctx)
+			}
 		case domain.ManualZarinpal:
 			if l := d["zarinpal_link"]; !strings.HasPrefix(l, "https://") && !strings.HasPrefix(l, "http://") {
 				return errMethodOff
