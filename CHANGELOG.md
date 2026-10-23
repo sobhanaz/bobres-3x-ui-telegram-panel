@@ -8,6 +8,17 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.16.1] — 2026-10-23
+
+**The supplier's product dialog fits a phone.** A long link in the supplier's text used to stretch the dialog of a digital-accounts product past the screen and cut its fields off; the form now stays inside the dialog and the supplier's text has its own scrolling box.
+
+### Updating
+- No database migration, no new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`.
+
+### Known limits
+- Checked on a 375 px wide test page, not yet on the real dashboard of a store.
+
 ### Fixed
 - The product dialog of the supplier page (Digital accounts) no longer spills out of the screen on a phone: a long link in the supplier's text stretched the form past the dialog and cut the fields off. The supplier's text now has its own scrolling box with its line breaks and its own direction, and the description fields are taller.
 

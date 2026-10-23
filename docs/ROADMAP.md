@@ -24,9 +24,10 @@ v0.12.0 (2026-10-22: a reseller's group and prefix in the 3x-ui panel, and 3x-ui
 v0.13.0 (2026-10-22: reward codes, sold-out digital accounts, the owner's menu buttons and find a service by its link)
 v0.14.0 (2026-10-23: reward amounts, deleting a plan, digital accounts by category, the live USDT price, the store's own Terms and Privacy pages, and Karing and NPV Tunnel)
 v0.15.0 (2026-10-23: buying a license in one screen, restoring a deleted plan, Undo in the bot's admin menu, a project wiki, a native read of the newest Persian texts)
-and v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount).
+v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount)
+and v0.16.1 (2026-10-23: the supplier's product dialog fits a phone).
 
-## Where things stand (after v0.16.0)
+## Where things stand (after v0.16.1)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
