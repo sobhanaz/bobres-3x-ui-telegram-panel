@@ -2,9 +2,12 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -50,6 +53,29 @@ func (s *Service) UsdtBaseRate(ctx context.Context) int64 {
 		return info.Manual
 	}
 	return 0
+}
+
+// usdtBaseRateIn is UsdtBaseRate read through an open transaction: a handler that holds a connection must not ask the pool for a second one (with
+// every connection held by such a handler, none would ever be free).
+func (s *Service) usdtBaseRateIn(ctx context.Context, tx pgx.Tx) int64 {
+	m, err := s.st.GetSettings(ctx, tx)
+	if err != nil {
+		return 0
+	}
+	str := func(key string) string {
+		var v string
+		if raw, ok := m[key]; ok && json.Unmarshal(raw, &v) == nil {
+			return v
+		}
+		return ""
+	}
+	if str(SettingUSDTAuto) != "false" {
+		var l LiveRate
+		if raw, ok := m[liveRateKey]; ok && json.Unmarshal(raw, &l) == nil && l.Fresh(time.Now()) {
+			return l.Rate
+		}
+	}
+	return parseWholeSetting(str("payments.usdt_rate"))
 }
 
 // mulDiv is a*b/c with a big intermediate, rounded up (ceil) or down, and a result that fits an int64 (false otherwise).
@@ -100,19 +126,15 @@ func (s *Service) UsdtEquivalent(ctx context.Context, toman int64) int64 {
 // down, as two ledger entries of kind wallet_convert. It returns the Toman credited and the Toman balance after it; 0 when there was nothing to
 // convert, no rate is known, or the amount is too small to be one Toman. The idempotency key carries the ledger's last entry of the wallet, so
 // two sweepers (or a replay) never convert the same money twice.
-func (s *Service) convertToToman(ctx context.Context, tx pgx.Tx, userID, currency string) (credited, balance int64, rate int64, err error) {
-	if currency != "USDT" {
-		return 0, 0, 0, nil // only USDT has a rate
+func (s *Service) convertToToman(ctx context.Context, tx pgx.Tx, userID, currency string, rate int64) (credited, balance int64, usedRate int64, err error) {
+	if currency != "USDT" || rate <= 0 {
+		return 0, 0, 0, nil // only USDT has a rate, and nothing is converted without one
 	}
 	w, err := s.st.GetWallet(ctx, tx, userID, currency)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 	if w.Balance <= 0 {
-		return 0, 0, 0, nil
-	}
-	rate = s.UsdtBaseRate(ctx)
-	if rate <= 0 {
 		return 0, 0, 0, nil
 	}
 	toman, ok := mulDiv(w.Balance, rate, usdtScale, false)
@@ -139,6 +161,16 @@ func (s *Service) convertToToman(ctx context.Context, tx pgx.Tx, userID, currenc
 	return toman, in.Balance, rate, nil
 }
 
+// parseWholeSetting reads a whole-number setting the way settingInt does ("271,600" and "271600" both work); 0 when it is none.
+func parseWholeSetting(v string) int64 {
+	v = strings.NewReplacer(",", "", "_", "", " ", "", "٬", "").Replace(latinDigits(v))
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
 func deref(p *string) string {
 	if p == nil {
 		return ""
@@ -149,7 +181,8 @@ func deref(p *string) string {
 // SweepUsdtWallets converts the money customers hold in USDT into Toman, up to a batch of wallets; it returns how many it converted. It is what
 // makes a USDT top-up, a USDT gift code and the license wallet of before into Toman, and it waits (changing nothing) while no rate is known.
 func (s *Service) SweepUsdtWallets(ctx context.Context) (int, error) {
-	if s.UsdtBaseRate(ctx) <= 0 {
+	rate := s.UsdtBaseRate(ctx) // read once, before any transaction opens
+	if rate <= 0 {
 		return 0, nil
 	}
 	list, err := s.st.ForeignBalances(ctx, s.st.Conn(), sweepBatch)
@@ -161,7 +194,7 @@ func (s *Service) SweepUsdtWallets(ctx context.Context) (int, error) {
 		var credited int64
 		err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
 			var err error
-			credited, _, _, err = s.convertToToman(ctx, tx, b.UserID, b.Currency)
+			credited, _, _, err = s.convertToToman(ctx, tx, b.UserID, b.Currency, rate)
 			return err
 		})
 		if err != nil {
