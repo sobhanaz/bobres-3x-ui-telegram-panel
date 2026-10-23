@@ -194,7 +194,9 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 			}
 			if !o.TargetsSet {
 				days, bytes := orderLimits(o, plan)
-				o.TargetExpiresAt, o.TargetTrafficBytes = extendBy(o.Type, sub, days, bytes, w.now())
+				// A renewal bought with a plan restarts the time from now; a staff member's extension adds to the time left.
+				restart := o.ExtendDays == nil && o.ExtendBytes == nil
+				o.TargetExpiresAt, o.TargetTrafficBytes = extendBy(o.Type, sub, days, bytes, w.now(), restart)
 				o.TargetsSet = true
 				if err := st.SetOrderTargets(ctx, tx, o.ID, o.TargetExpiresAt, o.TargetTrafficBytes); err != nil {
 					return err

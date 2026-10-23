@@ -137,6 +137,8 @@ services. They are being prepared: you will get all the links in one message." w
 TRON address, the deadline (45 minutes) and a Check button. The payment settles by itself once the transfer is seen on
 the chain. A different amount is an unmatched deposit: staff are told and credit it by hand.
 **Renew / add traffic:** My services -> service -> Renew | Add traffic -> pay -> updated expiry shown.
+
+**How a renewal works (2026-10-23).** A renewal bought with a plan **adds the plan's traffic to the service's current quota and starts the plan's days again from now**: the days that were left are dropped, so a service never lasts longer than one plan period after its last renewal (a 30-day plan: 30 days from the day of the renewal, whatever was left). The customer is told this **before** choosing the plan (the Renew picker, also when the service was found by its link) and again at the checkout (`renew.pick`, `find.renew_pick` and `renew.detail` in the bot, `renew.note` in the Mini App). A traffic package adds traffic only and leaves the time alone. A staff member's "add N days" in the dashboard is another thing and still adds the days to the time left. A service with no expiry or no traffic limit keeps it that way.
 **Top up wallet:** amount presets + custom -> method -> pay -> balance updated message.
 **Gift code:** Wallet -> Apply gift code (the button is absent while the owner has the setting `gift_codes.enabled` off) -> the
 customer sends the code (any way it is written: small or capital letters, Persian digits, spaces or dashes; Cancel is under

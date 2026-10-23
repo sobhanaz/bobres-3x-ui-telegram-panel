@@ -1042,14 +1042,15 @@ func TestRenewAndTopupFromTheServicePage(t *testing.T) {
 	u.press("rnw:")
 	u.sees("Renew service #")
 	u.press("rp:")
-	u.sees("Added to the time and traffic you have left")
+	u.sees("the days left are dropped")
 	u.press("pay:w:")
 	u.sees("Paid from your wallet")
 	u.eventuallySees("renewed")
 	after, _ := w.stack.Panel.Snapshot(sub.ClientEmail)
-	// Core keeps whole seconds, the panel milliseconds: up to 1 s may go.
-	if moved := after.ExpiryTime - before.ExpiryTime; after.TotalGB != 100<<30 || moved > 30*24*3600*1000 || moved < 30*24*3600*1000-1000 {
-		t.Fatalf("panel after renewal: total %d (want 100 GB), expiry moved %d ms (want 30 days)", after.TotalGB, moved)
+	// The traffic is added and the 30 days start again from now: the service was bought a moment ago, so the expiry is where it was
+	// (a renewal that stacked the days would end 60 days out).
+	if moved := after.ExpiryTime - before.ExpiryTime; after.TotalGB != 100<<30 || moved < -1000 || moved > 120_000 {
+		t.Fatalf("panel after renewal: total %d (want 100 GB), expiry moved %d ms (want about 0: the days start again)", after.TotalGB, moved)
 	}
 
 	u.press("sub:") // "View service" under the renewal message

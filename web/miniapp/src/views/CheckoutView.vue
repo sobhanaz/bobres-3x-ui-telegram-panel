@@ -216,6 +216,7 @@ const doneKey = computed(() => {
 
     <section class="card">
       <h2>{{ tr(summaryKey, { plan: nameOf(plan) }) }}</h2>
+      <p v-if="type === 'renew'" class="muted small" role="note">{{ tr('renew.note') }}</p>
       <p class="muted">{{ planFacts(plan) }}</p>
       <p v-if="label && type === 'new'" class="muted">🏷 {{ label }}</p>
       <template v-if="stage === 'review' && !reseller">

@@ -201,13 +201,14 @@ func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error)
 }
 
 // extendTargets is what a renewal or top-up sets, computed from the
-// subscription as it is now: a renewal adds the plan's days to the time left
-// (counted from now when it already expired) and the plan's traffic to the
-// quota, so nothing unused is lost; a top-up adds traffic only. A
+// subscription as it is now: a renewal bought with a plan starts the plan's
+// days again from now (the days left are not carried over, so a service
+// never lasts longer than one plan period) and adds the plan's traffic to the
+// quota (so the traffic left is not lost); a top-up adds traffic only. A
 // subscription without expiry or traffic limit keeps it that way.
 func extendTargets(typ string, sub *store.Subscription, plan *store.Plan, now time.Time) (*time.Time, *int64) {
 	days, bytes := planLimits(plan)
-	return extendBy(typ, sub, days, bytes, now)
+	return extendBy(typ, sub, days, bytes, now, true)
 }
 
 // orderLimits is what an order adds: a staff member's extension carries its
@@ -225,12 +226,14 @@ func orderLimits(o *store.Order, plan *store.Plan) (days, bytes int64) {
 	return days, bytes
 }
 
-// extendBy is extendTargets for a number of days and bytes.
-func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.Time) (*time.Time, *int64) {
+// extendBy is extendTargets for a number of days and bytes. With restart the days count from now (what a renewal bought with a
+// plan does); without it they are added to the time left (counted from now once it ended), which is what a staff member's
+// "add N days" means.
+func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.Time, restart bool) (*time.Time, *int64) {
 	expires, traffic := sub.ExpiresAt, sub.TrafficTotal
 	if typ == OrderRenew && days > 0 && expires != nil {
 		base := *expires
-		if base.Before(now) {
+		if restart || base.Before(now) {
 			base = now
 		}
 		t := base.Add(time.Duration(days) * 24 * time.Hour).UTC().Truncate(time.Second)

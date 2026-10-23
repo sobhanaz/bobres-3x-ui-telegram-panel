@@ -55,8 +55,10 @@ func TestExtendTargets(t *testing.T) {
 		wantTotal     *int64
 		planOverrides *store.Plan
 	}{
-		{"renew adds to the time left", OrderRenew, store.Subscription{ExpiresAt: in(5 * 24 * time.Hour), TrafficTotal: total(50 << 30)},
-			in(35 * 24 * time.Hour), total(100 << 30), nil},
+		{"renew starts the days again and adds the traffic", OrderRenew, store.Subscription{ExpiresAt: in(5 * 24 * time.Hour), TrafficTotal: total(50 << 30)},
+			in(30 * 24 * time.Hour), total(100 << 30), nil},
+		{"a long time left is not kept either", OrderRenew, store.Subscription{ExpiresAt: in(90 * 24 * time.Hour), TrafficTotal: total(50 << 30)},
+			in(30 * 24 * time.Hour), total(100 << 30), nil},
 		{"an expired one counts from now", OrderRenew, store.Subscription{ExpiresAt: in(-3 * 24 * time.Hour), TrafficTotal: total(50 << 30)},
 			in(30 * 24 * time.Hour), total(100 << 30), nil},
 		{"unlimited stays unlimited", OrderRenew, store.Subscription{},
@@ -111,7 +113,8 @@ func TestRenewalAndTopupOrders(t *testing.T) {
 		}
 	}
 
-	// Renewal: 30 more days on top of what is left, 50 GB more quota.
+	// Renewal: the 30 days start again from now (the days left are not added: the first period was delivered a moment ago, so a stacked
+	// renewal would end 60 days out), and the quota grows by 50 GB.
 	fund(t, s, u.ID, 1300)
 	ro, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: u.ID, PlanID: plan.ID, Type: OrderRenew, SubscriptionID: sub.ID, IdempotencyKey: "renew-1"})
 	if err != nil || ro.Amount != plan.Price || ro.SubscriptionID == nil || *ro.SubscriptionID != sub.ID {
@@ -123,21 +126,24 @@ func TestRenewalAndTopupOrders(t *testing.T) {
 	if worked, err := w.ProvisionNext(ctx); !worked || err != nil {
 		t.Fatalf("extend: %v %v", worked, err)
 	}
-	wantExp := sub.ExpiresAt.Add(30 * 24 * time.Hour).Truncate(time.Second)
+	wantExp := time.Now().Add(30 * 24 * time.Hour)
+	near := func(unix int64) bool { return unix >= wantExp.Unix()-30 && unix <= wantExp.Unix()+30 }
 	calls := fp.limitsFor(sub.ID)
-	if len(calls) != 1 || calls[0].expires != wantExp.Unix() || calls[0].traffic != 100<<30 {
-		t.Fatalf("panel limits: %+v, want %d / %d", calls, wantExp.Unix(), int64(100<<30))
+	if len(calls) != 1 || !near(calls[0].expires) || calls[0].traffic != 100<<30 {
+		t.Fatalf("panel limits: %+v, want about %d / %d", calls, wantExp.Unix(), int64(100<<30))
 	}
 	got, _ := s.GetSubscription(ctx, s.Conn(), sub.ID)
 	order, _ := s.GetOrder(ctx, s.Conn(), ro.ID)
-	if order.Status != "active" || got.Status != "active" || !got.ExpiresAt.Equal(wantExp) || *got.TrafficTotal != 100<<30 {
+	if order.Status != "active" || got.Status != "active" || !near(got.ExpiresAt.Unix()) || *got.TrafficTotal != 100<<30 {
 		t.Fatalf("after renewal: order %s, sub %+v", order.Status, got)
 	}
 	var ext events.SubscriptionExtendedEvent
 	if evs := outboxEvents(t, s, events.SubscriptionExtended); len(evs) != 1 || json.Unmarshal(evs[0], &ext) != nil ||
-		ext.Type != OrderRenew || ext.ExpiresAt != wantExp.Unix() || ext.TelegramID != u.TelegramID {
+		ext.Type != OrderRenew || !near(ext.ExpiresAt) || ext.TelegramID != u.TelegramID {
 		t.Fatalf("extended event: %s", evs)
 	}
+
+	renewedAt := got.ExpiresAt
 
 	// Top-up: 10 GB more, same expiry.
 	to, err := svc.CreateOrder(ctx, CreateOrderParams{UserID: u.ID, PlanID: pack.ID, Type: OrderTrafficTopup, SubscriptionID: sub.ID, IdempotencyKey: "topup-1"})
@@ -151,7 +157,7 @@ func TestRenewalAndTopupOrders(t *testing.T) {
 		t.Fatalf("top-up: %v %v", worked, err)
 	}
 	got, _ = s.GetSubscription(ctx, s.Conn(), sub.ID)
-	if !got.ExpiresAt.Equal(wantExp) || *got.TrafficTotal != 110<<30 {
+	if !got.ExpiresAt.Equal(*renewedAt) || *got.TrafficTotal != 110<<30 {
 		t.Fatalf("after top-up: %+v", got)
 	}
 
