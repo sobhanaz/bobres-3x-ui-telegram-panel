@@ -282,6 +282,7 @@ binary. The pictures below follow the compose files and the code; the details ar
 ### The big picture
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
 flowchart LR
     customer(["<b>Customers, resellers</b><br/>Telegram bot and Mini App<br/>and their VPN apps"])
     staff(["<b>Owner and staff</b><br/>dashboard · bot /admin<br/>bobres CLI"])
@@ -328,6 +329,7 @@ through anyone else's servers except Telegram, the gateways and the panels you c
 ### Inside one install
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
 flowchart TB
     web(("<b>Internet</b><br/>browsers · Telegram webhook<br/>gateway callbacks"))
     caddy["<b>caddy</b><br/>the only public entry<br/>/admin /app /sub /pay<br/>/webhooks /tg/webhook"]
@@ -385,6 +387,7 @@ flowchart TB
 ### Housekeeping: HTTPS, updates, monitoring and backups
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
 flowchart LR
     c1["<b>core</b>"] -.->|"HTTPS request<br/>(a volume)"| tls["<b>tls-agent</b><br/>no network, no secrets"]
     tls -->|"admin socket,<br/>the TLS files"| caddy["<b>caddy</b><br/>loads the new setting"]
@@ -421,7 +424,6 @@ the install's own.
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
 sequenceDiagram
-    autonumber
     actor C as Customer
     participant B as bot
     participant K as core
@@ -460,7 +462,6 @@ traffic and starts its days again from today.
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
 sequenceDiagram
-    autonumber
     actor D as Developer
     participant G as GitHub
     actor O as Owner
@@ -496,7 +497,6 @@ The trust chain: two offline root keys sign the list of release keys, a release 
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
 sequenceDiagram
-    autonumber
     actor B as Buyer
     participant V as Vendor's store
     participant L as licensesrv
