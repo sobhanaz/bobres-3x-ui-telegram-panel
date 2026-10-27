@@ -323,8 +323,8 @@ flowchart LR
 ```
 
 Solid arrows are calls the store always makes; dotted ones are optional or exist only on the vendor's own store. The
-only server the vendor runs is the license server, and a store works without it on the free tier. Nothing else goes
-through anyone else's servers except Telegram, the gateways and the panels you choose.
+only vendor-run server a store talks to is the license server, and a store works without it on the free tier. Nothing
+is relayed through the vendor: the store calls the services above directly.
 
 ### Inside one install
 
