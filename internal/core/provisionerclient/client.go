@@ -96,7 +96,17 @@ func (c *Client) Usage(ctx context.Context, subscriptionID string) (domain.Usage
 		return domain.Usage{}, fmt.Errorf("provisioner.GetUsage: %w", err)
 	}
 	return domain.Usage{UsedBytes: u.GetTrafficUsedBytes(), TotalBytes: u.GetTrafficTotalBytes(),
-		ExpiresAt: u.GetExpiresAt(), Enabled: u.GetEnabled()}, nil
+		ExpiresAt: u.GetExpiresAt(), Enabled: u.GetEnabled(), Missing: u.GetClientMissing()}, nil
+}
+
+// RecreateClient implements domain.Provisioner.
+func (c *Client) RecreateClient(ctx context.Context, subscriptionID string, expiresAt, trafficBytes int64) error {
+	if _, err := c.rpc.RecreateClient(ctx, &provisionerv1.RecreateClientRequest{
+		SubscriptionId: subscriptionID, ExpiresAt: expiresAt, TrafficTotalBytes: trafficBytes,
+	}); err != nil {
+		return fmt.Errorf("provisioner.RecreateClient: %w", err)
+	}
+	return nil
 }
 
 // SetEnabled implements domain.Provisioner.

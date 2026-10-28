@@ -48,6 +48,7 @@ sudo bobres admin link
 | The Mini App has no Store button | No public HTTPS address, or `miniapp.enabled` is off | See [Mini App](Mini-App) |
 | A subscription page shows 404 | The page is off, the service is pending or deleted, or the address was regenerated | See [Subscription Page](Subscription-Page) |
 | The installer fails | Ports 80 or 443 taken, little RAM or disk, a wrong token | Read `/var/log/bobres-install.log`, fix it and run the install again. It keeps your settings |
+| A service is active but its customer cannot connect, and the Services page marks it **Not on the panel** | An operator deleted the client in the panel (or the panel was rebuilt). Core noticed on its next read | Open the service and press **Make the client again**: the same address works again, the expiry and quota stay as shown, and the panel's usage counter restarts from zero. Or delete the service. Expiry reminders are paused for such a service, and one alert a day counts them |
 | A customer's VPN will not connect | The panel's host or inbound, not BOBRES | Check the service in the dashboard (status, expiry, usage) and in the panel itself. The connection runs on the panel's host |
 
 ## Alerts in Telegram

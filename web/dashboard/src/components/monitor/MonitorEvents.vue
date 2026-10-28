@@ -6,7 +6,8 @@ import Message from 'primevue/message'
 import SelectButton from 'primevue/selectbutton'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { alertStateOf, eventTitle, levelOf, levelSeverity, type EventItem, type EventLevel, type EventsReply, type Words } from '../../monitor'
+import { isolate } from '../../format'
+import { alertStateOf, eventTitle, levelOf, levelSeverity, repeatOf, type EventItem, type EventLevel, type EventsReply, type Words } from '../../monitor'
 import { useFmt } from './feed'
 
 // The newest warnings and errors in one list: the watchdog's alerts raised and fixed, the error lines of the
@@ -14,11 +15,11 @@ import { useFmt } from './feed'
 const props = defineProps<{ events: EventsReply | null; failed: boolean; level: EventLevel }>()
 const emit = defineEmits<{ 'update:level': [level: EventLevel] }>()
 const { t, te, tm } = useI18n()
-const { at, lang } = useFmt()
+const { at, n, lang } = useFmt()
 
 const levels = computed(() => (['warn', 'error'] as const).map((v) => ({ value: v, label: t('monitor.events.level.' + v) })))
 const words: Words = { t: (key, ...args) => (t as (k: string, ...a: unknown[]) => string)(key, ...args), te, tm }
-const items = computed(() => (props.events?.items ?? []).map((e) => ({ e, lvl: levelOf(e), text: eventTitle(e, lang.value, words), state: alertStateOf(e) })))
+const items = computed(() => (props.events?.items ?? []).map((e) => ({ e, lvl: levelOf(e), text: eventTitle(e, lang.value, words), state: alertStateOf(e), repeat: repeatOf(e) })))
 const sourceName = (e: EventItem) => (te('monitor.source.' + e.source.replace('.', '_')) ? t('monitor.source.' + e.source.replace('.', '_')) : e.source)
 const pick = (v: unknown) => {
   if (v === 'warn' || v === 'error') emit('update:level', v)
@@ -61,9 +62,14 @@ const pick = (v: unknown) => {
               <Tag :severity="levelSeverity[it.lvl]" :icon="it.lvl === 'error' ? 'pi pi-times-circle' : 'pi pi-exclamation-triangle'" :value="t('monitor.events.level_tag.' + it.lvl)" class="event-level" />
               <Tag severity="secondary" :value="sourceName(it.e)" class="event-source" />
               <Tag v-if="it.state" :severity="it.state === 'open' ? 'danger' : it.state === 'resolved' ? 'success' : 'secondary'" :value="t('monitor.events.state.' + it.state)" class="event-state" />
+              <template v-if="it.repeat">
+                <Tag severity="secondary" :value="t('monitor.events.repeat', { n: n(it.repeat.count) })" class="event-repeat" aria-hidden="true" />
+                <span class="sr-only">{{ t('monitor.events.repeat_hint', { n: n(it.repeat.count) }, it.repeat.count) }}</span>
+              </template>
               <time class="app-muted event-time" :datetime="new Date(it.e.at * 1000).toISOString()">{{ at(it.e.at) }}</time>
             </div>
             <div class="event-title" dir="auto">{{ it.text }}</div>
+            <div v-if="it.repeat?.first" class="app-muted event-range">{{ t('monitor.events.repeat_range', { first: isolate(at(it.repeat.first)), last: isolate(at(it.e.at)) }) }}</div>
             <div v-if="it.e.detail" class="app-muted app-mono event-detail" dir="auto">{{ it.e.detail }}</div>
           </li>
         </ol>
@@ -130,7 +136,24 @@ const pick = (v: unknown) => {
   margin-block-start: 0.2rem;
   font-size: 0.8rem;
 }
+/* "×12" reads the same in both directions */
+.event-repeat {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.event-range {
+  margin-block-start: 0.2rem;
+  font-size: 0.8rem;
+}
 .truncated {
   margin: 0.6rem 0 0;
+}
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 </style>

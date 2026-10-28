@@ -10,7 +10,9 @@ import (
 type Overview struct {
 	UsersTotal, UsersNew24h, UsersNew7d             int64
 	ServicesActive, ServicesExpiring, ServicesEnded int64
-	ProvisionFailed, OrdersPaid24h                  int64
+	// ServicesPanelMissing are the live services the panel has no client for (an operator deleted it there).
+	ServicesPanelMissing           int64
+	ProvisionFailed, OrdersPaid24h int64
 	// Revenue is what customers spent on orders, per currency.
 	Revenue24h, Revenue30d map[string]int64
 }
@@ -33,11 +35,12 @@ func (s *Store) OverviewStats(ctx context.Context, q querier, now time.Time) (*O
 		(SELECT count(*) FROM core.subscriptions WHERE status IN ('active', 'expiring_soon')),
 		(SELECT count(*) FROM core.subscriptions WHERE status = 'expiring_soon'),
 		(SELECT count(*) FROM core.subscriptions WHERE status IN ('expired', 'depleted')),
+		(SELECT count(*) FROM core.subscriptions WHERE panel_missing_since IS NOT NULL AND status IN `+livePanelStatuses+`),
 		(SELECT count(*) FROM core.orders WHERE status = 'provision_failed'),
 		(SELECT count(*) FROM core.orders WHERE status IN ('paid', 'provisioning', 'active', 'provision_failed')
 			AND updated_at >= $1 AND updated_at >= $3 AND amount > 0)`, day, week, sinceOrZero).
 		Scan(&o.UsersTotal, &o.UsersNew24h, &o.UsersNew7d, &o.ServicesActive, &o.ServicesExpiring, &o.ServicesEnded,
-			&o.ProvisionFailed, &o.OrdersPaid24h)
+			&o.ServicesPanelMissing, &o.ProvisionFailed, &o.OrdersPaid24h)
 	if err != nil {
 		return nil, fmt.Errorf("overview: %w", err)
 	}

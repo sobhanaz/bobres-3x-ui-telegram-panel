@@ -13,12 +13,12 @@ import (
 
 const subscriptionCols = `id, user_id, order_id, COALESCE(server_id::text, ''), client_email, sub_id, status,
 	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at,
-	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token, note`
+	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token, note, panel_missing_since`
 
 func subscriptionDest(sc *Subscription) []any {
 	return []any{&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
 		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
-		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken, &sc.Note}
+		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken, &sc.Note, &sc.PanelMissingSince}
 }
 
 func scanSubscription(row pgx.Row) (*Subscription, error) {
@@ -359,12 +359,15 @@ func (s *Store) ApplySubscriptionLimits(ctx context.Context, q querier, id strin
 }
 
 // DueUsageSync lists provisioned subscriptions whose usage was last synced
-// before olderThan (never synced first). Disabled ones are left alone.
-func (s *Store) DueUsageSync(ctx context.Context, q querier, olderThan time.Time, limit int) ([]Subscription, error) {
+// before olderThan (never synced first). A service the panel has no client for
+// (panel_missing_since set) is asked about less often: it is due once its last
+// sync is older than missingOlderThan, which is earlier than olderThan.
+// Disabled ones are left alone.
+func (s *Store) DueUsageSync(ctx context.Context, q querier, olderThan, missingOlderThan time.Time, limit int) ([]Subscription, error) {
 	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions
 		WHERE status IN ('active', 'expiring_soon', 'expired', 'depleted') AND server_id IS NOT NULL
-		  AND (last_synced_at IS NULL OR last_synced_at < $1)
-		ORDER BY last_synced_at NULLS FIRST LIMIT $2`, olderThan, limit)
+		  AND (last_synced_at IS NULL OR last_synced_at < CASE WHEN panel_missing_since IS NULL THEN $1::timestamptz ELSE $3::timestamptz END)
+		ORDER BY last_synced_at NULLS FIRST LIMIT $2`, olderThan, limit, missingOlderThan)
 	if err != nil {
 		return nil, fmt.Errorf("due usage sync: %w", err)
 	}
@@ -390,6 +393,8 @@ type SubscriptionSync struct {
 	NotifiedExpiringAt   *time.Time
 	NotifiedLowTrafficAt *time.Time
 	NotifiedEndedAt      *time.Time
+	// PanelMissingSince is when the panel was first seen to have no client for the service (nil: it has).
+	PanelMissingSince *time.Time
 }
 
 // RecordSync stores a usage-sync result.
@@ -397,14 +402,57 @@ func (s *Store) RecordSync(ctx context.Context, q querier, id string, r Subscrip
 	tag, err := q.Exec(ctx, `
 		UPDATE core.subscriptions
 		SET status = $2, traffic_used_bytes = $3, expires_at = $4, traffic_total_bytes = $5, last_synced_at = now(),
-		    notified_expiring_at = $6, notified_low_traffic_at = $7, notified_ended_at = $8, updated_at = now()
+		    notified_expiring_at = $6, notified_low_traffic_at = $7, notified_ended_at = $8, panel_missing_since = $9,
+		    updated_at = now()
 		WHERE id = $1`, id, r.Status, r.TrafficUsed, r.ExpiresAt, r.TrafficTotal,
-		r.NotifiedExpiringAt, r.NotifiedLowTrafficAt, r.NotifiedEndedAt)
+		r.NotifiedExpiringAt, r.NotifiedLowTrafficAt, r.NotifiedEndedAt, r.PanelMissingSince)
 	if err != nil {
 		return fmt.Errorf("record sync: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
+	}
+	return nil
+}
+
+// livePanelStatuses are the statuses of a service whose client the usage worker asks the panel about.
+const livePanelStatuses = `('active', 'expiring_soon', 'expired', 'depleted')`
+
+// CountPanelMissing counts the live services the panel has no client for.
+func (s *Store) CountPanelMissing(ctx context.Context, q querier) (int, error) {
+	var n int
+	if err := q.QueryRow(ctx, `SELECT count(*) FROM core.subscriptions
+		WHERE panel_missing_since IS NOT NULL AND status IN `+livePanelStatuses).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count panel missing: %w", err)
+	}
+	return n, nil
+}
+
+// PanelMissingSample lists up to limit of the live services the panel has no client for, the longest
+// missing first (what the alert about them names).
+func (s *Store) PanelMissingSample(ctx context.Context, q querier, limit int) ([]Subscription, error) {
+	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions
+		WHERE panel_missing_since IS NOT NULL AND status IN `+livePanelStatuses+`
+		ORDER BY panel_missing_since, id LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("panel missing sample: %w", err)
+	}
+	defer rows.Close()
+	var out []Subscription
+	for rows.Next() {
+		sc, err := scanSubscription(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *sc)
+	}
+	return out, rows.Err()
+}
+
+// ClearPanelMissing forgets that the panel lacked the service's client (it was made again, or turned up).
+func (s *Store) ClearPanelMissing(ctx context.Context, q querier, id string) error {
+	if _, err := q.Exec(ctx, `UPDATE core.subscriptions SET panel_missing_since = NULL, updated_at = now() WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("clear panel missing: %w", err)
 	}
 	return nil
 }

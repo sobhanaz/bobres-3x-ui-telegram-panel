@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -56,6 +57,10 @@ type Event struct {
 	Args     map[string]string `json:"args,omitempty"`
 	Title    string            `json:"title"`
 	Detail   string            `json:"detail"`
+	// Count is how many identical lines the entry stands for (a service that logs the same warning every ten
+	// minutes): At is the newest, FirstAt the oldest. Both are left out for a single line.
+	Count   int   `json:"count,omitempty"`
+	FirstAt int64 `json:"first_at,omitempty"`
 }
 
 // EventsQuery says what to list. Logs allows the services' own log lines (they carry Telegram ids:
@@ -225,6 +230,7 @@ func (m *Monitor) Events(ctx context.Context, q EventsQuery) (*EventsResult, err
 		all = kept
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].At > all[j].At })
+	all = foldRepeats(all)
 	if len(all) > limit {
 		all, res.Truncated = all[:limit], true
 	}
@@ -233,6 +239,47 @@ func (m *Monitor) Events(ctx context.Context, q EventsQuery) (*EventsResult, err
 		res.Items[i].Title = strings.TrimSpace(res.Items[i].Title)
 	}
 	return res, nil
+}
+
+var (
+	uuidRe   = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
+	numberRe = regexp.MustCompile(`[0-9]{5,}`)
+)
+
+// sameLine is what makes two log lines "the same": the message and its values, without the ids (a
+// subscription, a user, a Telegram id) that differ from one line to the next.
+func sameLine(e Event) string {
+	return e.Level + "\x00" + e.Source + "\x00" + e.Kind + "\x00" + e.Title + "\x00" +
+		numberRe.ReplaceAllString(uuidRe.ReplaceAllString(e.Detail, "…"), "#")
+}
+
+// foldRepeats folds the lines a service logs again and again (the same message with the same values, from
+// the same source at the same level) into one entry: the newest line, with how many there were and when
+// the first came, so a warning every ten minutes is one row marked "x48" and not 48 that push the real
+// events off the list. The list is newest first. Alerts are never folded: each announcement stands alone.
+func foldRepeats(in []Event) []Event {
+	seen := map[string]int{}
+	out := make([]Event, 0, len(in))
+	for _, e := range in {
+		if e.Kind == KindAlert {
+			out = append(out, e)
+			continue
+		}
+		k := sameLine(e)
+		i, ok := seen[k]
+		if !ok {
+			seen[k] = len(out)
+			out = append(out, e)
+			continue
+		}
+		g := &out[i]
+		if g.Count == 0 {
+			g.Count = 1
+		}
+		g.Count++
+		g.FirstAt = e.At // the list is newest first, so each folded line is older than the last
+	}
+	return out
 }
 
 // cleanArgs bounds an alert's values for its text (a mount, a container, a number): at most 8, each
