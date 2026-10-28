@@ -8,6 +8,17 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **Services the panel no longer has a client for.** When the 3x-ui or Marzban panel answers that it has no client for a service (an operator deleted it there), core now marks the service with the time it first saw that (`subscriptions.panel_missing_since`, migration 00040) instead of failing to read it every ten minutes. The Services page lists them (`?panel=missing`, a badge and a filter), the overview counts them, and the service page has **Make the client again** (`POST /api/v1/services/{id}/recreate-client`, `services.write`, with a reason): the provisioner makes the client on the same server, in the same inbounds and group, with the same email and subscription id, so the customer's link works again, with the expiry and quota core holds (the panel's usage counter starts from zero). New provisioner RPC `RecreateClient`; `GetUsage` answers `client_missing` instead of an error.
+- **One daily notice for them.** The watchdog raises `subscriptions.panel_missing` ("Services whose client is gone from the panel: N") once, then at most once a day while any remain, and says nothing when the last is made again.
+- **Repeated log lines are one row.** The Monitoring events list folds identical lines from one source (the same message and values, whatever the ids) into one entry with `count` and `first_at`, shown as "×48".
+
+### Changed
+- **No expiry reminder for a service the panel has no client for.** The customer cannot connect, so a message to renew would only confuse; the reminder that was due is not marked as sent and goes out once the client is back. Such a service is asked about every 6 hours (`UsageWorker.MissingEvery`) instead of every 10 minutes.
+
+### Fixed
+- **A service whose client was deleted in the panel filled the events list with two warnings every ten minutes, for ever** ("usage unavailable" from core and "panel call failed ... record not found" from the provisioner, for each such service), pushing real events off the list. A client the panel does not have is an answer now, not a failure, and writes no warning.
+
 ## [0.17.1] — 2026-10-28
 
 **The store comes back by itself after a reboot.** A real store was powered off and on by its host, and for 8 hours the dashboard, the Mini App, the subscription pages and the payment pages were unreachable while the bot went on answering: Docker had marked Caddy "manually stopped", and a container with that mark is not started again after a reboot. Every install and update did that to Caddy (it signalled it through `docker kill`), so every store would have hit it at its first reboot. This release stops doing it, starts the whole store from a systemd unit at every boot, fixes a heartbeat that kept the tls-agent "unhealthy" after any restart, and makes the alerts say what to type.

@@ -25,6 +25,7 @@ const (
 	ProvisionerService_SetClientLimits_FullMethodName  = "/provisioner.v1.ProvisionerService/SetClientLimits"
 	ProvisionerService_SetClientEnabled_FullMethodName = "/provisioner.v1.ProvisionerService/SetClientEnabled"
 	ProvisionerService_DeleteClient_FullMethodName     = "/provisioner.v1.ProvisionerService/DeleteClient"
+	ProvisionerService_RecreateClient_FullMethodName   = "/provisioner.v1.ProvisionerService/RecreateClient"
 	ProvisionerService_ResetTraffic_FullMethodName     = "/provisioner.v1.ProvisionerService/ResetTraffic"
 	ProvisionerService_GetUsage_FullMethodName         = "/provisioner.v1.ProvisionerService/GetUsage"
 	ProvisionerService_GetLinks_FullMethodName         = "/provisioner.v1.ProvisionerService/GetLinks"
@@ -52,6 +53,7 @@ type ProvisionerServiceClient interface {
 	SetClientLimits(ctx context.Context, in *SetClientLimitsRequest, opts ...grpc.CallOption) (*Client, error)
 	SetClientEnabled(ctx context.Context, in *SetClientEnabledRequest, opts ...grpc.CallOption) (*Client, error)
 	DeleteClient(ctx context.Context, in *DeleteClientRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	RecreateClient(ctx context.Context, in *RecreateClientRequest, opts ...grpc.CallOption) (*Client, error)
 	ResetTraffic(ctx context.Context, in *ResetTrafficRequest, opts ...grpc.CallOption) (*Client, error)
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*Usage, error)
 	GetLinks(ctx context.Context, in *GetLinksRequest, opts ...grpc.CallOption) (*Links, error)
@@ -124,6 +126,16 @@ func (c *provisionerServiceClient) DeleteClient(ctx context.Context, in *DeleteC
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, ProvisionerService_DeleteClient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) RecreateClient(ctx context.Context, in *RecreateClientRequest, opts ...grpc.CallOption) (*Client, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Client)
+	err := c.cc.Invoke(ctx, ProvisionerService_RecreateClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +284,7 @@ type ProvisionerServiceServer interface {
 	SetClientLimits(context.Context, *SetClientLimitsRequest) (*Client, error)
 	SetClientEnabled(context.Context, *SetClientEnabledRequest) (*Client, error)
 	DeleteClient(context.Context, *DeleteClientRequest) (*emptypb.Empty, error)
+	RecreateClient(context.Context, *RecreateClientRequest) (*Client, error)
 	ResetTraffic(context.Context, *ResetTrafficRequest) (*Client, error)
 	GetUsage(context.Context, *GetUsageRequest) (*Usage, error)
 	GetLinks(context.Context, *GetLinksRequest) (*Links, error)
@@ -314,6 +327,9 @@ func (UnimplementedProvisionerServiceServer) SetClientEnabled(context.Context, *
 }
 func (UnimplementedProvisionerServiceServer) DeleteClient(context.Context, *DeleteClientRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteClient not implemented")
+}
+func (UnimplementedProvisionerServiceServer) RecreateClient(context.Context, *RecreateClientRequest) (*Client, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecreateClient not implemented")
 }
 func (UnimplementedProvisionerServiceServer) ResetTraffic(context.Context, *ResetTrafficRequest) (*Client, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResetTraffic not implemented")
@@ -461,6 +477,24 @@ func _ProvisionerService_DeleteClient_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProvisionerServiceServer).DeleteClient(ctx, req.(*DeleteClientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_RecreateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecreateClientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).RecreateClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_RecreateClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).RecreateClient(ctx, req.(*RecreateClientRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -725,6 +759,10 @@ var ProvisionerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteClient",
 			Handler:    _ProvisionerService_DeleteClient_Handler,
+		},
+		{
+			MethodName: "RecreateClient",
+			Handler:    _ProvisionerService_RecreateClient_Handler,
 		},
 		{
 			MethodName: "ResetTraffic",

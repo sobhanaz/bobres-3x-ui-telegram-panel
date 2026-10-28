@@ -37,6 +37,8 @@ type fakeProvisioner struct {
 	assigned    map[string]string
 	assignCalls int
 	groupErr    error
+	// recreated are the limits of the RecreateClient calls, in order.
+	recreated []limitsCall
 }
 
 func (f *fakeProvisioner) op(subscriptionID, what string) error {
@@ -62,6 +64,22 @@ func (f *fakeProvisioner) ResetTraffic(_ context.Context, subscriptionID string)
 
 func (f *fakeProvisioner) Delete(_ context.Context, subscriptionID string) error {
 	return f.op(subscriptionID, "delete")
+}
+
+// RecreateClient records the call and the limits it was given and, like a panel that has the client
+// again, makes the service's usage answer as a client on the panel from then on.
+func (f *fakeProvisioner) RecreateClient(_ context.Context, subscriptionID string, expiresAt, trafficBytes int64) error {
+	if err := f.op(subscriptionID, "recreate"); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.recreated = append(f.recreated, limitsCall{expiresAt, trafficBytes})
+	if u, ok := f.usage[subscriptionID]; ok && u.Missing {
+		u.Missing = false
+		f.usage[subscriptionID] = u
+	}
+	return nil
 }
 
 func (f *fakeProvisioner) opsDone() []string {

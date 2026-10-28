@@ -133,6 +133,15 @@ func (p *fakeProv) SetEnabled(_ context.Context, id string, on bool) error {
 }
 func (p *fakeProv) ResetTraffic(_ context.Context, id string) error { return p.record("reset:" + id) }
 func (p *fakeProv) Delete(_ context.Context, id string) error       { return p.record("delete:" + id) }
+func (p *fakeProv) RecreateClient(_ context.Context, id string, _, _ int64) error {
+	if err := p.record("recreate:" + id); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.usage.Missing = false
+	return nil
+}
 func (p *fakeProv) done() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()

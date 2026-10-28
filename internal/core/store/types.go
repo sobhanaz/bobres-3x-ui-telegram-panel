@@ -167,6 +167,9 @@ type Subscription struct {
 	NotifiedExpiringAt   *time.Time
 	NotifiedLowTrafficAt *time.Time
 	NotifiedEndedAt      *time.Time
+	// PanelMissingSince is when core first saw that the panel has no client for the service any more (an
+	// operator deleted it there); nil while the panel has it. See UsageWorker.
+	PanelMissingSince *time.Time
 }
 
 // Discount mirrors core.discount_codes: a percentage or a fixed amount.

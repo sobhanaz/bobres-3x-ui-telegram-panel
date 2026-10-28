@@ -210,6 +210,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
 		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
+		w.panelMissing,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup
@@ -682,6 +683,32 @@ func (w *Watchdog) license(ctx context.Context, now time.Time) alertProbe {
 	if c, ok := trialCheck(eff, now); ok {
 		p.checks = append(p.checks, c)
 	}
+	return p
+}
+
+// panelMissing is the one notice about the services whose client the panel no longer has (an operator
+// deleted it there): their customers cannot connect, and nothing else tells the owner. It is a daily
+// notice: announced when the first such service is seen and then at most once a day while any remain; the
+// stored state is forgotten quietly when the last one is made again, deleted or back.
+func (w *Watchdog) panelMissing(ctx context.Context, _ time.Time) alertProbe {
+	p := alertProbe{scope: "subscriptions."}
+	n, err := w.s.st.CountPanelMissing(ctx, w.s.st.Conn())
+	if err != nil {
+		w.log.Warn("watchdog: services not on the panel", "err", err)
+		return p // not covered: an open notice must not be deleted for a transient error
+	}
+	p.covered = true
+	if n == 0 {
+		return p
+	}
+	var names []string
+	if sample, err := w.s.st.PanelMissingSample(ctx, w.s.st.Conn(), 5); err == nil {
+		for _, sc := range sample {
+			names = append(names, sc.ClientEmail)
+		}
+	}
+	p.checks = append(p.checks, alertCheck{key: "subscriptions.panel_missing", problem: true, severity: events.SeverityWarning,
+		title: "alert.panel_missing", args: map[string]string{"count": strconv.Itoa(n)}, detail: strings.Join(names, ", "), daily: true})
 	return p
 }
 
