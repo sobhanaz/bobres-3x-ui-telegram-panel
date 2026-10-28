@@ -118,7 +118,8 @@ Who mounts what (a deploy test asserts exactly this):
 - **Caddy's image is pinned** by version and digest
   (`caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f`, the multi-arch index) in
   the compose file. Caddy 2.11.3 is the oldest version that issues IP certificates, and 2.11.1 the oldest that reloads
-  on SIGUSR1. The image is not signature-checked on the server (see the supply-chain row below).
+  on SIGUSR1 (the installer reloads with `caddy reload` through the admin socket, never with a signal through Docker: see
+  [installer, "Starting at boot"](06-installer.md)). The image is not signature-checked on the server (see the supply-chain row below).
 - **Who may change it.** Everyone with `system.read` sees the status. Changing the mode and detecting the server's IP
   address need `system.write`, which is the owner's, at most 10 changes a minute. `bobres ssl` needs root on the server.
 
@@ -130,6 +131,14 @@ What it cannot do: make the gateway answer for another host name, add or change 
 fixed templates), reach the admin socket or load a configuration of its own, read Caddy's ACME account keys or the keys
 of certificates Caddy issued, or write outside the request file. A compromised agent would control the gateway, which
 is why it has no network, no secrets of its own and a single small input.
+
+## Starting at boot
+`bobres.service` runs `bobres start --dir /opt/bobres` as root at every boot (`Requires=docker.service`), so that the store
+comes back whatever Docker's restart policy did ([installer, "Starting at boot"](06-installer.md)). It takes no input: no
+environment, no `.env`, no request file, no network of its own; the one file it reads is `run/stopped`, which only root
+writes (`run/` is root's, mode 0755). It adds no way in for core: core has no Docker socket and no way to start the unit.
+The unit is hardened like the other two (`NoNewPrivileges`, private `/tmp`, no new namespaces, a short list of address
+families), and `bobres check` shows when it is missing.
 
 ## Updating from the dashboard
 The dashboard's Updates tab can update the store, and core must still never get the Docker socket or any other power

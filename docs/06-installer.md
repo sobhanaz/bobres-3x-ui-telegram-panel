@@ -180,7 +180,7 @@ verified key list and release in `/var/lib/bobres/{keys.seq,release.version}` (`
 are the HTTPS layout (see HTTPS certificates). `run/update/` is where the dashboard and its updater meet (owned by uid
 65532, mode 0700: `request.json` and `status.json`; see Updating from the dashboard), `.update.lock` is the lock of
 updates, rollbacks and restores and `.updater-handled` the ids of the requests the updater ran (both root's, mode 0600).
-`/etc/systemd/system/bobres-updater.{path,service}` are the updater's units; `run/monitor/` (root's, mode 0755, read only in core) holds the host collector's `snapshot.json` and `/etc/systemd/system/bobres-monitor.{timer,service}` are its units (see Host monitoring). An install made before P8 also keeps its
+`/etc/systemd/system/bobres-updater.{path,service}` are the updater's units; `/etc/systemd/system/bobres.service` brings the store up at every boot and `run/stopped` (root's) says it was stopped on purpose (see Starting at boot); `run/monitor/` (root's, mode 0755, read only in core) holds the host collector's `snapshot.json` and `/etc/systemd/system/bobres-monitor.{timer,service}` are its units (see Host monitoring). An install made before P8 also keeps its
 old top-level `Caddyfile`.
 
 ## Status (2026-10-12)
@@ -208,7 +208,7 @@ changed with `bobres menu` ("Owners") or `bobres admin owners`, which core appli
 | `bobres check [--dir D] [--json]` | Every check of the install in one list, a line per check, `PASS`/`WARN`/`FAIL`/`SKIP`; exit 1 when one FAILs (see Check). `--json` prints `{results:[{name,status,detail}], pass, warn, fail}` |
 | `bobres monitor status [--json] \| enable \| disable \| snapshot [--print] [--out DIR]` | The host collector for the dashboard's Monitoring section: whether it runs and how old its snapshot is, put it in place or take it away for good (`BOBRES_MONITOR_COLLECTOR`), or take one snapshot now (what the timer runs; see Host monitoring) |
 | `bobres logs [service] [-f]` | Tail logs |
-| `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack |
+| `bobres start / stop / restart` | Start (and wait for health) / stop / restart the stack. `stop` (and a plain `uninstall`) leave `run/stopped`, so that a reboot does not start the store again; `start`, `restart`, `install` and `update` take it away (see Starting at boot) |
 | `bobres update [--check] [--version X] [--channel stable\|beta] [--yes]` | Verify the signed release (the newest of the update channel, or X), back up, leave a restore point, swap in the new CLI, run its install, health check, automatic rollback. `--check` only says whether a newer verified release exists (with a note when it is newer than the license's update date: the update is never refused for it). One update, rollback or restore at a time (a lock). `bobres update --from-request` is the same update for the dashboard's request, run by `bobres-updater.service`; it is not in the help and not for people (see Updating from the dashboard) |
 | `bobres rollback [--yes]` | Undo the last update with its restore point: the previous CLI, install files and version, and the database from before the update |
 | `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
@@ -247,6 +247,7 @@ reads the array either way).
 | Watchdog | No open alert | WARN lists them (dashboard: Alerts) |
 | HTTPS (one line per address) | The certificate this server serves on port 443 is valid and covers the address | As in doctor and `bobres ssl status` |
 | Dashboard updates | `bobres-updater.path` is enabled and active, and the bobres its service runs is there (or the setting `BOBRES_UPDATE_FROM_DASHBOARD=off` is on and the units are gone) | WARN, never FAIL: not installed (update once with `sudo bobres update`), not enabled, not running or failed (`systemctl status bobres-updater.path`; `sudo bobres update` or `sudo bobres install` set it up again), or switched off but still installed |
+| Start at boot | `bobres.service` is installed and enabled, did not fail the last time it started the store, and the bobres it runs is there (or `BOBRES_START_AT_BOOT=off` is on and the unit is gone); it says so when the store was stopped on purpose | WARN, never FAIL: not installed (update once with `sudo bobres update`), not enabled, failed (`journalctl -u bobres.service`) |
 | Backup | The newest backup is under 48 hours old | WARN when older (`bobres logs backup`, `bobres backup`); FAIL when there is none: back up and keep the backup key |
 | Release signature | The release this server runs was signed with an expiry more than 14 days away | WARN/FAIL: publish or re-sign a newer release; updates and reinstalls are refused after the signed expiry. SKIP when the release manifest was not kept in the state directory (`/var/lib/bobres/checksums.txt`) |
 | Bot token | Telegram accepts the token (`getMe`; shows `@username`, through the self-hosted Bot API server when `BOBRES_TELEGRAM_API_URL` is set) | FAIL: `sudo bobres secrets rotate bot-token` |
@@ -774,6 +775,60 @@ can do is the worst the dashboard can already do to the data: replace it with a 
 that this server's `BOBRES_BACKUP_KEY` opens), with a safety backup of what was there, and every owner told. The
 dashboard turns restores off with the updater: `sudo bobres config set BOBRES_UPDATE_FROM_DASHBOARD off`.
 
+## Starting at boot
+
+After a reboot (or a restart of Docker) the whole store must come back by itself. Docker's own restart policy
+(`restart: unless-stopped` in the compose file) does that, with one exception that bit a real server on 2026-10-28:
+**Docker leaves a container down when it has marked it "manually stopped"**, and it puts that mark on a container that is
+sent a signal through `docker kill`, even a signal that does not stop it. The installer did that to Caddy at every
+install and update (`docker compose kill -s SIGUSR1 caddy`); the first reboot after one then left the gateway down for
+8 hours, with the dashboard, the Mini App, the subscription pages and the payment pages unreachable while the bot went
+on answering. Two things now stand between that and a store:
+
+1. **The installer never signals a container through Docker.** After `compose up -d` it asks Caddy to read its Caddyfile
+   again with `docker compose exec caddy caddy reload` (through Caddy's admin socket, three tries two seconds apart while
+   a Caddy that has just started has no socket yet), and when there is no admin socket (a Caddyfile from before the
+   HTTPS manager) it restarts Caddy, which reads the file too and leaves no mark. The install test fails on any
+   `kill`, and CI restarts Docker on the real stack and needs every service up and healthy again.
+2. **A boot unit, `bobres.service`, starts the store whatever Docker did.** It is `Type=oneshot` with
+   `RemainAfterExit=yes`, `Requires=docker.service` and `After=docker.service network-online.target`, and runs
+   `bobres start --dir /opt/bobres` as root: the same `docker compose up -d` an operator types, then a wait until every
+   service is healthy (the wait is the only thing that can fail it, and `TimeoutStartSec` is 15 minutes). A container
+   that Docker left stopped is started; one that runs is left alone. Because it requires `docker.service`, a restart of
+   Docker (an upgrade of its packages) runs it again.
+
+**A store stopped on purpose stays stopped.** `bobres stop` and a plain `bobres uninstall` leave an empty-looking file,
+`/opt/bobres/run/stopped` (root's, mode 0644), and the unit has `ConditionPathExists=!/opt/bobres/run/stopped`, so it
+skips quietly. `bobres start`, `bobres restart`, `bobres install` (so every `bobres update`) and a restore take the file
+away. A failure to write or remove it is a note or a warning that says what it means; the stop itself is never refused.
+
+**What is installed.** `bobres install` and `bobres update` (their last step, after the updater's and the collector's
+units) write `/etc/systemd/system/bobres.service` from the template in `deploy/systemd` (`@DIR@` and `@EXE@` filled in: the
+install directory and this bobres binary, checked for safe characters), run `systemctl daemon-reload` and `systemctl enable
+bobres.service` (only when the text changed or it is not enabled: a second run does nothing). It is not started then: the
+store is up, and the unit is for the next boot. Nothing happens on a host without systemd or when not run as root (a
+one-line note says so; the rest of the install is not affected), and a refusal by systemd is a warning, never a failed
+install. The container the unit protects is Caddy's as much as any: an install that was last updated before this
+version has its Caddy marked already (the mark goes when the container is started again), and the unit covers it.
+
+**Turning it off.** `sudo bobres config set BOBRES_START_AT_BOOT off` disables the unit and removes its file (a start that
+is running at that moment finishes); the next install or update does not put it back. `on` installs it again.
+`bobres uninstall --purge` removes it with every other unit named `bobres*`.
+
+**Check and doctor** show one line, **Start at boot**: `PASS on: bobres.service starts the store at every boot`, or
+`PASS on, and the store was stopped on purpose (sudo bobres stop): it stays stopped after a reboot until sudo bobres
+start`, or `WARN` (never `FAIL`) for a unit that is not installed, not enabled, failed at its last start
+(`journalctl -u bobres.service`) or pointing at a bobres that is gone. The dashboard's Monitoring page lists the unit
+among the watched ones.
+
+**The tls-agent's heartbeat** was the second thing a restart broke. The agent touches a file every 2 seconds and its Docker
+health check reads that file's age. The file was in `/tmp`, and the image is built `FROM scratch`: it has no `/tmp`, so a
+container's first start makes one that is open to everybody, but every later start (a reboot, a Docker restart) mounts the
+tmpfs over the directory that first start left, `0755` and root's, which the agent (uid 65532) cannot write: the container
+stayed `unhealthy` for ever (`FailingStreak` in the thousands) while the agent applied requests as usual, the watchdog raised
+its alert, and `bobres start` waited five minutes for it. The heartbeat is now `/dev/shm/tls-agent.alive` (memory that every
+container has, open to every user), and an agent that cannot write it says so once, at warning level.
+
 ## Host monitoring
 
 The dashboard's **Monitoring** section ([04-dashboard.md](04-dashboard.md)) shows the server and its containers, which core cannot
@@ -947,6 +1002,7 @@ The settings it changes, and the services each one recreates:
 | `BOBRES_TELEGRAM_API_URL` | bot | an http(s) URL without credentials, or empty (api.telegram.org) |
 | `BOBRES_ZARINPAL_PUBLIC_URL` | caddy, core, payments, tls-agent | install's rule (https://host), or empty; `BOBRES_ZARINPAL_HOST` follows it. The tls-agent is recreated with core for the same reason as for the domain |
 | `BOBRES_UPDATE_CHANNEL` | bot | stable or beta (lower-cased); `bobres update` and the menu read it too (see Update channel); the owner's choice in the dashboard (System > Updates, the `updates.channel` setting) wins for the bot's check and the dashboard's update when it is set |
+| `BOBRES_START_AT_BOOT` | (the unit, not a container) | on or off: whether `bobres.service` starts the store at every boot; off removes the unit (see Starting at boot) |
 | `BOBRES_LICENSE_SERVER` | bot | an https URL without credentials, or empty (no online activation or refresh; see License activation) |
 | `BOBRES_SELLER_CONTACT` | core | any text, or empty (a Telegram handle or an address the License tab and `bobres license status` show for buying or renewing a license; empty: they say "ask the seller you got BOBRES from") |
 | `BOBRES_BACKUP_S3_ENDPOINT` | backup | https without a path, or empty (no copy); needs the bucket and both keys; `BOBRES_BACKUP_NETWORK` follows it |
@@ -1079,11 +1135,15 @@ top level. Each site in `sites.caddy` imports `(bobres_site)`.
   2.11.1, the first that reloads on SIGUSR1. A changed reference is "missing" to `compose up -d`, which pulls it on
   update. CI validates every mode's files with the reference it reads from the compose file.
 - **Reloading Caddy.** After `compose up -d` in `bobres install` (and so in `bobres update`, which runs it) the
-  installer makes Caddy read its config again with `docker compose kill -s SIGUSR1 caddy`. The signal works with or
-  without the admin socket, and the tls-agent's loads keep Caddy's record of its config file, so the signal reloads the
-  right file. This is best effort: a failure is a warning, never a failed install or update. The installer then waits
-  up to 30 seconds for the caddy container to be `running` on two looks in a row (not restarting) and warns when it is
-  not. `bobres config set` does not send the signal: it recreates Caddy.
+  installer makes Caddy read its config again with `docker compose exec -T caddy caddy reload --config
+  /etc/caddy/Caddyfile --adapter caddyfile --force`, through Caddy's admin socket (three tries, two seconds apart: a Caddy that
+  has just started has no socket yet); when that fails (no admin socket: a Caddyfile from before the HTTPS manager) it runs
+  `docker compose restart caddy`, which reads the file as well. **Never a signal through `docker kill`** (it was
+  `kill -s SIGUSR1` until 0.17.0): Docker marks a container so signalled "manually stopped", and a container with
+  `restart: unless-stopped` that is marked is not started again after a reboot (see Starting at boot). This is best effort:
+  a failure is a warning, never a failed install or update. The installer then waits up to 30 seconds for the caddy
+  container to be `running` on two looks in a row (not restarting) and warns when it is not. `bobres config set` does not
+  reload: it recreates Caddy.
 - **Domain changes.** `bobres config set BOBRES_DOMAIN` and `BOBRES_ZARINPAL_PUBLIC_URL` recreate caddy, core, payments
   and the tls-agent. Core writes its request to the tls-agent again when it starts, and the agent, which has the new
   names in its own environment, renders the new domain or Zarinpal domain. A certificate of your own that does not
@@ -1219,7 +1279,7 @@ proof, and the uninstall takes the conservative choice wherever a marker cannot 
 | `state-dir` | `/var/lib/bobres`: `keys.seq`, `release.version`, `checksums.txt`, `install-receipt.json`, `installed/` | `install.sh`, `bobres install`, `bobres harden` | deleted after everything else, the receipt with it | the known file names |
 | `install-log` | `/var/log/bobres-install.log` | `install.sh`, `bobres install` | deleted | the name |
 | `uninstall-log` | `/var/log/bobres-uninstall.log` | `bobres uninstall` | **kept**: it is the record of the uninstall | the name |
-| `units` | `/etc/systemd/system/bobres*` (units, `*.d` drop-ins, `*.wants/` and `*.requires/` links), `/etc/systemd/user/bobres*` and `/run/systemd/system/bobres*`: today `bobres-updater.path` and `bobres-updater.service` (templates in `deploy/systemd`) | `bobres install` | found **by name** (`bobres-*`, `bobres.*`, `bobres@*`), not from a list, so a unit a later release adds is covered: stopped, disabled, deleted | the unit name, in a directory only an administrator writes |
+| `units` | `/etc/systemd/system/bobres*` (units, `*.d` drop-ins, `*.wants/` and `*.requires/` links), `/etc/systemd/user/bobres*` and `/run/systemd/system/bobres*`: today `bobres.service`, `bobres-monitor.{timer,service}` and `bobres-updater.{path,service}` (templates in `deploy/systemd`) | `bobres install` | found **by name** (`bobres-*`, `bobres.*`, `bobres@*`), not from a list, so a unit a later release adds is covered: stopped, disabled, deleted | the unit name, in a directory only an administrator writes |
 | `docker-objects` | project `bobres`: containers `bobres-*-1`, volumes `bobres_pg_data`, `bobres_redis_data`, `bobres_caddy_data`, `bobres_caddy_config`, `bobres_caddy_admin`, `bobres_tls_request`, `bobres_tls_result`, networks `bobres_public/edge/backend/egress/offline`, images `ghcr.io/sobhanaz/bobres-*` and the ones the install pulled (`caddy`, `postgres`, `redis`) | `docker compose` | removed; an image another container uses stays (`docker rmi` without `-f`), and so does one the receipt says was on the server before | the label `com.docker.compose.project=bobres` **and** the `bobres_` name; images by their repository, the receipt and what the project's containers run |
 | `fail2ban-jail` | `/etc/fail2ban/jail.d/bobres-sshd.local` | `bobres harden` | deleted, then fail2ban reloads | the header `Written by bobres harden` |
 | `security-only` | `/etc/apt/apt.conf.d/51bobres-security-only` | `bobres harden` | deleted | the header `Written by bobres harden` |
@@ -1265,7 +1325,8 @@ uninstall should guess at.)
 
 ## Uninstall
 Two commands. **`bobres uninstall`** stops the services and removes the containers; the data (database, Redis,
-certificates), the install directory and the updater's units stay, and `bobres start` brings the store back.
+certificates), the install directory and the units stay, and `bobres start` brings the store back (a reboot does not: the
+uninstall leaves `run/stopped`, which the boot unit reads).
 **`bobres uninstall --purge`** is the day-one command: it removes everything installing BOBRES put on this server
 (What installing BOBRES changes on a server, above), data and backups included, so that the server is as it was before.
 Run it as root. A runbook for the whole job, with the restore on a new server, is

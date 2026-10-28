@@ -8,6 +8,33 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.17.1] — 2026-10-28
+
+**The store comes back by itself after a reboot.** A real store was powered off and on by its host, and for 8 hours the dashboard, the Mini App, the subscription pages and the payment pages were unreachable while the bot went on answering: Docker had marked Caddy "manually stopped", and a container with that mark is not started again after a reboot. Every install and update did that to Caddy (it signalled it through `docker kill`), so every store would have hit it at its first reboot. This release stops doing it, starts the whole store from a systemd unit at every boot, fixes a heartbeat that kept the tls-agent "unhealthy" after any restart, and makes the alerts say what to type.
+
+### Updating
+- No database migration, no new service, no license change. Update from the dashboard (System > Updates) or `sudo bobres update`. The update installs a new systemd unit, `bobres.service` (`sudo bobres config set BOBRES_START_AT_BOOT off` removes it) and recreates the tls-agent, which is what clears an "unhealthy" one.
+- **Update before the next reboot if you can.** A store installed or updated with 0.17.0 or older that is rebooted before this update can come back without Caddy: `sudo bobres start` starts it. A `tls-agent` that stays "unhealthy" after such a reboot is the second fix below: the update recreates it (or `docker compose up -d --force-recreate --no-deps tls-agent` in `/opt/bobres` does).
+- `bobres check` has a new line, **Start at boot**, and the Monitoring page lists the unit; both need the update to show it.
+
+### Known limits
+- Caddy keeps its old "manually stopped" mark until it is started again. The boot unit makes that harmless: at the next boot it starts a Caddy that is stopped.
+- The unit runs `bobres start`, which waits for every service to be healthy: on a server where a service never gets healthy the unit shows `failed` (`journalctl -u bobres.service`) while the others run.
+- The unit needs systemd and root. Without systemd Docker's restart policy is all there is.
+
+### Added
+- **A boot unit, `bobres.service`**, installed by `bobres install` and `bobres update`: it runs `bobres start` after Docker at every boot (and when Docker restarts), so a container Docker left stopped comes back. `BOBRES_START_AT_BOOT` (`on` by default) turns it off.
+- **A store stopped on purpose stays stopped.** `bobres stop` and a plain `bobres uninstall` leave `run/stopped` in the install directory, which the unit reads; `bobres start`, `restart`, `install`, `update` and a restore take it away.
+- **A "Start at boot" line** in `bobres check` and `bobres doctor` (never a failure), and the unit among the systemd units of the Monitoring page.
+- **A CI test that restarts Docker** on the real stack and needs every service, Caddy and the tls-agent included, up and healthy again by itself.
+
+### Changed
+- **The alerts say what to type.** "The container X is not running" and "Caddy is not answering" end with `sudo bobres start`; "reports that it is unhealthy" with `sudo bobres logs X` (the bot's messages and the dashboard's Alerts, in English and Persian).
+
+### Fixed
+- **Caddy stayed down after a reboot.** The installer asked Caddy to read its Caddyfile again with `docker compose kill -s SIGUSR1 caddy`. Docker marks a container "manually stopped" when it is sent a signal through its kill call, even one that does not stop it, and with `restart: unless-stopped` a marked container is not started again after a reboot or a Docker restart. The installer now asks through Caddy's admin socket (`caddy reload`, three tries, then a restart of Caddy when there is no socket), and a test fails on any `kill`.
+- **The tls-agent stayed "unhealthy" after any restart.** It touched its heartbeat file in `/tmp`; the image is built from `scratch` and has no `/tmp`, so a container's first start makes one that anybody can write, but every later start (a reboot, a Docker restart) mounts the tmpfs over the directory the first start left, 0755 and root's, which the agent (uid 65532) could not write. The container looked unhealthy for ever (an alert, and `bobres start` waiting five minutes) while the agent worked. The heartbeat is in `/dev/shm`, and an agent that cannot write it says so at warning level.
+
 ## [0.17.0] — 2026-10-23
 
 **One wallet per customer, a renewal that restarts the days, reports that count every sale and can start from zero, and the reseller's search by link.** The USDT and Toman wallets are merged into one wallet in Toman: customers top up in Toman or in USDT, a USDT top-up is credited as Toman at the live rate, the licenses (priced in USDT) are charged in Toman, and the wallet is shown everywhere with its equivalent in USDT and the live rate. Renewing a service with a plan adds the plan's traffic to the service and starts the plan's days again from today, and the customer is told so before renewing. The reports now count the licenses and the digital accounts the store sells, and the owner can start them from zero for the day the store goes live. A reseller finds a service by its subscription link or its client config.

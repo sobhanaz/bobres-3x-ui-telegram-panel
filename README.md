@@ -11,7 +11,7 @@ dashboard**; and one **`bobres` command** on the server installs, updates, backs
 It is white-label and single-tenant: each operator runs it on their own server, with their own domain, bot, panels and
 brand. Nothing goes through anyone else's servers.
 
-Website: <https://bobresai.cv> · Latest release: **v0.17.0** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
+Website: <https://bobresai.cv> · Latest release: **v0.17.1** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
 
 ## At a glance
 
@@ -84,8 +84,8 @@ same server, S3 copies of the backups, Zarinpal, a different SSH port, hardening
 Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); the numbers below are the menu's choices:
 
 ```text
-   n____n   BOBRES manager  bobres v0.17.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.17.0
+   n____n   BOBRES manager  bobres v0.17.1
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.17.1
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -239,6 +239,8 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
 - Daily **encrypted backups**: the newest 7 kept on the server, each sent to the owner on Telegram, optional copies in
   S3-compatible storage; download and restore from the dashboard; `bobres restore` puts one back.
 - **Updates** with stable and beta channels and an automatic rollback, from the command line or the dashboard.
+- The whole store **comes back by itself after a reboot**: a systemd unit starts it at every boot, and a store you stopped on purpose
+  (`sudo bobres stop`) stays stopped until you start it.
 - **HTTPS** from the dashboard's HTTPS tab or `bobres ssl`: Caddy's automatic certificate for the domain (the default), a
   Let's Encrypt certificate for the server's IP address, or your own certificate and key. A change is saved only once
   Caddy accepts it, and `sudo bobres ssl auto` is the way back when a wrong certificate locks browsers out.

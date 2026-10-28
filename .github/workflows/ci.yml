@@ -279,6 +279,37 @@ jobs:
           BOBRES_E2E_SUB_BASE=https://sub.example.test/sub/ \
           XUI_TEST_URL=http://127.0.0.1:2053 XUI_TEST_TOKEN="$xui_token" XUI_TEST_ALLOW_PRIVATE=1 \
             go test -tags e2e -count=1 -v ./tests/e2e/
+      # A reboot or a Docker restart must bring the whole store back by itself. Two things broke that on a
+      # real server (2026-10-28), and neither shows until the first restart: the installer sent Caddy a signal
+      # through `docker kill` (compose kill -s SIGUSR1), which Docker answers by marking the container
+      # "manually stopped", so with restart: unless-stopped the gateway stayed down for 8 hours after a
+      # reboot; and the tls-agent kept its heartbeat in /tmp, which a restarted container gets mounted 0755
+      # and root's (the image is FROM scratch), so it stayed "unhealthy" for ever. Docker is restarted here
+      # the way a reboot does it, and every service must be up and healthy again with nobody starting
+      # anything.
+      - name: The store comes back after a Docker restart
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/bobres"
+          fail() { echo "::error title=Docker restart::$*"; exit 1; }
+          caddy_id=$(docker inspect -f '{{.Id}}' bobres-caddy-1)
+          flag=$(sudo grep -o '"HasBeenManuallyStopped":[a-z]*' "/var/lib/docker/containers/$caddy_id/config.v2.json")
+          echo "Caddy: $flag"
+          [ "$flag" = '"HasBeenManuallyStopped":false' ] || fail "the install left Caddy marked as manually stopped: Docker will not start it again after a restart"
+          sudo systemctl restart docker
+          up=""
+          for _ in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Running}}' bobres-caddy-1 2>/dev/null || true)" = true ]; then up=yes; break; fi
+            sleep 2
+          done
+          [ -n "$up" ] || { docker ps -a; fail "Caddy was not running two minutes after Docker restarted"; }
+          healthy=""
+          for _ in $(seq 1 60); do
+            if /tmp/bobres status --dir "$dir" >/dev/null 2>&1; then healthy=yes; break; fi
+            sleep 3
+          done
+          [ -n "$healthy" ] || { /tmp/bobres status --dir "$dir" || true; docker ps -a; fail "the stack was not healthy three minutes after Docker restarted"; }
+          /tmp/bobres status --dir "$dir"
       # The restore drill on the real stack, with the store the e2e test filled:
       # back up, write a marker row, restore that backup, and the marker must be
       # gone, the data from before intact and every service healthy. The CLI

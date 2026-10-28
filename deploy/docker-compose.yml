@@ -341,7 +341,9 @@ services:
       BOBRES_DOMAIN: ${BOBRES_DOMAIN:?set BOBRES_DOMAIN}
       BOBRES_ZARINPAL_HOST: ${BOBRES_ZARINPAL_HOST:-}
     healthcheck:
-      # The loop touches a heartbeat file in /tmp (a tmpfs) every round.
+      # The loop touches a heartbeat file in /dev/shm (memory every container has, open to every user) every round.
+      # Not /tmp: this image has none, so a restart mounts the tmpfs over the 0755 directory the first start left,
+      # and uid 65532 could not write there (the container stayed unhealthy after a reboot).
       test: ["CMD", "/app", "tls-agent", "--healthcheck"]
       interval: 15s
       timeout: 5s

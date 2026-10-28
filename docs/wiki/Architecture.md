@@ -57,6 +57,7 @@ Core has no Docker socket. Anything that needs the host goes through a file in a
 |---|---|
 | Update and restore from the dashboard | Core writes `run/update/request.json`. `bobres-updater.path` starts `bobres update --from-request`, which runs the same code as the command line and writes `status.json` |
 | Host monitoring | `bobres-monitor.timer` writes `run/monitor/snapshot.json` every 30 seconds. Core reads it read-only |
+| Start at boot | `bobres.service` runs `bobres start` at every boot, so a container Docker left stopped comes back. `bobres stop` leaves `run/stopped`, which keeps it from starting a store stopped on purpose |
 | HTTPS | Core writes a request file. The `tls-agent` re-checks it and talks to Caddy through its admin socket |
 
 ## Code layout

@@ -25,6 +25,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/deploy"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/config"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tlsagent"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"golang.org/x/term"
 )
@@ -76,6 +77,8 @@ type installer struct {
 	stateDir string
 	// monitorUnits installs the host collector's units the same way (nil: not installed).
 	monitorUnits *systemUnits
+	// bootUnits installs the unit that starts the store at boot (nil: not installed).
+	bootUnits *systemUnits
 }
 
 func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
@@ -99,7 +102,7 @@ func newInstaller(in io.Reader, out, errOut io.Writer) *installer {
 		runLines:  streamDocker,
 		logPath:   installLogPath, panelProbe: probePanel, survive: keepGoing,
 		rcpt:  newReceiptStore(defaultStateDir()),
-		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(), monitorUnits: newSystemUnits(),
+		units: newSystemUnits(), exe: selfExe, stateDir: defaultStateDir(), monitorUnits: newSystemUnits(), bootUnits: newSystemUnits(),
 	}
 	if p := strings.TrimSpace(os.Getenv("BOBRES_INSTALL_LOG")); p != "" {
 		ins.logPath = p
@@ -498,6 +501,8 @@ func (ins *installer) runInstall(args []string) int {
 	ins.ensureUpdater(ctx, *dir, env)
 	// And the host collector behind the dashboard's Monitoring section, the same way.
 	ins.ensureMonitor(ctx, *dir, env)
+	// And the unit that starts the store after every boot.
+	ins.ensureBoot(ctx, *dir, env)
 	// Hardening runs by itself where it is safe (--ask-harden asks step by
 	// step instead); never from a run that cannot ask (--yes, as bobres update
 	// runs it) or a settings change from the menu (quiet).
@@ -663,6 +668,10 @@ func (ins *installer) checks(domain string, existing bool) bool {
 // start pulls and starts the stack, then waits until every service is healthy.
 func (ins *installer) start(ctx context.Context, dir string, env map[string]string) int {
 	fmt.Fprintln(ins.out, "Pulling images and starting the stack (this can take a few minutes)...")
+	// A store that was stopped on purpose is being started: the boot unit may start it again.
+	if err := clearStopped(dir); err != nil {
+		fmt.Fprintf(ins.errOut, "warning: could not remove %s (%v): until it is removed the boot unit leaves the store stopped after a reboot.\n", stoppedPath(dir), err)
+	}
 	ins.prog.Begin(stepPull)
 	var up []byte
 	var err error
@@ -705,20 +714,42 @@ func (ins *installer) removeTLSAgent(ctx context.Context, dir string) {
 	}
 }
 
-// caddyWait is how long start waits for the gateway to run steadily.
-const caddyWait = 30 * time.Second
+const (
+	// caddyWait is how long start waits for the gateway to run steadily.
+	caddyWait = 30 * time.Second
+	// caddyReloadTries is how often the reload is asked for while Caddy has no admin socket yet.
+	caddyReloadTries = 3
+)
 
-// reloadCaddy makes Caddy read its Caddyfile again (SIGUSR1: it works with or
-// without the admin socket, and the tls-agent's loads keep the file name it
-// needs), then waits up to caddyWait for the gateway to be running and to stay
-// so for two looks in a row (a crash-looping container shows "running" now and
-// then). The Caddyfile is a directory mount, so an updated one is there, but a
-// running Caddy reads it only when told to. Both steps are best effort: a
-// failure is a warning, never a failed install or update.
+// reloadCaddy makes Caddy read its Caddyfile again, then waits up to caddyWait for the gateway to be
+// running and to stay so for two looks in a row (a crash-looping container shows "running" now and
+// then). The Caddyfile is a directory mount, so an updated one is there, but a running Caddy reads it
+// only when told to. Both steps are best effort: a failure is a warning, never a failed install or
+// update.
+//
+// It asks through Caddy's admin socket (`caddy reload` in the container), and never with a signal
+// through Docker (`docker compose kill -s SIGUSR1`): Docker marks a container "manually stopped" when
+// it is sent a signal through its kill call, even one that does not stop it, and with restart:
+// unless-stopped a container so marked is not started again after a reboot or a Docker restart. Every
+// install and update did that to Caddy, and the first reboot after one left the gateway down, with
+// the dashboard, the Mini App and the payment pages unreachable, until somebody started it
+// (2026-10-28). A Caddy with no admin socket (a Caddyfile from before the HTTPS manager) is restarted
+// instead, which reads the file as well and ends in a container Docker does not see as stopped.
 func (ins *installer) reloadCaddy(ctx context.Context, dir string) {
-	if out, err := ins.run(ctx, dir, composeArgs("kill", "-s", "SIGUSR1", "caddy")...); err != nil {
-		fmt.Fprintf(ins.errOut, "warning: Caddy was not told to read its Caddyfile again (%v): it reads it when it starts (bobres restart).\n%s\n",
-			err, strings.TrimSpace(string(out)))
+	// tlsagent.DefaultSourceFile is Caddy's main Caddyfile where its container sees it (the compose file mounts
+	// ./caddy at /etc/caddy), the name the tls-agent's loads give it as their source.
+	reload := composeArgs("exec", "-T", "caddy", "caddy", "reload", "--config", tlsagent.DefaultSourceFile, "--adapter", "caddyfile", "--force")
+	out, err := ins.run(ctx, dir, reload...)
+	for try := 1; err != nil && try < caddyReloadTries; try++ {
+		// Just started: its admin socket may not be there yet.
+		ins.sleep(2 * time.Second)
+		out, err = ins.run(ctx, dir, reload...)
+	}
+	if err != nil {
+		if _, rerr := ins.run(ctx, dir, composeArgs("restart", "caddy")...); rerr != nil {
+			fmt.Fprintf(ins.errOut, "warning: Caddy was not told to read its Caddyfile again (%v): it reads it when it starts (bobres restart).\n%s\n",
+				err, strings.TrimSpace(string(out)))
+		}
 	}
 	state, steady := "", 0
 	for waited := time.Duration(0); ; waited += 2 * time.Second {

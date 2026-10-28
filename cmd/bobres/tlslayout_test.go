@@ -588,7 +588,10 @@ func TestInstallReloadsCaddyBestEffort(t *testing.T) {
 		waitFull bool          // all of caddyWait
 	}{
 		{"fine", &fakeDocker{}, "", 2 * time.Second, false},
-		{"the signal fails", &fakeDocker{killErr: errors.New("service \"caddy\" is not running")}, "Caddy was not told to read its Caddyfile again", 2 * time.Second, false},
+		// Asked three times, two seconds apart (Caddy may have just started), then restarted; when that fails too, a warning.
+		{"the reload and the restart fail", &fakeDocker{reloadErr: errors.New("service \"caddy\" is not running"), restartErr: errors.New("no such service")},
+			"Caddy was not told to read its Caddyfile again", 6 * time.Second, false},
+		{"no admin socket: a restart reads the file", &fakeDocker{reloadErr: errors.New("admin endpoint disabled")}, "", 6 * time.Second, false},
 		{"a crash loop", &fakeDocker{caddy: []string{flap}}, "not running steadily (state: restarting)", caddyWait, true},
 		{"running now and then", &fakeDocker{caddy: []string{run, flap, run, flap}}, "not running steadily (state: restarting)", caddyWait, true},
 		{"slow to start", &fakeDocker{caddy: []string{`[]`, flap, run, run}}, "", 6 * time.Second, false},
@@ -614,6 +617,45 @@ func TestInstallReloadsCaddyBestEffort(t *testing.T) {
 				t.Errorf("waited %s for Caddy, want %s (full: %v)", waited, tc.wait, tc.waitFull)
 			}
 		})
+	}
+}
+
+// The install never sends Caddy a signal through Docker (`compose kill`): Docker marks a container
+// so signalled "manually stopped", even when the signal does not stop it, and with restart:
+// unless-stopped such a container is not started again after a reboot or a Docker restart. Every
+// install and update did that to Caddy, and the first reboot after one left the gateway down for 8
+// hours (2026-10-28). With no admin socket the install restarts Caddy, which leaves no mark.
+func TestInstallNeverSignalsCaddyThroughDocker(t *testing.T) {
+	for name, tc := range map[string]struct {
+		docker   *fakeDocker
+		restarts int
+	}{
+		"with an admin socket": {&fakeDocker{}, 0},
+		"without one":          {&fakeDocker{reloadErr: errors.New("admin endpoint disabled")}, 1},
+	} {
+		tc.docker.health = []string{allHealthy}
+		ins, _, errOut := testInstaller("", secrets, tc.docker)
+		ins.sleep = func(time.Duration) {}
+		if code := ins.install(baseArgs(t.TempDir())); code != 0 {
+			t.Fatalf("%s: exit %d: %s", name, code, errOut)
+		}
+		kills, restarts, reloads := 0, 0, 0
+		for _, c := range tc.docker.calls {
+			switch {
+			case contains(c, "kill"):
+				kills++
+			case contains(c, "restart") && contains(c, "caddy"):
+				restarts++
+			case contains(c, "reload"):
+				reloads++
+			}
+		}
+		if kills != 0 || restarts != tc.restarts || reloads == 0 {
+			t.Errorf("%s: %d kills, %d restarts of Caddy (want %d), %d reloads: %v", name, kills, restarts, tc.restarts, reloads, tc.docker.calls)
+		}
+		if strings.Contains(errOut.String(), "warning") {
+			t.Errorf("%s: a warning: %s", name, errOut)
+		}
 	}
 }
 

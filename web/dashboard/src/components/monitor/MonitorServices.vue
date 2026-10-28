@@ -29,6 +29,7 @@ const latency = computed<MetricDef[]>(() =>
 
 // what each watched unit is for, in the page's words; a unit it does not know is shown by name alone
 const UNIT_KEYS: Record<string, string> = {
+  'bobres.service': 'boot_service',
   'bobres-monitor.timer': 'monitor_timer',
   'bobres-monitor.service': 'monitor_service',
   'bobres-updater.path': 'updater_path',

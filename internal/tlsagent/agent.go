@@ -47,8 +47,15 @@ const (
 	DefaultCaddyfile   = "/etc/bobres/caddy/Caddyfile"
 	DefaultSourceFile  = "/etc/caddy/Caddyfile"
 	DefaultAdminSocket = "/run/caddy/admin.sock"
-	DefaultHeartbeat   = "/tmp/tls-agent.alive"
-	DefaultEvery       = 2 * time.Second
+	// DefaultHeartbeat is in /dev/shm, the memory file system every container gets, open to every user
+	// whatever the image holds. It was /tmp, a tmpfs too, and that broke after a restart: the image
+	// is built FROM scratch and has no /tmp, so a container's first start makes one that is open to
+	// everybody, but every later start (a reboot, a Docker restart) mounts the tmpfs over the directory
+	// that first start left, 0755 and root's, and the agent (uid 65532) could no longer touch its
+	// heartbeat: the container looked unhealthy for ever (2026-10-28), with the alert and a failed
+	// wait in `bobres start`, while the agent went on working.
+	DefaultHeartbeat = "/dev/shm/tls-agent.alive"
+	DefaultEvery     = 2 * time.Second
 	// DefaultLoadTimeout keeps an answer within the 20 seconds core waits
 	// for one (a round's wait plus the load; a load takes well under a
 	// second).
@@ -109,6 +116,8 @@ type Agent struct {
 	good *files
 	// unreadable is the last error reading the request, logged once.
 	unreadable string
+	// beatFailed says the heartbeat could not be written, logged once.
+	beatFailed bool
 }
 
 // files are the HTTPS files of one state.
@@ -399,8 +408,14 @@ func (a *Agent) beat() {
 		return
 	}
 	if err := os.WriteFile(a.cfg.Heartbeat, []byte(strconv.FormatInt(a.cfg.Now().Unix(), 10)), 0o600); err != nil {
-		a.cfg.Log.Debug("heartbeat", "err", err)
+		// Without it the container looks unhealthy though the agent works: said once, where a person reads it.
+		if !a.beatFailed {
+			a.cfg.Log.Warn("the heartbeat cannot be written: the container will look unhealthy", "path", a.cfg.Heartbeat, "err", err)
+			a.beatFailed = true
+		}
+		return
 	}
+	a.beatFailed = false
 }
 
 func (a *Agent) path(name string) string { return filepath.Join(a.cfg.TLSDir, name) }

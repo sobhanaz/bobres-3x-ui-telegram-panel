@@ -555,6 +555,43 @@ func TestHeartbeatAfterEveryLoad(t *testing.T) {
 	}
 }
 
+// A heartbeat that cannot be written is said once, at warning level, and the agent goes on: the
+// container will look unhealthy, and a person reading the log should see why. It was a debug line,
+// and an agent whose /tmp was not writable after a reboot stayed "unhealthy" for 8 hours without a word.
+func TestHeartbeatThatCannotBeWrittenIsSaidOnce(t *testing.T) {
+	w := newWorld(t)
+	w.agent.cfg.Heartbeat = filepath.Join(w.dir, "missing", "alive")
+	w.step()
+	w.step()
+	w.step()
+	if n := strings.Count(w.logs.String(), "the heartbeat cannot be written"); n != 1 || !strings.Contains(w.logs.String(), "level=WARN") {
+		t.Fatalf("%d warnings:\n%s", n, w.logs)
+	}
+	// Writable again: no longer failing, and a later failure is said again.
+	if err := os.MkdirAll(filepath.Dir(w.agent.cfg.Heartbeat), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	w.step()
+	if Healthcheck(w.agent.cfg.Heartbeat, time.Now()) != 0 {
+		t.Fatal("no heartbeat once it can be written")
+	}
+	if err := os.RemoveAll(filepath.Dir(w.agent.cfg.Heartbeat)); err != nil {
+		t.Fatal(err)
+	}
+	w.step()
+	if n := strings.Count(w.logs.String(), "the heartbeat cannot be written"); n != 2 {
+		t.Fatalf("a second failure after a recovery was not said: %d\n%s", n, w.logs)
+	}
+}
+
+// The default heartbeat is in /dev/shm, which every container has and every user may write: the
+// image is built FROM scratch, has no /tmp, and after a restart its tmpfs is 0755 and root's.
+func TestDefaultHeartbeatIsInDevShm(t *testing.T) {
+	if !strings.HasPrefix(DefaultHeartbeat, "/dev/shm/") {
+		t.Errorf("the heartbeat is %s: /tmp is not writable by the agent after a container restart", DefaultHeartbeat)
+	}
+}
+
 // Caddy was down for generation 2 (its files are on disk), comes back and
 // refuses them: the last good files go back, Caddy loads them again, and
 // the answer for generation 2 turns from unreachable to refused.

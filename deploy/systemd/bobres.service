@@ -1,0 +1,46 @@
+# Written by `bobres install` and `bobres update` (they replace it: do not edit it). It brings the
+# whole store up every time this server boots. Docker's own restart policy (unless-stopped) leaves a
+# container down when Docker has marked it "manually stopped", and that can happen to one container
+# when the machine is powered off: the gateway (Caddy) once stayed down for hours that way, with the
+# dashboard, the Mini App and the payment pages unreachable while the bot went on answering. Starting
+# the stack from here makes every boot end with every service up.
+#
+# A store stopped on purpose (sudo bobres stop, or a plain uninstall) leaves @DIR@/run/stopped
+# behind and stays stopped; sudo bobres start, restart, install and update remove it.
+# Turn it off for good with: sudo bobres config set BOBRES_START_AT_BOOT off
+# docs/06-installer.md, "Starting at boot".
+[Unit]
+Description=BOBRES: bring the store up at boot
+Documentation=https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/06-installer.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+# The install gone: skipped quietly, not failed. A store stopped on purpose: left stopped.
+ConditionPathIsDirectory=@DIR@
+ConditionPathExists=!@DIR@/run/stopped
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+# The same `bobres start` an operator types: docker compose up -d, then a wait until every service
+# is healthy. What it starts is what is installed; nothing is pulled unless an image is missing.
+ExecStart=@EXE@ start --dir @DIR@
+# Starting can wait for slow health checks; this only stops one that hangs.
+TimeoutStartSec=15min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

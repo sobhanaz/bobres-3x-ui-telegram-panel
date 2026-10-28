@@ -16,6 +16,7 @@ import (
 // BOBRES's own helpers and Docker. A fixed list: nothing else of the host's
 // services is looked at.
 var WatchedUnits = []string{
+	"bobres.service",
 	"bobres-monitor.timer", "bobres-monitor.service",
 	"bobres-updater.path", "bobres-updater.service",
 	"docker.service",
@@ -29,7 +30,7 @@ var journalSources = []struct {
 	units []string
 }{
 	{"docker", []string{"docker.service", "containerd.service"}},
-	{"bobres", []string{"bobres-monitor.service", "bobres-monitor.timer", "bobres-updater.service", "bobres-updater.path"}},
+	{"bobres", []string{"bobres.service", "bobres-monitor.service", "bobres-monitor.timer", "bobres-updater.service", "bobres-updater.path"}},
 }
 
 // journalCap is how many lines one source's query reads at most.

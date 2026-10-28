@@ -33,8 +33,9 @@ type fakeDocker struct {
 	// caddy are the successive answers to `ps ... caddy` (the wait for the
 	// gateway), the last one repeating; running when empty.
 	caddy []string
-	// killErr is the error of `kill` (the SIGUSR1 to Caddy).
-	killErr error
+	// reloadErr is the error of `exec ... caddy reload` (the install asks Caddy to read its Caddyfile
+	// again), restartErr the error of the `restart caddy` it falls back to.
+	reloadErr, restartErr error
 	// adminPW is what `exec core /app admin-password` prints (a sample
 	// login when empty); adminPWErr makes it fail.
 	adminPW    string
@@ -54,8 +55,10 @@ func (f *fakeDocker) run(_ context.Context, _ string, args ...string) ([]byte, e
 		return []byte(sampleLogin), nil
 	case contains(args, "up"):
 		return []byte("started"), f.upErr
-	case contains(args, "kill"):
-		return []byte("killed"), f.killErr
+	case contains(args, "reload"):
+		return []byte("reloaded"), f.reloadErr
+	case contains(args, "restart") && contains(args, "caddy"):
+		return []byte("restarted"), f.restartErr
 	case contains(args, "ps") && contains(args, "caddy"):
 		if len(f.caddy) == 0 {
 			return []byte(`[{"Service":"caddy","State":"running"}]`), nil
@@ -185,13 +188,20 @@ func TestFreshInstallWritesAWorkingStack(t *testing.T) {
 	if strings.Contains(string(compose), "build:") || strings.Contains(string(compose), "x-build") {
 		t.Fatal("installed compose file still builds from source")
 	}
-	// After `up`: Caddy is told to read its Caddyfile again, its state is
+	// After `up`: Caddy is asked to read its Caddyfile again, its state is
 	// looked at twice, and only then does the backup role get made.
-	if got := composeVerbs(docker.calls[:5]); strings.Join(got, " ") != "up kill ps ps exec" {
+	if got := composeVerbs(docker.calls[:5]); strings.Join(got, " ") != "up exec ps ps exec" {
 		t.Fatalf("docker calls: %v", docker.calls)
 	}
-	if kill := strings.Join(docker.calls[1], " "); !strings.HasSuffix(kill, " kill -s SIGUSR1 caddy") {
-		t.Errorf("the signal to Caddy: %s", kill)
+	if reload := strings.Join(docker.calls[1], " "); !strings.HasSuffix(reload, " exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile --force") {
+		t.Errorf("the reload of Caddy: %s", reload)
+	}
+	// Never a signal through Docker's kill call: it marks the container "manually stopped", and then
+	// Docker does not start it again after a reboot (the gateway stayed down for 8 hours that way).
+	for _, c := range docker.calls {
+		if contains(c, "kill") {
+			t.Errorf("the install sends a signal through Docker: %v", c)
+		}
 	}
 	assertHTTPSLayout(t, dir, "panel.example.com")
 
@@ -582,7 +592,7 @@ func TestBackupsFollowTheImageVersion(t *testing.T) {
 		t.Fatalf("pinned old version: profiles %q\n%s", env["COMPOSE_PROFILES"], out)
 	}
 	for _, c := range docker.calls {
-		if contains(c, "exec") && !contains(c, "license") && !contains(c, "admin-password") { // the summary reads the license
+		if contains(c, "exec") && !contains(c, "license") && !contains(c, "admin-password") && !contains(c, "reload") { // the summary reads the license; Caddy is asked to reload
 			t.Fatalf("backup role created without the backup service: %v", c)
 		}
 	}

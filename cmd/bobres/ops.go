@@ -86,12 +86,14 @@ type ops struct {
 	exe   func() (string, error)
 	// monitorUnits looks at, and removes, the host collector's units (nil: not asked).
 	monitorUnits *systemUnits
+	// bootUnits looks at, and removes, the unit that starts the store at boot (nil: not asked).
+	bootUnits *systemUnits
 }
 
 func newOps(in io.Reader, out, errOut io.Writer) *ops {
 	return &ops{
 		in: in, out: out, errOut: errOut,
-		units: newSystemUnits(), monitorUnits: newSystemUnits(),
+		units: newSystemUnits(), monitorUnits: newSystemUnits(), bootUnits: newSystemUnits(),
 		run: func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // fixed program, arguments built here
 			cmd.Dir = dir
@@ -415,6 +417,8 @@ func (o *ops) uninstallContainers(opts purgeOptions) int {
 		fmt.Fprintf(o.errOut, "error: docker compose down failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
+	// The containers were removed on purpose: the boot unit must not bring them back.
+	o.noteStopped(opts.dir)
 	fmt.Fprintf(o.out, "Containers removed. Kept: the database and Redis volumes (%s_*), certificates, and %s (run `bobres install` to start again, or `bobres uninstall --purge` to delete everything).\n",
 		composeProject, opts.dir)
 	return 0
@@ -448,6 +452,8 @@ func (o *ops) startCmd(args []string) int {
 		return 2
 	}
 	fmt.Fprintln(o.out, "Starting BOBRES...")
+	// Whoever starts the store wants it running: the boot unit may start it again.
+	o.noteStarting(dir)
 	if out, err := o.run(context.Background(), dir, composeArgs("up", "-d")...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
@@ -465,7 +471,8 @@ func (o *ops) stopCmd(args []string) int {
 		fmt.Fprintf(o.errOut, "error: docker compose stop failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
 	}
-	fmt.Fprintln(o.out, "BOBRES is stopped. The bot does not answer until you start it again (bobres start).")
+	o.noteStopped(dir)
+	fmt.Fprintln(o.out, "BOBRES is stopped. The bot does not answer until you start it again (bobres start); a reboot leaves it stopped too.")
 	return 0
 }
 
@@ -477,6 +484,7 @@ func (o *ops) restartCmd(args []string) int {
 		return 2
 	}
 	fmt.Fprintln(o.out, "Restarting BOBRES...")
+	o.noteStarting(dir)
 	if out, err := o.run(context.Background(), dir, composeArgs("restart")...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose restart failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1
