@@ -31,6 +31,14 @@ func (c *quoteClock) advance(d time.Duration) {
 	c.mu.Unlock()
 }
 
+// boundedContext ends after a minute: a test of concurrent payments must fail, not hang, if a payer waits for a connection that never frees.
+func boundedContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 // quoteEnv is a store with a plan at 4 USDT, a live USDT price of 280,000 Toman and a 5% margin (so the store's rate is 294,000: 4 USDT cost 1,176,000
 // Toman), and a clock the test moves.
 type quoteEnv struct {
@@ -468,7 +476,7 @@ func TestWalletQuoteBelongsToOneOrderAndCustomer(t *testing.T) {
 // Taps that arrive together, or one after the other, charge once: one purchase entry, one order.paid event, one debit, the same answer for all.
 func TestWalletQuoteDoubleTapChargesOnce(t *testing.T) {
 	e := newQuoteEnv(t)
-	ctx := context.Background()
+	ctx := boundedContext(t)
 	u := e.customer(t, 9710, 3_000_000)
 	o := e.order(t, u, "tap")
 	q, err := e.svc.QuoteWalletPayment(ctx, o.ID, u.ID)
@@ -480,11 +488,12 @@ func TestWalletQuoteDoubleTapChargesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A pool cannot be closed while a connection is out: release the wallet whatever happens (a failed test must not hang the package).
+	t.Cleanup(func() { _ = blocker.Rollback(context.Background()) })
 	if _, err := blocker.Exec(ctx, `SELECT 1 FROM core.wallets WHERE user_id = $1 AND currency = 'IRT' FOR UPDATE`, u.ID); err != nil {
 		t.Fatal(err)
 	}
 	const taps = 6
-	needConns(t, e.s, taps+1)
 	var wg sync.WaitGroup
 	errs := make([]error, taps)
 	got := make([]*store.Order, taps)
@@ -523,12 +532,11 @@ func TestWalletQuoteDoubleTapChargesOnce(t *testing.T) {
 // balance never goes below zero.
 func TestWalletQuoteTwoOrdersOneWallet(t *testing.T) {
 	e := newQuoteEnv(t)
-	ctx := context.Background()
+	ctx := boundedContext(t)
 	u := e.customer(t, 9711, 2_000_000)
 	a, b := e.order(t, u, "two-a"), e.order(t, u, "two-b")
 	qa, _ := e.svc.QuoteWalletPayment(ctx, a.ID, u.ID)
 	qb, _ := e.svc.QuoteWalletPayment(ctx, b.ID, u.ID)
-	needConns(t, e.s, 3)
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 	for i, pair := range [][2]string{{a.ID, qa.Token}, {b.ID, qb.Token}} {
@@ -659,6 +667,52 @@ func TestWalletQuoteAfterADiscountAndForAnInvitedCustomer(t *testing.T) {
 	}
 }
 
+// A payment that marks an order paid holds one connection from start to end, also for a customer somebody invited (the inviter's reward reads its
+// setting): payments of invited customers, more than the pool has connections, all complete. With the pool capped small (BOBRES_TEST_POOL_MAX_CONNS, as
+// CI does) a payment that asked for a second connection while it held one would wait for ever, and the bounded context turns that into a failure.
+func TestPaymentsOfInvitedCustomersNeedNoSecondConnection(t *testing.T) {
+	e := newQuoteEnv(t)
+	ctx := boundedContext(t)
+	if err := e.svc.SetSetting(ctx, e.owner, "referral.reward_percent", "10"); err != nil {
+		t.Fatal(err)
+	}
+	inviter := seedUser(t, e.s, 9740)
+	plan := seedPlan(t, e.s, false, 1000)
+	const buyers = 8
+	var orders [buyers]*store.Order
+	var users [buyers]*store.User
+	for i := range buyers {
+		u, err := e.s.UpsertUser(ctx, e.s.Conn(), int64(9741+i), "", "", inviter.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fund(t, e.s, u.ID, 5000)
+		o, err := e.svc.CreateOrder(ctx, CreateOrderParams{UserID: u.ID, PlanID: plan.ID, IdempotencyKey: fmt.Sprintf("invited-%d", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		users[i], orders[i] = u, o
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, buyers)
+	for i := range buyers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = e.svc.PayOrderWithWallet(ctx, orders[i].ID, users[i].ID)
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("buyer %d: %v", i, err)
+		}
+	}
+	if n, sum := e.ledgerCount(t, inviter.ID, "referral", "IRT"); n != buyers || sum != buyers*100 {
+		t.Fatalf("the inviter's rewards: %d of %d", n, sum)
+	}
+}
+
 // A reseller pays a USDT-priced plan on credit down to the limit, in Toman, like any other.
 func TestWalletQuoteOnAResellersCredit(t *testing.T) {
 	e := newQuoteEnv(t)
@@ -746,8 +800,7 @@ func TestWalletQuoteAndAnotherPayment(t *testing.T) {
 // lost or made: the books of both wallets add up to their balances, and the order was charged once, in the currency of the one that won.
 func TestWalletQuoteRacesACryptoPayment(t *testing.T) {
 	e := newQuoteEnv(t)
-	ctx := context.Background()
-	needConns(t, e.s, 4)
+	ctx := boundedContext(t)
 	for i := range 6 {
 		u := e.customer(t, int64(9720+i), 2_000_000)
 		o := e.order(t, u, fmt.Sprintf("race-%d", i))
