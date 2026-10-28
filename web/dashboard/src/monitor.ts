@@ -207,6 +207,7 @@ export interface MetricInfo {
   agg: string
 }
 export interface EventItem {
+  /** the newest line of the entry (the only one, unless `count` says more) */
   at: number
   level: string
   source: string
@@ -217,6 +218,10 @@ export interface EventItem {
   args?: Record<string, string>
   title: string
   detail: string
+  /** core folds identical lines into one entry: how many it stands for. Absent for a single line. */
+  count?: number
+  /** the oldest of those lines (unix seconds). Absent for a single line. */
+  first_at?: number
 }
 export interface EventsReply {
   items: EventItem[]
@@ -599,6 +604,15 @@ export const levelSeverity: Record<EventLevel, 'danger' | 'warn'> = { error: 'da
 export const EVENT_SOURCES = ['alert', 'core', 'bot', 'payments', 'provisioner', 'host.docker', 'host.bobres', 'host.caddy']
 export type AlertState = 'open' | 'closed' | 'resolved'
 export const alertStateOf = (e: Pick<EventItem, 'state'>): AlertState | null => (e.state === 'open' || e.state === 'closed' || e.state === 'resolved' ? e.state : null)
+
+/** repeatOf says how many identical lines an event stands for: `count`, with the time of the oldest in `first`
+ * (the newest is the event's own `at`). A single line, and an answer from an older core, carry neither: null.
+ * `first` is null when the oldest time is missing or not before the newest, so a span is never made up. */
+export function repeatOf(e: Pick<EventItem, 'at' | 'count' | 'first_at'>): { count: number; first: number | null } | null {
+  if (typeof e.count !== 'number' || !Number.isInteger(e.count) || e.count < 2) return null
+  const first = typeof e.first_at === 'number' && Number.isFinite(e.first_at) && e.first_at > 0 && e.first_at < e.at ? e.first_at : null
+  return { count: e.count, first }
+}
 
 type Say = (key: string, ...args: unknown[]) => string
 export interface Words {

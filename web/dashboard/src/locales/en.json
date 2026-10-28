@@ -161,6 +161,8 @@
     "users_new": "{day} today · {week} this week",
     "services": "Active services",
     "services_detail": "{expiring} expiring soon · {ended} ended",
+    "panel_missing": "Not on the panel",
+    "panel_missing_hint": "Their customers cannot connect",
     "revenue_day": "Revenue today",
     "revenue_month": "Revenue, 30 days",
     "no_revenue": "None yet",
@@ -406,7 +408,14 @@
     "page_hint": "The customer’s own page with the link, a QR code and app guides. Anyone with this address can use the service, like the link above.",
     "page_regenerate": "New page link",
     "page_regenerate_intro": "Gives the page a new address; the old one stops working at once. The subscription link itself does not change.",
-    "done_page_regenerate": "Page link replaced: the old address no longer works"
+    "done_page_regenerate": "Page link replaced: the old address no longer works",
+    "only_missing": "Only services not on the panel",
+    "panel_missing": "Not on the panel",
+    "panel_missing_since": "Not on the panel since {time}",
+    "missing_text": "The panel has had no client for this service since {time}, so the customer cannot connect. Expiry reminders are paused for it.",
+    "recreate": "Make the client again",
+    "recreate_intro": "Makes the client on the panel again, on the same server. The same subscription link works again and the customer does not have to do anything. The used traffic starts again from zero on the panel; the end date and the traffic limit stay as shown here.",
+    "done_recreate": "Client made again on the panel"
   },
   "plan": {
     "groups_title": "Plan groups",
@@ -3650,7 +3659,10 @@
       "unreachable": "Could not read the log of: {list}.",
       "none": "No warnings or errors.",
       "list_label": "Warnings and errors, newest first",
-      "truncated": "More events matched than are listed."
+      "truncated": "More events matched than are listed.",
+      "repeat": "×{n}",
+      "repeat_hint": "Repeated {n} time | Repeated {n} times",
+      "repeat_range": "First seen {first} · last seen {last}"
     },
     "source": {
       "alert": "Alert",
