@@ -27,6 +27,7 @@ A BOBRES store moves money and holds a full-admin token to your VPN panels. The 
 
 - **Owners** (root admins) are named in `BOBRES_ADMIN_TELEGRAM_ID` on the server. Only the server can make or remove one: use `bobres admin owners`. A hijacked Telegram or dashboard account can never become a permanent owner.
 - Every password login needs an authenticator code. A login link comes from your bot or from `bobres admin link` on the server.
+- The owner can also require that every staff sign-in is **approved in Telegram** (Settings > Sign-in security, off by default). A stolen link, or a stolen password and code, then opens nothing until the staff member or an owner taps Approve. If the bot or Telegram is out of reach, `sudo bobres admin approval off` on the server is the way out. See the [Dashboard Guide](Dashboard-Guide).
 - The dashboard has CSRF protection, lockout after repeated wrong passwords, a strict content security policy and an append-only audit log. Money and staff actions ask for a reason.
 - Roles follow least privilege. Payment details, staff and the license are the owner's.
 

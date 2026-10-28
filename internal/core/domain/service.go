@@ -88,6 +88,8 @@ type Service struct {
 	// supplierBal keeps the supplier balance for a minute, so the dashboard showing it everywhere does not ask the
 	// supplier at every page view.
 	supplierBal supplierBalanceCache
+	// approvals is the way to the bot and the rate limit of the approval of dashboard sign-ins (loginapproval.go).
+	approvals loginApprovalState
 }
 
 // New builds a Service publishing to core's outbox.

@@ -43,6 +43,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "admin-password" {
 		os.Exit(adminPasswordCmd(os.Args[2:], os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "approval" {
+		os.Exit(approvalCmd(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "check" {
 		os.Exit(checkCmd(os.Args[2:], os.Stdout, os.Stderr))
 	}
@@ -235,7 +238,8 @@ func setup(rt *app.Runtime) error {
 		monBot = peer
 		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
 		dom.SetSupplierTransport(peer)
-		dom.SetRateTransport(peer) // the live USDT price is read by the bot: core has no internet access
+		dom.SetRateTransport(peer)    // the live USDT price is read by the bot: core has no internet access
+		dom.SetLoginApprovalBot(peer) // the approval of dashboard sign-ins is asked in Telegram, which only the bot reaches
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}
@@ -301,6 +305,9 @@ func setup(rt *app.Runtime) error {
 	rt.Go("usdt-rate", func(ctx context.Context) error { dom.RunUsdtRateWorker(ctx); return nil })
 	rt.Go("vendor-intents", func(ctx context.Context) error { dom.RunVendorIntentWorker(ctx); return nil })
 	rt.Go("wallet-sweeper", func(ctx context.Context) error { dom.RunWalletSweeper(ctx); return nil })
+	// Dashboard sign-ins that wait for an approval in Telegram: the ones whose 5 minutes are up end here, and the result is written into the
+	// messages the approvers got.
+	rt.Go("login-approvals", func(ctx context.Context) error { dom.RunLoginApprovalWorker(ctx, rt.Log); return nil })
 	// Stored subscription links follow a server's new address.
 	rt.Go("sub-links", dom.NewSubLinkWorker(prov, prov, rt.Log).Run)
 	// Support tickets nobody answered back close themselves; broadcasts start on time.

@@ -168,6 +168,21 @@ var contexts = map[string]Context{
 	// A backup file's caption is sent without a parse mode.
 	"backup.caption": CtxPlain,
 
+	// The approval of dashboard sign-ins (docs/04-dashboard.md): the popups, and the words used inside its messages.
+	"loginapp.toast_approved":          CtxToast,
+	"loginapp.toast_denied":            CtxToast,
+	"loginapp.toast_stale":             CtxToast,
+	"loginapp.toast_forbidden":         CtxToast,
+	"loginapp.new_address":             CtxButtonHTML,
+	"loginapp.device":                  CtxButtonHTML,
+	"loginapp.device_unknown":          CtxButtonHTML,
+	"loginapp.unknown":                 CtxButtonHTML,
+	"loginapp.method_link":             CtxButtonHTML,
+	"loginapp.method_password":         CtxButtonHTML,
+	"loginapp.method_password_initial": CtxButtonHTML,
+	"loginapp.by_dashboard":            CtxButtonHTML,
+	"loginapp.by_server":               CtxButtonHTML,
+
 	// The subscription page's app guides (/sub/<token>) are plain text.
 	"subpage.guide.v2rayng":   CtxPlain,
 	"subpage.guide.hiddify":   CtxPlain,
@@ -214,6 +229,7 @@ var buttonStyles = map[string]string{
 	"btn.adm_enable":        "success",
 	"btn.join_check":        "success",
 	"btn.rs_resume":         "success",
+	"btn.login_approve":     "success",
 
 	"btn.services":       "primary",
 	"btn.wallet":         "primary",
@@ -251,6 +267,7 @@ var buttonStyles = map[string]string{
 	"btn.rs_delete":       "danger",
 	"btn.rs_delete_yes":   "danger",
 	"btn.rs_note_clear":   "danger",
+	"btn.login_deny":      "danger",
 }
 
 // ButtonStyle is the Bot API style of a button labelled with the text key:

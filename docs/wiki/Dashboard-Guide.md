@@ -12,6 +12,12 @@ The dashboard is where you run the store. It lives at `https://shop.example.com/
 
 Sessions use secure cookies and CSRF tokens. If you lose your phone, `sudo bobres admin password` is the way back.
 
+### Approve sign-ins in Telegram (optional)
+
+The owner can turn on **Settings > Sign-in security > Approve sign-ins in Telegram**. It is off by default. When it is on, a staff sign-in (a link, or a password with its code) does not open the dashboard by itself. The sign-in page says **Waiting for approval in Telegram**, and the bot messages the staff member (and the owners, for other staff members' sign-ins, unless you turn that off) with the time, the IP address, the browser and the system, and two buttons: **Approve** and **Deny**. Approve opens the dashboard within a few seconds. Deny, or five minutes without an answer, opens nothing.
+
+Turning it on shows what it does and asks you to confirm, and sends you a test message first, so you cannot turn it on with nobody able to answer. If the bot or Telegram cannot be reached, the sign-in page says so and does not wait. The way out is on the server: `sudo bobres admin approval off` (`sudo bobres admin approval status` shows whether it is on). It needs neither the bot nor a dashboard login. See the [runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/login-approval.md).
+
 ## Roles
 
 | Role | Can do |

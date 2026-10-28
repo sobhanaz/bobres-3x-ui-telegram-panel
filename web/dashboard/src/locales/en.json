@@ -154,7 +154,79 @@
     "no_password_yet": "After your first login, add or change your password in My account.",
     "code_optional": "Authenticator code (if you have set one up)",
     "code_hint": "Leave it empty when you sign in with the initial password from the installer or from {cmd}.",
-    "initial_hint": "No Telegram? Sign in with the initial password the installer showed, or get a new one on the server with {cmd}. You will choose your own password and set up two-factor authentication right after."
+    "initial_hint": "No Telegram? Sign in with the initial password the installer showed, or get a new one on the server with {cmd}. You will choose your own password and set up two-factor authentication right after.",
+    "pending_title": "Waiting for approval in Telegram",
+    "pending_self": "We sent a request to your Telegram. Open it and tap Approve to come in.",
+    "pending_both": "We sent a request to your Telegram and to the store's owner. Either of you can approve it.",
+    "pending_slow": "The request has not reached Telegram yet. If this stays so, the bot may be down or Telegram may be out of reach.",
+    "pending_failed": "The request could not be delivered, so no approval can come.",
+    "pending_left": "Time left: {time}",
+    "pending_checking": "Checking…",
+    "pending_cancel": "Cancel",
+    "pending_way_out": "If nobody can approve, someone with access to the server can turn the approval off with {cmd}.",
+    "ended": {
+      "denied": "The sign-in was denied in Telegram. Nothing was opened.",
+      "expired": "The request ended before anyone approved it. Log in again.",
+      "cancelled": "The request was cancelled. Log in again.",
+      "undeliverable": "The request could not be delivered to Telegram. Log in again later."
+    },
+    "approval_rate_limited": "Too many sign-in requests for this account. Wait a few minutes and try again.",
+    "approval": {
+      "no_bot": "Sign-in approval is on, but this store has no bot connected to ask in Telegram. On the server run {cmd} to log in without it.",
+      "bot_down": "Sign-in approval is on, but the bot did not answer, so the request could not be sent. Try again in a minute. If the bot stays down, run {cmd} on the server.",
+      "blocked": "Sign-in approval is on, but the bot cannot message the people who may approve (they have not started it or have blocked it). Open the bot in Telegram and tap Start, then try again, or run {cmd} on the server.",
+      "telegram": "Sign-in approval is on, but Telegram could not be reached to send the request. Try again in a minute, or run {cmd} on the server.",
+      "no_answer": "Sign-in approval is on, but the bot did not confirm the request. Try again in a minute, or run {cmd} on the server.",
+      "no_approver": "Sign-in approval is on, but there is nobody with a Telegram account to ask. Run {cmd} on the server to log in.",
+      "other": "Sign-in approval is on, but the request could not be sent. Try again in a minute, or run {cmd} on the server."
+    }
+  },
+  "security": {
+    "title": "Sign-in security",
+    "desc": "Extra checks before someone gets into the dashboard.",
+    "approval": {
+      "title": "Approve sign-ins in Telegram",
+      "desc": "A staff sign-in (a login link, or a password with its authenticator code) opens the dashboard only after the staff member, or an owner, taps Approve in Telegram within {minutes} minute. | A staff sign-in (a login link, or a password with its authenticator code) opens the dashboard only after the staff member, or an owner, taps Approve in Telegram within {minutes} minutes.",
+      "on": "On",
+      "off": "Off",
+      "turn_on": "Turn on",
+      "turn_off": "Turn off",
+      "waiting": "Sign-ins waiting for an answer now: {n}",
+      "notify_owner": "Ask the owners too",
+      "notify_owner_hint": "For a staff member who is not an owner, the owners get the request as well and can approve it.",
+      "no_bot": "This install has no bot connected, so the approval cannot be turned on.",
+      "read_only": "Only the owner changes this.",
+      "way_out": "If the bot is down or Telegram cannot be reached, nobody can approve. The way out is on the server: {cmd}. It needs no sign-in.",
+      "saved_on": "Approval of sign-ins is on",
+      "saved_off": "Approval of sign-ins is off",
+      "saved_notify": "Saved",
+      "dialog": {
+        "on_title": "Turn on the approval of sign-ins",
+        "on_submit": "Turn on",
+        "point_what": "From now on a staff sign-in opens the dashboard only after it is approved in Telegram. Sessions that are open now are not affected.",
+        "point_who": "The message shows the time, the address and the browser. The staff member taps Approve or Deny. For another staff member the owners can answer too, if you leave that on.",
+        "point_time": "A request waits {minutes} minute. Then it ends, nothing is opened, and the audit log records it. | A request waits {minutes} minutes. Then it ends, nothing is opened, and the audit log records it.",
+        "point_way_out": "If the bot is down or Telegram cannot be reached, nobody can sign in. On the server, {cmd} turns the approval off again.",
+        "point_test": "We send you a message in Telegram now. If it does not arrive, the approval stays off.",
+        "acknowledge": "I have read this, and I can receive and answer messages from the bot in Telegram.",
+        "off_title": "Turn off the approval of sign-ins",
+        "off_submit": "Turn off",
+        "off_text": "Staff sign-ins open at once again. Requests that are waiting now end, and the owners are told in Telegram.",
+        "notify_title": "Who is asked",
+        "notify_submit": "Save",
+        "notify_on_text": "The owners will get the request for the sign-in of a staff member who is not an owner, and can approve it.",
+        "notify_off_text": "Only the staff member will be asked. An owner no longer sees the sign-ins of the others."
+      },
+      "unavailable": {
+        "no_bot": "This install has no bot connected, so there is no way to ask in Telegram. Nothing was changed.",
+        "bot_down": "The bot did not answer, so the message to you could not be sent. Nothing was changed. Check that the bot is running, then try again.",
+        "blocked": "The bot cannot message you. Open it in Telegram and tap Start (or unblock it), then try again. Nothing was changed.",
+        "telegram": "Telegram could not be reached to send you the message. Nothing was changed. Try again in a minute.",
+        "no_answer": "The bot did not confirm the message to you. Nothing was changed. Try again in a minute.",
+        "no_approver": "Your account has no Telegram id to message. Nothing was changed.",
+        "other": "The message to you could not be sent. Nothing was changed."
+      }
+    }
   },
   "overview": {
     "users": "Users",
@@ -1304,7 +1376,8 @@
       "gift": "Gift codes",
       "bulk": "Bulk purchase",
       "profile": "Bot profile",
-      "help": "Help screens"
+      "help": "Help screens",
+      "loginapp": "Dashboard sign-in approval"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -1981,6 +2054,13 @@
         "login_failed": "Failed login",
         "logout": "Logged out",
         "link_created": "Login link created",
+        "login_requested": "Sign-in waits for approval in Telegram",
+        "login_approved": "Sign-in approved in Telegram",
+        "login_denied": "Sign-in denied in Telegram",
+        "login_expired": "Sign-in approval expired",
+        "login_cancelled": "Sign-in approval ended",
+        "login_undeliverable": "Sign-in approval could not be asked",
+        "login_approval_invalid": "A wrong answer to a sign-in approval",
         "password": {
           "set": "Password login turned on",
           "removed": "Password login turned off"

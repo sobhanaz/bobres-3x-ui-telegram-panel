@@ -14,7 +14,8 @@ import (
 
 const adminUsage = "usage: bobres admin link [--dir D] [telegram id]\n" +
 	"       bobres admin password [--dir D] [--id <owner telegram id>]\n" +
-	"       bobres admin owners list|add|remove [--dir D] [--no-restart] [telegram id]"
+	"       bobres admin owners list|add|remove [--dir D] [--no-restart] [telegram id]\n" +
+	"       bobres admin approval status|off [--dir D]"
 
 // adminCmd runs the dashboard sign-in helpers inside the core container:
 //
@@ -28,14 +29,20 @@ const adminUsage = "usage: bobres admin link [--dir D] [telegram id]\n" +
 //	    resets that owner's login.
 //	bobres admin owners list|add|remove         the owners the server names
 //	    (BOBRES_ADMIN_TELEGRAM_ID): list them, add one or remove one.
+//	bobres admin approval status|off            the approval of dashboard sign-ins in
+//	    Telegram: whether it is on, and the way out that needs neither the bot nor
+//	    Telegram, nor anyone signed in to the dashboard: switch it off.
 func (o *ops) adminCmd(args []string) int {
-	if len(args) == 0 || (args[0] != "link" && args[0] != "password" && args[0] != "owners") {
+	if len(args) == 0 || (args[0] != "link" && args[0] != "password" && args[0] != "owners" && args[0] != "approval") {
 		fmt.Fprintln(o.errOut, adminUsage)
 		return 2
 	}
 	sub := args[0]
-	if sub == "owners" {
+	switch sub {
+	case "owners":
 		return o.ownersCmd(args[1:])
+	case "approval":
+		return o.approvalCmd(args[1:])
 	}
 	fs := flag.NewFlagSet("admin "+sub, flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
@@ -69,6 +76,46 @@ func (o *ops) adminCmd(args []string) int {
 		}
 		fmt.Fprintf(o.errOut, "error: %v (is core running? bobres status)\n"+
 			"No Telegram, or the owner never started the bot? Use: bobres admin password\n", err)
+		return 1
+	}
+	return 0
+}
+
+// approvalCmd shows, or switches off, the approval of dashboard sign-ins in Telegram (core's `approval status|off`). Off is the way out of a
+// bot that is down or a Telegram that cannot be reached: it runs in core's own container, and when core is not running it runs in a new
+// container of its image, so it needs only the database. It never switches the approval on: that is the owner's, in the dashboard.
+func (o *ops) approvalCmd(args []string) int {
+	fs := flag.NewFlagSet("admin approval", flag.ContinueOnError)
+	fs.SetOutput(o.errOut)
+	dir := fs.String("dir", defaultDir(), dirUsage)
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return 2
+	}
+	if len(pos) != 1 || (pos[0] != "status" && pos[0] != "off") {
+		fmt.Fprintln(o.errOut, adminUsage)
+		return 2
+	}
+	if _, ok := o.requireInstall(*dir); !ok {
+		return 2
+	}
+	ctx := context.Background()
+	ps, err := o.run(ctx, *dir, composeArgs("ps", "--all", "--format", "json")...)
+	if err != nil {
+		fmt.Fprintf(o.errOut, "error: docker compose ps failed: %v\n%s\n", err, strings.TrimSpace(string(ps)))
+		return 1
+	}
+	if parseServices(ps)["postgres"].State != "running" {
+		fmt.Fprintf(o.errOut, "error: the database is not running, and the setting lives in it: start BOBRES first (bobres start --dir %s).\n", *dir)
+		return 1
+	}
+	cargs := composeArgs("exec", "-T", "core", "/app", "approval", pos[0])
+	if parseServices(ps)["core"].State != "running" {
+		// Core is down (the dashboard with it): its image runs the command by itself.
+		cargs = composeArgs("run", "--rm", "-T", "--no-deps", "core", "approval", pos[0])
+	}
+	if err := o.stream(ctx, *dir, cargs...); err != nil {
+		fmt.Fprintf(o.errOut, "error: %v\n", err)
 		return 1
 	}
 	return 0

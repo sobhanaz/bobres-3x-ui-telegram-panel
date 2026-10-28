@@ -132,6 +132,7 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 | `bobres rollback` | Undo the last update: the previous version and the database from before it |
 | `bobres backup` / `restore <file>` | Encrypted backup now (kept in `/opt/bobres/backups`, sent to the owner on Telegram, optionally copied to S3-compatible storage) / replace the data with a backup |
 | `bobres admin link` / `admin password` / `admin owners` | A one-time dashboard login link / reset the owner's dashboard password (no Telegram needed) / list, add or remove the store's owners (Telegram IDs) |
+| `bobres admin approval status \| off` | Whether dashboard sign-ins must be approved in Telegram (Settings > Sign-in security, off by default), and the way out when the bot or Telegram cannot be reached: switch it off |
 | `bobres config list \| get \| set` | Show or change a setting |
 | `bobres ssl status \| auto \| ip \| manual` | The HTTPS certificate: Caddy's automatic one, a Let's Encrypt one for the server's IP, or your own |
 | `bobres secrets rotate bot-token \| db-passwords \| service-tokens \| redis-password` | Rotate a secret |

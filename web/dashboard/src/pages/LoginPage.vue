@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { I18nT, useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Card from 'primevue/card'
@@ -9,10 +9,12 @@ import InputOtp from 'primevue/inputotp'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Divider from 'primevue/divider'
+import ProgressBar from 'primevue/progressbar'
 import { useAuth } from '../stores/auth'
 import { ApiError } from '../api'
 import { latinDigits } from '../format'
 import { setLang, currentLang } from '../i18n'
+import { APPROVAL_COMMAND, POLL_MS, clock, pendingState, reasonKey, secondsLeft } from '../security'
 import { applyBrandColor, applyDocumentBrand } from '../theme'
 import mascotWave from '../assets/brand/bobres-wave.webp'
 import mascotStill from '../assets/brand/bobres-mascot.webp'
@@ -38,6 +40,8 @@ const showPoweredBy = computed(() => auth.publicBrandSettled && auth.publicBrand
 onMounted(() => {
   if (auth.publicBrand && !auth.me) applyBrandColor(auth.publicBrand.color)
   void auth.loadPublicBrand()
+  // A page reloaded while a sign-in waits for its approval finds the wait again (the pending cookie is the browser's).
+  if (!/^#t=/.test(route.hash)) void resume()
 })
 watchEffect(() => applyDocumentBrand(t('branding.doc_title', { brand: brandName.value }), auth.publicBrand?.logo))
 
@@ -47,6 +51,8 @@ const username = ref('')
 const password = ref('')
 const code = ref('')
 const busy = ref(false)
+// Why no approval can be asked for in Telegram (core's reason): shown with the command that signs in without it.
+const unavailable = ref('')
 
 function messageFor(e: unknown): string {
   if (e instanceof ApiError) {
@@ -59,6 +65,8 @@ function messageFor(e: unknown): string {
         return t('login.locked')
       case 'rate_limited':
         return t('login.rate_limited')
+      case 'approval_rate_limited':
+        return t('login.approval_rate_limited')
       case 'not_configured':
         return t('login.not_configured')
       case 'network':
@@ -66,6 +74,20 @@ function messageFor(e: unknown): string {
     }
   }
   return t('error.generic')
+}
+
+// A login that needs an approval cannot be asked for (the bot is down, nobody can be reached): the reason, and the way in that needs none.
+function failed(e: unknown) {
+  if (e instanceof ApiError && e.code === 'approval_unavailable') {
+    unavailable.value = reasonKey(e.data.reason)
+    return
+  }
+  error.value = messageFor(e)
+}
+
+// What a login came to: a session (go in), or a wait for an approval in Telegram (the card below shows it).
+async function entered(how: 'session' | 'pending') {
+  if (how === 'session') await router.replace({ name: auth.me?.must_change ? 'account' : 'overview' })
 }
 
 // A link from the bot carries its one-time token in the fragment (#t=...),
@@ -76,12 +98,14 @@ async function consumeLink(hash: string) {
   const m = /^#t=([A-Za-z0-9_-]{20,})$/.exec(hash)
   if (!m || linking.value) return
   error.value = ''
+  unavailable.value = ''
   linking.value = true
   try {
-    await auth.loginWithLink(m[1])
-    await router.replace({ name: auth.me?.must_change ? 'account' : 'overview' })
+    const how = await auth.loginWithLink(m[1])
+    if (how === 'session') await entered(how)
+    else await router.replace({ name: 'login' }) // the spent token leaves the address bar while the request waits
   } catch (e) {
-    error.value = messageFor(e)
+    failed(e)
     await router.replace({ name: 'login' })
   } finally {
     linking.value = false
@@ -91,16 +115,90 @@ watch(() => route.hash, consumeLink, { immediate: true })
 
 async function submit() {
   error.value = ''
+  unavailable.value = ''
   busy.value = true
   try {
-    await auth.loginWithPassword(username.value.trim(), password.value, latinDigits(code.value))
     // The initial password only opens the page where a new one is chosen.
-    await router.replace({ name: auth.me?.must_change ? 'account' : 'overview' })
+    await entered(await auth.loginWithPassword(username.value.trim(), password.value, latinDigits(code.value)))
   } catch (e) {
-    error.value = messageFor(e)
+    failed(e)
     code.value = ''
   } finally {
     busy.value = false
+  }
+}
+
+// The wait for an approval in Telegram: asked about every few seconds until it ends. The request lives 5 minutes in core, whatever this page does.
+const now = ref(Date.now())
+let pollTimer: ReturnType<typeof setInterval> | undefined
+let tickTimer: ReturnType<typeof setInterval> | undefined
+let polling = false
+
+const waiting = computed(() => auth.pending)
+const left = computed(() => (waiting.value ? secondsLeft(waiting.value.expires_at, now.value) : 0))
+const waited = computed(() => (waiting.value ? Math.max(0, waiting.value.ttl_s - left.value) : 0))
+const waitState = computed(() => (waiting.value ? pendingState(waiting.value, waited.value) : 'self'))
+const percentLeft = computed(() => (waiting.value && waiting.value.ttl_s > 0 ? Math.round((left.value / waiting.value.ttl_s) * 100) : 0))
+const showWayOut = computed(() => waitState.value === 'slow' || waitState.value === 'failed')
+
+function stopWaiting() {
+  clearInterval(pollTimer)
+  clearInterval(tickTimer)
+  pollTimer = tickTimer = undefined
+}
+function startWaiting() {
+  stopWaiting()
+  now.value = Date.now()
+  tickTimer = setInterval(() => (now.value = Date.now()), 1000)
+  pollTimer = setInterval(() => void poll(), POLL_MS)
+}
+watch(
+  () => auth.pending !== null,
+  (isWaiting) => (isWaiting ? startWaiting() : stopWaiting()),
+  { immediate: true },
+)
+onBeforeUnmount(stopWaiting)
+
+async function poll() {
+  if (polling || !auth.pending) return
+  polling = true
+  try {
+    const r = await auth.pollPending()
+    if (r === 'session') {
+      stopWaiting()
+      await entered('session')
+    } else if (r !== 'pending') {
+      stopWaiting()
+      if (r !== 'none') error.value = t('login.ended.' + r)
+    }
+  } catch (e) {
+    // A network blip or a pause the server asked for keeps the wait going; anything else ends it.
+    if (e instanceof ApiError && e.code !== 'network' && e.code !== 'rate_limited') {
+      stopWaiting()
+      auth.pending = null
+      failed(e)
+    }
+  } finally {
+    polling = false
+  }
+}
+
+// One look at load: a wait that was open before the page was reloaded shows again (or, approved meanwhile, lets the person in).
+async function resume() {
+  try {
+    const r = await auth.pollPending()
+    if (r === 'session') await entered('session')
+    else if (r !== 'pending' && r !== 'none') error.value = t('login.ended.' + r)
+  } catch {
+    /* nothing to resume */
+  }
+}
+
+async function cancelWaiting() {
+  try {
+    await auth.cancelPending()
+  } catch {
+    /* the request ends on its own in 5 minutes */
   }
 }
 </script>
@@ -128,7 +226,25 @@ async function submit() {
         <template #content>
           <Message v-if="linking" severity="info" :closable="false">{{ t('login.link_working') }}</Message>
           <Message v-if="error" severity="error" :closable="false" class="msg">{{ error }}</Message>
+          <Message v-if="unavailable" severity="error" :closable="false" class="msg unavailable">
+            <I18nT :keypath="'login.approval.' + unavailable" tag="span" class="hint">
+              <template #cmd><code class="cmd" dir="ltr">{{ APPROVAL_COMMAND }}</code></template>
+            </I18nT>
+          </Message>
 
+          <section v-if="waiting" class="waiting" role="status" aria-live="polite" aria-labelledby="pending-title">
+            <i class="pi pi-send icon" aria-hidden="true" />
+            <h3 id="pending-title">{{ t('login.pending_title') }}</h3>
+            <p class="line">{{ t('login.pending_' + waitState) }}</p>
+            <p class="app-muted time">{{ left > 0 ? t('login.pending_left', { time: clock(left) }) : t('login.pending_checking') }}</p>
+            <ProgressBar :value="percentLeft" :show-value="false" class="bar" :aria-label="t('login.pending_title')" />
+            <I18nT v-if="showWayOut" keypath="login.pending_way_out" tag="p" class="app-muted hint">
+              <template #cmd><code class="cmd" dir="ltr">{{ waiting.command || APPROVAL_COMMAND }}</code></template>
+            </I18nT>
+            <Button :label="t('login.pending_cancel')" severity="secondary" outlined class="cancel" @click="cancelWaiting" />
+          </section>
+
+          <template v-else>
           <h3>{{ t('login.password_title') }}</h3>
           <form class="form" @submit.prevent="submit">
             <label>
@@ -160,6 +276,7 @@ async function submit() {
             <template #admin><code class="cmd" dir="ltr">/admin</code></template>
           </I18nT>
           <p class="app-muted small">{{ t('login.no_password_yet') }}</p>
+          </template>
         </template>
       </Card>
     </div>
@@ -248,6 +365,32 @@ h3 {
 }
 .msg {
   margin-block-end: 0.75rem;
+}
+/* The wait for an approval in Telegram: one calm column in the middle of the card. */
+.waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+.waiting .icon {
+  font-size: 1.75rem;
+  color: var(--p-primary-color);
+}
+.waiting h3 {
+  margin-block: 0;
+}
+.waiting .line,
+.waiting .time {
+  margin-block: 0;
+}
+.waiting .bar {
+  inline-size: 100%;
+  block-size: 0.4rem;
+}
+.waiting .cancel {
+  margin-block-start: 0.5rem;
 }
 .form {
   display: flex;
