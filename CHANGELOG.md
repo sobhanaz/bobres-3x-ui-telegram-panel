@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **The dashboard shows a service the panel has no client for** (an operator deleted it in 3x-ui or Marzban: the customer cannot connect while the service still looks active). The Services page marks it with a **Not on the panel** badge and has an **Only services not on the panel** switch (`?panel=missing`, so a link or a reload keeps it). The service's page warns since when, that the customer cannot connect and that expiry reminders are paused, and offers **Make the client again** (`services.write`, with a reason): the client is made again on the same server, the same subscription link works again, the used traffic starts from zero and the end date and the traffic limit stay. The Overview has a **Not on the panel** card while there are any, which opens the filtered list. In English and Persian.
+- **The Monitoring events show how often a line repeated.** An entry core folded from several identical lines carries **×N** and the time of the first and the last one; a single line looks as before.
+
 ## [0.17.1] — 2026-10-28
 
 **The store comes back by itself after a reboot.** A real store was powered off and on by its host, and for 8 hours the dashboard, the Mini App, the subscription pages and the payment pages were unreachable while the bot went on answering: Docker had marked Caddy "manually stopped", and a container with that mark is not started again after a reboot. Every install and update did that to Caddy (it signalled it through `docker kill`), so every store would have hit it at its first reboot. This release stops doing it, starts the whole store from a systemd unit at every boot, fixes a heartbeat that kept the tls-agent "unhealthy" after any restart, and makes the alerts say what to type.

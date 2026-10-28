@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import en from '../locales/en.json'
 import fa from '../locales/fa.json'
-import { RANGE_STEP, type EventsReply, type MetricInfo, type Overview, type Range, type SeriesAnswer } from '../monitor'
+import { RANGE_STEP, stamp, type EventsReply, type MetricInfo, type Overview, type Range, type SeriesAnswer } from '../monitor'
 
 // The System page's Monitoring tab, booted like the real app against a fake core: the overview and what it says
 // when all is well, when something needs a look and when something is down; a server without the host
@@ -477,6 +477,34 @@ describe('alerts and logs: the owner and the admin', () => {
     expect(calls).toContain('/api/v1/monitor/events?level=warn&limit=100')
   })
 
+  it('folds identical lines into one entry: how many there were, and when the first and the last came', async () => {
+    const folded = { ...journal, at: NOW - 100, first_at: NOW - 3700, count: 12 }
+    const noSpan = { ...journal, source: 'host.caddy', title: 'caddy: tls handshake error', at: NOW - 200, count: 3 } // core gave a count but no first time
+    const once = { ...botLog, count: 1 } // one line is no repeat, whatever core writes
+    await boot({ events: () => json(200, eventsReply({ items: [diskAlert, folded, noSpan, once, botLog] })) })
+    await found('#monitor-events .event')
+    const items = all(document, '#monitor-events .event')
+    expect(items).toHaveLength(5)
+    // a single line looks as it did: no badge, no span
+    for (const i of [0, 3, 4]) {
+      expect(items[i].querySelector('.event-repeat'), String(i)).toBeNull()
+      expect(items[i].querySelector('.event-range'), String(i)).toBeNull()
+    }
+    // the folded entry: ×12 (a screen reader is told in words), the time of the newest line, and the span it covers
+    const badge = items[1].querySelector('.event-repeat')!
+    expect(text(badge)).toBe('×12')
+    expect(badge.getAttribute('aria-hidden')).toBe('true')
+    expect(text(items[1].querySelector('.sr-only'))).toBe('Repeated 12 times')
+    expect(text(items[1].querySelector('.event-time'))).toBe(stamp(NOW - 100, 'en', 'gregorian'))
+    expect(text(items[1].querySelector('.event-range'))).toBe(
+      fill(en.monitor.events.repeat_range, { first: '\u2068' + stamp(NOW - 3700, 'en', 'gregorian') + '\u2069', last: '\u2068' + stamp(NOW - 100, 'en', 'gregorian') + '\u2069' }),
+    )
+    expect(text(items[1].querySelector('.event-title'))).toBe(journal.title)
+    // without the first time there is the count and no span made up
+    expect(text(items[2].querySelector('.event-repeat'))).toBe('×3')
+    expect(items[2].querySelector('.event-range')).toBeNull()
+  })
+
   it('tells the admin the services lines are the owner\'s, and shows the rest', async () => {
     await boot({ perms: ADMIN, events: () => json(200, eventsReply({ items: [diskAlert, journal], logs_visible: false })) })
     await found('#monitor-events .event')
@@ -665,6 +693,18 @@ describe('in Persian', () => {
     expect(text(q('.range-switch'))).toContain(fa.monitor.range['6h'])
     expect(q('#monitor-docker')).not.toBeNull()
     expect(text(q('#monitor-kubernetes .not-detected'))).toBe(fa.monitor.kube.none)
+  })
+
+  it('writes the repeat of a folded entry in Persian, with Persian digits and the Persian calendar', async () => {
+    const folded = { ...journal, at: NOW - 100, first_at: NOW - 3700, count: 12 }
+    await boot({ lang: 'fa', events: () => json(200, eventsReply({ items: [folded] })) })
+    await found('#monitor-events .event')
+    expect(text(q('#monitor-events .event-repeat'))).toBe('×۱۲')
+    expect(text(q('#monitor-events .sr-only'))).toBe(fill(fa.monitor.events.repeat_hint, { n: '۱۲' }))
+    expect(text(q('#monitor-events .event-range'))).toBe(
+      fill(fa.monitor.events.repeat_range, { first: '\u2068' + stamp(NOW - 3700, 'fa', 'jalali') + '\u2069', last: '\u2068' + stamp(NOW - 100, 'fa', 'jalali') + '\u2069' }),
+    )
+    expect(text(q('#monitor-events .event-range'))).toMatch(/[۰-۹]/)
   })
 
   it('writes the collector notice in Persian but keeps the command whole and left to right', async () => {
