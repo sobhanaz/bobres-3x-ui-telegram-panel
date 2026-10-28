@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -57,6 +58,8 @@ type resellerDetail struct {
 	PanelGroup     string `json:"panel_group"`
 	PanelGroupFull string `json:"panel_group_full"`
 	GroupsSynced   bool   `json:"groups_synced"`
+	// Targets is this month against the owner's monthly targets (absent while they are off).
+	Targets map[string]any `json:"targets,omitempty"`
 }
 
 func resellerOf(r *store.ResellerRow) resellerJSON {
@@ -125,7 +128,15 @@ func (s *Server) writeReseller(w http.ResponseWriter, r *http.Request, status in
 		s.fail(w, "load reseller naming", err)
 		return
 	}
-	writeJSON(w, status, map[string]any{"item": resellerDetailOf(row, naming)})
+	item := resellerDetailOf(row, naming)
+	if t, err := s.cfg.Domain.ResellerTargets(r.Context(), id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			s.cfg.Log.Warn("dashboard api: reseller targets", "err", err)
+		}
+	} else if t.On {
+		item.Targets = targetsJSON(t)
+	}
+	writeJSON(w, status, map[string]any{"item": item})
 }
 
 // getReseller: GET /api/v1/resellers/{id}; their services, customers,

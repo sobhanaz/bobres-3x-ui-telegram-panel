@@ -247,7 +247,7 @@ export interface AuditItem {
 export interface SettingItem {
   key: string
   group: string
-  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color'
+  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list'
   value: string
   default: string
   options: string[]
@@ -555,6 +555,30 @@ export interface ResellerDetail extends ResellerItem {
   panel_group?: string
   panel_group_full?: string
   groups_synced?: boolean
+  /** this month against the owner's monthly targets (absent while they are off) */
+  targets?: TargetsView
+}
+
+export interface TargetTierView {
+  threshold: number
+  bonus: number
+  reached: boolean
+  paid: boolean
+}
+
+/** A reseller's month against the owner's targets (core's targetsJSON): from and to are the Gregorian dates the month covers, ends_at unix seconds. */
+export interface TargetsView {
+  period: string
+  calendar: 'gregorian' | 'jalali'
+  from: string
+  to: string
+  ends_at: number
+  sold: number
+  tiers: TargetTierView[]
+  remaining: number
+  bonus_paid: number
+  currency: string
+  scale: number
 }
 
 /** A reseller tier: a discount off store prices, or a fixed price per plan

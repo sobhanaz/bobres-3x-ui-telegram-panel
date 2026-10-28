@@ -57,6 +57,8 @@ type Config struct {
 	SupplierTransport SupplierTransport
 	// RateTransport carries the live USDT rate from the bot (nil until SetRateTransport).
 	RateTransport RateTransport
+	// Now is the clock of the growth tools (the month of a reseller's sale, the day of a spin): nil is time.Now. Tests set it.
+	Now func() time.Time
 	// PrivateFeaturesOverride, when set, decides PrivateFeatures instead of the license. It exists for tests of the vendor's
 	// own features; nothing sets it in a running install.
 	PrivateFeaturesOverride *bool

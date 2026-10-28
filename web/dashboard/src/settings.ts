@@ -11,6 +11,57 @@ export interface Problem {
   params?: Record<string, number>
 }
 
+/** A tier of the reseller targets: how many new services a reseller sells in a month, and the bonus in Toman for reaching it. */
+export interface Tier {
+  threshold: number
+  bonus: number
+}
+
+/** Limits core checks again. */
+export const MAX_TIERS = 10
+export const MAX_THRESHOLD = 100_000
+export const MAX_BONUS = 100_000_000_000
+
+/** parseTiers reads the list the setting targets.tiers holds, by core's rules: whole numbers only, at most MAX_TIERS tiers, each threshold from 1
+ * to MAX_THRESHOLD and each bonus from 1 to MAX_BONUS, no threshold twice. The tiers come back sorted; a code names what is wrong. */
+export function parseTiers(raw: string): { tiers: Tier[] } | { code: 'tiers' | 'tiers_many' | 'tiers_dup' } {
+  if (raw.trim() === '') return { tiers: [] }
+  let v: unknown
+  try {
+    v = JSON.parse(raw)
+  } catch {
+    return { code: 'tiers' }
+  }
+  if (v === null) return { tiers: [] }
+  if (!Array.isArray(v)) return { code: 'tiers' }
+  if (v.length > MAX_TIERS) return { code: 'tiers_many' }
+  const tiers: Tier[] = []
+  for (const row of v) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) return { code: 'tiers' }
+    const keys = Object.keys(row)
+    if (keys.length !== 2 || !keys.includes('threshold') || !keys.includes('bonus')) return { code: 'tiers' }
+    const { threshold, bonus } = row as Record<string, unknown>
+    if (typeof threshold !== 'number' || typeof bonus !== 'number' || !Number.isInteger(threshold) || !Number.isInteger(bonus)) return { code: 'tiers' }
+    if (threshold < 1 || threshold > MAX_THRESHOLD || bonus < 1 || bonus > MAX_BONUS) return { code: 'tiers' }
+    tiers.push({ threshold, bonus })
+  }
+  tiers.sort((a, b) => a.threshold - b.threshold)
+  for (let i = 1; i < tiers.length; i++) if (tiers[i].threshold === tiers[i - 1].threshold) return { code: 'tiers_dup' }
+  return { tiers }
+}
+
+/** formatTiers writes the list the way core stores it: sorted, compact JSON, "" for none. */
+export function formatTiers(tiers: Tier[]): string {
+  if (!tiers.length) return ''
+  return JSON.stringify([...tiers].sort((a, b) => a.threshold - b.threshold).map((t) => ({ threshold: t.threshold, bonus: t.bonus })))
+}
+
+/** normalizeTiers is a list as it will be stored when it is valid, else as typed (for validate to refuse). */
+export function normalizeTiers(raw: string): string {
+  const p = parseTiers(raw)
+  return 'tiers' in p ? formatTiers(p.tiers) : raw.trim()
+}
+
 /** Groups core may still list that are edited on another page: the
  * payment details are on the Payment gateways page. */
 export const movedGroups = ['payments']
@@ -56,6 +107,7 @@ export function normalize(item: SettingItem, raw: string): string {
   if (item.kind === 'int') return asciiNumber(s)
   if (item.kind === 'channel') return normalizeChannel(s)
   if (item.kind === 'time') return normalizeTime(s)
+  if (item.kind === 'list') return normalizeTiers(s)
   if (item.key === 'cashback.percent') {
     const bp = percentBP(s)
     return bp === null ? s : String(bp / 100)
@@ -131,6 +183,10 @@ export function validate(item: SettingItem, value: string, others: Record<string
       return httpsURL(value) ? null : { code: 'https' }
     case 'text':
       return validateText(item.key, value)
+    case 'list': {
+      const p = parseTiers(value)
+      return 'code' in p ? { code: p.code } : null
+    }
   }
   return null
 }

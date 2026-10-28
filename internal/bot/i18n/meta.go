@@ -286,6 +286,7 @@ var markupArgs = map[string][]string{
 	"pay.rejected":         {"reason"},
 	"pay.check_failed":     {"reason"},
 	"rs.panel":             {"balances"},
+	"rs.targets":           {"tiers", "next"}, // the lines of the tiers, and the sentence about the next one (it holds a <b>)
 	"rs.customers_title":   {"lines"},
 	"ref.top_screen":       {"entries", "range"}, // rendered texts: the places, and the ranks of a page
 	"ref.top_entry":        {"you"},              // a rendered text

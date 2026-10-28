@@ -388,6 +388,21 @@ payments in the dashboard. Customers see none of this.
 - **Buy for a customer:** the plans at their prices, then "type a name for this service, like Ali's phone, or tap
   Skip" (one line, at most 64 characters), then the regular checkout. Their regular Buy, renewals and traffic
   packages show their prices too.
+- **Monthly target** (built 2026-10-28; off until the owner switches it on in Settings, Reseller targets: `targets.enabled`, `targets.tiers`, a list of
+  up to 10 `{threshold, bonus}` rows, and `targets.calendar`, `gregorian` by default or `jalali`). Each tier is a number of **new services** the reseller
+  sells in a calendar month and a bonus in Toman. A sale is a new service an active reseller bought that has been **delivered** (a renewal, a traffic
+  package, a free trial and an order that cost nothing are not sales); it belongs to the month it was delivered in, read in the store's time zone (the
+  zone of the reports and the daily summary) and in the owner's calendar, and counts only while targets are on, so switching them on in the middle of a
+  month counts from that moment. A bulk purchase counts each of its services. When a delivery makes the count reach a tier, the bonus goes to the
+  wallet in **the same transaction that marks the service delivered**: a ledger entry of kind `target_bonus`, key `target:<reseller user id>:<yyyy-mm>:<threshold>`,
+  and a row in `core.reseller_target_bonuses` whose primary key (reseller, month, threshold) is the guard: a tier pays once per month however often
+  the delivery is retried and however the owner edits the list (a tier is told by its threshold, not by its place in the list; a tier added in the
+  middle of a month pays at the reseller's next sale if their count is already past it). The reseller gets a message ("You reached N services this
+  month: bonus X was added to your wallet", `wallet.credited_target_bonus`). The panel shows the month (its dates), the count, each tier with its bonus
+  and whether it is reached and paid, and how many more sales the next one needs; the Mini App's reseller panel and the dashboard's reseller page show
+  the same (`targets`). **A refund takes the sale out of the count but never takes a paid bonus back**: a bonus is not clawed back, so a reseller who
+  was paid and then had orders refunded keeps it, and a tier that was paid is not paid again when the count climbs back. Staff can see every bonus in the
+  reseller's statement (kind "Monthly target bonus"). Targets need the resellers feature of the license, like the rest of this panel.
 - **Bulk purchase** (the home menu's button, Key flows above) works for resellers: the plans and every service at their
   prices, paid from the wallet down to their credit limit (the screen says what they can spend; past it, "Not enough
   credit" and no Pay or top-up), the services named "<name> 1" to "<name> N" like a name they give a single one, and the

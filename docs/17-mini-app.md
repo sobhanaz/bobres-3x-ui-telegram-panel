@@ -293,7 +293,9 @@ Five tabs:
 - **Panel:** tier, discount and commission, per currency the balance (a debt is written "Debt X", never with a minus),
   the credit limit and what can be spent (balance plus limit), how many services are in each group (a tap opens the list
   in that group), the customers who joined through the link and the commission earned, and the **invite link** with a
-  Share button (Telegram's share sheet) and Copy.
+  Share button (Telegram's share sheet) and Copy. While the owner has **monthly targets** on, a card shows this month
+  (its dates), the services sold, a bar to the next tier and every tier with its bonus, reached or paid
+  ([03-bot-ux.md](03-bot-ux.md#reseller-panel)).
 - **Buy:** the plans at the reseller's tier price (the shop's `/plans` already answers with it), then an optional name
   for the service (one line, at most 64 characters), then the shop's own checkout (the `label` of `POST /orders`).
   The checkout has no discount-code field for a reseller (they pay tier prices, core refuses codes), and its wallet
@@ -317,7 +319,7 @@ resume a service **support** paused (the app says to contact support, code `paus
 
 | Call | What it does |
 |---|---|
-| `GET /reseller` | Tier, discount, commission, balances with credit and available, customers, commission earned, `ref_code`, `invite_link` (`""` while the bot's username is unknown: Branding's, else the one the bot told at a sign-in), `counts` per group |
+| `GET /reseller` | Tier, discount, commission, balances with credit and available, customers, commission earned, `targets` (only while the owner's monthly targets are on: `period` (`yyyy-mm`), `calendar`, `from` and `to` (the Gregorian dates the month covers in the store's zone), `ends_at`, `sold`, `tiers` (`threshold`, `bonus` in Toman, `reached`, `paid`), `remaining` to the next tier, `bonus_paid`, `currency`, `scale`), `ref_code`, `invite_link` (`""` while the bot's username is unknown: Branding's, else the one the bot told at a sign-in), `counts` per group |
 | `GET /reseller/services?status=&q=&page=&size=` | The reseller's services (`status` is `active`, `expiring_soon`, `expired`, `paused` or `pending`; `size` at most 50, 10 by default) with `total` and `counts`; each has `label`, `note`, `status`, `expires_at`, `traffic_total`, `traffic_used`, `link`, `page_url`, `can_renew`, `can_topup`, `can_pause`, `can_resume`, `can_delete` |
 | `POST /reseller/services/{id}/pause`, `.../resume` `{}` | Turn the service off or on in the panel; repeating changes nothing; returns the service |
 | `POST /reseller/services/{id}/delete` `{confirm: true}` | Delete for good (no refund); repeating is fine; 400 without the confirmation |

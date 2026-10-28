@@ -242,6 +242,12 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			key = "wallet.credited"
 		}
 		lang := n.lang(ctx, e.TelegramID)
+		if e.Reason == events.CreditTargetBonus {
+			// A reseller reached a tier of the month's target.
+			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_target_bonus", "sold", i18n.Number(lang, int64(e.TargetSales)),
+				"threshold", i18n.Number(lang, int64(e.TargetThreshold)), "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		}
 		if e.Reason == events.CreditRefund && e.CashbackTaken > 0 {
 			// The refund also took back the cashback the order had earned: say so, with the balance after both.
 			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_refund_cashback", "amount", i18n.Money(lang, e.Amount, e.Currency),

@@ -178,7 +178,10 @@ func (s *Service) afterDelivery(ctx context.Context, tx pgx.Tx, o *store.Order, 
 	if err != nil {
 		return err
 	}
-	return s.issueCashback(ctx, tx, set, o, plan, buyer, bulkID)
+	if err := s.issueCashback(ctx, tx, set, o, plan, buyer, bulkID); err != nil {
+		return err
+	}
+	return s.recordSale(ctx, tx, set, o, plan, buyer)
 }
 
 // issueCashback credits the cashback an order earned, once, and queues the message that tells the buyer.

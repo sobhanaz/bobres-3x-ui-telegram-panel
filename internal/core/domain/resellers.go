@@ -157,6 +157,8 @@ type ResellerInfo struct {
 	Customers int64            // users who joined through their link
 	Earned    map[string]int64 // commissions per currency
 	RefCode   string
+	// Targets is this month against the owner's monthly targets (targets.go); nil while they are off or could not be read.
+	Targets *TargetProgress
 }
 
 // ResellerInfo returns a reseller's terms, balances and earnings; anyone who
@@ -192,7 +194,7 @@ func (s *Service) ResellerInfo(ctx context.Context, userID string) (*ResellerInf
 	if err != nil {
 		return nil, err
 	}
-	return &ResellerInfo{Terms: *terms, Wallets: wallets, Customers: customers, Earned: earned, RefCode: code}, nil
+	return &ResellerInfo{Terms: *terms, Wallets: wallets, Customers: customers, Earned: earned, RefCode: code, Targets: s.optionalTargets(ctx, u.ID)}, nil
 }
 
 // payCommission credits a reseller their commission on a paid order of a

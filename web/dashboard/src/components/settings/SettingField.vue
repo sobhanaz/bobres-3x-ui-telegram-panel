@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
+import TiersEditor from './TiersEditor.vue'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import { api } from '../../api'
@@ -175,6 +176,16 @@ async function runCheck() {
           <span :class="{ 'app-ltr': option.value }">{{ option.label }}</span>
         </template>
       </Select>
+      <TiersEditor
+        v-else-if="item.kind === 'list' && item.key === 'targets.tiers'"
+        :model-value="modelValue"
+        :input-id="id"
+        :invalid="!!problem || !!serverError"
+        :locked="locked"
+        :described-by="describedBy"
+        @update:model-value="set"
+        @touch="emit('touch')"
+      />
       <div v-else class="control">
         <InputText
           :id="id"

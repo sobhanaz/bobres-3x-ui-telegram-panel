@@ -513,7 +513,21 @@ func (s *Server) GetResellerInfo(ctx context.Context, req *corev1.GetResellerInf
 			CreditLimit: w.CreditLimit, Available: w.Balance + w.CreditLimit})
 	}
 	out.CommissionEarned = moneyList(ri.Earned)
+	out.Targets = targetsToProto(ri.Targets)
 	return out, nil
+}
+
+// targetsToProto is the monthly target for the bot (nil while the owner has targets off).
+func targetsToProto(p *domain.TargetProgress) *corev1.ResellerTargets {
+	if p == nil || !p.On {
+		return nil
+	}
+	out := &corev1.ResellerTargets{Period: p.Period, Calendar: p.Calendar, From: p.From, To: p.To, EndsAt: p.EndsAt.Unix(), Sold: p.Sold,
+		Remaining: p.Remaining, BonusPaid: p.BonusPaid}
+	for _, t := range p.Tiers {
+		out.Tiers = append(out.Tiers, &corev1.ResellerTargetTier{Threshold: t.Threshold, Bonus: t.Bonus, Reached: t.Reached, Paid: t.Paid})
+	}
+	return out
 }
 
 // SetResellerConfigPrefix sets the reseller's own prefix for the names of their configs in the 3x-ui panel (once:

@@ -204,6 +204,8 @@ const (
 	CreditGiftCode = "gift_code"
 	// CreditCashback: a share of a delivered order given back to the buyer (OrderID is the order).
 	CreditCashback = "cashback"
+	// CreditTargetBonus: a reseller reached a tier of the monthly sales target (TargetSales, TargetMonth and TargetThreshold say which).
+	CreditTargetBonus = "target_bonus"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
@@ -223,6 +225,10 @@ type WalletCreditedEvent struct {
 	Rate         int64  `json:"rate,omitempty"`
 	// CashbackTaken is, on a refund, the cashback the order had earned that was taken back with it (Balance is the balance after both).
 	CashbackTaken int64 `json:"cashback_taken,omitempty"`
+	// On a target bonus: how many services the reseller had sold that month, the month (yyyy-mm) and the tier that paid (its threshold).
+	TargetSales     int    `json:"target_sales,omitempty"`
+	TargetMonth     string `json:"target_month,omitempty"`
+	TargetThreshold int    `json:"target_threshold,omitempty"`
 }
 
 // PaymentRejectedEvent: a payment did not go through: a reviewer rejected a

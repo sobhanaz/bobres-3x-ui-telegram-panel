@@ -26,6 +26,25 @@ export interface Panel {
   /** the prefix of the names of their configs in the panel ("" until they choose it), and the NAME of their panel group */
   config_prefix: string
   panel_group: string
+  /** this month against the owner's monthly targets (absent while they are off) */
+  targets?: Targets
+}
+
+export interface TargetTier { threshold: number; bonus: number; reached: boolean; paid: boolean }
+
+/** Targets is the month's count and the tiers (core's miniTargets): from and to are the Gregorian dates the month covers, ends_at unix seconds. */
+export interface Targets {
+  period: string
+  calendar: 'gregorian' | 'jalali'
+  from: string
+  to: string
+  ends_at: number
+  sold: number
+  tiers: TargetTier[]
+  remaining: number
+  bonus_paid: number
+  currency: string
+  scale: number
 }
 
 /** ResellerService is a customer's service as the section shows it: the shop's Service plus what only a reseller has. */

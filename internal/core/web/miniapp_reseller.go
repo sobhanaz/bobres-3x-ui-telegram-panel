@@ -141,13 +141,18 @@ func (s *Server) miniResellerPanel(w http.ResponseWriter, r *http.Request) {
 		s.miniResellerFail(w, "mini app reseller", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	body := map[string]any{
 		"tier": info.Terms.TierName, "discount_percent": info.Terms.DiscountPercent, "commission_percent": info.Terms.CommissionPercent,
 		"balances": balances, "customers": info.Customers, "commission_earned": miniMoneyList(info.Earned),
 		"ref_code": info.RefCode, "invite_link": link, "counts": miniServiceCounts(counts),
 		// What their configs are called and grouped as in the 3x-ui panel ("" until chosen or given).
 		"config_prefix": naming.ConfigPrefix, "panel_group": naming.PanelGroup,
-	})
+	}
+	// This month against the owner's targets, while they are on.
+	if t := info.Targets; t != nil && t.On {
+		body["targets"] = targetsJSON(t)
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // miniResellerPrefix: POST /api/mini/v1/reseller/prefix {prefix} sets the reseller's own config prefix, once (the owner changes it

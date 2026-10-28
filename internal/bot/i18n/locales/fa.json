@@ -932,5 +932,17 @@
   "setting.cashback.min_order.label": "کمترین مبلغ سفارش برای کش‌بک (تومان)",
   "setting.cashback.min_order.help": "سفارش باید دست‌کم این مقدار تومان قیمت داشته باشد تا کش‌بک بگیرد. خالی یا ۰ یعنی هر سفارشی که مبلغی دارد.",
   "setting.cashback.renewals.label": "تمدید هم کش‌بک دارد",
-  "setting.cashback.renewals.help": "روشن: تمدید و بستهٔ ترافیک هم مثل سرویس جدید کش‌بک می‌گیرد. خاموش: فقط سرویس جدید."
+  "setting.cashback.renewals.help": "روشن: تمدید و بستهٔ ترافیک هم مثل سرویس جدید کش‌بک می‌گیرد. خاموش: فقط سرویس جدید.",
+  "rs.targets": "🎯 <b>هدف ماهانه</b> · {range}\nسرویس فروخته‌شده در این ماه: <b>{sold}</b>\n\n{tiers}\n\n{next}",
+  "rs.target_range": "{from} تا {to}",
+  "rs.target_tier": "{mark} {threshold} فروش: پاداش {bonus}",
+  "rs.target_next": "پاداش بعدی: <b>{bonus}</b> · فروش باقی‌مانده: <b>{remaining}</b>",
+  "rs.target_done": "این ماه به همهٔ پله‌ها رسیده‌اید. 🎉",
+  "rs.target_ends": "⏳ روزهای باقی‌ماندهٔ این ماه: {days}",
+  "wallet.credited_target_bonus": "🎯 <b>به هدف ماهانه رسیدید!</b>\nفروش این ماه: {sold} · پله: {threshold}\nپاداش، <b>{amount}</b>، به کیف پولتان اضافه شد.\nموجودی: {balance}",
+  "setting.group.targets": "هدف نمایندگان",
+  "setting.targets.enabled.label": "هدف ماهانه",
+  "setting.targets.enabled.help": "نمایندهٔ شما اگر در یک ماه به‌اندازهٔ کافی سرویس جدید بفروشد، برای هر پله‌ای که به آن می‌رسد یک بار در همان ماه پاداش می‌گیرد. پله‌ها در داشبورد (تنظیمات ← هدف نمایندگان) تعیین می‌شوند. به‌طور پیش‌فرض خاموش است و فروش‌ها از لحظهٔ روشن شدن شمرده می‌شوند.",
+  "setting.targets.calendar.label": "تقویم ماه",
+  "setting.targets.calendar.help": "gregorian: ماه از روز اول تا آخر آن میلادی است. jalali: ماه‌های شمسی. آن را میان دو ماه عوض کنید، نه وسط یک ماه."
 }

@@ -1450,6 +1450,16 @@
     "tz_default": "Server default",
     "tz_filter": "Search a region or city",
     "tz_now": "Time there now: {time}",
+    "tiers": {
+      "empty": "No tier yet. Add one to start paying bonuses.",
+      "row": "Tier {n}",
+      "threshold": "New services in a month",
+      "bonus": "Bonus (Toman)",
+      "remove": "Remove tier {n}",
+      "add": "Add a tier",
+      "max": "The list holds at most {n} tier. | The list holds at most {n} tiers.",
+      "sorted": "Tiers are saved in order of services."
+    },
     "join": {
       "locked": "Only the store owner can change the required channels and groups.",
       "dormant": "The first channel is empty, so customers are not asked to join anything. The chats below are saved, but do nothing until the list is saved: its first row then becomes the first channel.",
@@ -1512,9 +1522,18 @@
       "option": "Choose one of the options.",
       "timezone": "This time zone is not recognised.",
       "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59).",
+      "tiers": "Each tier needs a whole number of services (1 to 100,000) and a bonus of at least 1 Toman.",
+      "tiers_dup": "Two tiers ask for the same number of services.",
+      "tiers_many": "At most 10 tiers.",
       "percent": "A percent from 0.01 to 20, for example 2.5."
     },
     "option": {
+      "targets": {
+        "calendar": {
+          "gregorian": "Gregorian",
+          "jalali": "Jalali (Persian)"
+        }
+      },
       "bot": {
         "plan_layout": {
           "table": "Table",
@@ -1571,6 +1590,11 @@
         "title": "Cashback",
         "desc": "Give a share of what each order cost back to the customer's wallet once it is paid and delivered.",
         "note": "Cashback is credit in the wallet, not cash: it can only be spent in the store. If an order is refunded, its cashback is taken back from the refund. Resellers, free orders, free trials and orders priced in USDT earn none. Off until you turn it on."
+      },
+      "targets": {
+        "title": "Reseller targets",
+        "desc": "A monthly bonus for resellers who sell enough new services.",
+        "note": "Each tier pays its own bonus, once for the month, as soon as a reseller's sales of the month reach it, on top of the bonuses of the lower tiers. Only new services a reseller bought and that were delivered count; renewals, traffic packages and free orders do not. Sales are counted from the moment you switch targets on. A refunded sale leaves the count of its month, but a bonus already paid is not taken back. Off until you turn it on."
       },
       "growth": {
         "title": "Growth",
@@ -1776,6 +1800,20 @@
         "renewals": {
           "label": "Renewals earn cashback",
           "help": "On: renewals and traffic packages earn it like new services. Off: only new services do."
+        }
+      },
+      "targets": {
+        "enabled": {
+          "label": "Monthly targets",
+          "help": "When on, a reseller whose new services of a month reach a tier is paid that tier's bonus, once for the month, into their wallet; they are told in the bot, and the Mini App and the bot show their progress. Turned off, nothing is counted or paid; what was paid stays."
+        },
+        "tiers": {
+          "label": "Tiers",
+          "help": "How many new services a reseller sells in a month, and the bonus in Toman for reaching that number. At most 10 tiers; each pays its own bonus on top of the lower tiers'. Changing the tiers in the middle of a month never pays a tier twice."
+        },
+        "calendar": {
+          "label": "Calendar of the month",
+          "help": "Gregorian: a month runs from the 1st to its last day (the 1st of November, for instance). Jalali: Persian months (the 1st of Aban). The month is read in the store's time zone. Change it between months, not in the middle of one."
         }
       },
       "growth": {
@@ -2427,6 +2465,19 @@
   },
   "reseller": {
     "title": "Reseller",
+    "targets": {
+      "title": "Monthly target",
+      "range": "{from} to {to}",
+      "sold": "new services sold this month",
+      "tier": "{n} service: {bonus} bonus | {n} services: {bonus} bonus",
+      "paid": "bonus paid",
+      "reached_unpaid": "reached, bonus not paid",
+      "not_reached": "not reached yet",
+      "next": "{n} more service for the next bonus of {bonus}. | {n} more services for the next bonus of {bonus}.",
+      "done": "Every tier is reached this month.",
+      "paid_total": "Bonuses paid this month: {amount}",
+      "no_clawback": "A refunded sale leaves the count, but a bonus already paid is not taken back."
+    },
     "tab_resellers": "Resellers",
     "tab_tiers": "Tiers",
     "add": "Add reseller",

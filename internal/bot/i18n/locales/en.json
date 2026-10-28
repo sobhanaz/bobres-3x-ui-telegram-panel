@@ -932,5 +932,17 @@
   "setting.cashback.min_order.label": "Smallest order that earns (Toman)",
   "setting.cashback.min_order.help": "An order must cost at least this many Toman to earn cashback. Empty or 0 means any order that costs something.",
   "setting.cashback.renewals.label": "Renewals earn cashback",
-  "setting.cashback.renewals.help": "On: renewals and traffic packages earn cashback like new services. Off: only new services do."
+  "setting.cashback.renewals.help": "On: renewals and traffic packages earn cashback like new services. Off: only new services do.",
+  "rs.targets": "🎯 <b>Monthly target</b> · {range}\nServices sold this month: <b>{sold}</b>\n\n{tiers}\n\n{next}",
+  "rs.target_range": "{from} to {to}",
+  "rs.target_tier": "{mark} {threshold} sold: bonus {bonus}",
+  "rs.target_next": "Next bonus: <b>{bonus}</b> · still to sell: <b>{remaining}</b>",
+  "rs.target_done": "You have reached every tier this month. 🎉",
+  "rs.target_ends": "⏳ Days left in this month: {days}",
+  "wallet.credited_target_bonus": "🎯 <b>Monthly target reached!</b>\nSold this month: {sold} · tier: {threshold}\nThe bonus, <b>{amount}</b>, was added to your wallet.\nBalance: {balance}",
+  "setting.group.targets": "Reseller targets",
+  "setting.targets.enabled.label": "Monthly targets",
+  "setting.targets.enabled.help": "A reseller who sells enough new services in a month is paid a bonus for each tier they reach, once for that month. The tiers are set in the dashboard (Settings, Reseller targets). Off by default; sales are counted from the moment it is turned on.",
+  "setting.targets.calendar.label": "Calendar of the month",
+  "setting.targets.calendar.help": "gregorian: a month runs from the 1st to its last day. jalali: Persian months. Change it between months, not in the middle of one."
 }

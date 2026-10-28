@@ -14,6 +14,18 @@ export default {
     'cashback.new_only': 'فقط برای سرویس جدید؛ تمدید کش‌بک ندارد.',
     'cashback.earned': 'کش‌بک دریافتی تا امروز: {amount}',
     'done.cashback': 'کش‌بک {amount} به کیف پولتان اضافه شد.',
+
+    // the reseller's monthly target (the card on the reseller panel)
+    'targets.title': 'هدف ماهانه',
+    'targets.range': 'از {from} تا {to}',
+    'targets.sold': 'سرویس فروخته‌شده در این ماه',
+    'targets.tier': '{n} فروش: پاداش {bonus}',
+    'targets.paid': 'پاداش پرداخت شد',
+    'targets.not_paid': 'هنوز پاداشی پرداخت نشده',
+    'targets.next': 'پاداش بعدی: {bonus} · فروش باقی‌مانده: {n}',
+    'targets.done': 'این ماه به همهٔ پله‌ها رسیده‌اید. 🎉',
+    'targets.earned': 'پاداش دریافتی این ماه: {amount}',
+    'targets.ends': 'روزهای باقی‌ماندهٔ این ماه: {n}',
   },
   en: {
     'ledger.cashback': 'Cashback',
@@ -27,5 +39,17 @@ export default {
     'cashback.new_only': 'New services only; renewals do not earn it.',
     'cashback.earned': 'Cashback earned so far: {amount}',
     'done.cashback': 'You earned {amount} cashback. It was added to your wallet.',
+
+    // the reseller's monthly target (the card on the reseller panel)
+    'targets.title': 'Monthly target',
+    'targets.range': 'From {from} to {to}',
+    'targets.sold': 'Services sold this month',
+    'targets.tier': '{n} sold: bonus {bonus}',
+    'targets.paid': 'Bonus paid',
+    'targets.not_paid': 'No bonus paid yet',
+    'targets.next': 'Next bonus: {bonus} · still to sell: {n}',
+    'targets.done': 'You have reached every tier this month. 🎉',
+    'targets.earned': 'Bonus earned this month: {amount}',
+    'targets.ends': 'Days left in this month: {n}',
   },
 }

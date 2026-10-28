@@ -32,6 +32,9 @@ const (
 	KindURL     = "url"
 	KindChannel = "channel"
 	KindColor   = "color"
+	// KindList is a list of rows kept as compact JSON text (the reseller targets' tiers, the wheel's prizes): the dashboard has an editor for it,
+	// the bot's admin menu leaves it out.
+	KindList = "list"
 )
 
 // Dashboard permissions a setting needs (the web package's names).
@@ -177,6 +180,13 @@ var SettingSpecs = []SettingSpec{
 		Help: "an order must cost at least this many Toman to earn cashback (empty or 0 = any order that costs something)"},
 	{Key: SettingCashbackRenewals, Group: "cashback", Kind: KindBool, Perm: permDiscounts, Default: "true",
 		Help: "true = renewals and traffic packages earn cashback too; false = only new services do"},
+	// Reseller monthly targets (targets.go): a bonus for the services a reseller sells in a month. Off by default.
+	{Key: SettingTargetsEnabled, Group: "targets", Kind: KindBool, Perm: permDiscounts, Default: "false",
+		Help: "true = a reseller who sells enough services in a month is paid a bonus for each tier they reach, once for that month; false = no bonuses (what was paid stays in the wallets). Sales are counted from the moment it is switched on"},
+	{Key: SettingTargetsTiers, Group: "targets", Kind: KindList, Perm: permDiscounts,
+		Help: "the tiers: how many new services a reseller sells in a month and the bonus in Toman for reaching it, for example [{\"threshold\":10,\"bonus\":50000}]; each tier pays its own bonus on top of the lower tiers' (at most 10 tiers)"},
+	{Key: SettingTargetsCalendar, Group: "targets", Kind: KindEnum, Perm: permDiscounts, Default: CalendarGregorian, Options: []string{CalendarGregorian, CalendarJalali},
+		Help: "the calendar a month is read in: gregorian (1 to the end of the month) or jalali (Persian months); change it between months, not in the middle of one"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
@@ -459,8 +469,27 @@ func NormalizeSetting(key, value string) (string, error) {
 			return bad("a colour like #14b8a6")
 		}
 		value = strings.ToLower(value)
+	case KindList:
+		list, err := normalizeList(key, value)
+		if err != nil {
+			return bad(err.Error())
+		}
+		value = list
 	}
 	return value, nil
+}
+
+// normalizeList checks a list setting (KindList) and writes it the way it is stored: compact JSON, in order, "" for an empty list.
+func normalizeList(key, value string) (string, error) {
+	switch key {
+	case SettingTargetsTiers:
+		tiers, err := ParseTargetTiers(value)
+		if err != nil {
+			return "", err
+		}
+		return FormatTargetTiers(tiers), nil
+	}
+	return "", errors.New("not a list")
 }
 
 var clockRe = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):([0-5][0-9])$`)
