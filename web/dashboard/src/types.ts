@@ -77,6 +77,8 @@ export interface OrderItem {
   staff: string
   extend: { days: number | null; bytes: number | null } | null
   refund: { amount: Money; at: number } | null
+  /** an order listed in USDT and paid from the Toman wallet: amount is what was charged; this is the price it was listed at (the discount is in it) and the Toman per USDT it was worked out at */
+  list?: { price: Money; rate: number } | null
 }
 
 export interface Proof {
