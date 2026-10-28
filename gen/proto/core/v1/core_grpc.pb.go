@@ -89,6 +89,7 @@ const (
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
+	CoreService_ListMyCodes_FullMethodName               = "/core.v1.CoreService/ListMyCodes"
 	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
 	CoreService_BuyVendorLicense_FullMethodName          = "/core.v1.CoreService/BuyVendorLicense"
 	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
@@ -215,6 +216,9 @@ type CoreServiceClient interface {
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
 	RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error)
+	// ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
+	// codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+	ListMyCodes(ctx context.Context, in *ListMyCodesRequest, opts ...grpc.CallOption) (*ListMyCodesResponse, error)
 	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
 	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
 	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
@@ -944,6 +948,16 @@ func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCo
 	return out, nil
 }
 
+func (c *coreServiceClient) ListMyCodes(ctx context.Context, in *ListMyCodesRequest, opts ...grpc.CallOption) (*ListMyCodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMyCodesResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListMyCodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListVendorOffers(ctx context.Context, in *ListVendorOffersRequest, opts ...grpc.CallOption) (*ListVendorOffersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVendorOffersResponse)
@@ -1149,6 +1163,9 @@ type CoreServiceServer interface {
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
 	RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error)
+	// ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
+	// codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+	ListMyCodes(context.Context, *ListMyCodesRequest) (*ListMyCodesResponse, error)
 	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
 	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
 	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
@@ -1386,6 +1403,9 @@ func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroa
 }
 func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
+}
+func (UnimplementedCoreServiceServer) ListMyCodes(context.Context, *ListMyCodesRequest) (*ListMyCodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMyCodes not implemented")
 }
 func (UnimplementedCoreServiceServer) ListVendorOffers(context.Context, *ListVendorOffersRequest) (*ListVendorOffersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVendorOffers not implemented")
@@ -2695,6 +2715,24 @@ func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListMyCodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMyCodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListMyCodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListMyCodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListMyCodes(ctx, req.(*ListMyCodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListVendorOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListVendorOffersRequest)
 	if err := dec(in); err != nil {
@@ -3143,6 +3181,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RedeemGiftCode",
 			Handler:    _CoreService_RedeemGiftCode_Handler,
+		},
+		{
+			MethodName: "ListMyCodes",
+			Handler:    _CoreService_ListMyCodes_Handler,
 		},
 		{
 			MethodName: "ListVendorOffers",

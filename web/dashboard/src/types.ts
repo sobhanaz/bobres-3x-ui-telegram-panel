@@ -133,6 +133,32 @@ export interface LedgerItem {
   created_at: number
 }
 
+/** One of a customer's own codes (GET /codes?user=): a reward code issued to them, or a gift code they applied. */
+export interface CodeItem {
+  /** unique in the list: a reward code's own text, or the id of the gift redemption */
+  id: string
+  kind: 'reward' | 'gift'
+  /** a reward code, whole (a gift code is never kept: it has `tail`) */
+  code?: string
+  /** the last characters of the gift code the customer applied */
+  tail?: string
+  state: 'unused' | 'used' | 'expired' | 'off'
+  /** a reward code takes a percent off ... */
+  percent?: number
+  /** ... or an amount (minor units of its currency); for a gift code, what it added to the wallet */
+  amount?: number
+  currency?: string
+  scale: number
+  expires_at: number | null
+  used_at: number | null
+  received_at: number
+  /** the plan whose purchase gave a reward code, and that purchase */
+  plan?: Names
+  order_id?: string
+  /** a code made before reward codes were for any plan works on this one plan only */
+  only_plan?: Names
+}
+
 export interface PlanItem {
   id: string
   name: Names

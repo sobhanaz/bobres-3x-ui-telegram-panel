@@ -8,6 +8,16 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **My codes: the customer's own list of reward and gift codes.** A reward code used to be sent once in a message and gone from sight. The bot's Wallet screen now has a **🎟 My codes** button (and there is a `/codes` command in the bot's menu), and the Mini App a **My codes** section under More, that list the codes that are the customer's, newest first and paged (five to a page in the bot, ten in the app): the code (a tap copies it in the bot, a Copy button in the app), what it takes off, its state (not used yet, used, expired, switched off), when it ends or was used, and the plan and purchase that gave it. The reward message has a My codes button beside Buy. On the customer's page in the dashboard a read-only **Codes** tab (for staff with `users.read`, support included) shows the same list with a link to the order. In Persian and English everywhere.
+- **Only what can be attributed to the customer is listed.** A reward code is bound to its buyer, so it is theirs. A gift code has no owner (staff make it and hand it out) and is never stored whole, so only the customer's own redemption of it is listed, as **used by you**, with the last characters of the code and what it added to the wallet; a gift code nobody applied, a code staff made for everyone, and another customer's codes are in no list. The Mini App's `GET /api/mini/v1/codes` takes the customer from the session, never from the request; the bot's new call `ListMyCodes` names the customer the bot is serving (the sender of the update), as every call of that service does; the dashboard's `GET /api/v1/codes?user=` names the customer whose page it is.
+- One database migration, additive: core 00042 (`discount_codes_user_idx`, an index so that a customer's reward codes are found without reading the table). No new service, nothing to configure, no license change.
+
+### Known limits
+- A gift code the customer applied is shown by its last characters only (core keeps a keyed hash, never the code), and a gift code that has not been applied is in no list: gift codes have no owner.
+- A discount code that staff made for everyone is not listed (no one owns it), even for a customer who used it.
+- A customer who became a reseller after earning a reward code still sees it, but a reseller pays tier prices and cannot use a discount code.
+
 ## [0.17.2] — 2026-10-28
 
 **A service whose client was deleted in the panel is no longer a silent problem.** When an operator deletes a client in 3x-ui or Marzban, its customer cannot connect, yet the service stayed "active", expiry reminders kept going out, and core and the provisioner logged two warnings per service every ten minutes for ever, which pushed real events off the events list. Core now notices, marks the service, tells the owner once a day, stops the reminders and the warnings, and lets staff make the client again with one button.

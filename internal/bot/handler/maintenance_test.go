@@ -284,7 +284,7 @@ func gatedCases() []gatedCase {
 	// admins only"); and ones the bot does not know.
 	for _, text := range []string{
 		"/start", "/start r_abc123", "/start@test_vpn_bot", "/START", " /menu", "/menu", "/buy", "/wallet", "/support", "/trial",
-		"/new", "/renew", "/status",
+		"/new", "/renew", "/status", "/codes",
 		"/cancel", "/terms", "/dashboard", "/admin", "/help", "/nonsense",
 		"/set maintenance.enabled false", "/plan_add 1 IRT 1 1 Free", "/topup_add 1 IRT 1 +1GB", "/trial 1 1",
 		"/discount_add FREE 100% 1 30", "/discount_off FREE", "/discounts",
@@ -302,7 +302,7 @@ func gatedCases() []gatedCase {
 	for _, data := range []string{
 		"lang", "lang:fa", "lang:en", "home", "cancel",
 		"buy", "pg:g1", "pg:-", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
-		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "wusdt", "wusa:10", "wpu:x:10:n1", "wusc", "whist", "gift", "trial", "store",
+		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "wusdt", "wusa:10", "wpu:x:10:n1", "wusc", "whist", "gift", "cds", "cds:2", "trial", "store",
 		"top", "top:2", "ap", "renew",
 		"faq", "faq:p:2", "faq:q:1:f1", "tut", "tut:p:2", "tut:v:1:t1", // the FAQ under Support and the tutorials (help.go)
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",

@@ -3,6 +3,7 @@ syntax = "proto3";
 package core.v1;
 
 import "common/v1/types.proto";
+import "core/v1/codes.proto";
 import "core/v1/help.proto";
 
 option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
@@ -1057,6 +1058,9 @@ service CoreService {
   // an active account only (a banned one is PERMISSION_DENIED "user is banned").
   // What a customer can get wrong is an outcome of the answer, not an error.
   rpc RedeemGiftCode(RedeemGiftCodeRequest) returns (RedeemGiftCodeResponse);
+  // ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
+  // codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+  rpc ListMyCodes(ListMyCodesRequest) returns (ListMyCodesResponse);
 
   // License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
   // USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
