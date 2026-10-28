@@ -27,9 +27,9 @@ v0.15.0 (2026-10-23: buying a license in one screen, restoring a deleted plan, U
 v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount)
 v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
 v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
-and v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type).
+v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type) and v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button).
 
-## Where things stand (after v0.17.1)
+## Where things stand (after v0.17.2)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
