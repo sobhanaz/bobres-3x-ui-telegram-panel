@@ -565,6 +565,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showPlan(r, rest)
 	case "pay":
 		h.onPay(r, rest)
+	case "pq": // the customer confirms the price of a USDT plan paid from the wallet (walletquote.go)
+		h.onQuotePay(r, rest)
 	case "subs":
 		h.showServices(r)
 	case "fl":

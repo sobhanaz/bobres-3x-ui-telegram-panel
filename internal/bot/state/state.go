@@ -85,6 +85,10 @@ type Checkout struct {
 	Quantity int32  `json:"qty,omitempty"`
 	Total    int64  `json:"tot,omitempty"`
 	Currency string `json:"cur,omitempty"`
+	// A plan priced in USDT paid from the wallet: the order the screen is about and the token of the quote the buyer was shown, which the
+	// confirming button sends back (core charges exactly that, while it holds).
+	OrderID string `json:"oid,omitempty"`
+	Quote   string `json:"quote,omitempty"`
 }
 
 func checkoutKey(userID int64, nonce string) string {
