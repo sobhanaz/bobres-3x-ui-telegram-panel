@@ -272,20 +272,273 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
 - The dashboard has CSRF protection, authenticator codes for every password login, a strict CSP and an append-only audit
   log. Details and the threat model: [docs/07-security.md](docs/07-security.md), [SECURITY.md](SECURITY.md).
 
-## How it is built
+## Architecture
 
-A Go monorepo with four services (`core`, `bot`, `payments`, `provisioner`) and a `backup` service, behind Caddy, which a
-small `tls-agent` (core's image, without a network) configures for HTTPS, with PostgreSQL (one schema and one role per
-service) and Redis. Services call each other over gRPC and pass events through each service's outbox. The dashboard and
-the Mini App are Vue 3, built into the `core` binary. A separate service, `licensesrv`, is the vendor's license server and
-is never part of a customer's install.
+BOBRES is a Go monorepo that runs as nine Docker Compose services on one server: Caddy, PostgreSQL, Redis, and the
+BOBRES services. Four of them do the work (`core`, `bot`, `payments`, `provisioner`). Each has its own database role, its
+own service token and its own network reach: **core has no internet access**, only the provisioner holds the panels'
+tokens, and only payments holds the gateway secrets. The dashboard and the Mini App are Vue 3 apps built into the `core`
+binary. The pictures below follow the compose files and the code; the details are in [docs/PLAN.md](docs/PLAN.md),
+[docs/02-events-and-apis.md](docs/02-events-and-apis.md) and [docs/07-security.md](docs/07-security.md).
 
-```text
-Telegram ⇄ bot ⇄ core ⇄ provisioner ⇄ 3x-ui / Marzban panels
-              │      ⇅
-              │   payments ⇄ gateways, the TRON watcher
-        Mini App / dashboard (served by core)  ·  backup  ·  Caddy ⇄ tls-agent
+### The big picture
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
+flowchart LR
+    customer(["<b>Customers, resellers</b><br/>Telegram bot and Mini App<br/>and their VPN apps"])
+    staff(["<b>Owner and staff</b><br/>dashboard · bot /admin<br/>bobres CLI"])
+    store["<b>Your BOBRES install</b><br/>on one server (Compose)<br/>caddy · core · bot<br/>payments · provisioner<br/>PostgreSQL · Redis<br/>backup · tls-agent"]
+
+    telegram["<b>Telegram</b><br/>Bot API · Mini App · Stars"]
+    panels["<b>VPN panels</b><br/>3x-ui · Marzban"]
+    gateways["<b>Card gateways</b><br/>Zarinpal · IDPay · NextPay"]
+    tron["<b>TRON network</b><br/>automatic USDT (TRC20)"]
+    rates["<b>USDT price</b><br/>Tetherland · Wallex"]
+    github["<b>GitHub</b><br/>signed releases · images"]
+    vendor["<b>License server</b><br/>the vendor's"]
+    supplier["<b>Supplier API</b><br/>digital accounts"]
+    s3["<b>S3 storage</b><br/>backup copies"]
+
+    customer -->|"Mini App, service page"| store
+    customer -->|"chat, buy, renew"| telegram
+    customer -->|"VPN traffic,<br/>subscription link"| panels
+    staff -->|"dashboard, /admin"| store
+    store <-->|"updates, replies"| telegram
+    store -->|"create, renew, delete<br/>clients, read usage"| panels
+    store -->|"pay pages, verify"| gateways
+    store -->|"watch the address"| tron
+    store -->|"live price"| rates
+    store -->|"update check"| github
+    store -->|"activate, refresh"| vendor
+    store -.->|"owner's own store only"| supplier
+    store -.->|"optional"| s3
+
+    classDef person fill:#ffffff,stroke:#0f766e,stroke-width:2px,color:#0b2530
+    classDef mine fill:#d6f2ee,stroke:#0f766e,stroke-width:3px,color:#0b2530
+    classDef outside fill:#f3f4f6,stroke:#6b7280,color:#111827
+    classDef vendorbox fill:#ede9fe,stroke:#6d28d9,color:#1e1b4b
+    class customer,staff person
+    class store mine
+    class telegram,panels,gateways,tron,rates,github,supplier,s3 outside
+    class vendor vendorbox
 ```
+
+Solid arrows are calls the store always makes; dotted ones are optional or exist only on the vendor's own store. The
+only vendor-run server a store talks to is the license server, and a store works without it on the free tier. Nothing
+is relayed through the vendor: the store calls the services above directly.
+
+### Inside one install
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
+flowchart TB
+    web(("<b>Internet</b><br/>browsers · Telegram webhook<br/>gateway callbacks"))
+    caddy["<b>caddy</b><br/>the only public entry<br/>/admin /app /sub /pay<br/>/webhooks /tg/webhook"]
+    bot["<b>bot</b><br/>customers · staff · alerts<br/>the internet proxy for core"]
+    core["<b>core</b><br/>users · plans · orders<br/>wallet and ledger · reports<br/>dashboard and Mini App API"]
+    payments["<b>payments</b><br/>gateway secrets · intents<br/>Zarinpal · IDPay · NextPay<br/>Stars · TRON watcher"]
+    prov["<b>provisioner</b><br/>holds the panels' tokens<br/>create · renew · delete<br/>usage · health"]
+    pg[("<b>PostgreSQL</b><br/>a schema and a role<br/>for each service")]
+    redis[("<b>Redis</b><br/>bot state · rate limits")]
+    inet["Telegram · price pages<br/>GitHub · supplier<br/>license server"]
+    gateways["Card gateways<br/>and TronGrid"]
+    panels["3x-ui and Marzban<br/>panels"]
+
+    web -->|"HTTPS"| caddy
+    caddy --> core
+    caddy --> payments
+    caddy -.->|"webhook mode"| bot
+    bot -->|"gRPC and the event feed"| core
+    core -->|"gRPC"| payments
+    core -->|"gRPC"| prov
+    core -.->|"/internal: Mini App sign-in,<br/>receipts, license, rates"| bot
+    core --> pg
+    payments --> pg
+    prov --> pg
+    bot --> redis
+    bot --> inet
+    payments --> gateways
+    prov --> panels
+
+    classDef entry fill:#d6f2ee,stroke:#0f766e,stroke-width:2px,color:#0b2530
+    classDef online fill:#ffe8cc,stroke:#c2410c,stroke-width:2px,color:#2b1400
+    classDef private fill:#dbe8ff,stroke:#1d4ed8,stroke-width:2px,color:#0b1b3a
+    classDef data fill:#fff3d1,stroke:#a16207,color:#2b2000
+    classDef outside fill:#f3f4f6,stroke:#6b7280,color:#111827
+    class caddy entry
+    class bot,payments,prov online
+    class core private
+    class pg,redis data
+    class web,inet,gateways,panels outside
+```
+
+- **Teal** is the only public entry. **Orange** can reach the internet (`bot`, `payments`, `provisioner`). **Blue** has no
+  route out (`core`).
+- In Docker terms: `public` holds only Caddy; `edge`, `backend` and `offline` are internal networks; only `egress` has a
+  route out. Caddy answers nothing under `/internal` and `/api/internal`, so service-to-service endpoints never reach the
+  internet.
+- **Calls** are gRPC on the internal networks, one token per service, and a server accepts only its legitimate callers
+  (core accepts the bot; payments and provisioner accept only core). The contracts are in `proto/`.
+- **Events** (`order.paid.v1`, `subscription.provisioned.v1`...) are past-tense facts written to a transactional outbox in
+  the transaction that made them; consumers pull them with a cursor and de-duplicate with an inbox. A failure retries with
+  back-off, then goes to a dead-letter table and raises an alert.
+- **Money** is a whole number in minor units with a currency, never a float. The ledger is append-only, a wallet balance
+  is a cached sum of it, and every money-moving call carries an idempotency key with a unique index.
+
+### Housekeeping: HTTPS, updates, monitoring and backups
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
+flowchart LR
+    c1["<b>core</b>"] -.->|"HTTPS request<br/>(a volume)"| tls["<b>tls-agent</b><br/>no network, no secrets"]
+    tls -->|"admin socket,<br/>the TLS files"| caddy["<b>caddy</b><br/>loads the new setting"]
+
+    c2["<b>core</b>"] <-.->|"run/update/request.json<br/>and status.json"| updater["<b>bobres-updater.path</b><br/>on the host, as root<br/>runs bobres update"]
+
+    monitor["<b>bobres-monitor.timer</b><br/>on the host<br/>a snapshot every 30 s"] -.->|"snapshot.json,<br/>read-only"| c3["<b>core</b><br/>draws the charts"]
+
+    backup["<b>backup</b><br/>daily encrypted pg_dump"] -->|"each backup"| bot["<b>bot</b>"]
+    bot --> owner(["Owner on Telegram"])
+    backup -.->|"optional copy"| s3["S3 storage"]
+
+    classDef online fill:#ffe8cc,stroke:#c2410c,stroke-width:2px,color:#2b1400
+    classDef private fill:#dbe8ff,stroke:#1d4ed8,stroke-width:2px,color:#0b1b3a
+    classDef sealed fill:#eceff3,stroke:#475569,stroke-width:2px,stroke-dasharray:4 3,color:#111827
+    classDef entry fill:#d6f2ee,stroke:#0f766e,stroke-width:2px,color:#0b2530
+    classDef hostbox fill:#ede9fe,stroke:#6d28d9,color:#1e1b4b
+    classDef outside fill:#f3f4f6,stroke:#6b7280,color:#111827
+    class c1,c2,c3,backup private
+    class bot online
+    class tls sealed
+    class caddy entry
+    class updater,monitor hostbox
+    class owner,s3 outside
+```
+
+No container has the Docker socket. An update, a restore or an HTTPS change reaches the host as a small request file that
+a root systemd unit or the `tls-agent` picks up, and the host's monitoring snapshot comes back the same way, read-only.
+The `tls-agent` is core's image with no network; it checks a request again and answers `invalid` to any name that is not
+the install's own.
+
+### An order, from tap to config
+
+```mermaid
+%%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
+sequenceDiagram
+    actor C as Customer
+    participant B as bot
+    participant K as core
+    participant P as payments
+    participant V as provisioner
+    participant X as Panel
+
+    C->>B: Buy a plan, or renew
+    B->>K: CreateOrder (idempotent)
+    alt the wallet covers it
+        K->>K: Debit the wallet, write the ledger
+    else a gateway, Stars, card or USDT
+        K->>P: Create a payment intent
+        K-->>B: Pay link or instructions
+        B-->>C: Pay here
+        Note over C,P: The customer pays at the gateway,<br/>with a card receipt, or on TRON
+        P->>P: Verify with the provider
+        P-->>K: payment.succeeded
+        K->>K: Mark the order paid, once
+    end
+    K->>V: Create or renew the client
+    V->>X: Add or update the client
+    X-->>V: Client and links
+    V-->>K: subscription.provisioned
+    K-->>B: Event feed: service ready
+    B-->>C: Link, QR code, service page
+    Note over K,V: If the panel is down the order stays paid<br/>and is retried, then an alert is raised
+```
+
+A wallet payment skips the payment step. A gateway's callback is never trusted alone: payments verifies the payment with
+the provider. Card to card and manual USDT end with a receipt that staff approve. A renewal with a plan adds the plan's
+traffic and starts its days again from today.
+
+### Releases and updates
+
+```mermaid
+%%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
+sequenceDiagram
+    actor D as Developer
+    participant G as GitHub
+    actor O as Owner
+    participant K as core
+    participant H as Host: bobres update
+
+    D->>G: Pull request
+    G->>G: CI: race tests, lint, scans, panels, Docker install
+    D->>G: Merge to main, then tag vX.Y.Z
+    G->>G: Release: tests, signed images, signed bobres binaries
+    Note over D,O: Images on GHCR (amd64, arm64, cosign)<br/>Checksums signed with the release key<br/>Re-signed when under 25 days are left<br/>(checked on the 1st and 16th of each month)
+    O->>K: Update now (dashboard)
+    K->>H: run/update/request.json, seen by bobres-updater.path
+    H->>G: Download the release
+    H->>H: Verify the signatures and the image digests
+    H->>H: Back up, keep a restore point
+    H->>H: Pull the pinned images, migrate, restart
+    alt healthy
+        H-->>K: status.json: done
+    else not healthy
+        H->>H: Roll back by itself
+        H-->>K: status.json: rolled back
+    end
+    K-->>O: A message on Telegram and the Updates tab
+```
+
+The trust chain: two offline root keys sign the list of release keys, a release key signs each release's checksums, the
+`bobres` binary carries the digests of its images, and the stack runs by those digests. Pages (`site/`) and the Wiki
+(`docs/wiki/`) are published by their own workflows when those folders change on `main`.
+
+### Licenses
+
+```mermaid
+%%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
+sequenceDiagram
+    actor B as Buyer
+    participant V as Vendor's store
+    participant L as licensesrv
+    participant K as core (the buyer's)
+    participant T as bot (the buyer's)
+
+    B->>V: Pays from the wallet (Toman or USDT)
+    V->>L: Create the license (signed admin API)
+    L-->>V: Activation key
+    V-->>B: The key, in the bot
+    B->>K: Enters the key in the dashboard
+    K->>T: Activate (core has no internet)
+    T->>L: POST /v1/activate (install id, domain)
+    L-->>T: Signed license token
+    T-->>K: Token, checked with the public key built in
+    loop every day
+        K->>T: Refresh
+        T->>L: POST /v1/refresh (the current token)
+        L-->>T: A new token, unless revoked or ended
+    end
+    Note over K: Free tier, 30-day trial, Standard, Pro.<br/>A lapsed license only stops new things,<br/>nothing is deleted
+```
+
+`licensesrv` and the vendor's own store (an ordinary install with the vendor-only features on) run on the vendor's own
+servers and are never part of a customer's install. `bobres license activate` on the host calls the license server
+directly. An install never needs the license server to keep running ([docs/05-license.md](docs/05-license.md),
+[docs/13-license-server.md](docs/13-license-server.md)).
+
+### Where the code is
+
+| Path | Contents |
+|---|---|
+| `cmd/` | One `main` per program: `core`, `bot`, `payments`, `provisioner`, `backup`, `bobres` (the CLI), `licensesrv` (the vendor's license server) |
+| `internal/core/`, `internal/bot/`, `internal/payments/`, `internal/provisioner/` | Each service's rules, storage, gRPC and HTTP handlers (core: `domain`, `store`, `server`, `web`; the bot: handlers, Persian and English texts, notifier) |
+| `internal/xui`, `internal/marzban` | The panel clients, each with a fake (`xuifake`, `marzbanfake`) for tests |
+| `internal/license`, `internal/release`, `internal/crypto` | License tokens and tiers, release verification, encryption |
+| `proto/`, `gen/` | The gRPC contracts (buf) and the code generated from them |
+| `web/dashboard`, `web/miniapp` | The Vue 3 dashboard and Mini App, built into the `core` binary |
+| `deploy/`, `install/` | The compose files, Caddy and systemd units; `install.sh` and the embedded public keys |
+| `tools/`, `tests/`, `site/` | Build and signing tools, end-to-end tests, the public site |
 
 ## Docs
 
