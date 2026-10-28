@@ -340,7 +340,10 @@ func (w *gateWorld) activeServices(n int) []*store.Subscription {
 	w.t.Helper()
 	ctx := context.Background()
 	pl := seedPlan(w.t, w.s, false, 1000)
-	expires, total := w.now.Add(10*24*time.Hour), int64(50<<30)
+	// Ten days from the real clock, not from w.now: w.now is a fixed date that only the license
+	// checks read, while orders ask the real clock whether a service has expired (a traffic
+	// top-up is refused for an expired one). From w.now these services expired on their own.
+	expires, total := time.Now().Add(10*24*time.Hour), int64(50<<30)
 	var out []*store.Subscription
 	for range n {
 		w.tg++
