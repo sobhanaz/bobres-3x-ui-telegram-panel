@@ -1,6 +1,7 @@
-// The texts of the payment screens beyond the online gateways: Telegram Stars, and the manual methods (card to card,
-// USDT, a Zarinpal payment link) with the receipt that proves them. They live here, like a section's, so the shop's
-// own table stays as it is; a test checks every text is in both languages.
+// The texts of the payment screens beyond the online gateways: Telegram Stars, the manual methods (card to card,
+// USDT, a Zarinpal payment link) with the receipt that proves them, and USDT with the wallet (paying a plan priced in
+// USDT from the Toman wallet at a quoted rate, topping the wallet up in USDT). They live here, like a section's, so the
+// shop's own table stays as it is; a test checks every text is in both languages.
 export default {
   fa: {
     'method.stars': 'استارز تلگرام ⭐',
@@ -65,6 +66,37 @@ export default {
     'wallet.pending_order': 'خرید',
     'wallet.pending_failed': 'فهرست پرداخت‌های منتظر رسید بارگذاری نشد.',
 
+    // a plan priced in USDT, paid from the Toman wallet at a rate that is held for two minutes
+    'quote.title': 'پرداخت از کیف پول',
+    'quote.price': 'قیمت پلن',
+    'quote.rate': 'نرخ تتر',
+    'quote.rate_line': '۱ تتر = {rate}',
+    'quote.charge': 'مبلغ کسر از کیف پول',
+    'quote.balance': 'موجودی کیف پول',
+    'quote.held': 'مدت اعتبار این قیمت:',
+    'quote.updating': 'در حال به‌روزرسانی قیمت…',
+    'quote.updated': 'قیمت به‌روز شد؛ آن را بررسی کنید و دوباره تأیید کنید.',
+    'quote.missing': 'برای این پرداخت {missing} دیگر لازم است.',
+    'quote.confirm': 'تأیید و پرداخت {amount}',
+
+    // topping the wallet up in USDT
+    'wallet.currency': 'ارز افزایش موجودی',
+    'wallet.cur_irt': 'تومان',
+    'wallet.cur_usdt': 'تتر',
+    'wallet.custom_usdt': 'مبلغ دلخواه (عدد صحیح، به تتر)',
+    'wallet.est_usdt': 'با نرخ امروز (هر تتر {rate}) حدود {toman} به کیف پول شما اضافه می‌شود.',
+    'wallet.est_none': 'نرخ تتر الان مشخص نیست؛ به‌محض مشخص شدن نرخ، مبلغ به کیف پول شما اضافه می‌شود.',
+    'wallet.usdt_paid': 'پرداخت {amount} شما تأیید شد.',
+    'wallet.usdt_adding': 'در حال اضافه شدن به کیف پول…',
+    'wallet.usdt_added': 'اضافه شده به کیف پول',
+    'wallet.usdt_now': 'موجودی کیف پول اکنون',
+    'wallet.usdt_late': 'رسیدن به کیف پول ممکن است یک دقیقه طول بکشد. هر وقت دوباره کیف پول را باز کنید، موجودی به‌روز است؛ یا همین حالا «تلاش دوباره» را بزنید.',
+    'pay.usdt_qr': 'کد QR آدرس تتر',
+    'pay.usdt_left': 'زمان باقی‌مانده',
+    'pay.usdt_over': 'زمان این پرداخت تمام شد. به این آدرس چیزی نفرستید؛ برگردید و از نو شروع کنید. اگر قبلاً فرستاده‌اید، «پرداخت کردم» را بزنید.',
+
+    'err.quote_expired': 'قیمت به‌روز شد؛ آن را بررسی کنید و دوباره تأیید کنید.',
+    'err.no_rate': 'الان قیمت تتر در دسترس نیست و نمی‌شود این پلن را از کیف پول پرداخت کرد. کمی بعد دوباره تلاش کنید یا از راه دیگری پرداخت کنید.',
     'err.method_off': 'این روش پرداخت الان در دسترس نیست. روش دیگری انتخاب کنید.',
     'err.too_large': 'تصویر بزرگ است (حداکثر ۸ مگابایت).',
     'err.bad_type': 'فقط تصویر JPEG، PNG یا WebP بفرستید.',
@@ -145,6 +177,37 @@ export default {
     'wallet.pending_order': 'Purchase',
     'wallet.pending_failed': 'Could not load the payments waiting for a receipt.',
 
+    // a plan priced in USDT, paid from the Toman wallet at a rate that is held for two minutes
+    'quote.title': 'Pay from the wallet',
+    'quote.price': 'Plan price',
+    'quote.rate': 'USDT rate',
+    'quote.rate_line': '1 USDT = {rate}',
+    'quote.charge': 'Taken from your wallet',
+    'quote.balance': 'Wallet balance',
+    'quote.held': 'This price is held for',
+    'quote.updating': 'Updating the price…',
+    'quote.updated': 'The price was updated. Check it and confirm again.',
+    'quote.missing': 'You need {missing} more for this payment.',
+    'quote.confirm': 'Confirm and pay {amount}',
+
+    // topping the wallet up in USDT
+    'wallet.currency': 'Top-up currency',
+    'wallet.cur_irt': 'Toman',
+    'wallet.cur_usdt': 'USDT',
+    'wallet.custom_usdt': 'Other amount (a whole number of USDT)',
+    'wallet.est_usdt': 'About {toman} will be added to your wallet at today’s rate of {rate} per USDT.',
+    'wallet.est_none': 'The rate is not known right now; your USDT will be added to the wallet as soon as it is.',
+    'wallet.usdt_paid': 'Your payment of {amount} is confirmed.',
+    'wallet.usdt_adding': 'Adding it to your wallet…',
+    'wallet.usdt_added': 'Added to your wallet',
+    'wallet.usdt_now': 'The wallet now',
+    'wallet.usdt_late': 'It can take a minute to reach your wallet. The balance will be up to date whenever you open the wallet again; or tap “Try again” to check now.',
+    'pay.usdt_qr': 'QR code of the USDT address',
+    'pay.usdt_left': 'Time left',
+    'pay.usdt_over': 'The time for this payment is over. Do not send anything to this address; go back and start again. If you have already sent it, tap “I have paid”.',
+
+    'err.quote_expired': 'The price was updated. Check it and confirm again.',
+    'err.no_rate': 'The USDT price is not available right now, so this plan cannot be paid from the wallet. Try later or pay another way.',
     'err.method_off': 'This payment method is not available right now. Pick another one.',
     'err.too_large': 'The image is too large (8 MB at most).',
     'err.bad_type': 'Send a JPEG, PNG or WebP image.',
