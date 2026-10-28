@@ -205,6 +205,7 @@ var buttonStyles = map[string]string{
 	"btn.pay_zarinpal":      "success",
 	"btn.pay_idpay":         "success",
 	"btn.pay_nextpay":       "success",
+	"btn.pay_aqayepardakht": "success",
 	"btn.pay_stars":         "success",
 	"btn.pay_usdt_auto":     "success",
 	"btn.open_payment":      "success",

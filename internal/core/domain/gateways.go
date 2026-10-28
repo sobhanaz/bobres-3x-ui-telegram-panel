@@ -12,11 +12,13 @@ import (
 // starts; the payments service then holds the customer to that amount.
 const (
 	Zarinpal = "zarinpal"
-	// IDPay and NextPay are Iranian gateways built like Zarinpal: switched on
-	// in payments with an API key, charged in Rial (Toman x 10).
-	IDPay   = "idpay"
-	NextPay = "nextpay"
-	Stars   = "stars"
+	// IDPay, NextPay and Aqayepardakht are Iranian gateways built like
+	// Zarinpal: switched on in payments with an API key (Aqayepardakht's is
+	// its PIN), charged in Rial (Toman x 10).
+	IDPay         = "idpay"
+	NextPay       = "nextpay"
+	Aqayepardakht = "aqayepardakht"
+	Stars         = "stars"
 	// USDTAuto is automatic USDT on TRON (TRC20): the customer sends an exact
 	// amount to the store's address and payments' watcher finds it on chain.
 	// It is switched on in payments (the Gateways page), like Zarinpal.
@@ -57,13 +59,16 @@ const (
 	zarinpalMaxToman = 100_000_000
 )
 
-// IDPay's and NextPay's per-payment limits in Toman (their Rial limits are
-// 1,000 to 500,000,000 and 10,000 to 1,000,000,000: the gateway packages).
+// IDPay's, NextPay's and Aqayepardakht's per-payment limits in Toman (their
+// Rial limits are 1,000 to 500,000,000, 10,000 to 1,000,000,000 and 10,000 to
+// 4,000,000,000: the gateway packages).
 const (
-	idpayMinToman   = 100
-	idpayMaxToman   = 50_000_000
-	nextpayMinToman = 1_000
-	nextpayMaxToman = 100_000_000
+	idpayMinToman         = 100
+	idpayMaxToman         = 50_000_000
+	nextpayMinToman       = 1_000
+	nextpayMaxToman       = 100_000_000
+	aqayepardakhtMinToman = 1_000
+	aqayepardakhtMaxToman = 400_000_000
 )
 
 // Automatic USDT's per-payment limits, in micro-USDT (scale 6). Payments
@@ -81,7 +86,7 @@ const (
 )
 
 func isGateway(provider string) bool {
-	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Stars || provider == USDTAuto
+	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Aqayepardakht || provider == Stars || provider == USDTAuto
 }
 
 func ceilDiv(a, b int64) int64 { return (a + b - 1) / b }
@@ -97,8 +102,8 @@ func (s *Service) settingInt(ctx context.Context, key string) int64 {
 	return n
 }
 
-// gatewayCharge converts a price into what a gateway charges: Zarinpal takes
-// Rial (Toman x 10), Telegram Stars a whole number of Stars (payments.stars_rate
+// gatewayCharge converts a price into what a gateway charges: Zarinpal and the
+// gateways built like it take Rial (Toman x 10), Telegram Stars a whole number of Stars (payments.stars_rate
 // Toman per Star, rounded up so a payment never falls short), automatic USDT
 // micro-USDT (see usdtCharge).
 func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int64, currency string) (int64, string, error) {
@@ -128,6 +133,14 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 		}
 		if amount < nextpayMinToman || amount > nextpayMaxToman {
 			return 0, "", invalid("NextPay takes 1,000 to 100,000,000 Toman per payment")
+		}
+		return amount * 10, "IRR", nil
+	case Aqayepardakht:
+		if currency != "IRT" {
+			return 0, "", invalid("Aqayepardakht takes Toman prices only")
+		}
+		if amount < aqayepardakhtMinToman || amount > aqayepardakhtMaxToman {
+			return 0, "", invalid("Aqayepardakht takes 1,000 to 400,000,000 Toman per payment")
 		}
 		return amount * 10, "IRR", nil
 	case Stars:

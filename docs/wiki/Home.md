@@ -39,7 +39,7 @@ It asks for your domain, your Telegram ID, your bot token and (optionally) your 
 
 - **Customers:** a Persian and English Telegram bot and Mini App with plans, a wallet, a free trial, renewals, traffic packages, bulk purchase, gift and reward codes, invite links, support and a page for every service.
 - **You:** a dashboard for plans, payments, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses, plus Telegram alerts.
-- **Payments:** wallet, card to card, USDT (manual, and automatic on TRON), Zarinpal, IDPay, NextPay and Telegram Stars.
+- **Payments:** wallet, card to card, USDT (manual, and automatic on TRON), Zarinpal, IDPay, NextPay, Aqayepardakht and Telegram Stars.
 - **Panels:** 3x-ui v3.8.5 to v3.10.2 and Marzban 0.8, several at once.
 - **Price:** the core is free to run. A free tier, a 30-day trial of everything, then a paid license per install. See [Licensing](Licensing).
 

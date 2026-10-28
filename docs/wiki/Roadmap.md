@@ -55,7 +55,7 @@ Some work cannot be proved with tests and fakes. These stay open until someone t
 
 - The subscription page's app import buttons on real phones.
 - The Mini App on every Telegram client.
-- IDPay and NextPay with real merchant accounts.
+- IDPay, NextPay and Aqayepardakht with real merchant accounts.
 - Real payments for each method, and real Let's Encrypt issuance including the IP-address mode.
 - A native Persian speaker's review of every bot and dashboard text.
 

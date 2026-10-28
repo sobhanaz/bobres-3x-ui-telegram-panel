@@ -12,7 +12,7 @@ import (
 )
 
 // GatewayProviders are the automated providers the reconciler checks.
-var GatewayProviders = []string{"zarinpal", "idpay", "nextpay"}
+var GatewayProviders = []string{"zarinpal", "idpay", "nextpay", "aqayepardakht"}
 
 // SetGatewayStart records the gateway's id for the payment and where the
 // customer pays. It only applies to an open intent without an external id, so a

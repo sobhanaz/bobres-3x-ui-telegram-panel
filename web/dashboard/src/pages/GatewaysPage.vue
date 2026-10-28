@@ -12,12 +12,12 @@ import UsdtAutoCard from '../components/gateways/UsdtAutoCard.vue'
 import UsdtRateCard from '../components/gateways/UsdtRateCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
-import { isKeyedProvider, methodCards, stateSeverity, usdtAuto } from '../gateways'
+import { isKeyedProvider, keyedOrder, methodCards, stateSeverity, usdtAuto } from '../gateways'
 import type { GatewaysReply } from '../types'
 
 // How customers pay (owner only): Zarinpal, whose merchant id and proxy stay
-// encrypted in the payments service, IDPay and NextPay (an API key and a proxy,
-// kept the same way), automatic USDT (TRC20), whose address,
+// encrypted in the payments service, IDPay, NextPay and Aqayepardakht (an API
+// key, or a PIN, and a proxy, kept the same way), automatic USDT (TRC20), whose address,
 // TronGrid key and proxy are kept there too, then a card per manual method and
 // Telegram Stars, whose switches and details are bot settings (each card
 // saves on its own through the settings endpoint).
@@ -40,7 +40,10 @@ async function load() {
 onMounted(load)
 
 const zarinpal = computed(() => reply.value?.providers.find((p) => p.provider === 'zarinpal') ?? null)
-const keyed = computed(() => (reply.value?.providers ?? []).filter((p) => isKeyedProvider(p.provider)))
+// IDPay, NextPay, Aqayepardakht: in this order, whatever order core lists them in.
+const keyed = computed(() =>
+  (reply.value?.providers ?? []).filter((p) => isKeyedProvider(p.provider)).sort((a, b) => keyedOrder(a.provider) - keyedOrder(b.provider)),
+)
 const usdt = computed(() => reply.value?.providers.find((p) => p.provider === usdtAuto) ?? null)
 const keyMissing = computed(() => (reply.value?.providers ?? []).some((p) => p.key_missing))
 const cards = computed(() => methodCards(reply.value?.settings ?? []))

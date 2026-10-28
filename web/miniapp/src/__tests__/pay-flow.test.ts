@@ -8,7 +8,7 @@ import CheckoutView from '../views/CheckoutView.vue'
 import WalletView from '../views/WalletView.vue'
 import { chooseFile, clipboard, json, mount, noTelegram, pngBytes, settle, signedIn, telegram, type Call, type Mounted } from './helpers'
 
-const ALL = ['zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']
+const ALL = ['zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']
 
 const plan: Plan = { id: 'p1', names: { en: 'Gold', fa: 'طلایی' }, kind: 'both', days: 30, traffic_bytes: 50 * 2 ** 30, price: 150000, list_price: 150000, currency: 'IRT', scale: 0, topup: false }
 const order = (over: Record<string, unknown> = {}) => ({ id: 'o1', plan_id: 'p1', type: 'new', status: 'pending_payment', amount: 150000, discount_amount: 0, currency: 'IRT', scale: 0, subscription_id: '', ...over })
@@ -41,7 +41,7 @@ describe('Methods', () => {
     await settle(10)
     const labels = m.buttons().map((b) => b.textContent?.trim())
     expect(labels).toEqual([
-      'Zarinpal', 'IDPay', 'NextPay', 'USDT (TRC20)', 'Telegram Stars ⭐', 'Card to card', 'USDT, then send a receipt', 'Zarinpal payment link, then send a receipt',
+      'Zarinpal', 'IDPay', 'NextPay', 'Aqayepardakht', 'USDT (TRC20)', 'Telegram Stars ⭐', 'Card to card', 'USDT, then send a receipt', 'Zarinpal payment link, then send a receipt',
     ])
     expect(m.text()).not.toContain('in the bot only')
     await m.click('Card to card')
@@ -60,6 +60,7 @@ describe('Methods', () => {
     expect(t).toContain('کارت به کارت')
     expect(t).toContain('تتر (USDT) با ارسال رسید')
     expect(t).toContain('زرین‌پال (لینک پرداخت) با ارسال رسید')
+    expect(t).toContain('آقای‌پرداخت')
     m.unmount()
   })
 })
@@ -77,11 +78,14 @@ describe('PayPanel', () => {
       expect(m.text()).toContain('After paying, send the receipt')
       m.unmount()
     }
-    m = mount(PayPanel, { intent: intent({ provider: 'zarinpal', pay_url: 'https://pay.example/x', details: {} }), checking: false, message: '' }, ['check'])
-    await settle(5)
-    expect(m.text()).toContain('Waiting for the payment')
-    expect(m.text()).toContain('Open the payment page')
-    m.unmount()
+    // an online gateway sends the customer to its page, whoever it is
+    for (const provider of ['zarinpal', 'aqayepardakht']) {
+      m = mount(PayPanel, { intent: intent({ provider, pay_url: 'https://pay.example/x', details: {} }), checking: false, message: '' }, ['check'])
+      await settle(5)
+      expect(m.text(), provider).toContain('Waiting for the payment')
+      expect(m.text(), provider).toContain('Open the payment page')
+      m.unmount()
+    }
   })
 
   it('writes the amount of an automatic USDT payment whole, down to the last micro-USDT', async () => {

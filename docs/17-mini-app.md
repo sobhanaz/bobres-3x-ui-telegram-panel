@@ -143,7 +143,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
 | `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing. `categories` lists the three topics to write under (payment, service, other); a ticket's own `category` can also be `reseller`, a reseller application the bot filed, which the app shows with its label (a message named `reseller` from the app is filed as `other`: an application is made from the bot's button) |
 
-The app takes **Zarinpal, IDPay, NextPay, automatic USDT, Telegram Stars and the three manual methods**: whatever the
+The app takes **Zarinpal, IDPay, NextPay, Aqayepardakht, automatic USDT, Telegram Stars and the three manual methods**: whatever the
 store has on for the amount of the purchase (the next section).
 
 ### Account sections
@@ -415,7 +415,7 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
    not a public HTTPS one (`localhost`, a private name) gets none. Each must open the app signed in (the bottom menu's after one more tap, on the bot's answer).
 3. The CSP and framing in Telegram's web clients (web.telegram.org) and the mobile apps; nothing blocked in the console.
 4. Theme colours, dark and light, safe-area (notch) and Telegram's Back button inside a purchase.
-5. A payment page opening from the app (Zarinpal, IDPay, NextPay) and coming back; the automatic USDT address, exact
+5. A payment page opening from the app (Zarinpal, IDPay, NextPay, Aqayepardakht) and coming back; the automatic USDT address, exact
    amount and countdown.
 6. A purchase, a renewal and a wallet top-up end to end, and the same customer seen in the bot and the dashboard.
 7. Persian right to left layout and digits, and English.

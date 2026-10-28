@@ -36,7 +36,7 @@ func (s *Server) SetPublicURL(u string) { s.publicURL = strings.TrimRight(u, "/"
 func (s *Server) Register(g *grpc.Server) { paymentsv1.RegisterPaymentsServiceServer(g, s) }
 
 // CreateIntent validates and stores a pending intent; for an automated gateway
-// it also creates the payment there (Zarinpal, IDPay, NextPay) or fixes the Stars.
+// it also creates the payment there (Zarinpal, IDPay, NextPay, Aqayepardakht) or fixes the Stars.
 func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentRequest) (*paymentsv1.PaymentIntent, error) {
 	in := &store.Intent{
 		OrderID:        optstr(req.GetOrderId()),
@@ -57,7 +57,7 @@ func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentR
 	switch req.GetProvider() {
 	case domain.Stars:
 		out, err = s.svc.StartStars(ctx, in)
-	case "zarinpal", "idpay", "nextpay":
+	case "zarinpal", "idpay", "nextpay", "aqayepardakht":
 		out, err = s.svc.StartGateway(ctx, in, req.GetDescription(), s.publicURL+"/webhooks/"+req.GetProvider())
 	case domain.USDTAuto:
 		out, err = s.svc.StartChain(ctx, in)
@@ -70,12 +70,12 @@ func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentR
 	return s.publicIntent(out), nil
 }
 
-// publicIntent is intentToProto for the customer: a Zarinpal payment must start
-// from our own page (Zarinpal checks the Referer), so that page is the pay URL.
-// IDPay and NextPay send the customer to the gateway's own link.
+// publicIntent is intentToProto for the customer: a Zarinpal or Aqayepardakht
+// payment must start from our own page (both check the Referer), so that page
+// is the pay URL. IDPay and NextPay send the customer to the gateway's own link.
 func (s *Server) publicIntent(in *store.Intent) *paymentsv1.PaymentIntent {
 	p := intentToProto(in)
-	if in.Provider == "zarinpal" && p.PayUrl != "" {
+	if (in.Provider == "zarinpal" || in.Provider == "aqayepardakht") && p.PayUrl != "" {
 		p.PayUrl = s.publicURL + "/pay/" + in.ID
 	}
 	return p

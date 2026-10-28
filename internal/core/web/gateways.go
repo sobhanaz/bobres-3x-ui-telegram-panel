@@ -26,7 +26,7 @@ import (
 const gatewayTimeout = 40 * time.Second
 
 // reportProviders are the payment methods a report covers.
-var reportProviders = []string{domain.Zarinpal, domain.IDPay, domain.NextPay, domain.Stars, domain.USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
+var reportProviders = []string{domain.Zarinpal, domain.IDPay, domain.NextPay, domain.Aqayepardakht, domain.Stars, domain.USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
 
 type gatewayHealthJSON struct {
 	Healthy      bool   `json:"healthy"`
@@ -54,7 +54,7 @@ type gatewayJSON struct {
 	MerchantHint   string             `json:"merchant_hint"`
 	ProxySet       bool               `json:"proxy_set"`
 	Address        *string            `json:"address,omitempty"` // automatic USDT only (public)
-	KeySet         *bool              `json:"key_set,omitempty"` // automatic USDT, IDPay, NextPay: a key is stored
+	KeySet         *bool              `json:"key_set,omitempty"` // automatic USDT, IDPay, NextPay, Aqayepardakht: a key is stored
 	KeyMissing     bool               `json:"key_missing"`
 	FromEnv        bool               `json:"from_env"`
 	UpdatedAt      *int64             `json:"updated_at"`
@@ -96,12 +96,13 @@ func (s *Server) gatewayOf(c *domain.GatewayConfig, health *gatewayHealthJSON) g
 		out.Address, out.KeySet = &address, &keySet
 		return out // no sandbox
 	}
-	if c.Provider == domain.IDPay || c.Provider == domain.NextPay {
-		keySet := c.APIKeySet // the API key is write-only: only whether one is stored
+	if c.Provider == domain.IDPay || c.Provider == domain.NextPay || c.Provider == domain.Aqayepardakht {
+		keySet := c.APIKeySet // the API key (the PIN, for Aqayepardakht) is write-only: only whether one is stored
 		out.KeySet = &keySet
 	}
 	if s.cfg.Env != "" {
-		allowed := s.cfg.Env != "prod" && c.Provider != domain.NextPay // NextPay has no sandbox at all
+		// NextPay has no sandbox at all; Aqayepardakht's is the PIN "sandbox", which production refuses.
+		allowed := s.cfg.Env != "prod" && c.Provider != domain.NextPay
 		out.SandboxAllowed = &allowed
 	}
 	return out
@@ -163,7 +164,8 @@ func (s *Server) listGateways(w http.ResponseWriter, r *http.Request) {
 
 // putGateway: PUT /api/v1/gateways/{provider} {enabled, sandbox, merchant_id,
 // proxy, clear_proxy} for Zarinpal, {enabled, sandbox (IDPay only), api_key,
-// clear_api_key, proxy, clear_proxy} for IDPay and NextPay, {enabled, address,
+// clear_api_key, proxy, clear_proxy} for IDPay, NextPay and Aqayepardakht (whose
+// api_key is its PIN, and whose sandbox is the PIN "sandbox"), {enabled, address,
 // api_key, clear_api_key, proxy, clear_proxy} for automatic USDT; "" keeps a stored
 // value.
 func (s *Server) putGateway(w http.ResponseWriter, r *http.Request) {

@@ -211,15 +211,33 @@ func sameAudit(a, b map[string]any) bool {
 	return true
 }
 
+// pinRe is an Aqayepardakht PIN: printable ASCII without spaces (the
+// gateway's documentation shows no format, so nothing narrower is assumed).
+var pinRe = regexp.MustCompile(`^[\x21-\x7e]{4,100}$`)
+
+// normalizePIN reads a typed PIN: Latin digits and no spaces or direction
+// marks, and the case it was typed in (a PIN is case-sensitive).
+func normalizePIN(v string) string {
+	return strings.Join(strings.Fields(latinDigits(pasteJunk.Replace(v))), "")
+}
+
 // checkKeyedFields: IDPay and NextPay have an API key (the 36-character id
 // from the gateway's panel) and nothing else of their own; NextPay has no
-// sandbox. The key comes back normalised.
+// sandbox. Aqayepardakht has a PIN (case-sensitive) in its place, and its
+// sandbox is the PIN "sandbox", not a switch. The key comes back normalised.
 func checkKeyedFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
 	title := "IDPay"
-	if provider == NextPay {
+	switch provider {
+	case NextPay:
 		title = "NextPay"
+	case Aqayepardakht:
+		title = "Aqayepardakht"
 	}
-	apiKey = normalizeMerchant(pasteJunk.Replace(apiKey))
+	if provider == Aqayepardakht {
+		apiKey = normalizePIN(apiKey)
+	} else {
+		apiKey = normalizeMerchant(pasteJunk.Replace(apiKey))
+	}
 	switch {
 	case merchant != "":
 		return "", "", &FieldError{"merchant_id", title + " has no merchant id: it has an API key"}
@@ -227,9 +245,13 @@ func checkKeyedFields(provider, address, apiKey string, clearKey bool, merchant 
 		return "", "", &FieldError{"address", "only automatic USDT has an address"}
 	case sandbox && provider == NextPay:
 		return "", "", &FieldError{"sandbox", "NextPay has no sandbox"}
+	case sandbox && provider == Aqayepardakht:
+		return "", "", &FieldError{"sandbox", `Aqayepardakht has no sandbox switch: its test system is the PIN "sandbox"`}
 	case apiKey != "" && clearKey:
 		return "", "", &FieldError{"api_key", "set an API key or clear it, not both"}
-	case apiKey != "" && !merchantRe.MatchString(apiKey):
+	case apiKey != "" && provider == Aqayepardakht && !pinRe.MatchString(apiKey):
+		return "", "", &FieldError{"api_key", "the PIN from the " + title + " panel: 4 to 100 letters, digits or symbols, no spaces"}
+	case apiKey != "" && provider != Aqayepardakht && !merchantRe.MatchString(apiKey):
 		return "", "", &FieldError{"api_key", "the 36-character API key from the " + title + " panel"}
 	}
 	return "", apiKey, nil
@@ -237,9 +259,10 @@ func checkKeyedFields(provider, address, apiKey string, clearKey bool, merchant 
 
 // checkProviderFields checks the fields only one provider has: automatic
 // USDT's address and API key (normalised), Zarinpal's merchant id and
-// sandbox.
+// sandbox, the API key (the PIN, for Aqayepardakht) of the other Iranian
+// gateways.
 func checkProviderFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
-	if provider == IDPay || provider == NextPay {
+	if provider == IDPay || provider == NextPay || provider == Aqayepardakht {
 		return checkKeyedFields(provider, address, apiKey, clearKey, merchant, sandbox)
 	}
 	if provider != USDTAuto {

@@ -39,7 +39,7 @@ var ErrReportTimeout = errors.New("store: the report took too long")
 //   - a reviewer rejected a manual payment (provider in ManualProviders; the
 //     reason is whatever staff typed, so it can say anything, "expired"
 //     included): "rejected by staff";
-//   - an automated gateway intent failed or ran out (Zarinpal, IDPay, NextPay, Telegram Stars,
+//   - an automated gateway intent failed or ran out (Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars,
 //     automatic USDT; the reason is one of GatewayFailureReasons): "failed or
 //     expired gateway payments".
 //
@@ -486,7 +486,7 @@ type MethodRow struct {
 	// (a payment staff approved), "gateway" (Zarinpal, Stars or automatic
 	// USDT confirmed it), or "unknown" (a purchase with no matching event).
 	Method string
-	// Provider is who took the money (zarinpal, idpay, nextpay, stars, usdt_auto,
+	// Provider is who took the money (zarinpal, idpay, nextpay, aqayepardakht, stars, usdt_auto,
 	// manual_card, ...). Empty for wallet and unknown rows, and for orders
 	// paid before the event carried it.
 	Provider string

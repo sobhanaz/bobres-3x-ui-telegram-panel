@@ -17,6 +17,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/aqayepardakht"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/idpay"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/nextpay"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/trongrid"
@@ -66,7 +67,7 @@ func setup(rt *app.Runtime) error {
 			}
 			return g, nil
 		},
-		// IDPay and NextPay: one API key each, like Zarinpal's merchant id.
+		// IDPay, NextPay and Aqayepardakht: one API key each, like Zarinpal's merchant id.
 		Keyed: map[string]domain.KeyedOptions{
 			"idpay": {
 				Seed: domain.KeySettings{APIKey: cfg.IDPayAPIKey, Sandbox: cfg.IDPaySandbox, Proxy: cfg.IDPayProxy},
@@ -82,6 +83,17 @@ func setup(rt *app.Runtime) error {
 				Seed: domain.KeySettings{APIKey: cfg.NextPayAPIKey, Proxy: cfg.NextPayProxy},
 				Build: func(k domain.KeySettings) (gateway.Gateway, error) {
 					g, err := nextpay.New(nextpay.Config{APIKey: k.APIKey, Sandbox: k.Sandbox, Proxy: k.Proxy})
+					if err != nil {
+						return nil, err
+					}
+					return g, nil
+				},
+			},
+			// Aqayepardakht's key is its PIN, and its sandbox is the PIN "sandbox".
+			"aqayepardakht": {
+				Seed: domain.KeySettings{APIKey: cfg.AqayepardakhtPIN, Proxy: cfg.AqayepardakhtProxy},
+				Build: func(k domain.KeySettings) (gateway.Gateway, error) {
+					g, err := aqayepardakht.New(aqayepardakht.Config{PIN: k.APIKey, Sandbox: k.Sandbox, Proxy: k.Proxy})
 					if err != nil {
 						return nil, err
 					}

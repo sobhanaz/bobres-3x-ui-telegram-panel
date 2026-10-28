@@ -35,7 +35,7 @@ const (
 // LicenseGateways are the payment methods a license names (license.AllGateways:
 // a test keeps the two lists equal). The wallet is always allowed. Automatic
 // USDT also needs the crypto_watcher feature.
-var LicenseGateways = []string{Zarinpal, IDPay, NextPay, Stars, USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
+var LicenseGateways = []string{Zarinpal, IDPay, NextPay, Aqayepardakht, Stars, USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
 
 // LicenseConfig is what a license is checked against.
 type LicenseConfig struct {

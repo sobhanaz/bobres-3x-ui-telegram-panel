@@ -1,6 +1,6 @@
 // Helpers for the Payment gateways page: the Zarinpal form (write-only
-// merchant id and proxy), the IDPay and NextPay forms (write-only API key and
-// proxy), the automatic USDT form (address, write-only
+// merchant id and proxy), the IDPay, NextPay and Aqayepardakht forms
+// (write-only API key, or PIN, and proxy), the automatic USDT form (address, write-only
 // TronGrid key and proxy) and its unmatched deposits, the cards of the manual methods and Stars (their settings),
 // and the payments report; and the overview's gateways card.
 // Core and payments check everything again. Pure functions (no API, no Vue).
@@ -92,27 +92,73 @@ export function openPayments(e: unknown): number | null {
   return typeof e.data.open === 'number' ? e.data.open : null
 }
 
-// ---- IDPay and NextPay: built like Zarinpal, but the credential is one
-// write-only API key (a 36-character id from the gateway's panel) instead of a
-// merchant id. IDPay has a sandbox; NextPay has none.
+// ---- IDPay, NextPay and Aqayepardakht: built like Zarinpal, but the credential
+// is one write-only secret instead of a merchant id: an API key (a 36-character
+// id from the gateway's panel) for IDPay and NextPay, the gateway's PIN for
+// Aqayepardakht. IDPay has a sandbox switch; NextPay has no sandbox.
+// Aqayepardakht has no switch either: its test system is the PIN "sandbox"
+// itself, which a production install refuses.
 
-export const keyedProviders = ['idpay', 'nextpay'] as const
+export const keyedProviders = ['idpay', 'nextpay', 'aqayepardakht'] as const
 export type KeyedProvider = (typeof keyedProviders)[number]
 
 export function isKeyedProvider(p: string): p is KeyedProvider {
   return (keyedProviders as readonly string[]).includes(p)
 }
 
-/** keyedHasSandbox: only IDPay has a test system. */
+/** keyedOrder is where a gateway's card stands among the keyed ones. */
+export function keyedOrder(p: string): number {
+  return (keyedProviders as readonly string[]).indexOf(p)
+}
+
+/** keyedHasSandbox: only IDPay has a sandbox switch. */
 export function keyedHasSandbox(p: string): boolean {
   return p === 'idpay'
 }
 
-/** The IDPay / NextPay card, as staff edit it. */
+/** keyedUsesPin: Aqayepardakht's credential is a PIN, not an API key. */
+export function keyedUsesPin(p: string): boolean {
+  return p === 'aqayepardakht'
+}
+
+/** An Aqayepardakht PIN: 4 to 100 printable characters, no spaces. It is not an
+ * id and its case counts, so it is never lowercased. */
+const pinRe = /^[\x21-\x7e]{4,100}$/
+
+/** What the PIN field takes: a little more than a PIN may have, so a value
+ * that is too long shows as invalid instead of being cut to a valid length. */
+export const pinFieldMax = 128
+
+/** The PIN of Aqayepardakht's test system. Payments turns on its sandbox for
+ * it, and refuses it in production. */
+export const sandboxPin = 'sandbox'
+
+/** normalizePin is a typed PIN as payments reads it: trimmed, nothing else. */
+export function normalizePin(raw: string): string {
+  return raw.trim()
+}
+
+export function pinValid(raw: string): boolean {
+  return pinRe.test(normalizePin(raw))
+}
+
+/** keyedSecretValid: a typed API key or PIN, by the rule of its gateway. */
+export function keyedSecretValid(raw: string, provider: string): boolean {
+  return keyedUsesPin(provider) ? pinValid(raw) : merchantValid(raw)
+}
+
+/** normalizeKeyedSecret is a typed API key or PIN as payments reads it: a key
+ * is lowercased like a merchant id, a PIN keeps its case. */
+export function normalizeKeyedSecret(raw: string, provider: string): string {
+  return keyedUsesPin(provider) ? normalizePin(raw) : normalizeMerchant(raw)
+}
+
+/** The IDPay / NextPay / Aqayepardakht card, as staff edit it. */
 export interface KeyedForm {
   enabled: boolean
+  /** IDPay's sandbox switch; always off for the others */
   sandbox: boolean
-  /** a new API key; '' keeps the stored one */
+  /** a new API key, or Aqayepardakht's PIN; '' keeps the stored one */
   apiKey: string
   /** a new proxy; '' keeps the stored one */
   proxy: string
@@ -124,13 +170,15 @@ export function keyedFormOf(c: GatewayConfig): KeyedForm {
 }
 
 /** keyedProblems lists the fields that are not right yet, by the names core
- * uses. Turning it on needs an API key. */
+ * uses. Turning it on needs an API key (or PIN). Production refuses the test
+ * system, which core names 'sandbox': IDPay's switch, or the PIN "sandbox". */
 export function keyedProblems(f: KeyedForm, c: GatewayConfig): string[] {
   const out: string[] = []
-  if (f.apiKey.trim() && !merchantValid(f.apiKey)) out.push('api_key')
+  if (f.apiKey.trim() && !keyedSecretValid(f.apiKey, c.provider)) out.push('api_key')
   if (f.proxy.trim() && !proxyValid(f.proxy)) out.push('proxy')
   if (f.enabled && !c.configured && !f.apiKey.trim()) out.push('enabled')
-  if (f.sandbox && !c.sandbox && c.sandbox_allowed === false) out.push('sandbox')
+  const wantsSandbox = keyedUsesPin(c.provider) ? normalizePin(f.apiKey) === sandboxPin : f.sandbox && !c.sandbox
+  if (wantsSandbox && c.sandbox_allowed === false) out.push('sandbox')
   return out
 }
 
@@ -139,9 +187,11 @@ export function keyedDirty(f: KeyedForm, c: GatewayConfig): boolean {
   return f.enabled !== c.enabled || f.sandbox !== (keyedHasSandbox(c.provider) && c.sandbox) || !!f.apiKey.trim() || !!f.proxy.trim() || f.clearProxy
 }
 
-/** keyedBody is what PUT /gateways/{idpay|nextpay} takes: '' keeps a secret. */
+/** keyedBody is what PUT /gateways/{idpay|nextpay|aqayepardakht} takes: '' keeps
+ * a secret. The key is sent in the form payments stores it (a PIN as typed,
+ * trimmed); sandbox is only ever true for IDPay. */
 export function keyedBody(f: KeyedForm, provider: string) {
-  const key = f.apiKey.trim() ? normalizeMerchant(f.apiKey) : ''
+  const key = f.apiKey.trim() ? normalizeKeyedSecret(f.apiKey, provider) : ''
   return {
     enabled: f.enabled,
     sandbox: keyedHasSandbox(provider) && f.sandbox,
@@ -151,15 +201,15 @@ export function keyedBody(f: KeyedForm, provider: string) {
   }
 }
 
-/** keyedTestBody is what POST /gateways/{idpay|nextpay}/test takes: the typed
- * values, and '' for the stored ones. */
+/** keyedTestBody is what POST /gateways/{idpay|nextpay|aqayepardakht}/test
+ * takes: the typed values, and '' for the stored ones. */
 export function keyedTestBody(f: KeyedForm, provider: string) {
   const { sandbox, api_key, proxy, clear_proxy } = keyedBody(f, provider)
   return { sandbox, api_key, proxy, clear_proxy }
 }
 
-/** keyedBlockedByOpen: the form changes the API key or the sandbox while
- * payments are open, which payments refuses (they could not be verified). */
+/** keyedBlockedByOpen: the form changes the API key (or PIN) or the sandbox
+ * while payments are open, which payments refuses (they could not be verified). */
 export function keyedBlockedByOpen(f: KeyedForm, c: GatewayConfig): boolean {
   const open = c.health?.open ?? 0
   return c.configured && open > 0 && (!!f.apiKey.trim() || f.sandbox !== (keyedHasSandbox(c.provider) && c.sandbox))

@@ -22,7 +22,7 @@ BOBRES is a Go monorepo. The dashboard and the Mini App are Vue 3 apps embedded 
 | `redis` | The bot's conversation state and rate limits. Disposable | backend |
 | `core` | Users, plans, orders, wallet and ledger, tickets, resellers, the delivery worker, the dashboard and Mini App API, the watchdog | edge, backend |
 | `bot` | Telegram: customers, staff, alerts, backup delivery. Also the proxy for anything core needs from the internet | edge, backend, egress |
-| `payments` | Gateway secrets, payment intents, Zarinpal, IDPay, NextPay, Stars, the TRON watcher, manual receipts | edge, backend, egress |
+| `payments` | Gateway secrets, payment intents, Zarinpal, IDPay, NextPay, Aqayepardakht, Stars, the TRON watcher, manual receipts | edge, backend, egress |
 | `provisioner` | The only holder of panel tokens. Creates, renews and deletes clients | backend, egress |
 | `tls-agent` | Applies HTTPS changes to Caddy. Core's image, with no network | none |
 | `backup` | Daily encrypted `pg_dump`. Reaches the internet only when S3 copies are on | backend, offline |

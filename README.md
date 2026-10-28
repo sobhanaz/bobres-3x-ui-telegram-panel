@@ -20,7 +20,7 @@ Website: <https://bobresai.cv> · Latest release: **v0.17.1** · [Changelog](CHA
 | **Customers** | A Persian and English Telegram bot and Mini App: plans (in groups with a text each), wallet, free trial, renewals, traffic packages, bulk purchase, gift and reward codes, invite links, support, a page for every service |
 | **Resellers** | A panel in the bot and the Mini App: buy for customers at tier prices on credit, manage their services, commission; their configs carry their own prefix and group in your 3x-ui panel |
 | **You** | A dashboard for plans, payments, orders, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses; Telegram alerts; `/admin` in the bot |
-| **Payments** | Wallet, card to card, USDT (manual and automatic on TRON), Zarinpal, IDPay, NextPay, Telegram Stars |
+| **Payments** | Wallet, card to card, USDT (manual and automatic on TRON), Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars |
 | **Panels** | 3x-ui v3.8.5 to v3.10.2 and Marzban 0.8, several at once, each tested against the real panel in CI |
 | **Server** | `bobres`: install, status, logs, update with automatic rollback, encrypted backups and restore, HTTPS, hardening, health checks |
 | **Pricing** | Free core, paid premium: a free tier, a 30-day trial of everything, then a license per install ([docs/pricing.md](docs/pricing.md)) |
@@ -225,7 +225,7 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
 **Payments**
 - The wallet; card to card, USDT (TRC20 or ERC20) and a Zarinpal payment link, each with a screenshot staff approve;
   Zarinpal online; Telegram Stars; **automatic USDT on TRON (TRC20)**, which matches an exact, unique amount on the chain;
-  IDPay and NextPay, two more Iranian card gateways (off until credentials are set).
+  IDPay, NextPay and Aqayepardakht, three more Iranian card gateways (off until credentials are set).
 - Each payment settles exactly once. The ledger is append-only, and amounts are whole numbers in minor units.
 
 **3x-ui and Marzban**
@@ -292,7 +292,7 @@ flowchart LR
 
     telegram["<b>Telegram</b><br/>Bot API · Mini App · Stars"]
     panels["<b>VPN panels</b><br/>3x-ui · Marzban"]
-    gateways["<b>Card gateways</b><br/>Zarinpal · IDPay · NextPay"]
+    gateways["<b>Card gateways</b><br/>Zarinpal · IDPay · NextPay<br/>Aqayepardakht"]
     tron["<b>TRON network</b><br/>automatic USDT (TRC20)"]
     rates["<b>USDT price</b><br/>Tetherland · Wallex"]
     github["<b>GitHub</b><br/>signed releases · images"]
@@ -337,7 +337,7 @@ flowchart TB
     caddy["<b>caddy</b><br/>the only public entry<br/>/admin /app /sub /pay<br/>/webhooks /tg/webhook"]
     bot["<b>bot</b><br/>customers · staff · alerts<br/>the internet proxy for core"]
     core["<b>core</b><br/>users · plans · orders<br/>wallet and ledger · reports<br/>dashboard and Mini App API"]
-    payments["<b>payments</b><br/>gateway secrets · intents<br/>Zarinpal · IDPay · NextPay<br/>Stars · TRON watcher"]
+    payments["<b>payments</b><br/>gateway secrets · intents<br/>Zarinpal · IDPay · NextPay<br/>Aqayepardakht · Stars · TRON watcher"]
     prov["<b>provisioner</b><br/>holds the panels' tokens<br/>create · renew · delete<br/>usage · health"]
     pg[("<b>PostgreSQL</b><br/>a schema and a role<br/>for each service")]
     redis[("<b>Redis</b><br/>bot state · rate limits")]

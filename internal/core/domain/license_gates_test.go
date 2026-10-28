@@ -270,7 +270,7 @@ func TestLicenseGates(t *testing.T) {
 		if err := w.svc.SetSetting(ctx, w.own, "payments.manual_card.enabled", "true"); err != nil {
 			t.Fatalf("manual_card, which the free tier allows: %v", err)
 		}
-		for _, p := range []string{"manual_card", "manual_crypto", "manual_zarinpal", Stars, Zarinpal, IDPay, NextPay} {
+		for _, p := range []string{"manual_card", "manual_crypto", "manual_zarinpal", Stars, Zarinpal, IDPay, NextPay, Aqayepardakht} {
 			if err := w.svc.requireGateway(ctx, p); err != nil {
 				t.Errorf("%s under a license that names only zarinpal: %v", p, err)
 			}

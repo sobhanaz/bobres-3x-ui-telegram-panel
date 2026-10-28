@@ -269,7 +269,7 @@ func fallbackTLSFiles(domain, zarinpal string) (global, sites string) {
 	sites += "\n" + domain + " {\n\timport " + tlsconf.SiteSnippet + "\n}\n"
 	if zarinpal = strings.ToLower(zarinpal); zarinpal != "" && zarinpal != domain && domainRe.MatchString(zarinpal) && net.ParseIP(zarinpal) == nil {
 		sites += "\n# The Zarinpal domain: only the pay page and the return URL.\n" + zarinpal + " {\n" +
-			"\t@bobres_not_zarinpal {\n\t\tnot path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay\n\t}\n" +
+			"\t@bobres_not_zarinpal {\n\t\tnot path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay /webhooks/aqayepardakht\n\t}\n" +
 			"\thandle @bobres_not_zarinpal {\n\t\trespond \"Not found\" 404\n\t}\n" +
 			"\timport " + tlsconf.SiteSnippet + "\n}\n"
 	}

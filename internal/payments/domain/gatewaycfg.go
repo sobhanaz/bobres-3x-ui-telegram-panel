@@ -47,7 +47,7 @@ func (e *OpenIntentsError) Error() string {
 		return fmt.Sprintf("%d open %s payments: the address cannot change until they close", e.Count, e.Provider)
 	}
 	if isKeyed(e.Provider) {
-		return fmt.Sprintf("%d open %s payments: the API key and the sandbox cannot change until they close", e.Count, e.Provider)
+		return fmt.Sprintf("%d open %s payments: the %s and the sandbox cannot change until they close", e.Count, e.Provider, keyedSecretName(e.Provider))
 	}
 	return fmt.Sprintf("%d open %s payments: the merchant id and the sandbox cannot change until they close", e.Count, e.Provider)
 }
@@ -108,8 +108,8 @@ type GatewayOptions struct {
 	// BuildChain makes the TronGrid client of the automatic USDT watcher and
 	// validates its settings (tests point it at a fake). Nil = no watcher.
 	BuildChain func(ChainSettings) (gateway.ChainSource, error)
-	// Keyed wires the API-key gateways by provider name (idpay, nextpay); a
-	// provider without Build is not wired.
+	// Keyed wires the API-key gateways by provider name (idpay, nextpay,
+	// aqayepardakht); a provider without Build is not wired.
 	Keyed map[string]KeyedOptions
 }
 
@@ -149,7 +149,7 @@ type GatewayConfig struct {
 	Sandbox      bool
 	MerchantHint string // the merchant id's last 4 characters, "" when none
 	Address      string // usdt_trc20_auto: the store's TRC20 address (public)
-	APIKeySet    bool   // usdt_trc20_auto: a TronGrid API key is set
+	APIKeySet    bool   // usdt_trc20_auto: a TronGrid API key is set; idpay, nextpay, aqayepardakht: the key (PIN) is set
 	ProxySet     bool
 	KeyMissing   bool // no payments master key: read-only
 	FromEnv      bool // the settings come from the environment
@@ -174,7 +174,7 @@ func (s *Service) ConfigureGateways(ctx context.Context, o GatewayOptions) error
 		}
 	}
 	for _, name := range wiredKeyed(&o) {
-		if o.Envelope != nil && normalizeKeyed(o.Keyed[name].Seed).APIKey != "" {
+		if o.Envelope != nil && normalizeKeyed(name, o.Keyed[name].Seed).APIKey != "" {
 			if err := s.seedKeyed(ctx, &o, name); err != nil {
 				return err
 			}
@@ -653,7 +653,7 @@ func (s *Service) runGatewayTest(ctx context.Context, providerName string, g gat
 }
 
 // reportProviders are the providers a report can be asked for.
-var reportProviders = []string{providerZarinpal, providerIDPay, providerNextPay, Stars, USDTAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
+var reportProviders = []string{providerZarinpal, providerIDPay, providerNextPay, providerAqayepardakht, Stars, USDTAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
 
 // maxReportSpan bounds a report's period.
 const maxReportSpan = 366 * 24 * time.Hour

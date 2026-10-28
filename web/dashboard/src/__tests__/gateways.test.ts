@@ -19,19 +19,28 @@ import {
   keyedDirty,
   keyedFormOf,
   keyedHasSandbox,
+  keyedOrder,
   keyedProblems,
+  keyedProviders,
+  keyedSecretValid,
   keyedTestBody,
+  keyedUsesPin,
   merchantValid,
   methodCards,
   methods,
   methodState,
+  normalizeKeyedSecret,
   normalizeMerchant,
+  normalizePin,
   openPayments,
   overviewGatewayState,
+  pinFieldMax,
+  pinValid,
   proxyValid,
   reportRange,
   reportRows,
   resolveBody,
+  sandboxPin,
   tronscanUrl,
   unmatchedReason,
   unmatchedReasons,
@@ -52,6 +61,8 @@ import type { GatewayConfig, GatewayReport, SettingItem } from '../types'
 
 const t0 = 1_760_000_000
 const merchant = '1a2b3c4d-0000-4000-8000-00000000ab12'
+// An Aqayepardakht PIN: capitals, small letters and symbols, nothing like an id.
+const pin = 'AbC123xYz-Q_9'
 const config = (over: Partial<GatewayConfig> = {}): GatewayConfig => ({
   provider: 'zarinpal',
   enabled: false,
@@ -157,13 +168,144 @@ describe('idpay and nextpay form', () => {
     expect(keyedBlockedByOpen({ ...f, apiKey: merchant }, idpay({ health: { ...c.health!, open: 0 } }))).toBe(false)
     expect(keyedBlockedByOpen({ ...f, apiKey: merchant }, idpay({ configured: false }))).toBe(false)
   })
-  it('names both gateways in both languages', () => {
+  it('names every keyed gateway in both languages', () => {
     for (const lang of [en, fa]) {
-      for (const p of ['idpay', 'nextpay']) {
-        expect(lang.payment.provider[p as 'idpay'], p).toBeTruthy()
+      for (const p of keyedProviders) {
+        expect(lang.payment.provider[p], p).toBeTruthy()
         expect((lang.gateway as Record<string, unknown>)[p + '_desc'], p).toBeTruthy()
       }
     }
+  })
+  it('keeps IDPay and NextPay on the API key rule, whatever Aqayepardakht does', () => {
+    // a key is an id: lowercased, and only a 36-character one passes
+    expect(keyedUsesPin('idpay')).toBe(false)
+    expect(keyedUsesPin('nextpay')).toBe(false)
+    for (const p of ['idpay', 'nextpay']) {
+      expect(keyedSecretValid(merchant.toUpperCase(), p), p).toBe(true)
+      expect(keyedSecretValid('AbCd1234', p), p).toBe(false)
+      expect(normalizeKeyedSecret(' ' + merchant.toUpperCase() + ' ', p), p).toBe(merchant)
+    }
+    expect(keyedBody({ ...keyedFormOf(idpay()), apiKey: merchant.toUpperCase() }, 'nextpay').api_key).toBe(merchant)
+    // the PIN "sandbox" is no business of theirs
+    expect(keyedProblems({ ...keyedFormOf(idpay()), apiKey: 'sandbox' }, idpay({ sandbox_allowed: false }))).toEqual(['api_key'])
+  })
+})
+
+// Aqayepardakht: the credential is the gateway's PIN, which is no id (any 4 to
+// 100 printable characters, case counts), and the test system is the PIN
+// "sandbox" itself, so there is no sandbox switch.
+describe('aqayepardakht form', () => {
+  const aqayepardakht = (over: Partial<GatewayConfig> = {}) => config({ provider: 'aqayepardakht', merchant_hint: '', ...over })
+  const proxy = 'http://p.example.com:3128'
+
+  it('is a keyed gateway whose card comes after NextPay, with a PIN and no sandbox switch', () => {
+    expect(isKeyedProvider('aqayepardakht')).toBe(true)
+    expect(keyedUsesPin('aqayepardakht')).toBe(true)
+    expect(keyedHasSandbox('aqayepardakht')).toBe(false)
+    expect(keyedOrder('idpay')).toBeLessThan(keyedOrder('nextpay'))
+    expect(keyedOrder('nextpay')).toBeLessThan(keyedOrder('aqayepardakht'))
+    expect(keyedOrder('zarinpal')).toBe(-1)
+  })
+  it('reads a PIN as 4 to 100 printable characters without spaces', () => {
+    expect(pinValid('abcd')).toBe(true)
+    expect(pinValid('abc')).toBe(false)
+    expect(pinValid('a'.repeat(100))).toBe(true)
+    expect(pinValid('a'.repeat(101))).toBe(false)
+    expect(pinValid(pin)).toBe(true)
+    // every printable ASCII character but the space
+    expect(pinValid('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')).toBe(true)
+    // trimmed, but a space inside is not a PIN
+    expect(pinValid('  ' + pin + '\n')).toBe(true)
+    expect(pinValid('ab cd')).toBe(false)
+    expect(pinValid('ab\u00a0cd')).toBe(false)
+    expect(pinValid('')).toBe(false)
+    expect(pinValid('    ')).toBe(false)
+    // letters of another script, and digits in another script, are not converted: they are refused
+    expect(pinValid('پین-درگاه')).toBe(false)
+    expect(pinValid('۱۲۳۴۵۶')).toBe(false)
+    // what the field takes is more than a PIN may be, so a value that is too long shows as invalid
+    expect(pinFieldMax).toBeGreaterThan(100)
+  })
+  it('keeps the case of a PIN, and still lowercases the other gateways\' keys', () => {
+    expect(normalizePin('  AbC-1_x \t')).toBe('AbC-1_x')
+    expect(normalizeKeyedSecret(' ' + pin + ' ', 'aqayepardakht')).toBe(pin)
+    expect(normalizeKeyedSecret(' ' + merchant.toUpperCase() + ' ', 'idpay')).toBe(merchant)
+    // a PIN is not an id: the 36-character rule would refuse it
+    expect(merchantValid(pin)).toBe(false)
+    expect(keyedSecretValid(pin, 'aqayepardakht')).toBe(true)
+    expect(keyedSecretValid(pin, 'idpay')).toBe(false)
+    expect(keyedSecretValid(pin, 'nextpay')).toBe(false)
+  })
+  it('starts from the stored switches and an empty PIN, never with the sandbox on', () => {
+    expect(keyedFormOf(aqayepardakht({ enabled: true }))).toEqual({ enabled: true, sandbox: false, apiKey: '', proxy: '', clearProxy: false })
+    // the sandbox core reports (the stored PIN is "sandbox") is not a switch of this form
+    expect(keyedFormOf(aqayepardakht({ sandbox: true })).sandbox).toBe(false)
+  })
+  it('checks the form as payments will', () => {
+    const c = aqayepardakht()
+    const f = keyedFormOf(c)
+    expect(keyedProblems(f, c)).toEqual([])
+    expect(keyedProblems({ ...f, apiKey: pin }, c)).toEqual([])
+    expect(keyedProblems({ ...f, apiKey: 'abc', proxy: 'ftp://x' }, c)).toEqual(['api_key', 'proxy'])
+    expect(keyedProblems({ ...f, apiKey: 'with space' }, c)).toEqual(['api_key'])
+    // turning it on needs a PIN, stored or typed
+    const blank = aqayepardakht({ configured: false })
+    expect(keyedProblems({ ...f, enabled: true }, blank)).toEqual(['enabled'])
+    expect(keyedProblems({ ...f, enabled: true, apiKey: pin }, blank)).toEqual([])
+    expect(keyedProblems({ ...f, enabled: true }, c)).toEqual([])
+  })
+  it('refuses the PIN "sandbox" where production does, and only there', () => {
+    expect(sandboxPin).toBe('sandbox')
+    const prod = aqayepardakht({ sandbox_allowed: false })
+    const f = keyedFormOf(prod)
+    expect(keyedProblems({ ...f, apiKey: 'sandbox' }, prod)).toEqual(['sandbox'])
+    expect(keyedProblems({ ...f, apiKey: '  sandbox ' }, prod)).toEqual(['sandbox'])
+    // it is the whole PIN that counts, and case counts
+    expect(keyedProblems({ ...f, apiKey: 'sandbox1' }, prod)).toEqual([])
+    expect(keyedProblems({ ...f, apiKey: 'Sandbox' }, prod)).toEqual([])
+    expect(keyedProblems({ ...f, apiKey: pin }, prod)).toEqual([])
+    // typed nothing: a stored sandbox PIN is the problem core names, not a field
+    expect(keyedProblems(f, aqayepardakht({ sandbox_allowed: false, sandbox: true }))).toEqual([])
+    // elsewhere it is the test PIN, as the gateway has it
+    expect(keyedProblems({ ...f, apiKey: 'sandbox' }, aqayepardakht({ sandbox_allowed: true }))).toEqual([])
+    expect(keyedProblems({ ...f, apiKey: 'sandbox' }, aqayepardakht())).toEqual([])
+  })
+  it('knows when something would change', () => {
+    // the stored PIN is "sandbox": core reports sandbox, which is no switch to change
+    const c = aqayepardakht({ sandbox: true })
+    const f = keyedFormOf(c)
+    expect(keyedDirty(f, c)).toBe(false)
+    expect(keyedDirty({ ...f, enabled: true }, c)).toBe(true)
+    expect(keyedDirty({ ...f, apiKey: ' ' }, c)).toBe(false)
+    expect(keyedDirty({ ...f, apiKey: pin }, c)).toBe(true)
+    expect(keyedDirty({ ...f, proxy }, c)).toBe(true)
+    expect(keyedDirty({ ...f, clearProxy: true }, c)).toBe(true)
+  })
+  it('builds the bodies: the PIN as typed but trimmed, never a sandbox, "" keeps a secret', () => {
+    const f = keyedFormOf(aqayepardakht())
+    expect(keyedBody(f, 'aqayepardakht')).toEqual({ enabled: false, sandbox: false, api_key: '', proxy: '', clear_proxy: false })
+    expect(keyedBody({ ...f, enabled: true, apiKey: ' ' + pin + ' ', proxy: ' ' + proxy + ' ' }, 'aqayepardakht')).toEqual({
+      enabled: true, sandbox: false, api_key: pin, proxy, clear_proxy: false,
+    })
+    // a sandbox switch that was somehow on is not sent; the test PIN is a PIN like any other
+    expect(keyedBody({ ...f, sandbox: true }, 'aqayepardakht').sandbox).toBe(false)
+    expect(keyedBody({ ...f, apiKey: 'sandbox' }, 'aqayepardakht')).toMatchObject({ api_key: 'sandbox', sandbox: false })
+    expect(keyedBody({ ...f, proxy, clearProxy: true }, 'aqayepardakht')).toMatchObject({ proxy: '', clear_proxy: true })
+    // a test changes nothing: no switches but the sandbox, which is false
+    expect(keyedTestBody({ ...f, enabled: true, apiKey: pin }, 'aqayepardakht')).toEqual({ sandbox: false, api_key: pin, proxy: '', clear_proxy: false })
+    expect(keyedTestBody({ ...f, proxy }, 'aqayepardakht')).toEqual({ sandbox: false, api_key: '', proxy, clear_proxy: false })
+  })
+  it('refuses a new PIN while payments are open', () => {
+    const c = aqayepardakht() // two open payments
+    const f = keyedFormOf(c)
+    expect(keyedBlockedByOpen(f, c)).toBe(false)
+    expect(keyedBlockedByOpen({ ...f, enabled: true, proxy }, c)).toBe(false)
+    expect(keyedBlockedByOpen({ ...f, apiKey: pin }, c)).toBe(true)
+    expect(keyedBlockedByOpen({ ...f, apiKey: pin }, aqayepardakht({ health: { ...c.health!, open: 0 } }))).toBe(false)
+    expect(keyedBlockedByOpen({ ...f, apiKey: pin }, aqayepardakht({ configured: false }))).toBe(false)
+    // the sandbox core reports is not a change either
+    const sandboxed = aqayepardakht({ sandbox: true })
+    expect(keyedBlockedByOpen(keyedFormOf(sandboxed), sandboxed)).toBe(false)
   })
 })
 
@@ -372,8 +514,14 @@ describe('overview gateways', () => {
       expect(overviewGatewayState(g(m.key, true, true)), m.key).toBe('ok')
       expect(overviewGatewayState(g(m.key, false, false)), m.key).toBe('off')
     }
-    // Zarinpal can fail
+    // Zarinpal can fail, and so can the other card gateways
     expect(overviewGatewayState(g('zarinpal', true, false))).toBe('down')
+    for (const p of keyedProviders) {
+      expect(overviewGatewayState(g(p, true, false)), p).toBe('down')
+      expect(overviewGatewayState(g(p, true, true)), p).toBe('ok')
+      expect(overviewGatewayState(g(p, false, false)), p).toBe('off')
+      expect(overviewGatewayState(g(p, true, false, false)), p).toBe('incomplete')
+    }
     expect(overviewGatewayState(g('zarinpal', true, true))).toBe('ok')
     expect(overviewGatewayState(g('zarinpal', false, true))).toBe('off')
     // core may say a method is not ready itself
@@ -749,6 +897,201 @@ describe('gateways page', () => {
     // the typed key is gone from the page at once
     await vi.waitFor(() => expect(document.querySelector('#idpay-api-key')).toBeNull())
     expect(document.body.innerHTML.toLowerCase()).not.toContain(merchant)
+  })
+
+  // ---- Aqayepardakht: a PIN that keeps its case, and the PIN "sandbox" as its test system
+  const aqName = () => text('payment.provider.aqayepardakht')
+  const aqConfig = (over: Partial<GatewayConfig> = {}) => config({ provider: 'aqayepardakht', merchant_hint: '', configured: true, ...over })
+  const aqCard = () => document.querySelector('.keyed-aqayepardakht') as HTMLElement
+  const aqSave = () => aqCard().querySelector('button.save') as HTMLButtonElement
+  const aqTest = () => aqCard().querySelector('button.test') as HTMLButtonElement
+  const aqProviders = (aq: GatewayConfig) => () => ({ providers: [config(), aq], settings: payments() })
+
+  it('shows Aqayepardakht with a write-only PIN that keeps its case, and no sandbox switch', async () => {
+    let aq = aqConfig({ configured: false, sandbox_allowed: true })
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => aqProviders(aq)(), (url, init, b) => {
+      if (url === '/api/v1/gateways/aqayepardakht' && init?.method === 'PUT') {
+        aq = { ...aq, enabled: b.enabled as boolean, configured: true }
+        return json(200, { item: aq })
+      }
+    })
+    await found('.keyed-aqayepardakht')
+    expect(aqCard().querySelector('.card-title')?.textContent).toBe(aqName())
+    expect(aqCard().textContent).toContain(text('gateway.aqayepardakht_desc'))
+    // no sandbox switch: its test system is the PIN "sandbox", which the help under the PIN names
+    expect(document.getElementById('aqayepardakht-sandbox')).toBeNull()
+    expect(aqCard().querySelector('.sandbox')).toBeNull()
+    const input = await found<HTMLInputElement>('#aqayepardakht-api-key')
+    expect(input.type).toBe('password')
+    expect(field('aqayepardakht-api-key').querySelector('label')?.textContent).toBe(text('gateway.keyed.pin.label'))
+    expect(field('aqayepardakht-api-key').textContent).toContain(fill(text('gateway.keyed.pin.sandbox_help'), { name: aqName() }))
+    expect(field('aqayepardakht-api-key').textContent).not.toContain(text('gateway.keyed.pin.sandbox_prod'))
+    // the example is no id, and the field takes more than a PIN may have
+    expect(input.placeholder).not.toMatch(/[0-9a-fx]{8}-[0-9a-fx]{4}/i)
+    expect(input.maxLength).toBe(pinFieldMax)
+    // the PIN rule, not the API key's
+    type(input, 'ab')
+    await vi.waitFor(() => expect(field('aqayepardakht-api-key').textContent).toContain(text('gateway.keyed.pin.invalid.pin')))
+    expect(field('aqayepardakht-api-key').textContent).not.toContain(text('gateway.keyed.invalid.api_key'))
+    expect(aqSave().disabled).toBe(true)
+    // switched on without a PIN
+    ;(document.getElementById('aqayepardakht-enabled') as HTMLInputElement).click()
+    type(input, '')
+    await vi.waitFor(() => expect(aqCard().querySelector('.field-error')?.textContent).toContain(fill(text('gateway.keyed.pin.invalid.needs_pin'), { name: aqName() })))
+    // a PIN with capitals and symbols is saved as typed (trimmed), without a sandbox
+    type(input, ' ' + pin + ' ')
+    await vi.waitFor(() => expect(aqSave().disabled).toBe(false))
+    expect(field('aqayepardakht-api-key').querySelector('[role=alert]')).toBeNull()
+    aqSave().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/aqayepardakht')).toEqual([{ enabled: true, sandbox: false, api_key: pin, proxy: '', clear_proxy: false }]))
+    // the typed PIN is gone from the page at once
+    await vi.waitFor(() => expect(document.querySelector('#aqayepardakht-api-key')).toBeNull())
+    expect(document.body.innerHTML).not.toContain(pin)
+    expect(field('aqayepardakht-api-key').querySelector('.state')?.textContent).toBe(text('secret.set'))
+  })
+
+  it('refuses the PIN sandbox in production: said under the PIN, with nothing to save or test', async () => {
+    const { calls } = await boot('/admin/gateways', ownerPerms, aqProviders(aqConfig({ configured: false, sandbox_allowed: false })))
+    await found('.keyed-aqayepardakht')
+    // production does not offer the test PIN: the help says it is not accepted
+    expect(field('aqayepardakht-api-key').textContent).toContain(text('gateway.keyed.pin.sandbox_prod'))
+    expect(field('aqayepardakht-api-key').textContent).not.toContain(fill(text('gateway.keyed.pin.sandbox_help'), { name: aqName() }))
+    const input = await found<HTMLInputElement>('#aqayepardakht-api-key')
+    ;(document.getElementById('aqayepardakht-enabled') as HTMLInputElement).click()
+    type(input, 'sandbox')
+    await vi.waitFor(() => expect(field('aqayepardakht-api-key').textContent).toContain(text('gateway.keyed.pin.invalid.sandbox')))
+    expect(field('aqayepardakht-api-key').querySelector('[role=alert]')?.textContent).toBe(text('gateway.keyed.pin.invalid.sandbox'))
+    expect(input.classList.contains('p-invalid')).toBe(true)
+    expect(aqSave().disabled).toBe(true)
+    expect(aqTest().disabled).toBe(true)
+    // another PIN takes the message away
+    type(input, 'Sandbox-9')
+    await vi.waitFor(() => expect(aqSave().disabled).toBe(false))
+    expect(field('aqayepardakht-api-key').querySelector('[role=alert]')).toBeNull()
+    expect(input.classList.contains('p-invalid')).toBe(false)
+    expect(aqTest().disabled).toBe(false)
+    expect(sent(calls, 'PUT', '/gateways/aqayepardakht')).toEqual([])
+    expect(sent(calls, 'POST', '/gateways/aqayepardakht/test')).toEqual([])
+  })
+
+  it('shows what core says about the sandbox under the PIN, as there is no sandbox field', async () => {
+    const said = 'the PIN sandbox is refused in production'
+    const { calls } = await boot('/admin/gateways', ownerPerms, aqProviders(aqConfig({ configured: false })), (url, init) =>
+      url === '/api/v1/gateways/aqayepardakht' && init?.method === 'PUT' ? json(400, { error: 'invalid', message: said, field: 'sandbox' }) : undefined,
+    )
+    await found('.keyed-aqayepardakht')
+    const input = await found<HTMLInputElement>('#aqayepardakht-api-key')
+    ;(document.getElementById('aqayepardakht-enabled') as HTMLInputElement).click()
+    // this core did not say that production refuses it: the page lets it go to core
+    type(input, 'sandbox')
+    await vi.waitFor(() => expect(aqSave().disabled).toBe(false))
+    aqSave().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/aqayepardakht')).toHaveLength(1))
+    await vi.waitFor(() => expect(field('aqayepardakht-api-key').querySelector('[role=alert]')?.textContent).toBe(said))
+    expect(input.classList.contains('p-invalid')).toBe(true)
+    // under the PIN, and still no sandbox field
+    expect(aqCard().querySelector('.sandbox')).toBeNull()
+    expect(aqCard().querySelectorAll('.field-error')).toHaveLength(0)
+    // typing again takes the answer away
+    type(input, 'Another-1')
+    await vi.waitFor(() => expect(field('aqayepardakht-api-key').querySelector('[role=alert]')).toBeNull())
+  })
+
+  it('says a PIN cannot change while payments are open, before saving and when payments refuses', async () => {
+    const { calls } = await boot('/admin/gateways', ownerPerms, aqProviders(aqConfig()), (url, init) =>
+      url === '/api/v1/gateways/aqayepardakht' && init?.method === 'PUT' ? json(409, { error: 'state', message: '2 aqayepardakht payments are still open', open: 2 }) : undefined,
+    )
+    await found('.keyed-aqayepardakht')
+    ;(field('aqayepardakht-api-key').querySelector('button.replace') as HTMLButtonElement).click()
+    const input = await found<HTMLInputElement>('#aqayepardakht-api-key')
+    expect(input.type).toBe('password')
+    // the stored PIN is only "set"; payments under it are open
+    type(input, pin)
+    const opened = fill(text('gateway.keyed.pin.open_payments'), { n: '۲', name: aqName() })
+    await vi.waitFor(() => expect(aqCard().querySelector('.key-blocked')?.textContent).toContain(opened))
+    await vi.waitFor(() => expect(aqSave().disabled).toBe(false))
+    aqSave().click()
+    await vi.waitFor(() => expect(aqCard().querySelector('.error')?.textContent).toContain(opened))
+    expect(aqCard().querySelector('.error')?.textContent).toContain('2 aqayepardakht payments are still open')
+    // the API key's words are not used for a PIN
+    expect(opened).not.toContain('API')
+    expect(sent(calls, 'PUT', '/gateways/aqayepardakht')[0]).toEqual({ enabled: false, sandbox: false, api_key: pin, proxy: '', clear_proxy: false })
+  })
+
+  it('tests the PIN as typed, without saving', async () => {
+    let ok = true
+    const { calls } = await boot('/admin/gateways', ownerPerms, aqProviders(aqConfig()), (url) =>
+      url === '/api/v1/gateways/aqayepardakht/test' ? json(200, ok ? { ok: true, detail: '', unverified: 1 } : { ok: false, detail: 'aqayepardakht: pin not found' }) : undefined,
+    )
+    await found('.keyed-aqayepardakht')
+    const result = () => aqCard().querySelector('.test-result')?.textContent ?? ''
+    // the stored PIN, nothing typed
+    aqTest().click()
+    await vi.waitFor(() => expect(result()).toContain(fill(text('gateway.keyed.pin.test_ok'), { name: aqName() })))
+    expect(result()).toContain(fill(text('gateway.test_unverified'), { n: '۱' }))
+    expect(result()).not.toContain('API')
+    // a typed one
+    ;(field('aqayepardakht-api-key').querySelector('button.replace') as HTMLButtonElement).click()
+    const input = await found<HTMLInputElement>('#aqayepardakht-api-key')
+    type(input, ' ' + pin + ' ')
+    ok = false
+    await vi.waitFor(() => expect(result()).toBe(''))
+    aqTest().click()
+    await vi.waitFor(() => expect(result()).toContain(fill(text('gateway.keyed.test_failed'), { name: aqName() })))
+    expect(result()).toContain('aqayepardakht: pin not found')
+    expect(sent(calls, 'POST', '/gateways/aqayepardakht/test')).toEqual([
+      { sandbox: false, api_key: '', proxy: '', clear_proxy: false },
+      { sandbox: false, api_key: pin, proxy: '', clear_proxy: false },
+    ])
+    // a test saves nothing
+    expect(sent(calls, 'PUT', '/gateways/aqayepardakht')).toEqual([])
+  })
+
+  it('tags Aqayepardakht as sandbox while its PIN is the test PIN, and does not take that for an unsaved change', async () => {
+    let zarinpal = config()
+    let aq = aqConfig({ sandbox_allowed: true })
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [zarinpal, aq], settings: payments() }), (url, init, b) => {
+      if (url === '/api/v1/gateways/zarinpal' && init?.method === 'PUT') {
+        zarinpal = { ...zarinpal, enabled: b.enabled as boolean }
+        // the PIN was replaced with the test PIN meanwhile (by another owner)
+        aq = { ...aq, sandbox: true }
+        return json(200, { item: zarinpal })
+      }
+    })
+    await found('.keyed-aqayepardakht')
+    const tags = () => [...aqCard().querySelectorAll('.p-tag')].map((x) => x.textContent)
+    expect(tags()).not.toContain(text('gateway.sandbox_on'))
+    // another card saves, and the page reads the gateways again
+    ;(document.getElementById('zarinpal-enabled') as HTMLInputElement).click()
+    await vi.waitFor(() => expect(save().disabled).toBe(false))
+    save().click()
+    await vi.waitFor(() => expect(tags()).toContain(text('gateway.sandbox_on')))
+    // the sandbox is core's word for the PIN: no switch moved, so nothing is unsaved
+    expect(aqSave().disabled).toBe(true)
+    expect(aqCard().querySelector('.unsaved')).toBeNull()
+    expect(aqCard().querySelector('.sandbox')).toBeNull()
+  })
+
+  it('says why Aqayepardakht is on but not offered, in the words of the PIN', async () => {
+    const stored = { enabled: true, offered: false, sandbox: true, sandbox_allowed: false }
+    await boot('/admin/gateways', ownerPerms, aqProviders(aqConfig({ ...stored, problem: 'sandbox_refused' })))
+    await found('.keyed-aqayepardakht')
+    expect(aqCard().querySelector('.state')?.textContent).toBe(text('gateway.state.not_offered'))
+    expect(aqCard().querySelector('.problem')?.textContent).toContain(fill(text('gateway.keyed.pin.problem.sandbox_refused'), { name: aqName() }))
+    // IDPay's words tell staff to turn a sandbox switch off, which this card does not have
+    expect(aqCard().querySelector('.problem')?.textContent).not.toContain(text('gateway.keyed.problem.sandbox_refused'))
+    expect(aqCard().textContent).toContain(text('gateway.sandbox_on'))
+  })
+
+  it('lists IDPay, NextPay and Aqayepardakht in that order, whatever order core answers in', async () => {
+    const keyed = (provider: string) => config({ provider, merchant_hint: '', configured: false })
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [keyed('aqayepardakht'), keyed('nextpay'), config(), keyed('idpay')], settings: payments() }))
+    await found('.keyed-aqayepardakht')
+    expect([...document.querySelectorAll('.keyed-card')].map((c) => c.querySelector('.card-title')?.textContent)).toEqual([
+      text('payment.provider.idpay'), text('payment.provider.nextpay'), text('payment.provider.aqayepardakht'),
+    ])
+    // Zarinpal stays first
+    expect(document.querySelector('.cards > :first-child')?.classList.contains('zarinpal-card')).toBe(true)
   })
 
   it('replaces the merchant id, refused while payments are open', async () => {
@@ -1281,6 +1624,42 @@ describe('gateways page', () => {
     expect(row.querySelector('.txid')?.getAttribute('title')).toBe(txid(3))
   })
 
+  it('lists Aqayepardakht among the methods to filter the payments by, and names it in the row', async () => {
+    const item = {
+      id: 'p2', order_id: 'o2', user: { id: 'u2', telegram_id: 2, username: 'ali' }, provider: 'aqayepardakht', status: 'succeeded',
+      amount: { amount: 150_000, currency: 'IRT' }, gateway_amount: null, provider_ref: '987654321', failure_reason: '', created_at: t0, proof: null,
+    }
+    const { calls } = await boot('/admin/payments?tab=history', ['overview.read', 'payments.read'], () => ({}), (url) =>
+      url.startsWith('/api/v1/payments?') ? json(200, { items: [item], total: 1, page: 1, size: 25 }) : undefined,
+    )
+    await vi.waitFor(() => expect(calls).toContain('GET /api/v1/payments?page=1&size=25'))
+    const select = await vi.waitFor(() => {
+      const el = [...document.querySelectorAll<HTMLElement>('.p-select')].find((e) => e.querySelector(`[aria-label="${text('payment.method')}"]`))
+      expect(el).toBeDefined()
+      return el!
+    })
+    select.click()
+    const options = await vi.waitFor(() => {
+      const list = [...document.querySelectorAll('.p-select-option')]
+      expect(list.length).toBeGreaterThan(5)
+      return list
+    })
+    // after NextPay, before the automatic USDT
+    const labels = options.map((o) => o.textContent?.trim())
+    expect(labels.indexOf(text('payment.provider.aqayepardakht'))).toBe(labels.indexOf(text('payment.provider.nextpay')) + 1)
+    expect(labels.indexOf(text('payment.provider.usdt_trc20_auto'))).toBe(labels.indexOf(text('payment.provider.aqayepardakht')) + 1)
+    options.find((o) => o.textContent?.trim() === text('payment.provider.aqayepardakht'))!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await vi.waitFor(() => expect(calls).toContain('GET /api/v1/payments?provider=aqayepardakht&page=1&size=25'))
+    // the row names the gateway, not a key of the catalog
+    const row = await vi.waitFor(() => {
+      const el = [...document.querySelectorAll('.p-datatable-tbody tr')].find((r) => r.textContent?.includes(text('payment.provider.aqayepardakht')))
+      expect(el).toBeDefined()
+      return el!
+    })
+    expect(row.textContent).not.toContain('payment.provider.')
+    expect(row.querySelector('.app-mono')?.textContent).toBe('987654321')
+  })
+
   it('keeps the page from admins', async () => {
     const { router, calls } = await boot('/admin/gateways', adminPerms, () => ({ providers: [], settings: [] }))
     expect(router.currentRoute.value.name).toBe('overview')
@@ -1326,11 +1705,14 @@ describe('servers and gateways texts', () => {
       ...['ok', 'error', 'idle'].map((s) => 'gateway.health.' + s),
       ...['unreadable', 'sandbox_refused', 'public_url', 'invalid'].map((s) => 'gateway.problem.' + s),
       ...['unreadable', 'sandbox_refused', 'public_url', 'invalid'].map((s) => 'gateway.keyed.problem.' + s),
-      ...['idpay', 'nextpay'].map((p) => 'gateway.' + p + '_desc'),
+      ...keyedProviders.map((p) => 'gateway.' + p + '_desc'),
+      ...['label', 'help', 'sandbox_help', 'sandbox_prod', 'open_payments', 'test_ok'].map((s) => 'gateway.keyed.pin.' + s),
+      ...['pin', 'sandbox', 'needs_pin'].map((s) => 'gateway.keyed.pin.invalid.' + s),
+      ...['unreadable', 'sandbox_refused', 'invalid'].map((s) => 'gateway.keyed.pin.problem.' + s),
       ...['unreadable', 'invalid'].map((s) => 'gateway.usdt.problem.' + s),
       ...['format', 'checksum', 'required'].map((s) => 'gateway.usdt.invalid.address_' + s),
       ...unmatchedReasons.map((r) => 'gateway.usdt.reason.' + r),
-      ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'stars', 'wallet'].map((p) => 'payment.provider.' + p),
+      ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', ...keyedProviders, 'usdt_trc20_auto', 'stars', 'wallet'].map((p) => 'payment.provider.' + p),
       ...['on', 'off', 'incomplete'].map((s) => 'gateway.method_state.' + s),
       ...methods.flatMap((m) => ['gateway.method.' + m.key + '.title', 'gateway.method.' + m.key + '.desc', `settings.field.${m.toggle}.label`, `settings.field.${m.toggle}.help`]),
       ...['off', 'ok', 'incomplete', 'down'].map((s) => 'overview.gateway_state.' + s),

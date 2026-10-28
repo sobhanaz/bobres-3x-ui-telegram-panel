@@ -513,6 +513,7 @@
       "zarinpal": "Zarinpal",
       "idpay": "IDPay",
       "nextpay": "NextPay",
+      "aqayepardakht": "Aqayepardakht",
       "usdt_trc20_auto": "USDT TRC20 (automatic)",
       "stars": "Telegram Stars",
       "wallet": "Wallet"
@@ -763,7 +764,7 @@
     "method_hint": {
       "wallet": "Paid from the customer's wallet, whatever put the money there: a top-up, a refund, a reward, a change by staff, a reseller's commission or a reseller's credit.",
       "manual": "Card to card, crypto or a Zarinpal link, approved by staff.",
-      "gateway": "Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT.",
+      "gateway": "Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars or automatic USDT.",
       "unknown": "A sale with no record of how it was paid."
     },
     "daily": {
@@ -2592,12 +2593,13 @@
     "version_range": "BOBRES is tested with panel versions {min} to {max}; this version may still work."
   },
   "gateway": {
-    "intro": "How customers pay. The merchant id or API key and the proxy of Zarinpal, IDPay and NextPay, and the TronGrid key of automatic USDT, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
-    "key_missing_banner": "The payments service has no encryption key yet, so the settings of Zarinpal, IDPay and NextPay still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
+    "intro": "How customers pay. The merchant id, API key or PIN and the proxy of Zarinpal, IDPay, NextPay and Aqayepardakht, and the TronGrid key of automatic USDT, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
+    "key_missing_banner": "The payments service has no encryption key yet, so the settings of Zarinpal, IDPay, NextPay and Aqayepardakht still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
     "key_missing": "Read only: add the payments key (run bobres install again) to change these here.",
     "zarinpal_desc": "Online card payments through your Zarinpal merchant account; payments are confirmed automatically.",
     "idpay_desc": "Online card payments through your IDPay account; payments are confirmed automatically.",
     "nextpay_desc": "Online card payments through your NextPay account; payments are confirmed automatically.",
+    "aqayepardakht_desc": "Online card payments through your Aqayepardakht account; payments are confirmed automatically.",
     "keyed": {
       "enabled": "Offer {name}",
       "sandbox_help": "Payments go to {name}'s test system and no real money moves. Never leave it on for customers.",
@@ -2616,6 +2618,24 @@
         "sandbox_refused": "The sandbox is refused on a production install: turn it off.",
         "public_url": "The public payment address is not right (it must be https with a domain), so {name} is not offered. Fix BOBRES_ZARINPAL_PUBLIC_URL in the .env file.",
         "invalid": "These settings were refused, so {name} is not offered. Check the API key and the proxy."
+      },
+      "pin": {
+        "label": "PIN",
+        "help": "Your gateway's PIN, from your {name} panel. It is stored encrypted and never shown again. Register this store's payment address (the same one as Zarinpal's) in the {name} panel as the callback domain.",
+        "sandbox_help": "For a test, you can use the PIN “sandbox”: payments then go to {name}'s test system and no real money moves. Replace it with your real PIN before customers pay.",
+        "sandbox_prod": "The test PIN “sandbox” is not accepted on a production install.",
+        "open_payments": "{n} {name} payment is still open. The PIN cannot change until it finishes, or that payment could not be confirmed. | {n} {name} payments are still open. The PIN cannot change until they finish, or those payments could not be confirmed.",
+        "invalid": {
+          "pin": "The PIN has 4 to 100 characters, with no spaces: Latin letters, digits and symbols. Capital and small letters are different.",
+          "sandbox": "The PIN “sandbox” is a test PIN and a production install does not accept it. Enter your real PIN.",
+          "needs_pin": "Enter the PIN before turning {name} on."
+        },
+        "test_ok": "{name} answered: the PIN and the route to it work.",
+        "problem": {
+          "unreadable": "The stored settings cannot be read (the payments key changed or is missing). Enter the PIN again.",
+          "sandbox_refused": "The stored PIN is the test PIN “sandbox”, which a production install refuses, so {name} is not offered. Enter your real PIN.",
+          "invalid": "These settings were refused, so {name} is not offered. Check the PIN and the proxy."
+        }
       }
     },
     "state": {
@@ -2813,6 +2833,8 @@
         "idpay_stuck": "{count} IDPay payment is still open; it started over 3 hours ago | {count} IDPay payments are still open; the oldest started over 3 hours ago",
         "nextpay_failing": "NextPay payments are failing",
         "nextpay_stuck": "{count} NextPay payment is still open; it started over 3 hours ago | {count} NextPay payments are still open; the oldest started over 3 hours ago",
+        "aqayepardakht_failing": "Aqayepardakht payments are failing",
+        "aqayepardakht_stuck": "{count} Aqayepardakht payment is still open; it started over 3 hours ago | {count} Aqayepardakht payments are still open; the oldest started over 3 hours ago",
         "backup_offsite": "The latest backup was not copied to the off-site (S3) storage",
         "usdt_failing": "Automatic USDT payments are not being checked: the store cannot read its TRON address from TronGrid",
         "usdt_stuck": "{count} automatic USDT payment is still open; it started over 2 hours ago | {count} automatic USDT payments are still open; the oldest started over 2 hours ago",

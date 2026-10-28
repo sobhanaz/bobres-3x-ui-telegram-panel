@@ -17,7 +17,7 @@ func TestEmbeddedPresets(t *testing.T) {
 	if got := strings.Join(p.Names(), ","); got != "standard,pro,trial" {
 		t.Fatalf("tiers: %s", got)
 	}
-	all := []string{"zarinpal", "idpay", "nextpay", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"}
+	all := []string{"zarinpal", "idpay", "nextpay", "aqayepardakht", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"}
 	std, _ := p.Get(TierStandard)
 	e := std.Entitlements
 	if e.MaxServers != 3 || e.MaxActiveServices != 500 || !e.Resellers || !e.CryptoWatcher || e.DashboardStaffSeat != 5 || e.MaxJoinChats != 1 ||

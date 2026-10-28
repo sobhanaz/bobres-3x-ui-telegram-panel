@@ -14,7 +14,7 @@ afterEach(() => {
 describe('payment helpers', () => {
   it('knows the manual methods', () => {
     for (const m of ['manual_card', 'manual_crypto', 'manual_zarinpal']) expect(isManual(m)).toBe(true)
-    for (const m of ['stars', 'zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'wallet', '', 'manual_']) expect(isManual(m)).toBe(false)
+    for (const m of ['stars', 'zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'wallet', '', 'manual_']) expect(isManual(m)).toBe(false)
   })
 
   it('says what is not there yet in the words of the method, and warns a Stars payer not to pay twice', () => {
@@ -22,6 +22,7 @@ describe('payment helpers', () => {
     expect(notYetKey('manual_card')).toBe('manual.still_waiting')
     expect(notYetKey('manual_crypto')).toBe('manual.still_waiting')
     expect(notYetKey('zarinpal')).toBe('pay.not_yet')
+    expect(notYetKey('aqayepardakht')).toBe('pay.not_yet')
     expect(messages.en['stars.not_yet']).toContain('do not pay twice')
     expect(messages.fa['stars.not_yet']).toBeTruthy()
   })
@@ -162,7 +163,7 @@ describe('proofs', () => {
   })
 
   it('has a name for each payment method in both languages', () => {
-    for (const m of ['zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']) {
+    for (const m of ['zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']) {
       expect(messages.fa['method.' + m], `fa ${m}`).toBeTruthy()
       expect(messages.en['method.' + m], `en ${m}`).toBeTruthy()
     }

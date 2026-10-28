@@ -61,7 +61,7 @@ func reopenable(in *store.Intent) bool {
 }
 
 // gatewayCurrency is the only currency each automated provider is charged in.
-var gatewayCurrency = map[string]string{"zarinpal": "IRR", "idpay": "IRR", "nextpay": "IRR", "stars": "XTR"}
+var gatewayCurrency = map[string]string{"zarinpal": "IRR", "idpay": "IRR", "nextpay": "IRR", "aqayepardakht": "IRR", "stars": "XTR"}
 
 // SetGateways attaches automated providers by name and offers them, with
 // no stored settings behind them (tests; production uses ConfigureGateways).

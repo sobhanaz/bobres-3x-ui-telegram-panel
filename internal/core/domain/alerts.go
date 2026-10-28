@@ -209,7 +209,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
+		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.aqayepardakht, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
 	}
 	out := make([]alertProbe, len(fns))
 	var wg sync.WaitGroup
@@ -450,8 +450,8 @@ func (w *Watchdog) zarinpal(ctx context.Context, now time.Time) alertProbe {
 	return w.gatewayProbe(ctx, now, Zarinpal)
 }
 
-// idpay and nextpay: the same two checks for the gateways built like Zarinpal
-// (alert.idpay_failing, alert.idpay_stuck and so on).
+// idpay, nextpay and aqayepardakht: the same two checks for the gateways built
+// like Zarinpal (alert.idpay_failing, alert.idpay_stuck and so on).
 func (w *Watchdog) idpay(ctx context.Context, now time.Time) alertProbe {
 	return w.gatewayProbe(ctx, now, IDPay)
 }
@@ -460,8 +460,12 @@ func (w *Watchdog) nextpay(ctx context.Context, now time.Time) alertProbe {
 	return w.gatewayProbe(ctx, now, NextPay)
 }
 
+func (w *Watchdog) aqayepardakht(ctx context.Context, now time.Time) alertProbe {
+	return w.gatewayProbe(ctx, now, Aqayepardakht)
+}
+
 // gatewayProbe: the two checks of an automated Rial gateway (provider is
-// Zarinpal, IDPay or NextPay); nothing while the owner has it switched off.
+// Zarinpal, IDPay, NextPay or Aqayepardakht); nothing while the owner has it switched off.
 func (w *Watchdog) gatewayProbe(ctx context.Context, now time.Time, provider string) alertProbe {
 	p := alertProbe{scope: "gateway." + provider + "."}
 	if w.src.Gateways == nil {

@@ -85,7 +85,7 @@ const paymentStatuses = computed(() => [
 ])
 const providers = computed(() => [
   { label: t('payment.all_methods'), value: '' },
-  ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'stars', 'wallet'].map((s) => ({
+  ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'stars', 'wallet'].map((s) => ({
     label: t('payment.provider.' + s),
     value: s,
   })),

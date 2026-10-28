@@ -13,7 +13,7 @@ func TestIsManual(t *testing.T) {
 			t.Errorf("%s is manual", p)
 		}
 	}
-	for _, p := range []string{Zarinpal, IDPay, NextPay, Stars, USDTAuto, "wallet", "", "manual_", "MANUAL_CARD"} {
+	for _, p := range []string{Zarinpal, IDPay, NextPay, Aqayepardakht, Stars, USDTAuto, "wallet", "", "manual_", "MANUAL_CARD"} {
 		if IsManual(p) {
 			t.Errorf("%q is not manual", p)
 		}

@@ -18,7 +18,7 @@ Postgres/Redis are never published to the host. Provisioner is the only service 
 payments is the only one with gateway secrets.
 
 Since milestone 6a both are set from the dashboard, through core, without core ever keeping them:
-- A 3x-ui API token and a Zarinpal merchant id or proxy URL pass through core only in the memory of one request. Core
+- A 3x-ui API token and a gateway's merchant id, API key (Aqayepardakht's PIN) or proxy URL pass through core only in the memory of one request. Core
   never stores, logs or audits them, and no API answers them: the dashboard sees `has_token`, a merchant hint (last 4
   characters) and `proxy_set`. The audit records `{"token":"changed"}`, `{"merchant_id":"changed"}` and
   `{"proxy":"changed"|"cleared"}`. Error messages never repeat a typed secret (a proxy URL can carry a password).

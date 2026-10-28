@@ -59,7 +59,7 @@ What is still open:
   professional report** on the Reports page, **downloading and restoring a backup** from the dashboard, and a full
   **uninstall** that leaves a server as on day one (`sudo bobres uninstall --purge`). See the changelog for what has
   and has not been tried for real.
-- **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
+- **Still on the list, not built:** S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
   capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
   sign-in inside the bot.
@@ -122,8 +122,8 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
 - **Status: built** ([15-subscription-page.md](15-subscription-page.md), migration 00020). Open: check the app deep
   links on real devices.
 
-### 3. More Iranian payment gateways (M) — built, see [16-idpay-nextpay.md](16-idpay-nextpay.md)
-- **What:** automatic card gateways beyond Zarinpal (for example IDPay and NextPay), behind the same gateway interface,
+### 3. More Iranian payment gateways (M) — built, see [16-idpay-nextpay.md](16-idpay-nextpay.md) and [18-aqayepardakht.md](18-aqayepardakht.md)
+- **What:** automatic card gateways beyond Zarinpal (IDPay, NextPay and Aqayepardakht), behind the same gateway interface,
   with the same review, callback and refund flow.
 - **Why:** more ways to pay raises conversion; some customers cannot use Zarinpal.
 - **Needs:** merchant accounts and sandbox credentials from the owner for each gateway; the provider's rules on VPN
@@ -182,7 +182,7 @@ item says where it landed.
 1. **The installer and CLI makeover: built, v0.3.0.** A banner, an honest progress bar, quiet third-party output, automatic hardening that never touches SSH, a live check of the 3x-ui token while it is typed, and an install that survives an SSH drop.
 2. **Trust and first login: built, v0.4.0.** The owner's requests above (status screen, login at once with a password, `bobres check`, the default logo, the footer credit) and the bot's owner panel by buttons with every field explained (without the Undo).
 3. **More panels: Marzban built, v0.4.0; tested against the real 0.8.4 image in CI since.** A server has a kind, 3x-ui or Marzban; the adapter is checked against the real panel by the "Marzban integration" CI job (not a required check), which found and fixed six differences from the fake. Marzban 1.0 (beta) has another API and is not supported; flagging untested Marzban versions in the dashboard, as 3x-ui's are, is open. Then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
-4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
+4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is built since ([18-aqayepardakht.md](18-aqayepardakht.md), not yet tried with a real account); each gateway stays off until its merchant id is set.
 5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
 6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits are open.
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.

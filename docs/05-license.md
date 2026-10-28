@@ -40,7 +40,7 @@ the repository: the private half stays with the vendor, outside it.
     "max_servers": 1,
     "max_active_services": 500,
     "resellers": true,
-    "gateways": ["zarinpal", "idpay", "nextpay", "stars", "manual_card", "manual_crypto", "manual_zarinpal"],
+    "gateways": ["zarinpal", "idpay", "nextpay", "aqayepardakht", "stars", "manual_card", "manual_crypto", "manual_zarinpal"],
     "crypto_watcher": false,
     "dashboard_staff_seats": 3,
     "max_join_chats": 1,
@@ -62,7 +62,7 @@ the repository: the private half stays with the vendor, outside it.
   seller re-applies the tier (`licensesrv key update lic_… -tier pro -reason "required chats"` for a Pro license, which stores the preset's
   numbers and reaches the install at its next daily renewal; a hand-signed token needs signing again). Nothing that
   exists is lost meanwhile: the extra chats only start to count, and there are none before this version.
-- Gateway names: `zarinpal`, `idpay`, `nextpay`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
+- Gateway names: `zarinpal`, `idpay`, `nextpay`, `aqayepardakht`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
   wallet is always allowed. Automatic USDT (`usdt_trc20_auto`, Phase 6a) also needs the `crypto_watcher` feature.
 - `updates_until` (YYYY-MM-DD) is the end of the updates the license was sold with, and it is **advisory**. The
   release's day is the `# issued` line of its signed `checksums.txt` (UTC). `bobres update`, its `--check`, the menu,
@@ -128,7 +128,7 @@ was set back, a restore), so it never has more than 30 days left, and core write
 | `crypto_watcher` | no: no automatic USDT |
 | `max_join_chats` | 1: one channel or group customers must join; more need Pro (Standard has 1 too) or the trial |
 | `dashboard_staff_seats` | 2 (the main owner, the first id in `BOBRES_ADMIN_TELEGRAM_ID`, takes none; every other staff member takes one, an owner too, a second owner named in the same setting included) |
-| `gateways` | `zarinpal`, `idpay`, `nextpay`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`; the wallet is always allowed |
+| `gateways` | `zarinpal`, `idpay`, `nextpay`, `aqayepardakht`, `stars`, `manual_card`, `manual_crypto`, `manual_zarinpal`; the wallet is always allowed |
 | `updates_until` | none: security updates are never withheld |
 
 ### The trial
@@ -206,7 +206,7 @@ servers". The dashboard shows a sentence per gate in its language, with core's w
   ("3 of 1"); a list not longer than the saved one is always accepted, so the owner can still remove, edit and
   reorder, but not add. They count again when the limit allows. When the extras cannot be read, only the first chat is
   held, the floor of every license.
-- `gateways`: switching a payment method on (Zarinpal, IDPay, NextPay or automatic USDT in Payment gateways, or a manual
+- `gateways`: switching a payment method on (Zarinpal, IDPay, NextPay, Aqayepardakht or automatic USDT in Payment gateways, or a manual
   method's or Stars' switch from off to on) that the effective entitlements do not name;
 - `crypto_watcher`: switching automatic USDT on without the `crypto_watcher` feature.
 

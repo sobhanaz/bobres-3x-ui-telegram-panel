@@ -178,7 +178,8 @@ func keyHint(name string) string {
 		return "bobres update"
 	case strings.HasPrefix(name, "BOBRES_XUI_"):
 		return "servers are managed in the dashboard (Servers)"
-	case strings.HasPrefix(name, "BOBRES_ZARINPAL_"), strings.HasPrefix(name, "BOBRES_IDPAY_"), strings.HasPrefix(name, "BOBRES_NEXTPAY_"):
+	case strings.HasPrefix(name, "BOBRES_ZARINPAL_"), strings.HasPrefix(name, "BOBRES_IDPAY_"), strings.HasPrefix(name, "BOBRES_NEXTPAY_"),
+		strings.HasPrefix(name, "BOBRES_AQAYEPARDAKHT_"):
 		return "the dashboard (Payment gateways)"
 	case name == "BOBRES_ENV" || name == "COMPOSE_PROFILES" || name == "BOBRES_BACKUP_URL":
 		return "set by bobres install"

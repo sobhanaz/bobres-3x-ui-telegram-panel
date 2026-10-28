@@ -295,6 +295,9 @@ services:
       BOBRES_IDPAY_PROXY: ${BOBRES_IDPAY_PROXY:-}
       BOBRES_NEXTPAY_API_KEY: ${BOBRES_NEXTPAY_API_KEY:-}
       BOBRES_NEXTPAY_PROXY: ${BOBRES_NEXTPAY_PROXY:-}
+      # Aqayepardakht (off unless its PIN is set; a seed only; the PIN "sandbox" is refused in prod).
+      BOBRES_AQAYEPARDAKHT_PIN: ${BOBRES_AQAYEPARDAKHT_PIN:-}
+      BOBRES_AQAYEPARDAKHT_PROXY: ${BOBRES_AQAYEPARDAKHT_PROXY:-}
     depends_on:
       postgres: { condition: service_healthy }
     networks: [edge, backend, egress]

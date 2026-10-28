@@ -649,8 +649,8 @@ export interface GatewayHealth {
 }
 
 /** An automated gateway's configuration (GET /gateways, owner only). The
- * merchant id, the proxy and the TronGrid API key are never sent back: only a
- * hint and whether set. */
+ * merchant id, the API key or PIN, the proxy and the TronGrid API key are never
+ * sent back: only a hint and whether set. */
 export interface GatewayConfig {
   provider: string
   /** offered to customers */
@@ -662,17 +662,20 @@ export interface GatewayConfig {
   /** why the settings cannot be used: '' | unreadable | sandbox_refused |
    * public_url | invalid */
   problem?: string
+  /** on the test system (Aqayepardakht: while its stored PIN is "sandbox", which
+   * has no switch of its own) */
   sandbox: boolean
-  /** may the sandbox be turned on (never in production); absent = yes */
+  /** may the sandbox be turned on (never in production; Aqayepardakht: may its
+   * PIN be "sandbox"); absent = yes */
   sandbox_allowed?: boolean
   /** the merchant id's last 4 characters, '' when none */
   merchant_hint: string
-  /** a proxy is stored (Zarinpal, IDPay or NextPay: for the gateway calls; automatic USDT: for TronGrid) */
+  /** a proxy is stored (Zarinpal, IDPay, NextPay or Aqayepardakht: for the gateway calls; automatic USDT: for TronGrid) */
   proxy_set: boolean
   /** usdt_trc20_auto: the TRON (TRC20) address that receives USDT, '' when
    * none (public: customers see it) */
   address?: string
-  /** usdt_trc20_auto, idpay, nextpay: an API key is stored (the key is never sent back) */
+  /** usdt_trc20_auto, idpay, nextpay, aqayepardakht: an API key (Aqayepardakht: its PIN) is stored (the key is never sent back) */
   key_set?: boolean
   /** payments has no master key: the settings come from .env, read only */
   key_missing: boolean
