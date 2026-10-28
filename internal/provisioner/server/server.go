@@ -662,12 +662,70 @@ func (s *Server) GetUsage(ctx context.Context, req *provisionerv1.GetUsageReques
 	}
 	st, err := a.Status(ctx, cm.Email)
 	if err != nil {
+		if noSuchClient(err) {
+			// The panel answered, and has no such client: an operator deleted it there. That says
+			// something about the client, not about the panel, so it is an answer and not a warning
+			// (core asks about such a service every ten minutes, and a warning each time filled the
+			// events list); core marks the service "not on the panel" and asks about it rarely.
+			return &provisionerv1.Usage{SubscriptionId: cm.SubscriptionID, LastSyncedAt: time.Now().Unix(), ClientMissing: true}, nil
+		}
 		return nil, s.panelError("panel usage", err)
 	}
 	return &provisionerv1.Usage{
 		SubscriptionId: cm.SubscriptionID, TrafficUsedBytes: st.UsedBytes, LastSyncedAt: time.Now().Unix(),
 		TrafficTotalBytes: st.TotalBytes, ExpiresAt: st.ExpiryMs / 1000, Enabled: st.Enabled,
 	}, nil
+}
+
+// RecreateClient makes a client that is gone from its panel again (an operator deleted it there). The
+// client map says where it was: the same server, the same inbounds (those that still exist and take
+// clients) and group, the same email and subscription id, so the customer's link works again; core says
+// what limits it has. The panel's usage counter starts from zero. A panel that has the client is left
+// alone, so a retry or a second click changes nothing.
+func (s *Server) RecreateClient(ctx context.Context, req *provisionerv1.RecreateClientRequest) (*provisionerv1.Client, error) {
+	if req.GetExpiresAt() < 0 || req.GetTrafficTotalBytes() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "expires_at and traffic_total_bytes must be >= 0")
+	}
+	cm, sv, a, err := s.subscription(ctx, req.GetSubscriptionId())
+	if err != nil {
+		return nil, err
+	}
+	if cm == nil {
+		return nil, status.Error(codes.NotFound, "client not provisioned")
+	}
+	subID := s.st.SubIDFor(cm.SubscriptionID)
+	if cm.XUISubID != nil && *cm.XUISubID != "" {
+		subID = *cm.XUISubID
+	}
+	existing, lookupErr := a.ClientSubID(ctx, cm.Email)
+	switch {
+	case lookupErr == nil && existing == subID:
+		return clientProto(cm, req.GetExpiresAt(), req.GetTrafficTotalBytes()), nil // the panel has it already
+	case lookupErr == nil:
+		return nil, status.Error(codes.AlreadyExists, "another client on the panel already uses this email")
+	case !noSuchClient(lookupErr):
+		return nil, s.panelError("panel lookup", lookupErr)
+	}
+	inboundIDs, err := s.attachableInbounds(ctx, sv, a, cm.InboundIDs)
+	if err != nil {
+		return nil, err
+	}
+	expiryMs := req.GetExpiresAt() * 1000
+	var createErr error
+	if gc, ok := a.(adapter.GroupedCreator); ok {
+		createErr = gc.CreateClientInGroup(ctx, cm.PanelGroup, cm.Email, subID, expiryMs, req.GetTrafficTotalBytes(), inboundIDs)
+	} else {
+		createErr = a.CreateClient(ctx, cm.Email, subID, expiryMs, req.GetTrafficTotalBytes(), inboundIDs) // Marzban: no groups
+	}
+	if createErr != nil {
+		return nil, s.panelError("panel create", createErr)
+	}
+	done := *cm
+	done.XUISubID, done.InboundIDs = &subID, toInt32s(inboundIDs)
+	if err := s.st.PutClientMap(ctx, &done); err != nil {
+		return nil, status.Error(codes.Internal, "client map persist failed")
+	}
+	return clientProto(&done, req.GetExpiresAt(), req.GetTrafficTotalBytes()), nil
 }
 
 // GetLinks returns the subscription link (and its QR code as a PNG) plus one

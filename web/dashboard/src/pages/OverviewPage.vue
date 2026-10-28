@@ -31,7 +31,8 @@ interface RecentOrder {
 
 interface Overview {
   users: { total: number; new_24h: number; new_7d: number }
-  services: { active: number; expiring: number; ended: number }
+  /** panel_missing: services the panel has no client for; absent from older cores */
+  services: { active: number; expiring: number; ended: number; panel_missing?: number }
   orders: { paid_24h: number; provision_failed: number }
   /** Revenue: only for staff with reports.read; absent for support. */
   revenue?: { day: Money[]; month: Money[] }
@@ -107,9 +108,11 @@ const serverClientsText = computed(() => {
 // The owner's balance at the supplier, when the store resells digital accounts.
 const showSupplier = computed(() => auth.can('private.features') && auth.can('gateways.write'))
 const gateways = computed(() => (data.value?.gateways?.length ? data.value.gateways : null))
+// The services the panel has no account for: a card only while there are any.
+const missing = computed(() => data.value?.services.panel_missing ?? 0)
 // A card opens its page for those who may use it; for others it is just a card.
-function linkTo(perm: string, name: string) {
-  return auth.can(perm) ? { is: RouterLink, attrs: { to: { name }, class: 'card-link' } } : { is: 'div', attrs: {} }
+function linkTo(perm: string, name: string, query?: Record<string, string>) {
+  return auth.can(perm) ? { is: RouterLink, attrs: { to: { name, query }, class: 'card-link' } } : { is: 'div', attrs: {} }
 }
 const moneyLine = (list: Money[]) => (list.length ? list.map((m) => money(m, lang.value)).join(' · ') : t('overview.no_revenue'))
 const planName = (p: Record<string, string>) => p[lang.value] || p.en || p.fa || ''
@@ -146,6 +149,15 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
+    <component :is="linkTo('services.read', 'services', { panel: 'missing' }).is" v-if="missing > 0" v-bind="linkTo('services.read', 'services', { panel: 'missing' }).attrs" class="card-wrap missing-card">
+      <Card class="stat">
+        <template #subtitle>{{ t('overview.panel_missing') }}</template>
+        <template #content>
+          <div class="big warn">{{ num(missing, lang) }}</div>
+          <div class="app-muted">{{ t('overview.panel_missing_hint') }}</div>
+        </template>
+      </Card>
+    </component>
     <SupplierBalance v-if="showSupplier" quiet />
     <Card v-if="showRevenue" class="stat revenue-day">
       <template #subtitle>{{ t('overview.revenue_day') }}</template>
