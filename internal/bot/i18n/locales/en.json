@@ -505,6 +505,7 @@
   "alert.license_grace": "The license has expired; its grace period ends on {date}.",
   "alert.license_expired": "The license has expired: this install is on the free tier now (or the trial, while it lasts), and new servers, services, resellers, staff and payment methods beyond it are refused.",
   "alert.license_limit": "A new purchase was refused: this install is at its limit of {limit} {name}. Buy or renew a license to sell more.",
+  "alert.panel_missing": "Services whose client is gone from the panel: {count}. An operator deleted the client in the panel, so those customers cannot connect. In the dashboard open Services and choose \"Not on the panel\": each one can be made again with one button.",
   "alert.trial_ending": "The free trial ends in {days} days, on {date}. After that, new servers, services, resellers, staff and payment methods beyond the free tier are refused (what exists keeps working). Buy a license to keep the premium features.",
   "alert.trial_ended": "The free trial has ended: this install is on the free tier now. New servers, services, resellers, staff and payment methods beyond its limits are refused; everything that exists keeps working. Buy a license to unlock more.",
   "alert.check": "The {key} check reports a problem.",

@@ -56,6 +56,10 @@ Every change is written to an append-only audit log. Sensitive actions, such as 
 
 Two more sections, **BOBRES licenses** and **Digital accounts**, belong to the vendor's own store and are hidden on a normal install. See [Digital Accounts](Digital-Accounts).
 
+## A service that is not on the panel
+
+If someone deletes a customer's client (their account) on the 3x-ui or Marzban panel, the customer cannot connect, yet the service still looks active in BOBRES. BOBRES notices it, marks the service **Not on the panel** and stops sending expiry reminders for it. **Overview** shows a **Not on the panel** card with how many there are, and **Services** has an **Only services not on the panel** switch. Open one and press **Make the client again** (owner and admin, with a reason): the same subscription link works again, the used traffic starts from zero on the panel, and the end date and the traffic limit stay as shown. On the **Monitoring** tab, a line that repeated shows once with **×N** and the time it first and last came.
+
 ## The System page
 
 | Tab | Use it to |

@@ -48,7 +48,7 @@ const live = computed(() => !!s.value && s.value.status !== 'deleted' && s.value
 const left = computed(() => (s.value?.expires_at ? daysLeft(s.value.expires_at) : null))
 
 // One dialog at a time; each action knows its request.
-type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete' | 'page_regenerate'
+type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete' | 'page_regenerate' | 'recreate'
 const action = ref<Action | null>(null)
 const open = computed({ get: () => action.value !== null, set: (v) => !v && (action.value = null) })
 const busy = ref(false)
@@ -91,6 +91,8 @@ const dialog = computed(() => {
       return { title: t('service.delete'), message: t('service.delete_intro'), confirm: t('service.delete'), danger: true }
     case 'page_regenerate':
       return { title: t('service.page_regenerate'), message: t('service.page_regenerate_intro'), confirm: t('service.page_regenerate'), danger: true }
+    case 'recreate':
+      return { title: t('service.recreate'), message: t('service.recreate_intro'), confirm: t('service.recreate'), danger: false }
   }
   return { title: '', message: '', confirm: '', danger: false }
 })
@@ -116,6 +118,9 @@ async function confirm(reason: string) {
         break
       case 'page_regenerate':
         res = await api('POST', `/services/${id.value}/page-token/regenerate`, { reason })
+        break
+      case 'recreate':
+        res = await api('POST', `/services/${id.value}/recreate-client`, { reason })
         break
       default:
         return
@@ -197,6 +202,13 @@ async function copyPage() {
     </div>
   </div>
   <Message v-if="loadError" severity="error" :closable="false">{{ loadError }}</Message>
+  <Message v-if="s?.panel_missing_since" severity="warn" icon="pi pi-exclamation-triangle" :closable="false" class="missing">
+    <div class="missing-body">
+      <strong>{{ t('service.panel_missing') }}</strong>
+      <span>{{ t('service.missing_text', { time: dateTime(s.panel_missing_since, lang) }) }}</span>
+      <Button v-if="live && auth.can('services.write')" :label="t('service.recreate')" icon="pi pi-replay" size="small" severity="warn" outlined @click="start('recreate')" />
+    </div>
+  </Message>
 
   <Card>
     <template #content>
@@ -303,6 +315,15 @@ async function copyPage() {
 .history {
   text-decoration: none;
   gap: 0.5rem;
+}
+.missing {
+  margin-block-end: var(--app-gap);
+}
+.missing-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
 }
 .orders {
   margin-block-start: var(--app-gap);

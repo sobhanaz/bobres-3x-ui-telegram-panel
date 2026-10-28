@@ -233,6 +233,8 @@
     "users_new": "{day} today · {week} this week",
     "services": "Active services",
     "services_detail": "{expiring} expiring soon · {ended} ended",
+    "panel_missing": "Not on the panel",
+    "panel_missing_hint": "Their customers cannot connect",
     "revenue_day": "Revenue today",
     "revenue_month": "Revenue, 30 days",
     "no_revenue": "None yet",
@@ -478,7 +480,14 @@
     "page_hint": "The customer’s own page with the link, a QR code and app guides. Anyone with this address can use the service, like the link above.",
     "page_regenerate": "New page link",
     "page_regenerate_intro": "Gives the page a new address; the old one stops working at once. The subscription link itself does not change.",
-    "done_page_regenerate": "Page link replaced: the old address no longer works"
+    "done_page_regenerate": "Page link replaced: the old address no longer works",
+    "only_missing": "Only services not on the panel",
+    "panel_missing": "Not on the panel",
+    "panel_missing_since": "Not on the panel since {time}",
+    "missing_text": "The panel has had no client for this service since {time}, so the customer cannot connect. Expiry reminders are paused for it.",
+    "recreate": "Make the client again",
+    "recreate_intro": "Makes the client on the panel again, on the same server. The same subscription link works again and the customer does not have to do anything. The used traffic starts again from zero on the panel; the end date and the traffic limit stay as shown here.",
+    "done_recreate": "Client made again on the panel"
   },
   "plan": {
     "groups_title": "Plan groups",
@@ -2905,6 +2914,7 @@
         "license_grace": "The license has expired; its grace period ends on {date}",
         "license_expired": "The license has expired: this install is on the free tier now (or the trial, while it lasts), and new servers, services, resellers, staff and payment methods beyond it are refused",
         "license_limit": "A new purchase was refused: this install is at its limit of {limit} {name}. Buy or renew a license to sell more",
+        "panel_missing": "{count} service is not on its panel any more (an operator deleted the client there), so its customer cannot connect | {count} services are not on their panels any more (an operator deleted the clients there), so their customers cannot connect",
         "trial_ending": "The free trial ends in {days} day, on {date}. After that, new servers, services, resellers, staff and payment methods beyond the free tier are refused (what exists keeps working). Buy a license to keep the premium features | The free trial ends in {days} days, on {date}. After that, new servers, services, resellers, staff and payment methods beyond the free tier are refused (what exists keeps working). Buy a license to keep the premium features",
         "trial_ended": "The free trial has ended: this install is on the free tier now. New servers, services, resellers, staff and payment methods beyond its limits are refused; everything that exists keeps working. Buy a license to unlock more",
         "tls_expiring": "The HTTPS certificate of {address} expires in {days} day, on {date}, and has not been renewed | The HTTPS certificate of {address} expires in {days} days, on {date}, and has not been renewed",
@@ -3729,7 +3739,10 @@
       "unreachable": "Could not read the log of: {list}.",
       "none": "No warnings or errors.",
       "list_label": "Warnings and errors, newest first",
-      "truncated": "More events matched than are listed."
+      "truncated": "More events matched than are listed.",
+      "repeat": "×{n}",
+      "repeat_hint": "Repeated {n} time | Repeated {n} times",
+      "repeat_range": "First seen {first} · last seen {last}"
     },
     "source": {
       "alert": "Alert",

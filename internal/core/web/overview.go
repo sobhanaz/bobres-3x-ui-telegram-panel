@@ -51,7 +51,7 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"tickets":          tickets,
 		"users":            map[string]int64{"total": o.UsersTotal, "new_24h": o.UsersNew24h, "new_7d": o.UsersNew7d},
-		"services":         map[string]int64{"active": o.ServicesActive, "expiring": o.ServicesExpiring, "ended": o.ServicesEnded},
+		"services":         map[string]int64{"active": o.ServicesActive, "expiring": o.ServicesExpiring, "ended": o.ServicesEnded, "panel_missing": o.ServicesPanelMissing},
 		"orders":           map[string]int64{"paid_24h": o.OrdersPaid24h, "provision_failed": o.ProvisionFailed},
 		"pending_payments": o.PendingPayments,
 		"panel":            map[string]any{"healthy": o.PanelHealthy, "detail": o.PanelDetail},

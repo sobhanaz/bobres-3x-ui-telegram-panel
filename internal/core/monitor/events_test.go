@@ -229,3 +229,51 @@ func TestEventsAreBounded(t *testing.T) {
 		t.Fatal("no event")
 	}
 }
+
+// A service that logs the same warning again and again is one row with how many there were, not a screen of
+// rows that push the real events off the list; lines that differ in anything but an id stay apart.
+func TestEventsFoldTheSameLineFromManyServices(t *testing.T) {
+	e := newEnv(t)
+	real := time.Now()
+	e.clk.t = real
+	var lines []logging.Line
+	for i := range 6 { // the same warning for six services, one every ten minutes
+		lines = append(lines, logging.Line{Time: real.Add(-time.Duration(i) * 10 * time.Minute).Unix(), Level: "WARN", Msg: "usage unavailable",
+			Attrs: `{"subscription_id":"01a16a10-2c3e-7a00-8000-0000000000` + string(rune('0'+i)) + `0","err":"provisioner.GetUsage: rpc error: code = Unavailable desc = panel usage failed"}`})
+	}
+	lines = append(lines,
+		logging.Line{Time: real.Add(-5 * time.Minute).Unix(), Level: "WARN", Msg: "usage unavailable", Attrs: `{"subscription_id":"01a16a10-2c3e-7a00-8000-000000000099","err":"deadline exceeded"}`},
+		logging.Line{Time: real.Add(-3 * time.Minute).Unix(), Level: "ERROR", Msg: "send failed", Attrs: `{"user_id":4242424242}`})
+	e.logs["bot"] = &fakeLogs{lines: lines} // core's own lines come from the process, not from a source
+	e.build()
+
+	r := e.events(EventsQuery{Limit: 50, Logs: true})
+	var usage, other []Event
+	for _, ev := range r.Items {
+		if ev.Title == "usage unavailable" {
+			usage = append(usage, ev)
+		} else if ev.Kind == KindLog {
+			other = append(other, ev)
+		}
+	}
+	if len(usage) != 2 {
+		t.Fatalf("two kinds of the warning (different errors) must be two rows, got %d: %+v", len(usage), usage)
+	}
+	var folded Event
+	for _, ev := range usage {
+		if strings.Contains(ev.Detail, "panel usage failed") {
+			folded = ev
+		}
+	}
+	if folded.Count != 6 || folded.At != real.Unix() || folded.FirstAt != real.Add(-50*time.Minute).Unix() {
+		t.Fatalf("six lines of the same warning: count %d, at %d, first %d (now %d)", folded.Count, folded.At, folded.FirstAt, real.Unix())
+	}
+	for _, ev := range usage {
+		if ev.Count == 0 && ev.FirstAt != 0 {
+			t.Fatalf("a single line carries first_at: %+v", ev)
+		}
+	}
+	if len(other) != 1 || other[0].Count != 0 {
+		t.Fatalf("a single line of another message must stay as it is: %+v", other)
+	}
+}
