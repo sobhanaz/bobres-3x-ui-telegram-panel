@@ -27,9 +27,9 @@ v0.15.0 (2026-10-23: buying a license in one screen, restoring a deleted plan, U
 v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount)
 v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
 v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
-and v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type).
+v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type) and v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button).
 
-## Where things stand (after v0.17.1)
+## Where things stand (after v0.17.2)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
@@ -196,8 +196,8 @@ item says where it landed.
 - Metrics for operators (Prometheus endpoint, a Grafana example) and an uptime page per server.
 - Automatic node balancing and per-server capacity limits beyond the weights in use today.
 - Two-factor sign-in for staff inside the bot.
-- A hosted offering, so a customer who does not want to run a server can pay for one.
-- An affiliate program for BOBRES itself, on top of the license server.
+- A hosted offering, so a customer who does not want to run a server can pay for one: a plan, not built ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
+- An affiliate program for BOBRES itself, on top of the license server: a plan, not built ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
 - An adapter for a newer 3x-ui major version, when one is released and tested in CI.
 
 ## How an item gets built

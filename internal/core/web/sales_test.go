@@ -133,6 +133,15 @@ func (p *fakeProv) SetEnabled(_ context.Context, id string, on bool) error {
 }
 func (p *fakeProv) ResetTraffic(_ context.Context, id string) error { return p.record("reset:" + id) }
 func (p *fakeProv) Delete(_ context.Context, id string) error       { return p.record("delete:" + id) }
+func (p *fakeProv) RecreateClient(_ context.Context, id string, _, _ int64) error {
+	if err := p.record("recreate:" + id); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.usage.Missing = false
+	return nil
+}
 func (p *fakeProv) done() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -197,7 +206,7 @@ func (f *fixture) order(u *store.User, p *store.Plan, status, subStatus string, 
 		return o, nil
 	}
 	sub, err := f.st.CreateSubscription(ctx, f.st.Conn(), &store.Subscription{UserID: u.ID, OrderID: o.ID,
-		ClientEmail: "u-" + buuid.MustV7().String()[:12]})
+		ClientEmail: "u-" + buuid.MustV7().String()[24:]}) // the random tail: the first 12 characters are the millisecond clock, which two services made back to back share
 	if err != nil {
 		f.t.Fatal(err)
 	}

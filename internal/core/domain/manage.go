@@ -219,6 +219,43 @@ func (s *Service) DeleteSubscription(ctx context.Context, actor *store.User, pro
 	})
 }
 
+// RecreateSubscriptionClient makes the client of a service again when the panel no longer has it (an
+// operator deleted it there): on the same server, in the same inbounds and group, with the expiry and
+// the traffic quota core holds for the service, and the panel's usage counter starting from zero. The
+// service is read from the panel right after, which clears its "not on the panel" mark. A panel that
+// has the client is left as it is.
+func (s *Service) RecreateSubscriptionClient(ctx context.Context, actor *store.User, prov Provisioner, id, reason string) error {
+	reason, err := needReason(reason)
+	if err != nil {
+		return err
+	}
+	sub, err := s.st.GetSubscription(ctx, s.st.Conn(), id)
+	if err != nil {
+		return err
+	}
+	switch sub.Status {
+	case "deleted":
+		return stateErr("the service was deleted")
+	case "pending":
+		return stateErr("the service is being delivered")
+	}
+	var expires, total int64
+	if sub.ExpiresAt != nil {
+		expires = sub.ExpiresAt.Unix()
+	}
+	if sub.TrafficTotal != nil {
+		total = *sub.TrafficTotal
+	}
+	if err := prov.RecreateClient(ctx, sub.ID, expires, total); err != nil {
+		return err
+	}
+	if err := s.audit(ctx, nil, actor, "subscription.recreate_client", "subscription", sub.ID,
+		map[string]string{"client_email": sub.ClientEmail}, reason); err != nil {
+		return err
+	}
+	return s.SyncSubscription(ctx, prov, sub.ID)
+}
+
 // SyncSubscription reads one service from the panel now (usage, limits and
 // status) instead of waiting for the next sync. A panel that does not answer
 // is an error and nothing changes.

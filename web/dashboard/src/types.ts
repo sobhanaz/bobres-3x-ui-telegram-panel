@@ -58,6 +58,9 @@ export interface ServiceItem {
   created_at: number
   /** the name a reseller gave it (M5) */
   label?: string | null
+  /** when the panel first answered that it has no client for this service (an operator deleted it there):
+   * unix seconds, null while the panel has one. Older cores leave it out. */
+  panel_missing_since?: number | null
 }
 
 export interface OrderItem {

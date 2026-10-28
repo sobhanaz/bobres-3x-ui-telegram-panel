@@ -3,10 +3,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import Tag from 'primevue/tag'
 import UserLink from './UserLink.vue'
 import StatusTag from './StatusTag.vue'
 import TrafficBar from './TrafficBar.vue'
-import { date, daysLeft, num, planName, shortId, type Lang } from '../format'
+import { date, dateTime, daysLeft, num, planName, shortId, type Lang } from '../format'
 import type { ServiceItem } from '../types'
 
 const props = withDefaults(
@@ -51,7 +52,19 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
       <template #body="{ data: s }"><bdi>{{ planName(s.plan.name, lang) }}</bdi></template>
     </Column>
     <Column :header="t('common.status')">
-      <template #body="{ data: s }"><StatusTag kind="service" :status="s.status" /></template>
+      <template #body="{ data: s }">
+        <div class="states">
+          <StatusTag kind="service" :status="s.status" />
+          <Tag
+            v-if="s.panel_missing_since"
+            severity="warn"
+            icon="pi pi-exclamation-triangle"
+            :value="t('service.panel_missing')"
+            :title="t('service.panel_missing_since', { time: dateTime(s.panel_missing_since, lang) })"
+            class="panel-missing"
+          />
+        </div>
+      </template>
     </Column>
     <Column :header="t('service.expires')" body-class="app-nowrap">
       <template #body="{ data: s }">
@@ -73,5 +86,13 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
 <style scoped>
 .label {
   font-size: 0.8rem;
+}
+.states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.panel-missing {
+  white-space: nowrap;
 }
 </style>

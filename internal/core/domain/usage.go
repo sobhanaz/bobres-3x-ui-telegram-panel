@@ -30,6 +30,10 @@ type UsageWorker struct {
 	log  *slog.Logger
 	// Every is how often each subscription is synced.
 	Every time.Duration
+	// MissingEvery is how often a service the panel has no client for is asked about again: there is
+	// nothing to read until an operator makes the client again, and asking every Every would only repeat
+	// the answer.
+	MissingEvery time.Duration
 	// Tick is how often the worker looks for due subscriptions; Batch caps
 	// how many it syncs per tick.
 	Tick  time.Duration
@@ -43,7 +47,7 @@ func (s *Service) NewUsageWorker(prov Provisioner, log *slog.Logger) *UsageWorke
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &UsageWorker{svc: s, prov: prov, log: log.With("worker", "usage"),
-		Every: 10 * time.Minute, Tick: 30 * time.Second, Batch: 50, now: time.Now}
+		Every: 10 * time.Minute, MissingEvery: 6 * time.Hour, Tick: 30 * time.Second, Batch: 50, now: time.Now}
 }
 
 // Run syncs until ctx is done. Errors are logged; they never stop the loop.
@@ -66,7 +70,7 @@ func (w *UsageWorker) Run(ctx context.Context) error {
 // many it looked at.
 func (w *UsageWorker) SyncDue(ctx context.Context) (int, error) {
 	st := w.svc.st
-	due, err := st.DueUsageSync(ctx, st.Conn(), w.now().Add(-w.Every), w.Batch)
+	due, err := st.DueUsageSync(ctx, st.Conn(), w.now().Add(-w.Every), w.now().Add(-w.MissingEvery), w.Batch)
 	if err != nil {
 		return 0, err
 	}
@@ -97,7 +101,8 @@ func (w *UsageWorker) topupsOnSale(ctx context.Context) bool {
 
 // sync reads one subscription from the panel and records it with whatever
 // reminders are due. When the panel does not answer, the time-based
-// reminders still go out from what core knows.
+// reminders still go out from what core knows. When the panel answers that it
+// has no such client, the service is marked (see record).
 func (w *UsageWorker) sync(ctx context.Context, cached *store.Subscription, topups bool) error {
 	u, uerr := w.prov.Usage(ctx, cached.ID)
 	if uerr != nil {
@@ -133,7 +138,8 @@ func (w *UsageWorker) record(ctx context.Context, id string, u Usage, uerr error
 		default:
 			return nil
 		}
-		if uerr == nil {
+		missing := uerr == nil && u.Missing
+		if uerr == nil && !missing {
 			sub.TrafficUsed = u.UsedBytes
 			// The panel's limits are what the customer has (an operator may
 			// have changed them there). A start-on-first-use expiry is the
@@ -152,6 +158,30 @@ func (w *UsageWorker) record(ctx context.Context, id string, u Usage, uerr error
 			}
 		}
 		r, kind, days := reminderDue(sub, w.now())
+		switch {
+		case missing:
+			// The panel has no client for the service, so it cannot work: no reminder is sent for it
+			// (the owner hears about such services once a day, in the alert about them), and a
+			// reminder that was due is not marked as sent, so it goes out when the client is back.
+			// The dates it runs by stay core's. From now on it is asked about every MissingEvery.
+			r.PanelMissingSince = sub.PanelMissingSince
+			if sub.PanelMissingSince == nil {
+				now := w.now()
+				r.PanelMissingSince = &now
+				w.log.Info("the client is not on the panel", "subscription_id", sub.ID)
+			}
+			if kind != "" {
+				r.NotifiedExpiringAt, r.NotifiedLowTrafficAt, r.NotifiedEndedAt = sub.NotifiedExpiringAt, sub.NotifiedLowTrafficAt, sub.NotifiedEndedAt
+				kind = ""
+			}
+		case uerr == nil:
+			if sub.PanelMissingSince != nil {
+				w.log.Info("the client is on the panel again", "subscription_id", sub.ID)
+			}
+			// r.PanelMissingSince stays nil: the mark is cleared.
+		default:
+			r.PanelMissingSince = sub.PanelMissingSince // the panel did not answer: what core knew stays
+		}
 		if err := st.RecordSync(ctx, tx, sub.ID, r); err != nil {
 			return err
 		}
