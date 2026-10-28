@@ -59,6 +59,11 @@ export function ledgerKey(kind: string): Key {
       return 'ledger.digital'
     case 'wallet_convert':
       return 'ledger.convert'
+    case 'cashback':
+    case 'cashback_reversal':
+    case 'target_bonus':
+    case 'wheel_prize':
+      return `ledger.${kind}`
     default:
       return 'ledger.other'
   }

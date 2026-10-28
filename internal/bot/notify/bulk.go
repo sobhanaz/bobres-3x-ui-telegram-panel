@@ -122,6 +122,14 @@ func (n *Notifier) deliverBulk(ctx context.Context, e events.BulkReadyEvent) err
 		header = t("bulk.ready_some", "ready", i18n.Number(lang, int64(delivered)), "n", i18n.Number(lang, int64(len(items))))
 		footer = t("bulk.delayed", "m", i18n.Number(lang, int64(waiting)))
 	}
+	if e.Cashback > 0 {
+		line := t("bulk.cashback", "amount", html.EscapeString(i18n.Money(lang, e.Cashback, e.Currency)))
+		if footer != "" {
+			footer += "\n\n" + line
+		} else {
+			footer = line
+		}
+	}
 	msgs := bulkMessages(header, blocks, footer, t("bulk.continued"), bulkMessageLimit)
 	kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.services", "subs"))
 	sent, err := n.sendBulkMessages(ctx, e.TelegramID, msgs, kb)

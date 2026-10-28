@@ -202,6 +202,8 @@ const (
 	// CreditGiftCode: the customer applied a gift code (docs/03-bot-ux.md). They asked for it in the bot, which
 	// answered with the amount and the new balance in the same chat, so the notifier sends no second message.
 	CreditGiftCode = "gift_code"
+	// CreditCashback: a share of a delivered order given back to the buyer (OrderID is the order).
+	CreditCashback = "cashback"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
@@ -219,6 +221,8 @@ type WalletCreditedEvent struct {
 	FromAmount   int64  `json:"from_amount,omitempty"`
 	FromCurrency string `json:"from_currency,omitempty"`
 	Rate         int64  `json:"rate,omitempty"`
+	// CashbackTaken is, on a refund, the cashback the order had earned that was taken back with it (Balance is the balance after both).
+	CashbackTaken int64 `json:"cashback_taken,omitempty"`
 }
 
 // PaymentRejectedEvent: a payment did not go through: a reviewer rejected a
@@ -318,6 +322,9 @@ type BulkReadyEvent struct {
 	Delayed     int      `json:"delayed"`
 	Amount      int64    `json:"amount"` // what the whole bulk cost
 	Currency    string   `json:"currency"`
+	// Cashback is what the delivered services earned the buyer, credited to their wallet (0: none). The services of a bulk are not told
+	// one by one, so the bulk's message says it.
+	Cashback int64 `json:"cashback,omitempty"`
 }
 
 // SubscriptionExtendedEvent: a renewal or traffic top-up was applied.
@@ -528,6 +535,9 @@ type DailySummaryCurrency struct {
 	// gateway failed or let expire. The bot shows them only when they are not 0.
 	Rejected      DailySummaryFlow `json:"rejected"`
 	GatewayFailed DailySummaryFlow `json:"gateway_failed"`
+	// Cashback is the cashback given to wallets that day, less what refunds took back (Count: the credits); the bot shows it when there
+	// were any. Absent in an event from before it was counted.
+	Cashback DailySummaryFlow `json:"cashback"`
 }
 
 // DailySummaryEvent: yesterday's sales (one store-local day) for one staff

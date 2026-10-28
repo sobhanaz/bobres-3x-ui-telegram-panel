@@ -498,7 +498,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	// 4 days: one people row and one row per currency (IRT, USDT) each.
-	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 31 {
+	if len(rows) != 1+4*3 || rows[0][0] != "period_start" || len(rows[0]) != 33 {
 		t.Fatalf("%d rows: %v", len(rows), rows)
 	}
 	col := map[string]int{}
@@ -507,7 +507,7 @@ func TestReportsSummaryCSV(t *testing.T) {
 	}
 	byKey := map[string][]string{}
 	for _, r := range rows[1:] {
-		if len(r) != 31 {
+		if len(r) != 33 {
 			t.Fatalf("a row has %d cells: %v", len(r), r)
 		}
 		// what every row says about itself: the size of a period, the calendar that cut it, the zone of its days

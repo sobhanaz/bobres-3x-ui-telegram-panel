@@ -80,13 +80,15 @@ type cellJSON struct {
 	Rejected      flowJSON `json:"rejected"`       // manual payments a reviewer rejected
 	GatewayFailed flowJSON `json:"gateway_failed"` // gateway payments that failed or expired
 	Cancelled     flowJSON `json:"cancelled"`
+	// Cashback is the cashback given to wallets, less what refunds took back (count: the credits). It is not revenue and not in Net.
+	Cashback flowJSON `json:"cashback"`
 }
 
 func cellOf(c *store.ReportCell) cellJSON {
 	return cellJSON{
 		Revenue: c.Revenue, Refunds: flowJSON(c.Refunds), Net: domain.Net(c), Orders: c.Orders, NewOrders: c.NewOrders,
 		Renewals: c.Renewals, TrafficTopups: c.TrafficTopups, Licenses: flowJSON(c.Licenses), Digital: flowJSON(c.Digital), Topups: flowJSON(c.Topups),
-		Rejected: flowJSON(c.Rejected), GatewayFailed: flowJSON(c.GatewayFailed), Cancelled: flowJSON(c.Cancelled),
+		Rejected: flowJSON(c.Rejected), GatewayFailed: flowJSON(c.GatewayFailed), Cancelled: flowJSON(c.Cancelled), Cashback: flowJSON(c.Cashback),
 	}
 }
 
@@ -367,7 +369,7 @@ func (s *Server) auditExport(r *http.Request, kind string, rng *domain.ReportRan
 // three say what the rows are about, the same on every row of a file: the size
 // of a period, the calendar its weeks and months were cut by and the time zone
 // of its days. A Jalali file has one more column after them (summaryJalali),
-// and the four columns of summarySales come after that, whatever the calendar.
+// and the columns of summarySales come after that, whatever the calendar.
 var summaryColumns = []string{
 	"period_start", "partial_period", "currency", "revenue", "refund_amount", "net", "paid_orders", "new_orders",
 	"renewals", "traffic_topups", "topup_count", "topup_amount", "refund_count", "rejected_count", "rejected_amount",
@@ -376,8 +378,9 @@ var summaryColumns = []string{
 }
 
 // summarySales are the columns added after the first release of the file, at its very end so no earlier column moves: how many licenses
-// and digital accounts were sold and what they brought (both are already in paid_orders and revenue).
-var summarySales = []string{"license_orders", "license_revenue", "digital_orders", "digital_revenue"}
+// and digital accounts were sold and what they brought (both are already in paid_orders and revenue), and the cashback given (the number of
+// credits, and their amount less what refunds took back).
+var summarySales = []string{"license_orders", "license_revenue", "digital_orders", "digital_revenue", "cashback_count", "cashback_amount"}
 
 // summaryMoney is how many columns of summary.csv are numbers about money or
 // people (period_start to at_risk_services); the context columns follow.
@@ -437,14 +440,15 @@ func (s *Server) exportReportSummary(w http.ResponseWriter, r *http.Request) {
 		row[0], row[1] = b.Date, partial
 		row[summaryMoney-5], row[summaryMoney-4] = n(b.NewCustomers), n(b.Trials)
 		row[summaryMoney-3], row[summaryMoney-2], row[summaryMoney-1] = n(b.ChurnedServices), n(b.ChurnedCustomers), n(b.AtRisk)
-		_ = f.data(append(append(row, tail(b.Date)...), "", "", "", "")...)
+		_ = f.data(append(append(row, tail(b.Date)...), "", "", "", "", "", "")...)
 		for _, cur := range rep.Currencies {
 			c := b.Currencies[cur]
 			row := []string{b.Date, partial, textCell(cur), decimal(c.Revenue, cur), decimal(c.Refunds.Amount, cur), decimal(domain.Net(c), cur),
 				n(c.Orders), n(c.NewOrders), n(c.Renewals), n(c.TrafficTopups), n(c.Topups.Count), decimal(c.Topups.Amount, cur),
 				n(c.Refunds.Count), n(c.Rejected.Count), decimal(c.Rejected.Amount, cur), n(c.GatewayFailed.Count), decimal(c.GatewayFailed.Amount, cur),
 				n(c.Cancelled.Count), decimal(c.Cancelled.Amount, cur), "", "", "", "", ""}
-			sales := []string{n(c.Licenses.Count), decimal(c.Licenses.Amount, cur), n(c.Digital.Count), decimal(c.Digital.Amount, cur)}
+			sales := []string{n(c.Licenses.Count), decimal(c.Licenses.Amount, cur), n(c.Digital.Count), decimal(c.Digital.Amount, cur),
+				n(c.Cashback.Count), decimal(c.Cashback.Amount, cur)}
 			_ = f.data(append(append(row, tail(b.Date)...), sales...)...)
 		}
 	}

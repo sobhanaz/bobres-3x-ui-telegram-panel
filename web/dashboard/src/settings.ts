@@ -56,6 +56,10 @@ export function normalize(item: SettingItem, raw: string): string {
   if (item.kind === 'int') return asciiNumber(s)
   if (item.kind === 'channel') return normalizeChannel(s)
   if (item.kind === 'time') return normalizeTime(s)
+  if (item.key === 'cashback.percent') {
+    const bp = percentBP(s)
+    return bp === null ? s : String(bp / 100)
+  }
   if (item.key === 'payments.card_number') return latinDigits(s).replace(/^ir/i, 'IR')
   return s
 }
@@ -144,6 +148,8 @@ function validateText(key: string, value: string): Problem | null {
       return erc20.test(value) ? null : { code: 'erc20' }
     case 'payments.card_holder':
       return [...value].length > 64 ? { code: 'too_long', params: { max: 64 } } : null
+    case 'cashback.percent':
+      return percentBP(value) === null ? { code: 'percent' } : null
   }
   return new TextEncoder().encode(value).length > 1000 ? { code: 'too_long_text' } : null
 }
@@ -278,8 +284,18 @@ export function zoneNow(zone: string, at = new Date()): string {
 export function ltr(item: SettingItem): boolean {
   return (
     ['int', 'url', 'channel', 'tz', 'time', 'color'].includes(item.kind) ||
-    ['payments.card_number', 'payments.usdt_trc20', 'payments.usdt_erc20'].includes(item.key)
+    ['payments.card_number', 'payments.usdt_trc20', 'payments.usdt_erc20', 'cashback.percent'].includes(item.key)
   )
+}
+
+/** percentBP reads a percent typed as "5", "2.5", "۲٫۵" or "7%" (the point may be . , / or the Persian ٫ and ،) as hundredths of a
+ * percent, 0.01 to 20 with at most two decimals; null when it is none of that. Core reads it the same way. */
+export function percentBP(raw: string): number | null {
+  const v = latinDigits(raw.trim()).replace(/%$/, '').trim().replace(/[,/٫،]/g, '.')
+  const m = /^(\d{0,3})(?:\.(\d{0,2}))?$/.exec(v)
+  if (!m || (m[1] === '' && !m[2])) return null
+  const bp = Number(m[1] || '0') * 100 + Number((m[2] ?? '').padEnd(2, '0') || '0')
+  return bp >= 1 && bp <= 2000 ? bp : null
 }
 
 /** maxLength keeps inputs near what core accepts. */

@@ -464,9 +464,14 @@ func (s *Service) settleBulk(ctx context.Context, id string, delayedAfter int) (
 			return err
 		}
 		announced = true
+		// The services were not told one by one: the cashback they earned is told here, in the one message.
+		cashback, err := s.st.BulkCashback(ctx, tx, b.ID)
+		if err != nil {
+			return err
+		}
 		return s.publish(ctx, tx, events.BulkReady, events.BulkReadyEvent{
 			BulkID: b.ID, UserID: b.UserID, TelegramID: u.TelegramID, PlanID: b.PlanID, Quantity: int(b.Quantity),
-			ReadyOrders: pr.ReadyOrders, Delayed: pr.Delayed, Amount: b.Amount, Currency: b.Currency,
+			ReadyOrders: pr.ReadyOrders, Delayed: pr.Delayed, Amount: b.Amount, Currency: b.Currency, Cashback: cashback,
 		})
 	})
 	return announced, err

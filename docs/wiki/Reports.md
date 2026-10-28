@@ -32,6 +32,7 @@ A payment at 23:59 and one at 00:01 local time fall on different days. A period 
 | Customers lost | People whose last service ended past the grace period and who have no other live service |
 | At risk | Services that ended but are still inside the grace period |
 | Wallet top-ups | Money that stayed in a wallet from payments. It is money in, not a sale |
+| Cashback | The cashback given to wallets in the period, less what refunds took back (so a day with only refunds can be negative). It is not revenue and it is not taken off the net. Shown as a line on the card, in the summary CSV and in the daily summary when there was any |
 | Rejected / failed | Payments staff rejected, and gateway payments that failed or expired |
 | Paid with | Wallet, manually approved payments, or gateways, split again by provider (Zarinpal, Stars, automatic USDT, card to card) |
 

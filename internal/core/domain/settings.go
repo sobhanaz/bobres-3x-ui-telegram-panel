@@ -166,6 +166,17 @@ var SettingSpecs = []SettingSpec{
 		Help: "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)"},
 	{Key: SettingLeaderboard, Group: "growth", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = while the referral program is on, customers see a Top users board in the bot: the customers who invited the most people, with their names and Telegram ids masked (never staff, resellers or banned users); false = the Top users button and the board are gone"},
+	// Cashback (cashback.go): a share of a delivered order given back to the buyer's wallet. Off by default.
+	{Key: SettingCashbackEnabled, Group: "cashback", Kind: KindBool, Perm: permDiscounts, Default: "false",
+		Help: "true = when a customer's order has been paid and delivered, a share of what it cost is credited to their wallet as cashback, once; false = no cashback (cashback already paid stays in the wallets)"},
+	{Key: SettingCashbackPercent, Group: "cashback", Kind: KindText, Perm: permDiscounts, MaxLen: 8,
+		Help: "the share of the order's price given back, from 0.01 to 20 percent, for example 2.5 (worked out in whole Toman, rounded down); empty = no cashback"},
+	{Key: SettingCashbackMax, Group: "cashback", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxGrowthAmount,
+		Help: "the most cashback one order earns, in Toman (empty or 0 = no maximum)"},
+	{Key: SettingCashbackMinOrder, Group: "cashback", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxGrowthAmount,
+		Help: "an order must cost at least this many Toman to earn cashback (empty or 0 = any order that costs something)"},
+	{Key: SettingCashbackRenewals, Group: "cashback", Kind: KindBool, Perm: permDiscounts, Default: "true",
+		Help: "true = renewals and traffic packages earn cashback too; false = only new services do"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
@@ -373,6 +384,12 @@ func NormalizeSetting(key, value string) (string, error) {
 			if strings.ContainsAny(value, "<>&") {
 				return bad("may not contain <, > or &")
 			}
+		case SettingCashbackPercent:
+			bp, err := ParsePercentBP(value)
+			if err != nil {
+				return bad("a percent from 0.01 to 20, for example 2.5")
+			}
+			value = FormatPercentBP(bp)
 		case "branding.bot_username":
 			value = strings.TrimPrefix(value, "@")
 			if !botUsernameRe.MatchString(value) {

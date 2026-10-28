@@ -190,6 +190,42 @@ func (s *Store) Debit(ctx context.Context, tx pgx.Tx, userID, currency string, a
 	return move(ctx, tx, e, -amount)
 }
 
+// DebitAtMost takes up to most (> 0) from a wallet in tx: the most it holds, never more, so the balance does not go below zero. A wallet that
+// holds nothing, or owes (a reseller's debt), loses nothing and no entry is written (taken is 0). It follows the lock-then-check rule of every
+// movement: under the wallet's lock a key already in the ledger is a replay and answers ErrDuplicateIdempotency with the first entry, whatever the
+// balance is now.
+func (s *Store) DebitAtMost(ctx context.Context, tx pgx.Tx, userID, currency string, most int64, e *LedgerEntry) (taken int64, w *Wallet, err error) {
+	if most <= 0 {
+		return 0, nil, fmt.Errorf("debit amount must be positive: %d", most)
+	}
+	if userID == "" || currency == "" || e.Kind == "" || e.IdempotencyKey == "" {
+		return 0, nil, errors.New("ledger: user, currency, kind and idempotency key are required")
+	}
+	balance, limit, err := lockWallet(ctx, tx, userID, currency)
+	if err != nil {
+		return 0, nil, err
+	}
+	prev, err := scanLedger(tx.QueryRow(ctx,
+		`SELECT `+ledgerCols+` FROM core.ledger_entries WHERE idempotency_key = $1`, e.IdempotencyKey))
+	switch {
+	case err == nil:
+		if prev.UserID != userID || prev.Currency != currency || prev.Kind != e.Kind || prev.Amount >= 0 {
+			return 0, nil, ErrIdempotencyConflict
+		}
+		*e = *prev
+		return -prev.Amount, &Wallet{UserID: userID, Currency: currency, Balance: balance, CreditLimit: limit}, ErrDuplicateIdempotency
+	case !errors.Is(err, ErrNotFound):
+		return 0, nil, fmt.Errorf("ledger lookup: %w", err)
+	}
+	taken = min(most, max(balance, 0))
+	if taken == 0 {
+		return 0, &Wallet{UserID: userID, Currency: currency, Balance: balance, CreditLimit: limit}, nil
+	}
+	e.UserID, e.Currency = userID, currency
+	w, err = move(ctx, tx, e, -taken)
+	return taken, w, err
+}
+
 // AppendLedger records a zero-amount entry (e.g. a trial grant). It follows
 // the same lock-then-check rule as money movements.
 func (s *Store) AppendLedger(ctx context.Context, tx pgx.Tx, e *LedgerEntry) error {

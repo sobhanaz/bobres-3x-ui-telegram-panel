@@ -58,6 +58,23 @@ An amount code takes that amount off, never more than the price (the rest is los
 message (`reward.code`: the code, the percent or the amount, the days and the date, the owner's text, "only for you, once") with a Buy button; the
 buyer enters it at the payment menu's **Discount code** as any code. Each purchase brings a new code. A code staff made is unchanged (the
 dashboard's Discounts list shows reward codes too). A free plan (the trial) takes no code.
+**Cashback (2026-10-28).** The owner can give a share of what an order cost back to the buyer's wallet (Settings, Cashback; off until switched on):
+`cashback.enabled`, `cashback.percent` (0.01 to 20, up to two decimals, for example 2.5), `cashback.max_per_order` (Toman, empty or 0: no maximum),
+`cashback.min_order` (Toman, empty or 0: any order that costs something) and `cashback.renewals` (on by default: renewals and traffic packages earn
+too). When an order that earns it has been **paid and delivered**, core credits `floor(price x percent / 100)` (the price after any discount, in whole
+Toman, cut to the maximum) to the wallet in the same transaction that marks the order delivered: a ledger entry of kind `cashback`, key
+`cashback:<order id>`, once however often the delivery is retried, and a row in `core.cashback_credits` that records how it was worked out. The
+customer gets a message right after the service's own (`wallet.credited_cashback`: "You earned X cashback on your purchase", with the balance); the
+services of a **bulk purchase** are not told one by one: the bulk's one message ends with the sum (`bulk.cashback`). **Earns:** a purchase, renewal or
+traffic package of a customer, in Toman, that cost more than nothing and at least the minimum. **Earns nothing:** a reseller (they buy at tier prices and
+have monthly targets instead), a free trial, an order a code made free, an order priced in USDT, a banned customer, the licenses and digital accounts the
+owner's own store sells. An order paid from money that came as cashback earns again (a wallet does not remember where its money came from). **A refund
+takes the cashback back** in the same transaction as the refund (`cashback_reversal`, key `cashback_reversal:<order id>`), from the wallet the refund has
+just filled, never below zero: if the wallet cannot cover it (the customer owes), what could not be taken is written to the audit log
+(`order.cashback_reversal`, with `credited`, `taken` and `shortfall`). The refund message then says the cashback was taken back, with the balance after
+both (`wallet.credited_refund_cashback`). The wallet history names the movements ("Cashback", "Cashback taken back"). The Mini App shows the terms and
+the total earned on the Wallet tab and "You earned X cashback" on the result of a purchase; the dashboard shows it on the order's page and in the
+reports ([14-reports.md](14-reports.md)).
 **Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
 group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
 button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the

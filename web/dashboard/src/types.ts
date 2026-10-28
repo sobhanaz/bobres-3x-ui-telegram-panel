@@ -77,6 +77,8 @@ export interface OrderItem {
   staff: string
   extend: { days: number | null; bytes: number | null } | null
   refund: { amount: Money; at: number } | null
+  /** the cashback the order earned its buyer (only the one-order answer has it); `reversed` is what a refund took back */
+  cashback?: { amount: Money; percent_bp: number; capped: boolean; at: number; reversed?: Money; reversed_at?: number } | null
 }
 
 export interface Proof {

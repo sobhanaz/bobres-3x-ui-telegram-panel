@@ -1,7 +1,7 @@
 // What the app shows, loaded from core and kept here: one small reactive
 // object (no state library).
 import { reactive } from 'vue'
-import { api, ApiError, type JoinChatLink, type LedgerEntry, type Me, type Plan, type PlanGroup, type Service, type Wallet } from './api'
+import { api, ApiError, type CashbackInfo, type JoinChatLink, type LedgerEntry, type Me, type Plan, type PlanGroup, type Service, type Wallet } from './api'
 import { errorKey, gateFor, type Gate } from './errors'
 import { signIn } from './api'
 import { initData, telegramLanguage } from './telegram'
@@ -20,6 +20,7 @@ export const state = reactive({
   services: null as Service[] | null,
   wallets: [] as Wallet[],
   ledger: [] as LedgerEntry[],
+  cashback: null as CashbackInfo | null,
 })
 
 /** fail turns a failure into a full-screen gate when it is one; returns whether it was. */
@@ -96,6 +97,7 @@ export async function loadWallet(): Promise<void> {
   const w = await api.wallet()
   state.wallets = w.wallets
   state.ledger = w.ledger
+  state.cashback = w.cashback ?? null
 }
 
 export function irtBalance(): number {

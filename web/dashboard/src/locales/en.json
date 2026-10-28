@@ -238,7 +238,11 @@
     "refund": "Refund to wallet",
     "refund_intro": "{amount} goes to the customer's wallet and the order is cancelled (it was not delivered). The customer is told.",
     "refund_intro_delivered": "{amount} goes to the customer's wallet. The service was delivered and keeps working: delete it on its page if needed. The customer is told.",
-    "refund_done": "Refunded. Wallet balance: {balance}"
+    "refund_done": "Refunded. Wallet balance: {balance}",
+    "cashback": "Cashback",
+    "cashback_line": "{amount} · {percent} of {base}",
+    "cashback_capped": "cut to the most one order earns",
+    "cashback_reversed": "{amount} was taken back with the refund"
   },
   "account": {
     "title": "My account",
@@ -567,7 +571,11 @@
       "license_refund": "License refund",
       "supplier_purchase": "Digital account",
       "supplier_refund": "Digital account refund",
-      "wallet_convert": "USDT converted to Toman"
+      "wallet_convert": "USDT converted to Toman",
+      "cashback": "Cashback",
+      "cashback_reversal": "Cashback taken back",
+      "target_bonus": "Monthly target bonus",
+      "wheel_prize": "Wheel of fortune prize"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -672,6 +680,7 @@
       "split": "New {new} · Renewals {renew} · Traffic {traffic}",
       "licenses": "Licenses sold: {n} · {amount}",
       "digital": "Digital accounts sold: {n} · {amount}",
+      "cashback": "Cashback given: {n} · {amount}",
       "topups": "Wallet top-ups",
       "refunds": "Refunds",
       "rejected": "Rejected by staff",
@@ -1502,7 +1511,8 @@
       "one_line": "One line only, without control characters.",
       "option": "Choose one of the options.",
       "timezone": "This time zone is not recognised.",
-      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59)."
+      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59).",
+      "percent": "A percent from 0.01 to 20, for example 2.5."
     },
     "option": {
       "bot": {
@@ -1556,6 +1566,11 @@
       "monitor": {
         "title": "Monitoring",
         "desc": "What core watches on the server and in the stack, and when it raises an alert."
+      },
+      "cashback": {
+        "title": "Cashback",
+        "desc": "Give a share of what each order cost back to the customer's wallet once it is paid and delivered.",
+        "note": "Cashback is credit in the wallet, not cash: it can only be spent in the store. If an order is refunded, its cashback is taken back from the refund. Resellers, free orders, free trials and orders priced in USDT earn none. Off until you turn it on."
       },
       "growth": {
         "title": "Growth",
@@ -1739,6 +1754,28 @@
         "ci_alert": {
           "label": "Alert when CI on main fails",
           "help": "While the latest CI run on the repository's main branch has failed, an alert is raised. For a store built from main; leave it off for a store that runs releases."
+        }
+      },
+      "cashback": {
+        "enabled": {
+          "label": "Cashback",
+          "help": "When on, an order that has been paid and delivered credits a share of its price to the customer's wallet, once. Turned off, nothing more is paid; what was paid stays in the wallets. Set the percent too."
+        },
+        "percent": {
+          "label": "Cashback percent",
+          "help": "From 0.01 to 20, for example 2.5. It is worked out on what the order cost after any discount, in whole Toman, rounded down. Empty means no cashback."
+        },
+        "max_per_order": {
+          "label": "Most cashback per order (Toman)",
+          "help": "No order earns more than this. Empty or 0 means no maximum."
+        },
+        "min_order": {
+          "label": "Smallest order that earns (Toman)",
+          "help": "An order must cost at least this much, after any discount, to earn cashback. Empty or 0 means any order that costs something."
+        },
+        "renewals": {
+          "label": "Renewals earn cashback",
+          "help": "On: renewals and traffic packages earn it like new services. Off: only new services do."
         }
       },
       "growth": {
@@ -1974,7 +2011,8 @@
       "order": {
         "retry": "Order retried",
         "refund": "Order refunded",
-        "bulk": "Bulk purchase made"
+        "bulk": "Bulk purchase made",
+        "cashback_reversal": "Cashback taken back"
       },
       "dashboard": {
         "login": "Logged in",

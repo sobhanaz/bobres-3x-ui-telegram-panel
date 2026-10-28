@@ -318,12 +318,20 @@ func (s *Service) RefundOrder(ctx context.Context, actor *store.User, prov Provi
 			map[string]any{"amount": o.Amount, "currency": o.Currency, "status": o.Status}, reason); err != nil {
 			return err
 		}
+		// The cashback the order earned goes back with it, from the wallet the refund has just filled.
+		cashbackTaken, after, err := s.reverseCashback(ctx, tx, actor, o)
+		if err != nil {
+			return err
+		}
+		if after != nil {
+			w = after
+		}
 		now := time.Now()
 		o.RefundedAt, o.RefundAmount = &now, &o.Amount
 		res.Order, res.Wallet = o, w
 		return s.publish(ctx, tx, events.WalletCredited, events.WalletCreditedEvent{
 			UserID: o.UserID, TelegramID: user.TelegramID, OrderID: o.ID,
-			Amount: o.Amount, Currency: o.Currency, Balance: w.Balance, Reason: events.CreditRefund,
+			Amount: o.Amount, Currency: o.Currency, Balance: w.Balance, Reason: events.CreditRefund, CashbackTaken: cashbackTaken,
 		})
 	})
 	if err != nil {

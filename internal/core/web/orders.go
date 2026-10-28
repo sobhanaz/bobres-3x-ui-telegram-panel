@@ -35,6 +35,9 @@ type orderJSON struct {
 	Extend         map[string]any `json:"extend"` // {days, bytes} of an extension
 	Refund         map[string]any `json:"refund"` // {amount, at} once refunded
 	Label          *string        `json:"label"`  // a reseller's name for the service it creates
+	// Cashback is what the order earned its buyer ({amount, currency, reversed}); reversed is what a refund took back. Only the one-order
+	// answer carries it.
+	Cashback map[string]any `json:"cashback,omitempty"`
 }
 
 func orderOf(o *store.OrderRow) orderJSON {
@@ -110,8 +113,18 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
 		payments = s.paymentsOf(r.Context(), recs)
 	}
 	paid := o.Status == "paid" || o.Status == "active" || o.Status == "provision_failed"
+	order := orderOf(o)
+	if c, err := s.cfg.Domain.OrderCashback(r.Context(), id); err != nil {
+		s.cfg.Log.Warn("dashboard api: order cashback", "err", err)
+	} else if c != nil {
+		order.Cashback = map[string]any{"amount": money{c.Amount, c.Currency}, "percent_bp": c.PercentBP, "capped": c.Capped, "at": c.CreatedAt.Unix()}
+		if c.ReversedAmount != nil && c.ReversedAt != nil {
+			order.Cashback["reversed"] = money{*c.ReversedAmount, c.Currency}
+			order.Cashback["reversed_at"] = c.ReversedAt.Unix()
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"order": orderOf(o), "payments": payments, "payments_error": paymentsErr,
+		"order": order, "payments": payments, "payments_error": paymentsErr,
 		"can": map[string]bool{
 			"retry":  o.Status == "provision_failed",
 			"refund": paid && o.RefundedAt == nil && o.Amount > 0,

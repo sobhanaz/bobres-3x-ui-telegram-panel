@@ -14,7 +14,7 @@ import PaymentsTable from '../components/PaymentsTable.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
-import { bytes, dateTime, money, num, planName, shortId, type Lang } from '../format'
+import { bytes, dateTime, money, num, percentBP, planName, shortId, type Lang } from '../format'
 import type { OrderItem, PaymentItem } from '../types'
 
 const { t, locale } = useI18n()
@@ -128,6 +128,14 @@ async function refund(reason: string) {
             ({{ t('order.discount', { amount: money(o.discount.amount, lang) }) }} <span class="app-ltr app-mono">{{ o.discount.code }}</span>)
           </span>
         </dd>
+        <template v-if="o.cashback">
+          <dt>{{ t('order.cashback') }}</dt>
+          <dd class="cashback">
+            {{ t('order.cashback_line', { amount: money(o.cashback.amount, lang), percent: percentBP(o.cashback.percent_bp, lang), base: money(o.amount, lang) }) }}
+            <span v-if="o.cashback.capped" class="app-muted">({{ t('order.cashback_capped') }})</span>
+            <span v-if="o.cashback.reversed" class="app-muted">· {{ t('order.cashback_reversed', { amount: money(o.cashback.reversed, lang) }) }}</span>
+          </dd>
+        </template>
         <template v-if="o.staff">
           <dt>{{ t('order.made_by') }}</dt>
           <dd>

@@ -158,6 +158,10 @@ type ReportCell struct {
 	Rejected      ReportFlow
 	GatewayFailed ReportFlow
 	Cancelled     ReportFlow
+	// Cashback is what the store gave back to its customers' wallets (docs/14-reports.md): Count is the cashback credits of the bucket and
+	// Amount what they came to less the cashback that refunds took back in the bucket (so it can be negative in a bucket that only refunded).
+	// It is not revenue and is not taken off Net: it is credit the customers may spend.
+	Cashback ReportFlow
 }
 
 // SalesData is the sparse answer of SalesSummary: only buckets and
@@ -335,6 +339,13 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 			FROM core.ledger_entries e WHERE e.kind IN `+refundKinds+` AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
 			func(c *ReportCell) *ReportFlow { return &c.Refunds }); err != nil {
 			return reportErr("report refunds", err)
+		}
+		// Cashback paid: the credits and, taken off, the reversals that refunds made.
+		if err := flow(`
+			SELECT `+bucketOf("e.created_at")+`, e.currency, count(*) FILTER (WHERE e.kind = 'cashback'), COALESCE(sum(e.amount), 0)::bigint
+			FROM core.ledger_entries e WHERE e.kind IN ('cashback', 'cashback_reversal') AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
+			func(c *ReportCell) *ReportFlow { return &c.Cashback }); err != nil {
+			return reportErr("report cashback", err)
 		}
 		// Payments that were rejected or failed: core records each one as an
 		// event. Who rejected it is told as ManualProviders says ($5 the
