@@ -27,9 +27,9 @@ import (
 func TestMain(m *testing.M) { testdb.Main(m) }
 
 const (
-	oldMaster   = "0123456789abcdef0123456789abcdef"
-	newMaster   = "fedcba9876543210fedcba9876543210"
-	otherMaster = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+	oldMaster   = "0123456789abcdef0123456789abcdef" //gitleaks:allow test fixture
+	newMaster   = "fedcba9876543210fedcba9876543210" //gitleaks:allow test fixture
+	otherMaster = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1" //gitleaks:allow test fixture
 )
 
 var (

@@ -13,12 +13,12 @@ import (
 // still answer what it did, or every stored token and every gift code hash
 // would be lost by the update that brings rotation.
 const (
-	goldenMaster     = "0123456789abcdef0123456789abcdef"
-	goldenCipherHex  = "01614cf6352a978faeba2c493bffa5a8952dbb4564c08112b40fc6d8db191ade8f6b8649ec14b3c9b2acbb0bf6f253f8"
-	goldenPlain      = "3x-ui-api-token-abc"
-	goldenTagHex     = "4aaba698bbb7c0db5d389a88f8af7223c5b6e770b72e3c4062f2790c25d4246d"
-	goldenTagKeyHex  = "c827c38d6cc42925f8b006751562358f1d53e779ec09be6630c7113623a17d51"
-	masterB, masterC = "fedcba9876543210fedcba9876543210", "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+	goldenMaster     = "0123456789abcdef0123456789abcdef"                                                                 //gitleaks:allow test fixture
+	goldenCipherHex  = "01614cf6352a978faeba2c493bffa5a8952dbb4564c08112b40fc6d8db191ade8f6b8649ec14b3c9b2acbb0bf6f253f8" //gitleaks:allow test fixture
+	goldenPlain      = "3x-ui-api-token-abc"                                                                              //gitleaks:allow test fixture
+	goldenTagHex     = "4aaba698bbb7c0db5d389a88f8af7223c5b6e770b72e3c4062f2790c25d4246d"                                 //gitleaks:allow test fixture
+	goldenTagKeyHex  = "c827c38d6cc42925f8b006751562358f1d53e779ec09be6630c7113623a17d51"                                 //gitleaks:allow test fixture
+	masterB, masterC = "fedcba9876543210fedcba9876543210", "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"                             //gitleaks:allow test fixture
 )
 
 func keyring(t *testing.T, k Keys) *Envelope {

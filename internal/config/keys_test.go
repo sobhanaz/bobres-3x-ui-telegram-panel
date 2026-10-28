@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	rotMaster = "new-master-key-0123456789abcdef0123456789" //gitleaks:allow test fixture
-	rotOld    = "old-master-key-0123456789abcdef0123456789" //gitleaks:allow test fixture
-	rotTag    = "c827c38d6cc42925f8b006751562358f1d53e779ec09be6630c7113623a17d51"
+	rotMaster = "new-master-key-0123456789abcdef0123456789"                        //gitleaks:allow test fixture
+	rotOld    = "old-master-key-0123456789abcdef0123456789"                        //gitleaks:allow test fixture
+	rotTag    = "c827c38d6cc42925f8b006751562358f1d53e779ec09be6630c7113623a17d51" //gitleaks:allow test fixture
 )
 
 func keyEnv(t *testing.T, master, previous, tag string) {
