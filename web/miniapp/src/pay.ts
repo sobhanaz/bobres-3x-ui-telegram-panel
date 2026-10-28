@@ -41,6 +41,15 @@ export function plainAmount(minor: number, scale: number): string {
   return frac ? `${whole}.${frac}` : String(whole)
 }
 
+/**
+ * tomanForUsdt is what an amount of USDT (micro-USDT, 6 decimals) is worth in whole Toman at a rate (Toman per USDT), rounded
+ * down: what a USDT top-up credits to the wallet. 0 when there is no amount or no rate.
+ */
+export function tomanForUsdt(micro: number, rate: number): number {
+  if (!Number.isFinite(micro) || !Number.isFinite(rate) || micro <= 0 || rate <= 0) return 0
+  return Number((BigInt(Math.trunc(micro)) * BigInt(Math.trunc(rate))) / 1_000_000n)
+}
+
 /** txidPattern is a transaction hash as the server takes it: 64 hexadecimal characters, 0x in front for Ethereum. */
 export const txidPattern = /^(0x)?[0-9a-fA-F]{64}$/
 

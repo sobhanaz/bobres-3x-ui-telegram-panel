@@ -227,6 +227,8 @@
     "refunded": "برگشت داده شد",
     "made_by": "ثبت توسط",
     "discount": "{amount} تخفیف با",
+    "list": "قیمت در لیست {price}؛ از کیف پول با نرخ هر تتر {rate} کسر شد",
+    "list_short": "قیمت لیست {price}",
     "service": "سرویس",
     "service_new": "هنگام تحویل ساخته می‌شود",
     "created": "ثبت",

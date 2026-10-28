@@ -227,6 +227,8 @@
     "refunded": "Refunded",
     "made_by": "Made by",
     "discount": "{amount} off with",
+    "list": "Listed at {price}; the wallet was charged at {rate} per USDT",
+    "list_short": "Listed at {price}",
     "service": "Service",
     "service_new": "Created when delivered",
     "created": "Created",

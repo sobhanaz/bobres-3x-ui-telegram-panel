@@ -284,7 +284,13 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	if !ok {
 		return
 	}
-	w, err := h.core.GetWallet(r.ctx, &corev1.GetWalletRequest{UserId: r.user.GetId(), Currency: cur})
+	// The wallet is in Toman. A plan priced in USDT is paid from it too, at a quote the customer confirms (walletquote.go), so the wallet button is there
+	// whatever the balance is: whether it covers the price in Toman is the quote's to say.
+	walletCur, usdtPlan := cur, cur == "USDT"
+	if usdtPlan {
+		walletCur = walletCurrency
+	}
+	w, err := h.core.GetWallet(r.ctx, &corev1.GetWalletRequest{UserId: r.user.GetId(), Currency: walletCur})
 	if err != nil {
 		r.fail(err)
 		return
@@ -294,10 +300,10 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	var wallet *tg.Button
 	switch {
 	case !reseller:
-		b := r.button("btn.pay_wallet", "pay:w:"+n, "balance", r.money(w.GetBalance(), cur))
+		b := r.button("btn.pay_wallet", "pay:w:"+n, "balance", r.money(w.GetBalance(), walletCur))
 		wallet = &b
-	case available >= price: // on credit, down to the limit
-		b := r.button("btn.pay_credit", "pay:w:"+n, "available", r.money(available, cur))
+	case usdtPlan || available >= price: // on credit, down to the limit
+		b := r.button("btn.pay_credit", "pay:w:"+n, "available", r.money(available, walletCur))
 		wallet = &b
 	}
 	h.payButtons(r, kb, cur, price, n, wallet)
@@ -322,8 +328,13 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	if off > 0 {
 		text += "\n" + r.t("discount.applied", "code", esc(c.DiscountCode), "off", r.money(off, cur))
 	}
+	if usdtPlan { // about what the wallet would be charged, at the rate the bot knows now; the quote after the tap is the exact price
+		if hint := h.usdtHint(r, price); hint != "" {
+			text += "\n" + hint
+		}
+	}
 	if reseller {
-		text = r.labelled(c.Label, text) + "\n" + r.t("rs.checkout_available", "available", r.money(available, cur))
+		text = r.labelled(c.Label, text) + "\n" + r.t("rs.checkout_available", "available", r.money(available, walletCur))
 	}
 	r.show(text, kb)
 }
@@ -403,6 +414,11 @@ func (h *Handler) onPay(r *req, rest string) {
 }
 
 func (h *Handler) payWithWallet(r *req, c state.Checkout, p *corev1.Plan, order *corev1.Order) {
+	if order.GetAmount().GetCurrency() == "USDT" && order.GetAmount().GetAmount() > 0 {
+		// A plan priced in USDT: the wallet is in Toman, so the customer is shown the price in Toman and confirms it first (walletquote.go).
+		h.showWalletQuote(r, c, p, order.GetId(), false)
+		return
+	}
 	_, err := h.core.PayOrderWithWallet(r.ctx, &corev1.PayOrderWithWalletRequest{OrderId: order.GetId(), UserId: r.user.GetId()})
 	if err == nil {
 		kb := homeKeyboard(r)

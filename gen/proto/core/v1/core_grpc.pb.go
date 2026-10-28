@@ -33,6 +33,7 @@ const (
 	CoreService_UpdateBranding_FullMethodName            = "/core.v1.CoreService/UpdateBranding"
 	CoreService_ReviewManualPayment_FullMethodName       = "/core.v1.CoreService/ReviewManualPayment"
 	CoreService_PayOrderWithWallet_FullMethodName        = "/core.v1.CoreService/PayOrderWithWallet"
+	CoreService_QuoteWalletPayment_FullMethodName        = "/core.v1.CoreService/QuoteWalletPayment"
 	CoreService_CreatePaymentIntent_FullMethodName       = "/core.v1.CoreService/CreatePaymentIntent"
 	CoreService_StartTrial_FullMethodName                = "/core.v1.CoreService/StartTrial"
 	CoreService_CanStartTrial_FullMethodName             = "/core.v1.CoreService/CanStartTrial"
@@ -127,6 +128,9 @@ type CoreServiceClient interface {
 	UpdateBranding(ctx context.Context, in *UpdateBrandingRequest, opts ...grpc.CallOption) (*Settings, error)
 	ReviewManualPayment(ctx context.Context, in *ReviewManualPaymentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
 	PayOrderWithWallet(ctx context.Context, in *PayOrderWithWalletRequest, opts ...grpc.CallOption) (*Order, error)
+	// QuoteWalletPayment prices an order listed in USDT in Toman at the store's USDT rate now; PayOrderWithWallet with the
+	// quote's token charges exactly that (docs/03-bot-ux.md, "Plans priced in USDT").
+	QuoteWalletPayment(ctx context.Context, in *QuoteWalletPaymentRequest, opts ...grpc.CallOption) (*WalletQuote, error)
 	CreatePaymentIntent(ctx context.Context, in *CreatePaymentIntentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
 	StartTrial(ctx context.Context, in *StartTrialRequest, opts ...grpc.CallOption) (*Order, error)
 	CanStartTrial(ctx context.Context, in *CanStartTrialRequest, opts ...grpc.CallOption) (*CanStartTrialResponse, error)
@@ -382,6 +386,16 @@ func (c *coreServiceClient) PayOrderWithWallet(ctx context.Context, in *PayOrder
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Order)
 	err := c.cc.Invoke(ctx, CoreService_PayOrderWithWallet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) QuoteWalletPayment(ctx context.Context, in *QuoteWalletPaymentRequest, opts ...grpc.CallOption) (*WalletQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WalletQuote)
+	err := c.cc.Invoke(ctx, CoreService_QuoteWalletPayment_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,6 +1088,9 @@ type CoreServiceServer interface {
 	UpdateBranding(context.Context, *UpdateBrandingRequest) (*Settings, error)
 	ReviewManualPayment(context.Context, *ReviewManualPaymentRequest) (*PaymentIntentRef, error)
 	PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error)
+	// QuoteWalletPayment prices an order listed in USDT in Toman at the store's USDT rate now; PayOrderWithWallet with the
+	// quote's token charges exactly that (docs/03-bot-ux.md, "Plans priced in USDT").
+	QuoteWalletPayment(context.Context, *QuoteWalletPaymentRequest) (*WalletQuote, error)
 	CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error)
 	StartTrial(context.Context, *StartTrialRequest) (*Order, error)
 	CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error)
@@ -1235,6 +1252,9 @@ func (UnimplementedCoreServiceServer) ReviewManualPayment(context.Context, *Revi
 }
 func (UnimplementedCoreServiceServer) PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method PayOrderWithWallet not implemented")
+}
+func (UnimplementedCoreServiceServer) QuoteWalletPayment(context.Context, *QuoteWalletPaymentRequest) (*WalletQuote, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuoteWalletPayment not implemented")
 }
 func (UnimplementedCoreServiceServer) CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreatePaymentIntent not implemented")
@@ -1703,6 +1723,24 @@ func _CoreService_PayOrderWithWallet_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).PayOrderWithWallet(ctx, req.(*PayOrderWithWalletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_QuoteWalletPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteWalletPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).QuoteWalletPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_QuoteWalletPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).QuoteWalletPayment(ctx, req.(*QuoteWalletPaymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2957,6 +2995,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PayOrderWithWallet",
 			Handler:    _CoreService_PayOrderWithWallet_Handler,
+		},
+		{
+			MethodName: "QuoteWalletPayment",
+			Handler:    _CoreService_QuoteWalletPayment_Handler,
 		},
 		{
 			MethodName: "CreatePaymentIntent",
