@@ -655,16 +655,20 @@ func TestLoginApprovalRateLimit(t *testing.T) {
 // Sign-ins of one account, and answers to one sign-in, at the same time: the limits hold and exactly one answer wins.
 func TestLoginApprovalConcurrency(t *testing.T) {
 	f := newApprovalFixture(t)
-	needConns(t, f.s, 6)
+	needConns(t, f.s, 4)
 	ctx := context.Background()
 
-	// Twelve sign-ins of one account at once: only the open limit gets through.
+	// Twelve sign-ins of one account, three at a time (the CI pool has four connections, and a request that holds the account's lock may
+	// need one more): only the open limit gets through.
 	var wg sync.WaitGroup
 	results := make(chan error, 12)
+	inFlight := make(chan struct{}, 3)
 	for i := 0; i < 12; i++ {
 		wg.Add(1)
+		inFlight <- struct{}{}
 		go func() {
 			defer wg.Done()
+			defer func() { <-inFlight }()
 			_, hash, _ := webauth.NewToken()
 			_, err := f.svc.RequestLoginApproval(ctx, LoginRequest{User: f.admin, Method: "link", IP: "203.0.113.30", TicketHash: hash})
 			results <- err
@@ -733,7 +737,7 @@ func TestLoginApprovalConcurrency(t *testing.T) {
 // Many polls at once for one approved sign-in: one session is made, once.
 func TestLoginApprovalConcurrentPolls(t *testing.T) {
 	f := newApprovalFixture(t)
-	needConns(t, f.s, 6)
+	needConns(t, f.s, 4)
 	ctx := context.Background()
 	_, ticket := f.signIn(t, f.admin)
 	if d := f.decide(t, approverAdminTG, f.bot.lastPrompt(t), true); d.Outcome != OutcomeApproved {
@@ -744,10 +748,13 @@ func TestLoginApprovalConcurrentPolls(t *testing.T) {
 		mu       sync.Mutex
 		sessions int
 	)
+	inFlight := make(chan struct{}, 3) // the CI pool has four connections
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
+		inFlight <- struct{}{}
 		go func() {
 			defer wg.Done()
+			defer func() { <-inFlight }()
 			r, err := f.svc.PollLoginApproval(ctx, ticket)
 			if err != nil {
 				t.Error(err)
