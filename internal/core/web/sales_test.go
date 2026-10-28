@@ -206,7 +206,7 @@ func (f *fixture) order(u *store.User, p *store.Plan, status, subStatus string, 
 		return o, nil
 	}
 	sub, err := f.st.CreateSubscription(ctx, f.st.Conn(), &store.Subscription{UserID: u.ID, OrderID: o.ID,
-		ClientEmail: "u-" + buuid.MustV7().String()[:12]})
+		ClientEmail: "u-" + buuid.MustV7().String()[24:]}) // the random tail: the first 12 characters are the millisecond clock, which two services made back to back share
 	if err != nil {
 		f.t.Fatal(err)
 	}
