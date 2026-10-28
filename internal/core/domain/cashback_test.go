@@ -475,7 +475,7 @@ func TestCashbackChecksTheBuyerAtDelivery(t *testing.T) {
 // Many deliveries racing for one order pay once.
 func TestCashbackIsPaidOnceUnderConcurrency(t *testing.T) {
 	e := newCashbackEnv(t)
-	needConns(t, e.s, 8)
+	needConns(t, e.s, 4) // the racing transactions queue for the pool; none holds a second connection
 	ctx := context.Background()
 	u := seedUser(t, e.s, 9671)
 	e.fundNow(u, 10_000)
@@ -507,7 +507,7 @@ func TestCashbackIsPaidOnceUnderConcurrency(t *testing.T) {
 // Many orders delivered at once for one customer: every one earns, the wallet equals its ledger.
 func TestCashbackOfManyOrdersAtOnce(t *testing.T) {
 	e := newCashbackEnv(t)
-	needConns(t, e.s, 8)
+	needConns(t, e.s, 4) // the racing transactions queue for the pool; none holds a second connection
 	ctx := context.Background()
 	u := seedUser(t, e.s, 9672)
 	e.fundNow(u, 60_000)
@@ -769,7 +769,7 @@ func TestRefundWithoutCashbackIsAsBefore(t *testing.T) {
 // A refund and a replayed delivery racing: the cashback is taken once and the books stay whole.
 func TestRefundRacesAReplayedDelivery(t *testing.T) {
 	e := newCashbackEnv(t)
-	needConns(t, e.s, 8)
+	needConns(t, e.s, 4) // the racing transactions queue for the pool; none holds a second connection
 	ctx := context.Background()
 	u := seedUser(t, e.s, 9731)
 	e.fundNow(u, 10_000)

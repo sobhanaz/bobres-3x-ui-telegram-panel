@@ -513,7 +513,7 @@ func TestEditingTheTiersNeverPaysATierTwice(t *testing.T) {
 // A delivery that is replayed counts once and pays once; a delivery of many services at once pays each tier exactly once.
 func TestBonusesArePaidOnceUnderConcurrency(t *testing.T) {
 	e := newTargetsEnv(t)
-	needConns(t, e.s, 10)
+	needConns(t, e.s, 4) // the racing transactions queue for the pool; none holds a second connection
 	ctx := context.Background()
 	r := e.reseller(9361)
 

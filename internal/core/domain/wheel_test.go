@@ -556,7 +556,7 @@ func TestWheelDayIsTheStoreDay(t *testing.T) {
 // Twelve requests for one customer's spin at once: one draw, one credit, and the same answer for every other.
 func TestWheelConcurrentSpinsPayOnce(t *testing.T) {
 	e := newWheelEnv(t)
-	needConns(t, e.s, 14)
+	needConns(t, e.s, 4) // the racing transactions queue for the pool; none holds a second connection
 	u := e.customer()
 	e.rollAt(0)
 	const n = 12
@@ -600,7 +600,7 @@ func TestWheelConcurrentSpinsPayOnce(t *testing.T) {
 // Many customers at once cannot overspend the day's budget: the spins are decided one after the other, each seeing what the earlier ones paid.
 func TestWheelBudgetIsNeverOverspent(t *testing.T) {
 	e := newWheelEnv(t)
-	needConns(t, e.s, 14)
+	needConns(t, e.s, 4) // the racing transactions queue for the pool; none holds a second connection
 	e.set(map[string]string{SettingWheelPrizes: `[{"amount":1000,"weight":1},{"amount":5000,"weight":1}]`, SettingWheelNoPrize: "0", SettingWheelBudget: "12000"})
 	const n = 16
 	users := make([]*store.User, n)
