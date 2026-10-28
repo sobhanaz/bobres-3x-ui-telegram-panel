@@ -199,8 +199,8 @@ item says where it landed.
 - Incident history on the status page (it says only "working" or "down" now), and e-mail or Telegram subscriptions to it. (The Prometheus endpoint, a Grafana example and the uptime view are built.)
 - Automatic node balancing beyond the weights and the per-server service limit in use today.
 - Two-factor sign-in for staff inside the bot.
-- A hosted offering, so a customer who does not want to run a server can pay for one.
-- An affiliate program for BOBRES itself, on top of the license server.
+- A hosted offering, so a customer who does not want to run a server can pay for one: a plan, not built ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
+- An affiliate program for BOBRES itself, on top of the license server: a plan, not built ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
 - An adapter for a newer 3x-ui major version, when one is released and tested in CI.
 
 ## How an item gets built
