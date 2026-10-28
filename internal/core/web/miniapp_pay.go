@@ -145,10 +145,15 @@ func (s *Server) miniOffered(ctx context.Context, currency string, amount int64)
 var errMethodOff = errors.New("web: payment method not available")
 
 // miniPaymentExtras adds what the app needs beyond the intent itself: for
-// Stars the invoice link and the number of Stars, for crypto the USDT amount.
+// Stars the invoice link and the number of Stars, for crypto the USDT amount,
+// for automatic USDT a QR code of the address to send to.
 // It refuses (errMethodOff) a manual method whose details are missing.
 func (s *Server) miniPaymentExtras(ctx context.Context, u *store.User, res *domain.IntentResult, price miniPrice, body map[string]any) error {
 	switch {
+	case res.Provider == domain.USDTAuto:
+		if qr := usdtAddressQR(res.Details["pay_address"]); res.Details["pay_address"] != "" && qr != "" {
+			body["qr"] = qr
+		}
 	case res.Provider == domain.Stars:
 		body["stars"] = res.GatewayAmount
 		if res.Status != "pending" { // paid or over: there is no invoice to open

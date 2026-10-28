@@ -95,8 +95,15 @@ type Order struct {
 	// place in it (1 to the quantity); both nil for every other order.
 	BulkID    *string
 	BulkIndex *int32
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	// ListAmount, ListCurrency and Rate: an order listed in USDT and paid from the
+	// wallet (which is in Toman) was charged Amount in Currency (Toman); these say
+	// what the plan's price was (after any discount) and the Toman per USDT it was
+	// worked out at. All three or none: an order paid in the currency it was listed in has none.
+	ListAmount   *int64
+	ListCurrency *string
+	Rate         *int64
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Bulk mirrors core.bulk_orders: a purchase of Quantity services of one plan
