@@ -190,6 +190,10 @@ services:
       BOBRES_PAYMENTS_GRPC_ADDR: payments:9090
       BOBRES_PROVISIONER_GRPC_ADDR: provisioner:9090
       BOBRES_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:?set BOBRES_CORE_MASTER_KEY}
+      # Set only by `bobres rotate-key`: the key before a rotation (read while values sealed with
+      # it remain) and the key that keeps hashes and subscription ids the same under a new one.
+      BOBRES_MASTER_KEY_PREVIOUS: ${BOBRES_CORE_MASTER_KEY_PREVIOUS:-}
+      BOBRES_TAG_KEY: ${BOBRES_CORE_TAG_KEY:-}
       BOBRES_ADMIN_TELEGRAM_ID: ${BOBRES_ADMIN_TELEGRAM_ID:-}
       # The store's time zone when the general.timezone setting is empty: the sales reports'
       # days follow it, as the bot's dates do.
@@ -282,6 +286,8 @@ services:
       # Optional so an install from before it still starts: without it Zarinpal runs
       # from the values below and cannot be changed in the dashboard.
       BOBRES_MASTER_KEY: ${BOBRES_PAYMENTS_MASTER_KEY:-}
+      BOBRES_MASTER_KEY_PREVIOUS: ${BOBRES_PAYMENTS_MASTER_KEY_PREVIOUS:-}
+      BOBRES_TAG_KEY: ${BOBRES_PAYMENTS_TAG_KEY:-}
       # Zarinpal (off unless a merchant id is set). With the key above these only seed
       # the dashboard's settings on the first start. See docs/11-staging-run.md.
       BOBRES_ZARINPAL_MERCHANT_ID: ${BOBRES_ZARINPAL_MERCHANT_ID:-}
@@ -309,6 +315,8 @@ services:
       # The token core presents to provisioner only.
       BOBRES_PEER_CORE_TOKEN: ${BOBRES_TOKEN_CORE_PROVISIONER:?set BOBRES_TOKEN_CORE_PROVISIONER}
       BOBRES_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:?set BOBRES_PROVISIONER_MASTER_KEY}
+      BOBRES_MASTER_KEY_PREVIOUS: ${BOBRES_PROVISIONER_MASTER_KEY_PREVIOUS:-}
+      BOBRES_TAG_KEY: ${BOBRES_PROVISIONER_TAG_KEY:-}
       # Optional first panel, registered only while no server exists; servers are
       # added and changed in the dashboard (Servers).
       BOBRES_XUI_URL: ${BOBRES_XUI_URL:-}
@@ -384,6 +392,15 @@ services:
       BOBRES_CORE_MASTER_KEY: ${BOBRES_CORE_MASTER_KEY:-}
       BOBRES_PROVISIONER_MASTER_KEY: ${BOBRES_PROVISIONER_MASTER_KEY:-}
       BOBRES_PAYMENTS_MASTER_KEY: ${BOBRES_PAYMENTS_MASTER_KEY:-}
+      # The tag keys a master key rotation leaves (empty before one): gift codes and 3x-ui
+      # subscription ids are made with them, so a restore needs them too.
+      BOBRES_CORE_TAG_KEY: ${BOBRES_CORE_TAG_KEY:-}
+      BOBRES_PROVISIONER_TAG_KEY: ${BOBRES_PROVISIONER_TAG_KEY:-}
+      BOBRES_PAYMENTS_TAG_KEY: ${BOBRES_PAYMENTS_TAG_KEY:-}
+      # While a rotation runs (or was cut short) the keys it replaces: a backup made then needs both.
+      BOBRES_CORE_MASTER_KEY_PREVIOUS: ${BOBRES_CORE_MASTER_KEY_PREVIOUS:-}
+      BOBRES_PROVISIONER_MASTER_KEY_PREVIOUS: ${BOBRES_PROVISIONER_MASTER_KEY_PREVIOUS:-}
+      BOBRES_PAYMENTS_MASTER_KEY_PREVIOUS: ${BOBRES_PAYMENTS_MASTER_KEY_PREVIOUS:-}
       # Optional: a copy of each (still encrypted) backup in S3-compatible storage, which
       # keeps the newest BOBRES_BACKUP_S3_KEEP. Empty endpoint = no copy. Settings that
       # cannot be used do not stop the service: each backup records why it was not copied.

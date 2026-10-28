@@ -3,9 +3,12 @@ package config
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 )
 
 // minTokenLen is the minimum service token length per environment.
@@ -64,6 +67,80 @@ func optionalMasterKey() (string, error) {
 		return "", fmt.Errorf("BOBRES_MASTER_KEY still contains the %s placeholder", placeholderMarker)
 	}
 	return v, nil
+}
+
+// KeyExtras are the two optional values beside BOBRES_MASTER_KEY that a master
+// key rotation (`bobres rotate-key`) puts in .env. They are set only on an
+// install that has rotated (or is rotating); a fresh install has neither.
+type KeyExtras struct {
+	// Previous is the master key before the rotation (BOBRES_MASTER_KEY_PREVIOUS):
+	// still accepted for reading while values sealed with it remain.
+	Previous string
+	// Tag is the key of crypto.Envelope.Tag (BOBRES_TAG_KEY, 64 hex characters):
+	// set so that the identifiers Tag made stay the same under the new master key.
+	Tag string
+}
+
+// keyExtras reads the extras: each empty when unset, and checked when set.
+func keyExtras() (KeyExtras, error) {
+	prev, err := Secret("BOBRES_MASTER_KEY_PREVIOUS")
+	if err != nil {
+		return KeyExtras{}, err
+	}
+	if prev != "" {
+		if len(prev) < 32 {
+			return KeyExtras{}, errors.New("BOBRES_MASTER_KEY_PREVIOUS must be at least 32 characters")
+		}
+		if strings.Contains(prev, placeholderMarker) {
+			return KeyExtras{}, fmt.Errorf("BOBRES_MASTER_KEY_PREVIOUS still contains the %s placeholder", placeholderMarker)
+		}
+	}
+	tag, err := Secret("BOBRES_TAG_KEY")
+	if err != nil {
+		return KeyExtras{}, err
+	}
+	if tag != "" && !tagKeyRe.MatchString(tag) {
+		return KeyExtras{}, errors.New("BOBRES_TAG_KEY must be 64 hexadecimal characters")
+	}
+	return KeyExtras{Previous: prev, Tag: tag}, nil
+}
+
+var tagKeyRe = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+
+// KeyConfig is all the `rekey` command of a service needs: its database and its keys.
+type KeyConfig struct {
+	DatabaseURL string
+	// MasterKey is empty when the service has none (an install from before payments had one).
+	MasterKey string
+	KeyExtras KeyExtras
+}
+
+// LoadKeyConfig reads the database URL and the keys of the service it runs in, and nothing else, so
+// a re-encryption does not depend on the rest of the service's settings.
+func LoadKeyConfig() (KeyConfig, error) {
+	var errs []error
+	db, err := Secret("BOBRES_DATABASE_URL")
+	errs = append(errs, err)
+	if db == "" && err == nil {
+		errs = append(errs, errors.New("BOBRES_DATABASE_URL is required"))
+	}
+	if strings.Contains(db, placeholderMarker) {
+		errs = append(errs, fmt.Errorf("BOBRES_DATABASE_URL still contains the %s placeholder", placeholderMarker))
+	}
+	master, err := optionalMasterKey()
+	errs = append(errs, err)
+	extras, err := keyExtras()
+	errs = append(errs, err)
+	return KeyConfig{DatabaseURL: db, MasterKey: master, KeyExtras: extras}, errors.Join(errs...)
+}
+
+// Keyring is the set of keys a service's envelope works with: its master key and what a rotation added.
+func (k KeyExtras) Keyring(master string) crypto.Keys {
+	keys := crypto.Keys{Master: master, Tag: strings.ToLower(k.Tag)}
+	if k.Previous != "" {
+		keys.Previous = []string{k.Previous}
+	}
+	return keys
 }
 
 // MaxAdminTelegramIDs is how many root admins (the store owners a server's

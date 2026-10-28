@@ -319,10 +319,31 @@ model as the updater turned around.
   `BOBRES_PROVISIONER_MASTER_KEY`, `BOBRES_PAYMENTS_MASTER_KEY`, each passed to its own service only); the DB stores
   ciphertext for panel tokens, gateway secrets and authenticator secrets. A backup of the database is useless for
   these without the matching key, so the keys are backed up with it.
-- Gift codes are not encrypted but hashed with a key: HMAC-SHA256 under a key derived from `BOBRES_CORE_MASTER_KEY`
-  (see the threats table). The codes cannot be recovered from the database, and a master key that is changed or
-  lost makes the codes already made unredeemable (the hashes no longer match), so make new ones; the key is in every
-  backup, and a restore brings it back.
+- The envelope (`internal/crypto`) has two formats. Version 1 is `0x01 || nonce || AES-256-GCM` and carries no key
+  id. Version 2, which everything new is written in, is `0x02 || key id || nonce || AES-256-GCM`, with the version and
+  the key id as authenticated data: a value cannot be passed off as sealed by another key or version. The key id is 4
+  bytes of an HKDF output of the master key (`bobres:keyid:v1`): a public fingerprint, not a way to find the key. An
+  envelope holds the current master key and, during and after a rotation, the previous one: it seals with the current
+  key and opens with whichever the key id (or, for version 1, a trial) names. Nothing else decides which key opens a
+  value, so a rotation that stops half way leaves nothing unreadable.
+- **Master key rotation** (`bobres rotate-key`, docs/06-installer.md, runbooks/rotate-secrets.md): every encrypted
+  column is listed in `internal/rekey`, and a test fails when a migration adds one that is not (so a new secret cannot
+  be forgotten). The command refuses unless the store is healthy and the current keys read every value, takes and
+  reads back a backup, stops the services, writes the new keys to `.env` with the old ones beside them, seals every
+  value again (each: read with whichever key fits, sealed with the new, read back with the new alone, replaced under a
+  condition on the old bytes; one transaction per table, rows locked, the table checked again before it commits),
+  then finishes `.env` and starts the services. A failure puts the old keys back, which is the same run with the keys
+  swapped. Keys appear in no output and no log, only in `.env` (0600, one rename), the backups and, as comments, the
+  retired keys (until deleted or `--forget-old`). Residual: a retired key kept as a comment is as secret as `.env`; the
+  safety backup of before holds the old keys with the old data.
+- Gift codes are not encrypted but hashed with a key: HMAC-SHA256 under the **tag key** (`crypto.Envelope.Tag`),
+  which is derived from `BOBRES_CORE_MASTER_KEY` until the first rotation. The codes cannot be recovered from the
+  database, and a master key that is lost makes the codes already made unredeemable (the hashes no longer match), so
+  make new ones. A rotation does not change what Tag answers: it saves the key the old master key derived as
+  `BOBRES_CORE_TAG_KEY` (and `_PROVISIONER_` for the 3x-ui subscription ids, which the panels already hold) and keeps it
+  through every later rotation. So the tag key is not rotated: the protection of a gift code against an offline guess
+  by someone who has the database and that key is its 59 bits, and for a custom code its length. Every backup carries
+  the tag keys that are set, and a restore brings them back.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
 - TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS is not built; auth is one interceptor), see PLAN.md §11.
 - Backups (the `backup` service, docs/06-installer.md): each file is encrypted with `BOBRES_BACKUP_KEY` (a random
@@ -344,7 +365,7 @@ model as the updater turned around.
   text to any chat). The service hands files only to the bot, with its own token (`BOBRES_TOKEN_BACKUP`), which sends
   them to the configured owners and to no chat the caller names: the file is uploaded once, to the main owner, and the
   others get it from Telegram's servers by its file id.
-- Key rotation procedures documented and scripted (`bobres secrets rotate`).
+- Key rotation procedures documented and scripted (`bobres secrets rotate`; `bobres rotate-key` for the master keys).
 
 ## Privacy
 - Data minimization: Telegram ID + language + service data. No phone/email unless a feature needs it.
@@ -390,4 +411,7 @@ model as the updater turned around.
   (new password, authenticator removed, every session ended, the lock lifted); a loss of the phone is handled the
   same way. A link login is always a full session. The command needs shell access to the server (docker), which
   is already the trust boundary of `bobres admin link`.
-- Rotating the master keys (re-encrypting what they protect) is not built.
+- DECIDED (release 0.19.0): the master keys are rotated by `bobres rotate-key`, which re-encrypts what they protect (the key id in
+  the version 2 format, a dual-key envelope, a tag key that never changes). Not rotated: `BOBRES_BACKUP_KEY` (it encrypts
+  backup files, which older backups need), the tag keys, and the database and service secrets, which have their own
+  commands.

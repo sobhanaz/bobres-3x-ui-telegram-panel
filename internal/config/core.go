@@ -33,6 +33,8 @@ type Core struct {
 	// MasterKey encrypts secrets core stores at rest (dashboard TOTP secrets).
 	// Optional until the dashboard needs it; 32+ characters when set.
 	MasterKey string
+	// KeyExtras are the previous master key and the tag key a rotation leaves.
+	KeyExtras KeyExtras
 	// AdminTelegramIDs are the root admins (BOBRES_ADMIN_TELEGRAM_ID, one id or
 	// several separated by commas): each becomes an owner on first contact
 	// with the bot or when core starts. The first one is the primary.
@@ -139,6 +141,8 @@ func LoadCore() (Core, error) {
 	co.ProvisionerGRPCAddr = getenv("BOBRES_PROVISIONER_GRPC_ADDR", "")
 	keep(requireNonEmpty("BOBRES_PROVISIONER_GRPC_ADDR", co.ProvisionerGRPCAddr))
 	co.MasterKey, err = optionalMasterKey()
+	keep(err)
+	co.KeyExtras, err = keyExtras()
 	keep(err)
 	co.AdminTelegramIDs, err = telegramIDs("BOBRES_ADMIN_TELEGRAM_ID")
 	keep(err)
@@ -249,6 +253,8 @@ type Payments struct {
 	// above are used as they are and cannot be changed from the dashboard. With
 	// it they only seed the database once, when it has no settings yet.
 	MasterKey string
+	// KeyExtras are the previous master key and the tag key a rotation leaves.
+	KeyExtras KeyExtras
 }
 
 // LoadPayments reads the payments service configuration.
@@ -291,6 +297,9 @@ func LoadPayments() (Payments, error) {
 	if p.MasterKey, err = optionalMasterKey(); err != nil {
 		errs = append(errs, err)
 	}
+	if p.KeyExtras, err = keyExtras(); err != nil {
+		errs = append(errs, err)
+	}
 	return p, errors.Join(errs...)
 }
 
@@ -315,6 +324,8 @@ type Provisioner struct {
 	CoreToken string
 	// MasterKey encrypts 3x-ui API tokens at rest (envelope).
 	MasterKey string
+	// KeyExtras are the previous master key and the tag key a rotation leaves.
+	KeyExtras KeyExtras
 	// XUI* register the first 3x-ui panel on startup when no panel exists yet
 	// (installer input). Later changes go through the AddServer RPC.
 	XUIURL          string
@@ -342,6 +353,8 @@ func LoadProvisioner() (Provisioner, error) {
 	if p.MasterKey == "" {
 		keep(errors.New("BOBRES_MASTER_KEY is required (32+ characters)"))
 	}
+	p.KeyExtras, err = keyExtras()
+	keep(err)
 	p.XUIURL = getenv("BOBRES_XUI_URL", "")
 	p.XUIToken, err = Secret("BOBRES_XUI_TOKEN")
 	keep(err)

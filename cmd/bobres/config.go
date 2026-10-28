@@ -157,8 +157,16 @@ func isSecretKey(name string) bool { return !notSecretEnv[name] }
 func keyHint(name string) string {
 	for _, m := range config.BackupMasterKeys {
 		if name == m {
-			return "never rotated by bobres: see docs/runbooks/rotate-secrets.md"
+			return "bobres rotate-key (re-encrypts everything first; never edit it by hand)"
 		}
+	}
+	for _, m := range config.BackupTagKeys {
+		if name == m {
+			return "set by bobres rotate-key and never changed: it keeps gift codes and 3x-ui subscription ids working"
+		}
+	}
+	if strings.HasSuffix(name, "_MASTER_KEY_PREVIOUS") {
+		return "left by an unfinished bobres rotate-key: run it again to finish"
 	}
 	switch {
 	case name == "BOBRES_TELEGRAM_BOT_TOKEN":

@@ -86,6 +86,6 @@ Subscription: `pending -> active -> expiring_soon -> expired -> deleted`; also `
 
 ## Open points
 - UUID v7 vs bigserial (UUID chosen for mergeability across installs).
-- Encryption at rest: each service has its own master key (envelope, 07-security): the provisioner's for `api_token_enc`, payments' for `merchant_enc`/`proxy_enc`, core's for dashboard authenticator secrets and for the private key of an own HTTPS certificate (`tls_config.key_sealed`).
+- Encryption at rest: each service has its own master key (envelope, 07-security): the provisioner's for `api_token_enc`, payments' for `merchant_enc`/`proxy_enc`, core's for dashboard authenticator secrets and for the private key of an own HTTPS certificate (`tls_config.key_sealed`), the license server's admin key (`vendor_config.admin_key_enc`), the licenses sold (`vendor_licenses.key_enc`), the supplier's API key (`supplier_config.api_key_enc`) and what it delivered (`supplier_orders.delivery_enc`). Every such column is listed in `internal/rekey`, which `bobres rotate-key` walks to seal the values again when a master key is replaced; the ciphertext (format version 2) names the key that sealed it (07-security, "Crypto and secrets").
 - Retention: audit and ledger kept forever; provider_events pruned after N months.
 - 3x-ui is source of truth for live traffic/expiry; our `subscriptions` are a synced cache. Conflict rule: 3x-ui wins for usage, we win for entitlement/price.

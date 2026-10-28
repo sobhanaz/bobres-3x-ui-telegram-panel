@@ -52,7 +52,16 @@ To rotate the bot token, for example:
 sudo bobres secrets rotate bot-token
 ```
 
-The other names are `db-passwords`, `service-tokens` and `redis-password`. The master keys and the backup key are not rotated yet. See the [rotate-secrets runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/rotate-secrets.md).
+The other names are `db-passwords`, `service-tokens` and `redis-password`. The backup key is not rotated: older backups open only with it.
+
+The **master keys** (they encrypt the 3x-ui tokens, staff authenticators and gateway settings in the database) have their own command:
+
+```bash
+sudo bobres rotate-key --dry-run   # counts and checks every encrypted value, changes nothing
+sudo bobres rotate-key
+```
+
+It refuses unless the store is healthy and the current keys read everything, takes and checks a backup, makes new keys, seals every encrypted value again, and starts the services. The services stop for about a minute. If anything fails, the old keys come back by themselves; if the command is cut off, the store keeps running with both keys (nothing is lost) and running the command again finishes it. The old keys stay in `.env` as comments (`--forget-old` drops them). `BOBRES_BACKUP_KEY` does not change. See the [rotate-secrets runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/rotate-secrets.md).
 
 ## Privacy
 

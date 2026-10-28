@@ -136,6 +136,7 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 | `bobres config list \| get \| set` | Show or change a setting |
 | `bobres ssl status \| auto \| ip \| manual` | The HTTPS certificate: Caddy's automatic one, a Let's Encrypt one for the server's IP, or your own |
 | `bobres secrets rotate bot-token \| db-passwords \| service-tokens \| redis-password` | Rotate a secret |
+| `bobres rotate-key [--dry-run]` | Replace the master keys and seal everything they protect again (3x-ui tokens, staff authenticators, gateway settings): backup first, the old keys come back if anything fails; `--dry-run` changes nothing |
 | `bobres license status \| import \| activate` | Show the license, install a token, or activate a license key with the vendor's license server |
 | `bobres harden` | Firewall (ufw), fail2ban, automatic security updates and swap, each asked first |
 | `bobres monitor status \| enable \| disable` | Host monitoring for the dashboard's charts |

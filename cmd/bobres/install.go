@@ -1142,7 +1142,8 @@ func envComments(b []byte) map[string]string {
 }
 
 // writeEnv writes env to path (root only, atomically), keeping the comments
-// at the end of the lines of the file it replaces.
+// at the end of the lines of the file it replaces, and the retired master keys
+// `bobres rotate-key` keeps there (retiredKeyLines).
 func writeEnv(path string, env map[string]string) error {
 	return writeAtomic(path, renderEnvFor(path, env), 0o600)
 }
@@ -1151,7 +1152,7 @@ func writeEnv(path string, env map[string]string) error {
 // path (none when it cannot be read).
 func renderEnvFor(path string, env map[string]string) []byte {
 	prev, _ := os.ReadFile(path) //nolint:gosec // the install's own .env
-	return renderEnvComments(env, envComments(prev))
+	return appendRetiredKeys(renderEnvComments(env, envComments(prev)), retiredKeyLines(prev))
 }
 
 // renderEnv writes the env file; values with characters Compose would

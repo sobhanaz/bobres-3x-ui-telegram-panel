@@ -50,7 +50,9 @@ services, join date) on the wallet screen; a **card to forward** in Invite frien
 Built after v0.17.1 (unreleased, the security release): **approving dashboard sign-ins in Telegram** (Settings > Sign-in security, owner only,
 off by default: a staff sign-in gets no session until the staff member or an owner taps Approve in the bot, with the way out
 `sudo bobres admin approval off`; [04-dashboard.md](04-dashboard.md), [runbooks/login-approval.md](runbooks/login-approval.md)). This
-is the "two-factor sign-in inside the bot" item of the list below.
+is the "two-factor sign-in inside the bot" item of the list below. Also built: **`sudo bobres rotate-key`**, which replaces the
+three master keys and seals everything they protect again (backup first, the old keys come back if anything fails;
+[runbooks/rotate-secrets.md](runbooks/rotate-secrets.md)). Re-encrypting after a key change was "future work" in the security doc.
 
 What is still open:
 

@@ -503,7 +503,7 @@ func humanSize(n int64) string {
 // carries (as the backup service's do).
 func masterKeys(env map[string]string) map[string]string {
 	keys := map[string]string{}
-	for _, name := range config.BackupMasterKeys {
+	for _, name := range config.BackupKeyNames() {
 		if v := env[name]; v != "" {
 			keys[name] = v
 		}
@@ -681,7 +681,7 @@ func applyMasterKeys(dir string, archive map[string]string, keep bool) ([]string
 		return nil, err
 	}
 	var changed []string
-	for _, name := range config.BackupMasterKeys {
+	for _, name := range config.BackupKeyNames() {
 		v := archive[name]
 		if v == "" || v == env[name] {
 			continue

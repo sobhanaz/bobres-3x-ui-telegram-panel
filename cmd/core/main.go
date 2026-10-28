@@ -30,6 +30,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcauth"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/rekey"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/sysupdate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/version"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/web/dashboard"
@@ -45,6 +46,10 @@ func main() {
 	}
 	if len(os.Args) > 1 && os.Args[1] == "approval" {
 		os.Exit(approvalCmd(os.Args[2:], os.Stdout, os.Stderr))
+	}
+	// `bobres rotate-key` seals what core keeps encrypted again with the new master key.
+	if len(os.Args) > 1 && os.Args[1] == "rekey" {
+		os.Exit(rekey.Command("core", os.Args[2:], os.Stdout, os.Stderr))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "check" {
 		os.Exit(checkCmd(os.Args[2:], os.Stdout, os.Stderr))

@@ -214,7 +214,8 @@ changed with `bobres menu` ("Owners") or `bobres admin owners`, which core appli
 | `bobres backup` | Back up now: runs `/app run-now` in the backup container, which asks the running service (one backup at a time) and prints the result (see Backups) |
 | `bobres restore <file \| s3://bucket/key> [--key-file F] [--yes] [--keep-keys]` | Replace the database with a backup's (verified first, the current data backed up first, one transaction); the backup's master keys go into `.env`. A backup in S3-compatible storage is downloaded into `backups/` first, with the install's S3 settings (see Off-server copies) |
 | `bobres config list / get <key> / set <key> <value>` | Show the settings (secrets masked) or change one of the safe ones: validated as install does, `.env` written in one rename (0600), only the services that read it recreated (see Settings and secrets). `BOBRES_UPDATE_FROM_DASHBOARD on\|off` installs or removes the dashboard's updater instead of recreating a container |
-| `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. Master keys and the backup key are not rotated |
+| `bobres secrets rotate <name>` | `bot-token`, `db-passwords [--role R]`, `service-tokens` or `redis-password`: new values, the affected services restarted, `.env` rolled back when they do not come back healthy. The backup key is not rotated, and the master keys have their own command, below |
+| `bobres rotate-key [--dir D] [--dry-run] [--yes] [--forget-old]` | Replace the three master keys and seal everything they protect again with the new ones (see Master key rotation): refused unless the store is healthy and the current keys read every encrypted value; a backup is taken and read back first; the services stop for the re-encryption; any failure puts the old keys back. `--dry-run` counts and checks and changes nothing, not even a backup. `BOBRES_BACKUP_KEY` is not changed |
 | `bobres about [--dir D]` | The banner and everything in one place: version, commit, build date, license summary and copyright, the vendor license key's id and fingerprint (derived from the key built into this bobres), the store installed here, the links (site, docs, issues, security reports), a pointer to `THIRD_PARTY_NOTICES.md` and `LICENSE`, and the note that the license text is a draft |
 | `bobres harden [--yes] [--ssh-port N] [--dir DIR]` | The install's hardening step on its own: firewall, fail2ban, security updates, swap, each asked (see Hardening) |
 | `bobres license status` / `license import < token.txt` | Show the license as core sees it (state, install id to send the vendor, entitlements, how it came) / install a token read from stdin (verified first; audited as `license.set` from the CLI). Both run `/app license ...` in the core container |
@@ -1014,7 +1015,7 @@ The settings it changes, and the services each one recreates:
   read, never set. The S3 access and secret keys are secrets (`bobres install --s3-endpoint <url>` asks for them while
   they are empty).
 - Any other key is refused with what changes it instead: a secret (every key but the plain settings the support bundle
-  keeps) is never shown, and points to `bobres secrets rotate <name>` (master keys and the backup key to the runbook);
+  keeps) is never shown, and points to `bobres secrets rotate <name>` (master keys to `bobres rotate-key`, the backup key to the runbook);
   `BOBRES_VERSION` to `bobres update`; `BOBRES_XUI_*` and the Zarinpal merchant and proxy to the dashboard.
 - `set` checks the value with the key's rule and then the whole `.env` with install's `validateEnv`, refusing only
   errors the old `.env` did not have; writes `.env` with `writeAtomic` (0600, keeping every other key and secret);
@@ -1052,9 +1053,48 @@ The settings it changes, and the services each one recreates:
   update's restore point (`.restore-point/files/.env`) takes the new values too, so `bobres rollback` keeps them: a
   restore does not change the roles' passwords (pg_dump of the database does not carry roles), and a revoked token
   must not come back.
-- **Master keys are not rotated** (they encrypt the 3x-ui tokens, staff authenticators and gateway settings at rest;
-  re-encryption with a new key is future work), nor the backup key (older backups open only with it): the command
-  explains and points to the [rotate secrets](runbooks/rotate-secrets.md) runbook.
+- **Master keys** have their own command (`bobres secrets rotate master-keys` only points to it); the **backup key**
+  is not rotated (older backups open only with it): the command explains and points to the
+  [rotate secrets](runbooks/rotate-secrets.md) runbook.
+
+**Master key rotation: `bobres rotate-key [--dry-run] [--yes] [--forget-old]`** (exit 0 done, 1 refused or failed, 2
+usage). Runbook: [rotate secrets](runbooks/rotate-secrets.md#master-keys); design: [07-security.md](07-security.md), "Crypto
+and secrets". Every encrypted column is listed in `internal/rekey` (`rekey.Tables`: core's `staff_credentials`,
+`tls_config`, `vendor_config`, `vendor_licenses`, `supplier_config`, `supplier_orders`; payments' `gateway_configs`;
+provisioner's `xui_servers`), and a test fails when a migration adds a bytea column that neither is listed there nor is
+named, with its reason, as holding no ciphertext. Each service has a `rekey [--dry-run]` subcommand (`/app rekey`) that
+the CLI runs with `docker compose run --rm --no-deps -T <service> rekey` as the service's own database role.
+1. *Refuses* unless Postgres, Redis and every app service are healthy (an unfinished earlier run needs only Postgres),
+   there is `minUpdateGB` of free space, and the install lock is free (the same lock as update, restore and rollback);
+   then runs `rekey --dry-run` in each service: every encrypted value must be readable with the key now in `.env`
+   (a wrong key refuses here, naming the table, column and row but never a value). `--dry-run` stops after that.
+2. *Asks* (unless `--yes`), then takes a safety backup (`backups/bobres-<stamp>-before-key-rotation.bkp`) and reads it
+   back whole with the backup key, requiring it to carry the master keys.
+3. *Stops* the data services (the database, Redis, Caddy and the tls-agent keep running), so no service writes while
+   the values are sealed again. It keeps `.env` as `.env.before-key-rotation` (0600) until the run ends well.
+4. *Writes `.env`* (one rename, 0600): each `BOBRES_<S>_MASTER_KEY` is a new random key (64 hex characters),
+   `BOBRES_<S>_MASTER_KEY_PREVIOUS` the old one, `BOBRES_<S>_TAG_KEY` the key `crypto.Envelope.Tag` used (the old
+   master key's derived one, set at the first rotation and kept after), because Tag makes the gift code hashes (core) and
+   the 3x-ui subscription ids (provisioner), which must not change. Compose passes them to the container as
+   `BOBRES_MASTER_KEY_PREVIOUS` and `BOBRES_TAG_KEY`.
+5. *Seals again* with `rekey` in each service, provisioner, payments, core: values the new key does not read yet are
+   read with the old one, sealed with the new one, read back with the new one alone, and written under a condition
+   on the old bytes, one transaction per table with the rows locked; the whole service is checked readable first, and a
+   table is checked again before it commits. The new format (version 2) carries the id of the key that sealed it.
+6. *Finishes `.env`*: the `_PREVIOUS` settings go, and the old keys stay as comment lines (`# BOBRES_CORE_MASTER_KEY_PREVIOUS=...`,
+   after an explanation) that every later rewrite of `.env` (`config set`, `secrets rotate`, `restore`) carries over;
+   `--forget-old` writes none. Then the services start in order (provisioner and payments, core, the rest) and are waited
+   for.
+7. *On any failure* after `.env` was changed, and without being asked: the services stop, `.env` gets the keys swapped
+   (old current, new previous), `rekey` runs again (so what was moved comes back), the saved `.env` is put back
+   byte for byte, and the services start. The output says "nothing was rotated" and exits 1. If even that fails (or the
+   process is killed), `.env` keeps both keys and the services run with them: every value stays readable, `bobres check` warns,
+   and running `bobres rotate-key` again finishes the rotation with the same new keys (it finds `_PREVIOUS` in `.env`).
+   A backup made then carries `_PREVIOUS` too (`config.BackupPreviousKeys`), and a backup always carries the tag keys
+   (`config.BackupTagKeys`): `applyMasterKeys` puts them back on a restore.
+Keys are never printed, only their public ids (four bytes of an HKDF output). `bobres rollback` restores the
+`.env` and the database of the restore point together, so the old keys come back with the old data; the rotation is
+not copied into the restore point.
 
 ## HTTPS certificates
 Runbook: [HTTPS certificates](runbooks/https.md). Trust boundaries: [07-security.md](07-security.md), "HTTPS manager".

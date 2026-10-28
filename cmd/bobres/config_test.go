@@ -62,7 +62,8 @@ func TestConfigGetAndList(t *testing.T) {
 	for key, hint := range map[string]string{
 		"POSTGRES_PASSWORD": "bobres secrets rotate db-passwords", "BOBRES_TELEGRAM_BOT_TOKEN": "bobres secrets rotate bot-token",
 		"BOBRES_TOKEN_CORE": "bobres secrets rotate service-tokens", "REDIS_PASSWORD": "bobres secrets rotate redis-password",
-		"BOBRES_CORE_MASTER_KEY": "never rotated", "BOBRES_BACKUP_KEY": "Backup key", "BOBRES_VERSION": "bobres update",
+		"BOBRES_CORE_MASTER_KEY": "bobres rotate-key", "BOBRES_CORE_TAG_KEY": "bobres rotate-key", "BOBRES_CORE_MASTER_KEY_PREVIOUS": "bobres rotate-key",
+		"BOBRES_BACKUP_KEY": "Backup key", "BOBRES_VERSION": "bobres update",
 		"OPERATOR_NOTE": "bobres config list", "NO_SUCH_KEY": "not a setting bobres config knows",
 	} {
 		out.Reset()

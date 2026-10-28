@@ -60,6 +60,9 @@ Owners are named on the server: `sudo bobres admin owners add <telegram id>`. Ad
 **Where is my backup key?**
 It is shown once at the end of the install, and again in `sudo bobres`, under **Backup key**. Without it backups cannot be read. Keep it off the server.
 
+**How do I replace the master keys?**
+`sudo bobres rotate-key --dry-run`, then `sudo bobres rotate-key`. It takes a backup, seals everything the keys protect again with new ones, and puts the old keys back by itself if anything fails. The backup key is a different key and stays. See [Security](Security).
+
 **How do I move to a new server?**
 Install on the new server with the same domain and bot token, then restore a backup with its key. See [Updates, Backups, Restore](Updates-Backups-Restore).
 
