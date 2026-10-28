@@ -472,7 +472,7 @@ func TestMyCodesWithACoreOlderThanTheBot(t *testing.T) {
 		Config{AdminTelegramIDs: []int64{ownerID}, BotName: "TestVPN", BotUsername: "test_vpn_bot"}, nil)
 	u.press("wallet")
 	u.press("cds")
-	u.toast("My codes is not available right now.")
+	u.toast("Your list of codes is not available right now.")
 	u.shownHas("Wallet")
 }
 

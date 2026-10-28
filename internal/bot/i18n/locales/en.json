@@ -166,7 +166,7 @@
   "codes.page": " · page {page} of {pages}",
   "codes.hint": "💡 To use a discount code, enter it on the payment screen before you pay.",
   "codes.empty": "🎟 <b>My codes</b>\n\nYou have no codes yet. A discount code arrives in a message after you buy some plans, and a gift code you apply from your wallet is listed here.",
-  "codes.unavailable": "My codes is not available right now.",
+  "codes.unavailable": "Your list of codes is not available right now.",
   "codes.head": "{mark} <code>{code}</code>",
   "codes.worth_any": "<b>{value} off</b> any plan",
   "codes.worth_plan": "<b>{value} off</b> {plan} only",
