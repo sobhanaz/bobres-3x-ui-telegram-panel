@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   batches, byKind, ciProblem, collectorState, count, duration, eventTitle, githubLink, gridTimes, healthOf, imageName, lastKnown, onGrid, orderServices, outcomeOf, overallOf,
-  peak, pct, problems, rangeOf, runState, shortSha, size, subjects, tickLabel, tidy, unitFormat, versionOf, wantedMetrics, type EventItem, type MonitorComponent,
+  peak, pct, problems, rangeOf, repeatOf, runState, shortSha, size, subjects, tickLabel, tidy, unitFormat, versionOf, wantedMetrics, type EventItem, type MonitorComponent,
 } from '../monitor'
 import en from '../locales/en.json'
 
@@ -214,5 +214,34 @@ describe('an event\'s title', () => {
     expect(eventTitle({ ...alert, args: { percent: '88' } }, 'en', words(en))).toBe('The disk at / is 88% full.') // a value the text needs is missing: never a hole
     expect(eventTitle({ ...alert, kind: 'log', source: 'bot', title: '  send failed  ' }, 'en', words(en))).toBe('send failed')
     expect(eventTitle({ ...alert, title_key: undefined, title: '' }, 'en', words(en))).toBe('')
+  })
+})
+
+describe('an event that stands for several identical lines', () => {
+  it('says how many, and since when, for an entry core folded', () => {
+    expect(repeatOf({ at: 2000, count: 12, first_at: 1000 })).toEqual({ count: 12, first: 1000 })
+    expect(repeatOf({ at: 2000, count: 2, first_at: 1999 })).toEqual({ count: 2, first: 1999 })
+  })
+
+  it('is null for a single line, and for an answer of an older core that has neither field', () => {
+    expect(repeatOf({ at: 2000 })).toBeNull()
+    expect(repeatOf({ at: 2000, count: 1, first_at: 1000 })).toBeNull()
+    expect(repeatOf({ at: 2000, count: 0 })).toBeNull()
+    expect(repeatOf({ at: 2000, first_at: 1000 })).toBeNull() // a time without a count counts nothing
+  })
+
+  it('never invents a span: the oldest time must be there and before the newest', () => {
+    expect(repeatOf({ at: 2000, count: 5 })).toEqual({ count: 5, first: null })
+    expect(repeatOf({ at: 2000, count: 5, first_at: 2000 })).toEqual({ count: 5, first: null })
+    expect(repeatOf({ at: 2000, count: 5, first_at: 3000 })).toEqual({ count: 5, first: null })
+    expect(repeatOf({ at: 2000, count: 5, first_at: 0 })).toEqual({ count: 5, first: null })
+    expect(repeatOf({ at: 2000, count: 5, first_at: Number.NaN })).toEqual({ count: 5, first: null })
+  })
+
+  it('takes only a whole count', () => {
+    expect(repeatOf({ at: 2000, count: 2.5, first_at: 1000 })).toBeNull()
+    expect(repeatOf({ at: 2000, count: '12' as unknown as number, first_at: 1000 })).toBeNull()
+    expect(repeatOf({ at: 2000, count: Number.NaN, first_at: 1000 })).toBeNull()
+    expect(repeatOf({ at: 2000, count: null as unknown as number, first_at: 1000 })).toBeNull()
   })
 })

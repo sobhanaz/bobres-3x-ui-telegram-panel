@@ -40,6 +40,10 @@ type Provisioner interface {
 	ResetTraffic(ctx context.Context, subscriptionID string) error
 	// Delete removes the client from the panel; deleting it again is fine.
 	Delete(ctx context.Context, subscriptionID string) error
+	// RecreateClient makes a client that is gone from its panel again (an operator deleted it there):
+	// on the same server, in the same inbounds and group, with these absolute limits (unix seconds,
+	// bytes; 0 = unlimited). It changes nothing when the panel has the client.
+	RecreateClient(ctx context.Context, subscriptionID string, expiresAt, trafficBytes int64) error
 }
 
 // ClientGroup is the group a subscription's client should be in.
@@ -54,6 +58,9 @@ type Usage struct {
 	TotalBytes int64 // 0 = unlimited
 	ExpiresAt  int64 // unix seconds; 0 = none; negative = starts on first use
 	Enabled    bool
+	// Missing: the panel answered and has no such client (an operator deleted it there). The other
+	// fields are empty then.
+	Missing bool
 }
 
 // ProvisionedClient is what the panel holds for a subscription.

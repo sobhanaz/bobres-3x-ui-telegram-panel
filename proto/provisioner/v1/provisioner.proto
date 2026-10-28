@@ -24,6 +24,10 @@ message Usage {
   int64 traffic_total_bytes = 4; // 0 = unlimited
   int64 expires_at = 5; // unix seconds; 0 = no expiry; negative = starts on first use (set in the panel)
   bool enabled = 6;
+  // The panel answered and has no such client (an operator deleted it there). That says something
+  // about the client, not about the panel, so it is an answer and not an error; the other fields are
+  // empty then.
+  bool client_missing = 7;
 }
 
 message Links {
@@ -133,6 +137,15 @@ message RenewClientRequest {
 // SetClientLimitsRequest sets absolute limits (so a retry is harmless) and
 // enables the client: renewals and traffic top-ups.
 message SetClientLimitsRequest {
+  string subscription_id = 1;
+  int64 expires_at = 2; // unix seconds, 0 = no expiry
+  int64 traffic_total_bytes = 3; // 0 = unlimited
+}
+
+// RecreateClientRequest makes a client that is gone from its panel again: on the same server, in the
+// same inbounds and group, with the limits core holds for the service (the panel's usage counter starts
+// from zero). It changes nothing when the panel has the client.
+message RecreateClientRequest {
   string subscription_id = 1;
   int64 expires_at = 2; // unix seconds, 0 = no expiry
   int64 traffic_total_bytes = 3; // 0 = unlimited
@@ -282,6 +295,7 @@ service ProvisionerService {
   rpc SetClientLimits(SetClientLimitsRequest) returns (Client);
   rpc SetClientEnabled(SetClientEnabledRequest) returns (Client);
   rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty);
+  rpc RecreateClient(RecreateClientRequest) returns (Client);
   rpc ResetTraffic(ResetTrafficRequest) returns (Client);
   rpc GetUsage(GetUsageRequest) returns (Usage);
   rpc GetLinks(GetLinksRequest) returns (Links);

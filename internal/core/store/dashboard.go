@@ -120,7 +120,7 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 // subscriptionColsS is subscriptionCols for a query that names the table s.
 const subscriptionColsS = `s.id, s.user_id, s.order_id, COALESCE(s.server_id::text, ''), s.client_email, s.sub_id, s.status,
 	s.expires_at, s.traffic_total_bytes, COALESCE(s.traffic_used_bytes, 0), s.last_synced_at, COALESCE(s.sub_link, ''), s.created_at,
-	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label, s.page_token, s.note`
+	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label, s.page_token, s.note, s.panel_missing_since`
 
 // SubscriptionFilter narrows the services list. Query matches a Telegram id,
 // part of a username or panel email, or part of a service id (the bot shows
@@ -128,6 +128,8 @@ const subscriptionColsS = `s.id, s.user_id, s.order_id, COALESCE(s.server_id::te
 // for "deleted" or the list is one user's.
 type SubscriptionFilter struct {
 	Query, Status, UserID, ID string
+	// PanelMissing lists only the services whose client the panel no longer has.
+	PanelMissing bool
 }
 
 // SubscriptionRow is one line of the services list.
@@ -156,9 +158,10 @@ func (s *Store) ListAllSubscriptions(ctx context.Context, q querier, f Subscript
 		  AND (CASE WHEN $6 <> '' THEN s.status = $6 WHEN $7 <> '' OR $8 <> '' THEN true ELSE s.status <> 'deleted' END)
 		  AND ($7 = '' OR s.user_id::text = $7)
 		  AND ($8 = '' OR s.id::text = $8)
+		  AND (NOT $9 OR s.panel_missing_since IS NOT NULL)
 		ORDER BY s.created_at DESC, s.id DESC
-		LIMIT $9 OFFSET $10`,
-		strings.TrimSpace(f.Query), isNum, num, like, idPart, f.Status, f.UserID, f.ID, p.Limit, p.Offset)
+		LIMIT $10 OFFSET $11`,
+		strings.TrimSpace(f.Query), isNum, num, like, idPart, f.Status, f.UserID, f.ID, f.PanelMissing, p.Limit, p.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list subscriptions: %w", err)
 	}

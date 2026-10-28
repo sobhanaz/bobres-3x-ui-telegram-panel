@@ -23,8 +23,11 @@ type serviceJSON struct {
 	TrafficTotal *int64     `json:"traffic_total"`
 	TrafficUsed  int64      `json:"traffic_used"`
 	LastSyncedAt *int64     `json:"last_synced_at"`
-	CreatedAt    int64      `json:"created_at"`
-	Label        *string    `json:"label"` // the name a reseller gave it
+	// PanelMissingSince is when core first saw that the panel has no client for the service (an operator
+	// deleted it there); null while the panel has it.
+	PanelMissingSince *int64  `json:"panel_missing_since"`
+	CreatedAt         int64   `json:"created_at"`
+	Label             *string `json:"label"` // the name a reseller gave it
 	// PageURL is the branded page's address (the one service endpoints only;
 	// "" while the page is off or the service is not ready).
 	PageURL string `json:"page_url,omitempty"`
@@ -35,11 +38,11 @@ func serviceOf(r *store.SubscriptionRow) serviceJSON {
 		ID: r.ID, User: briefOf(r.UserID, r.TelegramID, r.Username), Plan: planRef{r.PlanID, r.PlanName},
 		Status: r.Status, ClientEmail: r.ClientEmail, SubLink: r.SubLink, ExpiresAt: unix(r.ExpiresAt),
 		TrafficTotal: r.TrafficTotal, TrafficUsed: r.TrafficUsed, LastSyncedAt: unix(r.LastSyncedAt), CreatedAt: r.CreatedAt.Unix(),
-		Label: r.Label,
+		PanelMissingSince: unix(r.PanelMissingSince), Label: r.Label,
 	}
 }
 
-// listServices: GET /api/v1/services?q=&status=&user=&page=&size=
+// listServices: GET /api/v1/services?q=&status=&user=&panel=missing&page=&size=
 func (s *Server) listServices(w http.ResponseWriter, r *http.Request) {
 	p, page, size := pageOf(r)
 	userID, ok := queryID(r, "user")
@@ -47,7 +50,8 @@ func (s *Server) listServices(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, list{[]serviceJSON{}, 0, page, size})
 		return
 	}
-	f := store.SubscriptionFilter{Query: r.URL.Query().Get("q"), Status: r.URL.Query().Get("status"), UserID: userID}
+	f := store.SubscriptionFilter{Query: r.URL.Query().Get("q"), Status: r.URL.Query().Get("status"), UserID: userID,
+		PanelMissing: r.URL.Query().Get("panel") == "missing"}
 	rows, total, err := s.cfg.Store.ListAllSubscriptions(r.Context(), s.cfg.Store.Conn(), f, p)
 	if err != nil {
 		s.fail(w, "list services", err)
@@ -206,6 +210,24 @@ func (s *Server) setServiceEnabled(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.serviceResult(w, r, id, extra)
+}
+
+// recreateService: POST /api/v1/services/{id}/recreate-client {reason} makes the client again when the
+// panel no longer has it (the same server, inbounds and group, the limits core holds).
+func (s *Server) recreateService(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req reasonBody
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if err := s.cfg.Domain.RecreateSubscriptionClient(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason); err != nil {
+		s.fail(w, "recreate service client", err)
+		return
+	}
+	s.serviceResult(w, r, id, nil)
 }
 
 // deleteService: POST /api/v1/services/{id}/delete {reason}
