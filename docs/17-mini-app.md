@@ -118,7 +118,7 @@ core  --POST /internal/miniapp/channel-member {"chat","user_id"} (Bearer core to
 
 JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with codes such as `unauthorized`,
 `rate_limited`, `banned`, `join_required` (403, with `join_url`: the store's required channel), `maintenance`, `insufficient_funds`, `plan_unavailable`, `not_extendable`, `not_payable`,
-`state`, `invalid`, `unavailable` (a service behind core is busy), `disabled` (the setting is off).
+`state`, `invalid`, `unavailable` (a service behind core is busy), `disabled` (the setting is off), `quote_expired` and `no_rate` (paying a USDT price from the wallet, below).
 
 | Call | What it does |
 |---|---|
@@ -130,10 +130,11 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /methods?currency=&amount=` | The payment methods the store offers for that amount and currency, as the bot offers them: the online ones, `stars`, and `manual_card`, `manual_crypto`, `manual_zarinpal` |
 | `POST /quote` | Price with a discount code, without making an order |
 | `POST /orders` | New order (`new`, `renew`, `traffic_topup`) with a request `key`; the same key returns the same order. A reseller may add a `label` (the name of the new service they buy for a customer, at most 64 characters, one line); core ignores it for anyone else and on a renewal or top-up |
-| `POST /orders/{id}/pay-wallet` | Pay from the wallet |
+| `GET /orders/{id}/wallet-quote` | The price of the customer's own unpaid order **listed in USDT** in Toman at the store's rate now ([Plans priced in USDT](#plans-priced-in-usdt)): `list_amount`, `list_currency` (USDT), `list_scale`, `rate`, `amount` (Toman), `quote` (the token), `expires_in` (120 seconds from the answer) and `expires_at`, `balance`, `credit_limit`, `enough`. Changes nothing; each call is a new quote. 409 `no_rate` (no USDT rate: nothing is guessed), `not_payable`, `state` (not a USDT order) |
+| `POST /orders/{id}/pay-wallet` `{quote}` | Pay from the wallet. A Toman order sends `{}`. An order listed in USDT sends the token of the quote the customer was shown and is charged exactly that, in Toman, while it holds; without one, or after it ran out, 409 `quote_expired` and nothing moves (the app asks for a new quote and shows it). The answer is the order: `amount`/`currency` are what was charged, `list_amount`, `list_currency`, `list_scale` and `rate` the USDT price and the rate. A second call finds the order paid |
 | `POST /orders/{id}/pay` `{method}` | Start a payment by any method of `/methods`; returns a pay URL, the USDT address and exact amount, a Stars `invoice_url`, or what to pay by hand (card, addresses, link, reference, exact amount) |
 | `GET /orders/{id}` | Order status (poll it until delivered) |
-| `POST /topup` `{amount, method, key}` | Wallet top-up, 10,000 to 50,000,000 Toman, same bounds as the bot; any method of `/methods` |
+| `POST /topup` `{amount, currency, method, key}` | Wallet top-up, in Toman (`currency` "IRT", the default): 10,000 to 50,000,000, same bounds as the bot; or in USDT (`currency` "USDT", `amount` in micro-USDT, a whole number of USDT from 1 to 10,000 as in the bot: `/me` says it in `top_up.usdt` `{min, max, step, scale}`); any method of `/methods` for that currency and amount (for USDT: automatic TRC20, and by hand when the store takes it). The answer of an automatic USDT payment also carries `qr`, the address as a PNG data URI. The payment is followed with `POST /payments/{id}/check`; when it is seen, core credits the one wallet in Toman at the live rate ([USDT top-up](#usdt-top-up)) |
 | `POST /payments/{id}/check` | The status of the customer's own payment, asking the gateway where there is one ("I have paid"); also how a Stars or manual payment is followed |
 | `POST /payments/{id}/proof` | The proof of the customer's own manual payment, once: `multipart/form-data` with `receipt` (an image) and `reference` (the bank's tracking number), or JSON `{txid, network}` for a crypto payment |
 | `GET /payments/pending` | The customer's own manual payments that still wait for their proof, newest first, at most 10: each as `pay` answered when it was started, plus `created_at` (see "Taking a payment up again") |
@@ -183,6 +184,16 @@ and the owners the server names are never held, and the bot holds the same rule 
 customer in maintenance gets the maintenance text for everything but a payment under way. A test reads the app's routes
 from the source and sweeps every one of them, so a section added later is held unless it is named in the test's list
 of what a payment under way needs.
+
+## Plans priced in USDT
+
+The wallet is in Toman, so a plan priced in USDT is paid from it at a **quote** (the bot does the same, [03-bot-ux.md](03-bot-ux.md)). In the checkout the wallet button of such an order asks `GET /orders/{id}/wallet-quote` and shows the plan's USDT price, the rate (`1 USDT = N Toman`), the Toman that will be taken, the wallet, and a countdown of the two minutes the price holds (counted by the app's own timer from the moment the quote arrived, not by the phone's date). **Confirm** sends the quote's token once (the button is off while the call runs, so a double tap is one request; the order is locked in core, so two devices are one payment too). The charge is exactly the quote, whatever the rate did meanwhile. When the countdown ends, or core answers `quote_expired`, the app asks for a new quote by itself, says "The price was updated" and waits for another tap. `no_rate` says the price is not available and leaves the online methods; a short wallet (`enough` false) cannot confirm. The rate and the rounding are the licenses': the live price plus the owner's margin (or the owner's own rate), rounded up to a whole Toman (`domain.TomanForUsdt`). The online methods for the order (automatic TRC20, by hand) are unchanged and keep the order in USDT.
+
+Core makes the quote a signed token (core's master key) of the order, the customer, the price, the rate, the Toman and the expiry, and checks the order's own row under its lock: the payment turns the order into the Toman charge (`amount` and `currency` become what was charged; `list_amount`, `list_currency` and `rate` keep the plan's price; migration core 00041), writes `purchase:<order id>` in the wallet's ledger and pays the order, in one transaction. A refund goes back in Toman as charged.
+
+## USDT top-up
+
+The Wallet tab offers **Toman | USDT** when core takes USDT (`top_up.usdt`) and the store has a way to be paid in it (`GET /methods?currency=USDT` is not empty; asked once when the tab opens). The customer picks 5, 10, 25, 50 or 100 USDT or types a whole number from 1 to 10,000; the app says about how much Toman it will add at today's rate (the live price without the margin, rounded down: what core credits), or that the rate is not known yet (the USDT then waits in the USDT wallet and core converts it as soon as there is a rate). For automatic TRC20 the payment screen shows the **exact amount** (unique among the open payments), the **address** with Copy, a **QR code** of the address, the network, a **countdown** to the end of the window (45 minutes; when it ends the screen says so and stops asking), and asks `POST /payments/{id}/check` every 5 seconds (and on "I have paid"). When the payment is seen the app reads the wallet until the Toman balance is above what it was when the payment began (core credits it a moment after the chain shows it: now, then every 2 seconds, up to 8 more times) and shows "Your payment of N USDT is confirmed", the increase, the new balance and its USDT equivalent. A top-up by hand goes through the receipt screen as any manual payment. The same endpoints and domain calls as the bot's USDT top-up: no payment logic is repeated.
 
 ## Stars and manual payments
 

@@ -8,6 +8,20 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Updating
+- One database migration, additive (a rollback keeps every order and credit): core 00041 (`orders.list_amount`, `list_currency`, `rate`). No new service, nothing to configure, no license change.
+- Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together; the Mini App is served by core.
+- Paying a plan priced in USDT from the wallet needs a USDT rate, as the licenses do: the live price (on by default) or a rate typed in Gateways. Without one the wallet is not offered for such a plan and crypto still is.
+
+### Known limits
+- A bulk purchase of a plan priced in USDT still takes the USDT wallet of the customer (which is usually empty); the single purchase is what pays from the Toman wallet.
+- The Mini App's USDT top-up counts down to the payment window by the phone's clock (a payment's deadline is a moment, not a length), and shows the address and the amount without a countdown when that moment is already past on the phone. Nothing here was tried in a real Telegram client.
+- The USDT top-up in the Mini App takes whole USDT from 1 to 10,000, as the bot does.
+
+### Added
+- **Pay a plan priced in USDT from the wallet** (the bot and the Mini App). The customer sees the plan's price in USDT, the rate and the Toman that will be taken, and confirms. The Toman is worked out by the very function the licenses are charged by (the live price plus your margin, or your own rate, rounded up to a whole Toman). The quote the customer confirmed is honoured for **2 minutes** whatever the rate does meanwhile; after that the payment is refused, nothing moves, and a new quote is shown. With no USDT rate (live or typed) nothing is quoted. The quote is a token signed with core's master key, so it cannot be made up or used for another order or customer; one charge per order however often the button is tapped (the order is locked, the ledger key is `purchase:<order id>`). The order keeps the USDT price and the rate (core 00041), a refund goes back to the wallet in Toman as charged, the reports count the Toman, the dashboard's order page and list show both, and `orders.csv` has `list_amount`, `list_currency` and `rate` at the end. The direct crypto payment of such a plan is unchanged. gRPC: `QuoteWalletPayment`, `PayOrderWithWalletRequest.quote`, `Order.list_price` and `rate`; Mini App: `GET /orders/{id}/wallet-quote`, `quote` in `pay-wallet`.
+- **Tether top-up in the Mini App.** The Wallet tab has Toman | USDT: a whole number of USDT (1 to 10,000), the address, the exact amount, a QR code, a countdown, status polling every 5 seconds, and on confirmation the converted Toman balance and the increase. It uses the bot's endpoints and domain calls (`POST /topup` takes `currency` USDT; nothing of the payment logic is repeated).
+
 ## [0.17.1] — 2026-10-28
 
 **The store comes back by itself after a reboot.** A real store was powered off and on by its host, and for 8 hours the dashboard, the Mini App, the subscription pages and the payment pages were unreachable while the bot went on answering: Docker had marked Caddy "manually stopped", and a container with that mark is not started again after a reboot. Every install and update did that to Caddy (it signalled it through `docker kill`), so every store would have hit it at its first reboot. This release stops doing it, starts the whole store from a systemd unit at every boot, fixes a heartbeat that kept the tls-agent "unhealthy" after any restart, and makes the alerts say what to type.
