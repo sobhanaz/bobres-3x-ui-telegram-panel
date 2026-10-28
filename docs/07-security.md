@@ -278,6 +278,30 @@ model as the updater turned around.
   against a live cluster.
 - **Off switch:** `sudo bobres monitor disable` removes the units and the snapshot. The compose mount can stay: with no collector the folder is empty.
 
+## The Prometheus endpoint
+
+`GET /metrics` ([04-dashboard.md](04-dashboard.md), "The Prometheus endpoint") is a public address on the store's domain, so it is closed by default
+and guarded like a credential.
+
+- **Off until the owner makes a token**, and a plain 404 (the same words as a path that does not exist) for everybody before that and after the owner
+  turns it off. Only the owner makes, sets or removes the token (`system.write`); owner and admin can see that it is on.
+- **A bearer token in the header, never in the address.** A token made by core has 256 random bits (`bm_` and 43 characters); one the owner
+  types has 24 to 128 characters. A missing or wrong token is 401; wrong tries are counted per client address (an IPv6 address by its /64) and
+  past 30 a minute get 429, which a request with the right token never meets.
+- **Core stores a hash, not the token.** The setting `monitor.metrics_token` holds the SHA-256 in hex; two hashes of the same length are compared
+  with `subtle.ConstantTimeCompare`. A copy of the database (or of a backup) cannot read the metrics. The key is not a setting the Settings page,
+  the bot's `/set` or core's gRPC settings (which the bot reads) can see or write; a damaged value counts as no token. The audit entries
+  (`metrics.token.generate`, `.set`, `.clear`) carry no value, not even the hash. A token that core makes is shown once, in the answer that makes
+  it; replacing or removing it ends the old one at once.
+- **What it holds is a closed list** (`promDefs` in `internal/core/monitor/prom.go`, all gauges): no customer, Telegram id, order, address,
+  token, key, error text or path. The labels are fixed words, core's version, mount points of the snapshot (at most 16) and the panel servers'
+  names (at most 200), so nothing grows with the number of customers. A test plants secrets in every source and fails if one reaches the
+  answer. A figure core does not know is left out, never written as 0.
+- **It travels over HTTPS only**, through Caddy like the rest; the Zarinpal domain answers 404 to it, as to everything but its payment pages.
+  Prometheus reads the token from a file (`credentials_file`), not from `prometheus.yml`.
+- **What a stolen token gives:** the operational figures above, which the dashboard shows to owner and admin anyway. Replace it from the dashboard;
+  nothing else needs rotating.
+
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
 |---|---|

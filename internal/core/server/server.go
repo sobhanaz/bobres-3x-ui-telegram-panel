@@ -553,7 +553,8 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx),
 		ResellersEnabled: s.resellersIncluded(ctx)}
 	for k, v := range m {
-		if strings.HasPrefix(k, "legal.") { // the pages' texts are core's to show; the bot needs none of them
+		// The pages' texts are core's to show, and the metrics token's hash is core's alone: the bot needs neither.
+		if strings.HasPrefix(k, "legal.") || k == domain.SettingMetricsToken {
 			continue
 		}
 		out.Values[k] = string(v)

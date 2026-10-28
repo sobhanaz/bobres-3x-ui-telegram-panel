@@ -19,7 +19,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
 | [Uninstall and start over](uninstall.md) | Take BOBRES off a server so that it is as on day one (with a final backup), move the store to another server, or start again from nothing |
 | [Releases and update channels](releases.md) | Publish a stable or beta release, re-sign a quiet stable channel (signatures expire after 45 days), or move a store between stable and beta |
-| [Monitoring](monitoring.md) | The Monitoring tab (System page) has no server figures, a monitoring alert arrived (disk, memory, a container, the collector, CI of `main`), or you want host monitoring off |
+| [Monitoring](monitoring.md) | The Monitoring tab (System page) has no server figures, a monitoring alert arrived (disk, memory, a container, the collector, CI of `main`), you want host monitoring off, or you want to read the figures from Prometheus and Grafana |
 
 ## System alerts in Telegram
 

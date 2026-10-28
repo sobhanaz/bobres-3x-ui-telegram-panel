@@ -233,6 +233,10 @@ existed.
 - `/webhooks/<provider>` (signature verified, replay-protected)
 - `/sub/<token>` subscription info page (branded; server-rendered, no script, one fixed 404 for anything unknown; see 15-subscription-page.md). `POST /api/v1/services/{id}/page-token/regenerate` (services.write) gives a service a new address
 - `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`.
+- `/metrics` Prometheus text format 0.0.4 (the monitor's figures as gauges; **404 until the owner makes a token**, then `Authorization: Bearer <token>`
+  or 401, 429 past 30 wrong tries a minute from one address; see [04-dashboard.md](04-dashboard.md), "The Prometheus endpoint", and
+  [runbooks/monitoring.md](runbooks/monitoring.md)). The token's own endpoints are `GET`/`PUT`/`DELETE /api/v1/metrics-token` and
+  `POST /api/v1/metrics-token/generate`.
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".
   P8 adds the HTTPS manager's `/api/v1/system/tls` (below).
@@ -423,6 +427,7 @@ host collector (root, systemd timer, every 30 s)  --- snapshot.json --->  <insta
 bot (has internet)  --- GET /internal/ci, GET /internal/stats --->  core
 services' /healthz, /readyz, gRPC (servers, gateways, pending payments, logs), core's database  --->  core
 core (sampler, every 30 s) ---> core.monitor_series ---> GET /api/v1/monitor/{overview,series,metrics,events}
+the same look at the stack (no history) ---> GET /metrics (Prometheus, bearer token, off until the owner makes one)
 ```
 
 ### The snapshot (`snapshot.json`, schema 1)

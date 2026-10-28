@@ -356,3 +356,24 @@ func (s *Store) RecentAlertEvents(ctx context.Context, q querier, limit int) ([]
 	}
 	return out, rows.Err()
 }
+
+// PaidOrders is how many orders were paid in the last hour, day and week.
+type PaidOrders struct {
+	Hour, Day, Week int64
+}
+
+// PaidOrderCounts counts the orders paid in the three windows that end at now: a purchase entry of the
+// ledger (a VPN order, a license, a digital account), the sales the Reports page counts, gross of refunds. The
+// ledger is append-only and indexed by time, so a count is a short walk and never changes except by what is sold
+// since. The date the owner started the reports from zero does not apply: this is a gauge of activity.
+func (s *Store) PaidOrderCounts(ctx context.Context, q querier, now time.Time) (*PaidOrders, error) {
+	var p PaidOrders
+	err := q.QueryRow(ctx, `SELECT
+		count(*) FILTER (WHERE created_at >= $1), count(*) FILTER (WHERE created_at >= $2), count(*)
+		FROM core.ledger_entries WHERE kind IN `+purchaseKinds+` AND created_at >= $3 AND created_at <= $4`,
+		now.Add(-time.Hour), now.Add(-24*time.Hour), now.Add(-7*24*time.Hour), now).Scan(&p.Hour, &p.Day, &p.Week)
+	if err != nil {
+		return nil, fmt.Errorf("paid orders: %w", err)
+	}
+	return &p, nil
+}

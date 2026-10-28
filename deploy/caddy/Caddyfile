@@ -133,8 +133,9 @@
 		}
 	}
 
-	# JSON API, public subscription pages, and the store's own Terms and Privacy pages.
-	@core path /api/* /sub/* /terms /privacy
+	# JSON API, public subscription pages, the store's own Terms and Privacy pages, and the Prometheus
+	# endpoint (core answers 404 until the owner makes a token, then wants it as a bearer credential).
+	@core path /api/* /sub/* /terms /privacy /metrics
 	handle @core {
 		request_body {
 			max_size 10MB

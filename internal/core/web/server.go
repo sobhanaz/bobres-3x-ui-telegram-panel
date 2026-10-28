@@ -129,6 +129,8 @@ type Server struct {
 	now        func() time.Time
 	// mini holds the Mini App's sessions and rate limits.
 	mini *miniState
+	// metrics counts the wrong tries at the public /metrics (metrics.go).
+	metrics metricsGate
 }
 
 // hashSlots is how many password hashes core computes at a time (32 MiB
@@ -363,6 +365,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/monitor/series", PermMonitorRead, s.monitorSeries)
 	s.route(api, "GET /api/v1/monitor/metrics", PermMonitorRead, s.monitorMetrics)
 	s.route(api, "GET /api/v1/monitor/events", PermMonitorRead, s.monitorEvents)
+	// The token of GET /metrics (Prometheus): owner and admin see whether it is on, the owner makes, sets and removes it.
+	s.route(api, "GET /api/v1/metrics-token", PermSettingsWrite, s.getMetricsToken)
+	s.route(api, "POST /api/v1/metrics-token/generate", PermSystemWrite, s.generateMetricsToken)
+	s.route(api, "PUT /api/v1/metrics-token", PermSystemWrite, s.putMetricsToken)
+	s.route(api, "DELETE /api/v1/metrics-token", PermSystemWrite, s.deleteMetricsToken)
 	s.route(api, "GET /api/v1/license", PermSystemRead, s.getLicense)
 	s.route(api, "POST /api/v1/license/check", PermLicenseWrite, s.checkLicense)
 	s.route(api, "PUT /api/v1/license", PermLicenseWrite, s.putLicense)
@@ -395,6 +402,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /terms", s.termsPage)
 	mux.HandleFunc("GET /privacy", s.privacyPage)
 	mux.HandleFunc("/sub/", s.pageNotFound)
+	// The Prometheus endpoint: not there until the owner makes a token, then bearer-protected (metrics.go).
+	mux.HandleFunc("GET /metrics", s.serveMetrics)
 	s.registerMiniApp(mux)
 	if s.cfg.Dashboard != nil {
 		mux.Handle("/admin/", s.cfg.Dashboard)

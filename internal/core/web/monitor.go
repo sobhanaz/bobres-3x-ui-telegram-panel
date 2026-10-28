@@ -17,6 +17,8 @@ type MonitorSource interface {
 	Series(ctx context.Context, metric string, r monitor.Range) (*monitor.Series, error)
 	Metrics(ctx context.Context) ([]monitor.MetricInfo, error)
 	Events(ctx context.Context, q monitor.EventsQuery) (*monitor.EventsResult, error)
+	// Exposition is GET /metrics, the Prometheus text format (metrics.go).
+	Exposition(ctx context.Context) []byte
 }
 
 // monitorTimeout bounds one request of the Monitoring endpoints.

@@ -142,6 +142,9 @@ type Monitor struct {
 	logsAt  time.Time
 	roll    time.Time
 	pruneAt time.Time
+
+	// What the Prometheus endpoint keeps between scrapes (prom.go).
+	prom promState
 }
 
 // New builds the monitor.

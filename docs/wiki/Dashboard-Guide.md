@@ -62,6 +62,10 @@ Two more sections, **BOBRES licenses** and **Digital accounts**, belong to the v
 | Logs | Read the newest warnings and errors of every service (owner) |
 | License | See the plan in effect, paste a token or activate a key. See [Licensing](Licensing) |
 
+### Metrics for Prometheus and Grafana
+
+If you already run Prometheus and Grafana, **Settings > Monitoring > Prometheus metrics** lets them read the store's figures at `https://<your domain>/metrics`: which services answer, the queues, paid orders, open alerts, each panel server's services and limit, the license's days left, the newest backup, and the server's CPU, memory and disks. It is **off until the owner makes a token**: press **Make a token**, copy it (it is shown once; BOBRES keeps only a hash) and save it in a file on the Prometheus server. Until then `/metrics` answers 404 to everybody, and with a wrong token 401. **Turn off** brings the 404 back; **Make a new token** ends the old one at once. Nothing about customers is in it. A scrape configuration, alert rules and a Grafana dashboard to import are in the [monitoring runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/monitoring.md#prometheus-and-grafana).
+
 **Update now** asks for a confirmation that names the versions and the channel. The dashboard and bot are away for a few minutes while customers' VPN links keep working. A backup comes first, and the update rolls back by itself if the new version is not healthy. The first update to a version that has this feature must still be run over SSH with `sudo bobres update`. See [Updates, Backups, Restore](Updates-Backups-Restore).
 
 ## Habits that save trouble
