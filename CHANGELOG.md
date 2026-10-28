@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.17.2] — 2026-10-28
+
+**A service whose client was deleted in the panel is no longer a silent problem.** When an operator deletes a client in 3x-ui or Marzban, its customer cannot connect, yet the service stayed "active", expiry reminders kept going out, and core and the provisioner logged two warnings per service every ten minutes for ever, which pushed real events off the events list. Core now notices, marks the service, tells the owner once a day, stops the reminders and the warnings, and lets staff make the client again with one button.
+
+### Updating
+- Update from the dashboard (System > Updates) or `sudo bobres update`. One additive migration (core 00040) and a new provisioner RPC (`RecreateClient`), so core and the provisioner must both be 0.17.2: the update replaces them together. No new service, nothing to configure, no license change.
+- A service the panel lacks is marked at its next read (within ten minutes of the update) and the daily notice follows within a minute.
+
+### Known limits
+- **Make the client again** gives the new client the expiry and the quota core holds; the panel's usage counter starts from zero, and a service whose expiry starts on first use (set in the panel) gets no expiry date in the new client.
+- A service is asked about every 6 hours while the panel lacks it, so one made again by hand in the panel is unmarked within 6 hours (press Sync on the service page to unmark it at once).
+
 ### Added
 - **Services the panel no longer has a client for.** When the 3x-ui or Marzban panel answers that it has no client for a service (an operator deleted it there), core now marks the service with the time it first saw that (`subscriptions.panel_missing_since`, migration 00040) instead of failing to read it every ten minutes. The Services page lists them (`?panel=missing`, a badge and a filter), the overview counts them, and the service page has **Make the client again** (`POST /api/v1/services/{id}/recreate-client`, `services.write`, with a reason): the provisioner makes the client on the same server, in the same inbounds and group, with the same email and subscription id, so the customer's link works again, with the expiry and quota core holds (the panel's usage counter starts from zero). New provisioner RPC `RecreateClient`; `GetUsage` answers `client_missing` instead of an error.
 - **One daily notice for them.** The watchdog raises `subscriptions.panel_missing` ("Services whose client is gone from the panel: N") once, then at most once a day while any remain, and says nothing when the last is made again.
