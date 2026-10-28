@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Tag from 'primevue/tag'
 
 // A status as a colored label. kind picks the vocabulary.
-const props = defineProps<{ kind: 'order' | 'service' | 'payment' | 'user' | 'review'; status: string }>()
+const props = defineProps<{ kind: 'order' | 'service' | 'payment' | 'user' | 'review' | 'code'; status: string }>()
 const { t, te } = useI18n()
 
 type Severity = 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast'
@@ -16,6 +16,7 @@ const severities: Record<string, Record<string, Severity>> = {
   payment: { pending: 'secondary', confirming: 'warn', succeeded: 'success', failed: 'danger', expired: 'secondary' },
   user: { active: 'success', banned: 'danger' },
   review: { approved: 'success', rejected: 'danger' },
+  code: { unused: 'success', used: 'secondary', expired: 'warn', off: 'danger' },
 }
 const severity = computed(() => severities[props.kind]?.[props.status] ?? 'secondary')
 const label = computed(() => {
