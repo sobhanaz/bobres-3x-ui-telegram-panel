@@ -222,13 +222,17 @@ install's disks and containers.
     "title_key": "alert.monitor_disk", "args": {"mount": "/", "percent": "88", "free": "12884901888"},
     "title": "The disk at / is 88% full (12 GB free).", "detail": "87.8% of 98.0 GiB used"},
    {"at": 1792498500, "level": "error", "source": "host.docker", "kind": "journal", "title": "level=error msg=\"failed to start\"", "detail": ""},
-   {"at": 1792498000, "level": "error", "source": "bot", "kind": "log", "title": "send failed", "detail": "{\"user_id\":42}"}
+   {"at": 1792498000, "level": "error", "source": "bot", "kind": "log", "title": "send failed", "detail": "{\"user_id\":42}"},
+   {"at": 1792497900, "level": "warn", "source": "core", "kind": "log", "title": "usage unavailable", "detail": "{\"err\":\"deadline exceeded\"}",
+    "count": 48, "first_at": 1792440000}
  ],
  "logs_visible": true, "unreachable": [], "truncated": false}
 ```
 
 An alert also carries `title_key` (the bot's text, `alert.monitor_disk`) and `args` (its values: numbers as strings, `free` in bytes, names as they are), so a page writes the sentence in its own language as the
 Telegram message does; `title` stays the English sentence for a page that has no text for it. A log line or a journal line has neither field.
+
+A service that logs the same line again and again (the same message and values from one source at one level, whatever the ids in it) is one entry: `at` is the newest line, `count` how many there were and `first_at` the oldest one's time (a single line has neither field). Alerts are never folded.
 
 Newest first. `level=warn` (the default) lists warnings and errors, `level=error` errors only; `limit` is 1 to 200 (default 100); anything else
 is `400`. `source`/`kind`: `alert` (`kind: "alert"`, `key` is the check, `state` is `open` while the problem is open, `closed` for one that was
