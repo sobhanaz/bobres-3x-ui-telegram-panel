@@ -17,7 +17,7 @@ Website: <https://bobresai.cv> · Latest release: **v0.17.1** · [Changelog](CHA
 
 | | |
 |---|---|
-| **Customers** | A Persian and English Telegram bot and Mini App: plans (in groups with a text each), wallet, free trial, renewals, traffic packages, bulk purchase, gift and reward codes, invite links, support, a page for every service |
+| **Customers** | A Persian and English Telegram bot and Mini App: plans (in groups with a text each), wallet, free trial, renewals, traffic packages, bulk purchase, gift and reward codes (with a list of their own), invite links, support, a page for every service |
 | **Resellers** | A panel in the bot and the Mini App: buy for customers at tier prices on credit, manage their services, commission; their configs carry their own prefix and group in your 3x-ui panel |
 | **You** | A dashboard for plans, payments, orders, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses; Telegram alerts; `/admin` in the bot |
 | **Payments** | Wallet, card to card, USDT (manual and automatic on TRON), Zarinpal, IDPay, NextPay, Telegram Stars |
@@ -181,7 +181,7 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
   not in the list is **found by its subscription link** (its state, and Renew, paid by the customer who holds the link).
 - A **wallet** with top-ups and history, **gift codes** that add credit, **reward codes** (mark a plan, say the unlimited
   one: each paid purchase gives the buyer a discount code, a percent or a fixed amount, for any plan they buy next, for
-  them only, one use, for the days you set, with your own text), **one free trial** per Telegram account, **bulk purchase**, and invite links that reward the inviter on a
+  them only, one use, for the days you set, with your own text), **My codes** (the reward codes and gift codes a customer holds, in the bot and the Mini App), **one free trial** per Telegram account, **bulk purchase**, and invite links that reward the inviter on a
   friend's first paid purchase, with a Top users board.
 - **Reminders** 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - **Support** conversations with text, photos and PDFs; staff replies arrive in the chat. A **help center** (FAQ and

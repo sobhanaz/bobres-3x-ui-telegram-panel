@@ -140,6 +140,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /digital`, `POST /digital/buy` `{sid, quantity, expected_total, key}`, `GET /digital/orders`, `GET /digital/orders/{id}` | Digital accounts (the owner's own store, `features.digital`): the shelf (the supplier's products the owner priced and switched on, names and texts in both languages, `category`, `price`, `sold_out`, `stock`, `max_quantity`) with the customer's Toman wallet; buying (the wallet pays; the same `key` again returns the first result and charges nothing; 409 `state` when the price or the stock moved, 409 `insufficient_funds`); the customer's purchases (no account in the list) and one of them with its account (`delivery`, "" until the supplier delivers; another customer's order is a 404) |
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `POST /reseller/prefix` `{prefix}` | A reseller chooses the prefix of the names of their configs in the 3x-ui panel, once (409 `state` afterwards: only the owner changes it; 400 for a shape core refuses or another reseller's prefix); the answer is the panel (`GET /reseller` carries `config_prefix` and `panel_group`). The section asks "Use <prefix> for all your configs?" before it sends |
+| `GET /codes?page=&size=` | The customer's own codes, newest first (see "My codes" below): `{codes, total, page, size}`; `size` 10 by default, at most 50; 400 `invalid` for a page or size out of range |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
 | `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing. `categories` lists the three topics to write under (payment, service, other); a ticket's own `category` can also be `reseller`, a reseller application the bot filed, which the app shows with its label (a message named `reseller` from the app is filed as `other`: an application is made from the bot's button) |
 
@@ -160,6 +161,13 @@ These are sections of the More tab (see "Adding a section"); each says in `featu
   `mini:<user id>:<key>`), so a purchase is one kind of order in both places and shows in the bot's list too. When the supplier
   has not delivered yet the order is `paid` and the app asks for it every 3 seconds (the account also arrives in the bot);
   a short wallet is sent to the Wallet tab to top up. The account is shown to its buyer only and is in no list.
+- **My codes** (`features.codes`, for every customer): the same list as the bot's Wallet > My codes and `/codes` ([03-bot-ux.md](03-bot-ux.md)).
+  `GET /codes` gives the signed-in customer's reward codes and the gift codes they applied, **newest first, ten a page** (the customer is the
+  session's: no parameter names another, and `?user=` or `?code=` change nothing). An entry is `{id, kind, state, percent | amount, currency,
+  scale, expires_at, used_at, received_at, plan, order_id, only_plan}`: for `kind: "reward"` the whole `code` (the card has a Copy button), for
+  `kind: "gift"` only the `tail` (the last characters; a gift code is never stored whole) and the amount it added, always `state: "used"`.
+  `state` is `unused`, `used`, `expired` or `off`. Held in maintenance like every call that is not a payment under way. A gift code the
+  customer did not apply, another customer's code, and a code staff made for everyone are never in the answer.
 - **Invite friends** (`features.invite`): the link is `https://t.me/<bot>?start=r_<code>`, as in the bot. A reseller has
   a commission link of their own in their panel and is not offered this one.
 - **Support** (`features.support`): the bot's support, with the same rules. One conversation is open at a time, a message

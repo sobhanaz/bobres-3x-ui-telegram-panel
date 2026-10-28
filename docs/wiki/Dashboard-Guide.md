@@ -29,7 +29,7 @@ Every change is written to an append-only audit log. Sensitive actions, such as 
 | Group | Section | What it is for |
 |---|---|---|
 | Store | Overview | Users, services, revenue, failed deliveries, gateway and panel health at a glance |
-| Customers | Users | Find a customer, see their services, orders and wallet, ban, adjust a balance |
+| Customers | Users | Find a customer, see their services, orders, wallet and codes, ban, adjust a balance. The **Codes** tab lists the reward codes made for the customer and the gift codes they applied (read only; support can read it too) |
 | | Services | Every subscription: extend, reset traffic, disable, delete, resync from the panel, regenerate the service's page address |
 | | Support | Ticket inbox with canned replies. A customer's reseller application arrives here too |
 | | Broadcasts | Send a message to all or some customers, now or later |

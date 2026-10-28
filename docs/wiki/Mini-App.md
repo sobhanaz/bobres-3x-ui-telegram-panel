@@ -8,6 +8,7 @@ The Mini App is your store as a web app inside Telegram. It is the same store as
 - See their services, copy the link, open the service's page, and renew or add traffic.
 - Use the wallet: balances, history, top-up. A top-up is 10,000 to 50,000,000 Toman.
 - Take the free trial, invite friends, and write to support.
+- See their own codes under **More > My codes**: the reward codes made for them (with a Copy button) and the gift codes they applied, newest first, with each one's worth, state and date. It is the same list as the bot's Wallet > My codes.
 - Resume a manual payment that was left half-way: card to card or USDT payments that still wait for their receipt are listed in the wallet tab.
 
 It does not do bulk purchase, and it does not reset traffic or give free days. Those stay with the bot or with staff.

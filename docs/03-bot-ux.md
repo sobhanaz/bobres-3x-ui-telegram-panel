@@ -14,9 +14,9 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
   language change and with `/menu`, and again ahead of the next answer whenever it changed (role, language, an edited
   label, a switch that adds or takes away one of those buttons). A tap is never taken as the answer to an open
   question (a bank reference, a service name), and the gates treat it as any message.
-- The commands `/new`, `/renew` and `/status` do what Buy, Renew and My services do. They are in the bot's command
-  menu with a Persian and an English description (`profile.cmd.new`, `profile.cmd.renew`, `profile.cmd.status`, edited
-  like any text), and they pass every gate exactly as the buttons do (see "Commands" below).
+- The commands `/new`, `/renew` and `/status` do what Buy, Renew and My services do, and `/codes` what Wallet > My codes does. They are in the
+  bot's command menu with a Persian and an English description (`profile.cmd.new`, `profile.cmd.renew`, `profile.cmd.status`,
+  `profile.cmd.codes`, edited like any text), and they pass every gate exactly as the buttons do (see "Commands" below).
 - Buttons are colored by what they do, the same on every keyboard: green pays or confirms, blue opens a main
   action, red cancels or refuses (Telegram has these three colors). Link buttons too: the payment link is
   green, sharing an invite link and joining the channel are blue. Navigation, lists and links to read (terms,
@@ -28,7 +28,7 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Main menu (user)
 1. Buy service
 2. My services
-3. Wallet (the account lines, balance, top up, history, apply a gift code)
+3. Wallet (the account lines, balance, top up, history, apply a gift code, My codes)
 4. Free trial (once per user, abuse-checked)
 5. Invite friends (referral link, earnings, a card to forward)
 6. Support (tickets, FAQ)
@@ -57,7 +57,26 @@ next purchase of **any plan**: `THX-` and eight characters, bound to the buyer (
 An amount code takes that amount off, never more than the price (the rest is lost) and only on a plan in its currency. The bot sends it in its own
 message (`reward.code`: the code, the percent or the amount, the days and the date, the owner's text, "only for you, once") with a Buy button; the
 buyer enters it at the payment menu's **Discount code** as any code. Each purchase brings a new code. A code staff made is unchanged (the
-dashboard's Discounts list shows reward codes too). A free plan (the trial) takes no code.
+dashboard's Discounts list shows reward codes too). A free plan (the trial) takes no code. The message has a **My codes** button beside Buy, so the
+code can be found again (below).
+**My codes** (built 2026-10-28; `cds`, `cds:<page>`): the **🎟 My codes** button on the Wallet screen (beside Apply gift code, whether or not gift
+codes are on) and the `/codes` command list the customer's own codes, **newest first, five to a page** with Previous and Next (a page past the end
+shows the last one). Which codes are the customer's is core's decision (`ListMyCodes`, which answers for the customer the bot names and nobody
+else); the bot holds no rule and never logs a code. Two kinds are listed, because only they can be attributed to a customer:
+- **A reward code** (the discount code a purchase gave them, bound to them by `discount_codes.user_id`): the whole code in a code span that a
+  tap copies, what it takes off (a percent, or an amount, "off any plan"; a code made before reward codes were for any plan says "off <plan> only"),
+  its **state** (not used yet, used, expired, switched off), when it ends ("valid until"), was used or ended, and where it came from ("Reward
+  for buying <plan>" with the day, or "Reward code" when the purchase is gone). The mark before the code says the state: green (not used
+  yet), a tick (used), an hourglass (expired), a stop sign (switched off). Used wins over expired (a code spent in time stays used), expired
+  over switched off. Staff switch a reward code off in the Discounts list.
+- **A gift code the customer applied** (a row of `gift_code_redemptions` of theirs): listed as **used by you**, with the last characters of the code,
+  what it added to the wallet and the day. A gift code has no owner (staff make it and hand it out) and core never keeps one whole (a keyed hash and
+  its last four characters), so an unapplied gift code is in no one's list, and the code itself can not be shown again: it is only its tail.
+Nobody else's code appears, and neither does a code staff made for everyone (a discount code with no user) or any code whose owner can not be
+told. A customer with no codes is told how they come. A **Buy** button and a hint (enter the code on the payment screen) show only while a
+listed reward code is still unused. A reseller sees the same list (they can apply gift codes; a reward code is not made for a reseller, and a
+reseller pays tier prices and uses no discount code, so one earned before they became a reseller waits). On a core older than the bot the button
+says it is not available yet.
 **Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
 group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
 button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the
@@ -202,7 +221,7 @@ figure core cannot give shows a dash and costs the customer nothing else.
 
 **Commands** (built 2026-10-20): `/new` opens the buy flow (the Buy button), `/renew` the services that can be renewed,
 each a button that opens its plans to renew with (a reseller: their services list, where a service has Renew), `/status`
-My services. A command goes through `dispatch` as the button does, so it has the same role checks, and `Handle` runs
+My services, `/codes` My codes. A command goes through `dispatch` as the button does, so it has the same role checks, and `Handle` runs
 the gates in front of it as for any update: maintenance and the required channel answer it (staff pass), and so does
 a language not chosen yet (the picker first). A command is never the answer to an open question: it closes it, as a
 tap on the bottom menu does (a ticket message, a discount code, a bank reference, an application), and a command a gate

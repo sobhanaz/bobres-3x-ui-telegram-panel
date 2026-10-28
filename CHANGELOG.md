@@ -8,6 +8,16 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **My codes: the customer's own list of reward and gift codes.** A reward code used to be sent once in a message and gone from sight. The bot's Wallet screen now has a **🎟 My codes** button (and there is a `/codes` command in the bot's menu), and the Mini App a **My codes** section under More, that list the codes that are the customer's, newest first and paged (five to a page in the bot, ten in the app): the code (a tap copies it in the bot, a Copy button in the app), what it takes off, its state (not used yet, used, expired, switched off), when it ends or was used, and the plan and purchase that gave it. The reward message has a My codes button beside Buy. On the customer's page in the dashboard a read-only **Codes** tab (for staff with `users.read`, support included) shows the same list with a link to the order. In Persian and English everywhere.
+- **Only what can be attributed to the customer is listed.** A reward code is bound to its buyer, so it is theirs. A gift code has no owner (staff make it and hand it out) and is never stored whole, so only the customer's own redemption of it is listed, as **used by you**, with the last characters of the code and what it added to the wallet; a gift code nobody applied, a code staff made for everyone, and another customer's codes are in no list. The Mini App's `GET /api/mini/v1/codes` takes the customer from the session, never from the request; the bot's new call `ListMyCodes` names the customer the bot is serving (the sender of the update), as every call of that service does; the dashboard's `GET /api/v1/codes?user=` names the customer whose page it is.
+- One database migration, additive: core 00042 (`discount_codes_user_idx`, an index so that a customer's reward codes are found without reading the table). No new service, nothing to configure, no license change.
+
+### Known limits
+- A gift code the customer applied is shown by its last characters only (core keeps a keyed hash, never the code), and a gift code that has not been applied is in no list: gift codes have no owner.
+- A discount code that staff made for everyone is not listed (no one owns it), even for a customer who used it.
+- A customer who became a reseller after earning a reward code still sees it, but a reseller pays tier prices and cannot use a discount code.
+
 ## [0.17.1] — 2026-10-28
 
 **The store comes back by itself after a reboot.** A real store was powered off and on by its host, and for 8 hours the dashboard, the Mini App, the subscription pages and the payment pages were unreachable while the bot went on answering: Docker had marked Caddy "manually stopped", and a container with that mark is not started again after a reboot. Every install and update did that to Caddy (it signalled it through `docker kill`), so every store would have hit it at its first reboot. This release stops doing it, starts the whole store from a systemd unit at every boot, fixes a heartbeat that kept the tls-agent "unhealthy" after any restart, and makes the alerts say what to type.

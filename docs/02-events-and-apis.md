@@ -130,6 +130,12 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   `GetBotPhoto` returns `{version, jpeg}` (a square JPEG of at most 3 MB) or NOT_FOUND. The bot reads the version
   with every settings refresh and fetches the photo only when it changes. An older core sends no version and
   answers UNIMPLEMENTED; an older bot ignores the field.
+- core, my codes (additive; `buf breaking` stays clean): `ListMyCodes(user_id, pagination)` returns a page of the customer's own codes, newest first
+  (`MyCode`: `kind` reward or gift, the reward `code` whole or the gift `tail`, `state` unused, used, expired or off, `percent` or `amount`,
+  `expires_at`, `used_at`, `received_at`, the `plan_names` and `order_id` that gave a reward code, `only_plan_names` for a code made before
+  reward codes were for any plan) with `page_info.total`; `page_size` is 1 to 50 (10 by default). Only codes that can be attributed to
+  the customer: their reward codes (`discount_codes.user_id`) and their gift redemptions. A banned customer is PERMISSION_DENIED, an
+  unknown one NOT_FOUND, a malformed id INVALID_ARGUMENT. An older core answers UNIMPLEMENTED and the bot says the list is not there yet.
 - core, help content (built, additive): `ListHelpEntries(user_id, kind, language)` returns the enabled FAQ questions or
   tutorials in the owner's order, each in the customer's language (the other one where that translation is missing,
   `HelpEntry.language` says which), and `GetHelpEntry(user_id, id, language)` one of them; a banned customer is
