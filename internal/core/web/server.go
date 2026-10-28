@@ -168,6 +168,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/users/{id}", PermUsersRead, s.getUser)
 	s.route(api, "POST /api/v1/users/{id}/status", PermUsersWrite, s.setUserStatus)
 	s.route(api, "POST /api/v1/users/{id}/balance", PermWalletAdjust, s.adjustBalance)
+	s.route(api, "GET /api/v1/codes", PermUsersRead, s.listCodes) // a customer's reward and gift codes (?user=), for their page
 	s.route(api, "GET /api/v1/services", PermServicesRead, s.listServices)
 	s.route(api, "GET /api/v1/services/{id}", PermServicesRead, s.getService)
 	s.route(api, "POST /api/v1/services/{id}/extend", PermServicesExtend, s.extendService)
