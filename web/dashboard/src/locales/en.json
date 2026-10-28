@@ -1743,6 +1743,12 @@
           "help": "While the latest CI run on the repository's main branch has failed, an alert is raised. For a store built from main; leave it off for a store that runs releases."
         }
       },
+      "status_page": {
+        "enabled": {
+          "label": "Public status page",
+          "help": "A public page at /status (and /status.json for a monitoring service) says whether the dashboard, the bot, payments and the panels are working, in general words only: no server names, versions or numbers. Off by default. Turned off, both addresses answer “not found”."
+        }
+      },
       "growth": {
         "leaderboard": {
           "enabled": {
@@ -3455,9 +3461,43 @@
       "docker": "Docker",
       "kubernetes": "Kubernetes",
       "services": "Services",
+      "uptime": "Uptime",
       "cicd": "CI/CD",
       "deployments": "Deployments",
       "events": "Alerts and logs"
+    },
+    "uptime": {
+      "window_label": "Period",
+      "intro": "How much of the time each service and each panel server was working, worked out from the samples core takes every 30 seconds. A moment nobody sampled (core was not running, monitoring was switched off, or a server was switched off or added later) is shown as no data. It is left out of the percentage and is neither up nor down.",
+      "loading": "Reading the uptime…",
+      "load_error": "The uptime could not be read just now.",
+      "services": "Services",
+      "panels": "Panel servers",
+      "panels_unavailable": "The panel servers could not be listed just now, so none is shown here.",
+      "no_panels": "No panel servers are set up.",
+      "col_name": "Name",
+      "col_availability": "Availability",
+      "col_outages": "Outages",
+      "col_bar": "Over the period",
+      "no_data": "No data",
+      "no_outages": "None",
+      "outages": "{n} outage, {time} down | {n} outages, {time} down",
+      "longest": "Longest: {time}",
+      "observed": "Observed for {time} of {window}",
+      "off": "Switched off",
+      "cell_down": "{time} down, {share} available",
+      "legend": {
+        "label": "What the colours mean",
+        "up": "Working",
+        "partial": "Some downtime",
+        "down": "Mostly down",
+        "nodata": "No data"
+      },
+      "retention": "Core keeps {n} day of samples: one every {step} for the first 7 days, then 5-minute averages. Older time is not shown. | Core keeps {n} days of samples: one every {step} for the first 7 days, then 5-minute averages. Older time is not shown.",
+      "since": "The oldest sample is from {date}; before that there is no data.",
+      "none_yet": "Nothing has been sampled yet, so there is nothing to show.",
+      "status_on": "The public status page is on:",
+      "status_off": "The public status page is off. It can be turned on in Settings, under Monitoring."
     },
     "jump": "Sections of the Monitoring tab",
     "kind": {

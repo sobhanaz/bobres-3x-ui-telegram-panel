@@ -61,10 +61,11 @@ What is still open:
   and has not been tried for real.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish);
-  an uptime page; Persian documentation generated from the code; two-factor sign-in inside the bot.
-  Built since v0.17.1 (release 0.19.0): **per-server capacity limits** (the Servers page, the pick, a daily notice) and a
+  Persian documentation generated from the code; two-factor sign-in inside the bot.
+  Built since v0.17.1 (release 0.19.0): **per-server capacity limits** (the Servers page, the pick, a daily notice), a
   **Prometheus endpoint** (`GET /metrics`, off until the owner makes a token; a scrape configuration, alert rules and a Grafana dashboard
-  in [runbooks/monitoring.md](runbooks/monitoring.md)).
+  in [runbooks/monitoring.md](runbooks/monitoring.md)) and an **uptime view** (System > Monitoring > Uptime: the availability of each service
+  and panel server over 24 hours, 7 days and 30 days) with an optional **public status page** (`/status`, off by default).
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 
@@ -188,14 +189,14 @@ item says where it landed.
 5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
 6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits: built (release 0.19.0).
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
-8. **Alongside:** the audit-log export is built (`audit.csv`), and so is the Prometheus endpoint (release 0.19.0). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), an uptime page, two-factor sign-in inside the bot.
+8. **Alongside:** the audit-log export is built (`audit.csv`), and so are the Prometheus endpoint and the uptime view with its optional public status page (release 0.19.0). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), two-factor sign-in inside the bot.
 9. **The business track (the owner's, not code):** the lawyer's review, the prices, the license server, the first customers ([launch-checklist.md](launch-checklist.md)).
 
 ## Later, not yet ordered
 
 - More bot languages (Arabic, Russian, Turkish): the texts are already keys, so the work is translation and review.
 - TON payments; more crypto networks, if a way that works from Iran exists.
-- An uptime page per server (the Prometheus endpoint and a Grafana example are built).
+- Incident history on the status page (it says only "working" or "down" now), and e-mail or Telegram subscriptions to it. (The Prometheus endpoint, a Grafana example and the uptime view are built.)
 - Automatic node balancing beyond the weights and the per-server service limit in use today.
 - Two-factor sign-in for staff inside the bot.
 - A hosted offering, so a customer who does not want to run a server can pay for one.

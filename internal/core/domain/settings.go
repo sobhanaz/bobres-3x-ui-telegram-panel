@@ -204,6 +204,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "minutes without a snapshot from the host collector before a monitoring alert is raised (only where the collector is installed)"},
 	{Key: SettingMonitorCIAlert, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = a monitoring alert is raised while the latest CI run on the repository's main branch has failed (for a store built from main; off for a store that runs releases)"},
+	{Key: SettingStatusPage, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = the store has a public status page at /status (and /status.json for a monitoring service) that says whether the dashboard, the bot, payments and the panels work, in general words only: no server names, versions or numbers; false = both addresses answer 404 (off by default)"},
 	// The Updates tab edits it (System > Updates, the owner only); it is not on the Settings page.
 	{Key: release.SettingChannel, Group: "updates", Kind: KindEnum, Perm: permSystem, Options: []string{release.ChannelStable, release.ChannelBeta},
 		Help: "the release channel updates follow: stable = the newest stable release, beta = the newest of all releases, pre-releases included (empty = the server's BOBRES_UPDATE_CHANNEL, stable when unset)"},

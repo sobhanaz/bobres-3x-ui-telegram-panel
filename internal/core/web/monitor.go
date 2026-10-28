@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/monitor"
 )
 
@@ -19,6 +20,10 @@ type MonitorSource interface {
 	Events(ctx context.Context, q monitor.EventsQuery) (*monitor.EventsResult, error)
 	// Exposition is GET /metrics, the Prometheus text format (metrics.go).
 	Exposition(ctx context.Context) []byte
+	// Uptime is the availability of the services and the panel servers over 24 hours, 7 days and 30 days.
+	Uptime(ctx context.Context) (*monitor.Uptime, error)
+	// PublicStatus is what the public status page says (status.go).
+	PublicStatus(ctx context.Context) *monitor.PublicStatus
 }
 
 // monitorTimeout bounds one request of the Monitoring endpoints.
@@ -42,6 +47,32 @@ func (s *Server) monitorOverview(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), monitorTimeout)
 	defer cancel()
 	writeJSON(w, http.StatusOK, s.cfg.Monitor.Overview(ctx))
+}
+
+// monitorUptime: GET /api/v1/monitor/uptime (owner and admin), the availability of every BOBRES service and every panel
+// server over 24 hours, 7 days and 30 days from the samples core keeps: the percentage of the time that was observed (null
+// when nothing was: no data), the outages and a bar of cells for each window. A moment nobody sampled is neither up nor
+// down. docs/04-dashboard.md lists every field. status_page tells whether the public status page is on.
+func (s *Server) monitorUptime(w http.ResponseWriter, r *http.Request) {
+	if !s.monitorOr503(w) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), monitorTimeout)
+	defer cancel()
+	u, err := s.cfg.Monitor.Uptime(ctx)
+	if err != nil {
+		s.internal(w, "monitor uptime", err)
+		return
+	}
+	settings, err := s.cfg.Domain.Settings(ctx)
+	if err != nil {
+		s.internal(w, "monitor uptime settings", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		*monitor.Uptime
+		StatusPage bool `json:"status_page"`
+	}{u, domain.StatusPageFrom(settings)})
 }
 
 // monitorMetrics: GET /api/v1/monitor/metrics, the metrics that have any data with their units, so a

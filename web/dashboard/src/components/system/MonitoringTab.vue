@@ -18,6 +18,8 @@ import {
   SERIES_EVERY_S,
   tickLabel,
   tidy,
+  tidyUptime,
+  UPTIME_EVERY_S,
   wantedMetrics,
   type EventLevel,
   type EventsReply,
@@ -25,6 +27,7 @@ import {
   type Overview,
   type Range,
   type SeriesAnswer,
+  type UptimeReply,
 } from '../../monitor'
 import { feedKey, useFmt, type Grid } from '../monitor/feed'
 import MonitorCicd from '../monitor/MonitorCicd.vue'
@@ -36,11 +39,13 @@ import MonitorKube from '../monitor/MonitorKube.vue'
 import MonitorServices from '../monitor/MonitorServices.vue'
 import MonitorStatus from '../monitor/MonitorStatus.vue'
 import MonitorStore from '../monitor/MonitorStore.vue'
+import MonitorUptime from '../monitor/MonitorUptime.vue'
 
 // The Monitoring tab (owner and admin, read only): one overview of the whole store, then the host, Docker,
-// Kubernetes, the services, CI/CD, the deployments and the alerts and logs. It asks core for the overview and
-// the events every 20 seconds while it is shown and the browser tab is visible, and for the series of the chosen
-// range when a new point can have appeared. Nothing here changes anything on the server.
+// Kubernetes, the services, how available the services and panel servers have been, CI/CD, the deployments and
+// the alerts and logs. It asks core for the overview and the events every 20 seconds while it is shown and the
+// browser tab is visible, for the series of the chosen range when a new point can have appeared, and for the
+// uptime once a minute. Nothing here changes anything on the server.
 const props = defineProps<{ active: boolean }>()
 const { t } = useI18n()
 const { time, lang, cal } = useFmt()
@@ -67,12 +72,16 @@ const seriesRange = ref<Range | null>(null)
 const seriesLoading = ref(false)
 const seriesFailed = ref(false)
 const refreshing = ref(false)
+const uptime = ref<UptimeReply | null>(null)
+const uptimeFailed = ref(false)
 
 let lastOkAt = 0
 let seriesAt = 0
+let uptimeAt = 0
 let oseq = 0
 let eseq = 0
 let sseq = 0
+let useq = 0
 let inflight: Promise<void> | null = null
 
 async function loadOverview() {
@@ -101,6 +110,21 @@ async function loadEvents() {
     if (n === eseq) eventsFailed.value = true
   }
 }
+
+// The uptime has an answer of its own: the section stays when the overview cannot be read.
+async function loadUptime() {
+  const n = ++useq
+  try {
+    const u = tidyUptime(await api<UptimeReply>('GET', '/monitor/uptime'))
+    if (n !== useq) return
+    uptime.value = u
+    uptimeFailed.value = false
+    uptimeAt = Date.now()
+  } catch {
+    if (n === useq) uptimeFailed.value = true
+  }
+}
+const uptimeDue = () => !uptime.value || Date.now() - uptimeAt >= UPTIME_EVERY_S * 1000
 
 // The series: first which metrics have data (so a request names only those), then them, a dozen at a time.
 async function loadSeries() {
@@ -136,7 +160,7 @@ function refresh(): Promise<void> {
   inflight = (async () => {
     refreshing.value = true
     try {
-      await Promise.all([loadOverview(), loadEvents()])
+      await Promise.all([loadOverview(), loadEvents(), uptimeDue() ? loadUptime() : Promise.resolve()])
       if (seriesDue()) await loadSeries()
     } finally {
       refreshing.value = false
@@ -148,6 +172,7 @@ function refresh(): Promise<void> {
 }
 async function refreshNow() {
   seriesAt = 0
+  uptimeAt = 0
   await refresh()
   schedule()
 }
@@ -223,11 +248,11 @@ provide(feedKey, { grid, answers, available, loading: seriesLoading })
 
 const rangeOptions = computed(() => RANGES.map((r) => ({ value: r, label: t('monitor.range.' + r) })))
 
-const SECTIONS = ['status', 'store', 'host', 'docker', 'kubernetes', 'services', 'cicd', 'deployments', 'events'] as const
+const SECTIONS = ['status', 'store', 'host', 'docker', 'kubernetes', 'services', 'uptime', 'cicd', 'deployments', 'events'] as const
 // When the overview cannot be read at all, what is drawn from it is left out (an empty "loading" would be a lie);
-// the charts and the events have answers of their own and stay.
+// the charts, the uptime and the events have answers of their own and stay.
 const readable = computed(() => !!overview.value || !failure.value)
-const shown = computed(() => (readable.value ? [...SECTIONS] : SECTIONS.filter((s) => s === 'store' || s === 'events')))
+const shown = computed(() => (readable.value ? [...SECTIONS] : SECTIONS.filter((s) => s === 'store' || s === 'uptime' || s === 'events')))
 function jump(id: string) {
   const el = document.getElementById('monitor-' + id)
   if (!el) return
@@ -280,6 +305,9 @@ const notConfigured = computed(() => failure.value?.code === 'not_configured')
         <MonitorDocker :overview="overview" />
         <MonitorKube :overview="overview" />
         <MonitorServices :overview="overview" />
+      </template>
+      <MonitorUptime :uptime="uptime" :failed="uptimeFailed" />
+      <template v-if="readable">
         <MonitorCicd :overview="overview" />
         <MonitorDeployments :overview="overview" />
       </template>

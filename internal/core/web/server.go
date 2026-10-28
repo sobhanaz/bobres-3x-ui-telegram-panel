@@ -131,6 +131,9 @@ type Server struct {
 	mini *miniState
 	// metrics counts the wrong tries at the public /metrics (metrics.go).
 	metrics metricsGate
+	// statusPages limits the public status page per client address, and status keeps its last look (status.go).
+	statusPages *limiter
+	status      statusState
 }
 
 // hashSlots is how many password hashes core computes at a time (32 MiB
@@ -144,7 +147,7 @@ func New(cfg Config) *Server {
 	}
 	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), subPages: newLimiter(subPageRate, time.Minute), tests: newLimiter(5, time.Minute),
 		probes: newLimiter(10, time.Minute), uploads: newLimiter(5, time.Hour), restores: newLimiter(6, time.Hour), downloads: newLimiter(10, time.Hour), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
-		now: time.Now, mini: newMiniState()}
+		now: time.Now, mini: newMiniState(), statusPages: newLimiter(statusRate, time.Minute)}
 }
 
 // Register mounts the API on /api/v1/ and the dashboard on /admin/.
@@ -364,6 +367,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/monitor/overview", PermMonitorRead, s.monitorOverview)
 	s.route(api, "GET /api/v1/monitor/series", PermMonitorRead, s.monitorSeries)
 	s.route(api, "GET /api/v1/monitor/metrics", PermMonitorRead, s.monitorMetrics)
+	s.route(api, "GET /api/v1/monitor/uptime", PermMonitorRead, s.monitorUptime)
 	s.route(api, "GET /api/v1/monitor/events", PermMonitorRead, s.monitorEvents)
 	// The token of GET /metrics (Prometheus): owner and admin see whether it is on, the owner makes, sets and removes it.
 	s.route(api, "GET /api/v1/metrics-token", PermSettingsWrite, s.getMetricsToken)
@@ -404,6 +408,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/sub/", s.pageNotFound)
 	// The Prometheus endpoint: not there until the owner makes a token, then bearer-protected (metrics.go).
 	mux.HandleFunc("GET /metrics", s.serveMetrics)
+	// The public status page: not there until the owner turns it on (status.go).
+	mux.HandleFunc("GET /status", s.statusPage)
+	mux.HandleFunc("GET /status.json", s.statusJSON)
 	s.registerMiniApp(mux)
 	if s.cfg.Dashboard != nil {
 		mux.Handle("/admin/", s.cfg.Dashboard)

@@ -237,6 +237,9 @@ existed.
   or 401, 429 past 30 wrong tries a minute from one address; see [04-dashboard.md](04-dashboard.md), "The Prometheus endpoint", and
   [runbooks/monitoring.md](runbooks/monitoring.md)). The token's own endpoints are `GET`/`PUT`/`DELETE /api/v1/metrics-token` and
   `POST /api/v1/metrics-token/generate`.
+- `/status` (a page) and `/status.json` (the same in JSON): whether the dashboard, the bot, payments and the panels work, in general
+  words only; **404 until `status_page.enabled` is turned on**, cached for 30 seconds, 60 requests a minute per client address (see
+  [04-dashboard.md](04-dashboard.md), "The public status page"). The staff's side is `GET /api/v1/monitor/uptime` (`monitor.read`).
   Milestone 6a adds `/api/v1/servers` (servers.write: owner and admin) and `/api/v1/gateways` (gateways.write: the
   owner); the table is in superpowers/specs/2026-10-07-phase4-dashboard-design.md, "Milestone 6a".
   P8 adds the HTTPS manager's `/api/v1/system/tls` (below).
@@ -428,6 +431,8 @@ bot (has internet)  --- GET /internal/ci, GET /internal/stats --->  core
 services' /healthz, /readyz, gRPC (servers, gateways, pending payments, logs), core's database  --->  core
 core (sampler, every 30 s) ---> core.monitor_series ---> GET /api/v1/monitor/{overview,series,metrics,events}
 the same look at the stack (no history) ---> GET /metrics (Prometheus, bearer token, off until the owner makes one)
+the same look at the stack (generic parts only) ---> GET /status, /status.json (public, off until the owner turns it on)
+core.monitor_series (service.up, panel.up) ---> GET /api/v1/monitor/uptime (availability over 24 hours, 7 days and 30 days)
 ```
 
 ### The snapshot (`snapshot.json`, schema 1)

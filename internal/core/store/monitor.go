@@ -164,6 +164,67 @@ func (s *Store) MonitorSeries(ctx context.Context, q querier, metric string, fro
 	return out, nil
 }
 
+// MonitorSlot is one stored slot of a metric: it starts at T (unix seconds) and lasts Step seconds. V is the
+// sample of a 30-second slot, or the average of the samples of a 5-minute slot that was rolled up.
+type MonitorSlot struct {
+	T, Step int64
+	V       float64
+}
+
+// MonitorSlots reads the slots of several metrics that overlap [from, to), each metric's oldest first and, where the
+// two resolutions overlap (a restored copy of the database can leave a day in both), the finer one first. MonitorSeries
+// gives the points without how long each stands for; the uptime view needs that. A slot nobody sampled is not
+// returned, and a metric nobody recorded has no entry.
+func (s *Store) MonitorSlots(ctx context.Context, q querier, metrics []string, from, to time.Time) (map[string][]MonitorSlot, error) {
+	out := map[string][]MonitorSlot{}
+	if len(metrics) == 0 {
+		return out, nil
+	}
+	f, t := from.Unix(), to.Unix()
+	rows, err := q.Query(ctx, `
+		SELECT m.name, ms.step, ms.bucket, ms.vals
+		FROM core.monitor_series ms JOIN core.monitor_metric m ON m.id = ms.metric_id
+		WHERE m.name = ANY($1) AND ((ms.step = $2 AND ms.bucket + $3 > $5 AND ms.bucket < $6)
+			OR (ms.step = $4 AND ms.bucket + $7 > $5 AND ms.bucket < $6))
+		ORDER BY m.name, ms.bucket, ms.step`,
+		metrics, FullStep, FullSpan, RolledStep, f, t, RolledSpan)
+	if err != nil {
+		return nil, fmt.Errorf("monitor slots: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			name   string
+			step   int16
+			bucket int64
+			vals   []*float32
+		)
+		if err := rows.Scan(&name, &step, &bucket, &vals); err != nil {
+			return nil, err
+		}
+		for i, v := range vals {
+			if v == nil {
+				continue
+			}
+			at := bucket + int64(i)*int64(step)
+			if at+int64(step) <= f || at >= t {
+				continue
+			}
+			out[name] = append(out[name], MonitorSlot{T: at, Step: int64(step), V: float64(*v)})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for name := range out {
+		sort.SliceStable(out[name], func(i, j int) bool {
+			a, b := out[name][i], out[name][j]
+			return a.T < b.T || (a.T == b.T && a.Step < b.Step)
+		})
+	}
+	return out, nil
+}
+
 // sortPoints keeps the order guaranteed even if the two resolutions overlap
 // (a restored copy of the database can leave a day in both).
 func sortPoints(p []MonitorPoint) {

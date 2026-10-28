@@ -775,6 +775,8 @@
   "setting.monitor.collector_minutes.help": "Minutes without a snapshot from the host collector before an alert is raised. Only where the collector is installed.",
   "setting.monitor.ci_alert.label": "Alert when CI on main fails",
   "setting.monitor.ci_alert.help": "While the latest CI run on the repository's main branch has failed, an alert is raised. For a store built from main; leave it off for a store that runs releases.",
+  "setting.status_page.enabled.label": "Public status page",
+  "setting.status_page.enabled.help": "The store gets a public page at /status (and /status.json for a monitoring service) that says whether the dashboard, the bot, payments and the panels work, in general words only: no server names, versions or numbers. Off by default; turned off, both addresses answer “not found”.",
   "setting.bot.plan_layout.label": "Plan list layout",
   "setting.bot.plan_layout.help": "How the bot lists plans when a customer buys or renews. A table puts each plan on a row of two buttons, its name and its price, under a header row. A list has one button per plan, with the name and the price together.",
   "setting.bot.plan_layout.opt.table": "Table",

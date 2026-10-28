@@ -26,6 +26,17 @@ const (
 	SettingMonitorCIAlert          = "monitor.ci_alert"
 )
 
+// SettingStatusPage switches the public status page on: GET /status (a page) and GET /status.json (internal/core/web/status.go).
+// It is off until the owner turns it on; off, both answer 404 as if they did not exist. It says only whether the dashboard,
+// the bot, payments and the panels work, in general words.
+const SettingStatusPage = "status_page.enabled"
+
+// StatusPageFrom reads whether the public status page is on out of a settings map already loaded: only an explicit "true"
+// turns it on.
+func StatusPageFrom(values map[string]string) bool {
+	return strings.TrimSpace(values[SettingStatusPage]) == "true"
+}
+
 // MonitorRestartWindow is the time within which MonitorSettings.Restarts restarts of one
 // container are a crash loop.
 const MonitorRestartWindow = 15 * time.Minute

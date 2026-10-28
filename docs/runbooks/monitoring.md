@@ -2,7 +2,8 @@
 
 Use this when the dashboard's **System → Monitoring** tab shows no server figures ("the host collector is not installed" or "sent nothing for
 N minutes"), when a monitoring alert arrives (disk, memory, a container, the collector, CI of `main`), when you want to turn
-host monitoring off, or when you want to read the figures from Prometheus and Grafana ([Prometheus and Grafana](#prometheus-and-grafana)). How it is
+host monitoring off, when you want to read the figures from Prometheus and Grafana ([Prometheus and Grafana](#prometheus-and-grafana)), or when
+you want to know how available the services were or to publish a status page ([Uptime and the status page](#uptime-and-the-status-page)). How it is
 built: [installer, "Host monitoring"](../06-installer.md); what it exposes:
 [security, "Host monitoring"](../07-security.md); the tab and its API: [dashboard, "Monitoring API"](../04-dashboard.md).
 
@@ -72,6 +73,50 @@ address used the quota; it comes back at the time the page shows (`rate_reset_at
 Core keeps 30-second samples for 7 days and 5-minute averages up to 30 days in its own database (a few megabytes) and includes
 them in every backup. Nothing to maintain: core rolls them up and prunes them itself. If a graph has a gap, nothing was sampled
 then (core was down, or the source was unreachable); it is a gap, not a zero.
+
+## Uptime and the status page
+
+The **Uptime** section of the Monitoring tab says how much of the time each BOBRES service (core, bot, payments, provisioner, backup) and each
+panel server was working over the last 24 hours, 7 days or 30 days: the percentage, the number and total length of the outages, the longest one,
+and a bar with a cell for each half hour, three hours or twelve hours. It is worked out from the samples above, so it can reach back as far as
+those: **30 days at most** (a store that is younger, or a server added later, has less, and the section says since when).
+
+How to read it:
+
+- **No data is not an outage.** Core is the one that samples. While it is not running (a restart, an update, a crash, the host off), or while
+  **Settings → Monitoring → Monitoring** is off, nothing is recorded, and that time is *no data*: it is left out of the percentage and drawn
+  as a hatched cell, neither green nor red. A panel server that is switched off is not checked, so the time it was off is no data too (it
+  is not counted as the downtime it had when you switched it off). The line under a percentage ("Observed for 20 hours of 1 day") tells
+  how much of the period had samples. A service or server nobody has sampled yet says "No data", never 0% and never 100%.
+- **The percentage is of the time observed.** 99.9% over a day is about 86 seconds down. A little downtime is never written as 100%: the
+  figure is capped at 99.999%. An outage is a run of samples in which the service was down; time with no data between two runs divides them.
+- **Older time is in 5-minute steps.** After 7 days the samples are 5-minute averages, and an average counts for the share of its 5 minutes
+  that was up: a stretch in which the service was down for one minute of five is one minute of downtime. Outages older than 7 days are
+  therefore accurate to about 5 minutes, and two short ones in the same 5 minutes are counted as one.
+- **Core cannot show its own outage.** The time core itself was down is no data, because nobody was there to sample it. If you need an
+  outside view, point an uptime service at `/status.json` (below), or at `/healthz` of your domain.
+
+### The public status page
+
+Off by default. **Settings → Monitoring → Public status page** (`status_page.enabled`; owner and admin) puts two public addresses on the store's
+own domain: `https://shop.example.com/status` (a page for a person, in Persian, or in English with `?l=en`) and `https://shop.example.com/status.json`
+(for a monitoring service or a widget of your site). Turned off, both answer 404 exactly as a path that does not exist.
+
+They say only whether the store works: one verdict, "All systems working" or "Some systems are down", and the state of four general parts,
+**Dashboard, Bot, Payments and Panels**, each Working, Degraded or Down. Panels is one line for all the panel servers (and the service that
+reaches them): it is Working when every server that is switched on answers, Degraded when some do not and Down when none does; a store with
+no checked panel server shows no Panels line. Nothing else is on it: no server name or address, no version, no error, no counts, no customers.
+
+```json
+{"status":"ok","updated_at":1793000000,"components":[{"id":"dashboard","name":"Dashboard","status":"ok"},{"id":"bot","name":"Bot","status":"ok"},{"id":"payments","name":"Payments","status":"ok"},{"id":"panels","name":"Panels","status":"ok"}]}
+```
+
+`status` is `ok` or `degraded`; each component's is `ok`, `degraded` or `down`. The answer is built at most every 30 seconds, whatever the
+number of visitors, so a crowd costs one look at the stack (`Cache-Control: public, max-age=30`; the page also reloads itself every minute), and
+one client address may ask 60 times a minute (429 after that). The page has the store's name, logo and colour, no script and `noindex`.
+`/status.json` carries `Access-Control-Allow-Origin: *`, so a page of another site may read it; turn the page off if you do not want that.
+
+If a customer reports a problem the page does not show, look at the Monitoring tab: the page only knows what core can see from inside.
 
 ## Prometheus and Grafana
 
