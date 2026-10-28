@@ -422,7 +422,8 @@ func (w *Watchdog) services(ctx context.Context, _ time.Time) alertProbe {
 }
 
 // servers: each enabled 3x-ui server answered its last health check (the
-// provisioner checks them; a server not checked yet is skipped).
+// provisioner checks them; a server not checked yet is skipped), and none with
+// a client limit is nearly full (a daily notice).
 func (w *Watchdog) servers(ctx context.Context, _ time.Time) alertProbe {
 	p := alertProbe{scope: "server.", covered: true}
 	if w.src.Servers == nil {
@@ -439,6 +440,12 @@ func (w *Watchdog) servers(ctx context.Context, _ time.Time) alertProbe {
 		}
 		p.checks = append(p.checks, alertCheck{key: "server." + sv.ID, problem: !sv.Healthy, severity: events.SeverityCritical,
 			title: "alert.server_down", args: map[string]string{"server": sv.Name}, detail: sv.HealthError})
+	}
+	// A server with a client limit that is nearly or entirely full (capacity.go).
+	for i := range list.Servers {
+		if c, ok := capacityCheck(&list.Servers[i]); ok {
+			p.checks = append(p.checks, c)
+		}
 	}
 	return p
 }

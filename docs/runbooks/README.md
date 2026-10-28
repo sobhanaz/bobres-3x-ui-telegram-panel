@@ -39,6 +39,7 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 |---|---|---|
 | A service is down or not ready | `service.<name>` | First look (below), then the runbook of that service's problem |
 | A 3x-ui server does not answer | `server.<id>` | [3x-ui down](xui-down.md) |
+| A 3x-ui server with a service limit is at 90% of it or full (one notice a day; raising the limit ends it quietly) | `server.<id>.capacity` | [Provisioning backlog](provisioning-backlog.md) (a plan whose servers are all full waits) |
 | Zarinpal payments are failing, or one has been open for over 3 hours | `gateway.zarinpal.error`, `gateway.zarinpal.open` | [Payment stuck](payment-stuck.md) |
 | Automatic USDT payments are not being checked (no read of the store's TRON address from TronGrid has worked for 5 minutes), or one has been open for over 2 hours | `gateway.usdt_auto.read`, `gateway.usdt_auto.open` | [Payment stuck](payment-stuck.md) |
 | The last backup failed, or no new backup for over 26 hours | `backup.failed`, `backup.stale` | [Backups not arriving](backups-not-arriving.md) |

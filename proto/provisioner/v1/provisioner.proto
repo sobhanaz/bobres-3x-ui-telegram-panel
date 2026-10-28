@@ -72,6 +72,10 @@ message XUIServer {
   bool version_untested = 15;
   // "xui" (3x-ui) or "marzban"; empty reads as "xui".
   string kind = 16;
+  // The most clients the server takes; 0 is no limit. A server whose clients
+  // (reservations included) have reached it is skipped for new clients and
+  // refuses an explicit request for one; the clients it has keep working.
+  int32 max_clients = 17;
 }
 
 message CreateClientRequest {
@@ -189,6 +193,8 @@ message AddServerRequest {
   // "xui" (default) or "marzban". Fixed once the server is added. For
   // "marzban", api_token is "username:password" of a Marzban admin.
   string kind = 9;
+  // 0..1000000; 0 = no limit (XUIServer.max_clients).
+  int32 max_clients = 10;
 }
 
 message ListServersRequest {}
@@ -215,6 +221,9 @@ message UpdateServerRequest {
   // entered for.
   string api_token = 8;
   bool skip_check = 9;
+  // 0..1000000; 0 = no limit. Unset keeps the stored limit (a caller from
+  // before the limit existed would otherwise lift it).
+  optional int32 max_clients = 10;
 }
 
 message DeleteServerRequest {

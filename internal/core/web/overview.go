@@ -120,7 +120,7 @@ func (s *Server) overviewServers(ctx context.Context, full bool) ([]map[string]a
 			}
 		}
 		out = append(out, map[string]any{"id": sv.ID, "name": sv.Name, "enabled": sv.Enabled, "healthy": healthy, "detail": detail,
-			"clients": sv.Clients})
+			"clients": sv.Clients, "max_clients": sv.MaxClients})
 	}
 	panel := map[string]any{"healthy": live > 0 && down == 0, "detail": ""}
 	switch {

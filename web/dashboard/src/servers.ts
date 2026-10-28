@@ -11,6 +11,11 @@ export const SERVER_NAME_MAX = 64
 export const WEIGHT_MIN = 1
 export const WEIGHT_MAX = 1000
 export const WEIGHT_DEFAULT = 100
+/** the largest limit on a server's services (0 or empty is none) */
+export const MAX_CLIENTS_MAX = 1_000_000
+/** the share of its limit at which a server counts as nearly full: the Servers page warns from here, and so does the
+ * watchdog's notice in Telegram (core's CapacityWarnPct) */
+export const CAPACITY_WARN_PCT = 90
 
 /** ok: answering; down: not answering (no new services meanwhile);
  * unknown: not checked yet; off: takes no new services (not checked). */
@@ -49,6 +54,8 @@ export interface ServerForm {
   /** a new token; '' keeps the stored one */
   token: string
   weight: string
+  /** the most services the server takes; '' or 0 = no limit */
+  maxClients: string
   enabled: boolean
   allowPrivate: boolean
   /** save even when the panel does not answer */
@@ -56,7 +63,7 @@ export interface ServerForm {
 }
 
 export function blankServer(): ServerForm {
-  return { kind: 'xui', name: '', baseURL: '', subURL: '', token: '', weight: String(WEIGHT_DEFAULT), enabled: true, allowPrivate: false, skipCheck: false }
+  return { kind: 'xui', name: '', baseURL: '', subURL: '', token: '', weight: String(WEIGHT_DEFAULT), maxClients: '', enabled: true, allowPrivate: false, skipCheck: false }
 }
 
 /** serverFormOf reads a server into the editor; the token stays empty
@@ -69,6 +76,7 @@ export function serverFormOf(s: ServerItem): ServerForm {
     subURL: s.sub_base_url ?? '',
     token: '',
     weight: String(s.weight || WEIGHT_DEFAULT),
+    maxClients: s.max_clients ? String(s.max_clients) : '',
     enabled: s.enabled,
     allowPrivate: s.allow_private,
     skipCheck: false,
@@ -110,6 +118,45 @@ export function weightOf(raw: string): number | null {
   return n >= WEIGHT_MIN && n <= WEIGHT_MAX ? n : null
 }
 
+/** maxClientsOf reads a typed limit on a server's services (either digit set): nothing typed is 0, no limit; null when it
+ * is not a whole number from 0 to 1,000,000. */
+export function maxClientsOf(raw: string): number | null {
+  const v = asciiNumber(raw)
+  if (v === '') return 0
+  if (!/^\d{1,7}$/.test(v)) return null
+  const n = Number(v)
+  return n <= MAX_CLIENTS_MAX ? n : null
+}
+
+export type Fill = 'none' | 'ok' | 'near' | 'full'
+
+/** How full a server is: its services against its limit. */
+export interface Capacity {
+  clients: number
+  /** the limit; 0 = none */
+  max: number
+  /** the whole percent it is at (more than 100 when the limit was set below what it holds); 0 without a limit */
+  pct: number
+  /** none: no limit; ok; near: from 90% on; full: at the limit or over it */
+  state: Fill
+}
+
+/** capacityOf reads a server's fill the way core's watchdog does: a limit of 0 or none is no limit, from 90% on is nearly
+ * full, and the limit reached is full. */
+export function capacityOf(s: { clients: number; max_clients?: number }): Capacity {
+  const clients = Math.max(0, s.clients || 0)
+  const max = Math.max(0, s.max_clients || 0)
+  if (max === 0) return { clients, max, pct: 0, state: 'none' }
+  const pct = Math.floor((clients * 100) / max)
+  return { clients, max, pct, state: clients >= max ? 'full' : pct >= CAPACITY_WARN_PCT ? 'near' : 'ok' }
+}
+
+/** nearFull lists the servers that take new services and are nearly or entirely full, in the order given (a switched-off
+ * server is not watched: it takes nothing anyway). */
+export function nearFull<T extends { clients: number; max_clients?: number; enabled?: boolean }>(list: readonly T[]): T[] {
+  return list.filter((s) => s.enabled !== false && ['near', 'full'].includes(capacityOf(s).state))
+}
+
 /** hostOf is the host and port of an address as written ("" when none),
  * the way the provisioner compares them. */
 export function hostOf(raw: string): string {
@@ -136,6 +183,7 @@ export function serverProblems(f: ServerForm, editing: Pick<ServerItem, 'has_tok
   const tok = f.token.trim()
   if (/\s/.test(tok) || (!tok && needsToken(f, editing)) || (f.kind === 'marzban' && tok && !marzbanLoginOK(tok))) out.push('token')
   if (weightOf(f.weight) === null) out.push('weight')
+  if (maxClientsOf(f.maxClients) === null) out.push('max_clients')
   return out
 }
 
@@ -149,6 +197,7 @@ export function serverBody(f: ServerForm) {
     sub_base_url: f.subURL.trim(),
     token: f.token.trim(),
     weight: weightOf(f.weight) ?? WEIGHT_DEFAULT,
+    max_clients: maxClientsOf(f.maxClients) ?? 0,
     enabled: f.enabled,
     allow_private: f.allowPrivate,
     skip_check: f.skipCheck,

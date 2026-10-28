@@ -1236,6 +1236,7 @@ func TestAlertTitlesExist(t *testing.T) {
 	cat := Texts()
 	titles := map[string][]string{
 		"alert.service_down": {"service"}, "alert.service_not_ready": {"service"}, "alert.server_down": {"server"},
+		"alert.server_capacity": {"count", "limit", "percent", "server"}, "alert.server_full": {"count", "limit", "server"},
 		"alert.zarinpal_failing": nil, "alert.zarinpal_stuck": {"count"},
 		"alert.idpay_failing": nil, "alert.idpay_stuck": {"count"}, "alert.nextpay_failing": nil, "alert.nextpay_stuck": {"count"},
 		"alert.backup_failed": nil,

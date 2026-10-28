@@ -151,10 +151,24 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 - provisioner, servers (milestone 6a, built; core's token only): `CreateClient.candidate_server_ids` (a plan's
   servers; empty = every enabled server; the healthy, enabled candidate with the least clients/weight is picked and
   reserved, so a retry stays on it; FAILED_PRECONDITION when none fits or no server exists), `ListServers` (settings,
-  health, version with an untested flag and the tested range, clients, has_token; never the token), `AddServer`,
+  health, version with an untested flag and the tested range, clients, `max_clients`, has_token; never the token), `AddServer`,
   `UpdateServer` (the whole state; an empty token keeps the stored one, on the same host only; the connection is
-  tested first unless skip_check), `DeleteServer` (FAILED_PRECONDITION while clients exist), `TestServer` (saves
-  nothing; a failed connection is `ok=false` with a detail), `ListInbounds` (with `attach`), `SetInboundAttach`.
+  tested first unless skip_check; `max_clients` is optional there, and unset keeps the stored limit), `DeleteServer`
+  (FAILED_PRECONDITION while clients exist), `TestServer` (saves nothing; a failed connection is `ok=false` with a
+  detail), `ListInbounds` (with `attach`), `SetInboundAttach`.
+- provisioner, **capacity** (`XUIServer.max_clients`, `AddServerRequest.max_clients`, `UpdateServerRequest.max_clients`, 0 to
+  1,000,000, 0 = no limit): the pick skips a server whose `client_map` rows (reservations included) have reached its limit, and
+  a request that names a full server is refused. Both are `FAILED_PRECONDITION` with words that say what to do: `server "de-1"
+  is full (100 of 100 clients): raise its limit in Servers, or add another server` for a named server or a single candidate,
+  `every server a new client may go to is full (2 servers, each at its client limit): ...` when every candidate is full (not the
+  "no enabled and healthy server" of a plan with no server that works). Core's provisioning worker treats it as it does that
+  one: the order stays paid, is retried with backoff (30 s, 1 min, 2, 5, 10, then every 30 minutes), `provision.failed.v1` is
+  announced at the third attempt, and the order is delivered by the first retry after a limit is raised or a server added. The
+  count and the place are one step: `ReserveClient` takes a `FOR NO KEY UPDATE` lock on the server's row, counts, and inserts,
+  so concurrent creates cannot take the last place twice (a create that loses it picks again, up to three servers, and the
+  pick now skips the full one). Lowering a limit below the clients a server has moves none of them. Core's watchdog also sends a
+  daily notice when a server with a limit is at 90% or more (`alert.server_capacity`) and when it is full (`alert.server_full`),
+  key `server.<id>.capacity`.
 
 ## Provider interface (payments)
 `Init(order) -> redirect/instructions`, `Verify(callback) -> Result`, `Reconcile(period)`, `Capabilities()`.

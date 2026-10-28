@@ -4,12 +4,15 @@ import {
   addressChanged,
   blankServer,
   canTest,
+  capacityOf,
   choiceOf,
   goneInbounds,
   healthOf,
   hostOf,
   inboundOptions,
   inboundsBody,
+  maxClientsOf,
+  nearFull,
   needsToken,
   noInbound,
   noUsableServer,
@@ -137,7 +140,7 @@ describe('server form', () => {
     expect(f).toMatchObject({ name: 'de-1', baseURL: 'https://panel.example.com:2053/secret', weight: '100', enabled: true, allowPrivate: false, skipCheck: false })
     expect(serverBody(f)).toEqual({
       kind: 'xui', name: 'de-1', base_url: 'https://panel.example.com:2053/secret', sub_base_url: 'https://sub.example.com/sub/', token: '',
-      weight: 100, enabled: true, allow_private: false, skip_check: false,
+      weight: 100, max_clients: 0, enabled: true, allow_private: false, skip_check: false,
     })
     expect(serverBody({ ...f, name: ' de-1 ', token: ' new ', weight: '۵۰', skipCheck: true })).toMatchObject({ name: 'de-1', token: 'new', weight: 50, skip_check: true })
   })
@@ -191,6 +194,51 @@ describe('server form', () => {
     // nothing private: nothing for the owner
     expect(privateNeedsOwner({ ...f, allowPrivate: false, token: 'new' }, null)).toBe(false)
     expect(privateNeedsOwner({ ...f, allowPrivate: false, baseURL: 'https://p.example.com/' }, lan)).toBe(false)
+  })
+})
+
+describe('server capacity', () => {
+  it('reads a typed limit in either digit set, and nothing typed as no limit', () => {
+    expect(maxClientsOf('')).toBe(0)
+    expect(maxClientsOf('  ')).toBe(0)
+    expect(maxClientsOf('0')).toBe(0)
+    expect(maxClientsOf('۱۲۰')).toBe(120)
+    expect(maxClientsOf('1,000,000')).toBe(1_000_000)
+    expect(maxClientsOf('1000001')).toBeNull()
+    for (const bad of ['-1', '1.5', 'abc', '12 3a', '99999999']) expect(maxClientsOf(bad), bad).toBeNull()
+  })
+  it('puts the limit in the form and the request, and refuses what core would refuse', () => {
+    const limited = server({ max_clients: 80 })
+    expect(serverFormOf(limited).maxClients).toBe('80')
+    expect(serverFormOf(server()).maxClients).toBe('') // an older core says nothing: no limit
+    expect(serverFormOf(server({ max_clients: 0 })).maxClients).toBe('')
+    expect(serverBody(serverFormOf(limited)).max_clients).toBe(80)
+    expect(serverBody({ ...serverFormOf(limited), maxClients: '' }).max_clients).toBe(0) // clearing the field lifts the limit
+    expect(serverBody({ ...serverFormOf(limited), maxClients: '۱۵۰' }).max_clients).toBe(150)
+    const typed = { ...blankServer(), name: 'x', baseURL: 'https://p.example.com/x', token: 't' }
+    expect(serverProblems(typed, null)).toEqual([])
+    expect(serverProblems({ ...typed, maxClients: '250' }, null)).toEqual([])
+    expect(serverProblems({ ...typed, maxClients: '-3' }, null)).toEqual(['max_clients'])
+    expect(serverProblems({ ...typed, maxClients: '2000000' }, null)).toEqual(['max_clients'])
+  })
+  it('says how full a server is: none without a limit, near from 90%, full at the limit', () => {
+    expect(capacityOf({ clients: 500 })).toEqual({ clients: 500, max: 0, pct: 0, state: 'none' })
+    expect(capacityOf({ clients: 500, max_clients: 0 }).state).toBe('none')
+    expect(capacityOf({ clients: 0, max_clients: 10 })).toEqual({ clients: 0, max: 10, pct: 0, state: 'ok' })
+    expect(capacityOf({ clients: 89, max_clients: 100 })).toEqual({ clients: 89, max: 100, pct: 89, state: 'ok' })
+    expect(capacityOf({ clients: 899, max_clients: 1000 }).state).toBe('ok') // 89.9%
+    expect(capacityOf({ clients: 90, max_clients: 100 })).toEqual({ clients: 90, max: 100, pct: 90, state: 'near' })
+    expect(capacityOf({ clients: 9, max_clients: 10 }).state).toBe('near')
+    expect(capacityOf({ clients: 99, max_clients: 100 }).state).toBe('near')
+    expect(capacityOf({ clients: 100, max_clients: 100 })).toEqual({ clients: 100, max: 100, pct: 100, state: 'full' })
+    expect(capacityOf({ clients: 150, max_clients: 100 })).toEqual({ clients: 150, max: 100, pct: 150, state: 'full' }) // the limit was set below what it holds
+    expect(capacityOf({ clients: -4, max_clients: 10 }).clients).toBe(0)
+  })
+  it('lists the servers that take new services and are nearly or entirely full', () => {
+    const s = (id: string, clients: number, max: number, enabled?: boolean) => ({ id, clients, max_clients: max, ...(enabled === undefined ? {} : { enabled }) })
+    const list = [s('a', 50, 100), s('b', 90, 100), s('c', 100, 100), s('d', 500, 0), s('e', 100, 100, false), s('f', 95, 100, true)]
+    expect(nearFull(list).map((x) => x.id)).toEqual(['b', 'c', 'f'])
+    expect(nearFull([])).toEqual([])
   })
 })
 
@@ -345,6 +393,45 @@ describe('servers pages', () => {
     expect(menu).not.toContain(text('section.gateways.title'))
   })
 
+  it('shows how full a server with a limit is, with a warning from 90% and a mark when it is full', async () => {
+    const limited = [
+      server({ id: sid1, name: 'half', clients: 40, max_clients: 100 }),
+      server({ id: sid2, name: 'near', clients: 92, max_clients: 100 }),
+      server({ id: sid3, name: 'full', clients: 100, max_clients: 100 }),
+      server({ id: 'free', name: 'free', clients: 300, max_clients: 0 }),
+      server({ id: 'off', name: 'off', clients: 100, max_clients: 100, enabled: false }),
+    ]
+    await boot('/admin/servers', adminPerms, (url, init) => {
+      if (url === '/api/v1/servers' && (init?.method ?? 'GET') === 'GET') return json(200, { items: limited })
+    })
+    await vi.waitFor(() => expect(rows()).toHaveLength(5))
+    const [half, near, full, free, off] = rows()
+    // "N / max" with a bar, in the language's digits
+    expect(half.querySelector('.clients')?.textContent).toBe('۴۰ / ۱۰۰')
+    expect(half.querySelector('.p-progressbar')?.getAttribute('aria-label')).toBe(fill(text('server.capacity_label'), { percent: '۴۰' }))
+    expect(half.querySelector('.chip')).toBeNull()
+    // from 90% a warning chip, at the limit another
+    expect(near.querySelector('.chip.near')?.textContent).toContain(fill(text('server.capacity_near'), { percent: '۹۲' }))
+    expect(full.querySelector('.chip.full')?.textContent).toContain(text('server.capacity_full'))
+    expect(full.querySelector('.chip.near')).toBeNull()
+    // no limit: only the count; a switched-off server shows its fill but is not warned about
+    expect(free.querySelector('.clients')?.textContent).toBe('۳۰۰')
+    expect(free.querySelector('.p-progressbar')).toBeNull()
+    expect(off.querySelector('.clients')?.textContent).toBe('۱۰۰ / ۱۰۰')
+    expect(off.querySelector('.chip')).toBeNull()
+    // one line above the table names the servers that need attention (not the one that is off)
+    const banner = document.querySelector('.filling')
+    expect(banner?.textContent).toContain(text('server.filling'))
+    expect([...document.querySelectorAll('.filling-name')].map((e) => e.textContent)).toEqual(['near', 'full'])
+  })
+
+  it('has no warning when no server is close to its limit', async () => {
+    await boot('/admin/servers', adminPerms)
+    await vi.waitFor(() => expect(rows()).toHaveLength(3))
+    expect(document.querySelector('.filling')).toBeNull()
+    expect(document.querySelector('.chip')).toBeNull()
+  })
+
   it('keeps the page from support staff', async () => {
     const { router, calls } = await boot('/admin/servers', supportPerms)
     expect(router.currentRoute.value.name).toBe('overview')
@@ -386,6 +473,7 @@ describe('servers pages', () => {
     await vi.waitFor(() => expect(d.querySelector('.private-warning')?.textContent).toBe(text('server.allow_private_warning')))
     expect(d.querySelector('.url-problem')).toBeNull()
     type(d.querySelector('input.weight'), '۲۰۰')
+    type(d.querySelector('input.max-clients'), '۵۰')
     await vi.waitFor(() => expect(test().disabled).toBe(false))
     test().click()
     await vi.waitFor(() => expect(d.querySelector('.test-result')?.textContent).toContain(fill(text('server.test_ok'), { version: '\u20683x-ui v3.9.0\u2069', n: '۳' })))
@@ -399,7 +487,7 @@ describe('servers pages', () => {
     save().click()
     await vi.waitFor(() => expect(sent(calls, 'POST', '/servers')).toHaveLength(2))
     expect(sent(calls, 'POST', '/servers')[1]).toEqual({
-      kind: 'xui', name: 'de-4', base_url: 'http://10.0.0.5:2053/x', sub_base_url: '', token, weight: 200, enabled: true, allow_private: true, skip_check: true,
+      kind: 'xui', name: 'de-4', base_url: 'http://10.0.0.5:2053/x', sub_base_url: '', token, weight: 200, max_clients: 50, enabled: true, allow_private: true, skip_check: true,
     })
     await vi.waitFor(() => expect(document.querySelector('.server-dialog')).toBeNull())
     await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/servers')).toHaveLength(2))
@@ -439,7 +527,7 @@ describe('servers pages', () => {
     await vi.waitFor(() => expect(sent(calls, 'PUT', `/servers/${sid1}`)).toHaveLength(1))
     expect(sent(calls, 'PUT', `/servers/${sid1}`)[0]).toEqual({
       kind: 'xui', name: 'de-1', base_url: 'https://panel.example.com:2053/secret/', sub_base_url: 'https://sub.example.com/sub/', token: '',
-      weight: 50, enabled: true, allow_private: false, skip_check: false,
+      weight: 50, max_clients: 0, enabled: true, allow_private: false, skip_check: false,
     })
     await vi.waitFor(() => expect(document.querySelector('.server-dialog')).toBeNull())
 

@@ -487,6 +487,8 @@
   "alert.service_down": "The {service} service is down.",
   "alert.service_not_ready": "The {service} service is running but not ready (a database, Redis or gRPC check fails).",
   "alert.server_down": "The 3x-ui server {server} does not answer.",
+  "alert.server_capacity": "The 3x-ui server {server} is {percent}% full (services: {count}/{limit}). When it is full, new services go to your other servers, and a plan that uses only this server makes its customers wait. Raise its limit or add a server.",
+  "alert.server_full": "The 3x-ui server {server} is full (services: {count}/{limit}), so it takes no new services. Raise its limit or add a server; a plan that uses only full servers makes its customers wait for their service.",
   "alert.zarinpal_failing": "Zarinpal payments are failing.",
   "alert.zarinpal_stuck": "{count} Zarinpal payments are still open; the oldest started over 3 hours ago.",
   "alert.idpay_failing": "IDPay payments are failing.",

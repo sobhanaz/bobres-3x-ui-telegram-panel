@@ -374,7 +374,11 @@ type XUIServer struct {
 	// panel_version is outside the tested range (ListServersResponse).
 	VersionUntested bool `protobuf:"varint,15,opt,name=version_untested,json=versionUntested,proto3" json:"version_untested,omitempty"`
 	// "xui" (3x-ui) or "marzban"; empty reads as "xui".
-	Kind          string `protobuf:"bytes,16,opt,name=kind,proto3" json:"kind,omitempty"`
+	Kind string `protobuf:"bytes,16,opt,name=kind,proto3" json:"kind,omitempty"`
+	// The most clients the server takes; 0 is no limit. A server whose clients
+	// (reservations included) have reached it is skipped for new clients and
+	// refuses an explicit request for one; the clients it has keep working.
+	MaxClients    int32 `protobuf:"varint,17,opt,name=max_clients,json=maxClients,proto3" json:"max_clients,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -519,6 +523,13 @@ func (x *XUIServer) GetKind() string {
 		return x.Kind
 	}
 	return ""
+}
+
+func (x *XUIServer) GetMaxClients() int32 {
+	if x != nil {
+		return x.MaxClients
+	}
+	return 0
 }
 
 type CreateClientRequest struct {
@@ -1294,7 +1305,9 @@ type AddServerRequest struct {
 	Enabled *bool `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
 	// "xui" (default) or "marzban". Fixed once the server is added. For
 	// "marzban", api_token is "username:password" of a Marzban admin.
-	Kind          string `protobuf:"bytes,9,opt,name=kind,proto3" json:"kind,omitempty"`
+	Kind string `protobuf:"bytes,9,opt,name=kind,proto3" json:"kind,omitempty"`
+	// 0..1000000; 0 = no limit (XUIServer.max_clients).
+	MaxClients    int32 `protobuf:"varint,10,opt,name=max_clients,json=maxClients,proto3" json:"max_clients,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1390,6 +1403,13 @@ func (x *AddServerRequest) GetKind() string {
 		return x.Kind
 	}
 	return ""
+}
+
+func (x *AddServerRequest) GetMaxClients() int32 {
+	if x != nil {
+		return x.MaxClients
+	}
+	return 0
 }
 
 type ListServersRequest struct {
@@ -1503,8 +1523,11 @@ type UpdateServerRequest struct {
 	// Empty = keep the stored token. A new address (host or port) needs the
 	// token again, so the stored one is never sent to a host it was not
 	// entered for.
-	ApiToken      string `protobuf:"bytes,8,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
-	SkipCheck     bool   `protobuf:"varint,9,opt,name=skip_check,json=skipCheck,proto3" json:"skip_check,omitempty"`
+	ApiToken  string `protobuf:"bytes,8,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
+	SkipCheck bool   `protobuf:"varint,9,opt,name=skip_check,json=skipCheck,proto3" json:"skip_check,omitempty"`
+	// 0..1000000; 0 = no limit. Unset keeps the stored limit (a caller from
+	// before the limit existed would otherwise lift it).
+	MaxClients    *int32 `protobuf:"varint,10,opt,name=max_clients,json=maxClients,proto3,oneof" json:"max_clients,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1600,6 +1623,13 @@ func (x *UpdateServerRequest) GetSkipCheck() bool {
 		return x.SkipCheck
 	}
 	return false
+}
+
+func (x *UpdateServerRequest) GetMaxClients() int32 {
+	if x != nil && x.MaxClients != nil {
+		return *x.MaxClients
+	}
+	return 0
 }
 
 type DeleteServerRequest struct {
@@ -2145,7 +2175,7 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x16\n" +
 	"\x06attach\x18\x04 \x01(\bR\x06attach\x12\x1a\n" +
 	"\bprotocol\x18\x05 \x01(\tR\bprotocol\x12\x12\n" +
-	"\x04port\x18\x06 \x01(\x05R\x04port\"\xd4\x03\n" +
+	"\x04port\x18\x06 \x01(\x05R\x04port\"\xf5\x03\n" +
 	"\tXUIServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
@@ -2165,7 +2195,9 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\n" +
 	"checked_at\x18\x0e \x01(\x03R\tcheckedAt\x12)\n" +
 	"\x10version_untested\x18\x0f \x01(\bR\x0fversionUntested\x12\x12\n" +
-	"\x04kind\x18\x10 \x01(\tR\x04kind\"\xc1\x02\n" +
+	"\x04kind\x18\x10 \x01(\tR\x04kind\x12\x1f\n" +
+	"\vmax_clients\x18\x11 \x01(\x05R\n" +
+	"maxClients\"\xc1\x02\n" +
 	"\x13CreateClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
 	"\tserver_id\x18\x02 \x01(\tR\bserverId\x12\x14\n" +
@@ -2209,7 +2241,7 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x13ListInboundsRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\"K\n" +
 	"\x14ListInboundsResponse\x123\n" +
-	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\x9b\x02\n" +
+	"\binbounds\x18\x01 \x03(\v2\x17.provisioner.v1.InboundR\binbounds\"\xbc\x02\n" +
 	"\x10AddServerRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x1b\n" +
@@ -2221,14 +2253,17 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\n" +
 	"skip_check\x18\a \x01(\bR\tskipCheck\x12\x1d\n" +
 	"\aenabled\x18\b \x01(\bH\x00R\aenabled\x88\x01\x01\x12\x12\n" +
-	"\x04kind\x18\t \x01(\tR\x04kindB\n" +
+	"\x04kind\x18\t \x01(\tR\x04kind\x12\x1f\n" +
+	"\vmax_clients\x18\n" +
+	" \x01(\x05R\n" +
+	"maxClientsB\n" +
 	"\n" +
 	"\b_enabled\"\x14\n" +
 	"\x12ListServersRequest\"\xa6\x01\n" +
 	"\x13ListServersResponse\x123\n" +
 	"\aservers\x18\x01 \x03(\v2\x19.provisioner.v1.XUIServerR\aservers\x12,\n" +
 	"\x12tested_min_version\x18\x02 \x01(\tR\x10testedMinVersion\x12,\n" +
-	"\x12tested_max_version\x18\x03 \x01(\tR\x10testedMaxVersion\"\x89\x02\n" +
+	"\x12tested_max_version\x18\x03 \x01(\tR\x10testedMaxVersion\"\xbf\x02\n" +
 	"\x13UpdateServerRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -2240,7 +2275,11 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\bbase_url\x18\a \x01(\tR\abaseUrl\x12\x1b\n" +
 	"\tapi_token\x18\b \x01(\tR\bapiToken\x12\x1d\n" +
 	"\n" +
-	"skip_check\x18\t \x01(\bR\tskipCheck\"%\n" +
+	"skip_check\x18\t \x01(\bR\tskipCheck\x12$\n" +
+	"\vmax_clients\x18\n" +
+	" \x01(\x05H\x00R\n" +
+	"maxClients\x88\x01\x01B\x0e\n" +
+	"\f_max_clients\"%\n" +
 	"\x13DeleteServerRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x94\x01\n" +
 	"\x11TestServerRequest\x12\x0e\n" +
@@ -2398,6 +2437,7 @@ func file_provisioner_v1_provisioner_proto_init() {
 		return
 	}
 	file_provisioner_v1_provisioner_proto_msgTypes[19].OneofWrappers = []any{}
+	file_provisioner_v1_provisioner_proto_msgTypes[22].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

@@ -333,35 +333,60 @@ func (s *Server) existingClient(ctx context.Context, cm *store.ClientMap) (*prov
 	return clientProto(cm, max(st.ExpiryMs, 0)/1000, st.TotalBytes), nil
 }
 
+// pickAttempts is how many servers reserve tries for one client: a server
+// that filled up between the pick and the reservation (another create took
+// its last place) is passed over by the next pick.
+const pickAttempts = 3
+
 // reserve picks the server for a new client and reserves it. fresh is false
 // when another attempt reserved (or finished) first: its row is returned.
 func (s *Server) reserve(ctx context.Context, req *provisionerv1.CreateClientRequest) (*store.ClientMap, bool, error) {
-	sv, err := s.pick(ctx, req.GetServerId(), req.GetCandidateServerIds())
-	if err != nil {
-		return nil, false, err
+	for attempt := 1; ; attempt++ {
+		sv, err := s.pick(ctx, req.GetServerId(), req.GetCandidateServerIds())
+		if err != nil {
+			return nil, false, err
+		}
+		if sv.Kind == store.KindMarzban && marzban.ValidateUsername(req.GetEmail()) != nil {
+			return nil, false, status.Error(codes.InvalidArgument,
+				"the email is not a valid Marzban username (3 to 32 of a-z, 0-9, - _ @ ., and at least 3 letters, digits or underscores before the first - . or @)")
+		}
+		subID := s.st.SubIDFor(req.GetSubscriptionId())
+		cm, fresh, err := s.st.ReserveClient(ctx, &store.ClientMap{
+			SubscriptionID: req.GetSubscriptionId(), ServerID: sv.ID, Email: req.GetEmail(), XUISubID: &subID,
+		})
+		var full *store.FullError
+		switch {
+		case errors.As(err, &full) && req.GetServerId() == "" && attempt < pickAttempts:
+			continue
+		case errors.As(err, &full):
+			return nil, false, fullStatus(full)
+		case errors.Is(err, store.ErrEmailTaken):
+			return nil, false, status.Error(codes.AlreadyExists, "another subscription already uses this email on the server")
+		case errors.Is(err, store.ErrNotFound):
+			return nil, false, status.Error(codes.Aborted, "the server was removed meanwhile; retry")
+		case err != nil:
+			return nil, false, status.Error(codes.Internal, "client reservation failed")
+		}
+		return cm, fresh, nil
 	}
-	if sv.Kind == store.KindMarzban && marzban.ValidateUsername(req.GetEmail()) != nil {
-		return nil, false, status.Error(codes.InvalidArgument,
-			"the email is not a valid Marzban username (3 to 32 of a-z, 0-9, - _ @ ., and at least 3 letters, digits or underscores before the first - . or @)")
+}
+
+// fullStatus is the refusal for a server, or every server a client could go
+// to, at its client limit. The order waits and is tried again (like one with
+// no healthy server), so the words say what to do.
+func fullStatus(full *store.FullError) error {
+	if full.Servers > 1 {
+		return status.Errorf(codes.FailedPrecondition,
+			"every server a new client may go to is full (%d servers, each at its client limit): raise a limit in Servers, or add a server", full.Servers)
 	}
-	subID := s.st.SubIDFor(req.GetSubscriptionId())
-	cm, fresh, err := s.st.ReserveClient(ctx, &store.ClientMap{
-		SubscriptionID: req.GetSubscriptionId(), ServerID: sv.ID, Email: req.GetEmail(), XUISubID: &subID,
-	})
-	switch {
-	case errors.Is(err, store.ErrEmailTaken):
-		return nil, false, status.Error(codes.AlreadyExists, "another subscription already uses this email on the server")
-	case errors.Is(err, store.ErrNotFound):
-		return nil, false, status.Error(codes.Aborted, "the server was removed meanwhile; retry")
-	case err != nil:
-		return nil, false, status.Error(codes.Internal, "client reservation failed")
-	}
-	return cm, fresh, nil
+	return status.Errorf(codes.FailedPrecondition,
+		"server %q is full (%d of %d clients): raise its limit in Servers, or add another server", full.Name, full.Clients, full.Max)
 }
 
 // pick chooses the server for a new client: the explicit one (refused when
-// disabled), or the enabled, healthy candidate with the fewest clients per
-// weight.
+// disabled), or the enabled, healthy candidate with room and the fewest
+// clients per weight. Whether the explicit one has room is the reservation's
+// to say, under its lock.
 func (s *Server) pick(ctx context.Context, serverID string, candidates []string) (*store.Server, error) {
 	if serverID != "" {
 		sv, _, err := s.server(ctx, serverID)
@@ -381,7 +406,10 @@ func (s *Server) pick(ctx context.Context, serverID string, candidates []string)
 		ids = append(ids, c) // a malformed id stays, and matches nothing
 	}
 	sv, err := s.st.PickServer(ctx, ids)
+	var full *store.FullError
 	switch {
+	case errors.As(err, &full):
+		return nil, fullStatus(full)
 	case errors.Is(err, store.ErrNotFound) && len(ids) > 0:
 		return nil, s.noServer(ctx, "none of the candidate servers is enabled and healthy")
 	case errors.Is(err, store.ErrNotFound):
