@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.17.0, 2026-10-23.
+As of v0.17.1, 2026-10-28.
 
 ## Shipped
 
@@ -25,6 +25,7 @@ As of v0.17.0, 2026-10-23.
 | v0.16.0 | 2026-10-23 | Digital accounts in the Mini App, and the rate shown beside a USDT amount |
 | v0.16.1 | 2026-10-23 | The supplier's product dialog fits a phone |
 | v0.17.0 | 2026-10-23 | One wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link |
+| v0.17.1 | 2026-10-28 | The store comes back by itself after a reboot; a tls-agent that stays healthy after a restart; alerts that say what to type |
 
 ## Still open
 

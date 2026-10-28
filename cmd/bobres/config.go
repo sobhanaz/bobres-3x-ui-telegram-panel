@@ -73,6 +73,8 @@ var configKeys = []configKey{
 		help: "stable or beta: which releases the update check and bobres update offer", check: oneOf("stable", "beta")},
 	{name: dashboardUpdatesKey, lower: true, check: oneOf("on", "off"), apply: applyDashboardUpdates,
 		help: "on or off: whether the dashboard (System > Updates) may update this server through the bobres-updater helper; off removes the helper"},
+	{name: bootKey, lower: true, check: oneOf("on", "off"), apply: applyStartAtBoot,
+		help: "on or off: whether the unit bobres.service starts the whole store by itself after every boot, whatever Docker's restart policy did; off removes it"},
 	{name: monitorCollectorKey, lower: true, check: oneOf("on", "off"), apply: applyMonitorCollector,
 		help: "on or off: whether the host collector (bobres-monitor.timer) takes a snapshot of this server every 30 seconds for the dashboard's Monitoring section; off removes it"},
 	{name: "BOBRES_LICENSE_SERVER", services: []string{"bot"}, optional: true,

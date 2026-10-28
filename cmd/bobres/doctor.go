@@ -201,6 +201,9 @@ func doctorResults(dir, domain string, offline bool) []Result {
 	if env, ok, _ := readEnv(filepath.Join(dir, ".env")); ok && o.monitorUnits != nil {
 		rs = append(rs, monitorResult(context.Background(), o.monitorUnits, dir, env, time.Now()))
 	}
+	if env, ok, _ := readEnv(filepath.Join(dir, ".env")); ok && o.bootUnits != nil {
+		rs = append(rs, o.bootUnits.bootReport(context.Background(), dir, bootOff(env)))
+	}
 	rs = append(rs, h.report(context.Background())...)
 	return append(rs, updaterResults(context.Background(), o, dir)...)
 }

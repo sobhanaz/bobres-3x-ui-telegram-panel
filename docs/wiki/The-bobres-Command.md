@@ -14,7 +14,7 @@ Without a command, on a terminal, it opens a numbered menu. The header is a live
 |---|---|
 | `bobres status` | Services, version, domain and free disk. Exit code 1 if something is down. `--json` is for scripts |
 | `bobres logs [-f] [--tail N] [service...]` | Service logs. Put flags before the service names |
-| `bobres start`, `stop`, `restart` | Start (and wait for health), stop (nothing is deleted) or restart the store |
+| `bobres start`, `stop`, `restart` | Start (and wait for health), stop (nothing is deleted) or restart the store. After `stop` the store stays stopped through a reboot until you `start` it; otherwise a boot unit starts it at every boot |
 | `bobres check` | Every part of the install as PASS, WARN, FAIL or SKIP lines. Exit 1 on a FAIL. `--json` is available |
 | `bobres doctor` | Is this server fit for BOBRES: RAM, disk, ports, Docker, DNS, HTTPS, hardening |
 | `bobres support-bundle` | A redacted archive for support: versions, status, logs, no secrets |

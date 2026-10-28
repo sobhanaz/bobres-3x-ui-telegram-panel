@@ -101,7 +101,7 @@ sudo bobres restore /opt/bobres/backups/bobres-20261011T033000Z.bkp
 
 | دستور | چه می‌کند |
 |---|---|
-| `sudo bobres uninstall` | کانتینرها را متوقف و حذف می‌کند. داده‌ها، گواهی‌ها و `/opt/bobres` می‌مانند و با `sudo bobres start` فروشگاه برمی‌گردد |
+| `sudo bobres uninstall` | کانتینرها را متوقف و حذف می‌کند. داده‌ها، گواهی‌ها و `/opt/bobres` می‌مانند و با `sudo bobres start` فروشگاه برمی‌گردد (ریبوت سرور آن را برنمی‌گرداند) |
 | `sudo bobres uninstall --purge --dry-run` | فقط نشان می‌دهد چه چیزهایی پاک می‌شود، بدون هیچ تغییر |
 | `sudo bobres uninstall --purge` | هرچه BOBRES روی سرور گذاشته (داده، رمزها، پشتیبان‌ها، کانتینرها، فایروال و خود دستور) پاک می‌کند. پشتیبان نهایی پیشنهاد می‌دهد و دامنه را کامل از شما می‌خواهد |
 | `sudo bobres uninstall --purge --backup-to /root/final.bkp` | همان، با پشتیبان نهایی که خوانده و سنجیده می‌شود پیش از هر حذفی |

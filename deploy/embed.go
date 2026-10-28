@@ -53,3 +53,10 @@ var MonitorServiceUnit []byte
 //
 //go:embed systemd/bobres-monitor.timer
 var MonitorTimerUnit []byte
+
+// BootServiceUnit is bobres.service, which runs `bobres start` at every boot so
+// that the whole store is up again whatever Docker's restart policy did.
+// @DIR@ is the install directory and @EXE@ the bobres binary.
+//
+//go:embed systemd/bobres.service
+var BootServiceUnit []byte

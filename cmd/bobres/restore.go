@@ -728,6 +728,7 @@ func (o *ops) startAndWaitEv(ctx context.Context, dir string, event func(restore
 		return 1
 	}
 	fmt.Fprintln(o.out, "Starting BOBRES...")
+	o.noteStarting(dir)
 	if out, err := o.run(ctx, dir, composeArgs(append([]string{"up", "-d"}, extra...)...)...); err != nil {
 		fmt.Fprintf(o.errOut, "error: docker compose up failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
 		return 1

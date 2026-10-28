@@ -26,9 +26,10 @@ v0.14.0 (2026-10-23: reward amounts, deleting a plan, digital accounts by catego
 v0.15.0 (2026-10-23: buying a license in one screen, restoring a deleted plan, Undo in the bot's admin menu, a project wiki, a native read of the newest Persian texts)
 v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount)
 v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
-and v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link).
+v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
+and v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type).
 
-## Where things stand (after v0.17.0)
+## Where things stand (after v0.17.1)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
