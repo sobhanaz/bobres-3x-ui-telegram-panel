@@ -617,6 +617,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showHistory(r)
 	case "gift":
 		h.askGiftCode(r)
+	case "cds": // My codes (mycodes.go), also the /codes command
+		h.showMyCodes(r, pageArg(rest))
 	case "trial":
 		h.onTrial(r)
 	case "store":
@@ -715,6 +717,8 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		h.onActionCommand(r, "renew")
 	case "/status":
 		h.onActionCommand(r, "subs")
+	case "/codes": // My codes
+		h.onActionCommand(r, "cds")
 	case "/paysupport":
 		h.onPaySupport(r)
 	case "/terms":

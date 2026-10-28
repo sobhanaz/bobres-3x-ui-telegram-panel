@@ -83,9 +83,9 @@ func TestGiftCodeFlowInEnglish(t *testing.T) {
 	code := w.giftCode(25_000, 5)
 	u := w.customer(901, "gina")
 
-	// The wallet screen: the button sits in a row of its own between top up and home.
+	// The wallet screen: the button sits in a row of its own between top up and home, with My codes beside it.
 	u.press("wallet")
-	if got := u.buttons(); got != "➕ Top up | 🧾 History | 🎁 Apply gift code | 🏠 Main menu" {
+	if got := u.buttons(); got != "➕ Top up | 🧾 History | 🎁 Apply gift code | 🎟 My codes | 🏠 Main menu" {
 		t.Fatalf("wallet buttons: %s", got)
 	}
 	u.press("gift")
@@ -265,7 +265,7 @@ func TestGiftCodesSwitchedOff(t *testing.T) {
 	}
 	// The wallet screen has no button; a button from before says so and shows the wallet.
 	u.press("wallet")
-	if got := u.buttons(); got != "➕ Top up | 🧾 History | 🏠 Main menu" {
+	if got := u.buttons(); got != "➕ Top up | 🧾 History | 🎟 My codes | 🏠 Main menu" { // My codes stays: it lists what was applied before
 		t.Fatalf("wallet buttons while off: %s", got)
 	}
 	w.tg.add(941, &msg{text: "an old message", kb: (&tg.Keyboard{}).Row(tg.CB("🎁", "gift"))})
