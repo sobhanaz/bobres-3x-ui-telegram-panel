@@ -123,6 +123,7 @@ const CASES: [string, Record<string, string>, Forms][] = [
   ],
   ['gateway.test_unverified', {}, ['0 paid payments are waiting to be confirmed.', '1 paid payment is waiting to be confirmed.', '2 paid payments are waiting to be confirmed.']],
   ['settings.tiers.max', {}, ['The list holds at most 0 tiers.', 'The list holds at most 1 tier.', 'The list holds at most 2 tiers.']],
+  ['settings.prizes.max', {}, ['The wheel holds at most 0 prizes.', 'The wheel holds at most 1 prize.', 'The wheel holds at most 2 prizes.']],
   ['reseller.targets.tier', { bonus: '50,000 T' }, ['0 services: 50,000 T bonus', '1 service: 50,000 T bonus', '2 services: 50,000 T bonus']],
   [
     'reseller.targets.next',

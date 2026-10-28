@@ -62,6 +62,61 @@ export function normalizeTiers(raw: string): string {
   return 'tiers' in p ? formatTiers(p.tiers) : raw.trim()
 }
 
+/** A prize of the daily wheel: Toman, and a weight, its share of the chances. */
+export interface Prize {
+  amount: number
+  weight: number
+}
+
+/** Limits core checks again. */
+export const MAX_PRIZES = 12
+export const MAX_PRIZE_WEIGHT = 1_000_000
+
+/** parsePrizes reads the list the setting wheel.prizes holds, by core's rules: whole numbers only, at most MAX_PRIZES prizes, each amount from 1 to
+ * MAX_BONUS and each weight from 1 to MAX_PRIZE_WEIGHT, no amount twice. The prizes come back sorted by amount; a code names what is wrong. */
+export function parsePrizes(raw: string): { prizes: Prize[] } | { code: 'prizes' | 'prizes_many' | 'prizes_dup' } {
+  if (raw.trim() === '') return { prizes: [] }
+  let v: unknown
+  try {
+    v = JSON.parse(raw)
+  } catch {
+    return { code: 'prizes' }
+  }
+  if (v === null) return { prizes: [] }
+  if (!Array.isArray(v)) return { code: 'prizes' }
+  if (v.length > MAX_PRIZES) return { code: 'prizes_many' }
+  const prizes: Prize[] = []
+  for (const row of v) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) return { code: 'prizes' }
+    const keys = Object.keys(row)
+    if (keys.length !== 2 || !keys.includes('amount') || !keys.includes('weight')) return { code: 'prizes' }
+    const { amount, weight } = row as Record<string, unknown>
+    if (typeof amount !== 'number' || typeof weight !== 'number' || !Number.isInteger(amount) || !Number.isInteger(weight)) return { code: 'prizes' }
+    if (amount < 1 || amount > MAX_BONUS || weight < 1 || weight > MAX_PRIZE_WEIGHT) return { code: 'prizes' }
+    prizes.push({ amount, weight })
+  }
+  prizes.sort((a, b) => a.amount - b.amount)
+  for (let i = 1; i < prizes.length; i++) if (prizes[i].amount === prizes[i - 1].amount) return { code: 'prizes_dup' }
+  return { prizes }
+}
+
+/** formatPrizes writes the list the way core stores it: sorted by amount, compact JSON, "" for none. */
+export function formatPrizes(prizes: Prize[]): string {
+  if (!prizes.length) return ''
+  return JSON.stringify([...prizes].sort((a, b) => a.amount - b.amount).map((p) => ({ amount: p.amount, weight: p.weight })))
+}
+
+/** normalizePrizes is a list as it will be stored when it is valid, else as typed (for validate to refuse). */
+export function normalizePrizes(raw: string): string {
+  const p = parsePrizes(raw)
+  return 'prizes' in p ? formatPrizes(p.prizes) : raw.trim()
+}
+
+/** chancePercent writes a chance (a fraction of 1) as a percent in the language, with up to two decimals ("37.5%", "۳۷٫۵٪"). */
+export function chancePercent(fraction: number, lang: 'fa' | 'en'): string {
+  return new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US', { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
+}
+
 /** Groups core may still list that are edited on another page: the
  * payment details are on the Payment gateways page. */
 export const movedGroups = ['payments']
@@ -107,7 +162,7 @@ export function normalize(item: SettingItem, raw: string): string {
   if (item.kind === 'int') return asciiNumber(s)
   if (item.kind === 'channel') return normalizeChannel(s)
   if (item.kind === 'time') return normalizeTime(s)
-  if (item.kind === 'list') return normalizeTiers(s)
+  if (item.kind === 'list') return item.key === 'wheel.prizes' ? normalizePrizes(s) : normalizeTiers(s)
   if (item.key === 'cashback.percent') {
     const bp = percentBP(s)
     return bp === null ? s : String(bp / 100)
@@ -184,7 +239,7 @@ export function validate(item: SettingItem, value: string, others: Record<string
     case 'text':
       return validateText(item.key, value)
     case 'list': {
-      const p = parseTiers(value)
+      const p = item.key === 'wheel.prizes' ? parsePrizes(value) : parseTiers(value)
       return 'code' in p ? { code: p.code } : null
     }
   }

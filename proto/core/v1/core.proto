@@ -1003,6 +1003,10 @@ service CoreService {
   // GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
   // enabled is false while the board is off. NOT_FOUND for an unknown user.
   rpc GetTopInviters(GetTopInvitersRequest) returns (TopInviters);
+  // GetWheel and SpinWheel are the daily wheel of fortune (growth.proto): the
+  // wheel as this customer sees it, and their one spin of the day.
+  rpc GetWheel(GetWheelRequest) returns (WheelState);
+  rpc SpinWheel(SpinWheelRequest) returns (WheelSpinResult);
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
   rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);

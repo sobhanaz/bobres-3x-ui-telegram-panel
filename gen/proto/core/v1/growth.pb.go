@@ -199,6 +199,382 @@ func (x *ResellerTargets) GetBonusPaid() int64 {
 	return 0
 }
 
+// WheelPrize is one segment of the wheel: Toman won, drawn with the chance weight / total_weight.
+type WheelPrize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Amount        int64                  `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`
+	Weight        int64                  `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WheelPrize) Reset() {
+	*x = WheelPrize{}
+	mi := &file_core_v1_growth_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WheelPrize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WheelPrize) ProtoMessage() {}
+
+func (x *WheelPrize) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_growth_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WheelPrize.ProtoReflect.Descriptor instead.
+func (*WheelPrize) Descriptor() ([]byte, []int) {
+	return file_core_v1_growth_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *WheelPrize) GetAmount() int64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *WheelPrize) GetWeight() int64 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+type GetWheelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWheelRequest) Reset() {
+	*x = GetWheelRequest{}
+	mi := &file_core_v1_growth_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWheelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWheelRequest) ProtoMessage() {}
+
+func (x *GetWheelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_growth_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWheelRequest.ProtoReflect.Descriptor instead.
+func (*GetWheelRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_growth_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetWheelRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// WheelState is the wheel as a customer sees it before they spin.
+type WheelState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	On            bool                   `protobuf:"varint,1,opt,name=on,proto3" json:"on,omitempty"`                                               // the wheel can pay (switched on, with prizes and a daily budget); when false nothing else is filled in
+	Day           string                 `protobuf:"bytes,2,opt,name=day,proto3" json:"day,omitempty"`                                              // the store-local day, "2026-10-28"
+	ResetsAt      int64                  `protobuf:"varint,3,opt,name=resets_at,json=resetsAt,proto3" json:"resets_at,omitempty"`                   // unix seconds: when the next day, and the next spin, begins
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`                                        // why this customer may not spin: "role" (a reseller or staff) or "orders" (not enough paid orders); empty when they may
+	Orders        int64                  `protobuf:"varint,5,opt,name=orders,proto3" json:"orders,omitempty"`                                       // paid orders the customer has
+	MinOrders     int64                  `protobuf:"varint,6,opt,name=min_orders,json=minOrders,proto3" json:"min_orders,omitempty"`                // paid orders the owner asks for
+	Spun          bool                   `protobuf:"varint,7,opt,name=spun,proto3" json:"spun,omitempty"`                                           // the customer has spun today
+	Prize         int64                  `protobuf:"varint,8,opt,name=prize,proto3" json:"prize,omitempty"`                                         // today's prize in Toman (0: none), when spun
+	Open          bool                   `protobuf:"varint,9,opt,name=open,proto3" json:"open,omitempty"`                                           // what is left of the day's budget still covers the smallest prize
+	Prizes        []*WheelPrize          `protobuf:"bytes,10,rep,name=prizes,proto3" json:"prizes,omitempty"`                                       // smallest amount first: the order of the segments
+	NoPrizeWeight int64                  `protobuf:"varint,11,opt,name=no_prize_weight,json=noPrizeWeight,proto3" json:"no_prize_weight,omitempty"` // the weight of the segment that pays nothing (after the prizes)
+	TotalWeight   int64                  `protobuf:"varint,12,opt,name=total_weight,json=totalWeight,proto3" json:"total_weight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WheelState) Reset() {
+	*x = WheelState{}
+	mi := &file_core_v1_growth_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WheelState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WheelState) ProtoMessage() {}
+
+func (x *WheelState) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_growth_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WheelState.ProtoReflect.Descriptor instead.
+func (*WheelState) Descriptor() ([]byte, []int) {
+	return file_core_v1_growth_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *WheelState) GetOn() bool {
+	if x != nil {
+		return x.On
+	}
+	return false
+}
+
+func (x *WheelState) GetDay() string {
+	if x != nil {
+		return x.Day
+	}
+	return ""
+}
+
+func (x *WheelState) GetResetsAt() int64 {
+	if x != nil {
+		return x.ResetsAt
+	}
+	return 0
+}
+
+func (x *WheelState) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *WheelState) GetOrders() int64 {
+	if x != nil {
+		return x.Orders
+	}
+	return 0
+}
+
+func (x *WheelState) GetMinOrders() int64 {
+	if x != nil {
+		return x.MinOrders
+	}
+	return 0
+}
+
+func (x *WheelState) GetSpun() bool {
+	if x != nil {
+		return x.Spun
+	}
+	return false
+}
+
+func (x *WheelState) GetPrize() int64 {
+	if x != nil {
+		return x.Prize
+	}
+	return 0
+}
+
+func (x *WheelState) GetOpen() bool {
+	if x != nil {
+		return x.Open
+	}
+	return false
+}
+
+func (x *WheelState) GetPrizes() []*WheelPrize {
+	if x != nil {
+		return x.Prizes
+	}
+	return nil
+}
+
+func (x *WheelState) GetNoPrizeWeight() int64 {
+	if x != nil {
+		return x.NoPrizeWeight
+	}
+	return 0
+}
+
+func (x *WheelState) GetTotalWeight() int64 {
+	if x != nil {
+		return x.TotalWeight
+	}
+	return 0
+}
+
+type SpinWheelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SpinWheelRequest) Reset() {
+	*x = SpinWheelRequest{}
+	mi := &file_core_v1_growth_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SpinWheelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpinWheelRequest) ProtoMessage() {}
+
+func (x *SpinWheelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_growth_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpinWheelRequest.ProtoReflect.Descriptor instead.
+func (*SpinWheelRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_growth_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SpinWheelRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// WheelSpinResult answers a spin. A customer who already spun today gets that spin back (status "already"); a prize the day's budget cannot cover is
+// "closed" and does not use the spin. A banned customer is PERMISSION_DENIED.
+type WheelSpinResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`    // won | lost | already | closed | off | role | orders
+	Prize         int64                  `protobuf:"varint,2,opt,name=prize,proto3" json:"prize,omitempty"`     // Toman won (won), or the earlier spin's (already)
+	Index         int32                  `protobuf:"varint,3,opt,name=index,proto3" json:"index,omitempty"`     // the prize's place in WheelState.prizes; -1 for no prize
+	Balance       int64                  `protobuf:"varint,4,opt,name=balance,proto3" json:"balance,omitempty"` // the wallet now (Toman)
+	Day           string                 `protobuf:"bytes,5,opt,name=day,proto3" json:"day,omitempty"`
+	ResetsAt      int64                  `protobuf:"varint,6,opt,name=resets_at,json=resetsAt,proto3" json:"resets_at,omitempty"`
+	Orders        int64                  `protobuf:"varint,7,opt,name=orders,proto3" json:"orders,omitempty"`                        // for status "orders": what the customer has
+	MinOrders     int64                  `protobuf:"varint,8,opt,name=min_orders,json=minOrders,proto3" json:"min_orders,omitempty"` // and what is asked
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WheelSpinResult) Reset() {
+	*x = WheelSpinResult{}
+	mi := &file_core_v1_growth_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WheelSpinResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WheelSpinResult) ProtoMessage() {}
+
+func (x *WheelSpinResult) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_growth_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WheelSpinResult.ProtoReflect.Descriptor instead.
+func (*WheelSpinResult) Descriptor() ([]byte, []int) {
+	return file_core_v1_growth_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WheelSpinResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *WheelSpinResult) GetPrize() int64 {
+	if x != nil {
+		return x.Prize
+	}
+	return 0
+}
+
+func (x *WheelSpinResult) GetIndex() int32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *WheelSpinResult) GetBalance() int64 {
+	if x != nil {
+		return x.Balance
+	}
+	return 0
+}
+
+func (x *WheelSpinResult) GetDay() string {
+	if x != nil {
+		return x.Day
+	}
+	return ""
+}
+
+func (x *WheelSpinResult) GetResetsAt() int64 {
+	if x != nil {
+		return x.ResetsAt
+	}
+	return 0
+}
+
+func (x *WheelSpinResult) GetOrders() int64 {
+	if x != nil {
+		return x.Orders
+	}
+	return 0
+}
+
+func (x *WheelSpinResult) GetMinOrders() int64 {
+	if x != nil {
+		return x.MinOrders
+	}
+	return 0
+}
+
 var File_core_v1_growth_proto protoreflect.FileDescriptor
 
 const file_core_v1_growth_proto_rawDesc = "" +
@@ -219,7 +595,41 @@ const file_core_v1_growth_proto_rawDesc = "" +
 	"\x05tiers\x18\a \x03(\v2\x1b.core.v1.ResellerTargetTierR\x05tiers\x12\x1c\n" +
 	"\tremaining\x18\b \x01(\x03R\tremaining\x12\x1d\n" +
 	"\n" +
-	"bonus_paid\x18\t \x01(\x03R\tbonusPaidBJZHgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1b\x06proto3"
+	"bonus_paid\x18\t \x01(\x03R\tbonusPaid\"<\n" +
+	"\n" +
+	"WheelPrize\x12\x16\n" +
+	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12\x16\n" +
+	"\x06weight\x18\x02 \x01(\x03R\x06weight\"*\n" +
+	"\x0fGetWheelRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xd0\x02\n" +
+	"\n" +
+	"WheelState\x12\x0e\n" +
+	"\x02on\x18\x01 \x01(\bR\x02on\x12\x10\n" +
+	"\x03day\x18\x02 \x01(\tR\x03day\x12\x1b\n" +
+	"\tresets_at\x18\x03 \x01(\x03R\bresetsAt\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12\x16\n" +
+	"\x06orders\x18\x05 \x01(\x03R\x06orders\x12\x1d\n" +
+	"\n" +
+	"min_orders\x18\x06 \x01(\x03R\tminOrders\x12\x12\n" +
+	"\x04spun\x18\a \x01(\bR\x04spun\x12\x14\n" +
+	"\x05prize\x18\b \x01(\x03R\x05prize\x12\x12\n" +
+	"\x04open\x18\t \x01(\bR\x04open\x12+\n" +
+	"\x06prizes\x18\n" +
+	" \x03(\v2\x13.core.v1.WheelPrizeR\x06prizes\x12&\n" +
+	"\x0fno_prize_weight\x18\v \x01(\x03R\rnoPrizeWeight\x12!\n" +
+	"\ftotal_weight\x18\f \x01(\x03R\vtotalWeight\"+\n" +
+	"\x10SpinWheelRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xd5\x01\n" +
+	"\x0fWheelSpinResult\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x14\n" +
+	"\x05prize\x18\x02 \x01(\x03R\x05prize\x12\x14\n" +
+	"\x05index\x18\x03 \x01(\x05R\x05index\x12\x18\n" +
+	"\abalance\x18\x04 \x01(\x03R\abalance\x12\x10\n" +
+	"\x03day\x18\x05 \x01(\tR\x03day\x12\x1b\n" +
+	"\tresets_at\x18\x06 \x01(\x03R\bresetsAt\x12\x16\n" +
+	"\x06orders\x18\a \x01(\x03R\x06orders\x12\x1d\n" +
+	"\n" +
+	"min_orders\x18\b \x01(\x03R\tminOrdersBJZHgithub.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1b\x06proto3"
 
 var (
 	file_core_v1_growth_proto_rawDescOnce sync.Once
@@ -233,18 +643,24 @@ func file_core_v1_growth_proto_rawDescGZIP() []byte {
 	return file_core_v1_growth_proto_rawDescData
 }
 
-var file_core_v1_growth_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_core_v1_growth_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_core_v1_growth_proto_goTypes = []any{
 	(*ResellerTargetTier)(nil), // 0: core.v1.ResellerTargetTier
 	(*ResellerTargets)(nil),    // 1: core.v1.ResellerTargets
+	(*WheelPrize)(nil),         // 2: core.v1.WheelPrize
+	(*GetWheelRequest)(nil),    // 3: core.v1.GetWheelRequest
+	(*WheelState)(nil),         // 4: core.v1.WheelState
+	(*SpinWheelRequest)(nil),   // 5: core.v1.SpinWheelRequest
+	(*WheelSpinResult)(nil),    // 6: core.v1.WheelSpinResult
 }
 var file_core_v1_growth_proto_depIdxs = []int32{
 	0, // 0: core.v1.ResellerTargets.tiers:type_name -> core.v1.ResellerTargetTier
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 1: core.v1.WheelState.prizes:type_name -> core.v1.WheelPrize
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_core_v1_growth_proto_init() }
@@ -258,7 +674,7 @@ func file_core_v1_growth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_core_v1_growth_proto_rawDesc), len(file_core_v1_growth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

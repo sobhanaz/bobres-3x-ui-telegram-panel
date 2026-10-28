@@ -59,6 +59,8 @@ type Config struct {
 	RateTransport RateTransport
 	// Now is the clock of the growth tools (the month of a reseller's sale, the day of a spin): nil is time.Now. Tests set it.
 	Now func() time.Time
+	// WheelRand draws the wheel of fortune: a uniform number in [0, n). nil is crypto/rand; tests set it to fix the draw.
+	WheelRand func(n int64) (int64, error)
 	// PrivateFeaturesOverride, when set, decides PrivateFeatures instead of the license. It exists for tests of the vendor's
 	// own features; nothing sets it in a running install.
 	PrivateFeaturesOverride *bool

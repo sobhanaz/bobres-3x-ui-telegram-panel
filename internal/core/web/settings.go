@@ -21,7 +21,7 @@ type BotPeer interface {
 // settingsGroups are the groups of the Settings page; branding and texts
 // have their own page, the referral reward is on the Discounts page and the
 // payments group on the Payment gateways page (which saves it here too).
-var settingsGroups = []string{"general", "shop", "maintenance", "join", "notify", "reports", "support", "growth", "cashback", "targets", "limits", "monitor"}
+var settingsGroups = []string{"general", "shop", "maintenance", "join", "notify", "reports", "support", "growth", "cashback", "targets", "wheel", "limits", "monitor"}
 
 // savedGroups are the groups PUT /api/v1/settings takes.
 var savedGroups = append(slices.Clone(settingsGroups), "payments")

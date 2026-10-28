@@ -49,7 +49,7 @@ If your panel is down, the customer keeps a paid order and gets the service when
 - **Reminders** come 3 days and 1 day before expiry, at 80% of the traffic and when it ends, with Renew and Add traffic buttons.
 - **Support** is one open conversation per customer. They can send text, photos and PDFs. Staff replies arrive in the chat.
 - **Help center:** the FAQ and tutorials you write in the dashboard (Branding & texts, Help content).
-- **Gift codes** add credit to the wallet. **Reward codes** are discount codes you hand out after a purchase. **Cashback** puts a share of a delivered order back into the wallet, with a message. See [Plans and Pricing](Plans-and-Pricing).
+- **Gift codes** add credit to the wallet. **Reward codes** are discount codes you hand out after a purchase. **Cashback** puts a share of a delivered order back into the wallet, with a message. The **Daily wheel** gives customers with paid orders one free spin a day. See [Plans and Pricing](Plans-and-Pricing).
 
 ## For staff
 

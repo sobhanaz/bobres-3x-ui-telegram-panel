@@ -7,6 +7,7 @@ import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import JoinChatsCard from '../components/settings/JoinChatsCard.vue'
 import SettingsCard from '../components/settings/SettingsCard.vue'
+import WheelReportCard from '../components/settings/WheelReportCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { effective, movedGroups, wideGroups } from '../settings'
@@ -70,8 +71,11 @@ const maintenanceOn = computed(() => {
   return m ? effective(m) === 'true' : false
 })
 
+// The wheel's report follows what was saved (its budget, whether it is on).
+const saves = ref(0)
 function saved(r: SettingsReply) {
   reply.value = r
+  saves.value++
 }
 </script>
 
@@ -103,6 +107,7 @@ function saved(r: SettingsReply) {
     <template v-for="g in groups" :key="g">
       <JoinChatsCard v-if="g === JOIN" class="wide" />
       <SettingsCard v-else :group="g" :items="byGroup[g]" :class="{ wide: wide.includes(g) }" @saved="saved" />
+      <WheelReportCard v-if="g === 'wheel' && auth.can('reports.read')" class="wide" :refresh-key="saves" />
     </template>
     <p v-if="!groups.length" class="app-muted">{{ t('settings.empty') }}</p>
   </div>

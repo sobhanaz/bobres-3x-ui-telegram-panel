@@ -223,7 +223,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		// A gift code was applied in the bot, which answered with the amount
 		// and the balance in the same chat (as a wallet payment does): a
 		// second message would only repeat it.
-		if e.Reason == events.CreditGiftCode {
+		if e.Reason == events.CreditGiftCode || e.Reason == events.CreditWheelPrize {
 			return nil
 		}
 		// A commission names the amount only: the customer who bought is

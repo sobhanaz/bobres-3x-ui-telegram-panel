@@ -56,6 +56,8 @@ const (
 	CoreService_GetBulkOrder_FullMethodName              = "/core.v1.CoreService/GetBulkOrder"
 	CoreService_GetReferralInfo_FullMethodName           = "/core.v1.CoreService/GetReferralInfo"
 	CoreService_GetTopInviters_FullMethodName            = "/core.v1.CoreService/GetTopInviters"
+	CoreService_GetWheel_FullMethodName                  = "/core.v1.CoreService/GetWheel"
+	CoreService_SpinWheel_FullMethodName                 = "/core.v1.CoreService/SpinWheel"
 	CoreService_AdminUpsertDiscount_FullMethodName       = "/core.v1.CoreService/AdminUpsertDiscount"
 	CoreService_AdminListDiscounts_FullMethodName        = "/core.v1.CoreService/AdminListDiscounts"
 	CoreService_CreateDashboardLink_FullMethodName       = "/core.v1.CoreService/CreateDashboardLink"
@@ -158,6 +160,10 @@ type CoreServiceClient interface {
 	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
 	// enabled is false while the board is off. NOT_FOUND for an unknown user.
 	GetTopInviters(ctx context.Context, in *GetTopInvitersRequest, opts ...grpc.CallOption) (*TopInviters, error)
+	// GetWheel and SpinWheel are the daily wheel of fortune (growth.proto): the
+	// wheel as this customer sees it, and their one spin of the day.
+	GetWheel(ctx context.Context, in *GetWheelRequest, opts ...grpc.CallOption) (*WheelState, error)
+	SpinWheel(ctx context.Context, in *SpinWheelRequest, opts ...grpc.CallOption) (*WheelSpinResult, error)
 	AdminUpsertDiscount(ctx context.Context, in *AdminUpsertDiscountRequest, opts ...grpc.CallOption) (*Discount, error)
 	AdminListDiscounts(ctx context.Context, in *AdminListDiscountsRequest, opts ...grpc.CallOption) (*AdminListDiscountsResponse, error)
 	CreateDashboardLink(ctx context.Context, in *CreateDashboardLinkRequest, opts ...grpc.CallOption) (*DashboardLink, error)
@@ -608,6 +614,26 @@ func (c *coreServiceClient) GetTopInviters(ctx context.Context, in *GetTopInvite
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TopInviters)
 	err := c.cc.Invoke(ctx, CoreService_GetTopInviters_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) GetWheel(ctx context.Context, in *GetWheelRequest, opts ...grpc.CallOption) (*WheelState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WheelState)
+	err := c.cc.Invoke(ctx, CoreService_GetWheel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) SpinWheel(ctx context.Context, in *SpinWheelRequest, opts ...grpc.CallOption) (*WheelSpinResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WheelSpinResult)
+	err := c.cc.Invoke(ctx, CoreService_SpinWheel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1092,6 +1118,10 @@ type CoreServiceServer interface {
 	// GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
 	// enabled is false while the board is off. NOT_FOUND for an unknown user.
 	GetTopInviters(context.Context, *GetTopInvitersRequest) (*TopInviters, error)
+	// GetWheel and SpinWheel are the daily wheel of fortune (growth.proto): the
+	// wheel as this customer sees it, and their one spin of the day.
+	GetWheel(context.Context, *GetWheelRequest) (*WheelState, error)
+	SpinWheel(context.Context, *SpinWheelRequest) (*WheelSpinResult, error)
 	AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error)
 	AdminListDiscounts(context.Context, *AdminListDiscountsRequest) (*AdminListDiscountsResponse, error)
 	CreateDashboardLink(context.Context, *CreateDashboardLinkRequest) (*DashboardLink, error)
@@ -1287,6 +1317,12 @@ func (UnimplementedCoreServiceServer) GetReferralInfo(context.Context, *GetRefer
 }
 func (UnimplementedCoreServiceServer) GetTopInviters(context.Context, *GetTopInvitersRequest) (*TopInviters, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTopInviters not implemented")
+}
+func (UnimplementedCoreServiceServer) GetWheel(context.Context, *GetWheelRequest) (*WheelState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWheel not implemented")
+}
+func (UnimplementedCoreServiceServer) SpinWheel(context.Context, *SpinWheelRequest) (*WheelSpinResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method SpinWheel not implemented")
 }
 func (UnimplementedCoreServiceServer) AdminUpsertDiscount(context.Context, *AdminUpsertDiscountRequest) (*Discount, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminUpsertDiscount not implemented")
@@ -2097,6 +2133,42 @@ func _CoreService_GetTopInviters_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).GetTopInviters(ctx, req.(*GetTopInvitersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_GetWheel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWheelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetWheel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetWheel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetWheel(ctx, req.(*GetWheelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_SpinWheel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpinWheelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SpinWheel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SpinWheel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SpinWheel(ctx, req.(*SpinWheelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3011,6 +3083,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopInviters",
 			Handler:    _CoreService_GetTopInviters_Handler,
+		},
+		{
+			MethodName: "GetWheel",
+			Handler:    _CoreService_GetWheel_Handler,
+		},
+		{
+			MethodName: "SpinWheel",
+			Handler:    _CoreService_SpinWheel_Handler,
 		},
 		{
 			MethodName: "AdminUpsertDiscount",

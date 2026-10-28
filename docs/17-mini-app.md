@@ -141,6 +141,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /trial`, `POST /trial` | The free trial's plan and whether the customer can still take it; take it (one per account, shared with the bot). The order is polled like a purchase's |
 | `POST /reseller/prefix` `{prefix}` | A reseller chooses the prefix of the names of their configs in the 3x-ui panel, once (409 `state` afterwards: only the owner changes it; 400 for a shape core refuses or another reseller's prefix); the answer is the panel (`GET /reseller` carries `config_prefix` and `panel_group`). The section asks "Use <prefix> for all your configs?" before it sends |
 | `GET /invite` | The customer's invite link, how many joined, how many bought, what it earned. Offered when `referral.reward_percent` is above 0, the bot's username is known and the customer is not a reseller |
+| `GET /wheel`, `POST /wheel/spin` | The daily wheel (`features.wheel`, true only for a customer while the wheel is on). `GET` is the wheel as this customer sees it: `prizes` (`amount`, `weight`), `no_prize_weight`, `total_weight`, `orders` and `min_orders`, `reason` (`orders`, `role` or empty), `spun` and `prize` for today, `open` (the day's budget still covers the smallest prize), `resets_at`; 404 while the wheel is off. `POST` draws, once a day: `status` `won` or `lost` (the wheel stopped; `index` is the place of the prize on the wheel, -1 for none), `already` (the earlier spin of the day, no new draw), `closed` (the budget cannot cover the prize: no prize, the spin is not used), `orders` or `role`; with `prize`, `balance` and `resets_at`. The draw is core's: the app turns the wheel to the piece `index` names and shows the answer when it stops |
 | `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing. `categories` lists the three topics to write under (payment, service, other); a ticket's own `category` can also be `reseller`, a reseller application the bot filed, which the app shows with its label (a message named `reseller` from the app is filed as `other`: an application is made from the bot's button) |
 
 The app takes **Zarinpal, IDPay, NextPay, automatic USDT, Telegram Stars and the three manual methods**: whatever the
@@ -160,6 +161,11 @@ These are sections of the More tab (see "Adding a section"); each says in `featu
   `mini:<user id>:<key>`), so a purchase is one kind of order in both places and shows in the bot's list too. When the supplier
   has not delivered yet the order is `paid` and the app asks for it every 3 seconds (the account also arrives in the bot);
   a short wallet is sent to the Wallet tab to top up. The account is shown to its buyer only and is in no list.
+- **Daily wheel** (`features.wheel`): the bot's wheel in the app, with the same rules (they live in core, [03-bot-ux.md](03-bot-ux.md#daily-wheel)). An
+  SVG wheel with a piece as wide as each prize's weight (and one for no prize), the prizes with their chances under it, and a Spin button. The tap calls
+  `POST /wheel/spin`; the wheel then turns to the piece the answer names (a few turns, about four seconds, none for a visitor who asked for reduced motion)
+  and the result is shown when it stops. The app never decides where it stops: only a tilt inside the named piece is its own. A double tap is one call; asked
+  again the same day, core gives the same spin back. The wallet tab follows a win.
 - **Invite friends** (`features.invite`): the link is `https://t.me/<bot>?start=r_<code>`, as in the bot. A reseller has
   a commission link of their own in their panel and is not offered this one.
 - **Support** (`features.support`): the bot's support, with the same rules. One conversation is open at a time, a message

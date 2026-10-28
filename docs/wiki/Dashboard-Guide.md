@@ -41,7 +41,7 @@ Every change is written to an append-only audit log. Sensitive actions, such as 
 | | Gift codes | Codes that add credit to a wallet |
 | | Resellers | Tiers, prices, credit limits, settlements |
 | Setup | Branding & texts | Name, logo, colors, every bot text, FAQ and tutorials, your Terms and Privacy pages |
-| | Settings | Time zone, maintenance mode, required channels and groups, notifications, limits, bulk purchase, cashback, daily sales summary |
+| | Settings | Time zone, maintenance mode, required channels and groups, notifications, limits, bulk purchase, cashback, reseller targets, the daily wheel (with its report), daily sales summary |
 | | Panel servers | Your 3x-ui and Marzban panels. See [Panels](Panels) |
 | | Payment gateways | Owner only. See [Payments](Payments) |
 | Administration | Staff | Who may use the dashboard, roles, sessions |

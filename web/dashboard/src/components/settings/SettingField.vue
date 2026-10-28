@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
+import PrizesEditor from './PrizesEditor.vue'
 import TiersEditor from './TiersEditor.vue'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
@@ -25,8 +26,10 @@ const props = withDefaults(
     placeholder?: string
     /** the channel check may run (a valid channel is typed) */
     checkable?: boolean
+    /** the draft of every setting of the card, for an editor that shows a figure that depends on another setting (the wheel's chances) */
+    siblings?: Record<string, string>
   }>(),
-  { problem: '', serverError: '', placeholder: '', checkable: false },
+  { problem: '', serverError: '', placeholder: '', checkable: false, siblings: () => ({}) },
 )
 const emit = defineEmits<{ 'update:modelValue': [value: string]; touch: [] }>()
 const { t, te, locale } = useI18n()
@@ -176,6 +179,17 @@ async function runCheck() {
           <span :class="{ 'app-ltr': option.value }">{{ option.label }}</span>
         </template>
       </Select>
+      <PrizesEditor
+        v-else-if="item.kind === 'list' && item.key === 'wheel.prizes'"
+        :model-value="modelValue"
+        :input-id="id"
+        :no-prize-weight="siblings['wheel.no_prize_weight']"
+        :invalid="!!problem || !!serverError"
+        :locked="locked"
+        :described-by="describedBy"
+        @update:model-value="set"
+        @touch="emit('touch')"
+      />
       <TiersEditor
         v-else-if="item.kind === 'list' && item.key === 'targets.tiers'"
         :model-value="modelValue"

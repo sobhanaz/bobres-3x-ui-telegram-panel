@@ -187,6 +187,17 @@ var SettingSpecs = []SettingSpec{
 		Help: "the tiers: how many new services a reseller sells in a month and the bonus in Toman for reaching it, for example [{\"threshold\":10,\"bonus\":50000}]; each tier pays its own bonus on top of the lower tiers' (at most 10 tiers)"},
 	{Key: SettingTargetsCalendar, Group: "targets", Kind: KindEnum, Perm: permDiscounts, Default: CalendarGregorian, Options: []string{CalendarGregorian, CalendarJalali},
 		Help: "the calendar a month is read in: gregorian (1 to the end of the month) or jalali (Persian months); change it between months, not in the middle of one"},
+	// The daily wheel of fortune (wheel.go): one free spin a day for customers who have paid orders. Off by default, and closed until it has a budget.
+	{Key: SettingWheelEnabled, Group: "wheel", Kind: KindBool, Perm: permDiscounts, Default: "false",
+		Help: "true = customers with enough paid orders get one free spin of the wheel a day, for a chance at wallet credit; false = no wheel (prizes already paid stay in the wallets). It also needs prizes and a daily budget"},
+	{Key: SettingWheelPrizes, Group: "wheel", Kind: KindList, Perm: permDiscounts,
+		Help: "the prizes: each an amount in Toman and a weight, its share of the chances, for example [{\"amount\":10000,\"weight\":10}] (at most 12 prizes, no amount twice)"},
+	{Key: SettingWheelNoPrize, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxWheelNoPrizeWeight,
+		Help: "the weight of the segment that pays nothing: the chance of no prize is this out of the sum of all the weights (empty or 0 = every spin wins something)"},
+	{Key: SettingWheelBudget, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxGrowthAmount,
+		Help: "the most Toman the wheel pays out in one day (store time); when it cannot cover a prize the customer is asked to come back tomorrow and their spin is not used (empty or 0 = the wheel is closed)"},
+	{Key: SettingWheelMinOrders, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 1, Max: MaxWheelMinOrders, Default: "1",
+		Help: "how many paid orders a customer needs before they may spin, at least 1"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
@@ -488,6 +499,12 @@ func normalizeList(key, value string) (string, error) {
 			return "", err
 		}
 		return FormatTargetTiers(tiers), nil
+	case SettingWheelPrizes:
+		prizes, err := ParseWheelPrizes(value)
+		if err != nil {
+			return "", err
+		}
+		return FormatWheelPrizes(prizes), nil
 	}
 	return "", errors.New("not a list")
 }

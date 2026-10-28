@@ -33,7 +33,7 @@ These are not built:
 
 - The **Aqayepardakht** gateway.
 - **S-UI and Hiddify** panels, if operators ask for them, and an adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported.
-- **Growth tools**: cashback, a lottery or wheel, reseller targets. (Gift codes, Top users and invite cards are built.)
+- **Growth tools**: a lottery with tickets. (Gift codes, Top users, invite cards, cashback, the daily wheel and reseller targets are built; the last three are in the next release.)
 - **More bot languages**: Arabic, Russian and Turkish. The texts are already keys, so the work is translation and review.
 - **Per-server capacity limits** beyond today's weights.
 - **A Prometheus endpoint** and an uptime page.

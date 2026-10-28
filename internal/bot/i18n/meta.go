@@ -236,6 +236,8 @@ var buttonStyles = map[string]string{
 	"btn.invite":         "primary",
 	"btn.reseller":       "primary",
 	"btn.top_users":      "primary",
+	"btn.wheel":          "primary",
+	"btn.wheel_spin":     "success",
 	"btn.reseller_apply": "primary",
 	"btn.tutorials":      "primary",
 	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
@@ -287,6 +289,7 @@ var markupArgs = map[string][]string{
 	"pay.check_failed":     {"reason"},
 	"rs.panel":             {"balances"},
 	"rs.targets":           {"tiers", "next"}, // the lines of the tiers, and the sentence about the next one (it holds a <b>)
+	"wheel.spun_today":     {"result"},        // a rendered text (it holds a <b>)
 	"rs.customers_title":   {"lines"},
 	"ref.top_screen":       {"entries", "range"}, // rendered texts: the places, and the ranks of a page
 	"ref.top_entry":        {"you"},              // a rendered text

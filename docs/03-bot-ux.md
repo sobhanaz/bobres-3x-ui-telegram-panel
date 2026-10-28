@@ -75,6 +75,26 @@ just filled, never below zero: if the wallet cannot cover it (the customer owes)
 both (`wallet.credited_refund_cashback`). The wallet history names the movements ("Cashback", "Cashback taken back"). The Mini App shows the terms and
 the total earned on the Wallet tab and "You earned X cashback" on the result of a purchase; the dashboard shows it on the order's page and in the
 reports ([14-reports.md](14-reports.md)).
+<a id="daily-wheel"></a>
+**Daily wheel (2026-10-28).** One free spin a day for customers who have made paid orders, for a chance at wallet credit. It is **off** until the owner switches
+it on and gives it prizes and a daily budget (Settings, Daily wheel): `wheel.enabled`, `wheel.prizes` (up to 12 rows of `{amount, weight}`; Toman and a
+weight, the share of the chances; no amount twice), `wheel.no_prize_weight` (the weight of the segment that pays nothing: the chance of no prize is this
+out of the sum of every weight; 0 means every spin wins), `wheel.daily_budget` (Toman a store-local day; empty or 0 closes the wheel) and `wheel.min_orders`
+(paid orders needed, at least 1; default 1). The home screen and the bottom menu have a **Daily wheel** button (`wh`) only while it is on, and only for
+customers: not for staff, resellers or banned customers (core refuses them anyway). The screen shows the prizes with their chances and a **Spin the wheel**
+button (`wh:spin`); a customer short of paid orders is told how many it takes. The rules, all in core:
+- **One spin per customer per store-local day** (the zone of the reports). The row `(user, day)` of `core.wheel_spins` is unique and a prize is the ledger
+  entry `wheel_prize` with the key `wheel:<user id>:<yyyy-mm-dd>`, written in the same transaction as the spin. A second request the same day (a double tap,
+  a retry, the bot and the Mini App at once) is answered with the first spin and draws nothing.
+- **The draw is core's**: `crypto/rand` over the weights, never the client's. The Mini App's animation only plays the result it was given.
+- **The daily budget** is what the day's spins already paid, read under a lock on the day, so spins are decided one at a time and the budget cannot be
+  overspent by two at once. When what is left cannot cover the smallest prize, or the prize that came up, nothing is paid, **the spin is not used** and the
+  customer is told to come back tomorrow.
+- **Who may spin:** active customers with at least `wheel.min_orders` paid orders (an order that cost something after any discount, was paid and not
+  refunded). A banned customer cannot, even when banned between the tap and the draw; a prize already won stays.
+- A customer sees one short message: "You won X! ... Balance: Y" or "No prize this time"; no second notification is sent (`wallet.credited` with reason
+  `wheel_prize` is silent). The wallet history names it ("Wheel of fortune prize"). The dashboard has a small report under the card
+  (`GET /api/v1/wheel/report`, `reports.read`): today against the budget and each day of the last month that had a spin.
 **Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
 group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
 button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the

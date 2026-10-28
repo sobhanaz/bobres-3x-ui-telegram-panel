@@ -1310,6 +1310,7 @@
       "topup": "Extra traffic",
       "admin": "Admin panel",
       "rs": "Reseller panel",
+      "wheel": "Daily wheel",
       "gift": "Gift codes",
       "bulk": "Bulk purchase",
       "profile": "Bot profile",
@@ -1460,6 +1461,17 @@
       "max": "The list holds at most {n} tier. | The list holds at most {n} tiers.",
       "sorted": "Tiers are saved in order of services."
     },
+    "prizes": {
+      "empty": "No prize yet. Add one to open the wheel.",
+      "row": "Prize {n}",
+      "amount": "Prize (Toman)",
+      "weight": "Weight",
+      "chance": "{percent} of spins",
+      "remove": "Remove prize {n}",
+      "add": "Add a prize",
+      "max": "The wheel holds at most {n} prize. | The wheel holds at most {n} prizes.",
+      "sorted": "Prizes are saved in order of amount."
+    },
     "join": {
       "locked": "Only the store owner can change the required channels and groups.",
       "dormant": "The first channel is empty, so customers are not asked to join anything. The chats below are saved, but do nothing until the list is saved: its first row then becomes the first channel.",
@@ -1525,6 +1537,9 @@
       "tiers": "Each tier needs a whole number of services (1 to 100,000) and a bonus of at least 1 Toman.",
       "tiers_dup": "Two tiers ask for the same number of services.",
       "tiers_many": "At most 10 tiers.",
+      "prizes": "Each prize needs a whole amount of Toman (at least 1) and a weight from 1 to 1,000,000.",
+      "prizes_dup": "Two prizes have the same amount.",
+      "prizes_many": "At most 12 prizes.",
       "percent": "A percent from 0.01 to 20, for example 2.5."
     },
     "option": {
@@ -1595,6 +1610,11 @@
         "title": "Reseller targets",
         "desc": "A monthly bonus for resellers who sell enough new services.",
         "note": "Each tier pays its own bonus, once for the month, as soon as a reseller's sales of the month reach it, on top of the bonuses of the lower tiers. Only new services a reseller bought and that were delivered count; renewals, traffic packages and free orders do not. Sales are counted from the moment you switch targets on. A refunded sale leaves the count of its month, but a bonus already paid is not taken back. Off until you turn it on."
+      },
+      "wheel": {
+        "title": "Daily wheel",
+        "desc": "One free spin a day for customers who have paid orders, for a chance at wallet credit.",
+        "note": "The wheel stays closed until it has prizes and a daily budget. The draw is made by core, once per customer per day in store time. A prize the day's budget cannot cover is not paid and the customer's spin is not used: they are asked to come back tomorrow. Only customers spin, not resellers, staff or banned customers, and only after the paid orders you ask for (at least one). A prize is credit in the wallet, not cash: it can only be spent in the store. Off until you turn it on."
       },
       "growth": {
         "title": "Growth",
@@ -1814,6 +1834,28 @@
         "calendar": {
           "label": "Calendar of the month",
           "help": "Gregorian: a month runs from the 1st to its last day (the 1st of November, for instance). Jalali: Persian months (the 1st of Aban). The month is read in the store's time zone. Change it between months, not in the middle of one."
+        }
+      },
+      "wheel": {
+        "enabled": {
+          "label": "Daily wheel",
+          "help": "When on, a customer with enough paid orders may spin the wheel once a day, in the bot and in the Mini App. Turned off, the wheel is gone; prizes already paid stay in the wallets. It also needs prizes and a daily budget."
+        },
+        "prizes": {
+          "label": "Prizes",
+          "help": "What the wheel can pay, in Toman, and each prize's weight: its share of the chances. A prize of weight 3 comes up three times as often as one of weight 1. At most 12 prizes, no amount twice; saved in order of amount."
+        },
+        "no_prize_weight": {
+          "label": "Weight of no prize",
+          "help": "The chance of no prize is this number out of the sum of all the weights, the prizes' included. Empty or 0 means every spin wins something."
+        },
+        "daily_budget": {
+          "label": "Daily budget (Toman)",
+          "help": "The most the wheel pays out in one day (store time). Spins are decided one at a time against it: when it cannot cover the prize that comes up, nothing is paid, the customer's spin is not used and they are asked to come back tomorrow. Empty or 0 means the wheel is closed."
+        },
+        "min_orders": {
+          "label": "Paid orders needed",
+          "help": "How many paid orders a customer needs before they may spin, at least 1: an account made only to spin earns nothing. Refunded orders and orders that cost nothing do not count."
         }
       },
       "growth": {
@@ -2461,6 +2503,22 @@
       "error": "Telegram's answer",
       "when": "Time",
       "empty": "No customer in this list."
+    }
+  },
+  "wheel": {
+    "report": {
+      "title": "Daily wheel report",
+      "desc": "What the wheel did today and on the days of the last month that had a spin, in store time.",
+      "off": "The wheel is off or closed now: it needs to be switched on, with prizes and a daily budget.",
+      "today": "Today",
+      "spins": "Spins",
+      "winners": "Winners",
+      "paid": "Paid out",
+      "budget": "Daily budget",
+      "remaining": "Left today",
+      "day": "Day",
+      "total": "All these days",
+      "empty": "Nobody has spun yet."
     }
   },
   "reseller": {

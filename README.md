@@ -182,7 +182,10 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
 - A **wallet** with top-ups and history, **gift codes** that add credit, **reward codes** (mark a plan, say the unlimited
   one: each paid purchase gives the buyer a discount code, a percent or a fixed amount, for any plan they buy next, for
   them only, one use, for the days you set, with your own text), **one free trial** per Telegram account, **bulk purchase**, and invite links that reward the inviter on a
-  friend's first paid purchase, with a Top users board.
+  friend's first paid purchase, with a Top users board. Three growth tools are off until you switch them on: **cashback**
+  (a share of each delivered order goes back to the buyer's wallet, and comes back out of a refund), a **daily wheel of
+  fortune** (one free spin a day for customers with paid orders, drawn on the server, paid out of a daily budget you set)
+  and **monthly targets** (resellers who sell enough new services in a month are paid a bonus, once per tier).
 - **Reminders** 3 days and 1 day before expiry, at 80% of the traffic and at the end, with Renew and Add traffic buttons.
 - **Support** conversations with text, photos and PDFs; staff replies arrive in the chat. A **help center** (FAQ and
   video tutorials) the owner edits in the dashboard.

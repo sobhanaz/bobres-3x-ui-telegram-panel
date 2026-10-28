@@ -55,6 +55,7 @@ Under the plans table, **Deleted plans** lists what was deleted. The owner (the 
 | Reward code | Made by the bot after a purchase (below) | Plans |
 | Referral reward | A percent of an invited friend's first paid purchase goes to the inviter's wallet (`referral.reward_percent`) | Discounts & referrals |
 | Cashback | A share of every delivered order goes back to the buyer's wallet (below) | Settings |
+| Daily wheel | A free spin a day for customers who have paid orders, for a chance at wallet credit (below) | Settings |
 
 Customers can apply gift codes unless you switch `gift_codes.enabled` off.
 
@@ -77,6 +78,22 @@ Cashback gives a share of what an order cost back to the buyer's wallet. It is *
 When an order has been **paid and delivered**, the buyer's wallet is credited once, whatever retries the delivery. The customer gets a message ("You earned X cashback") and sees it in the Mini App, on the Wallet tab and on the result of the purchase. The services of a bulk purchase are told in the bulk's one message.
 
 It is wallet credit, not cash: it can only be spent in your store, and an order paid with it earns cashback again. If you **refund** the order, the cashback is taken back in the same step, from the refund, and never takes a wallet below zero (if it cannot all be taken, the audit log says how much was short). Resellers (they have [monthly targets](Resellers)), free orders, the free trial, orders priced in USDT and banned customers earn nothing. Reports have a line for the cashback given; it is not revenue and it is not taken off the net.
+
+### Daily wheel
+
+The wheel gives each customer who has paid for enough orders one free spin a day, for a chance at wallet credit. It is **off** until you switch it on in **Settings**, card **Daily wheel**. It also stays closed until it has prizes and a daily budget.
+
+| Setting | Meaning |
+|---|---|
+| `wheel.enabled` | The switch. Off by default |
+| `wheel.prizes` | Up to 12 prizes. Each has an amount in Toman and a **weight**, its share of the chances: a prize of weight 3 comes up three times as often as one of weight 1. The card shows the chance of each |
+| `wheel.no_prize_weight` | The weight of the piece that pays nothing. The chance of no prize is this out of all the weights added up. 0 or empty: every spin wins something |
+| `wheel.daily_budget` | The most the wheel pays out in one day (store time). Empty or 0 closes the wheel |
+| `wheel.min_orders` | Paid orders a customer needs before they may spin, at least 1. Refunded orders and orders that cost nothing do not count |
+
+A customer spins once per day (the day is your store's day), in the bot (a **Daily wheel** button) or in the Mini App (a wheel that turns). Asked again the same day, they get the same spin back: it is never drawn or paid twice. The draw is made on the server, not on the customer's phone.
+
+The budget is checked one spin at a time. When what is left of it cannot cover the prize that comes up, nothing is paid, the customer's spin is **not** used, and they are asked to come back tomorrow. Only customers spin: not resellers, staff or banned customers. A prize is wallet credit, not cash; it can only be spent in your store. Under the card, a small report shows today against the budget and each day of the last month with a spin.
 
 ## Bulk purchase
 

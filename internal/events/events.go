@@ -206,6 +206,9 @@ const (
 	CreditCashback = "cashback"
 	// CreditTargetBonus: a reseller reached a tier of the monthly sales target (TargetSales, TargetMonth and TargetThreshold say which).
 	CreditTargetBonus = "target_bonus"
+	// CreditWheelPrize: the customer won a prize on the daily wheel. They spun in the bot or the Mini App, which answered with the prize and the new
+	// balance in the same place, so the notifier sends no second message.
+	CreditWheelPrize = "wheel_prize"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.

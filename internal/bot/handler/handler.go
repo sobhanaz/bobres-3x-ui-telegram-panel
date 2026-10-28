@@ -585,6 +585,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.showReferral(r)
 	case "top":
 		h.showTopUsers(r, pageArg(rest))
+	case "wh":
+		h.onWheel(r, rest)
 	case "ap":
 		h.onResellerApply(r)
 	case "renew":
