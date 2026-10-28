@@ -34,6 +34,16 @@ func TestWalletQuoteOverGRPC(t *testing.T) {
 	})
 	c := f.client(t, botToken)
 	ctx := context.Background()
+	// The settings table is not truncated between the tests of the package: start with no USDT rate, and leave none.
+	clearRates := func() {
+		for _, k := range []string{"payments.usdt_rate", "payments.usdt_rate_auto", "state.usdt_rate.live"} {
+			if err := f.st.DeleteSetting(ctx, f.st.Conn(), k); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	clearRates()
+	t.Cleanup(clearRates)
 	setRate := func(rate string) {
 		t.Helper()
 		raw, _ := json.Marshal(rate)
