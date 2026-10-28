@@ -9,8 +9,17 @@ All notable changes to BOBRES are written here. The format follows
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Added
+- **Services the panel no longer has a client for.** When the 3x-ui or Marzban panel answers that it has no client for a service (an operator deleted it there), core now marks the service with the time it first saw that (`subscriptions.panel_missing_since`, migration 00040) instead of failing to read it every ten minutes. The Services page lists them (`?panel=missing`, a badge and a filter), the overview counts them, and the service page has **Make the client again** (`POST /api/v1/services/{id}/recreate-client`, `services.write`, with a reason): the provisioner makes the client on the same server, in the same inbounds and group, with the same email and subscription id, so the customer's link works again, with the expiry and quota core holds (the panel's usage counter starts from zero). New provisioner RPC `RecreateClient`; `GetUsage` answers `client_missing` instead of an error.
+- **One daily notice for them.** The watchdog raises `subscriptions.panel_missing` ("Services whose client is gone from the panel: N") once, then at most once a day while any remain, and says nothing when the last is made again.
+- **Repeated log lines are one row.** The Monitoring events list folds identical lines from one source (the same message and values, whatever the ids) into one entry with `count` and `first_at`, shown as "×48".
 - **The dashboard shows a service the panel has no client for** (an operator deleted it in 3x-ui or Marzban: the customer cannot connect while the service still looks active). The Services page marks it with a **Not on the panel** badge and has an **Only services not on the panel** switch (`?panel=missing`, so a link or a reload keeps it). The service's page warns since when, that the customer cannot connect and that expiry reminders are paused, and offers **Make the client again** (`services.write`, with a reason): the client is made again on the same server, the same subscription link works again, the used traffic starts from zero and the end date and the traffic limit stay. The Overview has a **Not on the panel** card while there are any, which opens the filtered list. In English and Persian.
 - **The Monitoring events show how often a line repeated.** An entry core folded from several identical lines carries **×N** and the time of the first and the last one; a single line looks as before.
+
+### Changed
+- **No expiry reminder for a service the panel has no client for.** The customer cannot connect, so a message to renew would only confuse; the reminder that was due is not marked as sent and goes out once the client is back. Such a service is asked about every 6 hours (`UsageWorker.MissingEvery`) instead of every 10 minutes.
+
+### Fixed
+- **A service whose client was deleted in the panel filled the events list with two warnings every ten minutes, for ever** ("usage unavailable" from core and "panel call failed ... record not found" from the provisioner, for each such service), pushing real events off the list. A client the panel does not have is an answer now, not a failure, and writes no warning.
 
 ## [0.17.1] — 2026-10-28
 
