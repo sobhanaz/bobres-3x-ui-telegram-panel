@@ -48,7 +48,7 @@ Every owner gets an alert when a receipt arrives, and `/admin` in the bot has th
 
 For Zarinpal online, IDPay, NextPay and Aqayepardakht, paste the key (Aqayepardakht calls it the PIN, and it is case-sensitive) on the Gateways page, press **Test**, then switch on. Register your store's payment address as the callback domain in each gateway's panel. IDPay, NextPay and Aqayepardakht are off until you set a key. Aqayepardakht has a test system: the PIN `sandbox`, which is refused on a production install.
 
-**IDPay, NextPay and Aqayepardakht have not been tried against the real gateways.** They follow the public documentation and are tested only against fakes. Make a small real payment through each before you tell customers about them. The checklists are in [docs/16-idpay-nextpay.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/16-idpay-nextpay.md) and [docs/18-aqayepardakht.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/18-aqayepardakht.md).
+**IDPay, NextPay and Aqayepardakht have not been tried against the real gateways.** They follow the public documentation and are tested only against fakes. Make a small real payment through each before you tell customers about them. The checklists are in [docs/16-idpay-nextpay.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/16-idpay-nextpay.md) and [docs/19-aqayepardakht.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/19-aqayepardakht.md).
 
 ## Automatic USDT on TRON
 
@@ -58,7 +58,7 @@ Enter your TRON address on the Gateways page, and optionally a TronGrid key. The
 
 Enter your TON wallet address on the Gateways page (any form your wallet shows: `UQ...`, `EQ...` or `0:...`), and optionally a TON Center API key and a proxy. The price is worked out like automatic USDT's (Toman to USDT at your rate), then turned into TON at the price the payments service reads every 30 seconds from Binance and OKX. **With no fresh TON price (under 3 minutes old) the method is not offered at all.** The customer is shown the exact amount, the address, a comment to put in the transfer and a 30-minute countdown. The transfer must carry the comment and at least the amount; anything else (no comment, less than asked, a payment already paid, a late transfer the price no longer covers) is an **unmatched deposit**: nothing is credited, staff are alerted, and you credit by hand and mark it handled. BOBRES only reads your public address; it never holds a key.
 
-**Automatic TON has not been tried against the real network.** It follows TON Center's public API and is tested only against fakes. Make a small real payment first. The checklist is in [docs/19-ton.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/19-ton.md).
+**Automatic TON has not been tried against the real network.** It follows TON Center's public API and is tested only against fakes. Make a small real payment first. The checklist is in [docs/20-ton.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/20-ton.md).
 
 ## The live USDT rate
 
