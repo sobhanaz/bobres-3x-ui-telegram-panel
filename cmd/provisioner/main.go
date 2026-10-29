@@ -14,9 +14,14 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	provisionserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/rekey"
 )
 
 func main() {
+	// `bobres rotate-key` seals what provisioner keeps encrypted again with the new master key.
+	if len(os.Args) > 1 && os.Args[1] == "rekey" {
+		os.Exit(rekey.Command("provisioner", os.Args[2:], os.Stdout, os.Stderr))
+	}
 	os.Exit(app.Run("provisioner", os.Args[1:], setup))
 }
 
@@ -28,7 +33,7 @@ func setup(rt *app.Runtime) error {
 	if err := migrate.Up(rt.Ctx, cfg.DatabaseURL, "provisioner"); err != nil {
 		return fmt.Errorf("migrate provisioner schema: %w", err)
 	}
-	env, err := bcrypto.NewEnvelope([]byte(cfg.MasterKey))
+	env, err := bcrypto.NewKeyring(cfg.KeyExtras.Keyring(cfg.MasterKey))
 	if err != nil {
 		return fmt.Errorf("envelope: %w", err)
 	}

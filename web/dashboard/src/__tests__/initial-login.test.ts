@@ -59,6 +59,8 @@ async function open(path: string, meAnswer: () => Response, handler: Handler = (
       const method = init?.method ?? 'GET'
       calls.push(`${method} ${url}`)
       if (method === 'GET' && url === '/api/v1/me') return meAnswer()
+      // The login page looks once whether a sign-in waits for an approval in Telegram: none does here.
+      if (method === 'POST' && url === '/api/v1/auth/pending') return json(200, { status: 'none' })
       const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
       const answer = handler(method, body)
       if (answer && url !== '') return answer

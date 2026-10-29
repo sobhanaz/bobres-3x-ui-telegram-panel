@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.17.2, 2026-10-28.
+As of v0.18.0, 2026-10-29.
 
 ## Shipped
 
@@ -27,6 +27,15 @@ As of v0.17.2, 2026-10-28.
 | v0.17.0 | 2026-10-23 | One wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link |
 | v0.17.1 | 2026-10-28 | The store comes back by itself after a reboot; a tls-agent that stays healthy after a restart; alerts that say what to type |
 | v0.17.2 | 2026-10-28 | Services whose client is gone from the panel are marked, listed, noticed once a day, and made again with a button; repeated log lines fold into one row |
+| v0.18.0 | 2026-10-29 | My codes; USDT plans paid from the wallet; Tether top-up in the Mini App; per-server capacity; Prometheus, uptime and a status page; sign-in approval in Telegram; `bobres rotate-key` |
+
+## New in v0.18.0
+
+Shipped in v0.18.0 (2026-10-29), with the list of codes, the USDT plans paid from the wallet, the Tether top-up in the Mini App, the approval of sign-ins in Telegram and `bobres rotate-key`.
+
+- **Per-server capacity limits.** A panel server can be given the most services it takes; the pick passes over a full server, a plan whose servers are all full waits, and a daily notice comes at 90% and when full. See [Panels](Panels).
+- **A Prometheus endpoint.** `/metrics` on your domain, off until the owner makes a token, with a scrape configuration, alert rules and a Grafana dashboard. See [Dashboard Guide](Dashboard-Guide).
+- **An uptime view and a public status page.** System > Monitoring > Uptime shows how available each service and panel server was over 24 hours, 7 days and 30 days, with "no data" never counted as downtime. An optional public page, `/status` and `/status.json`, off by default, says only whether the dashboard, the bot, payments and the panels work. See [Dashboard Guide](Dashboard-Guide).
 
 ## Still open
 
@@ -36,10 +45,8 @@ These are not built:
 - **S-UI and Hiddify** panels, if operators ask for them, and an adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported.
 - **Growth tools**: cashback, a lottery or wheel, reseller targets. (Gift codes, Top users and invite cards are built.)
 - **More bot languages**: Arabic, Russian and Turkish. The texts are already keys, so the work is translation and review.
-- **Per-server capacity limits** beyond today's weights.
-- **A Prometheus endpoint** and an uptime page.
 - **Two-factor sign-in inside the bot.**
-- Re-encrypting data when a **master key** changes (the keys are not rotated today).
+- Rotating the **master keys** is built (`sudo bobres rotate-key`).
 - TON payments, and more crypto networks if a route that works from Iran exists.
 - A hosted offering, and an affiliate program for BOBRES itself.
 

@@ -21,6 +21,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/loginwire"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -127,6 +128,9 @@ type Handler struct {
 	// the menus show only while they are true (false until the first refresh).
 	helpFAQ       atomic.Bool
 	helpTutorials atomic.Bool
+
+	// approvals is core's LoginApprovalService, where the taps on Approve and Deny go (loginapproval.go); nil until SetLoginApprovals.
+	approvals corev1.LoginApprovalServiceClient
 }
 
 // New builds a Handler. limiter may be nil.
@@ -642,6 +646,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.sendDashboardLink(r)
 	case "adm":
 		h.routeAdmin(r, rest)
+	case loginwire.CallbackVerb: // Approve or Deny under a dashboard sign-in request (loginapproval.go)
+		h.onLoginApproval(r, rest)
 	case "rs":
 		h.routeReseller(r, rest)
 	default:

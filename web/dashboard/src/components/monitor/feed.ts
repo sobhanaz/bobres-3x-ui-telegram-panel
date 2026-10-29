@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Lang } from '../../format'
 import { initialCalendar } from '../../reports'
-import { clock, count, duration, pct, size, stamp, type Range, type SeriesAnswer } from '../../monitor'
+import { availabilityText, clock, count, duration, pct, size, stamp, type Range, type SeriesAnswer } from '../../monitor'
 
 // What the Monitoring tab hands its charts: the time grid of the range the series belong to, the series
 // core answered (by metric), the metrics it has data for, and whether a fresh look is on its way.
@@ -49,6 +49,7 @@ export function useFmt() {
     time: (unix: number) => (unix > 0 ? clock(unix, lang.value) : ''),
     n: (v: number | null | undefined, digits = 0) => (typeof v === 'number' ? count(v, lang.value, digits) : ''),
     pct: (v: number) => pct(v, lang.value),
+    avail: (v: number) => availabilityText(v, lang.value),
     size: (v: number) => size(v, lang.value),
     rate: (v: number) => size(v, lang.value, true),
     dur: (seconds: number) => duration(seconds, lang.value),

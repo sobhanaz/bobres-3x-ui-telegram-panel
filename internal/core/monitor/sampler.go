@@ -230,7 +230,9 @@ func (m *Monitor) sampleStack(ctx context.Context, now time.Time) {
 	}
 	if p.servers != nil {
 		for _, sv := range p.servers.Servers {
-			if sv.CheckedAt > 0 {
+			// A server that is switched off is no longer checked, so its last result is old news: nobody sampled it
+			// (the uptime view reads that as no data, not as the downtime it had when it was switched off).
+			if sv.CheckedAt > 0 && sv.Enabled {
 				add(withSubject(PanelUp, sv.ID), b2f(sv.Healthy))
 			}
 		}

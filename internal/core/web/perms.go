@@ -35,8 +35,9 @@ const (
 	PermAuditRead      = "audit.read"
 	PermStaffWrite     = "staff.write"
 	PermLicenseWrite   = "license.write"
-	PermJoinWrite      = "join.write"   // the required channels and groups: owner only
-	PermMonitorRead    = "monitor.read" // the Monitoring section: read only, owner and admin
+	PermJoinWrite      = "join.write"     // the required channels and groups: owner only
+	PermMonitorRead    = "monitor.read"   // the Monitoring section: read only, owner and admin
+	PermSecurityWrite  = "security.write" // how staff sign in (the approval of sign-ins in Telegram): only the owner
 )
 
 var allPerms = []string{
@@ -44,12 +45,14 @@ var allPerms = []string{
 	PermServicesWrite, PermPlansWrite, PermPlansDelete, PermPaymentsRead, PermPaymentsReview, PermLedgerRead, PermReportsRead, PermReportsReset, PermDiscountsWrite,
 	PermBrandingWrite, PermSettingsWrite, PermTicketsWrite, PermTicketsManage, PermBroadcastWrite, PermResellersWrite, PermServersWrite,
 	PermGatewaysWrite, PermSystemRead, PermSystemWrite, PermAuditRead, PermStaffWrite, PermLicenseWrite, PermJoinWrite, PermMonitorRead,
+	PermSecurityWrite,
 }
 
 // ownerOnly: staff accounts, the license, gateway secrets, system actions
-// (backups) and the list of required channels and groups stay with the owner.
+// (backups), the list of required channels and groups and how staff sign in stay with the owner.
 var ownerOnly = map[string]bool{
 	PermStaffWrite: true, PermLicenseWrite: true, PermGatewaysWrite: true, PermSystemWrite: true, PermJoinWrite: true, PermPlansDelete: true, PermReportsReset: true,
+	PermSecurityWrite: true,
 }
 
 var supportPerms = map[string]bool{

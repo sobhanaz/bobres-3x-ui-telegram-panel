@@ -24,6 +24,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/grpcx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/logging"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/loginwire"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/ratelimit"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/redisx"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
@@ -83,6 +84,8 @@ func setup(rt *app.Runtime) error {
 	cat := i18n.MustLoad()
 	h := handler.New(core, bot, state.NewRedis(rdb), cat, ratelimit.New(rdb, ""),
 		handler.Config{AdminTelegramIDs: cfg.AdminTelegramIDs, BotName: me.FirstName, BotUsername: me.Username, Location: loc}, rt.Log)
+	// The taps on Approve and Deny under a dashboard sign-in request go to core, which decides (loginapproval.go).
+	h.SetLoginApprovals(corev1.NewLoginApprovalServiceClient(conn))
 	// The update check follows the channel the store chose in the dashboard
 	// (the updates.channel setting, one of the settings the bot reloads; unset:
 	// BOBRES_UPDATE_CHANNEL), so every settings reload also tells it the channel.
@@ -212,6 +215,11 @@ func setup(rt *app.Runtime) error {
 		// The dashboard's HTTPS page detects the server's public IP address
 		// (for ip mode) through the bot: core has no internet access.
 		rt.Mux.Handle("GET /internal/public-ip", runner.PublicIP(runner.IPLookup{}.Lookup, cfg.PeerCoreToken, rt.Log))
+		// The approval of dashboard sign-ins in Telegram: core decides, and asks the bot to message the approvers, to write the end of a
+		// sign-in into those messages and to tell the owners that the switch changed (docs/04-dashboard.md, "Signing in").
+		rt.Mux.Handle("POST "+loginwire.PathRequest, runner.LoginApprovalRequest(h, cfg.PeerCoreToken, rt.Log))
+		rt.Mux.Handle("POST "+loginwire.PathResolve, runner.LoginApprovalResolve(h, cfg.PeerCoreToken, rt.Log))
+		rt.Mux.Handle("POST "+loginwire.PathNotice, runner.LoginApprovalNotice(h, cfg.PeerCoreToken, rt.Log))
 	}
 
 	if cfg.PeerBackupToken != "" {

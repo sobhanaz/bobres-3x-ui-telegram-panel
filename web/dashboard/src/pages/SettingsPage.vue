@@ -6,6 +6,8 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import JoinChatsCard from '../components/settings/JoinChatsCard.vue'
+import SecurityCard from '../components/settings/SecurityCard.vue'
+import MetricsCard from '../components/settings/MetricsCard.vue'
 import SettingsCard from '../components/settings/SettingsCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
@@ -60,6 +62,7 @@ const groups = computed(() => {
 // The required channels and groups are one list with its own card (the join
 // group's settings are the list's first row); it takes the page's full width.
 const JOIN = 'join'
+const MONITOR = 'monitor'
 const wide = computed(() => [
   ...wideGroups(groups.value.filter((g) => g !== JOIN).map((g) => ({ group: g, count: byGroup.value[g].length }))),
   JOIN,
@@ -103,8 +106,12 @@ function saved(r: SettingsReply) {
     <template v-for="g in groups" :key="g">
       <JoinChatsCard v-if="g === JOIN" class="wide" />
       <SettingsCard v-else :group="g" :items="byGroup[g]" :class="{ wide: wide.includes(g) }" @saved="saved" />
+      <!-- /metrics for Prometheus: its token is write-only, so it is not a setting of the card above -->
+      <MetricsCard v-if="g === MONITOR" class="wide" />
     </template>
     <p v-if="!groups.length" class="app-muted">{{ t('settings.empty') }}</p>
+    <!-- How staff sign in: its own card and endpoint, because the owner changes it with a confirmation, not with Save. -->
+    <SecurityCard class="wide" />
   </div>
 </template>
 

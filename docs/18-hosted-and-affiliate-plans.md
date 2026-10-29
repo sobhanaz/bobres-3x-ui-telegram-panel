@@ -20,7 +20,7 @@ The first is a service around what exists. The second is a different product and
 **Steps.**
 1. *Assisted install* (no code): the customer sends a domain and a bot token; we run `install.sh` on a VPS in our account (or theirs), set `BOBRES_UPDATE_CHANNEL`, and hand over the dashboard link. Billing is a license product ("Hosted") in the license store. Three paying pilots before anything is automated.
 2. *Automation*: a small tool that creates the VPS through the cloud provider's API, points DNS at it (Cloudflare API, as the vendor site already does), runs the installer, and records the store in a register.
-3. *Central view*: every hosted store's `/metrics` (the Prometheus endpoint of 0.19.0, behind its token) scraped into one Grafana, with alerts to us as well as to the customer.
+3. *Central view*: every hosted store's `/metrics` (the Prometheus endpoint of 0.18.0, behind its token) scraped into one Grafana, with alerts to us as well as to the customer.
 
 **What it needs.** Terms for hosting (data processing, liability, jurisdiction, what we do with a store that sells something unlawful); custody rules (the customer keeps `BOBRES_BACKUP_KEY`; we never keep their bot token anywhere but their server); a support routine and runbooks; a cost model; a policy for abuse.
 

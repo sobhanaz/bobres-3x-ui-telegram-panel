@@ -29,11 +29,14 @@ const probeTimeout = 20 * time.Second
 
 const maxNameLen = 64
 
+// maxClientsLimit is the largest client limit a server may be given (0 is none).
+const maxClientsLimit = 1_000_000
+
 func serverProto(in *store.ServerInfo) *provisionerv1.XUIServer {
 	p := &provisionerv1.XUIServer{
 		Id: in.ID, Name: in.Name, BaseUrl: in.BaseURL, PanelVersion: in.PanelVersion, Enabled: in.Enabled,
 		SubBaseUrl: in.SubBaseURL, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: in.Managed,
-		HasToken: in.HasToken, Clients: in.Clients, Kind: in.Kind,
+		HasToken: in.HasToken, Clients: in.Clients, Kind: in.Kind, MaxClients: in.MaxClients,
 		VersionUntested: in.Kind != store.KindMarzban && adapter.Untested(in.PanelVersion),
 	}
 	if in.CheckedAt != nil {
@@ -81,7 +84,7 @@ func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequ
 	sv, err := s.addServer(ctx, &store.Server{
 		Name: req.GetName(), BaseURL: req.GetBaseUrl(), Token: req.GetApiToken(), Enabled: enabled,
 		SubBaseURL: req.GetSubBaseUrl(), AllowPrivate: req.GetAllowPrivate(), Weight: weight, Managed: store.ManagedDashboard,
-		Kind: req.GetKind(),
+		Kind: req.GetKind(), MaxClients: req.GetMaxClients(),
 	}, !req.GetSkipCheck())
 	if err != nil {
 		return nil, err
@@ -94,7 +97,7 @@ func (s *Server) addServer(ctx context.Context, sv *store.Server, test bool) (*s
 		sv.Kind = store.KindXUI
 	}
 	sv.Name, sv.BaseURL, sv.SubBaseURL = strings.TrimSpace(sv.Name), strings.TrimSpace(sv.BaseURL), strings.TrimSpace(sv.SubBaseURL)
-	if err := validateSettings(sv.Name, sv.Weight); err != nil {
+	if err := validateSettings(sv.Name, sv.Weight, sv.MaxClients); err != nil {
 		return nil, err
 	}
 	if err := s.validateServer(sv.Kind, sv.BaseURL, sv.Token, sv.SubBaseURL, sv.AllowPrivate); err != nil {
@@ -123,12 +126,15 @@ func (s *Server) addServer(ctx context.Context, sv *store.Server, test bool) (*s
 }
 
 // validateSettings checks what an operator types besides the connection.
-func validateSettings(name string, weight int32) error {
+func validateSettings(name string, weight, maxClients int32) error {
 	if name == "" || utf8.RuneCountInString(name) > maxNameLen {
 		return status.Error(codes.InvalidArgument, fmt.Sprintf("name required (at most %d characters)", maxNameLen))
 	}
 	if weight < 1 || weight > 1000 {
 		return status.Error(codes.InvalidArgument, "weight must be 1 to 1000")
+	}
+	if maxClients < 0 || maxClients > maxClientsLimit {
+		return status.Error(codes.InvalidArgument, fmt.Sprintf("max_clients must be 0 (no limit) to %d", maxClientsLimit))
 	}
 	return nil
 }
@@ -208,9 +214,12 @@ func (s *Server) UpdateServer(ctx context.Context, req *provisionerv1.UpdateServ
 	sv := &store.Server{
 		ID: cur.ID, Name: strings.TrimSpace(req.GetName()), BaseURL: strings.TrimSpace(req.GetBaseUrl()),
 		Token: req.GetApiToken(), Enabled: req.GetEnabled(), SubBaseURL: strings.TrimSpace(req.GetSubBaseUrl()),
-		AllowPrivate: req.GetAllowPrivate(), Weight: req.GetWeight(), Kind: cur.Kind,
+		AllowPrivate: req.GetAllowPrivate(), Weight: req.GetWeight(), Kind: cur.Kind, MaxClients: cur.MaxClients,
 	}
-	if err := validateSettings(sv.Name, sv.Weight); err != nil {
+	if req.MaxClients != nil { // unset keeps the limit: a caller from before it existed does not lift it
+		sv.MaxClients = req.GetMaxClients()
+	}
+	if err := validateSettings(sv.Name, sv.Weight, sv.MaxClients); err != nil {
 		return nil, err
 	}
 	if sv.BaseURL == "" {

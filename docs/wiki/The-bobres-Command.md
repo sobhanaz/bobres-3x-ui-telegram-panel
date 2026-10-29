@@ -38,6 +38,7 @@ Details are in [Updates, Backups, Restore](Updates-Backups-Restore).
 | `bobres admin link` | A one-time dashboard login link, for when the bot is down |
 | `bobres admin password` | Reset the owner's dashboard password. It is shown once and must be changed at first login |
 | `bobres admin owners list\|add\|remove` | The store's owners (Telegram IDs). Only the server can change them |
+| `bobres admin approval status\|off` | Whether dashboard sign-ins must be approved in Telegram, and the way out when the bot or Telegram cannot be reached: switch it off. It cannot switch it on; the owner does that in the dashboard |
 
 ## Settings and secrets
 
@@ -45,6 +46,7 @@ Details are in [Updates, Backups, Restore](Updates-Backups-Restore).
 |---|---|
 | `bobres config list`, `get <key>`, `set <key> <value>` | Show or change a setting. The value is checked and only the affected services are recreated |
 | `bobres secrets rotate <name>` | Rotate `bot-token`, `db-passwords`, `service-tokens` or `redis-password` |
+| `bobres rotate-key [--dry-run] [--forget-old]` | Replace the master keys and seal everything they protect again. Backup first; the old keys come back if anything fails; `--dry-run` changes nothing. `BOBRES_BACKUP_KEY` stays |
 | `bobres ssl status\|auto\|ip\|manual` | The HTTPS certificate. See [HTTPS](HTTPS) |
 | `bobres license status\|import\|activate` | Show the license, install a token, or activate a license key. See [Licensing](Licensing) |
 | `bobres harden` | Firewall (ufw), fail2ban, automatic security updates and swap, each asked first |

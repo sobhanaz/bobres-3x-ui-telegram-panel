@@ -12,6 +12,12 @@ The dashboard is where you run the store. It lives at `https://shop.example.com/
 
 Sessions use secure cookies and CSRF tokens. If you lose your phone, `sudo bobres admin password` is the way back.
 
+### Approve sign-ins in Telegram (optional)
+
+The owner can turn on **Settings > Sign-in security > Approve sign-ins in Telegram**. It is off by default. When it is on, a staff sign-in (a link, or a password with its code) does not open the dashboard by itself. The sign-in page says **Waiting for approval in Telegram**, and the bot messages the staff member (and the owners, for other staff members' sign-ins, unless you turn that off) with the time, the IP address, the browser and the system, and two buttons: **Approve** and **Deny**. Approve opens the dashboard within a few seconds. Deny, or five minutes without an answer, opens nothing.
+
+Turning it on shows what it does and asks you to confirm, and sends you a test message first, so you cannot turn it on with nobody able to answer. If the bot or Telegram cannot be reached, the sign-in page says so and does not wait. The way out is on the server: `sudo bobres admin approval off` (`sudo bobres admin approval status` shows whether it is on). It needs neither the bot nor a dashboard login. See the [runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/login-approval.md).
+
 ## Roles
 
 | Role | Can do |
@@ -65,6 +71,16 @@ If someone deletes a customer's client (their account) on the 3x-ui or Marzban p
 | HTTPS | Choose the certificate mode. See [HTTPS](HTTPS) |
 | Logs | Read the newest warnings and errors of every service (owner) |
 | License | See the plan in effect, paste a token or activate a key. See [Licensing](Licensing) |
+
+### Uptime and a public status page
+
+**System > Monitoring > Uptime** shows how much of the time each service (core, bot, payments, provisioner) and each panel server was working over the last 24 hours, 7 days or 30 days: the percentage, how many outages and for how long in all, and a bar with a cell for each stretch of the period. Green is working, orange some downtime, red mostly down, and a **hatched cell is no data**: a time when nobody was there to measure (BOBRES itself was not running, monitoring was off, or the server was switched off or added later). No data is left out of the percentage; it is never counted as up or as down. BOBRES keeps 30 days of history, and the section says since when it has any.
+
+If you want your customers to be able to see whether the store works, turn on **Settings > Monitoring > Public status page**. It adds `https://<your domain>/status` (a page, in Persian or, with `?l=en`, English) and `/status.json` (for a monitoring service). They say only "All systems working" or "Some systems are down" and the state of four general parts: Dashboard, Bot, Payments and Panels. No server names, versions or numbers are on them. It is **off by default**; until you turn it on, both addresses answer "not found".
+
+### Metrics for Prometheus and Grafana
+
+If you already run Prometheus and Grafana, **Settings > Monitoring > Prometheus metrics** lets them read the store's figures at `https://<your domain>/metrics`: which services answer, the queues, paid orders, open alerts, each panel server's services and limit, the license's days left, the newest backup, and the server's CPU, memory and disks. It is **off until the owner makes a token**: press **Make a token**, copy it (it is shown once; BOBRES keeps only a hash) and save it in a file on the Prometheus server. Until then `/metrics` answers 404 to everybody, and with a wrong token 401. **Turn off** brings the 404 back; **Make a new token** ends the old one at once. Nothing about customers is in it. A scrape configuration, alert rules and a Grafana dashboard to import are in the [monitoring runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/monitoring.md#prometheus-and-grafana).
 
 **Update now** asks for a confirmation that names the versions and the channel. The dashboard and bot are away for a few minutes while customers' VPN links keep working. A backup comes first, and the update rolls back by itself if the new version is not healthy. The first update to a version that has this feature must still be run over SSH with `sudo bobres update`. See [Updates, Backups, Restore](Updates-Backups-Restore).
 

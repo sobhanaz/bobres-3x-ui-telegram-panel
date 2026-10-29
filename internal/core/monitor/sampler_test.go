@@ -247,6 +247,7 @@ func TestStepRecordsTheStackFromTheOtherSources(t *testing.T) {
 		{ID: "srv-1", Name: "DE-1", Enabled: true, Healthy: true, CheckedAt: 1},
 		{ID: "srv-2", Name: "NL-1", Enabled: true, Healthy: false, CheckedAt: 1},
 		{ID: "srv-3", Name: "never checked", Enabled: true},
+		{ID: "srv-4", Name: "switched off", Enabled: false, Healthy: false, CheckedAt: 1},
 	}}
 	e.gateways.list = []domain.GatewayConfig{
 		{Provider: "zarinpal", Enabled: true, Offered: true},
@@ -280,7 +281,7 @@ func TestStepRecordsTheStackFromTheOtherSources(t *testing.T) {
 	check("bot.updates_queued", 2)
 	check("bot.goroutines", 40)
 	names := e.metrics()
-	for _, bad := range []string{"service.latency_ms:bot", "panel.up:srv-3", "gateway.up:nextpay", "bot.updates_per_min"} {
+	for _, bad := range []string{"service.latency_ms:bot", "panel.up:srv-3", "panel.up:srv-4", "gateway.up:nextpay", "bot.updates_per_min"} {
 		if slices.Contains(names, bad) {
 			t.Errorf("recorded %s", bad)
 		}

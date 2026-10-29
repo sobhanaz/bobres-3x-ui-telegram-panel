@@ -47,9 +47,9 @@ are not part of the bundle.
 |---|---|---|---|
 | @fontsource/inter | 5.3.0 | OFL-1.1 | Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) |
 | @fontsource/vazirmatn | 5.3.0 | OFL-1.1 | Copyright 2015 The Vazirmatn Project Authors (https://github.com/rastikerdar/vazirmatn) |
-| @intlify/core-base | 11.4.13 | MIT | Copyright (c) 2020 kazuya kawaguchi |
-| @intlify/message-compiler | 11.4.13 | MIT | Copyright (c) 2020 kazuya kawaguchi |
-| @intlify/shared | 11.4.13 | MIT | Copyright (c) 2020 kazuya kawaguchi |
+| @intlify/core-base | 11.4.16 | MIT | Copyright (c) 2020 kazuya kawaguchi |
+| @intlify/message-compiler | 11.4.16 | MIT | Copyright (c) 2020 kazuya kawaguchi |
+| @intlify/shared | 11.4.16 | MIT | Copyright (c) 2020 kazuya kawaguchi |
 | @primeuix/styled | 0.7.4 | MIT | Copyright (c) 2025 PrimeTek |
 | @primeuix/styles | 2.0.3 | MIT | Copyright (c) 2025 PrimeTek |
 | @primeuix/themes | 1.2.5 | MIT | Copyright (c) 2025 PrimeTek |
@@ -64,7 +64,7 @@ are not part of the bundle.
 | primeicons | 7.0.0 | MIT | Copyright (c) 2018-2021 PrimeTek |
 | primevue | 4.5.5 | MIT | Copyright (c) 2018-2025 PrimeTek |
 | vue | 3.5.43 | MIT | Copyright (c) 2018-present, Yuxi (Evan) You |
-| vue-i18n | 11.4.13 | MIT | Copyright (c) 2020 kazuya kawaguchi |
+| vue-i18n | 11.4.16 | MIT | Copyright (c) 2020 kazuya kawaguchi |
 | vue-router | 4.6.4 | MIT | Copyright (c) 2019-present Eduardo San Martin Morote |
 
 Fonts: Inter (`@fontsource/inter`) and Vazirmatn (`@fontsource/vazirmatn`) are under the SIL Open Font License 1.1.

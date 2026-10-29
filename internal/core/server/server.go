@@ -91,8 +91,11 @@ func New(st *store.Store, dom *domain.Service) *Server {
 	return &Server{st: st, dom: dom}
 }
 
-// Register attaches the service to a grpc.Server.
-func (s *Server) Register(g *grpc.Server) { corev1.RegisterCoreServiceServer(g, s) }
+// Register attaches the services to a grpc.Server: CoreService, and the bot's taps on the approval of dashboard sign-ins.
+func (s *Server) Register(g *grpc.Server) {
+	corev1.RegisterCoreServiceServer(g, s)
+	corev1.RegisterLoginApprovalServiceServer(g, &approvalServer{dom: s.dom})
+}
 
 // fail maps domain errors to gRPC codes the bot can act on. Unknown errors
 // become Internal with a generic message (details stay in logs).
@@ -563,7 +566,8 @@ func (s *Server) GetSettings(ctx context.Context, _ *corev1.GetSettingsRequest) 
 	out := &corev1.Settings{Values: map[string]string{}, BotPhotoVersion: s.botPhotoVersion(ctx), WhiteLabel: s.whiteLabel(ctx),
 		ResellersEnabled: s.resellersIncluded(ctx)}
 	for k, v := range m {
-		if strings.HasPrefix(k, "legal.") { // the pages' texts are core's to show; the bot needs none of them
+		// The pages' texts are core's to show, and the metrics token's hash is core's alone: the bot needs neither.
+		if strings.HasPrefix(k, "legal.") || k == domain.SettingMetricsToken {
 			continue
 		}
 		out.Values[k] = string(v)

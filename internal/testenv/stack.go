@@ -52,10 +52,12 @@ const (
 
 // Stack is a running backend, as the bot sees it.
 type Stack struct {
-	Core  corev1.CoreServiceClient // authenticated as the bot
-	Feed  eventsv1.EventFeedServiceClient
-	Panel *xuifake.Server
-	Store *corestore.Store
+	Core corev1.CoreServiceClient // authenticated as the bot
+	// Approvals is the bot's taps on the approval of dashboard sign-ins (LoginApprovalService), on the same connection.
+	Approvals corev1.LoginApprovalServiceClient
+	Feed      eventsv1.EventFeedServiceClient
+	Panel     *xuifake.Server
+	Store     *corestore.Store
 	// Zarinpal is the fake gateway payments uses; PaySite serves the payments
 	// service's public pages (pay page, Zarinpal return).
 	Zarinpal *zpfake.Server
@@ -184,11 +186,12 @@ func Start(t *testing.T, ownerTelegramID int64, opts ...Option) *Stack {
 	eventsv1.RegisterEventFeedServiceServer(cgs, eventbus.NewFeedServer(eventbus.NewFeed(cs.DB(), "outbox_core")))
 	coreConn := Dial(t, gates.core(t, serve(t, cgs)), BotToken)
 	return &Stack{
-		Core:     corev1.NewCoreServiceClient(coreConn),
-		Feed:     eventsv1.NewEventFeedServiceClient(coreConn),
-		Panel:    panel,
-		Store:    cs,
-		Zarinpal: zp, PaySite: paySite, Payments: paySvc,
+		Core:      corev1.NewCoreServiceClient(coreConn),
+		Approvals: corev1.NewLoginApprovalServiceClient(coreConn),
+		Feed:      eventsv1.NewEventFeedServiceClient(coreConn),
+		Panel:     panel,
+		Store:     cs,
+		Zarinpal:  zp, PaySite: paySite, Payments: paySvc,
 		Usage: dom.NewUsageWorker(provClient, nil),
 		Gates: gates, Domain: dom, Prov: provClient, PayClient: payClient,
 	}

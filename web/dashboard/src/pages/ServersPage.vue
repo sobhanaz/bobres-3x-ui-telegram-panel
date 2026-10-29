@@ -8,12 +8,13 @@ import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Message from 'primevue/message'
+import CapacityBar from '../components/servers/CapacityBar.vue'
 import ServerDialog from '../components/servers/ServerDialog.vue'
 import InboundsDrawer from '../components/servers/InboundsDrawer.vue'
 import { api, ApiError } from '../api'
 import { errorText } from '../errors'
 import { dateTime, isolate, num, planName, type Lang } from '../format'
-import { healthOf, healthSeverity } from '../servers'
+import { healthOf, healthSeverity, nearFull } from '../servers'
 import type { ServerItem, ServersReply } from '../types'
 
 // The 3x-ui panels services are created on (owner and admin): their health,
@@ -54,6 +55,9 @@ function saved() {
   toast.add({ severity: 'success', summary: t('server.saved'), life: 3000 })
   void load()
 }
+
+// The servers that take new services and are nearly or entirely full (from 90% of their limit on).
+const filling = computed(() => nearFull(servers.value))
 
 const untestedText = computed(() =>
   tested.value.min && tested.value.max
@@ -104,6 +108,13 @@ function remove(s: ServerItem) {
     </div>
   </Message>
 
+  <Message v-if="filling.length" severity="warn" icon="pi pi-exclamation-triangle" :closable="false" class="banner filling">
+    <div>{{ t('server.filling') }}</div>
+    <div class="filling-names">
+      <bdi v-for="s in filling" :key="s.id" class="filling-name">{{ s.name }}</bdi>
+    </div>
+  </Message>
+
   <DataTable :value="servers" :loading="loading" data-key="id" size="small" scrollable row-hover class="servers">
     <template #empty>{{ loadError ? '' : t('server.none') }}</template>
     <Column :header="t('server.name')">
@@ -136,7 +147,7 @@ function remove(s: ServerItem) {
       </template>
     </Column>
     <Column :header="t('server.clients')">
-      <template #body="{ data: s }"><span class="clients">{{ num(s.clients, lang) }}</span></template>
+      <template #body="{ data: s }"><CapacityBar :clients="s.clients" :max="s.max_clients" :quiet="!s.enabled" /></template>
     </Column>
     <Column :header="t('server.weight')">
       <template #body="{ data: s }">{{ num(s.weight, lang) }}</template>
@@ -188,6 +199,13 @@ function remove(s: ServerItem) {
 }
 .small {
   font-size: 0.8rem;
+}
+.filling-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin-block-start: 0.25rem;
+  font-weight: 600;
 }
 .url,
 .detail {

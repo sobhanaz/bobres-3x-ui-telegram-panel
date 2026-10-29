@@ -25,6 +25,10 @@ var ErrNameTaken = errors.New("store: server name taken")
 // ErrServerInUse is returned when deleting a server that clients map to.
 var ErrServerInUse = errors.New("store: server has clients")
 
+// ErrServerFull is the sentinel of a *FullError: the server a client was meant
+// for, or every server it could go to, is at its client limit.
+var ErrServerFull = errors.New("store: server is full")
+
 // ErrEmailTaken is returned when another subscription already holds the
 // email on that server.
 var ErrEmailTaken = errors.New("store: email taken on the server")
@@ -75,7 +79,9 @@ type Server struct {
 	// AllowPrivate: the operator opted in to a panel on a private address.
 	AllowPrivate bool
 	Weight       int32
-	Managed      string
+	// MaxClients is the most clients the server takes (reservations count); 0 is no limit.
+	MaxClients int32
+	Managed    string
 	// The last health check: HealthOK is nil until the first one.
 	HealthOK    *bool
 	HealthError string
@@ -166,9 +172,9 @@ func (s *Store) AddServer(ctx context.Context, sv *Server) (*Server, error) {
 	}
 	sv.ID = buuid.MustV7().String()
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, enabled, sub_base_url, allow_private, weight, managed, kind)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8, $9, $10) RETURNING updated_at`,
-		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate, sv.Weight, sv.Managed, sv.Kind).Scan(&sv.UpdatedAt)
+		INSERT INTO provisioner.xui_servers (id, name, base_url, api_token_enc, enabled, sub_base_url, allow_private, weight, managed, kind, max_clients)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8, $9, $10, $11) RETURNING updated_at`,
+		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate, sv.Weight, sv.Managed, sv.Kind, sv.MaxClients).Scan(&sv.UpdatedAt)
 	if pgCode(err, "23505", "xui_servers_name_key") {
 		return nil, ErrNameTaken
 	}
@@ -188,7 +194,7 @@ func (s *Store) CountServers(ctx context.Context) (int, error) {
 }
 
 const serverCols = `s.id, s.name, s.base_url, s.api_token_enc, s.panel_version, s.enabled, s.sub_base_url, s.allow_private,
-	s.weight, s.managed, s.last_health_ok, s.last_error, s.last_checked_at, s.updated_at, s.kind`
+	s.weight, s.managed, s.last_health_ok, s.last_error, s.last_checked_at, s.updated_at, s.kind, s.max_clients`
 
 // scanServerRow reads serverCols (then extra) without decrypting the token.
 func scanServerRow(row pgx.Row, extra ...any) (*Server, []byte, error) {
@@ -198,7 +204,7 @@ func scanServerRow(row pgx.Row, extra ...any) (*Server, []byte, error) {
 		ver, sub *string
 	)
 	dest := append([]any{&sv.ID, &sv.Name, &sv.BaseURL, &enc, &ver, &sv.Enabled, &sub, &sv.AllowPrivate,
-		&sv.Weight, &sv.Managed, &sv.HealthOK, &sv.HealthError, &sv.CheckedAt, &sv.UpdatedAt, &sv.Kind}, extra...)
+		&sv.Weight, &sv.Managed, &sv.HealthOK, &sv.HealthError, &sv.CheckedAt, &sv.UpdatedAt, &sv.Kind, &sv.MaxClients}, extra...)
 	err := row.Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
@@ -215,8 +221,9 @@ func scanServerRow(row pgx.Row, extra ...any) (*Server, []byte, error) {
 	return &sv, enc, nil
 }
 
-func (s *Store) scanServer(row pgx.Row) (*Server, error) {
-	sv, enc, err := scanServerRow(row)
+// scanServer reads serverCols (then extra) and decrypts the token.
+func (s *Store) scanServer(row pgx.Row, extra ...any) (*Server, error) {
+	sv, enc, err := scanServerRow(row, extra...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,12 +320,12 @@ func (s *Store) UpdateServer(ctx context.Context, sv *Server, connChanged bool) 
 	err = s.db.QueryRow(ctx, `
 		UPDATE provisioner.xui_servers SET
 			name = $2, base_url = $3, api_token_enc = $4, enabled = $5, sub_base_url = NULLIF($6, ''),
-			allow_private = $7, weight = $8, managed = 'dashboard', updated_at = now(),
+			allow_private = $7, weight = $8, max_clients = $10, managed = 'dashboard', updated_at = now(),
 			last_health_ok = CASE WHEN $9 THEN NULL ELSE last_health_ok END,
 			last_error = CASE WHEN $9 THEN '' ELSE last_error END,
 			last_checked_at = CASE WHEN $9 THEN NULL ELSE last_checked_at END
 		WHERE id = $1 RETURNING updated_at`,
-		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate, sv.Weight, connChanged).Scan(&sv.UpdatedAt)
+		sv.ID, sv.Name, sv.BaseURL, enc, sv.Enabled, sv.SubBaseURL, sv.AllowPrivate, sv.Weight, connChanged, sv.MaxClients).Scan(&sv.UpdatedAt)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return ErrNotFound
@@ -371,19 +378,60 @@ func (s *Store) RecordHealth(ctx context.Context, id string, version time.Time, 
 	return nil
 }
 
-// PickServer returns the server a new client goes to: enabled, not failing
-// its last health check, among candidates (empty = any), with the fewest
-// clients per weight (reservations count), oldest first on a tie.
-func (s *Store) PickServer(ctx context.Context, candidates []string) (*Server, error) {
-	sv, err := s.scanServer(s.db.QueryRow(ctx, `
-		SELECT `+serverCols+` FROM provisioner.xui_servers s
+// FullError says a server is at its client limit: the one a client was meant
+// for (Servers is 1), or, when it picked one, every server it could have
+// picked (Servers of them; Name, Clients and Max are those of the one with the
+// most room). errors.Is(err, ErrServerFull) holds.
+type FullError struct {
+	Name    string
+	Clients int64
+	Max     int32
+	Servers int
+}
+
+func (e *FullError) Error() string {
+	if e.Servers > 1 {
+		return fmt.Sprintf("store: all %d servers are full", e.Servers)
+	}
+	return fmt.Sprintf("store: server %q is full (%d of %d clients)", e.Name, e.Clients, e.Max)
+}
+
+func (e *FullError) Is(target error) bool { return target == ErrServerFull }
+
+// full says whether a server with this many clients has no room: it has a limit and has reached it.
+func full(clients int64, limit int32) bool { return limit > 0 && clients >= int64(limit) }
+
+// pickQuery selects, among the servers a client may go to, the best one: a server
+// with room before a full one, then the fewest clients per weight (reservations
+// count), oldest first on a tie. eligible is how many servers there were.
+const pickQuery = `
+	WITH eligible AS (
+		SELECT s.*, (SELECT count(*) FROM provisioner.client_map c WHERE c.server_id = s.id) AS n
+		FROM provisioner.xui_servers s
 		WHERE s.enabled AND s.last_health_ok IS NOT FALSE
-			AND (coalesce(cardinality($1::text[]), 0) = 0 OR s.id::text = ANY ($1::text[]))
-		ORDER BY (SELECT count(*) FROM provisioner.client_map c WHERE c.server_id = s.id)::float8 / s.weight,
-			s.created_at, s.id
-		LIMIT 1`, candidates))
+			AND (coalesce(cardinality($1::text[]), 0) = 0 OR s.id::text = ANY ($1::text[])))
+	SELECT ` + serverCols + `, s.n, (SELECT count(*) FROM eligible)
+	FROM eligible s
+	ORDER BY (s.max_clients > 0 AND s.n >= s.max_clients), s.n::float8 / s.weight, s.created_at, s.id
+	LIMIT 1`
+
+// PickServer returns the server a new client goes to: enabled, not failing
+// its last health check, with room (below its client limit, if it has one),
+// among candidates (empty = any), with the fewest clients per weight
+// (reservations count), oldest first on a tie. ErrNotFound when none of the
+// candidates is enabled and healthy; a *FullError when some are but each is full.
+func (s *Store) PickServer(ctx context.Context, candidates []string) (*Server, error) {
+	var (
+		clients  int64
+		eligible int64
+	)
+	sv, err := s.scanServer(s.db.QueryRow(ctx, pickQuery, candidates), &clients, &eligible)
 	if err != nil {
 		return nil, fmt.Errorf("pick server: %w", err)
+	}
+	if full(clients, sv.MaxClients) {
+		// The best of them is full, so all of them are.
+		return nil, &FullError{Name: sv.Name, Clients: clients, Max: sv.MaxClients, Servers: int(eligible)}
 	}
 	return sv, nil
 }
@@ -404,13 +452,63 @@ func (s *Store) EnqueueJob(ctx context.Context, j *Job) error {
 // client goes to (pending, no inbounds yet), committed on its own. When the
 // subscription already has a row (an earlier attempt, or a concurrent one),
 // that row is returned instead and created is false.
+//
+// A server with a client limit (max_clients) is never taken past it: the
+// reservations of one server go one at a time, under a lock on its row, and
+// each counts the clients the server has only once it holds the lock, so
+// concurrent creates cannot take the last place twice. A full server is a
+// *FullError (a subscription that already has a row needs no place).
 func (s *Store) ReserveClient(ctx context.Context, cm *ClientMap) (*ClientMap, bool, error) {
-	tag, err := s.db.Exec(ctx, `
-		INSERT INTO provisioner.client_map (subscription_id, server_id, email, xui_sub_id, inbound_ids, pending)
-		VALUES ($1, $2, $3, $4, '{}', true)
-		ON CONFLICT (subscription_id) DO NOTHING`,
-		cm.SubscriptionID, cm.ServerID, cm.Email, cm.XUISubID)
+	var (
+		out     *ClientMap
+		created bool
+	)
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var (
+			limit int32
+			name  string
+		)
+		// FOR NO KEY UPDATE conflicts with itself, not with the key share a client_map row takes on the server.
+		err := tx.QueryRow(ctx, `SELECT max_clients, name FROM provisioner.xui_servers WHERE id = $1 FOR NO KEY UPDATE`,
+			cm.ServerID).Scan(&limit, &name)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound // the server was deleted meanwhile
+		}
+		if err != nil {
+			return err
+		}
+		if limit > 0 {
+			var has bool
+			var n int64
+			if err := tx.QueryRow(ctx, `SELECT
+					EXISTS (SELECT 1 FROM provisioner.client_map WHERE subscription_id = $1),
+					(SELECT count(*) FROM provisioner.client_map WHERE server_id = $2)`,
+				cm.SubscriptionID, cm.ServerID).Scan(&has, &n); err != nil {
+				return err
+			}
+			if !has && full(n, limit) {
+				return &FullError{Name: name, Clients: n, Max: limit, Servers: 1}
+			}
+		}
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO provisioner.client_map (subscription_id, server_id, email, xui_sub_id, inbound_ids, pending)
+			VALUES ($1, $2, $3, $4, '{}', true)
+			ON CONFLICT (subscription_id) DO NOTHING`,
+			cm.SubscriptionID, cm.ServerID, cm.Email, cm.XUISubID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 1 {
+			r := *cm
+			r.InboundIDs, r.Pending = []int32{}, true
+			out, created = &r, true
+		}
+		return nil
+	})
+	var fe *FullError
 	switch {
+	case errors.As(err, &fe), errors.Is(err, ErrNotFound):
+		return nil, false, err
 	case pgCode(err, "23505", "client_map_server_email_idx"):
 		// A concurrent attempt for this subscription can surface here
 		// instead of as the conflict on its id.
@@ -422,10 +520,8 @@ func (s *Store) ReserveClient(ctx context.Context, cm *ClientMap) (*ClientMap, b
 		return nil, false, ErrNotFound
 	case err != nil:
 		return nil, false, fmt.Errorf("reserve client: %w", err)
-	case tag.RowsAffected() == 1:
-		r := *cm
-		r.InboundIDs, r.Pending = []int32{}, true
-		return &r, true, nil
+	case created:
+		return out, true, nil
 	}
 	existing, err := s.GetClientMap(ctx, cm.SubscriptionID)
 	if err != nil {

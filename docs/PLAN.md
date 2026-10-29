@@ -3,7 +3,7 @@
 Product: Telegram bot + web dashboard for selling and managing 3x-ui (Xray) subscriptions.
 Brand name: BOBRES, with BOBRES the beaver as the mascot (08-brand.md). Trademark, domain and handle checks are
 still open (§2).
-Status: Phases 0 to 7 are built (§10) and shipped as v0.1.0 (2026-10-14) to v0.17.2 (2026-10-28)
+Status: Phases 0 to 7 are built (§10) and shipped as v0.1.0 (2026-10-14) to v0.18.0 (2026-10-29)
 ([CHANGELOG.md](../CHANGELOG.md)); what came after them is in [ROADMAP.md](ROADMAP.md). Next: the checks only a real
 server gives (11-staging-run.md, the roadmap's first table). Still open: the legal review, the brand checks and the
 prices (§2). How BOBRES is sold is decided: a free core and a subscription per install ([pricing.md](pricing.md)); what the
@@ -175,8 +175,8 @@ The plan as written, with what was built under each heading ("Built").
 - Rotation procedure for bot token, 3x-ui API token, DB password, internal service keys.
 - Built: `.env` is 0600 and root's. `bobres secrets rotate` changes the bot token, the database passwords, the
   service tokens and the Redis password, and puts `.env` back when the services do not come back healthy. 3x-ui tokens
-  are changed on the dashboard's Servers page. The three master keys and the backup key are not rotated
-  (runbooks/rotate-secrets.md).
+  are changed on the dashboard's Servers page. `bobres rotate-key` replaces the three master keys and seals again
+  what they protect (runbooks/rotate-secrets.md); the backup key is not rotated.
 
 ### Data operations
 - Postgres: automated encrypted dumps + WAL/PITR if needed, off-server storage (S3-compatible).

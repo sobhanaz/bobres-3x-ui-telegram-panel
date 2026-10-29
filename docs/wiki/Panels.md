@@ -26,6 +26,7 @@ Open **Panel servers** and press **Add server**.
 | Admin login | Marzban only: a dedicated admin written as `username:password` |
 | Subscription address | Optional. Where customers' subscription links point, such as the panel's subscription domain |
 | Weight | 1 to 1000. A panel with weight 200 gets about twice the new services of one with 100 |
+| Service limit | Optional. The most services this server takes; empty or 0 means no limit. See [A limit on a server](#a-limit-on-a-server) |
 | Takes new services | When off, no new service goes here. Existing services keep working and renewing |
 | Panel on a private network | For a panel on this server or your private network. Only the owner can turn it on |
 
@@ -35,7 +36,18 @@ To change a panel's address or token to a different host, you must enter the tok
 
 ## How a new service finds a panel
 
-A new service goes to the healthy panel with the fewest services for its weight, among the panels its plan allows. A plan can name the panels it may use, and the inbounds it joins on each. See [Plans and Pricing](Plans-and-Pricing). A retry of the same order stays on the panel its first attempt chose, so a customer never gets two accounts.
+A new service goes to the healthy panel with the fewest services for its weight, among the panels its plan allows that are not full. A plan can name the panels it may use, and the inbounds it joins on each. See [Plans and Pricing](Plans-and-Pricing). A retry of the same order stays on the panel its first attempt chose, so a customer never gets two accounts.
+
+## A limit on a server
+
+A panel on a small machine should not take more services than it can serve. Give a server a **Service limit** and BOBRES counts the services it holds (an order being delivered counts too). When the server has that many:
+
+- **New services go to your other servers.** A full server is passed over, whatever its weight.
+- **A plan that names only full servers waits.** The order stays paid and is delivered by the first retry after you raise the limit or add a server, as with a panel that does not answer. If it stays stuck, the usual "could not be delivered" alerts reach you too.
+- **The services it has keep working**, renewing and syncing.
+- Two orders arriving at the same moment cannot take the last place twice.
+
+The Servers page shows **N / limit** with a bar, an orange chip with the percentage (for example **92% full**) from 90%, and a red **Full** at the limit. The Overview names such servers, and the bot sends you a notice (once a day while it lasts) when a server reaches 90% and again when it is full. Raising the limit ends the notice without a message. A limit set below the number of services a server already has moves none of them: the server is simply full. A server you switched off is not warned about, since it takes nothing anyway.
 
 ## Inbounds
 

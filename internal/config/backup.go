@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,26 @@ import (
 // backup carries the ones that are set, so the file and BOBRES_BACKUP_KEY are
 // enough to restore.
 var BackupMasterKeys = []string{"BOBRES_CORE_MASTER_KEY", "BOBRES_PROVISIONER_MASTER_KEY", "BOBRES_PAYMENTS_MASTER_KEY"}
+
+// BackupTagKeys are the .env names of the tag keys a master key rotation
+// leaves (`bobres rotate-key`): one for each service, set only on an install
+// that has rotated. A backup carries the ones that are set, beside the master
+// keys, because gift code hashes and 3x-ui subscription ids are made with them:
+// a restore on another server without them could not redeem a gift code. Not
+// having one is normal, never reported as missing.
+var BackupTagKeys = []string{"BOBRES_CORE_TAG_KEY", "BOBRES_PROVISIONER_TAG_KEY", "BOBRES_PAYMENTS_TAG_KEY"}
+
+// BackupPreviousKeys are the .env names of the master keys a rotation is replacing (set only while it runs, or
+// when it was cut short). A backup made then holds values sealed with the old and the new key, so it carries both:
+// restored without the old one it could not read half of them.
+var BackupPreviousKeys = []string{"BOBRES_CORE_MASTER_KEY_PREVIOUS", "BOBRES_PROVISIONER_MASTER_KEY_PREVIOUS", "BOBRES_PAYMENTS_MASTER_KEY_PREVIOUS"}
+
+// BackupKeyNames are every key a backup may carry: BackupMasterKeys, BackupTagKeys, then BackupPreviousKeys.
+func BackupKeyNames() []string {
+	names := append([]string(nil), BackupMasterKeys...)
+	names = append(names, BackupTagKeys...)
+	return append(names, BackupPreviousKeys...)
+}
 
 // minBackupKeyLen matches internal/backup's MinKeyLen.
 const minBackupKeyLen = 32
@@ -130,6 +151,21 @@ func LoadBackup() (Backup, error) {
 			keep(fmt.Errorf("%s must be at least 32 characters", name))
 		case strings.Contains(v, placeholderMarker):
 			keep(fmt.Errorf("%s still contains the %s placeholder", name, placeholderMarker))
+		default:
+			b.MasterKeys[name] = v
+		}
+	}
+	// The extras of a rotation are optional: not having them is the normal case.
+	for _, name := range append(append([]string(nil), BackupTagKeys...), BackupPreviousKeys...) {
+		v, err := Secret(name)
+		switch {
+		case err != nil:
+			keep(err)
+		case v == "":
+		case slices.Contains(BackupTagKeys, name) && !tagKeyRe.MatchString(v):
+			keep(fmt.Errorf("%s must be 64 hexadecimal characters", name))
+		case slices.Contains(BackupPreviousKeys, name) && len(v) < 32:
+			keep(fmt.Errorf("%s must be at least 32 characters", name))
 		default:
 			b.MasterKeys[name] = v
 		}

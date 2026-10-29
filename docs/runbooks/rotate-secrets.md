@@ -2,8 +2,8 @@
 
 Replace a token, password or key: after a leak (a screenshot of `.env`, a laptop lost, a staff member who left), or on
 a schedule. Commands run on the server as root; `dc` and `bsql` are defined in the
-[runbooks README](README.md#before-you-start). Most secrets are rotated with `bobres secrets rotate <name>`; the backup
-key and the master keys are not, on purpose, and have their own procedures below.
+[runbooks README](README.md#before-you-start). Most secrets are rotated with `bobres secrets rotate <name>`; the master
+keys have their own command, `bobres rotate-key`, and the backup key has its own procedure below.
 
 ## Where each secret lives
 
@@ -22,11 +22,12 @@ key and the master keys are not, on purpose, and have their own procedures below
 | `BOBRES_BACKUP_KEY` | `.env` | Delete the line, re-run the installer; keep the old key for the old backups (below) | None |
 | S3 access and secret keys `BOBRES_BACKUP_S3_ACCESS_KEY`, `_SECRET_KEY` (off-server copies only) | `.env` | A new key in the storage's panel, delete both lines, re-run the installer (it asks for them); then revoke the old key in the panel ([below](#s3-keys-off-server-copies)) | The backup service restarts (seconds) |
 | `BOBRES_TELEGRAM_WEBHOOK_SECRET` (webhook mode only) | `.env` | Edit it, `bobres start` | The bot restarts |
-| Master keys `BOBRES_CORE_MASTER_KEY`, `_PROVISIONER_`, `_PAYMENTS_` | `.env`, and inside every backup | Only after a leak, with the procedure below: it makes what they encrypt unreadable | Partial |
+| Master keys `BOBRES_CORE_MASTER_KEY`, `_PROVISIONER_`, `_PAYMENTS_` | `.env`, and inside every backup | `sudo bobres rotate-key` ([below](#master-keys)): a backup first, then it seals everything they protect again with new keys | The BOBRES services stop for about a minute; the database stays up |
 
-**Never delete a master key's line by mistake:** the installer would make a new key, and the 3x-ui tokens, staff
-authenticators and gateway settings saved with the old one could no longer be read. `bobres secrets rotate` never
-touches them (`bobres secrets rotate master-keys` only explains why).
+**Never delete a master key's line by mistake, and never edit one by hand:** the installer would make a new key, and the
+3x-ui tokens, staff authenticators and gateway settings saved with the old one could no longer be read. Change a master
+key only with `bobres rotate-key`, which re-encrypts what it protects. `bobres secrets rotate master-keys` only points
+there.
 
 ## How `bobres secrets rotate` works
 
@@ -43,10 +44,12 @@ Every rotation, whatever the secret:
 A stopped store gets the new `.env` and starts with it later (`bobres start`); database passwords need the database
 running and are refused then. New values are random and never printed. The last update's restore point gets the new
 values too, so `bobres rollback` (which puts back the `.env` from before that update) keeps them: a restore never
-changes the database roles' passwords, and a revoked token must not come back. The backup key, S3 key and master key
+changes the database roles' passwords, and a revoked token must not come back. The backup key and S3 key
 procedures below are by hand: after a rollback, repeat those. A rollback or a restore also puts back the database of
 its backup, with the 3x-ui tokens, gateway settings and staff passwords saved in it then: change again the ones you
-rotated since.
+rotated since. The master keys are the exception to the exception: the restore point holds the database *and* the
+`.env` of before the update, which belong together, so a rollback after `bobres rotate-key` brings back the old keys
+with the old data (and loses the rotation along with everything else since the update): rotate again then.
 
 ## Bot token
 
@@ -150,29 +153,76 @@ minutes), then enter the new address and switch it on again. The old address is 
 last payment started, so a late transfer of an exact amount to it still settles. Tell customers who keep the old
 address in their wallet's history to use the new one.
 
-## Master keys (only after a leak)
+## Master keys
 
-A master key alone decrypts nothing: it protects the 3x-ui tokens, staff authenticators and gateway settings stored in
-the database and in backups. Re-encrypting them with a new key is not built yet, so a new key means entering them
-again. If someone may have both a master key and the database (or a backup and the backup key), first rotate what it
-protects: new 3x-ui API tokens (and delete the old ones in each panel), staff password resets, the Zarinpal proxy
-password, the automatic USDT TronGrid key and proxy password. Then, if you also want a new key:
-
-| Key | After a new key | Then |
-|---|---|---|
-| `BOBRES_PROVISIONER_MASTER_KEY` | Every server shows "the stored API token cannot be decrypted"; new orders wait | 3x-ui servers > Edit server > a new API token, for every server |
-| `BOBRES_PAYMENTS_MASTER_KEY` | Payment gateways: "The stored settings cannot be read" on Zarinpal and on USDT TRC20 (automatic); neither is offered | Payment gateways > enter Zarinpal's merchant id (and proxy) again, and on USDT TRC20 (automatic) the address, TronGrid key and proxy again |
-| `BOBRES_CORE_MASTER_KEY` | Staff password logins fail (links from the bot still work) | Staff > each member > Reset password; they set a new one in My account |
+Each service encrypts what it must keep secret with a master key of its own (`BOBRES_CORE_MASTER_KEY`,
+`BOBRES_PROVISIONER_MASTER_KEY`, `BOBRES_PAYMENTS_MASTER_KEY`): the 3x-ui API tokens, the staff authenticator secrets,
+the gateway settings (merchant id, proxy, USDT address, API keys), an own HTTPS certificate's private key, the license
+server's admin key and the license keys sold, the supplier's API key and the accounts it delivered. Replace them
+after a leak (`.env`, or a backup with its backup key, may have been seen), or on a schedule:
 
 ```sh
-cp -p /opt/bobres/.env /root/env.before-rotation              # root only; delete it once all is well
-sed -i '/^BOBRES_PROVISIONER_MASTER_KEY=/d' /opt/bobres/.env   # the one key to replace
-bobres install --skip-checks --quiet
+sudo bobres rotate-key --dry-run    # counts and checks every encrypted value, changes nothing
+sudo bobres rotate-key              # the rotation
 ```
 
-Then do the "Then" column at once, and repeat the change after a `bobres rollback` (which puts back the `.env` from
-before the last update). Backups made before carry the old key, and `bobres restore` of such a backup puts the
-old key back with the old data (that is what makes them readable): after a restore, check the three pages above.
+**What it does**, in this order, and why it is safe:
+
+1. **Checks.** The store must be up and healthy, there must be room for a backup, and the keys now in `.env` must read
+   *every* encrypted value (a dry run of each service's `rekey`). With a key that does not, it stops here and nothing
+   has changed: it will not replace a key it cannot use.
+2. **Backs up and checks the backup.** `bobres-<stamp>-before-key-rotation.bkp` in `/opt/bobres/backups`, read back in
+   full, and required to carry the three keys. It holds the OLD keys and the old data, a consistent pair: it restores
+   as it was. It stays until you delete it, and it is as secret as the old keys.
+3. **Makes new keys** (32 random bytes each) and writes `.env` atomically, mode 0600: the new key as
+   `BOBRES_<SERVICE>_MASTER_KEY`, the old one as `BOBRES_<SERVICE>_MASTER_KEY_PREVIOUS` (read, never written with),
+   and `BOBRES_<SERVICE>_TAG_KEY`, the key that gift code hashes and 3x-ui subscription ids are made with. The tag key
+   is set once, to what the first old key made, and never changes again: replacing it would make every gift code
+   unredeemable and every client of a 3x-ui panel unfindable. (It means the tag key of a leaked first key stays
+   known to whoever has it; gift codes are 59 bits long, which is the protection that remains.)
+4. **Stops the BOBRES services** (not the database, not Caddy), so nothing writes while values are sealed again.
+5. **Seals everything again**, in a container of each service, with its own database role. Each table is one
+   transaction; each value is read with whichever key fits, sealed with the new key and read back with the new key
+   alone before the old bytes are replaced; the rows are locked meanwhile. Before it writes anything it checks every
+   value of the service is readable at all.
+6. **Finishes `.env`.** The previous keys leave the settings and stay as comments (`# BOBRES_CORE_MASTER_KEY_PREVIOUS=...`)
+   so that a database copy or a backup older than the rotation can still be opened by hand. Nothing reads a comment.
+   `--forget-old` keeps no comment.
+7. **Starts the services** in the order they depend on each other (provisioner and payments, core, then the bot and the
+   backup service) and waits until they are healthy.
+
+**Nothing is lost if it fails or is cut off.** The new ciphertext carries the id of the key that sealed it, and while
+the rotation runs every service holds both keys, so a value is readable whichever side of the line it is on.
+
+- *It fails* (a database error, a service that is not healthy with the new keys): the command puts the old keys back
+  *by itself*: the keys swapped, everything sealed again with the old one, `.env` back byte for byte, the services
+  started. It says "nothing was rotated" and exits 1. The install is as it was; read the messages above that line.
+- *It cannot even do that*, or it was killed (a dropped SSH session, a power cut): the store is left, or comes back
+  with `bobres start`, running with **both** keys, which reads every value. `bobres check` warns "a master key rotation
+  was left unfinished". Run `sudo bobres rotate-key` again: it finds the previous key in `.env` and finishes the work
+  with the same new keys, without making others. Running it again after it finished makes *another* rotation (new keys).
+- A backup made while a rotation is unfinished carries both keys (`..._MASTER_KEY_PREVIOUS` too), so it restores whole.
+
+**What it does not change.** `BOBRES_BACKUP_KEY` is another key: it encrypts the backup files, not the database, and
+it stays. To replace it, see [The backup key](#the-backup-key) below. Database passwords and service tokens have their
+own commands (`bobres secrets rotate`). **Old backups** (made before the rotation) carry the old keys and old data:
+`bobres restore` puts the old keys back in `.env` with the old data, and the store works as it did then. The tag key
+is carried by every backup made after a rotation, so a restore on another server keeps gift codes and subscription ids.
+
+**After it.**
+
+- `sudo bobres backup`: the newest backup then carries the new keys. Check `bobres status` and open the dashboard.
+- If the old key leaked: after the rotation it protects nothing in the database any more, but it still opens the
+  backups and database copies made before. Delete the old backups you do not need, `--forget-old` at the next
+  rotation (or delete the `#` lines in `.env`), and delete `bobres-*-before-key-rotation.bkp` when you trust the new
+  state. If someone may have had both an old key and a copy of the database, also rotate what the keys protected:
+  new 3x-ui API tokens (and delete the old ones in each panel), staff password resets, the Zarinpal proxy password, the
+  automatic USDT TronGrid key and proxy password, the supplier's API key: a rotation protects the future, it cannot
+  un-leak what was already read.
+- `bobres rollback` after a rotation brings back the old keys together with the old database of before the update
+  (they are one pair in the restore point); the rotation is gone with everything since the update. Rotate again.
+- An install that has no payments key (one from before payments had one) rotates the two keys it has.
+- The command takes the install lock: it cannot run beside an update, a restore or a rollback, and says so.
 
 ## After any rotation
 

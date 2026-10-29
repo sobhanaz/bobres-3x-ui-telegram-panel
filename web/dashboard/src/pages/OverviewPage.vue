@@ -13,7 +13,7 @@ import { api } from '../api'
 import { useAuth } from '../stores/auth'
 import { dateTime, money, num, type Money, type Lang } from '../format'
 import { duration } from '../support'
-import { serverSummary } from '../servers'
+import { capacityOf, nearFull, serverSummary } from '../servers'
 import SupplierBalance from '../components/supplier/SupplierBalance.vue'
 import { overviewGatewaySeverity, overviewGatewayState } from '../gateways'
 import type { OverviewGateway, OverviewServer } from '../types'
@@ -94,6 +94,8 @@ const serversTag = computed(() => {
   if (down.length) return { severity: 'danger', text: t('overview.servers_down', { n: num(down.length, lang.value), total: num(live, lang.value) }) }
   return { severity: 'success', text: t('overview.servers_ok') }
 })
+// The servers with a limit that are nearly or entirely full (named under the tag).
+const filling = computed(() => nearFull(servers.value ?? []))
 const serverClients = computed(() => (servers.value ?? []).reduce((n, s) => n + s.clients, 0))
 // "5 services on 2 servers": each noun follows its own number ("1 service on 1 server").
 const serverClientsText = computed(() => {
@@ -217,6 +219,11 @@ const statusSeverity = (s: string) =>
             <bdi>{{ s.name }}</bdi>
             <div v-if="s.detail" class="app-muted app-ltr detail">{{ s.detail }}</div>
           </div>
+          <div v-for="s in filling" :key="'full-' + s.id" class="filling">
+            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+            <bdi>{{ s.name }}</bdi>
+            <span class="app-muted">{{ t(capacityOf(s).state === 'full' ? 'overview.server_full' : 'overview.server_near', { percent: num(capacityOf(s).pct, lang) }) }}</span>
+          </div>
           <div v-if="servers.length" class="app-muted count">
             {{ serverClientsText }}
           </div>
@@ -303,6 +310,17 @@ const statusSeverity = (s: string) =>
 }
 .down {
   margin-block-start: 0.4rem;
+}
+.filling {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  margin-block-start: 0.4rem;
+  font-size: 0.9rem;
+}
+.filling .pi {
+  color: var(--p-orange-500);
 }
 .count {
   margin-block-start: 0.4rem;

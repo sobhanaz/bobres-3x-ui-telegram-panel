@@ -140,7 +140,7 @@ func (c *Client) Delete(ctx context.Context, subscriptionID string) error {
 func serverOf(p *provisionerv1.XUIServer) *domain.Server {
 	return &domain.Server{
 		ID: p.GetId(), Kind: p.GetKind(), Name: p.GetName(), BaseURL: p.GetBaseUrl(), SubBaseURL: p.GetSubBaseUrl(),
-		Enabled: p.GetEnabled(), AllowPrivate: p.GetAllowPrivate(), Weight: p.GetWeight(), Managed: p.GetManaged(),
+		Enabled: p.GetEnabled(), AllowPrivate: p.GetAllowPrivate(), Weight: p.GetWeight(), MaxClients: p.GetMaxClients(), Managed: p.GetManaged(),
 		HasToken: p.GetHasToken(), Clients: p.GetClients(), PanelVersion: p.GetPanelVersion(),
 		VersionUntested: p.GetVersionUntested(), Healthy: p.GetHealthy(), HealthError: p.GetHealthError(),
 		CheckedAt: p.GetCheckedAt(),
@@ -164,9 +164,13 @@ func (c *Client) ListServers(ctx context.Context) (*domain.ServerList, error) {
 // AddServer implements domain.ServerAdmin. The server is saved switched on
 // or off as asked, in one step.
 func (c *Client) AddServer(ctx context.Context, in domain.ServerInput) (*domain.Server, error) {
+	var limit int32
+	if in.MaxClients != nil {
+		limit = *in.MaxClients
+	}
 	s, err := c.rpc.AddServer(ctx, &provisionerv1.AddServerRequest{
 		Name: in.Name, BaseUrl: in.BaseURL, ApiToken: in.Token, SubBaseUrl: in.SubBaseURL,
-		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled, Kind: in.Kind,
+		AllowPrivate: in.AllowPrivate, Weight: in.Weight, SkipCheck: in.SkipCheck, Enabled: &in.Enabled, Kind: in.Kind, MaxClients: limit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.AddServer: %w", err)
@@ -178,7 +182,7 @@ func (c *Client) AddServer(ctx context.Context, in domain.ServerInput) (*domain.
 func (c *Client) UpdateServer(ctx context.Context, id string, in domain.ServerInput) (*domain.Server, error) {
 	s, err := c.rpc.UpdateServer(ctx, &provisionerv1.UpdateServerRequest{
 		Id: id, Name: in.Name, Enabled: in.Enabled, Weight: in.Weight, SubBaseUrl: in.SubBaseURL,
-		AllowPrivate: in.AllowPrivate, BaseUrl: in.BaseURL, ApiToken: in.Token, SkipCheck: in.SkipCheck,
+		AllowPrivate: in.AllowPrivate, BaseUrl: in.BaseURL, ApiToken: in.Token, SkipCheck: in.SkipCheck, MaxClients: in.MaxClients,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provisioner.UpdateServer: %w", err)

@@ -58,6 +58,9 @@ func (f *fakeServers) AddServer(_ context.Context, in domain.ServerInput) (*doma
 	sv := domain.Server{ID: fmt.Sprintf("00000000-0000-7000-8000-%012d", f.next), Name: in.Name, BaseURL: in.BaseURL,
 		SubBaseURL: in.SubBaseURL, Enabled: in.Enabled, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: "dashboard",
 		HasToken: true, PanelVersion: "v3.9.0", Healthy: true, CheckedAt: 1_800_000_000}
+	if in.MaxClients != nil {
+		sv.MaxClients = *in.MaxClients
+	}
 	if f.tokens == nil {
 		f.tokens = map[string]string{}
 	}
@@ -79,6 +82,9 @@ func (f *fakeServers) UpdateServer(_ context.Context, id string, in domain.Serve
 		if sv := &f.servers[i]; sv.ID == id {
 			sv.Name, sv.BaseURL, sv.SubBaseURL, sv.Enabled, sv.AllowPrivate, sv.Weight =
 				in.Name, in.BaseURL, in.SubBaseURL, in.Enabled, in.AllowPrivate, in.Weight
+			if in.MaxClients != nil { // unset keeps the limit, as the provisioner does
+				sv.MaxClients = *in.MaxClients
+			}
 			if in.Token != "" {
 				f.tokens[id] = in.Token
 			}

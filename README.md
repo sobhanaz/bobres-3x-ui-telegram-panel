@@ -11,7 +11,7 @@ dashboard**; and one **`bobres` command** on the server installs, updates, backs
 It is white-label and single-tenant: each operator runs it on their own server, with their own domain, bot, panels and
 brand. Nothing goes through anyone else's servers.
 
-Website: <https://bobresai.cv> · Latest release: **v0.17.2** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
+Website: <https://bobresai.cv> · Latest release: **v0.18.0** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
 
 ## At a glance
 
@@ -84,8 +84,8 @@ same server, S3 copies of the backups, Zarinpal, a different SSH port, hardening
 Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); the numbers below are the menu's choices:
 
 ```text
-   n____n   BOBRES manager  bobres v0.17.2
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.17.2
+   n____n   BOBRES manager  bobres v0.18.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.18.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -132,9 +132,11 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 | `bobres rollback` | Undo the last update: the previous version and the database from before it |
 | `bobres backup` / `restore <file>` | Encrypted backup now (kept in `/opt/bobres/backups`, sent to the owner on Telegram, optionally copied to S3-compatible storage) / replace the data with a backup |
 | `bobres admin link` / `admin password` / `admin owners` | A one-time dashboard login link / reset the owner's dashboard password (no Telegram needed) / list, add or remove the store's owners (Telegram IDs) |
+| `bobres admin approval status \| off` | Whether dashboard sign-ins must be approved in Telegram (Settings > Sign-in security, off by default), and the way out when the bot or Telegram cannot be reached: switch it off |
 | `bobres config list \| get \| set` | Show or change a setting |
 | `bobres ssl status \| auto \| ip \| manual` | The HTTPS certificate: Caddy's automatic one, a Let's Encrypt one for the server's IP, or your own |
 | `bobres secrets rotate bot-token \| db-passwords \| service-tokens \| redis-password` | Rotate a secret |
+| `bobres rotate-key [--dry-run]` | Replace the master keys and seal everything they protect again (3x-ui tokens, staff authenticators, gateway settings): backup first, the old keys come back if anything fails; `--dry-run` changes nothing |
 | `bobres license status \| import \| activate` | Show the license, install a token, or activate a license key with the vendor's license server |
 | `bobres harden` | Firewall (ufw), fail2ban, automatic security updates and swap, each asked first |
 | `bobres monitor status \| enable \| disable` | Host monitoring for the dashboard's charts |

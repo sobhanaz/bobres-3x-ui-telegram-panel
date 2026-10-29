@@ -49,6 +49,9 @@ type Server struct {
 	Healthy     bool
 	HealthError string
 	CheckedAt   int64 // unix seconds
+	// MaxClients is the most clients the server takes (0: no limit). A server whose Clients have reached it
+	// gets no new services; the ones it has keep working.
+	MaxClients int32
 }
 
 // ServerList is every server and the panel versions BOBRES is tested with.
@@ -76,6 +79,8 @@ type ServerInput struct {
 	Kind                             string
 	Name, BaseURL, SubBaseURL, Token string
 	Weight                           int32
+	// MaxClients is the server's client limit (0: no limit); nil keeps the stored one, and a new server has none.
+	MaxClients                       *int32
 	Enabled, AllowPrivate, SkipCheck bool
 }
 
@@ -114,6 +119,8 @@ const (
 	maxServerName = 64
 	maxTokenLen   = 512
 	defaultWeight = 100
+	// MaxServerClients is the largest client limit a server may be given.
+	MaxServerClients = 1_000_000
 )
 
 // addFollowUp bounds what AddServer does once the server exists (the audit
@@ -167,6 +174,9 @@ func normalizeServer(in ServerInput, adding bool) (ServerInput, error) {
 	if in.Weight < 1 || in.Weight > 1000 {
 		return in, &FieldError{"weight", "a whole number from 1 to 1000"}
 	}
+	if in.MaxClients != nil && (*in.MaxClients < 0 || *in.MaxClients > MaxServerClients) {
+		return in, &FieldError{"max_clients", fmt.Sprintf("a whole number from 0 to %d (0: no limit)", MaxServerClients)}
+	}
 	return in, nil
 }
 
@@ -217,7 +227,7 @@ func privateNeedsOwner(actor *store.User, allowPrivate bool, baseURL, token stri
 func serverAudit(sv *Server, tokenSent bool) map[string]any {
 	out := map[string]any{
 		"kind": sv.Kind, "name": sv.Name, "base_url": sv.BaseURL, "sub_base_url": sv.SubBaseURL, "enabled": sv.Enabled,
-		"allow_private": sv.AllowPrivate, "weight": sv.Weight,
+		"allow_private": sv.AllowPrivate, "weight": sv.Weight, "max_clients": sv.MaxClients,
 	}
 	if tokenSent {
 		out["token"] = "changed"

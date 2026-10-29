@@ -368,6 +368,9 @@ const samples: Record<Lang, Record<string, string>> = {
     proof: 'A1B2C3', user: '@customer', when: '۵ دقیقه پیش', network: 'TRC20', txid: '9f2c…e1', lang: 'fa',
     role: 'user', tg: '123456789', key: 'notify.sales', value: 'true', list: '…', text: 'سلام، کمک می‌خواهم',
     charge: 'ch_123', payload: 'order:a1b2c3', line: 'OFF20 · ۲۰٪',
+    // the approval of dashboard sign-ins
+    account: '@ali', ip: '203.0.113.7', device: 'Chrome روی Windows', browser: 'Chrome', system: 'Windows', time: '۱۴:۳۰',
+    minutes: '۵', by: '@ali', new_note: '\n⚠️ این نشانی پیش‌تر برای این حساب دیده نشده است.',
   },
   en: {
     brand: 'Your store', name: 'Monthly', plan: 'Monthly', limits: '30 days · 50 GB', price: '150,000 Toman',
@@ -382,6 +385,9 @@ const samples: Record<Lang, Record<string, string>> = {
     proof: 'A1B2C3', user: '@customer', when: '5 minutes ago', network: 'TRC20', txid: '9f2c…e1', lang: 'en',
     role: 'user', tg: '123456789', key: 'notify.sales', value: 'true', list: '…', text: 'Hi, I need help',
     charge: 'ch_123', payload: 'order:a1b2c3', line: 'OFF20 · 20%',
+    // the approval of dashboard sign-ins
+    account: '@ali', ip: '203.0.113.7', device: 'Chrome on Windows', browser: 'Chrome', system: 'Windows', time: '2:30 PM',
+    minutes: '5', by: '@ali', new_note: '\n⚠️ This address has not been seen on this account before.',
   },
 }
 

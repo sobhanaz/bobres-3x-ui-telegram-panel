@@ -14,8 +14,8 @@ import { errorText, fieldError } from '../../errors'
 import { isolate, num, type Lang } from '../../format'
 import { useAuth } from '../../stores/auth'
 import {
-  addressChanged, blankServer, PANEL_KINDS, canTest, needsToken, panelURLProblem, privateNeedsOwner, SERVER_NAME_MAX, serverBody, serverFormOf, serverProblems,
-  subURLProblem, testBody, WEIGHT_MAX, WEIGHT_MIN,
+  addressChanged, blankServer, PANEL_KINDS, canTest, MAX_CLIENTS_MAX, maxClientsOf, needsToken, panelURLProblem, privateNeedsOwner, SERVER_NAME_MAX, serverBody, serverFormOf,
+  serverProblems, subURLProblem, testBody, WEIGHT_MAX, WEIGHT_MIN,
 } from '../../servers'
 import type { ServerItem, ServerTest } from '../../types'
 
@@ -68,7 +68,7 @@ const problems = computed(() => serverProblems(form.value, props.server))
 const issue = (f: string) => !!fieldErrors.value[f] || (problems.value.includes(f) && touched(f))
 // An empty required field is not marked before staff typed in it.
 function touched(f: string): boolean {
-  const v = { name: form.value.name, base_url: form.value.baseURL, sub_base_url: form.value.subURL, token: form.value.token, weight: form.value.weight }[f]
+  const v = { name: form.value.name, base_url: form.value.baseURL, sub_base_url: form.value.subURL, token: form.value.token, weight: form.value.weight, max_clients: form.value.maxClients }[f]
   return v === undefined || v.trim() !== ''
 }
 // Only the store owner lets BOBRES reach a private network (core checks it
@@ -87,6 +87,15 @@ const tokenProblem = computed(() =>
   problems.value.includes('token') && form.value.token.trim() ? t(marzban.value ? 'server.invalid.login' : 'server.invalid.token') : '',
 )
 const weightProblem = computed(() => (problems.value.includes('weight') && form.value.weight.trim() ? t('server.invalid.weight', { min: num(WEIGHT_MIN, lang.value), max: num(WEIGHT_MAX, lang.value) }) : ''))
+const maxClientsProblem = computed(() =>
+  problems.value.includes('max_clients') ? t('server.invalid.max_clients', { max: num(MAX_CLIENTS_MAX, lang.value) }) : '',
+)
+// A limit at or below the services the server has already: it is full at once and takes no new ones until some end.
+const limitBelowClients = computed(() => {
+  const limit = maxClientsOf(form.value.maxClients) ?? 0
+  const have = props.server?.clients ?? 0
+  return limit > 0 && have >= limit ? have : 0
+})
 const moved = computed(() => addressChanged(form.value, props.server) && (props.server?.clients ?? 0) > 0)
 // A stored token goes only to the host it was entered for: a new host or
 // port needs it typed again.
@@ -224,6 +233,23 @@ async function save() {
         <small v-if="weightProblem" class="field-error">{{ weightProblem }}</small>
         <small v-if="fieldErrors.weight" class="app-ltr field-error">{{ fieldErrors.weight }}</small>
       </label>
+      <label>
+        <span>{{ t('server.max_clients') }}</span>
+        <InputText
+          v-model="form.maxClients"
+          inputmode="numeric"
+          dir="ltr"
+          maxlength="9"
+          :placeholder="t('server.max_clients_none')"
+          :invalid="issue('max_clients')"
+          aria-describedby="server-max-clients-help"
+          class="max-clients"
+        />
+        <small id="server-max-clients-help" class="app-muted">{{ t('server.max_clients_help') }}</small>
+        <small v-if="maxClientsProblem" class="field-error">{{ maxClientsProblem }}</small>
+        <small v-if="fieldErrors.max_clients" class="app-ltr field-error">{{ fieldErrors.max_clients }}</small>
+        <small v-if="limitBelowClients" class="limit-below">{{ t('server.max_clients_below', { n: num(limitBelowClients, lang) }, limitBelowClients) }}</small>
+      </label>
       <div class="app-field">
         <label class="app-check">
           <ToggleSwitch v-model="form.enabled" input-id="server-enabled" aria-describedby="server-enabled-help" class="enabled" />
@@ -310,5 +336,8 @@ async function save() {
 }
 .field-error {
   color: var(--p-red-500);
+}
+.limit-below {
+  color: var(--p-orange-600);
 }
 </style>

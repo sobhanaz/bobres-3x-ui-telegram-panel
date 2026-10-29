@@ -192,6 +192,9 @@ func checkEnv(env map[string]string) Result {
 		bad = append(bad, "BOBRES_ADMIN_TELEGRAM_ID (not positive numbers separated by commas)")
 	}
 	if len(missing)+len(bad) == 0 {
+		if note := keyHealthNote(env); note != "" {
+			return Result{"Config", Warn, note}
+		}
 		return Result{"Config", Pass, ".env has every required setting"}
 	}
 	var parts []string

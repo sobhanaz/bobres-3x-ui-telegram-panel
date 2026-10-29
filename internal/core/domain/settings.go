@@ -41,6 +41,9 @@ const (
 	permSystem    = "system.write"   // owner only: how the server itself runs (its updates)
 	permBranding  = "branding.write"
 	permDiscounts = "discounts.write"
+	// permSecurity is how staff sign in (the approval of sign-ins): the owner's, changed in the dashboard with the owner signed in (or on
+	// the server with bobres admin approval), never in the bot.
+	permSecurity = "security.write"
 )
 
 // The layouts of the bot's plan lists (SettingPlanLayout): a table puts each
@@ -55,7 +58,9 @@ const (
 // ownerOnlyPerm reports whether a setting's permission is held by the owner
 // alone (the web package's ownerOnly: gateways.write and system.write), so an
 // admin neither sees nor changes it, in the dashboard or the bot.
-func ownerOnlyPerm(perm string) bool { return perm == permGateways || perm == permSystem }
+func ownerOnlyPerm(perm string) bool {
+	return perm == permGateways || perm == permSystem || perm == permSecurity
+}
 
 // LegalTextMax is the longest text (characters) the owner may write for a Terms or Privacy page.
 const LegalTextMax = 30000
@@ -204,6 +209,14 @@ var SettingSpecs = []SettingSpec{
 		Help: "minutes without a snapshot from the host collector before a monitoring alert is raised (only where the collector is installed)"},
 	{Key: SettingMonitorCIAlert, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = a monitoring alert is raised while the latest CI run on the repository's main branch has failed (for a store built from main; off for a store that runs releases)"},
+	// How staff sign in (Settings > Sign-in security, the owner only, in the dashboard: domain/loginapproval.go). They are not on the generic
+	// Settings form and not in the bot's /set: turning them on needs the owner signed in, their authenticator code and a confirmation.
+	{Key: SettingLoginApproval, Group: "security", Kind: KindBool, Perm: permSecurity, Default: "false",
+		Help: "true = a staff sign-in to the dashboard (a login link, or a password with its authenticator code) opens a session only after the staff member, or an owner, approves it in Telegram within 5 minutes; false = it opens at once"},
+	{Key: SettingLoginApprovalNotifyOwner, Group: "security", Kind: KindBool, Perm: permSecurity, Default: "true",
+		Help: "true = the owners are asked to approve the sign-in of a staff member who is not an owner as well; false = only that staff member is"},
+	{Key: SettingStatusPage, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = the store has a public status page at /status (and /status.json for a monitoring service) that says whether the dashboard, the bot, payments and the panels work, in general words only: no server names, versions or numbers; false = both addresses answer 404 (off by default)"},
 	// The Updates tab edits it (System > Updates, the owner only); it is not on the Settings page.
 	{Key: release.SettingChannel, Group: "updates", Kind: KindEnum, Perm: permSystem, Options: []string{release.ChannelStable, release.ChannelBeta},
 		Help: "the release channel updates follow: stable = the newest stable release, beta = the newest of all releases, pre-releases included (empty = the server's BOBRES_UPDATE_CHANNEL, stable when unset)"},
@@ -486,6 +499,9 @@ func (s *Service) AdminSetSetting(ctx context.Context, actorTelegramID int64, ke
 	actor, err := s.requireStaff(ctx, actorTelegramID)
 	if err != nil {
 		return err
+	}
+	if SettingPerm(key) == permSecurity {
+		return &FieldError{key, "change it in the dashboard (Settings, Sign-in security) with the owner signed in, or on the server with: bobres admin approval"}
 	}
 	if perm := SettingPerm(key); ownerOnlyPerm(perm) && actor.Role != "owner" {
 		if perm == permGateways {

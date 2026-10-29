@@ -27,9 +27,9 @@ v0.15.0 (2026-10-23: buying a license in one screen, restoring a deleted plan, U
 v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount)
 v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
 v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
-v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type) and v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button).
+v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type), v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button) and v0.18.0 (2026-10-29: the customer's own list of codes, a plan priced in USDT paid from the wallet, the Tether top-up in the Mini App, per-server capacity limits, a Prometheus endpoint, an uptime view and a public status page, the approval of dashboard sign-ins in Telegram, and `bobres rotate-key`).
 
-## Where things stand (after v0.17.2)
+## Where things stand (after v0.18.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
@@ -47,6 +47,13 @@ services, join date) on the wallet screen; a **card to forward** in Invite frien
 `/status` in the bot's command menu; and the **reseller application** (a button for customers, a ticket in a new
 "reseller" category, an alert to staff, the category in the dashboard's inbox and in the Mini App).
 
+Built after v0.17.1 (unreleased, the security release): **approving dashboard sign-ins in Telegram** (Settings > Sign-in security, owner only,
+off by default: a staff sign-in gets no session until the staff member or an owner taps Approve in the bot, with the way out
+`sudo bobres admin approval off`; [04-dashboard.md](04-dashboard.md), [runbooks/login-approval.md](runbooks/login-approval.md)). This
+is the "two-factor sign-in inside the bot" item of the list below. Also built: **`sudo bobres rotate-key`**, which replaces the
+three master keys and seals everything they protect again (backup first, the old keys come back if anything fails;
+[runbooks/rotate-secrets.md](runbooks/rotate-secrets.md)). Re-encrypting after a key change was "future work" in the security doc.
+
 What is still open:
 
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
@@ -60,9 +67,12 @@ What is still open:
   **uninstall** that leaves a server as on day one (`sudo bobres uninstall --purge`). See the changelog for what has
   and has not been tried for real.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
-  (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
-  capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
-  sign-in inside the bot.
+  (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish);
+  Persian documentation generated from the code. (Two-factor sign-in inside the bot is built: see above.)
+  Built since v0.17.1 (release 0.18.0): **per-server capacity limits** (the Servers page, the pick, a daily notice), a
+  **Prometheus endpoint** (`GET /metrics`, off until the owner makes a token; a scrape configuration, alert rules and a Grafana dashboard
+  in [runbooks/monitoring.md](runbooks/monitoring.md)) and an **uptime view** (System > Monitoring > Uptime: the availability of each service
+  and panel server over 24 hours, 7 days and 30 days) with an optional **public status page** (`/status`, off by default).
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 
@@ -184,17 +194,17 @@ item says where it landed.
 3. **More panels: Marzban built, v0.4.0; tested against the real 0.8.4 image in CI since.** A server has a kind, 3x-ui or Marzban; the adapter is checked against the real panel by the "Marzban integration" CI job (not a required check), which found and fixed six differences from the fake. Marzban 1.0 (beta) has another API and is not supported; flagging untested Marzban versions in the dashboard, as 3x-ui's are, is open. Then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
 4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
 5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
-6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits are open.
+6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits: built (release 0.18.0).
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
-8. **Alongside:** the audit-log export is built (`audit.csv`). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), a Prometheus endpoint and an uptime page, two-factor sign-in inside the bot.
+8. **Alongside:** the audit-log export is built (`audit.csv`), and so are the Prometheus endpoint and the uptime view with its optional public status page (release 0.18.0). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), two-factor sign-in inside the bot.
 9. **The business track (the owner's, not code):** the lawyer's review, the prices, the license server, the first customers ([launch-checklist.md](launch-checklist.md)).
 
 ## Later, not yet ordered
 
 - More bot languages (Arabic, Russian, Turkish): the texts are already keys, so the work is translation and review.
 - TON payments; more crypto networks, if a way that works from Iran exists.
-- Metrics for operators (Prometheus endpoint, a Grafana example) and an uptime page per server.
-- Automatic node balancing and per-server capacity limits beyond the weights in use today.
+- Incident history on the status page (it says only "working" or "down" now), and e-mail or Telegram subscriptions to it. (The Prometheus endpoint, a Grafana example and the uptime view are built.)
+- Automatic node balancing beyond the weights and the per-server service limit in use today.
 - Two-factor sign-in for staff inside the bot.
 - A hosted offering, so a customer who does not want to run a server can pay for one: a plan, not built ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
 - An affiliate program for BOBRES itself, on top of the license server: a plan, not built ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
