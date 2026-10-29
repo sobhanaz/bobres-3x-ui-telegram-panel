@@ -270,6 +270,9 @@ func (s *Server) GroupBatches() []int {
 
 func fakeUUID(row int64) string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", row) }
 
+// Remove deletes a client, as an operator who deletes it in the panel's own UI does.
+func (s *Server) Remove(email string) { s.mu.Lock(); delete(s.clients, email); s.mu.Unlock() }
+
 // Has reports whether a client exists.
 func (s *Server) Has(email string) bool {
 	s.mu.Lock()

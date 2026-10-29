@@ -91,6 +91,8 @@ const (
 	CoreService_AdminAddStaff_FullMethodName             = "/core.v1.CoreService/AdminAddStaff"
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
+	CoreService_AdminListPanelMissing_FullMethodName     = "/core.v1.CoreService/AdminListPanelMissing"
+	CoreService_AdminResolvePanelMissing_FullMethodName  = "/core.v1.CoreService/AdminResolvePanelMissing"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
 	CoreService_ListMyCodes_FullMethodName               = "/core.v1.CoreService/ListMyCodes"
 	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
@@ -222,6 +224,12 @@ type CoreServiceClient interface {
 	AdminAddStaff(ctx context.Context, in *AdminAddStaffRequest, opts ...grpc.CallOption) (*AdminStaffMember, error)
 	AdminRemoveStaff(ctx context.Context, in *AdminRemoveStaffRequest, opts ...grpc.CallOption) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(ctx context.Context, in *AdminBroadcastRequest, opts ...grpc.CallOption) (*AdminBroadcastResponse, error)
+	// Services whose client is gone from the panel (docs/03-bot-ux.md, "Not on the panel"): a page of them, the
+	// longest missing first, and making one's client again or deleting it from the bot too, one at a time. Owner and
+	// admin (services.write on the dashboard); each change is audited as the dashboard's (subscription.recreate_client,
+	// subscription.delete) with the reason the bot gives.
+	AdminListPanelMissing(ctx context.Context, in *AdminListPanelMissingRequest, opts ...grpc.CallOption) (*AdminListPanelMissingResponse, error)
+	AdminResolvePanelMissing(ctx context.Context, in *AdminResolvePanelMissingRequest, opts ...grpc.CallOption) (*AdminResolvePanelMissingResponse, error)
 	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
@@ -978,6 +986,26 @@ func (c *coreServiceClient) AdminBroadcast(ctx context.Context, in *AdminBroadca
 	return out, nil
 }
 
+func (c *coreServiceClient) AdminListPanelMissing(ctx context.Context, in *AdminListPanelMissingRequest, opts ...grpc.CallOption) (*AdminListPanelMissingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListPanelMissingResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListPanelMissing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminResolvePanelMissing(ctx context.Context, in *AdminResolvePanelMissingRequest, opts ...grpc.CallOption) (*AdminResolvePanelMissingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminResolvePanelMissingResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminResolvePanelMissing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RedeemGiftCodeResponse)
@@ -1206,6 +1234,12 @@ type CoreServiceServer interface {
 	AdminAddStaff(context.Context, *AdminAddStaffRequest) (*AdminStaffMember, error)
 	AdminRemoveStaff(context.Context, *AdminRemoveStaffRequest) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error)
+	// Services whose client is gone from the panel (docs/03-bot-ux.md, "Not on the panel"): a page of them, the
+	// longest missing first, and making one's client again or deleting it from the bot too, one at a time. Owner and
+	// admin (services.write on the dashboard); each change is audited as the dashboard's (subscription.recreate_client,
+	// subscription.delete) with the reason the bot gives.
+	AdminListPanelMissing(context.Context, *AdminListPanelMissingRequest) (*AdminListPanelMissingResponse, error)
+	AdminResolvePanelMissing(context.Context, *AdminResolvePanelMissingRequest) (*AdminResolvePanelMissingResponse, error)
 	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
@@ -1456,6 +1490,12 @@ func (UnimplementedCoreServiceServer) AdminRemoveStaff(context.Context, *AdminRe
 }
 func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminBroadcast not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListPanelMissing(context.Context, *AdminListPanelMissingRequest) (*AdminListPanelMissingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListPanelMissing not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminResolvePanelMissing(context.Context, *AdminResolvePanelMissingRequest) (*AdminResolvePanelMissingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminResolvePanelMissing not implemented")
 }
 func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
@@ -2807,6 +2847,42 @@ func _CoreService_AdminBroadcast_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_AdminListPanelMissing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListPanelMissingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListPanelMissing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListPanelMissing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListPanelMissing(ctx, req.(*AdminListPanelMissingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminResolvePanelMissing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminResolvePanelMissingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminResolvePanelMissing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminResolvePanelMissing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminResolvePanelMissing(ctx, req.(*AdminResolvePanelMissingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RedeemGiftCodeRequest)
 	if err := dec(in); err != nil {
@@ -3299,6 +3375,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminBroadcast",
 			Handler:    _CoreService_AdminBroadcast_Handler,
+		},
+		{
+			MethodName: "AdminListPanelMissing",
+			Handler:    _CoreService_AdminListPanelMissing_Handler,
+		},
+		{
+			MethodName: "AdminResolvePanelMissing",
+			Handler:    _CoreService_AdminResolvePanelMissing_Handler,
 		},
 		{
 			MethodName: "RedeemGiftCode",

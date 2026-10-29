@@ -308,6 +308,9 @@ func gatedCases() []gatedCase {
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
 		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1", "rs:pfx", "rs:pfy:ab", "fl", "fr:n1",
 		"jn", "nope", "x",
+		// The services not on the panel (the button under the staff alert, and the list's own).
+		"adm:pm", "adm:pm:1", "adm:pmd:0:00000000-0000-4000-8000-000000000001", "adm:pmy:d:0:00000000-0000-4000-8000-000000000001",
+		"adm:pma:r", "adm:pmz:d:3",
 	} {
 		add(buttonCase(data))
 	}

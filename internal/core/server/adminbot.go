@@ -137,3 +137,45 @@ func (s *Server) AdminBroadcast(ctx context.Context, req *corev1.AdminBroadcastR
 		BroadcastId: p.BroadcastID,
 	}, nil
 }
+
+// AdminListPanelMissing lists a page of the services whose client the panel no longer has (owner and admin).
+func (s *Server) AdminListPanelMissing(ctx context.Context, req *corev1.AdminListPanelMissingRequest) (*corev1.AdminListPanelMissingResponse, error) {
+	page, err := s.dom.AdminListPanelMissing(ctx, req.GetActorTelegramId(), int(req.GetOffset()), int(req.GetLimit()))
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.AdminListPanelMissingResponse{Total: page.Total}
+	for i := range page.Services {
+		r := &page.Services[i]
+		sv := &corev1.AdminPanelMissingService{
+			Id: r.ID, ClientEmail: r.ClientEmail, TelegramId: r.TelegramID, Username: r.Username,
+			PlanName: r.PlanName, Status: r.Status,
+		}
+		if r.ExpiresAt != nil {
+			sv.ExpiresAt = r.ExpiresAt.Unix()
+		}
+		if r.PanelMissingSince != nil {
+			sv.MissingSince = r.PanelMissingSince.Unix()
+		}
+		out.Services = append(out.Services, sv)
+	}
+	return out, nil
+}
+
+// AdminResolvePanelMissing makes the client of one such service again, or deletes the service (owner and
+// admin); a service that changed since it was listed is skipped, and the outcome says so.
+func (s *Server) AdminResolvePanelMissing(ctx context.Context, req *corev1.AdminResolvePanelMissingRequest) (*corev1.AdminResolvePanelMissingResponse, error) {
+	ctx = fromBot(ctx)
+	if err := s.needProvisioner(); err != nil {
+		return nil, err
+	}
+	outcome, sub, err := s.dom.AdminResolvePanelMissing(ctx, req.GetActorTelegramId(), s.prov, req.GetSubscriptionId(), req.GetAction(), req.GetReason())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.AdminResolvePanelMissingResponse{Outcome: outcome}
+	if sub != nil {
+		out.ClientEmail = sub.ClientEmail
+	}
+	return out, nil
+}
