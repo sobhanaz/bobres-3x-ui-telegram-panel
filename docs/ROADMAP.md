@@ -27,9 +27,9 @@ v0.15.0 (2026-10-23: buying a license in one screen, restoring a deleted plan, U
 v0.16.0 (2026-10-23: digital accounts in the Mini App, and the rate shown beside a USDT amount)
 v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
 v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
-v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type) and v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button).
+v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type), v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button) and v0.18.0 (2026-10-29: the customer's own list of codes, a plan priced in USDT paid from the wallet, the Tether top-up in the Mini App, per-server capacity limits, a Prometheus endpoint, an uptime view and a public status page, the approval of dashboard sign-ins in Telegram, and `bobres rotate-key`).
 
-## Where things stand (after v0.17.2)
+## Where things stand (after v0.18.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
@@ -194,9 +194,9 @@ item says where it landed.
 3. **More panels: Marzban built, v0.4.0; tested against the real 0.8.4 image in CI since.** A server has a kind, 3x-ui or Marzban; the adapter is checked against the real panel by the "Marzban integration" CI job (not a required check), which found and fixed six differences from the fake. Marzban 1.0 (beta) has another API and is not supported; flagging untested Marzban versions in the dashboard, as 3x-ui's are, is open. Then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
 4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
 5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
-6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits: built (release 0.19.0).
+6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits: built (release 0.18.0).
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
-8. **Alongside:** the audit-log export is built (`audit.csv`), and so are the Prometheus endpoint and the uptime view with its optional public status page (release 0.19.0). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), two-factor sign-in inside the bot.
+8. **Alongside:** the audit-log export is built (`audit.csv`), and so are the Prometheus endpoint and the uptime view with its optional public status page (release 0.18.0). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), two-factor sign-in inside the bot.
 9. **The business track (the owner's, not code):** the lawyer's review, the prices, the license server, the first customers ([launch-checklist.md](launch-checklist.md)).
 
 ## Later, not yet ordered

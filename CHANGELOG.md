@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.18.0] — 2026-10-29
+
+**Customers see their own codes and pay USDT-priced plans from their Toman wallet; operators get capacity limits, Prometheus, an uptime view and a public status page; owners can require that every dashboard sign-in be approved in Telegram, and can rotate the master keys.** Everything new for operators and owners is off until switched on (capacity limits are unlimited until set, the metrics endpoint answers 404 until a token is made, the status page and the sign-in approval are off), so an update changes nothing a customer sees except the new My codes list, the wallet payment of USDT-priced plans and the USDT top-up in the Mini App.
+
 ### Updating
 - One database migration, additive (a rollback keeps every order and credit): core 00041 (`orders.list_amount`, `list_currency`, `rate`). No new service, nothing to configure, no license change.
 - Update from the dashboard (System > Updates) or `sudo bobres update`. Core and the bot move together; the Mini App is served by core.
@@ -15,6 +19,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - One database migration, additive: core 00042 (`discount_codes_user_idx`, an index so that a customer's reward codes are found without reading the table). No new service, nothing to configure, no license change.
 
 ### Known limits
+- `sudo bobres rotate-key` was tested against throwaway databases and a fake Docker, not yet on a real server: before its first run take a backup and keep a copy off the server (`sudo bobres backup`).
 - A bulk purchase of a plan priced in USDT still takes the USDT wallet of the customer (which is usually empty); the single purchase is what pays from the Toman wallet.
 - The Mini App's USDT top-up counts down to the payment window by the phone's clock (a payment's deadline is a moment, not a length), and shows the address and the amount without a countdown when that moment is already past on the phone. Nothing here was tried in a real Telegram client.
 - The USDT top-up in the Mini App takes whole USDT from 1 to 10,000, as the bot does.

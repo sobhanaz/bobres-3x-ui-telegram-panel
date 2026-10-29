@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.17.2, 2026-10-28.
+As of v0.18.0, 2026-10-29.
 
 ## Shipped
 
@@ -27,10 +27,11 @@ As of v0.17.2, 2026-10-28.
 | v0.17.0 | 2026-10-23 | One wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link |
 | v0.17.1 | 2026-10-28 | The store comes back by itself after a reboot; a tls-agent that stays healthy after a restart; alerts that say what to type |
 | v0.17.2 | 2026-10-28 | Services whose client is gone from the panel are marked, listed, noticed once a day, and made again with a button; repeated log lines fold into one row |
+| v0.18.0 | 2026-10-29 | My codes; USDT plans paid from the wallet; Tether top-up in the Mini App; per-server capacity; Prometheus, uptime and a status page; sign-in approval in Telegram; `bobres rotate-key` |
 
-## Built, shipping with the next release
+## New in v0.18.0
 
-Done in the code and waiting for the next release (0.19.0); they are not in the table above until it is out.
+Shipped in v0.18.0 (2026-10-29), with the list of codes, the USDT plans paid from the wallet, the Tether top-up in the Mini App, the approval of sign-ins in Telegram and `bobres rotate-key`.
 
 - **Per-server capacity limits.** A panel server can be given the most services it takes; the pick passes over a full server, a plan whose servers are all full waits, and a daily notice comes at 90% and when full. See [Panels](Panels).
 - **A Prometheus endpoint.** `/metrics` on your domain, off until the owner makes a token, with a scrape configuration, alert rules and a Grafana dashboard. See [Dashboard Guide](Dashboard-Guide).

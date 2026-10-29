@@ -455,7 +455,7 @@ anything about how the store runs, so they are off by default and say as little 
   (new password, authenticator removed, every session ended, the lock lifted); a loss of the phone is handled the
   same way. A link login is always a full session. The command needs shell access to the server (docker), which
   is already the trust boundary of `bobres admin link`.
-- DECIDED (release 0.19.0): the master keys are rotated by `bobres rotate-key`, which re-encrypts what they protect (the key id in
+- DECIDED (release 0.18.0): the master keys are rotated by `bobres rotate-key`, which re-encrypts what they protect (the key id in
   the version 2 format, a dual-key envelope, a tag key that never changes). Not rotated: `BOBRES_BACKUP_KEY` (it encrypts
   backup files, which older backups need), the tag keys, and the database and service secrets, which have their own
   commands.
