@@ -81,6 +81,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, er
 	res, err := load(ctx, corev1.NewCoreServiceClient(conn), *cfg)
 	if res.Rec != nil {
 		writeReport(out, res)
+		if jerr := writeJSON(cfg.JSON, res, false); jerr != nil {
+			fmt.Fprintln(errOut, "loadtest: -json:", jerr)
+			return 1
+		}
 	}
 	if err != nil {
 		fmt.Fprintln(errOut, "loadtest:", err)
@@ -96,6 +100,7 @@ func flags(fs *flag.FlagSet) *config {
 	fs.DurationVar(&c.Duration, "duration", 30*time.Second, "how long new journeys are started")
 	fs.DurationVar(&c.Think, "think", 0, "pause between a customer's bot updates, give or take half (0: as fast as core answers)")
 	fs.DurationVar(&c.Timeout, "timeout", 10*time.Second, "per call")
+	fs.StringVar(&c.JSON, "json", "", "also write the run as JSON to this file (tools/bench reads it)")
 	return c
 }
 

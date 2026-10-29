@@ -24,6 +24,7 @@ type config struct {
 	Timeout  time.Duration // per call
 	Owner    int64         // Telegram id of the owner (or an admin) who tops wallets up
 	TGBase   int64         // simulated customers get Telegram ids above this
+	JSON     string        // also write the run as JSON to this file (-json)
 }
 
 // price is the load test plan's price: each journey's top-up buys it once.
@@ -95,7 +96,7 @@ func (r *runner) start(ctx context.Context) result {
 		})
 	}
 	wg.Wait()
-	res := result{Users: r.cfg.Users, Duration: r.cfg.Duration, Elapsed: time.Since(begin), Rec: newRecorder()}
+	res := result{Users: r.cfg.Users, Duration: r.cfg.Duration, Think: r.cfg.Think, Elapsed: time.Since(begin), Rec: newRecorder()}
 	for _, rec := range recs {
 		res.Rec.merge(rec)
 	}
