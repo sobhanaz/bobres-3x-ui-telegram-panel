@@ -480,6 +480,9 @@ const sparkLabel = (what: string, values: number[]) => t('reports.spark.' + tren
                 <div v-if="totals(c)!.digital?.count" class="app-muted small sales digital">
                   {{ t('reports.kpi.digital', { n: num(totals(c)!.digital!.count, lang), amount: m(totals(c)!.digital!.amount, c) }) }}
                 </div>
+                <div v-if="totals(c)!.cashback?.count || totals(c)!.cashback?.amount" class="app-muted small sales cashback">
+                  {{ t('reports.kpi.cashback', { n: num(totals(c)!.cashback!.count, lang), amount: m(totals(c)!.cashback!.amount, c) }) }}
+                </div>
                 <dl class="flows">
                   <template v-for="f in flows" :key="f">
                     <dt>{{ t('reports.kpi.' + f) }}</dt>

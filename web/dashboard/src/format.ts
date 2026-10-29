@@ -58,6 +58,11 @@ export function percent(n: number, lang: Lang): string {
   return new Intl.NumberFormat(numberLocale(lang), { style: 'percent', maximumFractionDigits: 0 }).format(n / 100)
 }
 
+/** percentBP writes hundredths of a percent ("2.5%", "۲٫۵٪"; 250 is 2.5%). */
+export function percentBP(bp: number, lang: Lang): string {
+  return new Intl.NumberFormat(numberLocale(lang), { style: 'percent', maximumFractionDigits: 2 }).format(bp / 10000)
+}
+
 /** shortId is the part of an id the bot shows customers: its last 6 hex digits. */
 export function shortId(id: string): string {
   return id.replaceAll('-', '').slice(-6)

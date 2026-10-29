@@ -110,6 +110,20 @@ export interface Order {
   list_scale?: number
   rate?: number
   discount_currency?: string
+  /** what the delivered order earned back as cashback (absent: none, or taken back by a refund) */
+  cashback?: { amount: number; currency: string; scale: number }
+}
+/** The store's cashback as the wallet shows it: its terms while it is on, and what this customer has earned (absent while off and unearned). */
+export interface CashbackInfo {
+  on: boolean
+  /** the share in percent as the owner wrote it, "2.5" ("" while off) */
+  percent: string
+  max_per_order: number
+  min_order: number
+  renewals: boolean
+  earned: number
+  currency: string
+  scale: number
 }
 export interface Quote { list_price: number; discount: number; total: number; currency: string; scale: number; discount_code: string }
 /**
@@ -247,7 +261,7 @@ export const api = {
   catalog: () =>
     call<{ plans: Plan[]; groups?: PlanGroup[] }>('GET', '/plans').then((r) => ({ plans: r.plans, groups: r.groups ?? [] })),
   services: () => call<{ services: Service[] }>('GET', '/services').then((r) => r.services),
-  wallet: () => call<{ wallets: Wallet[]; ledger: LedgerEntry[] }>('GET', '/wallet'),
+  wallet: () => call<{ wallets: Wallet[]; ledger: LedgerEntry[]; cashback?: CashbackInfo }>('GET', '/wallet'),
   methods: (currency: string, amount: number) =>
     call<{ methods: string[] }>('GET', `/methods?currency=${encodeURIComponent(currency)}&amount=${amount}`).then((r) => r.methods),
   quote: (req: OrderRequest) => call<Quote>('POST', '/quote', req),

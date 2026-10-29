@@ -316,6 +316,22 @@ function back() {
       </div>
       <p v-if="note" class="ok" role="status">{{ note }}</p>
 
+      <section v-if="state.cashback" class="card cashback" aria-label="cashback">
+        <template v-if="state.cashback.on">
+          <p>🎁 {{ tr('cashback.on', { percent: fmtNum(Number(state.cashback.percent)) }) }}</p>
+          <p v-if="state.cashback.min_order > 0" class="muted small">
+            {{ tr('cashback.min', { amount: fmtMoney(state.cashback.min_order, state.cashback.currency, state.cashback.scale) }) }}
+          </p>
+          <p v-if="state.cashback.max_per_order > 0" class="muted small">
+            {{ tr('cashback.max', { amount: fmtMoney(state.cashback.max_per_order, state.cashback.currency, state.cashback.scale) }) }}
+          </p>
+          <p v-if="!state.cashback.renewals" class="muted small">{{ tr('cashback.new_only') }}</p>
+        </template>
+        <p v-if="state.cashback.earned > 0" class="ok">
+          {{ tr('cashback.earned', { amount: fmtMoney(state.cashback.earned, state.cashback.currency, state.cashback.scale) }) }}
+        </p>
+      </section>
+
       <section v-if="credit" class="card credit" role="status">
         <h2>{{ tr('done.title') }}</h2>
         <p class="ok">{{ tr('wallet.usdt_paid', { amount: fmtMoney(credit.amount, 'USDT', credit.scale) }) }}</p>

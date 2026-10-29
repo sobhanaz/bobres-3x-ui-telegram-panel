@@ -6,7 +6,7 @@ The Mini App is your store as a web app inside Telegram. It is the same store as
 
 - Browse plans (in groups, if you made them), buy, and pay.
 - See their services, copy the link, open the service's page, and renew or add traffic.
-- Use the wallet: balances, history, top-up. A top-up is 10,000 to 50,000,000 Toman, or a whole number of USDT from 1 to 10,000: the app shows the address, the exact amount, a QR code and a countdown, and then the converted balance in Toman.
+- Use the wallet: balances, history, top-up. A top-up is 10,000 to 50,000,000 Toman, or a whole number of USDT from 1 to 10,000: the app shows the address, the exact amount, a QR code and a countdown, and then the converted balance in Toman. While [cashback](Plans-and-Pricing) is on, the wallet says what a purchase earns and what the customer has earned so far, and the result of a purchase says "You earned X cashback". While the [daily wheel](Plans-and-Pricing) is on, **More** has a **Daily wheel** page: a wheel that turns to the result the server drew, one spin a day.
 - Pay a plan priced in USDT from the wallet: the app shows the USDT price, the rate and the Toman that will be taken, held for two minutes, and the customer confirms.
 - Take the free trial, invite friends, and write to support.
 - See their own codes under **More > My codes**: the reward codes made for them (with a Copy button) and the gift codes they applied, newest first, with each one's worth, state and date. It is the same list as the bot's Wallet > My codes.

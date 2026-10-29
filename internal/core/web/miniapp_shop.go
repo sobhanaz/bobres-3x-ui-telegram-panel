@@ -126,7 +126,15 @@ func (s *Server) miniWallet(w http.ResponseWriter, r *http.Request) {
 		ledger = append(ledger, map[string]any{"kind": e.Kind, "amount": e.Amount, "currency": e.Currency, "balance_after": e.BalanceAfter,
 			"at": e.CreatedAt.Unix(), "scale": bmoney.Scale(e.Currency)})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"wallets": wallets, "ledger": ledger})
+	body := map[string]any{"wallets": wallets, "ledger": ledger}
+	// The cashback: its terms while it is on, and what this customer has earned, so the wallet can say both.
+	if cb, err := s.cfg.Domain.CashbackStatus(ctx, c.user.ID); err != nil {
+		s.cfg.Log.Warn("mini app wallet cashback", "err", err)
+	} else if cb.On || cb.Earned > 0 {
+		body["cashback"] = map[string]any{"on": cb.On, "percent": cb.Percent, "max_per_order": cb.MaxPerOrder, "min_order": cb.MinOrder,
+			"renewals": cb.Renewals, "earned": cb.Earned, "currency": domain.WalletCurrency, "scale": bmoney.Scale(domain.WalletCurrency)}
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // miniPaymentMethods: GET /api/mini/v1/methods?currency=IRT&amount=N, the
@@ -272,7 +280,14 @@ func (s *Server) miniGetOrder(w http.ResponseWriter, r *http.Request) {
 		s.miniFail(w, "mini app order", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, miniOrderBody(o))
+	body := miniOrderBody(o)
+	// What the delivered order earned back, for the result screen ("you earned X cashback"): a refunded one earned nothing in the end.
+	if c, err := s.cfg.Domain.OrderCashback(r.Context(), o.ID); err != nil {
+		s.cfg.Log.Warn("mini app order cashback", "order", o.ID, "err", err)
+	} else if c != nil && c.ReversedAt == nil {
+		body["cashback"] = map[string]any{"amount": c.Amount, "currency": c.Currency, "scale": bmoney.Scale(c.Currency)}
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // miniPayWallet: POST /api/mini/v1/orders/{id}/pay-wallet {quote}. Paying twice is

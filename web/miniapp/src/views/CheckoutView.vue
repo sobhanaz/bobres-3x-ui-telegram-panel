@@ -409,6 +409,9 @@ const doneKey = computed(() => {
     <section v-else-if="stage === 'done'" class="card" role="status">
       <h2>{{ tr('done.title') }}</h2>
       <p>{{ tr(doneKey) }}</p>
+      <p v-if="order?.status === 'active' && order.cashback && order.cashback.amount > 0" class="ok">
+        🎁 {{ tr('done.cashback', { amount: fmtMoney(order.cashback.amount, order.cashback.currency, order.cashback.scale) }) }}
+      </p>
       <button class="btn" type="button" @click="emit('services')">{{ tr('done.view') }}</button>
     </section>
 

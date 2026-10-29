@@ -80,6 +80,8 @@ export interface OrderItem {
   staff: string
   extend: { days: number | null; bytes: number | null } | null
   refund: { amount: Money; at: number } | null
+  /** the cashback the order earned its buyer (only the one-order answer has it); `reversed` is what a refund took back */
+  cashback?: { amount: Money; percent_bp: number; capped: boolean; at: number; reversed?: Money; reversed_at?: number } | null
   /** an order listed in USDT and paid from the Toman wallet: amount is what was charged; this is the price it was listed at (the discount is in it) and the Toman per USDT it was worked out at */
   list?: { price: Money; rate: number } | null
 }
@@ -276,7 +278,7 @@ export interface AuditItem {
 export interface SettingItem {
   key: string
   group: string
-  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color'
+  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list'
   value: string
   default: string
   options: string[]
@@ -584,6 +586,50 @@ export interface ResellerDetail extends ResellerItem {
   panel_group?: string
   panel_group_full?: string
   groups_synced?: boolean
+  /** this month against the owner's monthly targets (absent while they are off) */
+  targets?: TargetsView
+}
+
+/** One day of the daily wheel in the owner's report: customers who spun, those who won, and the Toman paid out. */
+export interface WheelDayView {
+  day: string
+  spins: number
+  winners: number
+  paid: { amount: number; currency: string }
+}
+
+/** GET /wheel/report: today against the daily budget and the days of the last month that had a spin (newest first). */
+export interface WheelReportView {
+  on: boolean
+  day: string
+  budget: { amount: number; currency: string }
+  remaining: { amount: number; currency: string }
+  today: WheelDayView
+  days: WheelDayView[]
+  total: WheelDayView
+  window_days: number
+}
+
+export interface TargetTierView {
+  threshold: number
+  bonus: number
+  reached: boolean
+  paid: boolean
+}
+
+/** A reseller's month against the owner's targets (core's targetsJSON): from and to are the Gregorian dates the month covers, ends_at unix seconds. */
+export interface TargetsView {
+  period: string
+  calendar: 'gregorian' | 'jalali'
+  from: string
+  to: string
+  ends_at: number
+  sold: number
+  tiers: TargetTierView[]
+  remaining: number
+  bonus_paid: number
+  currency: string
+  scale: number
 }
 
 /** A reseller tier: a discount off store prices, or a fixed price per plan

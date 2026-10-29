@@ -316,7 +316,11 @@
     "refund": "Refund to wallet",
     "refund_intro": "{amount} goes to the customer's wallet and the order is cancelled (it was not delivered). The customer is told.",
     "refund_intro_delivered": "{amount} goes to the customer's wallet. The service was delivered and keeps working: delete it on its page if needed. The customer is told.",
-    "refund_done": "Refunded. Wallet balance: {balance}"
+    "refund_done": "Refunded. Wallet balance: {balance}",
+    "cashback": "Cashback",
+    "cashback_line": "{amount} · {percent} of {base}",
+    "cashback_capped": "cut to the most one order earns",
+    "cashback_reversed": "{amount} was taken back with the refund"
   },
   "account": {
     "title": "My account",
@@ -654,7 +658,11 @@
       "license_refund": "License refund",
       "supplier_purchase": "Digital account",
       "supplier_refund": "Digital account refund",
-      "wallet_convert": "USDT converted to Toman"
+      "wallet_convert": "USDT converted to Toman",
+      "cashback": "Cashback",
+      "cashback_reversal": "Cashback taken back",
+      "target_bonus": "Monthly target bonus",
+      "wheel_prize": "Wheel of fortune prize"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -691,7 +699,12 @@
     "used_on": "Used on",
     "from": "Came from",
     "from_order": "Order",
-    "status": { "unused": "Not used yet", "used": "Used", "expired": "Expired", "off": "Switched off" }
+    "status": {
+      "unused": "Not used yet",
+      "used": "Used",
+      "expired": "Expired",
+      "off": "Switched off"
+    }
   },
   "charts": {
     "legend": "Series (select to show or hide)",
@@ -786,7 +799,8 @@
       "refunds_n": "{n} refund | {n} refunds",
       "rejected_n": "{n} payment | {n} payments",
       "gateway_failed_n": "{n} payment | {n} payments",
-      "cancelled_n": "{n} order | {n} orders"
+      "cancelled_n": "{n} order | {n} orders",
+      "cashback": "Cashback given: {n} · {amount}"
     },
     "customers": {
       "title": "Customers",
@@ -1032,12 +1046,18 @@
     "turned_off": "License sales are off",
     "on": "Sales on",
     "off": "Sales off",
-    "tier": { "standard": "Standard", "pro": "Pro" },
+    "tier": {
+      "standard": "Standard",
+      "pro": "Pro"
+    },
     "month": "month",
     "year": "year",
     "all": "All statuses",
     "status_col": "Status",
-    "status": { "active": "Active", "revoked": "Revoked" },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
     "none": "No licenses sold yet.",
     "buyer": "Buyer",
     "tier_col": "Tier",
@@ -1070,7 +1090,12 @@
     "end": "Ends",
     "end_date": "End date",
     "end_date_help": "YYYY-MM-DD, Gregorian, at most 10 years from today. Choose No end for a license without one.",
-    "mode": {"months": "After some months", "date": "On a date", "none": "No end", "default": "The trial's own days (30)"},
+    "mode": {
+      "months": "After some months",
+      "date": "On a date",
+      "none": "No end",
+      "default": "The trial's own days (30)"
+    },
     "default_help": "A trial lasts its own 30 days from now.",
     "make": "Make the license",
     "key_once": "The activation key",
@@ -1098,7 +1123,13 @@
     "rekey": "Issue a new key",
     "changed": "License changed",
     "ended_on": "Ended {date}",
-    "edit": {"title": "Change a license", "keep": "Keep the end", "tier_help": "A new tier takes that tier's limits and features.", "extend": "Or renew by", "extend_go": "Renew"}
+    "edit": {
+      "title": "Change a license",
+      "keep": "Keep the end",
+      "tier_help": "A new tier takes that tier's limits and features.",
+      "extend": "Or renew by",
+      "extend_go": "Renew"
+    }
   },
   "supplier": {
     "category": "Category",
@@ -1157,7 +1188,11 @@
     "refunded": "Order refunded",
     "refund_help": "The money goes back to the customer's wallet. Do this only when the supplier did not charge you for the order.",
     "attempts": "{n} attempt | {n} attempts",
-    "order_status": {"paid": "Waiting for the supplier", "done": "Delivered", "refunded": "Refunded"}
+    "order_status": {
+      "paid": "Waiting for the supplier",
+      "done": "Delivered",
+      "refunded": "Refunded"
+    }
   },
   "giftcodes": {
     "intro": "A gift code adds a fixed amount of credit to a customer's wallet. Customers apply it from the Wallet screen of the bot, with the Apply gift code button. A code is not kept: only its last four characters stay in this list, so copy new codes when you make them.",
@@ -1411,7 +1446,8 @@
       "bulk": "Bulk purchase",
       "profile": "Bot profile",
       "help": "Help screens",
-      "loginapp": "Dashboard sign-in approval"
+      "loginapp": "Dashboard sign-in approval",
+      "wheel": "Daily wheel"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -1609,7 +1645,14 @@
       "one_line": "One line only, without control characters.",
       "option": "Choose one of the options.",
       "timezone": "This time zone is not recognised.",
-      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59)."
+      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59).",
+      "tiers": "Each tier needs a whole number of services (1 to 100,000) and a bonus of at least 1 Toman.",
+      "tiers_dup": "Two tiers ask for the same number of services.",
+      "tiers_many": "At most 10 tiers.",
+      "prizes": "Each prize needs a whole amount of Toman (at least 1) and a weight from 1 to 1,000,000.",
+      "prizes_dup": "Two prizes have the same amount.",
+      "prizes_many": "At most 12 prizes.",
+      "percent": "A percent from 0.01 to 20, for example 2.5."
     },
     "option": {
       "bot": {
@@ -1622,6 +1665,12 @@
         "recipients": {
           "owner": "Only the store owner",
           "staff": "Every owner and admin"
+        }
+      },
+      "targets": {
+        "calendar": {
+          "gregorian": "Gregorian",
+          "jalali": "Jalali (Persian)"
         }
       }
     },
@@ -1671,6 +1720,21 @@
       "reports": {
         "title": "Sales summary",
         "desc": "A message in Telegram with yesterday's sales, once a day."
+      },
+      "cashback": {
+        "title": "Cashback",
+        "desc": "Give a share of what each order cost back to the customer's wallet once it is paid and delivered.",
+        "note": "Cashback is credit in the wallet, not cash: it can only be spent in the store. If an order is refunded, its cashback is taken back from the refund. Resellers, free orders, free trials and orders priced in USDT earn none. Off until you turn it on."
+      },
+      "targets": {
+        "title": "Reseller targets",
+        "desc": "A monthly bonus for resellers who sell enough new services.",
+        "note": "Each tier pays its own bonus, once for the month, as soon as a reseller's sales of the month reach it, on top of the bonuses of the lower tiers. Only new services a reseller bought and that were delivered count; renewals, traffic packages and free orders do not. Sales are counted from the moment you switch targets on. A refunded sale leaves the count of its month, but a bonus already paid is not taken back. Off until you turn it on."
+      },
+      "wheel": {
+        "title": "Daily wheel",
+        "desc": "One free spin a day for customers who have paid orders, for a chance at wallet credit.",
+        "note": "The wheel stays closed until it has prizes and a daily budget. The draw is made by core, once per customer per day in store time. A prize the day's budget cannot cover is not paid and the customer's spin is not used: they are asked to come back tomorrow. Only customers spin, not resellers, staff or banned customers, and only after the paid orders you ask for (at least one). A prize is credit in the wallet, not cash: it can only be spent in the store. Off until you turn it on."
       }
     },
     "field": {
@@ -1901,9 +1965,88 @@
           "label": "Time it is sent",
           "help": "Time of day, 24-hour (for example 09:00), in the store's time zone: the time zone of the General card, else BOBRES_TIMEZONE, else Tehran. If the server was down at that time, the summary is sent as soon as it is back, the same day; days that were missed are not made up."
         }
+      },
+      "cashback": {
+        "enabled": {
+          "label": "Cashback",
+          "help": "When on, an order that has been paid and delivered credits a share of its price to the customer's wallet, once. Turned off, nothing more is paid; what was paid stays in the wallets. Set the percent too."
+        },
+        "percent": {
+          "label": "Cashback percent",
+          "help": "From 0.01 to 20, for example 2.5. It is worked out on what the order cost after any discount, in whole Toman, rounded down. Empty means no cashback."
+        },
+        "max_per_order": {
+          "label": "Most cashback per order (Toman)",
+          "help": "No order earns more than this. Empty or 0 means no maximum."
+        },
+        "min_order": {
+          "label": "Smallest order that earns (Toman)",
+          "help": "An order must cost at least this much, after any discount, to earn cashback. Empty or 0 means any order that costs something."
+        },
+        "renewals": {
+          "label": "Renewals earn cashback",
+          "help": "On: renewals and traffic packages earn it like new services. Off: only new services do."
+        }
+      },
+      "targets": {
+        "enabled": {
+          "label": "Monthly targets",
+          "help": "When on, a reseller whose new services of a month reach a tier is paid that tier's bonus, once for the month, into their wallet; they are told in the bot, and the Mini App and the bot show their progress. Turned off, nothing is counted or paid; what was paid stays."
+        },
+        "tiers": {
+          "label": "Tiers",
+          "help": "How many new services a reseller sells in a month, and the bonus in Toman for reaching that number. At most 10 tiers; each pays its own bonus on top of the lower tiers'. Changing the tiers in the middle of a month never pays a tier twice."
+        },
+        "calendar": {
+          "label": "Calendar of the month",
+          "help": "Gregorian: a month runs from the 1st to its last day (the 1st of November, for instance). Jalali: Persian months (the 1st of Aban). The month is read in the store's time zone. Change it between months, not in the middle of one."
+        }
+      },
+      "wheel": {
+        "enabled": {
+          "label": "Daily wheel",
+          "help": "When on, a customer with enough paid orders may spin the wheel once a day, in the bot and in the Mini App. Turned off, the wheel is gone; prizes already paid stay in the wallets. It also needs prizes and a daily budget."
+        },
+        "prizes": {
+          "label": "Prizes",
+          "help": "What the wheel can pay, in Toman, and each prize's weight: its share of the chances. A prize of weight 3 comes up three times as often as one of weight 1. At most 12 prizes, no amount twice; saved in order of amount."
+        },
+        "no_prize_weight": {
+          "label": "Weight of no prize",
+          "help": "The chance of no prize is this number out of the sum of all the weights, the prizes' included. Empty or 0 means every spin wins something."
+        },
+        "daily_budget": {
+          "label": "Daily budget (Toman)",
+          "help": "The most the wheel pays out in one day (store time). Spins are decided one at a time against it: when it cannot cover the prize that comes up, nothing is paid, the customer's spin is not used and they are asked to come back tomorrow. Empty or 0 means the wheel is closed."
+        },
+        "min_orders": {
+          "label": "Paid orders needed",
+          "help": "How many paid orders a customer needs before they may spin, at least 1: an account made only to spin earns nothing. Refunded orders and orders that cost nothing do not count."
+        }
       }
     },
-    "payments_moved": "Payment methods and their details:"
+    "payments_moved": "Payment methods and their details:",
+    "tiers": {
+      "empty": "No tier yet. Add one to start paying bonuses.",
+      "row": "Tier {n}",
+      "threshold": "New services in a month",
+      "bonus": "Bonus (Toman)",
+      "remove": "Remove tier {n}",
+      "add": "Add a tier",
+      "max": "The list holds at most {n} tier. | The list holds at most {n} tiers.",
+      "sorted": "Tiers are saved in order of services."
+    },
+    "prizes": {
+      "empty": "No prize yet. Add one to open the wheel.",
+      "row": "Prize {n}",
+      "amount": "Prize (Toman)",
+      "weight": "Weight",
+      "chance": "{percent} of spins",
+      "remove": "Remove prize {n}",
+      "add": "Add a prize",
+      "max": "The wheel holds at most {n} prize. | The wheel holds at most {n} prizes.",
+      "sorted": "Prizes are saved in order of amount."
+    }
   },
   "staff": {
     "intro": "People who can use this dashboard. Every change logs that person out and is kept in the audit log with your reason.",
@@ -2087,7 +2230,8 @@
       "order": {
         "retry": "Order retried",
         "refund": "Order refunded",
-        "bulk": "Bulk purchase made"
+        "bulk": "Bulk purchase made",
+        "cashback_reversal": "Cashback taken back"
       },
       "dashboard": {
         "login": "Logged in",
@@ -2591,7 +2735,20 @@
     "config_prefix": "Config prefix",
     "config_prefix_none": "Not chosen yet (the usual names)",
     "config_prefix_hint": "New configs are named <prefix>-u<id>-…; leave empty to let the reseller choose it in the bot. Clearing it lets them choose again.",
-    "config_prefix_rule": "2 to 10 letters or digits (a-z, 0-9), not like u123, and not used by another reseller."
+    "config_prefix_rule": "2 to 10 letters or digits (a-z, 0-9), not like u123, and not used by another reseller.",
+    "targets": {
+      "title": "Monthly target",
+      "range": "{from} to {to}",
+      "sold": "new services sold this month",
+      "tier": "{n} service: {bonus} bonus | {n} services: {bonus} bonus",
+      "paid": "bonus paid",
+      "reached_unpaid": "reached, bonus not paid",
+      "not_reached": "not reached yet",
+      "next": "{n} more service for the next bonus of {bonus}. | {n} more services for the next bonus of {bonus}.",
+      "done": "Every tier is reached this month.",
+      "paid_total": "Bonuses paid this month: {amount}",
+      "no_clawback": "A refunded sale leaves the count, but a bonus already paid is not taken back."
+    }
   },
   "tier": {
     "intro": "A tier sets what its resellers pay: a percentage off store prices, or a fixed price for a plan. The commission is the share of each purchase by a customer who joined through a reseller's link.",
@@ -4105,6 +4262,22 @@
       "live": "Live",
       "manual": "Your own rate",
       "none": "None"
+    }
+  },
+  "wheel": {
+    "report": {
+      "title": "Daily wheel report",
+      "desc": "What the wheel did today and on the days of the last month that had a spin, in store time.",
+      "off": "The wheel is off or closed now: it needs to be switched on, with prizes and a daily budget.",
+      "today": "Today",
+      "spins": "Spins",
+      "winners": "Winners",
+      "paid": "Paid out",
+      "budget": "Daily budget",
+      "remaining": "Left today",
+      "day": "Day",
+      "total": "All these days",
+      "empty": "Nobody has spun yet."
     }
   }
 }

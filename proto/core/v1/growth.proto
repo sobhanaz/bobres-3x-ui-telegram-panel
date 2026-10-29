@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package core.v1;
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
+
+// The growth tools (docs/03-bot-ux.md): the reseller's monthly target, whose progress rides on ResellerInfo, and the daily wheel of fortune. They
+// have a file of their own, like help.proto, so the generated code of core.proto moves as little as possible when they change.
+
+// ResellerTargetTier is one tier of the monthly target as the reseller sees it this month.
+message ResellerTargetTier {
+  int64 threshold = 1; // services to sell in the month
+  int64 bonus = 2; // Toman, paid once for the month when the threshold is reached
+  bool reached = 3; // this month's count has got to the threshold
+  bool paid = 4; // the bonus was paid for this month
+}
+
+// ResellerTargets is a reseller's month against the owner's targets (ResellerInfo.targets). Absent while the owner has targets off.
+message ResellerTargets {
+  string period = 1; // the month, "2026-10" (in the owner's calendar: a Jalali month is "1405-07")
+  string calendar = 2; // gregorian | jalali
+  string from = 3; // the Gregorian dates the month covers in the store's time zone, both included: "2026-10-01"
+  string to = 4;
+  int64 ends_at = 5; // unix seconds: when the month ends
+  int64 sold = 6; // services delivered this month that count (a refunded one does not)
+  repeated ResellerTargetTier tiers = 7; // lowest first
+  int64 remaining = 8; // services to the next tier (0 when all are reached)
+  int64 bonus_paid = 9; // Toman paid as bonus for this month
+}
+
+// --- The daily wheel of fortune (GetWheel, SpinWheel) ---
+
+// WheelPrize is one segment of the wheel: Toman won, drawn with the chance weight / total_weight.
+message WheelPrize {
+  int64 amount = 1;
+  int64 weight = 2;
+}
+
+message GetWheelRequest {
+  string user_id = 1;
+}
+
+// WheelState is the wheel as a customer sees it before they spin.
+message WheelState {
+  bool on = 1; // the wheel can pay (switched on, with prizes and a daily budget); when false nothing else is filled in
+  string day = 2; // the store-local day, "2026-10-28"
+  int64 resets_at = 3; // unix seconds: when the next day, and the next spin, begins
+  string reason = 4; // why this customer may not spin: "role" (a reseller or staff) or "orders" (not enough paid orders); empty when they may
+  int64 orders = 5; // paid orders the customer has
+  int64 min_orders = 6; // paid orders the owner asks for
+  bool spun = 7; // the customer has spun today
+  int64 prize = 8; // today's prize in Toman (0: none), when spun
+  bool open = 9; // what is left of the day's budget still covers the smallest prize
+  repeated WheelPrize prizes = 10; // smallest amount first: the order of the segments
+  int64 no_prize_weight = 11; // the weight of the segment that pays nothing (after the prizes)
+  int64 total_weight = 12;
+}
+
+message SpinWheelRequest {
+  string user_id = 1;
+}
+
+// WheelSpinResult answers a spin. A customer who already spun today gets that spin back (status "already"); a prize the day's budget cannot cover is
+// "closed" and does not use the spin. A banned customer is PERMISSION_DENIED.
+message WheelSpinResult {
+  string status = 1; // won | lost | already | closed | off | role | orders
+  int64 prize = 2; // Toman won (won), or the earlier spin's (already)
+  int32 index = 3; // the prize's place in WheelState.prizes; -1 for no prize
+  int64 balance = 4; // the wallet now (Toman)
+  string day = 5;
+  int64 resets_at = 6;
+  int64 orders = 7; // for status "orders": what the customer has
+  int64 min_orders = 8; // and what is asked
+}

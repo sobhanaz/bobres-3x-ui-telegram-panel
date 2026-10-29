@@ -223,7 +223,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		// A gift code was applied in the bot, which answered with the amount
 		// and the balance in the same chat (as a wallet payment does): a
 		// second message would only repeat it.
-		if e.Reason == events.CreditGiftCode {
+		if e.Reason == events.CreditGiftCode || e.Reason == events.CreditWheelPrize {
 			return nil
 		}
 		// A commission names the amount only: the customer who bought is
@@ -236,11 +236,23 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			events.CreditRefund:          "wallet.credited_refund",
 			events.CreditCommission:      "wallet.credited_commission",
 			events.CreditSettlement:      "wallet.credited_settlement",
+			events.CreditCashback:        "wallet.credited_cashback",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"
 		}
 		lang := n.lang(ctx, e.TelegramID)
+		if e.Reason == events.CreditTargetBonus {
+			// A reseller reached a tier of the month's target.
+			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_target_bonus", "sold", i18n.Number(lang, int64(e.TargetSales)),
+				"threshold", i18n.Number(lang, int64(e.TargetThreshold)), "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		}
+		if e.Reason == events.CreditRefund && e.CashbackTaken > 0 {
+			// The refund also took back the cashback the order had earned: say so, with the balance after both.
+			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_refund_cashback", "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"cashback", i18n.Money(lang, e.CashbackTaken, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		}
 		if e.FromCurrency != "" && e.Reason == events.CreditTopup {
 			// a USDT top-up, credited in Toman at the live rate
 			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_converted", "from", i18n.Money(lang, e.FromAmount, e.FromCurrency),
@@ -678,6 +690,9 @@ func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string 
 		}
 		if c.Digital.Count > 0 {
 			out = append(out, t("report.daily_digital", "n", num(c.Digital.Count), "amount", money(c.Digital.Amount, c.Currency)))
+		}
+		if c.Cashback.Count > 0 {
+			out = append(out, t("report.daily_cashback", "n", num(c.Cashback.Count), "amount", money(c.Cashback.Amount, c.Currency)))
 		}
 		if c.Rejected.Count > 0 {
 			out = append(out, t("report.daily_rejected", "n", num(c.Rejected.Count), "amount", money(c.Rejected.Amount, c.Currency)))

@@ -196,6 +196,7 @@ async function send(values: Record<string, string>) {
             :server-error="serverErrors[item.key] ?? ''"
             :placeholder="placeholderOf(item)"
             :checkable="checkable(item)"
+            :siblings="drafts"
             @update:model-value="(v: string) => update(item.key, v)"
             @touch="touch(item.key)"
           />

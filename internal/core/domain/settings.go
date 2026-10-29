@@ -32,6 +32,9 @@ const (
 	KindURL     = "url"
 	KindChannel = "channel"
 	KindColor   = "color"
+	// KindList is a list of rows kept as compact JSON text (the reseller targets' tiers, the wheel's prizes): the dashboard has an editor for it,
+	// the bot's admin menu leaves it out.
+	KindList = "list"
 )
 
 // Dashboard permissions a setting needs (the web package's names).
@@ -171,6 +174,35 @@ var SettingSpecs = []SettingSpec{
 		Help: "percent of an invited user's first purchase credited to the inviter's wallet (empty or 0 = no referral program)"},
 	{Key: SettingLeaderboard, Group: "growth", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = while the referral program is on, customers see a Top users board in the bot: the customers who invited the most people, with their names and Telegram ids masked (never staff, resellers or banned users); false = the Top users button and the board are gone"},
+	// Cashback (cashback.go): a share of a delivered order given back to the buyer's wallet. Off by default.
+	{Key: SettingCashbackEnabled, Group: "cashback", Kind: KindBool, Perm: permDiscounts, Default: "false",
+		Help: "true = when a customer's order has been paid and delivered, a share of what it cost is credited to their wallet as cashback, once; false = no cashback (cashback already paid stays in the wallets)"},
+	{Key: SettingCashbackPercent, Group: "cashback", Kind: KindText, Perm: permDiscounts, MaxLen: 8,
+		Help: "the share of the order's price given back, from 0.01 to 20 percent, for example 2.5 (worked out in whole Toman, rounded down); empty = no cashback"},
+	{Key: SettingCashbackMax, Group: "cashback", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxGrowthAmount,
+		Help: "the most cashback one order earns, in Toman (empty or 0 = no maximum)"},
+	{Key: SettingCashbackMinOrder, Group: "cashback", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxGrowthAmount,
+		Help: "an order must cost at least this many Toman to earn cashback (empty or 0 = any order that costs something)"},
+	{Key: SettingCashbackRenewals, Group: "cashback", Kind: KindBool, Perm: permDiscounts, Default: "true",
+		Help: "true = renewals and traffic packages earn cashback too; false = only new services do"},
+	// Reseller monthly targets (targets.go): a bonus for the services a reseller sells in a month. Off by default.
+	{Key: SettingTargetsEnabled, Group: "targets", Kind: KindBool, Perm: permDiscounts, Default: "false",
+		Help: "true = a reseller who sells enough services in a month is paid a bonus for each tier they reach, once for that month; false = no bonuses (what was paid stays in the wallets). Sales are counted from the moment it is switched on"},
+	{Key: SettingTargetsTiers, Group: "targets", Kind: KindList, Perm: permDiscounts,
+		Help: "the tiers: how many new services a reseller sells in a month and the bonus in Toman for reaching it, for example [{\"threshold\":10,\"bonus\":50000}]; each tier pays its own bonus on top of the lower tiers' (at most 10 tiers)"},
+	{Key: SettingTargetsCalendar, Group: "targets", Kind: KindEnum, Perm: permDiscounts, Default: CalendarGregorian, Options: []string{CalendarGregorian, CalendarJalali},
+		Help: "the calendar a month is read in: gregorian (1 to the end of the month) or jalali (Persian months); change it between months, not in the middle of one"},
+	// The daily wheel of fortune (wheel.go): one free spin a day for customers who have paid orders. Off by default, and closed until it has a budget.
+	{Key: SettingWheelEnabled, Group: "wheel", Kind: KindBool, Perm: permDiscounts, Default: "false",
+		Help: "true = customers with enough paid orders get one free spin of the wheel a day, for a chance at wallet credit; false = no wheel (prizes already paid stay in the wallets). It also needs prizes and a daily budget"},
+	{Key: SettingWheelPrizes, Group: "wheel", Kind: KindList, Perm: permDiscounts,
+		Help: "the prizes: each an amount in Toman and a weight, its share of the chances, for example [{\"amount\":10000,\"weight\":10}] (at most 12 prizes, no amount twice)"},
+	{Key: SettingWheelNoPrize, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxWheelNoPrizeWeight,
+		Help: "the weight of the segment that pays nothing: the chance of no prize is this out of the sum of all the weights (empty or 0 = every spin wins something)"},
+	{Key: SettingWheelBudget, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 0, Max: MaxGrowthAmount,
+		Help: "the most Toman the wheel pays out in one day (store time); when it cannot cover a prize the customer is asked to come back tomorrow and their spin is not used (empty or 0 = the wheel is closed)"},
+	{Key: SettingWheelMinOrders, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 1, Max: MaxWheelMinOrders, Default: "1",
+		Help: "how many paid orders a customer needs before they may spin, at least 1"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
@@ -386,6 +418,12 @@ func NormalizeSetting(key, value string) (string, error) {
 			if strings.ContainsAny(value, "<>&") {
 				return bad("may not contain <, > or &")
 			}
+		case SettingCashbackPercent:
+			bp, err := ParsePercentBP(value)
+			if err != nil {
+				return bad("a percent from 0.01 to 20, for example 2.5")
+			}
+			value = FormatPercentBP(bp)
 		case "branding.bot_username":
 			value = strings.TrimPrefix(value, "@")
 			if !botUsernameRe.MatchString(value) {
@@ -455,8 +493,33 @@ func NormalizeSetting(key, value string) (string, error) {
 			return bad("a colour like #14b8a6")
 		}
 		value = strings.ToLower(value)
+	case KindList:
+		list, err := normalizeList(key, value)
+		if err != nil {
+			return bad(err.Error())
+		}
+		value = list
 	}
 	return value, nil
+}
+
+// normalizeList checks a list setting (KindList) and writes it the way it is stored: compact JSON, in order, "" for an empty list.
+func normalizeList(key, value string) (string, error) {
+	switch key {
+	case SettingTargetsTiers:
+		tiers, err := ParseTargetTiers(value)
+		if err != nil {
+			return "", err
+		}
+		return FormatTargetTiers(tiers), nil
+	case SettingWheelPrizes:
+		prizes, err := ParseWheelPrizes(value)
+		if err != nil {
+			return "", err
+		}
+		return FormatWheelPrizes(prizes), nil
+	}
+	return "", errors.New("not a list")
 }
 
 var clockRe = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):([0-5][0-9])$`)

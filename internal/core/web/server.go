@@ -215,6 +215,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "DELETE /api/v1/reports/reset", PermReportsReset, s.reportResetClear)
 	s.route(api, "GET /api/v1/reports/summary", PermReportsRead, s.reportSummary)
 	s.route(api, "GET /api/v1/reports/daily-summary", PermReportsRead, s.reportDailySummary)
+	s.route(api, "GET /api/v1/wheel/report", PermReportsRead, s.wheelReport)
 	s.route(api, "GET /api/v1/reports/summary.csv", PermReportsRead, s.exportReportSummary)
 	s.route(api, "GET /api/v1/reports/plans", PermReportsRead, s.reportPlans)
 	s.route(api, "GET /api/v1/reports/methods", PermReportsRead, s.reportMethods)

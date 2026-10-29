@@ -116,7 +116,8 @@ func (s *Service) AdminSettingSpecs(ctx context.Context, actorTelegramID int64) 
 	}
 	out := make([]AdminSettingView, 0, len(SettingSpecs))
 	for _, sp := range SettingSpecs {
-		if settingChangeable(actor.Role, sp) {
+		// A list of rows (the tiers of the reseller targets, the wheel's prizes) is edited in the dashboard, not by typing JSON in a chat.
+		if settingChangeable(actor.Role, sp) && sp.Kind != KindList {
 			out = append(out, AdminSettingView{SettingSpec: sp, Value: values[sp.Key]})
 		}
 	}
