@@ -8,6 +8,17 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Updating
+- One database migration, additive, in core: 00052 (broadcasts take the segment `resellers` with its filters, a Settle button and a kind; a recipient keeps the text written for them; `reseller_reminder_claims`). Its Down deletes the messages to resellers. The weekly reminder is off until the owner switches it on.
+
+### Added
+- **Messages to resellers.** The Resellers page has a **Messages** tab (and a **Message resellers** button; owner and admin, who hold both `broadcasts.write` and `resellers.write`) for a message only resellers get in the bot: to every reseller, only those who owe (the default) or one tier, in each one's language. The text has placeholders filled in for each reseller: `{name}`, `{debt}` (what they owe, as the bot writes money, 0 when nothing), `{balance}`, `{credit_limit}`, `{tier}` and `{customers}`; an unknown one (`{dept}`) is refused. A preview shows the text as a chosen reseller gets it, **Send to me** tries it on your own Telegram, and **Send now** sends it through the broadcasts (the same pace, progress and delivered, blocked and failed counts; blocked users skipped). An optional link button, and a **Settle / Top up** button that opens the reseller's wallet in the bot. Audited as `reseller_message.send` and `reseller_message.test`.
+- **Weekly settlement reminder** (the same tab; **off by default**): once a week, at a weekday and time of the store's time zone (Thursday 21:00 by default), resellers get "Your account debt is X. Please settle it as agreed." in their own bot language, only those who owe by default; the text is the owner's to change, with the same placeholders. A week is queued **exactly once** (a claim keyed by the local date, written with the week's broadcast in one transaction), at most 6 hours late and never for a week missed while core was down, and never twice within 6 days. The card shows the next reminder, the last one and how many got it, and sends a test to you. Settings `resellers.reminder.*` (also in the bot's admin settings), audited as `setting.set`; each week as `reseller_reminder.queue`.
+
+### Known limits
+- `{name}` is the reseller's @username (else their 3x-ui group name, else their Telegram id): core does not keep Telegram first names.
+- The messages were tested with fakes of Telegram; a bot from before this version sends a message to resellers with its placeholders unfilled, so update the bot and core together (as `bobres update` does).
+
 ## [0.19.0] — 2026-10-29
 
 **Growth tools and two more ways to pay.** Cashback, reseller monthly targets and a daily wheel of fortune (all off until the owner turns them on), and the Aqayepardakht card gateway and automatic TON payments (off until set up).

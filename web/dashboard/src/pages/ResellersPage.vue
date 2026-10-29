@@ -20,7 +20,9 @@ import UserLink from '../components/UserLink.vue'
 import BalanceText from '../components/resellers/BalanceText.vue'
 import MakeResellerDialog from '../components/resellers/MakeResellerDialog.vue'
 import TiersTab from '../components/resellers/TiersTab.vue'
+import MessagesTab from '../components/resellers/MessagesTab.vue'
 import { api } from '../api'
+import { useAuth } from '../stores/auth'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
 import { latinDigits, money, num, type Lang } from '../format'
@@ -29,23 +31,26 @@ import type { ResellerItem, TierItem } from '../types'
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
+const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-// Two tabs, the second in the address (?tab=tiers).
-type View = 'resellers' | 'tiers'
-const viewOf = (): View => (route.query.tab === 'tiers' ? 'tiers' : 'resellers')
+// Three tabs, the others in the address (?tab=tiers, ?tab=messages). Messages to resellers are broadcasts: that tab needs broadcasts.write.
+type View = 'resellers' | 'tiers' | 'messages'
+const canMessage = computed(() => auth.can('broadcasts.write'))
+const pick = (v: unknown): View => (v === 'tiers' ? 'tiers' : v === 'messages' && canMessage.value ? 'messages' : 'resellers')
+const viewOf = (): View => pick(route.query.tab)
 const view = ref<View>(viewOf())
 function show(v: string | number) {
-  view.value = String(v) === 'tiers' ? 'tiers' : 'resellers'
+  view.value = pick(String(v))
   const q = { ...route.query }
   delete q.tab
-  if (view.value === 'tiers') q.tab = 'tiers'
+  if (view.value !== 'resellers') q.tab = view.value
   void router.replace({ query: q })
 }
 watch(
-  () => route.query.tab,
+  () => [route.query.tab, canMessage.value],
   () => {
     if (route.name === 'resellers') view.value = viewOf()
   },
@@ -104,18 +109,23 @@ function open(id: string) {
 <template>
   <div class="app-page-head">
     <h1 class="app-page-title">{{ t('section.resellers.title') }}</h1>
-    <Button v-if="view === 'resellers'" :label="t('reseller.add')" icon="pi pi-plus" class="add" @click="making = true" />
+    <div v-if="view === 'resellers'" class="app-actions">
+      <Button v-if="canMessage" :label="t('reseller.messages.open')" icon="pi pi-send" outlined class="message" @click="show('messages')" />
+      <Button :label="t('reseller.add')" icon="pi pi-plus" class="add" @click="making = true" />
+    </div>
   </div>
 
   <Tabs :value="view" scrollable @update:value="show">
     <TabList>
       <Tab value="resellers">{{ t('reseller.tab_resellers') }}</Tab>
       <Tab value="tiers">{{ t('reseller.tab_tiers') }}</Tab>
+      <Tab v-if="canMessage" value="messages">{{ t('reseller.tab_messages') }}</Tab>
     </TabList>
   </Tabs>
 
   <div class="panel">
     <TiersTab v-if="view === 'tiers'" :tiers="tiers" :loading="tiersLoading" :error="tiersError" @changed="tiersChanged" />
+    <MessagesTab v-else-if="view === 'messages'" :tiers="tiers" />
     <template v-else>
       <div class="app-toolbar">
         <IconField class="app-grow">

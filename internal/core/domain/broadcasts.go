@@ -126,6 +126,9 @@ func (s *Service) UpdateBroadcast(ctx context.Context, actor *store.User, id str
 		if old.Status != "draft" && old.Status != "scheduled" {
 			return stateErr("only a draft or a scheduled broadcast can be changed")
 		}
+		if old.Segment == store.SegmentResellers {
+			return stateErr("a message to resellers cannot be changed; cancel it and write a new one")
+		}
 		if err := s.st.UpdateBroadcast(ctx, tx, b, version); errors.Is(err, store.ErrStale) {
 			return stateErr("someone changed this broadcast meanwhile; reload it")
 		} else if err != nil {
@@ -197,7 +200,7 @@ func (s *Service) SendBroadcast(ctx context.Context, actor *store.User, id strin
 		if !ok {
 			return stateErr("this broadcast was sent already")
 		}
-		total, _, _, err := s.st.AudienceCount(ctx, tx, b.Segment, b.Language)
+		total, err := s.audienceNow(ctx, tx, b)
 		if err != nil {
 			return err
 		}
@@ -210,6 +213,16 @@ func (s *Service) SendBroadcast(ctx context.Context, actor *store.User, id strin
 	}
 	s.KickBroadcasts()
 	return s.st.GetBroadcast(ctx, s.st.Conn(), id, false)
+}
+
+// audienceNow counts who a broadcast would reach now.
+func (s *Service) audienceNow(ctx context.Context, q pgx.Tx, b *store.Broadcast) (int64, error) {
+	if b.Segment == store.SegmentResellers {
+		total, _, _, err := s.st.CountResellerAudience(ctx, q, store.ResellerAudience{DebtOnly: b.ResellerDebtOnly, TierID: b.ResellerTierID, Language: b.Language})
+		return total, err
+	}
+	total, _, _, err := s.st.AudienceCount(ctx, q, b.Segment, b.Language)
+	return total, err
 }
 
 // changeBroadcast moves a broadcast between statuses, with an audit entry.
@@ -373,7 +386,7 @@ func (w *BroadcastWorker) Step(ctx context.Context) error {
 	}
 	for _, id := range due {
 		err := w.s.st.WithTx(ctx, func(tx pgx.Tx) error {
-			b, ok, err := w.s.st.StartBroadcast(ctx, tx, id, w.now())
+			b, ok, err := w.s.st.StartBroadcast(ctx, tx, id, w.now(), w.s.personalize)
 			if err != nil || !ok || b.Status != "done" {
 				return err
 			}

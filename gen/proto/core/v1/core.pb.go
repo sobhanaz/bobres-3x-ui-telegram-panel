@@ -2273,10 +2273,12 @@ func (x *ClaimBroadcastBatchRequest) GetLimit() int32 {
 }
 
 type BroadcastRecipient struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	TelegramId    int64                  `protobuf:"varint,2,opt,name=telegram_id,json=telegramId,proto3" json:"telegram_id,omitempty"`
-	Language      string                 `protobuf:"bytes,3,opt,name=language,proto3" json:"language,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	UserId     string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	TelegramId int64                  `protobuf:"varint,2,opt,name=telegram_id,json=telegramId,proto3" json:"telegram_id,omitempty"`
+	Language   string                 `protobuf:"bytes,3,opt,name=language,proto3" json:"language,omitempty"`
+	// The recipient's own HTML text (a message to resellers, written with their figures); empty: the batch's text in their language.
+	Text          string `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2332,13 +2334,22 @@ func (x *BroadcastRecipient) GetLanguage() string {
 	return ""
 }
 
+func (x *BroadcastRecipient) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
 type BroadcastBatch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BroadcastId   string                 `protobuf:"bytes,1,opt,name=broadcast_id,json=broadcastId,proto3" json:"broadcast_id,omitempty"`                                            // empty: nothing to send now
-	Texts         map[string]string      `protobuf:"bytes,2,rep,name=texts,proto3" json:"texts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // language -> HTML text
-	ButtonUrl     string                 `protobuf:"bytes,3,opt,name=button_url,json=buttonUrl,proto3" json:"button_url,omitempty"`                                                  // empty: no button
-	ButtonLabels  map[string]string      `protobuf:"bytes,4,rep,name=button_labels,json=buttonLabels,proto3" json:"button_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Recipients    []*BroadcastRecipient  `protobuf:"bytes,5,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	BroadcastId  string                 `protobuf:"bytes,1,opt,name=broadcast_id,json=broadcastId,proto3" json:"broadcast_id,omitempty"`                                            // empty: nothing to send now
+	Texts        map[string]string      `protobuf:"bytes,2,rep,name=texts,proto3" json:"texts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // language -> HTML text
+	ButtonUrl    string                 `protobuf:"bytes,3,opt,name=button_url,json=buttonUrl,proto3" json:"button_url,omitempty"`                                                  // empty: no button
+	ButtonLabels map[string]string      `protobuf:"bytes,4,rep,name=button_labels,json=buttonLabels,proto3" json:"button_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Recipients   []*BroadcastRecipient  `protobuf:"bytes,5,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	// A "Settle / Top up" button (the bot's own text) that opens the recipient's wallet: a message to resellers.
+	SettleButton  bool `protobuf:"varint,6,opt,name=settle_button,json=settleButton,proto3" json:"settle_button,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2406,6 +2417,13 @@ func (x *BroadcastBatch) GetRecipients() []*BroadcastRecipient {
 		return x.Recipients
 	}
 	return nil
+}
+
+func (x *BroadcastBatch) GetSettleButton() bool {
+	if x != nil {
+		return x.SettleButton
+	}
+	return false
 }
 
 type BroadcastResult struct {
@@ -11239,12 +11257,13 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\ablocked\x18\x02 \x01(\bR\ablocked\"\x1b\n" +
 	"\x19SetUserBotBlockedResponse\"2\n" +
 	"\x1aClaimBroadcastBatchRequest\x12\x14\n" +
-	"\x05limit\x18\x01 \x01(\x05R\x05limit\"j\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\"~\n" +
 	"\x12BroadcastRecipient\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1f\n" +
 	"\vtelegram_id\x18\x02 \x01(\x03R\n" +
 	"telegramId\x12\x1a\n" +
-	"\blanguage\x18\x03 \x01(\tR\blanguage\"\x94\x03\n" +
+	"\blanguage\x18\x03 \x01(\tR\blanguage\x12\x12\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\"\xb9\x03\n" +
 	"\x0eBroadcastBatch\x12!\n" +
 	"\fbroadcast_id\x18\x01 \x01(\tR\vbroadcastId\x128\n" +
 	"\x05texts\x18\x02 \x03(\v2\".core.v1.BroadcastBatch.TextsEntryR\x05texts\x12\x1d\n" +
@@ -11253,7 +11272,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\rbutton_labels\x18\x04 \x03(\v2).core.v1.BroadcastBatch.ButtonLabelsEntryR\fbuttonLabels\x12;\n" +
 	"\n" +
 	"recipients\x18\x05 \x03(\v2\x1b.core.v1.BroadcastRecipientR\n" +
-	"recipients\x1a8\n" +
+	"recipients\x12#\n" +
+	"\rsettle_button\x18\x06 \x01(\bR\fsettleButton\x1a8\n" +
 	"\n" +
 	"TextsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

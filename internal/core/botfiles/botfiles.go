@@ -146,6 +146,8 @@ type TestBroadcast struct {
 	ChatID int64             `json:"chat_id"`
 	Text   string            `json:"text"`
 	Button *TestBroadcastBtn `json:"button"`
+	// Settle is the label of a Settle / Top up button that opens the wallet ("": none), as under a message to resellers.
+	Settle string `json:"settle,omitempty"`
 }
 
 // TestBroadcastBtn is a test broadcast's link button.

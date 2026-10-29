@@ -144,7 +144,26 @@ func CurrencyName(lang, currency string) string { return currencyName(Normalize(
 // "۱۵۰٬۰۰۰ تومان", "25.5 USDT".
 func Money(lang string, minor int64, currency string) string {
 	lang = Normalize(lang)
-	name := currencyName(lang, currency)
+	return money(lang, minor, currency, currencyName(lang, currency))
+}
+
+// MoneyNamed is Money with the store's names for the Toman given (per language;
+// an empty or missing one is the built-in name): what core writes into a
+// message the bot sends as it is, since only the bot process holds the names
+// SetCurrencyNames set.
+func MoneyNamed(irtNames map[string]string, lang string, minor int64, currency string) string {
+	lang = Normalize(lang)
+	name := currencyNames[lang][currency]
+	if name == "" {
+		name = currency
+	}
+	if n := strings.TrimSpace(irtNames[lang]); currency == "IRT" && n != "" && !strings.ContainsAny(n, "<>&") {
+		name = n
+	}
+	return money(lang, minor, currency, name)
+}
+
+func money(lang string, minor int64, currency, name string) string {
 	scale := currencyScale[currency]
 	if scale == 0 {
 		return Number(lang, minor) + " " + name

@@ -234,6 +234,7 @@ var buttonStyles = map[string]string{
 	"btn.adm_enable":        "success",
 	"btn.join_check":        "success",
 	"btn.rs_resume":         "success",
+	"btn.rs_settle":         "success",
 	"btn.login_approve":     "success",
 
 	"btn.services":       "primary",

@@ -421,6 +421,13 @@ Built (milestone 5, 2026-10-11; managing their customers' services and the custo
 2026-10-20). Resellers work in the bot and in the Mini App's reseller section ([17-mini-app.md](17-mini-app.md)),
 never in the dashboard; the owner and admins make them, set their tier, credit limits and commission, and record their
 payments in the dashboard. Customers see none of this.
+- **Messages from the store** (built 2026-10-29): the owner's messages to resellers and the weekly settlement reminder (dashboard,
+  Resellers, Messages: [04-dashboard.md](04-dashboard.md)) arrive as ordinary bot messages, sent by the broadcast worker at its pace. Each
+  reseller's text was written by core with their own figures (`BroadcastRecipient.text`: their name, debt, balance, credit limit, tier,
+  customers, money as the bot writes it), so the bot sends it as it is. Under it may be the broadcast's link button and a **💳 Settle / Top up**
+  button (`btn.rs_settle`, green; `BroadcastBatch.settle_button`): it opens their wallet (`wallet:m`) in a new message, so the reminder with
+  its debt stays above it, and the wallet's Top up is the way to pay. There is no new payment flow: a top-up raises the balance, which lowers
+  the debt, and money paid outside the bot is still recorded by the owner (Record a payment).
 - **Home:** a "Reseller panel" button instead of "Invite friends" (their link is in the panel).
 - **Panel:** tier, discount and commission %; per currency the balance (a negative balance is shown as "debt X",
   never with a minus), credit limit and what they can spend (balance + limit); customers who joined through their

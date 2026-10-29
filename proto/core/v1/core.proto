@@ -265,6 +265,8 @@ message BroadcastRecipient {
   string user_id = 1;
   int64 telegram_id = 2;
   string language = 3;
+  // The recipient's own HTML text (a message to resellers, written with their figures); empty: the batch's text in their language.
+  string text = 4;
 }
 
 message BroadcastBatch {
@@ -273,6 +275,8 @@ message BroadcastBatch {
   string button_url = 3; // empty: no button
   map<string, string> button_labels = 4;
   repeated BroadcastRecipient recipients = 5;
+  // A "Settle / Top up" button (the bot's own text) that opens the recipient's wallet: a message to resellers.
+  bool settle_button = 6;
 }
 
 enum BroadcastOutcome {

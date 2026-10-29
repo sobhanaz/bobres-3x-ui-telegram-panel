@@ -10,6 +10,7 @@ import (
 	"time"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"google.golang.org/grpc"
@@ -494,5 +495,50 @@ func TestRunUntilCancelled(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A message to resellers: each recipient gets the text core wrote for them, and the Settle / Top up button (the bot's own label, in their
+// language) opens their wallet under a message that stays as it is; without the bot's texts the button is left out.
+func TestResellerMessageTextsAndSettleButton(t *testing.T) {
+	b := batch(2, "fa")
+	b.Recipients[1].Language = "en"
+	b.Recipients[0].Text = "بدهی شما ۱۲۵٬۰۰۰ تومان است"
+	b.Recipients[1].Text = "You owe 40,000 Toman"
+	b.SettleButton = true
+	b.ButtonUrl, b.ButtonLabels = "https://t.me/shop", map[string]string{"fa": "کانال", "en": "Channel"}
+	core := &fakeCore{batches: []*corev1.BroadcastBatch{b}}
+	s := newSender()
+	w, _ := newWorker(core, s, 25)
+	w.Texts = i18n.MustLoad()
+	if _, err := w.Step(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]sentMsg{}
+	for _, m := range s.messages() {
+		got[m.chat] = m
+	}
+	want := map[int64][3]string{1: {"بدهی شما ۱۲۵٬۰۰۰ تومان است", "کانال", "💳 تسویه / افزایش موجودی"}, 2: {"You owe 40,000 Toman", "Channel", "💳 Settle / Top up"}}
+	for chat, wnt := range want {
+		m := got[chat]
+		if m.text != wnt[0] || m.kb == nil || len(m.kb.InlineKeyboard) != 2 {
+			t.Fatalf("chat %d: %+v", chat, m)
+		}
+		link, settle := m.kb.InlineKeyboard[0][0], m.kb.InlineKeyboard[1][0]
+		if link.Text != wnt[1] || link.URL != "https://t.me/shop" || settle.Text != wnt[2] || settle.CallbackData != SettleCallback || settle.Style != tg.StyleSuccess {
+			t.Errorf("chat %d buttons: %+v", chat, m.kb.InlineKeyboard)
+		}
+	}
+
+	b = batch(1, "en")
+	b.SettleButton = true
+	core = &fakeCore{batches: []*corev1.BroadcastBatch{b}}
+	s = newSender()
+	w, _ = newWorker(core, s, 25)
+	if _, err := w.Step(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if ms := s.messages(); len(ms) != 1 || ms[0].kb != nil || ms[0].text != "<b>Hello</b> &amp; welcome" {
+		t.Fatalf("without the texts: %+v", ms)
 	}
 }

@@ -72,6 +72,8 @@ type Worker struct {
 	// often results are reported while sending (also after every 25).
 	Idle       time.Duration
 	FlushEvery time.Duration
+	// Texts labels the Settle / Top up button of messages to resellers (nil: no such button).
+	Texts *i18n.Catalog
 }
 
 // New builds a Worker. set holds limits.broadcast_per_sec; flood is shared
@@ -234,7 +236,7 @@ type outcome struct {
 // them back in line (they got nothing).
 func (w *Worker) sendOne(ctx context.Context, stop <-chan struct{}, p *pacer, b *corev1.BroadcastBatch, r *corev1.BroadcastRecipient) outcome {
 	res := &corev1.BroadcastResult{UserId: r.GetUserId()}
-	text, kb := message(b, r.GetLanguage())
+	text, kb := w.recipientMessage(b, r)
 	for {
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sendTimeout)
 		m, err := w.tg.SendMessage(sctx, r.GetTelegramId(), text, kb)
@@ -463,6 +465,31 @@ func message(b *corev1.BroadcastBatch, lang string) (string, *tg.Keyboard) {
 		kb = (&tg.Keyboard{}).Row(tg.Link(pick(b.GetButtonLabels(), lang), u))
 	}
 	return pick(b.GetTexts(), lang), kb
+}
+
+// SettleCallback opens the reseller's wallet under a message that stays as it is (the handler's "wallet:m").
+const SettleCallback = "wallet:m"
+
+// SettleText is the bot text of the Settle / Top up button.
+const SettleText = "btn.rs_settle"
+
+// recipientMessage is message for one recipient: their own text when core wrote one (a message to resellers), and the Settle / Top up button
+// under it when the broadcast has one (labelled from the bot's texts; left out without them).
+func (w *Worker) recipientMessage(b *corev1.BroadcastBatch, r *corev1.BroadcastRecipient) (string, *tg.Keyboard) {
+	lang := i18n.Normalize(r.GetLanguage())
+	text, kb := message(b, lang)
+	if t := r.GetText(); t != "" {
+		text = t
+	}
+	if b.GetSettleButton() && w.Texts != nil {
+		if kb == nil {
+			kb = &tg.Keyboard{}
+		}
+		settle := tg.CB(w.Texts.T(lang, SettleText), SettleCallback)
+		settle.Style = i18n.ButtonStyle(SettleText)
+		kb.Row(settle)
+	}
+	return text, kb
 }
 
 // checkBatch checks again what core checked, so a broken broadcast halts

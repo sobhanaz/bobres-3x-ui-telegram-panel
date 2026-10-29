@@ -296,6 +296,15 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/broadcasts/{id}/resume", PermBroadcastWrite, s.resumeBroadcast)
 	s.route(api, "POST /api/v1/broadcasts/{id}/cancel", PermBroadcastWrite, s.cancelBroadcast)
 	s.route(api, "GET /api/v1/broadcasts/{id}/recipients", PermBroadcastWrite, s.broadcastRecipients)
+	// Messages to resellers and the weekly settlement reminder (the Resellers page): broadcasts that show balances.
+	s.route(api, "POST /api/v1/reseller-messages", PermBroadcastWrite, resellerMessages(s.sendResellerMessage))
+	s.route(api, "POST /api/v1/reseller-messages/audience", PermBroadcastWrite, resellerMessages(s.resellerMessageAudience))
+	s.route(api, "POST /api/v1/reseller-messages/check", PermBroadcastWrite, resellerMessages(s.checkResellerText))
+	s.route(api, "POST /api/v1/reseller-messages/preview", PermBroadcastWrite, resellerMessages(s.previewResellerText))
+	s.route(api, "POST /api/v1/reseller-messages/test", PermBroadcastWrite, resellerMessages(s.testResellerMessage))
+	s.route(api, "GET /api/v1/reseller-messages/reminder", PermBroadcastWrite, resellerMessages(s.getReminder))
+	s.route(api, "PUT /api/v1/reseller-messages/reminder", PermBroadcastWrite, resellerMessages(s.putReminder))
+	s.route(api, "POST /api/v1/reseller-messages/reminder/test", PermBroadcastWrite, resellerMessages(s.testReminder))
 
 	// Store setup.
 	s.route(api, "GET /api/v1/branding", PermBrandingWrite, s.getBranding)

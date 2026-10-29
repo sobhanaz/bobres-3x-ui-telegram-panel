@@ -34,6 +34,26 @@ Targets give a reseller a bonus for selling more. Open **Settings**, the **Resel
 - **Refunds:** a refunded sale leaves the count of its month, but a bonus already paid is **not** taken back.
 - The reseller sees their progress in the bot's reseller panel and in the Mini App. You see it on the reseller's page in the dashboard, and each bonus in their statement as **Monthly target bonus**.
 
+## Messages to resellers
+
+The **Messages** tab of the Resellers page (or **Message resellers** above the list) sends a message that only resellers get in the bot.
+
+- **Who:** only those who owe (the default), every reseller, or one tier; and all languages or one. The count shows how many get it. Banned resellers and those who blocked the bot are left out.
+- **Text:** one per language. Tap a chip to add a value that is filled in for each reseller: `{name}`, `{debt}` (what they owe, "0 Toman" when nothing), `{balance}`, `{credit_limit}`, `{tier}` and `{customers}`. Anything else in braces, like `{dept}`, is refused. `{name}` is the reseller's @username (else their 3x-ui group name).
+- **Preview as** shows the text as one reseller gets it. **Send to me** sends it to your own Telegram first.
+- **Buttons:** a link button if you like, and **Settle / Top up** (on by default), which opens the reseller's wallet in the bot so they can top up.
+- **Send now** asks first, then sends it like a broadcast: its page shows the progress and how many got it. It is in the Broadcasts list too.
+
+### Weekly settlement reminder
+
+The card under it reminds resellers of what they owe once a week. It is **off until you switch it on**.
+
+- **Day and time:** Thursday 21:00 by default, in your store's time zone (Settings, General).
+- **Only resellers who owe:** on by default. Off, every reseller gets it.
+- **Text:** "Your account debt is {debt}. Please settle it as agreed." in Persian and English, each reseller in their own bot language. Change it with the same values, or go back to the default.
+- It goes out **once a week**, even after a restart. If the server was down at that time it goes when the server is back within 6 hours; a week missed for longer is not sent later. Switched on after this week's time, it starts next week.
+- The card shows the next reminder, the last one and how many got it. **Send a test to me now** sends the saved reminder to you, as a reseller would get it.
+
 ## What a reseller can do
 
 In the bot and in the Mini App's **More** section, a reseller has a panel with:

@@ -342,6 +342,9 @@ func setup(rt *app.Runtime) error {
 	// day, yesterday's sales go to the staff who hold reports.read (the
 	// dashboard's permission table says who) as report.daily_summary.v1.
 	rt.Go("daily-summary", dom.NewDailySummary(mayReadReports, rt.Log).Run)
+	// The weekly settlement reminder to resellers (off until the store turns it on): once a week, at the store's weekday and time, a message to
+	// the resellers (those in debt, by default) goes out through the broadcasts.
+	rt.Go("reseller-reminder", dom.NewResellerReminder(rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).

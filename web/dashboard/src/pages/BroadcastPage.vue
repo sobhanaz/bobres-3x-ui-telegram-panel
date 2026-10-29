@@ -24,7 +24,8 @@ import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { dateTime, num, type Lang } from '../format'
 import {
-  actionsFor,
+  actionsOf,
+  audienceKeys,
   duration,
   editable,
   live,
@@ -78,14 +79,17 @@ watch(id, () => {
   void load().catch(() => {})
 })
 
-const actions = computed(() => (item.value ? actionsFor(item.value.status) : []))
+const actions = computed(() => (item.value ? actionsOf(item.value) : []))
 const has = (a: BroadcastAction) => actions.value.includes(a)
 const counts = computed(() => item.value?.counts ?? { total: 0, pending: 0, sent: 0, blocked: 0, failed: 0, unknown: 0 })
 const p = computed(() => progress(counts.value))
 const langs = computed(() => (item.value ? neededLangs(item.value.language).filter((l) => item.value!.texts[l]?.trim()) : []))
-const audience = computed(() =>
-  item.value ? t('broadcasts.segment.' + item.value.segment) + ' · ' + t('broadcasts.language.' + (item.value.language || 'all')) : '',
-)
+const audience = computed(() => (item.value ? audienceKeys(item.value).map((k) => t(k)).join(' · ') : ''))
+// A draft is never a message to resellers (those are sent at once): the send dialog counts customers.
+const sendSegment = computed(() => {
+  const s = (sendFor.value ?? item.value)?.segment
+  return s && s !== 'resellers' ? s : 'all'
+})
 const countRows = computed(() => [
   { key: 'total', n: counts.value.total },
   { key: 'sent', n: counts.value.sent },
@@ -287,7 +291,8 @@ const problemCount = computed(() => counts.value.failed + counts.value.blocked +
                   <dt>{{ t('broadcasts.list.audience') }}</dt>
                   <dd>{{ audience }}</dd>
                   <dt>{{ t('broadcasts.detail.created_by') }}</dt>
-                  <dd><UserLink :user="item.created_by" /></dd>
+                  <dd v-if="item.created_by"><UserLink :user="item.created_by" /></dd>
+                  <dd v-else class="by-core">{{ t('broadcasts.detail.by_core') }}</dd>
                   <dt>{{ t('broadcasts.list.created') }}</dt>
                   <dd>{{ dateTime(item.created_at, lang) }}</dd>
                   <template v-if="item.scheduled_at">
@@ -348,7 +353,7 @@ const problemCount = computed(() => counts.value.failed + counts.value.blocked +
   <SendDialog
     v-if="item"
     v-model:visible="sendOpen"
-    :segment="(sendFor ?? item).segment"
+    :segment="sendSegment"
     :language="(sendFor ?? item).language"
     :mode="sendMode"
     :busy="sendBusy"
