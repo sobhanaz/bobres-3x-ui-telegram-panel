@@ -857,6 +857,9 @@ message AdminStats {
   // Every server of the list, the switched-off ones included: 0 means no
   // 3x-ui server was added yet.
   int32 servers_listed = 12;
+  // The live services whose client the panel no longer has (an operator deleted it there): the admin menu
+  // offers "Not on the panel (N)" while there are any. 0 from an older core.
+  int64 services_panel_missing = 13;
 }
 
 message AdminListPendingPaymentsRequest {
@@ -1098,6 +1101,12 @@ service CoreService {
   rpc AdminAddStaff(AdminAddStaffRequest) returns (AdminStaffMember);
   rpc AdminRemoveStaff(AdminRemoveStaffRequest) returns (AdminRemoveStaffResponse);
   rpc AdminBroadcast(AdminBroadcastRequest) returns (AdminBroadcastResponse);
+  // Services whose client is gone from the panel (docs/03-bot-ux.md, "Not on the panel"): a page of them, the
+  // longest missing first, and making one's client again or deleting it from the bot too, one at a time. Owner and
+  // admin (services.write on the dashboard); each change is audited as the dashboard's (subscription.recreate_client,
+  // subscription.delete) with the reason the bot gives.
+  rpc AdminListPanelMissing(AdminListPanelMissingRequest) returns (AdminListPanelMissingResponse);
+  rpc AdminResolvePanelMissing(AdminResolvePanelMissingRequest) returns (AdminResolvePanelMissingResponse);
   // RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
   // an active account only (a banned one is PERMISSION_DENIED "user is banned").
   // What a customer can get wrong is an outcome of the answer, not an error.
@@ -1187,6 +1196,43 @@ message AdminListSettingSpecsResponse {
 
 message AdminListServersRequest {
   int64 actor_telegram_id = 1;
+}
+
+message AdminListPanelMissingRequest {
+  int64 actor_telegram_id = 1;
+  int32 offset = 2;
+  int32 limit = 3; // 1 to 200; 0 is 25
+}
+
+// AdminPanelMissingService is a live service whose client the panel no longer has.
+message AdminPanelMissingService {
+  string id = 1;
+  string client_email = 2;
+  int64 telegram_id = 3; // the customer
+  string username = 4; // "" when they have none
+  map<string, string> plan_name = 5; // language -> name
+  int64 expires_at = 6; // unix seconds; 0: never
+  int64 missing_since = 7; // unix seconds: when core first saw the panel without it
+  string status = 8;
+}
+
+message AdminListPanelMissingResponse {
+  repeated AdminPanelMissingService services = 1;
+  int64 total = 2; // how many there are in all
+}
+
+message AdminResolvePanelMissingRequest {
+  int64 actor_telegram_id = 1;
+  string subscription_id = 2;
+  string action = 3; // recreate | delete
+  string reason = 4; // required, for the audit log
+}
+
+message AdminResolvePanelMissingResponse {
+  // done; or a skip, nothing was done: back (the panel has the client again, or the service is no longer
+  // live) or deleted (deleted already, or no such service).
+  string outcome = 1;
+  string client_email = 2; // "" when unknown
 }
 
 message AdminServer {

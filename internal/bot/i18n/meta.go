@@ -167,6 +167,13 @@ var contexts = map[string]Context{
 	"ref.promo_link":      CtxButtonHTML,
 	"rs.apply_already":    CtxToastHTML,
 	"admin.status_reason": CtxInternal,
+	// The services not on the panel: the reasons the audit log keeps, the popup, and core's failure in the
+	// staff member's words (inside a message).
+	"admin.pm_reason_recreate": CtxInternal,
+	"admin.pm_reason_delete":   CtxInternal,
+	"admin.pm_toast_done":      CtxToast,
+	"admin.pm_why_unavailable": CtxButtonHTML,
+	"admin.pm_why_internal":    CtxButtonHTML,
 	// A backup file's caption is sent without a parse mode.
 	"backup.caption": CtxPlain,
 
@@ -236,6 +243,7 @@ var buttonStyles = map[string]string{
 	"btn.rs_resume":         "success",
 	"btn.rs_settle":         "success",
 	"btn.login_approve":     "success",
+	"btn.pm_yes":            "success",
 
 	"btn.services":       "primary",
 	"btn.wallet":         "primary",
@@ -263,6 +271,7 @@ var buttonStyles = map[string]string{
 	"btn.reseller_apply": "primary",
 	"btn.tutorials":      "primary",
 	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
+	"btn.pm_manage":      "primary", // under the alert about services not on the panel
 
 	"btn.cancel":          "danger",
 	"btn.reject":          "danger",
@@ -276,6 +285,8 @@ var buttonStyles = map[string]string{
 	"btn.rs_delete_yes":   "danger",
 	"btn.rs_note_clear":   "danger",
 	"btn.login_deny":      "danger",
+	"btn.pm_delete":       "danger",
+	"btn.pm_delete_all":   "danger",
 }
 
 // ButtonStyle is the Bot API style of a button labelled with the text key:
@@ -327,6 +338,13 @@ var markupArgs = map[string][]string{
 	// An unmatched deposit's reason is a rendered text.
 	"admin.unmatched_deposit":     {"reason"},
 	"admin.unmatched_deposit_ton": {"reason", "comment"},
+
+	// The services not on the panel: the rendered lines of the list, and why core could not (its words,
+	// escaped, or a text of the bot's).
+	"admin.pm_list":            {"items"},
+	"admin.pm_fail_line":       {"reason"},
+	"admin.pm_failed_recreate": {"reason"},
+	"admin.pm_failed_delete":   {"reason"},
 }
 
 // onlyLangs are texts read in some languages only.

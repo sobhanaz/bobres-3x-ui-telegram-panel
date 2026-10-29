@@ -497,7 +497,31 @@
     "missing_text": "The panel has had no client for this service since {time}, so the customer cannot connect. Expiry reminders are paused for it.",
     "recreate": "Make the client again",
     "recreate_intro": "Makes the client on the panel again, on the same server. The same subscription link works again and the customer does not have to do anything. The used traffic starts again from zero on the panel; the end date and the traffic limit stay as shown here.",
-    "done_recreate": "Client made again on the panel"
+    "done_recreate": "Client made again on the panel",
+    "bulk": {
+      "toolbar": "Actions on the selected services",
+      "hint": "Select services to make their clients again or delete them, all with one reason.",
+      "selected": "{n} service selected | {n} services selected",
+      "select_page": "Select all on this page",
+      "select_one": "Select {email}",
+      "recreate": "Make again",
+      "delete": "Delete",
+      "recreate_title": "Make the client again for {n} service | Make the client again for {n} services",
+      "delete_title": "Delete {n} service | Delete {n} services",
+      "recreate_intro": "Each client is made on the panel again, on its own server: the same subscription link works again, the end date and the traffic limit stay, and the used traffic starts from zero. A service that is back on the panel or was deleted meanwhile is skipped. The reason below is recorded for each one.",
+      "delete_intro": "Each service is deleted from the bot too: its link stops working for good and no money goes back to the customer. A service that is back on the panel or was deleted meanwhile is skipped. The reason below is recorded for each one.",
+      "progress": "Working: {done} of {total}",
+      "summary_title": "Result",
+      "summary": "Done: {done} · Skipped: {skipped} · Failed: {failed}",
+      "result_done": "done",
+      "result_skipped": "skipped",
+      "result_failed": "failed",
+      "skipped_back": "It is on the panel again: nothing was done.",
+      "skipped_deleted": "It was deleted already: nothing was done.",
+      "done_recreate": "Clients made again",
+      "done_delete": "Services deleted",
+      "close": "Close"
+    }
   },
   "plan": {
     "groups_title": "Plan groups",

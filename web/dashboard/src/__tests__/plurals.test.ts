@@ -306,6 +306,7 @@ describe('English texts that count something', () => {
   const NOT_A_COUNT: Record<string, string> = {
     'placeholder.coming': '"milestone {n} of Phase 4": the number names a milestone, it counts nothing',
     'overview.servers_down': '"{n} of {total} not answering": "not" is not a counted noun',
+    'service.bulk.progress': '"Working: {done} of {total}": a position in the run, "of" is not a counted noun',
     'texts.changed_count': '"{n} changed": a verb, there is no noun to pluralize',
     'reseller.discount_short': '"{n} off": a percentage, "off" is not a counted noun',
     'reseller.commission_short': '"{n} commission": a percentage, "commission" is not counted',

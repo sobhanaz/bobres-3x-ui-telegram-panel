@@ -212,37 +212,53 @@ func (s *Server) setServiceEnabled(w http.ResponseWriter, r *http.Request) {
 	s.serviceResult(w, r, id, extra)
 }
 
-// recreateService: POST /api/v1/services/{id}/recreate-client {reason} makes the client again when the
-// panel no longer has it (the same server, inbounds and group, the limits core holds).
-func (s *Server) recreateService(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	var req reasonBody
-	if !readJSON(w, r, &req) {
-		return
-	}
-	if err := s.cfg.Domain.RecreateSubscriptionClient(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason); err != nil {
-		s.fail(w, "recreate service client", err)
-		return
-	}
-	s.serviceResult(w, r, id, nil)
+// panelMissingBody is the body of recreate-client and delete. OnlyMissing (the Services page's bulk actions
+// on the "Not on the panel" list) acts only while the panel still lacks the service's client: one that
+// changed since the list was loaded is skipped, answered 200 with "skipped": "back" (the panel has the
+// client again) or "deleted" (deleted already), and nothing is done to it.
+type panelMissingBody struct {
+	Reason      string `json:"reason"`
+	OnlyMissing bool   `json:"only_missing"`
 }
 
-// deleteService: POST /api/v1/services/{id}/delete {reason}
-func (s *Server) deleteService(w http.ResponseWriter, r *http.Request) {
+// resolveService runs one of the two actions on a service the panel may lack, as the body says.
+func (s *Server) resolveService(w http.ResponseWriter, r *http.Request, action string) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	var req reasonBody
+	var req panelMissingBody
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if err := s.cfg.Domain.DeleteSubscription(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason); err != nil {
-		s.fail(w, "delete service", err)
+	var extra map[string]any
+	var err error
+	switch {
+	case req.OnlyMissing:
+		var outcome string
+		outcome, err = s.cfg.Domain.ResolvePanelMissing(r.Context(), actor(r), s.cfg.Provisioner, id, action, req.Reason)
+		if err == nil && outcome != domain.PanelMissingDone {
+			extra = map[string]any{"skipped": outcome}
+		}
+	case action == domain.PanelMissingRecreate:
+		err = s.cfg.Domain.RecreateSubscriptionClient(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason)
+	default:
+		err = s.cfg.Domain.DeleteSubscription(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason)
+	}
+	if err != nil {
+		s.fail(w, action+" service", err)
 		return
 	}
-	s.serviceResult(w, r, id, nil)
+	s.serviceResult(w, r, id, extra)
+}
+
+// recreateService: POST /api/v1/services/{id}/recreate-client {reason, only_missing} makes the client again
+// when the panel no longer has it (the same server, inbounds and group, the limits core holds).
+func (s *Server) recreateService(w http.ResponseWriter, r *http.Request) {
+	s.resolveService(w, r, domain.PanelMissingRecreate)
+}
+
+// deleteService: POST /api/v1/services/{id}/delete {reason, only_missing}
+func (s *Server) deleteService(w http.ResponseWriter, r *http.Request) {
+	s.resolveService(w, r, domain.PanelMissingDelete)
 }

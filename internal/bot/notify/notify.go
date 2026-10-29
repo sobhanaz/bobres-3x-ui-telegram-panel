@@ -337,7 +337,9 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if !n.set.Bool("notify.system_alerts", true) {
 			return nil
 		}
-		return n.alert(ctx, 0, func(lang string) string { return n.systemAlert(lang, e) })
+		return n.alertToContacts(ctx, n.set.Recipients(n.adminIDs), 0, func(c settings.Contact, lang string) (string, *tg.Keyboard) {
+			return n.systemAlert(lang, e), n.systemAlertKeyboard(lang, c, e)
+		})
 
 	case events.DailySummary:
 		var e events.DailySummaryEvent
@@ -425,6 +427,22 @@ func (n *Notifier) alert(ctx context.Context, skip int64, text func(lang string)
 
 // alertTo messages each of to in their language, except skip; as alert.
 func (n *Notifier) alertTo(ctx context.Context, to []settings.Contact, skip int64, render func(lang string) (string, *tg.Keyboard)) error {
+	return n.alertToContacts(ctx, to, skip, func(_ settings.Contact, lang string) (string, *tg.Keyboard) { return render(lang) })
+}
+
+// systemAlertKeyboard is the button under a watchdog alert, for the staff member c: the services whose
+// client is gone from the panel open the list to decide about each (owner and admin, services.write; a
+// configured owner core has not listed yet gets it too, and core checks the role on every tap). Nil for
+// every other alert, and once it is fixed.
+func (n *Notifier) systemAlertKeyboard(lang string, c settings.Contact, e events.SystemAlertEvent) *tg.Keyboard {
+	if e.TitleKey != "alert.panel_missing" || e.State == events.AlertResolved || c.Role == "support" {
+		return nil
+	}
+	return (&tg.Keyboard{}).Row(n.button(lang, "btn.pm_manage", "adm:pm"))
+}
+
+// alertToContacts is alertTo with the contact handed to render too (what they may do decides the buttons).
+func (n *Notifier) alertToContacts(ctx context.Context, to []settings.Contact, skip int64, render func(c settings.Contact, lang string) (string, *tg.Keyboard)) error {
 	var failed error
 	sent := false
 	for _, c := range to {
@@ -435,7 +453,7 @@ func (n *Notifier) alertTo(ctx context.Context, to []settings.Contact, skip int6
 		if lang == "" {
 			lang = n.lang(ctx, c.TelegramID)
 		}
-		text, kb := render(lang)
+		text, kb := render(c, lang)
 		if err := n.send(ctx, c.TelegramID, text, kb); err != nil {
 			n.log.Warn("staff alert failed", "chat", c.TelegramID, "err", err)
 			failed = err
