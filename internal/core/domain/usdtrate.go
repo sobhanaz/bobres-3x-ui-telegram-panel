@@ -146,7 +146,8 @@ func (s *Service) RunUsdtRateWorker(ctx context.Context) {
 	first := time.After(10 * time.Second)
 	read := func() {
 		// It runs while the store takes crypto (an address is set) or sells licenses (priced in USDT): both need the rate.
-		if !s.UsdtAutoOn(ctx) || (s.setting(ctx, "payments.usdt_trc20") == "" && s.setting(ctx, "payments.usdt_erc20") == "" && !s.VendorOn(ctx)) {
+		if !s.UsdtAutoOn(ctx) || (s.setting(ctx, "payments.usdt_trc20") == "" && s.setting(ctx, "payments.usdt_erc20") == "" && !s.VendorOn(ctx) &&
+			!s.autoCrypto(ctx)) {
 			return
 		}
 		if _, err := s.RefreshUsdtRate(ctx); err != nil && ctx.Err() == nil {
@@ -163,6 +164,14 @@ func (s *Service) RunUsdtRateWorker(ctx context.Context) {
 			read()
 		}
 	}
+}
+
+// SetAutoCrypto sets how core asks whether the store takes automatic crypto (automatic USDT or TON switched on in
+// payments), which needs the live rate too (cmd/core).
+func (s *Service) SetAutoCrypto(f func(ctx context.Context) bool) { s.cfg.AutoCrypto = f }
+
+func (s *Service) autoCrypto(ctx context.Context) bool {
+	return s.cfg.AutoCrypto != nil && s.cfg.AutoCrypto(ctx)
 }
 
 // UsdtSettingRaw is the effective rate as the raw JSON the bot reads in place of the stored setting ("" when there is none).

@@ -134,7 +134,8 @@ func TestLicenseGates(t *testing.T) {
 		}
 		// Automatic USDT is a paid feature; Zarinpal and the manual methods
 		// are on the free tier, and switching one off is always allowed.
-		wantRefusal(t, "usdt", w.gateway(USDTAuto, true), "crypto_watcher", "the free tier does not include the automatic USDT watcher", buy)
+		wantRefusal(t, "usdt", w.gateway(USDTAuto, true), "crypto_watcher", "the free tier does not include the automatic crypto watcher", buy)
+		wantRefusal(t, "ton", w.gateway(TONAuto, true), "crypto_watcher", "the free tier does not include the automatic crypto watcher", buy)
 		if w.fg.sets != 0 {
 			t.Fatalf("a refused gateway was saved (%d writes)", w.fg.sets)
 		}
@@ -222,7 +223,8 @@ func TestLicenseGates(t *testing.T) {
 			t.Fatalf("an owner stepping down: %v", err)
 		}
 		// Automatic USDT is not in this license (the trial's is not either): off.
-		wantRefusal(t, "usdt on", w.gateway(USDTAuto, true), "crypto_watcher", "the license does not include the automatic USDT watcher", buy)
+		wantRefusal(t, "usdt on", w.gateway(USDTAuto, true), "crypto_watcher", "the license does not include the automatic crypto watcher", buy)
+		wantRefusal(t, "ton on", w.gateway(TONAuto, true), "crypto_watcher", "the license does not include the automatic crypto watcher", buy)
 		if w.fg.sets != 0 {
 			t.Fatalf("a refused gateway was saved")
 		}

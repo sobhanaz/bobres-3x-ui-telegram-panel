@@ -141,7 +141,11 @@ type DepositUnmatchedEvent struct {
 	Amount     int64  `json:"amount"`   // micro-USDT (scale 6)
 	Currency   string `json:"currency"` // USDT
 	BlockTime  int64  `json:"block_time"`
-	Reason     string `json:"reason"` // no_payment | already_paid | closed | ambiguous | shadowed_exact_match | after_restore
+	Reason     string `json:"reason"` // no_payment | already_paid | closed | ambiguous | shadowed_exact_match | after_restore | underpaid | late_price
+	// TON: the transfer's comment, the payment it named and the nanoton that payment asked for.
+	Comment  string `json:"comment,omitempty"`
+	IntentID string `json:"intent_id,omitempty"`
+	Expected int64  `json:"expected,omitempty"`
 }
 
 // TopicDepositClaimed is published on the payments feed when a manual crypto

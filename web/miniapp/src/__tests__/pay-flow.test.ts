@@ -8,7 +8,7 @@ import CheckoutView from '../views/CheckoutView.vue'
 import WalletView from '../views/WalletView.vue'
 import { chooseFile, clipboard, json, mount, noTelegram, pngBytes, settle, signedIn, telegram, type Call, type Mounted } from './helpers'
 
-const ALL = ['zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']
+const ALL = ['zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'ton_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']
 
 const plan: Plan = { id: 'p1', names: { en: 'Gold', fa: 'طلایی' }, kind: 'both', days: 30, traffic_bytes: 50 * 2 ** 30, price: 150000, list_price: 150000, currency: 'IRT', scale: 0, topup: false }
 const order = (over: Record<string, unknown> = {}) => ({ id: 'o1', plan_id: 'p1', type: 'new', status: 'pending_payment', amount: 150000, discount_amount: 0, currency: 'IRT', scale: 0, subscription_id: '', ...over })
@@ -17,6 +17,16 @@ const intent = (over: Partial<Intent> = {}): Intent => ({
   gateway_amount: 0, gateway_currency: '', scale_gateway: -1,
   details: { card_number: '6037-9911-2222-3333', card_holder: 'Ali Rezaei', reference: 'AB12CD34' }, ...over,
 })
+// The store's address (non-bounceable, as the server writes it) and a payment's memo.
+const tonAddress = 'UQDtFpEwcFAEcRe5mLVh2N6C0x-_hJEM7W61_JLnSF74p9dz'
+const tonIntent = (expiresAt: number, over: Partial<Intent> = {}): Intent =>
+  intent({
+    provider: 'ton_auto', gateway_amount: 2_531_000_000, gateway_currency: 'TON', scale_gateway: 9,
+    details: { pay_address: tonAddress, network: 'TON', memo: 'BOB-3F9A1C20', expires_at: String(expiresAt), reference: 'AB12CD34' }, ...over,
+  })
+const nowSeconds = () => Math.floor(Date.now() / 1000)
+// the isolates the screen puts around a left-to-right value
+const plain = (s: string | null | undefined) => s?.replace(/[⁦-⁩]/g, '')
 const starsIntent = (): Intent =>
   intent({ provider: 'stars', gateway_amount: 100, gateway_currency: 'XTR', invoice_url: 'https://t.me/$fakeInvoice1', stars: 100, details: { reference: 'AB12CD34' } })
 
@@ -41,7 +51,7 @@ describe('Methods', () => {
     await settle(10)
     const labels = m.buttons().map((b) => b.textContent?.trim())
     expect(labels).toEqual([
-      'Zarinpal', 'IDPay', 'NextPay', 'Aqayepardakht', 'USDT (TRC20)', 'Telegram Stars ⭐', 'Card to card', 'USDT, then send a receipt', 'Zarinpal payment link, then send a receipt',
+      'Zarinpal', 'IDPay', 'NextPay', 'Aqayepardakht', 'USDT (TRC20)', 'TON', 'Telegram Stars ⭐', 'Card to card', 'USDT, then send a receipt', 'Zarinpal payment link, then send a receipt',
     ])
     expect(m.text()).not.toContain('in the bot only')
     await m.click('Card to card')
@@ -61,6 +71,7 @@ describe('Methods', () => {
     expect(t).toContain('تتر (USDT) با ارسال رسید')
     expect(t).toContain('زرین‌پال (لینک پرداخت) با ارسال رسید')
     expect(t).toContain('آقای‌پرداخت')
+    expect(t).toContain('تون (TON)')
     m.unmount()
   })
 })
@@ -104,6 +115,127 @@ describe('PayPanel', () => {
     )
     await settle(5)
     expect(m.text()).toContain('Send exactly 2.500731 USDT to this address')
+    m.unmount()
+  })
+
+  it('shows an automatic TON payment: the exact amount, the address and the memo, each to copy, and the warning', async () => {
+    const copied = clipboard()
+    const m = mount(PayPanel, { intent: tonIntent(nowSeconds() + 900), checking: false, message: '' }, ['check'])
+    await settle(5)
+    const text = m.text()
+    // every decimal of a nanoton, zeros too, in Latin digits: never "2.531"
+    expect(text).toContain('Exact amount')
+    expect(text).toContain('2.531000000 TON')
+    expect(text).not.toMatch(/2\.531 TON/)
+    expect(text).toContain(tonAddress)
+    expect(text).toContain('BOB-3F9A1C20')
+    expect(text).toContain('Network TON')
+    expect(text).toContain('Waiting for the payment')
+    // the comment is what finds the payment: said so
+    expect(text).toContain('You must write this comment in the transfer’s comment field')
+    expect(text).toContain('can only be handled by hand')
+    // the three values are in left-to-right monospace boxes, each with a Copy button of its own
+    const boxes = [...m.el.querySelectorAll('.mono')] as HTMLElement[]
+    expect(boxes.map((b) => b.getAttribute('dir'))).toEqual(['ltr', 'ltr', 'ltr'])
+    expect(boxes.map((b) => plain(b.textContent))).toEqual(['2.531000000 TON', tonAddress, 'BOB-3F9A1C20'])
+    const buttons = m.buttons().filter((b) => b.textContent?.trim() === 'Copy')
+    expect(buttons).toHaveLength(3)
+    for (const b of buttons) b.click()
+    await settle(5)
+    // the amount is copied as a plain number, the way a wallet takes it
+    expect(copied).toEqual(['2.531000000', tonAddress, 'BOB-3F9A1C20'])
+    expect(m.text().match(/Copied/g)).toHaveLength(3)
+    // and the way to say it was paid
+    await m.click('I have paid')
+    expect(m.events.check).toEqual([[undefined]])
+    m.unmount()
+  })
+
+  it('writes the TON screen in Persian, with the values still left to right', async () => {
+    setLang('fa')
+    const m = mount(PayPanel, { intent: tonIntent(nowSeconds() + 900), checking: false, message: '' }, [])
+    await settle(5)
+    const text = m.text()
+    expect(text).toContain('مبلغ دقیق')
+    expect(text).toContain('2.531000000 TON') // Latin digits and the code, whatever the language
+    expect(text).toContain('آدرس مقصد')
+    expect(text).toContain('کامنت (Memo)')
+    expect(text).toContain('حتماً در بخش «کامنت» انتقال بنویسید')
+    expect(text).toContain('شبکه TON')
+    expect(text).toContain('زمان باقی‌مانده')
+    expect(text).toContain('پرداخت کردم')
+    expect([...m.el.querySelectorAll('.mono')].every((b) => b.getAttribute('dir') === 'ltr')).toBe(true)
+    m.unmount()
+  })
+
+  it('counts down to the deadline by the second, and stops at zero with the late payment explained', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-28T12:00:00Z'))
+    const m = mount(PayPanel, { intent: tonIntent(nowSeconds() + 75), checking: false, message: '' }, ['check'])
+    await settle(5)
+    const left = () => plain(m.el.querySelector('.ton-left')?.textContent)
+    expect(left()).toBe('Time left: 01:15')
+    expect(m.text()).not.toContain('The time to pay is over')
+    await settle(1000)
+    expect(left()).toBe('Time left: 01:14')
+    await settle(14_000)
+    expect(left()).toBe('Time left: 01:00')
+    await settle(59_000)
+    expect(left()).toBe('Time left: 00:01')
+    expect(m.text()).not.toContain('The time to pay is over')
+    // the last second: the time is over, and a late payment is still looked at
+    await settle(1000)
+    expect(left()).toBeUndefined()
+    expect(m.text()).toContain('The time to pay is over. A payment made late is still looked at by the store.')
+    expect(m.el.querySelector('.ton-over')?.getAttribute('role')).toBe('status')
+    // nothing counts any more, and the amount, the address, the memo and the check stay
+    expect(vi.getTimerCount()).toBe(0)
+    await settle(60_000)
+    expect(m.text()).toContain('The time to pay is over')
+    expect(m.text()).toContain('2.531000000 TON')
+    expect(m.text()).toContain('BOB-3F9A1C20')
+    await m.click('I have paid')
+    expect(m.events.check).toHaveLength(1)
+    m.unmount()
+  })
+
+  it('does not start a clock for a payment whose time is already over, and stops it when the screen goes', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-28T12:00:00Z'))
+    let m = mount(PayPanel, { intent: tonIntent(nowSeconds() - 30), checking: false, message: '' }, [])
+    await settle(5)
+    expect(m.text()).toContain('The time to pay is over')
+    expect(m.el.querySelector('.ton-left')).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+    m.unmount()
+    // one running clock, gone with the component
+    m = mount(PayPanel, { intent: tonIntent(nowSeconds() + 600), checking: false, message: '' }, [])
+    await settle(5)
+    expect(vi.getTimerCount()).toBe(1)
+    m.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+    // no deadline told: no clock and no claim that time is over
+    m = mount(PayPanel, { intent: tonIntent(0, { details: { pay_address: tonAddress, network: 'TON', memo: 'BOB-3F9A1C20' } }), checking: false, message: '' }, [])
+    await settle(5)
+    expect(m.text()).not.toContain('Time left')
+    expect(m.text()).not.toContain('The time to pay is over')
+    expect(vi.getTimerCount()).toBe(0)
+    m.unmount()
+  })
+
+  it('shows only the way to check when a payment has no address yet, and no memo warning without a memo', async () => {
+    let m = mount(PayPanel, { intent: tonIntent(0, { details: {} }), checking: false, message: '' }, ['check'])
+    await settle(5)
+    expect(m.text()).toContain('Waiting for the payment')
+    expect(m.el.querySelector('.copy-field')).toBeNull()
+    expect(m.text()).toContain('I have paid')
+    m.unmount()
+    m = mount(PayPanel, { intent: tonIntent(0, { details: { pay_address: tonAddress, network: 'TON' } }), checking: true, message: 'No payment seen yet.' }, [])
+    await settle(5)
+    expect(m.text()).not.toContain('You must write this comment')
+    expect(m.el.querySelectorAll('.copy-field')).toHaveLength(2)
+    expect(m.button('Checking').disabled).toBe(true)
+    expect(m.text()).toContain('No payment seen yet.')
     m.unmount()
   })
 
@@ -185,6 +317,46 @@ describe('buying with Telegram Stars', () => {
     expect(m.text()).toContain('The payment did not go through.')
     expect(m.text()).toContain('Pay online') // the methods are still there to pick another
     expect(m.text()).not.toContain('Pay with Telegram Stars')
+    m.unmount()
+  })
+})
+
+describe('buying with TON', () => {
+  it('shows what to send, says a payment is not there yet in TON’s words, and finishes when the payment is seen', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-28T12:00:00Z'))
+    let orderStatus = 'pending_payment'
+    const expires = nowSeconds() + 900
+    const calls = signedIn(({ method, path }) => {
+      if (path === '/orders' && method === 'POST') return order()
+      if (path.startsWith('/methods')) return { methods: ['ton_auto', 'manual_card'] }
+      if (path === '/orders/o1/pay') return tonIntent(expires)
+      if (path === '/orders/o1') return order({ status: orderStatus })
+      if (path === '/payments/i1/check') return { intent_id: 'i1', status: orderStatus === 'active' ? 'succeeded' : 'pending', order_id: 'o1', failure_reason: '' }
+      return { wallets: [], ledger: [], services: [] }
+    })
+    const flush = () => vi.advanceTimersByTimeAsync(10)
+    const m = await startCheckout(() => {}, flush)
+    expect(m.buttons().map((b) => b.textContent?.trim())).toContain('TON')
+    await m.click('TON')
+    await flush()
+    expect(JSON.parse(String(calls.find((c) => c.path === '/orders/o1/pay')?.init.body))).toEqual({ method: 'ton_auto' })
+    expect(m.text()).toContain('2.531000000 TON')
+    expect(m.text()).toContain(tonAddress)
+    expect(m.text()).toContain('BOB-3F9A1C20')
+    expect(m.text()).toContain('Time left: ')
+
+    // asked too early: not there yet, and why that may be
+    await m.click('I have paid')
+    await flush()
+    expect(calls.some((c) => c.path === '/payments/i1/check')).toBe(true)
+    expect(m.text()).toContain('A TON transfer can take a minute or two to show up. If the comment was left out, the payment cannot be recognized.')
+
+    // the payment is seen: the screen's own look at the order finds it
+    orderStatus = 'active'
+    await vi.advanceTimersByTimeAsync(3000)
+    await flush()
+    expect(m.text()).toContain('Your service is ready.')
     m.unmount()
   })
 })

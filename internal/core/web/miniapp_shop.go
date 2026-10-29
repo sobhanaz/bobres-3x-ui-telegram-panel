@@ -284,10 +284,19 @@ func (s *Server) miniPayWallet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, miniOrderBody(paid))
 }
 
+// gatewayScale is the number of decimals of what a gateway charges: TON has 9 (nanoton), and the currencies the
+// ledger knows what money says.
+func gatewayScale(currency string) int {
+	if currency == "TON" {
+		return 9
+	}
+	return bmoney.Scale(currency)
+}
+
 // miniIntentDetails are the details of a payment the customer is shown: the
 // USDT address of an automatic payment, and what a manual payment says (the
 // card, the addresses, the link, the payment reference), as in the bot.
-var miniIntentDetails = []string{"pay_address", "network", "expires_at", "reference",
+var miniIntentDetails = []string{"pay_address", "network", "memo", "expires_at", "reference",
 	"card_number", "card_holder", "usdt_trc20", "usdt_erc20", "zarinpal_link"}
 
 func miniIntentBody(res *domain.IntentResult) map[string]any {
@@ -299,7 +308,7 @@ func miniIntentBody(res *domain.IntentResult) map[string]any {
 	}
 	return map[string]any{"intent_id": res.IntentID, "status": res.Status, "provider": res.Provider, "order_id": res.OrderID,
 		"amount": res.Amount, "currency": res.Currency, "scale": bmoney.Scale(res.Currency), "pay_url": res.PayURL,
-		"gateway_amount": res.GatewayAmount, "gateway_currency": res.GatewayCurrency, "scale_gateway": bmoney.Scale(res.GatewayCurrency), "details": details}
+		"gateway_amount": res.GatewayAmount, "gateway_currency": res.GatewayCurrency, "scale_gateway": gatewayScale(res.GatewayCurrency), "details": details}
 }
 
 type miniPayIn struct {

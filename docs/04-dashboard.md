@@ -140,7 +140,7 @@ a collector that is not installed).
 | `datastore` | `postgres` (core pings it and says how big it is), `redis` (from its container) | as above |
 | `host` | `host` | `warn` when a disk or the memory is past its alert threshold (`detail` says which); `unknown` while the collector says nothing |
 | `panel` | `panel.<server id>` for every 3x-ui server | `ok` answers, `down` does not (`detail` is the server's last error), `unknown` never checked |
-| `gateway` | `gateway.<provider>` for every payment gateway that is switched on (`zarinpal`, `idpay`, `nextpay`, `aqayepardakht`, `usdt_auto`) | `ok` offered to customers; `warn` switched on but not offered, or its settings have a problem. This is the state the payments service reports, not a live call to the provider |
+| `gateway` | `gateway.<provider>` for every payment gateway that is switched on (`zarinpal`, `idpay`, `nextpay`, `aqayepardakht`, `usdt_auto`, `ton_auto`) | `ok` offered to customers; `warn` switched on but not offered, or its settings have a problem. This is the state the payments service reports, not a live call to the provider |
 | `job` | `collector` (the host collector), `backups` (the newest backup and its age), `ci` (the CI of `main`) | `collector`: `ok` fresh, `warn` it has gone quiet, `unknown` not installed. `backups`: `warn` older than 26 hours or its last run failed, `unknown` none yet. `ci`: `warn` the latest finished CI run on `main` failed, `unknown` GitHub unreachable or no finished run |
 
 **`host`**: when the collector is not installed, is off, or its snapshot is older than 90 seconds, `available` is `false`, `reason`

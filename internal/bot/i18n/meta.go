@@ -92,6 +92,7 @@ var contexts = map[string]Context{
 	"admin.status_done":      CtxToast,
 	"pay.check_pending":      CtxToast,
 	"pay.usdt_check_pending": CtxToast,
+	"pay.ton_check_pending":  CtxToast,
 	"pay.check_wait":         CtxToast,
 	"admin.txid_used":        CtxToastHTML,
 	"admin.unmatched_part":   CtxButtonHTML,
@@ -208,6 +209,7 @@ var buttonStyles = map[string]string{
 	"btn.pay_aqayepardakht": "success",
 	"btn.pay_stars":         "success",
 	"btn.pay_usdt_auto":     "success",
+	"btn.pay_ton":           "success",
 	"btn.open_payment":      "success",
 	"btn.approve":           "success",
 	"btn.adm_unban":         "success",
@@ -298,7 +300,8 @@ var markupArgs = map[string][]string{
 	"alert.resolved":       {"title"},
 
 	// An unmatched deposit's reason is a rendered text.
-	"admin.unmatched_deposit": {"reason"},
+	"admin.unmatched_deposit":     {"reason"},
+	"admin.unmatched_deposit_ton": {"reason", "comment"},
 }
 
 // onlyLangs are texts read in some languages only.

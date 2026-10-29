@@ -76,7 +76,7 @@ type PaymentProof struct {
 type CreatePaymentIntentParams struct {
 	UserID         string
 	OrderID        string // empty for a wallet top-up
-	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto
+	Provider       string // manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto | ton_auto
 	Amount         int64  // top-ups only; an order's amount comes from the order
 	Currency       string
 	IdempotencyKey string
@@ -94,7 +94,8 @@ type IntentResult struct {
 	// Details holds card_number, card_holder, usdt_trc20, usdt_erc20 and
 	// reference, so the bot can render instructions in the user's language;
 	// automatic USDT adds pay_address, network (TRC20) and expires_at (unix
-	// seconds; see GatewayDetails).
+	// seconds; see GatewayDetails); automatic TON adds the same with network
+	// TON and memo (the comment the transfer must carry).
 	Details map[string]string
 	// Automated gateways: where to pay and what is charged there.
 	PayURL          string
@@ -206,11 +207,17 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, pay PaymentsClient, p
 // and, once paid, the transaction (txid). Empty for the other gateways.
 func GatewayDetails(gi *GatewayIntent) map[string]string {
 	out := map[string]string{}
-	if gi.Provider != USDTAuto {
+	if gi.Provider != USDTAuto && gi.Provider != TONAuto {
 		return out
 	}
 	if gi.PayAddress != "" {
 		out["pay_address"], out["network"] = gi.PayAddress, "TRC20"
+		if gi.Provider == TONAuto {
+			out["network"] = "TON"
+			if gi.PayMemo != "" {
+				out["memo"] = gi.PayMemo
+			}
+		}
 	}
 	if gi.ExpiresAt > 0 {
 		out["expires_at"] = strconv.FormatInt(gi.ExpiresAt, 10)

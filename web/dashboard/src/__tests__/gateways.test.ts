@@ -11,6 +11,7 @@ import {
   blockedByOpen,
   checkErrors,
   depositKey,
+  depositNetwork,
   depositNoteMax,
   healthState,
   isKeyedProvider,
@@ -41,6 +42,18 @@ import {
   reportRows,
   resolveBody,
   sandboxPin,
+  tonAddressError,
+  tonApiKeyValid,
+  tonAuto,
+  tonBlockedByOpen,
+  tonBody,
+  tonDirty,
+  tonFormOf,
+  tonPriceState,
+  tonProblems,
+  tonTestBody,
+  tonUnmatchedReasons,
+  tonviewerUrl,
   tronscanUrl,
   unmatchedReason,
   unmatchedReasons,
@@ -94,6 +107,52 @@ const usdtConfig = (over: Partial<GatewayConfig> = {}): GatewayConfig => ({
   key_set: true,
   key_missing: false,
   health: { healthy: true, open: 1, oldest_open_at: t0 - 600, last_paid_at: t0 - 300, last_error_at: null, last_error: '' },
+  ...over,
+})
+// Real TON addresses (public data from TON's documentation): the store's, in the forms a wallet shows, a new one, and a
+// customer's. The stored (canonical) form is the non-bounceable one, UQ…
+const tonStoreRaw = '0:ed1691307050047117b998b561d8de82d31fbf84910ced6eb5fc92e7485ef8a7'
+const tonStoreEQ = 'EQDtFpEwcFAEcRe5mLVh2N6C0x-_hJEM7W61_JLnSF74p4q2'
+const tonStore = 'UQDtFpEwcFAEcRe5mLVh2N6C0x-_hJEM7W61_JLnSF74p9dz'
+const tonNewRaw = '0:83dfd552e63729b472fcbcc8c45ebcc6691702558b68ec7527e1ba403a0f31a8'
+const tonNewEQ = 'EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N'
+const tonNew = 'UQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqEBI'
+// the store's address with one character wrong
+const tonTypo = tonStore.slice(0, 20) + (tonStore[20] === 'Z' ? 'Y' : 'Z') + tonStore.slice(21)
+// A friendly address of any flag byte and workchain with a sound checksum, built apart from the code under test.
+function tonFriendly(tag: number, workchain: number): string {
+  const raw = Buffer.alloc(36)
+  raw[0] = tag
+  raw[1] = workchain
+  Buffer.from('ab'.repeat(32), 'hex').copy(raw, 2)
+  let crc = 0
+  for (const b of raw.subarray(0, 34)) {
+    crc ^= b << 8
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff
+  }
+  raw.writeUInt16BE(crc, 34)
+  return raw.toString('base64url')
+}
+// a customer's wallet
+const tonSender = tonFriendly(0x51, 0)
+const tonTestnet = tonFriendly(0x51 | 0x80, 0) // 0Q…
+const tonMasterchain = tonFriendly(0x11, 0xff)
+const tonKey = 'A1b2C3d4_e5F6-g7H8i9J0k1L2m3N4o5'
+const tonConfig = (over: Partial<GatewayConfig> = {}): GatewayConfig => ({
+  provider: 'ton_auto',
+  enabled: true,
+  configured: true,
+  offered: true,
+  problem: '',
+  sandbox: false,
+  merchant_hint: '',
+  proxy_set: false,
+  address: tonStore,
+  key_set: true,
+  key_missing: false,
+  health: { healthy: true, open: 1, oldest_open_at: t0 - 600, last_paid_at: t0 - 300, last_error_at: null, last_error: '', last_scan_at: t0 - 20, last_scan_ok_at: t0 - 20, unmatched_count: 3 },
+  // read ten minutes ago, by the page's own clock
+  price: { usdt_per_ton: '3.2145', source: 'binance', at: Math.floor(Date.now() / 1000) - 600, fresh: true },
   ...over,
 })
 const setting = (key: string, kind: SettingItem['kind'], extra: Partial<SettingItem> = {}): SettingItem => ({
@@ -477,6 +536,145 @@ describe('automatic USDT form', () => {
     expect(resolveBody({ ...d, event_index: 0 }, '')).toEqual({ txid: d.txid, event_index: 0, note: '' })
     // payments counts the note in bytes (at most 500): 3 bytes a character at most
     expect(depositNoteMax * 3).toBeLessThanOrEqual(500)
+  })
+})
+
+describe('automatic TON form', () => {
+  it('starts from the stored switch and address, and an empty key', () => {
+    expect(tonFormOf(tonConfig({ proxy_set: true }))).toEqual({ enabled: true, address: tonStore, apiKey: '', clearApiKey: false, proxy: '', clearProxy: false })
+    expect(tonFormOf(tonConfig({ address: undefined, enabled: false }))).toEqual({ enabled: false, address: '', apiKey: '', clearApiKey: false, proxy: '', clearProxy: false })
+    expect(tonAuto).toBe('ton_auto')
+  })
+  it('checks the address as core will: any form of a main network account on the basechain', () => {
+    const c = tonConfig()
+    const f = tonFormOf(c)
+    expect(tonAddressError(f, c)).toBe('')
+    for (const right of [tonStore, tonStoreEQ, tonStoreRaw, ' ' + tonStoreEQ + '‏\n', tonNewRaw]) expect(tonAddressError({ ...f, address: right }, c), right).toBe('')
+    // four kinds of mistake, each its own
+    expect(tonAddressError({ ...f, address: 'not an address' }, c)).toBe('format')
+    expect(tonAddressError({ ...f, address: store }, c)).toBe('format') // a TRON address
+    expect(tonAddressError({ ...f, address: tonTypo }, c)).toBe('checksum')
+    expect(tonAddressError({ ...f, address: tonTestnet }, c)).toBe('testnet')
+    expect(tonAddressError({ ...f, address: tonMasterchain }, c)).toBe('workchain')
+    expect(tonAddressError({ ...f, address: '-1:' + 'ab'.repeat(32) }, c)).toBe('workchain')
+    // a stored address is replaced, never removed
+    expect(tonAddressError({ ...f, address: '  ' }, c)).toBe('required')
+    expect(tonProblems({ ...f, address: tonTypo, apiKey: 'not a key!' }, c)).toEqual(['address', 'api_key'])
+    expect(tonProblems({ ...f, address: ' ' + tonNewRaw + '‏', apiKey: ' ' + tonKey + ' ' }, c)).toEqual([])
+    // turning it on needs an address, stored or typed
+    const blank = tonConfig({ configured: false, enabled: false, address: '', key_set: false })
+    expect(tonAddressError(tonFormOf(blank), blank)).toBe('')
+    expect(tonProblems({ ...tonFormOf(blank), enabled: true }, blank)).toEqual(['enabled'])
+    expect(tonProblems({ ...tonFormOf(blank), enabled: true, address: tonStoreEQ }, blank)).toEqual([])
+  })
+  it('takes a TON Center key of letters, digits, dashes and underscores, 8 to 128', () => {
+    expect(tonApiKeyValid(tonKey)).toBe(true)
+    expect(tonApiKeyValid(' ' + tonKey + ' ')).toBe(true)
+    expect(tonApiKeyValid('a'.repeat(8))).toBe(true)
+    expect(tonApiKeyValid('a'.repeat(7))).toBe(false)
+    expect(tonApiKeyValid('a'.repeat(128))).toBe(true)
+    expect(tonApiKeyValid('a'.repeat(129))).toBe(false)
+    expect(tonApiKeyValid('abcd efgh ijkl')).toBe(false)
+    expect(tonApiKeyValid('abcd.efgh/ijkl')).toBe(false)
+    const c = tonConfig()
+    const f = tonFormOf(c)
+    expect(tonProblems({ ...f, apiKey: 'abcd.efgh/ijkl' }, c)).toEqual(['api_key'])
+    // the proxy TON Center is called through, as the others'
+    expect(tonProblems({ ...f, proxy: 'socks5://proxy.example.com:1080' }, c)).toEqual(['proxy'])
+    expect(tonProblems({ ...f, proxy: ' http://user:pw@proxy.example.com:3128 ' }, c)).toEqual([])
+  })
+  it('knows when something would change, by the account and not by the form it is written in', () => {
+    const c = tonConfig()
+    const f = tonFormOf(c)
+    expect(tonDirty(f, c)).toBe(false)
+    expect(tonDirty({ ...f, address: ' ' + tonStore + ' ' }, c)).toBe(false)
+    expect(tonDirty({ ...f, address: tonStoreEQ }, c)).toBe(false)
+    expect(tonDirty({ ...f, address: tonStoreRaw }, c)).toBe(false)
+    expect(tonDirty({ ...f, address: tonNewEQ }, c)).toBe(true)
+    expect(tonDirty({ ...f, address: tonTypo }, c)).toBe(true)
+    expect(tonDirty({ ...f, enabled: false }, c)).toBe(true)
+    expect(tonDirty({ ...f, apiKey: ' ' }, c)).toBe(false)
+    expect(tonDirty({ ...f, apiKey: tonKey }, c)).toBe(true)
+    expect(tonDirty({ ...f, clearApiKey: true }, c)).toBe(true)
+    expect(tonDirty({ ...f, proxy: ' ' }, c)).toBe(false)
+    expect(tonDirty({ ...f, proxy: 'http://p.example.com:3128' }, c)).toBe(true)
+    expect(tonDirty({ ...f, clearProxy: true }, c)).toBe(true)
+    // an address the server stored in another form is not a change either
+    expect(tonDirty(tonFormOf(tonConfig({ address: tonStoreEQ })), tonConfig({ address: tonStoreEQ }))).toBe(false)
+  })
+  it('sends the whole address in the canonical form, empty secrets to keep them, and never a secret being removed', () => {
+    const f = tonFormOf(tonConfig())
+    const keep = { proxy: '', clear_proxy: false }
+    expect(tonBody(f)).toEqual({ enabled: true, address: tonStore, api_key: '', clear_api_key: false, ...keep })
+    // a bounceable EQ…, a raw 0:… and a UQ… of one account are sent as the one string, the UQ… form
+    for (const typed of [tonStoreEQ, tonStoreRaw, ' ' + tonStore + ' ', '⁦' + tonStoreEQ + '⁩']) expect(tonBody({ ...f, address: typed }).address, typed).toBe(tonStore)
+    expect(tonBody({ ...f, address: tonNewEQ, apiKey: ' ' + tonKey })).toEqual({ enabled: true, address: tonNew, api_key: tonKey, clear_api_key: false, ...keep })
+    expect(tonBody({ ...f, apiKey: tonKey, clearApiKey: true })).toEqual({ enabled: true, address: tonStore, api_key: '', clear_api_key: true, ...keep })
+    expect(tonBody({ ...f, proxy: ' http://p.example.com:3128 ' })).toMatchObject({ proxy: 'http://p.example.com:3128', clear_proxy: false })
+    expect(tonBody({ ...f, proxy: 'http://p.example.com:3128', clearProxy: true })).toMatchObject({ proxy: '', clear_proxy: true })
+    // a test changes nothing: no switch
+    expect(tonTestBody({ ...f, enabled: false, apiKey: tonKey })).toEqual({ address: tonStore, api_key: tonKey, clear_api_key: false, ...keep })
+    expect(tonTestBody({ ...f, address: tonNewRaw, proxy: 'http://p.example.com:3128' })).toEqual({ address: tonNew, api_key: '', clear_api_key: false, proxy: 'http://p.example.com:3128', clear_proxy: false })
+    expect(tonTestBody({ ...f, clearProxy: true })).toEqual({ address: tonStore, api_key: '', clear_api_key: false, proxy: '', clear_proxy: true })
+    // what is not an address goes as typed (without the decoration of a paste): core says what is wrong
+    expect(tonBody({ ...f, address: ' not an address ' }).address).toBe('notanaddress')
+  })
+  it('knows that open payments block a new address, in whatever form it is written', () => {
+    const c = tonConfig() // one open payment
+    const f = tonFormOf(c)
+    expect(tonBlockedByOpen(f, c)).toBe(false)
+    expect(tonBlockedByOpen({ ...f, enabled: false, apiKey: tonKey, address: tonStoreEQ }, c)).toBe(false)
+    expect(tonBlockedByOpen({ ...f, address: ' ' + tonStoreRaw }, c)).toBe(false)
+    expect(tonBlockedByOpen({ ...f, address: tonNew }, c)).toBe(true)
+    expect(tonBlockedByOpen({ ...f, address: tonNewEQ }, c)).toBe(true)
+    expect(tonBlockedByOpen({ ...f, address: tonNew }, tonConfig({ health: { ...c.health!, open: 0 } }))).toBe(false)
+    expect(tonBlockedByOpen({ ...f, address: tonNew }, tonConfig({ address: '' }))).toBe(false)
+  })
+  it('tells whether there is a price customers can be quoted', () => {
+    expect(tonPriceState(tonConfig())).toBe('fresh')
+    expect(tonPriceState(tonConfig({ price: { usdt_per_ton: '3.2145', source: 'okx', at: t0, fresh: false } }))).toBe('stale')
+    expect(tonPriceState(tonConfig({ price: null }))).toBe('none')
+    expect(tonPriceState(tonConfig({ price: undefined }))).toBe('none')
+  })
+  it('links a transaction to Tonviewer only when it is a hash', () => {
+    expect(tonviewerUrl('AB'.repeat(32))).toBe('https://tonviewer.com/transaction/' + 'ab'.repeat(32))
+    expect(tonviewerUrl('ab'.repeat(31))).toBe('')
+    expect(tonviewerUrl('javascript:alert(1)')).toBe('')
+    expect(tonviewerUrl('ab'.repeat(32) + '/../x')).toBe('')
+  })
+  it('says why a TON deposit matched nothing in its own words, and keeps the USDT words for USDT', () => {
+    expect([...tonUnmatchedReasons]).toEqual(['no_payment', 'already_paid', 'closed', 'ambiguous', 'underpaid', 'late_price', 'dust'])
+    for (const code of tonUnmatchedReasons) expect(unmatchedReason({ reason: 'English words', reason_code: code }, 'TON')).toEqual({ key: 'gateway.ton.reason.' + code })
+    for (const code of unmatchedReasons) expect(unmatchedReason({ reason: 'English words', reason_code: code })).toEqual({ key: 'gateway.usdt.reason.' + code })
+    // the two codes only TON has are not a USDT reason
+    expect(unmatchedReason({ reason: 'less than asked', reason_code: 'underpaid' })).toEqual({ raw: 'less than asked' })
+    expect(unmatchedReason({ reason_code: 'late_price' })).toEqual({ raw: 'late_price' })
+    // a reason this dashboard does not know: core's words, or the code itself
+    expect(unmatchedReason({ reason: 'something new', reason_code: 'new_code' }, 'TON')).toEqual({ raw: 'something new' })
+    expect(unmatchedReason({}, 'TON')).toBeNull()
+  })
+  it('names TON where every provider is named: payments, reports, the overview and the license', () => {
+    // all of them ask the catalog for payment.provider.<id>
+    expect(en.payment.provider.ton_auto).toBe('TON')
+    expect(fa.payment.provider.ton_auto).toBe('تون (TON)')
+    // the alerts the watchdog sends for it, in both languages, with the count the plural form follows
+    expect(en.system.alerts.kind.ton_stuck).toContain('{count}')
+    expect(fa.system.alerts.kind.ton_stuck).toContain('{count}')
+    expect(en.system.alerts.kind.ton_failing).not.toContain('{')
+    // the card's own title says it is automatic, the provider's name does not have to
+    expect(en.gateway.ton.title).toBe('TON (automatic)')
+    expect(fa.gateway.ton.title).toBe('تون (TON)')
+  })
+  it('resolves a TON transfer with its network, and a TRC20 one without', () => {
+    const d = { txid: 'AB'.repeat(32), event_index: 0 }
+    expect(depositNetwork(tonAuto)).toBe('TON')
+    expect(depositNetwork('usdt_trc20_auto')).toBeUndefined()
+    expect(depositNetwork('zarinpal')).toBeUndefined()
+    expect(resolveBody(d, ' paid back ', 'TON')).toEqual({ txid: d.txid, event_index: 0, note: 'paid back', network: 'TON' })
+    // as before TON: the body of a TRC20 deposit has no network at all
+    expect(resolveBody(d, ' paid back ')).toEqual({ txid: d.txid, event_index: 0, note: 'paid back' })
+    expect(Object.keys(resolveBody(d, '', undefined))).toEqual(['txid', 'event_index', 'note'])
+    expect(depositKey(d)).toBe('ab'.repeat(32) + '#0')
   })
 })
 
@@ -1660,6 +1858,506 @@ describe('gateways page', () => {
     expect(row.querySelector('.app-mono')?.textContent).toBe('987654321')
   })
 
+  // ---- Automatic TON
+  const ton = () => document.querySelector('.ton-card') as HTMLElement
+  const tonSave = () => ton().querySelector('button.save') as HTMLButtonElement
+  const tonTest = () => ton().querySelector('button.test') as HTMLButtonElement
+  type TonDeposit = Deposit & { network: string; to: string; comment: string; lt: number }
+  const tonDeposit = (n: number, over: Partial<TonDeposit> = {}): TonDeposit => ({
+    txid: txid(n), event_index: 0, network: 'TON', from: tonSender, to: tonStore, amount: { amount: 1_000_000_000, currency: 'TON' }, at: t0 - 60 * n, comment: 'BOB-3F9A1C20', lt: 1000 + n, ...over,
+  })
+  // three transfers that matched nothing: less than asked, with no comment, and a stranger's comment that is not text
+  const tonDeposits: TonDeposit[] = [
+    tonDeposit(5, { amount: { amount: 2_531_000_000, currency: 'TON' }, at: t0 - 120, reason: 'less TON than the payment asked for', reason_code: 'underpaid' }),
+    tonDeposit(6, { amount: { amount: 1_000_000_000, currency: 'TON' }, at: t0 - 3600, comment: '', reason: 'no open payment has this comment', reason_code: 'no_payment' }),
+    tonDeposit(7, { amount: { amount: 50_000_000, currency: 'TON' }, at: t0 - 7200, comment: '<b>سلام</b> BOB-XXXX', reason_code: 'late_price' }),
+  ]
+  const tonReportOf = (list: () => TonDeposit[], count?: () => number, extra: Record<string, unknown> = {}) => (url: string) => {
+    if (!url.startsWith('/api/v1/gateways/report?') || !url.includes('provider=ton_auto')) return undefined
+    const q = new URLSearchParams(url.split('?')[1])
+    const days = (Number(q.get('to')) - Number(q.get('from'))) / 86_400
+    return json(200, {
+      provider: 'ton_auto', from: Number(q.get('from')), to: Number(q.get('to')), healthy: true, open: 1, oldest_open_at: t0 - 600, last_paid_at: t0 - 300, last_error_at: null, last_error: '',
+      last_scan_at: t0 - 20, last_scan_ok_at: t0 - 20,
+      totals: [{ status: 'succeeded', count: days === 7 ? 2 : 6, amounts: [{ amount: days === 7 ? 2_531_000_000 : 9_000_000_000, currency: 'TON' }] }],
+      unmatched: list(), unmatched_count: count ? count() : list().length, ...extra,
+    })
+  }
+  // 12 to handle; the list holds the newest
+  const tonReport = tonReportOf(() => tonDeposits, () => 12)
+  const noOpen = (c: GatewayConfig) => ({ ...c.health!, open: 0, oldest_open_at: null })
+  const faAgo = (n: number, unit: Intl.RelativeTimeFormatUnit) => new Intl.RelativeTimeFormat('fa-IR', { numeric: 'always' }).format(-n, unit)
+
+  it('shows automatic TON after USDT, with its address, the price, the key only as set, and its unmatched deposits', async () => {
+    let current = tonConfig()
+    const scanned = usdtConfig({ health: { ...usdtConfig().health!, last_scan_at: t0 - 20, last_scan_ok_at: t0 - 20 } })
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [config(), scanned, current], settings: payments() }), (url, init, b) => {
+      if (url === '/api/v1/gateways/ton_auto' && init?.method === 'PUT') {
+        current = { ...current, enabled: b.enabled as boolean, key_set: true }
+        return json(200, { provider: current })
+      }
+      return usdtReport(url) ?? tonReport(url)
+    })
+    await found('.ton-card')
+    const cards = [...document.querySelectorAll('.cards > .wide')]
+    expect(cards.indexOf(ton())).toBe(cards.indexOf(usdt()) + 1)
+    expect(ton().querySelector('.card-title')?.textContent).toBe(text('gateway.ton.title'))
+    expect(ton().querySelector('.state')?.textContent).toBe(text('gateway.state.on'))
+    expect(ton().textContent).toContain(text('gateway.ton.desc'))
+    // the address is public: shown whole, left to right, as saved; the key is only "set"
+    const address = document.getElementById('ton-address') as HTMLInputElement
+    expect(address.value).toBe(tonStore)
+    expect(address.dir).toBe('ltr')
+    expect(ton().querySelector('#ton-address-saved-as')).toBeNull()
+    expect(ton().textContent).toContain(text('gateway.ton.address_help'))
+    expect(field('ton-api-key').querySelector('.state')?.textContent).toBe(text('secret.set'))
+    expect(document.querySelector('#ton-api-key')).toBeNull()
+    expect(ton().querySelector('.open-count')?.textContent).toContain(fill(text('gateway.open_count'), { n: '۱' }))
+    expect(ton().querySelector('.health-state')?.textContent).toBe(text('gateway.health.ok'))
+    // when the address was last read is told for TON only
+    expect(ton().querySelector('.last-scan')?.textContent).toBe(fill(text('gateway.last_scan'), { time: dateTime(t0 - 20, 'fa') }))
+    await found('.usdt-card .health-state')
+    expect(usdt().querySelector('.last-scan')).toBeNull()
+
+    // the live price: the value left to right with its code, where it came from, how old
+    expect(ton().querySelector('.price-title')?.textContent).toBe(text('gateway.ton.price.title'))
+    expect(ton().querySelector('.price-state')?.textContent).toBe(text('gateway.ton.price.fresh'))
+    expect(ton().querySelector('.price-value')?.textContent).toBe('3.2145 USDT')
+    expect(ton().querySelector('.price-value')?.classList.contains('app-ltr')).toBe(true)
+    expect(ton().querySelector('.price-source')?.textContent).toBe(text('gateway.ton.source.binance'))
+    expect(ton().querySelector('.price-age')?.textContent).toBe(faAgo(10, 'minute'))
+    expect(ton().querySelector('.price-warning')).toBeNull()
+
+    // the report asks for this provider and shows its totals in TON
+    await vi.waitFor(() => expect(ton().querySelector('.month-succeeded')?.textContent).toBe('۶'))
+    const reports = calls.filter((c) => c.startsWith('GET /api/v1/gateways/report?') && c.includes('provider=ton_auto'))
+    expect(reports).toHaveLength(2)
+    expect(ton().querySelector('.report-table')?.textContent).toContain('۹ تون')
+    expect(ton().querySelector('.report-table')?.textContent).toContain('۲٫۵۳ تون')
+
+    // the deposits that matched nothing, the newest first, with the comment each came with
+    const table = await shown(ton(), '.unmatched-table')
+    expect(ton().querySelector('#ton-unmatched-title')?.textContent).toBe(text('gateway.usdt.unmatched'))
+    expect(usdt().querySelector('#usdt-unmatched-title')).not.toBeNull()
+    expect(ton().querySelector('.unmatched-count')?.textContent).toBe('۱۲')
+    expect(ton().querySelector('.unmatched-more')?.textContent?.trim()).toBe(fill(text('gateway.usdt.unmatched_more'), { shown: '۳', n: '۱۲' }))
+    expect(ton().querySelector('.unmatched')?.textContent).toContain(text('gateway.ton.unmatched_help'))
+    expect(ton().querySelector('.unmatched')?.textContent).not.toContain(text('gateway.usdt.unmatched_help'))
+    expect([...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toContain(text('gateway.ton.comment'))
+    const rows = [...table.querySelectorAll('.p-datatable-tbody tr')]
+    expect(rows).toHaveLength(3)
+    // exact amounts with the code TON (up to 9 decimals), in Latin digits
+    expect(rows.map((r) => r.querySelector('.amount')?.textContent)).toEqual(['2.531 TON', '1 TON', '0.05 TON'])
+    // why, in the staff member's language and TON's own words (core's English is not shown)
+    expect(rows[0].querySelector('.reason')?.textContent).toBe(text('gateway.ton.reason.underpaid'))
+    expect(rows[1].querySelector('.reason')?.textContent).toBe(text('gateway.ton.reason.no_payment'))
+    expect(rows[2].querySelector('.reason')?.textContent).toBe(text('gateway.ton.reason.late_price'))
+    expect(rows[0].textContent).not.toContain('less TON than the payment asked for')
+    expect(rows[0].querySelector('.reason')?.classList.contains('app-ltr')).toBe(false)
+    // the comment: monospace, left to right; none is said; whatever else was written is text, never markup
+    expect(rows[0].querySelector('.comment')?.textContent).toBe('BOB-3F9A1C20')
+    expect(rows[0].querySelector('.comment')?.classList.contains('app-ltr')).toBe(true)
+    expect(rows[0].querySelector('.comment')?.classList.contains('app-mono')).toBe(true)
+    expect(rows[1].querySelector('.comment')).toBeNull()
+    expect(rows[1].querySelector('.no-comment')?.textContent).toBe(text('gateway.ton.comment_none'))
+    expect(rows[2].querySelector('.comment')?.textContent).toBe('<b>سلام</b> BOB-XXXX')
+    expect(rows[2].querySelector('b')).toBeNull()
+    expect(rows[0].querySelector('.from')?.textContent).toBe(tonSender)
+    expect(rows[0].querySelector('.txid')?.textContent).toBe(txid(5))
+    expect(rows[0].querySelector('button.resolve')?.textContent).toContain(text('gateway.usdt.resolve'))
+    // the transaction on Tonviewer, not Tronscan
+    const link = rows[0].querySelector('a.tonviewer') as HTMLAnchorElement
+    expect(link.href).toBe('https://tonviewer.com/transaction/' + txid(5))
+    expect(link.getAttribute('aria-label')).toBe(text('gateway.ton.tonviewer'))
+    expect(link.rel).toContain('noopener')
+    expect(link.target).toBe('_blank')
+    expect(ton().querySelector('a.tronscan')).toBeNull()
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    ;(rows[1].querySelector('button.copy') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(txid(6)))
+    // the USDT card keeps Tronscan and has no comment column
+    await shown(usdt(), '.unmatched-table')
+    expect(usdt().querySelector('a.tronscan')).not.toBeNull()
+    expect(usdt().querySelector('a.tonviewer')).toBeNull()
+    expect(usdt().querySelector('.comment')).toBeNull()
+    expect(usdt().querySelector('.unmatched')?.textContent).toContain(text('gateway.usdt.unmatched_help'))
+
+    // A new key: checked first, sent once, then gone from the page.
+    ;(field('ton-api-key').querySelector('button.replace') as HTMLButtonElement).click()
+    const key = await found<HTMLInputElement>('#ton-api-key')
+    expect(key.type).toBe('password')
+    type(key, 'not a key!')
+    await vi.waitFor(() => expect(field('ton-api-key').textContent).toContain(text('gateway.ton.invalid.api_key')))
+    expect(tonSave().disabled).toBe(true)
+    type(key, tonKey)
+    await vi.waitFor(() => expect(tonSave().disabled).toBe(false))
+    tonSave().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/ton_auto')).toEqual([{ enabled: true, address: tonStore, api_key: tonKey, clear_api_key: false, ...keep }]))
+    await vi.waitFor(() => expect(document.querySelector('#ton-api-key')).toBeNull())
+    expect(document.querySelector('.p-toast')?.textContent).toContain(text('gateway.ton.saved'))
+    await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/v1/gateways')).toHaveLength(2))
+    expect(document.body.innerHTML).not.toContain(tonKey)
+    // no other gateway was touched
+    expect(sent(calls, 'PUT', '/gateways/usdt_trc20_auto')).toEqual([])
+    expect(sent(calls, 'PUT', '/gateways/zarinpal')).toEqual([])
+  })
+
+  it('says TON is not offered while the price is not fresh or not there', async () => {
+    let price: GatewayConfig['price'] = { usdt_per_ton: '3.2145', source: 'okx', at: Math.floor(Date.now() / 1000) - 3600, fresh: false }
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ offered: false, price })], settings: payments() }), tonReport)
+    await found('.ton-card')
+    expect(ton().querySelector('.state')?.textContent).toBe(text('gateway.state.not_offered'))
+    expect(ton().querySelector('.price-state')?.textContent).toBe(text('gateway.ton.price.stale'))
+    expect(ton().querySelector('.price-warning')?.textContent).toContain(text('gateway.ton.price.warn_stale'))
+    // the last price read is still told, with where it came from and how old it is
+    expect(ton().querySelector('.price-value')?.textContent).toBe('3.2145 USDT')
+    expect(ton().querySelector('.price-source')?.textContent).toBe('OKX')
+    expect(ton().querySelector('.price-age')?.textContent).toBe(faAgo(60, 'minute'))
+    // none has been read yet
+    price = null
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ offered: false, price })], settings: payments() }), tonReport)
+    await found('.ton-card')
+    expect(ton().querySelector('.price-state')?.textContent).toBe(text('gateway.ton.price.none'))
+    expect(ton().querySelector('.price-warning')?.textContent).toContain(text('gateway.ton.price.warn_none'))
+    expect(ton().querySelector('.price-facts')).toBeNull()
+    // an older core that sends no price at all says the same
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ price: undefined })], settings: payments() }), tonReport)
+    await found('.ton-card')
+    expect(ton().querySelector('.price-warning')?.textContent).toContain(text('gateway.ton.price.warn_none'))
+  })
+
+  it('refuses a mistyped, test network or masterchain address in the browser, before anything is sent', async () => {
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig()], settings: payments() }), tonReport)
+    await found('.ton-card')
+    const address = document.getElementById('ton-address') as HTMLInputElement
+    const cases: [string, string][] = [
+      [tonTypo, 'checksum'],
+      ['TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', 'format'], // a TRON address
+      ['0:' + 'ab'.repeat(31), 'format'],
+      [tonTestnet, 'testnet'],
+      [tonMasterchain, 'workchain'],
+      ['-1:' + 'ab'.repeat(32), 'workchain'],
+      ['', 'required'],
+    ]
+    for (const [typed, problem] of cases) {
+      type(address, typed)
+      await vi.waitFor(() => expect(ton().querySelector('#ton-address-error')?.textContent).toBe(text('gateway.ton.invalid.address_' + problem)))
+      // the message never repeats what was typed
+      if (typed) expect(ton().textContent).not.toContain(typed)
+      expect(address.getAttribute('aria-describedby')).toContain('ton-address-error')
+      expect(ton().querySelector('#ton-address-saved-as')).toBeNull()
+      expect(tonSave().disabled).toBe(true)
+      expect(tonTest().disabled).toBe(true)
+    }
+    // nothing was sent, not even for a test
+    expect(sent(calls, 'PUT', '/gateways/ton_auto')).toEqual([])
+    expect(sent(calls, 'POST', '/gateways/ton_auto/test')).toEqual([])
+    // a right one clears the message
+    type(address, tonNewEQ)
+    await vi.waitFor(() => expect(ton().querySelector('#ton-address-error')).toBeNull())
+  })
+
+  it('takes the address in any form a wallet shows, says how it will be saved, and sends that form', async () => {
+    let current = tonConfig({ health: noOpen(tonConfig()) })
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [current], settings: payments() }), (url, init, b) => {
+      if (url === '/api/v1/gateways/ton_auto' && init?.method === 'PUT') {
+        current = { ...current, address: b.address as string }
+        return json(200, { provider: current })
+      }
+      return tonReport(url)
+    })
+    await found('.ton-card')
+    const address = document.getElementById('ton-address') as HTMLInputElement
+    const savedAs = () => ton().querySelector('#ton-address-saved-as')?.textContent
+    // the saved account in another form: said how it is saved, and nothing to save
+    type(address, tonStoreEQ)
+    await vi.waitFor(() => expect(savedAs()).toBe(fill(text('gateway.ton.address_saved_as'), { address: '⁨' + tonStore + '⁩' })))
+    expect(address.getAttribute('aria-describedby')).toContain('ton-address-saved-as')
+    expect(ton().querySelector('#ton-address-error')).toBeNull()
+    expect(tonSave().disabled).toBe(true)
+    // a raw address of another account: saved in the UQ… form
+    type(address, ' ' + tonNewRaw + ' ')
+    await vi.waitFor(() => expect(savedAs()).toBe(fill(text('gateway.ton.address_saved_as'), { address: '⁨' + tonNew + '⁩' })))
+    expect(ton().querySelector('.address-blocked')).toBeNull()
+    await vi.waitFor(() => expect(tonSave().disabled).toBe(false))
+    // the same account written in the saved form says nothing
+    type(address, tonNew)
+    await vi.waitFor(() => expect(savedAs()).toBeUndefined())
+    type(address, tonNewEQ)
+    await vi.waitFor(() => expect(savedAs()).toBeDefined())
+    // a test uses the form it will be saved in
+    tonTest().click()
+    await vi.waitFor(() => expect(sent(calls, 'POST', '/gateways/ton_auto/test')).toEqual([{ address: tonNew, api_key: '', clear_api_key: false, ...keep }]))
+    tonSave().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/ton_auto')).toEqual([{ enabled: true, address: tonNew, api_key: '', clear_api_key: false, ...keep }]))
+    // the page reads the settings again and the field shows what was saved
+    await vi.waitFor(() => expect(address.value).toBe(tonNew))
+    expect(savedAs()).toBeUndefined()
+    expect(tonSave().disabled).toBe(true)
+  })
+
+  it('refuses a new TON address while automatic payments are open, before saving and when payments refuses', async () => {
+    let refuse = true
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig()], settings: payments() }), (url, init) => {
+      if (url === '/api/v1/gateways/ton_auto' && init?.method === 'PUT') {
+        if (refuse) {
+          refuse = false
+          return json(409, { error: 'state', message: '1 open ton_auto payments: the address cannot change', open: 1 })
+        }
+        return json(200, { provider: tonConfig({ address: tonNew }) })
+      }
+      return tonReport(url)
+    })
+    await found('.ton-card')
+    const address = document.getElementById('ton-address') as HTMLInputElement
+    // the address's own problem comes first
+    type(address, tonTypo)
+    await vi.waitFor(() => expect(ton().textContent).toContain(text('gateway.ton.invalid.address_checksum')))
+    expect(ton().querySelector('.address-blocked')).toBeNull()
+    // a real new address, in any form: said before saving that open payments block it
+    type(address, ' ' + tonNewEQ + ' ')
+    await vi.waitFor(() => expect(ton().querySelector('.address-blocked')?.textContent).toContain(fill(text('gateway.ton.open_payments'), { n: '۱' })))
+    await vi.waitFor(() => expect(tonSave().disabled).toBe(false))
+    tonSave().click()
+    await vi.waitFor(() => expect(ton().querySelector('.error')?.textContent).toContain(fill(text('gateway.ton.open_payments'), { n: '۱' })))
+    expect(ton().querySelector('.error')?.textContent).toContain('the address cannot change')
+    tonSave().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/ton_auto')).toHaveLength(2))
+    expect(sent(calls, 'PUT', '/gateways/ton_auto')[1]).toEqual({ enabled: true, address: tonNew, api_key: '', clear_api_key: false, ...keep })
+    // saved at the second try: the refusal is gone
+    await vi.waitFor(() => expect(ton().querySelector('.error')).toBeNull())
+  })
+
+  it('names the field core refused', async () => {
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ health: noOpen(tonConfig()) })], settings: payments() }), (url, init) => {
+      if (url === '/api/v1/gateways/ton_auto' && init?.method === 'PUT') return json(400, { error: 'invalid', message: 'address: not a TON address', field: 'address' })
+      return tonReport(url)
+    })
+    await found('.ton-card')
+    type(document.getElementById('ton-address'), tonNewRaw)
+    await vi.waitFor(() => expect(tonSave().disabled).toBe(false))
+    tonSave().click()
+    await vi.waitFor(() => expect(ton().querySelector('#ton-address-error')?.textContent).toBe('address: not a TON address'))
+  })
+
+  it('tests TON Center with the typed values, without saving, and tells the latest transaction and the answer time', async () => {
+    let answer: Record<string, unknown> = { ok: true, detail: '', unverified: 0, latency_ms: 183, latest_tx_at: t0 - 3600 }
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig()], settings: payments() }), (url) => {
+      if (url === '/api/v1/gateways/ton_auto/test') return json(200, answer)
+      return tonReport(url)
+    })
+    await found('.ton-card')
+    // a wallet with a history
+    tonTest().click()
+    await vi.waitFor(() => expect(ton().querySelector('.test-result')?.textContent).toContain(text('gateway.ton.test_ok')))
+    const notes = () => [...ton().querySelectorAll('.test-result .test-note')].map((n) => n.textContent)
+    expect(notes()).toEqual([fill(text('gateway.ton.test_latest'), { time: '⁨' + dateTime(t0 - 3600, 'fa') + '⁩' }), fill(text('gateway.ton.test_latency'), { ms: '۱۸۳' })])
+    expect(ton().querySelector('.test-result')?.classList.contains('p-message-success')).toBe(true)
+    expect(sent(calls, 'POST', '/gateways/ton_auto/test')).toEqual([{ address: tonStore, api_key: '', clear_api_key: false, ...keep }])
+
+    // a new wallet has no transaction yet: said so, still a success
+    answer = { ok: true, detail: '', unverified: 0, latency_ms: 90, latest_tx_at: null }
+    tonTest().click()
+    await vi.waitFor(() => expect(notes()[0]).toBe(text('gateway.ton.test_no_tx')))
+    expect(notes()).toEqual([text('gateway.ton.test_no_tx'), fill(text('gateway.ton.test_latency'), { ms: '۹۰' })])
+    expect(ton().querySelector('.test-result')?.textContent).toContain(text('gateway.ton.test_ok'))
+
+    // an older core that tells neither says nothing more
+    answer = { ok: true, detail: '' }
+    tonTest().click()
+    await vi.waitFor(() => expect(ton().querySelector('.test-result')?.textContent).toContain(text('gateway.ton.test_ok')))
+    expect(notes()).toEqual([])
+
+    // a typed key and address are tested as typed, and a failure says why
+    answer = { ok: false, detail: 'toncenter: 401 invalid api key' }
+    ;(field('ton-api-key').querySelector('button.replace') as HTMLButtonElement).click()
+    type(await found('#ton-api-key'), tonKey)
+    type(document.getElementById('ton-address'), tonNewRaw)
+    await vi.waitFor(() => expect(ton().querySelector('.test-result')).toBeNull())
+    tonTest().click()
+    await vi.waitFor(() => expect(ton().querySelector('.test-result')?.textContent).toContain(text('gateway.ton.test_failed')))
+    expect(ton().querySelector('.test-result')?.textContent).toContain('toncenter: 401 invalid api key')
+    expect(ton().querySelector('.test-result .detail')?.classList.contains('app-ltr')).toBe(true)
+    expect(ton().querySelector('.test-result')?.classList.contains('p-message-error')).toBe(true)
+    expect(notes()).toEqual([])
+    expect(sent(calls, 'POST', '/gateways/ton_auto/test')[3]).toEqual({ address: tonNew, api_key: tonKey, clear_api_key: false, ...keep })
+
+    // and without the stored key
+    ;(field('ton-api-key').querySelector('button.keep') as HTMLButtonElement).click()
+    ;(await shown(field('ton-api-key'), 'button.clear')).click()
+    await vi.waitFor(() => expect(field('ton-api-key').querySelector('.state')?.textContent).toBe(text('secret.will_clear')))
+    tonTest().click()
+    await vi.waitFor(() => expect(sent(calls, 'POST', '/gateways/ton_auto/test')).toHaveLength(5))
+    expect(sent(calls, 'POST', '/gateways/ton_auto/test')[4]).toEqual({ address: tonNew, api_key: '', clear_api_key: true, ...keep })
+    // a test saves nothing, and the key typed stays out of the page
+    expect(sent(calls, 'PUT', '/gateways/ton_auto')).toEqual([])
+    expect(document.body.innerHTML).not.toContain(tonKey)
+  })
+
+  it('needs an address to turn automatic TON on', async () => {
+    const blank = tonConfig({ enabled: false, configured: false, offered: false, address: '', key_set: false, health: null, price: null })
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [blank], settings: payments() }), (url, init) => {
+      if (url === '/api/v1/gateways/ton_auto' && init?.method === 'PUT') return json(200, { provider: tonConfig() })
+      return tonReport(url)
+    })
+    await found('.ton-card')
+    expect(ton().querySelector('.state')?.textContent).toBe(text('gateway.state.not_set'))
+    expect(field('ton-api-key').querySelector('.state')?.textContent).toBe(text('secret.not_set'))
+    expect(tonTest().disabled).toBe(true)
+    ;(document.getElementById('ton-enabled') as HTMLInputElement).click()
+    await vi.waitFor(() => expect(ton().textContent).toContain(text('gateway.ton.invalid.needs_address')))
+    expect(tonSave().disabled).toBe(true)
+    type(document.getElementById('ton-address'), tonStoreEQ)
+    await vi.waitFor(() => expect(tonSave().disabled).toBe(false))
+    tonSave().click()
+    await vi.waitFor(() => expect(sent(calls, 'PUT', '/gateways/ton_auto')).toEqual([{ enabled: true, address: tonStore, api_key: '', clear_api_key: false, ...keep }]))
+  })
+
+  it('says why automatic TON is on but not offered', async () => {
+    let problem = 'unreadable'
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ offered: false, problem })], settings: payments() }), tonReport)
+    await found('.ton-card')
+    expect(ton().querySelector('.state')?.textContent).toBe(text('gateway.state.not_offered'))
+    expect(ton().querySelector('.problem')?.textContent).toContain(text('gateway.ton.problem.unreadable'))
+    problem = 'something_new'
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ offered: false, problem })], settings: payments() }), tonReport)
+    await found('.ton-card')
+    expect(ton().querySelector('.problem')?.textContent).toContain(text('gateway.ton.problem.invalid'))
+  })
+
+  it('tells why the address could not be read, for TON only', async () => {
+    await boot('/admin/gateways', ownerPerms, () => ({ providers: [usdtConfig(), tonConfig()], settings: payments() }), (url) => {
+      // core reports the same fields for USDT, which this dashboard does not show
+      if (url.startsWith('/api/v1/gateways/report?') && url.includes('provider=usdt_trc20_auto')) {
+        const q = new URLSearchParams(url.split('?')[1])
+        return json(200, {
+          provider: 'usdt_trc20_auto', from: Number(q.get('from')), to: Number(q.get('to')), healthy: true, open: 0, oldest_open_at: null, last_paid_at: null, last_error_at: null, last_error: '',
+          totals: [], unmatched: [], unmatched_count: 0, scan_error: 'trongrid: too many requests (HTTP 429)',
+        })
+      }
+      return tonReportOf(() => tonDeposits, undefined, { scan_error: 'toncenter: HTTP 429' })(url)
+    })
+    await found('.ton-card')
+    await vi.waitFor(() => expect(ton().querySelector('.scan-error')?.textContent).toContain(text('gateway.scan_error')))
+    expect(ton().querySelector('.scan-error .detail')?.textContent).toBe('toncenter: HTTP 429')
+    expect(ton().querySelector('.scan-error .detail')?.classList.contains('app-ltr')).toBe(true)
+    // the USDT card is as it was
+    await found('.usdt-card .report-table')
+    expect(usdt().querySelector('.scan-error')).toBeNull()
+  })
+
+  it('marks an unmatched TON deposit handled, sends its network, and reads the list again', async () => {
+    let open: TonDeposit[] = [...tonDeposits]
+    let refuse = false
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [usdtConfig(), tonConfig()], settings: payments() }), (url, init, b) => {
+      if (url === '/api/v1/gateways/deposits/resolve' && init?.method === 'POST') {
+        if (refuse) return json(409, { error: 'state', message: 'this transfer is not unmatched any more' })
+        const d = open.find((x) => x.txid === b.txid && x.event_index === b.event_index)
+        open = open.filter((x) => x !== d)
+        return json(200, { deposit: { ...d, outcome: 'resolved', resolved_at: t0, note: b.note } })
+      }
+      return usdtReport(url) ?? tonReportOf(() => open)(url)
+    })
+    await found('.ton-card')
+    await shown(ton(), '.unmatched-table')
+    const rows = () => [...ton().querySelectorAll('.unmatched-table .p-datatable-tbody tr')]
+    const row = (amount: string) => rows().find((r) => r.querySelector('.amount')?.textContent === amount) as HTMLElement
+    const reports = () => calls.filter((c) => c.startsWith('GET /api/v1/gateways/report?') && c.includes('provider=ton_auto'))
+    await vi.waitFor(() => expect(rows()).toHaveLength(3))
+    expect(reports()).toHaveLength(2)
+
+    ;(row('2.531 TON').querySelector('button.resolve') as HTMLButtonElement).click()
+    const dialog = await found<HTMLElement>('.p-dialog')
+    expect(dialog.textContent).toContain(text('gateway.usdt.resolve_title'))
+    // TON's own words: no mention of USDT
+    expect(dialog.textContent).toContain(text('gateway.ton.resolve_message'))
+    expect(dialog.textContent).not.toContain(text('gateway.usdt.resolve_message'))
+    const facts = dialog.querySelector('.resolve-facts')
+    expect(facts?.textContent).toContain('2.531 TON')
+    expect(facts?.textContent).toContain(txid(5))
+    expect(facts?.textContent).toContain(tonSender)
+    expect(facts?.querySelector('.resolve-comment')?.textContent).toBe('BOB-3F9A1C20')
+    const note = dialog.querySelector('textarea') as HTMLTextAreaElement
+    expect(note.maxLength).toBe(depositNoteMax)
+    type(note, '  تون به کیف پول ali اضافه شد ')
+    const confirm = () => [...document.querySelectorAll('.p-dialog .p-dialog-footer button')].pop() as HTMLButtonElement
+    confirm().click()
+    await vi.waitFor(() =>
+      expect(sent(calls, 'POST', '/gateways/deposits/resolve')).toEqual([{ txid: txid(5), event_index: 0, note: 'تون به کیف پول ali اضافه شد', network: 'TON' }]),
+    )
+    // the list is read again: the deposit is gone
+    await vi.waitFor(() => expect(rows()).toHaveLength(2))
+    expect(reports()).toHaveLength(4)
+    expect(row('2.531 TON')).toBeUndefined()
+    expect(document.querySelector('.p-toast')?.textContent).toContain(text('gateway.usdt.resolved'))
+    await vi.waitFor(() => expect(document.querySelector('.p-dialog')).toBeNull(), { timeout: 5000 })
+
+    // a deposit without a comment says so in the dialog; refused meanwhile: said, and the list is read again
+    refuse = true
+    ;(row('1 TON').querySelector('button.resolve') as HTMLButtonElement).click()
+    const again = await found<HTMLElement>('.p-dialog')
+    expect(again.querySelector('.resolve-facts')?.textContent).toContain(text('gateway.ton.comment_none'))
+    confirm().click()
+    await vi.waitFor(() => expect(again.textContent).toContain(text('error.state')))
+    expect(again.textContent).toContain('this transfer is not unmatched any more')
+    expect(sent(calls, 'POST', '/gateways/deposits/resolve')[1]).toEqual({ txid: txid(6), event_index: 0, note: '', network: 'TON' })
+    await vi.waitFor(() => expect(reports()).toHaveLength(6))
+  })
+
+  it('keeps automatic TON read only while the payments key is missing', async () => {
+    const { calls } = await boot('/admin/gateways', ownerPerms, () => ({ providers: [tonConfig({ key_missing: true })], settings: payments() }), (url) => {
+      if (url === '/api/v1/gateways/ton_auto/test') return json(200, { ok: true, detail: '', latency_ms: 40, latest_tx_at: null })
+      return tonReport(url)
+    })
+    await found('.ton-card')
+    expect(ton().querySelector('.key-missing')?.textContent).toContain(text('gateway.key_missing'))
+    expect((document.getElementById('ton-address') as HTMLInputElement).disabled).toBe(true)
+    expect((document.getElementById('ton-enabled') as HTMLInputElement).disabled).toBe(true)
+    expect(ton().querySelector('button.replace')).toBeNull()
+    expect(tonSave()).toBeNull()
+    tonTest().click()
+    await vi.waitFor(() => expect(sent(calls, 'POST', '/gateways/ton_auto/test')).toEqual([{}]))
+  })
+
+  it('filters the payments by TON, in its place among the methods, and shows the exact amount sent', async () => {
+    const item = {
+      id: 'p3', order_id: 'o3', user: { id: 'u2', telegram_id: 2, username: 'ali' }, provider: 'ton_auto', status: 'succeeded',
+      amount: { amount: 150_000, currency: 'IRT' }, gateway_amount: { amount: 2_531_000_000, currency: 'TON' }, provider_ref: txid(7), failure_reason: '', created_at: t0, proof: null,
+    }
+    const { calls } = await boot('/admin/payments?tab=history', ['overview.read', 'payments.read'], () => ({}), (url) =>
+      url.startsWith('/api/v1/payments?') ? json(200, { items: [item], total: 1, page: 1, size: 25 }) : undefined,
+    )
+    await vi.waitFor(() => expect(calls).toContain('GET /api/v1/payments?page=1&size=25'))
+    const select = await vi.waitFor(() => {
+      const el = [...document.querySelectorAll<HTMLElement>('.p-select')].find((e) => e.querySelector(`[aria-label="${text('payment.method')}"]`))
+      expect(el).toBeDefined()
+      return el!
+    })
+    select.click()
+    const options = await vi.waitFor(() => {
+      const list = [...document.querySelectorAll('.p-select-option')]
+      expect(list.length).toBeGreaterThan(5)
+      return list
+    })
+    // after the automatic USDT, before Stars
+    const labels = options.map((o) => o.textContent?.trim())
+    expect(labels.indexOf(text('payment.provider.ton_auto'))).toBe(labels.indexOf(text('payment.provider.usdt_trc20_auto')) + 1)
+    expect(labels.indexOf(text('payment.provider.stars'))).toBe(labels.indexOf(text('payment.provider.ton_auto')) + 1)
+    options.find((o) => o.textContent?.trim() === text('payment.provider.ton_auto'))!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await vi.waitFor(() => expect(calls).toContain('GET /api/v1/payments?provider=ton_auto&page=1&size=25'))
+    const row = await vi.waitFor(() => {
+      const el = [...document.querySelectorAll('.p-datatable-tbody tr')].find((r) => r.querySelector('.gateway-amount'))
+      expect(el).toBeDefined()
+      return el!
+    })
+    expect(row.textContent).toContain(text('payment.provider.ton_auto'))
+    expect(row.textContent).not.toContain('payment.provider.')
+    // the TON amount whole, in the wallet's own form; the hash is cut by the column, whole in its title
+    expect(row.querySelector('.gateway-amount')?.textContent?.trim()).toBe('2.531 TON')
+    expect(row.querySelector('.txid')?.getAttribute('title')).toBe(txid(7))
+  })
+
   it('keeps the page from admins', async () => {
     const { router, calls } = await boot('/admin/gateways', adminPerms, () => ({ providers: [], settings: [] }))
     expect(router.currentRoute.value.name).toBe('overview')
@@ -1712,7 +2410,13 @@ describe('servers and gateways texts', () => {
       ...['unreadable', 'invalid'].map((s) => 'gateway.usdt.problem.' + s),
       ...['format', 'checksum', 'required'].map((s) => 'gateway.usdt.invalid.address_' + s),
       ...unmatchedReasons.map((r) => 'gateway.usdt.reason.' + r),
-      ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', ...keyedProviders, 'usdt_trc20_auto', 'stars', 'wallet'].map((p) => 'payment.provider.' + p),
+      ...['unreadable', 'invalid'].map((s) => 'gateway.ton.problem.' + s),
+      ...['format', 'checksum', 'workchain', 'testnet', 'required'].map((s) => 'gateway.ton.invalid.address_' + s),
+      ...tonUnmatchedReasons.map((r) => 'gateway.ton.reason.' + r),
+      ...['title', 'label', 'source', 'updated', 'fresh', 'stale', 'none', 'warn_stale', 'warn_none'].map((s) => 'gateway.ton.price.' + s),
+      ...['binance', 'okx'].map((s) => 'gateway.ton.source.' + s),
+      ...['unmatched_help', 'resolve_message', 'comment', 'comment_none', 'tonviewer'].map((s) => 'gateway.ton.' + s),
+      ...['manual_card', 'manual_crypto', 'manual_zarinpal', 'zarinpal', ...keyedProviders, 'usdt_trc20_auto', 'ton_auto', 'stars', 'wallet'].map((p) => 'payment.provider.' + p),
       ...['on', 'off', 'incomplete'].map((s) => 'gateway.method_state.' + s),
       ...methods.flatMap((m) => ['gateway.method.' + m.key + '.title', 'gateway.method.' + m.key + '.desc', `settings.field.${m.toggle}.label`, `settings.field.${m.toggle}.help`]),
       ...['off', 'ok', 'incomplete', 'down'].map((s) => 'overview.gateway_state.' + s),

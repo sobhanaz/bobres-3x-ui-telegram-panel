@@ -209,7 +209,7 @@ func (w *Watchdog) Step(ctx context.Context) error {
 // probe asks every source at once, each within its time limit.
 func (w *Watchdog) probe(ctx context.Context, now time.Time) []alertProbe {
 	fns := []func(context.Context, time.Time) alertProbe{
-		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.aqayepardakht, w.usdt, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
+		w.services, w.servers, w.zarinpal, w.idpay, w.nextpay, w.aqayepardakht, w.usdt, w.ton, w.backups, w.deliveries, w.feed, w.license, w.tls, w.monitor,
 		w.panelMissing,
 	}
 	out := make([]alertProbe, len(fns))
@@ -534,6 +534,41 @@ func (w *Watchdog) usdt(ctx context.Context, now time.Time) alertProbe {
 	reads := alertCheck{key: "gateway.usdt_auto.read", problem: !rep.Healthy(now), severity: events.SeverityCritical,
 		title: "alert.usdt_failing", detail: rep.ScanError}
 	stuck := alertCheck{key: "gateway.usdt_auto.open", severity: events.SeverityCritical, title: "alert.usdt_stuck",
+		problem: rep.OldestOpenAt > 0 && now.Sub(time.Unix(rep.OldestOpenAt, 0)) > usdtOpenLimit,
+		args:    map[string]string{"count": strconv.FormatInt(rep.OpenCount, 10)}}
+	p.checks = append(p.checks, reads, stuck)
+	return p
+}
+
+// ton: the same two checks for automatic TON as for automatic USDT: while it is switched on, the watcher reads the store's
+// address (its last read worked, or one did within 5 minutes), and no automatic payment stays open over 2 hours.
+// (A TON price that is not fresh is no failure: the method then hides itself, as it should.)
+func (w *Watchdog) ton(ctx context.Context, now time.Time) alertProbe {
+	p := alertProbe{scope: "gateway.ton_auto."}
+	if w.src.Gateways == nil {
+		p.covered = true
+		return p
+	}
+	configs, err := w.src.Gateways.GatewayConfigs(ctx)
+	if err != nil {
+		return p
+	}
+	enabled := false
+	for _, c := range configs {
+		enabled = enabled || (c.Provider == TONAuto && c.Enabled)
+	}
+	if !enabled {
+		p.covered = true
+		return p
+	}
+	rep, err := w.src.Gateways.GatewayReport(ctx, TONAuto, 0, 0)
+	if err != nil {
+		return p
+	}
+	p.covered = true
+	reads := alertCheck{key: "gateway.ton_auto.read", problem: !rep.Healthy(now), severity: events.SeverityCritical,
+		title: "alert.ton_failing", detail: rep.ScanError}
+	stuck := alertCheck{key: "gateway.ton_auto.open", severity: events.SeverityCritical, title: "alert.ton_stuck",
 		problem: rep.OldestOpenAt > 0 && now.Sub(time.Unix(rep.OldestOpenAt, 0)) > usdtOpenLimit,
 		args:    map[string]string{"count": strconv.FormatInt(rep.OpenCount, 10)}}
 	p.checks = append(p.checks, reads, stuck)

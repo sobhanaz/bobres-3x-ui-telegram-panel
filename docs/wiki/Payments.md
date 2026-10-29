@@ -14,6 +14,7 @@ Customers can pay in several ways. The owner switches each on, and sets its deta
 | IDPay, NextPay, Aqayepardakht | Same, on the gateway's page (Aqayepardakht's is opened from your own payment page) | Payments verifies with the gateway |
 | Telegram Stars | Pays an invoice inside Telegram | Telegram confirms to the bot |
 | USDT, automatic (TRC20) | Sends an exact, unique amount to your TRON address, within 45 minutes | The payments service sees the transfer on the chain |
+| TON, automatic | Sends an exact amount of TON to your TON address, with the payment's comment (`BOB-...`), within 30 minutes | The payments service sees the transfer on the TON network |
 
 Rules that hold for every method:
 
@@ -21,7 +22,7 @@ Rules that hold for every method:
 - The ledger is append-only, and amounts are whole numbers in minor units.
 - If a panel is down after payment, the order stays paid and is delivered when the panel is back.
 
-On the free tier you can use Zarinpal, IDPay, NextPay, Aqayepardakht, Stars and the manual methods. Automatic USDT needs a paid license or the trial. See [Licensing](Licensing).
+On the free tier you can use Zarinpal, IDPay, NextPay, Aqayepardakht, Stars and the manual methods. Automatic USDT and automatic TON need a paid license or the trial. See [Licensing](Licensing).
 
 ## One wallet, in Toman
 
@@ -50,6 +51,12 @@ For Zarinpal online, IDPay, NextPay and Aqayepardakht, paste the key (Aqayeparda
 ## Automatic USDT on TRON
 
 Enter your TRON address on the Gateways page, and optionally a TronGrid key. The payments service reads the chain about every 30 seconds. A customer is shown an exact amount, the address and a deadline. A transfer of any other amount is an **unmatched deposit**: nothing is credited, staff are alerted, and you credit the customer by hand and mark the deposit handled. The address cannot be changed while automatic payments are open.
+
+## Automatic TON
+
+Enter your TON wallet address on the Gateways page (any form your wallet shows: `UQ...`, `EQ...` or `0:...`), and optionally a TON Center API key and a proxy. The price is worked out like automatic USDT's (Toman to USDT at your rate), then turned into TON at the price the payments service reads every 30 seconds from Binance and OKX. **With no fresh TON price (under 3 minutes old) the method is not offered at all.** The customer is shown the exact amount, the address, a comment to put in the transfer and a 30-minute countdown. The transfer must carry the comment and at least the amount; anything else (no comment, less than asked, a payment already paid, a late transfer the price no longer covers) is an **unmatched deposit**: nothing is credited, staff are alerted, and you credit by hand and mark it handled. BOBRES only reads your public address; it never holds a key.
+
+**Automatic TON has not been tried against the real network.** It follows TON Center's public API and is tested only against fakes. Make a small real payment first. The checklist is in [docs/19-ton.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/19-ton.md).
 
 ## The live USDT rate
 

@@ -7,8 +7,9 @@ import { healthState } from '../../gateways'
 import type { GatewayHealth } from '../../types'
 
 // What an automated gateway's payments say about it: whether they go
-// through, the last paid one, the open ones and the last error.
-const props = defineProps<{ health: GatewayHealth | null | undefined }>()
+// through, the last paid one, the open ones and the last error; with `scan`
+// (a gateway that watches an address), also when the address was last read.
+const props = withDefaults(defineProps<{ health: GatewayHealth | null | undefined; scan?: boolean }>(), { scan: false })
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const state = computed(() => healthState(props.health))
@@ -19,6 +20,7 @@ const open = computed(() => props.health?.open ?? 0)
   <div class="health" aria-live="polite">
     <Tag :severity="state === 'ok' ? 'success' : state === 'error' ? 'danger' : 'secondary'" :value="t('gateway.health.' + state)" class="health-state" />
     <span v-if="health?.last_paid_at" class="app-muted small">{{ t('gateway.last_paid', { time: dateTime(health.last_paid_at, lang) }) }}</span>
+    <span v-if="scan && health?.last_scan_ok_at" class="app-muted small last-scan">{{ t('gateway.last_scan', { time: dateTime(health.last_scan_ok_at, lang) }) }}</span>
     <span v-if="open" class="app-muted small open-count">
       {{ t('gateway.open_count', { n: num(open, lang) }) }}<template v-if="health?.oldest_open_at">
         · {{ t('gateway.oldest_open', { time: dateTime(health.oldest_open_at, lang) }) }}</template>

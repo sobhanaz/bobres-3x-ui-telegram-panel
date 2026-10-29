@@ -18,7 +18,7 @@ import (
 // every dashboard view and the CLI use it.
 
 // Gateway names a license can list. The wallet is always allowed and is not
-// listed. Automatic USDT (GatewayUSDTAuto) also needs the crypto_watcher
+// listed. Automatic USDT (GatewayUSDTAuto) and automatic TON (GatewayTONAuto) also need the crypto_watcher
 // feature.
 const (
 	GatewayZarinpal       = "zarinpal"
@@ -27,6 +27,7 @@ const (
 	GatewayAqayepardakht  = "aqayepardakht"
 	GatewayStars          = "stars"
 	GatewayUSDTAuto       = "usdt_trc20_auto"
+	GatewayTONAuto        = "ton_auto"
 	GatewayManualCard     = "manual_card"
 	GatewayManualCrypto   = "manual_crypto"
 	GatewayManualZarinpal = "manual_zarinpal"
@@ -35,7 +36,7 @@ const (
 // AllGateways are the payment methods a license can name (the wallet is
 // always allowed). The trial allows every one of them.
 func AllGateways() []string {
-	return []string{GatewayZarinpal, GatewayIDPay, GatewayNextPay, GatewayAqayepardakht, GatewayStars, GatewayUSDTAuto, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal}
+	return []string{GatewayZarinpal, GatewayIDPay, GatewayNextPay, GatewayAqayepardakht, GatewayStars, GatewayUSDTAuto, GatewayTONAuto, GatewayManualCard, GatewayManualCrypto, GatewayManualZarinpal}
 }
 
 // The free tier. These constants are the OWNER'S to tune: change a number

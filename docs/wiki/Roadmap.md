@@ -31,7 +31,6 @@ As of v0.17.1, 2026-10-28.
 
 These are not built:
 
-- The **Aqayepardakht** gateway.
 - **S-UI and Hiddify** panels, if operators ask for them, and an adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported.
 - **Growth tools**: cashback, a lottery or wheel, reseller targets. (Gift codes, Top users and invite cards are built.)
 - **More bot languages**: Arabic, Russian and Turkish. The texts are already keys, so the work is translation and review.
@@ -39,7 +38,7 @@ These are not built:
 - **A Prometheus endpoint** and an uptime page.
 - **Two-factor sign-in inside the bot.**
 - Re-encrypting data when a **master key** changes (the keys are not rotated today).
-- TON payments, and more crypto networks if a route that works from Iran exists.
+- More crypto networks, if a route that works from Iran exists.
 - A hosted offering, and an affiliate program for BOBRES itself.
 
 ## Left out on purpose
@@ -55,7 +54,7 @@ Some work cannot be proved with tests and fakes. These stay open until someone t
 
 - The subscription page's app import buttons on real phones.
 - The Mini App on every Telegram client.
-- IDPay, NextPay and Aqayepardakht with real merchant accounts.
+- IDPay, NextPay and Aqayepardakht with real merchant accounts, and automatic TON with a real wallet (both built, not yet tried for real).
 - Real payments for each method, and real Let's Encrypt issuance including the IP-address mode.
 - A native Persian speaker's review of every bot and dashboard text.
 

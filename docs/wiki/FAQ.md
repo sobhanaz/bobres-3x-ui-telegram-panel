@@ -41,7 +41,7 @@ Only with a Pro license (white label).
 Not without a paid license from the owner. See the [LICENSE](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/LICENSE).
 
 **Which payment methods work?**
-Wallet, card to card, manual USDT, a Zarinpal link, Zarinpal online, IDPay, NextPay, Aqayepardakht, Telegram Stars and automatic USDT on TRON. IDPay, NextPay and Aqayepardakht are not yet tried against the real gateways. See [Payments](Payments).
+Wallet, card to card, manual USDT, a Zarinpal link, Zarinpal online, IDPay, NextPay, Aqayepardakht, Telegram Stars, automatic USDT on TRON and automatic TON. IDPay, NextPay, Aqayepardakht and automatic TON are not yet tried against the real services. See [Payments](Payments).
 
 **How is the USDT price worked out?**
 The bot reads the live Toman price of USDT from Tetherland and Wallex every couple of minutes. You can add a margin of 0 to 30%, or use your own rate.

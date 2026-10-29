@@ -14,7 +14,7 @@ It does not do bulk purchase, and it does not reset traffic or give free days. T
 
 ### Payment methods
 
-The wallet, an online gateway (Zarinpal, IDPay, NextPay, Aqayepardakht), Telegram Stars, automatic USDT, and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
+The wallet, an online gateway (Zarinpal, IDPay, NextPay, Aqayepardakht), Telegram Stars, automatic USDT, automatic TON (the exact amount, the address and the comment, each with a copy button, and a countdown), and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
 
 ### Resellers
 

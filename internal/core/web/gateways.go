@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -26,7 +27,7 @@ import (
 const gatewayTimeout = 40 * time.Second
 
 // reportProviders are the payment methods a report covers.
-var reportProviders = []string{domain.Zarinpal, domain.IDPay, domain.NextPay, domain.Aqayepardakht, domain.Stars, domain.USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
+var reportProviders = []string{domain.Zarinpal, domain.IDPay, domain.NextPay, domain.Aqayepardakht, domain.Stars, domain.USDTAuto, domain.TONAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
 
 type gatewayHealthJSON struct {
 	Healthy      bool   `json:"healthy"`
@@ -41,6 +42,15 @@ type gatewayHealthJSON struct {
 	LastScanAt     *int64 `json:"last_scan_at,omitempty"`
 	LastScanOKAt   *int64 `json:"last_scan_ok_at,omitempty"`
 	UnmatchedCount *int64 `json:"unmatched_count,omitempty"`
+}
+
+// tonPriceJSON is the TON price payments read last: the decimal text of the USDT price of one TON, where and when it
+// was read, and whether it is fresh enough for customers to be offered the method.
+type tonPriceJSON struct {
+	USDTPerTON string `json:"usdt_per_ton"`
+	Source     string `json:"source"`
+	At         int64  `json:"at"`
+	Fresh      bool   `json:"fresh"`
 }
 
 type gatewayJSON struct {
@@ -59,6 +69,20 @@ type gatewayJSON struct {
 	FromEnv        bool               `json:"from_env"`
 	UpdatedAt      *int64             `json:"updated_at"`
 	Health         *gatewayHealthJSON `json:"health"`
+	Price          *tonPriceJSON      `json:"price,omitempty"` // automatic TON only: null when never read
+}
+
+// tonPriceOf is the price block of automatic TON's card: nil while no price was ever read.
+func tonPriceOf(c *domain.GatewayConfig) *tonPriceJSON {
+	if c.PriceMicro <= 0 {
+		return nil
+	}
+	whole, frac := c.PriceMicro/1_000_000, c.PriceMicro%1_000_000
+	text := strconv.FormatInt(whole, 10)
+	if f := strings.TrimRight(fmt.Sprintf("%06d", frac), "0"); f != "" {
+		text += "." + f
+	}
+	return &tonPriceJSON{USDTPerTON: text, Source: c.PriceSource, At: c.PriceAt, Fresh: c.PriceFresh}
 }
 
 func unixOrNull(v int64) *int64 {
@@ -76,7 +100,7 @@ func healthOf(r *domain.GatewayReport, now time.Time) *gatewayHealthJSON {
 	if r.LastError != nil {
 		h.LastErrorAt, h.LastError = unixOrNull(r.LastError.At), r.LastError.Detail
 	}
-	if r.Provider == domain.USDTAuto {
+	if r.Provider == domain.USDTAuto || r.Provider == domain.TONAuto {
 		h.LastScanAt, h.LastScanOKAt = unixOrNull(r.LastScanAt), unixOrNull(r.LastScanOKAt)
 		n := r.UnmatchedCount
 		h.UnmatchedCount = &n
@@ -91,9 +115,12 @@ func (s *Server) gatewayOf(c *domain.GatewayConfig, health *gatewayHealthJSON) g
 	out := gatewayJSON{Provider: c.Provider, Enabled: c.Enabled, Configured: c.Configured, Offered: c.Offered,
 		Problem: c.Problem, Sandbox: c.Sandbox, MerchantHint: c.MerchantHint, ProxySet: c.ProxySet,
 		KeyMissing: c.KeyMissing, FromEnv: c.FromEnv, UpdatedAt: unixOrNull(c.UpdatedAt), Health: health}
-	if c.Provider == domain.USDTAuto {
+	if c.Provider == domain.USDTAuto || c.Provider == domain.TONAuto {
 		address, keySet := c.Address, c.APIKeySet
 		out.Address, out.KeySet = &address, &keySet
+		if c.Provider == domain.TONAuto {
+			out.Price = tonPriceOf(c)
+		}
 		return out // no sandbox
 	}
 	if c.Provider == domain.IDPay || c.Provider == domain.NextPay || c.Provider == domain.Aqayepardakht {
@@ -166,8 +193,8 @@ func (s *Server) listGateways(w http.ResponseWriter, r *http.Request) {
 // proxy, clear_proxy} for Zarinpal, {enabled, sandbox (IDPay only), api_key,
 // clear_api_key, proxy, clear_proxy} for IDPay, NextPay and Aqayepardakht (whose
 // api_key is its PIN, and whose sandbox is the PIN "sandbox"), {enabled, address,
-// api_key, clear_api_key, proxy, clear_proxy} for automatic USDT; "" keeps a stored
-// value.
+// api_key, clear_api_key, proxy, clear_proxy} for automatic USDT and automatic TON
+// (whose address may be pasted in any wallet form); "" keeps a stored value.
 func (s *Server) putGateway(w http.ResponseWriter, r *http.Request) {
 	ga, ok := s.gateways(w)
 	if !ok {
@@ -234,8 +261,11 @@ func (s *Server) testGateway(w http.ResponseWriter, r *http.Request) {
 		s.gatewayFail(w, "test gateway", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": res.OK, "detail": res.Detail, "unverified": res.Unverified,
-		"latency_ms": res.LatencyMS})
+	out := map[string]any{"ok": res.OK, "detail": res.Detail, "unverified": res.Unverified, "latency_ms": res.LatencyMS}
+	if r.PathValue("provider") == domain.TONAuto {
+		out["latest_tx_at"] = unixOrNull(res.LatestTxAt) // null: the address has no transactions yet
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // gatewayReport: GET /api/v1/gateways/report?provider=&from=&to= (unix
@@ -286,7 +316,7 @@ func (s *Server) gatewayReport(w http.ResponseWriter, r *http.Request) {
 		"last_paid_at": h.LastPaidAt, "last_error_at": h.LastErrorAt, "last_error": h.LastError,
 		"check_errors": checkErrors, "check_error_count": rep.CheckErrorCount,
 	}
-	if provider == domain.USDTAuto {
+	if provider == domain.USDTAuto || provider == domain.TONAuto {
 		// The deposits staff must still credit by hand, whatever the period.
 		unmatched := make([]depositJSON, 0, len(rep.Unmatched))
 		for i := range rep.Unmatched {
@@ -319,7 +349,9 @@ type depositJSON struct {
 	At         int64      `json:"at"` // block time
 	Outcome    string     `json:"outcome"`
 	Reason     string     `json:"reason,omitempty"`      // why it matched nothing, in a few English words
-	ReasonCode string     `json:"reason_code,omitempty"` // no_payment | already_paid | closed | ambiguous | after_restore | dust
+	ReasonCode string     `json:"reason_code,omitempty"` // no_payment | already_paid | closed | ambiguous | after_restore | underpaid | late_price | dust
+	Comment    string     `json:"comment,omitempty"`     // automatic TON: the comment the transfer carried
+	LT         int64      `json:"lt,omitempty"`          // automatic TON: the transaction's logical time
 	IntentID   string     `json:"intent_id,omitempty"`
 	RecordedAt *int64     `json:"recorded_at"`
 	ResolvedAt *int64     `json:"resolved_at,omitempty"`
@@ -330,7 +362,8 @@ type depositJSON struct {
 func depositOf(t *domain.ChainTransfer, users map[string]*userBrief) depositJSON {
 	d := depositJSON{TxID: t.TxID, EventIndex: t.EventIndex, Network: t.Network, From: t.From, To: t.To,
 		Amount: money{Amount: t.Amount, Currency: t.Currency}, At: t.BlockTime, Outcome: t.Outcome, ReasonCode: t.Reason,
-		IntentID: t.IntentID, RecordedAt: unixOrNull(t.RecordedAt), ResolvedAt: unixOrNull(t.ResolvedAt), Note: t.Note}
+		IntentID: t.IntentID, RecordedAt: unixOrNull(t.RecordedAt), ResolvedAt: unixOrNull(t.ResolvedAt), Note: t.Note,
+		Comment: t.Comment, LT: t.LT}
 	if t.Reason != "" {
 		d.Reason = domain.UnmatchedText(t.Reason)
 	}
@@ -359,7 +392,7 @@ func (s *Server) listDeposits(w http.ResponseWriter, r *http.Request) {
 	}
 	_, page, size := pageOf(r)
 	found, total, err := s.cfg.Domain.ChainTransfers(r.Context(), ga, domain.ChainTransferFilter{Outcome: q.Get("outcome"),
-		TxID: q.Get("txid"), IntentID: intentID}, page, size)
+		TxID: q.Get("txid"), IntentID: intentID, Network: q.Get("network")}, page, size)
 	if err != nil {
 		s.depositFail(w, "list deposits", err)
 		return
@@ -390,11 +423,24 @@ func (s *Server) resolveDeposit(w http.ResponseWriter, r *http.Request) {
 		TxID       string `json:"txid"`
 		EventIndex int    `json:"event_index"`
 		Note       string `json:"note"`
+		Network    string `json:"network"` // "" or TRC20: a USDT deposit; TON: an automatic TON one
 	}
 	if !readJSON(w, r, &b) {
 		return
 	}
-	t, err := s.cfg.Domain.ResolveDeposit(r.Context(), actor(r), ga, b.TxID, b.EventIndex, b.Note)
+	var (
+		t   *domain.ChainTransfer
+		err error
+	)
+	switch strings.ToUpper(strings.TrimSpace(b.Network)) {
+	case "", "TRC20":
+		t, err = s.cfg.Domain.ResolveDeposit(r.Context(), actor(r), ga, b.TxID, b.EventIndex, b.Note)
+	case "TON":
+		t, err = s.cfg.Domain.ResolveTONDeposit(r.Context(), actor(r), ga, b.TxID, b.Note)
+	default:
+		writeFieldError(w, "network", "TRC20 or TON")
+		return
+	}
 	if err != nil {
 		s.depositFail(w, "resolve deposit", err)
 		return

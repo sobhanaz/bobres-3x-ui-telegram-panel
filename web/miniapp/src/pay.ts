@@ -1,4 +1,4 @@
-// Small helpers of the payment screens (Stars and the manual methods).
+// Small helpers of the payment screens (Stars, the manual methods and automatic TON).
 import type { Key } from './i18n'
 
 /** isManual says whether a payment method is one the customer pays by hand and then sends a proof for. */
@@ -18,12 +18,19 @@ export function shortMethodKey(provider: string): Key {
   }
 }
 
+/** isTon says whether a payment is an automatic TON one: paid from any wallet to an address, with a comment (a memo). */
+export function isTon(provider: string): boolean {
+  return provider === 'ton_auto'
+}
+
 /**
  * notYetKey is what is said when the customer asks about a payment and it is not there yet: a Stars payment may be
- * on its way from Telegram (so: do not pay twice), a manual one waits for the staff.
+ * on its way from Telegram (so: do not pay twice), a manual one waits for the staff, a TON transfer needs a minute or two
+ * and its comment.
  */
 export function notYetKey(provider: string): Key {
   if (provider === 'stars') return 'stars.not_yet'
+  if (isTon(provider)) return 'pay.ton_not_yet'
   return isManual(provider) ? 'manual.still_waiting' : 'pay.not_yet'
 }
 
@@ -39,6 +46,22 @@ export function plainAmount(minor: number, scale: number): string {
   const whole = Math.trunc(minor / unit)
   const frac = String(minor % unit).padStart(scale, '0').replace(/0+$/, '')
   return frac ? `${whole}.${frac}` : String(whole)
+}
+
+/**
+ * fixedAmount writes an amount in minor units with every decimal of its scale, trailing zeros too: 2531000000 nanoton (scale
+ * 9) is "2.531000000". A wallet is told the amount to the last nanoton, and the payment is found by it, so it is never rounded.
+ */
+export function fixedAmount(minor: number, scale: number): string {
+  if (scale <= 0) return String(minor)
+  const digits = String(Math.trunc(Math.abs(minor))).padStart(scale + 1, '0')
+  return `${minor < 0 ? '-' : ''}${digits.slice(0, -scale)}.${digits.slice(-scale)}`
+}
+
+/** countdown writes the seconds left as minutes and seconds ("14:59", "00:07"); more than an hour is still minutes. */
+export function countdown(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
 /** txidPattern is a transaction hash as the server takes it: 64 hexadecimal characters, 0x in front for Ethereum. */

@@ -10,7 +10,7 @@ message PaymentIntent {
   string id = 1;
   string order_id = 2; // empty for wallet top-ups
   string user_id = 3;
-  string provider = 4; // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto
+  string provider = 4; // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto | ton_auto
   common.v1.Money amount = 5;
   string status = 6; // pending|confirming|succeeded|failed|expired
   string provider_ref = 7; // gateways: bank reference or transaction hash
@@ -19,7 +19,8 @@ message PaymentIntent {
   int64 updated_at = 10;
   // Automated gateways: what the customer pays there, fixed at creation (IRR for
   // Zarinpal, XTR for Telegram Stars, USDT for usdt_trc20_auto: the exact,
-  // unique amount to send, scale 6).
+  // unique amount to send, scale 6; TON for ton_auto: the exact amount to send,
+  // in nanoton, scale 9).
   common.v1.Money gateway_amount = 11;
   string pay_url = 12; // where the customer pays (Zarinpal: a page on this install)
   // The gateway's id for the payment (usdt_trc20_auto: the settling
@@ -30,6 +31,11 @@ message PaymentIntent {
   // until expires_at. A later exact payment still settles, within 48 hours of
   // created_at.
   string pay_address = 15;
+  // ton_auto: the TON address to send gateway_amount to, in pay_address, with
+  // this comment (BOB- and 8 hex digits) until expires_at; a transfer without
+  // it is not recognised. A later transfer is looked at too, within 48 hours
+  // of created_at, and settles only if it still covers the price.
+  string pay_memo = 16;
 }
 
 message CreateIntentRequest {
@@ -43,7 +49,11 @@ message CreateIntentRequest {
   // providers. usdt_trc20_auto: USDT (scale 6), at most 1,000,000 USDT;
   // payments adds 1 to 9,999 micro-USDT so the amount is unique (never a
   // whole cent), and the returned intent's gateway_amount is what the
-  // customer must send. The same customer asking again for the same payment
+  // customer must send. ton_auto: USDT (scale 6), 0.1 to 100,000 USDT, the
+  // price in USDT core worked out; payments turns it into TON at the price it
+  // reads (FailedPrecondition "automatic TON: no fresh TON price ..." when it
+  // has none), and the returned intent's gateway_amount is what the customer
+  // must send, in nanoton, with pay_memo. The same customer asking again for the same payment
   // (order or top-up, amount) while it is open gets that payment back.
   // FailedPrecondition "automatic USDT: too many unpaid automatic USDT
   // payments ..." when the customer holds 10 unpaid ones from the last 2
@@ -180,7 +190,7 @@ message ListPendingReceiptsResponse {
 // GatewayConfig is an automated gateway's settings as staff see them: whether
 // the merchant id, the API key and the proxy are set, never their values.
 message GatewayConfig {
-  string provider = 1; // zarinpal | idpay | nextpay | aqayepardakht | usdt_trc20_auto
+  string provider = 1; // zarinpal | idpay | nextpay | aqayepardakht | usdt_trc20_auto | ton_auto
   bool enabled = 2; // switched on by the owner
   // It has credentials: payments already open keep being checked, even when
   // switched off.
@@ -204,7 +214,14 @@ message GatewayConfig {
   // usdt_trc20_auto: the store's TRC20 address (public: customers are shown
   // it), "" when none. configured = it has an address and can be read.
   string address = 13;
-  bool api_key_set = 14; // usdt_trc20_auto: a TronGrid API key is set
+  bool api_key_set = 14; // usdt_trc20_auto: a TronGrid API key is set; idpay, nextpay, aqayepardakht: the key (PIN) is set; ton_auto: a TON Center API key is set
+  // ton_auto: the TON price in micro-USDT per TON (0 = never read), where and
+  // when (unix seconds) it was read, and whether it is fresh enough to use
+  // (otherwise the method is not offered).
+  int64 price_micro = 15;
+  string price_source = 16;
+  int64 price_at = 17;
+  bool price_fresh = 18;
 }
 
 message ListGatewayConfigsRequest {}
@@ -259,12 +276,15 @@ message TestGatewayResponse {
   string detail = 2; // why it failed; never a secret or an address
   int32 unverified = 3; // paid payments the gateway still waits for us to verify
   int64 latency_ms = 4;
+  // ton_auto: when the address's newest transaction happened (unix seconds), 0
+  // when it has none yet.
+  int64 latest_tx_at = 5;
 }
 
 // GatewayReportRequest: one payment method's payments created in [from, to)
 // (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
 message GatewayReportRequest {
-  string provider = 1; // zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
+  string provider = 1; // zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto | ton_auto | manual_card | manual_crypto | manual_zarinpal
   int64 from = 2;
   int64 to = 3;
 }
@@ -346,6 +366,12 @@ message ChainTransfer {
   // by hand only from this time (unix seconds) if still unmatched; 0 =
   // announced already, or nothing pending.
   int64 held_until = 15;
+  // ton_auto: the transaction's logical time and the comment the transfer
+  // carried (txid is its hash, event_index 0, network TON, amount in nanoton).
+  // unmatched reasons there: no_payment | already_paid | closed | underpaid |
+  // late_price; ignored: dust | bounced.
+  int64 lt = 16;
+  string comment = 17;
 }
 
 // ResolveChainTransferRequest marks an unmatched deposit handled (credited by
@@ -356,6 +382,7 @@ message ResolveChainTransferRequest {
   int32 event_index = 2;
   string actor_id = 3; // core user id of the staff member
   string note = 4; // at most 500 characters
+  string network = 5; // "" or TRC20: the USDT log; TON: the TON log (txid is the hash, event_index 0)
 }
 
 // ListChainTransfersRequest filters the USDT transfer log; every field is optional.
@@ -367,6 +394,7 @@ message ListChainTransfersRequest {
   // micro-USDT: only transfers of exactly this amount (0 = any), e.g. the
   // deposits matching what a manual proof under review should have sent
   int64 value = 5;
+  string network = 6; // "" or TRC20: the USDT log; TON: the TON log (value in nanoton)
 }
 
 message ListChainTransfersResponse {

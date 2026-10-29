@@ -23,6 +23,10 @@ const (
 	// amount to the store's address and payments' watcher finds it on chain.
 	// It is switched on in payments (the Gateways page), like Zarinpal.
 	USDTAuto = "usdt_trc20_auto"
+	// TONAuto is automatic TON (Toncoin): the customer sends an exact amount of TON, with the payment's comment, to
+	// the store's address and payments' watcher finds it. Core prices it in USDT (as for automatic USDT) and payments
+	// turns that into TON at the price it reads.
+	TONAuto = "ton_auto"
 )
 
 // GatewayStart asks payments to start an automated payment.
@@ -49,6 +53,8 @@ type GatewayIntent struct {
 	// the window the amount is held for (unix seconds; 0 = none). ExternalID
 	// is the settling transaction's hash once paid.
 	PayAddress string
+	// Automatic TON: the comment the transfer must carry.
+	PayMemo    string
 	ExpiresAt  int64
 	ExternalID string
 }
@@ -86,7 +92,7 @@ const (
 )
 
 func isGateway(provider string) bool {
-	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Aqayepardakht || provider == Stars || provider == USDTAuto
+	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Aqayepardakht || provider == Stars || provider == USDTAuto || provider == TONAuto
 }
 
 func ceilDiv(a, b int64) int64 { return (a + b - 1) / b }
@@ -151,6 +157,8 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 		return ceilDiv(amount, rate), "XTR", nil
 	case USDTAuto:
 		return s.usdtCharge(ctx, amount, currency)
+	case TONAuto:
+		return s.tonCharge(ctx, amount, currency)
 	}
 	return 0, "", invalid("unsupported payment method %q", provider)
 }
@@ -185,6 +193,28 @@ func (s *Service) usdtCharge(ctx context.Context, amount int64, currency string)
 		return 0, "", invalid("automatic USDT takes at least 0.1 USDT per payment")
 	case base > usdtMax:
 		return 0, "", invalid("automatic USDT takes at most 1,000,000 USDT per payment")
+	}
+	return base, "USDT", nil
+}
+
+// Automatic TON's per-payment limits in micro-USDT (scale 6), as payments allows: the TON amount is worked out by
+// payments from this at the TON price it reads.
+const (
+	tonMin = 100_000         // 0.1 USDT
+	tonMax = 100_000_000_000 // 100,000 USDT
+)
+
+// tonCharge is what automatic TON asks payments for: the price in USDT, worked out exactly as automatic USDT's (a
+// USDT price as it is; a Toman price at the store's USDT rate, the live price plus the owner's margin, in whole
+// cents rounded up). Payments turns it into nanoton at the TON price it reads, and offers the method only while that
+// price is fresh.
+func (s *Service) tonCharge(ctx context.Context, amount int64, currency string) (int64, string, error) {
+	base, _, err := s.usdtCharge(ctx, amount, currency)
+	if err != nil {
+		return 0, "", invalid("%s", strings.ReplaceAll(err.Error(), "automatic USDT", "automatic TON"))
+	}
+	if base < tonMin || base > tonMax {
+		return 0, "", invalid("automatic TON takes 0.1 to 100,000 USDT per payment")
 	}
 	return base, "USDT", nil
 }

@@ -1,12 +1,14 @@
 // Helpers for the Payment gateways page: the Zarinpal form (write-only
 // merchant id and proxy), the IDPay, NextPay and Aqayepardakht forms
 // (write-only API key, or PIN, and proxy), the automatic USDT form (address, write-only
-// TronGrid key and proxy) and its unmatched deposits, the cards of the manual methods and Stars (their settings),
+// TronGrid key and proxy) and its unmatched deposits, the automatic TON form (address, write-only
+// TON Center key and proxy, the live price) and its unmatched deposits, the cards of the manual methods and Stars (their settings),
 // and the payments report; and the overview's gateways card.
 // Core and payments check everything again. Pure functions (no API, no Vue).
 import { ApiError } from './api'
 import { latinDigits, type Money } from './format'
 import { effective } from './settings'
+import { cleanTonAddress, normalizeTonAddress, tonAddressProblem, type TonAddressProblem } from './ton'
 import { normalizeTronAddress, tronAddressProblem } from './tron'
 import type { GatewayCheckError, GatewayConfig, GatewayHealth, GatewayReport, OverviewGateway, SettingItem, UnmatchedDeposit } from './types'
 
@@ -315,15 +317,35 @@ export function tronscanUrl(txid: string): string {
   return txidRe.test(txid) ? 'https://tronscan.org/#/transaction/' + txid.toLowerCase() : ''
 }
 
-/** Why a deposit matched nothing, as core names it (reason_code). */
+/** tonviewerUrl is where staff can look a TON transaction up, or '' when the
+ * hash is not one. */
+export function tonviewerUrl(hash: string): string {
+  return txidRe.test(hash) ? 'https://tonviewer.com/transaction/' + hash.toLowerCase() : ''
+}
+
+/** Why a USDT deposit matched nothing, as core names it (reason_code). */
 export const unmatchedReasons = ['no_payment', 'already_paid', 'closed', 'ambiguous', 'dust'] as const
 
+/** Why a TON deposit matched nothing: the same codes in the words of a comment (no payment is asked for with it),
+ * and two more: less than the payment asked for arrived, and it came late while the price fell. */
+export const tonUnmatchedReasons = ['no_payment', 'already_paid', 'closed', 'ambiguous', 'underpaid', 'late_price', 'dust'] as const
+
+/** The network a deposit list is of, for the calls that take one: TON, or none for the default (TRC20). */
+export type DepositNetwork = 'TON' | undefined
+
+/** depositNetwork: the deposits of a gateway are of its network (absent: TRC20, as before TON). */
+export function depositNetwork(provider: string): DepositNetwork {
+  return provider === tonAuto ? 'TON' : undefined
+}
+
 /** unmatchedReason is how a deposit's reason shows: the catalog key of a
- * reason the dashboard knows; otherwise core's own words or the code itself
- * (English, left to right); null when core said nothing. */
-export function unmatchedReason(d: Pick<UnmatchedDeposit, 'reason' | 'reason_code'>): { key: string } | { raw: string } | null {
+ * reason the dashboard knows (TON has its own words for them); otherwise
+ * core's own words or the code itself (English, left to right); null when core
+ * said nothing. */
+export function unmatchedReason(d: Pick<UnmatchedDeposit, 'reason' | 'reason_code'>, network?: DepositNetwork): { key: string } | { raw: string } | null {
   const code = d.reason_code ?? ''
-  if ((unmatchedReasons as readonly string[]).includes(code)) return { key: 'gateway.usdt.reason.' + code }
+  const known: readonly string[] = network === 'TON' ? tonUnmatchedReasons : unmatchedReasons
+  if (known.includes(code)) return { key: (network === 'TON' ? 'gateway.ton.reason.' : 'gateway.usdt.reason.') + code }
   const raw = d.reason || code
   return raw ? { raw } : null
 }
@@ -340,9 +362,114 @@ export function depositKey(d: Pick<UnmatchedDeposit, 'txid' | 'event_index'>): s
 export const depositNoteMax = 160
 
 /** resolveBody is what POST /gateways/deposits/resolve takes: the transfer
- * (its transaction and its place in it) and the note. */
-export function resolveBody(d: Pick<UnmatchedDeposit, 'txid' | 'event_index'>, note: string) {
-  return { txid: d.txid, event_index: d.event_index, note: note.trim() }
+ * (its transaction and its place in it), the note, and for TON its network
+ * (without one, the transfer is a TRC20 one). */
+export function resolveBody(d: Pick<UnmatchedDeposit, 'txid' | 'event_index'>, note: string, network?: DepositNetwork) {
+  const body = { txid: d.txid, event_index: d.event_index, note: note.trim() }
+  return network ? { ...body, network } : body
+}
+
+// ---- Automatic TON: the watcher finds TON sent to the store's TON address with a
+// payment's comment (its memo). The address is public (customers see it) and comes
+// back in its canonical form; the TON Center API key and the proxy are write-only.
+// The live TON price comes with the settings: without a fresh one, TON is not
+// offered to customers.
+
+export const tonAuto = 'ton_auto'
+
+/** A TON Center API key: letters, digits, underscores and dashes, as core and
+ * payments accept it. */
+const tonApiKeyRe = /^[A-Za-z0-9_-]{8,128}$/
+
+export function tonApiKeyValid(raw: string): boolean {
+  return tonApiKeyRe.test(raw.trim())
+}
+
+/** The automatic TON card, as staff edit it. */
+export interface TonForm {
+  enabled: boolean
+  /** the address as typed (any form a wallet shows); it starts as the stored one */
+  address: string
+  /** a new API key; '' keeps the stored one */
+  apiKey: string
+  clearApiKey: boolean
+  /** a new proxy for the TON Center calls; '' keeps the stored one */
+  proxy: string
+  clearProxy: boolean
+}
+
+export function tonFormOf(c: GatewayConfig): TonForm {
+  return { enabled: c.enabled, address: c.address ?? '', apiKey: '', clearApiKey: false, proxy: '', clearProxy: false }
+}
+
+/** tonAddressError is what is wrong with the typed address: format (not an
+ * address), checksum (a character is wrong), workchain (not the basechain),
+ * testnet (a test network address), or required (a stored address can be
+ * replaced, not removed); '' when nothing. */
+export function tonAddressError(f: TonForm, c: GatewayConfig): Exclude<TonAddressProblem, ''> | 'required' | '' {
+  const a = cleanTonAddress(f.address)
+  if (!a) return c.address ? 'required' : ''
+  return tonAddressProblem(a)
+}
+
+/** tonProblems lists the fields that are not right yet, by the names core
+ * uses. Turning it on needs an address. */
+export function tonProblems(f: TonForm, c: GatewayConfig): string[] {
+  const out: string[] = []
+  if (tonAddressError(f, c)) out.push('address')
+  if (f.apiKey.trim() && !tonApiKeyValid(f.apiKey)) out.push('api_key')
+  if (f.proxy.trim() && !proxyValid(f.proxy)) out.push('proxy')
+  if (f.enabled && !cleanTonAddress(f.address) && !c.address) out.push('enabled')
+  return out
+}
+
+/** tonDirty: the form would change something. The address counts by the
+ * account it names, not by the form it is written in. */
+export function tonDirty(f: TonForm, c: GatewayConfig): boolean {
+  return (
+    f.enabled !== c.enabled ||
+    normalizeTonAddress(f.address) !== normalizeTonAddress(c.address ?? '') ||
+    !!f.apiKey.trim() ||
+    f.clearApiKey ||
+    !!f.proxy.trim() ||
+    f.clearProxy
+  )
+}
+
+/** tonBody is what PUT /gateways/ton_auto takes: the whole address (in the
+ * canonical form when it is right, which is also what the form shows back),
+ * and '' to keep the API key or the proxy. */
+export function tonBody(f: TonForm) {
+  return {
+    enabled: f.enabled,
+    address: normalizeTonAddress(f.address),
+    api_key: f.clearApiKey ? '' : f.apiKey.trim(),
+    clear_api_key: f.clearApiKey,
+    proxy: f.clearProxy ? '' : f.proxy.trim(),
+    clear_proxy: f.clearProxy,
+  }
+}
+
+/** tonTestBody is what POST /gateways/ton_auto/test takes: the typed values
+ * ('' for the stored key and proxy). A test changes nothing. */
+export function tonTestBody(f: TonForm) {
+  const { address, api_key, clear_api_key, proxy, clear_proxy } = tonBody(f)
+  return { address, api_key, clear_api_key, proxy, clear_proxy }
+}
+
+/** tonBlockedByOpen: the form changes the address while automatic payments are
+ * open, which payments refuses (TON sent to the old address would not be found). */
+export function tonBlockedByOpen(f: TonForm, c: GatewayConfig): boolean {
+  const open = c.health?.open ?? 0
+  return !!c.address && open > 0 && normalizeTonAddress(f.address) !== normalizeTonAddress(c.address)
+}
+
+/** tonPriceState: fresh, so customers can be offered TON; stale, a price was
+ * read but it is too old; none, no price has been read. Until a fresh price
+ * arrives TON is not offered, whatever else is set. */
+export function tonPriceState(c: Pick<GatewayConfig, 'price'>): 'fresh' | 'stale' | 'none' {
+  if (!c.price) return 'none'
+  return c.price.fresh ? 'fresh' : 'stale'
 }
 
 /** ok: payments go through; error: the last event was an error; idle:

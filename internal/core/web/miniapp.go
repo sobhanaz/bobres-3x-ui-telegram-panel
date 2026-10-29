@@ -48,7 +48,7 @@ const (
 // receipt for. Which of them a customer is offered is the store's decision
 // (domain.OfferedMethods); a method outside this list is refused whatever.
 var miniMethods = map[string]bool{
-	domain.Zarinpal: true, domain.IDPay: true, domain.NextPay: true, domain.Aqayepardakht: true, domain.USDTAuto: true,
+	domain.Zarinpal: true, domain.IDPay: true, domain.NextPay: true, domain.Aqayepardakht: true, domain.USDTAuto: true, domain.TONAuto: true,
 	domain.Stars: true, domain.ManualCard: true, domain.ManualCrypto: true, domain.ManualZarinpal: true,
 }
 

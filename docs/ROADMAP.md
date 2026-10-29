@@ -192,7 +192,7 @@ item says where it landed.
 ## Later, not yet ordered
 
 - More bot languages (Arabic, Russian, Turkish): the texts are already keys, so the work is translation and review.
-- TON payments; more crypto networks, if a way that works from Iran exists.
+- More crypto networks, if a way that works from Iran exists. (Automatic TON is built: [19-ton.md](19-ton.md), not yet tried with a real wallet.)
 - Metrics for operators (Prometheus endpoint, a Grafana example) and an uptime page per server.
 - Automatic node balancing and per-server capacity limits beyond the weights in use today.
 - Two-factor sign-in for staff inside the bot.

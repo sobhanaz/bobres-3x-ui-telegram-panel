@@ -46,11 +46,16 @@ type ChainTransfer struct {
 	ResolvedBy string // core user id
 	ResolvedAt int64
 	Note       string
+	// Automatic TON: the transaction's logical time and the comment the transfer carried (Network is TON, TxID its
+	// hash, EventIndex 0, Amount in nanoton).
+	LT      int64
+	Comment string
 }
 
-// ChainTransferFilter narrows the transfer log; empty fields match all.
+// ChainTransferFilter narrows the transfer log; empty fields match all. Network "" or TRC20 is the USDT log, TON
+// the automatic TON one.
 type ChainTransferFilter struct {
-	Outcome, TxID, IntentID string
+	Outcome, TxID, IntentID, Network string
 }
 
 // Chain transfer outcomes.
@@ -70,6 +75,10 @@ func UnmatchedText(code string) string {
 		return "more than one payment has this amount"
 	case events.UnmatchedAfterRestore:
 		return "the payment with this amount was created just after a database restore: check who sent it"
+	case events.UnmatchedUnderpaid:
+		return "the comment names a payment, and less than it asked for arrived"
+	case events.UnmatchedLatePrice:
+		return "it came after the payment's time ran out, and at today's TON price it no longer covers the price"
 	case "dust":
 		return "under 0.1 USDT (dust)"
 	}
@@ -156,6 +165,11 @@ func normalizeTXID(v string) string {
 // first.
 func (s *Service) ChainTransfers(ctx context.Context, ga GatewayAdmin, f ChainTransferFilter, page, size int) ([]ChainTransfer, int64, error) {
 	f.Outcome = strings.ToLower(strings.TrimSpace(f.Outcome))
+	switch f.Network = strings.ToUpper(strings.TrimSpace(f.Network)); f.Network {
+	case "", "TRC20", "TON":
+	default:
+		return nil, 0, &FieldError{"network", "TRC20 or TON"}
+	}
 	if f.Outcome != "" && !slices.Contains(chainOutcomes, f.Outcome) {
 		return nil, 0, &FieldError{"outcome", "one of " + strings.Join(chainOutcomes, ", ")}
 	}
@@ -198,6 +212,34 @@ func (s *Service) ResolveDeposit(ctx context.Context, actor *store.User, ga Gate
 	return t, nil
 }
 
+// ResolveTONDeposit marks an unmatched TON deposit handled, as ResolveDeposit does a USDT one (audited with the
+// note). The transaction is told by its hash.
+func (s *Service) ResolveTONDeposit(ctx context.Context, actor *store.User, ga GatewayAdmin, txid, note string) (*ChainTransfer, error) {
+	key := normalizeTXID(txid)
+	note = strings.TrimSpace(note)
+	switch {
+	case key == "":
+		return nil, &FieldError{"txid", "a transaction hash: 64 hexadecimal digits"}
+	case utf8.RuneCountInString(note) > maxDepositNote:
+		return nil, &FieldError{"note", fmt.Sprintf("at most %d characters", maxDepositNote)}
+	}
+	r, ok := ga.(TONResolver)
+	if !ok {
+		return nil, &FieldError{"network", "this install cannot resolve TON deposits"}
+	}
+	t, err := r.ResolveTONTransfer(ctx, key, actor.ID, note)
+	if err != nil {
+		return nil, err
+	}
+	after := map[string]any{"outcome": t.Outcome, "amount": t.Amount, "currency": t.Currency, "from": t.From,
+		"to": t.To, "block_time": t.BlockTime}
+	if err := s.auditChange(ctx, nil, actor, "gateway.deposit_resolve", "deposit", key,
+		map[string]any{"outcome": "unmatched"}, after, note); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 // depositUnmatched passes payments' "unmatched deposit" on to the bot (the
 // staff alert), exactly once: the inbox claim and the event commit together.
 func (s *Service) depositUnmatched(ctx context.Context, m eventbus.Message) error {
@@ -205,8 +247,9 @@ func (s *Service) depositUnmatched(ctx context.Context, m eventbus.Message) erro
 	if err := json.Unmarshal(m.Payload, &e); err != nil {
 		return eventbus.Permanent(fmt.Errorf("decode %s: %w", m.Topic, err))
 	}
-	if !txidRe.MatchString(e.TxID) || e.EventIndex < 0 || e.Amount <= 0 || e.Currency != "USDT" {
-		return eventbus.Permanent(fmt.Errorf("%s: not a USDT deposit (txid %q, %d %q)", m.Topic, e.TxID, e.Amount, e.Currency))
+	ton := e.Network == "TON" && e.Currency == "TON"
+	if !txidRe.MatchString(e.TxID) || e.EventIndex < 0 || e.Amount <= 0 || (e.Currency != "USDT" && !ton) {
+		return eventbus.Permanent(fmt.Errorf("%s: not a USDT or TON deposit (txid %q, %d %q)", m.Topic, e.TxID, e.Amount, e.Currency))
 	}
 	return s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		claimed, err := s.st.ClaimInbox(ctx, tx, "payments:"+m.EventID)

@@ -236,6 +236,19 @@ func setup(rt *app.Runtime) error {
 		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
 		dom.SetSupplierTransport(peer)
 		dom.SetRateTransport(peer) // the live USDT price is read by the bot: core has no internet access
+		// The live rate is kept fresh while automatic USDT or TON is on in payments too (their prices come from it).
+		dom.SetAutoCrypto(func(ctx context.Context) bool {
+			configs, err := pay.GatewayConfigs(ctx)
+			if err != nil {
+				return false
+			}
+			for _, c := range configs {
+				if c.Enabled && (c.Provider == domain.USDTAuto || c.Provider == domain.TONAuto) {
+					return true
+				}
+			}
+			return false
+		})
 	} else {
 		rt.Log.Warn("BOBRES_BOT_URL is not set: the dashboard cannot show receipt photos or check channels")
 	}

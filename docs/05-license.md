@@ -62,7 +62,7 @@ the repository: the private half stays with the vendor, outside it.
   seller re-applies the tier (`licensesrv key update lic_… -tier pro -reason "required chats"` for a Pro license, which stores the preset's
   numbers and reaches the install at its next daily renewal; a hand-signed token needs signing again). Nothing that
   exists is lost meanwhile: the extra chats only start to count, and there are none before this version.
-- Gateway names: `zarinpal`, `idpay`, `nextpay`, `aqayepardakht`, `stars`, `usdt_trc20_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
+- Gateway names: `zarinpal`, `idpay`, `nextpay`, `aqayepardakht`, `stars`, `usdt_trc20_auto`, `ton_auto`, `manual_card`, `manual_crypto`, `manual_zarinpal`. The
   wallet is always allowed. Automatic USDT (`usdt_trc20_auto`, Phase 6a) also needs the `crypto_watcher` feature.
 - `updates_until` (YYYY-MM-DD) is the end of the updates the license was sold with, and it is **advisory**. The
   release's day is the `# issued` line of its signed `checksums.txt` (UTC). `bobres update`, its `--check`, the menu,

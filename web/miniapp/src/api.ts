@@ -110,10 +110,14 @@ export interface Intent {
   gateway_amount: number
   gateway_currency: string
   scale_gateway: number
-  /** what the payment shows: the USDT address of an automatic payment; for a manual one the card, the addresses, the link and the payment reference */
+  /** what the payment shows: the address of an automatic USDT or TON payment (TON also its memo, the comment the customer
+   * must write; the amount is gateway_amount in nanoton); for a manual one the card, the addresses, the link and the payment reference */
   details: {
     pay_address?: string
     network?: string
+    /** automatic TON: the comment the transfer must carry ("BOB-3F9A1C20"), or the payment is not recognized */
+    memo?: string
+    /** unix seconds, as text */
     expires_at?: string
     reference?: string
     card_number?: string

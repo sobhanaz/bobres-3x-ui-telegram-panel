@@ -735,6 +735,39 @@ var unmatchedReasons = map[string]bool{
 	events.UnmatchedAfterRestore: true,
 }
 
+// tonReasons are the reasons payments gives for an unmatched TON deposit.
+var tonReasons = map[string]bool{
+	events.UnmatchedNoPayment: true, events.UnmatchedAlreadyPaid: true, events.UnmatchedClosed: true,
+	events.UnmatchedUnderpaid: true, events.UnmatchedLatePrice: true,
+}
+
+// tonHashRe is a TON transaction hash as payments records it.
+var tonHashRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// unmatchedTON renders a TON deposit that no payment could take for the staff in lang: the exact amount, who sent it,
+// the comment it carried (or none), when, the transaction and why (for a short payment, what was asked for), with a
+// link to the transaction on Tonviewer and the dashboard, where it is marked handled. Every value is escaped: the
+// sender and the comment are anyone's on the chain.
+func (n *Notifier) unmatchedTON(lang string, e events.DepositUnmatchedEvent) (string, *tg.Keyboard) {
+	reason := html.EscapeString(e.Reason)
+	if tonReasons[e.Reason] {
+		reason = n.cat.T(lang, "admin.ton_reason."+e.Reason, "expected", i18n.Exact(e.Expected, "TON"))
+	}
+	comment := n.cat.T(lang, "admin.ton_no_comment")
+	if e.Comment != "" {
+		comment = "<code>" + html.EscapeString(e.Comment) + "</code>"
+	}
+	text := n.cat.T(lang, "admin.unmatched_deposit_ton",
+		"amount", i18n.Exact(e.Amount, "TON"), "from", html.EscapeString(e.From), "to", html.EscapeString(e.To),
+		"comment", comment, "when", i18n.DateTime(lang, time.Unix(e.BlockTime, 0)), "txid", html.EscapeString(e.TxID), "reason", reason)
+	kb := &tg.Keyboard{}
+	if h := strings.ToLower(e.TxID); tonHashRe.MatchString(h) {
+		kb.Row(n.linkButton(lang, "btn.tonviewer", "https://tonviewer.com/transaction/"+h))
+	}
+	kb.Row(n.button(lang, "btn.dashboard", "dash"))
+	return text, kb
+}
+
 // txidRe is a TRON transaction id as payments records it.
 var txidRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -744,6 +777,9 @@ var txidRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // where it is marked handled. Every value is escaped: the sender is anyone
 // on the chain.
 func (n *Notifier) unmatchedDeposit(lang string, e events.DepositUnmatchedEvent) (string, *tg.Keyboard) {
+	if e.Network == "TON" {
+		return n.unmatchedTON(lang, e)
+	}
 	reason := html.EscapeString(e.Reason)
 	if unmatchedReasons[e.Reason] {
 		reason = n.cat.T(lang, "admin.unmatched_reason."+e.Reason)

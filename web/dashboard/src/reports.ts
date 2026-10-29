@@ -85,7 +85,7 @@ export interface ReportPlan {
 export interface ReportMethod {
   /** wallet, manual, gateway, or unknown */
   method: string
-  /** who took the payment (zarinpal, idpay, nextpay, aqayepardakht, stars, usdt_trc20_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
+  /** who took the payment (zarinpal, idpay, nextpay, aqayepardakht, stars, usdt_trc20_auto, ton_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
   provider: string
   currency: string
   orders: number

@@ -14,9 +14,10 @@ export function num(n: number, lang: Lang): string {
 const names: Record<string, Record<Lang, string>> = {
   IRT: { fa: 'تومان', en: 'Toman' },
   USDT: { fa: 'تتر', en: 'USDT' },
+  TON: { fa: 'تون', en: 'TON' },
 }
 
-/** money writes an amount in minor units in its currency (Toman has none; USDT has 6). */
+/** money writes an amount in minor units in its currency (Toman has none; USDT has 6; TON has 9). */
 export function money(amount: number, currency: string, scale: number, lang: Lang): string {
   const value = amount / 10 ** scale
   const formatted = new Intl.NumberFormat(numberLocale(lang), { maximumFractionDigits: Math.min(scale, 2) }).format(value)

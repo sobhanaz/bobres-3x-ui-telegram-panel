@@ -317,7 +317,7 @@ func (h *Handler) showTopupMethods(r *req, raw string) {
 	r.show(r.t("wallet.choose_method", "amount", r.money(amount, "IRT")), kb)
 }
 
-// onTopupPay handles "wpay:<c|x|l|z|i|n|a|s|u>:<amount>:<nonce>".
+// onTopupPay handles "wpay:<c|x|l|z|i|n|a|s|u|t>:<amount>:<nonce>".
 func (h *Handler) onTopupPay(r *req, rest string) {
 	parts := strings.Split(rest, ":")
 	if len(parts) != 3 {
@@ -330,13 +330,13 @@ func (h *Handler) onTopupPay(r *req, rest string) {
 		return
 	}
 	provider := map[string]string{"c": "manual_card", "x": "manual_crypto", "l": "manual_zarinpal", "z": "zarinpal", "i": "idpay", "n": "nextpay", "s": "stars",
-		"a": "aqayepardakht", "u": usdtAuto}[parts[0]]
+		"a": "aqayepardakht", "u": usdtAuto, "t": tonAuto}[parts[0]]
 	if provider == "" {
 		h.showWallet(r)
 		return
 	}
 	key := fmt.Sprintf("top:%d:%d:%s:%s", r.from.ID, amount, provider, parts[2])
-	if provider == "zarinpal" || provider == "idpay" || provider == "nextpay" || provider == "aqayepardakht" || provider == "stars" || provider == usdtAuto {
+	if provider == "zarinpal" || provider == "idpay" || provider == "nextpay" || provider == "aqayepardakht" || provider == "stars" || provider == usdtAuto || provider == tonAuto {
 		h.startGateway(r, nil, provider, r.t("pay.topup_title"), key, amount)
 		return
 	}

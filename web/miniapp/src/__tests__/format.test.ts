@@ -25,6 +25,13 @@ describe('format', () => {
     expect(exactMoney(150_000, 'IRT', 0, 'en')).toBe('150000 Toman')
   })
 
+  it('knows TON: nine decimals, and its name in each language', () => {
+    expect(money(2_531_000_000, 'TON', 9, 'en')).toBe('2.53 TON')
+    expect(money(2_531_000_000, 'TON', 9, 'fa')).toContain('تون')
+    expect(exactMoney(2_531_000_007, 'TON', 9, 'en')).toBe('2.531000007 TON')
+    expect(exactMoney(2_531_000_007, 'TON', 9, 'fa')).toBe('2.531000007 تون')
+  })
+
   it('writes traffic in MB, GB or TB', () => {
     expect(bytes(512 * 2 ** 20, 'en')).toBe('512 MB')
     expect(bytes(50 * 2 ** 30, 'en')).toBe('50 GB')

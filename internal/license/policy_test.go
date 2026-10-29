@@ -17,7 +17,7 @@ func TestFreeAndTrialEntitlements(t *testing.T) {
 		t.Errorf("free tier:\n got %+v\nwant %+v", got, want)
 	}
 	wantTrial := Entitlements{MaxServers: Unlimited, MaxActiveServices: Unlimited, Resellers: true, CryptoWatcher: true,
-		DashboardStaffSeat: 5, MaxJoinChats: Unlimited, Gateways: []string{"zarinpal", "idpay", "nextpay", "aqayepardakht", "stars", "usdt_trc20_auto", "manual_card", "manual_crypto", "manual_zarinpal"}}
+		DashboardStaffSeat: 5, MaxJoinChats: Unlimited, Gateways: []string{"zarinpal", "idpay", "nextpay", "aqayepardakht", "stars", "usdt_trc20_auto", "ton_auto", "manual_card", "manual_crypto", "manual_zarinpal"}}
 	if got := TrialEntitlements(); !reflect.DeepEqual(got, wantTrial) {
 		t.Errorf("trial:\n got %+v\nwant %+v", got, wantTrial)
 	}

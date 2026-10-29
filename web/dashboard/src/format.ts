@@ -17,12 +17,13 @@ export function num(n: number, lang: Lang): string {
   return new Intl.NumberFormat(numberLocale(lang)).format(n)
 }
 
-// Currencies BOBRES charges in, with their minor-unit scale.
-const scales: Record<string, number> = { IRT: 0, USDT: 6, XTR: 0 }
+// Currencies BOBRES charges in, with their minor-unit scale (TON: nanoton, 9 decimals).
+const scales: Record<string, number> = { IRT: 0, USDT: 6, XTR: 0, TON: 9 }
 const names: Record<string, Record<Lang, string>> = {
   IRT: { fa: 'تومان', en: 'Toman' },
   USDT: { fa: 'تتر', en: 'USDT' },
   XTR: { fa: 'ستاره', en: 'Stars' },
+  TON: { fa: 'تون', en: 'TON' },
 }
 
 // The store's own name for Toman (Branding page), per language; "" = the
@@ -72,6 +73,20 @@ export function isolate(s: string): string {
 export function dateTime(unix: number, lang: Lang): string {
   const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(unix * 1000))
+}
+
+/** ago says how long before nowMs a time was, in the language and its digits ("12 seconds ago", "۵ دقیقه پیش"):
+ * seconds up to a minute and a half, then minutes, hours and days. A time that has not come yet (a clock that is
+ * off) is "0 seconds ago". */
+export function ago(unix: number, nowMs: number, lang: Lang): string {
+  const rtf = new Intl.RelativeTimeFormat(numberLocale(lang), { numeric: 'always' })
+  const seconds = Math.max(0, Math.floor(nowMs / 1000 - unix))
+  if (seconds < 90) return rtf.format(-seconds, 'second')
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 90) return rtf.format(-minutes, 'minute')
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return rtf.format(-hours, 'hour')
+  return rtf.format(-Math.round(hours / 24), 'day')
 }
 
 export function date(unix: number, lang: Lang): string {

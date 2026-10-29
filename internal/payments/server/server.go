@@ -61,6 +61,8 @@ func (s *Server) CreateIntent(ctx context.Context, req *paymentsv1.CreateIntentR
 		out, err = s.svc.StartGateway(ctx, in, req.GetDescription(), s.publicURL+"/webhooks/"+req.GetProvider())
 	case domain.USDTAuto:
 		out, err = s.svc.StartChain(ctx, in)
+	case domain.TONAuto:
+		out, err = s.svc.StartTON(ctx, in)
 	default:
 		out, err = s.svc.CreateIntent(ctx, in)
 	}
@@ -148,7 +150,7 @@ func (s *Server) TestGateway(ctx context.Context, req *paymentsv1.TestGatewayReq
 	}
 	return &paymentsv1.TestGatewayResponse{
 		Ok: r.OK, Detail: r.Detail, Unverified: int32(min(r.Unverified, math.MaxInt32)), //nolint:gosec // bounded
-		LatencyMs: r.Latency.Milliseconds(),
+		LatencyMs: r.Latency.Milliseconds(), LatestTxAt: r.LatestTxAt,
 	}, nil
 }
 
@@ -212,7 +214,8 @@ func (s *Server) GatewayReport(ctx context.Context, req *paymentsv1.GatewayRepor
 	return out, nil
 }
 
-// ListChainTransfers is the automatic USDT transfer log, newest first.
+// ListChainTransfers is the automatic USDT transfer log (TRC20, the default) or the automatic TON one (network
+// TON), newest first.
 func (s *Server) ListChainTransfers(ctx context.Context, req *paymentsv1.ListChainTransfersRequest) (*paymentsv1.ListChainTransfersResponse, error) {
 	page, size := int(req.GetPagination().GetPage()), int(req.GetPagination().GetPageSize())
 	if size <= 0 || size > 200 {
@@ -221,9 +224,20 @@ func (s *Server) ListChainTransfers(ctx context.Context, req *paymentsv1.ListCha
 	if page <= 0 {
 		page = 1
 	}
-	list, total, err := s.svc.ListChainTransfers(ctx, store.ChainTransferFilter{
-		Outcome: req.GetOutcome(), TxID: req.GetTxid(), IntentID: req.GetIntentId(), Value: req.GetValue(),
-	}, size, (page-1)*size)
+	f := store.ChainTransferFilter{Outcome: req.GetOutcome(), TxID: req.GetTxid(), IntentID: req.GetIntentId(), Value: req.GetValue()}
+	var (
+		list  []store.ChainTransfer
+		total int64
+		err   error
+	)
+	switch req.GetNetwork() {
+	case "", "TRC20":
+		list, total, err = s.svc.ListChainTransfers(ctx, f, size, (page-1)*size)
+	case "TON":
+		list, total, err = s.svc.ListTONTransfers(ctx, f, size, (page-1)*size)
+	default:
+		return nil, status.Error(codes.InvalidArgument, "network must be TRC20 or TON")
+	}
 	if err != nil {
 		return nil, fail(err)
 	}
@@ -238,7 +252,18 @@ func (s *Server) ListChainTransfers(ctx context.Context, req *paymentsv1.ListCha
 
 // ResolveChainTransfer marks an unmatched deposit handled by staff.
 func (s *Server) ResolveChainTransfer(ctx context.Context, req *paymentsv1.ResolveChainTransferRequest) (*paymentsv1.ChainTransfer, error) {
-	t, err := s.svc.ResolveChainTransfer(ctx, req.GetActorId(), req.GetTxid(), int(req.GetEventIndex()), req.GetNote())
+	var (
+		t   *store.ChainTransfer
+		err error
+	)
+	switch req.GetNetwork() {
+	case "", "TRC20":
+		t, err = s.svc.ResolveChainTransfer(ctx, req.GetActorId(), req.GetTxid(), int(req.GetEventIndex()), req.GetNote())
+	case "TON":
+		t, err = s.svc.ResolveTONTransfer(ctx, req.GetActorId(), req.GetTxid(), req.GetNote())
+	default:
+		return nil, status.Error(codes.InvalidArgument, "network must be TRC20 or TON")
+	}
 	if err != nil {
 		return nil, fail(err)
 	}
@@ -246,10 +271,14 @@ func (s *Server) ResolveChainTransfer(ctx context.Context, req *paymentsv1.Resol
 }
 
 func chainTransferToProto(t *store.ChainTransfer) *paymentsv1.ChainTransfer {
+	currency := "USDT"
+	if t.Network == "TON" {
+		currency = "TON"
+	}
 	p := &paymentsv1.ChainTransfer{
 		Txid: t.TxID, EventIndex: int32(min(t.EventIndex, math.MaxInt32)), Network: t.Network, //nolint:gosec // bounded
-		FromAddress: t.From, ToAddress: t.To, Amount: &commonv1.Money{Amount: t.Value, Currency: "USDT"},
-		BlockTime: t.BlockTS.Unix(), Outcome: t.Outcome, RecordedAt: t.CreatedAt.Unix(),
+		FromAddress: t.From, ToAddress: t.To, Amount: &commonv1.Money{Amount: t.Value, Currency: currency},
+		BlockTime: t.BlockTS.Unix(), Outcome: t.Outcome, RecordedAt: t.CreatedAt.Unix(), Lt: t.LT, Comment: t.Comment,
 	}
 	for dst, src := range map[*string]*string{&p.Reason: t.Reason, &p.IntentId: t.IntentID, &p.ResolvedBy: t.ResolvedBy, &p.Note: t.Note} {
 		if src != nil {
@@ -270,6 +299,10 @@ func gatewayConfigToProto(c domain.GatewayConfig) *paymentsv1.GatewayConfig {
 		Provider: c.Provider, Enabled: c.Enabled, Configured: c.Configured, Sandbox: c.Sandbox,
 		MerchantHint: c.MerchantHint, ProxySet: c.ProxySet, KeyMissing: c.KeyMissing, Offered: c.Offered,
 		Problem: c.Problem, FromEnv: c.FromEnv, UpdatedBy: c.UpdatedBy, Address: c.Address, ApiKeySet: c.APIKeySet,
+		PriceMicro: c.PriceMicro, PriceSource: c.PriceSource, PriceFresh: c.PriceFresh,
+	}
+	if !c.PriceAt.IsZero() {
+		p.PriceAt = c.PriceAt.Unix()
 	}
 	if !c.UpdatedAt.IsZero() {
 		p.UpdatedAt = c.UpdatedAt.Unix()
@@ -435,6 +468,9 @@ func intentToProto(in *store.Intent) *paymentsv1.PaymentIntent {
 	}
 	if in.PayAddress != nil {
 		p.PayAddress = *in.PayAddress
+	}
+	if in.PayMemo != nil {
+		p.PayMemo = *in.PayMemo
 	}
 	return p
 }
