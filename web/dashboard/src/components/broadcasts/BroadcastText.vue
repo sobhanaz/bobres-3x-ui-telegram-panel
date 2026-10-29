@@ -14,9 +14,20 @@ import type { TextCheck, TextProblem } from '../../types'
 // message), checked live by core once typing pauses, counted against
 // Telegram's limit, and previewed without running any markup.
 const value = defineModel<string>({ required: true })
+// checkPath is where core checks the text (a message to resellers is checked with its placeholders); noPreview leaves the preview to the
+// page (one written for a reseller).
 const props = withDefaults(
-  defineProps<{ lang: Lang; problems?: TextProblem[]; error?: string; buttonLabel?: string; disabled?: boolean; flagEmpty?: boolean }>(),
-  { problems: () => [], error: '', buttonLabel: '', disabled: false, flagEmpty: false },
+  defineProps<{
+    lang: Lang
+    problems?: TextProblem[]
+    error?: string
+    buttonLabel?: string
+    disabled?: boolean
+    flagEmpty?: boolean
+    checkPath?: string
+    noPreview?: boolean
+  }>(),
+  { problems: () => [], error: '', buttonLabel: '', disabled: false, flagEmpty: false, checkPath: '/broadcasts/check', noPreview: false },
 )
 const emit = defineEmits<{ state: [s: TextState] }>()
 const { t, locale } = useI18n()
@@ -49,7 +60,7 @@ function schedule(delay: number) {
   report()
   timer = setTimeout(async () => {
     try {
-      const res = await api<TextCheck>('POST', '/broadcasts/check', { lang: props.lang, text })
+      const res = await api<TextCheck>('POST', props.checkPath, { lang: props.lang, text })
       if (mine === seq) check.value = res
     } catch {
       if (mine === seq) check.value = null
@@ -115,7 +126,7 @@ const markup = {
       <span v-else-if="check?.ok" class="ok small"><i class="pi pi-check" aria-hidden="true" /> {{ t('texts.ok') }}</span>
       <div v-if="props.error && value.trim()" class="err small app-ltr">{{ props.error }}</div>
     </div>
-    <div class="block">
+    <div v-if="!props.noPreview" class="block">
       <div class="app-muted small">{{ t('broadcasts.text.preview') }}</div>
       <div class="bubble">
         <TextPreview :value="value" :html="true" :placeholders="[]" :lang="lang" kind="message" />

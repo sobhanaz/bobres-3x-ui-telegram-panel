@@ -211,6 +211,19 @@ func TestCurrencyNamesAndLocation(t *testing.T) {
 	if got := Money("fa", 2_500_000, "USDT"); got != "۲٫۵ تتر" {
 		t.Fatalf("usdt untouched: %q", got)
 	}
+	// MoneyNamed takes the names it is given, never the process's (core has none).
+	if got := MoneyNamed(nil, "fa", 1500, "IRT"); got != "۱٬۵۰۰ تومان" {
+		t.Fatalf("named, built-in: %q", got)
+	}
+	if got := MoneyNamed(map[string]string{"en": " Tmn ", "fa": "<b>"}, "en", -1500, "IRT"); got != "-1,500 Tmn" {
+		t.Fatalf("named: %q", got)
+	}
+	if got := MoneyNamed(map[string]string{"fa": "<b>"}, "fa", 1500, "IRT"); got != "۱٬۵۰۰ تومان" {
+		t.Fatalf("a name with markup: %q", got)
+	}
+	if got := MoneyNamed(map[string]string{"en": "Tmn"}, "en", 2_500_000, "USDT"); got != "2.5 USDT" {
+		t.Fatalf("named usdt: %q", got)
+	}
 	old := CurrentLocation()
 	defer SetLocation(old)
 	SetLocation(nil) // ignored

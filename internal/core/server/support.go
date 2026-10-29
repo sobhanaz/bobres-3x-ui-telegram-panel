@@ -131,9 +131,10 @@ func (s *Server) ClaimBroadcastBatch(ctx context.Context, req *corev1.ClaimBroad
 		return &corev1.BroadcastBatch{}, nil
 	}
 	out := &corev1.BroadcastBatch{BroadcastId: b.Broadcast.ID, Texts: b.Broadcast.Texts, ButtonUrl: b.Broadcast.ButtonURL,
-		ButtonLabels: b.Broadcast.ButtonLabels}
+		ButtonLabels: b.Broadcast.ButtonLabels, SettleButton: b.Broadcast.SettleButton}
 	for _, r := range b.Recipients {
-		out.Recipients = append(out.Recipients, &corev1.BroadcastRecipient{UserId: r.UserID, TelegramId: r.TelegramID, Language: r.Language})
+		out.Recipients = append(out.Recipients, &corev1.BroadcastRecipient{UserId: r.UserID, TelegramId: r.TelegramID, Language: r.Language,
+			Text: r.Text})
 	}
 	return out, nil
 }

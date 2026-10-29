@@ -600,6 +600,8 @@ func (h *Handler) dispatch(r *req, data string) {
 	case "qr":
 		h.sendQR(r, rest)
 	case "wallet":
+		// "wallet:m": the Settle / Top up button under a message to resellers, which must stay as it is.
+		r.keep = r.keep || rest == "m"
 		h.showWallet(r)
 	case "wtop":
 		h.showTopupAmounts(r)

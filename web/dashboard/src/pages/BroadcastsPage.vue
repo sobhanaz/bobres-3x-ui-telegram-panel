@@ -12,7 +12,7 @@ import BroadcastProgress from '../components/broadcasts/BroadcastProgress.vue'
 import { api, query } from '../api'
 import { useList } from '../composables/useList'
 import { dateTime, type Lang } from '../format'
-import { STATUSES, changingSoon, poller, previewOf, timing } from '../broadcasts'
+import { STATUSES, audienceKeys, changingSoon, poller, previewOf, timing } from '../broadcasts'
 import type { BroadcastItem, Page } from '../types'
 
 const { t, locale } = useI18n()
@@ -56,7 +56,7 @@ onBeforeUnmount(() => {
 })
 
 const statuses = computed(() => [{ label: t('broadcasts.list.all_statuses'), value: '' }, ...STATUSES.map((s) => ({ label: t('broadcasts.status.' + s), value: s }))])
-const audience = (b: BroadcastItem) => t('broadcasts.segment.' + b.segment) + ' · ' + t('broadcasts.language.' + (b.language || 'all'))
+const audience = (b: BroadcastItem) => audienceKeys(b).map((k) => t(k)).join(' · ')
 
 function open(b: BroadcastItem) {
   if (b.status === 'draft') void router.push({ name: 'broadcast-edit', params: { id: b.id } })

@@ -6,7 +6,8 @@ import type { Lang } from './format'
 import type { BroadcastItem, LangPair, TextProblem } from './types'
 
 export type BroadcastStatus = BroadcastItem['status']
-export type Segment = BroadcastItem['segment']
+/** The customer groups the composer offers (messages to resellers are written on the Resellers page). */
+export type Segment = Exclude<BroadcastItem['segment'], 'resellers'>
 export type AudienceLang = BroadcastItem['language']
 
 export const SEGMENTS: readonly Segment[] = ['all', 'active', 'expired', 'never_bought']
@@ -47,7 +48,7 @@ export function blankDraft(): Draft {
 
 export function draftOf(b: BroadcastItem): Draft {
   return {
-    segment: b.segment,
+    segment: b.segment === 'resellers' ? 'all' : b.segment,
     language: b.language,
     texts: { fa: b.texts.fa ?? '', en: b.texts.en ?? '' },
     button: b.button
@@ -170,6 +171,24 @@ export function actionsFor(status: BroadcastStatus): BroadcastAction[] {
       return ['resume', 'cancel']
   }
   return []
+}
+
+/** actionsOf is actionsFor a broadcast: a message to resellers is never edited in the composer (cancel it and write a new one). */
+export function actionsOf(b: Pick<BroadcastItem, 'status' | 'segment'>): BroadcastAction[] {
+  const out = actionsFor(b.status)
+  return b.segment === 'resellers' ? out.filter((a) => a !== 'edit') : out
+}
+
+/** audienceKeys are the texts that say who a broadcast goes to (the dashboard's keys, joined with " · "). */
+export function audienceKeys(b: Pick<BroadcastItem, 'segment' | 'language' | 'resellers'>): string[] {
+  const out = ['broadcasts.segment.' + b.segment]
+  if (b.segment === 'resellers' && b.resellers) {
+    if (b.resellers.debt_only) out.push('broadcasts.resellers.debt_only')
+    if (b.resellers.tier_id) out.push('broadcasts.resellers.one_tier')
+    if (b.resellers.kind === 'reminder') out.push('broadcasts.resellers.reminder')
+  }
+  out.push('broadcasts.language.' + (b.language || 'all'))
+  return out
 }
 
 /** editable: the composer may open it (core takes PUT then). */

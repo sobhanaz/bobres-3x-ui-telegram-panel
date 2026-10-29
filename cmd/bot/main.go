@@ -147,7 +147,9 @@ func setup(rt *app.Runtime) error {
 
 	// Broadcasts: claimed from core in batches, sent at the store's pace;
 	// at shutdown the sends in flight finish and the rest go back in line.
-	rt.Go("broadcasts", broadcast.New(core, bulk, h.Settings(), flood, meter, rt.Log).Run)
+	broadcasts := broadcast.New(core, bulk, h.Settings(), flood, meter, rt.Log)
+	broadcasts.Texts = cat // the Settle / Top up button of messages to resellers
+	rt.Go("broadcasts", broadcasts.Run)
 
 	if cfg.PeerCoreToken != "" {
 		rt.Mux.Handle("GET /internal/files/{id}", runner.Files(bot, cfg.PeerCoreToken, rt.Log))
