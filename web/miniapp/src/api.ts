@@ -45,12 +45,16 @@ export interface Wallet {
 /** Features are what the sections of the app say about this customer (core's miniFeature.me); a section reads its own keys. */
 export type Features = Record<string, boolean | number | string | undefined>
 
+/** What a top-up in USDT may be (micro-USDT, 6 decimals): a whole number of USDT, from min to max, in steps of step. */
+export interface UsdtTopUp { currency: string; min: number; max: number; step: number; scale: number }
+
 export interface Me {
   user: { id: string; username: string; language: string }
   wallets: Wallet[]
   brand: { name: string; color: string; support: string; support_url: string; bot_url: string }
   maintenance: boolean
-  top_up: { currency: string; min: number; max: number }
+  /** the Toman top-up bounds; usdt is there when core takes a top-up in USDT too (the store may still have no way to take it) */
+  top_up: { currency: string; min: number; max: number; usdt?: UsdtTopUp }
   features: Features
 }
 export interface Plan {
@@ -96,6 +100,16 @@ export interface Order {
   currency: string
   scale: number
   subscription_id: string
+  /**
+   * An order listed in USDT and paid from the wallet: amount and currency are then the Toman that was charged, and these are
+   * its USDT price (the discount is in it too, in discount_currency), that currency's scale and the Toman price of one USDT it
+   * was worked out at.
+   */
+  list_amount?: number
+  list_currency?: string
+  list_scale?: number
+  rate?: number
+  discount_currency?: string
   /** what the delivered order earned back as cashback (absent: none, or taken back by a refund) */
   cashback?: { amount: number; currency: string; scale: number }
 }
@@ -112,6 +126,31 @@ export interface CashbackInfo {
   scale: number
 }
 export interface Quote { list_price: number; discount: number; total: number; currency: string; scale: number; discount_code: string }
+/**
+ * WalletQuote is the Toman price of an order listed in USDT, for paying it from the wallet (GET /orders/{id}/wallet-quote). The
+ * wallet is charged exactly amount if the payment carries the quote token within expires_in seconds of the answer (counted by the
+ * app's own timer: the phone's clock may be wrong); after that core answers 409 quote_expired and a new quote is asked for.
+ */
+export interface WalletQuote {
+  order_id: string
+  /** the plan's price in micro-USDT, and the currency and scale it is listed in */
+  list_amount: number
+  list_currency: string
+  list_scale: number
+  /** the Toman price of one USDT it was worked out at */
+  rate: number
+  /** the Toman the wallet is charged */
+  amount: number
+  currency: string
+  scale: number
+  quote: string
+  expires_at: number
+  expires_in: number
+  /** the wallet in Toman now, and whether it (with a reseller's credit) covers amount */
+  balance: number
+  credit_limit: number
+  enough: boolean
+}
 export interface Intent {
   intent_id: string
   status: string
@@ -143,6 +182,8 @@ export interface Intent {
   usdt_amount?: number
   /** manual USDT of a Toman price: the Toman price of one USDT that amount was worked out at */
   usdt_rate?: number
+  /** automatic USDT: the address as a QR code, a PNG data URI (absent when core could not make one) */
+  qr?: string
 }
 /**
  * PendingPayment is one of the customer's manual payments that still waits for its receipt (GET /payments/pending): what
@@ -226,9 +267,14 @@ export const api = {
   quote: (req: OrderRequest) => call<Quote>('POST', '/quote', req),
   createOrder: (req: OrderRequest) => call<Order>('POST', '/orders', req),
   order: (id: string) => call<Order>('GET', `/orders/${id}`),
-  payWallet: (id: string) => call<Order>('POST', `/orders/${id}/pay-wallet`, {}),
+  /** walletQuote prices an order listed in USDT in Toman, at the rate of this moment; it changes nothing */
+  walletQuote: (id: string) => call<WalletQuote>('GET', `/orders/${id}/wallet-quote`),
+  /** payWallet pays from the wallet; an order listed in USDT carries the token of the quote the customer was shown (a Toman one sends none) */
+  payWallet: (id: string, quote?: string) => call<Order>('POST', `/orders/${id}/pay-wallet`, quote ? { quote } : {}),
   pay: (id: string, method: string) => call<Intent>('POST', `/orders/${id}/pay`, { method }),
-  topup: (amount: number, method: string, key: string) => call<Intent>('POST', '/topup', { amount, method, key }),
+  /** topup starts a top-up: amount is Toman, or micro-USDT with currency 'USDT' (left out, it is Toman, as it always was) */
+  topup: (amount: number, method: string, key: string, currency?: string) =>
+    call<Intent>('POST', '/topup', currency && currency !== 'IRT' ? { amount, currency, method, key } : { amount, method, key }),
   checkPayment: (id: string) => call<{ intent_id: string; status: string; order_id: string; failure_reason: string }>('POST', `/payments/${id}/check`, {}),
   /** pendingPayments lists the customer's own manual payments that still wait for their receipt, newest first. */
   pendingPayments: () => call<{ payments?: PendingPayment[] }>('GET', '/payments/pending').then((r) => r.payments ?? []),

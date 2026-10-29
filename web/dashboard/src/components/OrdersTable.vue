@@ -53,6 +53,7 @@ const lang = computed(() => locale.value as Lang)
     <Column :header="t('common.amount')" body-class="app-nowrap">
       <template #body="{ data: o }">
         {{ money(o.amount, lang) }}
+        <div v-if="o.list" class="app-muted small">{{ t('order.list_short', { price: money(o.list.price, lang) }) }}</div>
         <div v-if="o.discount" class="app-muted small app-ltr">{{ o.discount.code }}</div>
       </template>
     </Column>

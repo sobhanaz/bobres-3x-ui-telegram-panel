@@ -115,6 +115,8 @@ func fail(err error) error {
 		errors.Is(err, domain.ErrPlanUnavailable),
 		errors.Is(err, domain.ErrNotExtendable),
 		errors.Is(err, domain.ErrDiscount),
+		errors.Is(err, domain.ErrQuoteExpired),
+		errors.Is(err, domain.ErrNoUsdtRate),
 		errors.Is(err, store.ErrInsufficientFunds):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, store.ErrIdempotencyConflict):
@@ -300,10 +302,18 @@ func orderToProto(o *store.Order) *corev1.Order {
 	}
 	if o.DiscountCode != nil {
 		out.DiscountCode = *o.DiscountCode
+		// The discount is in the currency the order was listed in (USDT for a plan paid from the Toman wallet).
 		out.Discount = &commonv1.Money{Amount: o.DiscountAmount, Currency: o.Currency}
+		if o.ListCurrency != nil {
+			out.Discount.Currency = *o.ListCurrency
+		}
 	}
 	if o.Label != nil {
 		out.Label = *o.Label
+	}
+	if o.ListAmount != nil && o.ListCurrency != nil && o.Rate != nil {
+		out.ListPrice = &commonv1.Money{Amount: *o.ListAmount, Currency: *o.ListCurrency}
+		out.Rate = *o.Rate
 	}
 	return out
 }

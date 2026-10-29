@@ -448,7 +448,7 @@ func TestReportsOrdersCSV(t *testing.T) {
 	}
 	rows := parseCSV(t, body)
 	if len(rows) != 4 || strings.Join(rows[0], ",") !=
-		"paid_at_utc,paid_at_local,order_id,type,telegram_id,username,plan_fa,plan_en,amount,currency,paid_with,refunded_amount,provider,tz" {
+		"paid_at_utc,paid_at_local,order_id,type,telegram_id,username,plan_fa,plan_en,amount,currency,paid_with,refunded_amount,provider,tz,list_amount,list_currency,rate" {
 		t.Fatalf("rows: %v", rows)
 	}
 	// Oldest first, local times either side of midnight, money as plain decimals.

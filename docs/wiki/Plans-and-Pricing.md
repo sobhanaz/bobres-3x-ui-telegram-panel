@@ -63,6 +63,8 @@ Customers can apply gift codes unless you switch `gift_codes.enabled` off.
 
 Edit a plan and set **Reward code after a purchase**: nothing, a percent (1 to 90), or a fixed amount in the plan's currency. Set how many days it lasts (1 to 365, default 10) and a text for the buyer in both languages. After each paid purchase or renewal of that plan, the buyer gets a discount code in a message. It works on any plan they buy next, for them only, once. An amount never takes more than the price, and only works on a plan in its currency. A reseller's purchase, a free order, the trial, a traffic package and one service of a bulk purchase give no code.
 
+The customer finds the code again under Wallet > **My codes** (or `/codes`, or **More > My codes** in the Mini App), with its state: not used yet, used, expired or switched off. You see the same list on the customer's page in the dashboard, in the **Codes** tab.
+
 ### Cashback
 
 Cashback gives a share of what an order cost back to the buyer's wallet. It is **off** until you switch it on in **Settings**, card **Cashback**:

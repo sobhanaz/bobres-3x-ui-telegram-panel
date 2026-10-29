@@ -38,6 +38,15 @@ type orderJSON struct {
 	// Cashback is what the order earned its buyer ({amount, currency, reversed}); reversed is what a refund took back. Only the one-order
 	// answer carries it.
 	Cashback map[string]any `json:"cashback,omitempty"`
+	// List: an order listed in USDT and paid from the Toman wallet. Amount is then what was charged (Toman); this is the price it was listed at and the
+	// Toman per USDT it was worked out at (the discount, if any, is in the list currency).
+	List *orderList `json:"list"`
+}
+
+// orderList is the price an order was listed at and the rate it was charged at.
+type orderList struct {
+	Price money `json:"price"`
+	Rate  int64 `json:"rate"`
 }
 
 func orderOf(o *store.OrderRow) orderJSON {
@@ -47,8 +56,13 @@ func orderOf(o *store.OrderRow) orderJSON {
 		CreatedAt: o.CreatedAt.Unix(), UpdatedAt: o.UpdatedAt.Unix(), Attempts: o.Attempts, LastError: o.LastError,
 		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName, Label: o.Label,
 	}
+	discountCurrency := o.Currency
+	if o.ListAmount != nil && o.ListCurrency != nil && o.Rate != nil {
+		out.List = &orderList{Price: money{*o.ListAmount, *o.ListCurrency}, Rate: *o.Rate}
+		discountCurrency = *o.ListCurrency
+	}
 	if o.DiscountCode != nil {
-		out.Discount = map[string]any{"code": *o.DiscountCode, "amount": money{o.DiscountAmount, o.Currency}}
+		out.Discount = map[string]any{"code": *o.DiscountCode, "amount": money{o.DiscountAmount, discountCurrency}}
 	}
 	if o.ExtendDays != nil || o.ExtendBytes != nil {
 		out.Extend = map[string]any{"days": o.ExtendDays, "bytes": o.ExtendBytes}

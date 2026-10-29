@@ -105,13 +105,13 @@ func TestCommandMenuListsNewRenewAndStatus(t *testing.T) {
 			}
 		}
 	}
-	if names(p.Langs[""].Commands) != "start menu new renew status paysupport" {
+	if names(p.Langs[""].Commands) != "start menu new renew status codes paysupport" {
 		t.Fatalf("the default menu: %q", names(p.Langs[""].Commands))
 	}
 	// Every staff chat has them too, ahead of its own commands.
 	set.SetStaff([]settings.Contact{{TelegramID: 1, Language: "en", Role: "owner"}})
 	p, _ = wantedProfile(cat, set, "", true, "")
-	if got := names(p.Staff[1]); got != "start menu new renew status paysupport admin dashboard" {
+	if got := names(p.Staff[1]); got != "start menu new renew status codes paysupport admin dashboard" {
 		t.Fatalf("an owner's menu: %q", got)
 	}
 	// An edited text is the description.
@@ -139,8 +139,8 @@ func TestCommandsPassTheGatesLikeTheButtons(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
 	cat := w.h.cat
-	commands := []string{"/new", "/renew", "/status"}
-	shown := []string{cat.T("en", "plans.title"), cat.T("en", "renew.none"), cat.T("en", "subs.empty")}
+	commands := []string{"/new", "/renew", "/status", "/codes"}
+	shown := []string{cat.T("en", "plans.title"), cat.T("en", "renew.none"), cat.T("en", "subs.empty"), "You have no codes yet."}
 	var held, outside []*person
 	for i := range commands { // one customer a command, so each answer is that command's own
 		held = append(held, w.customer(7300000010+int64(i), "held"))

@@ -12,13 +12,15 @@ import (
 
 const orderCols = `id, user_id, plan_id, type, status, amount, currency, idempotency_key, created_at, updated_at,
 	subscription_id, discount_code, discount_amount, targets_set, target_expires_at, target_traffic_bytes,
-	extend_days, extend_bytes, created_by, refunded_at, refund_amount, label, bulk_id, bulk_index`
+	extend_days, extend_bytes, created_by, refunded_at, refund_amount, label, bulk_id, bulk_index,
+	list_amount, list_currency, rate`
 
 func orderDest(o *Order) []any {
 	return []any{&o.ID, &o.UserID, &o.PlanID, &o.Type, &o.Status,
 		&o.Amount, &o.Currency, &o.IdempotencyKey, &o.CreatedAt, &o.UpdatedAt,
 		&o.SubscriptionID, &o.DiscountCode, &o.DiscountAmount, &o.TargetsSet, &o.TargetExpiresAt, &o.TargetTrafficBytes,
-		&o.ExtendDays, &o.ExtendBytes, &o.CreatedBy, &o.RefundedAt, &o.RefundAmount, &o.Label, &o.BulkID, &o.BulkIndex}
+		&o.ExtendDays, &o.ExtendBytes, &o.CreatedBy, &o.RefundedAt, &o.RefundAmount, &o.Label, &o.BulkID, &o.BulkIndex,
+		&o.ListAmount, &o.ListCurrency, &o.Rate}
 }
 
 func scanOrder(row pgx.Row) (*Order, error) {
@@ -79,6 +81,21 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// PriceOrderAs makes an order that is listed in another currency (USDT) the charge of amount in currency (Toman), at rate: amount and currency become
+// what the customer is charged, and the price it was listed at (listAmount in listCurrency, which must be what the order says now) is kept with the
+// rate. It touches only an order that is still unpaid and not priced this way already, so a second call, or one after a payment, changes nothing
+// and says so (false). The caller holds the order's row lock and writes the charge in the same transaction.
+func (s *Store) PriceOrderAs(ctx context.Context, q querier, id string, amount int64, currency string, listAmount int64, listCurrency string, rate int64) (bool, error) {
+	tag, err := q.Exec(ctx, `
+		UPDATE core.orders SET amount = $2, currency = $3, list_amount = $4, list_currency = $5, rate = $6, updated_at = now()
+		WHERE id = $1 AND status IN ('created', 'awaiting_payment') AND amount = $4 AND currency = $5 AND list_amount IS NULL`,
+		id, amount, currency, listAmount, listCurrency, rate)
+	if err != nil {
+		return false, fmt.Errorf("price order: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 // OrderByIdempotencyKey returns the order created with key.

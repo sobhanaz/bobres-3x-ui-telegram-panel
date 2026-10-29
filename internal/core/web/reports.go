@@ -467,6 +467,11 @@ var ordersColumns = []string{"paid_at_utc", "paid_at_local", "order_id", "type",
 
 const ordersJalali = "paid_at_jalali"
 
+// ordersListColumns come at the very end of the file, after tz and the Jalali column: for an order paid from the Toman wallet that was listed in USDT
+// (and for a license), the USDT price it was listed at, its currency and the Toman per USDT it was charged at. amount and currency are what was
+// charged. Empty for every other order.
+var ordersListColumns = []string{"list_amount", "list_currency", "rate"}
+
 // exportReportOrders: GET /api/v1/reports/orders.csv, every order paid in the
 // range, oldest first, at most maxCSVRows of them. The file starts with the
 // first row. A failure before it is an error answer; one after it ends the
@@ -491,6 +496,7 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 	if jalali {
 		header = append(header, ordersJalali)
 	}
+	header = append(header, ordersListColumns...)
 	ctx, cancel := context.WithTimeout(r.Context(), s.exportWindow())
 	defer cancel()
 	more, err := s.cfg.Domain.EachPaidOrder(ctx, rng, maxCSVRows, func(o store.PaidOrderRow) error {
@@ -512,6 +518,11 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 			textCell(o.Provider), rng.TZ}
 		if jalali {
 			cells = append(cells, jalaliStamp(o.PaidLocal))
+		}
+		if o.ListAmount > 0 && o.ListCurrency != "" && o.Rate > 0 {
+			cells = append(cells, decimal(o.ListAmount, o.ListCurrency), textCell(o.ListCurrency), strconv.FormatInt(o.Rate, 10))
+		} else {
+			cells = append(cells, "", "", "")
 		}
 		return f.data(cells...)
 	})

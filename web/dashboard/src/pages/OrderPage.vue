@@ -127,6 +127,9 @@ async function refund(reason: string) {
           <span v-if="o.discount" class="app-muted">
             ({{ t('order.discount', { amount: money(o.discount.amount, lang) }) }} <span class="app-ltr app-mono">{{ o.discount.code }}</span>)
           </span>
+          <div v-if="o.list" class="app-muted list-price">
+            {{ t('order.list', { price: money(o.list.price, lang), rate: money({ amount: o.list.rate, currency: o.amount.currency }, lang) }) }}
+          </div>
         </dd>
         <template v-if="o.cashback">
           <dt>{{ t('order.cashback') }}</dt>
@@ -204,6 +207,10 @@ async function refund(reason: string) {
 }
 .payments {
   margin-block-start: var(--app-gap);
+}
+.list-price {
+  font-size: 0.85rem;
+  margin-block-start: 0.25rem;
 }
 .error {
   color: var(--p-red-500);

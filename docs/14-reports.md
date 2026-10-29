@@ -412,7 +412,7 @@ Columns, in order:
 - `orders.csv`: `paid_at_utc`, `paid_at_local`, `order_id`, `type`, `telegram_id`, `username`, `plan_fa`, `plan_en`,
   `amount`, `currency`, `paid_with` (wallet, manual, gateway, or empty), `refunded_amount`, `provider` (the provider
   that took the payment, empty for wallet, trial and free orders and for orders paid before it was recorded), `tz`, and
-  `paid_at_jalali` in a Jalali file; oldest first. What the orders cost adds up to the report's revenue: a license has `type` `license` and a digital account `type` `digital` (its name and quantity in `plan_fa` and `plan_en`), both paid with the wallet.
+  `paid_at_jalali` in a Jalali file, then, at the very end, `list_amount`, `list_currency` and `rate`: for a plan priced in USDT that was paid from the Toman wallet (and for a license), the USDT price it was listed at, its currency and the Toman per USDT it was charged at (`amount` and `currency` are what was charged, so such an order is revenue in Toman and appears under Toman in every number and in Top plans); empty for every other order; oldest first. What the orders cost adds up to the report's revenue: a license has `type` `license` and a digital account `type` `digital` (its name and quantity in `plan_fa` and `plan_en`), both paid with the wallet.
 - `ledger.csv` (newest first, the ledger page's filters, `?user=`, `kind`, `currency`, `from`, `to`): `time_utc`,
   `telegram_id`, `username`, `kind`, `amount` (signed: a purchase is negative), `currency`, `balance_after`, `ref_type`,
   `ref_id`, `entry_id`, `time_local`, `tz`, and `time_jalali` in a Jalali file.

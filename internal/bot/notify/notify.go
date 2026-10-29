@@ -192,7 +192,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		lang := n.lang(ctx, e.TelegramID)
-		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.buy", "buy"))
+		kb := (&tg.Keyboard{}).Row(n.button(lang, "btn.buy", "buy"), n.button(lang, "btn.my_codes", "cds")) // the code can be found again later
 		value := n.cat.T(lang, "reward.percent", "n", i18n.Number(lang, int64(e.Percent)))
 		if e.Amount > 0 {
 			value = i18n.Money(lang, e.Amount, e.Currency)

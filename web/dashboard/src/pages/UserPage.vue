@@ -23,6 +23,7 @@ import ServicesTable from '../components/ServicesTable.vue'
 import OrdersTable from '../components/OrdersTable.vue'
 import PaymentsTable from '../components/PaymentsTable.vue'
 import LedgerTable from '../components/LedgerTable.vue'
+import CodesTable from '../components/CodesTable.vue'
 import TicketsTable from '../components/support/TicketsTable.vue'
 import BalanceText from '../components/resellers/BalanceText.vue'
 import MakeResellerDialog from '../components/resellers/MakeResellerDialog.vue'
@@ -32,7 +33,7 @@ import { useAuth } from '../stores/auth'
 import { useList } from '../composables/useList'
 import { asciiNumber, currencies, date, money, num, validAmount, type Lang } from '../format'
 import { isStaff } from '../staff'
-import type { LedgerItem, OrderItem, PaymentItem, ServiceItem, TicketItem, UserDetail } from '../types'
+import type { CodeItem, LedgerItem, OrderItem, PaymentItem, ServiceItem, TicketItem, UserDetail } from '../types'
 
 // counts.tickets comes with core's M4 user answer (older answers leave it out).
 type Detail = UserDetail & { counts: UserDetail['counts'] & { tickets?: number } }
@@ -60,10 +61,11 @@ const services = useList<ServiceItem, { user: string }>('/services', { user: id.
 const orders = useList<OrderItem, { user: string }>('/orders', { user: id.value }, 10)
 const payments = useList<PaymentItem, { user: string }>('/payments', { user: id.value }, 10)
 const ledger = useList<LedgerItem, { user: string }>('/ledger', { user: id.value }, 10)
+const codes = useList<CodeItem, { user: string }>('/codes', { user: id.value }, 10)
 const tickets = useList<TicketItem, { user: string }>('/tickets', { user: id.value }, 10)
 const canTickets = computed(() => auth.can('tickets.write'))
 // The tab is in the address (?tab=), so the support thread can open Tickets.
-const tabs = computed(() => ['services', 'orders', 'payments', 'ledger', ...(canTickets.value ? ['tickets'] : [])])
+const tabs = computed(() => ['services', 'orders', 'payments', 'ledger', 'codes', ...(canTickets.value ? ['tickets'] : [])])
 const tabOf = (v: unknown) => (typeof v === 'string' && tabs.value.includes(v) ? v : 'services')
 const tab = ref(tabOf(route.query.tab))
 const loaded = new Set<string>()
@@ -74,7 +76,7 @@ function showTab(v: string | number) {
   }
   if (loaded.has(tab.value)) return
   loaded.add(tab.value)
-  ;({ services, orders, payments, ledger, tickets })[tab.value as 'services']?.load()
+  ;({ services, orders, payments, ledger, codes, tickets })[tab.value as 'services']?.load()
 }
 onMounted(() => {
   void load()
@@ -83,7 +85,7 @@ onMounted(() => {
 watch(id, () => {
   detail.value = null
   loaded.clear()
-  for (const l of [services, orders, payments, ledger, tickets]) l.filters.user = id.value
+  for (const l of [services, orders, payments, ledger, codes, tickets]) l.filters.user = id.value
   void load()
   showTab(tab.value)
 })
@@ -259,6 +261,7 @@ const directions = computed(() => [
           <Tab value="orders">{{ t('user.orders') }} <Tag v-if="detail" :value="num(detail.counts.orders, lang)" severity="secondary" /></Tab>
           <Tab value="payments">{{ t('user.payments') }}</Tab>
           <Tab value="ledger">{{ t('user.ledger') }}</Tab>
+          <Tab value="codes">{{ t('user.codes') }}</Tab>
           <Tab v-if="canTickets" value="tickets">
             {{ t('user.tickets') }}
             <Tag v-if="detail && detail.counts.tickets !== undefined" :value="num(detail.counts.tickets, lang)" severity="secondary" />
@@ -291,6 +294,13 @@ const directions = computed(() => [
               :items="ledger.items.value" :total="ledger.total.value" :rows="ledger.rows.value"
               :first="(ledger.page.value - 1) * ledger.rows.value" :loading="ledger.loading.value" hide-user
               @page="ledger.onPage"
+            />
+          </TabPanel>
+          <TabPanel value="codes">
+            <CodesTable
+              :items="codes.items.value" :total="codes.total.value" :rows="codes.rows.value"
+              :first="(codes.page.value - 1) * codes.rows.value" :loading="codes.loading.value"
+              @page="codes.onPage"
             />
           </TabPanel>
           <TabPanel v-if="canTickets" value="tickets">

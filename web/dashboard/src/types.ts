@@ -82,6 +82,8 @@ export interface OrderItem {
   refund: { amount: Money; at: number } | null
   /** the cashback the order earned its buyer (only the one-order answer has it); `reversed` is what a refund took back */
   cashback?: { amount: Money; percent_bp: number; capped: boolean; at: number; reversed?: Money; reversed_at?: number } | null
+  /** an order listed in USDT and paid from the Toman wallet: amount is what was charged; this is the price it was listed at (the discount is in it) and the Toman per USDT it was worked out at */
+  list?: { price: Money; rate: number } | null
 }
 
 export interface Proof {
@@ -133,6 +135,32 @@ export interface LedgerItem {
   ref_type: string
   ref_id: string
   created_at: number
+}
+
+/** One of a customer's own codes (GET /codes?user=): a reward code issued to them, or a gift code they applied. */
+export interface CodeItem {
+  /** unique in the list: a reward code's own text, or the id of the gift redemption */
+  id: string
+  kind: 'reward' | 'gift'
+  /** a reward code, whole (a gift code is never kept: it has `tail`) */
+  code?: string
+  /** the last characters of the gift code the customer applied */
+  tail?: string
+  state: 'unused' | 'used' | 'expired' | 'off'
+  /** a reward code takes a percent off ... */
+  percent?: number
+  /** ... or an amount (minor units of its currency); for a gift code, what it added to the wallet */
+  amount?: number
+  currency?: string
+  scale: number
+  expires_at: number | null
+  used_at: number | null
+  received_at: number
+  /** the plan whose purchase gave a reward code, and that purchase */
+  plan?: Names
+  order_id?: string
+  /** a code made before reward codes were for any plan works on this one plan only */
+  only_plan?: Names
 }
 
 export interface PlanItem {
