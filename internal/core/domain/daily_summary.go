@@ -342,6 +342,7 @@ func summaryEvent(day, zone string, rep *SalesReport) (events.DailySummaryEvent,
 			Licenses: events.DailySummaryFlow(c.Licenses), Digital: events.DailySummaryFlow(c.Digital),
 			Refunds: events.DailySummaryFlow(c.Refunds), Net: Net(c), Topups: events.DailySummaryFlow(c.Topups),
 			Rejected: events.DailySummaryFlow(c.Rejected), GatewayFailed: events.DailySummaryFlow(c.GatewayFailed),
+			Cashback: events.DailySummaryFlow(c.Cashback),
 		})
 	}
 	return e, nil
@@ -349,5 +350,6 @@ func summaryEvent(day, zone string, rep *SalesReport) (events.DailySummaryEvent,
 
 // worthTelling: the day did something in this currency that the message shows.
 func worthTelling(c *store.ReportCell) bool {
-	return c.Revenue != 0 || c.Orders > 0 || c.Refunds.Count > 0 || c.Topups.Count > 0 || c.Rejected.Count > 0 || c.GatewayFailed.Count > 0
+	return c.Revenue != 0 || c.Orders > 0 || c.Refunds.Count > 0 || c.Topups.Count > 0 || c.Rejected.Count > 0 || c.GatewayFailed.Count > 0 ||
+		c.Cashback.Count > 0
 }

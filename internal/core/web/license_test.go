@@ -145,7 +145,7 @@ func TestLicensePage(t *testing.T) {
 	if asJSON(ent["max_servers"]) != `{"full":false,"limit":1,"near":false,"used":0}` ||
 		asJSON(ent["max_active_services"]) != `{"full":false,"limit":25,"near":false,"used":0}` ||
 		asJSON(ent["dashboard_staff_seats"]) != `{"full":false,"limit":2,"near":false,"used":0}` ||
-		asJSON(ent["gateways"]) != `{"enabled":["manual_card","manual_crypto","manual_zarinpal","stars","zarinpal"],"licensed":["zarinpal","idpay","nextpay","stars","manual_card","manual_crypto","manual_zarinpal"]}` ||
+		asJSON(ent["gateways"]) != `{"enabled":["manual_card","manual_crypto","manual_zarinpal","stars","zarinpal"],"licensed":["zarinpal","idpay","nextpay","aqayepardakht","stars","manual_card","manual_crypto","manual_zarinpal"]}` ||
 		ent["resellers"] != false || ent["crypto_watcher"] != false || ent["white_label"] != false || ent["updates_until"] != "" {
 		t.Fatalf("free entitlements: %v", ent)
 	}
@@ -165,7 +165,7 @@ func TestLicensePage(t *testing.T) {
 	if asJSON(ent["max_servers"]) != `{"full":false,"limit":2,"near":false,"used":0}` ||
 		asJSON(ent["dashboard_staff_seats"]) != `{"full":false,"limit":2,"near":false,"used":0}` ||
 		asJSON(ent["max_active_services"]) != `{"full":false,"limit":-1,"near":false,"used":0}` ||
-		asJSON(ent["gateways"]) != `{"enabled":["manual_card","manual_crypto","manual_zarinpal","stars","zarinpal"],"licensed":["zarinpal","idpay","nextpay","stars","manual_card","manual_crypto","manual_zarinpal"]}` ||
+		asJSON(ent["gateways"]) != `{"enabled":["manual_card","manual_crypto","manual_zarinpal","stars","zarinpal"],"licensed":["zarinpal","idpay","nextpay","aqayepardakht","stars","manual_card","manual_crypto","manual_zarinpal"]}` ||
 		ent["updates_until"] != "2027-09-30" || ent["resellers"] != false {
 		t.Fatalf("entitlements: %v", ent)
 	}

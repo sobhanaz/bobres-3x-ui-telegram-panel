@@ -110,6 +110,20 @@ export interface Order {
   list_scale?: number
   rate?: number
   discount_currency?: string
+  /** what the delivered order earned back as cashback (absent: none, or taken back by a refund) */
+  cashback?: { amount: number; currency: string; scale: number }
+}
+/** The store's cashback as the wallet shows it: its terms while it is on, and what this customer has earned (absent while off and unearned). */
+export interface CashbackInfo {
+  on: boolean
+  /** the share in percent as the owner wrote it, "2.5" ("" while off) */
+  percent: string
+  max_per_order: number
+  min_order: number
+  renewals: boolean
+  earned: number
+  currency: string
+  scale: number
 }
 export interface Quote { list_price: number; discount: number; total: number; currency: string; scale: number; discount_code: string }
 /**
@@ -149,10 +163,14 @@ export interface Intent {
   gateway_amount: number
   gateway_currency: string
   scale_gateway: number
-  /** what the payment shows: the USDT address of an automatic payment; for a manual one the card, the addresses, the link and the payment reference */
+  /** what the payment shows: the address of an automatic USDT or TON payment (TON also its memo, the comment the customer
+   * must write; the amount is gateway_amount in nanoton); for a manual one the card, the addresses, the link and the payment reference */
   details: {
     pay_address?: string
     network?: string
+    /** automatic TON: the comment the transfer must carry ("BOB-3F9A1C20"), or the payment is not recognized */
+    memo?: string
+    /** unix seconds, as text */
     expires_at?: string
     reference?: string
     card_number?: string
@@ -247,7 +265,7 @@ export const api = {
   catalog: () =>
     call<{ plans: Plan[]; groups?: PlanGroup[] }>('GET', '/plans').then((r) => ({ plans: r.plans, groups: r.groups ?? [] })),
   services: () => call<{ services: Service[] }>('GET', '/services').then((r) => r.services),
-  wallet: () => call<{ wallets: Wallet[]; ledger: LedgerEntry[] }>('GET', '/wallet'),
+  wallet: () => call<{ wallets: Wallet[]; ledger: LedgerEntry[]; cashback?: CashbackInfo }>('GET', '/wallet'),
   methods: (currency: string, amount: number) =>
     call<{ methods: string[] }>('GET', `/methods?currency=${encodeURIComponent(currency)}&amount=${amount}`).then((r) => r.methods),
   quote: (req: OrderRequest) => call<Quote>('POST', '/quote', req),

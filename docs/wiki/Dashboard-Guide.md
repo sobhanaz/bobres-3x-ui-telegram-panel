@@ -40,14 +40,14 @@ Every change is written to an append-only audit log. Sensitive actions, such as 
 | | Support | Ticket inbox with canned replies. A customer's reseller application arrives here too |
 | | Broadcasts | Send a message to all or some customers, now or later |
 | Sales | Plans | Plans, plan groups, traffic packages, the free trial, reward codes. See [Plans and Pricing](Plans-and-Pricing) |
-| | Orders & payments | Orders, the receipt **review queue**, retry delivery, refunds |
+| | Orders & payments | Orders, the receipt **review queue**, retry delivery, refunds. An order's page shows the cashback it earned |
 | | Wallet & ledger | Every wallet movement, with CSV export |
 | | Reports | Sales per currency. See [Reports](Reports) |
 | | Discounts & referrals | Discount codes, the referral reward, top inviters |
 | | Gift codes | Codes that add credit to a wallet |
 | | Resellers | Tiers, prices, credit limits, settlements |
 | Setup | Branding & texts | Name, logo, colors, every bot text, FAQ and tutorials, your Terms and Privacy pages |
-| | Settings | Time zone, maintenance mode, required channels and groups, notifications, limits, bulk purchase, daily sales summary |
+| | Settings | Time zone, maintenance mode, required channels and groups, notifications, limits, bulk purchase, cashback, reseller targets, the daily wheel (with its report), daily sales summary |
 | | Panel servers | Your 3x-ui and Marzban panels. See [Panels](Panels) |
 | | Payment gateways | Owner only. See [Payments](Payments) |
 | Administration | Staff | Who may use the dashboard, roles, sessions |

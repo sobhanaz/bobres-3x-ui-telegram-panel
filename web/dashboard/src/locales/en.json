@@ -316,7 +316,11 @@
     "refund": "Refund to wallet",
     "refund_intro": "{amount} goes to the customer's wallet and the order is cancelled (it was not delivered). The customer is told.",
     "refund_intro_delivered": "{amount} goes to the customer's wallet. The service was delivered and keeps working: delete it on its page if needed. The customer is told.",
-    "refund_done": "Refunded. Wallet balance: {balance}"
+    "refund_done": "Refunded. Wallet balance: {balance}",
+    "cashback": "Cashback",
+    "cashback_line": "{amount} · {percent} of {base}",
+    "cashback_capped": "cut to the most one order earns",
+    "cashback_reversed": "{amount} was taken back with the refund"
   },
   "account": {
     "title": "My account",
@@ -600,7 +604,9 @@
       "zarinpal": "Zarinpal",
       "idpay": "IDPay",
       "nextpay": "NextPay",
+      "aqayepardakht": "Aqayepardakht",
       "usdt_trc20_auto": "USDT TRC20 (automatic)",
+      "ton_auto": "TON",
       "stars": "Telegram Stars",
       "wallet": "Wallet"
     },
@@ -654,7 +660,11 @@
       "license_refund": "License refund",
       "supplier_purchase": "Digital account",
       "supplier_refund": "Digital account refund",
-      "wallet_convert": "USDT converted to Toman"
+      "wallet_convert": "USDT converted to Toman",
+      "cashback": "Cashback",
+      "cashback_reversal": "Cashback taken back",
+      "target_bonus": "Monthly target bonus",
+      "wheel_prize": "Wheel of fortune prize"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -691,7 +701,12 @@
     "used_on": "Used on",
     "from": "Came from",
     "from_order": "Order",
-    "status": { "unused": "Not used yet", "used": "Used", "expired": "Expired", "off": "Switched off" }
+    "status": {
+      "unused": "Not used yet",
+      "used": "Used",
+      "expired": "Expired",
+      "off": "Switched off"
+    }
   },
   "charts": {
     "legend": "Series (select to show or hide)",
@@ -786,7 +801,8 @@
       "refunds_n": "{n} refund | {n} refunds",
       "rejected_n": "{n} payment | {n} payments",
       "gateway_failed_n": "{n} payment | {n} payments",
-      "cancelled_n": "{n} order | {n} orders"
+      "cancelled_n": "{n} order | {n} orders",
+      "cashback": "Cashback given: {n} · {amount}"
     },
     "customers": {
       "title": "Customers",
@@ -868,7 +884,7 @@
     "method_hint": {
       "wallet": "Paid from the customer's wallet, whatever put the money there: a top-up, a refund, a reward, a change by staff, a reseller's commission or a reseller's credit.",
       "manual": "Card to card, crypto or a Zarinpal link, approved by staff.",
-      "gateway": "Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT.",
+      "gateway": "Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars, automatic USDT or automatic TON.",
       "unknown": "A sale with no record of how it was paid."
     },
     "daily": {
@@ -1032,12 +1048,18 @@
     "turned_off": "License sales are off",
     "on": "Sales on",
     "off": "Sales off",
-    "tier": { "standard": "Standard", "pro": "Pro" },
+    "tier": {
+      "standard": "Standard",
+      "pro": "Pro"
+    },
     "month": "month",
     "year": "year",
     "all": "All statuses",
     "status_col": "Status",
-    "status": { "active": "Active", "revoked": "Revoked" },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
     "none": "No licenses sold yet.",
     "buyer": "Buyer",
     "tier_col": "Tier",
@@ -1070,7 +1092,12 @@
     "end": "Ends",
     "end_date": "End date",
     "end_date_help": "YYYY-MM-DD, Gregorian, at most 10 years from today. Choose No end for a license without one.",
-    "mode": {"months": "After some months", "date": "On a date", "none": "No end", "default": "The trial's own days (30)"},
+    "mode": {
+      "months": "After some months",
+      "date": "On a date",
+      "none": "No end",
+      "default": "The trial's own days (30)"
+    },
     "default_help": "A trial lasts its own 30 days from now.",
     "make": "Make the license",
     "key_once": "The activation key",
@@ -1098,7 +1125,13 @@
     "rekey": "Issue a new key",
     "changed": "License changed",
     "ended_on": "Ended {date}",
-    "edit": {"title": "Change a license", "keep": "Keep the end", "tier_help": "A new tier takes that tier's limits and features.", "extend": "Or renew by", "extend_go": "Renew"}
+    "edit": {
+      "title": "Change a license",
+      "keep": "Keep the end",
+      "tier_help": "A new tier takes that tier's limits and features.",
+      "extend": "Or renew by",
+      "extend_go": "Renew"
+    }
   },
   "supplier": {
     "category": "Category",
@@ -1157,7 +1190,11 @@
     "refunded": "Order refunded",
     "refund_help": "The money goes back to the customer's wallet. Do this only when the supplier did not charge you for the order.",
     "attempts": "{n} attempt | {n} attempts",
-    "order_status": {"paid": "Waiting for the supplier", "done": "Delivered", "refunded": "Refunded"}
+    "order_status": {
+      "paid": "Waiting for the supplier",
+      "done": "Delivered",
+      "refunded": "Refunded"
+    }
   },
   "giftcodes": {
     "intro": "A gift code adds a fixed amount of credit to a customer's wallet. Customers apply it from the Wallet screen of the bot, with the Apply gift code button. A code is not kept: only its last four characters stay in this list, so copy new codes when you make them.",
@@ -1411,7 +1448,8 @@
       "bulk": "Bulk purchase",
       "profile": "Bot profile",
       "help": "Help screens",
-      "loginapp": "Dashboard sign-in approval"
+      "loginapp": "Dashboard sign-in approval",
+      "wheel": "Daily wheel"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -1609,7 +1647,14 @@
       "one_line": "One line only, without control characters.",
       "option": "Choose one of the options.",
       "timezone": "This time zone is not recognised.",
-      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59)."
+      "time": "A time of day such as 09:00 (24-hour: hours 00 to 23, minutes 00 to 59).",
+      "tiers": "Each tier needs a whole number of services (1 to 100,000) and a bonus of at least 1 Toman.",
+      "tiers_dup": "Two tiers ask for the same number of services.",
+      "tiers_many": "At most 10 tiers.",
+      "prizes": "Each prize needs a whole amount of Toman (at least 1) and a weight from 1 to 1,000,000.",
+      "prizes_dup": "Two prizes have the same amount.",
+      "prizes_many": "At most 12 prizes.",
+      "percent": "A percent from 0.01 to 20, for example 2.5."
     },
     "option": {
       "bot": {
@@ -1622,6 +1667,12 @@
         "recipients": {
           "owner": "Only the store owner",
           "staff": "Every owner and admin"
+        }
+      },
+      "targets": {
+        "calendar": {
+          "gregorian": "Gregorian",
+          "jalali": "Jalali (Persian)"
         }
       }
     },
@@ -1671,6 +1722,21 @@
       "reports": {
         "title": "Sales summary",
         "desc": "A message in Telegram with yesterday's sales, once a day."
+      },
+      "cashback": {
+        "title": "Cashback",
+        "desc": "Give a share of what each order cost back to the customer's wallet once it is paid and delivered.",
+        "note": "Cashback is credit in the wallet, not cash: it can only be spent in the store. If an order is refunded, its cashback is taken back from the refund. Resellers, free orders, free trials and orders priced in USDT earn none. Off until you turn it on."
+      },
+      "targets": {
+        "title": "Reseller targets",
+        "desc": "A monthly bonus for resellers who sell enough new services.",
+        "note": "Each tier pays its own bonus, once for the month, as soon as a reseller's sales of the month reach it, on top of the bonuses of the lower tiers. Only new services a reseller bought and that were delivered count; renewals, traffic packages and free orders do not. Sales are counted from the moment you switch targets on. A refunded sale leaves the count of its month, but a bonus already paid is not taken back. Off until you turn it on."
+      },
+      "wheel": {
+        "title": "Daily wheel",
+        "desc": "One free spin a day for customers who have paid orders, for a chance at wallet credit.",
+        "note": "The wheel stays closed until it has prizes and a daily budget. The draw is made by core, once per customer per day in store time. A prize the day's budget cannot cover is not paid and the customer's spin is not used: they are asked to come back tomorrow. Only customers spin, not resellers, staff or banned customers, and only after the paid orders you ask for (at least one). A prize is credit in the wallet, not cash: it can only be spent in the store. Off until you turn it on."
       }
     },
     "field": {
@@ -1901,9 +1967,88 @@
           "label": "Time it is sent",
           "help": "Time of day, 24-hour (for example 09:00), in the store's time zone: the time zone of the General card, else BOBRES_TIMEZONE, else Tehran. If the server was down at that time, the summary is sent as soon as it is back, the same day; days that were missed are not made up."
         }
+      },
+      "cashback": {
+        "enabled": {
+          "label": "Cashback",
+          "help": "When on, an order that has been paid and delivered credits a share of its price to the customer's wallet, once. Turned off, nothing more is paid; what was paid stays in the wallets. Set the percent too."
+        },
+        "percent": {
+          "label": "Cashback percent",
+          "help": "From 0.01 to 20, for example 2.5. It is worked out on what the order cost after any discount, in whole Toman, rounded down. Empty means no cashback."
+        },
+        "max_per_order": {
+          "label": "Most cashback per order (Toman)",
+          "help": "No order earns more than this. Empty or 0 means no maximum."
+        },
+        "min_order": {
+          "label": "Smallest order that earns (Toman)",
+          "help": "An order must cost at least this much, after any discount, to earn cashback. Empty or 0 means any order that costs something."
+        },
+        "renewals": {
+          "label": "Renewals earn cashback",
+          "help": "On: renewals and traffic packages earn it like new services. Off: only new services do."
+        }
+      },
+      "targets": {
+        "enabled": {
+          "label": "Monthly targets",
+          "help": "When on, a reseller whose new services of a month reach a tier is paid that tier's bonus, once for the month, into their wallet; they are told in the bot, and the Mini App and the bot show their progress. Turned off, nothing is counted or paid; what was paid stays."
+        },
+        "tiers": {
+          "label": "Tiers",
+          "help": "How many new services a reseller sells in a month, and the bonus in Toman for reaching that number. At most 10 tiers; each pays its own bonus on top of the lower tiers'. Changing the tiers in the middle of a month never pays a tier twice."
+        },
+        "calendar": {
+          "label": "Calendar of the month",
+          "help": "Gregorian: a month runs from the 1st to its last day (the 1st of November, for instance). Jalali: Persian months (the 1st of Aban). The month is read in the store's time zone. Change it between months, not in the middle of one."
+        }
+      },
+      "wheel": {
+        "enabled": {
+          "label": "Daily wheel",
+          "help": "When on, a customer with enough paid orders may spin the wheel once a day, in the bot and in the Mini App. Turned off, the wheel is gone; prizes already paid stay in the wallets. It also needs prizes and a daily budget."
+        },
+        "prizes": {
+          "label": "Prizes",
+          "help": "What the wheel can pay, in Toman, and each prize's weight: its share of the chances. A prize of weight 3 comes up three times as often as one of weight 1. At most 12 prizes, no amount twice; saved in order of amount."
+        },
+        "no_prize_weight": {
+          "label": "Weight of no prize",
+          "help": "The chance of no prize is this number out of the sum of all the weights, the prizes' included. Empty or 0 means every spin wins something."
+        },
+        "daily_budget": {
+          "label": "Daily budget (Toman)",
+          "help": "The most the wheel pays out in one day (store time). Spins are decided one at a time against it: when it cannot cover the prize that comes up, nothing is paid, the customer's spin is not used and they are asked to come back tomorrow. Empty or 0 means the wheel is closed."
+        },
+        "min_orders": {
+          "label": "Paid orders needed",
+          "help": "How many paid orders a customer needs before they may spin, at least 1: an account made only to spin earns nothing. Refunded orders and orders that cost nothing do not count."
+        }
       }
     },
-    "payments_moved": "Payment methods and their details:"
+    "payments_moved": "Payment methods and their details:",
+    "tiers": {
+      "empty": "No tier yet. Add one to start paying bonuses.",
+      "row": "Tier {n}",
+      "threshold": "New services in a month",
+      "bonus": "Bonus (Toman)",
+      "remove": "Remove tier {n}",
+      "add": "Add a tier",
+      "max": "The list holds at most {n} tier. | The list holds at most {n} tiers.",
+      "sorted": "Tiers are saved in order of services."
+    },
+    "prizes": {
+      "empty": "No prize yet. Add one to open the wheel.",
+      "row": "Prize {n}",
+      "amount": "Prize (Toman)",
+      "weight": "Weight",
+      "chance": "{percent} of spins",
+      "remove": "Remove prize {n}",
+      "add": "Add a prize",
+      "max": "The wheel holds at most {n} prize. | The wheel holds at most {n} prizes.",
+      "sorted": "Prizes are saved in order of amount."
+    }
   },
   "staff": {
     "intro": "People who can use this dashboard. Every change logs that person out and is kept in the audit log with your reason.",
@@ -2087,7 +2232,8 @@
       "order": {
         "retry": "Order retried",
         "refund": "Order refunded",
-        "bulk": "Bulk purchase made"
+        "bulk": "Bulk purchase made",
+        "cashback_reversal": "Cashback taken back"
       },
       "dashboard": {
         "login": "Logged in",
@@ -2591,7 +2737,20 @@
     "config_prefix": "Config prefix",
     "config_prefix_none": "Not chosen yet (the usual names)",
     "config_prefix_hint": "New configs are named <prefix>-u<id>-…; leave empty to let the reseller choose it in the bot. Clearing it lets them choose again.",
-    "config_prefix_rule": "2 to 10 letters or digits (a-z, 0-9), not like u123, and not used by another reseller."
+    "config_prefix_rule": "2 to 10 letters or digits (a-z, 0-9), not like u123, and not used by another reseller.",
+    "targets": {
+      "title": "Monthly target",
+      "range": "{from} to {to}",
+      "sold": "new services sold this month",
+      "tier": "{n} service: {bonus} bonus | {n} services: {bonus} bonus",
+      "paid": "bonus paid",
+      "reached_unpaid": "reached, bonus not paid",
+      "not_reached": "not reached yet",
+      "next": "{n} more service for the next bonus of {bonus}. | {n} more services for the next bonus of {bonus}.",
+      "done": "Every tier is reached this month.",
+      "paid_total": "Bonuses paid this month: {amount}",
+      "no_clawback": "A refunded sale leaves the count, but a bonus already paid is not taken back."
+    }
   },
   "tier": {
     "intro": "A tier sets what its resellers pay: a percentage off store prices, or a fixed price for a plan. The commission is the share of each purchase by a customer who joined through a reseller's link.",
@@ -2730,12 +2889,13 @@
     "version_range": "BOBRES is tested with panel versions {min} to {max}; this version may still work."
   },
   "gateway": {
-    "intro": "How customers pay. The merchant id or API key and the proxy of Zarinpal, IDPay and NextPay, and the TronGrid key of automatic USDT, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
-    "key_missing_banner": "The payments service has no encryption key yet, so the settings of Zarinpal, IDPay and NextPay still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
+    "intro": "How customers pay. The merchant id, API key or PIN and the proxy of Zarinpal, IDPay, NextPay and Aqayepardakht, the TronGrid key of automatic USDT and the TON Center key of automatic TON, are stored encrypted in the payments service and never shown again. The manual methods and Telegram Stars show customers the details below.",
+    "key_missing_banner": "The payments service has no encryption key yet, so the settings of Zarinpal, IDPay, NextPay and Aqayepardakht still come from the .env file and cannot be changed here. To add the key, run bobres install again on the server.",
     "key_missing": "Read only: add the payments key (run bobres install again) to change these here.",
     "zarinpal_desc": "Online card payments through your Zarinpal merchant account; payments are confirmed automatically.",
     "idpay_desc": "Online card payments through your IDPay account; payments are confirmed automatically.",
     "nextpay_desc": "Online card payments through your NextPay account; payments are confirmed automatically.",
+    "aqayepardakht_desc": "Online card payments through your Aqayepardakht account; payments are confirmed automatically.",
     "keyed": {
       "enabled": "Offer {name}",
       "sandbox_help": "Payments go to {name}'s test system and no real money moves. Never leave it on for customers.",
@@ -2754,6 +2914,24 @@
         "sandbox_refused": "The sandbox is refused on a production install: turn it off.",
         "public_url": "The public payment address is not right (it must be https with a domain), so {name} is not offered. Fix BOBRES_ZARINPAL_PUBLIC_URL in the .env file.",
         "invalid": "These settings were refused, so {name} is not offered. Check the API key and the proxy."
+      },
+      "pin": {
+        "label": "PIN",
+        "help": "Your gateway's PIN, from your {name} panel. It is stored encrypted and never shown again. Register this store's payment address (the same one as Zarinpal's) in the {name} panel as the callback domain.",
+        "sandbox_help": "For a test, you can use the PIN “sandbox”: payments then go to {name}'s test system and no real money moves. Replace it with your real PIN before customers pay.",
+        "sandbox_prod": "The test PIN “sandbox” is not accepted on a production install.",
+        "open_payments": "{n} {name} payment is still open. The PIN cannot change until it finishes, or that payment could not be confirmed. | {n} {name} payments are still open. The PIN cannot change until they finish, or those payments could not be confirmed.",
+        "invalid": {
+          "pin": "The PIN has 4 to 100 characters, with no spaces: Latin letters, digits and symbols. Capital and small letters are different.",
+          "sandbox": "The PIN “sandbox” is a test PIN and a production install does not accept it. Enter your real PIN.",
+          "needs_pin": "Enter the PIN before turning {name} on."
+        },
+        "test_ok": "{name} answered: the PIN and the route to it work.",
+        "problem": {
+          "unreadable": "The stored settings cannot be read (the payments key changed or is missing). Enter the PIN again.",
+          "sandbox_refused": "The stored PIN is the test PIN “sandbox”, which a production install refuses, so {name} is not offered. Enter your real PIN.",
+          "invalid": "These settings were refused, so {name} is not offered. Check the PIN and the proxy."
+        }
       }
     },
     "state": {
@@ -2793,6 +2971,8 @@
     "oldest_open": "the oldest since {time}",
     "last_error": "Last error",
     "last_error_at": "Last error, {time}",
+    "last_scan": "Address last read {time}",
+    "scan_error": "The last attempt to read the address failed",
     "report": "Payments",
     "report_refresh": "Refresh the report",
     "report_empty": "No payments in this period.",
@@ -2847,6 +3027,67 @@
       "resolve_title": "Mark this deposit handled",
       "resolve_message": "Do this only after you credited the customer by hand (Change balance on their page) or sent the USDT back. The deposit leaves this list and its transaction id is no longer accepted as a payment proof, so the same USDT is never credited twice. This cannot be undone.",
       "resolved": "Deposit marked handled"
+    },
+    "ton": {
+      "title": "TON (automatic)",
+      "desc": "Customers send an exact amount of TON from any wallet to your TON address and write the payment's comment in the transfer. The payment is found on the chain by that comment and confirmed automatically, with no transaction id to review. The amount is worked out when the payment is created, from the order's price, the store's USDT rate (the Crypto (USDT) card) and the live TON price.",
+      "enabled": "Offer automatic TON",
+      "enabled_help": "Customers see the exact amount, your address, the comment to write and a deadline. Turning it off stops offering it. It is also not offered while there is no fresh TON price.",
+      "address": "TON address",
+      "address_help": "The wallet that receives the TON; customers see it. Paste the address in any form your wallet shows (UQ…, EQ… or 0:…): it is saved in the UQ… form, which is safe to send to even if the wallet has never been used (a transfer to an EQ… address can bounce back). The comment is how a payment is matched, so customers must keep it. The address cannot change while automatic TON payments are open.",
+      "address_saved_as": "It will be saved as {address}",
+      "api_key": "TON Center API key (optional)",
+      "api_key_help": "Payments are found through TON Center. Without a key it allows very few requests; add a free key from toncenter.com. Stored encrypted and never shown again.",
+      "proxy_help": "Payments are found by calling TON Center from this server. If TON Center cannot be reached from here, send the calls through a proxy that can reach it. The proxy must be http or https and may include a user name and password. Stored encrypted and never shown again.",
+      "open_payments": "{n} automatic TON payment is still open. The address cannot change until it finishes, or TON sent to the old address would not be found. | {n} automatic TON payments are still open. The address cannot change until they finish, or TON sent to the old address would not be found.",
+      "invalid": {
+        "address_format": "This is not a TON address. Use the 48-character address your wallet shows (it starts with UQ or EQ), or the raw form 0: followed by 64 hex digits.",
+        "address_checksum": "This address is not valid: one of its characters is wrong. Copy it again from your wallet.",
+        "address_workchain": "Only addresses on the basechain (workchain 0) can receive payments here. This one is on another chain.",
+        "address_testnet": "This is a test network address. Use your main network address.",
+        "address_required": "Enter the address: it can be replaced, not removed.",
+        "needs_address": "Enter the address before turning it on.",
+        "api_key": "A TON Center key has 8 to 128 letters, digits, dashes and underscores."
+      },
+      "price": {
+        "title": "TON price",
+        "label": "Price of 1 TON",
+        "source": "Source",
+        "updated": "Last updated",
+        "fresh": "Fresh",
+        "stale": "Not fresh",
+        "none": "No price",
+        "warn_stale": "The TON price is not fresh. Until a fresh price arrives, this method is not shown to customers.",
+        "warn_none": "No TON price has been read yet. Until one arrives, this method is not shown to customers."
+      },
+      "source": {
+        "binance": "Binance",
+        "okx": "OKX"
+      },
+      "test_ok": "TON Center answered: this address can be watched.",
+      "test_failed": "TON Center could not be reached or refused the request.",
+      "test_latest": "The address's latest transaction: {time}",
+      "test_no_tx": "This address has no transactions yet.",
+      "test_latency": "Answered in {ms} ms.",
+      "saved": "Automatic TON settings saved",
+      "problem": {
+        "unreadable": "The stored settings cannot be read (the payments key changed or is missing). Enter the address and the key again.",
+        "invalid": "These settings were refused, so automatic TON is not offered. Check the address and the key."
+      },
+      "unmatched_help": "TON that reached your address but matched no payment: no comment, a comment nobody asked for, the wrong amount, or too late. Nothing was credited for it. Find the customer, use Change balance on their page, then mark the deposit handled.",
+      "comment": "Comment",
+      "comment_none": "No comment",
+      "tonviewer": "Open on Tonviewer",
+      "reason": {
+        "no_payment": "No open payment asks for this comment: the customer left it out or mistyped it, or the transfer is not from a customer.",
+        "already_paid": "The payment this comment belongs to was already paid: this is a second transfer.",
+        "closed": "The payment this comment belongs to can no longer be paid (it expired or failed).",
+        "ambiguous": "More than one payment matches this transfer, so none was chosen.",
+        "underpaid": "The comment names a payment, but less TON arrived than it asked for.",
+        "late_price": "It arrived after the payment's time ran out and the TON price has fallen since, so it no longer covers the price.",
+        "dust": "A tiny amount (dust). Such transfers are often sent to plant a look-alike address in your wallet history."
+      },
+      "resolve_message": "Do this only after you credited the customer by hand (Change balance on their page) or sent the TON back. The deposit leaves this list and is not shown again. This cannot be undone."
     },
     "method": {
       "manual_card": {
@@ -2953,9 +3194,13 @@
         "idpay_stuck": "{count} IDPay payment is still open; it started over 3 hours ago | {count} IDPay payments are still open; the oldest started over 3 hours ago",
         "nextpay_failing": "NextPay payments are failing",
         "nextpay_stuck": "{count} NextPay payment is still open; it started over 3 hours ago | {count} NextPay payments are still open; the oldest started over 3 hours ago",
+        "aqayepardakht_failing": "Aqayepardakht payments are failing",
+        "aqayepardakht_stuck": "{count} Aqayepardakht payment is still open; it started over 3 hours ago | {count} Aqayepardakht payments are still open; the oldest started over 3 hours ago",
         "backup_offsite": "The latest backup was not copied to the off-site (S3) storage",
         "usdt_failing": "Automatic USDT payments are not being checked: the store cannot read its TRON address from TronGrid",
         "usdt_stuck": "{count} automatic USDT payment is still open; it started over 2 hours ago | {count} automatic USDT payments are still open; the oldest started over 2 hours ago",
+        "ton_failing": "Automatic TON payments are not being checked: the store cannot read its TON address from TON Center",
+        "ton_stuck": "{count} automatic TON payment is still open; it started over 2 hours ago | {count} automatic TON payments are still open; the oldest started over 2 hours ago",
         "backup_failed": "The last backup failed",
         "backup_stale": "No new backup for {hours} hour | No new backup for {hours} hours",
         "disk_low": "The disk is almost full: {free} free",
@@ -3941,7 +4186,7 @@
       "dashboard_staff_seats": "All of this install's staff seats are taken. Buy or renew a license to add more staff.",
       "resellers": "Resellers are not included here. Buy or renew a license that includes them.",
       "gateways": "This payment method is not included here. Buy or renew a license that includes it.",
-      "crypto_watcher": "Automatic USDT payments are not included here. Buy or renew a license that includes them.",
+      "crypto_watcher": "Automatic crypto payments (USDT, TON) are not included here. Buy or renew a license that includes them.",
       "max_join_chats": "This plan allows only one required channel or group. Buy or renew a license (the Pro plan has no limit) to add more.",
       "other": "This is not included here. Buy or renew a license."
     },
@@ -4105,6 +4350,22 @@
       "live": "Live",
       "manual": "Your own rate",
       "none": "None"
+    }
+  },
+  "wheel": {
+    "report": {
+      "title": "Daily wheel report",
+      "desc": "What the wheel did today and on the days of the last month that had a spin, in store time.",
+      "off": "The wheel is off or closed now: it needs to be switched on, with prizes and a daily budget.",
+      "today": "Today",
+      "spins": "Spins",
+      "winners": "Winners",
+      "paid": "Paid out",
+      "budget": "Daily budget",
+      "remaining": "Left today",
+      "day": "Day",
+      "total": "All these days",
+      "empty": "Nobody has spun yet."
     }
   }
 }

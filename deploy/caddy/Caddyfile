@@ -53,14 +53,14 @@
 	}
 
 	# On the Zarinpal domain only the pay page and the gateways' return URLs
-	# (Zarinpal, IDPay, NextPay: the domain registered with each) exist: no
+	# (Zarinpal, IDPay, NextPay, Aqayepardakht: the domain registered with each) exist: no
 	# subscription links, admin or API on a domain registered with a payment
 	# gateway. (The Zarinpal site in /tls/sites.caddy says so too, before this
 	# snippet. When BOBRES_ZARINPAL_HOST is empty this compares with "", which no
 	# request host equals, so it never matches.)
 	@zarinpalHostOther {
 		expression `{host} == "{$BOBRES_ZARINPAL_HOST}"`
-		not path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay
+		not path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay /webhooks/aqayepardakht
 	}
 	handle @zarinpalHostOther {
 		respond "Not found" 404

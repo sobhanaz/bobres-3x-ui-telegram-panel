@@ -50,9 +50,16 @@ type Intent struct {
 	FailureReason   *string
 	CheckAttempts   int // reconciler checks only (drives its backoff)
 	CheckedAt       *time.Time
-	// PayAddress is where an on-chain payment is sent (usdt_trc20_auto),
-	// fixed at creation.
+	// PayAddress is where an on-chain payment is sent (usdt_trc20_auto,
+	// ton_auto), fixed at creation.
 	PayAddress *string
+	// ton_auto: the comment the transfer must carry (unique, for ever), and
+	// the quote the amount was worked out from: the micro-USDT the order is
+	// worth, the micro-USDT per TON then, and where that price came from.
+	PayMemo     *string
+	QuoteUSDT   *int64
+	QuoteRate   *int64
+	QuoteSource *string
 }
 
 // Receipt mirrors payments.manual_receipts.
@@ -123,32 +130,39 @@ func (s *Store) WithTx(ctx context.Context, fn func(pgx.Tx) error) error {
 }
 
 const intentCols = `id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at, created_at,
-	gateway_amount, gateway_currency, external_id, pay_url, provider_ref, failure_reason, check_attempts, checked_at, pay_address`
+	gateway_amount, gateway_currency, external_id, pay_url, provider_ref, failure_reason, check_attempts, checked_at, pay_address,
+	pay_memo, quote_usdt, quote_rate, quote_source`
 
 func scanIntent(row pgx.Row) (*Intent, error) {
 	var in Intent
 	err := row.Scan(&in.ID, &in.OrderID, &in.UserID, &in.Provider, &in.Amount,
 		&in.Currency, &in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt,
 		&in.GatewayAmount, &in.GatewayCurrency, &in.ExternalID, &in.PayURL, &in.ProviderRef,
-		&in.FailureReason, &in.CheckAttempts, &in.CheckedAt, &in.PayAddress)
+		&in.FailureReason, &in.CheckAttempts, &in.CheckedAt, &in.PayAddress,
+		&in.PayMemo, &in.QuoteUSDT, &in.QuoteRate, &in.QuoteSource)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return &in, err
 }
 
-// CreateIntent inserts idempotently: same key returns the existing row.
+// CreateIntent inserts idempotently: same key returns the existing row. The id
+// is made here unless the caller chose one (a TON payment's comment is made
+// from its id).
 func (s *Store) CreateIntent(ctx context.Context, tx pgx.Tx, in *Intent) (*Intent, error) {
-	in.ID = buuid.MustV7().String()
+	if in.ID == "" {
+		in.ID = buuid.MustV7().String()
+	}
 	row := s.q(tx).QueryRow(ctx, `
 		INSERT INTO payments.payment_intents
 			(id, order_id, user_id, provider, amount, currency, status, idempotency_key, expires_at,
-			 gateway_amount, gateway_currency, pay_address)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			 gateway_amount, gateway_currency, pay_address, pay_memo, quote_usdt, quote_rate, quote_source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
 		RETURNING `+intentCols,
 		in.ID, in.OrderID, in.UserID, in.Provider, in.Amount, in.Currency,
-		in.Status, in.IdempotencyKey, in.ExpiresAt, in.GatewayAmount, in.GatewayCurrency, in.PayAddress)
+		in.Status, in.IdempotencyKey, in.ExpiresAt, in.GatewayAmount, in.GatewayCurrency, in.PayAddress,
+		in.PayMemo, in.QuoteUSDT, in.QuoteRate, in.QuoteSource)
 	got, err := scanIntent(row)
 	if err != nil {
 		return nil, fmt.Errorf("create intent: %w", err)
@@ -361,7 +375,8 @@ type IntentRecord struct {
 }
 
 const intentColsI = `i.id, i.order_id, i.user_id, i.provider, i.amount, i.currency, i.status, i.idempotency_key, i.expires_at, i.created_at,
-	i.gateway_amount, i.gateway_currency, i.external_id, i.pay_url, i.provider_ref, i.failure_reason, i.check_attempts, i.checked_at, i.pay_address`
+	i.gateway_amount, i.gateway_currency, i.external_id, i.pay_url, i.provider_ref, i.failure_reason, i.check_attempts, i.checked_at, i.pay_address,
+	i.pay_memo, i.quote_usdt, i.quote_rate, i.quote_source`
 
 // ListIntents returns a page of the payment history, newest first, and the
 // number of matches.
@@ -405,6 +420,7 @@ func (s *Store) ListIntents(ctx context.Context, f IntentFilter, limit, offset i
 			&in.Currency, &in.Status, &in.IdempotencyKey, &in.ExpiresAt, &in.CreatedAt,
 			&in.GatewayAmount, &in.GatewayCurrency, &in.ExternalID, &in.PayURL, &in.ProviderRef,
 			&in.FailureReason, &in.CheckAttempts, &in.CheckedAt, &in.PayAddress,
+			&in.PayMemo, &in.QuoteUSDT, &in.QuoteRate, &in.QuoteSource,
 			&rid, &r.Network, &r.TXID, &r.ReceiptFile, &r.ReferenceNumber, &submittedAt,
 			&r.ReviewedBy, &r.Decision, &r.Reason, &r.ReviewedAt, &total); err != nil {
 			return nil, 0, err

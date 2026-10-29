@@ -77,6 +77,43 @@ told. A customer with no codes is told how they come. A **Buy** button and a hin
 listed reward code is still unused. A reseller sees the same list (they can apply gift codes; a reward code is not made for a reseller, and a
 reseller pays tier prices and uses no discount code, so one earned before they became a reseller waits). On a core older than the bot the button
 says it is not available yet.
+**Cashback (2026-10-28).** The owner can give a share of what an order cost back to the buyer's wallet (Settings, Cashback; off until switched on):
+`cashback.enabled`, `cashback.percent` (0.01 to 20, up to two decimals, for example 2.5), `cashback.max_per_order` (Toman, empty or 0: no maximum),
+`cashback.min_order` (Toman, empty or 0: any order that costs something) and `cashback.renewals` (on by default: renewals and traffic packages earn
+too). When an order that earns it has been **paid and delivered**, core credits `floor(price x percent / 100)` (the price after any discount, in whole
+Toman, cut to the maximum) to the wallet in the same transaction that marks the order delivered: a ledger entry of kind `cashback`, key
+`cashback:<order id>`, once however often the delivery is retried, and a row in `core.cashback_credits` that records how it was worked out. The
+customer gets a message right after the service's own (`wallet.credited_cashback`: "You earned X cashback on your purchase", with the balance); the
+services of a **bulk purchase** are not told one by one: the bulk's one message ends with the sum (`bulk.cashback`). **Earns:** a purchase, renewal or
+traffic package of a customer, in Toman, that cost more than nothing and at least the minimum. **Earns nothing:** a reseller (they buy at tier prices and
+have monthly targets instead), a free trial, an order a code made free, an order priced in USDT, a banned customer, the licenses and digital accounts the
+owner's own store sells. An order paid from money that came as cashback earns again (a wallet does not remember where its money came from). **A refund
+takes the cashback back** in the same transaction as the refund (`cashback_reversal`, key `cashback_reversal:<order id>`), from the wallet the refund has
+just filled, never below zero: if the wallet cannot cover it (the customer owes), what could not be taken is written to the audit log
+(`order.cashback_reversal`, with `credited`, `taken` and `shortfall`). The refund message then says the cashback was taken back, with the balance after
+both (`wallet.credited_refund_cashback`). The wallet history names the movements ("Cashback", "Cashback taken back"). The Mini App shows the terms and
+the total earned on the Wallet tab and "You earned X cashback" on the result of a purchase; the dashboard shows it on the order's page and in the
+reports ([14-reports.md](14-reports.md)).
+<a id="daily-wheel"></a>
+**Daily wheel (2026-10-28).** One free spin a day for customers who have made paid orders, for a chance at wallet credit. It is **off** until the owner switches
+it on and gives it prizes and a daily budget (Settings, Daily wheel): `wheel.enabled`, `wheel.prizes` (up to 12 rows of `{amount, weight}`; Toman and a
+weight, the share of the chances; no amount twice), `wheel.no_prize_weight` (the weight of the segment that pays nothing: the chance of no prize is this
+out of the sum of every weight; 0 means every spin wins), `wheel.daily_budget` (Toman a store-local day; empty or 0 closes the wheel) and `wheel.min_orders`
+(paid orders needed, at least 1; default 1). The home screen and the bottom menu have a **Daily wheel** button (`wh`) only while it is on, and only for
+customers: not for staff, resellers or banned customers (core refuses them anyway). The screen shows the prizes with their chances and a **Spin the wheel**
+button (`wh:spin`); a customer short of paid orders is told how many it takes. The rules, all in core:
+- **One spin per customer per store-local day** (the zone of the reports). The row `(user, day)` of `core.wheel_spins` is unique and a prize is the ledger
+  entry `wheel_prize` with the key `wheel:<user id>:<yyyy-mm-dd>`, written in the same transaction as the spin. A second request the same day (a double tap,
+  a retry, the bot and the Mini App at once) is answered with the first spin and draws nothing.
+- **The draw is core's**: `crypto/rand` over the weights, never the client's. The Mini App's animation only plays the result it was given.
+- **The daily budget** is what the day's spins already paid, read under a lock on the day, so spins are decided one at a time and the budget cannot be
+  overspent by two at once. When what is left cannot cover the smallest prize, or the prize that came up, nothing is paid, **the spin is not used** and the
+  customer is told to come back tomorrow.
+- **Who may spin:** active customers with at least `wheel.min_orders` paid orders (an order that cost something after any discount, was paid and not
+  refunded). A banned customer cannot, even when banned between the tap and the draw; a prize already won stays.
+- A customer sees one short message: "You won X! ... Balance: Y" or "No prize this time"; no second notification is sent (`wallet.credited` with reason
+  `wheel_prize` is silent). The wallet history names it ("Wheel of fortune prize"). The dashboard has a small report under the card
+  (`GET /api/v1/wheel/report`, `reports.read`): today against the budget and each day of the last month that had a spin.
 **Plan groups:** staff may put plans in named groups with a text for each (dashboard, Plans). In a store that has at least one
 group with a plan on sale, Buy first shows the groups (`pg:<group id>`, one button each, `plans.group_button`) and an **Other plans**
 button (`pg:-`) for the plans with no group; a group's screen shows its name and its text (in the customer's language, else any the
@@ -391,6 +428,21 @@ payments in the dashboard. Customers see none of this.
 - **Buy for a customer:** the plans at their prices, then "type a name for this service, like Ali's phone, or tap
   Skip" (one line, at most 64 characters), then the regular checkout. Their regular Buy, renewals and traffic
   packages show their prices too.
+- **Monthly target** (built 2026-10-28; off until the owner switches it on in Settings, Reseller targets: `targets.enabled`, `targets.tiers`, a list of
+  up to 10 `{threshold, bonus}` rows, and `targets.calendar`, `gregorian` by default or `jalali`). Each tier is a number of **new services** the reseller
+  sells in a calendar month and a bonus in Toman. A sale is a new service an active reseller bought that has been **delivered** (a renewal, a traffic
+  package, a free trial and an order that cost nothing are not sales); it belongs to the month it was delivered in, read in the store's time zone (the
+  zone of the reports and the daily summary) and in the owner's calendar, and counts only while targets are on, so switching them on in the middle of a
+  month counts from that moment. A bulk purchase counts each of its services. When a delivery makes the count reach a tier, the bonus goes to the
+  wallet in **the same transaction that marks the service delivered**: a ledger entry of kind `target_bonus`, key `target:<reseller user id>:<yyyy-mm>:<threshold>`,
+  and a row in `core.reseller_target_bonuses` whose primary key (reseller, month, threshold) is the guard: a tier pays once per month however often
+  the delivery is retried and however the owner edits the list (a tier is told by its threshold, not by its place in the list; a tier added in the
+  middle of a month pays at the reseller's next sale if their count is already past it). The reseller gets a message ("You reached N services this
+  month: bonus X was added to your wallet", `wallet.credited_target_bonus`). The panel shows the month (its dates), the count, each tier with its bonus
+  and whether it is reached and paid, and how many more sales the next one needs; the Mini App's reseller panel and the dashboard's reseller page show
+  the same (`targets`). **A refund takes the sale out of the count but never takes a paid bonus back**: a bonus is not clawed back, so a reseller who
+  was paid and then had orders refunded keeps it, and a tier that was paid is not paid again when the count climbs back. Staff can see every bonus in the
+  reseller's statement (kind "Monthly target bonus"). Targets need the resellers feature of the license, like the rest of this panel.
 - **Bulk purchase** (the home menu's button, Key flows above) works for resellers: the plans and every service at their
   prices, paid from the wallet down to their credit limit (the screen says what they can spend; past it, "Not enough
   credit" and no Pay or top-up), the services named "<name> 1" to "<name> N" like a name they give a single one, and the

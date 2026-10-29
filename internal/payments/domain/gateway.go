@@ -61,7 +61,7 @@ func reopenable(in *store.Intent) bool {
 }
 
 // gatewayCurrency is the only currency each automated provider is charged in.
-var gatewayCurrency = map[string]string{"zarinpal": "IRR", "idpay": "IRR", "nextpay": "IRR", "stars": "XTR"}
+var gatewayCurrency = map[string]string{"zarinpal": "IRR", "idpay": "IRR", "nextpay": "IRR", "aqayepardakht": "IRR", "stars": "XTR"}
 
 // SetGateways attaches automated providers by name and offers them, with
 // no stored settings behind them (tests; production uses ConfigureGateways).
@@ -102,6 +102,9 @@ func (s *Service) Gateways() []string {
 	}
 	if s.chain.Load().offered() {
 		out = append(out, USDTAuto)
+	}
+	if s.tonOffered() {
+		out = append(out, TONAuto)
 	}
 	return out
 }
@@ -324,6 +327,12 @@ func (s *Service) check(ctx context.Context, userID, intentID, kind string, o ch
 			return in, nil // the watcher reads the chain itself; there is no return page
 		}
 		return s.checkChain(ctx, in)
+	}
+	if in.Provider == TONAuto {
+		if o.reconciler || o.fromReturn {
+			return in, nil
+		}
+		return s.checkTON(ctx, in)
 	}
 	open := in.Status == "pending" || in.Status == "confirming"
 	switch {

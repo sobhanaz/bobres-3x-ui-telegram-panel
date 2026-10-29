@@ -3,6 +3,7 @@ syntax = "proto3";
 package core.v1;
 
 import "common/v1/types.proto";
+import "core/v1/growth.proto";
 import "core/v1/codes.proto";
 import "core/v1/help.proto";
 
@@ -709,6 +710,8 @@ message ResellerInfo {
   // in ("" until the owner gives one).
   string config_prefix = 8;
   string panel_group = 9;
+  // The monthly target (growth.proto): this month's count and the tiers. Absent while the owner has targets off.
+  ResellerTargets targets = 10;
 }
 
 // SetResellerConfigPrefixRequest sets the reseller's own config prefix: once (the
@@ -1034,6 +1037,10 @@ service CoreService {
   // GetTopInviters is a page of the top-inviters board (the bot's "Top users"):
   // enabled is false while the board is off. NOT_FOUND for an unknown user.
   rpc GetTopInviters(GetTopInvitersRequest) returns (TopInviters);
+  // GetWheel and SpinWheel are the daily wheel of fortune (growth.proto): the
+  // wheel as this customer sees it, and their one spin of the day.
+  rpc GetWheel(GetWheelRequest) returns (WheelState);
+  rpc SpinWheel(SpinWheelRequest) returns (WheelSpinResult);
   rpc AdminUpsertDiscount(AdminUpsertDiscountRequest) returns (Discount);
   rpc AdminListDiscounts(AdminListDiscountsRequest) returns (AdminListDiscountsResponse);
   rpc CreateDashboardLink(CreateDashboardLinkRequest) returns (DashboardLink);

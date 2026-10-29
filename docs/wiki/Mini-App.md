@@ -6,7 +6,7 @@ The Mini App is your store as a web app inside Telegram. It is the same store as
 
 - Browse plans (in groups, if you made them), buy, and pay.
 - See their services, copy the link, open the service's page, and renew or add traffic.
-- Use the wallet: balances, history, top-up. A top-up is 10,000 to 50,000,000 Toman, or a whole number of USDT from 1 to 10,000: the app shows the address, the exact amount, a QR code and a countdown, and then the converted balance in Toman.
+- Use the wallet: balances, history, top-up. A top-up is 10,000 to 50,000,000 Toman, or a whole number of USDT from 1 to 10,000: the app shows the address, the exact amount, a QR code and a countdown, and then the converted balance in Toman. While [cashback](Plans-and-Pricing) is on, the wallet says what a purchase earns and what the customer has earned so far, and the result of a purchase says "You earned X cashback". While the [daily wheel](Plans-and-Pricing) is on, **More** has a **Daily wheel** page: a wheel that turns to the result the server drew, one spin a day.
 - Pay a plan priced in USDT from the wallet: the app shows the USDT price, the rate and the Toman that will be taken, held for two minutes, and the customer confirms.
 - Take the free trial, invite friends, and write to support.
 - See their own codes under **More > My codes**: the reward codes made for them (with a Copy button) and the gift codes they applied, newest first, with each one's worth, state and date. It is the same list as the bot's Wallet > My codes.
@@ -16,7 +16,7 @@ It does not do bulk purchase, and it does not reset traffic or give free days. T
 
 ### Payment methods
 
-The wallet, an online gateway (Zarinpal, IDPay, NextPay), Telegram Stars, automatic USDT, and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
+The wallet, an online gateway (Zarinpal, IDPay, NextPay, Aqayepardakht), Telegram Stars, automatic USDT, automatic TON (the exact amount, the address and the comment, each with a copy button, and a countdown), and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
 
 ### Resellers
 
@@ -58,7 +58,7 @@ The tests play Telegram with a fake. Only a real phone can prove these, and they
 
 - Sign-in with the real bot token on iOS, Android and Desktop.
 - Telegram's web clients, theme colors, the notch and the Back button.
-- A payment page opening from the app and coming back (Zarinpal, IDPay, NextPay).
+- A payment page opening from the app and coming back (Zarinpal, IDPay, NextPay, Aqayepardakht).
 - Stars payments made through a link.
 - Receipt photos from a camera, including large and HEIC photos.
 - The required-channel gate with a real channel.

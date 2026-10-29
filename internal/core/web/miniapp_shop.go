@@ -126,7 +126,15 @@ func (s *Server) miniWallet(w http.ResponseWriter, r *http.Request) {
 		ledger = append(ledger, map[string]any{"kind": e.Kind, "amount": e.Amount, "currency": e.Currency, "balance_after": e.BalanceAfter,
 			"at": e.CreatedAt.Unix(), "scale": bmoney.Scale(e.Currency)})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"wallets": wallets, "ledger": ledger})
+	body := map[string]any{"wallets": wallets, "ledger": ledger}
+	// The cashback: its terms while it is on, and what this customer has earned, so the wallet can say both.
+	if cb, err := s.cfg.Domain.CashbackStatus(ctx, c.user.ID); err != nil {
+		s.cfg.Log.Warn("mini app wallet cashback", "err", err)
+	} else if cb.On || cb.Earned > 0 {
+		body["cashback"] = map[string]any{"on": cb.On, "percent": cb.Percent, "max_per_order": cb.MaxPerOrder, "min_order": cb.MinOrder,
+			"renewals": cb.Renewals, "earned": cb.Earned, "currency": domain.WalletCurrency, "scale": bmoney.Scale(domain.WalletCurrency)}
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // miniPaymentMethods: GET /api/mini/v1/methods?currency=IRT&amount=N, the
@@ -272,7 +280,14 @@ func (s *Server) miniGetOrder(w http.ResponseWriter, r *http.Request) {
 		s.miniFail(w, "mini app order", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, miniOrderBody(o))
+	body := miniOrderBody(o)
+	// What the delivered order earned back, for the result screen ("you earned X cashback"): a refunded one earned nothing in the end.
+	if c, err := s.cfg.Domain.OrderCashback(r.Context(), o.ID); err != nil {
+		s.cfg.Log.Warn("mini app order cashback", "order", o.ID, "err", err)
+	} else if c != nil && c.ReversedAt == nil {
+		body["cashback"] = map[string]any{"amount": c.Amount, "currency": c.Currency, "scale": bmoney.Scale(c.Currency)}
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // miniPayWallet: POST /api/mini/v1/orders/{id}/pay-wallet {quote}. Paying twice is
@@ -304,10 +319,19 @@ func (s *Server) miniPayWallet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, miniOrderBody(paid))
 }
 
+// gatewayScale is the number of decimals of what a gateway charges: TON has 9 (nanoton), and the currencies the
+// ledger knows what money says.
+func gatewayScale(currency string) int {
+	if currency == "TON" {
+		return 9
+	}
+	return bmoney.Scale(currency)
+}
+
 // miniIntentDetails are the details of a payment the customer is shown: the
 // USDT address of an automatic payment, and what a manual payment says (the
 // card, the addresses, the link, the payment reference), as in the bot.
-var miniIntentDetails = []string{"pay_address", "network", "expires_at", "reference",
+var miniIntentDetails = []string{"pay_address", "network", "memo", "expires_at", "reference",
 	"card_number", "card_holder", "usdt_trc20", "usdt_erc20", "zarinpal_link"}
 
 func miniIntentBody(res *domain.IntentResult) map[string]any {
@@ -319,7 +343,7 @@ func miniIntentBody(res *domain.IntentResult) map[string]any {
 	}
 	return map[string]any{"intent_id": res.IntentID, "status": res.Status, "provider": res.Provider, "order_id": res.OrderID,
 		"amount": res.Amount, "currency": res.Currency, "scale": bmoney.Scale(res.Currency), "pay_url": res.PayURL,
-		"gateway_amount": res.GatewayAmount, "gateway_currency": res.GatewayCurrency, "scale_gateway": bmoney.Scale(res.GatewayCurrency), "details": details}
+		"gateway_amount": res.GatewayAmount, "gateway_currency": res.GatewayCurrency, "scale_gateway": gatewayScale(res.GatewayCurrency), "details": details}
 }
 
 type miniPayIn struct {

@@ -15,7 +15,7 @@ import (
 )
 
 // ChainProviders are the providers paid on chain and settled by the watcher.
-var ChainProviders = []string{chainProvider}
+var ChainProviders = []string{chainProvider, tonProvider}
 
 const chainProvider = "usdt_trc20_auto"
 
@@ -41,6 +41,8 @@ type ChainTransfer struct {
 	ID         int64
 	TxID       string // lower-case hex, no 0x
 	EventIndex int
+	LT         int64  // TON: the account's logical time of the transaction
+	Comment    string // TON: the transfer's comment
 	Network    string
 	Token      string
 	From       string

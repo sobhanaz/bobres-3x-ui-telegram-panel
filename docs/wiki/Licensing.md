@@ -21,7 +21,8 @@ BOBRES is **free core, paid premium**, with one subscription per install. You do
 
 Prices are per install, in USDT on TRON (TRC20). A year costs ten months.
 
-- The **free tier** is for your own store. Its payment methods are the wallet, Zarinpal, IDPay, NextPay, Stars, card to card, manual USDT and the manual Zarinpal link.
+- The **free tier** is for your own store. Its payment methods are the wallet, Zarinpal, IDPay, NextPay, Aqayepardakht, Stars, card to card, manual USDT and the manual Zarinpal link.
+- **Automatic USDT and automatic TON** need the crypto watcher, which the paid tiers and the trial have; a license that names automatic USDT covers automatic TON too.
 - The **trial** starts by itself on a new or upgraded install, lasts 30 days, and has everything except white label.
 - **Active services** are the services customers have now, active or about to expire, plus paid orders on their way.
 - **Staff seats** count admins, support members and extra owners. The main owner (the first ID in `BOBRES_ADMIN_TELEGRAM_ID`) takes none.

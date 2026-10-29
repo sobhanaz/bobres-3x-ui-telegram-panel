@@ -27,7 +27,7 @@ const mainCaddyfile = `{
 	}
 	@zarinpalHostOther {
 		expression ` + "`{host} == \"{$BOBRES_ZARINPAL_HOST}\"`" + `
-		not path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay
+		not path /pay/* /webhooks/zarinpal /webhooks/idpay /webhooks/nextpay /webhooks/aqayepardakht
 	}
 	handle @zarinpalHostOther {
 		respond "Not found" 404

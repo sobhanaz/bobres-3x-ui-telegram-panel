@@ -27,6 +27,8 @@ export interface ReportCell {
   /** the licenses the store sold and the digital accounts it resold: part of `orders` and `revenue`, not of new, renewals and traffic (absent from an older core) */
   licenses?: ReportFlow
   digital?: ReportFlow
+  /** the cashback given to wallets, less what refunds took back (count: the credits); not revenue and not in `net` (absent from an older core) */
+  cashback?: ReportFlow
   topups: ReportFlow
   /** manual payments a reviewer rejected */
   rejected: ReportFlow
@@ -85,7 +87,7 @@ export interface ReportPlan {
 export interface ReportMethod {
   /** wallet, manual, gateway, or unknown */
   method: string
-  /** who took the payment (zarinpal, idpay, nextpay, stars, usdt_trc20_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
+  /** who took the payment (zarinpal, idpay, nextpay, aqayepardakht, stars, usdt_trc20_auto, ton_auto, manual_card, ...); '' for wallet, unknown and orders paid before it was recorded */
   provider: string
   currency: string
   orders: number

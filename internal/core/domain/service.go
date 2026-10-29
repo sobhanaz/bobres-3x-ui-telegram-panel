@@ -57,10 +57,16 @@ type Config struct {
 	SupplierTransport SupplierTransport
 	// RateTransport carries the live USDT rate from the bot (nil until SetRateTransport).
 	RateTransport RateTransport
+	// WheelRand draws the wheel of fortune: a uniform number in [0, n). nil is crypto/rand; tests set it to fix the draw.
+	WheelRand func(n int64) (int64, error)
+	// AutoCrypto says whether automatic USDT or TON is switched on in payments (nil until SetAutoCrypto): the live
+	// rate is then kept fresh, as it is for a store with a manual crypto address.
+	AutoCrypto func(ctx context.Context) bool
 	// PrivateFeaturesOverride, when set, decides PrivateFeatures instead of the license. It exists for tests of the vendor's
 	// own features; nothing sets it in a running install.
 	PrivateFeaturesOverride *bool
-	// Now is the clock the wallet quotes expire by (nil: time.Now); tests move it.
+	// Now is the service's clock (nil: time.Now): the wallet quotes expire by it, and the growth tools read the month of a reseller's sale and the
+	// day of a spin from it. Tests move it.
 	Now func() time.Time
 }
 

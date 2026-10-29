@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { asciiNumber, bytes, date, daysLeft, decimalOf, gbOf, latinDigits, minorOf, money, num, planName, validAmount } from '../format'
+import { ago, asciiNumber, bytes, date, daysLeft, decimalOf, gbOf, latinDigits, minorOf, money, moneyCompact, num, planName, validAmount } from '../format'
 import { newKey, query } from '../api'
 
 describe('format', () => {
@@ -11,6 +11,35 @@ describe('format', () => {
     expect(money({ amount: 150000, currency: 'IRT' }, 'en')).toBe('150,000 Toman')
     expect(money({ amount: 150000, currency: 'IRT' }, 'fa')).toBe('۱۵۰٬۰۰۰ تومان')
     expect(money({ amount: 2_500_000, currency: 'USDT' }, 'en')).toBe('2.5 USDT')
+  })
+  it('knows TON: nanoton, 9 decimals, and its name in each language', () => {
+    expect(money({ amount: 2_531_000_000, currency: 'TON' }, 'en')).toBe('2.53 TON')
+    expect(money({ amount: 2_531_000_000, currency: 'TON' }, 'fa')).toBe('۲٫۵۳ تون')
+    expect(money({ amount: 9_000_000_000, currency: 'TON' }, 'fa')).toBe('۹ تون')
+    expect(moneyCompact({ amount: 12_000_000_000_000, currency: 'TON' }, 'en')).toBe('12K TON')
+    // the exact amount a wallet shows, all the way down to the last nanoton
+    expect(decimalOf({ amount: 2_531_000_000, currency: 'TON' })).toBe('2.531')
+    expect(decimalOf({ amount: 2_531_000_007, currency: 'TON' })).toBe('2.531000007')
+    expect(decimalOf({ amount: 1, currency: 'TON' })).toBe('0.000000001')
+    expect(decimalOf({ amount: 1_000_000_000, currency: 'TON' })).toBe('1')
+    expect(minorOf('2.531000007', 'TON')).toBe(2_531_000_007)
+    expect(minorOf('0.0000000001', 'TON')).toBeNull() // a tenth of a nanoton
+    expect(validAmount('1.123456789', 'TON')).toBe(true)
+    expect(validAmount('1.1234567891', 'TON')).toBe(false)
+  })
+  it('says how long ago a time was, in the language and its digits', () => {
+    const now = Date.UTC(2026, 9, 28, 12) // ms
+    const at = (secondsAgo: number) => now / 1000 - secondsAgo
+    expect(ago(at(12), now, 'en')).toBe('12 seconds ago')
+    expect(ago(at(12), now, 'fa')).toBe('۱۲ ثانیه پیش')
+    expect(ago(at(89), now, 'en')).toBe('89 seconds ago')
+    expect(ago(at(90), now, 'en')).toBe('2 minutes ago')
+    expect(ago(at(600), now, 'fa')).toBe('۱۰ دقیقه پیش')
+    expect(ago(at(3600), now, 'en')).toBe('60 minutes ago')
+    expect(ago(at(3 * 3600), now, 'en')).toBe('3 hours ago')
+    expect(ago(at(3 * 86_400), now, 'en')).toBe('3 days ago')
+    // a time in the future (a clock that is off) is not a negative age
+    expect(ago(at(-30), now, 'en')).toBe('0 seconds ago')
   })
   it('uses the Jalali calendar in Persian', () => {
     const nowruz1405 = Date.UTC(2026, 2, 21, 12) / 1000 // 1 Farvardin 1405

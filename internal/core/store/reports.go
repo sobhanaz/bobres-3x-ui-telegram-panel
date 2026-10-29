@@ -39,7 +39,7 @@ var ErrReportTimeout = errors.New("store: the report took too long")
 //   - a reviewer rejected a manual payment (provider in ManualProviders; the
 //     reason is whatever staff typed, so it can say anything, "expired"
 //     included): "rejected by staff";
-//   - an automated gateway intent failed or ran out (Zarinpal, IDPay, NextPay, Telegram Stars,
+//   - an automated gateway intent failed or ran out (Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars,
 //     automatic USDT; the reason is one of GatewayFailureReasons): "failed or
 //     expired gateway payments".
 //
@@ -158,6 +158,10 @@ type ReportCell struct {
 	Rejected      ReportFlow
 	GatewayFailed ReportFlow
 	Cancelled     ReportFlow
+	// Cashback is what the store gave back to its customers' wallets (docs/14-reports.md): Count is the cashback credits of the bucket and
+	// Amount what they came to less the cashback that refunds took back in the bucket (so it can be negative in a bucket that only refunded).
+	// It is not revenue and is not taken off Net: it is credit the customers may spend.
+	Cashback ReportFlow
 }
 
 // SalesData is the sparse answer of SalesSummary: only buckets and
@@ -336,6 +340,13 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 			func(c *ReportCell) *ReportFlow { return &c.Refunds }); err != nil {
 			return reportErr("report refunds", err)
 		}
+		// Cashback paid: the credits and, taken off, the reversals that refunds made.
+		if err := flow(`
+			SELECT `+bucketOf("e.created_at")+`, e.currency, count(*) FILTER (WHERE e.kind = 'cashback'), COALESCE(sum(e.amount), 0)::bigint
+			FROM core.ledger_entries e WHERE e.kind IN ('cashback', 'cashback_reversal') AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
+			func(c *ReportCell) *ReportFlow { return &c.Cashback }); err != nil {
+			return reportErr("report cashback", err)
+		}
 		// Payments that were rejected or failed: core records each one as an
 		// event. Who rejected it is told as ManualProviders says ($5 the
 		// manual providers, $6 the gateway failure reasons).
@@ -486,7 +497,7 @@ type MethodRow struct {
 	// (a payment staff approved), "gateway" (Zarinpal, Stars or automatic
 	// USDT confirmed it), or "unknown" (a purchase with no matching event).
 	Method string
-	// Provider is who took the money (zarinpal, idpay, nextpay, stars, usdt_auto,
+	// Provider is who took the money (zarinpal, idpay, nextpay, aqayepardakht, stars, usdt_auto,
 	// manual_card, ...). Empty for wallet and unknown rows, and for orders
 	// paid before the event carried it.
 	Provider string

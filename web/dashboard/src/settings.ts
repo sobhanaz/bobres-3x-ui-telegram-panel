@@ -11,6 +11,112 @@ export interface Problem {
   params?: Record<string, number>
 }
 
+/** A tier of the reseller targets: how many new services a reseller sells in a month, and the bonus in Toman for reaching it. */
+export interface Tier {
+  threshold: number
+  bonus: number
+}
+
+/** Limits core checks again. */
+export const MAX_TIERS = 10
+export const MAX_THRESHOLD = 100_000
+export const MAX_BONUS = 100_000_000_000
+
+/** parseTiers reads the list the setting targets.tiers holds, by core's rules: whole numbers only, at most MAX_TIERS tiers, each threshold from 1
+ * to MAX_THRESHOLD and each bonus from 1 to MAX_BONUS, no threshold twice. The tiers come back sorted; a code names what is wrong. */
+export function parseTiers(raw: string): { tiers: Tier[] } | { code: 'tiers' | 'tiers_many' | 'tiers_dup' } {
+  if (raw.trim() === '') return { tiers: [] }
+  let v: unknown
+  try {
+    v = JSON.parse(raw)
+  } catch {
+    return { code: 'tiers' }
+  }
+  if (v === null) return { tiers: [] }
+  if (!Array.isArray(v)) return { code: 'tiers' }
+  if (v.length > MAX_TIERS) return { code: 'tiers_many' }
+  const tiers: Tier[] = []
+  for (const row of v) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) return { code: 'tiers' }
+    const keys = Object.keys(row)
+    if (keys.length !== 2 || !keys.includes('threshold') || !keys.includes('bonus')) return { code: 'tiers' }
+    const { threshold, bonus } = row as Record<string, unknown>
+    if (typeof threshold !== 'number' || typeof bonus !== 'number' || !Number.isInteger(threshold) || !Number.isInteger(bonus)) return { code: 'tiers' }
+    if (threshold < 1 || threshold > MAX_THRESHOLD || bonus < 1 || bonus > MAX_BONUS) return { code: 'tiers' }
+    tiers.push({ threshold, bonus })
+  }
+  tiers.sort((a, b) => a.threshold - b.threshold)
+  for (let i = 1; i < tiers.length; i++) if (tiers[i].threshold === tiers[i - 1].threshold) return { code: 'tiers_dup' }
+  return { tiers }
+}
+
+/** formatTiers writes the list the way core stores it: sorted, compact JSON, "" for none. */
+export function formatTiers(tiers: Tier[]): string {
+  if (!tiers.length) return ''
+  return JSON.stringify([...tiers].sort((a, b) => a.threshold - b.threshold).map((t) => ({ threshold: t.threshold, bonus: t.bonus })))
+}
+
+/** normalizeTiers is a list as it will be stored when it is valid, else as typed (for validate to refuse). */
+export function normalizeTiers(raw: string): string {
+  const p = parseTiers(raw)
+  return 'tiers' in p ? formatTiers(p.tiers) : raw.trim()
+}
+
+/** A prize of the daily wheel: Toman, and a weight, its share of the chances. */
+export interface Prize {
+  amount: number
+  weight: number
+}
+
+/** Limits core checks again. */
+export const MAX_PRIZES = 12
+export const MAX_PRIZE_WEIGHT = 1_000_000
+
+/** parsePrizes reads the list the setting wheel.prizes holds, by core's rules: whole numbers only, at most MAX_PRIZES prizes, each amount from 1 to
+ * MAX_BONUS and each weight from 1 to MAX_PRIZE_WEIGHT, no amount twice. The prizes come back sorted by amount; a code names what is wrong. */
+export function parsePrizes(raw: string): { prizes: Prize[] } | { code: 'prizes' | 'prizes_many' | 'prizes_dup' } {
+  if (raw.trim() === '') return { prizes: [] }
+  let v: unknown
+  try {
+    v = JSON.parse(raw)
+  } catch {
+    return { code: 'prizes' }
+  }
+  if (v === null) return { prizes: [] }
+  if (!Array.isArray(v)) return { code: 'prizes' }
+  if (v.length > MAX_PRIZES) return { code: 'prizes_many' }
+  const prizes: Prize[] = []
+  for (const row of v) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) return { code: 'prizes' }
+    const keys = Object.keys(row)
+    if (keys.length !== 2 || !keys.includes('amount') || !keys.includes('weight')) return { code: 'prizes' }
+    const { amount, weight } = row as Record<string, unknown>
+    if (typeof amount !== 'number' || typeof weight !== 'number' || !Number.isInteger(amount) || !Number.isInteger(weight)) return { code: 'prizes' }
+    if (amount < 1 || amount > MAX_BONUS || weight < 1 || weight > MAX_PRIZE_WEIGHT) return { code: 'prizes' }
+    prizes.push({ amount, weight })
+  }
+  prizes.sort((a, b) => a.amount - b.amount)
+  for (let i = 1; i < prizes.length; i++) if (prizes[i].amount === prizes[i - 1].amount) return { code: 'prizes_dup' }
+  return { prizes }
+}
+
+/** formatPrizes writes the list the way core stores it: sorted by amount, compact JSON, "" for none. */
+export function formatPrizes(prizes: Prize[]): string {
+  if (!prizes.length) return ''
+  return JSON.stringify([...prizes].sort((a, b) => a.amount - b.amount).map((p) => ({ amount: p.amount, weight: p.weight })))
+}
+
+/** normalizePrizes is a list as it will be stored when it is valid, else as typed (for validate to refuse). */
+export function normalizePrizes(raw: string): string {
+  const p = parsePrizes(raw)
+  return 'prizes' in p ? formatPrizes(p.prizes) : raw.trim()
+}
+
+/** chancePercent writes a chance (a fraction of 1) as a percent in the language, with up to two decimals ("37.5%", "۳۷٫۵٪"). */
+export function chancePercent(fraction: number, lang: 'fa' | 'en'): string {
+  return new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US', { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
+}
+
 /** Groups core may still list that are edited on another page: the
  * payment details are on the Payment gateways page. */
 export const movedGroups = ['payments']
@@ -56,6 +162,11 @@ export function normalize(item: SettingItem, raw: string): string {
   if (item.kind === 'int') return asciiNumber(s)
   if (item.kind === 'channel') return normalizeChannel(s)
   if (item.kind === 'time') return normalizeTime(s)
+  if (item.kind === 'list') return item.key === 'wheel.prizes' ? normalizePrizes(s) : normalizeTiers(s)
+  if (item.key === 'cashback.percent') {
+    const bp = percentBP(s)
+    return bp === null ? s : String(bp / 100)
+  }
   if (item.key === 'payments.card_number') return latinDigits(s).replace(/^ir/i, 'IR')
   return s
 }
@@ -127,6 +238,10 @@ export function validate(item: SettingItem, value: string, others: Record<string
       return httpsURL(value) ? null : { code: 'https' }
     case 'text':
       return validateText(item.key, value)
+    case 'list': {
+      const p = item.key === 'wheel.prizes' ? parsePrizes(value) : parseTiers(value)
+      return 'code' in p ? { code: p.code } : null
+    }
   }
   return null
 }
@@ -144,6 +259,8 @@ function validateText(key: string, value: string): Problem | null {
       return erc20.test(value) ? null : { code: 'erc20' }
     case 'payments.card_holder':
       return [...value].length > 64 ? { code: 'too_long', params: { max: 64 } } : null
+    case 'cashback.percent':
+      return percentBP(value) === null ? { code: 'percent' } : null
   }
   return new TextEncoder().encode(value).length > 1000 ? { code: 'too_long_text' } : null
 }
@@ -278,8 +395,18 @@ export function zoneNow(zone: string, at = new Date()): string {
 export function ltr(item: SettingItem): boolean {
   return (
     ['int', 'url', 'channel', 'tz', 'time', 'color'].includes(item.kind) ||
-    ['payments.card_number', 'payments.usdt_trc20', 'payments.usdt_erc20'].includes(item.key)
+    ['payments.card_number', 'payments.usdt_trc20', 'payments.usdt_erc20', 'cashback.percent'].includes(item.key)
   )
+}
+
+/** percentBP reads a percent typed as "5", "2.5", "۲٫۵" or "7%" (the point may be . , / or the Persian ٫ and ،) as hundredths of a
+ * percent, 0.01 to 20 with at most two decimals; null when it is none of that. Core reads it the same way. */
+export function percentBP(raw: string): number | null {
+  const v = latinDigits(raw.trim()).replace(/%$/, '').trim().replace(/[,/٫،]/g, '.')
+  const m = /^(\d{0,3})(?:\.(\d{0,2}))?$/.exec(v)
+  if (!m || (m[1] === '' && !m[2])) return null
+  const bp = Number(m[1] || '0') * 100 + Number((m[2] ?? '').padEnd(2, '0') || '0')
+  return bp >= 1 && bp <= 2000 ? bp : null
 }
 
 /** maxLength keeps inputs near what core accepts. */

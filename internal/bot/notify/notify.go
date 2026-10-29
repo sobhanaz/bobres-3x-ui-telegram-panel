@@ -223,7 +223,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		// A gift code was applied in the bot, which answered with the amount
 		// and the balance in the same chat (as a wallet payment does): a
 		// second message would only repeat it.
-		if e.Reason == events.CreditGiftCode {
+		if e.Reason == events.CreditGiftCode || e.Reason == events.CreditWheelPrize {
 			return nil
 		}
 		// A commission names the amount only: the customer who bought is
@@ -236,11 +236,23 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			events.CreditRefund:          "wallet.credited_refund",
 			events.CreditCommission:      "wallet.credited_commission",
 			events.CreditSettlement:      "wallet.credited_settlement",
+			events.CreditCashback:        "wallet.credited_cashback",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"
 		}
 		lang := n.lang(ctx, e.TelegramID)
+		if e.Reason == events.CreditTargetBonus {
+			// A reseller reached a tier of the month's target.
+			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_target_bonus", "sold", i18n.Number(lang, int64(e.TargetSales)),
+				"threshold", i18n.Number(lang, int64(e.TargetThreshold)), "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		}
+		if e.Reason == events.CreditRefund && e.CashbackTaken > 0 {
+			// The refund also took back the cashback the order had earned: say so, with the balance after both.
+			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_refund_cashback", "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"cashback", i18n.Money(lang, e.CashbackTaken, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		}
 		if e.FromCurrency != "" && e.Reason == events.CreditTopup {
 			// a USDT top-up, credited in Toman at the live rate
 			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_converted", "from", i18n.Money(lang, e.FromAmount, e.FromCurrency),
@@ -679,6 +691,9 @@ func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string 
 		if c.Digital.Count > 0 {
 			out = append(out, t("report.daily_digital", "n", num(c.Digital.Count), "amount", money(c.Digital.Amount, c.Currency)))
 		}
+		if c.Cashback.Count > 0 {
+			out = append(out, t("report.daily_cashback", "n", num(c.Cashback.Count), "amount", money(c.Cashback.Amount, c.Currency)))
+		}
 		if c.Rejected.Count > 0 {
 			out = append(out, t("report.daily_rejected", "n", num(c.Rejected.Count), "amount", money(c.Rejected.Amount, c.Currency)))
 		}
@@ -735,6 +750,39 @@ var unmatchedReasons = map[string]bool{
 	events.UnmatchedAfterRestore: true,
 }
 
+// tonReasons are the reasons payments gives for an unmatched TON deposit.
+var tonReasons = map[string]bool{
+	events.UnmatchedNoPayment: true, events.UnmatchedAlreadyPaid: true, events.UnmatchedClosed: true,
+	events.UnmatchedUnderpaid: true, events.UnmatchedLatePrice: true,
+}
+
+// tonHashRe is a TON transaction hash as payments records it.
+var tonHashRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// unmatchedTON renders a TON deposit that no payment could take for the staff in lang: the exact amount, who sent it,
+// the comment it carried (or none), when, the transaction and why (for a short payment, what was asked for), with a
+// link to the transaction on Tonviewer and the dashboard, where it is marked handled. Every value is escaped: the
+// sender and the comment are anyone's on the chain.
+func (n *Notifier) unmatchedTON(lang string, e events.DepositUnmatchedEvent) (string, *tg.Keyboard) {
+	reason := html.EscapeString(e.Reason)
+	if tonReasons[e.Reason] {
+		reason = n.cat.T(lang, "admin.ton_reason."+e.Reason, "expected", i18n.Exact(e.Expected, "TON"))
+	}
+	comment := n.cat.T(lang, "admin.ton_no_comment")
+	if e.Comment != "" {
+		comment = "<code>" + html.EscapeString(e.Comment) + "</code>"
+	}
+	text := n.cat.T(lang, "admin.unmatched_deposit_ton",
+		"amount", i18n.Exact(e.Amount, "TON"), "from", html.EscapeString(e.From), "to", html.EscapeString(e.To),
+		"comment", comment, "when", i18n.DateTime(lang, time.Unix(e.BlockTime, 0)), "txid", html.EscapeString(e.TxID), "reason", reason)
+	kb := &tg.Keyboard{}
+	if h := strings.ToLower(e.TxID); tonHashRe.MatchString(h) {
+		kb.Row(n.linkButton(lang, "btn.tonviewer", "https://tonviewer.com/transaction/"+h))
+	}
+	kb.Row(n.button(lang, "btn.dashboard", "dash"))
+	return text, kb
+}
+
 // txidRe is a TRON transaction id as payments records it.
 var txidRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -744,6 +792,9 @@ var txidRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // where it is marked handled. Every value is escaped: the sender is anyone
 // on the chain.
 func (n *Notifier) unmatchedDeposit(lang string, e events.DepositUnmatchedEvent) (string, *tg.Keyboard) {
+	if e.Network == "TON" {
+		return n.unmatchedTON(lang, e)
+	}
 	reason := html.EscapeString(e.Reason)
 	if unmatchedReasons[e.Reason] {
 		reason = n.cat.T(lang, "admin.unmatched_reason."+e.Reason)

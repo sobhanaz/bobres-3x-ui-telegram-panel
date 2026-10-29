@@ -3,7 +3,7 @@
 // credit and what can be spent, how many services are in each group, the
 // customers who joined through the invite link, and the link to share.
 import { computed, onMounted, ref } from 'vue'
-import { fmtMoney, fmtNum } from '../../fmt'
+import { fmtDate, fmtMoney, fmtNum } from '../../fmt'
 import { isolate } from '../../format'
 import { tr } from '../../i18n'
 import { fail } from '../../store'
@@ -28,6 +28,14 @@ onMounted(load)
 
 const money = (m: Money) => fmtMoney(m.amount, m.currency, m.scale)
 const moneyList = (ms: Money[]) => (ms.length ? ms.map(money).join(' · ') : fmtMoney(0, 'IRT', 0))
+
+// The monthly target: the tiers in order, the bar to the highest one, what is left to the next, and the days left in the month.
+const targets = computed(() => panel.value?.targets ?? null)
+const targetTop = computed(() => Math.max(1, ...(targets.value?.tiers ?? []).map((t) => t.threshold)))
+const targetNext = computed(() => targets.value?.tiers.find((t) => !t.reached) ?? null)
+const targetDays = computed(() => (targets.value ? Math.max(0, Math.ceil((targets.value.ends_at * 1000 - Date.now()) / 86_400_000)) : 0))
+// a date core sends as "2026-10-01" is a day, not an instant: noon UTC keeps every zone on that day
+const targetDay = (iso: string) => fmtDate(Date.parse(iso + 'T12:00:00Z') / 1000)
 
 const groups = computed(() => {
   const c = panel.value?.counts
@@ -114,6 +122,27 @@ function share() {
       </section>
 
       <button class="btn" type="button" @click="emit('buy')">{{ tr('reseller.panel.buy') }}</button>
+
+      <section v-if="targets" class="card rs-targets" data-targets>
+        <strong>{{ tr('targets.title') }}</strong>
+        <p class="muted small">{{ tr('targets.range', { from: targetDay(targets.from), to: targetDay(targets.to) }) }}</p>
+        <div class="rs-kv">
+          <span class="muted">{{ tr('targets.sold') }}</span>
+          <strong class="big">{{ fmtNum(targets.sold) }}</strong>
+        </div>
+        <progress class="rs-bar" :max="targetTop" :value="Math.min(targets.sold, targetTop)" :aria-label="tr('targets.title')"></progress>
+        <ul class="rs-tiers">
+          <li v-for="t in targets.tiers" :key="t.threshold" :class="{ done: t.paid }">
+            <span aria-hidden="true">{{ t.paid ? '✅' : '⬜' }}</span>
+            {{ tr('targets.tier', { n: fmtNum(t.threshold), bonus: fmtMoney(t.bonus, targets.currency, targets.scale) }) }}
+            <span class="rs-sr">{{ tr(t.paid ? 'targets.paid' : 'targets.not_paid') }}</span>
+          </li>
+        </ul>
+        <p v-if="targetNext" class="ok">{{ tr('targets.next', { bonus: fmtMoney(targetNext.bonus, targets.currency, targets.scale), n: fmtNum(targets.remaining) }) }}</p>
+        <p v-else class="ok">{{ tr('targets.done') }}</p>
+        <p v-if="targets.bonus_paid > 0" class="muted small">{{ tr('targets.earned', { amount: fmtMoney(targets.bonus_paid, targets.currency, targets.scale) }) }}</p>
+        <p class="muted small">{{ tr('targets.ends', { n: fmtNum(targetDays) }) }}</p>
+      </section>
 
       <section class="card">
         <strong>{{ tr('reseller.panel.services') }}</strong>

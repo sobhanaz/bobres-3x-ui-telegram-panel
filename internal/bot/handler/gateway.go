@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Automated payment methods: Zarinpal, IDPay, NextPay, Telegram Stars and automatic USDT
-// (TRC20, usdt.go).
+// Automated payment methods: Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars, automatic USDT
+// (TRC20, usdt.go) and automatic TON (ton.go).
 
 const methodsTTL = time.Minute // how stale the list of usable methods may be
 
@@ -45,8 +45,8 @@ func (h *Handler) gatewayMethods(ctx context.Context, currency string, amount in
 	return resp.GetProviders()
 }
 
-// gatewayButtons are the automated payment buttons, "<verb>:<z|i|n|s|u>:<target>:<nonce>"
-// ("<verb>:<z|i|n|s|u>:<nonce>" without a target).
+// gatewayButtons are the automated payment buttons, "<verb>:<z|i|n|a|s|u|t>:<target>:<nonce>"
+// ("<verb>:<z|i|n|a|s|u|t>:<nonce>" without a target).
 func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, target, n string) []tg.Button {
 	suffix := ":" + n
 	if target != "" {
@@ -61,10 +61,14 @@ func (h *Handler) gatewayButtons(r *req, currency string, amount int64, verb, ta
 			out = append(out, r.button("btn.pay_idpay", verb+":i"+suffix))
 		case "nextpay":
 			out = append(out, r.button("btn.pay_nextpay", verb+":n"+suffix))
+		case "aqayepardakht":
+			out = append(out, r.button("btn.pay_aqayepardakht", verb+":a"+suffix))
 		case "stars":
 			out = append(out, r.button("btn.pay_stars", verb+":s"+suffix))
 		case usdtAuto:
 			out = append(out, r.button("btn.pay_usdt_auto", verb+":u"+suffix))
+		case tonAuto:
+			out = append(out, r.button("btn.pay_ton", verb+":t"+suffix))
 		}
 	}
 	return out
@@ -78,7 +82,7 @@ func truncRunes(s string, n int) string {
 	return string(r)
 }
 
-// startGateway starts a Zarinpal, IDPay or NextPay payment (a link to the pay page), sends a
+// startGateway starts a Zarinpal, IDPay, NextPay or Aqayepardakht payment (a link to the pay page), sends a
 // Telegram Stars invoice or shows where to send automatic USDT, for an order
 // or a wallet top-up.
 func (h *Handler) startGateway(r *req, order *corev1.Order, provider, title, key string, topup int64) {
@@ -115,7 +119,7 @@ func (h *Handler) startGatewayIn(r *req, order *corev1.Order, provider, title, k
 	}
 	amount := r.money(intent.GetAmount().GetAmount(), intent.GetAmount().GetCurrency())
 	switch provider {
-	case "zarinpal", "idpay", "nextpay":
+	case "zarinpal", "idpay", "nextpay", "aqayepardakht":
 		if intent.GetPayUrl() == "" {
 			r.show(r.t("pay.not_configured"), homeKeyboard(r))
 			return
@@ -141,6 +145,8 @@ func (h *Handler) startGatewayIn(r *req, order *corev1.Order, provider, title, k
 		r.show(r.t("pay.stars", "stars", i18n.Number(r.lang, stars), "amount", amount), homeKeyboard(r))
 	case usdtAuto:
 		h.showUSDT(r, intent)
+	case tonAuto:
+		h.showTON(r, intent)
 	}
 }
 
@@ -170,7 +176,7 @@ func (h *Handler) onCheckPayment(r *req, intentID string) {
 		}
 		r.show(r.t("pay.check_failed", "reason", r.t(reasonKey(reason))), retryKeyboard(r))
 	default:
-		if ref.GetProvider() != usdtAuto {
+		if ref.GetProvider() != usdtAuto && ref.GetProvider() != tonAuto {
 			r.toast, r.alert = r.t("pay.check_pending"), true
 			return
 		}
@@ -179,7 +185,11 @@ func (h *Handler) onCheckPayment(r *req, intentID string) {
 				h.log.Debug("check cooldown not saved", "err", err)
 			}
 		}
-		r.toast, r.alert = r.t("pay.usdt_check_pending"), true
+		pending := "pay.usdt_check_pending"
+		if ref.GetProvider() == tonAuto {
+			pending = "pay.ton_check_pending"
+		}
+		r.toast, r.alert = r.t(pending), true
 	}
 }
 

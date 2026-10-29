@@ -92,6 +92,7 @@ var contexts = map[string]Context{
 	"admin.status_done":      CtxToast,
 	"pay.check_pending":      CtxToast,
 	"pay.usdt_check_pending": CtxToast,
+	"pay.ton_check_pending":  CtxToast,
 	"pay.check_wait":         CtxToast,
 	"admin.txid_used":        CtxToastHTML,
 	"admin.unmatched_part":   CtxButtonHTML,
@@ -222,8 +223,10 @@ var buttonStyles = map[string]string{
 	"btn.pay_zarinpal":      "success",
 	"btn.pay_idpay":         "success",
 	"btn.pay_nextpay":       "success",
+	"btn.pay_aqayepardakht": "success",
 	"btn.pay_stars":         "success",
 	"btn.pay_usdt_auto":     "success",
+	"btn.pay_ton":           "success",
 	"btn.open_payment":      "success",
 	"btn.approve":           "success",
 	"btn.adm_unban":         "success",
@@ -254,6 +257,8 @@ var buttonStyles = map[string]string{
 	"btn.invite":         "primary",
 	"btn.reseller":       "primary",
 	"btn.top_users":      "primary",
+	"btn.wheel":          "primary",
+	"btn.wheel_spin":     "success",
 	"btn.reseller_apply": "primary",
 	"btn.tutorials":      "primary",
 	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
@@ -305,6 +310,8 @@ var markupArgs = map[string][]string{
 	"pay.rejected":         {"reason"},
 	"pay.check_failed":     {"reason"},
 	"rs.panel":             {"balances"},
+	"rs.targets":           {"tiers", "next"}, // the lines of the tiers, and the sentence about the next one (it holds a <b>)
+	"wheel.spun_today":     {"result"},        // a rendered text (it holds a <b>)
 	"rs.customers_title":   {"lines"},
 	"ref.top_screen":       {"entries", "range"}, // rendered texts: the places, and the ranks of a page
 	"ref.top_entry":        {"you"},              // a rendered text
@@ -317,7 +324,8 @@ var markupArgs = map[string][]string{
 	"alert.resolved":       {"title"},
 
 	// An unmatched deposit's reason is a rendered text.
-	"admin.unmatched_deposit": {"reason"},
+	"admin.unmatched_deposit":     {"reason"},
+	"admin.unmatched_deposit_ton": {"reason", "comment"},
 }
 
 // onlyLangs are texts read in some languages only.

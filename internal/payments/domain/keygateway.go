@@ -1,11 +1,12 @@
 package domain
 
-// API-key gateways (IDPay, NextPay): redirect gateways that, like Zarinpal, take
-// a payment, send the customer to the bank and are verified through their API
-// after the customer returns. They differ in what the owner enters: one API key
-// instead of a merchant id. The key and the proxy URL are stored encrypted with
-// the payments master key (the key in api_key_enc) and never leave this service:
-// staff only see whether they are set.
+// API-key gateways (IDPay, NextPay, Aqayepardakht): redirect gateways that, like
+// Zarinpal, take a payment, send the customer to the bank and are verified
+// through their API after the customer returns. They differ in what the owner
+// enters: one API key (Aqayepardakht calls it the PIN) instead of a merchant id.
+// The key and the proxy URL are stored encrypted with the payments master key
+// (the key in api_key_enc) and never leave this service: staff only see whether
+// they are set.
 
 import (
 	"context"
@@ -25,21 +26,58 @@ import (
 
 // Provider names of the API-key gateways.
 const (
-	providerIDPay   = "idpay"
-	providerNextPay = "nextpay"
+	providerIDPay         = "idpay"
+	providerNextPay       = "nextpay"
+	providerAqayepardakht = "aqayepardakht"
 )
 
 // keyedProviders is the order the API-key gateways are listed in, after
 // Zarinpal and automatic USDT.
-var keyedProviders = []string{providerIDPay, providerNextPay}
+var keyedProviders = []string{providerIDPay, providerNextPay, providerAqayepardakht}
 
-func isKeyed(p string) bool { return p == providerIDPay || p == providerNextPay }
+func isKeyed(p string) bool {
+	return p == providerIDPay || p == providerNextPay || p == providerAqayepardakht
+}
 
 func keyedTitle(p string) string {
-	if p == providerIDPay {
+	switch p {
+	case providerIDPay:
 		return "IDPay"
+	case providerAqayepardakht:
+		return "Aqayepardakht"
 	}
 	return "NextPay"
+}
+
+// keyedSecretName is what the owner's message calls the gateway's secret. It keeps the words "API key",
+// which the dashboard reads to put an error under the right field.
+func keyedSecretName(p string) string {
+	if p == providerAqayepardakht {
+		return "API key (PIN)"
+	}
+	return "API key"
+}
+
+// aqayepardakhtSandboxPIN is Aqayepardakht's test system: not a switch, a PIN.
+const aqayepardakhtSandboxPIN = "sandbox"
+
+// keyedSandbox says whether the settings use the gateway's test system: IDPay has a switch, Aqayepardakht's
+// is the PIN "sandbox" (so the flag follows the PIN and can never disagree with it), NextPay has none.
+func keyedSandbox(name string, k KeySettings) bool {
+	if name == providerAqayepardakht {
+		return k.APIKey == aqayepardakhtSandboxPIN
+	}
+	return k.Sandbox
+}
+
+// keyedKey reads a typed API key. IDPay's and NextPay's are UUIDs, whatever case they were typed in;
+// Aqayepardakht's PIN is case-sensitive and stays as it was typed.
+func keyedKey(name, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if name == providerAqayepardakht {
+		return raw
+	}
+	return strings.ToLower(raw)
 }
 
 // KeySettings are an API-key gateway's credentials and route. They are secret:
@@ -62,9 +100,10 @@ func (k KeySettings) String() string { return k.LogValue().String() }
 // GoString keeps %#v from printing the secrets.
 func (k KeySettings) GoString() string { return k.String() }
 
-func normalizeKeyed(k KeySettings) KeySettings {
-	k.APIKey = strings.ToLower(strings.TrimSpace(k.APIKey))
+func normalizeKeyed(name string, k KeySettings) KeySettings {
+	k.APIKey = keyedKey(name, k.APIKey)
 	k.Proxy = strings.TrimSpace(k.Proxy)
+	k.Sandbox = keyedSandbox(name, k)
 	return k
 }
 
@@ -138,6 +177,7 @@ func (set *gatewaySet) applyKeyed(o *GatewayOptions, name string, ks keyedState)
 	if ks.problem != "" || ks.settings.APIKey == "" {
 		return
 	}
+	ks.settings.Sandbox = keyedSandbox(name, ks.settings)
 	if ks.settings.Sandbox && o.Env == "prod" {
 		// Not even for checks: a sandbox "payment" settled here would give
 		// service for free.
@@ -209,7 +249,7 @@ func wiredKeyed(o *GatewayOptions) []string {
 
 // seedKeyed stores the environment's settings when there are none yet.
 func (s *Service) seedKeyed(ctx context.Context, o *GatewayOptions, name string) error {
-	seed := normalizeKeyed(o.Keyed[name].Seed)
+	seed := normalizeKeyed(name, o.Keyed[name].Seed)
 	if _, err := s.st.GetGatewayConfig(ctx, nil, name); err == nil {
 		return nil // stored settings win
 	} else if !errors.Is(err, store.ErrNotFound) {
@@ -245,7 +285,7 @@ func (s *Service) loadKeyed(ctx context.Context, o *GatewayOptions, name string)
 	if err != nil {
 		return keyedState{}, err
 	}
-	seed := normalizeKeyed(o.Keyed[name].Seed)
+	seed := normalizeKeyed(name, o.Keyed[name].Seed)
 	switch {
 	case row == nil && o.Envelope == nil:
 		if seed.APIKey != "" {
@@ -272,6 +312,7 @@ func (s *Service) loadKeyed(ctx context.Context, o *GatewayOptions, name string)
 		ks.problem = ProblemUnreadable
 		return ks, nil
 	}
+	k.Sandbox = keyedSandbox(name, k)
 	ks.settings = k
 	return ks, nil
 }
@@ -301,21 +342,23 @@ func parseActor(id string) (*string, error) {
 	return &a, nil
 }
 
-// setKeyedConfig is SetGatewayConfig for IDPay and NextPay.
+// setKeyedConfig is SetGatewayConfig for IDPay, NextPay and Aqayepardakht.
 func (s *Service) setKeyedConfig(ctx context.Context, u GatewayUpdate) (GatewayConfig, error) {
-	name, title := u.Provider, keyedTitle(u.Provider)
+	name, title, secret := u.Provider, keyedTitle(u.Provider), keyedSecretName(u.Provider)
 	actor, err := parseActor(u.ActorID)
 	if err != nil {
 		return GatewayConfig{}, err
 	}
-	apiKey, proxy := strings.ToLower(strings.TrimSpace(u.APIKey)), strings.TrimSpace(u.Proxy)
+	apiKey, proxy := keyedKey(name, u.APIKey), strings.TrimSpace(u.Proxy)
 	switch {
 	case u.ClearProxy && proxy != "":
 		return GatewayConfig{}, invalid("set a proxy or clear it, not both")
 	case u.ClearAPIKey && apiKey != "":
-		return GatewayConfig{}, invalid("set the API key or clear it, not both")
+		return GatewayConfig{}, invalid("set the %s or clear it, not both", secret)
 	case u.MerchantID != "" || u.Address != "":
 		return GatewayConfig{}, invalid("%s has an API key only: no merchant id and no address", title)
+	case u.Sandbox && name == providerAqayepardakht:
+		return GatewayConfig{}, invalid("%s has no sandbox switch: its test system is the %s %q", title, secret, aqayepardakhtSandboxPIN)
 	}
 
 	s.gwMu.Lock()
@@ -331,7 +374,7 @@ func (s *Service) setKeyedConfig(ctx context.Context, u GatewayUpdate) (GatewayC
 		// The stored secrets are lost: start again from the request.
 		old = KeySettings{Sandbox: old.Sandbox}
 		if apiKey == "" {
-			return GatewayConfig{}, invalid("enter the API key again: the stored one cannot be decrypted")
+			return GatewayConfig{}, invalid("enter the %s again: the stored one cannot be decrypted", secret)
 		}
 	}
 	next := old
@@ -348,11 +391,17 @@ func (s *Service) setKeyedConfig(ctx context.Context, u GatewayUpdate) (GatewayC
 		next.Proxy = proxy
 	}
 	next.Sandbox = u.Sandbox
+	if name == providerAqayepardakht {
+		next.Sandbox = keyedSandbox(name, next)
+	}
 	switch {
 	case next.Sandbox && o.Env == "prod":
+		if name == providerAqayepardakht {
+			return GatewayConfig{}, invalid("the %s sandbox (the %s %q) is refused when BOBRES_ENV=prod", title, secret, aqayepardakhtSandboxPIN)
+		}
 		return GatewayConfig{}, invalid("the %s sandbox is refused when BOBRES_ENV=prod", title)
 	case u.Enabled && next.APIKey == "":
-		return GatewayConfig{}, invalid("set the API key before switching %s on", title)
+		return GatewayConfig{}, invalid("set the %s before switching %s on", secret, title)
 	case u.Enabled && o.PublicURLErr != nil:
 		return GatewayConfig{}, precondition("%s", o.PublicURLErr.Error())
 	}
@@ -402,9 +451,9 @@ func (s *Service) setKeyedConfig(ctx context.Context, u GatewayUpdate) (GatewayC
 	return set.keyedView(name), nil
 }
 
-// testKeyed is TestGateway for IDPay and NextPay.
+// testKeyed is TestGateway for IDPay, NextPay and Aqayepardakht.
 func (s *Service) testKeyed(ctx context.Context, name string, cand *GatewayCandidate) (GatewayTest, error) {
-	title := keyedTitle(name)
+	title, secret := keyedTitle(name), keyedSecretName(name)
 	set := s.gws.Load()
 	g := set.configured[name]
 	if cand != nil {
@@ -417,7 +466,7 @@ func (s *Service) testKeyed(ctx context.Context, name string, cand *GatewayCandi
 		if ks.problem == ProblemUnreadable {
 			k = KeySettings{}
 		}
-		if a := strings.ToLower(strings.TrimSpace(cand.APIKey)); a != "" {
+		if a := keyedKey(name, cand.APIKey); a != "" {
 			k.APIKey = a
 		}
 		proxy := strings.TrimSpace(cand.Proxy)
@@ -430,11 +479,20 @@ func (s *Service) testKeyed(ctx context.Context, name string, cand *GatewayCandi
 			k.Proxy = proxy
 		}
 		k.Sandbox = cand.Sandbox
+		if name == providerAqayepardakht {
+			if cand.Sandbox {
+				return GatewayTest{}, invalid("%s has no sandbox switch: its test system is the %s %q", title, secret, aqayepardakhtSandboxPIN)
+			}
+			k.Sandbox = keyedSandbox(name, k)
+		}
 		switch {
 		case k.Sandbox && o.Env == "prod":
+			if name == providerAqayepardakht {
+				return GatewayTest{}, invalid("the %s sandbox (the %s %q) is refused when BOBRES_ENV=prod", title, secret, aqayepardakhtSandboxPIN)
+			}
 			return GatewayTest{}, invalid("the %s sandbox is refused when BOBRES_ENV=prod", title)
 		case k.APIKey == "":
-			return GatewayTest{}, invalid("enter the API key to test")
+			return GatewayTest{}, invalid("enter the %s to test", secret)
 		}
 		built, err := o.Keyed[name].Build(k)
 		if err != nil {
@@ -444,7 +502,7 @@ func (s *Service) testKeyed(ctx context.Context, name string, cand *GatewayCandi
 		g = built
 	}
 	if g == nil {
-		return GatewayTest{}, precondition("%s has no usable API key to test", title)
+		return GatewayTest{}, precondition("%s has no usable %s to test", title, secret)
 	}
 	return s.runGatewayTest(ctx, name, g)
 }

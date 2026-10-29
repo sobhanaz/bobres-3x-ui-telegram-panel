@@ -43,11 +43,11 @@ type OpenIntentsError struct {
 }
 
 func (e *OpenIntentsError) Error() string {
-	if e.Provider == USDTAuto {
+	if e.Provider == USDTAuto || e.Provider == TONAuto {
 		return fmt.Sprintf("%d open %s payments: the address cannot change until they close", e.Count, e.Provider)
 	}
 	if isKeyed(e.Provider) {
-		return fmt.Sprintf("%d open %s payments: the API key and the sandbox cannot change until they close", e.Count, e.Provider)
+		return fmt.Sprintf("%d open %s payments: the %s and the sandbox cannot change until they close", e.Count, e.Provider, keyedSecretName(e.Provider))
 	}
 	return fmt.Sprintf("%d open %s payments: the merchant id and the sandbox cannot change until they close", e.Count, e.Provider)
 }
@@ -108,8 +108,13 @@ type GatewayOptions struct {
 	// BuildChain makes the TronGrid client of the automatic USDT watcher and
 	// validates its settings (tests point it at a fake). Nil = no watcher.
 	BuildChain func(ChainSettings) (gateway.ChainSource, error)
-	// Keyed wires the API-key gateways by provider name (idpay, nextpay); a
-	// provider without Build is not wired.
+	// BuildTON makes the TON Center client of the automatic TON watcher and validates its settings (tests point
+	// it at a fake). Nil = no TON watcher.
+	BuildTON func(TONSettings) (gateway.TONSource, error)
+	// TONPrice reads the price of TON in USDT. Nil = automatic TON is never offered.
+	TONPrice gateway.TONPricer
+	// Keyed wires the API-key gateways by provider name (idpay, nextpay,
+	// aqayepardakht); a provider without Build is not wired.
 	Keyed map[string]KeyedOptions
 }
 
@@ -149,13 +154,19 @@ type GatewayConfig struct {
 	Sandbox      bool
 	MerchantHint string // the merchant id's last 4 characters, "" when none
 	Address      string // usdt_trc20_auto: the store's TRC20 address (public)
-	APIKeySet    bool   // usdt_trc20_auto: a TronGrid API key is set
+	APIKeySet    bool   // usdt_trc20_auto, ton_auto: an API key is set; idpay, nextpay, aqayepardakht: the key (PIN) is set
 	ProxySet     bool
 	KeyMissing   bool // no payments master key: read-only
 	FromEnv      bool // the settings come from the environment
 	Problem      string
 	UpdatedAt    time.Time // zero for the environment's settings
 	UpdatedBy    string
+	// ton_auto: the TON price (micro-USDT per TON) with where and when it was read, the latest one read; and
+	// whether it is fresh enough to use (otherwise the method is not offered).
+	PriceMicro  int64
+	PriceSource string
+	PriceAt     time.Time
+	PriceFresh  bool
 }
 
 // ConfigureGateways loads the automated gateways' settings at startup: from
@@ -174,7 +185,7 @@ func (s *Service) ConfigureGateways(ctx context.Context, o GatewayOptions) error
 		}
 	}
 	for _, name := range wiredKeyed(&o) {
-		if o.Envelope != nil && normalizeKeyed(o.Keyed[name].Seed).APIKey != "" {
+		if o.Envelope != nil && normalizeKeyed(name, o.Keyed[name].Seed).APIKey != "" {
 			if err := s.seedKeyed(ctx, &o, name); err != nil {
 				return err
 			}
@@ -217,6 +228,19 @@ func (s *Service) ConfigureGateways(ctx context.Context, o GatewayOptions) error
 		return err
 	}
 	s.chain.Store(cs)
+	s.tonMu.Lock()
+	defer s.tonMu.Unlock()
+	ts, err := s.loadTON(ctx, &o)
+	if err != nil {
+		return err
+	}
+	s.ton.Store(ts)
+	if o.BuildTON != nil {
+		s.log.Info("automatic TON settings", "readable", ts.readable(), "enabled", ts.enabled, "settings", ts.settings)
+		if ts.problem != "" {
+			s.log.Warn("automatic TON settings cannot be used", "problem", ts.problem, "why", problemText(ts.problem))
+		}
+	}
 	if o.BuildChain != nil {
 		s.log.Info("automatic USDT settings", "readable", cs.readable(), "offered", cs.offered(), "settings", cs.settings)
 		if cs.problem != "" {
@@ -406,6 +430,9 @@ func (set *gatewaySet) view() GatewayConfig {
 func (s *Service) GatewayConfigs() []GatewayConfig {
 	set := s.gws.Load()
 	out := []GatewayConfig{set.view(), s.chain.Load().view()}
+	if s.ton.Load().listed() {
+		out = append(out, s.tonView())
+	}
 	if set.opts != nil {
 		for _, name := range wiredKeyed(set.opts) {
 			out = append(out, set.keyedView(name))
@@ -437,6 +464,9 @@ type GatewayUpdate struct {
 func (s *Service) SetGatewayConfig(ctx context.Context, u GatewayUpdate) (GatewayConfig, error) {
 	if u.Provider == USDTAuto {
 		return s.setChainConfig(ctx, u)
+	}
+	if u.Provider == TONAuto {
+		return s.setTONConfig(ctx, u)
 	}
 	if isKeyed(u.Provider) {
 		return s.setKeyedConfig(ctx, u)
@@ -571,6 +601,8 @@ type GatewayTest struct {
 	Detail     string // why it failed (no secret or address in it)
 	Unverified int    // paid payments the gateway still waits for us to verify
 	Latency    time.Duration
+	// LatestTxAt: automatic TON: when the address's newest transaction happened (unix seconds; 0 = none yet).
+	LatestTxAt int64
 }
 
 // gatewayTestTimeout bounds a test, under the dashboard's request timeout.
@@ -582,6 +614,9 @@ const gatewayTestTimeout = 25 * time.Second
 func (s *Service) TestGateway(ctx context.Context, providerName string, cand *GatewayCandidate) (GatewayTest, error) {
 	if providerName == USDTAuto {
 		return s.testChain(ctx, cand)
+	}
+	if providerName == TONAuto {
+		return s.testTON(ctx, cand)
 	}
 	if isKeyed(providerName) {
 		return s.testKeyed(ctx, providerName, cand)
@@ -653,7 +688,7 @@ func (s *Service) runGatewayTest(ctx context.Context, providerName string, g gat
 }
 
 // reportProviders are the providers a report can be asked for.
-var reportProviders = []string{providerZarinpal, providerIDPay, providerNextPay, Stars, USDTAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
+var reportProviders = []string{providerZarinpal, providerIDPay, providerNextPay, providerAqayepardakht, Stars, USDTAuto, TONAuto, provider.ManualCard, provider.ManualCrypto, provider.ManualZarinpal}
 
 // maxReportSpan bounds a report's period.
 const maxReportSpan = 366 * 24 * time.Hour
@@ -679,8 +714,14 @@ func (s *Service) GatewayReport(ctx context.Context, providerName string, from, 
 		return nil, invalid("a report covers at most 366 days")
 	}
 	r, err := s.st.GatewayReport(ctx, providerName, from, to)
-	if err != nil || providerName != USDTAuto {
+	if err != nil || (providerName != USDTAuto && providerName != TONAuto) {
 		return r, err
+	}
+	if providerName == TONAuto {
+		if r.Chain, err = s.st.TONReport(ctx, s.ton.Load().settings.Address); err != nil {
+			return nil, err
+		}
+		return r, nil
 	}
 	if r.Chain, err = s.st.ChainReport(ctx, s.chain.Load().settings.Address); err != nil {
 		return nil, err

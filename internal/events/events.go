@@ -94,9 +94,15 @@ const (
 	// payment the restore erased may have been told the same amount, so
 	// staff check who sent it.
 	UnmatchedAfterRestore = "after_restore"
+	// UnmatchedUnderpaid: (automatic TON) the transfer's comment names a payment and less than it asked for
+	// arrived.
+	UnmatchedUnderpaid = "underpaid"
+	// UnmatchedLatePrice: (automatic TON) the transfer came after the payment's time ran out, and at today's TON
+	// price it no longer covers the price.
+	UnmatchedLatePrice = "late_price"
 )
 
-// DepositUnmatchedEvent: USDT (TRC20) reached the store's address and was
+// DepositUnmatchedEvent: USDT (TRC20) or TON reached the store's address and was
 // credited to nobody. Staff find the customer (the amount, the sender, the
 // time), credit their wallet by hand, then mark the deposit handled on the
 // dashboard. It is announced once per deposit; dust (under 0.1 USDT) never.
@@ -112,6 +118,11 @@ type DepositUnmatchedEvent struct {
 	Currency   string `json:"currency"`   // USDT
 	BlockTime  int64  `json:"block_time"` // unix seconds
 	Reason     string `json:"reason"`     // Unmatched*
+	// Automatic TON (Network TON, Currency TON, Amount in nanoton, TxID the transaction's hash): the transfer's
+	// comment, the payment it named and the nanoton that payment asked for.
+	Comment  string `json:"comment,omitempty"`
+	IntentID string `json:"intent_id,omitempty"`
+	Expected int64  `json:"expected,omitempty"`
 }
 
 // DepositClaimedEvent: a manual crypto payment's proof (IntentID) names a
@@ -202,6 +213,13 @@ const (
 	// CreditGiftCode: the customer applied a gift code (docs/03-bot-ux.md). They asked for it in the bot, which
 	// answered with the amount and the new balance in the same chat, so the notifier sends no second message.
 	CreditGiftCode = "gift_code"
+	// CreditCashback: a share of a delivered order given back to the buyer (OrderID is the order).
+	CreditCashback = "cashback"
+	// CreditTargetBonus: a reseller reached a tier of the monthly sales target (TargetSales, TargetMonth and TargetThreshold say which).
+	CreditTargetBonus = "target_bonus"
+	// CreditWheelPrize: the customer won a prize on the daily wheel. They spun in the bot or the Mini App, which answered with the prize and the new
+	// balance in the same place, so the notifier sends no second message.
+	CreditWheelPrize = "wheel_prize"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.
@@ -219,6 +237,12 @@ type WalletCreditedEvent struct {
 	FromAmount   int64  `json:"from_amount,omitempty"`
 	FromCurrency string `json:"from_currency,omitempty"`
 	Rate         int64  `json:"rate,omitempty"`
+	// CashbackTaken is, on a refund, the cashback the order had earned that was taken back with it (Balance is the balance after both).
+	CashbackTaken int64 `json:"cashback_taken,omitempty"`
+	// On a target bonus: how many services the reseller had sold that month, the month (yyyy-mm) and the tier that paid (its threshold).
+	TargetSales     int    `json:"target_sales,omitempty"`
+	TargetMonth     string `json:"target_month,omitempty"`
+	TargetThreshold int    `json:"target_threshold,omitempty"`
 }
 
 // PaymentRejectedEvent: a payment did not go through: a reviewer rejected a
@@ -318,6 +342,9 @@ type BulkReadyEvent struct {
 	Delayed     int      `json:"delayed"`
 	Amount      int64    `json:"amount"` // what the whole bulk cost
 	Currency    string   `json:"currency"`
+	// Cashback is what the delivered services earned the buyer, credited to their wallet (0: none). The services of a bulk are not told
+	// one by one, so the bulk's message says it.
+	Cashback int64 `json:"cashback,omitempty"`
 }
 
 // SubscriptionExtendedEvent: a renewal or traffic top-up was applied.
@@ -528,6 +555,9 @@ type DailySummaryCurrency struct {
 	// gateway failed or let expire. The bot shows them only when they are not 0.
 	Rejected      DailySummaryFlow `json:"rejected"`
 	GatewayFailed DailySummaryFlow `json:"gateway_failed"`
+	// Cashback is the cashback given to wallets that day, less what refunds took back (Count: the credits); the bot shows it when there
+	// were any. Absent in an event from before it was counted.
+	Cashback DailySummaryFlow `json:"cashback"`
 }
 
 // DailySummaryEvent: yesterday's sales (one store-local day) for one staff

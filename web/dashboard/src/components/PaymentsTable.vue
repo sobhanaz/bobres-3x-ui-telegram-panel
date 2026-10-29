@@ -15,6 +15,9 @@ const props = withDefaults(
 const emit = defineEmits<{ page: [e: { page: number; rows: number }]; open: [p: PaymentItem] }>()
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
+// Automatic crypto payments, whose amount is exact and whose reference is a transaction id or hash.
+const exactCurrencies = ['USDT', 'TON']
+const chainProviders = ['usdt_trc20_auto', 'ton_auto']
 </script>
 
 <template>
@@ -54,8 +57,8 @@ const lang = computed(() => locale.value as Lang)
           v-if="p.gateway_amount && (p.gateway_amount.currency !== p.amount.currency || p.gateway_amount.amount !== p.amount.amount)"
           class="app-muted small gateway-amount"
         >
-          <!-- the exact amount to send (automatic USDT), as the wallet shows it -->
-          <span v-if="p.gateway_amount.currency === 'USDT'" class="app-ltr app-mono">{{ decimalOf(p.gateway_amount) }} USDT</span>
+          <!-- the exact amount to send (automatic USDT or TON), as the wallet shows it -->
+          <span v-if="exactCurrencies.includes(p.gateway_amount.currency)" class="app-ltr app-mono">{{ decimalOf(p.gateway_amount) }} {{ p.gateway_amount.currency }}</span>
           <template v-else>{{ money(p.gateway_amount, lang) }}</template>
         </div>
       </template>
@@ -76,7 +79,7 @@ const lang = computed(() => locale.value as Lang)
           <div v-if="p.proof.reference" class="app-ltr app-mono small">{{ p.proof.reference }}</div>
           <div v-if="p.proof.txid" class="app-ltr app-mono small txid">{{ p.proof.txid }}</div>
         </template>
-        <div v-else-if="p.provider_ref" :class="['app-ltr', 'app-mono', 'small', { txid: p.provider === 'usdt_trc20_auto' }]" :title="p.provider_ref">{{ p.provider_ref }}</div>
+        <div v-else-if="p.provider_ref" :class="['app-ltr', 'app-mono', 'small', { txid: chainProviders.includes(p.provider) }]" :title="p.provider_ref">{{ p.provider_ref }}</div>
       </template>
     </Column>
   </DataTable>

@@ -294,6 +294,9 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 		if err := w.svc.issueReward(ctx, tx, job.order, job.plan, job.user); err != nil {
 			return err
 		}
+		if err := w.svc.afterDelivery(ctx, tx, job.order, job.plan, bulkID); err != nil {
+			return err
+		}
 		return w.svc.publish(ctx, tx, events.SubscriptionProvisioned, events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic, Label: derefStr(job.sub.Label),
@@ -333,6 +336,9 @@ func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
 		}
 		w.log.Info("extended", "order_id", o.ID, "subscription_id", job.sub.ID, "type", o.Type)
 		if err := w.svc.issueReward(ctx, tx, o, job.plan, job.user); err != nil {
+			return err
+		}
+		if err := w.svc.afterDelivery(ctx, tx, o, job.plan, ""); err != nil {
 			return err
 		}
 		return w.svc.publish(ctx, tx, events.SubscriptionExtended, events.SubscriptionExtendedEvent{

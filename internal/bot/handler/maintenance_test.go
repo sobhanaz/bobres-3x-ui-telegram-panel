@@ -303,7 +303,7 @@ func gatedCases() []gatedCase {
 		"lang", "lang:fa", "lang:en", "home", "cancel",
 		"buy", "pg:g1", "pg:-", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "pq:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
 		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "wusdt", "wusa:10", "wpu:x:10:n1", "wusc", "whist", "gift", "cds", "cds:2", "trial", "store",
-		"top", "top:2", "ap", "renew",
+		"top", "top:2", "ap", "renew", "wh", "wh:spin",
 		"faq", "faq:p:2", "faq:q:1:f1", "tut", "tut:p:2", "tut:v:1:t1", // the FAQ under Support and the tutorials (help.go)
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
 		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1", "rs:pfx", "rs:pfy:ab", "fl", "fr:n1",

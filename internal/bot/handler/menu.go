@@ -109,6 +109,9 @@ func (h *Handler) showHome(r *req) {
 		kb.Row(r.button("btn.invite", "ref"))
 	}
 	kb.Row(h.growthButtons(r)...) // Become a reseller and Top users, each while it is on
+	if h.wheelFor(r) {
+		kb.Row(r.button("btn.wheel", "wh")) // the daily wheel, while the owner has it on
+	}
 	switch {
 	case r.isStaff():
 		kb.Row(r.button("btn.admin", "adm"), r.button("btn.dashboard", "dash"))
@@ -123,7 +126,7 @@ func (h *Handler) showHome(r *req) {
 var menuItems = []struct{ key, data string }{
 	{"btn.store", "store"}, {"btn.buy", "buy"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
 	{"btn.support", "support"}, {"btn.reseller", "rs"}, {"btn.invite", "ref"}, {"btn.language", "lang"},
-	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"}, {"btn.tutorials", "tut"},
+	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"}, {"btn.tutorials", "tut"}, {"btn.wheel", "wh"},
 	{"btn.admin", "adm"}, {"btn.dashboard", "dash"},
 	{"btn.supplier", "sup"}, {"btn.licenses", "lic"}, // the owner's own store: digital accounts and BOBRES licenses
 }
@@ -202,6 +205,9 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		growth = append(growth, item("btn.top_users"))
 	}
 	m.Row(growth...)
+	if h.wheelFor(r) {
+		m.Row(item("btn.wheel")) // as on the home screen
+	}
 	switch {
 	case r.isStaff():
 		m.Row(item("btn.admin"), item("btn.dashboard"))

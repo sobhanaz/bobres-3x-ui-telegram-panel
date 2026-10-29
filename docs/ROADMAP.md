@@ -29,7 +29,7 @@ v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
 v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
 v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type), v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button) and v0.18.0 (2026-10-29: the customer's own list of codes, a plan priced in USDT paid from the wallet, the Tether top-up in the Mini App, per-server capacity limits, a Prometheus endpoint, an uptime view and a public status page, the approval of dashboard sign-ins in Telegram, and `bobres rotate-key`).
 
-## Where things stand (after v0.18.0)
+## Where things stand (after v0.19.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
@@ -66,8 +66,8 @@ What is still open:
   professional report** on the Reports page, **downloading and restoring a backup** from the dashboard, and a full
   **uninstall** that leaves a server as on day one (`sudo bobres uninstall --purge`). See the changelog for what has
   and has not been tried for real.
-- **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
-  (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish);
+- **Still on the list, not built:** S-UI and Hiddify panels, if operators ask; growth tools
+  (gift codes, cashback, a daily wheel and reseller targets are built; a lottery with tickets is not); more bot languages (Arabic, Russian, Turkish);
   Persian documentation generated from the code. (Two-factor sign-in inside the bot is built: see above.)
   Built since v0.17.1 (release 0.18.0): **per-server capacity limits** (the Servers page, the pick, a daily notice), a
   **Prometheus endpoint** (`GET /metrics`, off until the owner makes a token; a scrape configuration, alert rules and a Grafana dashboard
@@ -132,8 +132,8 @@ These cannot be done in the Docker lab ([11-staging-run.md](11-staging-run.md)).
 - **Status: built** ([15-subscription-page.md](15-subscription-page.md), migration 00020). Open: check the app deep
   links on real devices.
 
-### 3. More Iranian payment gateways (M) — built, see [16-idpay-nextpay.md](16-idpay-nextpay.md)
-- **What:** automatic card gateways beyond Zarinpal (for example IDPay and NextPay), behind the same gateway interface,
+### 3. More Iranian payment gateways (M) — built, see [16-idpay-nextpay.md](16-idpay-nextpay.md) and [19-aqayepardakht.md](19-aqayepardakht.md)
+- **What:** automatic card gateways beyond Zarinpal (IDPay, NextPay and Aqayepardakht), behind the same gateway interface,
   with the same review, callback and refund flow.
 - **Why:** more ways to pay raises conversion; some customers cannot use Zarinpal.
 - **Needs:** merchant accounts and sandbox credentials from the owner for each gateway; the provider's rules on VPN
@@ -192,8 +192,8 @@ item says where it landed.
 1. **The installer and CLI makeover: built, v0.3.0.** A banner, an honest progress bar, quiet third-party output, automatic hardening that never touches SSH, a live check of the 3x-ui token while it is typed, and an install that survives an SSH drop.
 2. **Trust and first login: built, v0.4.0.** The owner's requests above (status screen, login at once with a password, `bobres check`, the default logo, the footer credit) and the bot's owner panel by buttons with every field explained (without the Undo).
 3. **More panels: Marzban built, v0.4.0; tested against the real 0.8.4 image in CI since.** A server has a kind, 3x-ui or Marzban; the adapter is checked against the real panel by the "Marzban integration" CI job (not a required check), which found and fixed six differences from the fake. Marzban 1.0 (beta) has another API and is not supported; flagging untested Marzban versions in the dashboard, as 3x-ui's are, is open. Then S-UI and Hiddify if asked. The adapter interface exists; each panel gets the same CI integration test the 3x-ui versions have.
-4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is open; each gateway stays off until its merchant id is set.
-5. **Growth tools: gift codes built (unreleased, see the changelog); the rest open.** Cashback, a lottery or wheel, reseller tiers with targets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
+4. **More Iranian gateways: IDPay and NextPay built, v0.4.0** (item 3 of the picks above). Aqayepardakht is built since ([19-aqayepardakht.md](19-aqayepardakht.md), not yet tried with a real account); each gateway stays off until its merchant id is set.
+5. **Growth tools: gift codes, cashback, the daily wheel and reseller monthly targets built (unreleased, see the changelog); the rest open.** All three of the last are off until the owner switches them on, and money moves only in the transaction that records why (ledger kinds `cashback`, `target_bonus`, `wheel_prize`, each under an idempotency key). Open: a lottery with tickets; more bot languages (Arabic, Russian, Turkish). Built in v0.7.0: the Top users board, the card to forward in Invite friends, the reseller application, the account lines on the wallet screen and the `/new`, `/renew`, `/status` commands (see the top of this page).
 6. **The branded subscription page: built, v0.4.0** (item 2 of the picks above). Per-server capacity limits: built (release 0.18.0).
 7. **The Telegram Mini App: built, v0.4.0; on by default and complete since v0.6.0, and holding the required channel since v0.6.1** (item 4 of the picks above: trial, invites, support, Stars, receipts and a reseller panel), not yet checked in a real Telegram.
 8. **Alongside:** the audit-log export is built (`audit.csv`), and so are the Prometheus endpoint and the uptime view with its optional public status page (release 0.18.0). Open: Persian documentation generated from the code (Mirza's 61 pages are the bar), two-factor sign-in inside the bot.
@@ -202,7 +202,7 @@ item says where it landed.
 ## Later, not yet ordered
 
 - More bot languages (Arabic, Russian, Turkish): the texts are already keys, so the work is translation and review.
-- TON payments; more crypto networks, if a way that works from Iran exists.
+- More crypto networks, if a way that works from Iran exists. (Automatic TON is built: [20-ton.md](20-ton.md), not yet tried with a real wallet.)
 - Incident history on the status page (it says only "working" or "down" now), and e-mail or Telegram subscriptions to it. (The Prometheus endpoint, a Grafana example and the uptime view are built.)
 - Automatic node balancing beyond the weights and the per-server service limit in use today.
 - Two-factor sign-in for staff inside the bot.

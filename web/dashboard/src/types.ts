@@ -80,6 +80,8 @@ export interface OrderItem {
   staff: string
   extend: { days: number | null; bytes: number | null } | null
   refund: { amount: Money; at: number } | null
+  /** the cashback the order earned its buyer (only the one-order answer has it); `reversed` is what a refund took back */
+  cashback?: { amount: Money; percent_bp: number; capped: boolean; at: number; reversed?: Money; reversed_at?: number } | null
   /** an order listed in USDT and paid from the Toman wallet: amount is what was charged; this is the price it was listed at (the discount is in it) and the Toman per USDT it was worked out at */
   list?: { price: Money; rate: number } | null
 }
@@ -276,7 +278,7 @@ export interface AuditItem {
 export interface SettingItem {
   key: string
   group: string
-  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color'
+  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list'
   value: string
   default: string
   options: string[]
@@ -584,6 +586,50 @@ export interface ResellerDetail extends ResellerItem {
   panel_group?: string
   panel_group_full?: string
   groups_synced?: boolean
+  /** this month against the owner's monthly targets (absent while they are off) */
+  targets?: TargetsView
+}
+
+/** One day of the daily wheel in the owner's report: customers who spun, those who won, and the Toman paid out. */
+export interface WheelDayView {
+  day: string
+  spins: number
+  winners: number
+  paid: { amount: number; currency: string }
+}
+
+/** GET /wheel/report: today against the daily budget and the days of the last month that had a spin (newest first). */
+export interface WheelReportView {
+  on: boolean
+  day: string
+  budget: { amount: number; currency: string }
+  remaining: { amount: number; currency: string }
+  today: WheelDayView
+  days: WheelDayView[]
+  total: WheelDayView
+  window_days: number
+}
+
+export interface TargetTierView {
+  threshold: number
+  bonus: number
+  reached: boolean
+  paid: boolean
+}
+
+/** A reseller's month against the owner's targets (core's targetsJSON): from and to are the Gregorian dates the month covers, ends_at unix seconds. */
+export interface TargetsView {
+  period: string
+  calendar: 'gregorian' | 'jalali'
+  from: string
+  to: string
+  ends_at: number
+  sold: number
+  tiers: TargetTierView[]
+  remaining: number
+  bonus_paid: number
+  currency: string
+  scale: number
 }
 
 /** A reseller tier: a discount off store prices, or a fixed price per plan
@@ -679,11 +725,29 @@ export interface GatewayHealth {
   last_error_at: number | null
   /** the last error, already redacted (English) */
   last_error: string
+  /** ton_auto: when the watcher last read the address, and when it last did so without an error; null before the
+   * first; absent from the other gateways and older cores */
+  last_scan_at?: number | null
+  last_scan_ok_at?: number | null
+  /** ton_auto: how many deposits are still to handle */
+  unmatched_count?: number
+}
+
+/** The live TON price in USDT, as the payments service reads it (ton_auto). */
+export interface TonPrice {
+  /** USDT for one TON, a decimal string of up to 6 decimals ("3.2145") */
+  usdt_per_ton: string
+  /** the exchange it came from: binance | okx (others may come) */
+  source: string
+  /** when it was read, unix seconds */
+  at: number
+  /** true: recent enough to price a payment; false: customers are not offered TON until a fresh one arrives */
+  fresh: boolean
 }
 
 /** An automated gateway's configuration (GET /gateways, owner only). The
- * merchant id, the proxy and the TronGrid API key are never sent back: only a
- * hint and whether set. */
+ * merchant id, the API key or PIN, the proxy and the TronGrid and TON Center API
+ * keys are never sent back: only a hint and whether set. */
 export interface GatewayConfig {
   provider: string
   /** offered to customers */
@@ -695,21 +759,26 @@ export interface GatewayConfig {
   /** why the settings cannot be used: '' | unreadable | sandbox_refused |
    * public_url | invalid */
   problem?: string
+  /** on the test system (Aqayepardakht: while its stored PIN is "sandbox", which
+   * has no switch of its own) */
   sandbox: boolean
-  /** may the sandbox be turned on (never in production); absent = yes */
+  /** may the sandbox be turned on (never in production; Aqayepardakht: may its
+   * PIN be "sandbox"); absent = yes */
   sandbox_allowed?: boolean
   /** the merchant id's last 4 characters, '' when none */
   merchant_hint: string
-  /** a proxy is stored (Zarinpal, IDPay or NextPay: for the gateway calls; automatic USDT: for TronGrid) */
+  /** a proxy is stored (Zarinpal, IDPay, NextPay or Aqayepardakht: for the gateway calls; automatic USDT: for TronGrid; automatic TON: for TON Center) */
   proxy_set: boolean
-  /** usdt_trc20_auto: the TRON (TRC20) address that receives USDT, '' when
-   * none (public: customers see it) */
+  /** usdt_trc20_auto: the TRON (TRC20) address that receives USDT; ton_auto: the TON address that receives TON, in the
+   * non-bounceable form ("UQ…"); '' when none (public: customers see it) */
   address?: string
-  /** usdt_trc20_auto, idpay, nextpay: an API key is stored (the key is never sent back) */
+  /** usdt_trc20_auto, ton_auto, idpay, nextpay, aqayepardakht: an API key (Aqayepardakht: its PIN) is stored (the key is never sent back) */
   key_set?: boolean
   /** payments has no master key: the settings come from .env, read only */
   key_missing: boolean
   health?: GatewayHealth | null
+  /** ton_auto: the live TON price; null (or not fresh) means TON is not offered to customers right now */
+  price?: TonPrice | null
 }
 
 /** GET /gateways: the automated gateways, and the payments settings (the
@@ -726,24 +795,37 @@ export interface GatewayTest {
   detail: string
   /** paid payments the gateway still waits to have verified */
   unverified?: number
+  /** ton_auto: how long the answer took */
+  latency_ms?: number
+  /** ton_auto: the address's latest transaction, unix seconds; null when it has none yet (a new wallet) */
+  latest_tx_at?: number | null
 }
 
-/** USDT that reached the store's TRON address in the period but matched no
- * payment (another amount, or too late): nothing was credited. */
+/** USDT that reached the store's TRON address, or TON that reached its TON
+ * address, but matched no payment (another amount, no comment, or too late):
+ * nothing was credited. */
 export interface UnmatchedDeposit {
-  /** the transaction id (64 hex digits) */
+  /** the transaction id (64 hex digits); for TON, the transaction hash */
   txid: string
   /** the transfer's place in its transaction, from 0 (one transaction may
    * carry more than one); with txid, what marks it handled */
   event_index: number
-  /** the sender's TRON address */
+  /** TRC20 (USDT, the default) or TON */
+  network?: string
+  /** the sender's TRON or TON address */
   from: string
+  /** the store's address it reached */
+  to?: string
+  /** TON: the transfer's comment (a payment's memo is "BOB-3F9A1C20"), as sent; may be anything, or empty */
+  comment?: string
+  /** TON: the transaction's logical time */
+  lt?: number
   amount: Money
   /** its block time, unix seconds */
   at: number
   /** why it matched nothing, in core's words (English); absent when not said */
   reason?: string
-  /** why, as a code: no_payment | already_paid | closed | ambiguous | dust
+  /** why, as a code: no_payment | already_paid | closed | ambiguous | dust; TON also underpaid | late_price
    * (others may come) */
   reason_code?: string
 }
@@ -755,11 +837,13 @@ export interface GatewayReport extends GatewayHealth {
   to: number
   /** by status: how many, and the sum charged per currency */
   totals: { status: string; count: number; amounts: Money[] }[]
-  /** usdt_trc20_auto only: the deposits still to handle, whatever the
-   * period (the newest, at most 50) */
+  /** usdt_trc20_auto and ton_auto only: the deposits still to handle, whatever
+   * the period (the newest, at most 50) */
   unmatched?: UnmatchedDeposit[]
-  /** usdt_trc20_auto only: how many deposits are still to handle in all */
+  /** usdt_trc20_auto and ton_auto only: how many deposits are still to handle in all */
   unmatched_count?: number
+  /** ton_auto: why the last read of the address failed, already redacted (English); '' or absent when it did not */
+  scan_error?: string
   /** the failed payment checks (Zarinpal) kept in the period, newest first,
    * at most 20; absent from older cores */
   check_errors?: GatewayCheckError[] | null

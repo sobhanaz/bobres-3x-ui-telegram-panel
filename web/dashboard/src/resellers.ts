@@ -2,7 +2,7 @@
 // debt per currency (Toman first), the price a tier gives a plan, and what
 // the forms send. Pure functions (no API, no Vue).
 import { asciiNumber, currencies, decimalOf, latinDigits, minorOf, validAmount, type Lang, type Money } from './format'
-import type { PlanItem, ResellerBalance, ResellerDetail, ResellerItem, TierItem, UserBrief } from './types'
+import type { PlanItem, ResellerBalance, ResellerDetail, ResellerItem, TargetsView, TierItem, UserBrief } from './types'
 
 /** Limits core checks again. */
 export const MAX_DISCOUNT = 90
@@ -89,6 +89,8 @@ export interface Reseller {
   panelGroup: string
   panelGroupFull: string
   groupsSynced: boolean
+  /** this month against the owner's monthly targets (null while they are off) */
+  targets: TargetsView | null
 }
 
 /** resellerOf reads a row or item answer from core. */
@@ -115,6 +117,7 @@ export function resellerOf(r: ResellerItem | ResellerDetail): Reseller {
     panelGroup: d.panel_group ?? '',
     panelGroupFull: d.panel_group_full ?? '',
     groupsSynced: d.groups_synced ?? false,
+    targets: d.targets ?? null,
   }
 }
 

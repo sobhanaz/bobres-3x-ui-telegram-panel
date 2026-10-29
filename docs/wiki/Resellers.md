@@ -23,6 +23,17 @@ Only the owner can write the group name. An admin can make a reseller but not na
 
 When you receive money from a reseller, record it as a payment received. It raises their balance. The reseller's statement shows every purchase, commission and payment.
 
+## Monthly targets
+
+Targets give a reseller a bonus for selling more. Open **Settings**, the **Reseller targets** card. It is **off until you switch it on**.
+
+- **Tiers:** up to 10 rows, each a number of new services sold in a month and a bonus in Toman. For example 10 services pays 50,000 Toman and 25 services pays 150,000 Toman (the second tier pays on top of the first).
+- **Calendar of the month:** Gregorian (the 1st to the last day) or Jalali (Persian months). The month is read in your store's time zone, the one the reports use.
+- **What counts:** a new service that the reseller bought and that was delivered. Renewals, traffic packages, free trials and free orders do not. Sales are counted from the moment you switch targets on.
+- **The bonus** goes to the reseller's wallet the moment the service that reaches a tier is delivered, once for the month, and the bot tells them. Editing the tiers in the middle of a month never pays a tier twice.
+- **Refunds:** a refunded sale leaves the count of its month, but a bonus already paid is **not** taken back.
+- The reseller sees their progress in the bot's reseller panel and in the Mini App. You see it on the reseller's page in the dashboard, and each bonus in their statement as **Monthly target bonus**.
+
 ## What a reseller can do
 
 In the bot and in the Mini App's **More** section, a reseller has a panel with:

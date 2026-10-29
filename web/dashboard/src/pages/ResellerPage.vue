@@ -28,7 +28,7 @@ import { api, ApiError, query } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { useList } from '../composables/useList'
-import { date, money, num, type Lang, type Money } from '../format'
+import { date, localDate, money, num, type Lang, type Money } from '../format'
 import { csvCalendar } from '../reports'
 import { owed, percent, resellerOf, type Reseller } from '../resellers'
 import type { LedgerItem, OrderItem, ResellerDetail, ServiceItem, UserItem } from '../types'
@@ -92,6 +92,10 @@ watch(id, () => {
   showTab(tab.value)
 })
 const csvHref = computed(() => '/api/v1/ledger.csv' + query({ user: id.value, calendar: csvCalendar(lang.value) }))
+
+// The monthly target: the month's dates are days of the store's zone (calendar arithmetic, never moved by the browser's zone), in the owner's calendar.
+const targetDay = (ymd: string) => localDate(ymd, lang.value, 'medium', reseller.value?.targets?.calendar)
+const nextTier = computed(() => reseller.value?.targets?.tiers.find((x) => !x.reached) ?? null)
 
 // Money moved: the statement shows it the next time it is opened.
 function moneyMoved() {
@@ -242,6 +246,30 @@ async function remove(reason: string) {
       </Card>
     </div>
 
+    <Card v-if="reseller?.targets" class="targets" data-targets>
+      <template #title>{{ t('reseller.targets.title') }}</template>
+      <template #subtitle>{{ t('reseller.targets.range', { from: targetDay(reseller.targets.from), to: targetDay(reseller.targets.to) }) }}</template>
+      <template #content>
+        <div class="targets-head">
+          <div class="big sold">{{ num(reseller.targets.sold, lang) }}</div>
+          <div class="app-muted">{{ t('reseller.targets.sold') }}</div>
+        </div>
+        <ul class="tiers-list">
+          <li v-for="x in reseller.targets.tiers" :key="x.threshold" :class="{ paid: x.paid }">
+            <i :class="x.paid ? 'pi pi-check-circle' : x.reached ? 'pi pi-minus-circle' : 'pi pi-circle'" aria-hidden="true" />
+            {{ t('reseller.targets.tier', { n: num(x.threshold, lang), bonus: money({ amount: x.bonus, currency: reseller.targets.currency }, lang) }, x.threshold) }}
+            <span class="app-muted">· {{ x.paid ? t('reseller.targets.paid') : x.reached ? t('reseller.targets.reached_unpaid') : t('reseller.targets.not_reached') }}</span>
+          </li>
+        </ul>
+        <p v-if="nextTier" class="next">
+          {{ t('reseller.targets.next', { bonus: money({ amount: nextTier.bonus, currency: reseller.targets.currency }, lang), n: num(reseller.targets.remaining, lang) }, reseller.targets.remaining) }}
+        </p>
+        <p v-else class="next">{{ t('reseller.targets.done') }}</p>
+        <p class="app-muted tnote">{{ t('reseller.targets.paid_total', { amount: money({ amount: reseller.targets.bonus_paid, currency: reseller.targets.currency }, lang) }) }}</p>
+        <p class="app-muted tnote">{{ t('reseller.targets.no_clawback') }}</p>
+      </template>
+    </Card>
+
     <Card class="facts">
       <template #content>
         <dl v-if="reseller" class="app-facts">
@@ -387,8 +415,26 @@ async function remove(reason: string) {
   line-height: 1.5;
 }
 .facts,
-.tabs {
+.tabs,
+.targets {
   margin-block-start: var(--app-gap);
+}
+.tiers-list {
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+.tiers-list .paid {
+  font-weight: 600;
+}
+.next {
+  margin-block: 0.25rem;
+}
+.tnote {
+  margin-block: 0.25rem 0;
+  font-size: 0.85rem;
 }
 .note {
   white-space: pre-wrap;

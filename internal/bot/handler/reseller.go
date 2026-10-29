@@ -191,6 +191,9 @@ func (h *Handler) showResellerPanel(r *req) {
 	if p := info.GetConfigPrefix(); p != "" {
 		text += "\n\n" + r.t("rs.prefix_line", "prefix", esc(p))
 	}
+	if t := r.targetsBlock(info.GetTargets()); t != "" {
+		text += "\n\n" + t
+	}
 	r.show(text, kb)
 }
 

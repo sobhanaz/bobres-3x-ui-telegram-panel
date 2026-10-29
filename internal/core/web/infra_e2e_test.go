@@ -22,6 +22,8 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	paydomain "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/toncenter"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/tonprice"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/trongrid"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/zarinpal"
 	payserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
@@ -29,6 +31,7 @@ import (
 	provserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/server"
 	provstore "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tonfake"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tronfake"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xuifake"
@@ -108,6 +111,12 @@ func realPayments(t *testing.T) (*paymentsclient.Client, *paystore.Store) {
 // USDT reads that fake TronGrid through the real client.
 func startPayments(t *testing.T, chain *tronfake.Server) (*paymentsclient.Client, *paystore.Store, *paydomain.Service) {
 	t.Helper()
+	return startPaymentsWith(t, chain, nil)
+}
+
+// startPaymentsWith is startPayments with automatic TON wired to a fake TON Center and fake price sources too.
+func startPaymentsWith(t *testing.T, chain *tronfake.Server, ton *tonfake.Server) (*paymentsclient.Client, *paystore.Store, *paydomain.Service) {
+	t.Helper()
 	ctx := context.Background()
 	dsn := testdb.DSN(t)
 	if err := migrate.Up(ctx, dsn, "payments"); err != nil {
@@ -119,7 +128,8 @@ func startPayments(t *testing.T, chain *tronfake.Server) (*paymentsclient.Client
 	}
 	t.Cleanup(ps.Close)
 	if _, err := ps.DB().Exec(ctx, `TRUNCATE payments.gateway_configs, payments.payment_intents, payments.outbox_payments,
-		payments.outbox_payments_cursors, payments.chain_transfers, payments.chain_cursors, payments.gateway_events CASCADE`); err != nil {
+		payments.outbox_payments_cursors, payments.chain_transfers, payments.chain_cursors, payments.gateway_events,
+		payments.ton_transfers, payments.ton_cursors CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	zp := zpfake.New()
@@ -138,6 +148,20 @@ func startPayments(t *testing.T, chain *tronfake.Server) (*paymentsclient.Client
 	if chain != nil {
 		opts.BuildChain = func(c paydomain.ChainSettings) (gateway.ChainSource, error) {
 			cl, err := trongrid.New(trongrid.Config{APIKey: c.APIKey, Proxy: c.Proxy, BaseURL: chain.URL})
+			if err != nil {
+				return nil, err
+			}
+			return cl, nil
+		}
+	}
+	if ton != nil {
+		feed, err := tonprice.Default(tonprice.Config{BinanceURL: ton.BinanceURL(), OKXURL: ton.OKXURL()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts.TONPrice = feed
+		opts.BuildTON = func(c paydomain.TONSettings) (gateway.TONSource, error) {
+			cl, err := toncenter.New(toncenter.Config{APIKey: c.APIKey, Proxy: c.Proxy, BaseURL: ton.URL})
 			if err != nil {
 				return nil, err
 			}

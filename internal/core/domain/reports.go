@@ -494,7 +494,7 @@ func addCell(a, b *store.ReportCell) {
 	a.NewOrders += b.NewOrders
 	a.Renewals += b.Renewals
 	a.TrafficTopups += b.TrafficTopups
-	for _, p := range [][2]*store.ReportFlow{{&a.Topups, &b.Topups}, {&a.Refunds, &b.Refunds}, {&a.Rejected, &b.Rejected}, {&a.GatewayFailed, &b.GatewayFailed}, {&a.Cancelled, &b.Cancelled}, {&a.Licenses, &b.Licenses}, {&a.Digital, &b.Digital}} {
+	for _, p := range [][2]*store.ReportFlow{{&a.Topups, &b.Topups}, {&a.Refunds, &b.Refunds}, {&a.Rejected, &b.Rejected}, {&a.GatewayFailed, &b.GatewayFailed}, {&a.Cancelled, &b.Cancelled}, {&a.Licenses, &b.Licenses}, {&a.Digital, &b.Digital}, {&a.Cashback, &b.Cashback}} {
 		p[0].Count += p[1].Count
 		p[0].Amount += p[1].Amount
 	}

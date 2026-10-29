@@ -1,16 +1,18 @@
 <script setup lang="ts">
 // What the customer does to pay once a payment is started: open the gateway's page, or send USDT to an address (then
-// "I have paid"); open a Telegram Stars invoice; or pay by hand and send the proof (card to card, USDT, a Zarinpal link).
+// "I have paid"); send TON to an address with a comment (TonPay); open a Telegram Stars invoice; or pay by hand and send
+// the proof (card to card, USDT, a Zarinpal link).
 import { computed, ref, watch } from 'vue'
 import type { Intent } from '../api'
 import { tr } from '../i18n'
 import { fmtClock, fmtDateTime, fmtExact } from '../fmt'
 import { copyText, openLink } from '../telegram'
 import { isolate } from '../format'
-import { isManual } from '../pay'
+import { isManual, isTon } from '../pay'
 import { useCountdown, wall } from '../countdown'
 import ManualPay from './ManualPay.vue'
 import StarsPay from './StarsPay.vue'
+import TonPay from './TonPay.vue'
 
 const props = withDefaults(defineProps<{ intent: Intent; checking: boolean; message: string; showLeave?: boolean; reopened?: boolean }>(), {
   showLeave: true,
@@ -45,7 +47,8 @@ watch(
   ([a, until]) => {
     over.value = false
     countdown.stop()
-    if (a && until > wall()) countdown.start(until)
+    // An automatic TON payment counts its own time on its own screen (TonPay).
+    if (a && until > wall() && !isTon(props.intent.provider)) countdown.start(until)
   },
   { immediate: true },
 )
@@ -73,6 +76,7 @@ async function copy() {
     @check="(quiet) => $emit('check', quiet)"
     @leave="$emit('leave')"
   />
+  <TonPay v-else-if="isTon(intent.provider)" :intent="intent" :checking="checking" :message="message" @check="(quiet) => $emit('check', quiet)" />
   <section v-else class="card pay">
     <p v-if="!over" class="muted">{{ tr('pay.waiting') }}</p>
     <template v-if="address">

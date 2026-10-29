@@ -248,6 +248,10 @@ type Payments struct {
 	// has no sandbox.
 	IDPayAPIKey, IDPayProxy, NextPayAPIKey, NextPayProxy string
 	IDPaySandbox                                         bool
+	// Aqayepardakht is built the same way, with a PIN in place of the API key
+	// (case-sensitive: kept as it is). Its sandbox is the PIN "sandbox", which
+	// is refused when BOBRES_ENV=prod.
+	AqayepardakhtPIN, AqayepardakhtProxy string
 	// MasterKey encrypts the gateway settings stored in the database (the
 	// merchant id, the API keys and the proxy URLs). Optional: without it the Zarinpal* values
 	// above are used as they are and cannot be changed from the dashboard. With
@@ -289,7 +293,13 @@ func LoadPayments() (Payments, error) {
 	}
 	p.NextPayAPIKey = strings.TrimSpace(getenv("BOBRES_NEXTPAY_API_KEY", ""))
 	p.NextPayProxy = getenv("BOBRES_NEXTPAY_PROXY", "")
-	if p.ZarinpalMerchantID != "" || p.IDPayAPIKey != "" || p.NextPayAPIKey != "" {
+	p.AqayepardakhtPIN = strings.TrimSpace(getenv("BOBRES_AQAYEPARDAKHT_PIN", ""))
+	p.AqayepardakhtProxy = getenv("BOBRES_AQAYEPARDAKHT_PROXY", "")
+	if p.AqayepardakhtPIN == "sandbox" && c.Env == "prod" {
+		// The sandbox PIN makes any payment "succeed": customers would get service for free.
+		errs = append(errs, errors.New(`BOBRES_AQAYEPARDAKHT_PIN=sandbox is refused when BOBRES_ENV=prod`))
+	}
+	if p.ZarinpalMerchantID != "" || p.IDPayAPIKey != "" || p.NextPayAPIKey != "" || p.AqayepardakhtPIN != "" {
 		if err := CheckZarinpalPublicURL(p.ZarinpalPublicURL, c.Env); err != nil {
 			errs = append(errs, err)
 		}

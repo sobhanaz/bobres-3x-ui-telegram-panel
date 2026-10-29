@@ -180,9 +180,9 @@ describe('open problems', () => {
     expect(alertTextKey({})).toBe('')
     expect(alertTextKey({ title_key: 'alert.<b>' })).toBe('')
     // every text the bot has for a problem is here too, in both languages
-    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'server_capacity', 'server_full', 'zarinpal_failing', 'zarinpal_stuck', 'idpay_failing', 'idpay_stuck', 'nextpay_failing', 'nextpay_stuck', 'backup_failed', 'backup_stale',
+    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'server_capacity', 'server_full', 'zarinpal_failing', 'zarinpal_stuck', 'idpay_failing', 'idpay_stuck', 'nextpay_failing', 'nextpay_stuck', 'backup_failed', 'backup_stale', 'aqayepardakht_failing', 'aqayepardakht_stuck',
       'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'license_limit', 'trial_ending', 'trial_ended', 'check',
-      'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down',
+      'backup_offsite', 'usdt_failing', 'usdt_stuck', 'ton_failing', 'ton_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down',
       'monitor_disk', 'monitor_memory', 'monitor_container_down', 'monitor_container_unhealthy', 'monitor_container_restarting', 'monitor_collector_stale', 'monitor_ci', 'panel_missing']
     expect(Object.keys(fa.system.alerts.kind).sort()).toEqual([...botTexts].sort())
     expect(Object.keys(en.system.alerts.kind).sort()).toEqual([...botTexts].sort())
@@ -764,6 +764,7 @@ describe('system page', () => {
     gateways: [
       { provider: 'zarinpal', enabled: true, healthy: true, ready: true },
       { provider: 'manual_card', enabled: false, healthy: true },
+      { provider: 'ton_auto', enabled: true, healthy: false, ready: true },
     ],
     updates: { current: '1.4.0', latest: '1.5.0', newer: true, verified: false, checked_at: nowSec() - 3600, error: '' },
   })
@@ -788,7 +789,7 @@ describe('system page', () => {
       resellers: false, crypto_watcher: false, updates_until: '',
       max_servers: { limit: 1, used: 1, near: true, full: true }, max_active_services: { limit: 25, used: 24, near: true, full: false },
       dashboard_staff_seats: { limit: 2, used: 3, near: true, full: true },
-      gateways: { licensed: ['zarinpal', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal'], enabled: ['zarinpal', 'usdt_trc20_auto'] },
+      gateways: { licensed: ['zarinpal', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal'], enabled: ['zarinpal', 'usdt_trc20_auto', 'ton_auto'] },
     }),
   })
   const active = (): LicenseInfo => ({
@@ -906,6 +907,8 @@ describe('system page', () => {
     expect(gateways.map((g) => g.textContent)).toEqual([
       text('payment.provider.zarinpal') + text('overview.gateway_state.ok'),
       text('payment.provider.manual_card') + text('overview.gateway_state.off'),
+      // automatic TON is named, and says it fails when its payments do
+      text('payment.provider.ton_auto') + text('overview.gateway_state.down'),
     ])
     // admins manage servers, never gateways
     expect(document.querySelector('.servers-link')).not.toBeNull()
@@ -1457,6 +1460,7 @@ describe('system page', () => {
     expect(ent('updates_until').textContent).toContain(text('license.updates_any'))
     // automatic USDT is on although the free tier does not name it: it keeps working
     expect(ent('gateways').querySelector('.outside')?.textContent).toContain(text('payment.provider.usdt_trc20_auto'))
+    expect(ent('gateways').querySelector('.outside')?.textContent).toContain(text('payment.provider.ton_auto'))
     expect(ent('gateways').querySelector('.allowed')?.textContent).toContain(text('payment.provider.zarinpal'))
     expect(document.querySelector('.limits-warn')?.textContent).toBe(text('license.warnings'))
     // the footer shows the attribution on the free tier
