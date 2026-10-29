@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import JoinChatsCard from '../components/settings/JoinChatsCard.vue'
+import SecurityCard from '../components/settings/SecurityCard.vue'
 import SettingsCard from '../components/settings/SettingsCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
@@ -105,6 +106,8 @@ function saved(r: SettingsReply) {
       <SettingsCard v-else :group="g" :items="byGroup[g]" :class="{ wide: wide.includes(g) }" @saved="saved" />
     </template>
     <p v-if="!groups.length" class="app-muted">{{ t('settings.empty') }}</p>
+    <!-- How staff sign in: its own card and endpoint, because the owner changes it with a confirmation, not with Save. -->
+    <SecurityCard class="wide" />
   </div>
 </template>
 

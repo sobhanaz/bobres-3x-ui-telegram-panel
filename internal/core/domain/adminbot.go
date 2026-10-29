@@ -90,6 +90,9 @@ type AdminSettingView struct {
 // details and the server's own operation (its update channel) are the owner's,
 // like in the dashboard (web.Allowed).
 func settingChangeable(role string, sp SettingSpec) bool {
+	if sp.Perm == permSecurity {
+		return false // how staff sign in is changed in the dashboard, never in the bot
+	}
 	switch role {
 	case "owner":
 		return true

@@ -22,7 +22,7 @@ const rotateUsage = `usage: bobres secrets rotate <name> [--dir D] [--yes]
   db-passwords     the database passwords (--role core|payments|provisioner|backup|postgres; default all)
   service-tokens   the tokens the services present to each other (all four together)
   redis-password   the Redis password
-The master keys and the backup key are not rotated: see docs/runbooks/rotate-secrets.md`
+The master keys have their own command, bobres rotate-key. The backup key is not rotated: see docs/runbooks/rotate-secrets.md`
 
 // dbRole is a database password in .env and the role that has it.
 type dbRole struct {
@@ -85,10 +85,12 @@ func (r *rotator) secretsCmd(args []string) int {
 	switch {
 	case name == "bot-token" || name == "db-passwords" || name == "service-tokens" || name == "redis-password":
 	case strings.Contains(name, "master"):
-		fmt.Fprintln(r.errOut, "The master keys (BOBRES_CORE_MASTER_KEY, BOBRES_PROVISIONER_MASTER_KEY, BOBRES_PAYMENTS_MASTER_KEY) are not rotated:\n"+
-			"they encrypt the 3x-ui tokens, staff authenticators and gateway settings stored in the database, and a new key\n"+
-			"would leave all of them unreadable (re-encrypting with a new key is future work). After a leak, follow\n"+
-			"docs/runbooks/rotate-secrets.md (Master keys). Nothing was changed.")
+		fmt.Fprintln(r.errOut, "The master keys (BOBRES_CORE_MASTER_KEY, BOBRES_PROVISIONER_MASTER_KEY, BOBRES_PAYMENTS_MASTER_KEY) have a command of\n"+
+			"their own: they encrypt the 3x-ui tokens, staff authenticators and gateway settings stored in the database, so a new\n"+
+			"key must seal all of them again, after a backup, and that is what it does:\n"+
+			"  sudo bobres rotate-key --dry-run   check and count, change nothing\n"+
+			"  sudo bobres rotate-key\n"+
+			"See docs/runbooks/rotate-secrets.md (Master keys). Nothing was changed.")
 		return 1
 	case strings.Contains(name, "backup-key"):
 		fmt.Fprintln(r.errOut, "The backup key is not rotated: every backup made so far opens only with the current key. To start new\n"+

@@ -110,6 +110,8 @@ type Server struct {
 	tests *limiter
 	// probes limits connection tests (servers, gateways) per staff member.
 	probes *limiter
+	// polls limits how often a browser asks how its sign-in awaiting approval stands, per client address.
+	polls *limiter
 	// uploads, restores and downloads limit the dashboard's backup uploads (5 an hour), restore
 	// requests (6 an hour) and download links (10 an hour) per owner; tickets are the download links.
 	uploads, restores, downloads *limiter
@@ -141,7 +143,7 @@ func New(cfg Config) *Server {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Server{cfg: cfg, limiter: newLimiter(20, time.Minute), subPages: newLimiter(subPageRate, time.Minute), tests: newLimiter(5, time.Minute),
-		probes: newLimiter(10, time.Minute), uploads: newLimiter(5, time.Hour), restores: newLimiter(6, time.Hour), downloads: newLimiter(10, time.Hour), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
+		probes: newLimiter(10, time.Minute), polls: newLimiter(120, time.Minute), uploads: newLimiter(5, time.Hour), restores: newLimiter(6, time.Hour), downloads: newLimiter(10, time.Hour), hashing: make(chan struct{}, hashSlots), photoSlot: make(chan struct{}, 1), exports: make(chan struct{}, maxExports),
 		now: time.Now, mini: newMiniState()}
 }
 
@@ -150,6 +152,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	api := http.NewServeMux()
 	api.HandleFunc("POST /api/v1/auth/link", s.loginWithLink)
 	api.HandleFunc("POST /api/v1/auth/login", s.loginWithPassword)
+	// A sign-in that waits for an approver's yes in Telegram (loginapproval.go): polled and cancelled with its own cookie.
+	api.HandleFunc("POST /api/v1/auth/pending", s.pollPending)
+	api.HandleFunc("DELETE /api/v1/auth/pending", s.cancelPending)
 	api.HandleFunc("POST /api/v1/auth/logout", s.restrictedSession(s.logout))
 	api.HandleFunc("GET /api/v1/me", s.restrictedSession(s.me))
 	api.HandleFunc("POST /api/v1/me/password", s.restrictedSession(s.startPassword))
@@ -365,6 +370,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "GET /api/v1/monitor/series", PermMonitorRead, s.monitorSeries)
 	s.route(api, "GET /api/v1/monitor/metrics", PermMonitorRead, s.monitorMetrics)
 	s.route(api, "GET /api/v1/monitor/events", PermMonitorRead, s.monitorEvents)
+	// How staff sign in: the state for owner and admin, the owner's switch for the approval of sign-ins in Telegram.
+	s.route(api, "GET /api/v1/security", PermSystemRead, s.getSecurity)
+	s.route(api, "PUT /api/v1/security/login-approval", PermSecurityWrite, s.putLoginApproval)
 	s.route(api, "GET /api/v1/license", PermSystemRead, s.getLicense)
 	s.route(api, "POST /api/v1/license/check", PermLicenseWrite, s.checkLicense)
 	s.route(api, "PUT /api/v1/license", PermLicenseWrite, s.putLicense)

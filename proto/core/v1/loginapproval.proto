@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package core.v1;
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
+
+// Approving dashboard sign-ins in Telegram (docs/04-dashboard.md, "Signing in"). While the owner has the approval on, a staff sign-in waits
+// for a yes from the staff member themself or an owner. Core has the bot message the approvers through the bot's internal HTTP endpoints;
+// an approver's tap on Approve or Deny comes back here. Core decides everything: who may answer, whether the sign-in still waits, whether
+// the nonce is the one given to that person for that sign-in.
+service LoginApprovalService {
+  // DecideLoginApproval takes one tap. Telegram vouches for telegram_id (the account that pressed the button); approval_id and nonce are what
+  // the button carried. A tap that is repeated, stale, forged, or from someone who may no longer answer changes nothing, and the outcome
+  // says which.
+  rpc DecideLoginApproval(DecideLoginApprovalRequest) returns (DecideLoginApprovalResponse);
+}
+
+message DecideLoginApprovalRequest {
+  int64 telegram_id = 1;
+  string approval_id = 2; // 32 hexadecimal digits
+  string nonce = 3;
+  bool approve = 4; // false: Deny
+}
+
+message DecideLoginApprovalResponse {
+  // approved | denied (this tap decided) | already_approved | already_denied | expired | cancelled (it ended before) | invalid (not a
+  // sign-in this account was asked about, or a wrong nonce) | forbidden (this account may no longer answer for it)
+  string outcome = 1;
+  // Who signs in, for the text written into the message ("" for invalid).
+  string account_username = 2;
+  int64 account_telegram_id = 3;
+  string account_role = 4;
+  // Who decided and when (unix seconds), for approved, denied, already_approved and already_denied; empty and 0 when not known.
+  string by_username = 5;
+  int64 by_telegram_id = 6;
+  string by_role = 7;
+  int64 at = 8;
+}

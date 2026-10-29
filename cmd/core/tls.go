@@ -60,7 +60,7 @@ func masterKey(cfg config.Core) (*bcrypto.Envelope, error) {
 	if cfg.MasterKey == "" {
 		return nil, nil
 	}
-	return bcrypto.NewEnvelope([]byte(cfg.MasterKey))
+	return bcrypto.NewKeyring(cfg.KeyExtras.Keyring(cfg.MasterKey))
 }
 
 // tlsAgentCmd runs the tls-agent (internal/tlsagent), the service that

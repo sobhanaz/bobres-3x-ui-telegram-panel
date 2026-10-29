@@ -396,7 +396,7 @@ func TestSecretsRefusalsAndUsage(t *testing.T) {
 		code  int
 		want  string
 	}{
-		{[]string{"rotate", "master-keys"}, "", 1, "re-encrypting with a new key is future work"},
+		{[]string{"rotate", "master-keys"}, "", 1, "sudo bobres rotate-key --dry-run"},
 		{[]string{"rotate", "BOBRES_CORE_MASTER_KEY"}, "", 1, "The master keys"},
 		{[]string{"rotate", "backup-key"}, "", 1, "every backup made so far opens only with the current key"},
 		{[]string{"rotate", "service-tokens"}, "n\n", 1, "Cancelled. Nothing was changed."},

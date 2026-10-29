@@ -190,7 +190,8 @@ func (s *Server) loginFailed(w http.ResponseWriter, r *http.Request, userID stri
 	writeError(w, http.StatusUnauthorized, "login_failed", "wrong username, password or code")
 }
 
-// startSession opens a session for an active staff member.
+// startSession opens a session for an active staff member, or, while the owner has switched on the approval of sign-ins, starts the wait for
+// an approver's yes (loginapproval.go): no session exists until then. A switch that cannot be read opens nothing.
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID, method string) {
 	ctx := r.Context()
 	user, err := s.cfg.Domain.StaffUser(ctx, userID)
@@ -198,15 +199,35 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID, me
 		writeError(w, http.StatusForbidden, "forbidden", "this account may not use the dashboard")
 		return
 	}
+	on, err := s.cfg.Domain.LoginApprovalOn(ctx)
+	if err != nil {
+		s.internal(w, "read the sign-in approval switch", err)
+		return
+	}
+	if on {
+		s.startPendingLogin(w, r, user, method)
+		return
+	}
+	st, ok := s.openSession(w, r, user, method, nil)
+	if !ok {
+		return
+	}
+	s.writeMe(w, r.WithContext(context.WithValue(ctx, staffKey{}, st)))
+}
+
+// openSession makes a session for an active staff member and sets its cookie. approval is the approved sign-in it comes from (nil: none was
+// needed). It answers an error itself and reports false when it could not.
+func (s *Server) openSession(w http.ResponseWriter, r *http.Request, user *store.User, method string, approval *store.LoginApproval) (*staff, bool) {
+	ctx := r.Context()
 	cookie, hash, err := webauth.NewToken()
 	if err != nil {
 		s.internal(w, "new session", err)
-		return
+		return nil, false
 	}
 	csrf, _, err := webauth.NewToken()
 	if err != nil {
 		s.internal(w, "new session", err)
-		return
+		return nil, false
 	}
 	now := s.now()
 	ttl := SessionTTL
@@ -215,14 +236,28 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID, me
 	}
 	sess := &store.WebSession{IDHash: hash, UserID: user.ID, CSRFToken: csrf, Method: method,
 		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 256), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(ttl)}
+	// An approved sign-in keeps the address the approver was shown: the session is the one they approved, whatever address collects it.
+	if approval != nil && approval.IP != "" {
+		sess.IP, sess.UserAgent = approval.IP, truncate(approval.UserAgent, 256)
+	}
 	if err := s.cfg.Store.CreateSession(ctx, s.cfg.Store.Conn(), sess); err != nil {
 		s.internal(w, "create session", err)
-		return
+		return nil, false
 	}
-	s.audit(ctx, user, "dashboard.login", map[string]string{"method": method, "ip": sess.IP})
+	detail := map[string]string{"method": method, "ip": sess.IP}
+	if approval != nil {
+		detail["approval"] = approval.ID
+		if approval.DecidedVia != "" {
+			detail["approved_by"] = approval.DecidedVia
+		}
+		if collected := clientIP(r); collected != sess.IP {
+			detail["collected_from"] = collected
+		}
+	}
+	s.audit(ctx, user, "dashboard.login", detail)
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", MaxAge: int(ttl.Seconds()),
 		Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
-	s.writeMe(w, r.WithContext(context.WithValue(ctx, staffKey{}, &staff{user: user, session: sess, idHash: hash})))
+	return &staff{user: user, session: sess, idHash: hash}, true
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +276,11 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) { s.writeMe(w, r) }
 // writeMe answers who is logged in, what they may do, and the CSRF token
 // the dashboard sends back with every change.
 func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.meBody(r))
+}
+
+// meBody is the answer of writeMe.
+func (s *Server) meBody(r *http.Request) map[string]any {
 	st := staffFrom(r.Context())
 	u := st.user
 	settings, err := s.cfg.Domain.Settings(r.Context())
@@ -279,7 +319,7 @@ func (s *Server) writeMe(w http.ResponseWriter, r *http.Request) {
 	if lic := s.licenseBadge(r.Context()); lic != nil {
 		out["license"] = lic
 	}
-	writeJSON(w, http.StatusOK, out)
+	return out
 }
 
 // startPassword sets a new password and authenticator secret for the staff

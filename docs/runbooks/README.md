@@ -11,7 +11,8 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Bot token revoked](bot-token-revoked.md) | The bot does not answer and its log says Telegram rejected the token |
 | [Disk full](disk-full.md) | Low disk in `bobres status`, backups refused for space, the database cannot write |
 | [Backups not arriving](backups-not-arriving.md) | No daily backup in the owner's Telegram, or the System page shows a failed backup |
-| [Rotate secrets](rotate-secrets.md) | A token, password or key leaked, or you rotate them on a schedule |
+| [Rotate secrets](rotate-secrets.md) | A token, password or key leaked, or you rotate them on a schedule; the master key has its own command, `bobres rotate-key` |
+| [Dashboard sign-in approval](login-approval.md) | A staff sign-in waits for an approval in Telegram that cannot come (the bot is down, Telegram cannot be reached), or you want to know what the option does and how to switch it off |
 | [License](license.md) | The License tab is not "Active", or an action is refused by the license |
 | [Vendor license server](vendor-license-server.md) | For the **seller**, not an operator: deploy the license server, sell, renew and revoke licenses, back up and rotate the signing key |
 | [HTTPS certificates](https.md) | Choose the domain's, the server IP address's or your own certificate; a certificate alert; browsers refuse the dashboard after a change |

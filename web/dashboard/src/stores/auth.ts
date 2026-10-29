@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, setCsrf } from '../api'
 import { setCurrencyNames } from '../format'
+import { isPending, type PendingEnd, type PendingLogin } from '../security'
 import { applyBrandColor } from '../theme'
 
 export interface Me {
@@ -88,12 +89,51 @@ export const useAuth = defineStore('auth', () => {
     }
   }
 
-  async function loginWithLink(token: string) {
-    set(await api<Me>('POST', '/auth/link', { token }))
+  /** pending is the sign-in that waits for an approval in Telegram (the owner switched that on), else null. */
+  const pending = ref<PendingLogin | null>(null)
+
+  // A login answers a session, or, while sign-ins need an approval, a wait: 'pending' says which.
+  function taken(res: Me | PendingLogin): 'session' | 'pending' {
+    if (isPending(res)) {
+      pending.value = res
+      return 'pending'
+    }
+    pending.value = null
+    set(res)
+    return 'session'
   }
 
-  async function loginWithPassword(username: string, password: string, code: string) {
-    set(await api<Me>('POST', '/auth/login', { username, password, code }))
+  async function loginWithLink(token: string): Promise<'session' | 'pending'> {
+    return taken(await api<Me | PendingLogin>('POST', '/auth/link', { token }))
+  }
+
+  async function loginWithPassword(username: string, password: string, code: string): Promise<'session' | 'pending'> {
+    return taken(await api<Me | PendingLogin>('POST', '/auth/login', { username, password, code }))
+  }
+
+  /** pollPending asks how the waiting sign-in stands: 'session' once it was approved (the session is made), 'pending' while it waits,
+   * or how it ended. A page reloaded while waiting finds its wait again this way. */
+  async function pollPending(): Promise<'session' | 'pending' | PendingEnd> {
+    const res = await api<(Me & { status: 'approved' }) | PendingLogin | { status: PendingEnd }>('POST', '/auth/pending')
+    if (isPending(res)) {
+      pending.value = res
+      return 'pending'
+    }
+    pending.value = null
+    if (res.status === 'approved') {
+      set(res as Me)
+      return 'session'
+    }
+    return res.status as PendingEnd
+  }
+
+  /** cancelPending gives up the wait (the request ends in Telegram too). */
+  async function cancelPending() {
+    try {
+      await api('DELETE', '/auth/pending')
+    } finally {
+      pending.value = null
+    }
   }
 
   async function logout() {
@@ -107,5 +147,8 @@ export const useAuth = defineStore('auth', () => {
   const can = (perm: string) => me.value?.permissions.includes(perm) ?? false
   const brand = computed(() => me.value?.brand ?? 'BOBRES')
 
-  return { me, loaded, publicBrand, publicBrandSettled, load, refresh, set, loadPublicBrand, loginWithLink, loginWithPassword, logout, can, brand }
+  return {
+    me, loaded, publicBrand, publicBrandSettled, pending, load, refresh, set, loadPublicBrand,
+    loginWithLink, loginWithPassword, pollPending, cancelPending, logout, can, brand,
+  }
 })

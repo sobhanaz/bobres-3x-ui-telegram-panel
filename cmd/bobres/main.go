@@ -98,6 +98,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return newOps(stdin, out, errOut).sslCmd(args[1:])
 	case "secrets":
 		return newRotator(newOps(stdin, out, errOut)).secretsCmd(args[1:])
+	case "rotate-key":
+		return newRotator(newOps(stdin, out, errOut)).rotateKeyCmd(args[1:])
 	case "monitor":
 		return monitorCmd(args[1:], stdin, out, errOut)
 	default:
@@ -149,6 +151,8 @@ Available now:
   config     Show or change a setting: config list | get <key> | set <key> <value>
   ssl        The HTTPS certificate: ssl status | auto | ip | manual --cert FILE --key FILE
   secrets    Rotate a secret: secrets rotate bot-token|db-passwords|service-tokens|redis-password
+  rotate-key Replace the master keys and seal everything they protect again (backup first;
+             --dry-run changes nothing; the old keys come back if anything fails)
   harden     Firewall (ufw), fail2ban, automatic security updates and swap, each asked first
   monitor    Host monitoring for the dashboard: monitor status | enable | disable | snapshot
   doctor     Check this server (RAM, disk, ports, Docker, DNS, HTTPS certificate, hardening)

@@ -175,8 +175,8 @@ The plan as written, with what was built under each heading ("Built").
 - Rotation procedure for bot token, 3x-ui API token, DB password, internal service keys.
 - Built: `.env` is 0600 and root's. `bobres secrets rotate` changes the bot token, the database passwords, the
   service tokens and the Redis password, and puts `.env` back when the services do not come back healthy. 3x-ui tokens
-  are changed on the dashboard's Servers page. The three master keys and the backup key are not rotated
-  (runbooks/rotate-secrets.md).
+  are changed on the dashboard's Servers page. `bobres rotate-key` replaces the three master keys and seals again
+  what they protect (runbooks/rotate-secrets.md); the backup key is not rotated.
 
 ### Data operations
 - Postgres: automated encrypted dumps + WAL/PITR if needed, off-server storage (S3-compatible).

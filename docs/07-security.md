@@ -292,6 +292,7 @@ model as the updater turned around.
 | A customer gets past maintenance mode or the required channel by a path nobody gated (a command, an old button, a bottom-menu tap, a question left open, a reply to a staff answer) | One gate decides every update before any handler or scene sees it, with a short allowlist for maintenance (staff and the owners the server names, `/paysupport`, a payment under way, a newcomer's first steps) and every other update answered with the maintenance text, never ignored. The Mini App holds the same rule per call through one check. Tests send the bot every command, button verb, bottom-menu item and scene (and fail when one is missing from the tables) and sweep every Mini App route read from the source ([03-bot-ux.md](03-bot-ux.md), [17-mini-app.md](17-mini-app.md)) |
 | Many required channels turn one customer's updates into a storm of Telegram lookups (or one slow chat holds every tap) | At most 50 chats whatever the license; a confirmed membership is remembered per customer and chat for 10 minutes and a member of the whole list costs one cache read; a chat not joined is not asked again by an ordinary update for 2 seconds; one update's lookups run 4 at a time and the bot's 8 at a time in all, each with a 3-second timeout and 8 seconds for the update; a chat that cannot answer is skipped (logged once a minute), never a lock-out. The Mini App asks 4 at a time within 10 seconds ([03-bot-ux.md](03-bot-ux.md), "Required chats") |
 | Dashboard brute force | Rate limit, lockout, 2FA, secure cookies, CSRF tokens, short sessions |
+| A stolen login link, or a stolen password and authenticator code, used from another machine | The owner can turn on the approval of staff sign-ins in Telegram (Settings > Sign-in security, `security.login_approval`, off by default, owner only, needs the owner signed in, an explicit acknowledgement and the authenticator code where there is one, and a preflight message that proves the owner can be reached). A sign-in that passed every check then gets **no session at all** until the staff member, or an owner, taps Approve in the bot: only a pending row exists (`login_approvals`, 5 minutes by the database clock) and a separate cookie that opens nothing. The message shows the time, IP address, browser and system. Approval is one-time and bound to the request: a per-approver random nonce (kept hashed) in the callback, the approver's Telegram id and current staff role are checked in the same locked transaction that decides, a forged, replayed, stale or foreign answer does nothing and is audited (`dashboard.login_approval_invalid`), and the first of two answers wins. Deny, expiry and giving up all end without a session ever existing. New requests are limited per account (3 open, 6 per 15 minutes) and answers per Telegram account. It **fails closed** (no bot, blocked, Telegram down: the page says so at once and does not wait) and has a way out that needs neither the bot nor Telegram: `sudo bobres admin approval off` on the server, which can only switch it off. Not covered: a stolen Telegram account of the staff member or owner (the approver); the place of an IP address is not shown, since core has no internet and no geolocation database ships with it |
 | Subscription page address guessed or scraped | 128-bit random `page_token` unrelated to any other id; the same 404 for unknown, malformed, pending, deleted or page-off; 30 requests/min per address; `no-store`, `noindex`, no referrer; no e-mail, label or Telegram data on the page; an operator can regenerate the address (audited, tokens not logged) |
 | Mini App store: forged or replayed Telegram identity, another customer's order, request flooding | Telegram's `initData` is checked by the bot (only it holds the token: HMAC-SHA256, at most 1 hour old) and core never sees the token; core hands out a random session token kept as a hash, 6 hours at most, in the page's memory only; every call is bound to the session's own user and another customer's order or service is a 404; the app's sign-in is 20 a minute per address and its calls 120 a minute per customer; the page runs under a CSP that allows only itself and telegram.org and may be framed only by Telegram; on by default, and switched off it is 404; the support messages it takes are held to the store's daily limit; the store's required channel is held at the sign-in and at every call, asked of the bot (which alone can ask Telegram) and cached for 10 minutes, and the refusal carries only the channel's public link. Stars and manual payments: the amount comes from the order, a method starts only if the store offers it, a proof is accepted once for the customer's own manual payment, a receipt is a JPEG, PNG or WebP by its bytes and at most 8 MB, limited to 6 in 10 minutes, kept by Telegram (core stores only its file id and holds no bot token) and never logged ([17-mini-app.md](17-mini-app.md)) |
 | SQL injection / XSS | Parameterized queries (pgx), Vue template escaping, CSP headers, input validation |
@@ -318,10 +319,31 @@ model as the updater turned around.
   `BOBRES_PROVISIONER_MASTER_KEY`, `BOBRES_PAYMENTS_MASTER_KEY`, each passed to its own service only); the DB stores
   ciphertext for panel tokens, gateway secrets and authenticator secrets. A backup of the database is useless for
   these without the matching key, so the keys are backed up with it.
-- Gift codes are not encrypted but hashed with a key: HMAC-SHA256 under a key derived from `BOBRES_CORE_MASTER_KEY`
-  (see the threats table). The codes cannot be recovered from the database, and a master key that is changed or
-  lost makes the codes already made unredeemable (the hashes no longer match), so make new ones; the key is in every
-  backup, and a restore brings it back.
+- The envelope (`internal/crypto`) has two formats. Version 1 is `0x01 || nonce || AES-256-GCM` and carries no key
+  id. Version 2, which everything new is written in, is `0x02 || key id || nonce || AES-256-GCM`, with the version and
+  the key id as authenticated data: a value cannot be passed off as sealed by another key or version. The key id is 4
+  bytes of an HKDF output of the master key (`bobres:keyid:v1`): a public fingerprint, not a way to find the key. An
+  envelope holds the current master key and, during and after a rotation, the previous one: it seals with the current
+  key and opens with whichever the key id (or, for version 1, a trial) names. Nothing else decides which key opens a
+  value, so a rotation that stops half way leaves nothing unreadable.
+- **Master key rotation** (`bobres rotate-key`, docs/06-installer.md, runbooks/rotate-secrets.md): every encrypted
+  column is listed in `internal/rekey`, and a test fails when a migration adds one that is not (so a new secret cannot
+  be forgotten). The command refuses unless the store is healthy and the current keys read every value, takes and
+  reads back a backup, stops the services, writes the new keys to `.env` with the old ones beside them, seals every
+  value again (each: read with whichever key fits, sealed with the new, read back with the new alone, replaced under a
+  condition on the old bytes; one transaction per table, rows locked, the table checked again before it commits),
+  then finishes `.env` and starts the services. A failure puts the old keys back, which is the same run with the keys
+  swapped. Keys appear in no output and no log, only in `.env` (0600, one rename), the backups and, as comments, the
+  retired keys (until deleted or `--forget-old`). Residual: a retired key kept as a comment is as secret as `.env`; the
+  safety backup of before holds the old keys with the old data.
+- Gift codes are not encrypted but hashed with a key: HMAC-SHA256 under the **tag key** (`crypto.Envelope.Tag`),
+  which is derived from `BOBRES_CORE_MASTER_KEY` until the first rotation. The codes cannot be recovered from the
+  database, and a master key that is lost makes the codes already made unredeemable (the hashes no longer match), so
+  make new ones. A rotation does not change what Tag answers: it saves the key the old master key derived as
+  `BOBRES_CORE_TAG_KEY` (and `_PROVISIONER_` for the 3x-ui subscription ids, which the panels already hold) and keeps it
+  through every later rotation. So the tag key is not rotated: the protection of a gift code against an offline guess
+  by someone who has the database and that key is its 59 bits, and for a custom code its length. Every backup carries
+  the tag keys that are set, and a restore brings them back.
 - Passwords: argon2id. TOTP for staff. Constant-time comparisons for tokens/signatures.
 - TLS everywhere external; internal service auth via one token per service, each server accepting only its legitimate callers (mTLS is not built; auth is one interceptor), see PLAN.md §11.
 - Backups (the `backup` service, docs/06-installer.md): each file is encrypted with `BOBRES_BACKUP_KEY` (a random
@@ -343,7 +365,7 @@ model as the updater turned around.
   text to any chat). The service hands files only to the bot, with its own token (`BOBRES_TOKEN_BACKUP`), which sends
   them to the configured owners and to no chat the caller names: the file is uploaded once, to the main owner, and the
   others get it from Telegram's servers by its file id.
-- Key rotation procedures documented and scripted (`bobres secrets rotate`).
+- Key rotation procedures documented and scripted (`bobres secrets rotate`; `bobres rotate-key` for the master keys).
 
 ## Privacy
 - Data minimization: Telegram ID + language + service data. No phone/email unless a feature needs it.
@@ -389,4 +411,7 @@ model as the updater turned around.
   (new password, authenticator removed, every session ended, the lock lifted); a loss of the phone is handled the
   same way. A link login is always a full session. The command needs shell access to the server (docker), which
   is already the trust boundary of `bobres admin link`.
-- Rotating the master keys (re-encrypting what they protect) is not built.
+- DECIDED (release 0.19.0): the master keys are rotated by `bobres rotate-key`, which re-encrypts what they protect (the key id in
+  the version 2 format, a dual-key envelope, a tag key that never changes). Not rotated: `BOBRES_BACKUP_KEY` (it encrypts
+  backup files, which older backups need), the tag keys, and the database and service secrets, which have their own
+  commands.

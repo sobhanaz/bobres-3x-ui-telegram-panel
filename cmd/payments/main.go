@@ -24,9 +24,14 @@ import (
 	paymentserver "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/server"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/web"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/rekey"
 )
 
 func main() {
+	// `bobres rotate-key` seals what payments keeps encrypted again with the new master key.
+	if len(os.Args) > 1 && os.Args[1] == "rekey" {
+		os.Exit(rekey.Command("payments", os.Args[2:], os.Stdout, os.Stderr))
+	}
 	os.Exit(app.Run("payments", os.Args[1:], setup))
 }
 
@@ -100,7 +105,7 @@ func setup(rt *app.Runtime) error {
 		},
 	}
 	if cfg.MasterKey != "" {
-		if opts.Envelope, err = bcrypto.NewEnvelope([]byte(cfg.MasterKey)); err != nil {
+		if opts.Envelope, err = bcrypto.NewKeyring(cfg.KeyExtras.Keyring(cfg.MasterKey)); err != nil {
 			return err
 		}
 	} else {

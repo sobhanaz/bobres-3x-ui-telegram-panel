@@ -39,7 +39,7 @@ These are not built:
 - **Per-server capacity limits** beyond today's weights.
 - **A Prometheus endpoint** and an uptime page.
 - **Two-factor sign-in inside the bot.**
-- Re-encrypting data when a **master key** changes (the keys are not rotated today).
+- Rotating the **master keys** is built (`sudo bobres rotate-key`).
 - TON payments, and more crypto networks if a route that works from Iran exists.
 - A hosted offering, and an affiliate program for BOBRES itself.
 

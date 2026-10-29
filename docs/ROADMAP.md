@@ -47,6 +47,13 @@ services, join date) on the wallet screen; a **card to forward** in Invite frien
 `/status` in the bot's command menu; and the **reseller application** (a button for customers, a ticket in a new
 "reseller" category, an alert to staff, the category in the dashboard's inbox and in the Mini App).
 
+Built after v0.17.1 (unreleased, the security release): **approving dashboard sign-ins in Telegram** (Settings > Sign-in security, owner only,
+off by default: a staff sign-in gets no session until the staff member or an owner taps Approve in the bot, with the way out
+`sudo bobres admin approval off`; [04-dashboard.md](04-dashboard.md), [runbooks/login-approval.md](runbooks/login-approval.md)). This
+is the "two-factor sign-in inside the bot" item of the list below. Also built: **`sudo bobres rotate-key`**, which replaces the
+three master keys and seals everything they protect again (backup first, the old keys come back if anything fails;
+[runbooks/rotate-secrets.md](runbooks/rotate-secrets.md)). Re-encrypting after a key change was "future work" in the security doc.
+
 What is still open:
 
 - **Checks only the real world can give:** the table below (a real certificate, real payments, a native Persian
@@ -61,8 +68,8 @@ What is still open:
   and has not been tried for real.
 - **Still on the list, not built:** the Aqayepardakht gateway; S-UI and Hiddify panels, if operators ask; growth tools
   (cashback, a lottery or wheel, reseller targets: gift codes are built); more bot languages (Arabic, Russian, Turkish); per-server
-  capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code; two-factor
-  sign-in inside the bot.
+  capacity limits; a Prometheus endpoint and an uptime page; Persian documentation generated from the code. (Two-factor
+  sign-in inside the bot is built: see above.)
 - **The owner's business track** (not code): the lawyer's review, the brand checks, the prices, the license server and the
   first customers ([launch-checklist.md](launch-checklist.md)).
 

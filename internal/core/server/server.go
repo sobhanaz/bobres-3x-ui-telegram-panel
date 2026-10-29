@@ -91,8 +91,11 @@ func New(st *store.Store, dom *domain.Service) *Server {
 	return &Server{st: st, dom: dom}
 }
 
-// Register attaches the service to a grpc.Server.
-func (s *Server) Register(g *grpc.Server) { corev1.RegisterCoreServiceServer(g, s) }
+// Register attaches the services to a grpc.Server: CoreService, and the bot's taps on the approval of dashboard sign-ins.
+func (s *Server) Register(g *grpc.Server) {
+	corev1.RegisterCoreServiceServer(g, s)
+	corev1.RegisterLoginApprovalServiceServer(g, &approvalServer{dom: s.dom})
+}
 
 // fail maps domain errors to gRPC codes the bot can act on. Unknown errors
 // become Internal with a generic message (details stay in logs).

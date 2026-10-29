@@ -195,3 +195,65 @@ func TestAdminOwnersRefusals(t *testing.T) {
 		t.Fatalf("an eleventh owner: %d %s", code, errOut)
 	}
 }
+
+// bobres admin approval status|off runs core's approval command in the running core container.
+func TestAdminApproval(t *testing.T) {
+	f := &fakeOps{ps: healthyPS}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	for _, sub := range []string{"status", "off"} {
+		f.stream = nil
+		if code := o.adminCmd([]string{"approval", sub, "--dir", dir}); code != 0 {
+			t.Fatalf("admin approval %s: %d %s", sub, code, errOut)
+		}
+		got := strings.Join(f.stream[0], " ")
+		if !strings.HasSuffix(got, "exec -T core /app approval "+sub) || !strings.Contains(got, "--project-name bobres") {
+			t.Fatalf("compose args for %s: %s", sub, got)
+		}
+	}
+	// The flag may come after the word, as in the other admin commands.
+	f.stream = nil
+	if code := o.adminCmd([]string{"approval", "--dir", dir, "off"}); code != 0 || !strings.HasSuffix(strings.Join(f.stream[0], " "), "approval off") {
+		t.Fatalf("flag before the word: %d %v", code, f.stream)
+	}
+	// It can never turn the approval on, and anything else is a usage error that reaches nothing.
+	f.stream = nil
+	for _, bad := range [][]string{{"approval"}, {"approval", "on"}, {"approval", "off", "now"}, {"approval", "status", "off"}} {
+		errOut.Reset()
+		if code := o.adminCmd(append(bad, "--dir", dir)); code != 2 || !strings.Contains(errOut.String(), "bobres admin approval status|off") {
+			t.Errorf("%v: %d %q", bad, code, errOut)
+		}
+	}
+	if len(f.stream) != 0 {
+		t.Fatalf("a refused command reached core: %v", f.stream)
+	}
+	if code := o.adminCmd([]string{"approval", "off", "--dir", t.TempDir()}); code != 2 {
+		t.Fatalf("no install: %d", code)
+	}
+}
+
+// With core down, the way out still works through a new container of core's image; with the database down it says so.
+func TestAdminApprovalWithCoreDownOrNoDatabase(t *testing.T) {
+	dir := installDir(t)
+	f := &fakeOps{ps: `[{"Service":"postgres","State":"running","Health":"healthy"},{"Service":"core","State":"exited","Health":""}]`}
+	o, _, errOut := testOps("", f)
+	if code := o.adminCmd([]string{"approval", "off", "--dir", dir}); code != 0 {
+		t.Fatalf("core down: %d %s", code, errOut)
+	}
+	if got := strings.Join(f.stream[0], " "); !strings.HasSuffix(got, "run --rm -T --no-deps core approval off") {
+		t.Fatalf("core down, compose args: %s", got)
+	}
+
+	f = &fakeOps{ps: `[{"Service":"core","State":"running","Health":"healthy"}]`}
+	o, _, errOut = testOps("", f)
+	if code := o.adminCmd([]string{"approval", "off", "--dir", dir}); code != 1 || !strings.Contains(errOut.String(), "database is not running") || len(f.stream) != 0 {
+		t.Fatalf("no database: %d %q %v", code, errOut, f.stream)
+	}
+
+	f = &fakeOps{ps: healthyPS}
+	o, _, errOut = testOps("", f)
+	o.stream = func(context.Context, string, ...string) error { return errors.New("exit status 1") }
+	if code := o.adminCmd([]string{"approval", "off", "--dir", dir}); code != 1 || !strings.Contains(errOut.String(), "exit status 1") {
+		t.Fatalf("core failed: %d %q", code, errOut)
+	}
+}
