@@ -142,4 +142,52 @@ func TestAdminServersNeedTheProvisioner(t *testing.T) {
 	if _, err := c.AdminListServers(context.Background(), &corev1.AdminListServersRequest{ActorTelegramId: 1}); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("without a provisioner: %v", err)
 	}
+	if _, err := c.AdminResolvePanelMissing(context.Background(), &corev1.AdminResolvePanelMissingRequest{ActorTelegramId: 1}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("resolving without a provisioner: %v", err)
+	}
+}
+
+// The calls about services not on the panel: staff only, refusals the bot can act on, and a stale id is an
+// outcome, not an error (the bot's flow over the whole stack is in internal/bot/handler).
+func TestPanelMissingCallsOverGRPC(t *testing.T) {
+	f := newFixtureWith(t, func(s *Server) { s.SetProvisioner(&fakeAdminProv{}) })
+	c := f.client(t, botToken)
+	ctx := context.Background()
+	for tg, role := range map[int64]string{7101: "admin", 7102: "user", 7103: "support"} {
+		u, err := c.UpsertUser(ctx, &corev1.UpsertUserRequest{TelegramId: tg})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.st.DB().Exec(ctx, `UPDATE core.users SET role = $2 WHERE id = $1`, u.GetId(), role); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tg := range []int64{7102, 7103, 0} {
+		if _, err := c.AdminListPanelMissing(ctx, &corev1.AdminListPanelMissingRequest{ActorTelegramId: tg}); status.Code(err) != codes.PermissionDenied {
+			t.Fatalf("list as %d: %v", tg, err)
+		}
+		if _, err := c.AdminResolvePanelMissing(ctx, &corev1.AdminResolvePanelMissingRequest{ActorTelegramId: tg,
+			SubscriptionId: "00000000-0000-4000-8000-000000000001", Action: "delete", Reason: "x"}); status.Code(err) != codes.PermissionDenied {
+			t.Fatalf("resolve as %d: %v", tg, err)
+		}
+	}
+	list, err := c.AdminListPanelMissing(ctx, &corev1.AdminListPanelMissingRequest{ActorTelegramId: 7101, Limit: 5})
+	if err != nil || list.GetTotal() != 0 || len(list.GetServices()) != 0 {
+		t.Fatalf("empty list: %v %v", list, err)
+	}
+	for _, req := range []*corev1.AdminResolvePanelMissingRequest{
+		{SubscriptionId: "00000000-0000-4000-8000-000000000001", Action: "wipe", Reason: "x"},
+		{SubscriptionId: "00000000-0000-4000-8000-000000000001", Action: "delete"},
+		{SubscriptionId: "x", Action: "recreate", Reason: "x"},
+	} {
+		req.ActorTelegramId = 7101
+		if _, err := c.AdminResolvePanelMissing(ctx, req); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("%v: %v", req, err)
+		}
+	}
+	out, err := c.AdminResolvePanelMissing(ctx, &corev1.AdminResolvePanelMissingRequest{ActorTelegramId: 7101,
+		SubscriptionId: "00000000-0000-4000-8000-000000000001", Action: "recreate", Reason: "x"})
+	if err != nil || out.GetOutcome() != "deleted" || out.GetClientEmail() != "" {
+		t.Fatalf("an unknown service: %v %v", out, err)
+	}
 }

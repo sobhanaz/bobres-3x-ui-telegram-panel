@@ -256,7 +256,10 @@ existed.
 - `/sub/<token>` subscription info page (branded; server-rendered, no script, one fixed 404 for anything unknown; see 15-subscription-page.md). `POST /api/v1/services/{id}/page-token/regenerate` (services.write) gives a service a new address
 - Services the panel lacks: every service object carries `panel_missing_since` (unix seconds, null while the panel has the client); `GET /api/v1/services?panel=missing` lists only those;
   `GET /api/v1/overview` has `services.panel_missing`; `POST /api/v1/services/{id}/recreate-client {reason}` (services.write, like delete) makes the client again and reads the service from the panel
-  (409 `state` for a deleted or still-delivering service, 503 when the panel does not answer). The monitoring events list (`/api/v1/monitor/events`) folds identical log lines from one source into
+  (409 `state` for a deleted or still-delivering service, 503 when the panel does not answer). Both `recreate-client` and `delete` take `only_missing: true` (the Services page's bulk
+  actions): core then acts only while the panel still lacks the client, and answers a service back on the panel or deleted meanwhile with 200 and `"skipped": "back" | "deleted"`, doing nothing.
+  The bot does the same over gRPC: `AdminListPanelMissing` (a page, the longest missing first, and the total) and `AdminResolvePanelMissing` (`recreate` | `delete`, outcome `done` | `back` |
+  `deleted`), owner and admin; `AdminStats.services_panel_missing` counts them for the admin menu. The monitoring events list (`/api/v1/monitor/events`) folds identical log lines from one source into
   one entry with `count` and `first_at` (`at` is the newest), so a warning every ten minutes is one row.
 - `/admin/*` dashboard and `/api/v1/*` its JSON API (session cookie + CSRF token; password logins need TOTP), `/healthz`, `/readyz`.
 - `/metrics` Prometheus text format 0.0.4 (the monitor's figures as gauges; **404 until the owner makes a token**, then `Authorization: Bearer <token>`
