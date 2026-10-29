@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package core.v1;
+
+import "common/v1/types.proto";
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
+
+// My codes: the customer's own list of reward codes and gift codes (the bot's "My codes" and /codes). It holds only
+// what can be attributed to the customer: the reward codes issued to them (a discount code bound to its buyer) and the
+// gift codes they applied (a redemption of theirs). Another customer's codes, a code staff made for everyone and a gift
+// code nobody applied are never in it. The bot reads it with CoreService.ListMyCodes.
+
+// MyCode is one entry of the list.
+message MyCode {
+  string kind = 1; // reward | gift
+  // A reward code, whole (it is the customer's own secret). A gift code is never stored, so this is empty for a gift.
+  string code = 2;
+  // A gift code: the last characters of the code the customer applied. Empty for a reward code.
+  string tail = 3;
+  // unused | used | expired | off ("off": staff switched it off). A gift code the customer applied is always used.
+  string state = 4;
+  // A reward code takes a percent (1 to 90) or an amount off the price; the other is empty. A gift code's amount is what it
+  // added to the wallet.
+  int32 percent = 5;
+  common.v1.Money amount = 6;
+  int64 expires_at = 7; // unix seconds; 0: it does not expire (a gift code's own expiry is not reported)
+  int64 used_at = 8; // unix seconds; 0 while unused
+  int64 received_at = 9; // unix seconds: when a reward code was made for them, or they applied the gift code
+  // A reward code: the plan whose purchase gave it, and that purchase (empty when the purchase is gone).
+  map<string, string> plan_names = 10; // lang -> name
+  string order_id = 11; // uuid
+  // A reward code made before reward codes were for any plan works on this one plan only (lang -> name).
+  map<string, string> only_plan_names = 12;
+}
+
+message ListMyCodesRequest {
+  string user_id = 1; // uuid: the customer whose codes these are; a banned one is refused as everywhere else
+  common.v1.Pagination pagination = 2; // page_size 1 to 50, 10 by default
+}
+
+message ListMyCodesResponse {
+  repeated MyCode codes = 1; // newest first
+  common.v1.PageInfo page_info = 2; // total: how many codes the customer has
+}

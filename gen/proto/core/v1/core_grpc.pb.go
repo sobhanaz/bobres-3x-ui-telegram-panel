@@ -33,6 +33,7 @@ const (
 	CoreService_UpdateBranding_FullMethodName            = "/core.v1.CoreService/UpdateBranding"
 	CoreService_ReviewManualPayment_FullMethodName       = "/core.v1.CoreService/ReviewManualPayment"
 	CoreService_PayOrderWithWallet_FullMethodName        = "/core.v1.CoreService/PayOrderWithWallet"
+	CoreService_QuoteWalletPayment_FullMethodName        = "/core.v1.CoreService/QuoteWalletPayment"
 	CoreService_CreatePaymentIntent_FullMethodName       = "/core.v1.CoreService/CreatePaymentIntent"
 	CoreService_StartTrial_FullMethodName                = "/core.v1.CoreService/StartTrial"
 	CoreService_CanStartTrial_FullMethodName             = "/core.v1.CoreService/CanStartTrial"
@@ -89,6 +90,7 @@ const (
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
+	CoreService_ListMyCodes_FullMethodName               = "/core.v1.CoreService/ListMyCodes"
 	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
 	CoreService_BuyVendorLicense_FullMethodName          = "/core.v1.CoreService/BuyVendorLicense"
 	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
@@ -126,6 +128,9 @@ type CoreServiceClient interface {
 	UpdateBranding(ctx context.Context, in *UpdateBrandingRequest, opts ...grpc.CallOption) (*Settings, error)
 	ReviewManualPayment(ctx context.Context, in *ReviewManualPaymentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
 	PayOrderWithWallet(ctx context.Context, in *PayOrderWithWalletRequest, opts ...grpc.CallOption) (*Order, error)
+	// QuoteWalletPayment prices an order listed in USDT in Toman at the store's USDT rate now; PayOrderWithWallet with the
+	// quote's token charges exactly that (docs/03-bot-ux.md, "Plans priced in USDT").
+	QuoteWalletPayment(ctx context.Context, in *QuoteWalletPaymentRequest, opts ...grpc.CallOption) (*WalletQuote, error)
 	CreatePaymentIntent(ctx context.Context, in *CreatePaymentIntentRequest, opts ...grpc.CallOption) (*PaymentIntentRef, error)
 	StartTrial(ctx context.Context, in *StartTrialRequest, opts ...grpc.CallOption) (*Order, error)
 	CanStartTrial(ctx context.Context, in *CanStartTrialRequest, opts ...grpc.CallOption) (*CanStartTrialResponse, error)
@@ -215,6 +220,9 @@ type CoreServiceClient interface {
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
 	RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error)
+	// ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
+	// codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+	ListMyCodes(ctx context.Context, in *ListMyCodesRequest, opts ...grpc.CallOption) (*ListMyCodesResponse, error)
 	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
 	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
 	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
@@ -378,6 +386,16 @@ func (c *coreServiceClient) PayOrderWithWallet(ctx context.Context, in *PayOrder
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Order)
 	err := c.cc.Invoke(ctx, CoreService_PayOrderWithWallet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) QuoteWalletPayment(ctx context.Context, in *QuoteWalletPaymentRequest, opts ...grpc.CallOption) (*WalletQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WalletQuote)
+	err := c.cc.Invoke(ctx, CoreService_QuoteWalletPayment_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -944,6 +962,16 @@ func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCo
 	return out, nil
 }
 
+func (c *coreServiceClient) ListMyCodes(ctx context.Context, in *ListMyCodesRequest, opts ...grpc.CallOption) (*ListMyCodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMyCodesResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListMyCodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListVendorOffers(ctx context.Context, in *ListVendorOffersRequest, opts ...grpc.CallOption) (*ListVendorOffersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVendorOffersResponse)
@@ -1060,6 +1088,9 @@ type CoreServiceServer interface {
 	UpdateBranding(context.Context, *UpdateBrandingRequest) (*Settings, error)
 	ReviewManualPayment(context.Context, *ReviewManualPaymentRequest) (*PaymentIntentRef, error)
 	PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error)
+	// QuoteWalletPayment prices an order listed in USDT in Toman at the store's USDT rate now; PayOrderWithWallet with the
+	// quote's token charges exactly that (docs/03-bot-ux.md, "Plans priced in USDT").
+	QuoteWalletPayment(context.Context, *QuoteWalletPaymentRequest) (*WalletQuote, error)
 	CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error)
 	StartTrial(context.Context, *StartTrialRequest) (*Order, error)
 	CanStartTrial(context.Context, *CanStartTrialRequest) (*CanStartTrialResponse, error)
@@ -1149,6 +1180,9 @@ type CoreServiceServer interface {
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
 	RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error)
+	// ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
+	// codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+	ListMyCodes(context.Context, *ListMyCodesRequest) (*ListMyCodesResponse, error)
 	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
 	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
 	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
@@ -1218,6 +1252,9 @@ func (UnimplementedCoreServiceServer) ReviewManualPayment(context.Context, *Revi
 }
 func (UnimplementedCoreServiceServer) PayOrderWithWallet(context.Context, *PayOrderWithWalletRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method PayOrderWithWallet not implemented")
+}
+func (UnimplementedCoreServiceServer) QuoteWalletPayment(context.Context, *QuoteWalletPaymentRequest) (*WalletQuote, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuoteWalletPayment not implemented")
 }
 func (UnimplementedCoreServiceServer) CreatePaymentIntent(context.Context, *CreatePaymentIntentRequest) (*PaymentIntentRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreatePaymentIntent not implemented")
@@ -1386,6 +1423,9 @@ func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroa
 }
 func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
+}
+func (UnimplementedCoreServiceServer) ListMyCodes(context.Context, *ListMyCodesRequest) (*ListMyCodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMyCodes not implemented")
 }
 func (UnimplementedCoreServiceServer) ListVendorOffers(context.Context, *ListVendorOffersRequest) (*ListVendorOffersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVendorOffers not implemented")
@@ -1683,6 +1723,24 @@ func _CoreService_PayOrderWithWallet_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).PayOrderWithWallet(ctx, req.(*PayOrderWithWalletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_QuoteWalletPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteWalletPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).QuoteWalletPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_QuoteWalletPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).QuoteWalletPayment(ctx, req.(*QuoteWalletPaymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2695,6 +2753,24 @@ func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListMyCodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMyCodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListMyCodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListMyCodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListMyCodes(ctx, req.(*ListMyCodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListVendorOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListVendorOffersRequest)
 	if err := dec(in); err != nil {
@@ -2921,6 +2997,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CoreService_PayOrderWithWallet_Handler,
 		},
 		{
+			MethodName: "QuoteWalletPayment",
+			Handler:    _CoreService_QuoteWalletPayment_Handler,
+		},
+		{
 			MethodName: "CreatePaymentIntent",
 			Handler:    _CoreService_CreatePaymentIntent_Handler,
 		},
@@ -3143,6 +3223,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RedeemGiftCode",
 			Handler:    _CoreService_RedeemGiftCode_Handler,
+		},
+		{
+			MethodName: "ListMyCodes",
+			Handler:    _CoreService_ListMyCodes_Handler,
 		},
 		{
 			MethodName: "ListVendorOffers",

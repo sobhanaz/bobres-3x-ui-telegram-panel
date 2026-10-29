@@ -212,8 +212,15 @@ func miniOrderBody(o *store.Order) map[string]any {
 	if o.SubscriptionID != nil {
 		sub = *o.SubscriptionID
 	}
-	return map[string]any{"id": o.ID, "plan_id": o.PlanID, "type": o.Type, "status": o.Status, "amount": o.Amount,
+	body := map[string]any{"id": o.ID, "plan_id": o.PlanID, "type": o.Type, "status": o.Status, "amount": o.Amount,
 		"discount_amount": o.DiscountAmount, "currency": o.Currency, "scale": bmoney.Scale(o.Currency), "subscription_id": sub}
+	if o.ListAmount != nil && o.ListCurrency != nil && o.Rate != nil {
+		// An order listed in USDT and paid from the wallet: amount and currency are the Toman it was charged, these the USDT price (the discount is in it
+		// too) and the rate it was worked out at.
+		body["list_amount"], body["list_currency"], body["list_scale"], body["rate"] = *o.ListAmount, *o.ListCurrency, bmoney.Scale(*o.ListCurrency), *o.Rate
+		body["discount_currency"] = *o.ListCurrency
+	}
+	return body
 }
 
 // miniCreateOrder: POST /api/mini/v1/orders. The key is the app's own random
@@ -268,15 +275,28 @@ func (s *Server) miniGetOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, miniOrderBody(o))
 }
 
-// miniPayWallet: POST /api/mini/v1/orders/{id}/pay-wallet. Paying twice is
-// harmless: the second call sees the order paid.
+// miniPayWallet: POST /api/mini/v1/orders/{id}/pay-wallet {quote}. Paying twice is
+// harmless: the second call sees the order paid. An order listed in USDT is paid
+// at the quote the customer was shown (GET /orders/{id}/wallet-quote), and
+// never at a price they were not shown: without a quote that still holds it is
+// 409 quote_expired and nothing moves, and the app asks for a new one.
 func (s *Server) miniPayWallet(w http.ResponseWriter, r *http.Request) {
 	o, err := s.ownOrder(r)
 	if err != nil {
 		s.miniFail(w, "mini app pay", err)
 		return
 	}
-	paid, err := s.cfg.Domain.PayOrderWithWallet(r.Context(), o.ID, o.UserID)
+	var in struct {
+		Quote string `json:"quote"`
+	}
+	if !readOptionalJSON(w, r, &in) {
+		return
+	}
+	if unpaid := o.Status == "created" || o.Status == "awaiting_payment"; unpaid && o.Currency == "USDT" && in.Quote == "" {
+		s.miniFail(w, "mini app pay", domain.ErrQuoteExpired)
+		return
+	}
+	paid, err := s.cfg.Domain.PayOrderWithWalletQuote(r.Context(), o.ID, o.UserID, in.Quote)
 	if err != nil {
 		s.miniFail(w, "mini app pay", err)
 		return
@@ -374,27 +394,37 @@ func (s *Server) miniPayOrder(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey: "int:" + o.ID + ":" + in.Method}, miniPrice{amount: o.Amount, currency: o.Currency, planID: o.PlanID})
 }
 
-// miniTopup: POST /api/mini/v1/topup {amount, method, key} in Toman.
+// miniTopup: POST /api/mini/v1/topup {amount, currency, method, key}. The amount is in Toman (currency "IRT", the default) or in micro-USDT (currency
+// "USDT": a whole number of USDT from 1 to 10,000, the bot's bounds); a payment in USDT is credited to the one wallet as Toman at the live rate when it
+// settles, exactly as the bot's USDT top-up is.
 func (s *Server) miniTopup(w http.ResponseWriter, r *http.Request) {
 	c := miniFrom(r.Context())
 	var in struct {
-		Amount int64  `json:"amount"`
-		Method string `json:"method"`
-		Key    string `json:"key"`
+		Amount   int64  `json:"amount"`
+		Currency string `json:"currency"`
+		Method   string `json:"method"`
+		Key      string `json:"key"`
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
+	if in.Currency == "" {
+		in.Currency = "IRT"
+	}
 	switch {
-	case in.Amount < miniMinTopup || in.Amount > miniMaxTopup:
+	case in.Currency == "IRT" && (in.Amount < miniMinTopup || in.Amount > miniMaxTopup),
+		in.Currency == "USDT" && (in.Amount < miniMinTopupUsdt || in.Amount > miniMaxTopupUsdt || in.Amount%miniStepTopupUsdt != 0):
 		s.miniFail(w, "mini app topup", errInvalid("top-up amount out of range"))
+		return
+	case in.Currency != "IRT" && in.Currency != "USDT":
+		s.miniFail(w, "mini app topup", errInvalid("a top-up is in IRT or USDT"))
 		return
 	case !miniKeyRe.MatchString(in.Key):
 		s.miniFail(w, "mini app topup", errInvalid("a request key of 8 to 64 letters, digits, - or _ is required"))
 		return
 	}
-	s.miniStartPayment(w, r, domain.CreatePaymentIntentParams{UserID: c.user.ID, Provider: in.Method, Amount: in.Amount, Currency: "IRT",
-		IdempotencyKey: "mini:topup:" + c.user.ID + ":" + in.Key + ":" + in.Method}, miniPrice{amount: in.Amount, currency: "IRT"})
+	s.miniStartPayment(w, r, domain.CreatePaymentIntentParams{UserID: c.user.ID, Provider: in.Method, Amount: in.Amount, Currency: in.Currency,
+		IdempotencyKey: "mini:topup:" + c.user.ID + ":" + in.Key + ":" + in.Method}, miniPrice{amount: in.Amount, currency: in.Currency})
 }
 
 // miniCheckPayment: POST /api/mini/v1/payments/{id}/check asks payments to check the

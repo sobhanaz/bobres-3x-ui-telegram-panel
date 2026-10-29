@@ -3,6 +3,7 @@ syntax = "proto3";
 package core.v1;
 
 import "common/v1/types.proto";
+import "core/v1/codes.proto";
 import "core/v1/help.proto";
 
 option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
@@ -81,6 +82,11 @@ message Order {
   string discount_code = 11;
   common.v1.Money discount = 12; // already taken off amount
   string label = 13; // a reseller's name for the service it creates
+  // An order listed in USDT and paid from the wallet (which is in Toman) was charged amount in Toman: list_price is
+  // the USDT price it was listed at (after any discount) and rate the Toman per USDT it was worked out at. Unset
+  // (rate 0) for every other order.
+  common.v1.Money list_price = 14;
+  int64 rate = 15;
 }
 
 message Wallet {
@@ -929,6 +935,31 @@ message PayOrderWithWalletRequest {
   // can only ever be charged once).
   string idempotency_key = 2;
   string user_id = 3; // when set, must own the order
+  // The token of the WalletQuote the buyer was shown, for an order listed in USDT: the order is charged exactly
+  // that, in Toman. FAILED_PRECONDITION "the price quote expired" once it no longer holds (ask for a new one and
+  // show it); empty for every other order.
+  string quote = 4;
+}
+
+// QuoteWalletPaymentRequest prices an unpaid order that is listed in USDT in Toman, for paying it from the wallet.
+message QuoteWalletPaymentRequest {
+  string order_id = 1;
+  string user_id = 2; // when set, must own the order
+}
+
+// WalletQuote is what an order listed in USDT costs in Toman now, held until expires_at (two minutes), and the
+// wallet that would pay it. FAILED_PRECONDITION "the USDT rate is not known" when the store has no USDT rate: nothing
+// is quoted then.
+message WalletQuote {
+  string order_id = 1;
+  common.v1.Money list_price = 2; // the order's price: USDT
+  int64 rate = 3; // the Toman per USDT it was worked out at (the live price plus the margin, or the owner's own rate)
+  common.v1.Money price = 4; // what the wallet is charged: Toman, rounded up
+  int64 expires_at = 5; // unix seconds
+  string token = 6; // sent back in PayOrderWithWalletRequest.quote
+  common.v1.Money balance = 7; // the customer's wallet now: Toman
+  int64 credit_limit = 8; // a reseller's: the balance may go down to minus this
+  bool enough = 9; // balance plus credit_limit covers price
 }
 
 message CreatePaymentIntentRequest {
@@ -968,6 +999,9 @@ service CoreService {
   }
   rpc ReviewManualPayment(ReviewManualPaymentRequest) returns (PaymentIntentRef);
   rpc PayOrderWithWallet(PayOrderWithWalletRequest) returns (Order);
+  // QuoteWalletPayment prices an order listed in USDT in Toman at the store's USDT rate now; PayOrderWithWallet with the
+  // quote's token charges exactly that (docs/03-bot-ux.md, "Plans priced in USDT").
+  rpc QuoteWalletPayment(QuoteWalletPaymentRequest) returns (WalletQuote);
   rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentRef);
   rpc StartTrial(StartTrialRequest) returns (Order);
   rpc CanStartTrial(CanStartTrialRequest) returns (CanStartTrialResponse);
@@ -1057,6 +1091,9 @@ service CoreService {
   // an active account only (a banned one is PERMISSION_DENIED "user is banned").
   // What a customer can get wrong is an outcome of the answer, not an error.
   rpc RedeemGiftCode(RedeemGiftCodeRequest) returns (RedeemGiftCodeResponse);
+  // ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
+  // codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+  rpc ListMyCodes(ListMyCodesRequest) returns (ListMyCodesResponse);
 
   // License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
   // USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is

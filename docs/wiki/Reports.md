@@ -49,7 +49,7 @@ The **Professional report** view (`?view=report`) is for reading, printing or sa
 
 ## CSV files
 
-Reports can export two files: the **summary** and **paid orders**. The Wallet & ledger page exports `ledger.csv`, and the Audit log exports `audit.csv`. The files use English headers, UTC and local times, and a Jalali date column in a Jalali export. Every export is written to the audit log.
+Reports can export two files: the **summary** and **paid orders**. The Wallet & ledger page exports `ledger.csv`, and the Audit log exports `audit.csv`. The files use English headers, UTC and local times, and a Jalali date column in a Jalali export. A plan priced in USDT and paid from the Toman wallet is revenue in Toman (what was charged); in the paid-orders file `list_amount`, `list_currency` and `rate` (the last three columns) keep the USDT price and the rate. Every export is written to the audit log.
 
 ## Daily summary in Telegram
 

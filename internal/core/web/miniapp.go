@@ -125,6 +125,7 @@ func (s *Server) registerMiniApp(mux *http.ServeMux) {
 	api.HandleFunc("GET /api/mini/v1/methods", s.miniSession(false, s.miniPaymentMethods))
 	api.HandleFunc("POST /api/mini/v1/quote", s.miniSession(false, s.miniQuote))
 	api.HandleFunc("POST /api/mini/v1/orders", s.miniSession(false, s.miniCreateOrder))
+	api.HandleFunc("GET /api/mini/v1/orders/{id}/wallet-quote", s.miniSession(false, s.miniWalletQuote))
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay-wallet", s.miniSession(false, s.miniPayWallet))
 	api.HandleFunc("POST /api/mini/v1/orders/{id}/pay", s.miniSession(false, s.miniPayOrder))
 	api.HandleFunc("POST /api/mini/v1/topup", s.miniSession(false, s.miniTopup))
@@ -296,6 +297,10 @@ func (s *Server) miniFail(w http.ResponseWriter, what string, err error) {
 		writeError(w, http.StatusConflict, "not_extendable", reason(err, domain.ErrNotExtendable))
 	case errors.Is(err, domain.ErrOrderNotPayable):
 		writeError(w, http.StatusConflict, "not_payable", "this order cannot be paid now")
+	case errors.Is(err, domain.ErrQuoteExpired):
+		writeError(w, http.StatusConflict, "quote_expired", "the price quote ran out: look at the new price and confirm again")
+	case errors.Is(err, domain.ErrNoUsdtRate):
+		writeError(w, http.StatusConflict, "no_rate", "the USDT rate is not known right now, so this price cannot be worked out")
 	case errors.Is(err, domain.ErrState):
 		writeError(w, http.StatusConflict, "state", reason(err, domain.ErrState))
 	case errors.Is(err, store.ErrInsufficientFunds):
@@ -455,7 +460,9 @@ func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any,
 		"wallets":     wallets,
 		"brand":       map[string]any{"name": brandName(settings), "color": color, "support": support, "support_url": supportURL, "bot_url": bot},
 		"maintenance": s.miniMaintenance(settings, u),
-		"top_up":      map[string]any{"currency": "IRT", "min": miniMinTopup, "max": miniMaxTopup},
+		// A top-up is in Toman, or in USDT (a whole number of USDT, in micro-USDT here) that is credited as Toman at the live rate.
+		"top_up": map[string]any{"currency": "IRT", "min": miniMinTopup, "max": miniMaxTopup,
+			"usdt": map[string]any{"currency": "USDT", "min": miniMinTopupUsdt, "max": miniMaxTopupUsdt, "step": miniStepTopupUsdt, "scale": bmoney.Scale("USDT")}},
 		"features":    features,
 	}, nil
 }

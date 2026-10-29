@@ -103,6 +103,7 @@ var contexts = map[string]Context{
 	"error.menu_expired":     CtxToastHTML,
 	"trial.used":             CtxToastHTML,
 	"trial.unavailable":      CtxToastHTML,
+	"codes.unavailable":      CtxToastHTML, // My codes on a core older than the bot: a popup
 	"sub.not_ready":          CtxToastHTML,
 	"pay.already_submitted":  CtxToastHTML,
 	"sub.not_extendable":     CtxToastHTML,
@@ -200,6 +201,7 @@ var buttonStyles = map[string]string{
 	"btn.trial":             "success",
 	"btn.pay_wallet":        "success",
 	"btn.pay_credit":        "success",
+	"btn.quote_pay":         "success",
 	"btn.pay_card":          "success",
 	"btn.pay_crypto":        "success",
 	"btn.pay_zarinpal_link": "success",
@@ -294,6 +296,7 @@ var markupArgs = map[string][]string{
 	"ref.top_entry":        {"you"},              // a rendered text
 	"ref.promo":            {"link"},             // the invite link as a text link (<a>)
 	"bulk.checkout":        {"names"},
+	"codes.screen":         {"entries", "hint"}, // the page's codes, rendered, and the hint under them
 	"alert.critical":       {"title"},
 	"alert.warning":        {"title"},
 	"alert.repeat":         {"title"},

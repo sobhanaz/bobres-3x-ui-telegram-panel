@@ -63,6 +63,8 @@ type Config struct {
 	// PrivateFeaturesOverride, when set, decides PrivateFeatures instead of the license. It exists for tests of the vendor's
 	// own features; nothing sets it in a running install.
 	PrivateFeaturesOverride *bool
+	// Now is the clock the wallet quotes expire by (nil: time.Now); tests move it.
+	Now func() time.Time
 }
 
 func (c Config) vendorNow() time.Time {
@@ -321,8 +323,23 @@ func (s *Service) publishOrderPaidIn(ctx context.Context, tx pgx.Tx, o *store.Or
 // purchase is recorded under "purchase:<order id>", so one order can never be
 // charged twice even by a buggy caller. userID, when set, must own the order.
 func (s *Service) PayOrderWithWallet(ctx context.Context, orderID, userID string) (*store.Order, error) {
+	return s.PayOrderWithWalletQuote(ctx, orderID, userID, "")
+}
+
+// PayOrderWithWalletQuote is PayOrderWithWallet for an order listed in USDT, which the Toman wallet pays at a quote (QuoteWalletPayment): with the
+// quote's token the order is charged exactly what the quote said, in Toman, and keeps the USDT price and the rate (docs/03-bot-ux.md); a quote that
+// has run out is ErrQuoteExpired and nothing moves. quote is "" for every other order; an order in USDT paid without one is charged to the
+// customer's USDT wallet as before (a balance left there), at its list price, which needs no rate.
+func (s *Service) PayOrderWithWalletQuote(ctx context.Context, orderID, userID, quote string) (*store.Order, error) {
 	if orderID == "" {
 		return nil, invalid("order id required")
+	}
+	var claims *quoteClaims
+	if quote != "" {
+		var err error
+		if claims, err = s.openQuote(quote); err != nil {
+			return nil, err
+		}
 	}
 	var out *store.Order
 	err := s.st.WithTx(ctx, func(tx pgx.Tx) error {
@@ -350,6 +367,12 @@ func (s *Service) PayOrderWithWallet(ctx context.Context, orderID, userID string
 		// paid (orderPaidEffects), and checked again there.
 		if err := s.checkDiscount(ctx, tx, o, false); err != nil {
 			return err
+		}
+		if claims != nil {
+			// A plan priced in USDT: the order becomes the Toman charge the customer was quoted, and the wallet below is the Toman wallet.
+			if err := s.chargeQuoted(ctx, tx, o, claims); err != nil {
+				return err
+			}
 		}
 		_, err = s.st.Debit(ctx, tx, o.UserID, o.Currency, o.Amount, &store.LedgerEntry{
 			Kind: "purchase", RefType: strptr("order"), RefID: strptr(o.ID),

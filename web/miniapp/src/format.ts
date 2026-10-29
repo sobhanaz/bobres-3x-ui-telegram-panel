@@ -82,6 +82,24 @@ export function wholeNumber(s: string): number {
   return /^\d{1,12}$/.test(t) ? Number(t) : NaN
 }
 
+/**
+ * wholeUsdt reads a typed whole number of USDT ("25", "۲۵", "1,000"; NaN when it is not one). Unlike wholeNumber it takes no point
+ * for a thousands separator, and a comma (or a space) only between groups of three: "0.5" and "0,5" are half a USDT, which is
+ * not a whole number, and must not become 5.
+ */
+export function wholeUsdt(s: string): number {
+  const t = latinDigits(s).trim()
+  if (!/^\d{1,12}$/.test(t) && !/^\d{1,3}(?:[,٬،\s]\d{3}){1,3}$/.test(t)) return NaN
+  return Number(t.replace(/[,٬،\s]/g, ''))
+}
+
+/** clock writes a time left as minutes:seconds ("02:05"; with Persian digits in fa). */
+export function clock(seconds: number, lang: Lang): string {
+  const two = new Intl.NumberFormat(numberLocale(lang), { minimumIntegerDigits: 2, useGrouping: false })
+  const s = Math.max(0, Math.floor(seconds))
+  return `${two.format(Math.floor(s / 60))}:${two.format(s % 60)}`
+}
+
 /** daysLeft is whole days until a time (negative once past). */
 export function daysLeft(unix: number, now: number): number {
   return Math.ceil((unix * 1000 - now) / 86_400_000)

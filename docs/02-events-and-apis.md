@@ -56,6 +56,16 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   again with the same `idempotency_key` it credits nothing more and answers the same with `replayed`. Five wrong codes
   in an hour close entering codes for an hour (`gift_code.lock` in the audit log); a code is never logged or audited,
   only its last four characters.
+- core, a plan priced in USDT paid from the wallet (additive; [03-bot-ux.md](03-bot-ux.md), "Plans priced in USDT"):
+  `QuoteWalletPayment(order_id, user_id)` prices an unpaid order listed in USDT in Toman at the store's USDT rate now
+  (`TomanForUsdt`, the licenses' rule) and answers a `WalletQuote`: `list_price` (USDT), `rate`, `price` (Toman),
+  `expires_at` (two minutes on), `token` (signed with core's master key), the wallet (`balance`, `credit_limit`) and
+  `enough`; it changes nothing. `PayOrderWithWallet` takes the token in `quote`: the order is charged exactly the
+  quote, in Toman, and keeps the USDT price and the rate (`Order.list_price`, `Order.rate`; migration core 00041);
+  without a token an order in USDT is charged to the customer's USDT wallet as before. Errors: FAILED_PRECONDITION
+  "the USDT rate is not known" (nothing is quoted), "the price quote expired" (nothing moved; quote again),
+  "insufficient funds", "order not payable"; INVALID_ARGUMENT for a token that is not core's, or for another order,
+  customer or price; PERMISSION_DENIED for someone else's order.
 - core, bulk purchase (built 2026-10-20, additive; [03-bot-ux.md](03-bot-ux.md), "Bulk purchase"): `QuoteBulkOrder`
   (user, plan, quantity: the unit price, the total and the most the store allows now; it fails as `CreateBulkOrder` would for what
   can be known beforehand, the license's places included), `CreateBulkOrder` (user, plan, quantity, `idempotency_key`,
@@ -130,6 +140,12 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   `GetBotPhoto` returns `{version, jpeg}` (a square JPEG of at most 3 MB) or NOT_FOUND. The bot reads the version
   with every settings refresh and fetches the photo only when it changes. An older core sends no version and
   answers UNIMPLEMENTED; an older bot ignores the field.
+- core, my codes (additive; `buf breaking` stays clean): `ListMyCodes(user_id, pagination)` returns a page of the customer's own codes, newest first
+  (`MyCode`: `kind` reward or gift, the reward `code` whole or the gift `tail`, `state` unused, used, expired or off, `percent` or `amount`,
+  `expires_at`, `used_at`, `received_at`, the `plan_names` and `order_id` that gave a reward code, `only_plan_names` for a code made before
+  reward codes were for any plan) with `page_info.total`; `page_size` is 1 to 50 (10 by default). Only codes that can be attributed to
+  the customer: their reward codes (`discount_codes.user_id`) and their gift redemptions. A banned customer is PERMISSION_DENIED, an
+  unknown one NOT_FOUND, a malformed id INVALID_ARGUMENT. An older core answers UNIMPLEMENTED and the bot says the list is not there yet.
 - core, help content (built, additive): `ListHelpEntries(user_id, kind, language)` returns the enabled FAQ questions or
   tutorials in the owner's order, each in the customer's language (the other one where that translation is missing,
   `HelpEntry.language` says which), and `GetHelpEntry(user_id, id, language)` one of them; a banned customer is

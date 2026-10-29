@@ -10,7 +10,7 @@ The Telegram bot is where customers buy and get help. It speaks Persian and Engl
 |---|---|
 | Buy service | Plans, then payment, then the service |
 | My services | Status, expiry and traffic of each service. Renew or add traffic |
-| Wallet | Balance, top-up, history, apply a gift code |
+| Wallet | Balance, top-up, history, apply a gift code, **My codes** |
 | Free trial | One free service per Telegram account, if you made a trial plan |
 | Invite friends | The customer's invite link and a card to forward |
 | Support | Tickets and the FAQ |
@@ -29,6 +29,7 @@ A **bottom menu** keeps the main buttons one tap away. Buttons are colored by wh
 | `/new` | Buy a new service |
 | `/renew` | Renew a service |
 | `/status` | My services |
+| `/codes` | My codes: the customer's own reward and gift codes |
 | `/terms` | Terms of service and privacy |
 | `/paysupport` | Help with a payment |
 | `/cancel` | Leave what you were doing |
@@ -50,6 +51,7 @@ If your panel is down, the customer keeps a paid order and gets the service when
 - **Support** is one open conversation per customer. They can send text, photos and PDFs. Staff replies arrive in the chat.
 - **Help center:** the FAQ and tutorials you write in the dashboard (Branding & texts, Help content).
 - **Gift codes** add credit to the wallet. **Reward codes** are discount codes you hand out after a purchase. See [Plans and Pricing](Plans-and-Pricing).
+- **My codes** (Wallet, or `/codes`) lists the customer's own codes, newest first, five to a page: each reward code whole (a tap copies it) with what it takes off, its state (not used yet, used, expired, switched off), when it ends and the purchase that gave it; and each gift code the customer applied, as **used by you** with the last characters of the code (a gift code is never kept whole). It lists nothing that is not the customer's: not another customer's codes, not a code you made for everyone, not a gift code nobody applied. The reward message has a **My codes** button, so the code can be found again.
 
 ## For staff
 

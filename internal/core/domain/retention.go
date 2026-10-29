@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -327,11 +328,25 @@ func (s *Service) orderPaidEffects(ctx context.Context, tx pgx.Tx, o *store.Orde
 	return s.rewardReferrer(ctx, tx, o, buyer, inviter)
 }
 
+// settingIntIn is settingInt read through an open transaction. Code that runs inside one (a payment that marks an order paid) must not ask the pool for a
+// second connection: with every connection held by such a transaction, waiting for another, none would ever be free.
+func (s *Service) settingIntIn(ctx context.Context, tx pgx.Tx, key string) int64 {
+	m, err := s.st.GetSettings(ctx, tx)
+	if err != nil {
+		return 0
+	}
+	var v string
+	if raw, ok := m[key]; ok {
+		_ = json.Unmarshal(raw, &v)
+	}
+	return parseWholeSetting(v)
+}
+
 // rewardReferrer credits the inviter of the buyer with referral.reward_percent
 // of the buyer's first paid purchase. The ledger key is per invited user, so
 // only one purchase per invited user is ever rewarded.
 func (s *Service) rewardReferrer(ctx context.Context, tx pgx.Tx, o *store.Order, buyer, inviter *store.User) error {
-	pct := s.settingInt(ctx, "referral.reward_percent")
+	pct := s.settingIntIn(ctx, tx, "referral.reward_percent")
 	if pct <= 0 || pct > 100 {
 		return nil
 	}

@@ -205,7 +205,8 @@ func idPart(q string) string {
 // orderColsO is orderCols for a query that names the table o.
 const orderColsO = `o.id, o.user_id, o.plan_id, o.type, o.status, o.amount, o.currency, o.idempotency_key, o.created_at, o.updated_at,
 	o.subscription_id, o.discount_code, o.discount_amount, o.targets_set, o.target_expires_at, o.target_traffic_bytes,
-	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount, o.label, o.bulk_id, o.bulk_index`
+	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount, o.label, o.bulk_id, o.bulk_index,
+	o.list_amount, o.list_currency, o.rate`
 
 // OrderFilter narrows the orders list. Query matches a Telegram id, part of a
 // username or part of an order id.

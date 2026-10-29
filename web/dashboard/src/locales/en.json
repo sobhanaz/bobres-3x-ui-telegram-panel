@@ -227,6 +227,8 @@
     "refunded": "Refunded",
     "made_by": "Made by",
     "discount": "{amount} off with",
+    "list": "Listed at {price}; the wallet was charged at {rate} per USDT",
+    "list_short": "Listed at {price}",
     "service": "Service",
     "service_new": "Created when delivered",
     "created": "Created",
@@ -353,7 +355,9 @@
     "banned": "Customer banned",
     "unbanned": "Customer unbanned",
     "tickets": "Tickets",
-    "tickets_none": "No tickets from this customer."
+    "tickets_none": "No tickets from this customer.",
+    "codes": "Codes",
+    "codes_none": "This customer has no reward or gift codes."
   },
   "service": {
     "title": "Service",
@@ -598,6 +602,24 @@
       "month": "Last 30 days"
     },
     "one_customer": "One customer"
+  },
+  "code": {
+    "received": "Received",
+    "code": "Code",
+    "gift_ending": "Ends in",
+    "kind": "Type",
+    "kind_reward": "Reward code",
+    "kind_gift": "Gift code",
+    "worth": "Worth",
+    "off_any": "off any plan",
+    "off_plan": "off {plan} only",
+    "gift_added": "added to the wallet",
+    "valid_until": "Valid until",
+    "never": "No end",
+    "used_on": "Used on",
+    "from": "Came from",
+    "from_order": "Order",
+    "status": { "unused": "Not used yet", "used": "Used", "expired": "Expired", "off": "Switched off" }
   },
   "charts": {
     "legend": "Series (select to show or hide)",
@@ -1313,6 +1335,7 @@
       "admin": "Admin panel",
       "rs": "Reseller panel",
       "gift": "Gift codes",
+      "codes": "My codes",
       "bulk": "Bulk purchase",
       "profile": "Bot profile",
       "help": "Help screens"

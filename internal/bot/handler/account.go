@@ -185,7 +185,7 @@ func (h *Handler) showWallet(r *req) {
 		return
 	}
 	kb := (&tg.Keyboard{}).Row(r.button("btn.topup", "wtop"), r.button("btn.history", "whist")).
-		Row(h.giftButton(r)...).
+		Row(append(h.giftButton(r), r.button("btn.my_codes", "cds"))...).
 		Row(r.button("btn.home", "home"))
 	text := h.accountInfo(r) + "\n\n" + r.t("wallet.title", "balance", r.balance(w.GetBalance(), "IRT"))
 	if w.GetUsdtRate() > 0 {
