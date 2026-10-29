@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.20.0] — 2026-10-29
+
+**Messages only for resellers, a weekly settlement reminder, and buttons to deal with services the panel no longer has.** The reseller messages and the reminder are off until the owner uses them; the panel-missing buttons appear only for owners and admins. One additive migration (core 00052); the bot and core must be updated together (the update does that).
+
 ### Updating
 - One database migration, additive, in core: 00052 (broadcasts take the segment `resellers` with its filters, a Settle button and a kind; a recipient keeps the text written for them; `reseller_reminder_claims`). Its Down deletes the messages to resellers. The weekly reminder is off until the owner switches it on.
 

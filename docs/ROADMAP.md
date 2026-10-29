@@ -29,7 +29,7 @@ v0.16.1 (2026-10-23: the supplier's product dialog fits a phone)
 v0.17.0 (2026-10-23: one wallet in Toman, the renewal rule, reports that count every sale and start from zero, the reseller's search by link)
 v0.17.1 (2026-10-28: the store comes back by itself after a reboot, a heartbeat the tls-agent can write after a restart, and alerts that say what to type), v0.17.2 (2026-10-28: services whose client is gone from the panel are marked, listed, noticed once a day and made again with a button) and v0.18.0 (2026-10-29: the customer's own list of codes, a plan priced in USDT paid from the wallet, the Tether top-up in the Mini App, per-server capacity limits, a Prometheus endpoint, an uptime view and a public status page, the approval of dashboard sign-ins in Telegram, and `bobres rotate-key`).
 
-## Where things stand (after v0.19.0)
+## Where things stand (after v0.20.0)
 
 Everything in the owner's four picks below is built, and so is the owner's list of requests of 2026-10-14 and of 2026-10-20 (the Mini App on by default and complete, reseller management, the 3x-ui
 group).
@@ -201,6 +201,7 @@ item says where it landed.
 
 ## Later, not yet ordered
 
+- New-product announcements (a card with a Buy button, like other stores' bots): decided 2026-10-29 but not built yet — posted in the store's channel and sent in the bot to customers who said yes when asked once, for every kind of product, started by hand from the dashboard.
 - More bot languages (Arabic, Russian, Turkish): the texts are already keys, so the work is translation and review.
 - More crypto networks, if a way that works from Iran exists. (Automatic TON is built: [20-ton.md](20-ton.md), not yet tried with a real wallet.)
 - Incident history on the status page (it says only "working" or "down" now), and e-mail or Telegram subscriptions to it. (The Prometheus endpoint, a Grafana example and the uptime view are built.)
