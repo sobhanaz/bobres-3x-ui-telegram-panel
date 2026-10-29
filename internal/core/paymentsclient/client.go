@@ -97,7 +97,7 @@ func gatewayIntent(in *paymentsv1.PaymentIntent) *domain.GatewayIntent {
 		Amount: in.GetAmount().GetAmount(), Currency: in.GetAmount().GetCurrency(),
 		GatewayAmount: in.GetGatewayAmount().GetAmount(), GatewayCurrency: in.GetGatewayAmount().GetCurrency(),
 		PayURL: in.GetPayUrl(), FailureReason: in.GetFailureReason(),
-		PayAddress: in.GetPayAddress(), ExpiresAt: in.GetExpiresAt(), ExternalID: in.GetExternalId(),
+		PayAddress: in.GetPayAddress(), PayMemo: in.GetPayMemo(), ExpiresAt: in.GetExpiresAt(), ExternalID: in.GetExternalId(),
 	}
 }
 
@@ -200,6 +200,7 @@ func gatewayConfigOf(p *paymentsv1.GatewayConfig) *domain.GatewayConfig {
 		Sandbox: p.GetSandbox(), MerchantHint: p.GetMerchantHint(), ProxySet: p.GetProxySet(),
 		KeyMissing: p.GetKeyMissing(), FromEnv: p.GetFromEnv(), Problem: p.GetProblem(),
 		UpdatedAt: p.GetUpdatedAt(), UpdatedBy: p.GetUpdatedBy(), Address: p.GetAddress(), APIKeySet: p.GetApiKeySet(),
+		PriceMicro: p.GetPriceMicro(), PriceSource: p.GetPriceSource(), PriceAt: p.GetPriceAt(), PriceFresh: p.GetPriceFresh(),
 	}
 }
 
@@ -239,7 +240,8 @@ func (c *Client) TestGateway(ctx context.Context, provider string, cand *domain.
 	if err != nil {
 		return nil, fmt.Errorf("payments.TestGateway: %w", err)
 	}
-	return &domain.GatewayTest{OK: r.GetOk(), Detail: r.GetDetail(), Unverified: r.GetUnverified(), LatencyMS: r.GetLatencyMs()}, nil
+	return &domain.GatewayTest{OK: r.GetOk(), Detail: r.GetDetail(), Unverified: r.GetUnverified(), LatencyMS: r.GetLatencyMs(),
+		LatestTxAt: r.GetLatestTxAt()}, nil
 }
 
 func gatewayEventOf(e *paymentsv1.GatewayEvent) *domain.GatewayEvent {
@@ -283,13 +285,14 @@ func chainTransferOf(t *paymentsv1.ChainTransfer) domain.ChainTransfer {
 		To: t.GetToAddress(), Amount: t.GetAmount().GetAmount(), Currency: t.GetAmount().GetCurrency(),
 		BlockTime: t.GetBlockTime(), Outcome: t.GetOutcome(), Reason: t.GetReason(), IntentID: t.GetIntentId(),
 		RecordedAt: t.GetRecordedAt(), ResolvedBy: t.GetResolvedBy(), ResolvedAt: t.GetResolvedAt(), Note: t.GetNote(),
+		LT: t.GetLt(), Comment: t.GetComment(),
 	}
 }
 
 // ChainTransfers implements domain.GatewayAdmin.
 func (c *Client) ChainTransfers(ctx context.Context, f domain.ChainTransferFilter, page, size int) ([]domain.ChainTransfer, int64, error) {
 	resp, err := c.rpc.ListChainTransfers(ctx, &paymentsv1.ListChainTransfersRequest{
-		Outcome: f.Outcome, Txid: f.TxID, IntentId: f.IntentID,
+		Outcome: f.Outcome, Txid: f.TxID, IntentId: f.IntentID, Network: f.Network,
 		Pagination: &commonv1.Pagination{Page: int32(min(max(page, 1), math.MaxInt32)), PageSize: int32(min(max(size, 1), 200))}, //nolint:gosec // bounded
 	})
 	if err != nil {
@@ -300,6 +303,16 @@ func (c *Client) ChainTransfers(ctx context.Context, f domain.ChainTransferFilte
 		out = append(out, chainTransferOf(t))
 	}
 	return out, resp.GetPageInfo().GetTotal(), nil
+}
+
+// ResolveTONTransfer marks an unmatched automatic TON deposit handled (domain.TONResolver).
+func (c *Client) ResolveTONTransfer(ctx context.Context, txid, actorID, note string) (*domain.ChainTransfer, error) {
+	t, err := c.rpc.ResolveChainTransfer(ctx, &paymentsv1.ResolveChainTransferRequest{Txid: txid, ActorId: actorID, Note: note, Network: "TON"})
+	if err != nil {
+		return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", err)
+	}
+	out := chainTransferOf(t)
+	return &out, nil
 }
 
 // ResolveChainTransfer implements domain.GatewayAdmin.

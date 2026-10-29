@@ -11,9 +11,10 @@ Customers can pay in several ways. The owner switches each on, and sets its deta
 | USDT, manual | Sends USDT (TRC20 or ERC20) to your address, then sends a screenshot or the transaction ID | A staff member approves |
 | Zarinpal link, manual | Pays on your Zarinpal payment link, then sends a screenshot | A staff member approves |
 | Zarinpal, online | Pays on the bank page | Payments asks Zarinpal to confirm. Nothing is trusted from the callback alone |
-| IDPay, NextPay | Same, on the gateway's page | Payments verifies with the gateway |
+| IDPay, NextPay, Aqayepardakht | Same, on the gateway's page (Aqayepardakht's is opened from your own payment page) | Payments verifies with the gateway |
 | Telegram Stars | Pays an invoice inside Telegram | Telegram confirms to the bot |
 | USDT, automatic (TRC20) | Sends an exact, unique amount to your TRON address, within 45 minutes | The payments service sees the transfer on the chain |
+| TON, automatic | Sends an exact amount of TON to your TON address, with the payment's comment (`BOB-...`), within 30 minutes | The payments service sees the transfer on the TON network |
 
 Rules that hold for every method:
 
@@ -21,7 +22,7 @@ Rules that hold for every method:
 - The ledger is append-only, and amounts are whole numbers in minor units.
 - If a panel is down after payment, the order stays paid and is delivered when the panel is back.
 
-On the free tier you can use Zarinpal, IDPay, NextPay, Stars and the manual methods. Automatic USDT needs a paid license or the trial. See [Licensing](Licensing).
+On the free tier you can use Zarinpal, IDPay, NextPay, Aqayepardakht, Stars and the manual methods. Automatic USDT and automatic TON need a paid license or the trial. See [Licensing](Licensing).
 
 ## One wallet, in Toman
 
@@ -45,13 +46,19 @@ Every owner gets an alert when a receipt arrives, and `/admin` in the bot has th
 | `payments.stars_rate` | Toman per Telegram Star, used to price plans in Stars. Empty means no Stars |
 | `payments.manual_card.enabled`, `payments.manual_crypto.enabled`, `payments.manual_zarinpal.enabled`, `payments.stars.enabled` | The on and off switches |
 
-For Zarinpal online, IDPay and NextPay, paste the key on the Gateways page, press **Test**, then switch on. Register your store's payment address as the callback domain in each gateway's panel. IDPay and NextPay are off until you set a key.
+For Zarinpal online, IDPay, NextPay and Aqayepardakht, paste the key (Aqayepardakht calls it the PIN, and it is case-sensitive) on the Gateways page, press **Test**, then switch on. Register your store's payment address as the callback domain in each gateway's panel. IDPay, NextPay and Aqayepardakht are off until you set a key. Aqayepardakht has a test system: the PIN `sandbox`, which is refused on a production install.
 
-**IDPay and NextPay have not been tried against the real gateways.** They follow the public documentation and are tested only against fakes. Make a small real payment through each before you tell customers about them. The checklist is in [docs/16-idpay-nextpay.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/16-idpay-nextpay.md).
+**IDPay, NextPay and Aqayepardakht have not been tried against the real gateways.** They follow the public documentation and are tested only against fakes. Make a small real payment through each before you tell customers about them. The checklists are in [docs/16-idpay-nextpay.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/16-idpay-nextpay.md) and [docs/19-aqayepardakht.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/19-aqayepardakht.md).
 
 ## Automatic USDT on TRON
 
 Enter your TRON address on the Gateways page, and optionally a TronGrid key. The payments service reads the chain about every 30 seconds. A customer is shown an exact amount, the address and a deadline. A transfer of any other amount is an **unmatched deposit**: nothing is credited, staff are alerted, and you credit the customer by hand and mark the deposit handled. The address cannot be changed while automatic payments are open.
+
+## Automatic TON
+
+Enter your TON wallet address on the Gateways page (any form your wallet shows: `UQ...`, `EQ...` or `0:...`), and optionally a TON Center API key and a proxy. The price is worked out like automatic USDT's (Toman to USDT at your rate), then turned into TON at the price the payments service reads every 30 seconds from Binance and OKX. **With no fresh TON price (under 3 minutes old) the method is not offered at all.** The customer is shown the exact amount, the address, a comment to put in the transfer and a 30-minute countdown. The transfer must carry the comment and at least the amount; anything else (no comment, less than asked, a payment already paid, a late transfer the price no longer covers) is an **unmatched deposit**: nothing is credited, staff are alerted, and you credit by hand and mark it handled. BOBRES only reads your public address; it never holds a key.
+
+**Automatic TON has not been tried against the real network.** It follows TON Center's public API and is tested only against fakes. Make a small real payment first. The checklist is in [docs/20-ton.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/20-ton.md).
 
 ## The live USDT rate
 

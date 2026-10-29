@@ -102,11 +102,11 @@ func Number(lang string, n int64) string {
 }
 
 var currencyNames = map[string]map[string]string{
-	"fa": {"IRT": "تومان", "USDT": "تتر"},
-	"en": {"IRT": "Toman", "USDT": "USDT"},
+	"fa": {"IRT": "تومان", "USDT": "تتر", "TON": "TON"},
+	"en": {"IRT": "Toman", "USDT": "USDT", "TON": "TON"},
 }
 
-var currencyScale = map[string]int{"IRT": 0, "USDT": 6}
+var currencyScale = map[string]int{"IRT": 0, "USDT": 6, "TON": 9}
 
 // irtNames are the store's own names for the Toman (per language), from
 // the branding settings; empty means the built-in name.

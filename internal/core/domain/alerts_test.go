@@ -679,15 +679,16 @@ func TestZarinpalChecks(t *testing.T) {
 	}
 }
 
-// keyedReporter answers for IDPay and NextPay only: the one named in on is
-// switched on, with the report given.
+// keyedReporter answers for IDPay, NextPay and Aqayepardakht only: the one
+// named in on is switched on, with the report given.
 type keyedReporter struct {
 	on     string
 	report GatewayReport
 }
 
 func (k *keyedReporter) GatewayConfigs(context.Context) ([]GatewayConfig, error) {
-	return []GatewayConfig{{Provider: IDPay, Enabled: k.on == IDPay}, {Provider: NextPay, Enabled: k.on == NextPay}}, nil
+	return []GatewayConfig{{Provider: IDPay, Enabled: k.on == IDPay}, {Provider: NextPay, Enabled: k.on == NextPay},
+		{Provider: Aqayepardakht, Enabled: k.on == Aqayepardakht}}, nil
 }
 
 func (k *keyedReporter) GatewayReport(_ context.Context, provider string, _, _ int64) (*GatewayReport, error) {
@@ -698,14 +699,17 @@ func (k *keyedReporter) GatewayReport(_ context.Context, provider string, _, _ i
 	return &r, nil
 }
 
-// IDPay and NextPay are watched like Zarinpal, under their own names.
+// IDPay, NextPay and Aqayepardakht are watched like Zarinpal, under their own names.
 func TestKeyedGatewayChecks(t *testing.T) {
-	for _, provider := range []string{IDPay, NextPay} {
+	for _, provider := range []string{IDPay, NextPay, Aqayepardakht} {
 		k := &keyedReporter{}
 		a := newAlertWorld(t, WatchdogSources{Gateways: k})
 		probe := a.w.idpay
-		if provider == NextPay {
+		switch provider {
+		case NextPay:
 			probe = a.w.nextpay
+		case Aqayepardakht:
+			probe = a.w.aqayepardakht
 		}
 		now := a.now.Unix()
 		// Off: covered, and the report is not asked for.
@@ -1239,6 +1243,7 @@ func TestAlertTitlesExist(t *testing.T) {
 		"alert.server_capacity": {"count", "limit", "percent", "server"}, "alert.server_full": {"count", "limit", "server"},
 		"alert.zarinpal_failing": nil, "alert.zarinpal_stuck": {"count"},
 		"alert.idpay_failing": nil, "alert.idpay_stuck": {"count"}, "alert.nextpay_failing": nil, "alert.nextpay_stuck": {"count"},
+		"alert.aqayepardakht_failing": nil, "alert.aqayepardakht_stuck": {"count"},
 		"alert.backup_failed": nil,
 		"alert.usdt_failing":  nil, "alert.usdt_stuck": {"count"}, "alert.backup_offsite": nil,
 		"alert.backup_stale": {"hours"}, "alert.disk_low": {"free"}, "alert.provision_failed": {"count"},

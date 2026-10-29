@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tonaddr"
 )
 
 // Payment gateway settings (milestone 6a). Payments keeps Zarinpal's merchant
@@ -33,6 +34,12 @@ type GatewayAdmin interface {
 	ResolveChainTransfer(ctx context.Context, txid string, index int, actorID, note string) (*ChainTransfer, error)
 }
 
+// TONResolver is what a GatewayAdmin that knows automatic TON adds: marking an unmatched TON deposit handled (a
+// transaction is told by its hash alone).
+type TONResolver interface {
+	ResolveTONTransfer(ctx context.Context, txid, actorID, note string) (*ChainTransfer, error)
+}
+
 // GatewayConfig is an automated gateway's settings as payments reports
 // them: whether the secrets are set, never their values.
 type GatewayConfig struct {
@@ -43,13 +50,19 @@ type GatewayConfig struct {
 	Sandbox      bool
 	MerchantHint string // the merchant id's last 4 characters
 	Address      string // automatic USDT: the store's TRON address (public)
-	APIKeySet    bool   // automatic USDT: a TronGrid API key is set
-	ProxySet     bool
-	KeyMissing   bool   // payments has no master key: read only
-	FromEnv      bool   // the settings come from the environment
-	Problem      string // "" | unreadable | sandbox_refused | public_url | invalid
-	UpdatedAt    int64
-	UpdatedBy    string
+	APIKeySet    bool   // automatic USDT, automatic TON: an API key is set
+	// Automatic TON: the TON price (micro-USDT per TON) payments read last, where and when (unix seconds), and
+	// whether it is fresh enough to use (otherwise the method is not offered).
+	PriceMicro  int64
+	PriceSource string
+	PriceAt     int64
+	PriceFresh  bool
+	ProxySet    bool
+	KeyMissing  bool   // payments has no master key: read only
+	FromEnv     bool   // the settings come from the environment
+	Problem     string // "" | unreadable | sandbox_refused | public_url | invalid
+	UpdatedAt   int64
+	UpdatedBy   string
 }
 
 // GatewayUpdate replaces a gateway's settings. MerchantID, Proxy and APIKey
@@ -79,6 +92,8 @@ type GatewayTest struct {
 	Detail     string // why it failed; never a secret
 	Unverified int32  // paid payments the gateway waits for us to verify
 	LatencyMS  int64
+	// LatestTxAt: automatic TON: when the address's newest transaction happened (unix seconds; 0 = none yet).
+	LatestTxAt int64
 }
 
 // GatewayEvent is one entry of payments' gateway trail.
@@ -129,7 +144,7 @@ const chainReadGrace = 5 * time.Minute
 // the watcher can read the chain (its last read worked, or one worked within
 // the last 5 minutes).
 func (r *GatewayReport) Healthy(now time.Time) bool {
-	if r.Provider == USDTAuto {
+	if r.Provider == USDTAuto || r.Provider == TONAuto {
 		return r.ScanError == "" || (r.LastScanOKAt > 0 && now.Sub(time.Unix(r.LastScanOKAt, 0)) <= chainReadGrace)
 	}
 	switch {
@@ -191,7 +206,7 @@ func checkGatewaySecrets(merchant, proxy string, clearProxy bool) (string, strin
 // switches, and automatic USDT's address (public, and who changed where
 // customers' money goes matters most).
 func gatewayAudit(c *GatewayConfig) map[string]any {
-	if c.Provider == USDTAuto {
+	if c.Provider == USDTAuto || c.Provider == TONAuto {
 		return map[string]any{"enabled": c.Enabled, "address": c.Address}
 	}
 	return map[string]any{"enabled": c.Enabled, "sandbox": c.Sandbox}
@@ -211,43 +226,99 @@ func sameAudit(a, b map[string]any) bool {
 	return true
 }
 
+// pinRe is an Aqayepardakht PIN: printable ASCII without spaces (the
+// gateway's documentation shows no format, so nothing narrower is assumed).
+var pinRe = regexp.MustCompile(`^[\x21-\x7e]{4,100}$`)
+
+// normalizePIN reads a typed PIN: Latin digits and no spaces or direction
+// marks, and the case it was typed in (a PIN is case-sensitive).
+func normalizePIN(v string) string {
+	return strings.Join(strings.Fields(latinDigits(pasteJunk.Replace(v))), "")
+}
+
 // checkKeyedFields: IDPay and NextPay have an API key (the 36-character id
 // from the gateway's panel) and nothing else of their own; NextPay has no
-// sandbox. The key comes back normalised.
+// sandbox. Aqayepardakht has a PIN (case-sensitive) in its place, and its
+// sandbox is the PIN "sandbox", not a switch. The key comes back normalised.
 func checkKeyedFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
 	title := "IDPay"
-	if provider == NextPay {
+	switch provider {
+	case NextPay:
 		title = "NextPay"
+	case Aqayepardakht:
+		title = "Aqayepardakht"
 	}
-	apiKey = normalizeMerchant(pasteJunk.Replace(apiKey))
+	if provider == Aqayepardakht {
+		apiKey = normalizePIN(apiKey)
+	} else {
+		apiKey = normalizeMerchant(pasteJunk.Replace(apiKey))
+	}
 	switch {
 	case merchant != "":
 		return "", "", &FieldError{"merchant_id", title + " has no merchant id: it has an API key"}
 	case normalizeTronAddress(address) != "":
-		return "", "", &FieldError{"address", "only automatic USDT has an address"}
+		return "", "", &FieldError{"address", "only automatic USDT and TON have an address"}
 	case sandbox && provider == NextPay:
 		return "", "", &FieldError{"sandbox", "NextPay has no sandbox"}
+	case sandbox && provider == Aqayepardakht:
+		return "", "", &FieldError{"sandbox", `Aqayepardakht has no sandbox switch: its test system is the PIN "sandbox"`}
 	case apiKey != "" && clearKey:
 		return "", "", &FieldError{"api_key", "set an API key or clear it, not both"}
-	case apiKey != "" && !merchantRe.MatchString(apiKey):
+	case apiKey != "" && provider == Aqayepardakht && !pinRe.MatchString(apiKey):
+		return "", "", &FieldError{"api_key", "the PIN from the " + title + " panel: 4 to 100 letters, digits or symbols, no spaces"}
+	case apiKey != "" && provider != Aqayepardakht && !merchantRe.MatchString(apiKey):
 		return "", "", &FieldError{"api_key", "the 36-character API key from the " + title + " panel"}
 	}
 	return "", apiKey, nil
 }
 
+// tonAPIKeyRe: a TON Center API key (it goes in a header, so nothing else is accepted).
+var tonAPIKeyRe = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
+
+// checkTONSecrets normalises automatic TON's address and API key and checks them: the address in any form a wallet
+// shows (it comes back in the one customers are shown, the non-bounceable one), the key a TON Center key. The
+// messages never repeat the key.
+func checkTONSecrets(address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
+	apiKey = strings.TrimSpace(pasteJunk.Replace(apiKey))
+	switch {
+	case merchant != "":
+		return "", "", &FieldError{"merchant_id", "automatic TON has no merchant id"}
+	case sandbox:
+		return "", "", &FieldError{"sandbox", "automatic TON has no sandbox"}
+	case apiKey != "" && clearKey:
+		return "", "", &FieldError{"api_key", "set an API key or clear it, not both"}
+	case apiKey != "" && !tonAPIKeyRe.MatchString(apiKey):
+		return "", "", &FieldError{"api_key", "the API key from TON Center: letters, digits, - and _"}
+	}
+	if strings.TrimSpace(pasteJunk.Replace(address)) != "" {
+		a, err := tonaddr.Normalize(address)
+		if err != nil {
+			return "", "", &FieldError{"address", strings.TrimPrefix(err.Error(), "tonaddr: ")}
+		}
+		address = a
+	} else {
+		address = ""
+	}
+	return address, apiKey, nil
+}
+
 // checkProviderFields checks the fields only one provider has: automatic
 // USDT's address and API key (normalised), Zarinpal's merchant id and
-// sandbox.
+// sandbox, the API key (the PIN, for Aqayepardakht) of the other Iranian
+// gateways.
 func checkProviderFields(provider, address, apiKey string, clearKey bool, merchant string, sandbox bool) (string, string, error) {
-	if provider == IDPay || provider == NextPay {
+	if provider == IDPay || provider == NextPay || provider == Aqayepardakht {
 		return checkKeyedFields(provider, address, apiKey, clearKey, merchant, sandbox)
+	}
+	if provider == TONAuto {
+		return checkTONSecrets(address, apiKey, clearKey, merchant, sandbox)
 	}
 	if provider != USDTAuto {
 		switch {
 		case normalizeTronAddress(address) != "":
-			return "", "", &FieldError{"address", "only automatic USDT has an address"}
+			return "", "", &FieldError{"address", "only automatic USDT and TON have an address"}
 		case strings.TrimSpace(apiKey) != "" || clearKey:
-			return "", "", &FieldError{"api_key", "only automatic USDT has an API key"}
+			return "", "", &FieldError{"api_key", "only automatic USDT and TON have an API key"}
 		}
 		return "", "", nil
 	}

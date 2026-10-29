@@ -35,7 +35,7 @@ const (
 // LicenseGateways are the payment methods a license names (license.AllGateways:
 // a test keeps the two lists equal). The wallet is always allowed. Automatic
 // USDT also needs the crypto_watcher feature.
-var LicenseGateways = []string{Zarinpal, IDPay, NextPay, Stars, USDTAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
+var LicenseGateways = []string{Zarinpal, IDPay, NextPay, Aqayepardakht, Stars, USDTAuto, TONAuto, "manual_card", "manual_crypto", "manual_zarinpal"}
 
 // LicenseConfig is what a license is checked against.
 type LicenseConfig struct {
@@ -687,10 +687,15 @@ func gatewayRefusal(eff *EffectiveLicense, provider string) error {
 	if eff == nil {
 		return nil
 	}
-	if provider == USDTAuto && !eff.Entitlements.HasFeature("crypto_watcher") {
-		return eff.refuse("crypto_watcher", "does not include the automatic USDT watcher (crypto_watcher)")
+	if (provider == USDTAuto || provider == TONAuto) && !eff.Entitlements.HasFeature("crypto_watcher") {
+		return eff.refuse("crypto_watcher", "does not include the automatic crypto watcher (crypto_watcher)")
 	}
 	if eff.Entitlements.HasGateway(provider) {
+		return nil
+	}
+	// A license issued before automatic TON existed names automatic USDT, and its crypto_watcher feature is what
+	// both need: it covers TON too.
+	if provider == TONAuto && eff.Entitlements.HasGateway(USDTAuto) {
 		return nil
 	}
 	return eff.refuse("gateways", "does not include the payment method "+provider)

@@ -12,15 +12,21 @@ import (
 // starts; the payments service then holds the customer to that amount.
 const (
 	Zarinpal = "zarinpal"
-	// IDPay and NextPay are Iranian gateways built like Zarinpal: switched on
-	// in payments with an API key, charged in Rial (Toman x 10).
-	IDPay   = "idpay"
-	NextPay = "nextpay"
-	Stars   = "stars"
+	// IDPay, NextPay and Aqayepardakht are Iranian gateways built like
+	// Zarinpal: switched on in payments with an API key (Aqayepardakht's is
+	// its PIN), charged in Rial (Toman x 10).
+	IDPay         = "idpay"
+	NextPay       = "nextpay"
+	Aqayepardakht = "aqayepardakht"
+	Stars         = "stars"
 	// USDTAuto is automatic USDT on TRON (TRC20): the customer sends an exact
 	// amount to the store's address and payments' watcher finds it on chain.
 	// It is switched on in payments (the Gateways page), like Zarinpal.
 	USDTAuto = "usdt_trc20_auto"
+	// TONAuto is automatic TON (Toncoin): the customer sends an exact amount of TON, with the payment's comment, to
+	// the store's address and payments' watcher finds it. Core prices it in USDT (as for automatic USDT) and payments
+	// turns that into TON at the price it reads.
+	TONAuto = "ton_auto"
 )
 
 // GatewayStart asks payments to start an automated payment.
@@ -47,6 +53,8 @@ type GatewayIntent struct {
 	// the window the amount is held for (unix seconds; 0 = none). ExternalID
 	// is the settling transaction's hash once paid.
 	PayAddress string
+	// Automatic TON: the comment the transfer must carry.
+	PayMemo    string
 	ExpiresAt  int64
 	ExternalID string
 }
@@ -57,13 +65,16 @@ const (
 	zarinpalMaxToman = 100_000_000
 )
 
-// IDPay's and NextPay's per-payment limits in Toman (their Rial limits are
-// 1,000 to 500,000,000 and 10,000 to 1,000,000,000: the gateway packages).
+// IDPay's, NextPay's and Aqayepardakht's per-payment limits in Toman (their
+// Rial limits are 1,000 to 500,000,000, 10,000 to 1,000,000,000 and 10,000 to
+// 4,000,000,000: the gateway packages).
 const (
-	idpayMinToman   = 100
-	idpayMaxToman   = 50_000_000
-	nextpayMinToman = 1_000
-	nextpayMaxToman = 100_000_000
+	idpayMinToman         = 100
+	idpayMaxToman         = 50_000_000
+	nextpayMinToman       = 1_000
+	nextpayMaxToman       = 100_000_000
+	aqayepardakhtMinToman = 1_000
+	aqayepardakhtMaxToman = 400_000_000
 )
 
 // Automatic USDT's per-payment limits, in micro-USDT (scale 6). Payments
@@ -81,7 +92,7 @@ const (
 )
 
 func isGateway(provider string) bool {
-	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Stars || provider == USDTAuto
+	return provider == Zarinpal || provider == IDPay || provider == NextPay || provider == Aqayepardakht || provider == Stars || provider == USDTAuto || provider == TONAuto
 }
 
 func ceilDiv(a, b int64) int64 { return (a + b - 1) / b }
@@ -97,8 +108,8 @@ func (s *Service) settingInt(ctx context.Context, key string) int64 {
 	return n
 }
 
-// gatewayCharge converts a price into what a gateway charges: Zarinpal takes
-// Rial (Toman x 10), Telegram Stars a whole number of Stars (payments.stars_rate
+// gatewayCharge converts a price into what a gateway charges: Zarinpal and the
+// gateways built like it take Rial (Toman x 10), Telegram Stars a whole number of Stars (payments.stars_rate
 // Toman per Star, rounded up so a payment never falls short), automatic USDT
 // micro-USDT (see usdtCharge).
 func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int64, currency string) (int64, string, error) {
@@ -130,6 +141,14 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 			return 0, "", invalid("NextPay takes 1,000 to 100,000,000 Toman per payment")
 		}
 		return amount * 10, "IRR", nil
+	case Aqayepardakht:
+		if currency != "IRT" {
+			return 0, "", invalid("Aqayepardakht takes Toman prices only")
+		}
+		if amount < aqayepardakhtMinToman || amount > aqayepardakhtMaxToman {
+			return 0, "", invalid("Aqayepardakht takes 1,000 to 400,000,000 Toman per payment")
+		}
+		return amount * 10, "IRR", nil
 	case Stars:
 		rate := s.settingInt(ctx, "payments.stars_rate")
 		if currency != "IRT" || rate <= 0 {
@@ -138,6 +157,8 @@ func (s *Service) gatewayCharge(ctx context.Context, provider string, amount int
 		return ceilDiv(amount, rate), "XTR", nil
 	case USDTAuto:
 		return s.usdtCharge(ctx, amount, currency)
+	case TONAuto:
+		return s.tonCharge(ctx, amount, currency)
 	}
 	return 0, "", invalid("unsupported payment method %q", provider)
 }
@@ -172,6 +193,28 @@ func (s *Service) usdtCharge(ctx context.Context, amount int64, currency string)
 		return 0, "", invalid("automatic USDT takes at least 0.1 USDT per payment")
 	case base > usdtMax:
 		return 0, "", invalid("automatic USDT takes at most 1,000,000 USDT per payment")
+	}
+	return base, "USDT", nil
+}
+
+// Automatic TON's per-payment limits in micro-USDT (scale 6), as payments allows: the TON amount is worked out by
+// payments from this at the TON price it reads.
+const (
+	tonMin = 100_000         // 0.1 USDT
+	tonMax = 100_000_000_000 // 100,000 USDT
+)
+
+// tonCharge is what automatic TON asks payments for: the price in USDT, worked out exactly as automatic USDT's (a
+// USDT price as it is; a Toman price at the store's USDT rate, the live price plus the owner's margin, in whole
+// cents rounded up). Payments turns it into nanoton at the TON price it reads, and offers the method only while that
+// price is fresh.
+func (s *Service) tonCharge(ctx context.Context, amount int64, currency string) (int64, string, error) {
+	base, _, err := s.usdtCharge(ctx, amount, currency)
+	if err != nil {
+		return 0, "", invalid("%s", strings.ReplaceAll(err.Error(), "automatic USDT", "automatic TON"))
+	}
+	if base < tonMin || base > tonMax {
+		return 0, "", invalid("automatic TON takes 0.1 to 100,000 USDT per payment")
 	}
 	return base, "USDT", nil
 }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, resetSession } from '../api'
 import { errorKey } from '../errors'
 import { messages } from '../i18n'
-import { cardDigits, cleanTxid, isManual, networkFor, networksOf, notYetKey, plainAmount, shortMethodKey, tomanForUsdt, txidPattern } from '../pay'
+import { cardDigits, cleanTxid, countdown, fixedAmount, isManual, isTon, networkFor, networksOf, notYetKey, plainAmount, shortMethodKey, tomanForUsdt, txidPattern } from '../pay'
 import { openInvoice } from '../telegram'
 import { json, noTelegram, signedIn, telegram } from './helpers'
 
@@ -14,7 +14,12 @@ afterEach(() => {
 describe('payment helpers', () => {
   it('knows the manual methods', () => {
     for (const m of ['manual_card', 'manual_crypto', 'manual_zarinpal']) expect(isManual(m)).toBe(true)
-    for (const m of ['stars', 'zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'wallet', '', 'manual_']) expect(isManual(m)).toBe(false)
+    for (const m of ['stars', 'zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'ton_auto', 'wallet', '', 'manual_']) expect(isManual(m)).toBe(false)
+  })
+
+  it('knows the automatic TON method, and nothing else', () => {
+    expect(isTon('ton_auto')).toBe(true)
+    for (const m of ['usdt_trc20_auto', 'manual_crypto', 'stars', 'zarinpal', 'ton', 'TON_AUTO', '']) expect(isTon(m), m).toBe(false)
   })
 
   it('says what is not there yet in the words of the method, and warns a Stars payer not to pay twice', () => {
@@ -22,6 +27,11 @@ describe('payment helpers', () => {
     expect(notYetKey('manual_card')).toBe('manual.still_waiting')
     expect(notYetKey('manual_crypto')).toBe('manual.still_waiting')
     expect(notYetKey('zarinpal')).toBe('pay.not_yet')
+    expect(notYetKey('aqayepardakht')).toBe('pay.not_yet')
+    // a TON transfer takes a minute or two, and is not found without its comment
+    expect(notYetKey('ton_auto')).toBe('pay.ton_not_yet')
+    expect(messages.en['pay.ton_not_yet']).toContain('comment')
+    expect(messages.fa['pay.ton_not_yet']).toContain('کامنت')
     expect(messages.en['stars.not_yet']).toContain('do not pay twice')
     expect(messages.fa['stars.not_yet']).toBeTruthy()
   })
@@ -49,6 +59,31 @@ describe('payment helpers', () => {
     expect(plainAmount(3_340_000, 6)).toBe('3.34')
     expect(plainAmount(150_000, 0)).toBe('150000')
     expect(plainAmount(0, 6)).toBe('0')
+  })
+
+  it('writes a TON amount with every decimal of a nanoton, trailing zeros too, and never rounded', () => {
+    expect(fixedAmount(2_531_000_000, 9)).toBe('2.531000000')
+    expect(fixedAmount(1_000_000_000, 9)).toBe('1.000000000')
+    expect(fixedAmount(2_531_000_007, 9)).toBe('2.531000007')
+    expect(fixedAmount(1, 9)).toBe('0.000000001')
+    expect(fixedAmount(0, 9)).toBe('0.000000000')
+    expect(fixedAmount(Number.MAX_SAFE_INTEGER, 9)).toBe('9007199.254740991')
+    expect(fixedAmount(150_000, 0)).toBe('150000')
+    expect(fixedAmount(2_500_000, 6)).toBe('2.500000')
+    expect(fixedAmount(-1_500_000_000, 9)).toBe('-1.500000000')
+    // it is the plain decimal with its zeros kept
+    for (const n of [2_531_000_000, 1_000_000_000, 7, 999_999_999, 5_000_000_001]) expect(Number(fixedAmount(n, 9))).toBe(Number(plainAmount(n, 9)))
+  })
+
+  it('writes the time left as minutes and seconds', () => {
+    expect(countdown(899)).toBe('14:59')
+    expect(countdown(7)).toBe('00:07')
+    expect(countdown(60)).toBe('01:00')
+    expect(countdown(0)).toBe('00:00')
+    expect(countdown(-5)).toBe('00:00')
+    expect(countdown(3599)).toBe('59:59')
+    expect(countdown(3600)).toBe('60:00') // more than an hour is still minutes
+    expect(countdown(59.9)).toBe('00:59')
   })
 
   it('works out what USDT is worth in Toman at a rate, rounded down as the wallet is credited', () => {
@@ -177,7 +212,7 @@ describe('proofs', () => {
   })
 
   it('has a name for each payment method in both languages', () => {
-    for (const m of ['zarinpal', 'idpay', 'nextpay', 'usdt_trc20_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']) {
+    for (const m of ['zarinpal', 'idpay', 'nextpay', 'aqayepardakht', 'usdt_trc20_auto', 'ton_auto', 'stars', 'manual_card', 'manual_crypto', 'manual_zarinpal']) {
       expect(messages.fa['method.' + m], `fa ${m}`).toBeTruthy()
       expect(messages.en['method.' + m], `en ${m}`).toBeTruthy()
     }

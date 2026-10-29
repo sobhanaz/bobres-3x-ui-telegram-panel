@@ -27,7 +27,7 @@ type PaymentIntent struct {
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	OrderId     string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // empty for wallet top-ups
 	UserId      string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | stars | usdt_trc20_auto
+	Provider    string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"` // wallet | manual_card | manual_crypto | manual_zarinpal | zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto | ton_auto
 	Amount      *v1.Money              `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
 	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`                              // pending|confirming|succeeded|failed|expired
 	ProviderRef string                 `protobuf:"bytes,7,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"` // gateways: bank reference or transaction hash
@@ -36,7 +36,8 @@ type PaymentIntent struct {
 	UpdatedAt   int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// Automated gateways: what the customer pays there, fixed at creation (IRR for
 	// Zarinpal, XTR for Telegram Stars, USDT for usdt_trc20_auto: the exact,
-	// unique amount to send, scale 6).
+	// unique amount to send, scale 6; TON for ton_auto: the exact amount to send,
+	// in nanoton, scale 9).
 	GatewayAmount *v1.Money `protobuf:"bytes,11,opt,name=gateway_amount,json=gatewayAmount,proto3" json:"gateway_amount,omitempty"`
 	PayUrl        string    `protobuf:"bytes,12,opt,name=pay_url,json=payUrl,proto3" json:"pay_url,omitempty"` // where the customer pays (Zarinpal: a page on this install)
 	// The gateway's id for the payment (usdt_trc20_auto: the settling
@@ -46,7 +47,12 @@ type PaymentIntent struct {
 	// usdt_trc20_auto: the TRON address to send gateway_amount to, on TRC20,
 	// until expires_at. A later exact payment still settles, within 48 hours of
 	// created_at.
-	PayAddress    string `protobuf:"bytes,15,opt,name=pay_address,json=payAddress,proto3" json:"pay_address,omitempty"`
+	PayAddress string `protobuf:"bytes,15,opt,name=pay_address,json=payAddress,proto3" json:"pay_address,omitempty"`
+	// ton_auto: the TON address to send gateway_amount to, in pay_address, with
+	// this comment (BOB- and 8 hex digits) until expires_at; a transfer without
+	// it is not recognised. A later transfer is looked at too, within 48 hours
+	// of created_at, and settles only if it still covers the price.
+	PayMemo       string `protobuf:"bytes,16,opt,name=pay_memo,json=payMemo,proto3" json:"pay_memo,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -186,6 +192,13 @@ func (x *PaymentIntent) GetPayAddress() string {
 	return ""
 }
 
+func (x *PaymentIntent) GetPayMemo() string {
+	if x != nil {
+		return x.PayMemo
+	}
+	return ""
+}
+
 type CreateIntentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrderId        string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // optional, empty for top-ups
@@ -193,12 +206,16 @@ type CreateIntentRequest struct {
 	Provider       string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	// Automated gateways (zarinpal, idpay, nextpay, stars, usdt_trc20_auto): the amount to
+	// Automated gateways (zarinpal, idpay, nextpay, aqayepardakht, stars, usdt_trc20_auto): the amount to
 	// charge at the gateway, computed by core from its rates. Not used by manual
 	// providers. usdt_trc20_auto: USDT (scale 6), at most 1,000,000 USDT;
 	// payments adds 1 to 9,999 micro-USDT so the amount is unique (never a
 	// whole cent), and the returned intent's gateway_amount is what the
-	// customer must send. The same customer asking again for the same payment
+	// customer must send. ton_auto: USDT (scale 6), 0.1 to 100,000 USDT, the
+	// price in USDT core worked out; payments turns it into TON at the price it
+	// reads (FailedPrecondition "automatic TON: no fresh TON price ..." when it
+	// has none), and the returned intent's gateway_amount is what the customer
+	// must send, in nanoton, with pay_memo. The same customer asking again for the same payment
 	// (order or top-up, amount) while it is open gets that payment back.
 	// FailedPrecondition "automatic USDT: too many unpaid automatic USDT
 	// payments ..." when the customer holds 10 unpaid ones from the last 2
@@ -1303,7 +1320,7 @@ func (x *ListPendingReceiptsResponse) GetReceipts() []*PendingReceipt {
 // the merchant id, the API key and the proxy are set, never their values.
 type GatewayConfig struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
-	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | idpay | nextpay | usdt_trc20_auto
+	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | idpay | nextpay | aqayepardakht | usdt_trc20_auto | ton_auto
 	Enabled  bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`  // switched on by the owner
 	// It has credentials: payments already open keep being checked, even when
 	// switched off.
@@ -1326,8 +1343,15 @@ type GatewayConfig struct {
 	UpdatedBy string `protobuf:"bytes,12,opt,name=updated_by,json=updatedBy,proto3" json:"updated_by,omitempty"`  // core user id of the staff member, "" when none
 	// usdt_trc20_auto: the store's TRC20 address (public: customers are shown
 	// it), "" when none. configured = it has an address and can be read.
-	Address       string `protobuf:"bytes,13,opt,name=address,proto3" json:"address,omitempty"`
-	ApiKeySet     bool   `protobuf:"varint,14,opt,name=api_key_set,json=apiKeySet,proto3" json:"api_key_set,omitempty"` // usdt_trc20_auto: a TronGrid API key is set
+	Address   string `protobuf:"bytes,13,opt,name=address,proto3" json:"address,omitempty"`
+	ApiKeySet bool   `protobuf:"varint,14,opt,name=api_key_set,json=apiKeySet,proto3" json:"api_key_set,omitempty"` // usdt_trc20_auto: a TronGrid API key is set; idpay, nextpay, aqayepardakht: the key (PIN) is set; ton_auto: a TON Center API key is set
+	// ton_auto: the TON price in micro-USDT per TON (0 = never read), where and
+	// when (unix seconds) it was read, and whether it is fresh enough to use
+	// (otherwise the method is not offered).
+	PriceMicro    int64  `protobuf:"varint,15,opt,name=price_micro,json=priceMicro,proto3" json:"price_micro,omitempty"`
+	PriceSource   string `protobuf:"bytes,16,opt,name=price_source,json=priceSource,proto3" json:"price_source,omitempty"`
+	PriceAt       int64  `protobuf:"varint,17,opt,name=price_at,json=priceAt,proto3" json:"price_at,omitempty"`
+	PriceFresh    bool   `protobuf:"varint,18,opt,name=price_fresh,json=priceFresh,proto3" json:"price_fresh,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1460,6 +1484,34 @@ func (x *GatewayConfig) GetApiKeySet() bool {
 	return false
 }
 
+func (x *GatewayConfig) GetPriceMicro() int64 {
+	if x != nil {
+		return x.PriceMicro
+	}
+	return 0
+}
+
+func (x *GatewayConfig) GetPriceSource() string {
+	if x != nil {
+		return x.PriceSource
+	}
+	return ""
+}
+
+func (x *GatewayConfig) GetPriceAt() int64 {
+	if x != nil {
+		return x.PriceAt
+	}
+	return 0
+}
+
+func (x *GatewayConfig) GetPriceFresh() bool {
+	if x != nil {
+		return x.PriceFresh
+	}
+	return false
+}
+
 type ListGatewayConfigsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1550,7 +1602,7 @@ type SetGatewayConfigRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Provider   string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
 	Enabled    bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Sandbox    bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`                        // zarinpal and idpay only
+	Sandbox    bool                   `protobuf:"varint,3,opt,name=sandbox,proto3" json:"sandbox,omitempty"`                        // zarinpal and idpay only (aqayepardakht: its sandbox is the PIN "sandbox")
 	MerchantId string                 `protobuf:"bytes,4,opt,name=merchant_id,json=merchantId,proto3" json:"merchant_id,omitempty"` // zarinpal only
 	Proxy      string                 `protobuf:"bytes,5,opt,name=proxy,proto3" json:"proxy,omitempty"`                             // http(s)://[user:password@]host:port
 	ClearProxy bool                   `protobuf:"varint,6,opt,name=clear_proxy,json=clearProxy,proto3" json:"clear_proxy,omitempty"`
@@ -1814,11 +1866,14 @@ func (x *TestGatewayRequest) GetCandidate() *GatewayCandidate {
 }
 
 type TestGatewayResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`          // why it failed; never a secret or an address
-	Unverified    int32                  `protobuf:"varint,3,opt,name=unverified,proto3" json:"unverified,omitempty"` // paid payments the gateway still waits for us to verify
-	LatencyMs     int64                  `protobuf:"varint,4,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Ok         bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Detail     string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`          // why it failed; never a secret or an address
+	Unverified int32                  `protobuf:"varint,3,opt,name=unverified,proto3" json:"unverified,omitempty"` // paid payments the gateway still waits for us to verify
+	LatencyMs  int64                  `protobuf:"varint,4,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	// ton_auto: when the address's newest transaction happened (unix seconds), 0
+	// when it has none yet.
+	LatestTxAt    int64 `protobuf:"varint,5,opt,name=latest_tx_at,json=latestTxAt,proto3" json:"latest_tx_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1881,11 +1936,18 @@ func (x *TestGatewayResponse) GetLatencyMs() int64 {
 	return 0
 }
 
+func (x *TestGatewayResponse) GetLatestTxAt() int64 {
+	if x != nil {
+		return x.LatestTxAt
+	}
+	return 0
+}
+
 // GatewayReportRequest: one payment method's payments created in [from, to)
 // (unix seconds; to = 0: now, from = 0: 30 days before to; at most 366 days).
 type GatewayReportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | idpay | nextpay | stars | usdt_trc20_auto | manual_card | manual_crypto | manual_zarinpal
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"` // zarinpal | idpay | nextpay | aqayepardakht | stars | usdt_trc20_auto | ton_auto | manual_card | manual_crypto | manual_zarinpal
 	From          int64                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
 	To            int64                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2334,7 +2396,13 @@ type ChainTransfer struct {
 	// it (the address may take manual USDT too), so staff are told to credit it
 	// by hand only from this time (unix seconds) if still unmatched; 0 =
 	// announced already, or nothing pending.
-	HeldUntil     int64 `protobuf:"varint,15,opt,name=held_until,json=heldUntil,proto3" json:"held_until,omitempty"`
+	HeldUntil int64 `protobuf:"varint,15,opt,name=held_until,json=heldUntil,proto3" json:"held_until,omitempty"`
+	// ton_auto: the transaction's logical time and the comment the transfer
+	// carried (txid is its hash, event_index 0, network TON, amount in nanoton).
+	// unmatched reasons there: no_payment | already_paid | closed | underpaid |
+	// late_price; ignored: dust | bounced.
+	Lt            int64  `protobuf:"varint,16,opt,name=lt,proto3" json:"lt,omitempty"`
+	Comment       string `protobuf:"bytes,17,opt,name=comment,proto3" json:"comment,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2474,6 +2542,20 @@ func (x *ChainTransfer) GetHeldUntil() int64 {
 	return 0
 }
 
+func (x *ChainTransfer) GetLt() int64 {
+	if x != nil {
+		return x.Lt
+	}
+	return 0
+}
+
+func (x *ChainTransfer) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
 // ResolveChainTransferRequest marks an unmatched deposit handled (credited by
 // hand or refunded). FailedPrecondition when it is not unmatched (or
 // ignored); its TXID can no longer be sent as a manual proof.
@@ -2483,6 +2565,7 @@ type ResolveChainTransferRequest struct {
 	EventIndex    int32                  `protobuf:"varint,2,opt,name=event_index,json=eventIndex,proto3" json:"event_index,omitempty"`
 	ActorId       string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // core user id of the staff member
 	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`                      // at most 500 characters
+	Network       string                 `protobuf:"bytes,5,opt,name=network,proto3" json:"network,omitempty"`                // "" or TRC20: the USDT log; TON: the TON log (txid is the hash, event_index 0)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2545,6 +2628,13 @@ func (x *ResolveChainTransferRequest) GetNote() string {
 	return ""
 }
 
+func (x *ResolveChainTransferRequest) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
 // ListChainTransfersRequest filters the USDT transfer log; every field is optional.
 type ListChainTransfersRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
@@ -2554,7 +2644,8 @@ type ListChainTransfersRequest struct {
 	Pagination *v1.Pagination         `protobuf:"bytes,4,opt,name=pagination,proto3" json:"pagination,omitempty"`
 	// micro-USDT: only transfers of exactly this amount (0 = any), e.g. the
 	// deposits matching what a manual proof under review should have sent
-	Value         int64 `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	Value         int64  `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	Network       string `protobuf:"bytes,6,opt,name=network,proto3" json:"network,omitempty"` // "" or TRC20: the USDT log; TON: the TON log (value in nanoton)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2622,6 +2713,13 @@ func (x *ListChainTransfersRequest) GetValue() int64 {
 		return x.Value
 	}
 	return 0
+}
+
+func (x *ListChainTransfersRequest) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
 }
 
 type ListChainTransfersResponse struct {
@@ -2831,7 +2929,7 @@ var File_payments_v1_payments_proto protoreflect.FileDescriptor
 
 const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
-	"\x1apayments/v1/payments.proto\x12\vpayments.v1\x1a\x15common/v1/types.proto\"\xec\x03\n" +
+	"\x1apayments/v1/payments.proto\x12\vpayments.v1\x1a\x15common/v1/types.proto\"\x87\x04\n" +
 	"\rPaymentIntent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x17\n" +
@@ -2853,7 +2951,8 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"externalId\x12%\n" +
 	"\x0efailure_reason\x18\x0e \x01(\tR\rfailureReason\x12\x1f\n" +
 	"\vpay_address\x18\x0f \x01(\tR\n" +
-	"payAddress\"\x93\x02\n" +
+	"payAddress\x12\x19\n" +
+	"\bpay_memo\x18\x10 \x01(\tR\apayMemo\"\x93\x02\n" +
 	"\x13CreateIntentRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +
@@ -2935,7 +3034,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x1bListPendingReceiptsResponse\x124\n" +
 	"\aintents\x18\x01 \x03(\v2\x1a.payments.v1.PaymentIntentR\aintents\x120\n" +
 	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\x127\n" +
-	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts\"\xa9\x03\n" +
+	"\breceipts\x18\x03 \x03(\v2\x1b.payments.v1.PendingReceiptR\breceipts\"\xa9\x04\n" +
 	"\rGatewayConfig\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x1e\n" +
@@ -2956,7 +3055,13 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"updated_by\x18\f \x01(\tR\tupdatedBy\x12\x18\n" +
 	"\aaddress\x18\r \x01(\tR\aaddress\x12\x1e\n" +
-	"\vapi_key_set\x18\x0e \x01(\bR\tapiKeySet\"\x1b\n" +
+	"\vapi_key_set\x18\x0e \x01(\bR\tapiKeySet\x12\x1f\n" +
+	"\vprice_micro\x18\x0f \x01(\x03R\n" +
+	"priceMicro\x12!\n" +
+	"\fprice_source\x18\x10 \x01(\tR\vpriceSource\x12\x19\n" +
+	"\bprice_at\x18\x11 \x01(\x03R\apriceAt\x12\x1f\n" +
+	"\vprice_fresh\x18\x12 \x01(\bR\n" +
+	"priceFresh\"\x1b\n" +
 	"\x19ListGatewayConfigsRequest\"R\n" +
 	"\x1aListGatewayConfigsResponse\x124\n" +
 	"\aconfigs\x18\x01 \x03(\v2\x1a.payments.v1.GatewayConfigR\aconfigs\"\xb3\x02\n" +
@@ -2986,7 +3091,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\rclear_api_key\x18\a \x01(\bR\vclearApiKey\"m\n" +
 	"\x12TestGatewayRequest\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12;\n" +
-	"\tcandidate\x18\x02 \x01(\v2\x1d.payments.v1.GatewayCandidateR\tcandidate\"|\n" +
+	"\tcandidate\x18\x02 \x01(\v2\x1d.payments.v1.GatewayCandidateR\tcandidate\"\x9e\x01\n" +
 	"\x13TestGatewayResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
 	"\x06detail\x18\x02 \x01(\tR\x06detail\x12\x1e\n" +
@@ -2994,7 +3099,9 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"unverified\x18\x03 \x01(\x05R\n" +
 	"unverified\x12\x1d\n" +
 	"\n" +
-	"latency_ms\x18\x04 \x01(\x03R\tlatencyMs\"V\n" +
+	"latency_ms\x18\x04 \x01(\x03R\tlatencyMs\x12 \n" +
+	"\flatest_tx_at\x18\x05 \x01(\x03R\n" +
+	"latestTxAt\"V\n" +
 	"\x14GatewayReportRequest\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\x03R\x04from\x12\x0e\n" +
@@ -3033,7 +3140,7 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"scan_error\x18\x0e \x01(\tR\tscanError\x12<\n" +
 	"\fcheck_errors\x18\x0f \x03(\v2\x19.payments.v1.GatewayEventR\vcheckErrors\x12*\n" +
-	"\x11check_error_count\x18\x10 \x01(\x03R\x0fcheckErrorCount\"\xce\x03\n" +
+	"\x11check_error_count\x18\x10 \x01(\x03R\x0fcheckErrorCount\"\xf8\x03\n" +
 	"\rChainTransfer\x12\x12\n" +
 	"\x04txid\x18\x01 \x01(\tR\x04txid\x12\x1f\n" +
 	"\vevent_index\x18\x02 \x01(\x05R\n" +
@@ -3057,13 +3164,16 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"resolvedAt\x12\x12\n" +
 	"\x04note\x18\x0e \x01(\tR\x04note\x12\x1d\n" +
 	"\n" +
-	"held_until\x18\x0f \x01(\x03R\theldUntil\"\x81\x01\n" +
+	"held_until\x18\x0f \x01(\x03R\theldUntil\x12\x0e\n" +
+	"\x02lt\x18\x10 \x01(\x03R\x02lt\x12\x18\n" +
+	"\acomment\x18\x11 \x01(\tR\acomment\"\x9b\x01\n" +
 	"\x1bResolveChainTransferRequest\x12\x12\n" +
 	"\x04txid\x18\x01 \x01(\tR\x04txid\x12\x1f\n" +
 	"\vevent_index\x18\x02 \x01(\x05R\n" +
 	"eventIndex\x12\x19\n" +
 	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x12\n" +
-	"\x04note\x18\x04 \x01(\tR\x04note\"\xb3\x01\n" +
+	"\x04note\x18\x04 \x01(\tR\x04note\x12\x18\n" +
+	"\anetwork\x18\x05 \x01(\tR\anetwork\"\xcd\x01\n" +
 	"\x19ListChainTransfersRequest\x12\x18\n" +
 	"\aoutcome\x18\x01 \x01(\tR\aoutcome\x12\x12\n" +
 	"\x04txid\x18\x02 \x01(\tR\x04txid\x12\x1b\n" +
@@ -3071,7 +3181,8 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"pagination\x18\x04 \x01(\v2\x15.common.v1.PaginationR\n" +
 	"pagination\x12\x14\n" +
-	"\x05value\x18\x05 \x01(\x03R\x05value\"\x88\x01\n" +
+	"\x05value\x18\x05 \x01(\x03R\x05value\x12\x18\n" +
+	"\anetwork\x18\x06 \x01(\tR\anetwork\"\x88\x01\n" +
 	"\x1aListChainTransfersResponse\x128\n" +
 	"\ttransfers\x18\x01 \x03(\v2\x1a.payments.v1.ChainTransferR\ttransfers\x120\n" +
 	"\tpage_info\x18\x02 \x01(\v2\x13.common.v1.PageInfoR\bpageInfo\"\x13\n" +

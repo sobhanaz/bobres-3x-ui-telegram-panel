@@ -59,6 +59,9 @@ type Config struct {
 	RateTransport RateTransport
 	// WheelRand draws the wheel of fortune: a uniform number in [0, n). nil is crypto/rand; tests set it to fix the draw.
 	WheelRand func(n int64) (int64, error)
+	// AutoCrypto says whether automatic USDT or TON is switched on in payments (nil until SetAutoCrypto): the live
+	// rate is then kept fresh, as it is for a store with a manual crypto address.
+	AutoCrypto func(ctx context.Context) bool
 	// PrivateFeaturesOverride, when set, decides PrivateFeatures instead of the license. It exists for tests of the vendor's
 	// own features; nothing sets it in a running install.
 	PrivateFeaturesOverride *bool

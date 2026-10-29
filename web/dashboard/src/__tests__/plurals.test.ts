@@ -107,6 +107,24 @@ const CASES: [string, Record<string, string>, Forms][] = [
       '2 automatic USDT payments are still open. The address cannot change until they finish, or USDT sent to the old address would not be found.',
     ],
   ],
+  [
+    'gateway.ton.open_payments',
+    {},
+    [
+      '0 automatic TON payments are still open. The address cannot change until they finish, or TON sent to the old address would not be found.',
+      '1 automatic TON payment is still open. The address cannot change until it finishes, or TON sent to the old address would not be found.',
+      '2 automatic TON payments are still open. The address cannot change until they finish, or TON sent to the old address would not be found.',
+    ],
+  ],
+  [
+    'gateway.keyed.pin.open_payments',
+    { name: 'Aqayepardakht' },
+    [
+      '0 Aqayepardakht payments are still open. The PIN cannot change until they finish, or those payments could not be confirmed.',
+      '1 Aqayepardakht payment is still open. The PIN cannot change until it finishes, or that payment could not be confirmed.',
+      '2 Aqayepardakht payments are still open. The PIN cannot change until they finish, or those payments could not be confirmed.',
+    ],
+  ],
   ['reports.kpi.orders', {}, ['0 paid orders', '1 paid order', '2 paid orders']],
   ['reports.kpi.topups_n', {}, ['0 top-ups', '1 top-up', '2 top-ups']],
   ['reports.kpi.refunds_n', {}, ['0 refunds', '1 refund', '2 refunds']],
@@ -217,15 +235,20 @@ describe('English plurals in the open problems', () => {
     expect(title('en', alert('alert.provision_failed', { count: '4' }))).toBe('4 paid orders could not be delivered in the last hour')
     expect(title('en', alert('alert.zarinpal_stuck', { count: '1' }))).toBe('1 Zarinpal payment is still open; it started over 3 hours ago')
     expect(title('en', alert('alert.zarinpal_stuck', { count: '2' }))).toBe('2 Zarinpal payments are still open; the oldest started over 3 hours ago')
+    expect(title('en', alert('alert.aqayepardakht_stuck', { count: '1' }))).toBe('1 Aqayepardakht payment is still open; it started over 3 hours ago')
+    expect(title('en', alert('alert.aqayepardakht_stuck', { count: '2' }))).toBe('2 Aqayepardakht payments are still open; the oldest started over 3 hours ago')
     expect(title('en', alert('alert.usdt_stuck', { count: '1' }))).toBe('1 automatic USDT payment is still open; it started over 2 hours ago')
     expect(title('en', alert('alert.usdt_stuck', { count: '5' }))).toBe('5 automatic USDT payments are still open; the oldest started over 2 hours ago')
+    expect(title('en', alert('alert.ton_stuck', { count: '1' }))).toBe('1 automatic TON payment is still open; it started over 2 hours ago')
+    expect(title('en', alert('alert.ton_stuck', { count: '5' }))).toBe('5 automatic TON payments are still open; the oldest started over 2 hours ago')
+    expect(title('en', alert('alert.ton_failing', {}))).toBe('Automatic TON payments are not being checked: the store cannot read its TON address from TON Center')
     expect(title('en', alert('alert.trial_ending', { days: '1', date: String(day) }))).toMatch(/^The free trial ends in 1 day, on /)
     expect(title('en', alert('alert.trial_ending', { days: '2', date: String(day) }))).toMatch(/^The free trial ends in 2 days, on /)
   })
 
   it('reads the same in Persian for 0, 1 and 2', () => {
     i18n.global.locale.value = 'fa'
-    for (const [kind, name] of [['backup_stale', 'hours'], ['bot_lag', 'minutes'], ['license_expiring', 'days'], ['provision_failed', 'count'], ['usdt_stuck', 'count']] as const) {
+    for (const [kind, name] of [['backup_stale', 'hours'], ['bot_lag', 'minutes'], ['license_expiring', 'days'], ['provision_failed', 'count'], ['usdt_stuck', 'count'], ['ton_stuck', 'count']] as const) {
       const a = alert('alert.' + kind, { [name]: '5', date: String(day) })
       const key = alertTextKey(a)
       const args = alertArgs(a, 'fa')

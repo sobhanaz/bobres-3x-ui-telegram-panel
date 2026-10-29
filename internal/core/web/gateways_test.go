@@ -35,6 +35,13 @@ type fakeGateways struct {
 	filters    []domain.ChainTransferFilter
 	resolved   []string // txid#index|actor|note
 	testedFor  []string
+	// automatic TON, listed after automatic USDT when set: its settings, its
+	// report, the newest transaction of its address and what was resolved.
+	ton       *domain.GatewayConfig
+	tonKey    string
+	tonReport domain.GatewayReport
+	tonLatest int64
+	tonDone   []string // txid|actor|note
 }
 
 func (f *fakeGateways) fail() error {
@@ -52,10 +59,14 @@ func (f *fakeGateways) GatewayConfigs(context.Context) ([]domain.GatewayConfig, 
 	if f.down {
 		return nil, fmt.Errorf("payments.ListGatewayConfigs: %w", status.Error(codes.Unavailable, "down"))
 	}
+	out := []domain.GatewayConfig{f.cfg}
 	if f.usdt != nil {
-		return []domain.GatewayConfig{f.cfg, *f.usdt}, nil
+		out = append(out, *f.usdt)
 	}
-	return []domain.GatewayConfig{f.cfg}, nil
+	if f.ton != nil {
+		out = append(out, *f.ton)
+	}
+	return out, nil
 }
 
 func (f *fakeGateways) SetGatewayConfig(_ context.Context, u domain.GatewayUpdate, actorID string) (*domain.GatewayConfig, error) {
@@ -65,6 +76,21 @@ func (f *fakeGateways) SetGatewayConfig(_ context.Context, u domain.GatewayUpdat
 		return nil, fmt.Errorf("payments.SetGatewayConfig: %w", err)
 	}
 	f.actor = actorID
+	if u.Provider == domain.TONAuto && f.ton != nil {
+		if u.Address != "" {
+			f.ton.Address = u.Address
+		}
+		switch {
+		case u.ClearAPIKey:
+			f.tonKey = ""
+		case u.APIKey != "":
+			f.tonKey = u.APIKey
+		}
+		f.ton.Enabled, f.ton.APIKeySet, f.ton.Configured = u.Enabled, f.tonKey != "", f.ton.Address != ""
+		f.ton.Offered = u.Enabled && f.ton.Configured && f.ton.PriceFresh
+		out := *f.ton
+		return &out, nil
+	}
 	if u.Provider == domain.USDTAuto && f.usdt != nil {
 		if u.Address != "" {
 			f.usdt.Address = u.Address
@@ -104,6 +130,12 @@ func (f *fakeGateways) TestGateway(_ context.Context, provider string, c *domain
 		return nil, fmt.Errorf("payments.TestGateway: %w", err)
 	}
 	f.tested, f.testedFor = append(f.tested, c), append(f.testedFor, provider)
+	if provider == domain.TONAuto {
+		if c != nil && c.APIKey == "BadKeyBadKey1234" {
+			return &domain.GatewayTest{Detail: "toncenter: the API key was refused (HTTP 401)"}, nil
+		}
+		return &domain.GatewayTest{OK: true, LatencyMS: 120, LatestTxAt: f.tonLatest}, nil
+	}
 	if provider == domain.USDTAuto {
 		if c != nil && c.APIKey == "00000000-dead-beef-0000-000000000000" {
 			return &domain.GatewayTest{Detail: "trongrid: the API key was refused (HTTP 401)"}, nil
@@ -124,8 +156,11 @@ func (f *fakeGateways) GatewayReport(_ context.Context, provider string, from, t
 	}
 	f.reports = append(f.reports, fmt.Sprintf("%s|%d|%d", provider, from, to))
 	r := f.report
-	if provider == domain.USDTAuto {
+	switch provider {
+	case domain.USDTAuto:
 		r = f.usdtReport
+	case domain.TONAuto:
+		r = f.tonReport
 	}
 	r.Provider = provider
 	return &r, nil
@@ -140,6 +175,9 @@ func (f *fakeGateways) ChainTransfers(_ context.Context, flt domain.ChainTransfe
 	f.filters = append(f.filters, flt)
 	var out []domain.ChainTransfer
 	for _, t := range f.transfers {
+		if (flt.Network == "TON") != (t.Network == "TON") {
+			continue // the USDT log and the TON log are two logs
+		}
 		if (flt.Outcome == "" || t.Outcome == flt.Outcome) && (flt.TxID == "" || t.TxID == flt.TxID) &&
 			(flt.IntentID == "" || t.IntentID == flt.IntentID) {
 			out = append(out, t)
@@ -169,6 +207,30 @@ func (f *fakeGateways) ResolveChainTransfer(_ context.Context, txid string, inde
 		return &out, nil
 	}
 	return nil, fmt.Errorf("payments.ResolveChainTransfer: %w", status.Error(codes.NotFound, "no such transfer"))
+}
+
+// ResolveTONTransfer marks an unmatched TON deposit handled (domain.TONResolver).
+func (f *fakeGateways) ResolveTONTransfer(_ context.Context, txid, actorID, note string) (*domain.ChainTransfer, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.fail(); err != nil {
+		return nil, fmt.Errorf("payments.ResolveTONTransfer: %w", err)
+	}
+	for i := range f.transfers {
+		t := &f.transfers[i]
+		if t.Network != "TON" || t.TxID != txid {
+			continue
+		}
+		if t.Outcome != "unmatched" {
+			return nil, fmt.Errorf("payments.ResolveTONTransfer: %w",
+				status.Error(codes.FailedPrecondition, "this transfer is "+t.Outcome+", not unmatched"))
+		}
+		t.Outcome, t.ResolvedBy, t.ResolvedAt, t.Note = "resolved", actorID, 1_800_000_500, note
+		f.tonDone = append(f.tonDone, fmt.Sprintf("%s|%s|%s", txid, actorID, note))
+		out := *t
+		return &out, nil
+	}
+	return nil, fmt.Errorf("payments.ResolveTONTransfer: %w", status.Error(codes.NotFound, "no such transfer"))
 }
 
 const (

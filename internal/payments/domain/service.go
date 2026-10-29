@@ -54,6 +54,15 @@ type Service struct {
 	// the settings change, so no payment starts at an address being replaced.
 	chain   atomic.Pointer[chainState]
 	chainMu sync.RWMutex
+	// ton is the automatic TON watcher's settings, replaced whole like chain; tonMu is held shared while a TON
+	// payment is created and exclusively while the settings change. tonQ is the latest TON price read and
+	// tonPriceErr the last error of reading it (logged when it changes); tonScanMu is held while the TON
+	// watcher reads an address.
+	ton         atomic.Pointer[tonState]
+	tonMu       sync.RWMutex
+	tonQ        atomic.Pointer[gateway.TONQuote]
+	tonPriceErr atomic.Pointer[string]
+	tonScanMu   sync.Mutex
 	// scanMu is held while the watcher reads the chain, and guards cutShort:
 	// the addresses whose last read was cut short (its page limit, or a page
 	// that failed).
@@ -70,6 +79,7 @@ func New(st *store.Store) *Service {
 	s := &Service{st: st, ob: eventbus.NewOutbox("outbox_payments"), log: slog.New(slog.DiscardHandler), cutShort: map[string]bool{}}
 	s.gws.Store(&gatewaySet{configured: map[string]gateway.Gateway{}, offered: map[string]bool{}, opts: &GatewayOptions{}})
 	s.chain.Store(&chainState{})
+	s.ton.Store(&tonState{})
 	s.hold.Store(int64(chainUnmatchedHold))
 	return s
 }

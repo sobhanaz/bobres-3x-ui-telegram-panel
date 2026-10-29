@@ -146,7 +146,7 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `GET /wheel`, `POST /wheel/spin` | The daily wheel (`features.wheel`, true only for a customer while the wheel is on). `GET` is the wheel as this customer sees it: `prizes` (`amount`, `weight`), `no_prize_weight`, `total_weight`, `orders` and `min_orders`, `reason` (`orders`, `role` or empty), `spun` and `prize` for today, `open` (the day's budget still covers the smallest prize), `resets_at`; 404 while the wheel is off. `POST` draws, once a day: `status` `won` or `lost` (the wheel stopped; `index` is the place of the prize on the wheel, -1 for none), `already` (the earlier spin of the day, no new draw), `closed` (the budget cannot cover the prize: no prize, the spin is not used), `orders` or `role`; with `prize`, `balance` and `resets_at`. The draw is core's: the app turns the wheel to the piece `index` names and shows the answer when it stops |
 | `GET /support`, `GET /support/tickets/{id}`, `POST /support/messages` `{text, category}`, `POST /support/tickets/{id}/close` | The customer's conversations with staff: the open one and the recent ones, one thread (staff notes are never shown), a message (joins the open conversation or starts one), closing. `categories` lists the three topics to write under (payment, service, other); a ticket's own `category` can also be `reseller`, a reseller application the bot filed, which the app shows with its label (a message named `reseller` from the app is filed as `other`: an application is made from the bot's button) |
 
-The app takes **Zarinpal, IDPay, NextPay, automatic USDT, Telegram Stars and the three manual methods**: whatever the
+The app takes **Zarinpal, IDPay, NextPay, Aqayepardakht, automatic USDT, automatic TON, Telegram Stars and the three manual methods**: whatever the
 store has on for the amount of the purchase (the next section).
 
 ### Account sections
@@ -442,7 +442,7 @@ Beyond the shop, the app has sections listed in its **More** tab. A section touc
    not a public HTTPS one (`localhost`, a private name) gets none. Each must open the app signed in (the bottom menu's after one more tap, on the bot's answer).
 3. The CSP and framing in Telegram's web clients (web.telegram.org) and the mobile apps; nothing blocked in the console.
 4. Theme colours, dark and light, safe-area (notch) and Telegram's Back button inside a purchase.
-5. A payment page opening from the app (Zarinpal, IDPay, NextPay) and coming back; the automatic USDT address, exact
+5. A payment page opening from the app (Zarinpal, IDPay, NextPay, Aqayepardakht) and coming back; the automatic USDT address, exact
    amount and countdown.
 6. A purchase, a renewal and a wallet top-up end to end, and the same customer seen in the bot and the dashboard.
 7. Persian right to left layout and digits, and English.

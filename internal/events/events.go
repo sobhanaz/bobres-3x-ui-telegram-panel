@@ -94,9 +94,15 @@ const (
 	// payment the restore erased may have been told the same amount, so
 	// staff check who sent it.
 	UnmatchedAfterRestore = "after_restore"
+	// UnmatchedUnderpaid: (automatic TON) the transfer's comment names a payment and less than it asked for
+	// arrived.
+	UnmatchedUnderpaid = "underpaid"
+	// UnmatchedLatePrice: (automatic TON) the transfer came after the payment's time ran out, and at today's TON
+	// price it no longer covers the price.
+	UnmatchedLatePrice = "late_price"
 )
 
-// DepositUnmatchedEvent: USDT (TRC20) reached the store's address and was
+// DepositUnmatchedEvent: USDT (TRC20) or TON reached the store's address and was
 // credited to nobody. Staff find the customer (the amount, the sender, the
 // time), credit their wallet by hand, then mark the deposit handled on the
 // dashboard. It is announced once per deposit; dust (under 0.1 USDT) never.
@@ -112,6 +118,11 @@ type DepositUnmatchedEvent struct {
 	Currency   string `json:"currency"`   // USDT
 	BlockTime  int64  `json:"block_time"` // unix seconds
 	Reason     string `json:"reason"`     // Unmatched*
+	// Automatic TON (Network TON, Currency TON, Amount in nanoton, TxID the transaction's hash): the transfer's
+	// comment, the payment it named and the nanoton that payment asked for.
+	Comment  string `json:"comment,omitempty"`
+	IntentID string `json:"intent_id,omitempty"`
+	Expected int64  `json:"expected,omitempty"`
 }
 
 // DepositClaimedEvent: a manual crypto payment's proof (IntentID) names a

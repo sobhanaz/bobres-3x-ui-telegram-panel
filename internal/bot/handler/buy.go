@@ -339,7 +339,7 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	r.show(text, kb)
 }
 
-// onPay handles "pay:<w|c|x|l|z|i|n|s|u>:<nonce>" (a saved checkout), and the
+// onPay handles "pay:<w|c|x|l|z|i|n|a|s|u|t>:<nonce>" (a saved checkout), and the
 // "pay:<method>:<plan id>:<nonce>" buttons of menus sent before checkouts.
 func (h *Handler) onPay(r *req, rest string) {
 	parts := strings.Split(rest, ":")
@@ -404,10 +404,14 @@ func (h *Handler) onPay(r *req, rest string) {
 		h.startGateway(r, order, "idpay", planName(r, p), "", 0)
 	case "n":
 		h.startGateway(r, order, "nextpay", planName(r, p), "", 0)
+	case "a":
+		h.startGateway(r, order, "aqayepardakht", planName(r, p), "", 0)
 	case "s":
 		h.startGateway(r, order, "stars", planName(r, p), "", 0)
 	case "u":
 		h.startGateway(r, order, usdtAuto, planName(r, p), "", 0)
+	case "t":
+		h.startGateway(r, order, tonAuto, planName(r, p), "", 0)
 	default:
 		h.showPlans(r)
 	}

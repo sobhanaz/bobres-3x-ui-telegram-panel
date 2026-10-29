@@ -1,17 +1,19 @@
 // Package web serves the payments service's public pages, behind Caddy:
 //
 //   - GET /pay/<intent id>: the page a customer opens from the bot. Zarinpal
-//     accepts a payment only when it starts from a page on the merchant's
-//     registered domain (the browser's Referer), so the bot links here, not to
-//     Zarinpal directly. A plain redirect would not carry the Referer.
+//     and Aqayepardakht accept a payment only when it starts from a page on the
+//     merchant's registered domain (the browser's Referer), so the bot links
+//     here, not to the gateway directly. A plain redirect would not carry the
+//     Referer.
 //   - GET /webhooks/zarinpal: Zarinpal sends the customer's browser back here.
 //     Nothing in the query is trusted: the payment is always verified with
 //     Zarinpal before the result page is shown.
-//   - GET|POST /webhooks/idpay and /webhooks/nextpay: the same for IDPay (which
-//     returns the customer by a form POST or a GET, as set in its panel) and
-//     NextPay. The callback only names the payment; the paid state, the amount
-//     and the order always come from the gateway's verify API. These routes
-//     cap the body and are rate limited.
+//   - GET|POST /webhooks/idpay, /webhooks/nextpay and /webhooks/aqayepardakht:
+//     the same for IDPay (which returns the customer by a form POST or a GET,
+//     as set in its panel), NextPay and Aqayepardakht (a GET, as BOBRES asks
+//     for; a POST is read too). The callback only names the payment; the paid
+//     state, the amount and the order always come from the gateway's verify
+//     API. These routes cap the body and are rate limited.
 package web
 
 import (
@@ -28,6 +30,7 @@ import (
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/aqayepardakht"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/idpay"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/gateway/nextpay"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/store"
@@ -103,6 +106,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /webhooks/idpay", h.idpayReturn)
 	mux.HandleFunc("GET /webhooks/nextpay", h.nextpayReturn)
 	mux.HandleFunc("POST /webhooks/nextpay", h.nextpayReturn)
+	mux.HandleFunc("GET /webhooks/aqayepardakht", h.aqayepardakhtReturn)
+	mux.HandleFunc("POST /webhooks/aqayepardakht", h.aqayepardakhtReturn)
 }
 
 func headers(w http.ResponseWriter) {
@@ -123,7 +128,7 @@ func (h *Handler) payPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in, err := h.st.GetIntent(r.Context(), nil, id)
-	if err != nil || in.Provider != "zarinpal" {
+	if err != nil || (in.Provider != "zarinpal" && in.Provider != "aqayepardakht") {
 		h.render(w, http.StatusNotFound, page{Kind: "missing"})
 		return
 	}
@@ -178,6 +183,34 @@ func (h *Handler) idpayReturn(w http.ResponseWriter, r *http.Request) {
 	}
 	// 10: the payer paid and the payment waits for our verify.
 	h.finishReturn(w, r, in, form.Get("status") == "10", "idpay")
+}
+
+// aqayepardakhtReturn: Aqayepardakht sends the customer back by GET (as BOBRES
+// asks for) or POST with the payment's transid. Only the transid is used, and
+// only to find our payment: the status, the card and everything else in it can
+// be forged. The invoice id, when it comes, must be this payment's: a callback
+// that names another payment's is refused, not verified.
+func (h *Handler) aqayepardakhtReturn(w http.ResponseWriter, r *http.Request) {
+	headers(w)
+	form, ok := h.callbackForm(w, r)
+	if !ok {
+		return
+	}
+	id := form.Get("transid")
+	if !aqayepardakht.ValidID(id) {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return
+	}
+	in, ok := h.byExternal(w, r, "aqayepardakht", id)
+	if !ok {
+		return
+	}
+	if inv := form.Get("invoice_id"); inv != "" && inv != in.ID {
+		h.render(w, http.StatusNotFound, page{Kind: "missing"})
+		return
+	}
+	// 1: the payer paid and the payment waits for our verify.
+	h.finishReturn(w, r, in, form.Get("status") == "1", "aqayepardakht")
 }
 
 // nextpayReturn: NextPay sends the customer back with the payment's trans_id.
@@ -281,10 +314,23 @@ type page struct {
 	Reference string
 	ReasonEN  string
 	ReasonFA  string
+	// GatewayEN and GatewayFA name the gateway on the pay button.
+	GatewayEN string
+	GatewayFA string
+}
+
+// gatewayNames are a gateway's name in English and in Persian (with the
+// zero-width non-joiner Persian needs, written as an escape).
+func gatewayNames(provider string) (en, fa string) {
+	if provider == "aqayepardakht" {
+		return "Aqayepardakht", "آقای\u200cپرداخت"
+	}
+	return "Zarinpal", "زرین\u200cپال"
 }
 
 func pageFor(in *store.Intent) page {
 	p := page{AmountEN: i18n.Money("en", in.Amount, in.Currency), AmountFA: i18n.Money("fa", in.Amount, in.Currency)}
+	p.GatewayEN, p.GatewayFA = gatewayNames(in.Provider)
 	switch in.Status {
 	case "succeeded":
 		p.Kind = "paid"
@@ -336,9 +382,9 @@ h1{font-size:20px;margin:0 0 12px}.en{direction:ltr;text-align:left;color:#5b647
 <h1>پرداخت آنلاین</h1>
 <div class="amount">{{.AmountFA}}</div>
 <p class="note">پیش از پرداخت، فیلترشکن (VPN) را خاموش کنید؛ درگاه بانکی فقط از اینترنت ایران باز می‌شود.</p>
-<a class="btn" href="{{.PayURL}}" referrerpolicy="origin">پرداخت با زرین‌پال</a>
+<a class="btn" href="{{.PayURL}}" referrerpolicy="origin">پرداخت با {{.GatewayFA}}</a>
 <p>پس از پرداخت به همین صفحه برمی‌گردید و سرویس شما در ربات تحویل می‌شود.</p>
-<div class="en"><b>Online payment: {{.AmountEN}}</b><br>Turn your VPN off before paying: the bank page only opens from an Iranian connection. <a href="{{.PayURL}}" referrerpolicy="origin">Pay with Zarinpal</a>. You will come back here, and the bot delivers your service.</div>
+<div class="en"><b>Online payment: {{.AmountEN}}</b><br>Turn your VPN off before paying: the bank page only opens from an Iranian connection. <a href="{{.PayURL}}" referrerpolicy="origin">Pay with {{.GatewayEN}}</a>. You will come back here, and the bot delivers your service.</div>
 {{else if eq .Kind "paid"}}
 <h1 class="ok">پرداخت انجام شد ✓</h1>
 <div class="amount">{{.AmountFA}}</div>

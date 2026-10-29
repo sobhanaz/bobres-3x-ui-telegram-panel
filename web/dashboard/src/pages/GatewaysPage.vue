@@ -9,16 +9,18 @@ import SettingsCard from '../components/settings/SettingsCard.vue'
 import ZarinpalCard from '../components/gateways/ZarinpalCard.vue'
 import KeyedGatewayCard from '../components/gateways/KeyedGatewayCard.vue'
 import UsdtAutoCard from '../components/gateways/UsdtAutoCard.vue'
+import TonAutoCard from '../components/gateways/TonAutoCard.vue'
 import UsdtRateCard from '../components/gateways/UsdtRateCard.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
-import { isKeyedProvider, methodCards, stateSeverity, usdtAuto } from '../gateways'
+import { isKeyedProvider, keyedOrder, methodCards, stateSeverity, tonAuto, usdtAuto } from '../gateways'
 import type { GatewaysReply } from '../types'
 
 // How customers pay (owner only): Zarinpal, whose merchant id and proxy stay
-// encrypted in the payments service, IDPay and NextPay (an API key and a proxy,
-// kept the same way), automatic USDT (TRC20), whose address,
-// TronGrid key and proxy are kept there too, then a card per manual method and
+// encrypted in the payments service, IDPay, NextPay and Aqayepardakht (an API
+// key, or a PIN, and a proxy, kept the same way), automatic USDT (TRC20), whose address,
+// TronGrid key and proxy are kept there too, automatic TON (address, TON Center
+// key and proxy, and the live price), then a card per manual method and
 // Telegram Stars, whose switches and details are bot settings (each card
 // saves on its own through the settings endpoint).
 const { t, te } = useI18n()
@@ -26,13 +28,15 @@ const { t, te } = useI18n()
 const reply = ref<GatewaysReply | null>(null)
 const loading = ref(true)
 const loadError = ref('')
-async function load() {
+// quiet (only ever `true`): a periodic read (the TON price moves on its own) says nothing when it fails. Some cards
+// hand their own payload to the handler, so anything else is an ordinary read.
+async function load(quiet?: unknown) {
   loading.value = true
   loadError.value = ''
   try {
     reply.value = await api<GatewaysReply>('GET', '/gateways')
   } catch (e) {
-    loadError.value = errorText(e, t).text
+    if (quiet !== true) loadError.value = errorText(e, t).text
   } finally {
     loading.value = false
   }
@@ -40,8 +44,12 @@ async function load() {
 onMounted(load)
 
 const zarinpal = computed(() => reply.value?.providers.find((p) => p.provider === 'zarinpal') ?? null)
-const keyed = computed(() => (reply.value?.providers ?? []).filter((p) => isKeyedProvider(p.provider)))
+// IDPay, NextPay, Aqayepardakht: in this order, whatever order core lists them in.
+const keyed = computed(() =>
+  (reply.value?.providers ?? []).filter((p) => isKeyedProvider(p.provider)).sort((a, b) => keyedOrder(a.provider) - keyedOrder(b.provider)),
+)
 const usdt = computed(() => reply.value?.providers.find((p) => p.provider === usdtAuto) ?? null)
+const ton = computed(() => reply.value?.providers.find((p) => p.provider === tonAuto) ?? null)
 const keyMissing = computed(() => (reply.value?.providers ?? []).some((p) => p.key_missing))
 const cards = computed(() => methodCards(reply.value?.settings ?? []))
 const text = (key: string) => (te(key) ? t(key) : '')
@@ -72,6 +80,7 @@ const text = (key: string) => (te(key) ? t(key) : '')
     <KeyedGatewayCard v-for="k in keyed" :key="k.provider" :config="k" class="wide" @saved="load" />
     <UsdtRateCard class="wide" />
     <UsdtAutoCard v-if="usdt" :config="usdt" class="wide" @saved="load" />
+    <TonAutoCard v-if="ton" :config="ton" class="wide" @saved="load" @refresh="load(true)" />
     <SettingsCard
       v-for="c in cards"
       :key="c.key"

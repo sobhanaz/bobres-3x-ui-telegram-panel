@@ -197,7 +197,7 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
 Implementations: wallet, manual-card, zarinpal, stars, crypto-manual, crypto-thirdparty, crypto-watcher.
 Built: wallet, manual-card, crypto-manual (Phase 1); zarinpal, stars (Phase 2, see
 superpowers/specs/2026-10-04-phase2-payments-design.md); idpay, nextpay (see
-[16-idpay-nextpay.md](16-idpay-nextpay.md)); manual-zarinpal (the owner's Zarinpal
+[16-idpay-nextpay.md](16-idpay-nextpay.md)); aqayepardakht (see [19-aqayepardakht.md](19-aqayepardakht.md)); ton_auto (automatic TON, see [20-ton.md](20-ton.md): an exact nanoton amount and a comment, matched by a watcher; `payment.deposit_unmatched.v1` carries `network: "TON"`, `comment`, `intent_id` and `expected` for it); manual-zarinpal (the owner's Zarinpal
 payment link, paid outside the bot); the crypto watcher, `usdt_trc20_auto` (Phase 6a: an exact, unique USDT amount to
 the store's TRON address, found through TronGrid every 30 s). Every manual method takes a screenshot that an admin
 approves. crypto-thirdparty is not built: the candidate processors exclude Iran. The automated gateways share `internal/payments/gateway` (Create, Check)

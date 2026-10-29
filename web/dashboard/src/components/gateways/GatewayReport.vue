@@ -9,15 +9,16 @@ import UnmatchedDeposits from './UnmatchedDeposits.vue'
 import { api, query } from '../../api'
 import { errorText } from '../../errors'
 import { dateTime, money, num, shortId, type Lang } from '../../format'
-import { checkErrors, reportRange, reportRows } from '../../gateways'
+import { checkErrors, depositNetwork, reportRange, reportRows } from '../../gateways'
 import type { GatewayReport } from '../../types'
 
 // A gateway's payments of the last 7 and 30 days, by status, side by side,
 // and the payment checks that failed meanwhile (the gateway could not be
 // asked, or refused; when core reports them); with `unmatched`, also the
 // deposits that matched no payment and are still to handle, whatever their
-// age (when core reports them).
-const props = withDefaults(defineProps<{ provider: string; unmatched?: boolean }>(), { unmatched: false })
+// age (when core reports them); with `scan` (a gateway that watches an address),
+// also why the last read of the address failed, when it did.
+const props = withDefaults(defineProps<{ provider: string; unmatched?: boolean; scan?: boolean }>(), { unmatched: false, scan: false })
 const { t, te, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 
@@ -50,6 +51,9 @@ const rows = computed(() => (week.value || month.value ? reportRows(week.value, 
 const deposits = computed(() => (props.unmatched && !error.value && Array.isArray(month.value?.unmatched) ? month.value.unmatched : null))
 const depositCount = computed(() => (typeof month.value?.unmatched_count === 'number' ? month.value.unmatched_count : undefined))
 const checks = computed(() => (error.value ? null : checkErrors(week.value, month.value)))
+const scanError = computed(() => (props.scan && !error.value ? month.value?.scan_error || week.value?.scan_error || '' : ''))
+// A deposit list is of the gateway's network: TON for automatic TON, else TRC20.
+const network = computed(() => depositNetwork(props.provider))
 const statusLabel = (s: string) => (te('payment.status.' + s) ? t('payment.status.' + s) : s)
 const totalText = (list: { amount: number; currency: string }[]) => list.map((m) => money(m, lang.value)).join(' · ')
 </script>
@@ -60,6 +64,10 @@ const totalText = (list: { amount: number; currency: string }[]) => list.map((m)
       <h3 class="title">{{ t('gateway.report') }}</h3>
       <Button icon="pi pi-refresh" text rounded size="small" :loading="loading" :aria-label="t('gateway.report_refresh')" class="refresh" @click="load" />
     </div>
+    <Message v-if="scanError" severity="warn" :closable="false" class="scan-error">
+      {{ t('gateway.scan_error') }}
+      <div class="app-ltr detail">{{ scanError }}</div>
+    </Message>
     <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
     <DataTable v-else :value="rows" :loading="loading" data-key="status" size="small" scrollable class="report-table">
       <template #empty>{{ t('gateway.report_empty') }}</template>
@@ -98,7 +106,7 @@ const totalText = (list: { amount: number; currency: string }[]) => list.map((m)
         {{ t('gateway.check_errors.more', { shown: num(checks.items.length, lang), total: num(checks.month, lang) }) }}
       </p>
     </section>
-    <UnmatchedDeposits v-if="deposits" :items="deposits" :count="depositCount" class="deposits" @changed="load" />
+    <UnmatchedDeposits v-if="deposits" :items="deposits" :count="depositCount" :network="network" class="deposits" @changed="load" />
   </section>
 </template>
 
@@ -119,6 +127,9 @@ const totalText = (list: { amount: number; currency: string }[]) => list.map((m)
 }
 .deposits {
   margin-block-start: 1.25rem;
+}
+.scan-error {
+  margin-block-end: 1rem;
 }
 .check-errors {
   margin-block-start: 1.25rem;

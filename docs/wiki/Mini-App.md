@@ -16,7 +16,7 @@ It does not do bulk purchase, and it does not reset traffic or give free days. T
 
 ### Payment methods
 
-The wallet, an online gateway (Zarinpal, IDPay, NextPay), Telegram Stars, automatic USDT, and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
+The wallet, an online gateway (Zarinpal, IDPay, NextPay, Aqayepardakht), Telegram Stars, automatic USDT, automatic TON (the exact amount, the address and the comment, each with a copy button, and a countdown), and the manual methods (card to card, USDT, a Zarinpal link). For a manual payment the customer uploads a receipt image. It reaches the customer's chat with the bot and your staff review it as usual. A customer who never pressed Start in the bot gets an "open the bot" message. See [Payments](Payments). When a Toman price is paid in manual USDT, the screen also shows the rate the USDT amount was worked out at (the live price when the store follows it).
 
 ### Resellers
 
@@ -58,7 +58,7 @@ The tests play Telegram with a fake. Only a real phone can prove these, and they
 
 - Sign-in with the real bot token on iOS, Android and Desktop.
 - Telegram's web clients, theme colors, the notch and the Back button.
-- A payment page opening from the app and coming back (Zarinpal, IDPay, NextPay).
+- A payment page opening from the app and coming back (Zarinpal, IDPay, NextPay, Aqayepardakht).
 - Stars payments made through a link.
 - Receipt photos from a camera, including large and HEIC photos.
 - The required-channel gate with a real channel.
