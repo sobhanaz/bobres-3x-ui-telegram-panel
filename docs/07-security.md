@@ -278,6 +278,50 @@ model as the updater turned around.
   against a live cluster.
 - **Off switch:** `sudo bobres monitor disable` removes the units and the snapshot. The compose mount can stay: with no collector the folder is empty.
 
+## The Prometheus endpoint
+
+`GET /metrics` ([04-dashboard.md](04-dashboard.md), "The Prometheus endpoint") is a public address on the store's domain, so it is closed by default
+and guarded like a credential.
+
+- **Off until the owner makes a token**, and a plain 404 (the same words as a path that does not exist) for everybody before that and after the owner
+  turns it off. Only the owner makes, sets or removes the token (`system.write`); owner and admin can see that it is on.
+- **A bearer token in the header, never in the address.** A token made by core has 256 random bits (`bm_` and 43 characters); one the owner
+  types has 24 to 128 characters. A missing or wrong token is 401; wrong tries are counted per client address (an IPv6 address by its /64) and
+  past 30 a minute get 429, which a request with the right token never meets.
+- **Core stores a hash, not the token.** The setting `monitor.metrics_token` holds the SHA-256 in hex; two hashes of the same length are compared
+  with `subtle.ConstantTimeCompare`. A copy of the database (or of a backup) cannot read the metrics. The key is not a setting the Settings page,
+  the bot's `/set` or core's gRPC settings (which the bot reads) can see or write; a damaged value counts as no token. The audit entries
+  (`metrics.token.generate`, `.set`, `.clear`) carry no value, not even the hash. A token that core makes is shown once, in the answer that makes
+  it; replacing or removing it ends the old one at once.
+- **What it holds is a closed list** (`promDefs` in `internal/core/monitor/prom.go`, all gauges): no customer, Telegram id, order, address,
+  token, key, error text or path. The labels are fixed words, core's version, mount points of the snapshot (at most 16) and the panel servers'
+  names (at most 200), so nothing grows with the number of customers. A test plants secrets in every source and fails if one reaches the
+  answer. A figure core does not know is left out, never written as 0.
+- **It travels over HTTPS only**, through Caddy like the rest; the Zarinpal domain answers 404 to it, as to everything but its payment pages.
+  Prometheus reads the token from a file (`credentials_file`), not from `prometheus.yml`.
+- **What a stolen token gives:** the operational figures above, which the dashboard shows to owner and admin anyway. Replace it from the dashboard;
+  nothing else needs rotating.
+
+## The public status page
+
+`GET /status` and `GET /status.json` ([04-dashboard.md](04-dashboard.md), "The public status page") are the one public page that tells
+anything about how the store runs, so they are off by default and say as little as can still be useful.
+
+- **Off until the owner or an admin turns on `status_page.enabled`**; off, both are the same 404 as an address that does not exist (the page
+  with the fixed bytes of every other missing address), so a store that does not use it shows nothing.
+- **A closed answer.** `internal/core/monitor.PublicStatus` is the only thing the handler reads: an overall `ok` or `degraded` and four
+  general parts (Dashboard, Bot, Payments, Panels) each `ok`, `degraded` or `down`. No server name, id or address, no version, no error, no
+  count, no customer, no latency and no history. Tests plant a server name, id and address, versions and check details in what the monitor
+  reads and fail if one reaches the page or the JSON. A part core cannot know is left out, not guessed.
+- **Cheap to ask.** The answer is built at most every 30 seconds whatever the number of visitors (a crowd cannot make core ask the stack
+  more often than the Monitoring tab does), and one client address (an IPv6 address by its /64) gets 60 requests a minute, then 429.
+  Nothing a visitor sends changes the answer: no query other than `l=en` is read.
+- **No script, no cookie, `noindex`.** The page's Content-Security-Policy is the subscription page's (own styles and logo only); the branding it
+  shows is the store's name, colour and logo, escaped like every other page. `/status.json` allows any origin to read it
+  (`Access-Control-Allow-Origin: *`) because it holds nothing private; turn the page off to stop that.
+- **What it shows an attacker:** that the store exists and whether its bot, payments and panels are up at this moment, which anyone can
+  find out by using the store. It does not say how many panel servers there are, where they are or which software runs.
+
 ## Threats and mitigations (STRIDE-style, condensed)
 | Threat | Mitigation |
 |---|---|

@@ -72,7 +72,7 @@ func (m *monFixture) snapshot(mut func(*snapshot.Snapshot)) {
 	}
 }
 
-var monPaths = []string{"/api/v1/monitor/overview", "/api/v1/monitor/series?metric=host.cpu_pct", "/api/v1/monitor/metrics", "/api/v1/monitor/events"}
+var monPaths = []string{"/api/v1/monitor/overview", "/api/v1/monitor/series?metric=host.cpu_pct", "/api/v1/monitor/metrics", "/api/v1/monitor/events", "/api/v1/monitor/uptime"}
 
 func TestMonitorEndpointsNeedAStaffSessionOfOwnerOrAdmin(t *testing.T) {
 	m := newMonFixture(t)

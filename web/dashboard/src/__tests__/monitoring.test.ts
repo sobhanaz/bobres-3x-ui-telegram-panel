@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import en from '../locales/en.json'
 import fa from '../locales/fa.json'
-import { RANGE_STEP, stamp, type EventsReply, type MetricInfo, type Overview, type Range, type SeriesAnswer } from '../monitor'
+import { RANGE_STEP, stamp, type EventsReply, type MetricInfo, type Overview, type Range, type SeriesAnswer, type UptimeReply } from '../monitor'
 
 // The System page's Monitoring tab, booted like the real app against a fake core: the overview and what it says
 // when all is well, when something needs a look and when something is down; a server without the host
@@ -110,9 +110,35 @@ const points = (value: number, step = 30, gap = true): [number, number][] => {
   return out
 }
 
+/** the availability of a component over a window: a bar of cells of [observed, down] seconds */
+const avail = (pct: number | null, extra: Record<string, unknown> = {}) => ({
+  availability_pct: pct, observed_s: pct === null ? 0 : 86_400, window_s: 86_400, outages: 0, down_s: 0, longest_s: 0,
+  bar: Array.from({ length: 48 }, () => (pct === null ? [0, 0] : [1800, 0])), ...extra,
+})
+const comp3 = (id: string, name: string, a24: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+  id, name, windows: { '24h': a24, '7d': { ...a24, window_s: 604_800, bar: Array.from({ length: 56 }, () => [10_800, 0]) }, '30d': { ...a24, window_s: 2_592_000, bar: Array.from({ length: 60 }, () => [43_200, 0]) } }, ...extra,
+})
+/** what core answers for the uptime: the services all up, one panel with an outage, one switched off, one new */
+function uptimeReply(over: Partial<UptimeReply> = {}): UptimeReply {
+  const outage = avail(99.653, { outages: 2, down_s: 300, longest_s: 240, observed_s: 86_000, bar: Array.from({ length: 48 }, (_, i) => (i === 10 ? [1800, 300] : [1800, 0])) })
+  return {
+    generated_at: NOW,
+    retention_days: 30,
+    sample_every_s: 30,
+    since: NOW - 3 * 86_400,
+    windows: [{ name: '24h', span_s: 86_400, bucket_s: 1800 }, { name: '7d', span_s: 604_800, bucket_s: 10_800 }, { name: '30d', span_s: 2_592_000, bucket_s: 43_200 }],
+    services: ['core', 'bot', 'payments', 'provisioner'].map((id) => comp3(id, id, avail(100))),
+    panels: [comp3('s1', 'DE-1', outage, { enabled: true }), comp3('s2', 'NL-1', avail(null), { enabled: false }), comp3('s3', 'Brand new', avail(null), { enabled: true })],
+    panels_unavailable: false,
+    status_page: false,
+    ...over,
+  } as unknown as UptimeReply
+}
+
 interface Env {
   perms?: string[]
   lang?: 'en' | 'fa'
+  uptime?: () => Response
   overview?: () => Response
   events?: (url: string) => Response
   metrics?: () => Response
@@ -140,6 +166,7 @@ async function boot(env: Env = {}) {
     }
     if (url === '/api/v1/brand') return json(200, { name: 'Shop', color: '', logo: null })
     if (url === '/api/v1/monitor/overview') return env.overview?.() ?? json(200, healthy())
+    if (url === '/api/v1/monitor/uptime') return env.uptime?.() ?? json(200, uptimeReply())
     if (url.startsWith('/api/v1/monitor/events')) return env.events?.(url) ?? json(200, eventsReply())
     if (url === '/api/v1/monitor/metrics') return env.metrics?.() ?? json(200, { metrics: METRICS })
     if (url.startsWith('/api/v1/monitor/series')) {
@@ -198,6 +225,7 @@ afterEach(() => {
   try {
     localStorage.removeItem('bobres.lang')
     localStorage.removeItem('bobres.monitor.range')
+    localStorage.removeItem('bobres.monitor.uptime')
     localStorage.removeItem('bobres.reports.calendar')
   } catch {
     /* nothing was stored */
@@ -639,7 +667,8 @@ describe('when the API fails', () => {
     expect(q('#monitor-status .verdict')).toBeNull() // no verdict without a reading
     expect(q('.verdict-loading')).toBeNull() // and no "loading" that would never end
     expect(q('#monitor-host')).toBeNull() // what is drawn from the overview is left out
-    expect(all(document, '.jump button').map(text)).toEqual([en.monitor.section.store, en.monitor.section.events]) // the links only lead to what is there
+    expect(all(document, '.jump button').map(text)).toEqual([en.monitor.section.store, en.monitor.section.uptime, en.monitor.section.events]) // the links only lead to what is there
+    expect(q('#monitor-uptime')).not.toBeNull() // the uptime has an answer of its own
     expect(q('#monitor-events')).not.toBeNull() // the events have an answer of their own
   })
 
@@ -714,5 +743,146 @@ describe('in Persian', () => {
     const cmd = q('#monitor-host .enable-command')!
     expect(text(cmd)).toBe('sudo bobres monitor enable')
     expect(cmd.className).toContain('app-ltr')
+  })
+})
+
+describe('the uptime', () => {
+  const rowsIn = (card: string) => all(document, `#monitor-uptime ${card} tbody tr`)
+  const cells = (id: string) => all(document, `#monitor-uptime .bar[data-id="${id}"] .cell`)
+
+  it('lists the services and the panel servers with their availability, outages and a bar', async () => {
+    await boot()
+    await vi.waitFor(() => expect(rowsIn('.services-card')).toHaveLength(4), { timeout: 8000 })
+    expect(text(q('#monitor-uptime h2'))).toBe(en.monitor.section.uptime)
+    // the services, named as the rest of the tab names them; all of them up the whole day
+    const services = rowsIn('.services-card')
+    expect(services.map((r) => text(r.querySelector('.name')))).toEqual([en.monitor.component.core, en.monitor.component.bot, en.monitor.component.payments, en.monitor.component.provisioner])
+    expect(services.map((r) => text(r.querySelector('.pct')))).toEqual(['100%', '100%', '100%', '100%'])
+    expect(services.map((r) => text(r.querySelector('.no-outages')))).toEqual(Array(4).fill(en.monitor.uptime.no_outages))
+    // the panel servers: one with two outages, one switched off, one added just now
+    const panels = rowsIn('.panels-card')
+    expect(panels.map((r) => text(r.querySelector('.name')))).toEqual(['DE-1', 'NL-1', 'Brand new'])
+    expect(text(panels[0].querySelector('.pct'))).toBe('99.653%')
+    expect(text(panels[0].querySelector('.outages'))).toBe('2 outages, 5 minutes down')
+    expect(text(panels[0].querySelector('.longest'))).toBe(fill(en.monitor.uptime.longest, { time: '4 minutes' }))
+    expect(text(panels[1].querySelector('.off-tag'))).toBe(en.monitor.uptime.off)
+    // no data is written as such: no percentage, no "0%", no outages
+    for (const r of [panels[1], panels[2]]) {
+      expect(text(r.querySelector('.no-data'))).toBe(en.monitor.uptime.no_data)
+      expect(r.querySelector('.pct')).toBeNull()
+      expect(r.querySelector('.outages, .no-outages')).toBeNull()
+    }
+    // the bar: a cell for each half hour of the day; the one with the outage is partial, a server nobody sampled is all no data
+    expect(cells('s1')).toHaveLength(48)
+    expect(cells('s1').map((c) => c.className.replace('cell', '').trim()).filter((c) => c !== 'up')).toEqual(['partial'])
+    expect(cells('s1')[10].className).toContain('partial')
+    expect(cells('s2').every((c) => c.className.includes('nodata'))).toBe(true)
+    expect(cells('s1').every((c) => c.getAttribute('aria-hidden') === 'true')).toBe(true)
+    // a screen reader gets the row in one sentence instead of the cells
+    expect(q('#monitor-uptime .bar[data-id="s1"]')!.getAttribute('role')).toBe('img')
+    expect(q('#monitor-uptime .bar[data-id="s1"]')!.getAttribute('aria-label')).toBe('DE-1, 24 hours: 99.653%, 2 outages, 5 minutes down')
+    expect(q('#monitor-uptime .bar[data-id="s2"]')!.getAttribute('aria-label')).toBe(`NL-1, 24 hours: ${en.monitor.uptime.no_data}`)
+    // the legend names all four kinds of cell
+    expect(all(document, '#monitor-uptime .legend li').map(text)).toEqual([en.monitor.uptime.legend.up, en.monitor.uptime.legend.partial, en.monitor.uptime.legend.down, en.monitor.uptime.legend.nodata])
+    // and the jump link leads here
+    expect(all(document, '.jump button').map(text)).toContain(en.monitor.section.uptime)
+  })
+
+  it('says how much of the period was observed when part of it has no data', async () => {
+    const r = uptimeReply()
+    r.services[0].windows['24h'] = avail(100, { observed_s: 43_200 }) as never
+    await boot({ uptime: () => json(200, r) })
+    await vi.waitFor(() => expect(rowsIn('.services-card')).toHaveLength(4), { timeout: 8000 })
+    expect(text(rowsIn('.services-card')[0].querySelector('.observed'))).toBe(fill(en.monitor.uptime.observed, { time: '12 hours', window: '1 day' }))
+    expect(rowsIn('.services-card')[1].querySelector('.observed')).toBeNull() // observed all day: nothing to say
+  })
+
+  it('asks for the other periods, draws their cells and remembers the choice', async () => {
+    await boot()
+    await vi.waitFor(() => expect(cells('s1')).toHaveLength(48), { timeout: 8000 })
+    press('.window-switch', en.monitor.range['7d'])
+    await vi.waitFor(() => expect(cells('s1')).toHaveLength(56))
+    expect(localStorage.getItem('bobres.monitor.uptime')).toBe('7d')
+    expect(q('#monitor-uptime .bar[data-id="s1"]')!.getAttribute('aria-label')).toContain(en.monitor.range['7d'])
+    press('.window-switch', en.monitor.range['30d'])
+    await vi.waitFor(() => expect(cells('s1')).toHaveLength(60))
+    // the range of the charts above is not the uptime's
+    expect(localStorage.getItem('bobres.monitor.range')).toBeNull()
+  })
+
+  it('opens on the period it remembered', async () => {
+    localStorage.setItem('bobres.monitor.uptime', '30d')
+    await boot()
+    await vi.waitFor(() => expect(cells('s1')).toHaveLength(60), { timeout: 8000 })
+    localStorage.setItem('bobres.monitor.uptime', 'forever') // a value that is not a period is the default
+    await boot()
+    await vi.waitFor(() => expect(cells('s1')).toHaveLength(48), { timeout: 8000 })
+  })
+
+  it('states how long the samples are kept and since when there are any', async () => {
+    await boot()
+    await found('#monitor-uptime .retention')
+    expect(text(q('#monitor-uptime .retention'))).toContain('Core keeps 30 days of samples: one every 30 seconds for the first 7 days, then 5-minute averages. Older time is not shown.')
+    expect(text(q('#monitor-uptime .retention'))).toContain('The oldest sample is from')
+    expect(text(q('#monitor-uptime .intro'))).toContain('A moment nobody sampled')
+    unmount()
+    await boot({ uptime: () => json(200, uptimeReply({ since: null, services: [], panels: [] })) })
+    await found('#monitor-uptime .retention')
+    expect(text(q('#monitor-uptime .retention'))).toContain(en.monitor.uptime.none_yet)
+    expect(text(q('#monitor-uptime .no-panels'))).toBe(en.monitor.uptime.no_panels)
+  })
+
+  it('says when the panel servers could not be listed, instead of listing none', async () => {
+    await boot({ uptime: () => json(200, uptimeReply({ panels: [], panels_unavailable: true })) })
+    await found('#monitor-uptime .panels-unavailable')
+    expect(text(q('#monitor-uptime .panels-unavailable'))).toBe(en.monitor.uptime.panels_unavailable)
+    expect(q('#monitor-uptime .no-panels')).toBeNull()
+  })
+
+  it('points to the public status page when it is on, and says how to turn it on when it is off', async () => {
+    await boot()
+    await found('#monitor-uptime .status-off')
+    expect(text(q('#monitor-uptime .status-off'))).toBe(en.monitor.uptime.status_off)
+    expect(q('#monitor-uptime .status-page a')).toBeNull()
+    unmount()
+    await boot({ uptime: () => json(200, uptimeReply({ status_page: true })) })
+    await found('#monitor-uptime .status-on')
+    const link = q('#monitor-uptime .status-on a') as HTMLAnchorElement
+    expect(link.getAttribute('href')).toBe('/status')
+    expect(link.getAttribute('rel')).toContain('noopener')
+    expect(text(q('#monitor-uptime .status-on'))).toBe(en.monitor.uptime.status_on + ' /status')
+  })
+
+  it('says the uptime could not be read, and the rest of the tab keeps working', async () => {
+    await boot({ uptime: () => json(500, { error: 'internal' }) })
+    await found('#monitor-uptime .uptime-failed')
+    expect(text(q('#monitor-uptime .uptime-failed'))).toBe(en.monitor.uptime.load_error)
+    expect(q('#monitor-uptime .services-card')).toBeNull() // nothing made up
+    expect(q('#monitor-uptime .loading')).toBeNull() // and no "loading" that never ends
+    await found('#monitor-status .verdict')
+    expect(q('.load-error')).toBeNull()
+  })
+
+  it('asks for the uptime once a minute, not with every refresh of the overview', async () => {
+    vi.doMock('../monitor', async (orig) => ({ ...(await orig<typeof import('../monitor')>()), REFRESH_MS: 120 }))
+    const { calls } = await boot()
+    await found('#monitor-status .verdict')
+    await vi.waitFor(() => expect(count(calls, '/api/v1/monitor/overview')).toBeGreaterThanOrEqual(4), { timeout: 4000 })
+    expect(count(calls, '/api/v1/monitor/uptime')).toBe(1)
+    // "Check again" asks for it at once
+    q('.monitoring .refresh')!.click()
+    await vi.waitFor(() => expect(count(calls, '/api/v1/monitor/uptime')).toBe(2), { timeout: 4000 })
+  })
+
+  it('is written in Persian, with Persian digits', async () => {
+    await boot({ lang: 'fa' })
+    await vi.waitFor(() => expect(rowsIn('.panels-card')).toHaveLength(3), { timeout: 8000 })
+    expect(text(q('#monitor-uptime h2'))).toBe(fa.monitor.section.uptime)
+    const panels = rowsIn('.panels-card')
+    expect(text(panels[0].querySelector('.pct'))).toBe('۹۹٫۶۵۳٪')
+    expect(text(panels[0].querySelector('.outages'))).toBe(fill(fa.monitor.uptime.outages, { n: '۲', time: '۵ دقیقه' }))
+    expect(text(rowsIn('.services-card')[0].querySelector('.pct'))).toBe('۱۰۰٪')
+    expect(text(panels[1].querySelector('.no-data'))).toBe(fa.monitor.uptime.no_data)
+    expect(text(q('#monitor-uptime .status-off'))).toBe(fa.monitor.uptime.status_off)
   })
 })

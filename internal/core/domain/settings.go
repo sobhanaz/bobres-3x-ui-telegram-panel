@@ -215,6 +215,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = a staff sign-in to the dashboard (a login link, or a password with its authenticator code) opens a session only after the staff member, or an owner, approves it in Telegram within 5 minutes; false = it opens at once"},
 	{Key: SettingLoginApprovalNotifyOwner, Group: "security", Kind: KindBool, Perm: permSecurity, Default: "true",
 		Help: "true = the owners are asked to approve the sign-in of a staff member who is not an owner as well; false = only that staff member is"},
+	{Key: SettingStatusPage, Group: "monitor", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = the store has a public status page at /status (and /status.json for a monitoring service) that says whether the dashboard, the bot, payments and the panels work, in general words only: no server names, versions or numbers; false = both addresses answer 404 (off by default)"},
 	// The Updates tab edits it (System > Updates, the owner only); it is not on the Settings page.
 	{Key: release.SettingChannel, Group: "updates", Kind: KindEnum, Perm: permSystem, Options: []string{release.ChannelStable, release.ChannelBeta},
 		Help: "the release channel updates follow: stable = the newest stable release, beta = the newest of all releases, pre-releases included (empty = the server's BOBRES_UPDATE_CHANNEL, stable when unset)"},

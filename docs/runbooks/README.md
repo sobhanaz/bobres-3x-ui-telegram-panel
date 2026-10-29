@@ -20,7 +20,7 @@ runbook says how the problem shows, what to check (exact commands), how to fix i
 | [Update and roll back](update-rollback.md) | Install a new release, or undo the last one |
 | [Uninstall and start over](uninstall.md) | Take BOBRES off a server so that it is as on day one (with a final backup), move the store to another server, or start again from nothing |
 | [Releases and update channels](releases.md) | Publish a stable or beta release, re-sign a quiet stable channel (signatures expire after 45 days), or move a store between stable and beta |
-| [Monitoring](monitoring.md) | The Monitoring tab (System page) has no server figures, a monitoring alert arrived (disk, memory, a container, the collector, CI of `main`), or you want host monitoring off |
+| [Monitoring](monitoring.md) | The Monitoring tab (System page) has no server figures, a monitoring alert arrived (disk, memory, a container, the collector, CI of `main`), you want host monitoring off, or you want to read the figures from Prometheus and Grafana, or to see how available each service and panel server was and publish a status page |
 
 ## System alerts in Telegram
 
@@ -40,6 +40,7 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 |---|---|---|
 | A service is down or not ready | `service.<name>` | First look (below), then the runbook of that service's problem |
 | A 3x-ui server does not answer | `server.<id>` | [3x-ui down](xui-down.md) |
+| A 3x-ui server with a service limit is at 90% of it or full (one notice a day; raising the limit ends it quietly) | `server.<id>.capacity` | [Provisioning backlog](provisioning-backlog.md) (a plan whose servers are all full waits) |
 | Zarinpal payments are failing, or one has been open for over 3 hours | `gateway.zarinpal.error`, `gateway.zarinpal.open` | [Payment stuck](payment-stuck.md) |
 | Automatic USDT payments are not being checked (no read of the store's TRON address from TronGrid has worked for 5 minutes), or one has been open for over 2 hours | `gateway.usdt_auto.read`, `gateway.usdt_auto.open` | [Payment stuck](payment-stuck.md) |
 | The last backup failed, or no new backup for over 26 hours | `backup.failed`, `backup.stale` | [Backups not arriving](backups-not-arriving.md) |

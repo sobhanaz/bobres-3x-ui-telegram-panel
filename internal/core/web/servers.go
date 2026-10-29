@@ -31,6 +31,7 @@ type serverJSON struct {
 	Enabled         bool      `json:"enabled"`
 	AllowPrivate    bool      `json:"allow_private"`
 	Weight          int32     `json:"weight"`
+	MaxClients      int32     `json:"max_clients"` // the most clients it takes; 0 is no limit
 	Managed         string    `json:"managed"`
 	PanelVersion    string    `json:"panel_version"`
 	VersionUntested bool      `json:"version_untested"`
@@ -44,7 +45,7 @@ type serverJSON struct {
 
 func serverOf(sv *domain.Server, plans []planRef) serverJSON {
 	out := serverJSON{ID: sv.ID, Kind: sv.Kind, Name: sv.Name, BaseURL: sv.BaseURL, SubBaseURL: sv.SubBaseURL, Enabled: sv.Enabled,
-		AllowPrivate: sv.AllowPrivate, Weight: sv.Weight, Managed: sv.Managed, PanelVersion: sv.PanelVersion,
+		AllowPrivate: sv.AllowPrivate, Weight: sv.Weight, MaxClients: sv.MaxClients, Managed: sv.Managed, PanelVersion: sv.PanelVersion,
 		VersionUntested: sv.VersionUntested, Healthy: sv.Healthy, HealthError: sv.HealthError, Clients: sv.Clients,
 		HasToken: sv.HasToken, Plans: plans}
 	if sv.CheckedAt > 0 {
@@ -102,7 +103,7 @@ func (s *Server) listServers(w http.ResponseWriter, r *http.Request) {
 }
 
 // serverBody is a server as the dashboard edits it; token "" keeps the
-// stored one.
+// stored one, and so does a max_clients left out (0 is no limit).
 type serverBody struct {
 	Kind         string `json:"kind"`
 	Name         string `json:"name"`
@@ -110,6 +111,7 @@ type serverBody struct {
 	SubBaseURL   string `json:"sub_base_url"`
 	Token        string `json:"token"`
 	Weight       int32  `json:"weight"`
+	MaxClients   *int32 `json:"max_clients"`
 	Enabled      bool   `json:"enabled"`
 	AllowPrivate bool   `json:"allow_private"`
 	SkipCheck    bool   `json:"skip_check"`
@@ -117,7 +119,7 @@ type serverBody struct {
 
 func (b *serverBody) input() domain.ServerInput {
 	return domain.ServerInput{Kind: b.Kind, Name: b.Name, BaseURL: b.BaseURL, SubBaseURL: b.SubBaseURL, Token: b.Token,
-		Weight: b.Weight, Enabled: b.Enabled, AllowPrivate: b.AllowPrivate, SkipCheck: b.SkipCheck}
+		Weight: b.Weight, MaxClients: b.MaxClients, Enabled: b.Enabled, AllowPrivate: b.AllowPrivate, SkipCheck: b.SkipCheck}
 }
 
 // addServer: POST /api/v1/servers
@@ -334,6 +336,8 @@ func serverField(msg string) string {
 		return "sub_base_url"
 	case strings.Contains(m, "weight"):
 		return "weight"
+	case strings.Contains(m, "max_clients"):
+		return "max_clients"
 	case strings.HasPrefix(m, "name"):
 		return "name"
 	case strings.Contains(m, "url") || strings.Contains(m, "address") || strings.Contains(m, "http"):

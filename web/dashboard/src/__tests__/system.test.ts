@@ -180,7 +180,7 @@ describe('open problems', () => {
     expect(alertTextKey({})).toBe('')
     expect(alertTextKey({ title_key: 'alert.<b>' })).toBe('')
     // every text the bot has for a problem is here too, in both languages
-    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'zarinpal_failing', 'zarinpal_stuck', 'idpay_failing', 'idpay_stuck', 'nextpay_failing', 'nextpay_stuck', 'backup_failed', 'backup_stale',
+    const botTexts = ['service_down', 'service_not_ready', 'server_down', 'server_capacity', 'server_full', 'zarinpal_failing', 'zarinpal_stuck', 'idpay_failing', 'idpay_stuck', 'nextpay_failing', 'nextpay_stuck', 'backup_failed', 'backup_stale',
       'disk_low', 'provision_failed', 'bot_lag', 'license_expiring', 'license_grace', 'license_expired', 'license_limit', 'trial_ending', 'trial_ended', 'check',
       'backup_offsite', 'usdt_failing', 'usdt_stuck', 'tls_expiring', 'tls_failing', 'tls_problem', 'tls_caddy_down',
       'monitor_disk', 'monitor_memory', 'monitor_container_down', 'monitor_container_unhealthy', 'monitor_container_restarting', 'monitor_collector_stale', 'monitor_ci', 'panel_missing']

@@ -436,6 +436,97 @@ export function batches<T>(items: readonly T[], size = SERIES_BATCH): T[][] {
   return out
 }
 
+// ---------------------------------------------------------------- uptime
+
+// GET /monitor/uptime: how available each BOBRES service and each panel server was over 24 hours, 7 days and 30
+// days, from the samples core keeps. A moment nobody sampled is "no data": it is left out of the percentage and drawn
+// as a gap in the bar, never as up and never as down.
+
+export type UptimeWindow = '24h' | '7d' | '30d'
+export const UPTIME_WINDOWS: UptimeWindow[] = ['24h', '7d', '30d']
+export const uptimeWindowOf = (v: unknown): UptimeWindow => (UPTIME_WINDOWS.includes(v as UptimeWindow) ? (v as UptimeWindow) : '24h')
+/** the uptime moves slowly (a sample every 30 seconds): the tab asks again at most this often */
+export const UPTIME_EVERY_S = 60
+
+export interface Availability {
+  /** the share of the observed time that was up, in percent; null when nothing was observed (no data) */
+  availability_pct: number | null
+  observed_s: number
+  window_s: number
+  outages: number
+  down_s: number
+  longest_s: number
+  /** one cell per bucket, oldest first: the seconds observed in it and the seconds of them that were down */
+  bar: [number, number][]
+}
+export interface UptimeComponent {
+  id: string
+  name: string
+  /** a panel server that is switched off is not checked; absent for a service */
+  enabled?: boolean
+  windows: Record<string, Availability>
+}
+export interface UptimeReply {
+  generated_at: number
+  retention_days: number
+  sample_every_s: number
+  /** the start of the oldest sample; null when nothing was sampled yet */
+  since: number | null
+  windows: { name: string; span_s: number; bucket_s: number }[]
+  services: UptimeComponent[]
+  panels: UptimeComponent[]
+  panels_unavailable: boolean
+  status_page: boolean
+}
+
+const emptyAvailability = (window_s: number): Availability => ({ availability_pct: null, observed_s: 0, window_s, outages: 0, down_s: 0, longest_s: 0, bar: [] })
+
+/** tidyUptime fills in what an answer may leave out, so the page never reads a hole: a window that is missing is no data */
+export function tidyUptime(u: Partial<UptimeReply> | null | undefined): UptimeReply {
+  const windows = list(u?.windows)
+  const span = (w: UptimeWindow) => windows.find((x) => x.name === w)?.span_s ?? { '24h': 86_400, '7d': 604_800, '30d': 2_592_000 }[w]
+  const component = (c: UptimeComponent): UptimeComponent => ({
+    ...c,
+    windows: Object.fromEntries(
+      UPTIME_WINDOWS.map((w) => {
+        const a: Partial<Availability> = c.windows?.[w] ?? {}
+        return [w, { ...emptyAvailability(span(w)), ...a, availability_pct: orNull(a.availability_pct), bar: list(a.bar) }]
+      }),
+    ),
+  })
+  return {
+    generated_at: u?.generated_at ?? 0,
+    retention_days: u?.retention_days ?? 30,
+    sample_every_s: u?.sample_every_s ?? 30,
+    since: orNull(u?.since),
+    windows,
+    services: list(u?.services).map(component),
+    panels: list(u?.panels).map(component),
+    panels_unavailable: u?.panels_unavailable === true,
+    status_page: u?.status_page === true,
+  }
+}
+
+/** how a cell of the bar looks: nothing observed is no data; some downtime is partial until it is most of what was observed */
+export type CellState = 'nodata' | 'up' | 'partial' | 'down'
+export function cellState(cell: readonly [number, number]): CellState {
+  const [observed, down] = cell
+  if (!(observed > 0)) return 'nodata'
+  if (!(down > 0)) return 'up'
+  return down / observed >= 0.5 ? 'down' : 'partial'
+}
+
+/** how good an availability is, for the colour of its number (the number itself is always written) */
+export type AvailabilityLevel = 'ok' | 'warn' | 'down' | 'none'
+export function availabilityLevel(pctValue: number | null): AvailabilityLevel {
+  if (pctValue === null) return 'none'
+  if (pctValue >= 99.9) return 'ok'
+  return pctValue >= 99 ? 'warn' : 'down'
+}
+
+/** how much of the window was observed, in percent (0 to 100) */
+export const observedShare = (a: Pick<Availability, 'observed_s' | 'window_s'>): number => (a.window_s > 0 ? Math.min(100, (a.observed_s / a.window_s) * 100) : 0)
+
 // ---------------------------------------------------------------- numbers, sizes, durations and times
 
 const SIZE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
@@ -456,6 +547,9 @@ export const count = (n: number, lang: Lang, digits = 0): string => numberFormat
 
 /** percent writes a percentage with one decimal at most ("12.5%", "۱۲٫۵٪") */
 export const pct = (n: number, lang: Lang): string => numberFormat(lang, { style: 'percent', maximumFractionDigits: 1 }).format(n / 100)
+
+/** availabilityText writes an availability with up to three decimals ("99.971%", "۹۹٫۹۷۱٪"): 99.9 and 99.99 are different promises */
+export const availabilityText = (n: number, lang: Lang): string => numberFormat(lang, { style: 'percent', maximumFractionDigits: 3 }).format(n / 100)
 
 /** size writes bytes in B, KB, MB, GB or TB (1 KB = 1024 bytes, as the host counts), per second when asked;
  * the unit names are the language's own (Intl). */

@@ -56,3 +56,5 @@ cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-log
 # test fixtures of the rotate-key commit (made-up keys; the marker added later does not rewrite that commit)
 40ae0967ec50f091c153c48817cc1d25b1b2e83d:internal/crypto/keyring_test.go:generic-api-key:20
 40ae0967ec50f091c153c48817cc1d25b1b2e83d:internal/rekey/rekey_test.go:private-key:144
+# A made-up token in the dashboard metrics test (no secret).
+11f9df00c4f3f4b63b76a1c626e15ece5c189d36:web/dashboard/src/__tests__/metrics.test.ts:generic-api-key:53

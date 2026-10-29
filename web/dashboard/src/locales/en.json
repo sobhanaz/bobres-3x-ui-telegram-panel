@@ -266,6 +266,8 @@
     "services_n": "{n} service | {n} services",
     "servers_n": "{n} server | {n} servers",
     "servers_clients": "{services} on {servers}",
+    "server_near": "{percent}% full",
+    "server_full": "full",
     "gateways": "Payment gateways",
     "gateway_state": {
       "off": "Off",
@@ -1846,6 +1848,12 @@
           "help": "While the latest CI run on the repository's main branch has failed, an alert is raised. For a store built from main; leave it off for a store that runs releases."
         }
       },
+      "status_page": {
+        "enabled": {
+          "label": "Public status page",
+          "help": "A public page at /status (and /status.json for a monitoring service) says whether the dashboard, the bot, payments and the panels are working, in general words only: no server names, versions or numbers. Off by default. Turned off, both addresses answer “not found”."
+        }
+      },
       "growth": {
         "leaderboard": {
           "enabled": {
@@ -2197,6 +2205,13 @@
       },
       "license": {
         "set": "License saved"
+      },
+      "metrics": {
+        "token": {
+          "generate": "Metrics token made",
+          "set": "Metrics token set",
+          "clear": "Metrics turned off"
+        }
       },
       "system": {
         "tls": {
@@ -2643,6 +2658,16 @@
     "sub_url_help": "Where customers' subscription links point, for example the panel's subscription domain. Empty uses the panel's own links. When it changes, existing links are updated within a few minutes.",
     "weight": "Weight",
     "weight_help": "This panel's share of new services compared with the others: weight 200 takes twice as many as 100. From 1 to 1000.",
+    "max_clients": "Service limit",
+    "max_clients_none": "No limit",
+    "max_clients_help": "The most services this server takes; empty or 0 is no limit. Once it has that many, new services go to your other servers, and a plan that names only this server waits until you raise the limit or add a server. The services it has keep working.",
+    "max_clients_below": "This server already has {n} service, so it is full as soon as you save: it takes no new service until some end. | This server already has {n} services, so it is full as soon as you save: it takes no new service until some end.",
+    "capacity_label": "{percent}% of the service limit",
+    "capacity_near": "{percent}% full",
+    "capacity_near_hint": "Nearly full. When it is full, new services go to your other servers.",
+    "capacity_full": "Full",
+    "capacity_full_hint": "At its limit: it takes no new services. Raise the limit or add a server.",
+    "filling": "Nearly or entirely full: a full server takes no new services. They go to your other servers, and a plan that names only full servers makes its customers wait. Raise a limit or add a server.",
     "enabled": "Takes new services",
     "enabled_help": "When off, no new service is created here; its existing services keep working, renewing and syncing.",
     "allow_private": "Panel on a private network",
@@ -2698,7 +2723,8 @@
       "sub_url": "A full address that starts with https:// or http://",
       "token": "A token has no spaces.",
       "login": "Write it as username:password, with no spaces.",
-      "weight": "A whole number from {min} to {max}."
+      "weight": "A whole number from {min} to {max}.",
+      "max_clients": "A whole number from 0 to {max}, or empty for no limit."
     },
     "token_again": "The panel's address moved to another host or port: enter the token again. A stored token is only sent to the address it was entered for.",
     "version_range": "BOBRES is tested with panel versions {min} to {max}; this version may still work."
@@ -2919,6 +2945,8 @@
         "service_down": "The {service} service is down",
         "service_not_ready": "The {service} service is running but not ready (a database, Redis or gRPC check fails)",
         "server_down": "The panel server {server} does not answer",
+        "server_capacity": "The panel server {server} is {percent}% full (services: {count}/{limit}). When it is full, new services go to your other servers, and a plan that uses only this server makes its customers wait. Raise its limit or add a server",
+        "server_full": "The panel server {server} is full (services: {count}/{limit}), so it takes no new services. Raise its limit or add a server; a plan that uses only full servers makes its customers wait for their service",
         "zarinpal_failing": "Zarinpal payments are failing",
         "zarinpal_stuck": "{count} Zarinpal payment is still open; it started over 3 hours ago | {count} Zarinpal payments are still open; the oldest started over 3 hours ago",
         "idpay_failing": "IDPay payments are failing",
@@ -3471,6 +3499,51 @@
       }
     }
   },
+  "prometheus": {
+    "title": "Prometheus metrics",
+    "desc": "Lets Prometheus read the store's figures at /metrics: which services answer, the queues, paid orders, open alerts, each panel server's services and limit, the license, the newest backup and the server. No customer data and no secrets. It is off until you make a token.",
+    "on": "On",
+    "off": "Off",
+    "on_help": "/metrics answers a request that carries the token. Anything else gets 401.",
+    "off_help": "/metrics answers 404 to everybody until a token is made.",
+    "address": "Address",
+    "owner_only": "Only the store owner can make, replace or remove the token.",
+    "make": "Make a token",
+    "make_new": "Make a new token",
+    "own": "Use a token of my own",
+    "own_label": "Your token",
+    "own_help": "Length from {min} to {max}; letters, digits and . _ ~ + / = - only. Core keeps only a hash of it and never shows it again.",
+    "save": "Save the token",
+    "saved": "Token saved. /metrics is on.",
+    "turn_off": "Turn off",
+    "removed": "Metrics are off.",
+    "replace_title": "Make a new token?",
+    "replace_confirm": "The old token stops working at once, so Prometheus needs the new one.",
+    "replace": "Make a new token",
+    "off_title": "Turn off the metrics?",
+    "off_confirm": "/metrics answers 404 from now on, and the token stops working.",
+    "invalid": {
+      "short": "Too short (at least {min}).",
+      "long": "Too long (at most {max}).",
+      "chars": "Only letters, digits and . _ ~ + / = - are allowed."
+    },
+    "shown_title": "Your metrics token",
+    "shown_warning": "Copy the token now. Core keeps only a hash of it, so it cannot be shown again. Put it in a file on the Prometheus server.",
+    "token": "Token",
+    "scrape": "Prometheus scrape configuration",
+    "scrape_hint": "Save the token in the file named under credentials_file (readable by Prometheus only), add this job to prometheus.yml and reload Prometheus. A Grafana dashboard and alert rules to start from are in docs/runbooks/monitoring.md.",
+    "copy_token": "Copy the token",
+    "copy_config": "Copy the configuration",
+    "token_copied": "Token copied",
+    "config_copied": "Configuration copied",
+    "copy_failed": "Could not copy. Select the text and copy it by hand.",
+    "done": "I have saved it",
+    "unsaved_title": "Close without copying?",
+    "unsaved_message": "You have not copied the token, and it cannot be shown again. If you close now, make a new one.",
+    "close_anyway": "Close anyway",
+    "keep_open": "Keep open",
+    "docs": "How to connect Prometheus and Grafana: docs/runbooks/monitoring.md on GitHub."
+  },
   "monitor": {
     "state": {
       "ok": "Working",
@@ -3501,9 +3574,43 @@
       "docker": "Docker",
       "kubernetes": "Kubernetes",
       "services": "Services",
+      "uptime": "Uptime",
       "cicd": "CI/CD",
       "deployments": "Deployments",
       "events": "Alerts and logs"
+    },
+    "uptime": {
+      "window_label": "Period",
+      "intro": "How much of the time each service and each panel server was working, worked out from the samples core takes every 30 seconds. A moment nobody sampled (core was not running, monitoring was switched off, or a server was switched off or added later) is shown as no data. It is left out of the percentage and is neither up nor down.",
+      "loading": "Reading the uptime…",
+      "load_error": "The uptime could not be read just now.",
+      "services": "Services",
+      "panels": "Panel servers",
+      "panels_unavailable": "The panel servers could not be listed just now, so none is shown here.",
+      "no_panels": "No panel servers are set up.",
+      "col_name": "Name",
+      "col_availability": "Availability",
+      "col_outages": "Outages",
+      "col_bar": "Over the period",
+      "no_data": "No data",
+      "no_outages": "None",
+      "outages": "{n} outage, {time} down | {n} outages, {time} down",
+      "longest": "Longest: {time}",
+      "observed": "Observed for {time} of {window}",
+      "off": "Switched off",
+      "cell_down": "{time} down, {share} available",
+      "legend": {
+        "label": "What the colours mean",
+        "up": "Working",
+        "partial": "Some downtime",
+        "down": "Mostly down",
+        "nodata": "No data"
+      },
+      "retention": "Core keeps {n} day of samples: one every {step} for the first 7 days, then 5-minute averages. Older time is not shown. | Core keeps {n} days of samples: one every {step} for the first 7 days, then 5-minute averages. Older time is not shown.",
+      "since": "The oldest sample is from {date}; before that there is no data.",
+      "none_yet": "Nothing has been sampled yet, so there is nothing to show.",
+      "status_on": "The public status page is on:",
+      "status_off": "The public status page is off. It can be turned on in Settings, under Monitoring."
     },
     "jump": "Sections of the Monitoring tab",
     "kind": {

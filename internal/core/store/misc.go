@@ -29,6 +29,19 @@ func (s *Store) GetSettings(ctx context.Context, q querier) (map[string]json.Raw
 	return out, rows.Err()
 }
 
+// GetSetting returns one setting's raw value; ErrNotFound when it is not set.
+func (s *Store) GetSetting(ctx context.Context, q querier, key string) (json.RawMessage, error) {
+	var v json.RawMessage
+	err := q.QueryRow(ctx, `SELECT value FROM core.settings WHERE key = $1`, key).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get setting: %w", err)
+	}
+	return v, nil
+}
+
 // SetSetting upserts one setting value.
 func (s *Store) SetSetting(ctx context.Context, q querier, key string, value json.RawMessage) error {
 	_, err := q.Exec(ctx, `

@@ -622,6 +622,8 @@ export interface ServerItem {
   allow_private: boolean
   /** 1 to 1000: new services go where clients ÷ weight is lowest */
   weight: number
+  /** the most services it takes, 0 = no limit; absent from older cores (no limit). At the limit it is skipped for new services. */
+  max_clients?: number
   panel_version: string
   /** the version is outside the range BOBRES is tested with */
   version_untested?: boolean
@@ -787,6 +789,8 @@ export interface OverviewServer {
   /** why not, in English */
   detail: string
   clients: number
+  /** the most services it takes, 0 or absent = no limit */
+  max_clients?: number
   /** takes new services; absent from older cores (then: yes) */
   enabled?: boolean
 }

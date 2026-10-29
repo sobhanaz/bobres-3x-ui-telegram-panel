@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="{{.Lang}}" dir="{{.Dir}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="refresh" content="{{.Refresh}}">
+<title>{{.Title}} · {{.Brand}}</title>
+<style>
+:root{--brand:{{.Color}};--bg:#f5f7f8;--card:#fff;--text:#14202b;--muted:#5b6b78;--line:#dfe5ea;--ok:#15803d;--warn:#b45309;--bad:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1519;--card:#18212a;--text:#e8eef2;--muted:#9aabb8;--line:#2a3743;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,Tahoma,"Vazirmatn",sans-serif}
+main{max-width:40rem;margin:0 auto;padding:1rem 1rem 2.5rem}
+header.brand{display:flex;align-items:center;gap:.75rem;padding:1rem 0 .5rem}
+header.brand img{width:2.75rem;height:2.75rem;border-radius:.6rem;object-fit:contain;background:var(--card)}
+header.brand .name{font-size:1.25rem;font-weight:700;flex:1}
+nav a{color:var(--muted);font-size:.9rem;text-decoration:none;border:1px solid var(--line);border-radius:.5rem;padding:.2rem .6rem}
+section.verdict{background:var(--card);border:1px solid var(--line);border-inline-start:6px solid var(--ok);border-radius:1rem;padding:1.1rem 1.3rem;margin:.9rem 0;display:flex;align-items:center;gap:.9rem}
+section.verdict.degraded,section.verdict.down{border-inline-start-color:var(--bad)}
+section.verdict .icon{font-size:1.6rem;line-height:1;font-weight:700;color:var(--ok)}
+section.verdict.degraded .icon,section.verdict.down .icon{color:var(--bad)}
+section.verdict h1{font-size:1.35rem;margin:0}
+ul.parts{list-style:none;margin:.9rem 0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:1rem}
+ul.parts li{display:flex;align-items:center;gap:.7rem;padding:.8rem 1.3rem;border-block-end:1px solid var(--line)}
+ul.parts li:last-child{border-block-end:0}
+ul.parts .part{flex:1;font-weight:600}
+ul.parts .state{font-size:.95rem;font-weight:600;display:inline-flex;align-items:center;gap:.4rem;color:var(--ok)}
+ul.parts .degraded .state{color:var(--warn)}
+ul.parts .down .state{color:var(--bad)}
+p.updated{color:var(--muted);font-size:.9rem;text-align:center;margin:.5rem 0}
+footer{text-align:center;color:var(--muted);font-size:.88rem;margin-top:1.5rem}
+footer a{color:var(--muted);margin:0 .5rem}
+</style>
+</head>
+<body>
+<main>
+<header class="brand">
+{{- if .Logo}}<img src="{{.Logo}}" alt="" width="44" height="44">{{end}}
+<span class="name">{{.Brand}}</span>
+<nav><a href="{{.OtherLangHref}}" hreflang="{{.OtherLang}}" lang="{{.OtherLang}}">{{.OtherLangName}}</a></nav>
+</header>
+<section class="verdict {{.Overall}}" role="status">
+<span class="icon" aria-hidden="true">{{.OverallIcon}}</span>
+<h1>{{.Headline}}</h1>
+</section>
+<ul class="parts">
+{{- range .Rows}}
+<li class="{{.Class}}"><span class="part">{{.Name}}</span><span class="state"><span aria-hidden="true">{{.Icon}}</span>{{.Label}}</span></li>
+{{- end}}
+</ul>
+<p class="updated">{{.Updated}}</p>
+<footer>
+{{- if .SupportURL}}<a href="{{.SupportURL}}" rel="noopener noreferrer">{{.SupportLabel}}</a>{{else if .Support}}<span>{{.SupportLabel}}: <bdi>{{.Support}}</bdi></span>{{end}}
+{{- if .PoweredBy}}<p>Powered by BOBRES</p>{{end}}
+</footer>
+</main>
+</body>
+</html>
