@@ -78,7 +78,7 @@ const photoUnknown = "?"
 
 // commands of the customer menu; terms only when the store links its terms
 // or privacy policy (otherwise /terms only says there are none).
-var customerCommands = []string{"start", "menu", "new", "renew", "status", "terms", "paysupport"}
+var customerCommands = []string{"start", "menu", "new", "renew", "status", "codes", "terms", "paysupport"}
 
 // wantedProfile is the profile the current texts, branding, staff and bot
 // photo (its version) call for, with the vendor credit in the about text

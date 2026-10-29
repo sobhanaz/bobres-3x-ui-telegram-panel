@@ -37,13 +37,32 @@ func (s *Server) needProvisioner() error {
 	return nil
 }
 
-// PayOrderWithWallet debits the wallet and marks the order paid.
+// PayOrderWithWallet debits the wallet and marks the order paid. An order listed in USDT is charged in Toman at the quote the buyer was shown.
 func (s *Server) PayOrderWithWallet(ctx context.Context, req *corev1.PayOrderWithWalletRequest) (*corev1.Order, error) {
-	o, err := s.dom.PayOrderWithWallet(ctx, req.GetOrderId(), req.GetUserId())
+	o, err := s.dom.PayOrderWithWalletQuote(ctx, req.GetOrderId(), req.GetUserId(), req.GetQuote())
 	if err != nil {
 		return nil, fail(err)
 	}
 	return orderToProto(o), nil
+}
+
+// QuoteWalletPayment prices an order listed in USDT in Toman at the store's rate now, for paying it from the wallet.
+func (s *Server) QuoteWalletPayment(ctx context.Context, req *corev1.QuoteWalletPaymentRequest) (*corev1.WalletQuote, error) {
+	q, err := s.dom.QuoteWalletPayment(ctx, req.GetOrderId(), req.GetUserId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.WalletQuote{
+		OrderId:     q.OrderID,
+		ListPrice:   &commonv1.Money{Amount: q.ListAmount, Currency: q.ListCurrency},
+		Rate:        q.Rate,
+		Price:       &commonv1.Money{Amount: q.Amount, Currency: domain.WalletCurrency},
+		ExpiresAt:   q.ExpiresAt.Unix(),
+		Token:       q.Token,
+		Balance:     &commonv1.Money{Amount: q.Balance, Currency: domain.WalletCurrency},
+		CreditLimit: q.CreditLimit,
+		Enough:      q.Enough,
+	}, nil
 }
 
 // CreatePaymentIntent creates a payments intent (order payment or wallet top-up)

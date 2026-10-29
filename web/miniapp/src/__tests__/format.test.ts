@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ago, bytes, daysLeft, exactMoney, isolate, latinDigits, money, newKey, num, wholeNumber } from '../format'
+import { ago, bytes, clock, daysLeft, exactMoney, isolate, latinDigits, money, newKey, num, wholeNumber, wholeUsdt } from '../format'
 
 describe('format', () => {
   it('writes numbers with Persian digits for fa', () => {
@@ -39,6 +39,32 @@ describe('format', () => {
     expect(wholeNumber('12.5x')).toBeNaN()
     expect(wholeNumber('')).toBeNaN()
     expect(wholeNumber('-5')).toBeNaN()
+  })
+
+  it('reads a whole number of USDT, and takes a point or a lone comma for a decimal mark, not a thousands separator', () => {
+    for (const [typed, n] of [['25', 25], ['۲۵', 25], ['٢٥', 25], [' 7 ', 7], ['007', 7], ['1,000', 1000], ['۱٬۰۰۰', 1000], ['10,000', 10000], ['10 000', 10000], ['1,000,000', 1_000_000]] as const) {
+      expect(wholeUsdt(typed), JSON.stringify(typed)).toBe(n)
+    }
+    // wholeNumber reads "0.5" and "0,5" as 5 (a thousands separator); for USDT that would be ten times what was typed
+    expect(wholeNumber('0.5')).toBe(5)
+    for (const typed of ['0.5', '0,5', '۰٫۵', '1.5', '5.0', '5.', '1.000', '1,00', '12,34', '-5', '+5', '1e3', 'abc', '12x', '', '  ', '1,,000', '1 0 0']) {
+      expect(wholeUsdt(typed), JSON.stringify(typed)).toBeNaN()
+    }
+  })
+
+  it('writes a time left as minutes and seconds, in the digits of the language', () => {
+    expect(clock(120, 'en')).toBe('02:00')
+    expect(clock(119, 'en')).toBe('01:59')
+    expect(clock(59.4, 'en')).toBe('00:59')
+    expect(clock(1, 'en')).toBe('00:01')
+    expect(clock(0, 'en')).toBe('00:00')
+    expect(clock(-5, 'en')).toBe('00:00') // never a minus sign
+    expect(clock(600, 'en')).toBe('10:00')
+    expect(clock(30 * 60 + 5, 'en')).toBe('30:05')
+    expect(clock(120, 'fa')).toBe('۰۲:۰۰')
+    expect(clock(119, 'fa')).toBe('۰۱:۵۹')
+    expect(clock(0, 'fa')).toBe('۰۰:۰۰')
+    expect(clock(3 * 3600, 'en')).toBe('180:00') // minutes keep counting past an hour
   })
 
   it('counts days left', () => {

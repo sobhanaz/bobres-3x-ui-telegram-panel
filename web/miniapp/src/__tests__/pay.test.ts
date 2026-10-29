@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, resetSession } from '../api'
 import { errorKey } from '../errors'
 import { messages } from '../i18n'
-import { cardDigits, cleanTxid, isManual, networkFor, networksOf, notYetKey, plainAmount, shortMethodKey, txidPattern } from '../pay'
+import { cardDigits, cleanTxid, isManual, networkFor, networksOf, notYetKey, plainAmount, shortMethodKey, tomanForUsdt, txidPattern } from '../pay'
 import { openInvoice } from '../telegram'
 import { json, noTelegram, signedIn, telegram } from './helpers'
 
@@ -49,6 +49,21 @@ describe('payment helpers', () => {
     expect(plainAmount(3_340_000, 6)).toBe('3.34')
     expect(plainAmount(150_000, 0)).toBe('150000')
     expect(plainAmount(0, 6)).toBe('0')
+  })
+
+  it('works out what USDT is worth in Toman at a rate, rounded down as the wallet is credited', () => {
+    expect(tomanForUsdt(10_000_000, 294_000)).toBe(2_940_000)
+    expect(tomanForUsdt(1_000_000, 294_000)).toBe(294_000)
+    expect(tomanForUsdt(10_000_000_000, 294_000)).toBe(2_940_000_000)
+    expect(tomanForUsdt(1_500_000, 1001)).toBe(1501) // 1501.5: never a Toman more than the wallet will get
+    expect(tomanForUsdt(1_000_001, 999_999)).toBe(999_999) // 999999.999999
+    expect(tomanForUsdt(1, 294_000)).toBe(0)
+    // the product passes what a plain number holds exactly (2^53) and is still right
+    expect(tomanForUsdt(10_000_000_000, 900_719_925)).toBe(9_007_199_250_000)
+    expect(tomanForUsdt(10_000_000, 294_000.9)).toBe(2_940_000) // a rate is whole Toman
+    for (const [micro, rate] of [[0, 294_000], [10_000_000, 0], [-1, 294_000], [10_000_000, -5], [NaN, 294_000], [10_000_000, NaN], [Infinity, 294_000], [10_000_000, Infinity]]) {
+      expect(tomanForUsdt(micro, rate), `${micro} at ${rate}`).toBe(0)
+    }
   })
 
   it('reads a transaction hash', () => {

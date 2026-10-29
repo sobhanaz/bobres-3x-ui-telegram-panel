@@ -42,8 +42,8 @@ var csvKinds = []struct {
 	{
 		"orders", "/api/v1/reports/orders.csv" + reportQuery,
 		[]string{"paid_at_utc", "paid_at_local", "order_id", "type", "telegram_id", "username", "plan_fa", "plan_en", "amount", "currency",
-			"paid_with", "refunded_amount", "provider", "tz"},
-		[]string{"telegram_id", "amount", "refunded_amount"},
+			"paid_with", "refunded_amount", "provider", "tz", "list_amount", "list_currency", "rate"},
+		[]string{"telegram_id", "amount", "refunded_amount", "list_amount", "rate"},
 	},
 	{
 		"ledger", "/api/v1/ledger.csv",
@@ -188,8 +188,8 @@ func TestCSVDatesFollowOneRule(t *testing.T) {
 		_, _, body := b.get("/api/v1/reports/orders.csv" + reportQuery + c.calendar)
 		rows := parseCSV(t, body)
 		want := csvKinds[1].header
-		if c.wantJalali != "" {
-			want = append(append([]string{}, want...), "paid_at_jalali")
+		if c.wantJalali != "" { // after tz, before the list price columns that close every orders file
+			want = append(append(append([]string{}, want[:14]...), "paid_at_jalali"), want[14:]...)
 		}
 		if !reflect.DeepEqual(rows[0], want) {
 			t.Fatalf("orders%s header %v", c.calendar, rows[0])
@@ -198,7 +198,7 @@ func TestCSVDatesFollowOneRule(t *testing.T) {
 		if r[2] != ids["o1"] || r[0] != c.wantUTC || r[1] != c.wantHere || r[13] != "Asia/Tehran" {
 			t.Errorf("orders%s first row: %v", c.calendar, r)
 		}
-		if c.wantJalali != "" && (len(r) != 15 || r[14] != c.wantJalali || rows[2][14] != "1405-08-10 00:01:00") {
+		if c.wantJalali != "" && (len(r) != 18 || r[14] != c.wantJalali || rows[2][14] != "1405-08-10 00:01:00") {
 			t.Errorf("orders%s Jalali column: %v / %v", c.calendar, r, rows[2])
 		}
 	}

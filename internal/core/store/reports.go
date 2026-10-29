@@ -723,6 +723,12 @@ type PaidOrderRow struct {
 	Method     string // wallet, manual, gateway; "" when unknown
 	Provider   string // who took the payment; "" for wallet and for orders paid before it was recorded
 	Refunded   int64  // what was refunded (0: nothing)
+	// ListAmount, ListCurrency and Rate: the USDT price an order paid from the Toman wallet was listed at and the Toman per USDT it was charged at (a
+	// license has them too). Amount and Currency are what was charged. ListAmount 0 and "" when there is no list price (the order was paid in the
+	// currency it was listed in).
+	ListAmount   int64
+	ListCurrency string
+	Rate         int64
 }
 
 // paidOrdersSQL is the export's query. How an order was paid is one index
@@ -734,10 +740,12 @@ type PaidOrderRow struct {
 func paidOrdersSQL() string {
 	local := `to_char(e.created_at AT TIME ZONE $3::text, 'YYYY-MM-DD HH24:MI:SS')`
 	return `
-	SELECT created_at, local, order_id, type, telegram_id, username, name_i18n, currency, amount, method, refunded, provider FROM (
+	SELECT created_at, local, order_id, type, telegram_id, username, name_i18n, currency, amount, method, refunded, provider,
+		list_amount, list_currency, rate FROM (
 		SELECT e.created_at, e.id AS eid, ` + local + ` AS local, e.ref_id::text AS order_id, o.type AS type,
 			u.telegram_id, COALESCE(u.username, '') AS username, p.name_i18n, e.currency, -e.amount AS amount, COALESCE(ev.method, '') AS method,
-			COALESCE(o.refund_amount, 0) AS refunded, COALESCE(ev.provider, '') AS provider
+			COALESCE(o.refund_amount, 0) AS refunded, COALESCE(ev.provider, '') AS provider,
+			COALESCE(o.list_amount, 0) AS list_amount, COALESCE(o.list_currency, '') AS list_currency, COALESCE(o.rate, 0) AS rate
 		FROM core.ledger_entries e
 		JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
 		JOIN core.users u ON u.id = e.user_id
@@ -751,7 +759,8 @@ func paidOrdersSQL() string {
 			u.telegram_id, COALESCE(u.username, ''),
 			jsonb_build_object('en', 'BOBRES license (' || v.tier || ', ' || v.months || ' months)',
 				'fa', 'لایسنس BOBRES (' || CASE v.tier WHEN 'standard' THEN 'استاندارد' WHEN 'pro' THEN 'حرفه' || chr(8204) || 'ای' ELSE v.tier END || '، ' || v.months || ' ماه)'),
-			e.currency, -e.amount, 'wallet', CASE WHEN v.status = 'refunded' THEN v.amount ELSE 0 END, ''
+			e.currency, -e.amount, 'wallet', CASE WHEN v.status = 'refunded' THEN v.amount ELSE 0 END, '',
+			COALESCE(v.list_amount, 0), COALESCE(v.list_currency, ''), COALESCE(v.rate, 0)
 		FROM core.ledger_entries e
 		JOIN core.vendor_orders v ON e.ref_type = 'vendor_order' AND v.id = e.ref_id
 		JOIN core.users u ON u.id = e.user_id
@@ -763,7 +772,7 @@ func paidOrdersSQL() string {
 			jsonb_build_object(
 				'en', COALESCE(NULLIF(sp.title_i18n->>'en', ''), sp.name, so.product_id) || ' x ' || so.quantity,
 				'fa', COALESCE(NULLIF(sp.title_i18n->>'fa', ''), NULLIF(sp.title_i18n->>'en', ''), sp.name, so.product_id) || ' × ' || so.quantity),
-			e.currency, -e.amount, 'wallet', CASE WHEN so.status = 'refunded' THEN so.amount ELSE 0 END, ''
+			e.currency, -e.amount, 'wallet', CASE WHEN so.status = 'refunded' THEN so.amount ELSE 0 END, '', 0::bigint, ''::text, 0::bigint
 		FROM core.ledger_entries e
 		JOIN core.supplier_orders so ON e.ref_type = 'supplier_order' AND so.id = e.ref_id
 		JOIN core.users u ON u.id = e.user_id
@@ -793,7 +802,7 @@ func (s *Store) EachPaidOrder(ctx context.Context, q ReportQuery, max int, fn fu
 			}
 			var r PaidOrderRow
 			if err := rows.Scan(&r.PaidAt, &r.PaidLocal, &r.OrderID, &r.Type, &r.TelegramID, &r.Username, &r.PlanName,
-				&r.Currency, &r.Amount, &r.Method, &r.Refunded, &r.Provider); err != nil {
+				&r.Currency, &r.Amount, &r.Method, &r.Refunded, &r.Provider, &r.ListAmount, &r.ListCurrency, &r.Rate); err != nil {
 				return err
 			}
 			if err := fn(r); err != nil {
