@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TargetBonus mirrors core.reseller_target_bonuses (migration 00044): the bonus a reseller was paid for reaching a tier of a month's sales target.
+// TargetBonus mirrors core.reseller_target_bonuses (migration 00050): the bonus a reseller was paid for reaching a tier of a month's sales target.
 type TargetBonus struct {
 	UserID        string
 	Period        string // yyyy-mm, in the calendar the owner chose

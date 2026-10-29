@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-// 00043 puts four kinds into the ledger's rule on top of the rule in force (so a kind another migration added is kept), and Down takes them out
+// 00048 puts four kinds into the ledger's rule on top of the rule in force (so a kind another migration added is kept), and Down takes them out
 // for new rows only: the ledger is append-only, so the entries that are there stay.
 func TestGrowthLedgerKindsMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 39); err != nil {
-		t.Fatalf("Up to 39: %v", err)
+	if err := upTo(ctx, dsn, "core", 47); err != nil {
+		t.Fatalf("Up to 47: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -55,7 +55,7 @@ func TestGrowthLedgerKindsMigration(t *testing.T) {
 	if err := entry("made_up"); err == nil {
 		t.Error("a made-up kind")
 	}
-	if err := downTo(ctx, dsn, "core", 42); err != nil {
+	if err := downTo(ctx, dsn, "core", 47); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	for _, kind := range []string{"cashback", "cashback_reversal", "target_bonus", "wheel_prize"} {
@@ -81,7 +81,7 @@ func TestGrowthLedgerKindsMigration(t *testing.T) {
 	}
 }
 
-// 00041: one cashback row per order, a share of 0.01 to 100 percent, a reversal that is all or nothing, and Down drops the table.
+// 00049: one cashback row per order, a share of 0.01 to 100 percent, a reversal that is all or nothing, and Down drops the table.
 func TestCashbackMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
@@ -148,7 +148,7 @@ func TestCashbackMigration(t *testing.T) {
 	if err := exec(`UPDATE core.cashback_credits SET reversed_amount = 250, reversed_at = now(), reversal_entry_id = $2 WHERE order_id = $1`, order, rev); err != nil {
 		t.Fatalf("a reversal: %v", err)
 	}
-	if err := downTo(ctx, dsn, "core", 40); err != nil {
+	if err := downTo(ctx, dsn, "core", 48); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var left int

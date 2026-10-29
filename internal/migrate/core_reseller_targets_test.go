@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 00044: a sale is recorded once per order in a month with a real label, a bonus once per reseller, month and tier, with its own ledger entry; Down
+// 00050: a sale is recorded once per order in a month with a real label, a bonus once per reseller, month and tier, with its own ledger entry; Down
 // drops both tables and Up brings them back.
 func TestResellerTargetsMigration(t *testing.T) {
 	dsn := testDSN(t)
@@ -95,7 +95,7 @@ func TestResellerTargetsMigration(t *testing.T) {
 		t.Errorf("the same tier in the next month: %v", err)
 	}
 
-	if err := downTo(ctx, dsn, "core", 43); err != nil {
+	if err := downTo(ctx, dsn, "core", 49); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var left int

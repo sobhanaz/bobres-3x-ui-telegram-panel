@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// WheelSpin mirrors core.wheel_spins (migration 00045): one customer's spin of one store-local day.
+// WheelSpin mirrors core.wheel_spins (migration 00051): one customer's spin of one store-local day.
 type WheelSpin struct {
 	ID     string
 	UserID string

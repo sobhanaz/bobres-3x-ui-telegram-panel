@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// CashbackCredit mirrors core.cashback_credits (migration 00041): the cashback an order earned, what it was worked out on, and what a refund of
+// CashbackCredit mirrors core.cashback_credits (migration 00049): the cashback an order earned, what it was worked out on, and what a refund of
 // the order took back. The credit itself is the ledger entry LedgerEntryID (kind cashback, key cashback:<order id>).
 type CashbackCredit struct {
 	OrderID, UserID, Currency string

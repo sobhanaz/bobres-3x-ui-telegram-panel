@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 00045: one spin per customer and day, a prize that has its ledger entry and a roll inside the weights; Down drops the table and Up brings it back.
+// 00051: one spin per customer and day, a prize that has its ledger entry and a roll inside the weights; Down drops the table and Up brings it back.
 func TestWheelMigration(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
@@ -75,7 +75,7 @@ func TestWheelMigration(t *testing.T) {
 		t.Error("one ledger entry behind two spins")
 	}
 
-	if err := downTo(ctx, dsn, "core", 44); err != nil {
+	if err := downTo(ctx, dsn, "core", 50); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var left int
