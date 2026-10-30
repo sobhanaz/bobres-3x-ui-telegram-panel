@@ -6,6 +6,7 @@ import "common/v1/types.proto";
 import "core/v1/growth.proto";
 import "core/v1/codes.proto";
 import "core/v1/help.proto";
+import "core/v1/affiliate.proto";
 
 option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
 
@@ -1125,6 +1126,10 @@ service CoreService {
   // A customer short of money taps a payment method for the shortfall: this records what they meant to buy, and when the payment lands and the
   // wallet covers it core buys it by itself (and the bot is told by license.order_settled.v1). One intent per customer; it lasts 12 hours.
   rpc SetVendorIntent(SetVendorIntentRequest) returns (SetVendorIntentResponse);
+  // The affiliate program of the owner's own store (affiliate.proto): /affiliate gives a customer their code and figures (FAILED_PRECONDITION
+  // while the program is off), and a start link aff_<code> records who brought a new customer (never an error: applied says whether it counted).
+  rpc GetMyAffiliate(GetMyAffiliateRequest) returns (GetMyAffiliateResponse);
+  rpc ApplyAffiliateCode(ApplyAffiliateCodeRequest) returns (ApplyAffiliateCodeResponse);
 
   // Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
   // (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in

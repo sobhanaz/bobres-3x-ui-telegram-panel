@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package core.v1;
+
+import "common/v1/types.proto";
+
+option go_package = "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1;corev1";
+
+// The affiliate program of the owner's own store (docs/18-hosted-and-affiliate-plans.md, section 2): a customer who brings a new BOBRES
+// license buyer earns a share of that buyer's first license payment in their wallet. The bot's /affiliate reads GetMyAffiliate; a start link
+// t.me/<bot>?start=aff_<code> is passed to ApplyAffiliateCode.
+
+message GetMyAffiliateRequest {
+  string user_id = 1; // uuid: the customer (made an affiliate on their first request)
+}
+
+message GetMyAffiliateResponse {
+  string code = 1; // their link is t.me/<bot>?start=aff_<code>
+  int32 percent = 2; // what they earn on a buyer's first license (0: nothing, the owner set it so)
+  string status = 3; // active | disabled
+  int64 referred = 4; // customers their link brought
+  int64 licenses = 5; // licenses those customers bought that earned a commission
+  common.v1.Money earned = 6; // commissions, net of what refunds took back (Toman)
+  common.v1.Money paid = 7; // what the owner paid them out
+  common.v1.Money balance = 8; // their wallet now
+  common.v1.Money min_payout = 9; // the least one payout is (0: no minimum)
+}
+
+message ApplyAffiliateCodeRequest {
+  string user_id = 1; // uuid: the customer who opened the link
+  string code = 2; // the code after aff_
+}
+
+message ApplyAffiliateCodeResponse {
+  bool applied = 1; // false: the link did not count (the program is off, an unknown code, their own link, a customer who bought before)
+}

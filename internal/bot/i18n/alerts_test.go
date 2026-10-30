@@ -79,7 +79,9 @@ var licensingWords = []string{"licen", "free tier", "مجوز", "پروانه", 
 // that one store, not a limit a customer meets): the menu button, the sales screens, their ledger lines and settings, and the line of the
 // staff's daily sales summary that counts them.
 func sellsLicenses(key string) bool {
-	for _, p := range []string{"lic.", "btn.lic", "ledger.license_", "setting.vendor.", "report.daily_licenses"} {
+	// The affiliate program is part of those sales: it pays for bringing a license buyer (aff.*, its button, credit, ledger lines and settings).
+	for _, p := range []string{"lic.", "btn.lic", "ledger.license_", "setting.vendor.", "report.daily_licenses",
+		"aff.", "btn.affiliate", "wallet.credited_affiliate", "ledger.affiliate_", "setting.affiliate.", "setting.group.affiliate"} {
 		if strings.HasPrefix(key, p) {
 			return true
 		}

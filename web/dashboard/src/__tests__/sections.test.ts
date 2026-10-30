@@ -4,9 +4,9 @@ import fa from '../locales/fa.json'
 import en from '../locales/en.json'
 
 describe('sections', () => {
-  it('lists all 21 dashboard sections once', () => {
-    expect(sections).toHaveLength(21)
-    expect(new Set(sections.map((s) => s.key)).size).toBe(21)
+  it('lists all 23 dashboard sections once', () => {
+    expect(sections).toHaveLength(23)
+    expect(new Set(sections.map((s) => s.key)).size).toBe(23)
   })
   it('puts Gift codes beside Discounts, for the staff who hold discounts.write', () => {
     expect(sections.find((s) => s.key === 'giftcodes')).toMatchObject({ path: 'gift-codes', perm: 'discounts.write', group: 'sales' })
@@ -30,7 +30,9 @@ describe('sections', () => {
     const owner = ['overview.read', 'license.write', 'gateways.write', 'discounts.write']
     expect(visibleSections(owner).map((s) => s.key)).not.toContain('licenses')
     expect(visibleSections(owner).map((s) => s.key)).not.toContain('supplier')
-    expect(visibleSections([...owner, 'private.features']).map((s) => s.key)).toEqual(expect.arrayContaining(['licenses', 'supplier']))
+    expect(visibleSections(owner).map((s) => s.key)).not.toContain('affiliates')
+    expect(visibleSections(owner).map((s) => s.key)).not.toContain('hosted')
+    expect(visibleSections([...owner, 'private.features']).map((s) => s.key)).toEqual(expect.arrayContaining(['licenses', 'supplier', 'affiliates', 'hosted']))
     // the feature without the permission opens nothing
     expect(visibleSections(['overview.read', 'private.features']).map((s) => s.key)).not.toContain('licenses')
   })

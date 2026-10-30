@@ -316,10 +316,21 @@ func (s *Service) BuyVendorLicense(ctx context.Context, p VendorBuyParams) (*Ven
 	if lic != nil {
 		order.VendorLicenseID = &lic.ID
 	}
+	affOn := kind == "new" && s.AffiliateOn(ctx) // read before the transaction: nothing in it may ask the pool for a second connection
 	var got *store.VendorOrder
 	var inserted bool
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
+		if affOn { // the affiliate who brought a buyer is written on their first license order
+			affID, err := s.affiliateForOrder(ctx, tx, u.ID)
+			if err != nil {
+				return err
+			}
+			order.AffiliateID = nil
+			if affID != "" {
+				order.AffiliateID = &affID
+			}
+		}
 		if got, inserted, err = s.st.CreateVendorOrder(ctx, tx, order); err != nil || !inserted {
 			return err
 		}
@@ -524,6 +535,9 @@ func (s *Service) finishVendorOrder(ctx context.Context, orderID string, info *V
 			return err
 		}
 		o.Status = "done"
+		if err := s.payAffiliate(ctx, tx, o); err != nil { // paid and delivered: the affiliate who brought the buyer earns, once
+			return err
+		}
 		return s.publishVendorSettled(ctx, tx, o, info.EndsAt)
 	})
 	return out, err

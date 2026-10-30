@@ -132,6 +132,13 @@ var SettingSpecs = []SettingSpec{
 		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
 	{Key: SettingVendorEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = the bot sells BOBRES licenses (the owner's own store only: it needs the license server's address and admin key, set in the dashboard); false = it does not"},
+	// The affiliate program of the vendor's own store (affiliates.go): edited on the dashboard's Affiliates page, not the Settings page.
+	{Key: SettingAffiliateEnabled, Group: "affiliate", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = customers get an affiliate link (/affiliate in the bot) and earn a commission on the first license a buyer they brought pays for (the owner's own store, while licenses are sold); false = no new affiliates, links or commissions (what was paid stays)"},
+	{Key: SettingAffiliatePercent, Group: "affiliate", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultAffiliatePercent), Min: 1, Max: 100,
+		Help: "percent of a referred buyer's first license payment credited to the affiliate's wallet (an affiliate can have a percent of their own)"},
+	{Key: SettingAffiliateMinPayout, Group: "affiliate", Kind: KindInt, Perm: permSettings, Default: "0", Min: 0, Max: MaxGrowthAmount,
+		Help: "the least, in Toman, the owner records as one payout to an affiliate (0 = no minimum)"},
 	{Key: SettingSupplierEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = the bot has a Digital accounts button: the owner's own store resells a supplier's accounts, paid from the wallet in Toman (it needs the supplier's API key and the products switched on in the dashboard); false = no button, and core refuses the purchase"},
 	{Key: SettingBulkEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "true",

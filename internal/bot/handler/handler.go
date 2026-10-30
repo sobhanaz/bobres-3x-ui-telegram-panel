@@ -589,6 +589,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.askDiscount(r, rest)
 	case "ref":
 		h.showReferral(r)
+	case "aff":
+		h.showAffiliate(r)
 	case "top":
 		h.showTopUsers(r, pageArg(rest))
 	case "wh":
@@ -731,6 +733,8 @@ func (h *Handler) onCommand(r *req, cmd, args string) {
 		h.onActionCommand(r, "subs")
 	case "/codes": // My codes
 		h.onActionCommand(r, "cds")
+	case "/affiliate": // the affiliate program of the owner's own store
+		h.onActionCommand(r, "aff")
 	case "/paysupport":
 		h.onPaySupport(r)
 	case "/terms":

@@ -100,6 +100,8 @@ const (
 	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
 	CoreService_GetVendorLicenseKey_FullMethodName       = "/core.v1.CoreService/GetVendorLicenseKey"
 	CoreService_SetVendorIntent_FullMethodName           = "/core.v1.CoreService/SetVendorIntent"
+	CoreService_GetMyAffiliate_FullMethodName            = "/core.v1.CoreService/GetMyAffiliate"
+	CoreService_ApplyAffiliateCode_FullMethodName        = "/core.v1.CoreService/ApplyAffiliateCode"
 	CoreService_ListSupplierOffers_FullMethodName        = "/core.v1.CoreService/ListSupplierOffers"
 	CoreService_BuySupplierProduct_FullMethodName        = "/core.v1.CoreService/BuySupplierProduct"
 	CoreService_ListMySupplierOrders_FullMethodName      = "/core.v1.CoreService/ListMySupplierOrders"
@@ -247,6 +249,10 @@ type CoreServiceClient interface {
 	// A customer short of money taps a payment method for the shortfall: this records what they meant to buy, and when the payment lands and the
 	// wallet covers it core buys it by itself (and the bot is told by license.order_settled.v1). One intent per customer; it lasts 12 hours.
 	SetVendorIntent(ctx context.Context, in *SetVendorIntentRequest, opts ...grpc.CallOption) (*SetVendorIntentResponse, error)
+	// The affiliate program of the owner's own store (affiliate.proto): /affiliate gives a customer their code and figures (FAILED_PRECONDITION
+	// while the program is off), and a start link aff_<code> records who brought a new customer (never an error: applied says whether it counted).
+	GetMyAffiliate(ctx context.Context, in *GetMyAffiliateRequest, opts ...grpc.CallOption) (*GetMyAffiliateResponse, error)
+	ApplyAffiliateCode(ctx context.Context, in *ApplyAffiliateCodeRequest, opts ...grpc.CallOption) (*ApplyAffiliateCodeResponse, error)
 	// Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
 	// (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
 	// Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
@@ -1076,6 +1082,26 @@ func (c *coreServiceClient) SetVendorIntent(ctx context.Context, in *SetVendorIn
 	return out, nil
 }
 
+func (c *coreServiceClient) GetMyAffiliate(ctx context.Context, in *GetMyAffiliateRequest, opts ...grpc.CallOption) (*GetMyAffiliateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMyAffiliateResponse)
+	err := c.cc.Invoke(ctx, CoreService_GetMyAffiliate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) ApplyAffiliateCode(ctx context.Context, in *ApplyAffiliateCodeRequest, opts ...grpc.CallOption) (*ApplyAffiliateCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyAffiliateCodeResponse)
+	err := c.cc.Invoke(ctx, CoreService_ApplyAffiliateCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListSupplierOffers(ctx context.Context, in *ListSupplierOffersRequest, opts ...grpc.CallOption) (*ListSupplierOffersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSupplierOffersResponse)
@@ -1257,6 +1283,10 @@ type CoreServiceServer interface {
 	// A customer short of money taps a payment method for the shortfall: this records what they meant to buy, and when the payment lands and the
 	// wallet covers it core buys it by itself (and the bot is told by license.order_settled.v1). One intent per customer; it lasts 12 hours.
 	SetVendorIntent(context.Context, *SetVendorIntentRequest) (*SetVendorIntentResponse, error)
+	// The affiliate program of the owner's own store (affiliate.proto): /affiliate gives a customer their code and figures (FAILED_PRECONDITION
+	// while the program is off), and a start link aff_<code> records who brought a new customer (never an error: applied says whether it counted).
+	GetMyAffiliate(context.Context, *GetMyAffiliateRequest) (*GetMyAffiliateResponse, error)
+	ApplyAffiliateCode(context.Context, *ApplyAffiliateCodeRequest) (*ApplyAffiliateCodeResponse, error)
 	// Digital accounts resold from a supplier (docs/supplier.md): the owner's own store only; off everywhere else
 	// (ListSupplierOffers says so). BuySupplierProduct is once-only per idempotency key and is paid from the wallet in
 	// Toman; "insufficient funds" is FAILED_PRECONDITION. What was delivered (an account) is a secret: GetSupplierDelivery
@@ -1517,6 +1547,12 @@ func (UnimplementedCoreServiceServer) GetVendorLicenseKey(context.Context, *GetV
 }
 func (UnimplementedCoreServiceServer) SetVendorIntent(context.Context, *SetVendorIntentRequest) (*SetVendorIntentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetVendorIntent not implemented")
+}
+func (UnimplementedCoreServiceServer) GetMyAffiliate(context.Context, *GetMyAffiliateRequest) (*GetMyAffiliateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMyAffiliate not implemented")
+}
+func (UnimplementedCoreServiceServer) ApplyAffiliateCode(context.Context, *ApplyAffiliateCodeRequest) (*ApplyAffiliateCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplyAffiliateCode not implemented")
 }
 func (UnimplementedCoreServiceServer) ListSupplierOffers(context.Context, *ListSupplierOffersRequest) (*ListSupplierOffersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSupplierOffers not implemented")
@@ -3009,6 +3045,42 @@ func _CoreService_SetVendorIntent_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_GetMyAffiliate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMyAffiliateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).GetMyAffiliate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_GetMyAffiliate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).GetMyAffiliate(ctx, req.(*GetMyAffiliateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_ApplyAffiliateCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyAffiliateCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ApplyAffiliateCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ApplyAffiliateCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ApplyAffiliateCode(ctx, req.(*ApplyAffiliateCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListSupplierOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSupplierOffersRequest)
 	if err := dec(in); err != nil {
@@ -3411,6 +3483,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetVendorIntent",
 			Handler:    _CoreService_SetVendorIntent_Handler,
+		},
+		{
+			MethodName: "GetMyAffiliate",
+			Handler:    _CoreService_GetMyAffiliate_Handler,
+		},
+		{
+			MethodName: "ApplyAffiliateCode",
+			Handler:    _CoreService_ApplyAffiliateCode_Handler,
 		},
 		{
 			MethodName: "ListSupplierOffers",

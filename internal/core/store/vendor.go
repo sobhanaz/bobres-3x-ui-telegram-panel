@@ -54,6 +54,8 @@ type VendorOrder struct {
 	LastError      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// AffiliateID is the affiliate who brought the buyer (migration 00053), recorded on a new license of a referred customer; nil otherwise.
+	AffiliateID *string
 }
 
 // GetVendorConfig returns the admin key, or ErrNotFound when none is set.
@@ -145,12 +147,12 @@ func (s *Store) SetVendorLicenseEnd(ctx context.Context, q querier, id string, e
 }
 
 const vendorOrderCols = `id, user_id, vendor_license_id, kind, tier, months, amount, currency, status, idempotency_key,
-	attempts, next_attempt_at, last_error, created_at, updated_at`
+	attempts, next_attempt_at, last_error, created_at, updated_at, affiliate_id`
 
 func scanVendorOrder(row pgx.Row) (*VendorOrder, error) {
 	var o VendorOrder
 	err := row.Scan(&o.ID, &o.UserID, &o.VendorLicenseID, &o.Kind, &o.Tier, &o.Months, &o.Amount, &o.Currency, &o.Status,
-		&o.IdempotencyKey, &o.Attempts, &o.NextAttemptAt, &o.LastError, &o.CreatedAt, &o.UpdatedAt)
+		&o.IdempotencyKey, &o.Attempts, &o.NextAttemptAt, &o.LastError, &o.CreatedAt, &o.UpdatedAt, &o.AffiliateID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -164,15 +166,15 @@ func (s *Store) CreateVendorOrder(ctx context.Context, q querier, o *VendorOrder
 	var inserted bool
 	row := q.QueryRow(ctx, `
 		INSERT INTO core.vendor_orders (id, user_id, vendor_license_id, kind, tier, months, amount, currency, idempotency_key,
-			list_amount, list_currency, rate)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10::bigint, 0), NULLIF($11::text, ''), NULLIF($12::bigint, 0))
+			list_amount, list_currency, rate, affiliate_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10::bigint, 0), NULLIF($11::text, ''), NULLIF($12::bigint, 0), $13)
 		ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
 		RETURNING `+vendorOrderCols+`, (xmax = 0)`,
 		o.ID, o.UserID, o.VendorLicenseID, o.Kind, o.Tier, o.Months, o.Amount, o.Currency, o.IdempotencyKey,
-		o.ListAmount, o.ListCurrency, o.Rate)
+		o.ListAmount, o.ListCurrency, o.Rate, o.AffiliateID)
 	var got VendorOrder
 	err := row.Scan(&got.ID, &got.UserID, &got.VendorLicenseID, &got.Kind, &got.Tier, &got.Months, &got.Amount, &got.Currency,
-		&got.Status, &got.IdempotencyKey, &got.Attempts, &got.NextAttemptAt, &got.LastError, &got.CreatedAt, &got.UpdatedAt, &inserted)
+		&got.Status, &got.IdempotencyKey, &got.Attempts, &got.NextAttemptAt, &got.LastError, &got.CreatedAt, &got.UpdatedAt, &got.AffiliateID, &inserted)
 	if err != nil {
 		return nil, false, fmt.Errorf("create vendor order: %w", err)
 	}

@@ -106,6 +106,25 @@ async function grant() {
   }
 }
 
+// Refunding a sold license: the buyer gets the money back, the license is revoked, an affiliate's commission is taken back within 30 days.
+const refunding = ref<SoldLicense | null>(null)
+const refundReason = ref('')
+async function refund() {
+  if (!refunding.value || refundReason.value.trim() === '') return
+  working.value = true
+  try {
+    await api('POST', `/vendor/licenses/${refunding.value.id}/refund`, { reason: refundReason.value.trim() })
+    toast.add({ severity: 'success', summary: t('licenses.refunded'), life: 3000 })
+    refunding.value = null
+    refundReason.value = ''
+    await list.load()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: errorText(e, t).text, life: 5000 })
+  } finally {
+    working.value = false
+  }
+}
+
 const revoking = ref<SoldLicense | null>(null)
 const reason = ref('')
 async function revoke() {
@@ -227,6 +246,7 @@ async function revoke() {
         <div class="row-actions">
           <Button class="give" icon="pi pi-plus" text rounded :disabled="l.status !== 'active'" :aria-label="t('licenses.give')" @click="openGrant(l)" />
           <Button class="revoke" icon="pi pi-ban" text rounded severity="danger" :disabled="l.status !== 'active'" :aria-label="t('licenses.revoke')" @click="revoking = l" />
+          <Button class="refund" icon="pi pi-replay" text rounded severity="warn" :disabled="l.status !== 'active'" :aria-label="t('licenses.refund')" @click="refunding = l" />
         </div>
       </template>
     </Column>
@@ -241,6 +261,15 @@ async function revoke() {
     <template #footer>
       <Button text :label="t('app.cancel')" @click="granting = null" />
       <Button :label="t('licenses.give')" :loading="working" @click="grant" />
+    </template>
+  </Dialog>
+
+  <Dialog :visible="refunding !== null" modal :header="t('licenses.refund')" :style="{ width: '26rem' }" @update:visible="(v: boolean) => !v && (refunding = null)">
+    <p class="app-muted">{{ t('licenses.refund_help') }}</p>
+    <Textarea v-model="refundReason" rows="3" class="reason" :placeholder="t('licenses.reason')" :aria-label="t('licenses.reason')" maxlength="480" />
+    <template #footer>
+      <Button text :label="t('app.cancel')" @click="refunding = null" />
+      <Button severity="danger" :label="t('licenses.refund')" :loading="working" :disabled="refundReason.trim() === ''" @click="refund" />
     </template>
   </Dialog>
 

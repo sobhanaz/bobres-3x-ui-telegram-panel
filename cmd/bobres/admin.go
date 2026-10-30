@@ -15,7 +15,8 @@ import (
 const adminUsage = "usage: bobres admin link [--dir D] [telegram id]\n" +
 	"       bobres admin password [--dir D] [--id <owner telegram id>]\n" +
 	"       bobres admin owners list|add|remove [--dir D] [--no-restart] [telegram id]\n" +
-	"       bobres admin approval status|off [--dir D]"
+	"       bobres admin approval status|off [--dir D]\n" +
+	"       bobres admin metrics-token generate|status [--dir D]"
 
 // adminCmd runs the dashboard sign-in helpers inside the core container:
 //
@@ -32,8 +33,11 @@ const adminUsage = "usage: bobres admin link [--dir D] [telegram id]\n" +
 //	bobres admin approval status|off            the approval of dashboard sign-ins in
 //	    Telegram: whether it is on, and the way out that needs neither the bot nor
 //	    Telegram, nor anyone signed in to the dashboard: switch it off.
+//	bobres admin metrics-token generate|status  the token of the store's /metrics:
+//	    generate makes a new one (printed once, replacing any), status says whether
+//	    one is set. tools/hosted runs it over SSH on a hosted store.
 func (o *ops) adminCmd(args []string) int {
-	if len(args) == 0 || (args[0] != "link" && args[0] != "password" && args[0] != "owners" && args[0] != "approval") {
+	if len(args) == 0 || (args[0] != "link" && args[0] != "password" && args[0] != "owners" && args[0] != "approval" && args[0] != "metrics-token") {
 		fmt.Fprintln(o.errOut, adminUsage)
 		return 2
 	}
@@ -43,6 +47,8 @@ func (o *ops) adminCmd(args []string) int {
 		return o.ownersCmd(args[1:])
 	case "approval":
 		return o.approvalCmd(args[1:])
+	case "metrics-token":
+		return o.metricsTokenCmd(args[1:])
 	}
 	fs := flag.NewFlagSet("admin "+sub, flag.ContinueOnError)
 	fs.SetOutput(o.errOut)
@@ -116,6 +122,30 @@ func (o *ops) approvalCmd(args []string) int {
 	}
 	if err := o.stream(ctx, *dir, cargs...); err != nil {
 		fmt.Fprintf(o.errOut, "error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// metricsTokenCmd makes the token of the store's /metrics, or says whether one is set (core's `metrics-token generate|status`, in the running
+// core container). The token is printed once on stdout, alone on its line, so a script (tools/hosted) can read it; nothing else keeps it.
+func (o *ops) metricsTokenCmd(args []string) int {
+	fs := flag.NewFlagSet("admin metrics-token", flag.ContinueOnError)
+	fs.SetOutput(o.errOut)
+	dir := fs.String("dir", defaultDir(), dirUsage)
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return 2
+	}
+	if len(pos) != 1 || (pos[0] != "generate" && pos[0] != "status") {
+		fmt.Fprintln(o.errOut, adminUsage)
+		return 2
+	}
+	if _, ok := o.requireInstall(*dir); !ok {
+		return 2
+	}
+	if err := o.stream(context.Background(), *dir, composeArgs("exec", "-T", "core", "/app", "metrics-token", pos[0])...); err != nil {
+		fmt.Fprintf(o.errOut, "error: %v (is core running? bobres status)\n", err)
 		return 1
 	}
 	return 0

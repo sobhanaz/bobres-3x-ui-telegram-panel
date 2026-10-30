@@ -17,7 +17,8 @@ describe('ledgerKey', () => {
     expect(ledgerKey('referral_reward')).toBe('ledger.other')
     // the sales of licenses and digital accounts and the conversion of USDT to Toman have names of their own
     for (const [kind, key] of [['license_purchase', 'ledger.license'], ['license_refund', 'ledger.license'], ['supplier_purchase', 'ledger.digital'],
-      ['supplier_refund', 'ledger.digital'], ['wallet_convert', 'ledger.convert']] as const) {
+      ['supplier_refund', 'ledger.digital'], ['wallet_convert', 'ledger.convert'], ['affiliate_commission', 'ledger.affiliate'],
+      ['affiliate_reversal', 'ledger.affiliate'], ['affiliate_payout', 'ledger.affiliate']] as const) {
       expect(ledgerKey(kind)).toBe(key)
       expect(messages.fa[key]).toBeTruthy()
       expect(messages.en[key]).toBeTruthy()
